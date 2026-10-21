@@ -15,7 +15,7 @@ An action's name is the name of its file without the ending: `actions/load-booki
 | `sql`        | `actions/<name>.sql` plus a line under `actions` in `app.yaml`        | The Data Store the manifest lists                | Written in the manifest line |
 | `workflow`   | `actions/<name>.action.yaml` with `workflow`                          | A run of the published Workflow                  | Always `changing`            |
 
-Every call runs as the person who looks at the App, through the platform's policy and audit. In the published App the viewer needs the right to use the App; in its draft, the right to write it. Beside that, for a `connection` action the viewer needs the right to use the Connection, for a `workflow` action the right to use the Workflow. An `sql` action of a published App needs no right on the Data Store: the person who published the App answered for it.
+Every call runs as the person who looks at the App, through the platform's policy and audit. In the published App the viewer needs the right to use the App; in its draft, the right to write it. Beside that, for a `connection` action the viewer needs the right to use the Connection. An `sql` or `workflow` action of a published App needs no right on the Data Store or the Workflow: the person who published the App needed it and answered for it. In the draft, whoever tries an action needs those rights of their own.
 
 ### The input of an action file
 

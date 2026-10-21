@@ -242,8 +242,9 @@ function dataStoreBinding(action: ActionOfKind<"sql">): AppActionBinding {
 
 /**
  * A `workflow` action of a published App starts a run of the published revision of its
- * Workflow, as the viewer: the viewer needs `workflow.use` on the Workflow beside the right on
- * the App, by the rule of `workflows.start` itself. The run acts as the Workflow's own
+ * Workflow, as the viewer. The App is the gate (DP-1b): its publisher was asked `workflow.use`
+ * at the publish (`requireWorkflows`), so a person who may use the published App needs nothing
+ * on the Workflow, as for an `sql` action's store. The run acts as the Workflow's own
  * principal, never with the rights of the person who started it. In an App's draft the click
  * starts a test run instead (`workflows.test`, target `test`, DP-1): of the Workflow's draft
  * where the viewer may write the Workflow, else of its published revision, in mode test either
@@ -265,8 +266,12 @@ function workflowBinding(action: ActionOfKind<"workflow">): AppActionBinding {
       operation
         ? { operation }
         : { refusal: new AppError("NOT_FOUND", "This instance has no Workflows") },
-    authorize: (operation, context, _host, resolveResource) =>
-      authorizeCaller(operation, context, resolveResource, { workflow: action.workflow }),
+    // A draft was never published: who tries it starts the test run with the right of their
+    // own, `workflow.write` or `workflow.use`, as by `workflows.test` itself.
+    authorize: (operation, context, host, resolveResource) =>
+      host.published
+        ? { allowed: true }
+        : authorizeCaller(operation, context, resolveResource, { workflow: action.workflow }),
     inputOf: startOf,
     inputRefusal: () =>
       new AppError(

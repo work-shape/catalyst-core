@@ -197,6 +197,34 @@ describe("an App and the Workflows it starts, at the App's publish", () => {
     });
   });
 
+  // DP-1b: the App is the gate for its Workflow. Fails without it: a publisher who may not
+  // use the Workflow published an App whose every viewer then started it.
+  it("refuses a publisher who may not use the Workflow the App starts, and publishes for one who may", async () => {
+    await publishWorkflow("gated-pages", await putWorkflow("gated-pages"));
+    expectStatus(await t.putApp(t.admin.id, "pages-g", pagesApp("pages-g", "gated-pages")), 200);
+    const workflowId = await t.assetId(WORKFLOW_ASSET_KIND, "gated-pages");
+    const inWorkspace = { workspaceId: t.workspaceId };
+
+    await t.withRight(t.kai.id, "app.publish", inWorkspace, async () => {
+      const refused = await t.publish(t.kai.id, "pages-g", 1);
+      expectStatus(refused, 403);
+      expect(refusalSchema.parse(refused.json()).error).toMatchObject({
+        code: "FORBIDDEN",
+        details: expect.objectContaining({ action: "workflow.use" })
+      });
+      const app = await t.stores.configAssets.getConfigAsset({
+        clientInstanceId,
+        kind: "app",
+        name: "pages-g"
+      });
+      expect(app?.publishedRevision).toBeUndefined();
+
+      await t.withRight(t.kai.id, "workflow.use", { assetId: workflowId }, async () => {
+        expectStatus(await t.publish(t.kai.id, "pages-g", 1), 200);
+      });
+    });
+  });
+
   it("publishes with a live Workflow; taking the Workflow back names the App, whose click then names the Workflow", async () => {
     const revision = await putWorkflow("live-pages");
     await publishWorkflow("live-pages", revision);

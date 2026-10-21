@@ -25,7 +25,8 @@ import { expectStatus } from "./support/app-instance";
 import { instanceWorkflowAssetKind, runSchema } from "./support/workflow-instance";
 
 // APP-6a: an App starts a published Workflow through a named action of kind `workflow`. The
-// frame's call starts the run as the viewer, by the rule of `workflows.start`, and the frame
+// frame's call starts the run as the viewer, who needs only the right to use the App: its
+// publisher was asked to use the Workflow (DP-1b). The frame
 // follows the run it started through `apps.sessions.get_workflow_run`. A draft starts a test
 // run (DP-1): of the Workflow's draft for a tester who may write it, else of its published
 // revision, and never a live one. Real build, real call path, real engine on a real
@@ -117,7 +118,6 @@ const followedSchema = z.object({
 describe("an App that starts a Workflow", () => {
   let t: AppActionsInstance;
   let worker: JobWorker;
-  let grantId: string | undefined;
 
   beforeAll(async () => {
     let workflows: InstanceWorkflows | undefined;
@@ -185,25 +185,6 @@ describe("an App that starts a Workflow", () => {
     await t.closeAll();
   });
 
-  /** Lets `kai` start every Workflow of the instance, as a grant on the instance does. */
-  async function letKaiStart(): Promise<void> {
-    const grant = await t.stores.access.createGrant({
-      clientInstanceId,
-      holderKind: "user",
-      holderId: t.kai.id,
-      action: "workflow.use",
-      effect: "allow",
-      scopeKind: "instance",
-      grantedBy: t.admin.id
-    });
-    grantId = grant.id;
-  }
-  /** Takes back what `letKaiStart` gave. */
-  async function stopKai(): Promise<void> {
-    if (grantId) await t.stores.access.deleteGrant({ clientInstanceId, grantId });
-    grantId = undefined;
-  }
-
   async function readRun(userId: string, frame: Frame, runId: string) {
     return t.call(userId, "apps.sessions.get_workflow_run", {
       params: { pageSessionId: frame.pageSessionId, runId },
@@ -223,29 +204,18 @@ describe("an App that starts a Workflow", () => {
     throw new Error(`Workflow Run ${runId} did not end`);
   }
 
-  it("refuses a viewer without the right to use the Workflow, with the right named, and starts nothing", async () => {
-    const frame = await t.openApp(t.kai.id, "published", "visits");
-    expect(await t.can(t.kai.id, frame)).toEqual({ "log-visit": "deny" });
-
-    const response = await t.callAction(
-      t.kai.id,
-      frame,
-      "log-visit",
-      { page: "/refused" },
-      { "idempotency-key": "refused-1" }
+  // DP-1b: the App is the gate for its Workflow. Fails without it: kai, who may use the App and
+  // not the Workflow, was refused with workflow.use named, and the App's button failed for him.
+  it("starts the published Workflow as a viewer who may use the App and not the Workflow, who follows the run to its result", async () => {
+    // kai holds no right on any Workflow: only the publisher was asked it.
+    expectStatus(
+      await t.call(t.kai.id, "workflows.start", {
+        params: { workflow: WORKFLOW },
+        payload: { input: { page: "/outside" } },
+        headers: { "idempotency-key": "outside-1" }
+      }),
+      403
     );
-
-    expectStatus(response, 403);
-    expect(t.refusal(response)).toMatchObject({
-      code: "FORBIDDEN",
-      details: expect.objectContaining({ action: "workflow.use" })
-    });
-    const runs = await t.stores.workflowRuns.listRuns({ clientInstanceId, workflow: WORKFLOW });
-    expect(runs).toEqual([]);
-  });
-
-  it("starts the published Workflow as the viewer, who follows the run to its result", async () => {
-    await letKaiStart();
     const frame = await t.openApp(t.kai.id, "published", "visits");
     expect(await t.can(t.kai.id, frame)).toEqual({
       "log-visit": expect.not.stringMatching(/deny/u)
@@ -413,8 +383,6 @@ describe("an App that starts a Workflow", () => {
   });
 
   it("starts the published revision in mode test for a tester who may only use the Workflow, and refuses one who may not (DP-1)", async () => {
-    // kai holds no right to use a Workflow from the tests before.
-    await stopKai();
     const appId = await t.assetId("app", "visits");
     await t.withRight(t.kai.id, "app.write", { assetId: appId }, async () => {
       const frame = await t.openApp(t.kai.id, "draft", "visits");
@@ -459,6 +427,4 @@ describe("an App that starts a Workflow", () => {
       });
     });
   });
-
-  afterAll(stopKai);
 });

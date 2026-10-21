@@ -20,7 +20,7 @@ input:
     client: "{{client}}"
 ```
 
-`workflow` is the Workflow's name. The mapping makes the input the Workflow declares. The call starts a run of the Workflow's published revision as the viewer, who needs the right to use that Workflow. The answer's `result` is the Workflow Run; follow it with `useWorkflowRun(result.id)` from the kit, or `workflowRuns.get(result.id)` in a plain HTML App. In the App's draft it starts a [test run](#in-the-apps-draft) instead. A `workflow` action has no `effect` key and no `connection`; it needs kit `1.3.0` or later.
+`workflow` is the Workflow's name. The mapping makes the input the Workflow declares. The call starts a run of the Workflow's published revision as the viewer. The viewer needs only the right to use the App: publishing the App needs the right to use the Workflow, and the person who publishes answers for it. The answer's `result` is the Workflow Run; follow it with `useWorkflowRun(result.id)` from the kit, or `workflowRuns.get(result.id)` in a plain HTML App. In the App's draft it starts a [test run](#in-the-apps-draft) instead. A `workflow` action has no `effect` key and no `connection`; it needs kit `1.3.0` or later.
 
 ## In the App's draft
 

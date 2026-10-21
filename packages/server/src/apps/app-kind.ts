@@ -12,6 +12,7 @@ import {
   CONNECTION_ASSET_KIND,
   DATA_STORE_ACTIONS,
   DATA_STORE_ASSET_KIND,
+  WORKFLOW_ACTIONS,
   WORKFLOW_ASSET_KIND,
   appReachesDataStore,
   appWorkflowRefusalError,
@@ -268,11 +269,16 @@ const workflowInputsSchema = z.object({
  * published where the App reaches it, in the App's own workspace or on the instance (the rule
  * of `appReachesDataStore`), and each action's mapping fills what that published revision
  * requires and nothing it does not declare. A live App whose Workflow is not live fails at
- * every click, so the publish is where it is refused (DP-0). One point read per Workflow, in
- * the transaction of the publish.
+ * every click, so the publish is where it is refused (DP-0).
+ *
+ * The App is the gate for its Workflows (DP-1b): the publisher is asked `workflow.use` on each
+ * here, as for the stores its `sql` actions reach, and a person who may use the published App
+ * starts them with nothing on the Workflow. Nothing is written for it: the published pointer of
+ * the App is the record. One point read per Workflow, in the transaction of the publish.
  */
 async function requireWorkflows(input: {
   clientInstanceId: ClientInstanceId;
+  access: ActorAccess;
   scope: AssetScope;
   config: JsonObject;
   stores: PlatformStores;
@@ -293,6 +299,12 @@ async function requireWorkflows(input: {
     ) {
       throw appWorkflowRefusalError("workflow_unavailable", action.workflow);
     }
+    input.access.require(WORKFLOW_ACTIONS.use, {
+      kind: WORKFLOW_ASSET_KIND,
+      assetId: asset.id,
+      name: action.workflow,
+      ...(asset.scope.kind === "workspace" ? { workspaceId: asset.scope.workspaceId } : {})
+    });
     const inputs = workflowInputsSchema.safeParse(asset.publishedConfig).data?.manifest.inputs;
     const mapped = Object.keys(action.input.mapping);
     const missing = (inputs?.required ?? []).find((name) => !mapped.includes(name));

@@ -6,30 +6,12 @@ import { z } from "zod";
 import { requestWithOrigin } from "./request-with-origin";
 import { expect, test } from "./test";
 import { apiOrigin, uiOrigin } from "./view-fixtures";
-import { requestAnswered } from "./allowed-page-errors";
-// The messages this spec's tests cause on purpose (see allowed-page-errors.ts).
-test.use({
-  allowedPageErrors: {
-    errors: [
-      {
-        name: "app-workflow-action-refused-for-a-missing-right",
-        reason:
-          "Chromium's own log line: a member without the use right on the Workflow presses the " +
-          "App's button, the call is answered with 403, and the test asserts that the App names the right.",
-        matches: requestAnswered(403),
-        path: /^\/api\/v1\/app-content-sessions\/[^/]+\/actions\/log-visit$/u,
-        tests: [
-          "an App button starts a published Workflow and shows its output; the draft starts a test run and a member without the right nothing"
-        ]
-      }
-    ]
-  }
-});
 
 // A button of a published App starts a published Workflow through a named action: the frame
 // asks the interface, the instance starts the Workflow as whoever looks, and the App follows
 // the run with the kit's `useWorkflowRun` until it shows what the Workflow answered. A member
-// without the use right on the Workflow is refused with the platform's sentence. The draft of
+// who may use the App and not the Workflow starts it as well: the App is the gate, and its
+// publisher was asked the right (DP-1b; before it, the member was refused). The draft of
 // the App starts a test run (DP-1): of the published Workflow for a tester who may only use
 // it, of its draft for one who may write it, marked over the frame, and no live run. Fails
 // without APP-6a: no action could name a Workflow, and kit 1.3.0, which follows a run, did not
@@ -264,7 +246,7 @@ async function shoot(page: Page, name: string): Promise<void> {
 }
 
 // The test writes grants: it takes its turn with the tests that count grants.
-test("an App button starts a published Workflow and shows its output; the draft starts a test run and a member without the right nothing", async ({
+test("an App button starts a published Workflow and shows its output, also to a member who may not use the Workflow; the draft starts a test run", async ({
   page,
   browser,
   baseURL,
@@ -298,7 +280,7 @@ test("an App button starts a published Workflow and shows its output; the draft 
 
   try {
     const workflowAssetId = await publishWorkflow(root, workflow);
-    // The builder may start this one Workflow; the member may not.
+    // The builder, who publishes the App, may start this one Workflow; the member may not.
     const granted = await requestWithOrigin(
       root,
       "post",
@@ -374,13 +356,13 @@ test("an App button starts a published Workflow and shows its output; the draft 
       })
     ]);
 
-    // The member may use the App and not the Workflow: the platform refuses, and starts nothing.
+    // The member may use the App and not the Workflow: the App is the gate, so the run starts.
     await memberPage.goto(appPath);
     const memberApp = appIn(memberPage, "app-view");
     await memberApp.getByRole("button", { name: "Log visit" }).click();
-    await expect(memberApp.getByTestId("refusal")).toContainText("workflow.use");
-    await expect(memberApp.getByTestId("run-status")).toHaveCount(0);
-    await shoot(memberPage, "app-workflow-action-refused");
+    await expect(memberApp.getByTestId("run-status")).toHaveText("done");
+    await expect(memberApp.getByTestId("refusal")).toHaveCount(0);
+    await shoot(memberPage, "app-workflow-action-member");
 
     // A draft starts a test run, of the Workflow's draft, since the builder, an admin, may
     // write the Workflow.
@@ -410,8 +392,9 @@ test("an App button starts a published Workflow and shows its output; the draft 
         await (await root.request.get(`${apiOrigin}/api/v1/workflows/${workflow}/runs`)).json()
       ).items;
     const afterDraft = await readRuns();
-    // One live run, of the published App; the draft's is a test run that names it.
-    expect(afterDraft.filter((run) => run.mode === "live")).toHaveLength(1);
+    // Two live runs, the builder's and the member's in the published App; the draft's is a test
+    // run that names it.
+    expect(afterDraft.filter((run) => run.mode === "live")).toHaveLength(2);
     const tests = afterDraft.filter((run) => run.mode === "test");
     expect(tests).toEqual([
       expect.objectContaining({
@@ -444,7 +427,7 @@ test("an App button starts a published Workflow and shows its output; the draft 
     await expect(strip).toContainText("Test run · published Workflow");
     await shoot(page, "app-workflow-action-draft-published-workflow");
     const afterDeny = await readRuns();
-    expect(afterDeny.filter((run) => run.mode === "live")).toHaveLength(1);
+    expect(afterDeny.filter((run) => run.mode === "live")).toHaveLength(2);
     expect(
       afterDeny.filter((run) => run.startedFrom?.workflowRevision === "published")
     ).toHaveLength(1);
