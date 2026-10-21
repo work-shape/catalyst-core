@@ -1,5 +1,5 @@
 import { FolderSync, Plug, RefreshCw, RotateCcw, Trash2 } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import {
   Badge,
   Button,
@@ -17,12 +17,19 @@ import { useTranslation } from "../../shared/i18n";
 import { formatMomentShort } from "../../shared/locale-format";
 import type {
   KnowledgeBaseSource,
+  KnowledgeChoice,
+  KnowledgeRead,
   KnowledgeSourceFailureCode,
   KnowledgeSourceStatus
 } from "./knowledge-base-source";
 import { sourceFailureText, sourceItemCounts, sourceStateView } from "./knowledge-source-status";
 import { newKnowledgeSource, type KnowledgeSourceForm } from "./knowledge-sources-model";
 import type { ActionNotice } from "./build-model";
+import { useOptionalBuildNavigation } from "../../shared/build-route";
+import { requestBuildCreateDialog } from "./build-create-request";
+import { CONNECTIONS_BUILD_PATH } from "./connection-tools";
+import { offerText } from "./connection-typed-model";
+import type { PagedItems } from "./paged-items";
 
 // The synced sources of a Knowledge Base of documents (SRC-2): each reads the folders it names
 // through a Connection whose type is a document source. The list is part of the draft: a source
@@ -67,9 +74,15 @@ export function KnowledgeSourcesSection({
       : undefined;
   const change = (id: string, patch: Partial<KnowledgeSourceForm>) =>
     onChange(sources.map((entry) => (entry.id === id ? { ...entry, ...patch } : entry)));
+  const [search, setSearch] = useState(NO_SEARCH);
+  const read = source.useSourceConnections?.(search, owner);
+  // Where no Connection can be chosen at all, one neutral line says what to connect first,
+  // instead of an empty list, an empty chooser and its error.
+  const noneToChoose =
+    canWrite && read?.status === "ready" && read.data.items.length === 0 && search === NO_SEARCH;
   return (
     <div className="grid gap-4" data-knowledge-sources="">
-      {sources.length === 0 ? (
+      {noneToChoose && sources.length === 0 ? null : sources.length === 0 ? (
         <EmptyState layout="inline">
           {t(canWrite ? "knowledgeSources.empty" : "knowledgeSources.emptyReadOnly")}
         </EmptyState>
@@ -110,11 +123,13 @@ export function KnowledgeSourcesSection({
           ))}
         </ul>
       )}
-      {canWrite ? (
+      {noneToChoose ? (
+        <NoSourceConnection source={source} />
+      ) : canWrite && read !== undefined ? (
         <>
           <AddSource
-            source={source}
-            owner={owner}
+            read={read}
+            onSearchChange={setSearch}
             onAdd={(connection) => onChange([...sources, newKnowledgeSource(connection, sources)])}
           />
           <p className="text-caption text-muted-foreground">{t("knowledgeSources.draftNote")}</p>
@@ -382,34 +397,80 @@ function queuedOf(answer: unknown): number {
   return typeof queued === "number" ? queued : 0;
 }
 
+/**
+ * Where no Connection can sync folders yet: the types the instance can connect, and the New
+ * connection dialog for a person who may create one.
+ */
+function NoSourceConnection({ source }: { source: KnowledgeBaseSource }) {
+  const { locale, t } = useTranslation();
+  const types = source.useSourceTypes?.();
+  const navigation = useOptionalBuildNavigation();
+  const connections = { kindPath: CONNECTIONS_BUILD_PATH };
+  return (
+    <EmptyState
+      layout="inline"
+      data-knowledge-sources-none=""
+      action={
+        types !== undefined && types.length > 0 && navigation ? (
+          <Button asChild variant="outline" size="sm">
+            <a
+              href={navigation.href(connections)}
+              data-knowledge-source-connect=""
+              onClick={(event) => {
+                if (!opensHere(event)) return;
+                event.preventDefault();
+                navigation.open(connections);
+                requestBuildCreateDialog(CONNECTIONS_BUILD_PATH);
+              }}
+            >
+              <Plug aria-hidden="true" />
+              {t("connections.new")}
+            </a>
+          </Button>
+        ) : undefined
+      }
+    >
+      {types === undefined
+        ? t("knowledgeSources.noConnections")
+        : types.length === 0
+          ? t("knowledgeSources.noDocumentTypes")
+          : t("knowledgeSources.noConnectionsFor", {
+              types: new Intl.ListFormat(locale, { type: "disjunction" }).format(
+                types.map((type) => offerText(type.service ?? type.title, locale))
+              )
+            })}
+    </EmptyState>
+  );
+}
+
+/** Whether a click opens the link in this tab, not in a new one. */
+function opensHere(event: ReactMouseEvent): boolean {
+  return event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;
+}
+
 /** The chooser of a Connection a new source reads through. */
 function AddSource({
-  source,
-  owner,
+  read,
+  onSearchChange,
   onAdd
 }: {
-  source: KnowledgeBaseSource;
-  owner: string | undefined;
+  read: KnowledgeRead<PagedItems<KnowledgeChoice>>;
+  onSearchChange(search: string): void;
   onAdd(connection: string): void;
 }) {
   const { t } = useTranslation();
-  const [search, setSearch] = useState(NO_SEARCH);
-  const read = source.useSourceConnections?.(search, owner);
-  if (read === undefined) return null;
   const connections = read.status === "ready" ? read.data.items : [];
   const more = read.status === "ready" ? read.data.more : undefined;
   const error =
     read.status === "failed" || read.status === "refused"
       ? t("knowledgeSources.connectionsFailed")
-      : read.status === "ready" && connections.length === 0 && search === NO_SEARCH
-        ? t("knowledgeSources.noConnections")
-        : undefined;
+      : undefined;
   return (
     <Field label={t("knowledgeSources.add")} error={error}>
       <Picker
         search
         label={t("knowledgeSources.chooseConnection")}
-        onSearchChange={(text) => setSearch(text.trim())}
+        onSearchChange={(text) => onSearchChange(text.trim())}
         more={more && { loading: more.loading, onLoad: more.load }}
         options={connections.map((connection) => ({
           value: connection.name,

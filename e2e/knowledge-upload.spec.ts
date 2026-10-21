@@ -248,10 +248,28 @@ test.describe("uploading files from the computer into a Knowledge Base", () => {
       }
       const asset = await page.request.get(assetUrl);
       expect(await asset.json()).toMatchObject({ publishedRevision: 1 });
-      await expect(page.locator("[data-knowledge-source-types]")).toBeVisible();
+      // Synced sources says in one neutral line what to connect, or offers the chooser.
+      const sources = page.locator("[data-knowledge-sources]");
+      await expect(
+        sources.locator("[data-knowledge-sources-none], [data-knowledge-source-add]").first()
+      ).toBeVisible();
+      if ((await sources.locator("[data-knowledge-sources-none]").count()) > 0) {
+        await expect(sources).toContainText(
+          "Um Ordner aus Test folders zu synchronisieren, lege zuerst eine Verbindung an."
+        );
+        await expect(sources.locator("[data-knowledge-source-connect]")).toBeVisible();
+      }
+      await expect(page.getByText("Lege zuerst unter Verbindungen eine an.")).toHaveCount(0);
       await picture(page, "kb-page-1-new-de-light-1280");
       await page.locator('[id="documents"]').scrollIntoViewIfNeeded();
       await picture(page, "kb-page-1-new-documents-de-light-1280");
+      // New connection leads to the Connections with their New connection dialog open.
+      const connect = sources.locator("[data-knowledge-source-connect]");
+      if ((await connect.count()) > 0) {
+        await connect.click();
+        await expect(page).toHaveURL(/\/build\/connections$/u);
+        await expect(page.getByRole("dialog")).toBeVisible();
+      }
 
       // One of tables, saved as a draft: one notice under the head instead of three empty sections.
       const store = await requestWithOrigin(page, "put", storeUrl, {

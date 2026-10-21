@@ -135,8 +135,7 @@ function render(
     locale = "en",
     workflows,
     settings,
-    availability,
-    sourceTypes
+    availability
   }: {
     newAsset?: boolean;
     state?: KnowledgeBaseState;
@@ -147,8 +146,6 @@ function render(
     settings?: SettingsPageContextValue;
     /** Where agents can use it, as the instance answers it to a reader who may change it. */
     availability?: AvailabilityChoice;
-    /** The titles of the Connector types the instance can sync documents from. */
-    sourceTypes?: readonly string[];
   } = {}
 ): string {
   const name = newAsset ? undefined : asset.name;
@@ -182,21 +179,7 @@ function render(
   const planted = knowledgeBaseKindOn(() => ({
     ...source,
     useState: () => ready(state),
-    ...(availability === undefined ? {} : { useAvailability: () => availability }),
-    ...(sourceTypes === undefined
-      ? {}
-      : {
-          useSourceTypes: () =>
-            sourceTypes.map((title) => ({
-              type: title.toLowerCase(),
-              title,
-              description: "",
-              documentSource: true,
-              authScheme: "none",
-              settings: {},
-              fields: []
-            }))
-        })
+    ...(availability === undefined ? {} : { useAvailability: () => availability })
   }));
   const kinds = buildAssetKinds.map((kind) => (kind.kind === "knowledge_base" ? planted : kind));
   const page = createElement(
@@ -468,26 +451,6 @@ describe("Knowledge Bases of documents", () => {
       expect(page).not.toContain("data-knowledge-not-published");
       expect(page).not.toContain(">Test search<");
       expect(page).not.toContain("Saves a draft.");
-    } finally {
-      clearBuildStartRequest();
-    }
-  });
-
-  it("names under Source the document sources the instance can sync from, before its publish too", () => {
-    try {
-      requestBuildStart("knowledge-bases", { name: "contracts-kb", title: "Contracts" });
-      const fresh = render(documentsKnowledgeBase(), {
-        newAsset: true,
-        locale: "de",
-        sourceTypes: ["Box", "Ordner"]
-      });
-      expect(fresh).toContain("Diese Instanz kann Ordner aus Box und Ordner synchronisieren.");
-      const none = render(documentsKnowledgeBase(), { newAsset: true, sourceTypes: [] });
-      expect(none).toContain("This instance connects no document source yet.");
-      // A reader who may not read the types is told nothing of them.
-      expect(render(documentsKnowledgeBase(), { newAsset: true })).not.toContain(
-        "data-knowledge-source-types"
-      );
     } finally {
       clearBuildStartRequest();
     }
