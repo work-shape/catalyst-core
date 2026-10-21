@@ -21,6 +21,7 @@ import {
   readCompatibleAssistantToolCalls,
   readCompatibleMessageRunId,
   readCompatiblePersistedToolResult,
+  readSteeredRunId,
   type PersistedToolResult
 } from "./assistant-message-compat";
 import {
@@ -28,8 +29,10 @@ import {
   appendAssistantWebSourceParts,
   appendWorkspacePromotedArtifactsPart,
   appendWorkspacePromotedSurfacesPart,
-  toActiveRunUiMessage,
+  splitProjectionAtSteers,
+  toActiveRunUiMessages,
   toProjectionUiMessageParts,
+  toSteeredUiMessage,
   toUiMessageParts
 } from "./assistant-ui-parts";
 import type {
@@ -57,6 +60,11 @@ interface AssistantRunMessageGroup {
   finalMessage: Message;
   messageIds: Set<string>;
   messages: Message[];
+  /**
+   * The run's messages cut where its person steered it (FU-2), keyed by each piece's last
+   * message: the steered messages stand between the pieces in the transcript.
+   */
+  segmentsByLastId: Map<string, Message[]>;
 }
 
 export function toAiSdkMessageRepository(messages: UIMessage[]): AiSdkMessageFormatRepository {
@@ -83,10 +91,12 @@ export function toUiMessages(
     ? withoutRunResponseMessages(messages, activeRun.run.id)
     : messages;
   const projectedMessages = toPersistedUiMessages(visibleMessages, completedRunProjections);
-  const activeRunMessage = activeRun ? toActiveRunUiMessage(activeRun) : undefined;
-  return activeRunMessage && !leftNothingToShow(activeRun, activeRunMessage)
-    ? [...projectedMessages, activeRunMessage]
-    : projectedMessages;
+  const activeRunMessages = activeRun ? toActiveRunUiMessages(activeRun) : [];
+  const activeRunMessage = activeRunMessages.at(-1);
+  if (!activeRunMessage || leftNothingToShow(activeRun, activeRunMessage)) {
+    return [...projectedMessages, ...activeRunMessages.slice(0, -1)];
+  }
+  return [...projectedMessages, ...activeRunMessages];
 }
 
 /**
@@ -188,6 +198,11 @@ function toPersistedUiMessages(
     if (!isRenderableMessage(message)) {
       return [];
     }
+    // A run shown from its projection shows the messages steered into it in place.
+    const steeredInto = readSteeredRunId(message);
+    if (steeredInto && completedRunProjections[steeredInto]) {
+      return [];
+    }
 
     const runId = readCompatibleMessageRunId(message);
     const completedRunProjection = runId ? completedRunProjections[runId] : undefined;
@@ -195,24 +210,24 @@ function toPersistedUiMessages(
       if (readCompatibleAssistantFinalRunId(message) !== runId) {
         return [];
       }
-      return [
-        toCompletedRunProjectionUiMessage(
-          message,
-          completedRunProjection,
-          surfacedArtifactsByRunId,
-          surfacedSurfacesByRunId
-        )
-      ];
+      return toCompletedRunProjectionUiMessages(
+        message,
+        completedRunProjection,
+        surfacedArtifactsByRunId,
+        surfacedSurfacesByRunId
+      );
     }
 
     const runGroup = runId ? assistantRunMessageGroups.get(runId) : undefined;
     if (runGroup?.messageIds.has(message.id)) {
-      if (message.id !== runGroup.finalMessage.id) {
+      const segment = runGroup.segmentsByLastId.get(message.id);
+      if (!segment) {
         return [];
       }
       return [
         toCombinedAssistantRunUiMessage(
           runGroup,
+          segment,
           toolResultsByToolCallId,
           surfacedArtifactsByRunId,
           surfacedSurfacesByRunId
@@ -266,11 +281,18 @@ function toPersistedUiMessage(
 
 function toCombinedAssistantRunUiMessage(
   group: AssistantRunMessageGroup,
+  segment: Message[],
   toolResultsByToolCallId: Map<string, PersistedToolResult>,
   surfacedArtifactsByRunId: Map<string, ToolArtifactDownloadRef[]>,
   surfacedSurfacesByRunId: Map<string, ToolSurfaceRef[]>
 ): UIMessage {
-  const messages = stripRepeatedFinalRunPrefix(group.messages, group.finalMessage);
+  // The final answer's repeated prefix is read against the whole run, then cut to the piece.
+  const inSegment = new Set(segment.map((message) => message.id));
+  const messages = stripRepeatedFinalRunPrefix(group.messages, group.finalMessage).filter(
+    (message) => inSegment.has(message.id)
+  );
+  const last = segment.at(-1) ?? group.finalMessage;
+  const isFinal = last.id === group.finalMessage.id;
   const runHasExplicitWebSearchTool = group.messages.some((message) =>
     readCompatibleAssistantToolCalls(message).some((toolCall) => toolCall.toolName === "web_search")
   );
@@ -285,9 +307,11 @@ function toCombinedAssistantRunUiMessage(
       }
     )
   );
-  const metadata = createPersistedUiMessageMetadata(group.finalMessage, group.messages);
+  const metadata = isFinal
+    ? createPersistedUiMessageMetadata(group.finalMessage, group.messages)
+    : undefined;
   return {
-    id: group.finalMessage.id,
+    id: last.id,
     role: "assistant",
     ...(metadata ? { metadata } : {}),
     parts:
@@ -325,16 +349,44 @@ function stripRepeatedFinalRunPrefix(messages: Message[], finalMessage: Message)
   );
 }
 
-function toCompletedRunProjectionUiMessage(
+/**
+ * A completed run shown from its projection, at its final message: one assistant message, or,
+ * where its person steered it, its answers with the steered messages between them.
+ */
+function toCompletedRunProjectionUiMessages(
   finalMessage: Message,
   projection: AgentRunProjection,
   surfacedArtifactsByRunId: Map<string, ToolArtifactDownloadRef[]>,
   surfacedSurfacesByRunId: Map<string, ToolSurfaceRef[]>
+): UIMessage[] {
+  const segments = splitProjectionAtSteers(projection);
+  return segments.map((segment, index): UIMessage => {
+    if (segment.kind === "steer") return toSteeredUiMessage(segment);
+    if (index === segments.length - 1) {
+      return toCompletedRunProjectionUiMessage(
+        finalMessage,
+        projection,
+        segment.projection,
+        surfacedArtifactsByRunId,
+        surfacedSurfacesByRunId
+      );
+    }
+    return {
+      id: `${finalMessage.id}:${index}`,
+      role: "assistant",
+      parts: toProjectionUiMessageParts(segment.projection)
+    };
+  });
+}
+
+function toCompletedRunProjectionUiMessage(
+  finalMessage: Message,
+  projection: AgentRunProjection,
+  shown: AgentRunProjection,
+  surfacedArtifactsByRunId: Map<string, ToolArtifactDownloadRef[]>,
+  surfacedSurfacesByRunId: Map<string, ToolSurfaceRef[]>
 ): UIMessage {
-  const completedProjection = projectionWithPersistedFinalTextFallback(
-    projection,
-    finalMessage.text
-  );
+  const completedProjection = projectionWithPersistedFinalTextFallback(shown, finalMessage.text);
   const parts = toProjectionUiMessageParts(completedProjection, {
     run: {
       id: completedProjection.runId,
@@ -440,8 +492,21 @@ function createAssistantRunMessageGroups(
 ): Map<string, AssistantRunMessageGroup> {
   const messagesByRunId = new Map<string, Message[]>();
   const finalMessageByRunId = new Map<string, Message>();
+  // Where a run's person steered it: the run's piece before stops at its last message so far.
+  const steeredAfterIds = new Map<string, Set<string>>();
 
   for (const message of messages) {
+    const steeredInto = readSteeredRunId(message);
+    if (steeredInto) {
+      const before = messagesByRunId.get(steeredInto)?.at(-1);
+      if (before) {
+        steeredAfterIds.set(
+          steeredInto,
+          (steeredAfterIds.get(steeredInto) ?? new Set()).add(before.id)
+        );
+      }
+      continue;
+    }
     if (message.role !== "assistant") {
       continue;
     }
@@ -466,10 +531,21 @@ function createAssistantRunMessageGroups(
       continue;
     }
     const groupedMessages = runMessages.slice(0, finalIndex + 1);
+    const cuts = steeredAfterIds.get(runId) ?? new Set<string>();
+    const segmentsByLastId = new Map<string, Message[]>();
+    let segment: Message[] = [];
+    for (const message of groupedMessages) {
+      segment.push(message);
+      if (cuts.has(message.id) || message.id === finalMessage.id) {
+        segmentsByLastId.set(message.id, segment);
+        segment = [];
+      }
+    }
     groups.set(runId, {
       finalMessage,
       messageIds: new Set(groupedMessages.map((message) => message.id)),
-      messages: groupedMessages
+      messages: groupedMessages,
+      segmentsByLastId
     });
   }
   return groups;
@@ -497,6 +573,10 @@ function createPersistedUiMessageMetadata(
 
 function withoutRunResponseMessages(messages: Message[], runId: string): Message[] {
   return messages.filter((message) => {
+    // The active run shows the messages steered into it in place.
+    if (readSteeredRunId(message) === runId) {
+      return false;
+    }
     const messageRunId = readCompatibleMessageRunId(message);
     if (messageRunId !== runId) {
       return true;

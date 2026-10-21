@@ -154,6 +154,16 @@ export type AgentRunProjectionPart =
       open: boolean;
     }
   | {
+      /**
+       * A message the run's person steered into it (FU-2), where the run took it in: after the
+       * results of one step and before the next. It is also a user row of the transcript.
+       */
+      type: "user_message";
+      messageId: MessageId;
+      text: string;
+      createdAt: ISODateString;
+    }
+  | {
       type: "tool_call";
       toolCallId: ToolCallId;
       toolName: string;

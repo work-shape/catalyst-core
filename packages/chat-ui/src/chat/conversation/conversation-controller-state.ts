@@ -308,18 +308,30 @@ function applyObservationToRunSummary(
 
 function applyObservationToMessages(messages: Message[], observation: RunObservation): Message[] {
   const event = observation.payload;
-  if (event.type !== "message_completed") {
+  if (event.type !== "message_completed" && event.type !== "user_message_steered") {
     return messages;
   }
-  const message: Message = {
-    id: event.message.id,
-    clientInstanceId: observation.clientInstanceId,
-    conversationId: observation.conversationId,
-    role: "assistant",
-    text: event.message.text,
-    createdAt: event.createdAt,
-    metadata: event.message.metadata
-  };
+  // A steered message is a user row of the transcript; the run's projection shows it in place.
+  const message: Message =
+    event.type === "user_message_steered"
+      ? {
+          id: event.message.id,
+          clientInstanceId: observation.clientInstanceId,
+          conversationId: observation.conversationId,
+          role: "user",
+          text: event.message.text,
+          createdAt: event.message.createdAt,
+          ...(event.message.metadata ? { metadata: event.message.metadata } : {})
+        }
+      : {
+          id: event.message.id,
+          clientInstanceId: observation.clientInstanceId,
+          conversationId: observation.conversationId,
+          role: "assistant",
+          text: event.message.text,
+          createdAt: event.createdAt,
+          metadata: event.message.metadata
+        };
   if (messages.some((candidate) => candidate.id === message.id)) {
     return messages.map((candidate) => (candidate.id === message.id ? message : candidate));
   }

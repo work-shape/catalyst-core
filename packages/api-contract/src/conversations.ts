@@ -670,6 +670,13 @@ export const agentRunProjectionPartSchema = z.discriminatedUnion("type", [
     open: z.boolean()
   }),
   z.object({
+    /** A message the run's person steered into it, where the run took it in (FU-2). */
+    type: z.literal("user_message"),
+    messageId: z.string(),
+    text: z.string(),
+    createdAt: timestampSchema
+  }),
+  z.object({
     type: z.literal("tool_call"),
     toolCallId: z.string(),
     toolName: z.string(),

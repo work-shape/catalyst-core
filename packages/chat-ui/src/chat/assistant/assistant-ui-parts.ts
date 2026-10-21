@@ -47,8 +47,86 @@ export function toAttachmentFilePart(
   };
 }
 
-export function toActiveRunUiMessage(activeRun: AssistantUiActiveRun): UIMessage {
-  const parts = toProjectionUiMessageParts(activeRun.projection, activeRun);
+/** One piece of a run as the thread shows it: an answer, or a message steered into it. */
+export type ProjectionSegment =
+  | { kind: "answer"; projection: AgentRunProjection }
+  | { kind: "steer"; messageId: string; text: string };
+
+/**
+ * A run's projection cut at the messages its person steered into it (FU-2): the answer before
+ * a steer, the steer, and the answer after it, in the order the run took them. Each answer
+ * holds only its own parts. An earlier answer is done; the last one carries the run's state.
+ * A run without a steer is one answer, unchanged.
+ */
+export function splitProjectionAtSteers(projection: AgentRunProjection): ProjectionSegment[] {
+  const parts = projection.parts ?? [];
+  if (!parts.some((part) => part.type === "user_message")) {
+    return [{ kind: "answer", projection }];
+  }
+  const segments: ProjectionSegment[] = [];
+  let current: AgentRunProjection["parts"] = [];
+  const answer = (answerParts: AgentRunProjection["parts"], last: boolean): ProjectionSegment => ({
+    kind: "answer",
+    projection: {
+      ...projection,
+      ...(last ? {} : { status: "completed" as const, preparingTool: undefined }),
+      parts: answerParts,
+      text: answerParts.map((part) => (part.type === "text" ? part.text : "")).join(""),
+      reasoning: [],
+      activeToolCalls: []
+    }
+  });
+  for (const part of parts) {
+    if (part.type !== "user_message") {
+      current.push(part);
+      continue;
+    }
+    if (current.length > 0) segments.push(answer(current, false));
+    segments.push({ kind: "steer", messageId: part.messageId, text: part.text });
+    current = [];
+  }
+  // The last answer stays, empty or not: the run goes on in it.
+  segments.push(answer(current, true));
+  return segments;
+}
+
+/** The steered message as the thread shows it, between the answers of its run. */
+export function toSteeredUiMessage(segment: { messageId: string; text: string }): UIMessage {
+  return {
+    id: segment.messageId,
+    role: "user",
+    parts: [{ type: "text", text: segment.text, state: "done" } as UIMessage["parts"][number]]
+  };
+}
+
+/**
+ * The active run as the thread shows it: one assistant message, or, where its person steered
+ * it, its answers with the steered messages between them. The last answer keeps the run's id.
+ */
+export function toActiveRunUiMessages(activeRun: AssistantUiActiveRun): UIMessage[] {
+  const segments = splitProjectionAtSteers(activeRun.projection);
+  return segments.map((segment, index): UIMessage => {
+    if (segment.kind === "steer") return toSteeredUiMessage(segment);
+    if (index === segments.length - 1) {
+      return toActiveRunUiMessage(activeRun, segment.projection);
+    }
+    return {
+      id: `${activeRun.run.id}:${index}`,
+      role: "assistant",
+      parts: toProjectionUiMessageParts(segment.projection, activeRun)
+    };
+  });
+}
+
+/**
+ * The active run's assistant message. `shown` is the part of the run it shows, the last answer
+ * of a steered run; what the run surfaced is read from all of it.
+ */
+export function toActiveRunUiMessage(
+  activeRun: AssistantUiActiveRun,
+  shown: AgentRunProjection = activeRun.projection
+): UIMessage {
+  const parts = toProjectionUiMessageParts(shown, activeRun);
   if (isTerminalRunStatus(activeRun.projection.status)) {
     appendWorkspacePromotedSurfacesPart(
       parts,
@@ -122,6 +200,10 @@ export function toProjectionUiMessageParts(
           state: part.open && !terminal ? "streaming" : "done"
         } as UIMessage["parts"][number]
       ];
+    }
+    // A steer is its own user message: `splitProjectionAtSteers` cuts the run at it.
+    if (part.type === "user_message") {
+      return [];
     }
     return [toToolCallUiPart(part, activeRun)];
   });

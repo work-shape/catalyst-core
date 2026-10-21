@@ -31552,6 +31552,30 @@
             "properties": {
               "type": {
                 "type": "string",
+                "const": "user_message"
+              },
+              "messageId": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              },
+              "createdAt": {
+                "$ref": "#/components/schemas/Timestamp"
+              }
+            },
+            "required": [
+              "type",
+              "messageId",
+              "text",
+              "createdAt"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
                 "const": "tool_call"
               },
               "toolCallId": {

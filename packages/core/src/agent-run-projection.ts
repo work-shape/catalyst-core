@@ -141,6 +141,18 @@ export function applyAgentRunObservation(
   if (event.type === "run_failed") {
     error = event.error;
   }
+  // A steer stands where the run took it in; the next step's text and calls follow it.
+  if (
+    event.type === "user_message_steered" &&
+    !parts.some((part) => part.type === "user_message" && part.messageId === event.message.id)
+  ) {
+    parts.push({
+      type: "user_message",
+      messageId: event.message.id,
+      text: event.message.text,
+      createdAt: event.message.createdAt
+    });
+  }
   if (isTerminalEvent(event)) {
     preparingTool = undefined;
     for (const entry of reasoning) {

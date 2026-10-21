@@ -56,6 +56,13 @@ export function readCompatibleMessageRunId(message: Pick<Message, "metadata">): 
   return runtime && "runId" in runtime ? runtime.runId : undefined;
 }
 
+/** The run a user message was steered into (FU-2); nothing for any other message. */
+export function readSteeredRunId(message: Pick<Message, "metadata" | "role">): string | undefined {
+  return message.role === "user"
+    ? readUserMessageMetadata(message.metadata)?.steered?.runId
+    : undefined;
+}
+
 export function readCompatibleAssistantFinalRunId(
   message: Pick<Message, "metadata" | "role">
 ): string | undefined {
