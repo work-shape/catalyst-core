@@ -28,9 +28,9 @@ import { requirePathParam } from "./request-context";
 import type { ChatServerOptions } from "../types";
 
 /**
- * Governance records. The three changing operations are operations of the registry: each
- * call is an Operation Run, and the caller's right is asked before the policy. The three reads
- * are plain routes.
+ * Governance records. The changing operations are operations of the registry: each call is
+ * an Operation Run, and the caller's right is asked before the policy. The reads are plain
+ * routes.
  */
 export function registerAccessRoutes(route: Route, options: ChatServerOptions): void {
   const workflow = new AccessWorkflow(options);
@@ -197,6 +197,14 @@ export function registerAccessRoutes(route: Route, options: ChatServerOptions): 
 
   route(apiOperations["permissions.effective"], ({ user, access, query }) =>
     workflow.effective(user, access, query)
+  );
+
+  route(apiOperations["permissions.rights"], ({ user, access, query }) =>
+    workflow.rights(user, access, query)
+  );
+
+  route(apiOperations["permissions.check"], ({ user, access, query }) =>
+    workflow.check(user, access, query)
   );
 
   route(apiOperations["workspaces.limits.list"], async () =>

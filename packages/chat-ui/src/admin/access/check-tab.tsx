@@ -1,8 +1,9 @@
 // @rights-screen: included in the rights wording guard.
 import type {
+  AccessOrigin,
   AdministeredUser,
+  AssetRightsCheck,
   ConfigAssetSummary,
-  EffectivePermissions,
   PermissionGrantRow
 } from "@work-shape/catalyst-api-client";
 import { ASSET_OWNER_KINDS } from "@work-shape/catalyst-core";
@@ -31,11 +32,9 @@ import {
   type TranslationContextValue,
   type TranslationKey
 } from "../../shared/i18n";
-import { ACCESS_LEVEL_OPTIONS } from "../control-plane/user-administration-model";
 import { refusalAskingInstanceAdmin } from "../settings/ask-instance-admin";
 import {
-  checkAsset,
-  checkedAssetId,
+  checkedActions,
   checkState,
   type CheckableAsset,
   type CheckedAction,
@@ -43,6 +42,7 @@ import {
   type LoadFailure
 } from "./access-model";
 import { assetKindLabelKey } from "./grant-words";
+import { originRoleName } from "./origin-words";
 import { verbLabel } from "./right-words";
 
 /** From this many entries on, a picker of the check shows its search field. */
@@ -59,16 +59,17 @@ const reasonLabelKeys: Record<CheckedAction["reason"], TranslationKey> = {
   holder_inactive: "access.reasonHolderInactive"
 };
 
-/** The person's role as the Users page names it: the highest of the built-in roles held. */
-function roleName(holder: AdministeredUser | undefined, t: Translate): string | undefined {
-  const option = ACCESS_LEVEL_OPTIONS.findLast((candidate) =>
-    holder?.roles.includes(candidate.value)
-  );
-  return option && t(option.label);
+/** Where the entry that decided lies, as the sentence of a role or a given right names it. */
+function decidedPlace(entry: AccessOrigin): "Instance" | "Workspace" | "Asset" {
+  return entry.scopeKind === "asset"
+    ? "Asset"
+    : entry.scopeKind === "workspace"
+      ? "Workspace"
+      : "Instance";
 }
 
-/** The entry that decided, as one sentence. */
-function decidedBy(action: CheckedAction, t: Translate, role: string | undefined): string {
+/** The entry that decided, as one sentence: the role by its name, a right by where it lies. */
+function decidedBy(action: CheckedAction, t: Translate, roles: AssetRightsCheck["roles"]): string {
   const { entry } = action;
   if (action.reason === "holder_inactive") {
     return t("access.reasonHolderInactive");
@@ -76,19 +77,28 @@ function decidedBy(action: CheckedAction, t: Translate, role: string | undefined
   if (!entry) {
     return t("access.decidedByNothing");
   }
+  const place = decidedPlace(entry);
+  const deny = entry.effect === "deny";
+  let sentence: string;
   if (entry.source === "role") {
-    return role === undefined ? t("access.decidedByAnyRole") : t("access.decidedByRole", { role });
+    const role = originRoleName(entry.roleId, roles, t);
+    sentence =
+      role === undefined
+        ? t("access.decidedByAnyRole")
+        : deny
+          ? t("access.decidedByRoleDeny", { role })
+          : place === "Instance"
+            ? t("access.decidedByRole", { role })
+            : t(`access.decidedByRole${place}`, { role });
+  } else if (entry.source === "legacy_ref") {
+    sentence = t(deny ? "access.decidedByLegacyDeny" : "access.decidedByLegacy");
+  } else {
+    sentence = t(deny ? `access.decidedByDeny${place}` : `access.decidedByGrant${place}`);
   }
-  if (entry.source !== "grant") {
-    return t(entry.effect === "deny" ? "access.decidedByLegacyDeny" : "access.decidedByLegacy");
-  }
-  const row = t(
-    entry.effect === "deny" ? "access.decidedByDenyAsset" : "access.decidedByGrantAsset"
-  );
   return action.deniedThrough === undefined
-    ? row
+    ? sentence
     : t("access.decidedByDenyThrough", {
-        deny: row,
+        deny: sentence,
         action: verbLabel(action.deniedThrough, t)
       });
 }
@@ -126,10 +136,16 @@ export interface CheckTabProps {
   onRetryAssets(): void;
   holderId: string | undefined;
   onHolderChange(holderId: string): void;
-  /** What the chosen user is allowed and denied. Absent while it loads. */
-  effective: EffectivePermissions | undefined;
+  /** The chosen asset's name, picked from the assets of the chosen kind. */
+  name: string;
+  onNameChange(name: string): void;
+  /**
+   * The server's answer for the chosen user and asset, each right decided with the entry that
+   * decides it. Absent while it loads and until a person and an asset are chosen.
+   */
+  check: AssetRightsCheck | undefined;
   /** `hidden` when the server does not show the caller this user. */
-  effectiveFailure: "hidden" | "failed" | undefined;
+  checkFailure: "hidden" | "failed" | undefined;
   onRetry(): void;
   /**
    * The grant rows the chosen user holds: they name assets that were deleted, too. Absent
@@ -176,8 +192,10 @@ export function CheckTab({
   onRetryAssets,
   holderId,
   onHolderChange,
-  effective,
-  effectiveFailure,
+  name,
+  onNameChange,
+  check,
+  checkFailure,
   onRetry,
   holderGrants,
   grantsFailed,
@@ -188,7 +206,6 @@ export function CheckTab({
   const { t } = useTranslation();
   const kinds = reportedKinds ?? BUILT_IN_KINDS;
   const [kindId, setKindId] = useState("agent");
-  const [name, setName] = useState("");
   const holder = users?.find((user) => user.id === holderId);
   const assetName = name.trim();
   const checkedKind = kinds.find((candidate) => candidate.kind === kindId) ?? kinds[0];
@@ -209,8 +226,8 @@ export function CheckTab({
     holderId,
     kind: checkedKind?.kind,
     name: assetName,
-    effectiveLoaded: effective !== undefined,
-    effectiveFailure,
+    checkLoaded: check !== undefined,
+    checkFailure,
     grantsLoaded: holderGrants !== undefined,
     grantsFailed,
     assetsLoaded: loadedAssets !== undefined,
@@ -265,7 +282,7 @@ export function CheckTab({
               if (next) {
                 setKindId(next.kind);
                 // An asset belongs to its kind: the name of another kind's asset is not kept.
-                setName("");
+                onNameChange("");
                 onKindChange(next.kind);
               }
             }}
@@ -296,7 +313,7 @@ export function CheckTab({
               };
             })}
             value={kindAssets.some((asset) => asset.name === assetName) ? assetName : undefined}
-            onValueChange={setName}
+            onValueChange={onNameChange}
           >
             <PickerButton
               label={t("access.checkName")}
@@ -313,7 +330,7 @@ export function CheckTab({
         <EmptyState>{t("access.checkEmpty")}</EmptyState>
       ) : state === "holderHidden" ? (
         <Banner tone="danger">{t("access.checkHolderHidden")}</Banner>
-      ) : state === "effectiveFailed" ? (
+      ) : state === "checkFailed" ? (
         retryBanner(t("access.checkLoadFailed"), onRetry)
       ) : state === "grantsFailed" ? (
         retryBanner(t("access.checkGrantsFailed"), onRetryGrants)
@@ -323,24 +340,14 @@ export function CheckTab({
         </Banner>
       ) : state === "assetsFailed" ? (
         retryBanner(t("access.checkAssetsFailed"), retryKindAssets)
-      ) : effective === undefined ||
-        holderGrants === undefined ||
-        loadedAssets === undefined ||
-        checkedKind === undefined ? (
+      ) : check === undefined || state !== "ready" ? (
         <SkeletonList rows={3} />
       ) : (
         <CheckResult
           holderName={holder?.displayLabel ?? t("access.unknownUser")}
-          role={roleName(holder, t)}
           kind={kind}
           assetName={picked === undefined ? assetName : labelOf(picked)}
-          effective={effective}
-          actions={checkAsset(
-            effective,
-            { kind, name: assetName },
-            checkedAssetId({ kind, name: assetName }, loadedAssets, holderGrants),
-            checkedKind.actions
-          )}
+          check={check}
         />
       )}
     </div>
@@ -349,21 +356,17 @@ export function CheckTab({
 
 function CheckResult({
   holderName,
-  role,
   kind,
   assetName,
-  effective,
-  actions
+  check
 }: {
   holderName: string;
-  /** The name of the person's role, where it is a built-in one. */
-  role: string | undefined;
   kind: string;
   assetName: string;
-  effective: EffectivePermissions;
-  actions: readonly CheckedAction[];
+  check: AssetRightsCheck;
 }) {
   const { t } = useTranslation();
+  const actions = checkedActions(check);
   const allowed = (verb: CheckedAction["verb"]) =>
     actions.find((action) => action.verb === verb && action.allowed);
   return (
@@ -372,7 +375,7 @@ function CheckResult({
       title={t("access.checkResult", { name: holderName, asset: assetName })}
     >
       <div className="grid gap-3">
-        {effective.holderActive ? null : (
+        {check.holderActive ? null : (
           <Banner tone="warning">{t("access.checkHolderInactive")}</Banner>
         )}
         <Table>
@@ -396,7 +399,7 @@ function CheckResult({
                   </div>
                 </TableCell>
                 <TableCell className="text-muted-foreground">
-                  {decidedBy(action, t, role)}
+                  {decidedBy(action, t, check.roles)}
                 </TableCell>
               </TableRow>
             ))}

@@ -4,6 +4,7 @@ import { useWorkspaceUsersQuery } from "../../../shared/api/workspace-queries";
 import { UserAdministrationPanel } from "../../control-plane/user-administration-panel";
 import { apiErrorMessage } from "../../../shared/workspace-utils";
 import { useSettingsPage } from "../../../shared/settings-page-context";
+import { UserEffectiveRightsCard } from "../../access/effective-rights";
 
 /** Instance > Users: the accounts of this instance, with its own data. */
 export function UsersPage() {
@@ -41,6 +42,7 @@ export function UsersPage() {
           ? (userId) => userMutations.sendUserInvitation.mutateAsync(userId)
           : undefined
       }
+      userRights={(userId) => <UserEffectiveRightsCard key={userId} holderId={userId} />}
     />
   );
 }

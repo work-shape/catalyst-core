@@ -2,9 +2,11 @@ export { CheckTab } from "./check-tab";
 export { assetKindLabelKey } from "./grant-words";
 export { actionLabel } from "./right-words";
 export { GrantsTab } from "./grants-tab";
+export { EffectiveRights, UserEffectiveRightsCard } from "./effective-rights";
+export { effectiveRightAreas } from "./effective-rights-model";
 export {
   accessWriteFailure,
-  checkAsset,
+  checkedActions,
   checkedAssetId,
   checkState,
   emptyGrantForm,

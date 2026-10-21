@@ -52,6 +52,13 @@ import {
   refused
 } from "./principal-grant";
 import { withRightsHeld } from "./rights-held";
+import {
+  decideAssetActions,
+  decideHeldRights,
+  nameRoles,
+  namePlaces,
+  type PlaceNames
+} from "./effective-rights";
 import { READ_RUN_DATA_ACTION, authorizeRunDataGrant } from "./run-data-grant";
 
 type AccessCallContext = Pick<OperationExecutionContext, "correlationId">;
@@ -77,6 +84,9 @@ export interface GrantViewContext {
   hiddenUserIds: ReadonlySet<string>;
   scopeAssets: ReadonlyMap<string, GrantScopeAsset>;
 }
+
+/** The holder a read of rights names. */
+type HolderInput = { holderKind: (typeof PRINCIPAL_HOLDER_KINDS)[number]; holderId: string };
 
 interface GrantCommand {
   holderKind: PermissionGrant["holderKind"];
@@ -416,9 +426,95 @@ export class AccessWorkflow {
   async effective(
     actor: AuthenticatedUser,
     access: ActorAccess,
-    input: { holderKind: (typeof PRINCIPAL_HOLDER_KINDS)[number]; holderId: string }
+    input: HolderInput
   ): Promise<{ holderActive: boolean; items: AccessEntry[] }> {
-    // A person always reads their own rights. Other people remain behind user administration.
+    const { holderActive, entries } = await this.holderEntries(actor, access, input);
+    return { holderActive, items: entries };
+  }
+
+  /**
+   * What one holder holds and is refused, each right decided on the server with where it
+   * comes from: the role, a grant or a membership that gives it, and the deny that refuses it.
+   * The read of `effective`, under its rule.
+   */
+  async rights(actor: AuthenticatedUser, access: ActorAccess, input: HolderInput) {
+    const { holderActive, entries } = await this.holderEntries(actor, access, input);
+    const places = await namePlaces(this.namingOptions(), { actor, access }, entries);
+    const decided = decideHeldRights(
+      entries,
+      holderActive,
+      (assetId) => places.assets.get(assetId)?.workspaceId
+    );
+    const origin = (entry: AccessEntry) => originView(entry, places.placeOf(entry));
+    return {
+      holderActive,
+      roles: await nameRoles(
+        this.namingOptions(),
+        decided.flatMap((right) => [...right.grantedBy, right.deniedBy])
+      ),
+      rights: decided.map(({ grantedBy, deniedBy, ...right }) => ({
+        ...right,
+        ...places.placeOf(right),
+        grantedBy: grantedBy.map(origin),
+        ...(deniedBy === undefined ? {} : { deniedBy: origin(deniedBy) })
+      }))
+    };
+  }
+
+  /**
+   * What one holder may do with one asset of a kind, per right the kind names, decided on the
+   * server with the entry that decides it. Without an asset id, only what holds on every
+   * asset of the kind decides. The read of `effective`, under its rule.
+   */
+  async check(
+    actor: AuthenticatedUser,
+    access: ActorAccess,
+    input: HolderInput & { kind: string; assetId?: string }
+  ) {
+    const kind = this.options.configAssets.kinds.get(input.kind);
+    if (!kind) {
+      throw new AppError("NOT_FOUND", "Asset kind not found", { reason: "unknown_kind" });
+    }
+    const { holderActive, entries } = await this.holderEntries(actor, access, input);
+    const asset =
+      input.assetId === undefined
+        ? undefined
+        : (
+            await this.options.stores.access.listGrantScopeAssets({
+              clientInstanceId: this.options.clientInstanceId,
+              assetIds: [input.assetId]
+            })
+          ).find((candidate) => candidate.kind === kind.kind);
+    // An id of another kind names no asset of this one; only what holds everywhere decides.
+    const resource = {
+      kind: kind.kind,
+      ...(asset === undefined ? {} : { assetId: asset.id, name: asset.name }),
+      ...(asset?.workspaceId === undefined ? {} : { workspaceId: asset.workspaceId })
+    };
+    const decided = decideAssetActions(entries, holderActive, kind.actions, resource);
+    const deciding = decided.flatMap((action) => action.decidedBy ?? []);
+    const places = await namePlaces(this.namingOptions(), { actor, access }, deciding);
+    return {
+      holderActive,
+      roles: await nameRoles(this.namingOptions(), deciding),
+      actions: decided.map(({ decidedBy, ...action }) => ({
+        ...action,
+        ...(decidedBy === undefined
+          ? {}
+          : { decidedBy: originView(decidedBy, places.placeOf(decidedBy)) })
+      }))
+    };
+  }
+
+  /**
+   * One holder's entries, for a caller allowed to read them: a person always reads their own,
+   * and other people remain behind user administration.
+   */
+  private async holderEntries(
+    actor: AuthenticatedUser,
+    access: ActorAccess,
+    input: HolderInput
+  ): Promise<{ holderActive: boolean; entries: AccessEntry[] }> {
     if (input.holderKind === "user" && input.holderId !== actor.id) {
       access.require(MANAGE_ACTION);
     }
@@ -434,9 +530,17 @@ export class AccessWorkflow {
     );
     return {
       holderActive: persisted.holderActive,
-      items: listAccessEntries(holder, persisted).filter(
+      entries: listAccessEntries(holder, persisted).filter(
         (entry) => entry.source !== "membership" || kindActions.has(entry.action)
       )
+    };
+  }
+
+  private namingOptions() {
+    return {
+      clientInstanceId: this.options.clientInstanceId,
+      stores: this.options.stores,
+      kinds: this.options.configAssets.kinds
     };
   }
 
@@ -552,7 +656,7 @@ export class AccessWorkflow {
   private async findHolder(
     actor: AuthenticatedUser,
     access: ActorAccess,
-    input: { holderKind: (typeof PRINCIPAL_HOLDER_KINDS)[number]; holderId: string }
+    input: HolderInput
   ): Promise<AccessHolder> {
     if (input.holderKind === "user") {
       const user = await this.findUser(input.holderId);
@@ -649,6 +753,12 @@ export class AccessWorkflow {
       metadata
     });
   }
+}
+
+/** An entry as an origin of a right: what it gives or refuses, at its named place. */
+function originView(entry: AccessEntry, place: PlaceNames) {
+  const { action: _action, ...origin } = entry;
+  return { ...origin, ...place };
 }
 
 /**

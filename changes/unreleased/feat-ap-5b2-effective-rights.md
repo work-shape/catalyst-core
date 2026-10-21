@@ -1,0 +1,5 @@
+---
+section: Added
+---
+
+- **Access:** A person's detail on **Instance > Users** shows **Effective rights**: every right the person holds, grouped by kind, each with where it applies, whether it holds and where it comes from: a role by its name ("Rolle Buchhaltung"), a right given directly, or a membership, and the deny that refuses it. The server decides each right by the rule that guards requests and serves it through `permissions.rights` (`GET /api/v1/instance/access/rights`). The **Check** tab of **Instance > Access** now reads its answer from `permissions.check` (`GET /api/v1/instance/access/check`) instead of deciding in the browser, so a custom role is named and a right in the workspace that owns the asset counts. Both only read, under the rule for reading effective rights: a person reads their own, others need `users.manage`, a technical account needs `service_principals.manage`. See [Effective rights on the Users page](/operate/rights-for-one-person/#effective-rights-on-the-users-page).

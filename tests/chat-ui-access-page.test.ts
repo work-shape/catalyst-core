@@ -3,13 +3,14 @@ import {
   ApiError,
   createApiClient,
   type AdministeredUser,
+  type AssetRightsCheck,
   type ConfigAssetSummary,
   type EffectivePermissions,
   type PermissionGrantRow
 } from "@work-shape/catalyst-api-client";
 import {
   accessWriteFailure,
-  checkAsset,
+  checkedActions,
   checkedAssetId,
   checkState,
   CheckTab,
@@ -28,6 +29,7 @@ import {
   type GrantForm
 } from "@work-shape/catalyst-chat-ui/access";
 import { DocsAddressProvider } from "@work-shape/catalyst-ui";
+import { decideAssetActions } from "@work-shape/catalyst-server";
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 
@@ -110,8 +112,10 @@ function checkTab(props: Partial<ComponentProps<typeof CheckTab>>) {
     onRetryAssets: nothing,
     holderId: undefined,
     onHolderChange: nothing,
-    effective: undefined,
-    effectiveFailure: undefined,
+    name: "",
+    onNameChange: nothing,
+    check: undefined,
+    checkFailure: undefined,
     onRetry: nothing,
     holderGrants: [],
     grantsFailed: false,
@@ -319,16 +323,19 @@ describe("when a check gives a result", () => {
     holderId: "user-1",
     kind: "agent",
     name: "kai-helper",
-    effectiveLoaded: true,
-    effectiveFailure: undefined,
+    checkLoaded: true,
+    checkFailure: undefined,
     grantsLoaded: true,
     grantsFailed: false,
     assetsLoaded: true,
     assetsFailure: undefined
   } as const;
 
-  it("gives one when the person's rights, the grants and the assets are there", () => {
+  it("gives one when the server's answer, the grants and the assets are there", () => {
     expect(checkState(ready)).toBe("ready");
+    expect(checkState({ ...ready, checkLoaded: false })).toBe("loading");
+    expect(checkState({ ...ready, checkFailure: "hidden" })).toBe("holderHidden");
+    expect(checkState({ ...ready, checkFailure: "failed" })).toBe("checkFailed");
   });
 
   it("gives none while the grants or the assets load, and says which part failed", () => {
@@ -353,7 +360,24 @@ describe("when a check gives a result", () => {
   });
 });
 
-describe("what a check decides", () => {
+const AGENT_ACTIONS = { read: "agent.read", write: "agent.write", delete: "agent.delete" };
+
+/** The server's answer on one asset, from a holder's entries, as `permissions.check` gives it. */
+function checkOf(
+  holder: EffectivePermissions,
+  assetId?: string,
+  actions: Record<string, string> = AGENT_ACTIONS
+): AssetRightsCheck {
+  return {
+    holderActive: holder.holderActive,
+    roles: [],
+    actions: decideAssetActions(holder.items, holder.holderActive, actions, {
+      ...(assetId === undefined ? {} : { assetId })
+    })
+  };
+}
+
+describe("what a check decides, and how the tab names it", () => {
   /** Allowed to change and delete one agent, `asset-1`. */
   const effective: EffectivePermissions = {
     holderActive: true,
@@ -366,8 +390,8 @@ describe("what a check decides", () => {
     }))
   };
 
-  function decisions(holder: EffectivePermissions, name: string, assetId?: string) {
-    return checkAsset(holder, { kind: "agent", name }, assetId).map((action) => [
+  function decisions(holder: EffectivePermissions, _name: string, assetId?: string) {
+    return checkedActions(checkOf(holder, assetId)).map((action) => [
       action.verb,
       action.allowed,
       action.reason
@@ -407,7 +431,7 @@ describe("what a check decides", () => {
         }
       ]
     };
-    const actions = checkAsset(denied, { kind: "agent", name: "kai-helper" }, "asset-1");
+    const actions = checkedActions(checkOf(denied, "asset-1"));
     expect(actions.map((action) => [action.verb, action.allowed, action.reason])).toEqual([
       ["read", false, "no_grant"],
       ["write", false, "deny"],
@@ -438,12 +462,11 @@ describe("what a check decides", () => {
       ]
     };
     const asked = (holder: EffectivePermissions, assetId?: string) =>
-      checkAsset(
-        holder,
-        { kind: "connection", name: "sample-business" },
-        assetId,
-        connectionActions
-      ).map((action) => [action.verb, action.allowed, action.reason]);
+      checkedActions(checkOf(holder, assetId, connectionActions)).map((action) => [
+        action.verb,
+        action.allowed,
+        action.reason
+      ]);
     // A right to use a Connection is found, in the order the page lists the actions.
     expect(asked(user, "conn-1")).toEqual([
       ["read", false, "no_grant"],

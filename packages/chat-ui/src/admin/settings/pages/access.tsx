@@ -3,6 +3,7 @@ import { DataScopes } from "../../access/data-scopes";
 import { useState } from "react";
 import { ApiError } from "@work-shape/catalyst-api-client";
 import {
+  checkedAssetId,
   furtherGrantKinds,
   grantRowCount,
   grantsNameWorkspaces,
@@ -15,6 +16,7 @@ import { CheckTab, GrantsTab } from "../../access";
 import {
   listGrantChoiceAssets,
   useAccessMutations,
+  useAssetCheckQuery,
   useEffectivePermissionsQuery,
   usePermissionGrantsQuery
 } from "../../access/access-queries";
@@ -40,13 +42,13 @@ export function AccessPage() {
   const api = { apiBaseUrl, authScope, client };
   const [checkedHolderId, setCheckedHolderId] = useState<string | undefined>();
   const [checkedKind, setCheckedKind] = useState("agent");
+  const [checkedName, setCheckedName] = useState("");
   const grantsQuery = usePermissionGrantsQuery(api);
   const usersQuery = useWorkspaceUsersQuery({ ...api, enabled: true });
   // Assets come with the agent configuration, which has its own right. A
   // reader without it still sees and revokes rows; the pickers say what could not be loaded.
   const overviewQuery = useConfigAssetsOverviewQuery({ ...api, enabled: true });
   const giverQuery = useEffectivePermissionsQuery({ ...api, holderId: user.id });
-  const effectiveQuery = useEffectivePermissionsQuery({ ...api, holderId: checkedHolderId });
   // A grant names a kind beyond agents and skills while the instance has the kind: its module
   // is on. Which kinds a grant can name at all, core says.
   const contextQuery = usePlatformContextQuery({ ...api, enabled: true });
@@ -140,6 +142,35 @@ export function AccessPage() {
   });
   const mutations = useAccessMutations(api);
   const overview = overviewQuery.data;
+  // The Check tab asks the server about the asset its rows name: the active asset of the name,
+  // or the one a row of the person still names after it was deleted.
+  const checkedAssets =
+    checkedKind === "agent" || checkedKind === "skill"
+      ? overview?.assets
+      : checkedKindAssetsQuery.data?.map((asset) => ({
+          id: asset.id,
+          kind: checkedKind,
+          name: asset.name
+        }));
+  const checkedHolderGrants = grantsQuery.data?.filter(
+    (grant) => grant.holderKind === "user" && grant.holderId === checkedHolderId
+  );
+  const checkedAssetName = checkedName.trim();
+  const checkQuery = useAssetCheckQuery({
+    ...api,
+    holderId: checkedHolderId,
+    kind: checkedKind,
+    assetId:
+      checkedAssets && checkedHolderGrants
+        ? checkedAssetId(
+            { kind: checkedKind, name: checkedAssetName },
+            checkedAssets,
+            checkedHolderGrants
+          )
+        : undefined,
+    enabled:
+      checkedAssetName !== "" && checkedAssets !== undefined && checkedHolderGrants !== undefined
+  });
   const overviewFailure = loadFailure(overviewQuery.error);
   const retry = (query: { refetch(): Promise<unknown> }) => () => {
     query.refetch().catch(() => undefined);
@@ -219,18 +250,18 @@ export function AccessPage() {
             onRetryAssets={retry(overviewQuery)}
             holderId={checkedHolderId}
             onHolderChange={setCheckedHolderId}
-            effective={effectiveQuery.data}
-            effectiveFailure={
-              effectiveQuery.error === null
+            name={checkedName}
+            onNameChange={setCheckedName}
+            check={checkQuery.data}
+            checkFailure={
+              checkQuery.error === null
                 ? undefined
-                : effectiveQuery.error instanceof ApiError && effectiveQuery.error.status === 404
+                : checkQuery.error instanceof ApiError && checkQuery.error.status === 404
                   ? "hidden"
                   : "failed"
             }
-            onRetry={retry(effectiveQuery)}
-            holderGrants={grantsQuery.data?.filter(
-              (grant) => grant.holderKind === "user" && grant.holderId === checkedHolderId
-            )}
+            onRetry={retry(checkQuery)}
+            holderGrants={checkedHolderGrants}
             grantsFailed={Boolean(grantsQuery.error)}
             onRetryGrants={retry(grantsQuery)}
             instanceAdminName={user.instanceAdminName}

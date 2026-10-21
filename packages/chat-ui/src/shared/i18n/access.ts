@@ -197,7 +197,29 @@ export const access = defineTranslations({
     "access.checkName": "Asset",
     "access.checkEmpty": "Choose a person and an asset to see what the person may do with it.",
     "access.decidedByRole": "The person's role, {role}, allows this everywhere.",
-    "access.decidedByAnyRole": "The person's role allows this everywhere."
+    "access.decidedByAnyRole": "The person's role allows this everywhere.",
+    "access.decidedByRoleWorkspace": "The role {role} allows this in the asset's workspace.",
+    "access.decidedByRoleAsset": "The role {role} allows this on this asset.",
+    "access.decidedByRoleDeny": "The role {role} refuses this.",
+    "access.decidedByGrantInstance": "Right on the whole instance",
+    "access.decidedByGrantWorkspace": "Right in the asset's workspace",
+    "access.decidedByDenyInstance": "Deny on the whole instance",
+    "access.decidedByDenyWorkspace": "Deny in the asset's workspace",
+    "access.scopePersonalWorkspace": "Personal workspace",
+    "access.effectiveTitle": "Effective rights",
+    "access.effectiveDescription":
+      "What this person may do, and where each right comes from. Rights are given on Access and on roles.",
+    "access.effectiveEmpty": "This person holds no right.",
+    "access.effectiveLoadFailed": "The rights could not be loaded.",
+    "access.effectiveInactive": "This account is not active, so it holds none of these rights.",
+    "access.effectiveAreaAdministration": "Administration",
+    "access.originRole": "Role {role}",
+    "access.originRoleDeny": "Denied by role {role}",
+    "access.originAnyRole": "a role",
+    "access.originGrant": "Granted directly",
+    "access.originGrantDeny": "Denied directly",
+    "access.originMembership": "Membership",
+    "access.originDenyPlace": "The deny applies to: {place}"
   },
   de: {
     "access.scopeTab": "Datenzugriff",
@@ -397,6 +419,29 @@ export const access = defineTranslations({
     "access.checkName": "Asset",
     "access.checkEmpty": "Wähle eine Person und ein Asset, um zu sehen, was die Person damit darf.",
     "access.decidedByRole": "Die Rolle der Person, {role}, erlaubt das überall.",
-    "access.decidedByAnyRole": "Die Rolle der Person erlaubt das überall."
+    "access.decidedByAnyRole": "Die Rolle der Person erlaubt das überall.",
+    "access.decidedByRoleWorkspace": "Die Rolle {role} erlaubt das im Arbeitsbereich des Assets.",
+    "access.decidedByRoleAsset": "Die Rolle {role} erlaubt das an diesem Asset.",
+    "access.decidedByRoleDeny": "Die Rolle {role} verweigert das.",
+    "access.decidedByGrantInstance": "Recht auf der ganzen Instanz",
+    "access.decidedByGrantWorkspace": "Recht im Arbeitsbereich des Assets",
+    "access.decidedByDenyInstance": "Verweigerung auf der ganzen Instanz",
+    "access.decidedByDenyWorkspace": "Verweigerung im Arbeitsbereich des Assets",
+    "access.scopePersonalWorkspace": "Persönlicher Arbeitsbereich",
+    "access.effectiveTitle": "Wirksame Rechte",
+    "access.effectiveDescription":
+      "Was diese Person darf und woher jedes Recht kommt. Rechte vergibst du unter Zugriff und an den Rollen.",
+    "access.effectiveEmpty": "Diese Person hat kein Recht.",
+    "access.effectiveLoadFailed": "Die Rechte konnten nicht geladen werden.",
+    "access.effectiveInactive":
+      "Dieses Konto ist nicht aktiv und hat deshalb keines dieser Rechte.",
+    "access.effectiveAreaAdministration": "Verwaltung",
+    "access.originRole": "Rolle {role}",
+    "access.originRoleDeny": "Verweigert durch Rolle {role}",
+    "access.originAnyRole": "eine Rolle",
+    "access.originGrant": "Direkt vergeben",
+    "access.originGrantDeny": "Direkt verweigert",
+    "access.originMembership": "Mitgliedschaft",
+    "access.originDenyPlace": "Die Verweigerung gilt für: {place}"
   }
 });

@@ -24,7 +24,7 @@ import { createFilesystemObjectStorage } from "@work-shape/catalyst-object-stora
 import { createPostgresJobWorker } from "@work-shape/catalyst-postgres-store";
 import { LocalWorkspaceCommandProcessExecutor } from "@work-shape/catalyst-tool-execution";
 import type { ToolAssemblyDefinition } from "@work-shape/catalyst-tool-sdk";
-import { checkAsset, checkedAssetId } from "@work-shape/catalyst-chat-ui/access";
+import { checkedActions, checkedAssetId } from "@work-shape/catalyst-chat-ui/access";
 import {
   SEED_EMAIL_SUFFIX,
   checkQuestions,
@@ -373,7 +373,7 @@ export function expectSecondRunChangedNothing(
   expect(right).toEqual(left);
 }
 
-const reasonOf = (action: ReturnType<typeof checkAsset>[number]): CheckReason =>
+const reasonOf = (action: ReturnType<typeof checkedActions>[number]): CheckReason =>
   action.reason === "legacy"
     ? "individual_right"
     : action.reason === "holder_inactive"
@@ -381,8 +381,8 @@ const reasonOf = (action: ReturnType<typeof checkAsset>[number]): CheckReason =>
       : action.reason;
 
 /**
- * Asks every question of the demo README's table the way the Check tab does: the tab's own
- * decision, from the three things the tab loads.
+ * Asks every question of the demo README's table the way the Check tab does: the server's
+ * answer on the asset the tab names from the assets and the person's rows.
  */
 export async function expectCheckAnswers(
   state: InstanceState,
@@ -392,11 +392,11 @@ export async function expectCheckAnswers(
     | (typeof workflowCheckQuestions)[number]
   )[] = checkQuestions
 ): Promise<void> {
-  // The tab takes the kinds and the actions of each from the instance's registry.
+  // The tab offers the kinds of the instance's registry.
   const { kinds } = await state.client.platform.context.get();
   for (const question of questions) {
-    const registered = kinds.find((kind) => kind.kind === question.kind);
-    if (!registered) throw new Error(`The instance has no kind '${question.kind}'`);
+    if (!kinds.some((kind) => kind.kind === question.kind))
+      throw new Error(`The instance has no kind '${question.kind}'`);
     // Agents and skills come with the agent configuration, any other kind has its own list.
     const listed =
       question.kind === "agent" || question.kind === "skill"
@@ -409,20 +409,22 @@ export async function expectCheckAnswers(
     const email = people.find((person) => person.key === question.person)?.email;
     const holder = state.users.find((user) => user.email === email);
     if (!holder) throw new Error(`No seeded user for '${question.person}'`);
-    const [effective, holderGrants] = await Promise.all([
-      state.client.permissions.effective({ query: { holderKind: "user", holderId: holder.id } }),
-      listAll((paging) =>
-        state.client.permissions.list({
-          query: { ...paging, holderKind: "user", holderId: holder.id }
-        })
-      )
-    ]);
+    const holderGrants = await listAll((paging) =>
+      state.client.permissions.list({
+        query: { ...paging, holderKind: "user", holderId: holder.id }
+      })
+    );
     const asset = { kind: question.kind, name: question.asset };
-    const answers = checkAsset(
-      effective,
-      asset,
-      checkedAssetId(asset, listed, holderGrants),
-      registered.actions
+    const assetId = checkedAssetId(asset, listed, holderGrants);
+    const answers = checkedActions(
+      await state.client.permissions.check({
+        query: {
+          holderKind: "user",
+          holderId: holder.id,
+          kind: question.kind,
+          ...(assetId === undefined ? {} : { assetId })
+        }
+      })
     );
     expect(
       Object.fromEntries(

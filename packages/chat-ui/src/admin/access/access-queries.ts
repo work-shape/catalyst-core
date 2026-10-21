@@ -21,6 +21,15 @@ const accessQueryKeys = {
     ["access", apiBaseUrl, authScope, "grants"] as const,
   effective: (apiBaseUrl: string, authScope: string, holderId: string | undefined) =>
     ["access", apiBaseUrl, authScope, "effective", holderId] as const,
+  rights: (apiBaseUrl: string, authScope: string, holderId: string) =>
+    ["access", apiBaseUrl, authScope, "rights", holderId] as const,
+  check: (
+    apiBaseUrl: string,
+    authScope: string,
+    holderId: string | undefined,
+    kind: string,
+    assetId: string | undefined
+  ) => ["access", apiBaseUrl, authScope, "check", holderId, kind, assetId] as const,
   workspaceLimits: (apiBaseUrl: string, authScope: string) =>
     ["access", apiBaseUrl, authScope, "workspaces"] as const
 };
@@ -126,6 +135,48 @@ export function useEffectivePermissionsQuery(input: AccessApiInput & { holderId?
         query: { holderKind: "user", holderId: holderId ?? "" }
       }),
     enabled: holderId !== undefined,
+    retry: false
+  });
+}
+
+/**
+ * What one person holds and is refused, each right decided by the server with where it comes
+ * from. Read by the person themselves or by who administers people.
+ */
+export function useHolderRightsQuery(input: AccessApiInput & { holderId: string }) {
+  const { holderId } = input;
+  return useQuery({
+    queryKey: accessQueryKeys.rights(input.apiBaseUrl, input.authScope, holderId),
+    queryFn: () => input.client.permissions.rights({ query: { holderKind: "user", holderId } }),
+    retry: false
+  });
+}
+
+/**
+ * What one person may do with one asset of a kind, decided by the server with the entry that
+ * decides each right. Without an asset id, what holds on every asset of the kind decides.
+ */
+export function useAssetCheckQuery(
+  input: AccessApiInput & {
+    holderId: string | undefined;
+    kind: string;
+    assetId: string | undefined;
+    enabled: boolean;
+  }
+) {
+  const { holderId, kind, assetId } = input;
+  return useQuery({
+    queryKey: accessQueryKeys.check(input.apiBaseUrl, input.authScope, holderId, kind, assetId),
+    queryFn: () =>
+      input.client.permissions.check({
+        query: {
+          holderKind: "user",
+          holderId: holderId ?? "",
+          kind,
+          ...(assetId === undefined ? {} : { assetId })
+        }
+      }),
+    enabled: input.enabled && holderId !== undefined,
     retry: false
   });
 }

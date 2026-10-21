@@ -1,15 +1,15 @@
 import {
   ApiError,
+  type AccessOrigin,
   type AdministeredUser,
+  type AssetRightsCheck,
   type CreatePermissionGrantRequest,
-  type EffectivePermissions,
   type PermissionGrantRow,
   type PlatformContext
 } from "@work-shape/catalyst-api-client";
 import {
   ACCESS_SOURCES,
   CONFIG_ASSET_KINDS,
-  explainAccessEntries,
   GRANT_EFFECTS,
   GRANT_SCOPE_KINDS as SCOPE_KINDS,
   GRANTABLE_ACTION_SCOPES,
@@ -20,18 +20,6 @@ import {
 
 /** A kind of the instance's registry, with the actions its rights are checked as. */
 export type CheckedKind = PlatformContext["kinds"][number];
-
-/** What the Check tab decides on an asset, in the order the page lists it. */
-const ACCESS_VERBS = ["read", "use", "write", "delete"] as const;
-type AccessVerb = (typeof ACCESS_VERBS)[number];
-
-/** The actions of a kind the check answers for: every one its registry entry names. */
-function checkedVerbs(actions: CheckedKind["actions"]): { verb: AccessVerb; action: string }[] {
-  return ACCESS_VERBS.flatMap((verb) => {
-    const action = actions[verb];
-    return action === undefined ? [] : [{ verb, action }];
-  });
-}
 
 /**
  * The asset kinds a grant of this page names and what it allows or denies on them: the two
@@ -522,7 +510,9 @@ export function loadFailure(error: unknown): LoadFailure | undefined {
   return error instanceof ApiError && error.status === 403 ? "forbidden" : "failed";
 }
 
-type EffectiveEntry = EffectivePermissions["items"][number];
+type CheckAnswer = AssetRightsCheck["actions"][number];
+/** What the Check tab answers for on an asset. */
+type AccessVerb = CheckAnswer["verb"];
 
 /** The asset a check asks about: a name that need not exist yet. */
 export interface CheckedAsset {
@@ -553,7 +543,7 @@ export interface CheckedAction {
   allowed: boolean;
   reason: "role" | "legacy" | "grant" | "deny" | "no_grant" | "holder_inactive";
   /** The entry that decided. Absent when nothing covers the asset or the holder is inactive. */
-  entry?: EffectiveEntry;
+  entry?: AccessOrigin;
   /**
    * The verb of the deny that refuses a delete the holder is otherwise allowed: whoever is
    * denied reading or writing an asset does not delete it.
@@ -582,56 +572,37 @@ export function checkedAssetId(
 }
 
 /**
- * Decides every action of the asset's kind on one asset, from a holder's effective entries,
- * with the evaluator the server decides with. `actions` are the ones the instance's registry
- * names for the kind; without them a kind has reading, writing and deleting under its own
- * name. A delete follows the asset workflow's further rule.
+ * The server's answers on one asset, as the Check tab names them. The server decided each one
+ * with the evaluator it decides every call with; this only says which words fit.
  */
-export function checkAsset(
-  effective: EffectivePermissions,
-  asset: CheckedAsset,
-  assetId: string | undefined,
-  actions: CheckedKind["actions"] = {
-    read: `${asset.kind}.read`,
-    write: `${asset.kind}.write`,
-    delete: `${asset.kind}.delete`
-  }
-): CheckedAction[] {
-  const verbs = checkedVerbs(actions);
-  if (!effective.holderActive) {
-    return verbs.map(({ verb }) => ({ verb, allowed: false, reason: "holder_inactive" }));
-  }
-  const resource = { kind: asset.kind, name: asset.name, ...(assetId ? { assetId } : {}) };
-  const decided = verbs.map(({ verb, action }): CheckedAction => {
-    const { decision, entry } = explainAccessEntries(effective.items, action, resource);
-    if (decision.allowed) {
-      return {
-        verb,
-        allowed: true,
-        reason: checkedReason(decision.source),
-        ...(entry ? { entry } : {})
-      };
-    }
-    return decision.reason === "denied"
-      ? { verb, allowed: false, reason: "deny", ...(entry ? { entry } : {}) }
-      : { verb, allowed: false, reason: "no_grant" };
-  });
-  return decided.map((action) => {
-    if (action.verb !== "delete" || !action.allowed) {
-      return action;
-    }
-    const deny = decided.find(
-      (other) => (other.verb === "read" || other.verb === "write") && other.reason === "deny"
-    );
-    return deny
-      ? {
-          verb: "delete",
-          allowed: false,
-          reason: "deny",
-          ...(deny.entry ? { entry: deny.entry } : {}),
-          deniedThrough: deny.verb
+export function checkedActions(check: AssetRightsCheck): CheckedAction[] {
+  return check.actions.flatMap((answer: CheckAnswer): CheckedAction[] => {
+    const entry = answer.decidedBy === undefined ? {} : { entry: answer.decidedBy };
+    if (answer.allowed) {
+      return [
+        {
+          verb: answer.verb,
+          allowed: true,
+          reason: answer.decidedBy ? checkedReason(answer.decidedBy.source) : "grant",
+          ...entry
         }
-      : action;
+      ];
+    }
+    const reason =
+      answer.reason === "denied"
+        ? "deny"
+        : answer.reason === "holder_inactive"
+          ? "holder_inactive"
+          : "no_grant";
+    return [
+      {
+        verb: answer.verb,
+        allowed: false,
+        reason,
+        ...(reason === "deny" ? entry : {}),
+        ...(answer.deniedThrough === undefined ? {} : { deniedThrough: answer.deniedThrough })
+      }
+    ];
   });
 }
 
@@ -641,8 +612,8 @@ export interface CheckInputs {
   /** The chosen kind. Absent until the instance has said which kinds it has. */
   kind: string | undefined;
   name: string;
-  effectiveLoaded: boolean;
-  effectiveFailure: "hidden" | "failed" | undefined;
+  checkLoaded: boolean;
+  checkFailure: "hidden" | "failed" | undefined;
   grantsLoaded: boolean;
   grantsFailed: boolean;
   assetsLoaded: boolean;
@@ -652,7 +623,7 @@ export interface CheckInputs {
 export type CheckState =
   | "incomplete"
   | "holderHidden"
-  | "effectiveFailed"
+  | "checkFailed"
   | "grantsFailed"
   | "assetsForbidden"
   | "assetsFailed"
@@ -661,8 +632,9 @@ export type CheckState =
 
 /**
  * Whether the Check tab may give a result. It needs a person, a name an asset can have, the
- * person's rights, the grant rows and the assets: a result without the rows or the assets
- * would miss a deny on one asset and call the action allowed.
+ * grant rows and the assets, which name the asset the server is asked about, and the server's
+ * answer: a question without the rows or the assets would miss a deny on one asset and call
+ * the action allowed.
  */
 export function checkState(inputs: CheckInputs): CheckState {
   if (
@@ -672,8 +644,8 @@ export function checkState(inputs: CheckInputs): CheckState {
   ) {
     return "incomplete";
   }
-  if (inputs.effectiveFailure !== undefined) {
-    return inputs.effectiveFailure === "hidden" ? "holderHidden" : "effectiveFailed";
+  if (inputs.checkFailure !== undefined) {
+    return inputs.checkFailure === "hidden" ? "holderHidden" : "checkFailed";
   }
   if (inputs.grantsFailed) {
     return "grantsFailed";
@@ -681,5 +653,5 @@ export function checkState(inputs: CheckInputs): CheckState {
   if (inputs.assetsFailure !== undefined) {
     return inputs.assetsFailure === "forbidden" ? "assetsForbidden" : "assetsFailed";
   }
-  return inputs.effectiveLoaded && inputs.grantsLoaded && inputs.assetsLoaded ? "ready" : "loading";
+  return inputs.checkLoaded && inputs.grantsLoaded && inputs.assetsLoaded ? "ready" : "loading";
 }

@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { ApiError } from "@work-shape/catalyst-api-client";
 import {
+  assetRightsCheckSchema,
   configAssetsOverviewSchema,
-  effectivePermissionsSchema,
   permissionGrantSchema
 } from "@work-shape/catalyst-api-contract";
 import {
   accessWriteFailure,
-  checkAsset,
+  checkedActions,
   checkedAssetId
 } from "@work-shape/catalyst-chat-ui/access";
 import { asUserId } from "@work-shape/catalyst-core";
@@ -24,25 +24,22 @@ import {
 
 const grantList = z.object({ items: z.array(permissionGrantSchema) });
 
-/** The Check tab's verdicts for one holder and agent, from the answers the page loads. */
+/** The Check tab's verdicts for one holder and agent: the server's answer on the asset the page names. */
 async function verdicts(t: AccessInstance, holderId: string, name: string) {
-  const [effective, grants, overview] = await Promise.all([
-    t.expectOk(t.admin.id, "permissions.effective", {
-      query: { holderKind: "user", holderId }
-    }),
+  const [grants, overview] = await Promise.all([
     t.expectOk(t.admin.id, "permissions.list", { query: { holderKind: "user", holderId } }),
     t.expectOk(t.admin.id, "config_assets.get_overview")
   ]);
   const asset = { kind: "agent", name } as const;
-  return checkAsset(
-    effectivePermissionsSchema.parse(effective.json()),
+  const assetId = checkedAssetId(
     asset,
-    checkedAssetId(
-      asset,
-      configAssetsOverviewSchema.parse(overview.json()).assets,
-      grantList.parse(grants.json()).items
-    )
+    configAssetsOverviewSchema.parse(overview.json()).assets,
+    grantList.parse(grants.json()).items
   );
+  const check = await t.expectOk(t.admin.id, "permissions.check", {
+    query: { holderKind: "user", holderId, kind: "agent", ...(assetId ? { assetId } : {}) }
+  });
+  return checkedActions(assetRightsCheckSchema.parse(check.json()));
 }
 
 /**

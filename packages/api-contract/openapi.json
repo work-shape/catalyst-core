@@ -14004,6 +14004,103 @@
         "x-catalyst-rate-class": "write"
       }
     },
+    "/api/v1/instance/access/check": {
+      "get": {
+        "operationId": "permissions.check",
+        "summary": "Decide what one holder may do with one asset, with the entry that decides each right",
+        "tags": [
+          "Access"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "user_admin:read"
+            ]
+          },
+          {
+            "sessionToken": [
+              "user_admin:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "holderKind",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "user",
+                "service_principal"
+              ]
+            }
+          },
+          {
+            "name": "holderId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "assetId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssetRightsCheck"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-rate-class": "read"
+      }
+    },
     "/api/v1/instance/access/effective": {
       "get": {
         "operationId": "permissions.effective",
@@ -14463,6 +14560,85 @@
         },
         "x-catalyst-effect": "changing",
         "x-catalyst-rate-class": "write"
+      }
+    },
+    "/api/v1/instance/access/rights": {
+      "get": {
+        "operationId": "permissions.rights",
+        "summary": "List what one holder holds and is refused, each right decided with where it comes from",
+        "tags": [
+          "Access"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "user_admin:read"
+            ]
+          },
+          {
+            "sessionToken": [
+              "user_admin:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "holderKind",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "user",
+                "service_principal"
+              ]
+            }
+          },
+          {
+            "name": "holderId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HolderRights"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-rate-class": "read"
       }
     },
     "/api/v1/instance/access/roles": {
@@ -31031,6 +31207,88 @@
       }
     },
     "schemas": {
+      "AccessOrigin": {
+        "type": "object",
+        "properties": {
+          "effect": {
+            "$ref": "#/components/schemas/GrantEffect"
+          },
+          "scopeKind": {
+            "$ref": "#/components/schemas/GrantScopeKind"
+          },
+          "scopeId": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "role",
+              "legacy_ref",
+              "grant",
+              "membership"
+            ]
+          },
+          "roleId": {
+            "type": "string"
+          },
+          "scopeAsset": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "active": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "kind",
+              "active"
+            ]
+          },
+          "scopeWorkspace": {
+            "type": "object",
+            "properties": {
+              "personal": {
+                "type": "boolean"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "personal"
+            ]
+          }
+        },
+        "required": [
+          "effect",
+          "scopeKind",
+          "source"
+        ]
+      },
+      "AccessOriginRole": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "builtIn": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "builtIn"
+        ]
+      },
       "ActiveRunSummary": {
         "type": "object",
         "properties": {
@@ -34450,6 +34708,73 @@
       "AssetRevisionSelector": {
         "type": "string",
         "pattern": "^(?:draft|published|[1-9]\\d{0,8})$"
+      },
+      "AssetRightsCheck": {
+        "type": "object",
+        "properties": {
+          "holderActive": {
+            "type": "boolean"
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AccessOriginRole"
+            }
+          },
+          "actions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "verb": {
+                  "type": "string",
+                  "enum": [
+                    "read",
+                    "use",
+                    "write",
+                    "delete"
+                  ]
+                },
+                "action": {
+                  "type": "string"
+                },
+                "allowed": {
+                  "type": "boolean"
+                },
+                "reason": {
+                  "type": "string",
+                  "enum": [
+                    "denied",
+                    "no_grant",
+                    "holder_inactive"
+                  ]
+                },
+                "decidedBy": {
+                  "$ref": "#/components/schemas/AccessOrigin"
+                },
+                "deniedThrough": {
+                  "type": "string",
+                  "enum": [
+                    "read",
+                    "use",
+                    "write",
+                    "delete"
+                  ]
+                }
+              },
+              "required": [
+                "verb",
+                "action",
+                "allowed"
+              ]
+            }
+          }
+        },
+        "required": [
+          "holderActive",
+          "roles",
+          "actions"
+        ]
       },
       "AssetScope": {
         "oneOf": [
@@ -37944,6 +38269,100 @@
           "instance",
           "workspace",
           "asset"
+        ]
+      },
+      "HolderRights": {
+        "type": "object",
+        "properties": {
+          "holderActive": {
+            "type": "boolean"
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AccessOriginRole"
+            }
+          },
+          "rights": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string"
+                },
+                "scopeKind": {
+                  "$ref": "#/components/schemas/GrantScopeKind"
+                },
+                "scopeId": {
+                  "type": "string"
+                },
+                "allowed": {
+                  "type": "boolean"
+                },
+                "reason": {
+                  "type": "string",
+                  "enum": [
+                    "denied",
+                    "no_grant",
+                    "holder_inactive"
+                  ]
+                },
+                "grantedBy": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AccessOrigin"
+                  }
+                },
+                "deniedBy": {
+                  "$ref": "#/components/schemas/AccessOrigin"
+                },
+                "scopeAsset": {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "active": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "active"
+                  ]
+                },
+                "scopeWorkspace": {
+                  "type": "object",
+                  "properties": {
+                    "personal": {
+                      "type": "boolean"
+                    },
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "personal"
+                  ]
+                }
+              },
+              "required": [
+                "action",
+                "scopeKind",
+                "allowed",
+                "grantedBy"
+              ]
+            }
+          }
+        },
+        "required": [
+          "holderActive",
+          "roles",
+          "rights"
         ]
       },
       "Infrastructure": {

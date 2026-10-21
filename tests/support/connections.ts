@@ -78,6 +78,23 @@ export function connection(
   return config;
 }
 
+/** The Connection kind of the tests, for an instance that registers it beside others. */
+export function fixtureConnectionKind() {
+  return createConnectionAssetKind({
+    connectorTypes: fixtureConnectorTypes,
+    egress: fixtureEgress
+  });
+}
+
+/** Stores a Connection the way the release seed does. Returns the asset id. */
+export async function seedConnection(t: AccessInstance, name: string): Promise<string> {
+  await applyAtCurrentRevisions(t.stores.configAssets, {
+    clientInstanceId,
+    mutations: [{ type: "upsert", kind: "connection", name, config: connection(name) }]
+  });
+  return t.assetId("connection", name);
+}
+
 export interface ConnectionInstance extends AccessInstance {
   /**
    * Stores a Connection the way the release seed does: through the store and through no

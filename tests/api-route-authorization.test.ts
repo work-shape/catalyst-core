@@ -87,7 +87,9 @@ const acceptedQueries: Partial<Record<ApiOperationName, Record<string, string>>>
   "data_stores.rows": { table: "missing" },
   "data_stores.value": { table: "missing", column: "missing", at: "missing" },
   "scope_assignments.list": { holderKind: "user", holderId: "missing" },
-  "permissions.effective": { holderKind: "user", holderId: "missing" }
+  "permissions.effective": { holderKind: "user", holderId: "missing" },
+  "permissions.rights": { holderKind: "user", holderId: "missing" },
+  "permissions.check": { holderKind: "user", holderId: "missing", kind: "agent" }
 };
 
 function call(name: ApiOperationName, as: ReturnType<typeof asCaller>, headers = {}) {

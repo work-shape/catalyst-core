@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { ArrowLeft, KeyRound, Link2, Mail, Plus, Save, Trash2 } from "lucide-react";
 import type {
   AdministeredUser,
@@ -52,11 +52,14 @@ export function UserDetail({
   onUpsertIdentity,
   onDeleteIdentity,
   onResetPassword,
-  onSendInvitation
+  onSendInvitation,
+  rights
 }: {
   user: AdministeredUser;
   canManageSuperadminAccess: boolean;
   canDeleteUser: boolean;
+  /** The person's effective rights with where each comes from; read-only. */
+  rights?: ReactNode;
   mutating: boolean;
   onBack(): void;
   onUpdateUser(userId: string, input: UpdateAdministeredUserRequest): Promise<AdministeredUser>;
@@ -118,6 +121,7 @@ export function UserDetail({
             mutating={mutating}
             onUpdateUser={onUpdateUser}
           />
+          {rights}
           <IdentitiesCard
             user={user}
             disabledReason={managementDisabledReason}

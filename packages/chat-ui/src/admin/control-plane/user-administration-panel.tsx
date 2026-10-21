@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { ChevronRight, Copy, Search, UserPlus, Users } from "lucide-react";
 import type {
   AdministeredUser,
@@ -71,6 +71,8 @@ interface UserAdministrationPanelProps {
   onResetPassword(userId: string, password: string): Promise<unknown>;
   /** Absent while invitation emails are unavailable for this client instance. */
   onSendInvitation?(userId: string): Promise<unknown>;
+  /** The effective rights of one person, shown read-only on the person's page. */
+  userRights?(userId: string): ReactNode;
 }
 
 export function UserAdministrationPanel({
@@ -85,7 +87,8 @@ export function UserAdministrationPanel({
   onUpsertIdentity,
   onDeleteIdentity,
   onResetPassword,
-  onSendInvitation
+  onSendInvitation,
+  userRights
 }: UserAdministrationPanelProps) {
   const [selectedUserId, setSelectedUserId] = useState<string | undefined>();
   const [selectedRowIds, setSelectedRowIds] = useState<Set<string>>(() => new Set());
@@ -126,6 +129,7 @@ export function UserAdministrationPanel({
         onDeleteIdentity={onDeleteIdentity}
         onResetPassword={onResetPassword}
         onSendInvitation={onSendInvitation}
+        rights={userRights?.(selectedUser.id)}
       />
     );
   }
