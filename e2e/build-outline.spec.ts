@@ -187,12 +187,13 @@ test("an agent's sections are an outline right of the content: its mark follows 
     "Model",
     "Skills",
     "Tools",
-    "Starter prompts"
+    "Starter prompts",
+    "Available in"
   ]);
   // The steps of 40 can stop a pixel short of the end, which the loop counts as the end: where
   // the page scrolls one pixel past a multiple of 40, the last section is still a pixel away.
   await scrollPage("end");
-  await expect(current).toHaveText("Available in");
+  await expect(current).toHaveText("Who may use it");
   await expect(current).toHaveCount(1);
   // At the end of the page the switch is still pinned in view.
   await expectSwitchUsable();
