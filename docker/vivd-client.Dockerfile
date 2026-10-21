@@ -113,6 +113,8 @@ FROM workspace-artifact-runtime AS workspace-runner-runtime
 RUN python3 -m pip install --no-cache-dir --break-system-packages \
     numpy==2.1.3 \
     pandas==2.2.3 \
+    PyYAML==6.0.2 \
+  && python3 -c "import yaml; yaml.safe_load('ok: true')" \
   && python3 -m pip list --format=json > /usr/local/share/catalyst/runner-packages.json
 
 FROM base AS page-build-command

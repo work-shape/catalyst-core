@@ -544,7 +544,7 @@ describe("the kit's Dockerfile", () => {
     const stage = demo.split(" AS workspace-runner-runtime\n")[1]?.split("\nFROM ")[0];
     assert.ok(stage);
     const releasePins = systemPackages(kitDockerfile, "runner-system").pip;
-    for (const pin of ["numpy==2.1.3", "pandas==2.2.3"]) {
+    for (const pin of ["numpy==2.1.3", "pandas==2.2.3", "PyYAML==6.0.2"]) {
       assert.ok(releasePins.includes(pin));
       assert.ok(stage.includes(pin));
     }

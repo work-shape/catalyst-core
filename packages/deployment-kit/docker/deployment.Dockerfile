@@ -132,6 +132,7 @@ RUN --mount=type=cache,id=vivd-runner-apt-lists,target=/var/lib/apt/lists,sharin
     pypdf==4.3.1 \
     python-docx==1.1.2 \
     python-pptx==0.6.23 \
+    PyYAML==6.0.2 \
     reportlab==4.2.2 \
   && mkdir -p /usr/local/share/catalyst \
   && python3 -m pip list --format=json > /usr/local/share/catalyst/runner-packages.json \
@@ -300,6 +301,7 @@ RUN while IFS="$(printf '\t')" read -r command file; do \
   && python -c "from docx import Document; doc=Document(); doc.add_paragraph('python-docx ok'); print('python-docx ok')" \
   && python -c "from pptx import Presentation; prs=Presentation(); prs.slides.add_slide(prs.slide_layouts[0]); print('python-pptx ok')" \
   && python -c "import numpy, openpyxl, pandas; print('python-tabular ok')" \
+  && python -c "import yaml; yaml.safe_load('ok: true'); print('pyyaml ok')" \
   && python -c "import pdfplumber, pypdf, reportlab; print('python-pdf ok')" \
   && python -c "from PIL import Image; Image.new('RGB', (1, 1)); print('pillow ok')" \
   && node --version \
