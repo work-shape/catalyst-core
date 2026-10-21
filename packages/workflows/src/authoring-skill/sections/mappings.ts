@@ -31,4 +31,11 @@ needs computing is done by the operation a step calls or by a code step.
 - What an operation answers decides the path into its output. Where you do not know the shape,
   say so to the person instead of guessing a path: a wrong path fails the run, not the save.
 
+An MCP Connection operation's output is the MCP result: \`{ content, structuredContent }\`.
+Prefer \`structuredContent\` when present. Many tools instead put JSON text in
+\`content[0].text\`, where the block is \`{ type: "text", text }\`. That text is a string,
+not a record: a mapping cannot reach a field inside it. Use a code step to parse the JSON
+before mapping its fields, and handle a tool that answers prose instead. Inspect the actual
+answer first; an App action wraps this same MCP result in its \`result\` field.
+
 The input and the output of one step may each be at most ${WORKFLOW_STEP_DATA_MAX_BYTES} bytes as JSON. Dataset references count toward this bound; their rows do not.`;

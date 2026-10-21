@@ -44,6 +44,7 @@ import type { ToolRegistry } from "./tool-registry";
 import { failed } from "./tool-results";
 import {
   internalFailure,
+  toolTimeoutFailure,
   privateConversationRecovery,
   toolResultFromOperationResult
 } from "./operation-tool-result";
@@ -257,13 +258,13 @@ function toolCallOf(
 function validationFailure(
   issues: readonly { code?: string; path: readonly PropertyKey[]; message: string }[]
 ): ToolHandlerFailureResult {
-  return failed("validation_failed", "Tool input or output failed validation", {
-    issues: issues.map((issue) => ({
-      code: issue.code ?? "invalid",
-      path: issue.path.map(String).join("."),
-      message: issue.message
-    }))
-  });
+  const details = issueDetails(issues);
+  const summary = details.map((issue) => `${issue.path || "<root>"}: ${issue.message}`).join("; ");
+  return failed(
+    "validation_failed",
+    `Tool input or output failed validation${summary ? `: ${summary}` : ""}`,
+    { issues: details }
+  );
 }
 
 /**
@@ -278,6 +279,9 @@ function thrownHandlerFailure(
   context: ToolExecutionContext,
   logger: Logger | undefined
 ): ToolHandlerFailureResult {
+  if (isAppError(error) && error.code === "TIMEOUT") {
+    return toolTimeoutFailure({ toolName: request.toolName, locale: context.locale });
+  }
   if (isAppError(error) && error.code !== "INTERNAL" && error.exposeMessage) {
     return {
       ...failed("handler_failed", toErrorEnvelope(error, context.correlationId).error.message),

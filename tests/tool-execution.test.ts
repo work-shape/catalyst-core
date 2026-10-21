@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import {
+  AppError,
   asAgentRunId,
   asClientInstanceId,
   asConversationId,
@@ -71,6 +72,8 @@ const echo = defineTool({
   execute(input, toolContext) {
     executed.push(input.text);
     seenRuns.push(toolContext.operationRun);
+    if (input.text === "timeout") throw new AppError("TIMEOUT", "private provider details");
+    if (input.text === "never") return new Promise<never>(() => {});
     if (input.text === "throw") throw new Error("select * from secrets where token = 'abc'");
     if (input.text === "fail") return toolFailed("handler_failed", "The echo is out of order");
     return toolSuccess(
@@ -110,6 +113,29 @@ function setup(options: Partial<TestToolRunnerOptions> = {}) {
 }
 
 describe("an agent's tool call as an operation", () => {
+  it("says a tool did not answer for provider and executor timeouts without exposing provider details", async () => {
+    for (const locale of ["en", "de"] as const) {
+      for (const text of ["timeout", "never"]) {
+        const { runTool, runs } = setup();
+        const result = await runTool(request("demo.echo", { text }), {
+          ...context(),
+          locale,
+          deadline: new Date(Date.now() + 100)
+        });
+        expect(result).toMatchObject({
+          status: "timed_out",
+          error: {
+            code: "timed_out",
+            message: expect.stringContaining(
+              locale === "de" ? "nicht rechtzeitig geantwortet" : "did not answer in time"
+            )
+          }
+        });
+        expect(JSON.stringify(result)).not.toContain("private provider details");
+        expect(runs).toMatchObject([{ status: "failed" }]);
+      }
+    }
+  });
   it("runs the tool, answers its result and records one run that the tool is told of", async () => {
     const { runTool, runs, auditEvents } = setup();
     const call = request("demo.echo", { text: "hello" });
@@ -263,14 +289,14 @@ describe("an agent's tool call as an operation", () => {
     expect(runs).toEqual([]);
   });
 
-  it("answers an invalid input as the validation failure an agent has always read", async () => {
+  it("names an invalid input key in the message the agent reads", async () => {
     const { runTool, runs } = setup();
     const result = await runTool(request("demo.echo", { text: "" }), context());
     expect(result).toMatchObject({
       status: "failed",
       error: {
         code: "validation_failed",
-        message: "Tool input or output failed validation",
+        message: expect.stringContaining("Tool input or output failed validation: text:"),
         details: { issues: [{ path: "text" }] }
       }
     });

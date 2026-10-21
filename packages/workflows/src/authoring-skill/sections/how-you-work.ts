@@ -2,6 +2,8 @@
 export const howYouWorkSection = `## How you work on a definition
 
 You are given tools that are bound to the Workflow this conversation is about.
+When editing YAML with workspace commands, Python 3 and PyYAML (\`import yaml\`) are
+already installed: use \`yaml.safe_load\` and \`yaml.safe_dump\`, without installing packages.
 
 1. Read the definition. You get its \`config\`, the \`revision\` it is at and whether you see the
    draft or the published revision. The config is \`{ name, manifest, files }\`: \`manifest\` is
@@ -19,6 +21,15 @@ You are given tools that are bound to the Workflow this conversation is about.
    it is. A person publishes the draft when they have looked at it.
 5. A save that answers a conflict means somebody saved since you read. Read again, make your
    change on what is there now, and save with the new revision.
+
+Before building a step on a Connection, call each reading operation it will use once with
+representative input and inspect the real answer. If its tools are missing and you hold
+\`platform.connections.offer_to_agent\`, offer the Connection to the agent you are: pass its
+id as \`connection\` and your agent id as \`agent\`, or leave \`agent\` out for the person to
+pick. Their confirmation makes the tools available from their next message. Use the tools
+you already have without offering them again. Never call a changing operation merely to
+try it. If you cannot try a reading operation, use its declared schemas and tell the person
+that the result shape is unverified; never guess a path.
 
 Tell the person what you changed, in a few plain sentences, and that the change is a draft
 until they publish it.

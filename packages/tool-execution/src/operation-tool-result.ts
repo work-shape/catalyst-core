@@ -40,6 +40,7 @@ export function toolResultFromOperationResult(
           })
         : failed("not_allowed", denialText(result.reason, names));
     case "failed":
+      if (result.error.code === "TIMEOUT") return toolTimeoutFailure(names);
       return result.error.code === "INTERNAL"
         ? internalFailure(names.correlationId)
         : // The message is all the model reads. A fixed reason stays in the run and in the
@@ -76,4 +77,20 @@ export function internalFailure(correlationId: string): ToolHandlerFailureResult
     `The tool failed with an internal error. Reference: ${correlationId}`,
     { correlationId }
   );
+}
+
+/** A timeout says nothing about whether an unacknowledged change happened. */
+export function toolTimeoutFailure(
+  names: Pick<ToolCallNames, "toolName" | "locale">
+): ToolHandlerFailureResult {
+  return {
+    status: "timed_out",
+    error: {
+      code: "timed_out",
+      message:
+        names.locale === "de"
+          ? `Das Tool '${names.toolName}' hat nicht rechtzeitig geantwortet. Das Ergebnis ist unbekannt; vor einem erneuten Aufruf prüfen.`
+          : `The tool '${names.toolName}' did not answer in time. Its outcome is not known; check before calling again.`
+    }
+  };
 }
