@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -25,6 +25,7 @@ import { PLATFORM_TOOL_NAMES } from "@work-shape/catalyst-client-assembly";
 import {
   CONNECTION_DRAFT_TOOL_NAME,
   createConnectionDraftTool,
+  createConnectionOfferTool,
   createPlatformDiscoveryTools
 } from "@work-shape/catalyst-tool-execution";
 import { drainRunEvents, injectStartConversationRun } from "./support/chat-server-run-harness";
@@ -554,6 +555,26 @@ describe("the tools that find what is on the platform", () => {
     );
     expect(draft.description).toContain("once OAuth for REST APIs is available");
     expect(draft.description).not.toMatch(/not supported yet/iu);
+  });
+
+  it("shows no card the person approves in an answer that still asks them something", async () => {
+    // Felix's run asked a question and showed an approval card in the same answer.
+    const oneThing = "never in an answer that also asks the person something";
+    const draft = createConnectionDraftTool({
+      connectorTypes: createConnectorTypeRegistry([createHttpApiConnectorType()]),
+      connectorType: HTTP_API_CONNECTOR_TYPE
+    });
+    expect(draft.description).toContain(oneThing);
+    expect(createConnectionOfferTool().description).toContain(oneThing);
+    // The orientation every agent with the platform's tools gets, and Workshaper's own guidance.
+    const source = (path: string) =>
+      readFile(new URL(`../packages/client-assembly/src/${path}`, import.meta.url), "utf8");
+    expect(await source("orientation/evidence.ts")).toContain(
+      "never in the same answer as a question to the person"
+    );
+    expect(await source("workshaper.ts")).toContain(
+      "Never show one in the same answer as a question"
+    );
   });
 
   it("finds files the agent made for the person and none it only rendered to check its work", async () => {

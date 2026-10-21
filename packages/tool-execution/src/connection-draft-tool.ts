@@ -387,6 +387,7 @@ export function createConnectionDraftTool(input: {
       "Name a testPath when the API has a read path that answers only with a valid key, such as a health or 'me' path: the Connection's test reads it, so the test proves the key.",
       "The tool checks the operations as a save of the Connection would, and answers either every issue, which you fix before you call it again, or the draft, which the person sees as a card in this conversation. From the card they open the Connection's approval list and approve the tools; nothing is saved before that, and you never save a Connection.",
       "Never ask for a key and never put one into the draft: the person enters it on the Connection's page. A header or parameter that carries a credential, a fixed value in a parameter's schema ('default', 'const', 'examples', 'example', a singleton 'enum'), a method other than GET and the effect 'changing' are refused.",
+      "Call it only once the way is clear: never in an answer that also asks the person something, and never while it is open whether these tools can work or are what the person wants. Ask first; draft in a later answer.",
       "After a draft, tell the person in one sentence to review the tools on the card and approve what they need.",
       `Once they say they approved them, offer the tools to an agent with ${CONNECTION_OFFER_TOOL_NAME} where you hold it: no agent can call them before.`
     ].join(" "),

@@ -43,6 +43,7 @@ export function createConnectionOfferTool(): AnyToolDefinition {
       "Offer the person a card that gives the approved tools of a Connection to an agent. Use it right after the person approved a Connection's tools, or when they ask that an agent may use a Connection.",
       "Name the Connection by its id, and the agent by its id where the person named one. The card lists the agents the person may publish; the person picks one and confirms, and that publishes the agent with the tools added. You never give tools yourself.",
       "Where the agent is the one in this conversation, its new tools are yours from the person's next message on.",
+      "Offer it only once the way is clear: never in an answer that also asks the person something, and never while the Connection's tools are not approved or it is open which agent should get them.",
       "After the card, tell the person in one sentence to pick the agent on the card and confirm."
     ].join(" "),
     inputSchema,
