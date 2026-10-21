@@ -421,17 +421,18 @@ test("the User screen and the Check tab name the role a right comes from", async
     // Exactly the role's rights: the use of each App and editing the agent, allowed, from the
     // role.
     await expect(fromRole).toHaveCount(3);
-    await expect(fromRole.filter({ hasText: "application_assistant" })).toHaveAttribute(
+    await expect(fromRole.filter({ hasText: "Agent Application Assistant" })).toHaveAttribute(
       "data-area",
       "agent"
     );
     for (const app of apps) {
-      const row = fromRole.filter({ hasText: app.name });
+      const row = fromRole.filter({ hasText: app.title });
       await expect(row).toHaveAttribute("data-area", "app");
       await expect(row).toHaveAttribute("data-allowed", "true");
       await expect(row).toContainText("Erlaubt");
     }
-    // Nothing else the person holds comes from that role, and no id is shown.
+    // Each asset by the title people read, never by an id.
+    await expect(card.getByText("application_assistant")).toHaveCount(0);
     await expect(card.getByText(roleId)).toHaveCount(0);
     await expect(card.getByText("app.use")).toHaveCount(0);
     await expectNoSidewaysScroll(page);
