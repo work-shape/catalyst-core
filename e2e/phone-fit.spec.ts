@@ -370,3 +370,108 @@ test("the band under the sidebar button gives way to a pinned head and stays ove
     expect(await bandDrawn(page)).toBe(false);
   }
 });
+
+/** A command longer than any row has room for, as an agent writes one. */
+const LONG_COMMAND = [
+  "cd /workspace/reports && python3 scripts/build_quarterly_summary.py",
+  "--input data/customers-2026-q3.csv --segments hospitality,retail,logistics",
+  "--output out/quarterly-summary-2026-q3.xlsx --currency EUR --verbose"
+].join(" ");
+
+/**
+ * Turns every call of the weather tool in a conversation's snapshot into a finished
+ * `workspace.exec` call of `LONG_COMMAND`. The fixture model offers no command tool; the row is
+ * drawn from the snapshot alone.
+ */
+function asCommandCall(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(asCommandCall);
+  if (value === null || typeof value !== "object") return value;
+  const record = Object.fromEntries(
+    Object.entries(value).map(([key, entry]) => [key, asCommandCall(entry)])
+  );
+  if (record.toolName !== "demo.weather_forecast") return record;
+  const args = { command: LONG_COMMAND };
+  return {
+    ...record,
+    toolName: "workspace.exec",
+    ...("args" in record ? { args } : {}),
+    ...("argsText" in record ? { argsText: JSON.stringify(args) } : {}),
+    ...("input" in record ? { input: args } : {}),
+    result: {
+      status: "completed",
+      output: { status: "succeeded", exitCode: 0, durationMs: 1200, stdoutPreview: "done\n" }
+    }
+  };
+}
+
+// Fails with the row of a long command as it was: "Run command" wrapped onto two lines and the
+// one-line preview ran past the thread to the window's right edge, at 390 and at 1280.
+test("a long command's row keeps its label on one line and ends its preview inside the thread", async ({
+  page
+}) => {
+  test.setTimeout(shotsDir ? 300_000 : 120_000);
+  await signIn(page);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto("/");
+  const composer = page.getByRole("textbox", { name: "Message" });
+  await composer.fill(
+    `/tool demo.weather_forecast {"location":"Bergen","days":3,"unit":"celsius","startDate":"2026-06-13"}`
+  );
+  await composer.press("Enter");
+  await expect(page.getByText("Tool work completed").last()).toBeVisible();
+  await expect(page).toHaveURL(/\/c\/[^/]+$/u);
+  const conversation = new URL(page.url()).pathname;
+  await page.route(/\/api\/v1\/conversations\/[^/]+\/thread(?:\?.*)?$/u, async (route) => {
+    const response = await route.fetch();
+    await route.fulfill({ response, json: asCommandCall(await response.json()) });
+  });
+
+  const runCommand = { en: "Run command", de: "Befehl starten" } as const;
+  for (const variant of shotsDir ? variants : [enLight]) {
+    const title = runCommand[variant[0]];
+    const chat = page.getByRole("region", { name: "Chat" });
+    const step = chat.getByTestId("assistant-work-group-trigger").filter({ hasText: title });
+    const label = step.getByTestId("tool-call-row");
+    const preview = step.getByTestId("tool-call-preview");
+    for (const width of [390, 1280]) {
+      await show(page, conversation, variant, width);
+      const history = chat.getByRole("button", { name: /^(?:Work history|Arbeitsverlauf)/u });
+      if ((await history.getAttribute("aria-expanded")) === "false") await history.click();
+      await expect(step).toBeVisible();
+      const fit = await step.evaluate((trigger) => {
+        const row = trigger.querySelector<HTMLElement>('[data-testid="tool-call-row"]');
+        const shown = trigger.querySelector<HTMLElement>('[data-testid="tool-call-preview"]');
+        const message = trigger.closest<HTMLElement>("[data-role='assistant']");
+        if (!row || !shown || !message) throw new Error("The row has no label or preview.");
+        const lineHeight = Number.parseFloat(getComputedStyle(row).lineHeight);
+        return {
+          labelLines: Math.round(row.getBoundingClientRect().height / lineHeight),
+          labelCut: row.scrollWidth > row.clientWidth,
+          previewCut: shown.scrollWidth > shown.clientWidth,
+          previewEnd: shown.getBoundingClientRect().right,
+          triggerEnd: trigger.getBoundingClientRect().right,
+          threadEnd: message.getBoundingClientRect().right,
+          page: document.documentElement.scrollWidth,
+          window: window.innerWidth
+        };
+      });
+      const where = `${String(width)} ${variant.join(" ")}`;
+      expect(fit.labelLines, where).toBe(1);
+      expect(fit.labelCut, where).toBe(false);
+      expect(fit.previewCut, where).toBe(true);
+      expect(fit.previewEnd, where).toBeLessThanOrEqual(fit.threadEnd + 0.5);
+      expect(fit.triggerEnd, where).toBeLessThanOrEqual(fit.threadEnd + 0.5);
+      expect(fit.page, where).toBeLessThanOrEqual(fit.window);
+      await expect(preview).toHaveCSS("text-overflow", "ellipsis");
+      await expect(label).toHaveText(title);
+      await shoot(page, `tool-row-command-${String(width)}-${variant[1]}-${variant[0]}`);
+
+      // Opened, the call says the whole command.
+      await step.click();
+      const call = chat.getByTestId("tool-call-card").filter({ hasText: title });
+      await call.getByRole("button", { expanded: false }).first().click();
+      await expect(call.getByText(`Ran ${LONG_COMMAND}`, { exact: false })).toBeVisible();
+      await shoot(page, `tool-row-command-open-${String(width)}-${variant[1]}-${variant[0]}`);
+    }
+  }
+});

@@ -39,7 +39,8 @@ export function ToolGroupTrigger({
   return (
     <DisclosureTrigger
       data-slot="tool-group-trigger"
-      className={cn("aui-tool-group-trigger leading-none", className)}
+      // As wide as its label, and never wider than the thread: a long label ends in an ellipsis.
+      className={cn("aui-tool-group-trigger max-w-full leading-none", className)}
       {...props}
     >
       {resolvedLabel}

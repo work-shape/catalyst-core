@@ -329,13 +329,20 @@ export function ToolCallHead({
   return (
     <>
       <ToolStatusIcon state={state} />
+      {/* The title stays on one line and keeps its width; the preview of the call's input,
+          a command or a file name, takes what is left and ends in an ellipsis, so a long one
+          never wraps the title or runs past the thread. Opened, the call shows it whole. */}
       <span
-        className="line-clamp-2 min-w-0 font-medium text-foreground"
+        className="max-w-full shrink-0 truncate font-medium text-foreground"
         data-testid="tool-call-row"
       >
         {state === "failed" ? t("toolStepFailed", { title }) : title}
       </span>
-      {actionLabel ? <span className="min-w-0 truncate">{actionLabel}</span> : null}
+      {actionLabel ? (
+        <span className="min-w-0 truncate" data-testid="tool-call-preview">
+          {actionLabel}
+        </span>
+      ) : null}
       {state === "running" ? <span className="shrink-0">{statusLabel}</span> : null}
     </>
   );
@@ -431,7 +438,7 @@ export function ToolCallFoldLabel({
   const assetSentence = last === undefined ? undefined : assetToolSentence(last, t);
   if (assetSentence !== undefined) {
     return (
-      <span className="min-w-0 truncate" data-testid="tool-call-fold-sentence">
+      <span className="block min-w-0 truncate" data-testid="tool-call-fold-sentence">
         {count > 1
           ? t("assetToolFoldMore", { sentence: assetSentence, count: count - 1 })
           : assetSentence}
@@ -454,7 +461,7 @@ export function ToolCallFoldLabel({
     locale
   });
   return (
-    <span className="inline-flex min-w-0 items-center gap-2" data-testid="tool-call-fold-line">
+    <span className="flex min-w-0 items-center gap-2" data-testid="tool-call-fold-line">
       <ToolCallHead
         state={state}
         toolName={only.toolName}
