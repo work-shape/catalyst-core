@@ -80,6 +80,7 @@ const e2eApiUrl = process.env.E2E_API_URL ?? `http://${e2eHost}:${e2eApiPort}`;
 const e2eUiUrl = process.env.E2E_UI_URL ?? `http://${e2eHost}:${e2eUiPort}`;
 const generatedConfigPath = resolve(repoRoot, ".tmp/e2e/e2e-app.yaml");
 const e2eKeyEnvFile = resolve(repoRoot, ".tmp/e2e/config-cli.env");
+const e2eUiDir = resolve(repoRoot, ".tmp/e2e/ui");
 const e2eConfigPath = resolve(repoRoot, process.env.E2E_CONFIG_PATH ?? generatedConfigPath);
 const e2eSessionTokenSecret = "e2e-session-token-secret-with-at-least-24-characters";
 const e2eServerCredential = "e2e-server-to-server-credential";
@@ -121,11 +122,11 @@ try {
   await migrateDatabase();
   startApiServer();
   startWorkspaceCommandWorker();
-  startUiServer();
+  await startUiServer();
   await withServerMonitoring(
     Promise.all([
       waitForUrl(`${e2eApiUrl}/health`, { label: "API health" }),
-      waitForUrl(e2eUiUrl, { label: "Vite UI" })
+      waitForUrl(e2eUiUrl, { label: "UI" })
     ])
   );
   await withServerMonitoring(waitForAuthReady());
@@ -413,17 +414,30 @@ async function createConfigApiKey() {
   );
 }
 
-function startUiServer() {
-  // No test edits a source file, so the suite's server watches none; see the config it names.
-  const args = ["--config", "vite.e2e.config.ts", "--host", e2eHost, "--port", e2eUiPort];
-  return spawnManaged(localBin("vite"), args, {
-    cwd: resolve(repoRoot, "clients/demo"),
-    label: "chat ui",
-    env: {
-      ...process.env,
-      VITE_CHAT_API_PORT: e2eApiPort,
-      VITE_CHAT_API_URL: e2eApiUrl
-    }
+/**
+ * The interface the suite opens, built once and served as files. The dev server answered each
+ * page load with about a thousand module requests, which made every load of a page seconds long
+ * on a hosted runner. The build is React's development build, so the warnings the page-error
+ * watch fails a test on still reach the console; it takes a few seconds.
+ */
+async function startUiServer() {
+  const cwd = resolve(repoRoot, "clients/demo");
+  const env = {
+    ...process.env,
+    NODE_ENV: "development",
+    VITE_CHAT_API_PORT: e2eApiPort,
+    VITE_CHAT_API_URL: e2eApiUrl
+  };
+  await run(
+    localBin("vite"),
+    ["build", "--mode", "development", "--outDir", e2eUiDir, "--emptyOutDir"],
+    { cwd, env, label: "chat ui build" }
+  );
+  const serve = ["--outDir", e2eUiDir, "--host", e2eHost, "--port", e2eUiPort, "--strictPort"];
+  return spawnManaged(localBin("vite"), ["preview", ...serve], {
+    cwd,
+    env,
+    label: "chat ui"
   });
 }
 
