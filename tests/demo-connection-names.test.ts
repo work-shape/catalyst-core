@@ -3,7 +3,10 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { parseAgentYaml } from "@work-shape/catalyst-cli";
-import { loadClientInstanceConfigFromFile } from "@work-shape/catalyst-config-schema";
+import {
+  loadClientInstanceConfigFromFile,
+  releaseConnectionConfigSchema
+} from "@work-shape/catalyst-config-schema";
 import { connectionOperationName, isDataToolName } from "@work-shape/catalyst-core";
 import { outputSchemas } from "@work-shape/catalyst-demo/sample-mcp";
 
@@ -26,7 +29,7 @@ describe("the demo's Connection and the names its agent carries", () => {
       resolve(root, "clients/demo/config/app.yaml")
     );
     expect(config.modules.connections?.enabled).toBe(true);
-    const connection = config.connections[CONNECTION];
+    const connection = releaseConnectionConfigSchema.parse(config.connections[CONNECTION]);
     expect(connection).toMatchObject({
       connectorType: "mcp",
       displayName: "Sample business",
@@ -35,10 +38,10 @@ describe("the demo's Connection and the names its agent carries", () => {
       settings: { url: "http://sample-mcp:8787/mcp" }
     });
     // The accepted list is the list of tools the sample server registers, no more and no less.
-    expect(connection?.operations.map(({ name }) => name).sort()).toEqual(
+    expect(connection.operations.map(({ name }) => name).sort()).toEqual(
       Object.keys(outputSchemas).sort()
     );
-    for (const operation of connection?.operations ?? []) {
+    for (const operation of connection.operations) {
       expect(operation).toMatchObject({ effect: "reading", exposure: ["agent", "bridge"] });
       expect(operation.schemaFingerprint).toBeUndefined();
     }

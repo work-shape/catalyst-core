@@ -3,7 +3,10 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
-import { loadClientInstanceConfigFromFile } from "@work-shape/catalyst-config-schema";
+import {
+  loadClientInstanceConfigFromFile,
+  releaseConnectionConfigSchema
+} from "@work-shape/catalyst-config-schema";
 import {
   compileJsonSchema,
   MCP_CALL_TIMEOUT_MS,
@@ -135,7 +138,7 @@ describe("demo sample accounting", () => {
     const config = await loadClientInstanceConfigFromFile(
       resolve(root, "clients/demo/config/app.yaml")
     );
-    const connection = required(config.connections[CONNECTION]);
+    const connection = releaseConnectionConfigSchema.parse(config.connections[CONNECTION]);
     expect(connection).toMatchObject({
       connectorType: "mcp",
       displayName: "Sample accounting",

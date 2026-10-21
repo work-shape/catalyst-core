@@ -1,6 +1,7 @@
 import {
   connectionConfigSchema,
-  type ReleaseConnectionConfig
+  type ReleaseConnectionConfig,
+  type ReleaseConnectionInput
 } from "@work-shape/catalyst-config-schema";
 import {
   AppError,
@@ -35,6 +36,8 @@ import {
 } from "@work-shape/catalyst-core";
 import { AUTH_SCHEME_NONE, AUTH_SCHEME_OAUTH, connectionOriginOf } from "./connector-context";
 import { createSecretStore, type SecretKeyring } from "./secret-store";
+import type { Catalogue } from "./catalogue/catalogue";
+import { expandReleaseConnections } from "./catalogue/release-config";
 
 // The release seed. When the API process starts it makes the stored Connections of origin
 // `release` equal to `connections` of release config: in one transaction, under one lock, so
@@ -49,7 +52,8 @@ const RELEASE_OWNER_PRINCIPAL_ID = "system";
 export interface SeedReleaseConnectionsInput {
   clientInstanceId: ClientInstanceId;
   /** `connections` of release config. */
-  connections: Readonly<Record<string, ReleaseConnectionConfig>>;
+  connections: Readonly<Record<string, ReleaseConnectionInput>>;
+  catalogue?: Pick<Catalogue, "entries">;
   connectorTypes: ConnectorTypeRegistry;
   stores: PlatformStores;
   /** The keys of the Secret Store. Needed as soon as an entry names a secret. */
@@ -143,6 +147,7 @@ function toJsonObject(config: ConnectionConfig): JsonObject {
   };
   if (config.description !== undefined) json.description = config.description;
   if (config.service !== undefined) json.service = config.service;
+  if (config.catalogue !== undefined) json.catalogue = { ...config.catalogue };
   if (config.secretHandle !== undefined) json.secretHandle = config.secretHandle;
   return json;
 }
@@ -178,6 +183,7 @@ function definitionOf(
     displayName: entry.displayName ?? name,
     ...(entry.description === undefined ? {} : { description: entry.description }),
     ...(entry.service === undefined ? {} : { service: entry.service }),
+    ...(entry.catalogue === undefined ? {} : { catalogue: entry.catalogue }),
     connectorType: entry.connectorType,
     ownerPrincipalId: RELEASE_OWNER_PRINCIPAL_ID,
     settings: entry.settings,
@@ -213,8 +219,9 @@ export async function seedReleaseConnections(
   input: SeedReleaseConnectionsInput
 ): Promise<ReleaseSeedResult> {
   const { clientInstanceId, connectorTypes } = input;
-  const names = Object.keys(input.connections).sort();
-  const namesSecret = names.some((name) => input.connections[name]?.secret !== undefined);
+  const connections = expandReleaseConnections(input.connections, input.catalogue);
+  const names = Object.keys(connections).sort();
+  const namesSecret = names.some((name) => connections[name]?.secret !== undefined);
   if (namesSecret && !input.keyring) {
     throw new AppError(
       "VALIDATION_FAILED",
@@ -224,14 +231,14 @@ export async function seedReleaseConnections(
   // Checked before anything is read or written: a config the instance cannot run stops the
   // start and leaves what is stored as it was.
   for (const name of names) {
-    const entry = input.connections[name];
+    const entry = connections[name];
     if (entry) definitionOf(name, entry, connectorTypes, undefined);
   }
   // Read once, outside the transaction. A secret nothing configures leaves its Connection in
   // `needs_configuration`; one that is configured and broken stops the start by its name.
   const values = new Map<string, string | undefined>();
   for (const name of names) {
-    const ref = input.connections[name]?.secret;
+    const ref = connections[name]?.secret;
     if (ref !== undefined) {
       values.set(name, await resolveOptionalSecret(input.secrets, ref));
     }
@@ -298,7 +305,7 @@ export async function seedReleaseConnections(
       const baseRevisions: Record<string, number | null> = {};
       const handles = new Map<string, string>();
       for (const name of names) {
-        const entry = input.connections[name];
+        const entry = connections[name];
         if (!entry) continue;
         const asset = before.get(name);
         if (asset && storedOrigin(asset) !== "release") {
@@ -406,7 +413,7 @@ export async function seedReleaseConnections(
           name,
           // The environment's secret is for the address release config names now.
           origin,
-          named: input.connections[name]?.secret !== undefined,
+          named: connections[name]?.secret !== undefined,
           value: values.get(name),
           handle: handles.get(name),
           binding,

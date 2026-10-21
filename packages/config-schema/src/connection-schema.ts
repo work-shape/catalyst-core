@@ -426,6 +426,7 @@ export const releaseConnectionConfigSchema = z
     displayName: z.string().trim().min(1).max(120).optional(),
     description: z.string().max(2000).optional(),
     service: z.string().regex(CONNECTION_SERVICE_PATTERN).optional(),
+    catalogue: connectionCatalogueLinkSchema.optional(),
     /** Read by the Connector type's own strict schema when the instance starts. */
     settings: settingsSchema.default({}),
     authScheme: z.string().min(1).max(64),
@@ -440,11 +441,37 @@ export const releaseConnectionConfigSchema = z
   })
   .strict();
 
+/** A release-owned Connection expanded from an offered catalogue part at startup. */
+export const releaseConnectionFromEntrySchema = releaseConnectionConfigSchema
+  .omit({ connectorType: true, authScheme: true, service: true, catalogue: true })
+  .extend({
+    fromEntry: z.string().regex(CATALOGUE_ENTRY_ID_PATTERN),
+    part: z.enum(CATALOGUE_PARTS).optional(),
+    operations: releaseConnectionConfigSchema.shape.operations.unwrap().optional()
+  })
+  .strict();
+
+// Select by the reference key so errors retain their field paths and messages, rather than
+// collapsing an invalid operation or secret to a union's "Invalid input".
+const releaseConnectionInputSchema = z.unknown().transform((value, context) => {
+  const schema =
+    typeof value === "object" && value !== null && "fromEntry" in value
+      ? releaseConnectionFromEntrySchema
+      : releaseConnectionConfigSchema;
+  const parsed = schema.safeParse(value);
+  if (!parsed.success) {
+    for (const issue of parsed.error.issues) context.addIssue({ ...issue });
+    return z.NEVER;
+  }
+  return parsed.data;
+});
+
 export const releaseConnectionsConfigSchema = z
-  .record(connectionNameSchema, releaseConnectionConfigSchema)
+  .record(connectionNameSchema, releaseConnectionInputSchema)
   .default({});
 
 export type ReleaseConnectionConfig = z.infer<typeof releaseConnectionConfigSchema>;
+export type ReleaseConnectionInput = z.infer<typeof releaseConnectionsConfigSchema>[string];
 
 const SECRET_STORE_KEY_ID_PATTERN = /^[a-z0-9][a-z0-9_-]{0,31}$/u;
 

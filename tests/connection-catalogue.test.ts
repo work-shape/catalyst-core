@@ -1,11 +1,19 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { z } from "zod";
-import { parseClientInstanceConfig } from "@work-shape/catalyst-config-schema";
+import {
+  parseClientInstanceConfig,
+  loadClientInstanceConfigFromFile,
+  releaseConnectionsConfigSchema
+} from "@work-shape/catalyst-config-schema";
 import {
   createCatalogue,
   createEgressChecker,
   createFixtureDocumentSource,
   createHttpApiConnectorType,
+  expandReleaseConnections,
   loadCatalogueEntries,
   parseCatalogueEntry,
   type CatalogueEntry
@@ -20,7 +28,7 @@ import { errorSchema } from "./support/access-instance";
 import { required } from "./support/assertions";
 import { createTestConfig } from "./support/fixtures";
 import { generateSecretStoreKey } from "./support/test-connector";
-import { createTestInstance, type TestInstance } from "./support/test-instance";
+import { createTestInstance, getTestExecution, type TestInstance } from "./support/test-instance";
 import { withTestSql } from "./support/test-sql";
 
 // The Connection Catalogue (CAT-1): what an entry may hold, what an instance checks at its
@@ -305,6 +313,151 @@ describe("the catalogue of an instance", () => {
   });
 });
 
+describe("release config from a catalogue entry (CAT-2)", () => {
+  const release = (value: Record<string, unknown>) =>
+    releaseConnectionsConfigSchema.parse({ books: value });
+
+  it("loads a release file with fromEntry without requiring a connector type or auth scheme", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "catalogue-release-"));
+    try {
+      const path = join(directory, "release.yaml");
+      await writeFile(
+        path,
+        JSON.stringify({
+          ...createTestConfig(),
+          catalogue: { entries: ["ledger"] },
+          connections: { books: { fromEntry: "ledger", secret: "LEDGER_KEY" } }
+        })
+      );
+      const config = await loadClientInstanceConfigFromFile(path);
+      expect(
+        expandReleaseConnections(config.connections, catalogueOf([parsed(entry())])).books
+      ).toMatchObject({
+        connectorType: "http_api",
+        authScheme: "bearer",
+        catalogue: { entry: "ledger", part: "tools", version: 1 },
+        operations: [{ name: "listClients" }, { name: "listPostings" }]
+      });
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("expands a valid fromEntry, defaults and overrides, with provenance and no exposure", () => {
+    const catalogue = catalogueOf([
+      parsed(
+        entry(
+          {},
+          {
+            settings: { baseUrl: "https://ledger.example.test/api", headers: { fixed: "kept" } },
+            fields: [
+              { secret: true, label: { en: "Key", de: "Schlüssel" } },
+              {
+                setting: "headers.account",
+                label: { en: "Account", de: "Konto" },
+                default: "default-account"
+              }
+            ]
+          }
+        )
+      )
+    ]);
+    const expanded = expandReleaseConnections(
+      release({
+        fromEntry: "ledger",
+        secret: "LEDGER_KEY",
+        displayName: "Books",
+        settings: { headers: { account: "my-account" } }
+      }),
+      catalogue
+    );
+    expect(expanded.books).toMatchObject({
+      connectorType: "http_api",
+      authScheme: "bearer",
+      secret: "LEDGER_KEY",
+      displayName: "Books",
+      service: "ledger",
+      catalogue: { entry: "ledger", part: "tools", version: 1 },
+      settings: {
+        baseUrl: "https://ledger.example.test/api",
+        headers: { fixed: "kept", account: "my-account" }
+      },
+      operations: [
+        { name: "listClients", method: "GET", path: "/clients", effect: "reading", exposure: [] },
+        { name: "listPostings", path: "/postings", exposure: [] }
+      ]
+    });
+    expect(
+      expandReleaseConnections(release({ fromEntry: "ledger", operations: [] }), catalogue).books
+        ?.operations
+    ).toEqual([]);
+  });
+
+  it("refuses an unknown entry and an entry the operator has not offered", () => {
+    expect(() =>
+      expandReleaseConnections(release({ fromEntry: "unknown" }), catalogueOf([parsed(entry())]))
+    ).toThrow("catalogue entry 'unknown': unknown entry");
+    expect(() =>
+      expandReleaseConnections(release({ fromEntry: "ledger" }), catalogueOf([parsed(entry())], []))
+    ).toThrow("catalogue entry 'ledger': not offered");
+  });
+
+  it("refuses a part whose Connector type this build does not register", () => {
+    const source = required(loadCatalogueEntries(SUITE)[0]).source;
+    const catalogue = createCatalogue({
+      entries: [parsed(entry({ source }))],
+      named: ["ledger"],
+      connectorTypes: createConnectorTypeRegistry([createHttpApiConnectorType()])
+    });
+    expect(catalogue.entries[0]?.parts.map((part) => part.part)).toEqual(["tools"]);
+    expect(() =>
+      expandReleaseConnections(release({ fromEntry: "ledger", part: "source" }), catalogue)
+    ).toThrow("catalogue entry 'ledger': the 'source' part is not offered");
+  });
+
+  it("requires a choice for two offered parts and expands a source from its type's form", () => {
+    const source = required(loadCatalogueEntries(SUITE)[0]).source;
+    // This registry includes the form of the test folder source.
+    const withSource = createCatalogue({
+      entries: [parsed(entry({ source }))],
+      named: ["ledger"],
+      connectorTypes: registry()
+    });
+    expect(() => expandReleaseConnections(release({ fromEntry: "ledger" }), withSource)).toThrow(
+      "choose a part explicitly"
+    );
+    expect(
+      expandReleaseConnections(
+        release({
+          fromEntry: "ledger",
+          part: "source",
+          settings: { accountId: "account", region: "eu" },
+          secret: "SOURCE_SECRET"
+        }),
+        withSource
+      ).books
+    ).toMatchObject({
+      connectorType: "test_folders",
+      authScheme: "client_credentials",
+      operations: [],
+      catalogue: { entry: "ledger", part: "source", version: 1 }
+    });
+  });
+
+  it("refuses an OAuth part in release config with an actionable message", () => {
+    const catalogue = catalogueOf([parsed(entry())]);
+    const oauth = {
+      entries: catalogue.entries.map((entry) => ({
+        ...entry,
+        parts: entry.parts.map((part) => ({ ...part, authScheme: "oauth" }))
+      }))
+    };
+    expect(() => expandReleaseConnections(release({ fromEntry: "ledger" }), oauth)).toThrow(
+      "catalogue entry 'ledger': the 'tools' part uses OAuth; OAuth parts cannot be installed through release config yet"
+    );
+  });
+});
+
 describe("a write of a Connection's catalogue link", () => {
   const catalogue = createCatalogue({
     entries: shipped(),
@@ -383,7 +536,7 @@ describe("an install on an assembled instance", () => {
     await Promise.all(started.splice(0).map((instance) => instance.close()));
   });
 
-  async function start() {
+  async function start(connections: Record<string, unknown> = {}) {
     const key = generateSecretStoreKey();
     const config = parseClientInstanceConfig({
       ...createTestConfig({
@@ -399,7 +552,8 @@ describe("an install on an assembled instance", () => {
       }),
       modules: { assetManagement: { enabled: true }, connections: { enabled: true } },
       secretStore: { keys: [{ id: "k1", ref: "CATALYST_SECRET_STORE_KEY" }] },
-      catalogue: { entries: ["sample-accounting"] }
+      catalogue: { entries: ["sample-accounting"] },
+      connections
     });
     const instance = await createTestInstance({
       config,
@@ -425,6 +579,36 @@ describe("an install on an assembled instance", () => {
         )
       })
     )
+  });
+
+  it("seeds an expanded release entry and keeps its catalogue link on a repeated seed", async () => {
+    const instance = await start({
+      books: { fromEntry: "sample-accounting", secret: "SAMPLE_KEY" }
+    });
+    const read = () =>
+      instance.call("assets.get", { params: { kind: "connection", name: "books" } });
+    const first = await read();
+    expect(first.statusCode, first.body).toBe(200);
+    expect(first.json()).toMatchObject({
+      config: {
+        name: "books",
+        origin: "release",
+        service: "sample-accounting",
+        catalogue: { entry: "sample-accounting", part: "tools", version: 1 },
+        settings: {
+          baseUrl: "http://sample-mcp:8787/rest",
+          headers: { "x-client-instance-id": "demo-local" }
+        },
+        operations: [
+          { name: "listClients", exposure: [] },
+          { name: "listFiscalYears", exposure: [] },
+          { name: "listAccountPostings", exposure: [] }
+        ]
+      }
+    });
+    const revision = z.object({ revision: z.number() }).parse(first.json()).revision;
+    await start({ books: { fromEntry: "sample-accounting", secret: "SAMPLE_KEY" } });
+    expect((await read()).json()).toMatchObject({ revision });
   });
 
   it("offers the named entry, stores the link, enables nothing and grants nothing", async () => {

@@ -3,6 +3,7 @@ export * from "./catalog";
 export * from "./catalogue/catalogue";
 export * from "./catalogue/entry";
 export * from "./catalogue/loader";
+export * from "./catalogue/release-config";
 export * from "./connection-reads";
 export * from "./connector-context";
 export * from "./connector-type-offers";

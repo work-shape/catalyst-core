@@ -15,6 +15,7 @@ import {
   createHttpApiConnectorType,
   createMcpConnectorType,
   discoverConnection,
+  expandReleaseConnections,
   loadSecretKeyring,
   platformStoreTargetsOf,
   readConnections,
@@ -191,6 +192,7 @@ async function buildInstanceConnections(
     named: config.catalogue.entries,
     connectorTypes
   });
+  const releaseConnections = expandReleaseConnections(config.connections, catalogue);
   // Named keys are needed: a release Connection's secret or one entered on the instance is
   // stored under them.
   let keyring: SecretKeyring | undefined;
@@ -290,7 +292,7 @@ async function buildInstanceConnections(
     async seed() {
       const result = await seedReleaseConnections({
         clientInstanceId,
-        connections: config.connections,
+        connections: releaseConnections,
         connectorTypes,
         stores,
         secrets,

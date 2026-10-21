@@ -6,7 +6,10 @@ import {
   connectionPersonContextSchema,
   type ApiOperationName
 } from "@work-shape/catalyst-api-contract";
-import { parseClientInstanceConfig } from "@work-shape/catalyst-config-schema";
+import {
+  parseClientInstanceConfig,
+  releaseConnectionConfigSchema
+} from "@work-shape/catalyst-config-schema";
 import {
   asClientInstanceId,
   asServicePrincipalId,
@@ -249,8 +252,7 @@ describe("person context on a shared Connection, with Postgres and real HTTP", (
       const w = await world();
       const name = "app-context-guard";
       const params = { kind: "connection", name };
-      const original = w.config.connections[connection];
-      if (!original) throw new Error("Missing fixture connection");
+      const original = releaseConnectionConfigSchema.parse(w.config.connections[connection]);
       const config = {
         ...original,
         name,
@@ -490,8 +492,7 @@ describe("person context on a shared Connection, with Postgres and real HTTP", (
     const w = await world();
     const subjectId = w.userActor("alice").id;
     expect((await w.map("user", subjectId, "team-a")).status).toBe(200);
-    const original = w.config.connections[connection];
-    if (!original) throw new Error("Missing fixture connection");
+    const original = releaseConnectionConfigSchema.parse(w.config.connections[connection]);
     for (const nextHeader of ["x-other-context", header]) {
       const api = await createTestInstance({
         config: parseClientInstanceConfig({

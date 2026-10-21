@@ -3,6 +3,7 @@ import { z } from "zod";
 import { resolveInstanceModules } from "@work-shape/catalyst-client-assembly";
 import {
   connectionConfigSchema,
+  releaseConnectionConfigSchema,
   parseClientInstanceConfig
 } from "@work-shape/catalyst-config-schema";
 import {
@@ -120,7 +121,9 @@ describe("the definition of a Connection", () => {
       modules: { assetManagement: { enabled: true }, connections: { enabled: true } },
       connections: { accounting: { connectorType: "mcp", authScheme: "none", service: "datev" } }
     });
-    expect(config.connections?.accounting?.service).toBe("datev");
+    expect(releaseConnectionConfigSchema.parse(config.connections.accounting).service).toBe(
+      "datev"
+    );
   });
 
   it("reads a definition and fills what it leaves out", () => {

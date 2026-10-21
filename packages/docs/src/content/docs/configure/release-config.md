@@ -1063,6 +1063,24 @@ When moving an existing instance:
 
 `connections` names the Connections of the instance. It needs the module [`connections`](/configure/modules/#connections); with the module off the section is read and nothing is seeded.
 
+A Connection can also start from an offered catalogue entry:
+
+```yaml
+catalogue:
+  entries: [accounting]
+connections:
+  reporting:
+    fromEntry: accounting
+    part: tools
+    secret: ACCOUNTING_KEY
+    settings:
+      accountId: example-account
+```
+
+The assembly must ship `accounting`; this is an illustrative entry id. Startup expands the selected part into an ordinary release Connection, with `catalogue: { entry: accounting, part: tools, version: 1 }` at entry version 1. It refuses an unknown entry, an entry absent from `catalogue.entries`, or a part whose Connector type the build does not register. Omit `part` only when one part is available. Only offered entries add their declared hosts to the instance's egress list.
+
+`settings` override fixed settings and field defaults recursively; arrays and scalars replace defaults. `displayName`, `description`, `limits` and `secret` work as on a fully written Connection. `connectorType`, `authScheme` and `service` come from the part. Without `operations`, the part's operations are copied with empty exposures; an explicit `operations` list replaces them and is the operator's accepted list, including its exposures. No entry grants a right. OAuth parts are refused in release config; install them at runtime in Studio. Companion assets are not installed.
+
 ```yaml
 modules:
   connections:
