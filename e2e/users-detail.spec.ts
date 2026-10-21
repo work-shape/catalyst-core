@@ -100,14 +100,23 @@ test("a user's detail keeps its cards apart and in the window, and each right's 
     const settings = page.getByRole("region", { name: "Einstellungen" });
     const cards = settings.locator("[data-card]");
     const rights = cards.filter({ has: page.getByRole("heading", { name: "Rechte" }) });
+    // The detail is opened once for each theme and read in each of its windows: a window is a
+    // size the open page takes, as when a person resizes it, and a load per window took the
+    // test's time.
+    let opened: string | undefined;
     for (const { theme, ...window } of WINDOWS) {
       const at = `at ${window.width} ${theme}`;
       await page.setViewportSize(window);
-      await page.goto("/settings/instance/users");
-      await page.evaluate((value) => localStorage.setItem("vivd-catalyst:theme", value), theme);
-      await page.reload();
-      await page.getByRole("searchbox", { name: "Benutzer suchen", exact: true }).fill(shown.email);
-      await page.getByRole("button", { name: `${shown.displayLabel} ${shown.email}` }).click();
+      if (opened !== theme) {
+        if (opened === undefined) await page.goto("/settings/instance/users");
+        await page.evaluate((value) => localStorage.setItem("vivd-catalyst:theme", value), theme);
+        await page.goto("/settings/instance/users");
+        await page
+          .getByRole("searchbox", { name: "Benutzer suchen", exact: true })
+          .fill(shown.email);
+        await page.getByRole("button", { name: `${shown.displayLabel} ${shown.email}` }).click();
+        opened = theme;
+      }
       await expect(settings.getByRole("heading", { name: "Profil", exact: true })).toBeVisible();
       await expect(settings.getByRole("heading", { name: "Konto", exact: true })).toBeVisible();
       await shoot(page, `users-detail-${window.width}-de-${theme}`);
