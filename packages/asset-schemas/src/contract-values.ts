@@ -514,8 +514,10 @@ export type AttachmentCreateOutcome = (typeof ATTACHMENT_CREATE_OUTCOMES)[number
 export const STRUCTURED_DATA_REVIEW_REASONS = ["uncertain", "conflicting"] as const;
 export type StructuredDataReviewReason = (typeof STRUCTURED_DATA_REVIEW_REASONS)[number];
 
-export const FOLLOW_UP_MODES = ["queue"] as const;
-export const FOLLOW_UP_STATUSES = ["pending", "dispatched", "cancelled"] as const;
+/** Queued: sent as the next turn. Steer: taken in by the author's own running turn (FU-2). */
+export const FOLLOW_UP_MODES = ["queue", "steer"] as const;
+/** `consumed`: a steer the running turn took in; `dispatched`: started as a turn of its own. */
+export const FOLLOW_UP_STATUSES = ["pending", "dispatched", "consumed", "cancelled"] as const;
 
 export const AGENT_RUN_STATUSES = [
   "queued",

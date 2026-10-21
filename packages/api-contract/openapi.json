@@ -31802,6 +31802,66 @@
             "properties": {
               "type": {
                 "type": "string",
+                "const": "user_message_steered"
+              },
+              "runId": {
+                "type": "string"
+              },
+              "sequence": {
+                "type": "number"
+              },
+              "createdAt": {
+                "$ref": "#/components/schemas/Timestamp"
+              },
+              "followUpId": {
+                "type": "string"
+              },
+              "message": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "role": {
+                    "type": "string",
+                    "const": "user"
+                  },
+                  "text": {
+                    "type": "string"
+                  },
+                  "createdAt": {
+                    "$ref": "#/components/schemas/Timestamp"
+                  },
+                  "metadata": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {}
+                  }
+                },
+                "required": [
+                  "id",
+                  "role",
+                  "text",
+                  "createdAt"
+                ]
+              }
+            },
+            "required": [
+              "type",
+              "runId",
+              "sequence",
+              "createdAt",
+              "followUpId",
+              "message"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
                 "const": "tool_call_preparing"
               },
               "runId": {
@@ -35998,7 +36058,8 @@
           "mode": {
             "type": "string",
             "enum": [
-              "queue"
+              "queue",
+              "steer"
             ]
           },
           "status": {
@@ -36006,6 +36067,7 @@
             "enum": [
               "pending",
               "dispatched",
+              "consumed",
               "cancelled"
             ]
           },
@@ -36816,9 +36878,12 @@
         "type": "object",
         "properties": {
           "followUp": {
-            "description": "Queue the message when this conversation has an active run. Without this option, an active run still returns CONFLICT.",
+            "description": "What happens when this conversation has an active run. `queue` sends the message as the next turn. `steer` hands it to the running turn at its next step when the run is the caller's own under the same credential and the message has no attachments, and queues it otherwise. Without this option, an active run still returns CONFLICT.",
             "type": "string",
-            "const": "queue"
+            "enum": [
+              "queue",
+              "steer"
+            ]
           },
           "idempotencyKey": {
             "type": "string",
@@ -41805,9 +41870,12 @@
         "type": "object",
         "properties": {
           "followUp": {
-            "description": "Queue the message when this conversation has an active run. Without this option, an active run still returns CONFLICT.",
+            "description": "What happens when this conversation has an active run. `queue` sends the message as the next turn. `steer` hands it to the running turn at its next step when the run is the caller's own under the same credential and the message has no attachments, and queues it otherwise. Without this option, an active run still returns CONFLICT.",
             "type": "string",
-            "const": "queue"
+            "enum": [
+              "queue",
+              "steer"
+            ]
           },
           "idempotencyKey": {
             "type": "string",

@@ -142,7 +142,8 @@ describe("run cancellation logging", () => {
       } else {
         const execution = await execute(input, runContext, {
           assertLease: async () => {},
-          conversationHistory
+          conversationHistory,
+          takeSteers: async () => []
         });
         await entered;
         await execution.cancel("user_requested");
@@ -217,7 +218,7 @@ describe("run cancellation logging", () => {
         message: { text: "hello" }
       },
       { ...context, signal: worker.signal },
-      { assertLease: async () => {}, conversationHistory }
+      { assertLease: async () => {}, conversationHistory, takeSteers: async () => [] }
     );
     await entered;
     worker.abort(reason);

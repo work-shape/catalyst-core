@@ -45,6 +45,15 @@ export interface AgentRuntimeUserMessageMetadata {
   kind: "user_message";
   preview?: AgentPreview;
   attachmentManifest: JsonValue;
+  /** A message the running turn took in (FU-2): its run, its follow-up, who typed it, when. */
+  steered?: SteeredUserMessageDelivery;
+}
+
+export interface SteeredUserMessageDelivery {
+  runId: string;
+  followUpId: string;
+  authorUserId: string;
+  typedAt: string;
 }
 
 export interface AgentRuntimeAssistantToolCallsMetadata {
@@ -212,9 +221,11 @@ export interface StoredModelOutputProjection {
 export function createUserMessageMetadata(input: {
   preview?: AgentPreview;
   attachmentManifest?: AttachmentManifest;
+  steered?: SteeredUserMessageDelivery;
 }): JsonObject | undefined {
   if (
     !input.preview &&
+    !input.steered &&
     (!input.attachmentManifest || input.attachmentManifest.attachments.length === 0)
   ) {
     return undefined;
@@ -223,7 +234,8 @@ export function createUserMessageMetadata(input: {
     version: MESSAGE_METADATA_VERSION,
     kind: "user_message",
     attachmentManifest: unknownToJsonValue(input.attachmentManifest),
-    ...(input.preview ? { preview: input.preview } : {})
+    ...(input.preview ? { preview: input.preview } : {}),
+    ...(input.steered ? { steered: { ...input.steered } } : {})
   });
 }
 
@@ -336,7 +348,8 @@ export function readAgentRuntimeMessageMetadata(
       attachmentManifest: unknownToJsonValue(runtime.attachmentManifest),
       ...(agentPreviewSchema.safeParse(runtime.preview).success
         ? { preview: agentPreviewSchema.parse(runtime.preview) }
-        : {})
+        : {}),
+      ...(isSteeredDelivery(runtime.steered) ? { steered: runtime.steered } : {})
     };
   }
   if (runtime.kind === "assistant_tool_calls" && typeof runtime.runId === "string") {
@@ -664,4 +677,15 @@ function isWebSourceProvider(value: string): value is WebSourceProvider {
 
 function isUnknownRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function isSteeredDelivery(value: unknown): value is SteeredUserMessageDelivery {
+  if (typeof value !== "object" || value === null) return false;
+  const delivery = value as Record<string, unknown>;
+  return (
+    typeof delivery.runId === "string" &&
+    typeof delivery.followUpId === "string" &&
+    typeof delivery.authorUserId === "string" &&
+    typeof delivery.typedAt === "string"
+  );
 }

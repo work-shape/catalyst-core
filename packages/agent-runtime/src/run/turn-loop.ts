@@ -368,6 +368,9 @@ export class TurnLoop {
       );
 
     for (let step = entry.firstStep; step < maxSteps; step += 1) {
+      // The step boundary: all results of the last step are in. A new run's first request
+      // goes out with its input alone, so a refused continuation rebuilds it in full.
+      if (step > 0 || input.resume) await this.takeSteers(state, runId, input, context, messages);
       const modelResult = await callModel().catch(async (error: unknown) => {
         if (!carriesEarlierContinuation || !isModelProviderContinuationRejected(error)) {
           throw error;
@@ -563,6 +566,33 @@ export class TurnLoop {
     }
 
     state.fail(new AppError("CONFLICT", `Agent exceeded the maximum step limit of ${maxSteps}`));
+  }
+
+  /**
+   * What the run's own person sent into the running turn (FU-2), appended after the step's
+   * tool results as user messages: never between two results of one step. A subagent and a
+   * Workflow step are never steered.
+   */
+  private async takeSteers(
+    state: RunState,
+    runId: AgentRunId,
+    input: StartAgentRunInput,
+    context: RuntimeCallContext,
+    messages: ModelMessage[]
+  ): Promise<void> {
+    if (!this.options.takeSteers || context.subagent || input.workflowAgent) return;
+    if (context.signal?.aborted || isCancellationRequested(state.getStatus())) return;
+    const steered = await this.options.takeSteers({ runId, conversationId: input.conversationId });
+    for (const { message } of steered) {
+      messages.push({
+        role: "user",
+        content: await createSubmittedUserMessageContent(
+          message.text,
+          undefined,
+          this.modelInput.modelContextOptions(context)
+        )
+      });
+    }
   }
 }
 

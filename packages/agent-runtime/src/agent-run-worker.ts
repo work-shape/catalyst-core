@@ -1,4 +1,5 @@
 import {
+  auditActorFromUser,
   AGENT_RUN_CANCELLATION_CHECK_INTERVAL_MS,
   AGENT_RUN_INTERRUPTED_ERROR,
   AppError,
@@ -28,6 +29,7 @@ import {
   type ChatMessage,
   type ClientInstanceId,
   type ConversationHistoryStore,
+  type SteeredUserMessage,
   type JobControl,
   type JobSchedule,
   type OperationDraftContext,
@@ -85,6 +87,8 @@ export interface AgentRunExecutionControl {
   assertLease(): Promise<void>;
   /** The conversation of the run. Its writes carry the lease of the job. */
   conversationHistory: ConversationHistoryStore;
+  /** Takes the steers sent into the run, under the lease of the job (FU-2). */
+  takeSteers(): Promise<SteeredUserMessage[]>;
 }
 
 export interface AgentRunJobsOptions {
@@ -506,7 +510,18 @@ async function executeClaimedRun(
           fenced,
           holdFinalMessage,
           flushHeldEnd
-        })
+        }),
+        takeSteers: async () => {
+          await flushHeldEnd();
+          return fenced(() =>
+            store.takeClaimedAgentRunSteers({
+              ...ofRun,
+              lease,
+              actor: auditActorFromUser(user),
+              correlationId: run.correlationId
+            })
+          );
+        }
       });
       cancelExecution = (reason) => execution.cancel(reason);
       resumeStateOf = execution.resumeState;
@@ -652,7 +667,8 @@ export function createLocalAgentRunExecutor(
     const runtime = new LocalAgentRuntime({
       ...options,
       conversationHistory: control.conversationHistory,
-      beforeEffect: () => control.assertLease()
+      beforeEffect: () => control.assertLease(),
+      takeSteers: () => control.takeSteers()
     });
     const handle = await runtime.start(input, context);
     return {

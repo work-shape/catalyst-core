@@ -28,7 +28,10 @@ import {
   type ClientInstanceId,
   type FailLostAgentRunInput,
   type RenewAgentRunJobLeaseInput,
-  type RunObservation
+  type RunObservation,
+  type SteeredUserMessage,
+  type TakeClaimedAgentRunSteersInput,
+  createUserMessageMetadata
 } from "@work-shape/catalyst-core";
 import { and, asc, sql as drizzleSql, eq, gt, inArray, lt, or, type SQL } from "drizzle-orm";
 import { enqueueJob } from "./jobs/store";
@@ -37,9 +40,12 @@ import { requireActiveConversationLock } from "./postgres-conversation-operation
 import type { PostgresConnection, PostgresTransaction } from "./postgres-database";
 import { withdrawUnclaimedWorkspaceCommandsOfRuns } from "./postgres-execution-workspace-operations";
 import { mapAgentRun, mapMessage, mapRunObservation } from "./rows";
+import { appendAuditEvent } from "./postgres-audit-usage-operations";
+import { mapFollowUp } from "./postgres-follow-up-operations";
 import {
   agentRunObservations,
   agentRuns,
+  conversationFollowUps,
   conversations,
   messages,
   modelProviderContinuations,
@@ -215,6 +221,26 @@ async function insertClaimedRunObservation(
     await settleEndedAgentRuns(tx, claim.clientInstanceId, [run], new Date(event.createdAt));
   }
 
+  // A steer the run did not take in before it ended becomes a queued follow-up: never lost.
+  if (
+    terminal.status &&
+    terminal.status !== "waiting_for_decision" &&
+    run.parentRunId === null &&
+    run.workflowStepRunId === null
+  )
+    await tx
+      .update(conversationFollowUps)
+      .set({ mode: "queue", dispatchedRunId: null, updatedAt: new Date(event.createdAt) })
+      .where(
+        and(
+          eq(conversationFollowUps.clientInstanceId, claim.clientInstanceId),
+          eq(conversationFollowUps.conversationId, run.conversationId),
+          eq(conversationFollowUps.dispatchedRunId, run.id),
+          eq(conversationFollowUps.status, "pending"),
+          eq(conversationFollowUps.mode, "steer")
+        )
+      );
+
   // A subagent's thread takes no follow-ups: it has no composer.
   if (
     event.type === "run_completed" &&
@@ -324,6 +350,132 @@ export async function appendClaimedAgentRunMessage(
     await requireJobLease(tx, input.lease);
     await lockClaimedRunConversation(tx, input);
     return insertClaimedAgentRunMessage(tx, input, input.message);
+  });
+}
+
+/**
+ * The steers sent into this run, taken in at a step boundary (FU-2). Each becomes a user row
+ * stored now, so the transcript's order is the order the model read; its attachments move to
+ * the row, the follow-up ends `consumed`, and every tab is told with `follow_up_changed` and
+ * `user_message_steered`. The audit names the person and the run, never the text.
+ */
+export async function takeClaimedAgentRunSteers(
+  db: PostgresConnection,
+  input: TakeClaimedAgentRunSteersInput
+): Promise<SteeredUserMessage[]> {
+  return db.transaction(async (tx) => {
+    await requireJobLease(tx, input.lease);
+    await lockClaimedRunConversation(tx, input);
+    const [run] = await tx
+      .select()
+      .from(agentRuns)
+      .where(claimedRunWhere(input))
+      .limit(1)
+      .for("update");
+    if (!run) throw new AppError("CONFLICT", "Agent run has ended");
+    if (run.ownerUserId === null) return [];
+    const steers = await tx
+      .select()
+      .from(conversationFollowUps)
+      .where(
+        and(
+          eq(conversationFollowUps.clientInstanceId, input.clientInstanceId),
+          eq(conversationFollowUps.conversationId, run.conversationId),
+          eq(conversationFollowUps.dispatchedRunId, run.id),
+          eq(conversationFollowUps.status, "pending"),
+          eq(conversationFollowUps.mode, "steer"),
+          eq(conversationFollowUps.authorUserId, run.ownerUserId)
+        )
+      )
+      .orderBy(asc(conversationFollowUps.position));
+    if (steers.length === 0) return [];
+    await requireActiveConversationLock(
+      tx,
+      input.clientInstanceId,
+      asConversationId(run.conversationId),
+      asUserId(run.ownerUserId)
+    );
+    const takenAt = new Date();
+    let sequence = run.lastSequence;
+    const taken: SteeredUserMessage[] = [];
+    for (const steer of steers) {
+      const [row] = await tx
+        .insert(messages)
+        .values({
+          id: createPlatformId<"MessageId">("msg"),
+          clientInstanceId: input.clientInstanceId,
+          conversationId: run.conversationId,
+          role: "user",
+          text: steer.text,
+          metadata:
+            createUserMessageMetadata({
+              steered: {
+                runId: run.id,
+                followUpId: steer.id,
+                authorUserId: steer.authorUserId,
+                typedAt: steer.createdAt.toISOString()
+              }
+            }) ?? {},
+          createdAt: takenAt
+        })
+        .returning();
+      if (!row) throw new AppError("INTERNAL", "Steered message was not stored");
+      const [consumed] = await tx
+        .update(conversationFollowUps)
+        .set({ status: "consumed", updatedAt: takenAt })
+        .where(eq(conversationFollowUps.id, steer.id))
+        .returning();
+      if (!consumed) throw new AppError("INTERNAL", "Steered follow-up was not consumed");
+      const message = mapMessage(row);
+      const at = takenAt.toISOString();
+      await insertClaimedRunObservation(tx, input, {
+        type: "follow_up_changed",
+        runId: asAgentRunId(run.id),
+        sequence: ++sequence,
+        createdAt: at,
+        followUp: mapFollowUp(consumed)
+      });
+      await insertClaimedRunObservation(tx, input, {
+        type: "user_message_steered",
+        runId: asAgentRunId(run.id),
+        sequence: ++sequence,
+        createdAt: at,
+        followUpId: steer.id,
+        message: {
+          id: message.id,
+          role: "user",
+          text: message.text,
+          createdAt: message.createdAt,
+          ...(message.metadata ? { metadata: message.metadata } : {})
+        }
+      });
+      await appendAuditEvent(tx, {
+        clientInstanceId: input.clientInstanceId,
+        type: "message.created",
+        status: "success",
+        actor: input.actor,
+        subject: message.id,
+        correlationId: input.correlationId,
+        metadata: {
+          conversationId: run.conversationId,
+          attachmentCount: 0,
+          delivery: "steered",
+          runId: run.id
+        }
+      });
+      taken.push({ followUpId: steer.id, message });
+    }
+    await tx
+      .update(conversations)
+      .set({ updatedAt: takenAt })
+      .where(
+        and(
+          eq(conversations.clientInstanceId, input.clientInstanceId),
+          eq(conversations.id, run.conversationId),
+          eq(conversations.status, "active")
+        )
+      );
+    return taken;
   });
 }
 

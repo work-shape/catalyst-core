@@ -5,6 +5,7 @@ import {
   LIVE_JOB_STATUSES,
   TOOL_CALL_STATES
 } from "@work-shape/catalyst-asset-schemas";
+import type { AuditActor } from "./audit";
 import type { ModelUsageRefusal } from "./errors";
 import type { ConversationFollowUp } from "./follow-ups";
 import type { ReasoningEffortConfig } from "./config";
@@ -282,6 +283,24 @@ export type AgentRuntimeEvent =
       };
     }
   | {
+      /**
+       * The run's own person steered it: their message, taken in after all results of a step
+       * and before the next model call, stored as a user row at that moment (FU-2).
+       */
+      type: "user_message_steered";
+      runId: AgentRunId;
+      sequence: number;
+      createdAt: ISODateString;
+      followUpId: string;
+      message: {
+        id: MessageId;
+        role: "user";
+        text: string;
+        createdAt: ISODateString;
+        metadata?: JsonObject;
+      };
+    }
+  | {
       type: "tool_call_preparing";
       runId: AgentRunId;
       sequence: number;
@@ -419,7 +438,12 @@ export interface PrepareConversationRunStartInput {
     commandKind: RunStartCommandKind;
     claimedAt?: ISODateString;
   };
-  followUp?: "queue";
+  /**
+   * With an active run: `queue` stores the message as the next turn, `steer` as a message the
+   * running turn takes in, where the run is the sender's own under the same authorization
+   * (otherwise it is queued). Without an active run both start the run.
+   */
+  followUp?: "queue" | "steer";
   /** Effective defaults captured only for a queued message; immediate runs keep caller selections. */
   followUpSelection?: Pick<CreateAgentRunInput, "modelBindingId" | "reasoningEffort">;
   /** Internal dispatch: starts with this oldest pending item under the conversation lock. */
@@ -525,6 +549,22 @@ export interface AppendClaimedAgentRunMessageInput {
   lease: AgentRunJobLease;
   message:
     ({ role: "assistant" } & AppendAssistantMessageInput) | ({ role: "tool" } & CreateMessageInput);
+}
+
+/** The steers a run takes in at a step boundary, under the job's lease (FU-2). */
+export interface TakeClaimedAgentRunSteersInput {
+  clientInstanceId: ClientInstanceId;
+  runId: AgentRunId;
+  lease: AgentRunJobLease;
+  /** The run's own person, who sent every steer it takes: named by the audit record. */
+  actor: AuditActor;
+  correlationId: string;
+}
+
+/** A steer the running turn took in: the follow-up it was, and the user row it became. */
+export interface SteeredUserMessage {
+  followUpId: string;
+  message: ChatMessage;
 }
 
 export interface AppendClaimedAgentRunEndInput {
@@ -651,6 +691,13 @@ export interface AgentRunStore {
    * nothing is written back after an erasure began.
    */
   appendClaimedAgentRunMessage(input: AppendClaimedAgentRunMessageInput): Promise<ChatMessage>;
+  /**
+   * Takes the run's pending steers in position order, under the job's lease and the
+   * Conversation row lock: each becomes a user row at this moment, its attachments move to
+   * that row, the follow-up ends `consumed` and `message.created` is audited without payload.
+   * Only steers by the run's own person are taken. Refused as `appendClaimedAgentRunMessage`.
+   */
+  takeClaimedAgentRunSteers(input: TakeClaimedAgentRunSteersInput): Promise<SteeredUserMessage[]>;
   /**
    * Stores the end of a run in one transaction: its last assistant message, when one is
    * given, and its events in order. Refused as `appendClaimedAgentRunMessage` and

@@ -5,6 +5,7 @@ import { decideWaitingToolCall } from "./postgres-agent-run-decision-operations"
 import {
   appendClaimedAgentRunEnd,
   appendClaimedAgentRunMessage,
+  takeClaimedAgentRunSteers,
   appendClaimedRunObservation,
   assertClaimedAgentRun,
   claimAgentRunForJob,
@@ -163,6 +164,50 @@ async function releaseRunStartCommand(
   await db.delete(runStartCommands).where(runStartCommandPendingClaimWhere(input));
 }
 
+/**
+ * Whether a steer goes into the active run (FU-2): only the run's own person, under the same
+ * authorization the run acts with, steers a conversation's own run that is not ending. A
+ * message with attachments waits for the next turn, as every other is queued.
+ */
+async function steersInto(
+  tx: PostgresConnection,
+  run: typeof agentRuns.$inferSelect,
+  input: PrepareConversationRunStartInput
+): Promise<boolean> {
+  if (
+    run.ownerUserId !== input.ownerUserId ||
+    run.status === "cancelling" ||
+    run.parentRunId !== null ||
+    run.workflowStepRunId !== null
+  )
+    return false;
+  const [same] = await tx
+    .select({ id: agentRuns.id })
+    .from(agentRuns)
+    .where(
+      and(
+        eq(agentRuns.id, run.id),
+        drizzleSql`${agentRuns.authorizationContext} = ${JSON.stringify(input.run.authorization)}::jsonb`
+      )
+    )
+    .limit(1);
+  if (!same) return false;
+  const [attachment] = await tx
+    .select({ id: conversationAttachments.id })
+    .from(conversationAttachments)
+    .where(
+      and(
+        eq(conversationAttachments.clientInstanceId, input.clientInstanceId),
+        eq(conversationAttachments.conversationId, input.conversationId),
+        eq(conversationAttachments.status, "ready"),
+        isNull(conversationAttachments.messageId),
+        isNull(conversationAttachments.followUpId)
+      )
+    )
+    .limit(1);
+  return !attachment;
+}
+
 async function prepareConversationRunStart(
   db: PostgresConnection,
   input: PrepareConversationRunStartInput
@@ -184,8 +229,16 @@ async function prepareConversationRunStart(
       )
       .limit(1);
     if (activeRun) {
-      if (input.followUp === "queue" && !input.dispatchFollowUpId)
-        return { followUp: await queueFollowUp(tx, input) };
+      if (input.followUp && !input.dispatchFollowUpId)
+        return {
+          followUp: await queueFollowUp(
+            tx,
+            input,
+            input.followUp === "steer" && (await steersInto(tx, activeRun, input))
+              ? activeRun.id
+              : undefined
+          )
+        };
       throw new AppError("CONFLICT", "Conversation already has an active agent run");
     }
 
@@ -766,6 +819,9 @@ export function createPostgresAgentRunsStore(
       input: AppendClaimedAgentRunMessageInput
     ): Promise<ChatMessage> {
       return appendClaimedAgentRunMessage(db, input);
+    },
+    async takeClaimedAgentRunSteers(input) {
+      return takeClaimedAgentRunSteers(db, input);
     },
     async appendRunObservation(input: AppendRunObservationInput): Promise<RunObservation> {
       return appendRunObservation(db, input);

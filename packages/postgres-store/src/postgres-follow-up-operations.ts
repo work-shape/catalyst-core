@@ -190,10 +190,14 @@ export async function observeFollowUpChange(
   await db.update(agentRuns).set({ lastSequence: sequence }).where(eq(agentRuns.id, run.id));
 }
 
-/** Accepts the queued outcome in the same locked transaction as normal run acceptance. */
+/**
+ * Accepts the queued outcome in the same locked transaction as normal run acceptance. With
+ * `steerRunId` the message is a steer that only that run takes in (FU-2).
+ */
 export async function queueFollowUp(
   db: PostgresConnection,
-  input: PrepareConversationRunStartInput
+  input: PrepareConversationRunStartInput,
+  steerRunId?: string
 ): Promise<ConversationFollowUp> {
   const [last] = await db
     .select({ position: conversationFollowUps.position })
@@ -210,8 +214,9 @@ export async function queueFollowUp(
       conversationId: input.conversationId,
       authorUserId: input.ownerUserId,
       text: input.userMessage.text,
-      mode: "queue",
+      mode: steerRunId ? "steer" : "queue",
       status: "pending",
+      dispatchedRunId: steerRunId ?? null,
       position: (last?.position ?? 0) + 1,
       agentName: input.run.agentName,
       modelBindingId: input.followUpSelection?.modelBindingId ?? input.run.modelBindingId,

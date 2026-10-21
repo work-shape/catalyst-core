@@ -687,7 +687,7 @@ describe("server follow-up queue on Postgres", () => {
   it("rejects malformed queue requests and a withdrawal scoped to another conversation", async () => {
     const f = await fixture(true);
     for (const payload of [
-      { followUp: "steer", message: { text: "Wrong mode" } },
+      { followUp: "interrupt", message: { text: "Wrong mode" } },
       { followUp: "queue", message: { text: "" } },
       { followUp: "queue", message: { text: null } }
     ]) {

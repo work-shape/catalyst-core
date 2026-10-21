@@ -18,7 +18,9 @@ import {
   type WebAccessConfig,
   type AgentRunId,
   type AgentRuntimeEvent,
+  type ConversationId,
   type RuntimeCallContext,
+  type SteeredUserMessage,
   type StartAgentRunInput
 } from "@work-shape/catalyst-core";
 import type { SubagentOutcomeReader } from "./subagents";
@@ -78,6 +80,15 @@ export interface LocalAgentRuntimeOptions {
   fileReader?: ModelContextFileReader;
   runFailureReporter?: (report: LocalAgentRunFailureReport) => void | Promise<void>;
   beforeEffect?: (effect: LocalAgentRuntimeEffect) => void | Promise<void>;
+  /**
+   * Takes what the run's own person sent into it since the last step (FU-2), stored as user
+   * rows. Read at every step boundary: after all results of a step, before the next model
+   * call. Without it a run is never steered.
+   */
+  takeSteers?: (input: {
+    runId: AgentRunId;
+    conversationId: ConversationId;
+  }) => Promise<SteeredUserMessage[]>;
 }
 
 export interface LocalAgentRuntimeEffect {

@@ -50,7 +50,7 @@ export interface SendConversationMessageCommand {
   access?: ActorAccess;
   idempotencyKey?: string;
   text: string;
-  followUp?: "queue";
+  followUp?: "queue" | "steer";
   dispatchFollowUpId?: string;
   dispatchAfterRunId?: AgentRunId;
   dispatchJobId?: JobId;

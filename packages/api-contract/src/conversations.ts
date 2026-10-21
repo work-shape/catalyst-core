@@ -484,6 +484,20 @@ export const agentRuntimeEventSchema = z.discriminatedUnion("type", [
     })
   }),
   z.object({
+    type: z.literal("user_message_steered"),
+    runId: z.string(),
+    sequence: z.number(),
+    createdAt: timestampSchema,
+    followUpId: z.string(),
+    message: z.object({
+      id: z.string(),
+      role: z.literal("user"),
+      text: z.string(),
+      createdAt: timestampSchema,
+      metadata: z.record(z.string(), z.unknown()).optional()
+    })
+  }),
+  z.object({
     type: z.literal("tool_call_preparing"),
     runId: z.string(),
     sequence: z.number(),
@@ -773,10 +787,10 @@ export const queuedConversationRunResponseSchema = z.object({
 
 export const startConversationRunRequestSchema = z.object({
   followUp: z
-    .literal("queue")
+    .enum(FOLLOW_UP_MODES)
     .optional()
     .describe(
-      "Queue the message when this conversation has an active run. Without this option, an active run still returns CONFLICT."
+      "What happens when this conversation has an active run. `queue` sends the message as the next turn. `steer` hands it to the running turn at its next step when the run is the caller's own under the same credential and the message has no attachments, and queues it otherwise. Without this option, an active run still returns CONFLICT."
     ),
   idempotencyKey: z.string().min(1),
   agentName: z.string().min(1).optional(),
