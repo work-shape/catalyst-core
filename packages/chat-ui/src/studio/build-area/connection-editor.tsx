@@ -83,10 +83,15 @@ function NewConnectionPage({
   const submit = async () => {
     setSaving(true);
     const answer = await frame.save(newConnectionConfig(start, form));
-    if (answer.ok && sendsSecret(form.authScheme) && secret !== "") {
+    if (
+      answer.ok &&
+      answer.revision !== undefined &&
+      sendsSecret(form.authScheme) &&
+      secret !== ""
+    ) {
       // The Connection exists and its page is open. A key that could not be stored shows
       // there as not set, with the field to enter it again.
-      await source.setSecret(start.name, secret, null).catch(() => undefined);
+      await source.setSecret(start.name, secret, null, answer.revision).catch(() => undefined);
     }
     setSaving(false);
     setOutcome(answer);

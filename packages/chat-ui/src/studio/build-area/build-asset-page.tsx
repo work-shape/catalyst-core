@@ -157,7 +157,7 @@ function useCreate({
           .catch(() => undefined);
       }
       onCreated(start.name);
-      return { ok: true };
+      return { ok: true, revision: written.revision };
     } catch (error) {
       const outcome = readBuildRefusal(error, t, locale);
       // A create that meets a conflict found the id taken, or held by a deleted asset
@@ -568,7 +568,7 @@ function LoadedAssetPage({
       });
       setFailure(undefined);
       onRestored(undefined);
-      return { ok: true, ...(files ? { stored: files } : {}) };
+      return { ok: true, revision, ...(files ? { stored: files } : {}) };
     } catch (error) {
       return refusalOf(error);
     }

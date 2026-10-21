@@ -68,6 +68,21 @@ function connectionDetail(version?: number) {
   };
 }
 
+/** A read before a secret write: the Connection's definition for its revision, or its state. */
+function secretSetRead(request: Request, version?: number) {
+  return new URL(request.url).pathname.split("/").includes("assets")
+    ? Response.json({
+        id: "asset_outside",
+        kind: "connection",
+        name: "outside",
+        scope: { kind: "instance" },
+        revision: 3,
+        config: { name: "outside" },
+        updatedAt: "2026-10-21T12:00:00.000Z"
+      })
+    : Response.json(connectionDetail(version));
+}
+
 describe("catalog CLI commands", () => {
   it("reads file and stdin client input, sends a write with idempotency, and prints its JSON output", async () => {
     const cwd = await directory();
@@ -266,7 +281,7 @@ describe("write-only CLI secret input", () => {
     const secret = generateTestSecret();
     let body: unknown;
     const fetchImpl = apiFetch(async (request) => {
-      if (request.method === "GET") return Response.json(connectionDetail(7));
+      if (request.method === "GET") return secretSetRead(request, 7);
       body = await request.json();
       return Response.json({ state: "set", version: 8 });
     });
@@ -274,7 +289,7 @@ describe("write-only CLI secret input", () => {
       fetchImpl,
       stdin: Readable.from([` ${secret} \r\n`])
     });
-    expect(body).toEqual({ value: ` ${secret} `, expectedVersion: 7 });
+    expect(body).toEqual({ value: ` ${secret} `, expectedVersion: 7, expectedRevision: 3 });
     expect(result).toEqual({ code: 0, out: '{\n  "state": "set",\n  "version": 8\n}\n', err: "" });
     expect(JSON.stringify(result)).not.toContain(secret);
   });
@@ -283,7 +298,7 @@ describe("write-only CLI secret input", () => {
     const secret = generateTestSecret();
     const keys: (string | null)[] = [];
     const fetchImpl = apiFetch((request) => {
-      if (request.method === "GET") return Response.json(connectionDetail());
+      if (request.method === "GET") return secretSetRead(request);
       keys.push(request.headers.get("idempotency-key"));
       if (keys.length === 1) throw new TypeError("The test connection dropped");
       return Response.json({ state: "set", version: 1 });
@@ -307,7 +322,7 @@ describe("write-only CLI secret input", () => {
       fetchImpl: apiFetch((request) => {
         if (request.method === "GET") {
           reads += 1;
-          return Response.json(connectionDetail());
+          return secretSetRead(request);
         }
         return Response.json({ error: { code, message: "Write refused" } }, { status: 409 });
       })
@@ -315,7 +330,8 @@ describe("write-only CLI secret input", () => {
     expect(result.code).toBe(1);
     expect(result.out).toBe("");
     expect(result.err).toContain(`HTTP 409 ${code}`);
-    expect(reads).toBe(1);
+    // The state and the revision before the write, and no read after it.
+    expect(reads).toBe(2);
   });
 
   it("keeps OUTPUT_NOT_RETAINED as a refusal for generic calls", async () => {
@@ -323,7 +339,7 @@ describe("write-only CLI secret input", () => {
       stdin: Readable.from([
         JSON.stringify({
           params: { name: "outside" },
-          body: { value: generateTestSecret(), expectedVersion: null }
+          body: { value: generateTestSecret(), expectedVersion: null, expectedRevision: 1 }
         })
       ]),
       fetchImpl: apiFetch(() =>
@@ -353,7 +369,7 @@ describe("write-only CLI secret input", () => {
     const secret = generateTestSecret();
     const fetchImpl = apiFetch((request) =>
       request.method === "GET"
-        ? Response.json(connectionDetail())
+        ? secretSetRead(request)
         : Response.json(
             {
               error: {
@@ -374,7 +390,7 @@ describe("write-only CLI secret input", () => {
       stdin: Readable.from([
         JSON.stringify({
           params: { name: "outside" },
-          body: { value: secret, expectedVersion: null }
+          body: { value: secret, expectedVersion: null, expectedRevision: 1 }
         })
       ])
     });
@@ -400,7 +416,7 @@ describe("write-only CLI secret input", () => {
       const result = await run(["connection", "secret", "set", "outside"], {
         stdin: input,
         fetchImpl: apiFetch(async (request) => {
-          if (request.method === "GET") return Response.json(connectionDetail());
+          if (request.method === "GET") return secretSetRead(request);
           body = await request.json();
           return Response.json({ state: "set", version: 1 });
         }),
@@ -419,7 +435,9 @@ describe("write-only CLI secret input", () => {
         cancel ? "Secret (hidden): \nSecret entry cancelled.\n" : "Secret (hidden): \n"
       );
       expect(result.out + result.err).not.toContain(secret);
-      expect(body).toEqual(cancel ? undefined : { value: secret, expectedVersion: null });
+      expect(body).toEqual(
+        cancel ? undefined : { value: secret, expectedVersion: null, expectedRevision: 3 }
+      );
       expect(input.setRawMode.mock.calls).toEqual([[true], [false]]);
       expect(input.listenerCount("keypress")).toBe(0);
       expect(input.isPaused()).toBe(true);
@@ -525,7 +543,8 @@ describe("CLI parity against persisted operations", () => {
     expect(statuses).toEqual([200, 409]);
     expect(keys[0]).toBeTruthy();
     expect(keys[1]).toBe(keys[0]);
-    expect(reads).toBe(2);
+    // The state and the revision before the write, the state after the lost answer.
+    expect(reads).toBe(3);
     // Discovery reads the actual encrypted value; version 1 also proves no second write ran.
     await runJobs(instance);
     expect(w.connector.handed).toContain(secret);

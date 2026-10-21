@@ -920,6 +920,11 @@ export const CONNECTION_REFUSALS = {
   takesNoSecret: "connection_takes_no_secret",
   /** The instance names no key of the Secret Store, so no secret can be stored. */
   secretStoreUnavailable: "secret_store_unavailable",
+  /**
+   * The Connection is at another revision than the one a secret was entered for: its addresses
+   * or client may have changed, so the secret is not stored.
+   */
+  changedSinceRead: "connection_changed",
   /** Apps do not send person context yet, so a Connection that sends it is not for Apps. */
   personContextAppUnavailable: "person_context_app_unavailable",
   /**

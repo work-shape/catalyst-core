@@ -192,6 +192,7 @@ function keyRemovalWarning(
  */
 export function ConnectionSecretEditor({
   name,
+  revision,
   secret,
   source,
   written,
@@ -199,6 +200,8 @@ export function ConnectionSecretEditor({
   removal
 }: {
   name: string;
+  /** The revision of the Connection the page shows: the key is for its addresses. */
+  revision: number;
   secret: ConnectionDetail["secret"];
   source: ConnectionSource;
   written(): void;
@@ -250,7 +253,7 @@ export function ConnectionSecretEditor({
         event.preventDefault();
         setSaving(true);
         source
-          .setSecret(name, value, secret.version ?? null)
+          .setSecret(name, value, secret.version ?? null, revision)
           .then(
             () => {
               setValue(undefined);

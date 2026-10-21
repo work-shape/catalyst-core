@@ -176,6 +176,7 @@ export function ConnectionPage({
                   ? (retest) => (
                       <ConnectionSecretEditor
                         name={asset.name}
+                        revision={asset.revision}
                         secret={read.detail.secret}
                         source={source}
                         written={written}
@@ -206,8 +207,10 @@ export function ConnectionPage({
                   ? {
                       writeOAuth: async (oauth: { clientId?: string; scopes?: string[] }) => {
                         const outcome = await editing.save(withOAuthSettings(config, oauth));
-                        if (!outcome.ok) throw new Error("The sign-in settings were not saved");
+                        if (!outcome.ok || outcome.revision === undefined)
+                          throw new Error("The sign-in settings were not saved");
                         written();
+                        return outcome.revision;
                       }
                     }
                   : {})}

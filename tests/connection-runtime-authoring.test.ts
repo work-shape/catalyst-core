@@ -62,10 +62,26 @@ const put = (
     payload: { config, expectedRevision }
   });
 
-const setSecret = (instance: TestInstance, value: string, expectedVersion: number | null) =>
+/** The revision of the Connection made here, as a writer reads it before entering a key. */
+async function revisionOf(instance: TestInstance): Promise<number> {
+  const read = await instance.call("assets.get", { params: { kind: "connection", name: NAME } });
+  expect(read.statusCode).toBe(200);
+  return z.object({ revision: z.number() }).parse(read.json()).revision;
+}
+
+const setSecret = async (
+  instance: TestInstance,
+  value: string,
+  expectedVersion: number | null,
+  expectedRevision?: number
+) =>
   instance.call("connections.set_secret", {
     params: { name: NAME },
-    payload: { value, expectedVersion }
+    payload: {
+      value,
+      expectedVersion,
+      expectedRevision: expectedRevision ?? (await revisionOf(instance))
+    }
   });
 
 const discoveredSchema = z.object({
@@ -188,12 +204,34 @@ describe("a Connection made on the instance", () => {
     expect((await secretsOfConnection()).map((row) => row.version)).toEqual([2]);
   });
 
+  it("refuses a key typed for a Connection somebody changed since it was read", async () => {
+    const instance = await start();
+    await put(instance, definition(), null);
+    await setSecret(instance, generateTestSecret(), null);
+    // The admin read the Connection and types a key; meanwhile another writer changes it. Any
+    // change refuses the key, not only one of the address: the server does not guess which
+    // settings a credential is bound to.
+    const read = await revisionOf(instance);
+    await put(instance, definition({ displayName: "Changed" }), read);
+    const stale = await setSecret(instance, generateTestSecret(), 1, read);
+    expect(stale.statusCode).toBe(409);
+    expect(errorSchema.parse(stale.json()).error.details).toEqual({
+      reason: "connection_changed"
+    });
+    expect((await secretsOfConnection()).map((row) => row.version)).toEqual([1]);
+    // Read again, the key is entered over the revision the Connection now has.
+    expect((await setSecret(instance, generateTestSecret(), 1)).json()).toEqual({
+      state: "set",
+      version: 2
+    });
+  });
+
   it("takes no key for a release Connection or for one that sends none", async () => {
     const instance = await start();
     // `outside` is the world's release Connection.
     const release = await instance.call("connections.set_secret", {
       params: { name: "outside" },
-      payload: { value: generateTestSecret(), expectedVersion: 1 }
+      payload: { value: generateTestSecret(), expectedVersion: 1, expectedRevision: 1 }
     });
     expect(release.statusCode).toBe(403);
     expect(errorSchema.parse(release.json()).error.details).toEqual({
@@ -207,7 +245,7 @@ describe("a Connection made on the instance", () => {
     });
     const missing = await instance.call("connections.set_secret", {
       params: { name: "nowhere" },
-      payload: { value: generateTestSecret(), expectedVersion: null }
+      payload: { value: generateTestSecret(), expectedVersion: null, expectedRevision: 1 }
     });
     expect(missing.statusCode).toBe(404);
   });
@@ -386,7 +424,11 @@ describe("the rights over a Connection made on the instance", () => {
         })
       }
     };
-    const key = { params: { name: "crm" }, payload: { value: "replaced", expectedVersion: 1 } };
+    // The key is entered over the revision the change below writes.
+    const key = {
+      params: { name: "crm" },
+      payload: { value: "replaced", expectedVersion: 1, expectedRevision: 2 }
+    };
     const discover = { params: { name: "crm" } };
     for (const action of ["connection.read", "connection.use"]) {
       const grantId = await t.grant(t.kai.id, action, { assetId });
@@ -434,18 +476,26 @@ describe("the rights over a Connection made on the instance", () => {
     });
     const find = t.stores.connections.findSecret.bind(t.stores.connections);
     let lands = true;
-    vi.spyOn(t.stores.connections, "findSecret").mockImplementation(async (input) => {
-      const found = await find(input);
-      if (lands) {
-        // Version 2 lands right after this writer read version 1.
-        lands = false;
-        await other.put({ binding, value: generateTestSecret(), source: "runtime" });
-      }
-      return found;
-    });
+    // The write reads the secret inside its transaction, over that transaction's stores.
+    const transaction = t.stores.transaction.bind(t.stores);
+    vi.spyOn(t.stores, "transaction").mockImplementation((work) =>
+      transaction((stores) => {
+        const inner = stores.connections.findSecret.bind(stores.connections);
+        vi.spyOn(stores.connections, "findSecret").mockImplementation(async (input) => {
+          const found = await inner(input);
+          if (lands) {
+            // Version 2 lands right after this writer read version 1.
+            lands = false;
+            await other.put({ binding, value: generateTestSecret(), source: "runtime" });
+          }
+          return found;
+        });
+        return work(stores);
+      })
+    );
     const refused = await t.call(t.admin.id, "connections.set_secret", {
       params: { name: "crm" },
-      payload: { value: generateTestSecret(), expectedVersion: 1 }
+      payload: { value: generateTestSecret(), expectedVersion: 1, expectedRevision: 1 }
     });
     expect(refused.statusCode).toBe(409);
     expect(errorSchema.parse(refused.json()).error.details).toEqual({

@@ -318,11 +318,14 @@ export type ConnectorTypeOffers = z.infer<typeof connectorTypeOffersSchema>;
 /**
  * A secret entered once. It is never answered, logged or kept with the run of its call.
  * `expectedVersion` is the version the writer saw, `null` where none was set: a write over a
- * version somebody else set meanwhile is refused.
+ * version somebody else set meanwhile is refused. `expectedRevision` is the revision of the
+ * Connection the writer read: a secret is entered for the addresses that revision names, so a
+ * Connection changed since is refused with `connection_changed` and stores nothing.
  */
 const connectionSecretWriteSchema = z.object({
   value: z.string().min(1).max(SECRET_VALUE_MAX_CHARS),
-  expectedVersion: z.number().int().positive().nullable()
+  expectedVersion: z.number().int().positive().nullable(),
+  expectedRevision: z.number().int().positive()
 });
 
 const connectionDiscoveryRequestSchema = z.object({ status: z.literal("queued") });

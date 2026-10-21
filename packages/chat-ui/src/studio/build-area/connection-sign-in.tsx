@@ -37,12 +37,20 @@ export interface SignInCalls {
   start(): Promise<ConnectionOAuthStart>;
   readDetail(): Promise<ConnectionDetail>;
   /**
-   * Writes `settings.oauth` of the definition. Absent where the definition is not changed
-   * here, as for a Connection of the release config: the permissions then stand as they are.
+   * Writes `settings.oauth` of the definition and answers the revision it wrote. Absent where
+   * the definition is not changed here, as for a Connection of the release config: the
+   * permissions then stand as they are.
    */
-  writeOAuth?(oauth: { clientId?: string; scopes?: string[] }): Promise<void>;
-  /** Enters the client secret, the Connection's own secret. Present with `writeOAuth`. */
-  setSecret?(value: string, expectedVersion: number | null): Promise<void>;
+  writeOAuth?(oauth: { clientId?: string; scopes?: string[] }): Promise<number>;
+  /**
+   * Enters the client secret, the Connection's own secret, for the Connection at the revision
+   * given. Present with `writeOAuth`.
+   */
+  setSecret?(
+    value: string,
+    expectedVersion: number | null,
+    expectedRevision: number
+  ): Promise<void>;
 }
 
 /** A tab opened for the provider's page. */
@@ -260,10 +268,11 @@ export function useConnectionSignIn(
     const id = client.id.trim();
     setState({ ...state, saving: true, error: undefined });
     try {
-      await current.writeOAuth({ clientId: id });
+      const revision = await current.writeOAuth({ clientId: id });
       if (client.secret !== "" && current.setSecret) {
         const version = (await current.readDetail()).secret.version;
-        await current.setSecret(client.secret, version ?? null);
+        // For the client just written: a write of the addresses since refuses the secret.
+        await current.setSecret(client.secret, version ?? null, revision);
       }
     } catch (error) {
       setState({ ...state, saving: false, error: signInErrorOf(error) });

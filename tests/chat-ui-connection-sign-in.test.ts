@@ -135,10 +135,11 @@ function testCalls(
     },
     writeOAuth: async (oauth) => {
       log.push(`assets.put(${JSON.stringify(oauth)})`);
+      return 4;
     },
-    setSecret: async (value, expectedVersion) => {
+    setSecret: async (value, expectedVersion, expectedRevision) => {
       log.push(
-        `connections.set_secret(${value === CLIENT_SECRET ? "secret" : "?"},${expectedVersion})`
+        `connections.set_secret(${value === CLIENT_SECRET ? "secret" : "?"},${expectedVersion},${expectedRevision})`
       );
     }
   };
@@ -370,7 +371,8 @@ describe("the sign-in step", () => {
       "connections.oauth_start",
       'assets.put({"clientId":"client-123"})',
       "connections.get",
-      "connections.set_secret(secret,2)",
+      // The client secret is for the revision that wrote the client.
+      "connections.set_secret(secret,2,4)",
       "connections.get",
       "connections.oauth_start"
     ]);

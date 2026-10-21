@@ -28,7 +28,8 @@ interface BuildRefusal {
 
 /** How a change went. */
 export type BuildWriteOutcome =
-  | { ok: true }
+  /** The revision the write made, where the write was of the asset itself. */
+  | { ok: true; revision?: number }
   /**
    * Somebody saved or deleted the asset after this page loaded it. The page offers the newer
    * version, and names who wrote it and when where the instance said so.

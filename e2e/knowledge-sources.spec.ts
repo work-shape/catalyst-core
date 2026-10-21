@@ -189,7 +189,13 @@ test.describe("a synced source on a Knowledge Base's page", () => {
       page,
       "put",
       `${knowledge.url}/api/v1/connections/${connection}/secret`,
-      { data: { value: "e2e-folder-secret", expectedVersion: null } }
+      {
+        data: {
+          value: "e2e-folder-secret",
+          expectedVersion: null,
+          expectedRevision: await assetRevision(page, connectionUrl)
+        }
+      }
     );
     expect(secret.ok(), await secret.text()).toBe(true);
 

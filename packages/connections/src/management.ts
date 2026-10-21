@@ -187,10 +187,13 @@ export interface ConnectionManagement extends ReturnType<
    * Stores the shared secret of a Connection made on the instance, as the next version. The
    * value is written once and never read back. `expectedVersion` is the version the writer
    * saw, `null` for none: another writer's version in between refuses the write.
+   * `expectedRevision` is the revision of the Connection the writer read: the secret is for
+   * the addresses that revision names, and a Connection changed since refuses the write with
+   * `connection_changed`.
    */
   setSecret(
     name: string,
-    input: { value: string; expectedVersion: number | null }
+    input: { value: string; expectedVersion: number | null; expectedRevision: number }
   ): Promise<{ state: "set"; version: number }>;
   /** Starts the shared OAuth sign-in of a Connection. See `ConnectionSignIn`. */
   oauthStart: ConnectionSignIn["start"];
@@ -512,65 +515,81 @@ export function createConnectionManagement(
       return { status, testedAt };
     },
 
-    async setSecret(name, { value, expectedVersion }) {
-      const connection = await readConnection(deps, name);
-      if (!connection) throw notFound(name);
-      const { config } = connection;
-      if (config.origin === "release") {
-        throw new AppError(
-          "FORBIDDEN",
-          `${CONNECTION_REFUSALS.readOnlyOrigin}: this Connection is defined in release config, and its secret comes from the environment`,
-          { reason: CONNECTION_REFUSALS.readOnlyOrigin }
-        );
-      }
-      if (config.authScheme === AUTH_SCHEME_NONE || config.secretHandle === undefined) {
-        throw secretWriteRefusal(
-          CONNECTION_REFUSALS.takesNoSecret,
-          "the Connection sends no credential. Choose an auth scheme that does first"
-        );
-      }
-      if (!deps.keyring) {
-        throw secretWriteRefusal(
-          CONNECTION_REFUSALS.secretStoreUnavailable,
-          "this instance names no key of the Secret Store. An operator names one under 'secretStore.keys'"
-        );
-      }
-      const binding = { connectionAssetId: connection.assetId, subject: SHARED_CREDENTIAL_SUBJECT };
-      // The secret is for the address the Connection has on this read, and is sent nowhere
-      // else: an address another writer sets meanwhile does not get it.
-      const origin = connection.type
-        ? connectionOriginOf(connection.type, connection.config)
-        : undefined;
-      if (origin === undefined) {
-        throw secretWriteRefusal(
-          CREDENTIAL_REFUSALS.notConfigured,
-          "the Connection's settings name no address its connector type reads. Fix the settings first"
-        );
-      }
-      // The version is compared on the read the write follows: a check before it here would
-      // let a write that lands in between be replaced unseen.
-      const written = await createSecretStore({
-        clientInstanceId: deps.clientInstanceId,
-        keyring: deps.keyring,
-        store: deps.stores.connections
-      }).put({
-        binding,
-        value,
-        source: "runtime",
-        handle: config.secretHandle,
-        expectedVersion,
-        origin
-      });
-      if (written.changed) {
-        // What a test found was found with the secret before.
-        await deps.stores.connections.putConnectionState({
-          clientInstanceId: deps.clientInstanceId,
+    async setSecret(name, { value, expectedVersion, expectedRevision }) {
+      return deps.stores.transaction(async (stores) => {
+        // Held until the end: a write of the Connection waits, so the addresses the revision
+        // below names are the ones the secret is stored for.
+        const connection = await readConnection({ ...deps, stores }, name, { held: true });
+        if (!connection) throw notFound(name);
+        const { config } = connection;
+        if (config.origin === "release") {
+          throw new AppError(
+            "FORBIDDEN",
+            `${CONNECTION_REFUSALS.readOnlyOrigin}: this Connection is defined in release config, and its secret comes from the environment`,
+            { reason: CONNECTION_REFUSALS.readOnlyOrigin }
+          );
+        }
+        // The secret was typed for the Connection as the writer read it. Another writer may
+        // have moved its token address, issuer or client since: the secret is not sent there.
+        if (connection.revision !== expectedRevision) {
+          throw new AppError(
+            "CONFLICT",
+            `${CONNECTION_REFUSALS.changedSinceRead}: the Connection was changed by somebody else since it was read. Nothing was stored; read the Connection again`,
+            { reason: CONNECTION_REFUSALS.changedSinceRead }
+          );
+        }
+        if (config.authScheme === AUTH_SCHEME_NONE || config.secretHandle === undefined) {
+          throw secretWriteRefusal(
+            CONNECTION_REFUSALS.takesNoSecret,
+            "the Connection sends no credential. Choose an auth scheme that does first"
+          );
+        }
+        if (!deps.keyring) {
+          throw secretWriteRefusal(
+            CONNECTION_REFUSALS.secretStoreUnavailable,
+            "this instance names no key of the Secret Store. An operator names one under 'secretStore.keys'"
+          );
+        }
+        const binding = {
           connectionAssetId: connection.assetId,
-          health: "unknown",
-          lastErrorCode: null
+          subject: SHARED_CREDENTIAL_SUBJECT
+        };
+        // The secret is for the address the Connection has on this read, and is sent nowhere
+        // else.
+        const origin = connection.type
+          ? connectionOriginOf(connection.type, connection.config)
+          : undefined;
+        if (origin === undefined) {
+          throw secretWriteRefusal(
+            CREDENTIAL_REFUSALS.notConfigured,
+            "the Connection's settings name no address its connector type reads. Fix the settings first"
+          );
+        }
+        // The version is compared on the read the write follows: a check before it here would
+        // let a write that lands in between be replaced unseen.
+        const written = await createSecretStore({
+          clientInstanceId: deps.clientInstanceId,
+          keyring: deps.keyring,
+          store: stores.connections
+        }).put({
+          binding,
+          value,
+          source: "runtime",
+          handle: config.secretHandle,
+          expectedVersion,
+          origin
         });
-      }
-      return { state: "set", version: written.version };
+        if (written.changed) {
+          // What a test found was found with the secret before.
+          await stores.connections.putConnectionState({
+            clientInstanceId: deps.clientInstanceId,
+            connectionAssetId: connection.assetId,
+            health: "unknown",
+            lastErrorCode: null
+          });
+        }
+        return { state: "set" as const, version: written.version };
+      });
     },
 
     async disconnect(name, audit) {

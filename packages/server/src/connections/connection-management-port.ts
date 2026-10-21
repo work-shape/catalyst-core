@@ -100,11 +100,12 @@ export interface ConnectionManagementPort {
   connectorTypes(): ConnectorTypeOffers;
   /**
    * Stores the shared secret of a Connection made on the instance as its next version, after
-   * the version the writer saw. The value is never answered, logged or read back.
+   * the version the writer saw, on the revision of the Connection the writer read. The value is
+   * never answered, logged or read back.
    */
   setSecret(
     name: string,
-    input: { value: string; expectedVersion: number | null }
+    input: { value: string; expectedVersion: number | null; expectedRevision: number }
   ): Promise<ConnectionSecretState>;
   /**
    * Reads what the outside system offers into the Connection's catalog, bounded in time and

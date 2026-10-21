@@ -121,10 +121,16 @@ export interface ConnectionSource {
    */
   useDetail(name: string, wait?: DiscoveryWait): ConnectionDetailRead;
   /**
-   * Enters the Connection's secret, as the next version after `expectedVersion`. The value goes
-   * to the instance and is kept nowhere here. The page reads the Connection again afterwards.
+   * Enters the Connection's secret, as the next version after `expectedVersion`, for the
+   * Connection at `expectedRevision`: one changed since is refused. The value goes to the
+   * instance and is kept nowhere here. The page reads the Connection again afterwards.
    */
-  setSecret(name: string, value: string, expectedVersion: number | null): Promise<void>;
+  setSecret(
+    name: string,
+    value: string,
+    expectedVersion: number | null,
+    expectedRevision: number
+  ): Promise<void>;
   /** Asks the instance to read the Connection's tools again. Throws `PendingApprovalError` when held. */
   discover(name: string): Promise<void>;
   /**
@@ -321,9 +327,12 @@ export function useConnectionSource(): ConnectionSource {
         ? { status: "failed", retry: () => void grants.refetch().catch(() => undefined) }
         : { status: "loading" };
     },
-    async setSecret(name, value, expectedVersion) {
+    async setSecret(name, value, expectedVersion, expectedRevision) {
       try {
-        await calls.set_secret({ params: { name }, body: { value, expectedVersion } });
+        await calls.set_secret({
+          params: { name },
+          body: { value, expectedVersion, expectedRevision }
+        });
       } finally {
         await queryClient.invalidateQueries({ queryKey: detailKey(name) });
       }

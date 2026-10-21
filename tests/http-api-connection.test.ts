@@ -144,11 +144,15 @@ async function world(options: { release?: true } = {}) {
       params: { kind: "connection", name: NAME },
       payload: { config, expectedRevision }
     });
-  const setSecret = (value: string, expectedVersion: number | null) =>
-    instance.call("connections.set_secret", {
+  const setSecret = async (value: string, expectedVersion: number | null) => {
+    // Over the revision of the Connection as it stands now, as a writer reads it first.
+    const read = await instance.call("assets.get", { params: { kind: "connection", name: NAME } });
+    const { revision } = z.object({ revision: z.number() }).parse(read.json());
+    return instance.call("connections.set_secret", {
       params: { name: NAME },
-      payload: { value, expectedVersion }
+      payload: { value, expectedVersion, expectedRevision: revision }
     });
+  };
   const detail = async () => {
     const response = await instance.call("connections.get", { params: { name: NAME } });
     expect(response.statusCode).toBe(200);

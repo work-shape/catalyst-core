@@ -155,8 +155,8 @@ export function ConnectionSignInSection({
             ...(writeOAuth
               ? {
                   writeOAuth,
-                  setSecret: (value, expectedVersion) =>
-                    source.setSecret(asset.name, value, expectedVersion)
+                  setSecret: (value, expectedVersion, expectedRevision) =>
+                    source.setSecret(asset.name, value, expectedVersion, expectedRevision)
                 }
               : {})
           }}

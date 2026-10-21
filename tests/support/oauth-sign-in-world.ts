@@ -111,7 +111,10 @@ export interface OAuthWorld {
   start(name: string, cookie: string): Promise<{ status: number; body: unknown }>;
   /** `connections.oauth_start` with a bearer token instead of a browser session. */
   startWithToken(name: string, token: string): Promise<number>;
-  /** `connections.set_secret` in the person's browser session: its status. */
+  /**
+   * `connections.set_secret` in the person's browser session, over the Connection's revision as
+   * it stands now: its status.
+   */
   setSecret(
     name: string,
     value: string,
@@ -474,10 +477,19 @@ export async function createOAuthWorld(): Promise<OAuthWorld> {
       return response.status;
     },
     async setSecret(name, value, cookie, expectedVersion = null) {
+      const stored = await instance.stores.configAssets.getConfigAsset({
+        clientInstanceId,
+        kind: "connection",
+        name
+      });
       const response = await fetch(`${api}/api/v1/connections/${name}/secret`, {
         method: "PUT",
         headers: { cookie, origin: PUBLIC_URL, "content-type": "application/json" },
-        body: JSON.stringify({ value, expectedVersion })
+        body: JSON.stringify({
+          value,
+          expectedVersion,
+          expectedRevision: stored?.revision ?? 1
+        })
       });
       await response.body?.cancel();
       return response.status;

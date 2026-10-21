@@ -13,7 +13,8 @@ import { addressOrigin, DISCOVERY_WAIT_MS } from "./connection-form-model";
 export interface ConnectCalls {
   /** Writes the definition: creates it at `null`, or writes over the revision given. */
   put(config: Record<string, unknown>, expectedRevision: number | null): Promise<number>;
-  setSecret(value: string, expectedVersion: number | null): Promise<void>;
+  /** Enters the key over the version given, for the Connection at the revision given. */
+  setSecret(value: string, expectedVersion: number | null, expectedRevision: number): Promise<void>;
   readDetail(): Promise<ConnectionDetail>;
   /** Throws `PendingApprovalError` where somebody approves the test first. */
   test(): Promise<ConnectionTestResult>;
@@ -100,7 +101,8 @@ export async function connectConnection(
       // A new Connection holds no key yet. On a later connect the version is read first, as a
       // write over somebody else's version is refused.
       const version = created ? undefined : (await calls.readDetail()).secret.version;
-      await calls.setSecret(attempt.key, version ?? null);
+      // The key is for the definition just written: one written over it since refuses it.
+      await calls.setSecret(attempt.key, version ?? null, revision);
     } catch (error) {
       onStep("server", "failed");
       return { status: "secret_failed", memory, error };

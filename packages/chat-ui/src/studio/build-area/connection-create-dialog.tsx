@@ -211,13 +211,14 @@ export function ConnectionCreateFlow({
   /** A REST API's OAuth choice, or nothing where the Connection sends a key. */
   const oauthChoice = rest && fields.auth !== "key" ? fields.auth : undefined;
 
-  /** One write of the definition over the revision the dialog wrote last. */
+  /** One write of the definition over the revision the dialog wrote last. Answers the new one. */
   const rewrite = async (config: Record<string, unknown>) => {
     const revision = (
       await put({ name, config, expectedRevision: memory.current.revision ?? null })
     ).revision;
     memory.current = { ...memory.current, revision };
     written.current = config;
+    return revision;
   };
   const signIn = useConnectionSignIn(
     {
@@ -225,7 +226,8 @@ export function ConnectionCreateFlow({
       start: () => source.oauthStart(name),
       readDetail: () => source.readDetail(name),
       writeOAuth: (oauth) => rewrite(withOAuthSettings(written.current, oauth)),
-      setSecret: (value, expectedVersion) => source.setSecret(name, value, expectedVersion)
+      setSecret: (value, expectedVersion, expectedRevision) =>
+        source.setSecret(name, value, expectedVersion, expectedRevision)
     },
     {
       enabled: stage.step === "sign-in",
@@ -301,7 +303,8 @@ export function ConnectionCreateFlow({
               .revision;
           }
         },
-        setSecret: (value, expectedVersion) => source.setSecret(name, value, expectedVersion),
+        setSecret: (value, expectedVersion, expectedRevision) =>
+          source.setSecret(name, value, expectedVersion, expectedRevision),
         readDetail: () => source.readDetail(name),
         test: () => source.test(name),
         discover: () => source.discover(name),

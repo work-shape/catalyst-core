@@ -129,7 +129,8 @@ export function TypedConnectionCreate({
       {
         put: async (definition, expectedRevision) =>
           (await put({ name, config: definition, expectedRevision })).revision,
-        setSecret: (value, expectedVersion) => source.setSecret(name, value, expectedVersion),
+        setSecret: (value, expectedVersion, expectedRevision) =>
+          source.setSecret(name, value, expectedVersion, expectedRevision),
         readDetail: () => source.readDetail(name),
         test: () => source.test(name),
         discover: () => Promise.resolve(),

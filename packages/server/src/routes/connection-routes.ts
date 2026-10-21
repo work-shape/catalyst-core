@@ -146,7 +146,8 @@ export function registerConnectionRoutes(route: Route, options: ChatServerOption
     execute: async (input) => {
       const secret = await required().setSecret(input.name, {
         value: input.value,
-        expectedVersion: input.expectedVersion
+        expectedVersion: input.expectedVersion,
+        expectedRevision: input.expectedRevision
       });
       // What the system offers may depend on whose key asks. A Connection with nothing to
       // discover ends that discovery at once.
