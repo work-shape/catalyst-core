@@ -14,6 +14,7 @@ import {
   DATA_STORE_ASSET_KIND,
   WORKFLOW_ACTIONS,
   WORKFLOW_ASSET_KIND,
+  AppError,
   appReachesDataStore,
   appWorkflowRefusalError,
   dataStoreRefusalError,
@@ -305,22 +306,34 @@ async function requireWorkflows(input: {
       name: action.workflow,
       ...(asset.scope.kind === "workspace" ? { workspaceId: asset.scope.workspaceId } : {})
     });
-    const inputs = workflowInputsSchema.safeParse(asset.publishedConfig).data?.manifest.inputs;
-    const mapped = Object.keys(action.input.mapping);
-    const missing = (inputs?.required ?? []).find((name) => !mapped.includes(name));
-    const undeclared =
-      inputs?.additionalProperties === false
-        ? mapped.find((name) => !Object.hasOwn(inputs.properties ?? {}, name))
-        : undefined;
-    const misfit = missing ?? undeclared;
-    if (misfit !== undefined) {
-      throw appWorkflowRefusalError("workflow_input_invalid", action.workflow, {
+    const misfit = appWorkflowInputMisfit(action, asset.publishedConfig);
+    if (misfit) throw misfit;
+  }
+}
+
+/**
+ * Where an action's mapping does not fit the inputs a revision of its Workflow declares: a
+ * required input it leaves out, or one it fills that the revision does not declare.
+ */
+export function appWorkflowInputMisfit(
+  action: { name: string; workflow: string; input: { mapping: Record<string, unknown> } },
+  config: unknown
+): AppError | undefined {
+  const inputs = workflowInputsSchema.safeParse(config).data?.manifest.inputs;
+  const mapped = Object.keys(action.input.mapping);
+  const missing = (inputs?.required ?? []).find((name) => !mapped.includes(name));
+  const undeclared =
+    inputs?.additionalProperties === false
+      ? mapped.find((name) => !Object.hasOwn(inputs.properties ?? {}, name))
+      : undefined;
+  const misfit = missing ?? undeclared;
+  return misfit === undefined
+    ? undefined
+    : appWorkflowRefusalError("workflow_input_invalid", action.workflow, {
         action: action.name,
         input: misfit,
         fault: missing === undefined ? "undeclared" : "missing"
       });
-    }
-  }
 }
 
 /**

@@ -93,6 +93,7 @@ export {
 } from "./operation-policy-call";
 
 export { APP_PUBLISH_TOOL_NAME, createAppPublishTool } from "./app-publish-tool";
+export { APP_TRY_TOOL_NAMES, createAppTryTools } from "./app-try-tools";
 export { MAIL_SEND_TOOL_NAME, createMailSendTool } from "./mail-send-tool";
 
 export {

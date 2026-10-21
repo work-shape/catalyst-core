@@ -39,6 +39,7 @@ import {
   type OperationDraftContext,
   type OperationOrigin,
   type OperationResult,
+  type OperationTarget,
   type ServedFileSet
 } from "@work-shape/catalyst-core";
 import { runOperation, type OperationOutcome } from "@work-shape/catalyst-tool-execution";
@@ -115,6 +116,8 @@ interface FrameCall {
   idempotencyKey: string | undefined;
   /** Sets the headers of the answer that name the run. */
   header(name: string, value: string): void;
+  /** Told the run the call left and where it went, for a try of the draft (DP-2). */
+  ran?(run: { id: string; target: OperationTarget }): void;
 }
 
 function refusal(
@@ -557,7 +560,10 @@ export class AppActionCalls {
     const { result, run } = outcome;
     // A refusal and a failure name their run too, so the frame's error can be traced.
     const reference = outcome.unrecorded ? {} : { operationRunId: run.id };
-    if (!outcome.unrecorded) call.header("operation-run-id", run.id);
+    if (!outcome.unrecorded) {
+      call.header("operation-run-id", run.id);
+      call.ran?.({ id: run.id, target: run.target });
+    }
     if (outcome.replayed) call.header("idempotent-replayed", "true");
     switch (result.status) {
       case "done":

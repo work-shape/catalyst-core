@@ -24,6 +24,9 @@ const PAGE_TOOLS = [
   "workspace.open",
   "app.save",
   "assets.publish",
+  // DP-2: the agent tries the App's draft and reviews its publish.
+  "apps.try_action",
+  "apps.publish_review",
   "workspace.write_file",
   "workspace.edit_file",
   "workspace.read_file"

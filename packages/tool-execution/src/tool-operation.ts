@@ -54,6 +54,7 @@ export { toolResultFromOperationResult } from "./operation-tool-result";
 import { APP_PUBLISH_TOOL_NAME } from "./app-publish-tool";
 import { MAIL_SEND_TOOL_NAME } from "./mail-send-tool";
 import { WORKFLOW_TEST_TOOL_NAMES } from "./workflow-test-tools";
+import { APP_TRY_TOOL_NAMES } from "./app-try-tools";
 import { KNOWLEDGE_ADD_FILES_TOOL_NAME } from "./knowledge-add-files-tool";
 
 /**
@@ -199,6 +200,7 @@ export function registerToolOperations(
     if (
       SCHEDULED_START_TOOL_NAMES.includes(tool.name) ||
       WORKFLOW_TEST_TOOL_NAMES.includes(tool.name) ||
+      APP_TRY_TOOL_NAMES.includes(tool.name) ||
       tool.name === RUN_AGENT_TOOL_NAME ||
       tool.name === APP_PUBLISH_TOOL_NAME ||
       tool.name === MAIL_SEND_TOOL_NAME ||

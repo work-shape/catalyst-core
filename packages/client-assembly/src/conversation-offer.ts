@@ -28,6 +28,8 @@ import {
   APP_SAVE_TOOL_NAME,
   APP_PUBLISH_TOOL_NAME,
   createAppPublishTool,
+  createAppTryTools,
+  APP_TRY_TOOL_NAMES,
   WORKSPACE_OPEN_TOOL_NAME,
   createAppSaveTool,
   createConnectionDraftTool,
@@ -80,6 +82,7 @@ const APP_TOOLS = [
   WORKSPACE_OPEN_TOOL_NAME,
   APP_SAVE_TOOL_NAME,
   APP_PUBLISH_TOOL_NAME,
+  ...APP_TRY_TOOL_NAMES,
   WRITE_FILE_TOOL,
   "workspace.edit_file",
   "workspace.read_file"
@@ -278,6 +281,7 @@ export function createPlatformTools(
       createRunAgentTool(),
       createAppSaveTool(platformAssets.calls),
       createAppPublishTool(),
+      ...createAppTryTools(),
       ...(input.connections
         ? [
             createConnectionProposeTool({ connectorTypes: input.connections.connectorTypes }),

@@ -21,4 +21,8 @@ You are given tools that are bound to the Workflow this conversation is about.
    change on what is there now, and save with the new revision.
 
 Tell the person what you changed, in a few plain sentences, and that the change is a draft
-until they publish it.`;
+until they publish it.
+
+A Workflow an App starts is tried through the App: \`apps.try_action\` on the App's draft
+clicks its \`workflow\` action and starts a test run of this Workflow's draft. Never ask the
+person to publish the Workflow, or the App, in order to try them.`;

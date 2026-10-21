@@ -302,6 +302,26 @@ export class AppWorkflow {
     caller: { user: AuthenticatedUser; access: ActorAccess },
     input: { app: string; mode: AppMode }
   ) {
+    const { token: _token, ...preview } = await this.mint(caller, input);
+    return preview;
+  }
+
+  /**
+   * The proof a call of the draft's frame carries, minted as `apps.preview` mints it for the
+   * caller, for a try of the draft that opens no frame (DP-2). It asks `app.write`.
+   */
+  async draftProof(
+    caller: { user: AuthenticatedUser; access: ActorAccess },
+    app: string
+  ): Promise<{ pageSessionId: string; fileSetId: string; token: string }> {
+    const { pageSessionId, fileSetId, token } = await this.mint(caller, { app, mode: "draft" });
+    return { pageSessionId, fileSetId, token };
+  }
+
+  private async mint(
+    caller: { user: AuthenticatedUser; access: ActorAccess },
+    input: { app: string; mode: AppMode }
+  ) {
     const kind = this.kind();
     const asset = await this.options.configAssets.store.getConfigAsset({
       clientInstanceId: this.options.clientInstanceId,
@@ -408,6 +428,7 @@ export class AppWorkflow {
       .map(([, definition]) => definition.label);
     return {
       ...(unassignedScopes.length ? { unassignedScopes } : {}),
+      token,
       url: appContentPath(fileSet.id, token),
       expiresAt: new Date(expiresAt * 1000).toISOString(),
       fileSetId: fileSet.id,

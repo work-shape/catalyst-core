@@ -26,6 +26,8 @@ input:
 
 In the App's draft a `workflow` action is not simulated: it starts a test run of the Workflow, so the App and the Workflow are tried together before either is published. A person who may write the Workflow gets a test run of its draft; one who may only use it gets a test run of its published revision. Either way the run's reading, model and code steps are real and its changing steps are simulated or go to a test target, and nothing of it is live. A Workflow that was never published answers a person who may not write it `workflow_unavailable`. "Run live once" is not offered on a `workflow` action: the switches belong to the Workflow's steps.
 
+An agent tries the same click with `apps.try_action` on the draft of the App its conversation is about or created. The answer names the test run (`workflowRun`, with its `runId` and the revision that runs); the agent follows it with `workflows.get_run` and `workflows.list_step_runs` and says what each step did. Nobody publishes anything in order to try it.
+
 The run the App reads (kit `1.8.0` or later) then carries `mode: "test"`, `workflowRevision` (`{ kind: "draft" | "published", number }`, the number while that revision is still the draft or the published one) and `simulatedSteps`, the ids of the steps whose calls were simulated: their part of `output` is not real. The page around the App marks the result itself; an App may say so too, but needs no marker of its own. The published App never gets these fields.
 
 ## The run's output

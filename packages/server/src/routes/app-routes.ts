@@ -11,6 +11,7 @@ import {
 import { AppActionCalls } from "../apps/action-call";
 import { AppActionList } from "../apps/action-list";
 import { AppWorkflow } from "../apps/app-service";
+import { AppDraftTries } from "../apps/app-tries";
 import { DraftHosts } from "../apps/draft-hosts";
 import type { Route } from "../http/route";
 import type { ResolvedChatServerOptions } from "../types";
@@ -28,6 +29,7 @@ export function registerAppRoutes(route: Route, options: ResolvedChatServerOptio
   const actions = new AppActionCalls(options);
   const actionList = new AppActionList(options);
   const draftHosts = new DraftHosts(options);
+  const tries = new AppDraftTries(options, { apps: workflow, actions });
 
   route.operation(apiOperations["apps.create_from_page"], {
     authorize: (input, { actor, access }) => workflow.authorizeCreate(actor, access, input),
@@ -67,6 +69,24 @@ export function registerAppRoutes(route: Route, options: ResolvedChatServerOptio
     beforeEvents: (input) => [workflow.writeEventFromPage(input)],
     heldInputKeys: [PAGE_FILE_SET_HELD_KEY],
     execute: (input, context) => workflow.updateFromPage(context, input, context.beforeEvents)
+  });
+
+  // An agent tries an action of an App's draft as the person's click would, without a frame
+  // (DP-2). The call of the action is its own run, decided as the click's; a test needs no
+  // confirmation unless an administrator made its policy stricter, like `workflows.test`.
+  route.operation(apiOperations["apps.try_action"], {
+    defaultPolicy: "allow",
+    authorize: (input, caller) => tries.authorize(caller, input.app),
+    resource: (input) => ({ kind: APP_ASSET_KIND, id: input.app, name: input.app }),
+    module: APPS_MODULE,
+    execute: (input, context) => tries.tryAction(context, input)
+  });
+
+  route.operation(apiOperations["apps.publish_review"], {
+    authorize: (input, caller) => tries.authorize(caller, input.app),
+    resource: (input) => ({ kind: APP_ASSET_KIND, id: input.app, name: input.app }),
+    module: APPS_MODULE,
+    execute: (input, context) => tries.publishReview(context, input.app)
   });
 
   // A person allows an outside host for their own view of a draft (DRAFT-HOSTS-1). Every check

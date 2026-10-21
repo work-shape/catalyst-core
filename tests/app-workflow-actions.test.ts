@@ -8,12 +8,17 @@ import {
 } from "@work-shape/catalyst-client-assembly";
 import {
   WORKFLOW_ASSET_KIND,
+  asAgentRunId,
+  asConversationId,
+  asToolCallId,
+  type AuthenticatedUser,
   type JobWorker,
   type Logger,
   type ModuleSnapshot,
   type OperationRegistry,
   type PlatformStores
 } from "@work-shape/catalyst-core";
+import { runOperation } from "@work-shape/catalyst-tool-execution";
 import { clientInstanceId } from "./support/access-instance";
 import {
   action,
@@ -22,6 +27,7 @@ import {
   type Frame
 } from "./support/app-actions";
 import { expectStatus } from "./support/app-instance";
+import { getTestOperationCalls } from "./support/test-instance";
 import { instanceWorkflowAssetKind, runSchema } from "./support/workflow-instance";
 
 // APP-6a: an App starts a published Workflow through a named action of kind `workflow`. The
@@ -426,5 +432,155 @@ describe("an App that starts a Workflow", () => {
         expect(t.refusal(unavailable).details).toMatchObject({ reason: "workflow_unavailable" });
       });
     });
+  });
+
+  /** The admin as the call path names a person an agent acts for. */
+  const admin = (): AuthenticatedUser => ({
+    id: t.admin.id,
+    externalUserId: t.admin.id,
+    displayLabel: t.admin.displayLabel,
+    roles: t.admin.roles,
+    permissionRefs: t.admin.permissionRefs,
+    clientInstanceId,
+    authSource: "test"
+  });
+
+  /** A private conversation of the admin in the App's workspace, about `subject` if named. */
+  async function conversationAbout(subject?: string) {
+    const app = await t.stores.configAssets.getConfigAsset({
+      clientInstanceId,
+      kind: "app",
+      name: "visits"
+    });
+    if (app?.scope.kind !== "workspace") throw new Error("The App has no workspace");
+    const conversation = await t.stores.conversations.createConversation({
+      visibility: "private",
+      clientInstanceId,
+      collaborationWorkspaceId: app.scope.workspaceId,
+      createdByUserId: t.admin.id,
+      createdByExternalUserId: t.admin.id,
+      title: "Build visits",
+      retainedUntil: "2099-01-01T00:00:00.000Z"
+    });
+    if (subject !== undefined) {
+      await t.stores.conversations.setConversationSubject({
+        clientInstanceId,
+        conversationId: conversation.id,
+        subject: { kind: "app", name: subject }
+      });
+    }
+    return conversation;
+  }
+
+  /** `apps.try_action` as the agent of a conversation calls it. */
+  async function tryAsAgent(conversationId: string, input: Record<string, unknown>) {
+    const calls = await getTestOperationCalls(t.instance);
+    return runOperation(
+      {
+        operation: "apps.try_action",
+        effect: "changing",
+        input: { app: "visits", ...input },
+        actor: admin(),
+        origin: {
+          kind: "agent",
+          agentName: "workshaper",
+          agentRunId: asAgentRunId(`agent-run-${conversationId}`),
+          conversationId: asConversationId(conversationId),
+          toolCallId: asToolCallId(`tool-call-${conversationId}`),
+          toolName: "apps.try_action"
+        },
+        correlationId: `try-${conversationId}`
+      },
+      // The agent holds the tool; which agents are offered it is the offer's own test.
+      { ...calls.deps, agentToolNames: () => Promise.resolve(["apps.try_action"]) }
+    );
+  }
+
+  // DP-2. Fails without it: an agent had no way to click an App's draft and asked the person to
+  // publish the Workflow, or the App, in order to try them.
+  it("lets an agent of a conversation about the App try its draft's workflow action: a test run of the Workflow's draft, and nothing live (DP-2)", async () => {
+    const live = await t.stores.workflowRuns.listRuns({ clientInstanceId, workflow: WORKFLOW });
+    // A conversation about no App, or about another, tries nothing.
+    const elsewhere = await conversationAbout();
+    const refused = await tryAsAgent(elsewhere.id, {
+      action: "log-visit",
+      input: { page: "/elsewhere" }
+    });
+    expect(refused.result).toMatchObject({
+      status: "failed",
+      error: { code: "FORBIDDEN", details: expect.objectContaining({ reason: "app_not_subject" }) }
+    });
+
+    const about = await conversationAbout("visits");
+    const tried = await tryAsAgent(about.id, { action: "log-visit", input: { page: "/agent" } });
+
+    expect(tried.result).toMatchObject({
+      status: "done",
+      output: {
+        status: "done",
+        target: "test",
+        operationRunId: expect.any(String),
+        workflowRun: {
+          workflow: WORKFLOW,
+          revision: { kind: "draft", number: 1 },
+          runId: expect.any(String)
+        }
+      }
+    });
+    const output = z
+      .object({ operationRunId: z.string(), workflowRun: z.object({ runId: z.string() }) })
+      .parse(tried.result.status === "done" ? tried.result.output : undefined);
+    // The click is the button's own run, made in the agent's conversation.
+    expect(await t.runOf(output.operationRunId)).toMatchObject({
+      operation: "app.visits.log-visit",
+      target: "test",
+      origin: expect.objectContaining({ kind: "app", appName: "visits", conversationId: about.id })
+    });
+    for (let pass = 0; pass < 50; pass++) await worker.runDue();
+    expect(
+      await t.stores.workflowRuns.readRun({ clientInstanceId, id: output.workflowRun.runId })
+    ).toMatchObject({
+      mode: "test",
+      status: "done",
+      startedBy: { kind: "user", id: t.admin.id },
+      startedFrom: { kind: "app", app: "visits", action: "log-visit", workflowRevision: "draft" }
+    });
+    const after = await t.stores.workflowRuns.listRuns({ clientInstanceId, workflow: WORKFLOW });
+    const liveIds = (runs: typeof live) =>
+      runs.filter((one) => one.mode !== "test").map((one) => one.id);
+    expect(liveIds(after)).toEqual(liveIds(live));
+  });
+
+  it("reviews what publishing the App's draft comes to: the App, the Workflows it calls, what is pending and what would refuse it (DP-2)", async () => {
+    const review = await t.call(t.admin.id, "apps.publish_review", { params: { app: "visits" } });
+    expectStatus(review, 200);
+    expect(review.json()).toMatchObject({
+      app: { name: "visits", draftRevision: 2, publishedRevision: 1, pending: true, refusals: [] },
+      workflows: [
+        { name: UNPUBLISHED_WORKFLOW, pending: true, actions: ["log-unpublished"], refusals: [] },
+        { name: WORKFLOW, pending: false, publishedRevision: 1, actions: ["log-visit"] }
+      ],
+      publishesTogether: false,
+      ready: true
+    });
+
+    // A writer of the App who may not publish it, nor use its Workflows, is told each.
+    const appId = await t.assetId("app", "visits");
+    await t.withRight(t.kai.id, "app.write", { assetId: appId }, async () => {
+      const kai = await t.call(t.kai.id, "apps.publish_review", { params: { app: "visits" } });
+      expectStatus(kai, 200);
+      const body = z
+        .object({
+          ready: z.boolean(),
+          app: z.object({ refusals: z.array(z.object({ right: z.string().optional() })) })
+        })
+        .parse(kai.json());
+      expect(body.ready).toBe(false);
+      expect(body.app.refusals.map(({ right }) => right)).toEqual(
+        expect.arrayContaining(["app.publish", "workflow.use"])
+      );
+    });
+    // Whoever may not write the App reads no review of its draft.
+    expectStatus(await t.call(t.kai.id, "apps.publish_review", { params: { app: "visits" } }), 403);
   });
 });
