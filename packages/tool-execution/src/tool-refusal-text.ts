@@ -179,6 +179,10 @@ const OWN_ACTION_WORDS: Record<OwnWordAction, Words> = {
     en: "manage service principals",
     de: "Technische Konten verwalten"
   },
+  "roles.edit_built_in": {
+    en: "edit the built-in roles User and Admin",
+    de: "Eingebaute Rollen Benutzer und Admin bearbeiten"
+  },
   "agent_models.manage": {
     en: "manage agent model settings",
     de: "Modelleinstellungen der Agenten verwalten"

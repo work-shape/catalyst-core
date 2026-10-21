@@ -189,10 +189,10 @@ export const ROLE_GRANT_SCOPE_KINDS = [
 ] as const satisfies readonly GrantScopeKind[];
 export type RoleGrantScopeKind = (typeof ROLE_GRANT_SCOPE_KINDS)[number];
 
-/** What a release did to an action of a built-in role's default that waits for a superadmin. */
+/** What a release did to an action of a built-in role's default that waits for a decision. */
 export const ROLE_PENDING_CHANGES = ["added", "removed"] as const;
 
-/** A superadmin's decision on a pending action: apply what the release did, or dismiss it. */
+/** The decision on a pending action: apply what the release did, or dismiss it. */
 export const ROLE_PENDING_DECISIONS = ["apply", "dismiss"] as const;
 export type RolePendingDecision = (typeof ROLE_PENDING_DECISIONS)[number];
 

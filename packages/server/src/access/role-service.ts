@@ -40,6 +40,9 @@ import {
 /** The right every role write asks for, on the instance. */
 const MANAGE_ACTION = "users.manage";
 
+/** The right a write to `user` or `admin` asks for beside it, on the instance. */
+const EDIT_BUILT_IN_ACTION = "roles.edit_built_in";
+
 /**
  * What a role holds beyond what a person can be granted: `app.use` on one App or on the Apps
  * of one workspace. A person holds it through membership of the App's workspace; a role, such
@@ -77,9 +80,10 @@ export interface RoleChange {
 }
 
 /**
- * Roles as data (ADR-0028). A holder of `users.manage` writes custom roles. Only a superadmin
- * edits, resets or decides for `user` and `admin`, and gives or takes, in any role, a right only
- * a superadmin hands out. `superadmin` is the floor and is never written. Whoever writes a
+ * Roles as data (ADR-0028). A holder of `users.manage` writes custom roles, and edits, resets or
+ * decides for `user` and `admin` while also holding `roles.edit_built_in`. Only a superadmin
+ * gives or takes, in any role, a right only a superadmin hands out. `superadmin` is the floor
+ * and is never written. Whoever writes a
  * grant into a role holds what it gives, an allow or a deny alike, as for a grant to a person.
  * Every write is an audit event with the grants added and removed.
  */
@@ -122,10 +126,20 @@ export class RoleWorkflow {
         "The superadmin role is the floor: nobody edits, resets or deletes it"
       );
     }
-    const superadmin = isSuperadmin(actor);
-    if (change.roleId !== undefined && isBuiltInRole(change.roleId) && !superadmin) {
-      return superadminOnly(operation, `Only a superadmin changes the role '${change.roleId}'`);
+    if (change.roleId !== undefined && isBuiltInRole(change.roleId)) {
+      // A built-in role changes the rights of everybody who holds it at once: its own right,
+      // held by `superadmin` by default and given on like any other (Felix, 2026-10-21).
+      const edit = access.authorize(EDIT_BUILT_IN_ACTION);
+      if (!edit.allowed) {
+        return {
+          allowed: false,
+          action: EDIT_BUILT_IN_ACTION,
+          reason: edit.reason,
+          message: `Changing the role '${change.roleId}' needs the right '${EDIT_BUILT_IN_ACTION}'`
+        };
+      }
     }
+    const superadmin = isSuperadmin(actor);
     if (change.grants === undefined) return { allowed: true };
     const before =
       change.roleId === undefined

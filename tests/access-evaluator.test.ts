@@ -347,7 +347,7 @@ describe("access evaluator: an inactive holder", () => {
 });
 
 describe("access evaluator: role defaults", () => {
-  it("gives a plain user nothing, an admin no release and no API access, a superadmin all but release", () => {
+  it("gives a plain user nothing, an admin no release, no API access and no built-in role edits, a superadmin all but release", () => {
     const allowedFor = (roles: string[]) =>
       ACTIONS.filter((action) => decide({ holder: holder({ roles }), action }).allowed);
 
@@ -357,7 +357,8 @@ describe("access evaluator: role defaults", () => {
         (action) =>
           action !== "assets.release" &&
           action !== "api_access.manage" &&
-          action !== "agent_models.manage"
+          action !== "agent_models.manage" &&
+          action !== "roles.edit_built_in"
       )
     );
     expect(allowedFor(["user", "admin", "superadmin"])).toEqual(

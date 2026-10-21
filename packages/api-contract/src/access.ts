@@ -218,7 +218,7 @@ const roleGrantsSchema = z.array(roleGrantSchema).max(ROLE_GRANTS_MAX, {
 
 /**
  * An action a release added to (`added`) or took out of (`removed`) the default of a built-in
- * role that a superadmin had edited. It waits for a superadmin's decision.
+ * role that somebody had edited. It waits for the decision of a holder of `roles.edit_built_in`.
  */
 export const rolePendingActionSchema = z.object({
   action: z.string(),
@@ -226,8 +226,8 @@ export const rolePendingActionSchema = z.object({
 });
 
 /**
- * A role of the instance. `user` and `admin` are built in: a superadmin edits and resets them,
- * and nobody renames or deletes them. `superadmin` is built in and read-only: it holds every
+ * A role of the instance. `user` and `admin` are built in: a holder of `roles.edit_built_in`
+ * edits and resets them, and nobody renames or deletes them. `superadmin` is built in and read-only: it holds every
  * action of the release except `assets.release`. A custom role is written by a holder of
  * `users.manage`.
  */

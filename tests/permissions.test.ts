@@ -71,18 +71,21 @@ describe("permissions", () => {
       "api_access.manage",
       "service_principals.manage",
       "agent_models.manage",
+      "roles.edit_built_in",
       "assets.release",
       "builder",
       "publisher"
     ]);
     // The rights of a Connection, an App, a Workflow, a Data Store, a Knowledge Base, a Guardrail
     // and a mail sender came after the legacy keys, as did the right over service principals and
-    // the two bundles: no key names one, so nobody holds one through the legacy column.
+    // the two bundles and the right to edit the built-in roles: no key names one, so nobody holds
+    // one through the legacy column.
     const unkeyed = (action: string) =>
       /^(?:connection|app|workflow|data_store|knowledge_base|guardrail|mail_sender)\./u.test(
         action
       ) ||
       action === "service_principals.manage" ||
+      action === "roles.edit_built_in" ||
       action === "feedback.review" ||
       action === "agent.publish" ||
       action === "builder" ||

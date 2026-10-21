@@ -14992,7 +14992,7 @@
       },
       "patch": {
         "operationId": "roles.update",
-        "summary": "Change a role's name, description or grants. Only a superadmin edits `user` and `admin`; `superadmin` is never edited.",
+        "summary": "Change a role's name, description or grants. Editing `user` and `admin` also needs `roles.edit_built_in`; `superadmin` is never edited.",
         "tags": [
           "Access"
         ],
@@ -15240,7 +15240,7 @@
     "/api/v1/instance/access/roles/{roleId}/pending": {
       "post": {
         "operationId": "roles.pending.decide",
-        "summary": "Decide one action a release changed in the default of an edited `user` or `admin`: apply it or dismiss it. Only a superadmin decides.",
+        "summary": "Decide one action a release changed in the default of an edited `user` or `admin`: apply it or dismiss it. Needs `users.manage` and `roles.edit_built_in`.",
         "tags": [
           "Access"
         ],
@@ -15370,7 +15370,7 @@
     "/api/v1/instance/access/roles/{roleId}/reset": {
       "post": {
         "operationId": "roles.reset",
-        "summary": "Reset `user` or `admin` to the release's default, which also settles every pending action. Only a superadmin resets.",
+        "summary": "Reset `user` or `admin` to the release's default, which also settles every pending action. Needs `users.manage` and `roles.edit_built_in`.",
         "tags": [
           "Access"
         ],

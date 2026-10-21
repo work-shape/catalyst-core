@@ -43,7 +43,9 @@ const ROLE_DEFAULT_ACTIONS: Record<"user" | "admin" | "superadmin", readonly Pla
     (action) =>
       action !== "assets.release" &&
       action !== "api_access.manage" &&
-      action !== "agent_models.manage"
+      action !== "agent_models.manage" &&
+      // Came after AP-4 and outside the admin default (AP-5b1); the frozen list is today's.
+      action !== "roles.edit_built_in"
   ),
   superadmin: ACTIONS.filter((action) => action !== "assets.release")
 };

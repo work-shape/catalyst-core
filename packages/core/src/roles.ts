@@ -10,15 +10,15 @@ import {
 } from "@work-shape/catalyst-asset-schemas";
 import type { ClientInstanceId, UserId } from "./ids";
 
-// Roles as data (ADR-0028). `user` and `admin` hold rows of `permission_grants` once a
-// superadmin edits them, and their release default until then; `superadmin` is the floor and
-// stays code.
+// Roles as data (ADR-0028). `user` and `admin` hold rows of `permission_grants` once a holder
+// of `roles.edit_built_in` edits them, and their release default until then; `superadmin` is
+// the floor and stays code.
 
 /** The roles every instance has. Their ids are their names, and no custom role takes one. */
 export const BUILT_IN_ROLES = ["user", "admin", "superadmin"] as const;
 export type BuiltInRole = (typeof BUILT_IN_ROLES)[number];
 
-/** The built-in roles a superadmin edits and resets. `superadmin` is neither. */
+/** The built-in roles that are edited and reset. `superadmin` is neither. */
 export const EDITABLE_BUILT_IN_ROLES = ["user", "admin"] as const;
 export type EditableBuiltInRole = (typeof EDITABLE_BUILT_IN_ROLES)[number];
 
@@ -32,6 +32,16 @@ export const SUPERADMIN_GRANTED_ACTIONS = [
 ] as const satisfies readonly PlatformAction[];
 
 /**
+ * The rights whose default sits with `superadmin` alone. Unlike the list above, anybody who
+ * holds one may give it on, to a person or a role, under the rule of no escalation.
+ * `roles.edit_built_in` edits and resets `user` and `admin` (Felix, 2026-10-21, amending
+ * ADR-0028 point 1).
+ */
+export const SUPERADMIN_DEFAULT_ACTIONS = [
+  "roles.edit_built_in"
+] as const satisfies readonly PlatformAction[];
+
+/**
  * The release's default of each built-in role, every action at instance scope. For `user` and
  * `admin` it is what a role nobody edited holds, what "Reset to default" restores, and what the
  * migration step compares an edited role with to find what a release added or removed.
@@ -41,7 +51,10 @@ export const SUPERADMIN_GRANTED_ACTIONS = [
 export const ROLE_DEFAULT_ACTIONS: Record<BuiltInRole, readonly PlatformAction[]> = {
   user: [],
   admin: ACTIONS.filter(
-    (action) => action !== "assets.release" && !isSuperadminGrantedAction(action)
+    (action) =>
+      action !== "assets.release" &&
+      !isSuperadminGrantedAction(action) &&
+      !SUPERADMIN_DEFAULT_ACTIONS.some((candidate) => candidate === action)
   ),
   superadmin: ACTIONS.filter((action) => action !== "assets.release")
 };
@@ -77,8 +90,8 @@ export interface RoleGrant {
 
 /**
  * An action a release added to (`added`) or took out of (`removed`) the default of a built-in
- * role a superadmin had edited. The release changed nothing of the role; the action waits until
- * a superadmin adds it or leaves it out, or takes it away or keeps it.
+ * role somebody had edited. The release changed nothing of the role; the action waits until a
+ * holder of `roles.edit_built_in` adds it or leaves it out, or takes it away or keeps it.
  */
 export interface RolePendingAction {
   action: string;

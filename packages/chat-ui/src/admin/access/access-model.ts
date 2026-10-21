@@ -59,7 +59,8 @@ const GRANT_VERB_RANK: Record<GrantVerb, number> = {
   records: 8,
   builder: 9,
   publisher: 10,
-  review: 11
+  review: 11,
+  edit_built_in: 12
 };
 
 function isGrantKind(kind: string): kind is GrantKind {
@@ -426,7 +427,7 @@ export function grantableUsers(users: readonly AdministeredUser[]): Administered
 }
 
 /** One field of the `details` the server sends with a refusal, when it is text. */
-function refusalDetail(error: unknown, field: string): string | undefined {
+export function refusalDetail(error: unknown, field: string): string | undefined {
   if (!(error instanceof ApiError)) {
     return undefined;
   }

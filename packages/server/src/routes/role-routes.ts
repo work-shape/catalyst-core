@@ -73,7 +73,7 @@ export function registerRoleRoutes(route: Route, options: ChatServerOptions): vo
 
   route.operation(decide, {
     changeClass: "reversible",
-    // Only a superadmin decides, for a built-in role: that is the whole rule.
+    // Deciding for a built-in role is editing it: `roles.edit_built_in` beside `users.manage`.
     authorize: (input, { actor, access }) =>
       workflow.authorizeWrite(actor, access, decide.id, { roleId: input.roleId }),
     resource,

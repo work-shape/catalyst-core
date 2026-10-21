@@ -7,6 +7,7 @@ import { accessFeedback } from "./access-feedback";
 import { accessGuardrail } from "./access-guardrail";
 import { accessKnowledgeBase } from "./access-knowledge-base";
 import { accessMailSender } from "./access-mail-sender";
+import { accessRoles } from "./access-roles";
 import { accessSkill } from "./access-skill";
 import { accessWorkflow } from "./access-workflow";
 import { accessWorkspace } from "./access-workspace";
@@ -69,6 +70,7 @@ export const translations = combineTranslations(common)
   .and(accessGuardrail)
   .and(accessKnowledgeBase)
   .and(accessMailSender)
+  .and(accessRoles)
   .and(accessSkill)
   .and(accessWorkflow)
   .and(accessWorkspace)

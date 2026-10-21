@@ -53,6 +53,7 @@ const ownActionKeys: Record<Exclude<PlatformAction, VerbAction>, TranslationKey>
   "api_access.manage": "rights.actionApiAccessManage",
   "service_principals.manage": "rights.actionServicePrincipalsManage",
   "agent_models.manage": "rights.actionAgentModelsManage",
+  "roles.edit_built_in": "rights.actionRolesEditBuiltIn",
   "assets.release": "rights.actionAssetsRelease",
   builder: "rights.actionBuilder",
   publisher: "rights.actionPublisher"

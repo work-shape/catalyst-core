@@ -10,6 +10,7 @@ import { feedbackKind } from "./kinds/feedback";
 import { guardrailKind } from "./kinds/guardrail";
 import { knowledgeBaseKind } from "./kinds/knowledge-base";
 import { mailSenderKind } from "./kinds/mail-sender";
+import { rolesKind } from "./kinds/roles";
 import { skillKind } from "./kinds/skill";
 import { workflowKind } from "./kinds/workflow";
 import { workspaceKind } from "./kinds/workspace";
@@ -33,7 +34,8 @@ export const grantKinds: { [Kind in GrantKind]: GrantKindEntry<Kind> } = {
   guardrail: guardrailKind,
   mail_sender: mailSenderKind,
   feedback: feedbackKind,
-  workspace: workspaceKind
+  workspace: workspaceKind,
+  roles: rolesKind
 };
 
 function entryOf(kind: string): GrantKindEntry<GrantKind> | undefined {
@@ -60,6 +62,11 @@ export const rightSentenceKeys: ActionKeys = Object.values(grantKinds).reduce<Ac
   (keys, entry) => ({ ...keys, ...entry.sentences }),
   {}
 );
+
+/** The sentence of one right, by any action's name; nothing for a right without one. */
+export function rightSentenceKey(action: string): TranslationKey | undefined {
+  return Object.entries(rightSentenceKeys).find(([known]) => known === action)?.[1];
+}
 
 /**
  * Extra requirements for giving an allow, shown beside the action. Publishing checks the

@@ -149,30 +149,22 @@ describe("built-in roles as data", () => {
 });
 
 describe("only a superadmin writes what only a superadmin hands out", () => {
-  it("refuses an admin's edit or reset of a built-in role, and records the refusal", async () => {
+  it("refuses an admin's edit or reset of a built-in role for want of its right, and records the refusal", async () => {
     const t = await setup();
-    const rule = (operation: string) => ({
-      status: 403,
-      code: "FORBIDDEN",
-      details: { action: operation, reason: "no_grant" }
-    });
+    // `admin` does not hold `roles.edit_built_in` by default: the refusal names it.
+    const rule = t.forbidden("roles.edit_built_in", "no_grant");
     await t.expectRefused(
       t.admin.id,
       "roles.update",
       { params: { roleId: "user" }, payload: { grants: [instanceAllow("usage.view")] } },
-      rule("roles.update")
+      rule
     );
-    await t.expectRefused(
-      t.admin.id,
-      "roles.reset",
-      { params: { roleId: "admin" } },
-      rule("roles.reset")
-    );
+    await t.expectRefused(t.admin.id, "roles.reset", { params: { roleId: "admin" } }, rule);
     await t.expectRefused(
       t.admin.id,
       "roles.pending.decide",
       { params: { roleId: "admin" }, payload: { action: "usage.view", decision: "apply" } },
-      rule("roles.pending.decide")
+      rule
     );
     expect((await role(t, "user")).equalsDefault).toBe(true);
     const runs = await withTestSql(
@@ -218,6 +210,193 @@ describe("only a superadmin writes what only a superadmin hands out", () => {
       params: { userId: t.kai.id },
       payload: { roles: ["user", created.id] }
     });
+  });
+});
+
+describe("editing the built-in roles is a right of its own (Felix, 2026-10-21)", () => {
+  /** A custom role that writes roles and edits the built-in ones, held by Kai. */
+  async function roleEditor(t: AccessInstance, further: string[] = []) {
+    const editors = roleSchema.parse(
+      (
+        await t.expectOk(t.root.id, "roles.create", {
+          payload: {
+            name: "Role editors",
+            grants: ["users.manage", "roles.edit_built_in", "usage.view", ...further].map(
+              instanceAllow
+            )
+          }
+        })
+      ).json()
+    );
+    await t.expectOk(t.root.id, "users.update", {
+      params: { userId: t.kai.id },
+      payload: { roles: ["user", editors.id] }
+    });
+    return editors;
+  }
+
+  it("sits with superadmin by default and with no other built-in role", () => {
+    expect(ROLE_DEFAULT_ACTIONS.superadmin).toContain("roles.edit_built_in");
+    expect(ROLE_DEFAULT_ACTIONS.admin).not.toContain("roles.edit_built_in");
+    expect(ROLE_DEFAULT_ACTIONS.user).not.toContain("roles.edit_built_in");
+  });
+
+  it("lets a person granted it edit, reset and decide for user and admin without being a superadmin", async () => {
+    const t = await setup();
+    await t.expectOk(t.root.id, "permissions.grant", {
+      payload: {
+        holderKind: "user",
+        holderId: t.admin.id,
+        action: "roles.edit_built_in",
+        scopeKind: "instance"
+      }
+    });
+
+    await t.expectOk(t.admin.id, "roles.update", {
+      params: { roleId: "user" },
+      payload: { grants: [instanceAllow("usage.view")] }
+    });
+    await t.expectOk(t.kai.id, "usage.get_summary");
+    await t.expectOk(t.admin.id, "roles.reset", { params: { roleId: "user" } });
+    await t.expectRefused(t.kai.id, "usage.get_summary", {}, t.forbidden("usage.view", "no_grant"));
+    // Past the rule, the decision answers for itself: nothing is pending.
+    await t.expectRefused(
+      t.admin.id,
+      "roles.pending.decide",
+      { params: { roleId: "admin" }, payload: { action: "usage.view", decision: "apply" } },
+      { status: 404, code: "NOT_FOUND" }
+    );
+    const updated = await auditOf(t, "role.updated");
+    expect(updated.map((event) => [event.actor?.userId, event.metadata?.roleId])).toEqual([
+      [t.admin.id, "user"]
+    ]);
+    expect((await auditOf(t, "role.reset")).map((event) => event.actor?.userId)).toEqual([
+      t.admin.id
+    ]);
+  });
+
+  it("is given only by who holds it, to a person or a role", async () => {
+    const t = await setup();
+    const give = {
+      payload: {
+        holderKind: "user",
+        holderId: t.lena.id,
+        action: "roles.edit_built_in",
+        scopeKind: "instance"
+      }
+    };
+    await t.expectRefused(
+      t.admin.id,
+      "permissions.grant",
+      give,
+      t.forbidden("roles.edit_built_in", "no_grant")
+    );
+    await t.expectRefused(
+      t.admin.id,
+      "roles.create",
+      { payload: { name: "Editors", grants: [instanceAllow("roles.edit_built_in")] } },
+      t.forbidden("roles.edit_built_in", "no_grant")
+    );
+    // Its holder gives it on: into a role, and into a built-in role too.
+    await roleEditor(t);
+    await t.expectOk(t.kai.id, "roles.create", {
+      payload: { name: "Editors", grants: [instanceAllow("roles.edit_built_in")] }
+    });
+    await t.expectOk(t.kai.id, "roles.update", {
+      params: { roleId: "admin" },
+      payload: {
+        grants: [...ROLE_DEFAULT_ACTIONS.admin, "roles.edit_built_in"].map(instanceAllow)
+      }
+    });
+    await t.expectOk(t.admin.id, "roles.reset", { params: { roleId: "user" } });
+  });
+
+  it("never lets its holder add to a built-in role a right they lack", async () => {
+    const t = await setup();
+    await roleEditor(t);
+    // Kai holds `usage.view` and not `audit.view`.
+    await t.expectOk(t.kai.id, "roles.update", {
+      params: { roleId: "user" },
+      payload: { grants: [instanceAllow("usage.view")] }
+    });
+    await t.expectRefused(
+      t.kai.id,
+      "roles.update",
+      {
+        params: { roleId: "user" },
+        payload: { grants: [instanceAllow("usage.view"), instanceAllow("audit.view")] }
+      },
+      t.forbidden("audit.view", "no_grant")
+    );
+    // A deny of a right they lack is no way around it either.
+    await t.expectRefused(
+      t.kai.id,
+      "roles.update",
+      {
+        params: { roleId: "user" },
+        payload: { grants: [{ action: "audit.view", effect: "deny", scopeKind: "instance" }] }
+      },
+      t.forbidden("audit.view", "no_grant")
+    );
+    expect((await role(t, "user")).grants).toEqual([instanceAllow("usage.view")]);
+  });
+
+  it("keeps the superadmin's rights, the floor and the last superadmin out of its holder's reach", async () => {
+    const t = await setup();
+    await roleEditor(t);
+    const superadminOnly = (operation: string) => ({
+      status: 403,
+      code: "FORBIDDEN",
+      details: { action: operation, reason: "no_grant" }
+    });
+    // A right only a superadmin hands out stays theirs, also through a built-in role.
+    await t.expectRefused(
+      t.kai.id,
+      "roles.update",
+      {
+        params: { roleId: "user" },
+        payload: { grants: [instanceAllow("api_access.manage")] }
+      },
+      superadminOnly("roles.update")
+    );
+    // `superadmin` is never written, reset or deleted.
+    for (const [operation, input] of [
+      ["roles.update", { params: { roleId: "superadmin" }, payload: { grants: [] } }],
+      ["roles.reset", { params: { roleId: "superadmin" } }],
+      ["roles.delete", { params: { roleId: "superadmin" } }]
+    ] as const) {
+      await t.expectRefused(t.kai.id, operation, input, {
+        status: 403,
+        code: "FORBIDDEN",
+        details: { action: operation, reason: "holder_not_administrable" }
+      });
+    }
+    // Nor a superadmin's roles, so the last superadmin stays.
+    await t.expectRefused(
+      t.kai.id,
+      "users.update",
+      { params: { userId: t.root.id }, payload: { roles: ["user"] } },
+      superadminOnly("users.update")
+    );
+    expect((await role(t, "superadmin")).editable).toBe(false);
+  });
+
+  it("is refused by a deny on its holder", async () => {
+    const t = await setup();
+    await roleEditor(t);
+    await withTestSql(
+      (sql) => sql`
+        insert into permission_grants
+          (id, client_instance_id, holder_kind, holder_id, action, scope_kind, effect, granted_by, created_at)
+        values
+          ('grant_deny_kai_roles', ${clientInstanceId}, 'user', ${t.kai.id}, 'roles.edit_built_in', 'instance', 'deny', ${t.root.id}, now())`
+    );
+    await t.expectRefused(
+      t.kai.id,
+      "roles.update",
+      { params: { roleId: "user" }, payload: { grants: [instanceAllow("usage.view")] } },
+      t.forbidden("roles.edit_built_in", "denied")
+    );
   });
 });
 
