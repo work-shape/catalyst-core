@@ -127,6 +127,48 @@ test("in a narrow window the area's name stands beside the sidebar button, over 
   expect(await bandCovers(page)).toBeLessThanOrEqual(await top(inbox));
 });
 
+// Fails with the band of #210 at every width: from 768 px up a conversation alone stopped at
+// the band's lower edge instead of scrolling to the window's top under the agent picker.
+test("a conversation alone scrolls to the window's top from 768 px up, and stands under the band on a phone", async ({
+  page
+}) => {
+  await page.setViewportSize(WIDE);
+  const workspace = await signIn(page);
+  const thread = page.locator(".chat-thread-inset").first();
+  // The room above the thread's column, where the first message rests.
+  const restingStart = () =>
+    thread.evaluate((element) =>
+      Math.max(
+        0,
+        ...[...element.children].map((child) =>
+          Number.parseFloat(getComputedStyle(child).paddingTop)
+        )
+      )
+    );
+  const lightFade = page.locator("#workspace-content > header [data-header-fade]");
+
+  for (const size of [WIDE, { width: 768, height: 900 }]) {
+    await page.setViewportSize(size);
+    await page.goto(`/w/${workspace}`);
+    await expect(thread).toBeVisible();
+    // No band and no fade under it: the thread runs to the window's top.
+    expect(await bandCovers(page), String(size.width)).toBe(0);
+    expect(await top(thread), String(size.width)).toBe(0);
+    // A light fade keeps the floating controls legible over what has scrolled up.
+    await expect(lightFade, String(size.width)).toBeVisible();
+    // At rest the first message starts below the controls and their fade.
+    expect(await restingStart(), String(size.width)).toBeGreaterThanOrEqual(HEADER + 16);
+  }
+
+  await page.setViewportSize(PHONE);
+  await page.goto(`/w/${workspace}`);
+  await expect(thread).toBeVisible();
+  // On a phone the controls take most of the line: the band and its 1rem fade stand.
+  expect(await bandCovers(page)).toBe(HEADER + 16);
+  await expect(lightFade).toBeHidden();
+  expect(await restingStart()).toBeGreaterThanOrEqual(HEADER + 16);
+});
+
 /** A name longer than any head has room for beside its actions. */
 const LONG_TITLE =
   "Monthly check of every booking against the ledger and the open items of the quarter before it";
@@ -319,6 +361,8 @@ test("a narrowing head gives the chips, then the text of the way back, and the n
     const head = page.locator('header[data-variant="detail"]');
     const name = head.getByRole("heading", { level: 1 });
     await expect(name).toBeVisible();
+    // The second chip, the Connection's health, comes once its detail is read.
+    await expect(head.locator("[data-connection-head-health]")).toBeVisible();
     const read = () =>
       head.evaluate(async (element, height) => {
         // The head measures its row after a resize and draws again.

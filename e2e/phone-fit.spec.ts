@@ -154,22 +154,42 @@ test("at 390 a reply's table of five columns scrolls sideways inside the message
   await expect(frame.locator('[data-slot="table-edge-shade"][data-side="end"]')).toHaveCount(0);
   expect((await sizes()).page).toBeLessThanOrEqual(atStart.window);
 
+  // At phone width the head is a band with its fade, so nothing passes under the controls.
+  // From 768 px up the thread scrolls to the window's top, and the agent picker floats over it
+  // on a light fade.
+  const lightFade = page.locator("#workspace-content > header [data-header-fade]");
+  expect(await bandDrawn(page)).toBe(true);
+  expect(await fadeDrawn(page)).toBe(true);
+  await expect(lightFade).toBeHidden();
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await expect(lightFade).toBeVisible();
+  expect(await bandDrawn(page)).toBe(false);
+  expect(await fadeDrawn(page)).toBe(false);
+
   if (!shotsDir) {
     return;
   }
+  // A second turn, so the thread has something to scroll in a wide window too.
+  await composer.fill(TABLE);
+  await composer.press("Enter");
+  await expect(page.locator('[data-role="assistant"]')).toHaveCount(2);
+  await expect(page.locator('[data-role="assistant"]').last()).toContainText("registered tool");
   for (const variant of variants) {
     for (const width of [390, 1280]) {
       await show(page, conversation, variant, width);
       await expect(tableBox(page).locator("th")).toHaveCount(5);
       await shoot(page, `chat-table-${String(width)}-${variant[1]}-${variant[0]}`);
-      if (width === 390) {
-        // The head's band over the scrolled message, and the table scrolled to its end.
-        await tableBox(page).evaluate((element) => {
-          element.scrollTo({ left: element.scrollWidth });
-          element.closest("[data-role='assistant']")?.scrollIntoView({ block: "start" });
+      // The table scrolled to its end, and the thread scrolled so that the first reply's table
+      // passes the window's top: under the band at 390, under the floating picker at 1280.
+      await page
+        .locator('[data-role="assistant"]')
+        .first()
+        .evaluate((message) => {
+          const table = message.querySelector<HTMLElement>('[data-slot="table-box"]');
+          table?.scrollTo({ left: table.scrollWidth, behavior: "instant" });
+          table?.scrollIntoView({ block: "start", behavior: "instant" });
         });
-        await shoot(page, `chat-table-scrolled-${String(width)}-${variant[1]}-${variant[0]}`);
-      }
+      await shoot(page, `chat-table-scrolled-${String(width)}-${variant[1]}-${variant[0]}`);
     }
   }
 });

@@ -149,8 +149,8 @@ describe("agent chip in the header", () => {
     );
   });
 
-  // Both layouts cover scrolled text. Beside a surface, the header also continues its line.
-  it("stands on an opaque band alone and beside a surface, with a line at the panel seam", () => {
+  // Beside a surface the band covers scrolled text and continues the surface's line.
+  it("stands on an opaque band beside a surface, with a line at the panel seam", () => {
     const header = (markup: string) => /<header[^>]*>/u.exec(markup)?.[0] ?? "";
     const beside = renderHeader({ surfaceBesideWidth: 520 });
 
@@ -162,11 +162,32 @@ describe("agent chip in the header", () => {
     expect(header(beside)).toContain("after:top-full");
     expect(header(beside)).toContain("after:h-4");
 
+    expect(header(beside)).not.toMatch(/\bmd:bg-transparent\b/u);
+    expect(beside).not.toContain("data-header-fade");
+  });
+
+  // Fails with the band of #210 at every width: from 768 px up a conversation no longer
+  // scrolled to the window's top, and the band cut it off under the agent picker.
+  it("floats over a conversation alone from 768 px up, and keeps the band at phone width", () => {
+    const header = (markup: string) => /<header[^>]*>/u.exec(markup)?.[0] ?? "";
     const alone = renderHeader();
+
     expect(header(alone)).not.toContain("data-beside-surface");
     expect(header(alone)).not.toContain("border-b");
+    // At phone width the band and its 1rem fade stand.
     expect(header(alone)).toContain("bg-background");
     expect(header(alone)).toContain("after:bg-gradient-to-b");
+    // From 768 px up both go, and a light fade keeps the controls legible.
+    expect(header(alone)).toMatch(/\bmd:bg-transparent\b/u);
+    expect(header(alone)).toMatch(/\bmd:after:hidden\b/u);
+    const fade = /<div[^>]*data-header-fade[^>]*>/u.exec(alone)?.[0] ?? "";
+    expect(fade).toContain("from-background/25");
+    expect(fade).toMatch(/\bmax-md:hidden\b/u);
+
+    // Outside a conversation the band rules of 06d6c7922 stand.
+    const elsewhere = renderHeader({ conversation: false, showAgentSelector: false });
+    expect(header(elsewhere)).not.toMatch(/\bmd:bg-transparent\b/u);
+    expect(elsewhere).not.toContain("data-header-fade");
   });
 
   // Fails with the band on every page: at 390 px it covered the pinned head of a Studio page,

@@ -297,7 +297,8 @@ test("Stop pauses the queue, and Send now starts the oldest message", async ({ p
 });
 
 // The notice, queue and composer share one opaque pinned surface. The return button belongs
-// above all of them, and the head's band covers the transcript in both themes at phone width.
+// above all of them, and the head's band covers the transcript in both themes at phone width;
+// from 768 px up the transcript scrolls under the floating controls to the window's top.
 test("pinned chat bands cover the transcript and the return button clears the whole footer", async ({
   page
 }) => {
@@ -336,10 +337,10 @@ test("pinned chat bands cover the transcript and the return button clears the wh
     await expect(footer.getByRole("alert")).toBeVisible();
     await input.fill("");
     expect(await background(footer)).toBe(await background(chat));
-    expect(await background(head)).toBe(await background(chat));
     const fade = await head.evaluate((element) => {
       const style = getComputedStyle(element, "::after");
       return {
+        display: style.display,
         top: parseFloat(style.top),
         height: parseFloat(style.height),
         image: style.backgroundImage,
@@ -347,9 +348,17 @@ test("pinned chat bands cover the transcript and the return button clears the wh
         rem: parseFloat(getComputedStyle(document.documentElement).fontSize)
       };
     });
-    expect(fade.top).toBe(fade.headerHeight);
-    expect(fade.height).toBe(fade.rem);
-    expect(fade.image).toContain("linear-gradient");
+    if (variant[2] === 390) {
+      expect(await background(head)).toBe(await background(chat));
+      expect(fade.top).toBe(fade.headerHeight);
+      expect(fade.height).toBe(fade.rem);
+      expect(fade.image).toContain("linear-gradient");
+    } else {
+      // From 768 px up the transcript scrolls to the window's top under the floating controls.
+      expect(await background(head)).toBe("rgba(0, 0, 0, 0)");
+      expect(fade.display).toBe("none");
+      await expect(head.locator("[data-header-fade]")).toBeVisible();
+    }
 
     const end = await viewport.evaluate((element) => element.scrollHeight - element.clientHeight);
     expect(end).toBeGreaterThan(100);
