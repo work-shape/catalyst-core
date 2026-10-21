@@ -9,6 +9,7 @@ import { useTranslation } from "../../shared/i18n";
 import { useSettingsPage } from "../../shared/settings-page-context";
 import { apiErrorMessage } from "../../shared/workspace-utils";
 import type { AvailabilityChoice } from "./asset-availability-fields";
+import type { AgentUseChoice } from "./agent-use-fields";
 import type { AgentAvailabilityForm } from "./asset-form-model";
 import type { BuildAssetEditorProps } from "./build-asset-kind";
 
@@ -109,5 +110,35 @@ export function useAvailabilityChoice(
           },
           (error: unknown) => apiErrorMessage(error, t("configChangeSaveFailed"))
         )
+  };
+}
+
+/**
+ * Who uses the agent on the page where it is available (AGENT-USE-1), for a reader who may set
+ * its availability, which decides this as well. An instance from before says nothing of it.
+ */
+export function useAgentUseChoice(frame: AvailabilityFrame): AgentUseChoice | undefined {
+  const { apiBaseUrl, authScope, client } = useSettingsPage();
+  const { t } = useTranslation();
+  const { asset } = frame;
+  const placement = useAgentPlacementMutations({
+    apiBaseUrl,
+    authScope,
+    client,
+    heldMessage: t("configChangeWaitsForApproval")
+  });
+  const [saved, setSaved] = useState(asset?.agentUse);
+  const maySet = asset?.canSetAvailability ?? frame.instanceWrite;
+  if (asset === undefined || saved === undefined || !maySet) return undefined;
+  return {
+    saved,
+    save: (use) =>
+      placement.setUse.mutateAsync({ name: asset.name, assetId: asset.id, use }).then(
+        (stored) => {
+          setSaved(stored.use);
+          return undefined;
+        },
+        (error: unknown) => apiErrorMessage(error, t("configChangeSaveFailed"))
+      )
   };
 }

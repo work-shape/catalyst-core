@@ -11,7 +11,7 @@ import { useSettingsPage } from "../../shared/settings-page-context";
 import { apiErrorMessage } from "../../shared/workspace-utils";
 import { AgentEditor } from "./agent-editor";
 import { startAvailability, type AgentCreateCheck } from "./agent-create-review";
-import { useAvailabilityChoice } from "./asset-availability";
+import { useAgentUseChoice, useAvailabilityChoice } from "./asset-availability";
 import { useAgentDraft } from "./agent-draft-source";
 import { agentConfigToForm, startedAgentForm } from "./asset-form-model";
 import type { BuildAssetEditorProps, BuildAssetKind } from "./build-asset-kind";
@@ -108,6 +108,7 @@ function AgentAssetEditor(frame: BuildAssetEditorProps) {
   // the form alone, so the page keeps what it was told and what it changed itself.
   const [isDefault, setIsDefault] = useState(asset?.isDefault === true);
   const availability = useAvailabilityChoice(frame, "agent");
+  const agentUse = useAgentUseChoice(frame);
   // A new agent is checked before its create for what it would use that members where it
   // starts could not use. One that starts hidden is checked too: the instance's first agent
   // becomes its default, available everywhere.
@@ -208,6 +209,7 @@ function AgentAssetEditor(frame: BuildAssetEditorProps) {
           : undefined
       }
       {...(availability === undefined ? {} : { availability })}
+      {...(agentUse === undefined ? {} : { agentUse })}
       {...(createCheck === undefined ? {} : { createCheck })}
     />
   );

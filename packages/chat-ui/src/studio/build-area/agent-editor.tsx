@@ -40,6 +40,7 @@ import {
   type AvailabilityChoice
 } from "./asset-availability-fields";
 import { MissingDependencies, type DependencyAvailability } from "./dependency-availability";
+import { AgentUseFields, useAgentUseEdit, type AgentUseChoice } from "./agent-use-fields";
 import { AgentCreateReview, type AgentCreateCheck } from "./agent-create-review";
 import type { DependencyConsent } from "../../shared/api/asset-writes";
 import { AgentKnowledge, type KnowledgeBaseChoice } from "./agent-knowledge";
@@ -71,6 +72,7 @@ export function AgentEditor({
   appTools = NO_APP_TOOLS,
   onMakeDefault,
   availability,
+  agentUse,
   createCheck,
   draft
 }: {
@@ -97,6 +99,8 @@ export function AgentEditor({
   onMakeDefault?: () => Promise<string | undefined>;
   /** Where the agent can be chosen, for a reader who may change it. */
   availability?: AvailabilityChoice;
+  /** Who uses it where it is available, for a reader who may set its availability. */
+  agentUse?: AgentUseChoice;
   /**
    * A new agent's: what it would use that is missing where it starts, read before the create.
    * Absent for an existing agent. A new hidden agent is checked too: the first becomes the default everywhere.
@@ -120,6 +124,7 @@ export function AgentEditor({
   // newer one somebody else wrote is taken over only where nothing is typed.
   const [held, setHeld] = useState<AgentDraft | null>(draft?.latest ?? null);
   const availabilityEdit = useAvailabilityEdit(availability);
+  const useEdit = useAgentUseEdit(agentUse);
   const availabilityChanged = availabilityEdit.changed;
   // Publish also makes what the draft uses available where the agent is, where the reader
   // chose so in the dialog. The choice starts unticked each time the dialog opens, and the
@@ -197,7 +202,7 @@ export function AgentEditor({
     onReset: update
   });
   const changedFields = countChangedFields(form, state.baseline);
-  const dirty = changedFields > 0 || availabilityChanged;
+  const dirty = changedFields > 0 || availabilityChanged || useEdit.changed;
   const latest = draft?.latest;
   const latestRevision = latest === undefined ? undefined : (latest?.revision ?? null);
   // Try in the dock, for a reader who may change the agent: it runs the draft (section 4.7c).
@@ -310,10 +315,14 @@ export function AgentEditor({
       await draft?.reread().catch(() => undefined);
     }
     const refused = saved.ok && availabilityChanged ? await availabilityEdit.save() : undefined;
+    const useRefused =
+      saved.ok && refused === undefined && useEdit.changed ? await useEdit.save() : undefined;
     const answer: BuildWriteOutcome =
-      refused === undefined
-        ? saved
-        : { ok: false, conflict: false, refusals: [{ field: "availability", message: refused }] };
+      refused !== undefined
+        ? { ok: false, conflict: false, refusals: [{ field: "availability", message: refused }] }
+        : useRefused !== undefined
+          ? { ok: false, conflict: false, refusals: [{ field: "agentUse", message: useRefused }] }
+          : saved;
     setSaving(false);
     state.setOutcome(answer);
     return answer;
@@ -601,6 +610,23 @@ export function AgentEditor({
             )
           }
         ]
+      : []),
+    ...(agentUse
+      ? [
+          {
+            id: "agent-use",
+            label: t("configAgentUse"),
+            description: t("configAgentUseDescription"),
+            refusalField: "agentUse" as const,
+            body: (
+              <AgentUseFields
+                edit={useEdit}
+                disabled={saving}
+                refusals={refusalsOf(outcome, "agentUse")}
+              />
+            )
+          }
+        ]
       : [])
   ];
 
@@ -714,11 +740,12 @@ export function AgentEditor({
       }))}
       missingTranslations={agentMissingTranslations(form)}
       control={{
-        changes: changedFields + (availabilityChanged ? 1 : 0),
+        changes: changedFields + (availabilityChanged ? 1 : 0) + (useEdit.changed ? 1 : 0),
         submit,
         discard: () => {
           state.discard();
           availabilityEdit.discard();
+          useEdit.discard();
         }
       }}
       outcome={outcome}

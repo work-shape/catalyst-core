@@ -9,6 +9,8 @@ description: The agent that comes with every instance, who sees it, and how an i
 
 Workshaper comes with an instance where the module `workshaper` is on (see [Modules](/configure/modules/)). It starts offered in no workspace, so at first no chat lists it. An instance administrator offers it where people should use it: on the agent page in Studio, under **Available in** ("Verfügbar in"), the same way as any other agent. Superadmins and anyone who may change agents find it in **Studio > Agents** from the start and can try it there.
 
+To let only some people use it where it is offered, set **Who may use it** ("Wer ihn verwenden darf") on the same page to "Only people and roles with the right", and give those people, or a role they hold, the right **Use** on Workshaper under **Instance > Access**.
+
 Where the instance names no default agent, Workshaper is the default in every workspace that offers it. An instance that names its own default agent keeps it.
 
 ## Changing it

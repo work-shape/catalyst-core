@@ -1,5 +1,6 @@
 export { useAvailabilityChoice } from "./asset-availability";
 export { type AvailabilityChoice } from "./asset-availability-fields";
+export { type AgentUseChoice } from "./agent-use-fields";
 export { AgentEditor } from "./agent-editor";
 export {
   draftAgentFields,

@@ -8,7 +8,15 @@ type Translate = TranslationContextValue["t"];
 
 /** The part of an asset page a refusal is about. A kind names its sections' fields with these. */
 export type BuildRefusalField =
-  "tools" | "model" | "skills" | "knowledge" | "source" | "sources" | "availability" | "files";
+  | "tools"
+  | "model"
+  | "skills"
+  | "knowledge"
+  | "source"
+  | "sources"
+  | "availability"
+  | "agentUse"
+  | "files";
 
 /** What a refused change says, and where on the page it says it. */
 interface BuildRefusal {

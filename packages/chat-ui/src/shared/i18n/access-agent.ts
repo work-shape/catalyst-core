@@ -6,11 +6,13 @@ export const accessAgent = defineTranslations({
   en: {
     "access.scopeAgent": "Agent {name}",
     "access.kindAgent": "Agents",
-    "access.objectAgent": "the agent {name}"
+    "access.objectAgent": "the agent {name}",
+    "access.actionUseAgentDescription": "Chat with the agent where it is available"
   },
   de: {
     "access.scopeAgent": "Agent {name}",
     "access.kindAgent": "Agenten",
-    "access.objectAgent": "den Agenten {name}"
+    "access.objectAgent": "den Agenten {name}",
+    "access.actionUseAgentDescription": "Mit dem Agenten chatten, wo er verfügbar ist"
   }
 });

@@ -285,6 +285,8 @@ Being a member is not building. Editing a workspace's agents and skills is a rig
 
 An agent of the whole instance can be offered in several workspaces under **Available in** ("Verfügbar in"). Only someone with the right to edit agents on the whole instance can change where it is offered.
 
+Beside it, **Who may use it** ("Wer ihn verwenden darf") says who chats with the agent where it is offered: everyone who works there, which every agent starts with, or only people and roles given the right **Use** ("Verwenden") on the agent, on the Access page. Both must allow: the right never opens an agent in a workspace where it is not offered, and a deny of Use keeps one person or role from an agent everyone else uses. Instance admins can always use it. Someone without the right does not see the agent in the chat, and a start that names it, also over the API, is refused naming the right.
+
 ## Connections
 
 A Connection is signed in with one shared account ("Ein gemeinsames Konto"). Everyone who may use it sees the same in the outside system: what that account sees. If a team should be able to do less, create a second Connection with fewer operations and give the right to use it to each person of that team.

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   AgentEditor,
   agentConfigToForm,
+  type AgentUseChoice,
   type AvailabilityChoice,
   type BuildAssetEditorProps
 } from "@work-shape/catalyst-chat-ui/build-area";
@@ -111,5 +112,48 @@ describe("agent availability", () => {
     });
     expect(section).toContain("The workspaces could not be read.");
     expect(section).not.toContain("There are no shared workspaces yet.");
+  });
+});
+
+/** The section "Who may use it" of the agent's page, in the reader's language. */
+function useSection(agentUse: AgentUseChoice | undefined, locale: "en" | "de" = "en"): string {
+  const markup = renderToStaticMarkup(
+    createElement(TranslationProvider, {
+      locale,
+      children: createElement(AgentEditor, {
+        frame: frame(),
+        initialForm: agentConfigToForm(config),
+        isDefault: false,
+        references: undefined,
+        editableAgentFields: [],
+        canManageAgentModels: false,
+        skillChoice: { options: [], onSearch: noop },
+        availability: { saved: undefined, workspaces, save: async () => undefined },
+        ...(agentUse ? { agentUse } : {})
+      })
+    })
+  );
+  return /<section[^>]*id="agent-use">.*?<\/section>/u.exec(markup)?.[0] ?? "";
+}
+
+// Who uses the agent where it is available (AGENT-USE-1): beside "Available in", for whoever
+// sets that, and saved with the agent through the page's save bar.
+describe("who may use an agent", () => {
+  const save = async () => undefined;
+
+  it("offers everyone or only holders of the right, and links to where the right is given", () => {
+    const everyone = useSection({ saved: "everyone", save });
+    expect(everyone).toContain("Who may use it");
+    expect(everyone).toContain("Everyone there");
+    expect(everyone).toContain("Only people and roles with the right");
+    expect(everyone).not.toContain("/settings/instance/access");
+    const limited = useSection({ saved: "granted", save }, "de");
+    expect(limited).toContain("Wer ihn verwenden darf");
+    expect(limited).toContain("Nur Personen und Rollen mit dem Recht");
+    expect(limited).toContain('href="/settings/instance/access"');
+  });
+
+  it("is not shown to a reader who may not set where the agent is available", () => {
+    expect(useSection(undefined)).toBe("");
   });
 });

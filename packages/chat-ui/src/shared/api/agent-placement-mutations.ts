@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
-import type { AgentAvailability, ApiClient } from "@work-shape/catalyst-api-client";
+import type { AgentAvailability, AgentUse, ApiClient } from "@work-shape/catalyst-api-client";
 import { completedOutput } from "@work-shape/catalyst-api-client";
 import { workspaceQueryKeys } from "./workspace-query-keys";
 
@@ -105,9 +105,27 @@ export function useAgentPlacementMutations(input: AgentPlacementMutationInput) {
       ])
   });
 
+  // Who uses an agent where it is available (AGENT-USE-1). The pickers follow it at once.
+  const setUse = useMutation({
+    mutationFn: async ({ name, assetId, use }: { name: string; assetId: string; use: AgentUse }) =>
+      completedOutput(
+        await input.client.agents.use.set({
+          params: { name },
+          body: { use, expectedAssetId: assetId }
+        }),
+        input.heldMessage
+      ),
+    onSuccess: () =>
+      Promise.all([
+        invalidateAssets(),
+        invalidateOfferedAgents(queryClient, input.apiBaseUrl, input.authScope)
+      ])
+  });
+
   return {
     setDefaultAgent,
     setAvailability,
-    isPending: setDefaultAgent.isPending || setAvailability.isPending
+    setUse,
+    isPending: setDefaultAgent.isPending || setAvailability.isPending || setUse.isPending
   };
 }
