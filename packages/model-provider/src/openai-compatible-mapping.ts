@@ -19,6 +19,7 @@ import {
   type ModelProviderNativeTool,
   type ModelTool
 } from "./types";
+import { stripCitationMarkers } from "./citation-markers";
 import { serializeToolInput } from "./tool-input";
 import { createProviderToolNames, type ProviderToolNames } from "./openai-compatible-tool-names";
 export type { ProviderToolNames } from "./openai-compatible-tool-names";
@@ -497,18 +498,19 @@ export function toOpenAiResponsesTools(
   ];
 }
 
+/** The text of an answer as a person reads it: without the model's inline citation markers. */
 export function readOpenAiResponsesText(payload: OpenAiResponsesResponse): string {
   if (payload.output_text) {
-    return payload.output_text;
+    return stripCitationMarkers(payload.output_text).text;
   }
-  return (
+  return stripCitationMarkers(
     payload.output
       ?.filter((item) => item.type === "message")
       .flatMap((item) => ("content" in item && Array.isArray(item.content) ? item.content : []))
       .filter((part) => part.type === "output_text" && typeof part.text === "string")
       .map((part) => part.text)
       .join("") ?? ""
-  );
+  ).text;
 }
 
 export function readOpenAiResponsesWebMetadata(payload: OpenAiResponsesResponse): {
@@ -546,6 +548,8 @@ export function readOpenAiResponsesWebMetadata(payload: OpenAiResponsesResponse)
       if (!Array.isArray(part.annotations)) {
         continue;
       }
+      // A range counts the characters of the text without the model's citation markers.
+      const stripped = stripCitationMarkers(typeof part.text === "string" ? part.text : "");
       for (const annotation of part.annotations) {
         const citationPayload = readUrlCitationPayload(annotation);
         if (!citationPayload) {
@@ -562,7 +566,7 @@ export function readOpenAiResponsesWebMetadata(payload: OpenAiResponsesResponse)
         citations.push({
           sourceId: source.id,
           ...(source.title ? { label: source.title } : {}),
-          ...readCitationRange(citationPayload)
+          ...readCitationRange(citationPayload, stripped.indexOf)
         });
       }
     }
@@ -625,7 +629,8 @@ function readOpenAiWebSource(
 }
 
 function readCitationRange(
-  value: Record<string, unknown>
+  value: Record<string, unknown>,
+  indexOf: (index: number) => number
 ): Pick<MessageCitation, "characterRange"> {
   const start =
     typeof value.start_index === "number" && Number.isInteger(value.start_index)
@@ -635,7 +640,9 @@ function readCitationRange(
     typeof value.end_index === "number" && Number.isInteger(value.end_index)
       ? value.end_index
       : undefined;
-  return start !== undefined && end !== undefined ? { characterRange: { start, end } } : {};
+  return start !== undefined && end !== undefined
+    ? { characterRange: { start: indexOf(start), end: indexOf(end) } }
+    : {};
 }
 
 function createWebSourceId(url: string): string {

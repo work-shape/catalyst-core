@@ -5,6 +5,7 @@ import type {
   ModelProviderContinuation
 } from "./types";
 import { WEB_SEARCH_MODEL_TOOL_NAME } from "./types";
+import { createCitationMarkerFilter } from "./citation-markers";
 import {
   noReportedUsage,
   readProviderServiceTier,
@@ -230,6 +231,8 @@ export async function* streamOpenAiResponsesCompletion(
   headers?: Headers
 ): AsyncIterable<ModelCompletionStreamEvent> {
   let text = "";
+  // The model's inline citation markers never reach a reader, also when a delta splits one.
+  const citationMarkers = createCitationMarkerFilter();
   let usage = noReportedUsage();
   const toolCalls: OpenAiCompatibleStreamingToolCall[] = [];
   const reasoningItemsByOutputIndex = new Map<number, string>();
@@ -304,11 +307,11 @@ export async function* streamOpenAiResponsesCompletion(
     }
 
     if (payload.type === "response.output_text.delta" && payload.delta) {
-      text += payload.delta;
-      yield {
-        type: "text_delta",
-        delta: payload.delta
-      };
+      const shown = citationMarkers.push(payload.delta);
+      if (shown) {
+        text += shown;
+        yield { type: "text_delta", delta: shown };
+      }
       continue;
     }
 
@@ -370,6 +373,11 @@ export async function* streamOpenAiResponsesCompletion(
     throw new AppError("TIMEOUT", "Model provider stream ended before response.completed");
   }
 
+  const heldBack = citationMarkers.flush();
+  if (heldBack) {
+    text += heldBack;
+    yield { type: "text_delta", delta: heldBack };
+  }
   const finalText = readOpenAiResponsesText(finalResponse);
   const webMetadata = readOpenAiResponsesWebMetadata(finalResponse);
   const webSearchCallCount = readOpenAiResponsesWebSearchCallCount(finalResponse);

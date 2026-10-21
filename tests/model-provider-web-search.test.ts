@@ -341,6 +341,150 @@ describe("OpenAI provider-native web search", () => {
     });
   });
 
+  // AGENT-FRICTION-1: GPT-6.1 Sol wrote its inline web citation syntax into the answer, and the
+  // chat showed "cite turn1view2 turn1view4" between private-use characters beside the source
+  // chips. The text below is that answer's shape, as the Responses API sent it.
+  describe("with the model's inline citation markers", () => {
+    const marker = "\uE200cite\uE202turn1view2\uE202turn1view4\uE201";
+    const answer = `Gmail uses OAuth 2.0. ${marker}Ask for the scope gmail.readonly.`;
+    const completed = {
+      output: [
+        {
+          type: "web_search_call",
+          action: {
+            type: "search",
+            query: "gmail api oauth",
+            sources: [{ url: "https://developers.google.com/gmail/api", title: "Gmail API" }]
+          }
+        },
+        {
+          type: "message",
+          content: [
+            {
+              type: "output_text",
+              text: answer,
+              annotations: [
+                {
+                  type: "url_citation",
+                  url: "https://developers.google.com/gmail/api",
+                  title: "Gmail API",
+                  start_index: answer.indexOf("Ask"),
+                  end_index: answer.length
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      usage: { input_tokens: 5, output_tokens: 6, total_tokens: 11 }
+    };
+    const shown = "Gmail uses OAuth 2.0. Ask for the scope gmail.readonly.";
+    const citedRange = { start: shown.indexOf("Ask"), end: shown.length };
+
+    it("keeps them out of the text and counts a citation's range in the text without them", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(
+          async () =>
+            new Response(JSON.stringify(completed), {
+              status: 200,
+              headers: { "content-type": "application/json" }
+            })
+        )
+      );
+      const completion = await createResponsesProvider().complete(
+        {
+          providerId: "openai",
+          model: "gpt-5.5",
+          messages: [{ role: "user", content: "search the web" }],
+          tools: [OPENAI_WEB_SEARCH_TOOL]
+        },
+        createRuntimeContext()
+      );
+      expect(completion.text).toBe(shown);
+      expect(completion.citations).toEqual([
+        expect.objectContaining({ label: "Gmail API", characterRange: citedRange })
+      ]);
+    });
+
+    it("streams no marker, also when the deltas split one", async () => {
+      const cut = answer.indexOf("turn1view4");
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(
+          async () =>
+            new Response(
+              createSseStream([
+                { type: "response.output_text.delta", delta: answer.slice(0, cut) },
+                { type: "response.output_text.delta", delta: answer.slice(cut) },
+                { type: "response.completed", response: completed }
+              ]),
+              { status: 200, headers: { "content-type": "text/event-stream" } }
+            )
+        )
+      );
+      const events: ModelAdapterStreamEvent[] = [];
+      for await (const event of createResponsesProvider().stream?.(
+        {
+          providerId: "openai",
+          model: "gpt-5.5",
+          messages: [{ role: "user", content: "search the web" }],
+          tools: [OPENAI_WEB_SEARCH_TOOL]
+        },
+        createRuntimeContext()
+      ) ?? []) {
+        events.push(event);
+      }
+      const deltas = events.flatMap((event) => (event.type === "text_delta" ? [event.delta] : []));
+      expect(deltas.join("")).toBe(shown);
+      for (const delta of deltas) expect(delta).not.toMatch(/[\uE200-\uE202]|turn1view/u);
+      expect(events.at(-1)).toMatchObject({
+        type: "completed",
+        completion: {
+          text: shown,
+          citations: [expect.objectContaining({ characterRange: citedRange })]
+        }
+      });
+    });
+
+    it("drops an opening character that no marker follows, and holds back no text at the end", async () => {
+      const lone = "A\uE200 without its end.";
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(
+          async () =>
+            new Response(
+              createSseStream([
+                { type: "response.output_text.delta", delta: lone },
+                {
+                  type: "response.completed",
+                  response: {
+                    output: [{ type: "message", content: [{ type: "output_text", text: lone }] }]
+                  }
+                }
+              ]),
+              { status: 200, headers: { "content-type": "text/event-stream" } }
+            )
+        )
+      );
+      const events: ModelAdapterStreamEvent[] = [];
+      for await (const event of createResponsesProvider().stream?.(
+        {
+          providerId: "openai",
+          model: "gpt-5.5",
+          messages: [{ role: "user", content: "hi" }],
+          tools: [OPENAI_WEB_SEARCH_TOOL]
+        },
+        createRuntimeContext()
+      ) ?? []) {
+        events.push(event);
+      }
+      expect(
+        events.flatMap((event) => (event.type === "text_delta" ? [event.delta] : [])).join("")
+      ).toBe("A without its end.");
+    });
+  });
+
   it("rejects provider-native web_search on Chat Completions providers", async () => {
     const provider = new OpenAiCompatibleChatProvider({
       id: "openai",
