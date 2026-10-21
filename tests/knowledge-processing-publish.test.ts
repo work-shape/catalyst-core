@@ -58,6 +58,14 @@ describe("confirmed, selective processing at publish (KB 80)", () => {
       expect(get.body).toContain("Reprocess 1 affected contents");
     }
   );
+  it("reads a Knowledge Base whose store is ready before its tables are made (KB-PAGE-1)", async () => {
+    const world = await setup();
+    // Right after the first publish: the store's record is ready, its tables are not made yet.
+    await world.sql`drop schema catalyst_kb cascade`;
+    await world.platform`update data_stores set migrations='[]'::jsonb where id=${world.record.id}`;
+    const get = await world.instance.api.call("assets.get", { params });
+    expect(get.statusCode, get.body).toBe(200);
+  });
   it("estimates only active passages of affected contents", async () => {
     const world = await setup();
     for (const name of ["target.md", "other.md"])

@@ -79,7 +79,9 @@ export async function knowledgeProcessingReview(
     clientInstanceId: runtime.clientInstanceId,
     id: assetId
   });
-  if (record?.status !== "ready") return undefined;
+  // A store whose tables are not made yet, as right after the first publish, holds nothing to
+  // process again. Its record is ready before its tables are.
+  if (record?.status !== "ready" || record.migrations.length === 0) return undefined;
   const store = runtime.backend.documentStore(knowledgeTargetOf(next, assetId), records);
   if (!store) return undefined;
   // Unchanged rules need only a release-version check, without classifying documents or

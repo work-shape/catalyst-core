@@ -239,7 +239,18 @@ test.describe("uploading files from the computer into a Knowledge Base", () => {
         page.getByText("Ist sofort veröffentlicht und in keinem Arbeitsbereich verfügbar")
       ).toBeVisible();
       await page.getByLabel("Was sie enthält").fill("Regeln des Teams zu Urlaub und Reisen.");
+      // The create's answer, so a refusal names its reason here rather than as a missing section.
+      const created = page.waitForResponse(
+        (response) =>
+          response.request().method() === "PUT" &&
+          new URL(response.url()).pathname === `/api/v1/assets/knowledge_base/${name}`
+      );
       await page.getByRole("button", { name: "Wissensbasis anlegen", exact: true }).click();
+      const answer = await created;
+      expect(
+        answer.ok(),
+        `${answer.status()} ${await answer.text()} for ${answer.request().postData() ?? ""}`
+      ).toBe(true);
       // Published in the same step: its Documents section is there, with no notice and no draft.
       await expect(page.locator("[data-knowledge-documents]")).toBeVisible({ timeout: 30_000 });
       await expect(page.locator("[data-knowledge-not-published]")).toHaveCount(0);
