@@ -442,9 +442,7 @@ export class AppActionCalls {
         })
       : [];
     const simulatedSteps = [
-      ...new Set(
-        stepRuns.flatMap((step) => (step.target === "dry_run" ? [step.stepId] : []))
-      )
+      ...new Set(stepRuns.flatMap((step) => (step.target === "dry_run" ? [step.stepId] : [])))
     ];
     return { mode: "test", workflowRevision, simulatedSteps };
   }

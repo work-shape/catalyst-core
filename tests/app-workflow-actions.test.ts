@@ -343,7 +343,13 @@ describe("an App that starts a Workflow", () => {
 
   /** A click in the draft of `visits`, followed to its end as the frame follows it. */
   async function clickInDraft(userId: string, frame: Frame, page: string, key: string) {
-    const response = await t.callAction(userId, frame, "log-visit", { page }, { "idempotency-key": key });
+    const response = await t.callAction(
+      userId,
+      frame,
+      "log-visit",
+      { page },
+      { "idempotency-key": key }
+    );
     expectStatus(response, 200);
     const started = startedSchema.parse(response.json());
     return { started, run: await followToEnd(userId, frame, started.result.id) };

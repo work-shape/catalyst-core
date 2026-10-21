@@ -264,11 +264,7 @@ function registerWorkflowRoutes(
         throw new AppError("FORBIDDEN", "Only a person starts a test run of a Workflow's draft");
       }
       await requireTestSubject(input.workflow, origin);
-      const { revision } = testRevisionOf(
-        context.access,
-        await resourceOf(input.workflow),
-        origin
-      );
+      const { revision } = testRevisionOf(context.access, await resourceOf(input.workflow), origin);
       return toRunResource(
         await required().test({
           workflow: input.workflow,
