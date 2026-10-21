@@ -448,7 +448,7 @@ export const Route = createFileRoute("/")({ component: () => <p>never</p> });
       pageId: page.id
     });
     expect(stored).toMatchObject({
-      kitVersion: "1.6.0",
+      kitVersion: RELEASED_KIT_VERSIONS.at(-1),
       manifest: { id: "index", entry: "index.html" }
     });
     expect(stored?.builtFiles.map((file) => file.path)).toContain("index.html");

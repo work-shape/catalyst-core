@@ -23,7 +23,7 @@ import { compile, optimize } from "@tailwindcss/node";
 import { Scanner } from "@tailwindcss/oxide";
 import { build } from "esbuild";
 
-const KIT_VERSION = "1.6.0";
+const KIT_VERSION = "1.7.0";
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const platformRoot = resolve(packageRoot, "../..");

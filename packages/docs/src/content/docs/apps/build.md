@@ -33,7 +33,7 @@ but this is best effort. A write is lost if the page closes before its batch is 
 An immediate reload within the batching window can also lose the write; await kit
 `storage.set` before navigating or reloading when the save must persist.
 
-Prefer the JSON API in kit **1.6.0**, whose save waits for persistence and rejects on failure:
+Prefer the JSON API of kit **1.6.0** and later, whose save waits for persistence and rejects on failure:
 
 ```ts
 import { storage } from "@work-shape/catalyst-app-kit";
@@ -83,9 +83,9 @@ A React App imports only its own files, `react`, `react-dom`, `@tanstack/react-r
 
 Put fonts and libraries in the App's folder or use the kit's; an outside address (Google Fonts, Adobe Fonts or a CDN) will not load.
 
-Kit 1.6.0 supplies Inter (400, 600, 700), Lora (400, 700 and 400 italic), IBM Plex Mono (400, 600) and Bungee (400), with Latin coverage including German: link `/app-runtime/kit/1.6.0/fonts/fonts.css` and use the family name in CSS. The font sources and licences are in `/app-runtime/kit/1.6.0/fonts/README.md`.
+Kit 1.6.0 and later supply Inter (400, 600, 700), Lora (400, 700 and 400 italic), IBM Plex Mono (400, 600) and Bungee (400), with Latin coverage including German: link `/app-runtime/kit/1.7.0/fonts/fonts.css` and use the family name in CSS. The font sources and licences are in `/app-runtime/kit/1.7.0/fonts/README.md`.
 
-A React App imports its CSS from a route (for example, `import "../fonts.css"`); in that CSS, write `@import url("/app-runtime/kit/1.6.0/fonts/fonts.css");` and `body { font-family: Lora; }`.
+A React App imports its CSS from a route (for example, `import "../fonts.css"`); in that CSS, write `@import url("/app-runtime/kit/1.7.0/fonts/fonts.css");` and `body { font-family: Lora; }`.
 
 ## The manifest
 
@@ -96,7 +96,7 @@ A React App imports its CSS from a route (for example, `import "../fonts.css"`);
 | `id`                  | Lowercase letters, digits and `-`, at most 63 characters.                                                                                |
 | `name`                | The name people read.                                                                                                                    |
 | `description`, `icon` | Optional.                                                                                                                                |
-| `kit`                 | The exact kit version. Use `1.6.0` for a new App; actions on a Connection need `1.1.0` or later and `workflow` actions `1.3.0` or later. |
+| `kit`                 | The exact kit version. Use `1.7.0` for a new App; actions on a Connection need `1.1.0` or later and `workflow` actions `1.3.0` or later. |
 | `entry`               | `index.html` for a plain HTML App. A React App leaves it out.                                                                            |
 | `connections`         | The Connections the App's actions call, by name.                                                                                         |
 | `dataStores`          | The Data Store the App's `sql` actions use: `{ name, minSchema }`. One at most while the App has `sql` actions.                          |
@@ -214,6 +214,8 @@ Import `actions` from `@work-shape/catalyst-app-kit`. `actions.call(name, params
 
 A changing call passes `{ idempotencyKey }`: make the key when the person acts, and send the same key again when the answer was lost. In a draft the answer to a changing call is `{ status: "dry_run", message, result }` unless "Run live once" sent it live: show `message`, which says what the published App would have done.
 
+An `AppCallError` with the code `not_connected` means the interface that shows the App never answered it: the App was shown outside the platform, or the page around it did not connect. It is a fault of the host, not of the App or its actions, and trying again inside the App does not help, so it is not retryable. Add no retries or reconnect buttons for it; reload the page or open the App again, and if it stays, say that the preview did not connect.
+
 `getContext()` answers the viewer, the locale and, under `can`, what the instance says for each action: `allow`, `confirm`, `approval` or `deny`. The server asks again at every call.
 
 ## A complete example
@@ -223,7 +225,7 @@ A dashboard for one client of an accounting data source: it reads bookings from 
 ```yaml title="app.yaml"
 id: accounting-dashboard
 name: Accounting dashboard
-kit: 1.6.0
+kit: 1.7.0
 connections:
   - accounting_source
 dataStores:
@@ -371,7 +373,7 @@ The same call from a plain HTML App, with one action on the Connection.
 ```yaml title="app.yaml"
 id: accounting-bookings
 name: Accounting bookings
-kit: 1.6.0
+kit: 1.7.0
 entry: index.html
 connections:
   - accounting_source

@@ -131,12 +131,15 @@ describe("the two halves of the bridge", () => {
   });
 
   // Fails before kit 1.4.0: every released kit offered `connections.call` to a new Page.
-  it("ship kit 1.6.0 with personal JSON storage and without a free call of a Connection", () => {
-    expect(RELEASED_KIT_VERSIONS.at(-1)).toBe("1.6.0");
-    const kit = loadAppKitFiles().get("1.6.0")?.get("kit.js")?.bytes.toString("utf8");
+  // Fails before kit 1.7.0: a call without the interface said only "The interface did not
+  // answer.", and an agent added retries to the App for a fault of the host.
+  it("ship kit 1.7.0 with personal JSON storage, without a free call of a Connection, and naming the host's fault", () => {
+    expect(RELEASED_KIT_VERSIONS.at(-1)).toBe("1.7.0");
+    const kit = loadAppKitFiles().get("1.7.0")?.get("kit.js")?.bytes.toString("utf8");
     expect(kit).not.toMatch(/connection/u);
     expect(kit).toMatch(/\bas actions\b/u);
     expect(kit).toMatch(/\bas storage\b/u);
+    expect(kit).toMatch(/trying again inside the App does not help/u);
   });
 
   it("agree on what the interface sends: the client reads what the schema allows", () => {
@@ -436,9 +439,13 @@ describe("the kit client", () => {
     const { transport } = recordingTransport();
     const client = createAppClient(transport, { contextTimeoutMs: 5 });
 
+    // AGENT-FRICTION-1: the message says the host is at fault and that trying again in the
+    // App does not help, and the error is not retryable, so no App offers a retry for it.
     await expect(client.actions.call("load")).rejects.toMatchObject({
       name: "AppCallError",
-      code: "not_connected"
+      code: "not_connected",
+      retryable: false,
+      message: expect.stringContaining("not of the App: trying again inside the App does not help")
     });
   });
 
@@ -446,7 +453,9 @@ describe("the kit client", () => {
     const { transport } = recordingTransport();
     const client = createAppClient(transport, { contextTimeoutMs: 5 });
 
-    await expect(client.getContext()).rejects.toThrow("The interface did not answer");
+    await expect(client.getContext()).rejects.toThrow(
+      "The interface that shows this App did not answer it."
+    );
   });
 });
 

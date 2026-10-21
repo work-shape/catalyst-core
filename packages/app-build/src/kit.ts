@@ -18,7 +18,8 @@ export const RELEASED_KIT_VERSIONS: readonly string[] = [
   "1.3.0",
   "1.4.0",
   "1.5.0",
-  "1.6.0"
+  "1.6.0",
+  "1.7.0"
 ];
 
 /** The stylesheet of the shared UI library, with the utility classes its components use. */

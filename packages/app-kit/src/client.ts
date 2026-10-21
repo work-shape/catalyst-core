@@ -56,6 +56,15 @@ export class AppCallError extends Error {
   }
 }
 
+/**
+ * What a Page is told when the interface that shows it never answered its greeting. The fault is
+ * the host's, not the Page's: the frame was shown outside the platform, or the interface did
+ * not connect to it. Calling again from the Page cannot change that, so the call is not
+ * retryable, and the sentence says so to the person and to an agent that reads it.
+ */
+const NOT_CONNECTED_MESSAGE =
+  "The interface that shows this App did not answer it. That is a fault of the page around the App, not of the App: trying again inside the App does not help. Reload the page or open the App again.";
+
 /** What an answer of the wrong kind to a request is taken as. The interface sends none. */
 const MISMATCHED_ANSWER = { code: "failed", message: "The interface answered another call." };
 
@@ -224,7 +233,7 @@ export function createAppClient(
   function connect(): Promise<AppContext> {
     context ??= new Promise<AppContext>((resolve, reject) => {
       const timeout = setTimeout(() => {
-        reject(new Error("The interface did not answer. A Page runs inside the platform."));
+        reject(new Error(NOT_CONNECTED_MESSAGE));
       }, options.contextTimeoutMs ?? CONTEXT_TIMEOUT_MS);
       transport.subscribe((incoming) => {
         if (incoming.type === "context") {
@@ -274,7 +283,11 @@ export function createAppClient(
     await connect().catch(() => undefined);
     const callSession = session;
     if (callSession === undefined) {
-      throw new AppCallError({ code: "not_connected", message: "The interface did not answer." });
+      throw new AppCallError({
+        code: "not_connected",
+        message: NOT_CONNECTED_MESSAGE,
+        retryable: false
+      });
     }
     callCount += 1;
     const requestId = `${callCount}-${Math.random().toString(36).slice(2, 10)}`;
