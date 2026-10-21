@@ -154,7 +154,9 @@ export interface AppPublishSend {
   /** Sends the publish: made live, held for an approver, or refused. */
   send(
     revision: number,
-    audience: AppAudience | undefined
+    audience: AppAudience | undefined,
+    /** The Workflows the one Publish makes live with the App (DP-3). */
+    workflows?: readonly { name: string; revision: number }[]
   ): Promise<"published" | "waits" | "failed">;
 }
 
@@ -169,11 +171,11 @@ export function useAppPublishSend(workspaceId: string, app: string): AppPublishS
     busy,
     error,
     waits,
-    send: async (revision, audience) => {
+    send: async (revision, audience, workflows) => {
       setBusy(true);
       setError(undefined);
       try {
-        await writes.publish(app, revision, audience);
+        await writes.publish(app, revision, audience, workflows);
         return "published";
       } catch (caught) {
         if (caught instanceof PendingApprovalError) {

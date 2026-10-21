@@ -17,13 +17,20 @@ import {
 import {
   useAppPublishData,
   useAppPublishNarrative,
+  useAppPublishTogether,
   type AppAudience,
   type AppAudienceOffer,
-  type AppPublishDataRead
+  type AppPublishDataRead,
+  type AppPublishTogetherRead
 } from "./app-data";
 import { NameList } from "./app-header";
 import { appManifestSummary, appReadsStoredData, type AppManifestSummary } from "./app-model";
 import { AppPublishDataView } from "./app-publish-data";
+import {
+  AppPublishTogetherView,
+  appPublishTogetherNamed,
+  appPublishTogetherReady
+} from "./app-publish-together";
 import {
   AppAudienceChange,
   AppAudienceQuestion,
@@ -90,6 +97,8 @@ export function AskedPublishDialog({ app, ...props }: PublishDialogProps & { app
   const [chosen, setChosen] = useState<AppAudience>();
   const question = useAppPublishNarrative(props.workspace.id, app, props.ask.revision, chosen);
   const publishing = useAppPublishSend(props.workspace.id, app);
+  // The pending Workflows the draft reaches go live with it, on this one Publish (DP-3).
+  const together = useAppPublishTogether(app, props.ask.revision);
   // What is sent is what is shown: the choice, or the audience the instance proposed.
   const selected = chosen ?? question.audience?.selected;
   const shared = {
@@ -98,6 +107,7 @@ export function AskedPublishDialog({ app, ...props }: PublishDialogProps & { app
     error: publishing.error,
     waits: publishing.waits,
     narrative: question.narrative,
+    together,
     audience: {
       offer: question.audience,
       selected,
@@ -105,7 +115,11 @@ export function AskedPublishDialog({ app, ...props }: PublishDialogProps & { app
     },
     onConfirm: () => {
       publishing
-        .send(props.ask.revision, question.audience === undefined ? undefined : selected)
+        .send(
+          props.ask.revision,
+          question.audience === undefined ? undefined : selected,
+          appPublishTogetherNamed(together)
+        )
         .then((outcome) => {
           // A held publish stays in the dialog, which says it waits; Close leaves it.
           if (outcome === "published") props.onClose();
@@ -162,6 +176,7 @@ export function PublishDialog({
   storedData,
   narrative = NO_NARRATIVE,
   audience,
+  together,
   waits = false,
   onConfirm,
   onClose
@@ -174,6 +189,8 @@ export function PublishDialog({
   audience?: PublishAudienceAsk;
   /** The publish was sent and waits for an approver. */
   waits?: boolean;
+  /** The Workflows the Publish makes live with the App. Absent, as in a sample, it names none. */
+  together?: AppPublishTogetherRead;
 }) {
   const { t } = useTranslation();
   const offer = audience?.offer;
@@ -183,7 +200,8 @@ export function PublishDialog({
   const waitsForData =
     (storedData !== undefined && storedData.status !== "ready") ||
     narrativeHolds(narrative) ||
-    (offer !== undefined && audienceLabel === undefined);
+    (offer !== undefined && audienceLabel === undefined) ||
+    (together !== undefined && !appPublishTogetherReady(together));
   // The live revision for its own audience again changes nothing: Publish waits for a change.
   const changes = appPublishMaySend(ask, offer, selected);
   const body = appPublishBody(offer ? selected : undefined, ask.revision, workspace.name, t);
@@ -242,6 +260,7 @@ export function PublishDialog({
         <AppAudienceChange offer={offer} selected={selected} workspaceName={workspace.name} />
         <div className="grid gap-3">
           <PublishNarrativeReadLead read={narrative} />
+          {together ? <AppPublishTogetherView read={together} /> : null}
           {narrative.status === "none" && offer === undefined ? (
             lists
           ) : (

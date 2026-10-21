@@ -151,6 +151,11 @@ export interface PublishReview {
    * filed (SHARE-1). Absent for other kinds and older requests.
    */
   widens?: boolean;
+  /**
+   * The Workflows an App's publish makes live with it, children first, each reviewed against
+   * its live revision (DP-3). Approving approves all of them; absent where there are none.
+   */
+  publishedWith?: PublishReview[];
 }
 
 /** The audiences an App's publish can choose, as the contract names them. */
@@ -302,6 +307,13 @@ function parseAsset(value: unknown): OperationCallAsset | undefined {
 }
 
 function parseReview(value: unknown): PublishReview | undefined {
+  const review = parseOneReview(value);
+  if (!review || !isRecord(value) || !Array.isArray(value.publishedWith)) return review;
+  const together = value.publishedWith.flatMap((entry) => parseOneReview(entry) ?? []);
+  return together.length > 0 ? { ...review, publishedWith: together } : review;
+}
+
+function parseOneReview(value: unknown): PublishReview | undefined {
   if (!isRecord(value) || typeof value.revision !== "number") return undefined;
   const kind = readText(value.kind);
   const name = readText(value.name);

@@ -152,6 +152,7 @@ export function PublishReviewBody({
       )}
       {/* The same sentence the Publish dialog leads with, then the lists behind "Details". */}
       {review.narrative ? <PublishNarrativeReadLead read={review.narrative} /> : null}
+      {review.publishedWith ? <PublishedWith reviews={review.publishedWith} /> : null}
       {review.narrative ? (
         // What approving does in general is a detail of the sentence on this publish.
         <PublishDetails>
@@ -168,6 +169,40 @@ export function PublishReviewBody({
         lists
       )}
     </section>
+  );
+}
+
+/**
+ * The Workflows an App's publish makes live with it (DP-3), children first: each with the
+ * version it makes live and its own sentence. Approving approves them all.
+ */
+function PublishedWith({ reviews }: { reviews: readonly PublishReview[] }) {
+  const { t } = useTranslation();
+  return (
+    <KeyValueList layout="stacked">
+      <KeyValue label={t("operations.publishTogether")} data-field="published-with">
+        <ul className="grid gap-3" data-testid="publish-review-published-with">
+          {reviews.map((review) => (
+            <li key={review.name} className="grid min-w-0 gap-1" data-asset={review.name}>
+              <span className="flex min-w-0 flex-wrap items-center gap-2">
+                <span className="wrap-anywhere">
+                  {t("operations.publishTogetherWorkflow", { title: review.title })}
+                </span>
+                <Badge tone={review.liveRevision === undefined ? "accent" : "neutral"}>
+                  {review.liveRevision === undefined
+                    ? t("operations.publishFirst", { number: review.revision })
+                    : t("operations.publishReplaces", {
+                        number: review.revision,
+                        live: review.liveRevision
+                      })}
+                </Badge>
+              </span>
+              {review.narrative ? <PublishNarrativeReadLead read={review.narrative} /> : null}
+            </li>
+          ))}
+        </ul>
+      </KeyValue>
+    </KeyValueList>
   );
 }
 

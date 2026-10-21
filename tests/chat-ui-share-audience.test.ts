@@ -544,13 +544,29 @@ describe("SHARE-1 fix round: the agent's App publish asks “For whom?” before
   it("reads the App, its revision, its workspace and the agent's suggestion", () => {
     expect(
       preview({ kind: "app", name: "findings", revision: 2, workspaceId: "cw_1", audience: "self" })
-    ).toEqual({ app: "findings", revision: 2, workspaceId: "cw_1", suggested: "self" });
+    ).toEqual({
+      app: "findings",
+      revision: 2,
+      workspaceId: "cw_1",
+      suggested: "self",
+      workflows: []
+    });
     expect(preview({ kind: "app", name: "findings", revision: 2 })).toEqual({
       app: "findings",
       revision: 2,
       workspaceId: undefined,
-      suggested: undefined
+      suggested: undefined,
+      workflows: []
     });
+    // DP-3: the Workflows the call makes live with the App, by name.
+    expect(
+      preview({
+        kind: "app",
+        name: "findings",
+        revision: 2,
+        workflows: [{ name: "w", revision: 3 }]
+      })
+    ).toEqual(expect.objectContaining({ workflows: ["w"] }));
     expect(preview({ kind: "app", name: "findings", revision: 2, audience: "everyone" })).toEqual(
       expect.objectContaining({ suggested: undefined })
     );

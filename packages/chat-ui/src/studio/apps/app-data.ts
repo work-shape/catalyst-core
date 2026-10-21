@@ -11,6 +11,8 @@ import {
   type AppFromPageResponse,
   type AppMode,
   type AppPreviewResponse,
+  type AppPublishReview,
+  ApiError,
   type Asset,
   type AssetSummary,
   type ConfigAssetRevision,
@@ -242,6 +244,62 @@ export function useAppPublishData(
     t,
     locale
   );
+}
+
+/** One Workflow a Publish of an App's draft makes live with it, as the review names it. */
+export type AppPublishTogetherWorkflow = AppPublishReview["workflows"][number];
+
+/** What one Publish of an App's draft makes live with it (DP-3), as the dialog reads it. */
+export interface AppPublishTogetherRead {
+  /** As the stored-data read of the same question: loading, failed or ready. */
+  status: AppPublishDataRead["status"];
+  /**
+   * The Workflows with changes their live revision does not have, children first: the
+   * Publish names each with the revision shown. Empty where there are none, for a revision
+   * other than the draft, and for a reader who may not write the App and reads no review.
+   */
+  workflows: readonly AppPublishTogetherWorkflow[];
+  retry(): void;
+}
+
+/**
+ * Reads `apps.publish_review` for the publish of an App's revision. Only a publish of the
+ * draft makes Workflows live with it; the review is of the draft, so any other revision names
+ * none. A refused read names none either: the publish then refuses an App whose Workflow is
+ * not live, as before.
+ */
+export function useAppPublishTogether(
+  app: string,
+  revision: number,
+  enabled = true
+): AppPublishTogetherRead {
+  const { apiBaseUrl, client } = useWorkspaceApiClient();
+  const query = useQuery({
+    queryKey: [...appKeys(apiBaseUrl), "publish-review", app] as const,
+    queryFn: async ({ signal }) => {
+      try {
+        return await client.apps.publish_review({ params: { app }, signal });
+      } catch (error) {
+        if (error instanceof ApiError && (error.status === 403 || error.status === 404)) {
+          return null;
+        }
+        throw error;
+      }
+    },
+    enabled,
+    staleTime: 0,
+    retry: false
+  });
+  const retry = () => void query.refetch().catch(() => undefined);
+  if (!enabled) return { status: "ready", workflows: [], retry };
+  if (query.isError) return { status: "failed", workflows: [], retry };
+  if (query.data === undefined) return { status: "loading", workflows: [], retry };
+  const review = query.data;
+  const workflows =
+    review && review.app.draftRevision === revision
+      ? review.workflows.filter((workflow) => workflow.pending)
+      : [];
+  return { status: "ready", workflows, retry };
 }
 
 /** Who a publish of an App makes it live for: its builder, its workspace or the whole instance. */
@@ -484,7 +542,13 @@ export interface AppWrites {
    * Makes the revision with this number the published one, for the audience chosen in the
    * question (SHARE-1). Without one the instance keeps the App's audience.
    */
-  publish(app: string, revision: number, audience?: AppAudience): Promise<unknown>;
+  publish(
+    app: string,
+    revision: number,
+    audience?: AppAudience,
+    /** The Workflows made live with the App, each at the revision the person was shown. */
+    workflows?: readonly { name: string; revision: number }[]
+  ): Promise<unknown>;
   /** Puts the draft back on the published revision. */
   discardDraft(app: string, expectedRevision: number): Promise<unknown>;
   remove(app: string, expectedRevision: number): Promise<unknown>;
@@ -534,11 +598,16 @@ export function useAppWrites(workspaceId: string | undefined): AppWrites {
           })
         ).finally(changed);
       },
-      publish: (app, revision, audience) =>
+      publish: (app, revision, audience, workflows) =>
         made(
           client.assets.publish({
             params: params(app),
-            body: { revision, workspaceId, ...(audience === undefined ? {} : { audience }) }
+            body: {
+              revision,
+              workspaceId,
+              ...(audience === undefined ? {} : { audience }),
+              ...(workflows?.length ? { workflows: [...workflows] } : {})
+            }
           })
         ).finally(changed),
       discardDraft: (app, expectedRevision) =>

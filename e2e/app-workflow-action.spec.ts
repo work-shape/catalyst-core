@@ -3,6 +3,7 @@ import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { FrameLocator, Page } from "@playwright/test";
 import { z } from "zod";
+import { chooseWorkspaceAudience } from "./app-audience";
 import { requestWithOrigin } from "./request-with-origin";
 import { expect, test } from "./test";
 import { apiOrigin, uiOrigin } from "./view-fixtures";
@@ -44,10 +45,10 @@ async function signIn(page: Page, person: { email: string; password: string }): 
 }
 
 /**
- * Stores and publishes, as the release would, a Workflow that starts by hand and answers the
- * page it is given. Answers the id of its asset.
+ * Stores, as the release would, a Workflow that starts by hand and answers the page it is
+ * given, without publishing it. Answers its asset and the revision of its draft.
  */
-async function publishWorkflow(root: Page, id: string): Promise<string> {
+async function saveWorkflow(root: Page, id: string): Promise<{ id: string; revision: number }> {
   const runAs = `${id}-runner`;
   const principal = await requestWithOrigin(
     root,
@@ -94,7 +95,13 @@ async function publishWorkflow(root: Page, id: string): Promise<string> {
     }
   });
   expect(saved.ok(), await saved.text()).toBe(true);
-  const stored = assetSchema.parse(await (await root.request.get(assetUrl)).json());
+  return assetSchema.parse(await (await root.request.get(assetUrl)).json());
+}
+
+/** Stores and publishes the Workflow of `saveWorkflow`. Answers the id of its asset. */
+async function publishWorkflow(root: Page, id: string): Promise<string> {
+  const stored = await saveWorkflow(root, id);
+  const assetUrl = `${apiOrigin}/api/v1/assets/workflow/${id}`;
   const published = await requestWithOrigin(root, "post", `${assetUrl}/publish`, {
     data: { revision: stored.revision }
   });
@@ -449,6 +456,77 @@ test("an App button starts a published Workflow and shows its output, also to a 
       );
     }
     await memberContext.close();
+    await rootContext.close();
+  }
+});
+
+// DP-3: one Publish makes the App and the Workflow draft it starts live together. The dialog
+// names the Workflow, new and not tested yet, before the click; after it both are published.
+// Fails before DP-3: the publish of the App refused the never-published Workflow.
+test("one Publish makes an App and the never-published Workflow it starts live together", async ({
+  page,
+  browser,
+  baseURL,
+  pageErrors
+}, testInfo) => {
+  const suffix = randomUUID().slice(0, 8);
+  const attempt = testInfo.repeatEachIndex * 10 + testInfo.retry;
+  const appId = attempt === 0 ? "visit-together" : `visit-together-${attempt}`;
+  const workflow = `app-together-${suffix}`;
+  test.setTimeout(180_000);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  page.setDefaultTimeout(30_000);
+
+  const rootContext = await browser.newContext({ baseURL });
+  await pageErrors.watch(rootContext);
+  const root = await rootContext.newPage();
+  await signIn(root, superadmin);
+  await signIn(page, builder);
+
+  try {
+    await saveWorkflow(root, workflow);
+    const created = await requestWithOrigin(page, "post", `${apiOrigin}/api/v1/workspaces`, {
+      data: { name: `Together team ${suffix}` }
+    });
+    expect(created.ok(), await created.text()).toBe(true);
+    const workspaceId = idSchema.parse(await created.json()).id;
+    const appUrl = `${apiOrigin}/api/v1/assets/app/${appId}`;
+    const written = await requestWithOrigin(page, "put", appUrl, {
+      data: {
+        workspaceId,
+        expectedRevision: null,
+        files: Object.entries(appSource({ id: appId, workflow, heading: "Visit log" })).map(
+          ([path, text]) => ({ path, text })
+        )
+      },
+      timeout: 90_000
+    });
+    expect(written.ok(), await written.text()).toBe(true);
+
+    await page.goto(`/w/${workspaceId}/app-drafts/${appId}`);
+    const edit = page.getByTestId("app-edit");
+    await edit.getByRole("button", { name: "Publish", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "Publish “Visit log”?" });
+    await chooseWorkspaceAudience(dialog);
+    const together = dialog.getByTestId("app-publish-together");
+    await expect(together).toContainText("Workflow “Visit log”");
+    await expect(together).toContainText("New");
+    await expect(together).toContainText("Not tested yet");
+    await shoot(page, "app-publish-together-dialog");
+    await dialog.getByRole("button", { name: "Publish", exact: true }).click();
+    await expect(dialog).toBeHidden();
+    await expect(edit).toContainText("Published · version 1");
+    await shoot(page, "app-publish-together-published");
+
+    const pointer = z.looseObject({ publishedRevision: z.number().optional() });
+    const read = async (url: string) => pointer.parse(await (await root.request.get(url)).json());
+    expect((await read(`${apiOrigin}/api/v1/assets/workflow/${workflow}`)).publishedRevision).toBe(
+      1
+    );
+    expect(
+      (await read(`${appUrl}?workspaceId=${workspaceId}&revision=published`)).publishedRevision
+    ).toBe(1);
+  } finally {
     await rootContext.close();
   }
 });

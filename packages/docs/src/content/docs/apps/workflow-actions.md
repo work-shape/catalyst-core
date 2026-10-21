@@ -28,6 +28,10 @@ In the App's draft a `workflow` action is not simulated: it starts a test run of
 
 An agent tries the same click with `apps.try_action` on the draft of the App its conversation is about or created. The answer names the test run (`workflowRun`, with its `runId` and the revision that runs); the agent follows it with `workflows.get_run` and `workflows.list_step_runs` and says what each step did. Nobody publishes anything in order to try it.
 
+## Publishing the App and its Workflow
+
+The App's Publish publishes the Workflow drafts it reaches with it: those its `workflow` actions name and their child Workflows, where a draft has changes its published revision does not. The Publish question lists them under **Published with it** ("Wird zusammen veröffentlicht"), each new or changed, with who changed it last and how its last test run ended. One click publishes them first, children before the Workflows that start them, and then the App, in one step: a missing right, a check or a guardrail on any of them publishes none. Where the publish waits for an approver, it is one item in the Inbox that names every Workflow, and approving it publishes them all. Publishing needs the right to publish each Workflow as well as the App. Through the API, `assets.publish` of the App names each Workflow in `workflows` with the revision the person saw; `catalyst app publish` does that for the draft.
+
 The run the App reads (kit `1.8.0` or later) then carries `mode: "test"`, `workflowRevision` (`{ kind: "draft" | "published", number }`, the number while that revision is still the draft or the published one) and `simulatedSteps`, the ids of the steps whose calls were simulated: their part of `output` is not real. The page around the App marks the result itself; an App may say so too, but needs no marker of its own. The published App never gets these fields.
 
 ## The run's output
