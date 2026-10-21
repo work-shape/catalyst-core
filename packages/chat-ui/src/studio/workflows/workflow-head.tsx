@@ -8,10 +8,11 @@ import type { WorkflowView } from "./workflow-views";
 import { BackLink, TitlePlaceholder, routeLink, type OpenRoute } from "./workflows-frame";
 
 /**
- * The head of a Workflow, on its canvas and on the list of its runs: the way back, the name,
- * "Edit with the agent", "Start now", "Copy ID" for whoever may change it, and the two tabs.
- * The tabs are addresses. Without runs on the instance there is one view and no tabs. The
- * first paragraph under them says what the Workflow does and whom every run acts as.
+ * The head of a Workflow, on its canvas, the list of its runs and its Settings: the way back,
+ * the name, "Edit with the agent", "Start now", "Copy ID" for whoever may change it, and the
+ * tabs Workflow, Runs and Settings. The tabs are addresses. Without runs on the instance, or
+ * for a reader who may not read them, there is no Runs tab. The first paragraph under them
+ * says what the Workflow does and whom every run acts as.
  */
 export function WorkflowHead({
   workspaceId,
@@ -29,8 +30,8 @@ export function WorkflowHead({
   workflowId: string;
   /** The Workflow, once its record arrived. */
   workflow: Pick<WorkflowView, "name" | "description" | "runsAs"> | undefined;
-  tab: "workflow" | "runs";
-  /** The instance runs Workflows and the reader may read this one's runs: the tabs stand. */
+  tab: "workflow" | "runs" | "settings";
+  /** The instance runs Workflows and the reader may read this one's runs: its tab stands. */
   runsShown: boolean;
   canStart: boolean;
   /** The reader may start the Workflow and the instance accepts no start of it now. */
@@ -92,22 +93,25 @@ export function WorkflowHead({
         }
         menu={edit === undefined ? undefined : <CopyIdItem id={workflowId} />}
       />
-      {runsShown ? (
-        <TabsNav label={t("workflows.tabs")} className="shrink-0 px-(--layout-gutter)">
-          <TabsLink selected={tab === "workflow"} asChild>
-            <a {...routeLink({ kind: "workflow", ...address }, onOpenRoute)}>
-              {t("workflows.tabWorkflow")}
-            </a>
-          </TabsLink>
+      <TabsNav label={t("workflows.tabs")} className="shrink-0 px-(--layout-gutter)">
+        <TabsLink selected={tab === "workflow"} asChild>
+          <a {...routeLink({ kind: "workflow", ...address }, onOpenRoute)}>
+            {t("workflows.tabWorkflow")}
+          </a>
+        </TabsLink>
+        {runsShown ? (
           <TabsLink selected={tab === "runs"} asChild>
             <a {...routeLink({ kind: "workflow-runs", ...address }, onOpenRoute)}>
               {t("workflows.sectionRuns")}
             </a>
           </TabsLink>
-        </TabsNav>
-      ) : (
-        <div aria-hidden="true" className="shrink-0 border-b" />
-      )}
+        ) : null}
+        <TabsLink selected={tab === "settings"} asChild>
+          <a {...routeLink({ kind: "workflow-settings", ...address }, onOpenRoute)}>
+            {t("workflows.tabSettings")}
+          </a>
+        </TabsLink>
+      </TabsNav>
       {/* What the Workflow does, and whom every run acts as: never the person who starts it. */}
       {lead.length === 0 ? null : <PageLead className="shrink-0 pb-3">{lead.join(" · ")}</PageLead>}
     </>

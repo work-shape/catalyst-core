@@ -50,6 +50,8 @@ export type WorkspaceRoute =
   | { kind: "workflow"; collaborationWorkspaceId: string; workflow: string; opened?: string }
   /** Every run of one Workflow. */
   | { kind: "workflow-runs"; collaborationWorkspaceId: string; workflow: string }
+  /** The Settings of one Workflow: its name, when it starts and what it asks for. */
+  | { kind: "workflow-settings"; collaborationWorkspaceId: string; workflow: string }
   /** One run of a Workflow with its steps. */
   | { kind: "workflow-run"; collaborationWorkspaceId: string; workflow: string; run: string }
   /** The person's own scheduled prompts in one workspace. */
@@ -154,6 +156,10 @@ export const areaRoutes: readonly AreaRoute[] = [
       { path: "/w/$collaborationWorkspaceId/workflows/$workflow", route: "workflow" },
       { path: "/w/$collaborationWorkspaceId/workflows/$workflow/open/$", route: "workflow" },
       { path: "/w/$collaborationWorkspaceId/workflows/$workflow/runs", route: "workflow-runs" },
+      {
+        path: "/w/$collaborationWorkspaceId/workflows/$workflow/settings",
+        route: "workflow-settings"
+      },
       { path: "/w/$collaborationWorkspaceId/workflows/$workflow/runs/$run", route: "workflow-run" }
     ]
   },
@@ -344,6 +350,7 @@ function routeOf(
           }
         : undefined;
     case "workflow-runs":
+    case "workflow-settings":
       return collaborationWorkspaceId && params.workflow
         ? { kind, collaborationWorkspaceId, workflow: params.workflow }
         : undefined;

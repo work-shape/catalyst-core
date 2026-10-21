@@ -4,6 +4,7 @@ export { CancelRunDialog, WorkflowRunPage, WorkflowRunPageView } from "./run-pag
 export { fixWithAgentPrompt } from "./fix-with-agent";
 export { LoopEntriesView, defaultEntryFilter, loopEntries } from "./loop-entries";
 export { createInstanceSource } from "./instance-source";
+export { cronSchedule, scheduleCron } from "./schedule-cron";
 export { scheduleInWords } from "./schedule-words";
 export { StepPanel, StepTranscriptView } from "./step-panel";
 export { StepSettings, StepSettingsBar } from "./step-settings";
@@ -68,6 +69,11 @@ export {
   type WorkflowPublishRightsView
 } from "./workflow-publish-rights-model";
 export { WorkflowPage, WorkflowPageView } from "./workflow-page";
+export {
+  WorkflowSettingsForm,
+  WorkflowSettingsPage,
+  WorkflowSettingsPageView
+} from "./workflow-settings";
 export { WorkflowsPage, WorkflowsPageView } from "./workflows-page";
 // The address of the area and its row in the rail, which the same tests hold.
 export { areaOfRoute, workspaceRouteFromPath, workspaceRoutePath } from "../../shared/routes";

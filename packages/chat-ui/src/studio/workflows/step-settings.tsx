@@ -39,7 +39,8 @@ import { AgentSettings } from "./step-settings-agent";
 import { CodeSettings } from "./step-settings-code";
 import { ChildWorkflowSettings, missingInputs, OperationSettings } from "./step-settings-operation";
 import { useCallableOperations, useChildWorkflows } from "./workflow-data";
-import { useRecipientNames } from "./workflows-host";
+import { routeLink } from "./workflows-frame";
+import { useRecipientNames, useWorkflowsHost } from "./workflows-host";
 
 // The Settings tab of a step (workflow-canvas 9.4): the step's form for a holder of
 // `workflow.write`. Every step has its name and what it does; a loop, a notice and the result
@@ -251,17 +252,40 @@ export function StepSettings({
         />
       ) : step.type === "output" ? (
         <ResultSettings step={step} stepId={stepId} editing={editing} under={under} />
+      ) : step.type === "trigger" ? (
+        <TriggerSettings editing={editing} />
       ) : (
         <div className="grid gap-2" data-step-settings-agent="">
-          <p className="text-body text-muted-foreground">
-            {t(
-              step.type === "trigger"
-                ? "workflows.settings.triggerElsewhere"
-                : "workflows.settings.restWithAgent"
-            )}
-          </p>
+          <p className="text-body text-muted-foreground">{t("workflows.settings.restWithAgent")}</p>
           {changeWithAgent}
         </div>
+      )}
+    </div>
+  );
+}
+
+/** The trigger has no Settings of its own: when it starts is the Workflow's Settings (9.7). */
+function TriggerSettings({ editing }: { editing: WorkflowEditing }) {
+  const { t } = useTranslation();
+  const host = useWorkflowsHost();
+  return (
+    <div className="grid gap-2" data-step-settings-trigger="">
+      <p className="text-body text-muted-foreground">{t("workflows.settings.triggerElsewhere")}</p>
+      {host === undefined ? null : (
+        <Button variant="outline" size="sm" className="w-fit" asChild>
+          <a
+            {...routeLink(
+              {
+                kind: "workflow-settings",
+                collaborationWorkspaceId: editing.workspaceId,
+                workflow: editing.workflowId
+              },
+              host.showRoute
+            )}
+          >
+            {t("workflows.settings.triggerOpenSettings")}
+          </a>
+        </Button>
       )}
     </div>
   );

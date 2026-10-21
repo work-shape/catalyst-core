@@ -205,6 +205,7 @@ export function dockKindOfRoute(route: WorkspaceRoute): string | undefined {
     case "workflow":
     case "workflow-runs":
     case "workflow-run":
+    case "workflow-settings":
       return WORKFLOW_ASSET_KIND;
     case "agents":
       return "agent";

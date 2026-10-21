@@ -15,7 +15,7 @@ import { createSampleSource } from "./sample-source";
 // the same right: every state of the screens, also those an instance's own Workflows do not
 // reach, to be looked at, photographed and tested in a browser. The
 // address says what to open: `?at=<workflow>`, `?at=<workflow>/runs`,
-// `?at=<workflow>/runs/<run>`, `?at=<workflow>/open/<child>`, with `lang=de`, and with
+// `?at=<workflow>/runs/<run>`, `?at=<workflow>/open/<child>`, `?at=<workflow>/settings`, with `lang=de`, and with
 // `as=reader` as one who reads the Workflows and may start and cancel none. Light and dark
 // are the reader's own, as everywhere in the interface.
 
@@ -35,6 +35,9 @@ function routeAt(at: string | null): WorkflowsRoute {
       opened: (at ?? "").split("/").slice(2).join("/")
     };
   }
+  if (runs === "settings") {
+    return { kind: "workflow-settings", collaborationWorkspaceId, workflow };
+  }
   if (runs !== "runs") {
     return { kind: "workflow", collaborationWorkspaceId, workflow };
   }
@@ -53,6 +56,8 @@ function address(route: WorkflowsRoute): string {
       return `${route.workflow}/runs`;
     case "workflow-run":
       return `${route.workflow}/runs/${route.run}`;
+    case "workflow-settings":
+      return `${route.workflow}/settings`;
   }
 }
 
