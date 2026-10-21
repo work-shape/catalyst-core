@@ -12,7 +12,7 @@ import { checkedServer } from "./server";
 // step of the flow reads one: the start, the callback, a refresh and a revocation. Nothing is
 // discovered and nothing registered. The settings were checked at the save: every address is
 // `https` (or `http` on the machine itself), and the client secret and the sign-in are bound to
-// these addresses' origins and the client id, so a change of them ends both.
+// these full addresses, the issuer and the client id, so a change of them ends both.
 
 /**
  * The name a setup session and a token set keep for such a server: the issuer the settings

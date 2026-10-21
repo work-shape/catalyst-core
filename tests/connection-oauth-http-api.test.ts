@@ -68,13 +68,15 @@ function providerAt(host = new URL(world.sample).host) {
 /** A runtime `http_api` Connection of the REST provider's API. */
 function restConnection(
   authScheme: "oauth" | "oauth_client",
-  oauth: Record<string, unknown> = {}
+  oauth: Record<string, unknown> = {},
+  settings: Record<string, unknown> = {}
 ): Record<string, unknown> {
   const { authorizationUrl, ...addresses } = providerAt();
   return {
     displayName: "Sample REST",
     connectorType: "http_api",
     settings: {
+      ...settings,
       baseUrl: `${world.sample}/oauth-rest/api`,
       testPath: "/customers",
       oauth: {
@@ -121,6 +123,24 @@ async function signInOf(name: string) {
       limit 1`
   );
   return row;
+}
+
+async function secretVersionOf(name: string): Promise<number | null> {
+  const [row] = await withTestSql(
+    (sql) => sql<{ version: number }[]>`
+      select s.version from secrets s join config_assets a on a.id = s.connection_asset_id
+      where a.kind = 'connection' and a.name = ${name} and s.subject = 'shared'`
+  );
+  return row?.version ?? null;
+}
+
+/** The REST Connection at the provider's own addresses, with its client secret, signed in. */
+async function signedInAgain(cookie: string) {
+  expect(await world.putConnection(REST_CONNECTION, restConnection("oauth"), cookie)).toBe(200);
+  const version = await secretVersionOf(REST_CONNECTION);
+  expect(await world.setSecret(REST_CONNECTION, world.restClientSecret, cookie, version)).toBe(200);
+  await signInFully(REST_CONNECTION, cookie);
+  expect(await signInOf(REST_CONNECTION)).toMatchObject({ state: "connected" });
 }
 
 async function secretsOf(name: string): Promise<string[]> {
@@ -190,7 +210,18 @@ describe("an http_api Connection that signs in with OAuth", () => {
     const elsewhere = providerAt(`localhost:${new URL(world.sample).port}`);
     const before = world.oauth.counts();
     const moved = restConnection("oauth", { tokenUrl: elsewhere.tokenUrl });
-    expect(await world.putConnection(REST_CONNECTION, moved, alice)).toBe(200);
+    // The provider is told once the write committed: by then the client secret is gone with
+    // the sign-in, in the same transaction, not in a cleanup after it.
+    let atRevocation: string[] | undefined;
+    world.provider.beforeRevoke = async () => {
+      atRevocation = await secretsOf(REST_CONNECTION);
+    };
+    try {
+      expect(await world.putConnection(REST_CONNECTION, moved, alice)).toBe(200);
+    } finally {
+      world.provider.beforeRevoke = undefined;
+    }
+    expect(atRevocation).toEqual([]);
     // The provider was told with the client secret of the old address, then both were gone.
     expect(world.oauth.counts().revocation - before.revocation).toBe(1);
     expect(await signInOf(REST_CONNECTION)).toMatchObject({
@@ -225,6 +256,9 @@ describe("an http_api Connection that signs in with OAuth", () => {
     for (const oauth of [
       { authorizationParams: { client_secret: "x" } },
       { authorizationParams: { resource: "https://example.test" } },
+      { authorizationParams: { request_uri: "urn:example:request" } },
+      { authorizationParams: { request: "eyJhbGciOiJub25lIn0.e30." } },
+      { authorizationParams: { response_mode: "form_post" } },
       { authorizationUrl: undefined }
     ]) {
       const definition = restConnection("oauth", oauth);
@@ -239,6 +273,75 @@ describe("an http_api Connection that signs in with OAuth", () => {
       expect(answer.statusCode, JSON.stringify(oauth)).toBe(422);
       errorSchema.parse(answer.json());
     }
+  });
+
+  it("ends the sign-in and the client secret when an address changes its path, or the issuer changes", async () => {
+    // A multi-tenant provider serves every tenant at one host (login.microsoftonline.com/<tenant>).
+    const alice = await world.signIn("alice");
+    for (const change of [
+      { tokenUrl: `${world.sample}/oauth-rest/tenant-b/token` },
+      { revocationUrl: `${world.sample}/oauth-rest/tenant-b/revoke` },
+      { issuer: `${world.sample}/oauth-rest/tenant-b` }
+    ]) {
+      await signedInAgain(alice);
+      const changed = restConnection("oauth", change);
+      expect(await world.putConnection(REST_CONNECTION, changed, alice)).toBe(200);
+      expect(await signInOf(REST_CONNECTION), JSON.stringify(change)).toMatchObject({
+        state: "revoked",
+        reason: "origin_changed",
+        secrets: 0
+      });
+    }
+  });
+
+  it("sends a refresh nowhere when a write moves the token address while the refresh runs", async () => {
+    const alice = await world.signIn("alice");
+    await signedInAgain(alice);
+    const original = providerAt();
+    const elsewhere = providerAt(`localhost:${new URL(world.sample).port}`);
+    // The writer names the old token address as the issuer, so the issuer the sign-in kept
+    // matches the new settings, and moves the token address to another admitted host.
+    const moved = restConnection("oauth", {
+      tokenUrl: elsewhere.tokenUrl,
+      issuer: original.tokenUrl
+    });
+    // The worker's refresh takes the binding's lease and reads its token set; the write lands
+    // before it reads the Connection.
+    const { connections, configAssets } = world.worker.stores;
+    const take = connections.takeConnectionBindingLease;
+    const list = configAssets.listActiveConfigAssets;
+    let leased = false;
+    let wrote = false;
+    connections.takeConnectionBindingLease = async (input) => {
+      const answer = await take.call(connections, input);
+      leased = true;
+      return answer;
+    };
+    configAssets.listActiveConfigAssets = async (input) => {
+      if (leased && !wrote) {
+        wrote = true;
+        expect(await world.putConnection(REST_CONNECTION, moved, alice)).toBe(200);
+      }
+      return list.call(configAssets, input);
+    };
+    const hostsBefore = world.oauth.restTokenHosts().length;
+    try {
+      world.oauth.expireAccessTokens();
+      const outcome = await world.call(REST_CONNECTION, "list_customers", alice);
+      answers.push(JSON.stringify(outcome.result));
+      expect(outcome.result).not.toMatchObject({ status: "done" });
+    } finally {
+      connections.takeConnectionBindingLease = take;
+      configAssets.listActiveConfigAssets = list;
+    }
+    expect(wrote).toBe(true);
+    // No token request at all after the write, least of all at the new host.
+    expect(world.oauth.restTokenHosts().slice(hostsBefore)).toEqual([]);
+    expect(await signInOf(REST_CONNECTION)).toMatchObject({
+      state: "revoked",
+      reason: "origin_changed",
+      secrets: 0
+    });
   });
 });
 
@@ -265,6 +368,28 @@ describe("an http_api Connection with the client credentials grant", () => {
     // The token is kept nowhere but in memory: the Connection holds its client secret only.
     expect(await secretsOf("machine")).toEqual(["shared"]);
     expect(await test("machine", alice)).toBe("ready");
+  });
+
+  it("calls with the person context a mapping names, which a save of the Connection keeps", async () => {
+    const alice = await world.signIn("alice");
+    const definition = (displayName: string) => ({
+      ...restConnection("oauth_client", {}, { personContextHeader: "x-audience-context" }),
+      displayName
+    });
+    expect(await world.putConnection("mapped", definition("Mapped REST"), alice)).toBe(200);
+    expect(await world.setSecret("mapped", world.restClientSecret, alice)).toBe(200);
+    const subjectId = await world.userIdOf(alice);
+    expect(await world.setPersonContext("mapped", subjectId, "tenant-a", alice)).toBe(200);
+    const first = await world.call("mapped", "list_customers", alice);
+    answers.push(JSON.stringify(first.result));
+    expect(JSON.stringify(first.result)).not.toContain("person_context_unmapped");
+    expect(first.result).toMatchObject({ status: "done" });
+    // A save that leaves the API where it was keeps the mapping.
+    expect(await world.putConnection("mapped", definition("Mapped REST API"), alice)).toBe(200);
+    const again = await world.call("mapped", "list_customers", alice);
+    answers.push(JSON.stringify(again.result));
+    expect(JSON.stringify(again.result)).not.toContain("person_context_unmapped");
+    expect(again.result).toMatchObject({ status: "done" });
   });
 
   it("answers unauthorized with a client secret the token endpoint refuses", async () => {

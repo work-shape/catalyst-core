@@ -19,6 +19,7 @@ import {
   type PlatformStores
 } from "@work-shape/catalyst-core";
 import { readConnections, type StoredConnection } from "../connection-reads";
+import { connectionOriginOf } from "../connector-context";
 import { createSecretStore, openSignInTokenSet, type SecretKeyring } from "../secret-store";
 import { scopesOf } from "./checks";
 import { clientOfSession } from "./client-registration";
@@ -319,6 +320,12 @@ export function createSignInTokens(deps: SignInTokensDeps): SignInTokens {
     }
     const settings = connection.type.settingsSchema.safeParse(connection.config.settings);
     if (!settings.success) throw connectionCallError("connection_not_configured");
+    // The Connection is read now, after the binding: a write may have landed in between. The
+    // refresh token and the client secret go only to the server of this very config, so it
+    // must still be bound to the origin the sign-in was made for (its target, the full
+    // addresses of the server it names, the issuer and the client). A write that changed one
+    // of them ended the sign-in in its transaction; nothing is sent.
+    if (connectionOriginOf(connection.type, connection.config) !== origin) throw notConnected();
     const signal = AbortSignal.timeout(SIGN_IN_REFRESH_TIMEOUT_MS);
     const fetch = createOAuthFetch({ egress: deps.egress, signal });
     let tokens;

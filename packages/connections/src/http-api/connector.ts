@@ -167,11 +167,14 @@ const oauthAddressSchema = z
   }, "must be an https address without user name, password or fragment");
 
 /**
- * The parameters of the authorization request the protocol sets itself, and the client secret,
- * which never travels through a browser. An extra parameter may name none of them.
+ * The parameters of the authorization request the protocol sets itself, the client secret,
+ * which never travels through a browser, and those that would replace or redirect the request
+ * the sign-in signs: a request object (`request`, `request_uri`, RFC 9101) and the way the
+ * answer comes back (`response_mode`). An extra parameter may name none of them.
  */
 const OAUTH_PROTOCOL_PARAMS: ReadonlySet<string> = new Set([
   "response_type",
+  "response_mode",
   "client_id",
   "client_secret",
   "redirect_uri",
@@ -179,7 +182,9 @@ const OAUTH_PROTOCOL_PARAMS: ReadonlySet<string> = new Set([
   "state",
   "code_challenge",
   "code_challenge_method",
-  "resource"
+  "resource",
+  "request",
+  "request_uri"
 ]);
 /** How many fixed extra parameters a sign-in sends. */
 const OAUTH_EXTRA_PARAMS_MAX = 8;

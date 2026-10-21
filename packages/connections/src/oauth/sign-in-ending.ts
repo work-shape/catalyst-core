@@ -18,6 +18,7 @@ import {
   type Logger
 } from "@work-shape/catalyst-core";
 import type { StoredConnection } from "../connection-reads";
+import { connectionOriginOf } from "../connector-context";
 import {
   createConnectionCredentialResolver,
   openSignInTokenSet,
@@ -104,6 +105,9 @@ export function createSignInEnding(deps: SignInEndingDeps): ConnectionSignInEndi
     if (!type?.signIn) return undefined;
     const settings = type.settingsSchema.safeParse(parsed.data.settings);
     if (!settings.success) return undefined;
+    // The provider is told only at the server the sign-in was made for: a config bound to
+    // another origin is not that server, and is sent neither the token nor the client secret.
+    if (connectionOriginOf(type, parsed.data) !== origin) return undefined;
     const tokenSet = await openSignInTokenSet(
       { clientInstanceId, keyring, store },
       { ...binding, origin }

@@ -118,6 +118,8 @@ export interface OAuthWorld {
     cookie: string,
     expectedVersion?: number | null
   ): Promise<number>;
+  /** `connections.set_person_context` of a user in the person's browser session: its status. */
+  setPersonContext(name: string, userId: string, value: string, cookie: string): Promise<number>;
   /** `connections.test` in the person's browser session: its status and its text. */
   test(name: string, cookie: string): Promise<{ status: number; text: string }>;
   /** `connections.get` in the person's browser session, as text. */
@@ -476,6 +478,20 @@ export async function createOAuthWorld(): Promise<OAuthWorld> {
         method: "PUT",
         headers: { cookie, origin: PUBLIC_URL, "content-type": "application/json" },
         body: JSON.stringify({ value, expectedVersion })
+      });
+      await response.body?.cancel();
+      return response.status;
+    },
+    async setPersonContext(name, userId, value, cookie) {
+      const response = await fetch(`${api}/api/v1/connections/${name}/person-context`, {
+        method: "PUT",
+        headers: { cookie, origin: PUBLIC_URL, "content-type": "application/json" },
+        body: JSON.stringify({
+          subjectKind: "user",
+          subjectId: userId,
+          value,
+          expectedRowVersion: null
+        })
       });
       await response.body?.cancel();
       return response.status;

@@ -230,6 +230,8 @@ export function createSampleOAuth(options: SampleOAuthOptions, log?: SampleOAuth
   };
   /** The parameters of the last authorization request beside the protocol's, for tests. */
   let lastExtraParams: Record<string, string> = {};
+  /** The `Host` of every request to the REST provider's token endpoint, for tests. */
+  const restTokenHosts: string[] = [];
   if (options.restClient) {
     clients.set(options.restClient.clientId, {
       clientId: options.restClient.clientId,
@@ -476,6 +478,7 @@ export function createSampleOAuth(options: SampleOAuthOptions, log?: SampleOAuth
       if (route === "GET /authorize") {
         authorize("rest", url, response);
       } else if (route === "POST /token") {
+        restTokenHosts.push(request.headers.host ?? "");
         json(response, 200, await token("rest", request));
         log?.(`POST ${SAMPLE_OAUTH_REST_PATH}/token 200`);
       } else if (route === "POST /revoke") {
@@ -547,6 +550,8 @@ export function createSampleOAuth(options: SampleOAuthOptions, log?: SampleOAuth
     counts: (): SampleOAuthCounts => ({ ...counts }),
     /** The parameters of the last authorization request beside the protocol's. */
     lastExtraParams: (): Record<string, string> => ({ ...lastExtraParams }),
+    /** The `Host` of every request the REST provider's token endpoint received, in order. */
+    restTokenHosts: (): string[] => [...restTokenHosts],
     /**
      * Answers a request this server serves and says so; leaves every other one.
      * The MCP endpoints of the modes stay with the caller.

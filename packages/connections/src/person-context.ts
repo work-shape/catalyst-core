@@ -9,7 +9,7 @@ import {
   type AuditActor
 } from "@work-shape/catalyst-core";
 import { readConnection, type ConnectionOperationSourceDeps } from "./connection-reads";
-import { connectionOriginOf } from "./connector-context";
+import { connectionTargetOriginOf } from "./connector-context";
 
 type Deps = Pick<ConnectionOperationSourceDeps, "clientInstanceId" | "stores" | "connectorTypes">;
 
@@ -138,7 +138,8 @@ async function configuredPersonContext(deps: Deps, name: string) {
   const { type, config } = connection;
   const parsed = type?.settingsSchema.safeParse(config.settings);
   const header = parsed?.success ? type?.personContextHeaderName?.(parsed.data) : undefined;
-  const origin = type ? connectionOriginOf(type, config) : undefined;
+  // The API's own origin, as a call and a save of the Connection compare it.
+  const origin = type ? connectionTargetOriginOf(type, config) : undefined;
   if (header === undefined || origin === undefined)
     throw connectionCallError("connection_not_configured");
   return { connection, header, origin };

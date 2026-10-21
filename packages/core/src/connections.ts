@@ -264,14 +264,6 @@ export function egressOriginOf(target: EgressTarget): string {
   return `${target.protocol}://${normalizeEgressHost(target.host)}:${target.port}`;
 }
 
-/** The origin of an address, `protocol://host:port`, as `egressOriginOf` writes one. */
-function originOfAddress(address: string): string {
-  const url = new URL(address);
-  const protocol = url.protocol.replace(/:$/u, "");
-  const port = url.port === "" ? (protocol === "https" ? 443 : 80) : Number(url.port);
-  return `${protocol}://${normalizeEgressHost(url.hostname)}:${port}`;
-}
-
 /**
  * The targets of the addresses of an authorization server a Connection names, each of which
  * the operator's egress list must admit: token, authorization and revocation. The settings
@@ -290,10 +282,11 @@ export function connectionOAuthTargets(endpoints: ConnectorOAuthEndpoints): Egre
 
 /**
  * What a Connection's own secret and its sign-in are bound to: the origin of its target and,
- * where the Connection names its authorization server itself, the origins of its token,
- * authorization and revocation addresses and its client id. A secret or a sign-in made for
- * other values is none for these, so a writer cannot have a client secret, a code or a refresh
- * token sent to another host. Holds no `|`, which the Secret Store's associated data refuses.
+ * where the Connection names its authorization server itself, the full token, authorization
+ * and revocation addresses, the issuer it names and its client id. A secret or a sign-in made
+ * for other values is none for these, so a writer cannot have a client secret, a code or a
+ * refresh token sent to another host, nor to another tenant's path on the same host. Holds no
+ * `|`, which the Secret Store's associated data refuses, and no space inside a part.
  */
 export function connectionCredentialOrigin(
   target: EgressTarget,
@@ -302,13 +295,14 @@ export function connectionCredentialOrigin(
   const origin = egressOriginOf(target);
   if (endpoints === undefined) return origin;
   const of = (address: string | undefined) =>
-    address === undefined ? "-" : originOfAddress(address);
+    address === undefined ? "-" : encodeURIComponent(new URL(address).href);
   return [
     origin,
     "oauth",
     of(endpoints.tokenUrl),
     of(endpoints.authorizationUrl),
     of(endpoints.revocationUrl),
+    of(endpoints.issuer),
     encodeURIComponent(endpoints.clientId)
   ].join(" ");
 }

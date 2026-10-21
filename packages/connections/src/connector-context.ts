@@ -187,6 +187,24 @@ export function connectionOriginOf(
   }
 }
 
+/**
+ * The origin of the Connection's target alone, `protocol://host:port`: what its person-context
+ * mappings are kept for, since the header goes to the API and to nowhere else. Nothing where
+ * the settings do not fit the type.
+ */
+export function connectionTargetOriginOf(
+  type: ConnectorTypeDefinition,
+  config: Pick<ConnectionConfig, "settings">
+): string | undefined {
+  const settings = type.settingsSchema.safeParse(config.settings);
+  if (!settings.success) return undefined;
+  try {
+    return egressOriginOf(type.target(settings.data));
+  } catch {
+    return undefined;
+  }
+}
+
 /** The handle of the Connection's own secret, which a scheme that sends one needs. */
 function storedSecretHandle(config: ConnectionConfig): string {
   if (config.secretHandle === undefined) {

@@ -33,6 +33,7 @@ import { requestConnectionDiscovery } from "../connections/connection-jobs";
 import {
   configValuesEqual,
   readDefinitionField,
+  type AssetWriteFollowUp,
   type AssetWriteSurface,
   type WorkflowAssetKind
 } from "./shared";
@@ -150,7 +151,7 @@ function oauthEndpointsOf(
 
 /**
  * What the Connection's own secret and its sign-in are bound to: its target's origin and, where
- * it names its authorization server, that server's origins and the client id.
+ * it names its authorization server, that server's full addresses, its issuer and the client id.
  */
 function credentialOriginOf(
   options: ConnectionAssetKindOptions,
@@ -405,38 +406,66 @@ export function createConnectionAssetKind(options: ConnectionAssetKindOptions): 
         ...(header === undefined ? {} : { header })
       });
       const reason = signInEndOf(options, previous, config);
-      if (reason === undefined) return undefined;
-      const ending = options.signInEnding;
-      if (ending === undefined) {
-        await endConnectionSignIn(
-          stores.connections,
-          { clientInstanceId, connectionAssetId: assetId },
-          { reason, ...(input.actor.userId === undefined ? {} : { changedBy: input.actor.userId }) }
-        );
-        return undefined;
+      let after: AssetWriteFollowUp | undefined;
+      if (reason !== undefined) {
+        const ending = options.signInEnding;
+        if (ending === undefined) {
+          await endConnectionSignIn(
+            stores.connections,
+            { clientInstanceId, connectionAssetId: assetId },
+            {
+              reason,
+              ...(input.actor.userId === undefined ? {} : { changedBy: input.actor.userId })
+            }
+          );
+        } else {
+          // Reads the token set and the client secret the provider is told with, then ends.
+          const ended = await ending.end(stores, {
+            connectionAssetId: assetId,
+            connectionName: input.name,
+            connectionRevision: input.previousRevision ?? 0,
+            config: previous,
+            reason,
+            actor: input.actor,
+            correlationId: input.correlationId
+          });
+          if (ended !== undefined) {
+            after = {
+              committed: async () => {
+                await ended.revokeAtProvider();
+              },
+              rolledBack: () => ended.discard()
+            };
+          }
+        }
       }
-      const ended = await ending.end(stores, {
-        connectionAssetId: assetId,
-        connectionName: input.name,
-        connectionRevision: input.previousRevision ?? 0,
-        config: previous,
-        reason,
-        actor: input.actor,
-        correlationId: input.correlationId
-      });
-      if (ended === undefined) return undefined;
-      return {
-        committed: async () => {
-          await ended.revokeAtProvider();
-        },
-        rolledBack: () => ended.discard()
-      };
+      // The Connection's own secret, where it no longer sends one or was entered for another
+      // origin (the target, the authorization server's addresses, its issuer or the client), is
+      // deleted with the revision that left it, in the same transaction as the sign-in's end.
+      // No call or refresh after the commit finds it, and a revert brings none back.
+      if (next.success) {
+        const moved = originMoved(options, previous, next.data);
+        if (next.data.authScheme === AUTH_SCHEME_NONE || moved) {
+          await stores.connections.deleteSecrets({
+            clientInstanceId,
+            connectionAssetId: assetId,
+            subject: SHARED_CREDENTIAL_SUBJECT
+          });
+        }
+        if (moved) {
+          // A client registered for the old server is no client of the new one.
+          await stores.connections.putConnectionOAuthClient({
+            clientInstanceId,
+            connectionAssetId: assetId,
+            oauthClient: null
+          });
+        }
+      }
+      return after;
     },
     // A change of where or how the Connection reaches its system makes what a test found
     // stale, and every write asks for a discovery, which stores nothing a write did not accept.
-    // The key of an origin the Connection left is removed here, after the commit. Should that
-    // fail, the key stays bound to the origin it was entered for, and no call resolves it for
-    // another: the removal is cleanup, not the guard.
+    // The key of an origin the Connection left went in the write's transaction (`withinWrite`).
     async afterWrite({ clientInstanceId, name, previous, config, stores }) {
       const parsed = connectionConfigSchema.safeParse(config);
       if (!parsed.success) return;
@@ -449,22 +478,6 @@ export function createConnectionAssetKind(options: ConnectionAssetKindOptions): 
       if (!asset) return;
       const connectionAssetId = asset.id;
       const authenticates = connection.authScheme !== AUTH_SCHEME_NONE;
-      const moved = originMoved(options, previous, connection);
-      if (!authenticates || moved) {
-        await stores.connections.deleteSecrets({
-          clientInstanceId,
-          connectionAssetId,
-          subject: SHARED_CREDENTIAL_SUBJECT
-        });
-      }
-      if (moved) {
-        // A client registered for the old server is no client of the new one.
-        await stores.connections.putConnectionOAuthClient({
-          clientInstanceId,
-          connectionAssetId,
-          oauthClient: null
-        });
-      }
       const origin = credentialOriginOf(options, connection);
       const configured = !authenticates || (await credentialFor(origin));
       /**
