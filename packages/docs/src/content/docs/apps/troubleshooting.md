@@ -33,4 +33,4 @@ A refused or failed call rejects with an `AppCallError` whose `code` says why. S
 
 ## What to check first
 
-When the preview shows nothing or a call fails, check the form handlers, storage availability and the declared network policy before blaming the data ([Sandbox and storage](/apps/sandbox/)).
+When the preview shows nothing or a call fails, check the form handlers, storage availability and the declared network policy before blaming the data ([Sandbox and storage](/apps/sandbox/)). When an action answers but the App shows nothing, the answer's shape is not the one the code expects, as with JSON text in `content[0].text` of an MCP tool: call the operation once yourself and compare ([Actions on a Connection](/apps/connection-actions/#try-the-operations-first)).

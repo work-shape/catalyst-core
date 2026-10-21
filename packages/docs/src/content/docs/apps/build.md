@@ -22,6 +22,8 @@ An agent writes an App's files in its execution workspace and shows the folder b
 
 A quick preview may show data the agent wrote into it. Live data comes through named actions: one file per action in the folder `actions/`, which the build compiles into the manifest. The browser calls an action by its name and nothing else: it never calls a Connection, a Data Store or a Workflow directly, and it never holds a key. See [Actions](/apps/actions/).
 
+An App that shows what a Workflow made gets it as fields, not prose: the Workflow's `agent` step returns structured JSON through its `outputSchema`, and the App lays out each field itself. A large result can come without its output (`outputTruncated`); the App then says where the run's result is, never a generic error. See [Actions that start a Workflow](/apps/workflow-actions/#the-runs-output).
+
 ## The folder
 
 ```text

@@ -2,7 +2,7 @@ import { compileJsonSchema } from "@work-shape/catalyst-connections";
 import { isJsonObject, type JsonObject, type JsonValue } from "@work-shape/catalyst-core";
 
 /** The keys an agent output schema may hold at any level. */
-const AGENT_OUTPUT_SCHEMA_KEYS = [
+export const AGENT_OUTPUT_SCHEMA_KEYS: readonly string[] = [
   "type",
   "properties",
   "required",

@@ -64,11 +64,9 @@ Click **Test connection** ("Verbindung testen"). The **Status** shows **Ready** 
 
 ## Give an agent the tools
 
-1. In **Studio**, open **Agents** ("Agenten") and the agent.
-2. Go to the **Tools** section ("Werkzeuge"). Under **Connections** ("Verbindungen") there is a group for your Connection.
-3. Tick the operations this agent may use, and save.
+**Give to an agent** ("Einem Agenten geben") gives all the operations allowed for agents to one agent in one step. It is offered on the Connection's page after you approve operations, and as a card in a chat when an agent offers it: pick the agent and confirm. An agent that builds an App or a Workflow on the Connection offers you this card for itself first, so it can try the operations before it builds.
 
-Only operations that are ready and allowed for agents appear here.
+To give only some of the operations, open the agent in **Studio > Agents** ("Agenten"), go to **Tools** ("Werkzeuge"), tick the operations under **Connections** ("Verbindungen") and save. Only operations that are ready and allowed for agents appear there.
 
 ## Let people use it
 

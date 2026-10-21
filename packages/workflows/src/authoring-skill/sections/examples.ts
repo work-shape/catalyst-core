@@ -89,6 +89,88 @@ steps:
         ref: { step: each_client, path: failed }`
   },
   {
+    title: "An agent step whose structured answer an App shows",
+    yaml: `id: weekly-briefing
+name: Weekly briefing
+inputs:
+  type: object
+  properties:
+    notes:
+      type: string
+  required: [notes]
+outputs:
+  type: object
+  properties:
+    priorities:
+      type: array
+    decisions:
+      type: array
+    sources:
+      type: array
+steps:
+  - id: start
+    name: Start by hand
+    type: trigger
+    triggers:
+      - kind: manual
+  - id: brief
+    name: Write the briefing
+    type: agent
+    instructions: Read the notes and return the week's priorities, the decisions taken and the sources you used.
+    input:
+      notes:
+        ref: { step: start, path: input.notes }
+    inputSchema:
+      type: object
+      properties:
+        notes:
+          type: string
+    outputSchema:
+      type: object
+      properties:
+        priorities:
+          type: array
+          description: At most five, the most urgent first.
+          items:
+            type: object
+            properties:
+              title:
+                type: string
+              level:
+                type: string
+                enum: [high, medium, low]
+            required: [title, level]
+            additionalProperties: false
+        decisions:
+          type: array
+          items:
+            type: string
+        sources:
+          type: array
+          items:
+            type: object
+            properties:
+              title:
+                type: string
+              url:
+                type: string
+                description: The full address of the source.
+            required: [title]
+            additionalProperties: false
+      required: [priorities, decisions, sources]
+      additionalProperties: false
+  - id: result
+    name: Result
+    type: output
+    input:
+      priorities:
+        ref: { step: brief, path: priorities }
+      decisions:
+        ref: { step: brief, path: decisions }
+      sources:
+        ref: { step: brief, path: sources }`
+  },
+  {
     title: "A schedule and a literal value in a mapping",
     yaml: `id: nightly-check
 name: Nightly check
