@@ -38,6 +38,11 @@ import { BuildHistory } from "./build-history";
 import { assetConfigTitle, type VisibleBuildKind } from "./build-model";
 import { formatDateTime } from "../../shared/locale-format";
 import { useBuildEditWithAgent } from "./build-edit-with-agent";
+import {
+  PublishQuestionLines,
+  publishQuestionHolds,
+  usePublishQuestion
+} from "./build-publish-question";
 import { readBuildRefusal, type BuildWriteOutcome } from "./build-refusals";
 import { AGENT_ASSET_KIND, buildWorkspaceName, type BuildRights } from "../../shared/build-rights";
 
@@ -438,6 +443,13 @@ function LoadedAssetPage({
   const [publishing, setPublishing] = useState(false);
   const [unsaved, setUnsaved] = useState(false);
   const address = { kind: entry.kind, name: stored.name };
+  const readQuestion = source.publishQuestion;
+  const { question, ask } = usePublishQuestion(
+    entry.asksBeforePublish && readQuestion
+      ? // Of the revision the publish names, not of a draft saved since elsewhere.
+        () => readQuestion(address.kind, address.name, stored.revision)
+      : undefined
+  );
   // An asset that ships with the platform is changed by a release alone, whoever reads it.
   const shippedTitle = entry.shippedTitle?.(stored);
   const shipped = shippedTitle !== undefined;
@@ -629,7 +641,10 @@ function LoadedAssetPage({
                 data-build-publish=""
                 disabled={unsaved}
                 title={unsaved ? t("build.publishSaveFirst") : undefined}
-                onClick={() => setPublishOpen(true)}
+                onClick={() => {
+                  ask();
+                  setPublishOpen(true);
+                }}
               >
                 <Send aria-hidden="true" />
                 {t("build.publish")}
@@ -717,7 +732,9 @@ function LoadedAssetPage({
               ) : null}
             </>
           ) : failure ? (
-            <FormNotice tone="error">{failure}</FormNotice>
+            <FormNotice tone="error" data-build-failure="">
+              {failure}
+            </FormNotice>
           ) : restored !== undefined ? (
             <Banner
               tone="success"
@@ -794,12 +811,14 @@ function LoadedAssetPage({
         title={t("build.publishTitle", { name: assetConfigTitle(stored, locale) })}
         confirmLabel={t("build.publish")}
         loading={publishing}
+        confirmDisabled={publishQuestionHolds(question)}
         onConfirm={() => {
           publish().catch(() => undefined);
         }}
         onClose={() => setPublishOpen(false)}
       >
         {t("build.publishDescription")}
+        <PublishQuestionLines question={question} onRetry={ask} />
       </ConfirmDialog>
       <ConfirmDialog
         open={loadAsked}

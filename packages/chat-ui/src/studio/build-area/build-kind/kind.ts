@@ -59,6 +59,11 @@ interface BuildKindBase {
    * asset, where the instance offers an agent that builds assets.
    */
   editsWithAgent?: true;
+  /**
+   * The publish dialog reads the saved draft's publish question again and lists its lines, as
+   * who will find what through a synced source: the question the page loaded may be stale.
+   */
+  asksBeforePublish?: true;
 }
 
 /**

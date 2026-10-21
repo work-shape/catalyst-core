@@ -125,6 +125,8 @@ export interface KnowledgeBases {
     assetId: string;
     scope: AssetScope;
     config: unknown;
+    /** The reader's language. English without it. */
+    locale?: LocaleCode;
   }): Promise<string[]>;
 }
 

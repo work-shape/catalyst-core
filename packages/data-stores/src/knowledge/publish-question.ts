@@ -3,6 +3,7 @@ import {
   KNOWLEDGE_BASE_ACTIONS,
   type AssetScope,
   type ClientInstanceId,
+  type LocaleCode,
   type PlatformStores
 } from "@work-shape/catalyst-core";
 import { knowledgeBaseDefinitionSchema } from "./definition";
@@ -12,7 +13,7 @@ const AUDIENCE_PAGE_USERS = 200;
 export async function knowledgePublishQuestion(
   stores: PlatformStores,
   clientInstanceId: ClientInstanceId,
-  input: { assetId: string; scope: AssetScope; config: unknown }
+  input: { assetId: string; scope: AssetScope; config: unknown; locale?: LocaleCode }
 ): Promise<string[]> {
   const definition = knowledgeBaseDefinitionSchema.parse(input.config);
   if (!definition.sources?.length) return [];
@@ -66,8 +67,13 @@ export async function knowledgePublishQuestion(
           subject: "shared"
         })
       : undefined;
+    const account = binding?.accountLabel ?? source.connection;
+    const folders = source.folders.join(", ");
+    const one = source.folders.length === 1;
     lines.push(
-      `${audience} people with access to ${definition.title} can find everything in folders ${source.folders.join(", ")}, read with the shared account ${binding?.accountLabel ?? source.connection}. Their own rights at the source do not apply.`
+      input.locale === "de"
+        ? `${audience} ${audience === 1 ? "Person" : "Personen"} mit Zugriff auf „${definition.title}“ ${audience === 1 ? "findet" : "finden"} alles ${one ? "im Ordner" : "in den Ordnern"} ${folders}, gelesen mit dem gemeinsamen Konto ${account}. Die eigenen Rechte dieser Personen in der Quelle gelten hier nicht.`
+        : `${audience} ${audience === 1 ? "person" : "people"} with access to “${definition.title}” can find everything in ${one ? "folder" : "folders"} ${folders}, read with the shared account ${account}. Their own rights at the source do not apply.`
     );
   }
   return lines;

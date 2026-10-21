@@ -275,7 +275,11 @@ export function createConnectionAssetKind(options: ConnectionAssetKindOptions): 
           origin: connection.origin,
           enabled: connection.enabled,
           // Only picks the icon a list shows.
-          ...(connection.service === undefined ? {} : { service: connection.service })
+          ...(connection.service === undefined ? {} : { service: connection.service }),
+          // A Knowledge Base can sync documents through it: its page offers it as a source.
+          ...(options.connectorTypes.get(connection.connectorType)?.documentSource === undefined
+            ? {}
+            : { documentSource: true })
         }
       })
     }),

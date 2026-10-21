@@ -134,6 +134,8 @@ export function knowledgeBaseKindOn(useSource: () => KnowledgeBaseSource): Build
     missingText: "knowledge.missing",
     icon: "knowledge_base",
     editsWithAgent: true,
+    // A synced source names who finds what in it, with which account (SRC-2).
+    asksBeforePublish: true,
     rowText: (asset) => asset.description,
     badges: (asset) => <KnowledgeBaseRowFacts asset={asset} useSource={useSource} />,
     Editor: KnowledgeBaseAssetEditor

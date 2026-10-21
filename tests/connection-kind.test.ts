@@ -11,8 +11,12 @@ import {
   createConnectionSecretHandle,
   createConnectorTypeRegistry,
   findConnectorTypeIssues,
-  type JsonObject
+  type ConnectorTypeDefinition,
+  type JsonObject,
+  type JsonValue
 } from "@work-shape/catalyst-core";
+import { createEgressChecker, createFixtureDocumentSource } from "@work-shape/catalyst-connections";
+import { createConnectionAssetKind } from "@work-shape/catalyst-server";
 import { agent, clientInstanceId, errorSchema } from "./support/access-instance";
 import { assetPageSchema } from "./support/asset-operations";
 import {
@@ -812,5 +816,26 @@ describe("the module connections", () => {
     expect(assetPageSchema.parse(listed.json()).items.map((item) => item.name)).toEqual([
       "outside"
     ]);
+  });
+});
+
+describe("a Connection a Knowledge Base can sync documents through", () => {
+  it("is marked in the list, so the Knowledge Base page offers it as a source (SRC-2)", () => {
+    const folders: ConnectorTypeDefinition = {
+      ...fixtureConnectorType,
+      type: "folders",
+      documentSource: createFixtureDocumentSource({ secret: "test", pageSize: 10 }).capability
+    };
+    const kind = createConnectionAssetKind({
+      connectorTypes: createConnectorTypeRegistry([fixtureConnectorType, folders]),
+      egress: createEgressChecker({ allow: [], resolve: () => Promise.resolve([]) })
+    });
+    const summary = (overrides: Record<string, JsonValue | undefined>) =>
+      kind.summarize(connectionConfigSchema.parse(connection("handbook", overrides)));
+    expect(summary({ connectorType: "folders" }).attributes).toMatchObject({
+      connectorType: "folders",
+      documentSource: true
+    });
+    expect(summary({}).attributes).not.toHaveProperty("documentSource");
   });
 });

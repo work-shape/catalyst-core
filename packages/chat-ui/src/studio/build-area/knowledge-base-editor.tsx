@@ -32,6 +32,7 @@ import { ReadState } from "./data-store-read-state";
 import { KnowledgeBaseAgents, KnowledgeBaseHolders } from "./knowledge-base-access";
 import { KnowledgeStatus, KnowledgeTestQuery } from "./knowledge-base-checks";
 import { KnowledgeDocuments } from "./knowledge-base-documents";
+import { KnowledgeSourcesSection } from "./knowledge-base-sources";
 import { KnowledgeTestSearch } from "./knowledge-base-test-search";
 import {
   knowledgeBaseFormToConfig,
@@ -245,6 +246,31 @@ export function KnowledgeBaseEditor({
         </>
       )
     },
+    ...(documents && source.useSourceConnections
+      ? [
+          {
+            id: "sources",
+            label: t("knowledgeSources.title"),
+            description: t("knowledgeSources.description"),
+            count: form.sources.length,
+            refusalField: "sources" as const,
+            body: (
+              <>
+                <KnowledgeSourcesSection
+                  source={source}
+                  knowledgeBase={asset?.name}
+                  published={published}
+                  owner={frame.owner}
+                  sources={form.sources}
+                  canWrite={canWrite}
+                  onChange={(sources) => update({ sources })}
+                />
+                <FieldRefusals messages={refusalsOf(outcome, "sources")} />
+              </>
+            )
+          }
+        ]
+      : []),
     ...flowSections,
     ...(documents
       ? [

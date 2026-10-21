@@ -45,6 +45,11 @@ export const build = defineTranslations({
     "build.publishDescription":
       "The saved draft becomes the version everyone who uses it gets, from now on. Unsaved changes are not part of it.",
     "build.publishFailed": "The draft could not be published.",
+    "build.publishRaises": "What this publish changes",
+    "build.publishQuestionLoading": "Reading what this publish changes …",
+    "build.publishQuestionFailed":
+      "What this publish changes could not be read. Read it again before you publish.",
+    "build.publishQuestionRetry": "Read again",
     "build.deleteFailed": "It could not be deleted. Try again.",
     "build.refusedDataStoreInUse":
       "This data store is still in use, so nothing was deleted. Stop using it in the apps, workflows, agents and knowledge bases that use it, then delete it.",
@@ -195,6 +200,11 @@ export const build = defineTranslations({
     "build.publishDescription":
       "Der gespeicherte Entwurf wird ab jetzt die Version, die alle bekommen, die damit arbeiten. Ungespeicherte Änderungen gehören nicht dazu.",
     "build.publishFailed": "Der Entwurf konnte nicht veröffentlicht werden.",
+    "build.publishRaises": "Was diese Veröffentlichung ändert",
+    "build.publishQuestionLoading": "Lese, was diese Veröffentlichung ändert …",
+    "build.publishQuestionFailed":
+      "Was diese Veröffentlichung ändert, ließ sich nicht lesen. Lies es erneut, bevor du veröffentlichst.",
+    "build.publishQuestionRetry": "Erneut lesen",
     "build.deleteFailed": "Das ließ sich nicht löschen. Versuch es noch einmal.",
     "build.refusedDataStoreInUse":
       "Dieser Datenspeicher wird noch verwendet, daher wurde nichts gelöscht. Entferne ihn aus den Apps, Workflows, Agenten und Wissensbasen, die ihn verwenden, und lösche ihn dann.",

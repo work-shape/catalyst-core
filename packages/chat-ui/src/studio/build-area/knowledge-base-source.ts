@@ -37,6 +37,22 @@ export type KnowledgeQueryAnswer = Awaited<ReturnType<ApiClient["knowledge_bases
 export type KnowledgeSearchAnswer = Awaited<ReturnType<ApiClient["knowledge_bases"]["search"]>>;
 export type KnowledgeSearchPassage = KnowledgeSearchAnswer["passages"][number];
 
+/** The synced sources of a published Knowledge Base, as `knowledge_bases.sources` answers them. */
+export type KnowledgeSources = Awaited<ReturnType<ApiClient["knowledge_bases"]["sources"]>>;
+export type KnowledgeSourceStatus = KnowledgeSources["sources"][number];
+/** Why items of a source failed, as the sources read counts them. */
+export type KnowledgeSourceFailureCode = KnowledgeSourceStatus["failures"][number]["code"];
+
+/**
+ * Whether a source syncs or waits for its first sync, as right after a publish adds it: the
+ * page then reads the sources again every few seconds.
+ */
+export function sourcesStillSyncing(sources: KnowledgeSources): boolean {
+  return sources.sources.some(
+    (source) => source.running !== undefined || source.last === undefined
+  );
+}
+
 /** One document of a Knowledge Base that keeps documents, as `knowledge_bases.list_documents` answers it. */
 export type KnowledgeDocument = Awaited<
   ReturnType<ApiClient["knowledge_bases"]["list_documents"]>
@@ -92,6 +108,8 @@ const OPENABLE_FILES_PAGE_SIZE = 50;
 
 /** How many Data Stores of each owner one page of the chooser asks the instance for. */
 const DATA_STORE_CHOICE_PAGE_SIZE = 50;
+/** How many Connections of each owner one page of the source chooser asks the instance for. */
+const CONNECTION_CHOICE_PAGE_SIZE = 50;
 /** How many Knowledge Bases of each owner one page of an agent's chooser asks the instance for. */
 const KNOWLEDGE_BASE_CHOICE_PAGE_SIZE = 50;
 
@@ -231,6 +249,32 @@ export interface KnowledgeBaseSource {
     knowledgeBase: string,
     enabled: boolean
   ): KnowledgeRead<KnowledgeDocumentSummary | null>;
+  /**
+   * A hook: the Connections a source of the Knowledge Base can sync documents through whose name
+   * or id holds `search`, those of the workspace `owner` names first. Absent where the page
+   * offers no synced sources.
+   */
+  useSourceConnections?(
+    search: string,
+    owner: string | undefined
+  ): KnowledgeRead<PagedItems<KnowledgeChoice>>;
+  /**
+   * A hook: the state of each synced source of the published revision, read again every few
+   * seconds while one syncs, and anew once another revision is published. Without a published
+   * revision it reads nothing and stays loading.
+   */
+  useSources?(
+    knowledgeBase: string,
+    publishedRevision: number | undefined
+  ): KnowledgeRead<KnowledgeSources>;
+  /** Syncs the changes of one source now; a sync that runs already is joined. */
+  syncSource?(knowledgeBase: string, source: string): Promise<KnowledgeCall<unknown>>;
+  /** Fetches and indexes again the failed items of one source that failed for `failureCode`. */
+  retrySource?(
+    knowledgeBase: string,
+    source: string,
+    failureCode: KnowledgeSourceFailureCode
+  ): Promise<KnowledgeCall<unknown>>;
 }
 
 /** What the first page of documents says of all of them. */
@@ -414,6 +458,59 @@ export function useKnowledgeBaseSource(): KnowledgeBaseSource {
           ).summary ?? null,
         { enabled }
       ),
+    useSourceConnections: (search, owner) => {
+      const read = knowledgeReadOf(
+        useOwnedChoices(
+          client,
+          key("choice", "connection", owner ?? "", search),
+          { kind: "connection", owner, search, limit: CONNECTION_CHOICE_PAGE_SIZE },
+          (asset) => (asset.attributes?.documentSource === true ? toKnowledgeChoice(asset) : null)
+        )
+      );
+      // Only a Connection whose type is a document source can be one.
+      return read.status === "ready"
+        ? {
+            status: "ready",
+            data: {
+              ...read.data,
+              items: read.data.items.filter((item): item is KnowledgeChoice => item !== null)
+            }
+          }
+        : read;
+    },
+    useSources: (knowledgeBase, publishedRevision) =>
+      useRead(
+        key("sources", knowledgeBase, publishedRevision ?? ""),
+        (signal) => client.knowledge_bases.sources({ params: { knowledgeBase }, signal }),
+        { enabled: publishedRevision !== undefined, pollWhile: sourcesStillSyncing }
+      ),
+    syncSource: (knowledgeBase, source) =>
+      called(async () => {
+        const outcome = await client.knowledge_bases.sync({
+          params: { knowledgeBase },
+          body: { source }
+        });
+        // A sync answers its Operation Run at once, still running: only one that waits for
+        // somebody's decision has not started.
+        if (outcome.status !== "done" && outcome.run.status !== "running") {
+          throw new PendingApprovalError();
+        }
+        await queryClient.invalidateQueries({ queryKey: key("sources", knowledgeBase) });
+        return outcome.status === "done" ? outcome.output : outcome.run;
+      }),
+    retrySource: (knowledgeBase, source, failureCode) =>
+      called(async () => {
+        const outcome = await client.knowledge_bases.retry_documents({
+          params: { knowledgeBase },
+          body: { source, failureCode }
+        });
+        if (outcome.status !== "done") throw new PendingApprovalError();
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: key("sources", knowledgeBase) }),
+          queryClient.invalidateQueries({ queryKey: key("documents", knowledgeBase) })
+        ]);
+        return outcome.output;
+      }),
     useOpenableFiles: (search, enabled) => {
       const workspaceId = activeWorkspace?.id;
       const read = useOpenableFiles(

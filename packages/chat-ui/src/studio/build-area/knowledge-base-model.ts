@@ -5,6 +5,11 @@ import {
 } from "@work-shape/catalyst-core";
 import type { BadgeTone } from "@work-shape/catalyst-ui";
 import type { TranslationKey } from "../../shared/i18n";
+import {
+  knowledgeSourcesFromConfig,
+  knowledgeSourcesToConfig,
+  type KnowledgeSourceForm
+} from "./knowledge-sources-model";
 import type {
   KnowledgeBaseState,
   KnowledgeDocument,
@@ -12,7 +17,8 @@ import type {
 } from "./knowledge-base-source";
 
 // The form of a Knowledge Base's page and its definition. The definition is the whole config
-// of a revision: what the form does not show, the instance does not take either.
+// of a revision: what the form does not show, such as document types or an extraction budget
+// from kb.yaml, it keeps as it was read and writes back unchanged.
 
 /** One table the Knowledge Base describes, with the sentence an agent reads about a row of it. */
 export interface KnowledgeTableForm {
@@ -46,7 +52,22 @@ export interface KnowledgeBaseForm {
   /** The id of the Data Store whose tables it describes. Empty until one is chosen. */
   dataStore: string;
   tables: KnowledgeTableForm[];
+  /** The synced sources of a Knowledge Base of documents, in the definition's order. */
+  sources: KnowledgeSourceForm[];
+  /** What the definition holds beside what the form shows, written back as it was read. */
+  kept: Record<string, unknown>;
 }
+
+/** The members of a definition the form shows and writes itself. */
+const FORM_MEMBERS = new Set([
+  "name",
+  "title",
+  "description",
+  "methods",
+  "backend",
+  "tables",
+  "sources"
+]);
 
 function text(config: Record<string, unknown>, key: string): string {
   const value = config[key];
@@ -78,7 +99,9 @@ export function knowledgeBaseConfigToForm(config: Record<string, unknown>): Know
       return typeof name === "string"
         ? [{ name, description: typeof description === "string" ? description : "" }]
         : [];
-    })
+    }),
+    sources: knowledgeSourcesFromConfig(config.sources),
+    kept: Object.fromEntries(Object.entries(config).filter(([key]) => !FORM_MEMBERS.has(key)))
   };
 }
 
@@ -94,9 +117,15 @@ export function knowledgeBaseFormToConfig(form: KnowledgeBaseForm): Record<strin
   };
   if (form.holds === "documents") {
     // A definition without methods searches by both, as the instance reads it: it stays so.
-    return { ...about, ...(form.methods.length > 0 ? { methods: form.methods } : {}) };
+    return {
+      ...form.kept,
+      ...about,
+      ...(form.methods.length > 0 ? { methods: form.methods } : {}),
+      ...(form.sources.length > 0 ? { sources: knowledgeSourcesToConfig(form.sources) } : {})
+    };
   }
   return {
+    ...form.kept,
     ...about,
     methods: ["structured"],
     backend: { dataStore: form.dataStore },
@@ -122,7 +151,9 @@ export function startedKnowledgeBaseForm(start: {
     holds: "documents",
     methods: [...NEW_DOCUMENT_METHODS],
     dataStore: "",
-    tables: []
+    tables: [],
+    sources: [],
+    kept: {}
   };
 }
 

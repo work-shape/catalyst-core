@@ -173,6 +173,11 @@ export interface BuildSource {
   exists(kind: string, name: string): Promise<boolean | undefined>;
   /** Whether a new asset of the kind could take the name, where Studio would make it. */
   checkName(kind: string, name: string): Promise<NameCheckAnswer>;
+  /**
+   * What publishing the asset's saved `revision` raises, in the reader's language, read now.
+   * Absent where the source asks nothing before a publish.
+   */
+  publishQuestion?(kind: string, name: string, revision: number): Promise<readonly string[]>;
   writes: BuildWrites;
   /**
    * The owner Studio works in for a kind a workspace can own: lists, reads and writes of such
@@ -526,6 +531,13 @@ export function useBuildSource(): BuildSource {
         (error: unknown) => (apiErrorCode(error) === "NOT_FOUND" ? false : undefined)
       ),
     checkName: (kind, name) => writes.checkName({ kind, name, ...inScope(kind) }),
+    publishQuestion: async (kind, name, revision) =>
+      (
+        await client.assets.get({
+          params: { kind, name },
+          query: { ...inScope(kind), revision: String(revision) }
+        })
+      ).publishQuestion ?? [],
     writes: {
       put: (input) =>
         made(client, writes.put({ ...input, ...inScope(input.kind) })).finally(changed(input.kind)),

@@ -144,7 +144,11 @@ export {
   knowledgeBaseFormToConfig,
   startedKnowledgeBaseForm
 } from "./knowledge-base-model";
-export { documentsStillIndexing, knowledgeStateStillChanging } from "./knowledge-base-source";
+export {
+  documentsStillIndexing,
+  knowledgeStateStillChanging,
+  sourcesStillSyncing
+} from "./knowledge-base-source";
 export type {
   KnowledgeBaseSource,
   KnowledgeBaseState,
@@ -153,8 +157,25 @@ export type {
   KnowledgeHoldersRead,
   KnowledgeOpenableFile,
   KnowledgeRead,
-  KnowledgeSearchAnswer
+  KnowledgeSearchAnswer,
+  KnowledgeSources,
+  KnowledgeSourceStatus
 } from "./knowledge-base-source";
+export {
+  knowledgeSourcesFromConfig,
+  knowledgeSourcesToConfig,
+  newKnowledgeSource,
+  newSourceId,
+  sourceFolderIds,
+  type KnowledgeSourceForm
+} from "./knowledge-sources-model";
+export { sourceFailureText, sourceItemCounts, sourceStateView } from "./knowledge-source-status";
+export { KnowledgeSourcesSection } from "./knowledge-base-sources";
+export {
+  PublishQuestionLines,
+  publishQuestionHolds,
+  type PublishQuestionRead
+} from "./build-publish-question";
 export {
   connectionToolTitle,
   connectionToolsView,

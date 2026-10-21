@@ -23,6 +23,7 @@ import { common } from "./common";
 import { configAssets } from "./config-assets";
 import { connectionCreate } from "./connection-create";
 import { connectionTyped } from "./connection-typed";
+import { knowledgeSources } from "./knowledge-sources";
 import { connectionGive } from "./connection-give";
 import { connectionPage } from "./connection-page";
 import { connectionSignIn } from "./connection-sign-in";
@@ -86,6 +87,7 @@ export const translations = combineTranslations(common)
   .and(connectionPage)
   .and(connectionSignIn)
   .and(connectionTyped)
+  .and(knowledgeSources)
   .and(connections)
   .and(conversation)
   .and(dataStores)
