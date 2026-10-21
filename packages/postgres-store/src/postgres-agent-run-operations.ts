@@ -1,7 +1,10 @@
 import { lockAgentRunConversations } from "./postgres-agent-run-locks";
 import { lockParentRunsOf, settleEndedAgentRuns } from "./postgres-agent-run-lineage";
 import { requestAgentRunCancellation } from "./postgres-agent-run-cancellation";
-import { decideWaitingToolCall } from "./postgres-agent-run-decision-operations";
+import {
+  decideWaitingToolCall,
+  declineConfirmationsForSteer
+} from "./postgres-agent-run-decision-operations";
 import {
   appendClaimedAgentRunEnd,
   appendClaimedAgentRunMessage,
@@ -208,9 +211,11 @@ async function steersInto(
   return !attachment;
 }
 
+/** `queued` is called when a steer declined a call and so queued its waiting run again. */
 async function prepareConversationRunStart(
   db: PostgresConnection,
-  input: PrepareConversationRunStartInput
+  input: PrepareConversationRunStartInput,
+  queued: () => void
 ): Promise<ConversationRunStartResult> {
   return db.transaction(async (tx) => {
     if (!(await lockActiveConversation(tx, input.clientInstanceId, input.conversationId))) {
@@ -229,16 +234,13 @@ async function prepareConversationRunStart(
       )
       .limit(1);
     if (activeRun) {
-      if (input.followUp && !input.dispatchFollowUpId)
-        return {
-          followUp: await queueFollowUp(
-            tx,
-            input,
-            input.followUp === "steer" && (await steersInto(tx, activeRun, input))
-              ? activeRun.id
-              : undefined
-          )
-        };
+      if (input.followUp && !input.dispatchFollowUpId) {
+        const steers = input.followUp === "steer" && (await steersInto(tx, activeRun, input));
+        const followUp = await queueFollowUp(tx, input, steers ? activeRun.id : undefined);
+        // A steer while the run waits on its person's confirmation declines that call.
+        if (steers) await declineConfirmationsForSteer(tx, activeRun, queued);
+        return { followUp };
+      }
       throw new AppError("CONFLICT", "Conversation already has an active agent run");
     }
 
@@ -722,8 +724,11 @@ export function createPostgresAgentRunsStore(
   async function prepare(
     input: PrepareConversationRunStartInput
   ): Promise<ConversationRunStartResult> {
-    const result = await prepareConversationRunStart(db, input);
-    if ("run" in result && result.run.status === "queued") enqueued();
+    let resumed = false;
+    const result = await prepareConversationRunStart(db, input, () => {
+      resumed = true;
+    });
+    if (resumed || ("run" in result && result.run.status === "queued")) enqueued();
     return result;
   }
   return {

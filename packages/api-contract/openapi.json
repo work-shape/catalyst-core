@@ -42879,7 +42879,30 @@
               "source"
             ]
           },
-          "attachmentManifest": {}
+          "attachmentManifest": {},
+          "steered": {
+            "type": "object",
+            "properties": {
+              "runId": {
+                "type": "string"
+              },
+              "followUpId": {
+                "type": "string"
+              },
+              "authorUserId": {
+                "type": "string"
+              },
+              "typedAt": {
+                "$ref": "#/components/schemas/Timestamp"
+              }
+            },
+            "required": [
+              "runId",
+              "followUpId",
+              "authorUserId",
+              "typedAt"
+            ]
+          }
         },
         "required": [
           "version",

@@ -1,4 +1,4 @@
-import { agentRunProjectionSchema } from "@work-shape/catalyst-api-contract";
+import { agentRunProjectionSchema, messageSchema } from "@work-shape/catalyst-api-contract";
 import type { AgentRunProjection, Message } from "@work-shape/catalyst-api-client";
 import { describe, expect, it } from "vitest";
 import {
@@ -219,6 +219,20 @@ describe("a steered message in the thread", () => {
       "msg_step",
       "msg_steer",
       "msg_final"
+    ]);
+  });
+
+  it("stands once after the rows were read through the API's contract", () => {
+    // The client parses what the API answers: a steer that lost its delivery there was shown
+    // a second time, and the thread broke on the repeated id.
+    const read = storedRows.map((row) => messageSchema.parse(row) as Message);
+    const shown = toUiMessages(read, undefined, { [runId]: steeredProjection("completed", true) });
+    expect(new Set(shown.map((message) => message.id)).size).toBe(shown.length);
+    expect(shape(shown)).toEqual([
+      { role: "user", text: "Go" },
+      { role: "assistant", text: "Looking at the house. | dynamic-tool" },
+      { role: "user", text: "Also check the attic" },
+      { role: "assistant", text: "The attic is dry." }
     ]);
   });
 });

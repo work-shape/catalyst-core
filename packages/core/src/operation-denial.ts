@@ -60,7 +60,16 @@ export type OperationDenial =
       guardrailTitle?: string;
       guardrailReason?: string;
     }
-  | { kind: "declined"; by: string; comment?: string };
+  | {
+      kind: "declined";
+      by: string;
+      comment?: string;
+      /**
+       * `steered`: the run's person sent a new message while the call waited for their
+       * confirmation, and the message declined it (FU-2). The agent reads it right after.
+       */
+      reason?: "steered";
+    };
 
 /** The error a refused call answers with: `403` and a code that names what refused it. */
 export function operationDenialError(denial: OperationDenial): AppError {
@@ -115,6 +124,13 @@ export function operationDenialError(denial: OperationDenial): AppError {
         ...(denial.guardrailReason === undefined ? {} : { guardrailReason: denial.guardrailReason })
       });
     case "declined":
+      if (denial.reason === "steered") {
+        return new AppError(
+          "DECLINED",
+          "The user sent a new message instead of confirming this call. Nothing ran. Their message follows.",
+          { by: denial.by, reason: denial.reason }
+        );
+      }
       return new AppError("DECLINED", "The call was declined", {
         by: denial.by,
         ...(denial.comment === undefined ? {} : { comment: denial.comment })

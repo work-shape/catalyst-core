@@ -337,7 +337,7 @@ describe("operation contracts", () => {
           guardrailTitle?: string;
           guardrailReason?: string;
         }
-      | { kind: "declined"; by: string; comment?: string }
+      | { kind: "declined"; by: string; comment?: string; reason?: "steered" }
     >();
     expectTypeOf<OperationResult<string>>().toEqualTypeOf<
       | {

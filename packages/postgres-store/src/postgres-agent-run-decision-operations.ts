@@ -3,10 +3,13 @@ import { lockAgentRunConversations } from "./postgres-agent-run-locks";
 import { and, eq, gt, inArray, isNull, sql } from "drizzle-orm";
 import {
   AppError,
+  asClientInstanceId,
   canonicalJson,
   type JsonValue,
   isJsonObject,
   DECISION_EXPIRED_REASON,
+  operationDenialError,
+  type OperationDenial,
   agentRunJobOptions,
   executeAgentRunJob,
   type AgentRuntimeEvent,
@@ -213,6 +216,53 @@ export async function decideWaitingToolCall(
   });
   if (queued) enqueued();
   return decided;
+}
+
+/**
+ * A steer while its run waits on its person's confirmation declines each such call (FU-2):
+ * denied, reason `steered`, decided by the run's person, who sent it. A call that waits in
+ * the Inbox or for another person's approval is left waiting, and the steer pending until the
+ * run resumes. Runs in the transaction that stored the steer, under its conversation lock.
+ * `queued` is called when the run was queued again.
+ */
+export async function declineConfirmationsForSteer(
+  tx: PostgresConnection,
+  run: typeof agentRuns.$inferSelect,
+  queued: () => void
+): Promise<void> {
+  if (run.status !== "waiting_for_decision" || !run.ownerUserId || !run.resumeState) return;
+  const clientInstanceId = asClientInstanceId(run.clientInstanceId);
+  const waiting = run.resumeState.waiting.map((entry) => entry.operationRunId);
+  if (waiting.length === 0) return;
+  const calls = await tx
+    .select({ id: operationRuns.id })
+    .from(operationRuns)
+    .where(
+      and(
+        eq(operationRuns.clientInstanceId, clientInstanceId),
+        inArray(operationRuns.id, waiting),
+        eq(operationRuns.status, "pending_confirmation"),
+        isNull(operationRuns.decision),
+        isNull(operationRuns.approvalRequestId),
+        gt(operationRuns.expiresAt, sql`now()`)
+      )
+    );
+  const denial: OperationDenial = { kind: "declined", by: run.ownerUserId, reason: "steered" };
+  const error = operationDenialError(denial);
+  const at = new Date().toISOString();
+  for (const call of calls) {
+    await decideWaitingToolCall(
+      tx,
+      {
+        clientInstanceId,
+        operationRunId: call.id,
+        deciderUserId: run.ownerUserId,
+        decision: { mode: "declined", by: run.ownerUserId, at },
+        declined: { error: { code: error.code, message: error.message, reason: "steered" }, denial }
+      },
+      queued
+    );
+  }
 }
 
 function notWaiting(expired: boolean): AppError {

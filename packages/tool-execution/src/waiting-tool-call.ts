@@ -32,6 +32,10 @@ export function createDecidedToolCallRunner(baseDeps: RunOperationDeps): ToolDec
       return failed("handler_failed", "The call this run waited on no longer exists. Nothing ran.");
     }
     if (run.status === "denied" && run.decision?.mode === "declined") {
+      // A message the person steered in declined it (FU-2): the message follows the result.
+      if (run.denial?.kind === "declined" && run.denial.reason === "steered") {
+        return failed("not_allowed", operationDenialError(run.denial).message);
+      }
       const reason = run.decision.comment;
       return failed(
         "not_allowed",

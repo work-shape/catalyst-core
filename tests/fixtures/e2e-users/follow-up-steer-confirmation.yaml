@@ -1,0 +1,11 @@
+# The person of the spec where a steer declines a waiting confirmation, used by no other spec:
+# its runs wait on their confirmation, which no other spec's runs should meet. The label sorts
+# after every other for the reason in e2e-app.yaml.
+- email: e2e-steer-confirm@example.test
+  displayLabel: E2E Zz Steer Confirm
+  passwordEnvName: E2E_STEER_CONFIRM_PASSWORD
+  developmentPassword: e2e-steer-confirm-password
+  roles:
+    - user
+  permissionRefs:
+    - demo-tools

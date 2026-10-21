@@ -126,7 +126,16 @@ export const userMessageMetadataSchema = z.object({
       source: z.enum(AGENT_PREVIEW_SOURCES)
     })
     .optional(),
-  attachmentManifest: z.unknown()
+  attachmentManifest: z.unknown(),
+  /** Set on a message its person steered into their running turn (FU-2). */
+  steered: z
+    .object({
+      runId: z.string(),
+      followUpId: z.string(),
+      authorUserId: z.string(),
+      typedAt: timestampSchema
+    })
+    .optional()
 });
 
 export const assistantToolCallsMessageMetadataSchema = z.object({
