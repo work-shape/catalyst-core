@@ -264,6 +264,16 @@ export interface WorkflowAssetKind extends RegisteredAssetKind<ConfigAssetKind> 
     assets(kind: string): Promise<readonly ConfigAssetRecord[]>;
   }): Promise<void>;
   /**
+   * What a delete or an unpublish of this asset answers beside its result: one warning for
+   * each live asset that calls it and stops working without it. A warning and never a refusal:
+   * whoever takes the asset back decides, and is told what it breaks.
+   */
+  liveCallerWarnings?(input: {
+    clientInstanceId: ClientInstanceId;
+    name: string;
+    stores: PlatformStores;
+  }): Promise<{ code: string; message: string }[]>;
+  /**
    * What a write or delete of a config revision must do in the same transaction: asked after
    * the revision was written and before the commit, with the transaction's stores. What it
    * throws refuses the write. It answers what to do once the transaction committed, or

@@ -549,6 +549,12 @@ export class AssetDraftWorkflow {
         config: asset.publishedConfig
       });
     }
+    const warnings =
+      (await kind.liveCallerWarnings?.({
+        clientInstanceId: this.options.clientInstanceId,
+        name,
+        stores: this.options.stores
+      })) ?? [];
     const unpublished = await this.options.stores.transaction(async (stores) => {
       const moved = await stores.configAssets.unpublishConfigAsset({
         clientInstanceId: this.options.clientInstanceId,
@@ -574,7 +580,11 @@ export class AssetDraftWorkflow {
         ...scopeMetadata(asset.scope)
       }
     );
-    return { draftRevision: asset.revision, unpublishedRevision: unpublished.revision };
+    return {
+      draftRevision: asset.revision,
+      unpublishedRevision: unpublished.revision,
+      warnings
+    };
   }
 
   /** Moves the draft back to the published revision. The revisions in between stay readable. */

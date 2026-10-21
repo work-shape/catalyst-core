@@ -339,6 +339,7 @@ export {
   appConfigOf,
   createAppAssetKind
 } from "./apps/app-kind";
+export { workflowLiveCallerWarnings } from "./apps/live-workflow-callers";
 export { ASSET_PUT_BODY_LIMIT_BYTES } from "./assets/asset-files";
 export { createConnectionAssetKind } from "./asset-kinds/connection";
 export { createGuardrailAssetKind } from "./asset-kinds/guardrail";

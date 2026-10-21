@@ -55,6 +55,12 @@ export async function deleteAsset(
   if (kind.representation === "files") {
     return scope.drafts.remove(call, target, expectedRevision);
   }
+  const warnings =
+    (await kind.liveCallerWarnings?.({
+      clientInstanceId: scope.options.clientInstanceId,
+      name,
+      stores: scope.options.stores
+    })) ?? [];
   const stored = await loadStoredAssets(scope.options);
   await kind.assertRemovable?.({
     name,
@@ -108,7 +114,7 @@ export async function deleteAsset(
   }
 
   await afterRemove(scope.options, call, target);
-  return { version: result.version, revision, warnings: [] };
+  return { version: result.version, revision, warnings };
 }
 
 /** The revision the store gave the asset in the write that just committed. */

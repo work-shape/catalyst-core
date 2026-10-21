@@ -247,6 +247,39 @@ const MAIL_IDENTITY: MailSenderIdentity = {
   frame: { accentColor: "#123456", footer: { en: "Example GmbH\nMusterstrasse 1" } }
 };
 
+type WorkflowAssetKindOptions = Parameters<typeof createWorkflowAssetKind>[0];
+
+/**
+ * The kind `workflow` as an instance registers it, over the stores of an instance that is set
+ * up after the kind is made: `storesOf` and `registryOf` are asked at each use.
+ */
+export function instanceWorkflowAssetKind(
+  storesOf: () => PlatformStores,
+  registryOf: () => OperationRegistry | undefined,
+  options: Partial<Omit<WorkflowAssetKindOptions, "clientInstanceId">> = {}
+) {
+  return createWorkflowAssetKind({
+    clientInstanceId,
+    registry: registryOf,
+    runnerPackages: [],
+    limits: { ceilings: workflowLimitCeilingsOf(), stepSlots: 4 },
+    configAssets: {
+      getConfigAsset: (input) => storesOf().configAssets.getConfigAsset(input),
+      listPublishedConfigAssets: (input) => storesOf().configAssets.listPublishedConfigAssets(input)
+    },
+    apiAccess: {
+      findServicePrincipalByName: (input) => storesOf().apiAccess.findServicePrincipalByName(input),
+      findServicePrincipalByOwner: (input) =>
+        storesOf().apiAccess.findServicePrincipalByOwner(input)
+    },
+    access: {
+      loadPersistedAccess: (input) => storesOf().access.loadPersistedAccess(input),
+      listGrantScopeAssets: (input) => storesOf().access.listGrantScopeAssets(input)
+    },
+    ...options
+  });
+}
+
 export async function workflowFixture(
   options: {
     runnerPackages?: Parameters<typeof createWorkflowAssetKind>[0]["runnerPackages"];
@@ -306,24 +339,9 @@ export async function workflowFixture(
     return instanceStores;
   };
   const ceilings = { ...workflowLimitCeilingsOf(), ...options.ceilings };
-  const kind = createWorkflowAssetKind({
-    clientInstanceId,
-    registry: () => operationRegistry,
+  const kind = instanceWorkflowAssetKind(storesOf, () => operationRegistry, {
     runnerPackages: options.runnerPackages ?? [],
     limits: { ceilings, stepSlots: options.stepSlots ?? 4 },
-    configAssets: {
-      getConfigAsset: (input) => storesOf().configAssets.getConfigAsset(input),
-      listPublishedConfigAssets: (input) => storesOf().configAssets.listPublishedConfigAssets(input)
-    },
-    apiAccess: {
-      findServicePrincipalByName: (input) => storesOf().apiAccess.findServicePrincipalByName(input),
-      findServicePrincipalByOwner: (input) =>
-        storesOf().apiAccess.findServicePrincipalByOwner(input)
-    },
-    access: {
-      loadPersistedAccess: (input) => storesOf().access.loadPersistedAccess(input),
-      listGrantScopeAssets: (input) => storesOf().access.listGrantScopeAssets(input)
-    },
     ...(options.now ? { now: options.now } : {}),
     ...(options.timeZone === undefined ? {} : { timeZone: options.timeZone }),
     ...(options.mail

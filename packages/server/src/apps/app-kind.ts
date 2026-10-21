@@ -12,7 +12,9 @@ import {
   CONNECTION_ASSET_KIND,
   DATA_STORE_ACTIONS,
   DATA_STORE_ASSET_KIND,
+  WORKFLOW_ASSET_KIND,
   appReachesDataStore,
+  appWorkflowRefusalError,
   dataStoreRefusalError,
   defineAssetKind,
   type ActorAccess,
@@ -249,6 +251,66 @@ async function requireDataStores(input: {
   }
 }
 
+const workflowInputsSchema = z.object({
+  manifest: z.object({
+    inputs: z
+      .object({
+        properties: z.record(z.string(), z.unknown()).optional(),
+        required: z.array(z.string()).optional(),
+        additionalProperties: z.unknown().optional()
+      })
+      .optional()
+  })
+});
+
+/**
+ * What a publish of an App asks of the Workflows its `workflow` actions start: each is
+ * published where the App reaches it, in the App's own workspace or on the instance (the rule
+ * of `appReachesDataStore`), and each action's mapping fills what that published revision
+ * requires and nothing it does not declare. A live App whose Workflow is not live fails at
+ * every click, so the publish is where it is refused (DP-0). One point read per Workflow, in
+ * the transaction of the publish.
+ */
+async function requireWorkflows(input: {
+  clientInstanceId: ClientInstanceId;
+  scope: AssetScope;
+  config: JsonObject;
+  stores: PlatformStores;
+}): Promise<void> {
+  const actions = compiledActionsOf(input.config.manifest).flatMap((action) =>
+    action.kind === "workflow" ? [action] : []
+  );
+  for (const action of actions) {
+    const asset = await input.stores.configAssets.getConfigAsset({
+      clientInstanceId: input.clientInstanceId,
+      kind: WORKFLOW_ASSET_KIND,
+      name: action.workflow
+    });
+    if (
+      asset?.status !== "active" ||
+      asset.publishedConfig === undefined ||
+      !appReachesDataStore(input.scope, asset.scope)
+    ) {
+      throw appWorkflowRefusalError("workflow_unavailable", action.workflow);
+    }
+    const inputs = workflowInputsSchema.safeParse(asset.publishedConfig).data?.manifest.inputs;
+    const mapped = Object.keys(action.input.mapping);
+    const missing = (inputs?.required ?? []).find((name) => !mapped.includes(name));
+    const undeclared =
+      inputs?.additionalProperties === false
+        ? mapped.find((name) => !Object.hasOwn(inputs.properties ?? {}, name))
+        : undefined;
+    const misfit = missing ?? undeclared;
+    if (misfit !== undefined) {
+      throw appWorkflowRefusalError("workflow_input_invalid", action.workflow, {
+        action: action.name,
+        input: misfit,
+        fault: missing === undefined ? "undeclared" : "missing"
+      });
+    }
+  }
+}
+
 /**
  * The App kind: a set of files a workspace's members open, with a draft and a published
  * revision. A write moves the draft, and nobody but its writers is shown it. It belongs to one
@@ -318,6 +380,7 @@ export function createAppAssetKind(): WorkflowAssetKind {
     assertInteractiveDeleteAllowed: () => undefined,
     onPublish: async (input) => {
       await requireDataStores(input);
+      await requireWorkflows(input);
       // A publish reviews the hosts of the revision it publishes. What people allowed for
       // their own view of the draft before ends with it, in the publish's transaction
       // (DRAFT-HOSTS-1).

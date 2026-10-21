@@ -232,6 +232,39 @@ export function appRefusalText(error: unknown): TranslationKey | undefined {
   }
 }
 
+/**
+ * The sentence of a refused publish, with what it names: a Workflow the App starts that is not
+ * live, or an action whose mapping does not fit that Workflow (DP-0). Every other refusal is
+ * one `appRefusalText` knows, or none.
+ */
+export function appPublishRefusal(
+  error: unknown
+): { key: TranslationKey; values?: Record<string, string> } | undefined {
+  if (!(error instanceof ApiError)) return undefined;
+  const details = field(field(error.payload, "error"), "details");
+  const text = (name: string) => {
+    const value = field(details, name);
+    return typeof value === "string" ? value : "";
+  };
+  const values = { workflow: text("workflow"), action: text("action"), input: text("input") };
+  switch (refusalReason(error)) {
+    case "workflow_unavailable":
+      return { key: "apps.publishWorkflowUnavailable", values };
+    case "workflow_input_invalid":
+      return {
+        key:
+          text("fault") === "missing"
+            ? "apps.publishWorkflowInputMissing"
+            : "apps.publishWorkflowInputUndeclared",
+        values
+      };
+    default: {
+      const key = appRefusalText(error);
+      return key ? { key } : undefined;
+    }
+  }
+}
+
 /** Why the instance gave no address for a revision of an App. */
 export function appPreviewProblem(error: unknown): AppPreviewProblem {
   const reason = refusalReason(error);

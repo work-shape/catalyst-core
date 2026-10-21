@@ -38,7 +38,7 @@ import {
   appDescription,
   appDraftRevision,
   appDraftShown,
-  appRefusalText,
+  appPublishRefusal,
   appRightsOn,
   appTitle,
   type AppRights
@@ -180,12 +180,12 @@ export function AppEdit({ app }: { app: string }) {
         setPublishWaits(true);
         return true;
       }
-      const refusal = appRefusalText(caught);
+      const refusal = appPublishRefusal(caught);
       setError(
         caught instanceof PendingApprovalError
           ? t("apps.publishPending")
           : refusal
-            ? t(refusal)
+            ? t(refusal.key, refusal.values)
             : (instanceSentence(caught) ??
               t(
                 failure === "publish"

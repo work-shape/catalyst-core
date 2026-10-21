@@ -8,7 +8,7 @@ import {
   appDraftShown,
   appManifestSummary,
   appReadsStoredData,
-  appRefusalText,
+  appPublishRefusal,
   appTitle,
   type AppManifestSummary
 } from "./app-model";
@@ -180,8 +180,12 @@ export function useAppPublishSend(workspaceId: string, app: string): AppPublishS
           setWaits(true);
           return "waits";
         }
-        const refusal = appRefusalText(caught);
-        setError(refusal ? t(refusal) : (instanceSentence(caught) ?? t("apps.publishFailed")));
+        const refusal = appPublishRefusal(caught);
+        setError(
+          refusal
+            ? t(refusal.key, refusal.values)
+            : (instanceSentence(caught) ?? t("apps.publishFailed"))
+        );
         return "failed";
       } finally {
         setBusy(false);

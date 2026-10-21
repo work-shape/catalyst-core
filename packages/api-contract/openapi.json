@@ -28811,11 +28811,18 @@
                       "type": "integer",
                       "exclusiveMinimum": 0,
                       "maximum": 9007199254740991
+                    },
+                    "warnings": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/AssetWarning"
+                      }
                     }
                   },
                   "required": [
                     "draftRevision",
-                    "unpublishedRevision"
+                    "unpublishedRevision",
+                    "warnings"
                   ]
                 }
               }

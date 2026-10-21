@@ -15,6 +15,7 @@ import { workflowAccountRights } from "./workflow-account-rights";
 import {
   createWorkflowLiveCheck,
   mailSendStepRefusal,
+  workflowLiveCallerWarnings,
   type PublishReach,
   type WorkflowAssetKind,
   type WorkflowRunAsOptions
@@ -421,6 +422,8 @@ export function createWorkflowAssetKind(
         });
       return undefined;
     },
+    // The live Apps that start it stop working without it: an unpublish and a delete say so.
+    liveCallerWarnings: workflowLiveCallerWarnings,
     async onUnpublish({ stores, assetId, published }) {
       const principal = await stores.apiAccess.findServicePrincipalByOwner({
         clientInstanceId,

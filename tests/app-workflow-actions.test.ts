@@ -6,7 +6,14 @@ import {
   resolveInstanceModules,
   type InstanceWorkflows
 } from "@work-shape/catalyst-client-assembly";
-import type { JobWorker, Logger, ModuleSnapshot } from "@work-shape/catalyst-core";
+import {
+  WORKFLOW_ASSET_KIND,
+  type JobWorker,
+  type Logger,
+  type ModuleSnapshot,
+  type OperationRegistry,
+  type PlatformStores
+} from "@work-shape/catalyst-core";
 import { clientInstanceId } from "./support/access-instance";
 import {
   action,
@@ -15,13 +22,13 @@ import {
   type Frame
 } from "./support/app-actions";
 import { expectStatus } from "./support/app-instance";
-import { WORKFLOW_RUNNER, publishedDefinitions, runSchema } from "./support/workflow-instance";
+import { instanceWorkflowAssetKind, runSchema } from "./support/workflow-instance";
 
 // APP-6a: an App starts a published Workflow through a named action of kind `workflow`. The
 // frame's call starts the run as the viewer, by the rule of `workflows.start`, and the frame
 // follows the run it started through `apps.sessions.get_workflow_run`. A draft starts nothing
 // and answers what it would have started. Real build, real call path, real engine on a real
-// database; the Workflow echoes the page it is given.
+// database, Workflows as published assets; the Workflow echoes the page it is given.
 //
 // Every test here fails without the change: the build refused an action file that names a
 // Workflow, and a frame had no way to read a run.
@@ -41,7 +48,6 @@ const OTHER_WORKFLOW = "visit-other";
 const visitWorkflow = (id: string) => ({
   id,
   name: "Visit log",
-  runAs: WORKFLOW_RUNNER,
   inputs: {
     type: "object",
     properties: { page: { type: "string" }, source: { type: "string" } },
@@ -100,22 +106,30 @@ describe("an App that starts a Workflow", () => {
   let grantId: string | undefined;
 
   beforeAll(async () => {
-    const definitions = publishedDefinitions();
-    definitions.publish(visitWorkflow(WORKFLOW));
-    definitions.publish(visitWorkflow(OTHER_WORKFLOW));
     let workflows: InstanceWorkflows | undefined;
     let modules: ModuleSnapshot | undefined;
+    let stores: PlatformStores | undefined;
+    let registry: OperationRegistry | undefined;
+    const kind = instanceWorkflowAssetKind(
+      () => {
+        if (!stores) throw new Error("The instance is not set up");
+        return stores;
+      },
+      () => registry
+    );
     t = await setupAppActions({
       modules: { workflows: { enabled: true } },
-      server(stores, config, built) {
+      furtherKinds: [kind],
+      server(instanceStores, config, built) {
         if (!built.operationCalls) throw new Error("The instance built no call path");
+        stores = instanceStores;
+        registry = built.operationCalls.registry;
         modules = resolveInstanceModules(config, []).snapshot;
         workflows = createInstanceWorkflows({
           modules,
           clientInstanceId,
-          stores,
-          operationCalls: built.operationCalls,
-          definitions: definitions.source
+          stores: instanceStores,
+          operationCalls: built.operationCalls
         });
         return {};
       },
@@ -124,10 +138,16 @@ describe("an App that starts a Workflow", () => {
       }
     });
     if (!workflows || !modules) throw new Error("The instance did not build its server");
-    await t.stores.apiAccess.createServicePrincipal({
-      clientInstanceId,
-      displayLabel: WORKFLOW_RUNNER
-    });
+    // The App is published only with its Workflow live (DP-0).
+    for (const id of [WORKFLOW, OTHER_WORKFLOW]) {
+      const address = { kind: WORKFLOW_ASSET_KIND, name: id };
+      const put = await t.expectOk(t.root.id, "assets.put", {
+        params: address,
+        payload: { config: { name: id, manifest: visitWorkflow(id) }, expectedRevision: null }
+      });
+      const { revision } = z.object({ revision: z.number() }).parse(put.json());
+      await t.expectOk(t.root.id, "assets.publish", { params: address, payload: { revision } });
+    }
     worker = createJobWorker({
       stores: t.stores,
       clientInstanceId,

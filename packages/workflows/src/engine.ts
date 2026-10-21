@@ -11,6 +11,7 @@ import { createWorkflowDatasets } from "./datasets";
 import { createDatasetLifetime } from "./dataset-lifetime";
 import {
   AppError,
+  appWorkflowRefusalError,
   asUserId,
   auditActorFromIdentity,
   defineJobHandler,
@@ -725,9 +726,8 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
 
     async start(input) {
       const published = await definitions.read(input.workflow);
-      if (!published) {
-        throw new AppError("NOT_FOUND", `There is no Workflow '${input.workflow}'`);
-      }
+      // A live App whose Workflow was unpublished since names it with the reason (DP-0).
+      if (!published) throw appWorkflowRefusalError("workflow_unavailable", input.workflow);
       const [trigger] = published.manifest.steps;
       if (trigger?.type !== "trigger" || !trigger.triggers.some(({ kind }) => kind === "manual")) {
         throw new AppError(

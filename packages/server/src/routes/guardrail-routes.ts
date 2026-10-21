@@ -110,11 +110,13 @@ export function registerGuardrailRoutes(route: Route, options: ChatServerOptions
     module: ASSET_WRITE_MODULE,
     async execute(input, context) {
       const asset = await storedOrMissing(input.name);
-      return workflow.drafts.unpublish(context, {
+      // A guardrail has no live callers to warn of: its answer is the two revisions.
+      const { draftRevision, unpublishedRevision } = await workflow.drafts.unpublish(context, {
         kind: GUARDRAIL_ASSET_KIND,
         name: input.name,
         ...(asset.scope.kind === "workspace" ? { workspaceId: asset.scope.workspaceId } : {})
       });
+      return { draftRevision, unpublishedRevision };
     }
   });
 
