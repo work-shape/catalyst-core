@@ -84,7 +84,7 @@ describe("German Settings copy", () => {
           {
             correlationId: "activity-1",
             at: "2026-10-16T08:00:00Z",
-            label: "Signed in",
+            type: "auth.session_token_issued",
             tier: "governance",
             outcome: "success",
             actor: { kind: "user", label: user.displayLabel },
@@ -97,5 +97,6 @@ describe("German Settings copy", () => {
     );
     expect(markup).toContain("Audit");
     expect(markup).toContain("Letzte Aktivitäten");
+    expect(markup).toContain("Angemeldet");
   });
 });

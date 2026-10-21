@@ -1,8 +1,17 @@
+// @vitest-environment happy-dom
+
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { act, createElement } from "react";
+import { createRoot } from "react-dom/client";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
+import type { AuditActivity, AuditEvent } from "@work-shape/catalyst-api-client";
+import { TranslationProvider } from "@work-shape/catalyst-chat-ui";
+import { AuditView } from "@work-shape/catalyst-chat-ui/control-plane";
+import { EVENTS } from "@work-shape/catalyst-core";
+import { UiRoot, uiLabelsDe } from "@work-shape/catalyst-ui";
 
 // UXA-1b (navigation-and-layout section 4.16): member and admin screens use the words of the
 // product, never engineering terms, audit keys or error codes. Every message of the interface
@@ -132,6 +141,141 @@ describe("plain words in the interface (UXA-1b)", () => {
     }
   );
 });
+
+// UXA-1b2: the audit view says each activity, event, target and reason in the catalogs' words.
+// The server sends the event type, a tool's action and reason codes; a type or code without
+// words is said by a generic line. Fails without UXA-1b2: the view showed the server's English
+// labels, the raw event types and the reason codes.
+describe("plain words in the audit view (UXA-1b2)", () => {
+  const messages = catalog();
+
+  it("has words in both catalogs for every audited event", () => {
+    const audited = Object.values(EVENTS)
+      .filter((event) => event.audited)
+      .map((event) => `audit.event.${event.name}`);
+    for (const locale of locales) {
+      const keys = new Set(messages[locale].map(([key]) => key));
+      expect(
+        audited.filter((key) => !keys.has(key)),
+        locale
+      ).toEqual([]);
+    }
+  });
+
+  it("shows no event type, reason code or target kind, also for ones it has no words for", async () => {
+    const text = await germanAuditText([
+      activity({
+        correlationId: "corr_known",
+        type: "connection.discovery_failed",
+        outcome: "failed",
+        reason: "upstream_unauthorized",
+        target: { kind: "conversation", id: "conv_1" },
+        evidence: [
+          event({ type: "connection.discovery_failed", status: "failed", reason: "INTERNAL" }),
+          event({
+            type: "operation.completed",
+            metadata: { auditAction: "workspace.exec", code: "insufficient_scope" }
+          })
+        ]
+      }),
+      activity({
+        correlationId: "corr_unknown",
+        type: "future_domain.something_new",
+        outcome: "denied",
+        reason: "SOME_NEW_CODE",
+        actor: { kind: "system", label: "System" },
+        target: { kind: "future_kind", id: "thing_1" },
+        evidence: [
+          event({ type: "future_domain.something_new", status: "denied", reason: "a_new_reason" })
+        ]
+      })
+    ]);
+
+    for (const words of [
+      "Lesen der Operationen einer Verbindung fehlgeschlagen",
+      "Das externe System hat die Anmeldung abgelehnt.",
+      "Ein Fehler in der Instanz.",
+      "Befehl ausgeführt",
+      "Der Anmeldung fehlt eine Berechtigung, die der Aufruf brauchte.",
+      "Unterhaltung: conv_1",
+      "Sonstige Aktivität",
+      "Für diesen Grund gibt es keine Beschreibung."
+    ]) {
+      expect(text).toContain(words);
+    }
+    for (const code of [
+      "connection.discovery_failed",
+      "operation.completed",
+      "workspace.exec",
+      "future_domain",
+      "upstream_unauthorized",
+      "insufficient_scope",
+      "INTERNAL",
+      "SOME_NEW_CODE",
+      "a_new_reason",
+      "conversation:",
+      "future_kind"
+    ]) {
+      expect(text).not.toContain(code);
+    }
+    for (const rule of REFUSED) expect(text, rule.word).not.toMatch(rule.pattern);
+  });
+});
+
+let sequence = 0;
+
+function event(partial: Partial<AuditEvent> & Pick<AuditEvent, "type">): AuditEvent {
+  sequence += 1;
+  return {
+    id: `audit_${sequence}`,
+    clientInstanceId: "client_test",
+    status: "success",
+    correlationId: "corr_evidence",
+    createdAt: "2026-10-21T08:00:00.000Z",
+    ...partial
+  };
+}
+
+function activity(
+  partial: Partial<AuditActivity> & Pick<AuditActivity, "correlationId" | "type">
+): AuditActivity {
+  return {
+    at: "2026-10-21T08:00:00.000Z",
+    tier: "runtime",
+    outcome: "success",
+    actor: { kind: "user", label: "Ada" },
+    eventCount: partial.evidence?.length ?? 1,
+    repeatCount: 1,
+    evidence: [],
+    ...partial
+  };
+}
+
+/** The German audit view's text with every activity opened to its events. */
+async function germanAuditText(auditActivities: AuditActivity[]): Promise<string> {
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  await act(async () => {
+    root.render(
+      createElement(
+        UiRoot,
+        { mode: "light", labels: uiLabelsDe },
+        createElement(TranslationProvider, {
+          locale: "de",
+          children: createElement(AuditView, { auditActivities })
+        })
+      )
+    );
+  });
+  for (const row of container.querySelectorAll<HTMLButtonElement>("button[aria-expanded]")) {
+    await act(async () => row.click());
+  }
+  const text = container.textContent ?? "";
+  await act(async () => root.unmount());
+  container.remove();
+  return text;
+}
 
 function excepted(key: string, word: string): boolean {
   return EXCEPTIONS.some((exception) => exception.keys.test(key) && exception.words.includes(word));

@@ -60,7 +60,7 @@ describe("projectAuditActivities", () => {
     expect(activities).toHaveLength(1);
     const [activity] = activities;
     // message.completed outranks the tool events and titles the activity.
-    expect(activity!.label).toBe("Assistant responded");
+    expect(activity!.type).toBe("message.completed");
     expect(activity!.tier).toBe("workflow");
     expect(activity!.target).toEqual({ kind: "conversation", id: "conv_1" });
     expect(activity!.eventCount).toBe(3);
@@ -111,7 +111,7 @@ describe("projectAuditActivities", () => {
     });
 
     const defaultView = projectAuditActivities([successful, failed]);
-    expect(defaultView.map((activity) => activity.label)).toEqual(["Workspace command failed"]);
+    expect(defaultView.map((activity) => activity.type)).toEqual(["workspace_command.failed"]);
 
     const allView = projectAuditActivities([successful, failed], { view: "all" });
     expect(allView).toHaveLength(2);
@@ -130,7 +130,7 @@ describe("projectAuditActivities", () => {
     const activities = projectAuditActivities(reads);
 
     expect(activities).toHaveLength(1);
-    expect(activities[0]!.label).toBe("Viewed the audit log");
+    expect(activities[0]!.type).toBe("governance.audit_events_viewed");
     expect(activities[0]!.repeatCount).toBe(3);
     expect(activities[0]!.tier).toBe("governance");
   });
@@ -155,8 +155,7 @@ describe("projectAuditActivities", () => {
     });
   });
 
-  // Fails without the labels: the timeline showed the raw event names.
-  it("labels the outcome of a Connection discovery and shows a failed one by default", () => {
+  it("titles a Connection discovery by its outcome and shows a failed one by default", () => {
     const discovered = evt({ type: "connection.discovered", correlationId: "d_ok" });
     const failed = evt({
       type: "connection.discovery_failed",
@@ -165,13 +164,11 @@ describe("projectAuditActivities", () => {
       reason: "upstream_unauthorized"
     });
     expect(projectAuditActivities([discovered, failed])).toMatchObject([
-      { label: "Connection discovery failed", reason: "upstream_unauthorized" }
+      { type: "connection.discovery_failed", reason: "upstream_unauthorized" }
     ]);
     expect(
-      projectAuditActivities([discovered, failed], { view: "all" }).map(
-        (activity) => activity.label
-      )
-    ).toEqual(["Connection discovery failed", "Read the operations of a Connection"]);
+      projectAuditActivities([discovered, failed], { view: "all" }).map((activity) => activity.type)
+    ).toEqual(["connection.discovery_failed", "connection.discovered"]);
   });
 
   // Fails without the change: the discovery was a success of the runtime tier and hidden,
@@ -191,7 +188,7 @@ describe("projectAuditActivities", () => {
     expect(projectAuditActivities([clean, rejected])).toMatchObject([
       {
         correlationId: "d_rejected",
-        label: "Read the operations of a Connection",
+        type: "connection.discovered",
         outcome: "warning",
         reason: "output_rejected"
       }
@@ -205,7 +202,7 @@ describe("projectAuditActivities", () => {
     expect(activity!.actor).toEqual({ kind: "system", label: "System" });
   });
 
-  it("labels workspace tool runs from their audit summary action", () => {
+  it("carries the action a workspace tool run names in its audit summary", () => {
     const [activity] = projectAuditActivities(
       [
         evt({
@@ -218,7 +215,7 @@ describe("projectAuditActivities", () => {
       ],
       { view: "all" }
     );
-    expect(activity!.label).toBe("Ran a command");
+    expect(activity).toMatchObject({ type: "tool.completed", action: "workspace.exec" });
     expect(activity!.target).toMatchObject({ kind: "tool", id: "wcmd_1" });
   });
 
@@ -238,7 +235,7 @@ describe("projectAuditActivities", () => {
 
     const activities = projectAuditActivities([older, newer], { limit: 1 });
     expect(activities).toHaveLength(1);
-    expect(activities[0]!.label).toBe("Created a user");
+    expect(activities[0]!.type).toBe("user.created");
   });
 });
 
@@ -256,31 +253,31 @@ describe("reasonForEvent", () => {
 });
 
 describe("conversation cleanup audit events", () => {
-  it.each([
-    ["conversation.cleanup_failed", "Removing conversation data failed"],
-    ["conversation.cleanup_completed", "Finished removing conversation data"]
-  ])("shows %s in the governance tier with its label", (type, label) => {
-    const [activity] = projectAuditActivities([
-      evt({ type, correlationId: type, subject: "conv_1" })
-    ]);
+  it.each(["conversation.cleanup_failed", "conversation.cleanup_completed"])(
+    "shows %s in the governance tier",
+    (type) => {
+      const [activity] = projectAuditActivities([
+        evt({ type, correlationId: type, subject: "conv_1" })
+      ]);
 
-    expect(activity).toMatchObject({ tier: "governance", label });
-  });
+      expect(activity).toMatchObject({ tier: "governance", type });
+    }
+  );
 
-  it.each([
-    ["user.delete_failed", "User deletion refused"],
-    ["collaboration_workspace.delete_failed", "Workspace deletion refused"]
-  ])("labels %s", (type, label) => {
-    const [activity] = projectAuditActivities([
-      evt({ type, status: "failed", correlationId: type, actor: human })
-    ]);
+  it.each(["user.delete_failed", "collaboration_workspace.delete_failed"])(
+    "shows %s in the governance tier",
+    (type) => {
+      const [activity] = projectAuditActivities([
+        evt({ type, status: "failed", correlationId: type, actor: human })
+      ]);
 
-    expect(activity).toMatchObject({ tier: "governance", label });
-  });
+      expect(activity).toMatchObject({ tier: "governance", type });
+    }
+  );
 });
 
-describe("conversation audit labels", () => {
-  it("describes a manual conversation rename", () => {
+describe("conversation audit activities", () => {
+  it("titles a manual conversation rename by its type", () => {
     const [activity] = projectAuditActivities([
       evt({
         type: "conversation.renamed",
@@ -290,7 +287,7 @@ describe("conversation audit labels", () => {
       })
     ]);
 
-    expect(activity!.label).toBe("Renamed a conversation");
+    expect(activity!.type).toBe("conversation.renamed");
     expect(activity!.target).toEqual({ kind: "conversation", id: "conv_1" });
   });
 });

@@ -3952,7 +3952,9 @@ test("demo chat can run a configured tool widget", async ({ page }) => {
   for (let index = 0; index < rowCount; index += 1) {
     await activityRows.nth(index).click();
   }
-  await expect(page.getByText("operation.completed").first()).toBeVisible();
+  // Each event is said in words, never as its type (UXA-1b2).
+  await expect(page.getByText("Ran a call").first()).toBeVisible();
+  await expect(page.getByText("operation.completed")).toHaveCount(0);
   expect(consoleErrors).toEqual([]);
 });
 
