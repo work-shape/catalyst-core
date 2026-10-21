@@ -1,4 +1,5 @@
 apps.actions.list  GET /api/v1/app-actions
+apps.allow_draft_host  POST /api/v1/apps/draft-hosts
 apps.create_from_page  POST /api/v1/apps
 apps.get_from_page  GET /api/v1/conversations/:conversationId/pages/:pageId/app
 apps.preview  POST /api/v1/apps/:app/preview
