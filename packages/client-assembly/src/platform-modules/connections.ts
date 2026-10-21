@@ -22,7 +22,8 @@ export const connectionsModule = defineModule({
     "connections.disconnect",
     "connections.person_context",
     "connections.set_person_context",
-    "connections.list_tools"
+    "connections.list_tools",
+    "connections.connector_types"
   ],
   kinds: ["connection"],
   // The agent's draft of a REST API's tools checks them against the instance's Connector types;

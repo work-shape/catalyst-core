@@ -28,6 +28,7 @@ import type {
 import { AppError } from "./errors";
 import { createPlatformId, type ClientInstanceId } from "./ids";
 import type { JsonObject, JsonValue } from "./json";
+import type { LocalizedStringConfig } from "./localization";
 import type { OperationLimits, OperationPaging } from "./workflows";
 
 /**
@@ -633,6 +634,37 @@ export interface ConnectorSignIn {
   }): Promise<ConnectorSignInChallenge | undefined>;
 }
 
+/**
+ * One field of a Connector type's form in the New connection dialog: a setting, by its dotted
+ * path in `settings`, or the Connection's secret, which goes through `connections.set_secret`
+ * and is never part of the definition.
+ */
+export type ConnectorFormField = {
+  label: LocalizedStringConfig;
+  /** One line under the field: where the person finds the value. */
+  help?: LocalizedStringConfig;
+  /** A field the person may leave empty; an empty setting is left out of `settings`. */
+  optional?: true;
+} & ({ setting: string; secret?: undefined } | { secret: true; setting?: undefined });
+
+/**
+ * How the New connection dialog offers a Connector type of the build beside an MCP server and
+ * a REST API: a card, and a form whose fields fill the settings and the secret. A type without
+ * one is not offered there; release config can still define a Connection of it.
+ */
+export interface ConnectorTypeForm {
+  title: LocalizedStringConfig;
+  /** What a Connection of the type is for, on the card. */
+  description: LocalizedStringConfig;
+  /** The service whose mark the card shows, as a Connection's `service` names it. */
+  service?: string;
+  /** The auth scheme a Connection the form makes uses. */
+  authScheme: string;
+  /** Settings every Connection the form makes holds, beside the fields' values. */
+  settings?: JsonObject;
+  fields: readonly ConnectorFormField[];
+}
+
 interface ConnectorTypeBase {
   /** The configured person-context header. Its value is derived from the acting identity. */
   personContextHeaderName?(settings: JsonObject): string | undefined;
@@ -671,6 +703,8 @@ interface ConnectorTypeBase {
    * the platform's sync calls them, as a Knowledge Base's ingestion principal.
    */
   documentSource?: DocumentSourceCapability;
+  /** The type's card and form in the New connection dialog. */
+  form?: ConnectorTypeForm;
 }
 
 /**
@@ -741,6 +775,17 @@ export function createConnectorTypeRegistry(
       throw new AppError(
         "VALIDATION_FAILED",
         `Connector type '${definition.type}' must be lowercase words joined by underscores`
+      );
+    }
+    const { form } = definition;
+    if (
+      form !== undefined &&
+      (!definition.authSchemes.includes(form.authScheme) ||
+        form.fields.filter((field) => field.secret === true).length > 1)
+    ) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        `The form of Connector type '${definition.type}' must use one of its auth schemes and ask for one secret at most`
       );
     }
     if (byType.has(definition.type)) {

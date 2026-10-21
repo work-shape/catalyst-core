@@ -25,6 +25,7 @@ import {
   type OperationPaging,
   type SecretState
 } from "@work-shape/catalyst-core";
+import { connectorTypeOffers, type ConnectorTypeOfferView } from "./connector-type-offers";
 import {
   createConnectionPersonContextManagement,
   resolveConnectionPersonContext
@@ -176,6 +177,8 @@ export interface ConnectionManagement extends ReturnType<
   ): Promise<ConnectionTestView>;
   /** The tools an agent can carry, of the Connections `readable` admits. */
   listTools(readable: (resource: AccessResource) => boolean): Promise<ConnectionToolsView>;
+  /** The Connector types of the build that the New connection dialog offers with a form. */
+  connectorTypes(): { types: ConnectorTypeOfferView[] };
   /**
    * Stores the shared secret of a Connection made on the instance, as the next version. The
    * value is written once and never read back. `expectedVersion` is the version the writer
@@ -589,6 +592,8 @@ export function createConnectionManagement(
       deps.publicUrl === undefined
         ? undefined
         : signInLandingUrl(deps.publicUrl, outcome, connectionName),
+
+    connectorTypes: () => connectorTypeOffers(deps.connectorTypes),
 
     async listTools(readable) {
       const connections = (await readConnections(deps))

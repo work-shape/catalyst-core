@@ -4,7 +4,8 @@ import type {
   ConnectionOAuthStart,
   ConnectionSecretState,
   ConnectionTestResult,
-  ConnectionTools
+  ConnectionTools,
+  ConnectorTypeOffers
 } from "@work-shape/catalyst-api-contract";
 import type {
   AccessResource,
@@ -95,6 +96,8 @@ export interface ConnectionManagementPort {
   ): Promise<ConnectionTestResult>;
   /** The tools an agent can carry, of the Connections `readable` admits. */
   listTools(readable: (resource: AccessResource) => boolean): Promise<ConnectionTools>;
+  /** The Connector types of the build that the New connection dialog offers with a form. */
+  connectorTypes(): ConnectorTypeOffers;
   /**
    * Stores the shared secret of a Connection made on the instance as its next version, after
    * the version the writer saw. The value is never answered, logged or read back.

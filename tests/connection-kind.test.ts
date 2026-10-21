@@ -326,6 +326,25 @@ describe("the Connector types of a build", () => {
       createConnectorTypeRegistry([{ ...fixtureConnectorType, type: "Fixture.Type" }])
     ).toThrow("must be lowercase words joined by underscores");
     expect(fixtureConnectorTypes.get("fixture")).toBe(fixtureConnectorType);
+    // A form must sign in as the type does, and asks for one secret at most.
+    const field = { label: "Secret", secret: true } as const;
+    const form = { title: "Fixture", description: "For tests.", fields: [field] };
+    expect(() =>
+      createConnectorTypeRegistry([
+        { ...fixtureConnectorType, form: { ...form, authScheme: "not_a_scheme" } }
+      ])
+    ).toThrow("must use one of its auth schemes and ask for one secret at most");
+    const scheme = fixtureConnectorType.authSchemes[0] ?? "none";
+    expect(() =>
+      createConnectorTypeRegistry([
+        { ...fixtureConnectorType, form: { ...form, authScheme: scheme, fields: [field, field] } }
+      ])
+    ).toThrow("ask for one secret at most");
+    expect(
+      createConnectorTypeRegistry([
+        { ...fixtureConnectorType, form: { ...form, authScheme: scheme } }
+      ]).get("fixture")?.form?.authScheme
+    ).toBe(scheme);
     expect(fixtureConnectorTypes.get("mcp")).toBeUndefined();
   });
 

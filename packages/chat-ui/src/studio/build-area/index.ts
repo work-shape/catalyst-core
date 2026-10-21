@@ -42,6 +42,8 @@ export * from "./connection-approval-model";
 export { ConnectionApprovalList } from "./connection-approval";
 export * from "./connection-connect";
 export { ConnectionCreateFlow } from "./connection-create-dialog";
+export { TypedConnectionCreate } from "./connection-typed-create";
+export * from "./connection-typed-model";
 export { openConnectionDraft, readConnectionDraft, type ConnectionDraft } from "./connection-draft";
 export {
   ConnectionDraftCard,

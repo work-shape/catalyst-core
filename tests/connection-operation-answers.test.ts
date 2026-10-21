@@ -4,7 +4,8 @@ import {
   assetSummarySchema,
   listEnvelopeSchema,
   connectionDetailSchema,
-  connectionToolsSchema
+  connectionToolsSchema,
+  connectorTypeOffersSchema
 } from "@work-shape/catalyst-api-contract";
 import {
   AppError,
@@ -610,6 +611,47 @@ describe("the Connection routes", () => {
     ]);
     // Nothing a person without a right on a Connection can reach.
     expect(await toolsFor(t.lena.id)).toEqual({ connections: [] });
+  });
+
+  it("offer the Connector types with a form to whoever may make a Connection", async () => {
+    const t = await fixture();
+    const crm = await t.seed("crm");
+    await t.grant(t.kai.id, "connection.use", { assetId: crm });
+
+    expect(
+      connectorTypeOffersSchema.parse(
+        (await t.expectOk(t.admin.id, "connections.connector_types")).json()
+      )
+    ).toEqual({
+      types: [
+        {
+          type: "discovering",
+          title: { en: "Discovering", de: "Entdeckend" },
+          description: "Reads its tools. For tests.",
+          documentSource: false,
+          authScheme: "bearer",
+          settings: { mode: "fixed" },
+          fields: [
+            { label: "Address", optional: false, setting: "url", secret: false },
+            {
+              label: { en: "Token", de: "Token" },
+              help: "Sent as a bearer.",
+              optional: false,
+              secret: true
+            }
+          ]
+        }
+      ]
+    });
+    // Using one Connection makes no new one: the types are not offered.
+    for (const user of [t.kai, t.lena]) {
+      await t.expectRefused(
+        user.id,
+        "connections.connector_types",
+        {},
+        t.forbidden("connection.write", "no_grant")
+      );
+    }
   });
 });
 

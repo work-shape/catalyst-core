@@ -41,6 +41,7 @@ import {
   type DiscoveryWait
 } from "./connection-form-model";
 import { authSchemeLabel, connectorTypeLabel } from "./connection-form";
+import { offerText, type ConnectorTypeOffer } from "./connection-typed-model";
 import { ConnectionOperations, EditableOperations } from "./connection-operations";
 import { PersonContextSection } from "./connection-person-context";
 import { RestToolsSection } from "./connection-rest-tools";
@@ -102,8 +103,14 @@ export function ConnectionPage({
   usePageShown(page, "asset");
   // A Connection made here and not yet read waits for its first discovery. A REST API has none:
   // its page reads the Connection again for a while after a write.
+  // A type with a form of its own, such as a document source, discovers nothing, and its
+  // settings are not the address and key this page edits: they show as they are.
+  const { connectorType } = asset.config;
+  const offer = (source.useConnectorTypes?.() ?? []).find((type) => type.type === connectorType);
+  const discovers = connectorType !== "http_api" && offer === undefined;
+  const formEdits = offer === undefined;
   const [wait, setWait] = useState<DiscoveryWait | undefined>(() =>
-    editing && asset.config.connectorType !== "http_api" ? { since: Date.now() } : undefined
+    editing && discovers ? { since: Date.now() } : undefined
   );
   const read = source.useDetail(asset.name, wait);
   const holders = source.useHolders(asset.id);
@@ -214,17 +221,18 @@ export function ConnectionPage({
       id: "settings",
       label: t("connections.settingsTitle"),
       description: t("connections.settingsDescription"),
-      body: editing ? (
-        <ConnectionSettingsEditor
-          asset={asset}
-          frame={editing}
-          written={written}
-          view={<ConnectionSettings config={config} withDescription={false} />}
-          {...(detail?.secret.state === "set" ? { keyUsers: detail } : {})}
-        />
-      ) : (
-        <ConnectionSettings config={config} />
-      )
+      body:
+        editing && formEdits ? (
+          <ConnectionSettingsEditor
+            asset={asset}
+            frame={editing}
+            written={written}
+            view={<ConnectionSettings config={config} offer={offer} withDescription={false} />}
+            {...(detail?.secret.state === "set" ? { keyUsers: detail } : {})}
+          />
+        ) : (
+          <ConnectionSettings config={config} offer={offer} />
+        )
     },
     ...(personContextHeader && personContext
       ? [
@@ -281,7 +289,7 @@ export function ConnectionPage({
                   )
                 }
               ]
-            : editing
+            : editing && discovers
               ? [
                   {
                     id: "discovered",
@@ -422,13 +430,16 @@ const SETTING_LABELS = new Map<string, TranslationKey>([
  */
 function ConnectionSettings({
   config,
-  withDescription = true
+  withDescription = true,
+  offer
 }: {
   config: Record<string, unknown>;
+  /** The type's own form, where it has one: its title names the type. */
+  offer?: ConnectorTypeOffer | undefined;
   /** Without it the description stands in its own section, where it is changed. */
   withDescription?: boolean;
 }) {
-  const { t } = useTranslation();
+  const { locale, t } = useTranslation();
   const description = withDescription ? textOf(config, "description") : undefined;
   const connectorType = textOf(config, "connectorType") ?? "";
   const authScheme = textOf(config, "authScheme") ?? "";
@@ -436,7 +447,7 @@ function ConnectionSettings({
     <div className="grid min-w-0 gap-3">
       <KeyValueList>
         <KeyValue label={t("connections.connectorType")}>
-          {connectorTypeLabel(connectorType, t)}
+          {offer ? offerText(offer.title, locale) : connectorTypeLabel(connectorType, t)}
         </KeyValue>
         <KeyValue label={t("connections.authScheme")}>{authSchemeLabel(authScheme, t)}</KeyValue>
         {description ? (

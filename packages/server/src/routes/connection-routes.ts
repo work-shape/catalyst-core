@@ -242,6 +242,14 @@ export function registerConnectionRoutes(route: Route, options: ChatServerOption
           )
         : { connections: [] }
   });
+
+  route.operation(apiOperations["connections.connector_types"], {
+    // What a Connection can be made of, for whoever may make one.
+    authorize: (_input, { access }) =>
+      decide(access, CONNECTION_ACTIONS.write, { kind: CONNECTION_ASSET_KIND }),
+    module: CONNECTIONS_MODULE,
+    execute: () => (connections ? connections.connectorTypes() : { types: [] })
+  });
 }
 
 /** What the call touches, as its run and its events name it. */

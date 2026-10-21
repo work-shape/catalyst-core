@@ -31,6 +31,8 @@ A Connection reaches a remote MCP server (connector type `mcp`) or a REST interf
 3. The instance reads the tools the server offers. On the Connection's page, accept the operations agents may call. **Test connection** checks the address and the key.
 4. Give an agent the tools, as the next section says.
 
+A build can ship further connector types with a form of their own, such as a document source a Knowledge Base syncs from. **New connection** offers each as a card beside **MCP server** and **REST API**. Its form asks for a name and the fields the type declares, with the secret hidden as it is typed; **Connect** saves the Connection, stores the secret and runs the type's test. A refused secret empties its field and says so; the Connection is saved already and waits for the right one. Such a Connection reads no tools, and its page shows its settings without changing them. The list of these types is the operation `connections.connector_types`, answered to a person who may change Connections (`connection.write`).
+
 The rights this needs:
 
 | Step                                                                          | Right                                                                                                |

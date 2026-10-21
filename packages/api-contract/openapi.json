@@ -6008,6 +6008,205 @@
         "x-catalyst-rate-class": "write"
       }
     },
+    "/api/v1/connector-types": {
+      "get": {
+        "operationId": "connections.connector_types",
+        "summary": "List the Connector types a person who may make a Connection can connect from a form",
+        "tags": [
+          "Connections"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "config_assets:read"
+            ]
+          },
+          {
+            "sessionToken": [
+              "config_assets:read"
+            ]
+          },
+          {
+            "accessToken": [
+              "config_assets:read"
+            ]
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "types": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "en": {
+                                    "type": "string"
+                                  },
+                                  "de": {
+                                    "type": "string"
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          "description": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "en": {
+                                    "type": "string"
+                                  },
+                                  "de": {
+                                    "type": "string"
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          "service": {
+                            "type": "string"
+                          },
+                          "documentSource": {
+                            "type": "boolean"
+                          },
+                          "authScheme": {
+                            "type": "string"
+                          },
+                          "settings": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {}
+                          },
+                          "fields": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "label": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "en": {
+                                          "type": "string"
+                                        },
+                                        "de": {
+                                          "type": "string"
+                                        }
+                                      }
+                                    }
+                                  ]
+                                },
+                                "help": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "en": {
+                                          "type": "string"
+                                        },
+                                        "de": {
+                                          "type": "string"
+                                        }
+                                      }
+                                    }
+                                  ]
+                                },
+                                "optional": {
+                                  "type": "boolean"
+                                },
+                                "setting": {
+                                  "type": "string"
+                                },
+                                "secret": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": [
+                                "label",
+                                "optional",
+                                "secret"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "title",
+                          "description",
+                          "documentSource",
+                          "authScheme",
+                          "settings",
+                          "fields"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "types"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlocked"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-rate-class": "read"
+      }
+    },
     "/api/v1/context": {
       "get": {
         "operationId": "platform.context.get",

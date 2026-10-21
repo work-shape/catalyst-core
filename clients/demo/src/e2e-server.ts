@@ -7,6 +7,7 @@ import {
 import { defineTool, toolSuccess } from "@work-shape/catalyst-tool-sdk";
 import { z } from "zod";
 import { demoTools } from "../tools";
+import { folderSourceConnector } from "./e2e-folder-source";
 import { heldSkillSaves } from "./policy";
 
 // The API the browser suite runs against: the demo, with one changing tool and the central
@@ -15,7 +16,7 @@ import { heldSkillSaves } from "./policy";
 // named `E2E held skills`, which one test creates and deletes; they hold nothing while no
 // workspace has that name. No screen sets a central setting before
 // Instance > Policies exists (OP-2), so the suite's server names both.
-// It also names the one Connector type of the suite, which reaches nothing, and ships the four
+// It also names the suite's Connector types, which reach nothing, and ships the four
 // general skills as a capability of a deployment does, without the commands they name.
 // `pnpm dev:demo` and the demo's own server do not load this file.
 
@@ -139,7 +140,7 @@ const generalSkills: ClientInstanceCapability = {
 const client = defineClientInstance({
   rootDir: new URL("..", import.meta.url),
   tools: [...demoTools, recordNote, confirmNote],
-  connectorTypes: [testConnector],
+  connectorTypes: [testConnector, folderSourceConnector],
   capabilities: [generalSkills]
 });
 

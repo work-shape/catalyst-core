@@ -284,7 +284,18 @@ export async function fixtureOn<Instance extends AccessInstance>(
   const discoveringType: ConnectorTypeDefinition = {
     ...base,
     type: "discovering",
-    discover: () => Promise.resolve([lookup])
+    discover: () => Promise.resolve([lookup]),
+    // A form of its own: the New connection dialog offers it beside an MCP server.
+    form: {
+      title: { en: "Discovering", de: "Entdeckend" },
+      description: "Reads its tools. For tests.",
+      authScheme: "bearer",
+      settings: { mode: "fixed" },
+      fields: [
+        { label: "Address", setting: "url" },
+        { label: { en: "Token", de: "Token" }, help: "Sent as a bearer.", secret: true }
+      ]
+    }
   };
   Object.defineProperty(discoveringType, "limits", { get: () => state.limits });
   const connectorTypes = createConnectorTypeRegistry([staticType, discoveringType]);

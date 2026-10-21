@@ -209,6 +209,42 @@ export const connectionToolsSchema = z.object({
   )
 });
 
+/** A text in the reader's language: one for every language, or one per language. */
+const localizedTextSchema = z.union([
+  z.string(),
+  z.strictObject({ en: z.string().optional(), de: z.string().optional() })
+]);
+
+/**
+ * The Connector types the New connection dialog offers beside an MCP server and a REST API,
+ * each with its card and its form. A field fills a setting by its dotted path, or the secret.
+ * `documentSource` says that a Knowledge Base can sync documents through such a Connection.
+ */
+export const connectorTypeOffersSchema = z.object({
+  types: z.array(
+    z.object({
+      type: z.string(),
+      title: localizedTextSchema,
+      description: localizedTextSchema,
+      service: z.string().optional(),
+      documentSource: z.boolean(),
+      authScheme: z.string(),
+      settings: z.record(z.string(), z.unknown()),
+      fields: z.array(
+        z.object({
+          label: localizedTextSchema,
+          help: localizedTextSchema.optional(),
+          optional: z.boolean(),
+          setting: z.string().optional(),
+          secret: z.boolean()
+        })
+      )
+    })
+  )
+});
+
+export type ConnectorTypeOffers = z.infer<typeof connectorTypeOffersSchema>;
+
 /**
  * A secret entered once. It is never answered, logged or kept with the run of its call.
  * `expectedVersion` is the version the writer saw, `null` where none was set: a write over a
@@ -405,6 +441,20 @@ export const connectionOperations = {
     rateClass: "write"
   }),
   // A path of its own: `agent-tools` would be a valid Connection name under `/connections/`.
+  "connections.connector_types": defineRegisteredOperation({
+    id: "connections.connector_types",
+    method: "GET",
+    path: "/api/v1/connector-types",
+    summary: "List the Connector types a person who may make a Connection can connect from a form",
+    tag: "Connections",
+    auth: "principal",
+    scope: "config_assets:read",
+    requires: [],
+    effect: "reading",
+    response: json(connectorTypeOffersSchema),
+    errors: [],
+    rateClass: "read"
+  }),
   "connections.list_tools": defineRegisteredOperation({
     id: "connections.list_tools",
     method: "GET",

@@ -31,6 +31,7 @@ import { useAvailabilityChoice, type AvailabilityFrame } from "./asset-availabil
 import type { AvailabilityChoice } from "./asset-availability-fields";
 import { connectionGiveSource } from "./connection-give";
 import type { ConnectionGiveHost } from "./connection-give-step";
+import type { ConnectorTypeOffer } from "./connection-typed-model";
 
 /** The action that lets a person test a Connection. */
 const CONNECTION_WRITE_ACTION = "connection.write";
@@ -125,6 +126,11 @@ export interface ConnectionSource {
   setSecret(name: string, value: string, expectedVersion: number | null): Promise<void>;
   /** Asks the instance to read the Connection's tools again. Throws `PendingApprovalError` when held. */
   discover(name: string): Promise<void>;
+  /**
+   * A hook: the Connector types the build offers with a form of their own, for the New
+   * connection dialog. Nothing until they are read; a failed read offers none.
+   */
+  useConnectorTypes?(): readonly ConnectorTypeOffer[] | undefined;
   /** Reads the Connection's state now, beside the hook, as the New connection dialog waits. */
   readDetail(name: string): Promise<ConnectionDetail>;
   /** Tests the Connection. Throws `PendingApprovalError` when somebody approves the test first. */
@@ -304,6 +310,17 @@ export function useConnectionSource(): ConnectionSource {
       await queryClient.invalidateQueries({ queryKey: detailKey(name) });
     },
     readDetail: (name) => calls.get({ params: { name } }),
+    useConnectorTypes() {
+      const query = useQuery({
+        queryKey: ["connector-types", apiBaseUrl, authScope],
+        queryFn: ({ signal }) => calls.connector_types({ signal }),
+        // Offered to whoever may make a Connection; nobody else asks.
+        enabled: context.data?.actions.includes(CONNECTION_WRITE_ACTION) ?? false,
+        retry: false,
+        staleTime: Infinity
+      });
+      return query.isError ? [] : query.data?.types;
+    },
     async oauthStart(name) {
       try {
         return await calls.oauth_start({ params: { name } });

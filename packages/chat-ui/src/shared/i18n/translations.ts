@@ -22,6 +22,7 @@ import { collaborationWorkspace } from "./collaboration-workspace";
 import { common } from "./common";
 import { configAssets } from "./config-assets";
 import { connectionCreate } from "./connection-create";
+import { connectionTyped } from "./connection-typed";
 import { connectionGive } from "./connection-give";
 import { connectionPage } from "./connection-page";
 import { connectionSignIn } from "./connection-sign-in";
@@ -84,6 +85,7 @@ export const translations = combineTranslations(common)
   .and(connectionGive)
   .and(connectionPage)
   .and(connectionSignIn)
+  .and(connectionTyped)
   .and(connections)
   .and(conversation)
   .and(dataStores)

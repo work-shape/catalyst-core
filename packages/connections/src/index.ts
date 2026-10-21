@@ -2,6 +2,7 @@ export * from "./call";
 export * from "./catalog";
 export * from "./connection-reads";
 export * from "./connector-context";
+export * from "./connector-type-offers";
 export * from "./discovery";
 export * from "./document-source";
 export * from "./egress";

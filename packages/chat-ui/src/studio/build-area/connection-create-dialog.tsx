@@ -1,4 +1,4 @@
-import { ArrowLeft, Code, Plug } from "lucide-react";
+import { ArrowLeft, Code, FileText, Plug } from "lucide-react";
 import { useRef, useState } from "react";
 import type { ConnectionDetail } from "@work-shape/catalyst-api-client";
 import { CONNECTION_ASSET_KIND, assetAddressFromName } from "@work-shape/catalyst-core";
@@ -66,6 +66,8 @@ import {
 } from "./connection-rest-tools";
 import { useConnectionSource, type ConnectionSource } from "./connection-source";
 import { ConnectionApprovedBody, useGiveToAgent } from "./connection-give-step";
+import { TypedConnectionCreate } from "./connection-typed-create";
+import { offerText, type ConnectorTypeOffer } from "./connection-typed-model";
 
 // The New connection dialog (CS-5a 2/2): pick what to connect, give it a name, its address and
 // its key, press Verbinden, and choose which of its tools agents, Apps and Workflows may use.
@@ -73,6 +75,8 @@ import { ConnectionApprovedBody, useGiveToAgent } from "./connection-give-step";
 /** Where the dialog stands. */
 type Stage =
   | { step: "pick" }
+  /** A type of the build with a form of its own, such as a document source. */
+  | { step: "typed"; offer: ConnectorTypeOffer }
   | { step: "form" }
   /** A call waits for somebody's approval in the Inbox. */
   | { step: "held" }
@@ -119,7 +123,8 @@ export function ConnectionCreateFlow({
   onClose,
   onCreated
 }: BuildCreateDialogProps & { source: ConnectionSource; browser?: SignInBrowser }) {
-  const { t } = useTranslation();
+  const { locale, t } = useTranslation();
+  const offers = source.useConnectorTypes?.() ?? [];
   // The agent's draft opened from its card: the dialog starts at the REST API's form, filled
   // with it, and after Verbinden its tools wait in the approval list.
   const drafted = useDraftForNewConnection();
@@ -461,6 +466,7 @@ export function ConnectionCreateFlow({
   const heading = (() => {
     switch (stage.step) {
       case "pick":
+      case "typed":
         return t("connectionCreate.title");
       case "form":
         return t(rest ? "connectionCreate.restHeading" : "connectionCreate.mcpHeading");
@@ -485,6 +491,20 @@ export function ConnectionCreateFlow({
     memory.current.sent ? "connectionCreate.connectedRest" : "connectionCreate.connectedRestNoKey",
     { name: title }
   );
+
+  if (stage.step === "typed") {
+    return (
+      <TypedConnectionCreate
+        offer={stage.offer}
+        source={source}
+        checkName={checkName}
+        put={put}
+        onBack={() => setStage({ step: "pick" })}
+        onClose={onClose}
+        onCreated={onCreated}
+      />
+    );
+  }
 
   return (
     <>
@@ -528,6 +548,8 @@ export function ConnectionCreateFlow({
 
   function body() {
     switch (stage.step) {
+      case "typed":
+        return null;
       case "pick":
         return (
           <div
@@ -549,6 +571,22 @@ export function ConnectionCreateFlow({
               onChoose={() => pick("http_api")}
               data-connection-type="http_api"
             />
+            {offers.map((offer) => (
+              <ChoiceCard
+                key={offer.type}
+                icon={
+                  offer.documentSource ? (
+                    <FileText aria-hidden="true" />
+                  ) : (
+                    <Plug aria-hidden="true" />
+                  )
+                }
+                title={offerText(offer.title, locale)}
+                text={offerText(offer.description, locale)}
+                onChoose={() => setStage({ step: "typed", offer })}
+                data-connection-type={offer.type}
+              />
+            ))}
           </div>
         );
       case "form":
@@ -665,6 +703,7 @@ export function ConnectionCreateFlow({
   function footer() {
     switch (stage.step) {
       case "pick":
+      case "typed":
         return undefined;
       case "form":
         return (

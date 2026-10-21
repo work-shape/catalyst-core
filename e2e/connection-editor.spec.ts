@@ -135,7 +135,8 @@ async function openDialog(page: Page, locale: Locale) {
   // The title of the dialog follows its step; its first step is "New connection".
   await expect(page.getByRole("dialog", { name: WORDS[locale].newConnection })).toBeVisible();
   const dialog = page.getByRole("dialog").first();
-  await expect(dialog.locator("[data-connection-type]")).toHaveCount(2);
+  // An MCP server, a REST API and the suite's folder source, which has a form of its own.
+  await expect(dialog.locator("[data-connection-type]")).toHaveCount(3);
   return { main, dialog };
 }
 

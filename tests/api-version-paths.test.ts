@@ -129,6 +129,7 @@ describe("the operation catalog", () => {
       "auth",
       "connection-tools",
       "connections",
+      "connector-types",
       "context",
       "conversations",
       "data-stores",
