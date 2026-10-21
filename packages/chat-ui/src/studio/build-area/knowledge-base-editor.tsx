@@ -3,6 +3,7 @@ import { useState } from "react";
 import { KNOWLEDGE_DOCUMENT_FORMATS } from "@work-shape/catalyst-core";
 import {
   Badge,
+  Banner,
   Checkbox,
   EmptyState,
   Field,
@@ -36,12 +37,14 @@ import { KnowledgeSourcesSection } from "./knowledge-base-sources";
 import { KnowledgeTestSearch } from "./knowledge-base-test-search";
 import {
   knowledgeBaseFormToConfig,
+  knowledgeBasePublishesOnCreate,
   knowledgeTableRows,
   type KnowledgeBaseForm,
   type KnowledgeBaseHolds,
   type KnowledgeTableForm
 } from "./knowledge-base-model";
 import type { KnowledgeBaseSource, KnowledgeHoldersRead } from "./knowledge-base-source";
+import { offerText } from "./connection-typed-model";
 import { uploadFormatList, uploadFormats } from "./knowledge-upload-model";
 
 /** The sections of the data Workflows on the page, by what they do to it. */
@@ -63,10 +66,13 @@ const FLOW_SECTIONS = {
 
 /**
  * The page of one Knowledge Base: what it holds and what it answers from. A new one is chosen
- * to answer from documents or from tables of a Data Store; that stays once it is created. With
- * documents, the published Knowledge Base lists them with their state, takes more and has a
- * search to try; with tables, it names the Data Store with a sentence per table, and once
- * published whether it can read them and a query to try. The frame saves the form as a draft and publishes it.
+ * to answer from documents or from tables of a Data Store; that stays once it is created. One of
+ * documents goes live on create, available nowhere, so files can be added at once (KB-PAGE-1).
+ * With documents, the published Knowledge Base lists them with their state, takes more and has
+ * a search to try; with tables, it names the Data Store with a sentence per table, and once
+ * published whether it can read them and a query to try. Before its first publish, one notice
+ * under the head says what publishing opens, in place of those sections. The frame saves the
+ * form as a draft and publishes it.
  * Where it is available applies at once, saved with the same save bar.
  */
 export function KnowledgeBaseEditor({
@@ -113,6 +119,10 @@ export function KnowledgeBaseEditor({
   };
   const published = asset?.publishedRevision;
   const documents = form.holds === "documents";
+  // What only a published Knowledge Base has: its documents, its status and a test.
+  const live = asset !== undefined && published !== undefined;
+  // The Connector types of the instance its documents can be synced from, named under Source.
+  const sourceTypes = source.useSourceTypes?.();
   // The data Workflows that fill or process it arrive with the state the Status section reads:
   // the same read, not another. A section stands only where one is named or counted.
   const stateRead = source.useState(asset?.name ?? "", published);
@@ -149,6 +159,22 @@ export function KnowledgeBaseEditor({
             )
           };
         });
+  // Whether the published version can keep and search its documents, or read its tables.
+  const statusSection = (knowledgeBase: string, publishedRevision: number): AssetSection => ({
+    id: "status",
+    label: t("knowledge.statusTitle"),
+    description: t(
+      documents ? "knowledge.statusDocumentsDescription" : "knowledge.statusDescription"
+    ),
+    body: (
+      <KnowledgeStatus
+        source={source}
+        knowledgeBase={knowledgeBase}
+        publishedRevision={publishedRevision}
+        canCheck={canWrite}
+      />
+    )
+  });
   const holdsOptions: { value: KnowledgeBaseHolds; label: string; description: string }[] = [
     {
       value: "documents",
@@ -233,6 +259,21 @@ export function KnowledgeBaseEditor({
               onValueChange={(holds) => update({ holds })}
             />
           )}
+          {documents && sourceTypes !== undefined ? (
+            <KeyValueList layout="stacked">
+              <KeyValue label={t("knowledgeSources.title")}>
+                <span data-knowledge-source-types="">
+                  {sourceTypes.length === 0
+                    ? t("knowledge.syncsFromNone")
+                    : t("knowledge.syncsFrom", {
+                        types: new Intl.ListFormat(locale, { type: "conjunction" }).format(
+                          sourceTypes.map((type) => offerText(type.service ?? type.title, locale))
+                        )
+                      })}
+                </span>
+              </KeyValue>
+            </KeyValueList>
+          ) : null}
           {documents ? null : (
             <TablesSource
               source={source}
@@ -272,77 +313,47 @@ export function KnowledgeBaseEditor({
         ]
       : []),
     ...flowSections,
-    ...(documents
-      ? [
-          {
-            id: "documents",
-            label: t("knowledge.documentsTitle"),
-            description: t("knowledge.documentsDescription"),
-            body:
-              asset && published !== undefined ? (
+    // Before its first publish these stand as one notice under the head, not as empty sections.
+    ...(!live
+      ? []
+      : documents
+        ? [
+            {
+              id: "documents",
+              label: t("knowledge.documentsTitle"),
+              description: t("knowledge.documentsDescription"),
+              body: (
                 <KnowledgeDocuments
                   source={source}
                   knowledgeBase={asset.name}
                   publishedRevision={published}
                   canWrite={canWrite}
                 />
-              ) : (
-                <EmptyState layout="inline">{t("knowledge.notPublishedDocuments")}</EmptyState>
               )
-          }
-        ]
-      : []),
-    {
-      id: "status",
-      label: t("knowledge.statusTitle"),
-      description: t(
-        documents ? "knowledge.statusDocumentsDescription" : "knowledge.statusDescription"
-      ),
-      body:
-        asset && published !== undefined ? (
-          <KnowledgeStatus
-            source={source}
-            knowledgeBase={asset.name}
-            publishedRevision={published}
-            canCheck={canWrite}
-          />
-        ) : (
-          <EmptyState layout="inline">
-            {t(documents ? "knowledge.notPublishedDocuments" : "knowledge.notPublished")}
-          </EmptyState>
-        )
-    },
-    ...(documents
-      ? [
-          {
-            id: "test",
-            label: t("knowledge.searchTitle"),
-            description: t("knowledge.searchDescription"),
-            body:
-              asset && published !== undefined ? (
-                <KnowledgeTestSearch source={source} knowledgeBase={asset.name} />
-              ) : (
-                <EmptyState layout="inline">{t("knowledge.notPublishedSearch")}</EmptyState>
-              )
-          }
-        ]
-      : [
-          {
-            id: "test",
-            label: t("knowledge.testTitle"),
-            description: t("knowledge.testDescription"),
-            body:
-              asset && published !== undefined ? (
+            },
+            statusSection(asset.name, published),
+            {
+              id: "test",
+              label: t("knowledge.searchTitle"),
+              description: t("knowledge.searchDescription"),
+              body: <KnowledgeTestSearch source={source} knowledgeBase={asset.name} />
+            }
+          ]
+        : [
+            statusSection(asset.name, published),
+            {
+              id: "test",
+              label: t("knowledge.testTitle"),
+              description: t("knowledge.testDescription"),
+              body: (
                 <KnowledgeTestQuery
                   source={source}
                   knowledgeBase={asset.name}
                   firstTable={form.tables[0]?.name}
                 />
-              ) : (
-                <EmptyState layout="inline">{t("knowledge.notPublished")}</EmptyState>
               )
-          }
-        ]),
+            }
+          ]),
     ...(availability
       ? [
           {
@@ -407,11 +418,23 @@ export function KnowledgeBaseEditor({
           availabilityEdit.discard();
         }
       }}
+      notices={
+        asset !== undefined && published === undefined ? (
+          <Banner tone="info" className="mb-3" data-knowledge-not-published="">
+            {t(documents ? "knowledge.notPublishedDocuments" : "knowledge.notPublished")}
+          </Banner>
+        ) : undefined
+      }
       outcome={outcome}
       saving={saving}
       saveLabel={asset ? t("configSaveChanges") : t("knowledge.create")}
-      // Where it is available applies at once; only its definition goes to the draft.
-      {...(asset === undefined || changedFields > 0 ? { saveHint: t("build.savesDraft") } : {})}
+      // Where it is available applies at once; only its definition goes to the draft. A new one
+      // of documents goes live on create.
+      {...(asset === undefined && knowledgeBasePublishesOnCreate(knowledgeBaseFormToConfig(form))
+        ? { saveHint: t("knowledge.createsLive") }
+        : asset === undefined || changedFields > 0
+          ? { saveHint: t("build.savesDraft") }
+          : {})}
     />
   );
 }

@@ -135,7 +135,8 @@ function render(
     locale = "en",
     workflows,
     settings,
-    availability
+    availability,
+    sourceTypes
   }: {
     newAsset?: boolean;
     state?: KnowledgeBaseState;
@@ -146,6 +147,8 @@ function render(
     settings?: SettingsPageContextValue;
     /** Where agents can use it, as the instance answers it to a reader who may change it. */
     availability?: AvailabilityChoice;
+    /** The titles of the Connector types the instance can sync documents from. */
+    sourceTypes?: readonly string[];
   } = {}
 ): string {
   const name = newAsset ? undefined : asset.name;
@@ -179,7 +182,21 @@ function render(
   const planted = knowledgeBaseKindOn(() => ({
     ...source,
     useState: () => ready(state),
-    ...(availability === undefined ? {} : { useAvailability: () => availability })
+    ...(availability === undefined ? {} : { useAvailability: () => availability }),
+    ...(sourceTypes === undefined
+      ? {}
+      : {
+          useSourceTypes: () =>
+            sourceTypes.map((title) => ({
+              type: title.toLowerCase(),
+              title,
+              description: "",
+              documentSource: true,
+              authScheme: "none",
+              settings: {},
+              fields: []
+            }))
+        })
   }));
   const kinds = buildAssetKinds.map((kind) => (kind.kind === "knowledge_base" ? planted : kind));
   const page = createElement(
@@ -286,7 +303,13 @@ describe("Knowledge Bases in Build", () => {
 
     expect(page).toContain(">Not published<");
     expect(page).not.toContain("data-knowledge-state");
-    expect(page).toContain("Publish the knowledge base to see whether it can read its tables");
+    // One notice under the head, not a Status and a Test query section that each say "publish".
+    expect(page).toContain("data-knowledge-not-published");
+    expect(page).toContain(
+      "Not published yet. Publish it to see whether it can read its tables and to try a query."
+    );
+    expect(page).not.toContain(">Test query<");
+    expect(page).not.toContain(">Status<");
   });
 });
 
@@ -440,8 +463,31 @@ describe("Knowledge Bases of documents", () => {
       expect(page).toContain(`id="${label}" class="text-label">Documents<`);
       expect(page).toContain("Tables of a data store");
       expect(page).not.toContain("Choose a data store");
-      expect(page).toContain("Publish the knowledge base to see its status and to add documents.");
-      expect(page).toContain("Publish the knowledge base to try a search.");
+      // It goes live on create: no section waits for a publish, and the save bar says so.
+      expect(page).toContain("Goes live when it is created, available in no workspace");
+      expect(page).not.toContain("data-knowledge-not-published");
+      expect(page).not.toContain(">Test search<");
+      expect(page).not.toContain("Saves a draft.");
+    } finally {
+      clearBuildStartRequest();
+    }
+  });
+
+  it("names under Source the document sources the instance can sync from, before its publish too", () => {
+    try {
+      requestBuildStart("knowledge-bases", { name: "contracts-kb", title: "Contracts" });
+      const fresh = render(documentsKnowledgeBase(), {
+        newAsset: true,
+        locale: "de",
+        sourceTypes: ["Box", "Ordner"]
+      });
+      expect(fresh).toContain("Diese Instanz kann Ordner aus Box und Ordner synchronisieren.");
+      const none = render(documentsKnowledgeBase(), { newAsset: true, sourceTypes: [] });
+      expect(none).toContain("This instance connects no document source yet.");
+      // A reader who may not read the types is told nothing of them.
+      expect(render(documentsKnowledgeBase(), { newAsset: true })).not.toContain(
+        "data-knowledge-source-types"
+      );
     } finally {
       clearBuildStartRequest();
     }

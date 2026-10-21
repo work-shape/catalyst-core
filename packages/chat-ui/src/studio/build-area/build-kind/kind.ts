@@ -64,6 +64,11 @@ interface BuildKindBase {
    * who will find what through a synced source: the question the page loaded may be stale.
    */
   asksBeforePublish?: true;
+  /**
+   * A new asset of the kind with this definition is published right after its create, where the
+   * reader may publish it, such as a Knowledge Base of documents: it starts available nowhere.
+   */
+  publishesOnCreate?(config: Record<string, unknown>): boolean;
 }
 
 /**

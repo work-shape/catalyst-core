@@ -137,6 +137,14 @@ export function knowledgeBaseFormToConfig(form: KnowledgeBaseForm): Record<strin
 }
 
 /**
+ * Whether a new Knowledge Base with this definition goes live on create: one that keeps
+ * documents in its own store and syncs no source, whose publish asks nothing.
+ */
+export function knowledgeBasePublishesOnCreate(config: Record<string, unknown>): boolean {
+  return config.backend === undefined && config.sources === undefined;
+}
+
+/**
  * A Knowledge Base as the dialog that starts one leaves it: its id and its name. It starts with
  * documents, the choice its page offers first.
  */

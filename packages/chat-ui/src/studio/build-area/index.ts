@@ -149,6 +149,7 @@ export {
   KNOWLEDGE_DOCUMENT_FAILURES,
   knowledgeBaseConfigToForm,
   knowledgeBaseFormToConfig,
+  knowledgeBasePublishesOnCreate,
   startedKnowledgeBaseForm
 } from "./knowledge-base-model";
 export {

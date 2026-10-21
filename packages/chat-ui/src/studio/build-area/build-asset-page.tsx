@@ -128,8 +128,9 @@ function useCreate({
         ...(dependencyConsent ? { dependencyConsent } : {})
       });
     try {
+      let written: { revision: number };
       try {
-        await create(null);
+        written = await create(null);
       } catch (error) {
         // The id is held by a deleted asset. The reader chose the id for a new asset and
         // holds no older text of it, so the asset is created again after that delete, which
@@ -138,7 +139,22 @@ function useCreate({
         if (met.ok || !met.conflict || !met.deleted || met.currentRevision === undefined) {
           throw error;
         }
-        await create(met.currentRevision);
+        written = await create(met.currentRevision);
+      }
+      // A kind that goes live on create is published now, where the reader may. A publish that
+      // fails or waits leaves the draft, which its page offers to publish.
+      const scope = source.scopeOf?.(entry.kind);
+      if (
+        "config" in content &&
+        entry.publishesOnCreate?.(content.config) === true &&
+        source.rights.may("publish", {
+          kind: entry.kind,
+          ...(scope?.kind === "workspace" ? { workspaceId: scope.workspaceId } : {})
+        })
+      ) {
+        await source.writes
+          .publish({ kind: entry.kind, name: start.name, revision: written.revision })
+          .catch(() => undefined);
       }
       onCreated(start.name);
       return { ok: true };

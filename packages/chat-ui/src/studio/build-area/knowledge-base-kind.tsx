@@ -6,6 +6,7 @@ import { KnowledgeBaseEditor } from "./knowledge-base-editor";
 import {
   KNOWLEDGE_STATUS_VIEWS,
   knowledgeBaseConfigToForm,
+  knowledgeBasePublishesOnCreate,
   startedKnowledgeBaseForm
 } from "./knowledge-base-model";
 import {
@@ -136,6 +137,9 @@ export function knowledgeBaseKindOn(useSource: () => KnowledgeBaseSource): Build
     editsWithAgent: true,
     // A synced source names who finds what in it, with which account (SRC-2).
     asksBeforePublish: true,
+    // One that keeps documents goes live on create, available nowhere, so files can be added at
+    // once (KB-PAGE-1, Felix 2026-10-21). A synced source waits for the publish question.
+    publishesOnCreate: knowledgeBasePublishesOnCreate,
     rowText: (asset) => asset.description,
     badges: (asset) => <KnowledgeBaseRowFacts asset={asset} useSource={useSource} />,
     Editor: KnowledgeBaseAssetEditor

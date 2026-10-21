@@ -22,6 +22,7 @@ import { useOwnedChoices, type OwnedChoicesRead } from "./owned-choices";
 import type { MoreRead, PagedItems } from "./paged-items";
 import { useAvailabilityChoice, type AvailabilityFrame } from "./asset-availability";
 import type { AvailabilityChoice } from "./asset-availability-fields";
+import type { ConnectorTypeOffer } from "./connection-typed-model";
 
 /**
  * The state of one published Knowledge Base, as `knowledge_bases.get` answers it, with the data
@@ -250,6 +251,12 @@ export interface KnowledgeBaseSource {
     enabled: boolean
   ): KnowledgeRead<KnowledgeDocumentSummary | null>;
   /**
+   * A hook: the Connector types of the instance a Knowledge Base of documents can sync from, such
+   * as Box, whether or not a Connection of them exists yet. Undefined until read, and where the
+   * reader may not read them.
+   */
+  useSourceTypes?(): readonly ConnectorTypeOffer[] | undefined;
+  /**
    * A hook: the Connections a source of the Knowledge Base can sync documents through whose name
    * or id holds `search`, those of the workspace `owner` names first. Absent where the page
    * offers no synced sources.
@@ -281,6 +288,9 @@ export interface KnowledgeBaseSource {
 export type KnowledgeDocumentSummary = NonNullable<
   Awaited<ReturnType<ApiClient["knowledge_bases"]["list_documents"]>>["summary"]
 >;
+
+/** The action that lets a person make a Connection, and read what it can be made of. */
+const CONNECTION_WRITE_ACTION = "connection.write";
 
 /** The action that lets a person or a service principal search a Knowledge Base. */
 const KNOWLEDGE_BASE_USE_ACTION = "knowledge_base.use";
@@ -458,6 +468,18 @@ export function useKnowledgeBaseSource(): KnowledgeBaseSource {
           ).summary ?? null,
         { enabled }
       ),
+    useSourceTypes() {
+      // The instance names them to whoever may make a Connection; nobody else asks.
+      const known = usePlatformContextQuery({ ...api, enabled: true });
+      const query = useQuery({
+        queryKey: ["connector-types", apiBaseUrl, authScope],
+        queryFn: ({ signal }) => client.connections.connector_types({ signal }),
+        enabled: known.data?.actions.includes(CONNECTION_WRITE_ACTION) ?? false,
+        retry: false,
+        staleTime: Infinity
+      });
+      return query.data?.types.filter((type) => type.documentSource);
+    },
     useSourceConnections: (search, owner) => {
       const read = knowledgeReadOf(
         useOwnedChoices(

@@ -205,6 +205,116 @@ test.describe("uploading files from the computer into a Knowledge Base", () => {
     }
   });
 
+  test("de: a new Knowledge Base of documents is live at create, and one of tables in draft shows one notice (KB-PAGE-1)", async ({
+    page
+  }) => {
+    test.setTimeout(150_000);
+    const suffix = randomUUID().slice(0, 8);
+    const title = `Handbuch ${suffix}`;
+    const name = `handbuch-${suffix}`;
+    const tablesName = `e2e-tables-${suffix}`;
+    const storeName = `e2e-tables-store-${suffix}`;
+    const assetUrl = `${knowledgeApiUrl}/api/v1/assets/knowledge_base/${name}`;
+    const tablesUrl = `${knowledgeApiUrl}/api/v1/assets/knowledge_base/${tablesName}`;
+    const storeUrl = `${knowledgeApiUrl}/api/v1/assets/data_store/${storeName}`;
+    await signIn(page, apiBaseUrl);
+    await signIn(page, knowledgeApiUrl);
+    await page.addInitScript(() => {
+      window.localStorage.setItem("vivd-catalyst:locale", "de");
+      window.localStorage.setItem("vivd-catalyst:theme", "light");
+    });
+    await page.route(`${apiBaseUrl}/**`, (route) =>
+      route.continue({ url: route.request().url().replace(apiBaseUrl, knowledgeApiUrl) })
+    );
+    try {
+      await page.setViewportSize({ width: 1280, height: 900 });
+      await page.emulateMedia({ colorScheme: "light" });
+      await page.goto("/build/knowledge-bases");
+      await page.getByRole("button", { name: "Neue Wissensbasis", exact: true }).first().click();
+      const dialog = page.getByRole("dialog");
+      await dialog.locator('[data-name-with-address-field="name"]').fill(title);
+      await dialog.getByRole("button", { name: "Weiter", exact: true }).click();
+      await expect(page.getByRole("heading", { name: title, level: 1 })).toBeVisible();
+      await expect(
+        page.getByText("Ist sofort veröffentlicht und in keinem Arbeitsbereich verfügbar")
+      ).toBeVisible();
+      await page.getByLabel("Was sie enthält").fill("Regeln des Teams zu Urlaub und Reisen.");
+      await page.getByRole("button", { name: "Wissensbasis anlegen", exact: true }).click();
+      // Published in the same step: its Documents section is there, with no notice and no draft.
+      await expect(page.locator("[data-knowledge-documents]")).toBeVisible({ timeout: 30_000 });
+      await expect(page.locator("[data-knowledge-not-published]")).toHaveCount(0);
+      for (const section of ["status", "test"]) {
+        await expect(page.locator(`[id="${section}"]`)).toBeVisible();
+      }
+      const asset = await page.request.get(assetUrl);
+      expect(await asset.json()).toMatchObject({ publishedRevision: 1 });
+      await expect(page.locator("[data-knowledge-source-types]")).toBeVisible();
+      await picture(page, "kb-page-1-new-de-light-1280");
+      await page.locator('[id="documents"]').scrollIntoViewIfNeeded();
+      await picture(page, "kb-page-1-new-documents-de-light-1280");
+
+      // One of tables, saved as a draft: one notice under the head instead of three empty sections.
+      const store = await requestWithOrigin(page, "put", storeUrl, {
+        data: {
+          expectedRevision: null,
+          files: [
+            { path: "store.yaml", text: `id: ${storeName}\nname: Buchungen\n` },
+            {
+              path: "migrations/0001_init.sql",
+              text: "create table bookings (id text primary key, amount numeric not null);"
+            }
+          ]
+        }
+      });
+      expect(store.ok(), await store.text()).toBe(true);
+      const storePublished = await requestWithOrigin(page, "post", `${storeUrl}/publish`, {
+        data: { revision: 1 }
+      });
+      expect(storePublished.ok(), await storePublished.text()).toBe(true);
+      await expect
+        .poll(
+          async () =>
+            (
+              await page.request.get(`${knowledgeApiUrl}/api/v1/data-stores/${storeName}/describe`)
+            ).status(),
+          { timeout: 30_000 }
+        )
+        .toBe(200);
+      const tables = await requestWithOrigin(page, "put", tablesUrl, {
+        data: {
+          expectedRevision: null,
+          config: {
+            name: tablesName,
+            title: "Buchungsprüfung",
+            description: "Was die monatliche Prüfung der Buchungen fand.",
+            methods: ["structured"],
+            backend: { dataStore: storeName },
+            tables: [{ name: "bookings", description: "Eine Zeile je Buchung." }]
+          }
+        }
+      });
+      expect(tables.ok(), await tables.text()).toBe(true);
+      await page.goto(`/build/knowledge-bases/${tablesName}`);
+      await expect(page.getByRole("heading", { name: "Buchungsprüfung", level: 1 })).toBeVisible();
+      const notice = page.locator("[data-knowledge-not-published]");
+      await expect(notice).toContainText("Noch nicht veröffentlicht.");
+      for (const section of ["documents", "status", "test"]) {
+        await expect(page.locator(`[id="${section}"]`)).toHaveCount(0);
+      }
+      await expect(page.locator('[id="source"]')).toBeVisible();
+      await picture(page, "kb-page-1-tables-draft-de-light-1280");
+    } finally {
+      await page.unrouteAll({ behavior: "ignoreErrors" });
+      for (const url of [assetUrl, tablesUrl, storeUrl]) {
+        if ((await page.request.get(url)).ok()) {
+          await requestWithOrigin(page, "post", `${url}/delete`, {
+            data: { expectedRevision: await assetRevision(page, url) }
+          });
+        }
+      }
+    }
+  });
+
   test("opens a Knowledge Base right after its publish without a SQL error, and lists it once its store stands (ACCEPT-FIX-8, E7)", async ({
     page
   }) => {

@@ -84,7 +84,7 @@ export const knowledge = defineTranslations({
       "The workflows that process its documents by document type.",
     "knowledge.processedByTitle": "Processed by",
     "knowledge.notPublished":
-      "Publish the knowledge base to see whether it can read its tables and to try a query.",
+      "Not published yet. Publish it to see whether it can read its tables and to try a query.",
     "knowledge.testTitle": "Test query",
     "knowledge.testDescription":
       "Ask the published version with one read-only SQL statement, as an agent does. Nothing is changed.",
@@ -99,7 +99,6 @@ export const knowledge = defineTranslations({
     "knowledge.searchTitle": "Test search",
     "knowledge.searchDescription":
       "Search the published version as an agent does, with your own right to use it. Nothing is changed.",
-    "knowledge.notPublishedSearch": "Publish the knowledge base to try a search.",
     "knowledge.searchQuery": "Search for",
     "knowledge.searchPlaceholder": "Words or a question",
     "knowledge.searchRun": "Search",
@@ -133,11 +132,16 @@ export const knowledge = defineTranslations({
     "knowledge.holdsTables": "Tables of a data store",
     "knowledge.holdsTablesDescription": "Agents read the rows of the tables you describe with SQL.",
     "knowledge.sourceDocumentsDescription":
-      "It keeps its documents in a store of its own and searches them for words. You add documents once it is published.",
+      "It keeps its documents in a store of its own and searches them for words. You add files under Documents, and folders through a synced source.",
     "knowledge.statusDocumentsDescription":
       "Whether the published version can keep and search its documents. It is checked when it is published and when you check now.",
     "knowledge.notPublishedDocuments":
-      "Publish the knowledge base to see its status and to add documents.",
+      "Not published yet. Publish it to add documents, see its status and try a search.",
+    "knowledge.createsLive":
+      "Goes live when it is created, available in no workspace, so you can add files at once. Later changes are saved as a draft.",
+    "knowledge.syncsFrom": "This instance can sync folders from {types}.",
+    "knowledge.syncsFromNone":
+      "This instance connects no document source yet. Files are added under Documents.",
     "knowledge.documentsTitle": "Documents",
     "knowledge.documentsDescription":
       "Everyone who may use this knowledge base finds every document in it, once the document is searchable.",
@@ -322,7 +326,7 @@ export const knowledge = defineTranslations({
       "Die Workflows, die ihre Dokumente nach Dokumenttyp verarbeiten.",
     "knowledge.processedByTitle": "Verarbeitet von",
     "knowledge.notPublished":
-      "Veröffentliche die Wissensbasis, um zu sehen, ob sie ihre Tabellen lesen kann, und um eine Abfrage zu testen.",
+      "Noch nicht veröffentlicht. Veröffentliche sie, um zu sehen, ob sie ihre Tabellen lesen kann, und um eine Abfrage zu testen.",
     "knowledge.testTitle": "Testabfrage",
     "knowledge.testDescription":
       "Frag die veröffentlichte Version mit einer lesenden SQL-Anweisung, so wie ein Agent. Es wird nichts geändert.",
@@ -337,7 +341,6 @@ export const knowledge = defineTranslations({
     "knowledge.searchTitle": "Testsuche",
     "knowledge.searchDescription":
       "Durchsuche die veröffentlichte Version so wie ein Agent, mit deinem eigenen Recht, sie zu nutzen. Es wird nichts geändert.",
-    "knowledge.notPublishedSearch": "Veröffentliche die Wissensbasis, um eine Suche zu testen.",
     "knowledge.searchQuery": "Suchen nach",
     "knowledge.searchPlaceholder": "Wörter oder eine Frage",
     "knowledge.searchRun": "Suchen",
@@ -373,11 +376,16 @@ export const knowledge = defineTranslations({
     "knowledge.holdsTablesDescription":
       "Agenten lesen die Zeilen der Tabellen, die du beschreibst, mit SQL.",
     "knowledge.sourceDocumentsDescription":
-      "Sie hält ihre Dokumente in einem eigenen Speicher und durchsucht sie nach Wörtern. Dokumente fügst du hinzu, sobald sie veröffentlicht ist.",
+      "Sie hält ihre Dokumente in einem eigenen Speicher und durchsucht sie nach Wörtern. Dateien fügst du unter Dokumente hinzu, Ordner über eine synchronisierte Quelle.",
     "knowledge.statusDocumentsDescription":
       "Ob die veröffentlichte Version ihre Dokumente speichern und durchsuchen kann. Das wird beim Veröffentlichen geprüft und wenn du jetzt prüfst.",
     "knowledge.notPublishedDocuments":
-      "Veröffentliche die Wissensbasis, um ihren Status zu sehen und Dokumente hinzuzufügen.",
+      "Noch nicht veröffentlicht. Veröffentliche sie, um Dokumente hinzuzufügen, ihren Status zu sehen und eine Suche zu testen.",
+    "knowledge.createsLive":
+      "Ist sofort veröffentlicht und in keinem Arbeitsbereich verfügbar, damit du gleich Dateien hinzufügen kannst. Spätere Änderungen werden als Entwurf gespeichert.",
+    "knowledge.syncsFrom": "Diese Instanz kann Ordner aus {types} synchronisieren.",
+    "knowledge.syncsFromNone":
+      "Diese Instanz verbindet noch keine Dokumentquelle. Dateien fügst du unter Dokumente hinzu.",
     "knowledge.documentsTitle": "Dokumente",
     "knowledge.documentsDescription":
       "Jeder, der diese Wissensbasis nutzen darf, findet jedes Dokument darin, sobald es durchsuchbar ist.",

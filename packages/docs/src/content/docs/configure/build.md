@@ -157,6 +157,10 @@ Texts that exist in English and German are written in one language at a time. **
 
 If you may read an asset but not change it, the page says so and has no save bar.
 
+### A new Knowledge Base
+
+A Knowledge Base of documents made on its page with **New knowledge base** (**Neue Wissensbasis**) is published when it is created, where you may publish it, and is available in no workspace, so you can add files under **Documents** (**Dokumente**) at once and choose its workspaces under **Available in** when it is ready. Later changes of its definition are saved as a draft and need **Publish**. One that syncs from a source, one of tables, and one written by `catalyst config push` or by an agent start as a draft. Before its first publish the page says under its head what publishing opens. Its **Source** (**Quelle**) section names the systems the instance can sync folders from.
+
 ### The files of a skill
 
 A skill's page shows the skill as a folder under **Files**: `SKILL.md`, which holds the instructions, and the files below `references/`, `scripts/` and `assets/`. The **+** of a folder uploads a file into it or starts a new, empty one; the type of a file is read from its name. A text file, such as a reference or a script, is edited in place. Any file can be renamed, replaced with a new version, downloaded and deleted, and the page shows its size and, once saved, its SHA-256 hash. A file that is not text is not shown, only replaced.
