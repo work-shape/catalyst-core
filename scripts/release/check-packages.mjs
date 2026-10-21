@@ -300,8 +300,9 @@ console.log(
 if (!skipBuild) {
   step("Build");
   const exclusions = Object.keys(UNPUBLISHED).flatMap((dir) => ["--filter", `!./packages/${dir}`]);
+  // Build output stays visible: a failed release build has no other record of why.
   run("pnpm", ["-r", "--filter", "./packages/*", ...exclusions, "build"], {
-    stdio: ["ignore", "ignore", "inherit"]
+    stdio: ["ignore", "inherit", "inherit"]
   });
   if (companionRoot)
     run("pnpm", ["build"], { cwd: companionRoot, stdio: ["ignore", "ignore", "inherit"] });

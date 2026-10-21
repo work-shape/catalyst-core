@@ -88,6 +88,9 @@ jobs:
           node scripts/release/notes.mjs "$VERSION" > "$RUNNER_TEMP/release-notes.md"
         env:
           VERSION: ${{ steps.release.outputs.version }}
+          # A private repository's hosted runner has about 7 GB; building packages one at a
+          # time keeps the type declaration builds inside it.
+          npm_config_workspace_concurrency: "1"
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           repository: work-shape/catalyst
