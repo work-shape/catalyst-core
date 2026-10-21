@@ -54,7 +54,7 @@
       "target": "lint",
       "rule": "@typescript-eslint/no-non-null-assertion",
       "scope": "tests",
-      "count": 130,
+      "count": 129,
       "owner": "CB-2"
     },
     {
@@ -68,7 +68,7 @@
       "target": "lint",
       "rule": "@typescript-eslint/no-unnecessary-type-assertion",
       "scope": "packages/chat-ui",
-      "count": 13,
+      "count": 12,
       "owner": "G-5c"
     },
     {

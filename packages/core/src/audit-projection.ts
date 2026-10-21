@@ -8,7 +8,7 @@ import type { ISODateString } from "./time";
  *
  * The raw events stay the source of truth (and are still served verbatim from
  * `/api/v1/instance/audit-events`). This layer groups the events of one request together,
- * gives them domain labels, resolves who really acted, and hides runtime
+ * picks the event that titles them, resolves who really acted, and hides runtime
  * lifecycle noise unless something failed. It is a pure function so it can be
  * unit tested and run either on the server or the client.
  */
@@ -45,7 +45,13 @@ export interface AuditActivity {
   correlationId: string;
   /** Most recent moment in the group; the timeline sorts on this. */
   at: ISODateString;
-  label: string;
+  /**
+   * The type of the event that titles the activity. The interface says it in words of its own
+   * catalogs; the server sends no prose.
+   */
+  type: string;
+  /** What a tool says it did (`workspace.exec`), where the titling event is a tool's. */
+  action?: string;
   tier: AuditActivityTier;
   outcome: AuditActivityOutcome;
   actor: AuditActivityActor;
@@ -64,105 +70,6 @@ export interface ProjectAuditActivitiesOptions {
   /** Cap the number of activities returned after grouping. */
   limit?: number;
 }
-
-const ACTIVITY_LABELS: Record<string, string> = {
-  "auth.session_token_issued": "Signed in",
-  "conversation.cleanup_completed": "Finished removing conversation data",
-  "conversation.cleanup_failed": "Removing conversation data failed",
-  "connection.discovered": "Read the operations of a Connection",
-  "connection.discovery_failed": "Connection discovery failed",
-  "connection.binding_connected": "Signed in to the outside system of a Connection",
-  "connection.binding_needs_reconnect": "The outside system of a Connection refused its sign-in",
-  "connection.binding_revoked": "Ended the sign-in of a Connection",
-  "connection.oauth_client_registered": "Registered a sign-in client for a Connection",
-  "connection.oauth_refused": "Refused a sign-in for a Connection",
-  "conversation.created": "Started a conversation",
-  "conversation.deleted": "Deleted a conversation",
-  "conversation.renamed": "Renamed a conversation",
-  "conversation.retention_expired": "Conversation retention expired",
-  "conversation.retention_expiration_failed": "Conversation retention failed",
-  "conversation.title_generated": "Generated a conversation title",
-  "conversation.title_generation_failed": "Conversation title generation failed",
-  "storage.orphaned_files_deleted": "Removed orphaned files",
-  "audit.pruned": "Removed expired audit events",
-  "storage.orphaned_file_cleanup_failed": "Orphaned file cleanup failed",
-  "collaboration_workspace.created": "Created a workspace",
-  // Written until the deletion became a job. Kept for the events that exist.
-  "collaboration_workspace.delete_failed": "Workspace deletion refused",
-  "collaboration_workspace.deletion_requested": "Requested the deletion of a workspace",
-  "collaboration_workspace.deletion_stalled": "Workspace deletion stalled",
-  "collaboration_workspace.updated": "Updated a workspace",
-  "collaboration_workspace.member_added": "Added a workspace member",
-  "collaboration_workspace.member_removed": "Removed a workspace member",
-  "collaboration_workspace.member_left": "Left a workspace",
-  "collaboration_workspace.member_role_changed": "Changed a workspace member role",
-  "collaboration_workspace.access_requested": "Requested workspace access",
-  "collaboration_workspace.access_request_approved": "Approved workspace access",
-  "collaboration_workspace.access_request_declined": "Declined workspace access",
-  "message.created": "Sent a message",
-  "message.completed": "Assistant responded",
-  "message.failed": "Assistant response failed",
-  "message.cancelled": "Cancelled a response",
-  "operation.authorization_checked": "Checked the right for a call",
-  "operation.started": "Started a call",
-  "operation.completed": "Ran a call",
-  "operation.failed": "Call failed",
-  "operation.denied": "Call refused",
-  // Written until a tool call became an Operation Run. Kept for the events that exist.
-  "tool.authorization_checked": "Checked tool authorization",
-  "tool.started": "Started a tool",
-  "tool.completed": "Ran a tool",
-  "tool.failed": "Tool failed",
-  "workspace_command.queued": "Queued a workspace command",
-  "workspace_command.running": "Ran a workspace command",
-  "workspace_command.completed": "Workspace command completed",
-  "workspace_command.failed": "Workspace command failed",
-  "workspace_command.timed_out": "Workspace command timed out",
-  "workspace_command.cancelled": "Workspace command cancelled",
-  "workspace_command.recovered_stale": "Recovered a stale workspace command",
-  "governance.audit_events_viewed": "Viewed the audit log",
-  "governance.users_viewed": "Viewed users",
-  "governance.usage_viewed": "Viewed usage",
-  "governance.user_create_authorized": "Authorized creating a user",
-  "governance.user_update_authorized": "Authorized updating a user",
-  "governance.user_identity_upsert_authorized": "Authorized a user identity change",
-  "governance.user_identity_delete_authorized": "Authorized removing a user identity",
-  "governance.user_password_reset_authorized": "Authorized a password reset",
-  "governance.user_invitation_authorized": "Authorized a user invitation",
-  "user.created": "Created a user",
-  // Written until the deletion became a job. Kept for the events that exist.
-  "user.delete_failed": "User deletion refused",
-  "user.deletion_requested": "Requested the deletion of a user",
-  "user.deletion_stalled": "User deletion stalled",
-  "user.updated": "Updated a user",
-  "user.profile_updated": "Updated a profile",
-  "user.identity_linked": "Linked a user identity",
-  "user.identity_upserted": "Updated a user identity",
-  "user.identity_deleted": "Removed a user identity",
-  "user.password_changed": "Changed a password",
-  "user.password_reset": "Reset a password",
-  "user.password_reset_requested": "Requested a password reset email",
-  "user.invitation_sent": "Sent a user invitation",
-  "user.password_sign_in_created": "Created sign-in credentials",
-  "agent_run.recovered": "Recovered an agent run",
-  "agent_runtime.run_failed": "Agent run failed",
-  "model_context_projection.file_unavailable": "Referenced file unavailable",
-  "model_context_projection.artifact_unavailable": "Referenced artifact unavailable",
-  "model_context_projection.bounded_tool_output": "Bounded a large tool output"
-};
-
-/** Domain labels for workspace/document tool actions reported via `auditSummary`. */
-const TOOL_ACTION_LABELS: Record<string, string> = {
-  "workspace.exec": "Ran a command",
-  "workspace.list_files": "Listed workspace files",
-  "workspace.read_file": "Read a workspace file",
-  "workspace.write_file": "Wrote a workspace file",
-  "workspace.edit_file": "Edited a workspace file",
-  "workspace.import_files": "Imported files",
-  "workspace.promote_artifact": "Saved an artifact",
-  "workspace.preview_images": "Loaded artifact preview images",
-  "workspace.file": "Wrote a workspace file"
-};
 
 const GOVERNANCE_READ_TYPES = new Set([
   "governance.audit_events_viewed",
@@ -222,16 +129,11 @@ function metadataString(event: AuditEvent, key: string): string | undefined {
   return typeof value === "string" ? value : undefined;
 }
 
-function labelForEvent(event: AuditEvent): string {
-  if (event.type.startsWith("tool.") || event.type.startsWith("operation.")) {
-    // A tool says what it did in words of its own, whichever event carries them.
-    const action = metadataString(event, "auditAction");
-    const actionLabel = action ? TOOL_ACTION_LABELS[action] : undefined;
-    if (actionLabel) {
-      return actionLabel;
-    }
-  }
-  return ACTIVITY_LABELS[event.type] ?? event.type;
+/** What a tool says it did, in a name of its own, whichever of its events carries it. */
+function actionForEvent(event: AuditEvent): string | undefined {
+  return event.type.startsWith("tool.") || event.type.startsWith("operation.")
+    ? metadataString(event, "auditAction")
+    : undefined;
 }
 
 export function reasonForEvent(event: AuditEvent): string | undefined {
@@ -328,6 +230,10 @@ function pickHeadline(events: AuditEvent[]): AuditEvent {
   });
 }
 
+function withAction(action: string | undefined): { action?: string } {
+  return action ? { action } : {};
+}
+
 interface BuiltActivity {
   activity: AuditActivity;
   headlineType: string;
@@ -349,7 +255,8 @@ function buildActivity(events: AuditEvent[]): BuiltActivity {
     activity: {
       correlationId: headline.correlationId,
       at,
-      label: labelForEvent(headline),
+      type: headline.type,
+      ...withAction(actionForEvent(headline)),
       tier: tierForType(headline.type),
       outcome: aggregateOutcome(headline, ascending),
       actor,

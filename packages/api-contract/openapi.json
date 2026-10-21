@@ -36641,7 +36641,10 @@
           "at": {
             "$ref": "#/components/schemas/Timestamp"
           },
-          "label": {
+          "type": {
+            "type": "string"
+          },
+          "action": {
             "type": "string"
           },
           "tier": {
@@ -36691,7 +36694,7 @@
         "required": [
           "correlationId",
           "at",
-          "label",
+          "type",
           "tier",
           "outcome",
           "actor",

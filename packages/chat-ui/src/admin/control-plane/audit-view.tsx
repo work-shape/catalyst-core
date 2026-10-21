@@ -3,7 +3,6 @@ import { useState } from "react";
 import type {
   AuditActivity,
   AuditActivityActor,
-  AuditActivityTarget,
   AuditEvent
 } from "@work-shape/catalyst-api-client";
 import {
@@ -31,6 +30,13 @@ import {
   type TranslationKey
 } from "../../shared/i18n";
 import { formatDateTime } from "../../shared/locale-format";
+import {
+  auditEventAction,
+  auditEventReason,
+  auditEventText,
+  auditReasonText,
+  auditTargetText
+} from "./audit-words";
 
 export function AuditView({
   auditActivities,
@@ -102,7 +108,7 @@ export function AuditView({
 function AuditActivityRow({ activity }: { activity: AuditActivity }) {
   const { t, locale } = useTranslation();
   const [open, setOpen] = useState(false);
-  const showReason = Boolean(activity.reason) && activity.outcome !== "success";
+  const reason = activity.outcome === "success" ? undefined : activity.reason;
 
   return (
     <li className="py-2 first:pt-0 last:pb-0">
@@ -122,7 +128,7 @@ function AuditActivityRow({ activity }: { activity: AuditActivity }) {
         />
         <div className="grid min-w-0 flex-1 gap-1">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="font-medium">{activity.label}</span>
+            <span className="font-medium">{auditEventText(activity.type, activity.action, t)}</span>
             <OutcomeBadge outcome={activity.outcome} />
             {activity.repeatCount > 1 ? (
               <span className="text-xs text-muted-foreground">×{activity.repeatCount}</span>
@@ -138,7 +144,7 @@ function AuditActivityRow({ activity }: { activity: AuditActivity }) {
             <span className="whitespace-nowrap">{formatDateTime(activity.at, locale)}</span>
             <ActorChip actor={activity.actor} />
             {activity.target ? (
-              <span className="break-all">{targetText(activity.target)}</span>
+              <span className="break-all">{auditTargetText(activity.target, t)}</span>
             ) : null}
             <span className="whitespace-nowrap">
               {t(
@@ -149,8 +155,8 @@ function AuditActivityRow({ activity }: { activity: AuditActivity }) {
               )}
             </span>
           </div>
-          {showReason ? (
-            <p className="text-xs break-words text-destructive">{activity.reason}</p>
+          {reason ? (
+            <p className="text-xs break-words text-destructive">{auditReasonText(reason, t)}</p>
           ) : null}
         </div>
       </button>
@@ -180,7 +186,9 @@ function AuditEvidence({ evidence }: { evidence: AuditEvent[] }) {
               <TableCell className="whitespace-nowrap text-muted-foreground">
                 {formatDateTime(event.createdAt, locale)}
               </TableCell>
-              <TableCell className="font-mono text-xs break-words">{event.type}</TableCell>
+              <TableCell className="break-words">
+                {auditEventText(event.type, auditEventAction(event), t)}
+              </TableCell>
               <TableCell>
                 <Badge
                   tone={event.status === "success" ? "success" : "neutral"}
@@ -198,7 +206,7 @@ function AuditEvidence({ evidence }: { evidence: AuditEvent[] }) {
                 {event.subject ?? "—"}
               </TableCell>
               <TableCell className="break-words text-muted-foreground">
-                {evidenceReasonText(event) ?? "—"}
+                {evidenceReasonText(event, t) ?? "—"}
               </TableCell>
             </TableRow>
           ))}
@@ -273,11 +281,10 @@ function actorText(actor: AuditActivityActor, t: Translate): string {
   if (actor.kind === "service") {
     return t("settings.auditActorService", { name: actor.label });
   }
+  if (actor.kind === "system") {
+    return t("settings.auditActorSystem");
+  }
   return actor.label;
-}
-
-function targetText(target: AuditActivityTarget): string {
-  return `${target.kind}: ${target.label ?? target.id}`;
 }
 
 function evidenceActorText(event: AuditEvent, t: Translate): string {
@@ -294,16 +301,7 @@ function evidenceActorText(event: AuditEvent, t: Translate): string {
   return actor.displayLabel;
 }
 
-function evidenceReasonText(event: AuditEvent): string | undefined {
-  if (event.reason) {
-    return event.reason;
-  }
-  const metadata = event.metadata as Record<string, unknown> | undefined;
-  for (const key of ["reason", "code"]) {
-    const value = metadata?.[key];
-    if (typeof value === "string") {
-      return value;
-    }
-  }
-  return undefined;
+function evidenceReasonText(event: AuditEvent, t: Translate): string | undefined {
+  const reason = auditEventReason(event);
+  return reason ? auditReasonText(reason, t) : undefined;
 }
