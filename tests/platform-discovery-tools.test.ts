@@ -532,7 +532,10 @@ describe("the tools that find what is on the platform", () => {
       answer.connectorTypes.map((type) => [type.type, type.signIn])
     );
     expect(signIn["mcp"]).toContain("oauth");
-    expect(signIn[HTTP_API_CONNECTOR_TYPE]).not.toContain("oauth");
+    // A REST API signs in with OAuth too, through an app registered with the provider.
+    expect(signIn[HTTP_API_CONNECTOR_TYPE]).toEqual(
+      expect.arrayContaining(["none", "oauth", "oauth_client"])
+    );
     expect(context?.description).toContain("connectorTypes lists the kinds of Connection");
 
     // Without the module, no type is told.
@@ -544,16 +547,20 @@ describe("the tools that find what is on the platform", () => {
       "connectorTypes"
     );
 
-    // The draft tool sends an OAuth API to its MCP server, never to unauthenticated tools.
+    // The draft tool sends an OAuth API to its MCP server first, and otherwise to a REST API
+    // that signs in with OAuth, never to tools that cannot sign in.
     const draft = createConnectionDraftTool({
       connectorTypes: registry,
       connectorType: HTTP_API_CONNECTOR_TYPE
     });
     expect(draft.name).toBe(CONNECTION_DRAFT_TOOL_NAME);
     expect(draft.description).toContain(
-      "For an API that needs the person to sign in with the provider (OAuth), draft nothing"
+      "For an API that needs the person to sign in with the provider (OAuth), use the provider's MCP server where one exists"
     );
-    expect(draft.description).toContain("once OAuth for REST APIs is available");
+    expect(draft.description).toContain(
+      "draft only once the REST API Connection signs in with OAuth"
+    );
+    expect(draft.description).not.toContain("once OAuth for REST APIs is available");
     expect(draft.description).not.toMatch(/not supported yet/iu);
   });
 
