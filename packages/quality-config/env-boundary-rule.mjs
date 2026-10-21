@@ -17,14 +17,16 @@
  */
 
 /**
- * The one module of a package that may read the environment is `src/env.ts`. These two
- * packages keep theirs elsewhere: the Vite plugin of chat-ui is plain JavaScript that loads
- * without a build, and the artifact helpers keep their library under `src/lib`.
+ * The one module of a package that may read the environment is `src/env.ts`. These packages
+ * keep theirs elsewhere: the Vite plugin of chat-ui is plain JavaScript that loads without a
+ * build, the artifact helpers keep their library under `src/lib`, and the deployment kit is
+ * plain JavaScript and shell under `lib`.
  * @type {Record<string, string>}
  */
 const ENV_MODULE_ELSEWHERE = {
   "packages/chat-ui": "src/env.js",
-  "packages/artifact-helpers": "src/lib/env.ts"
+  "packages/artifact-helpers": "src/lib/env.ts",
+  "packages/deployment-kit": "lib/env.mjs"
 };
 
 /**

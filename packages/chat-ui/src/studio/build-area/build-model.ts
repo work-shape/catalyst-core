@@ -94,3 +94,9 @@ export function assetConfigTitle(
   }
   return asset.name;
 }
+
+/** What a button's call left to say beside it: that it worked, or why it did not. */
+export interface ActionNotice {
+  tone: "success" | "error";
+  text: string;
+}

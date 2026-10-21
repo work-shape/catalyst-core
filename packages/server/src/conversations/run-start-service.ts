@@ -6,6 +6,7 @@ import {
   type AgentPreview,
   type PrepareConversationRunStartInput,
   type ConversationFollowUp,
+  type FollowUpMode,
   type PlatformStores,
   type JobId,
   type AgentRun,
@@ -50,7 +51,7 @@ export interface SendConversationMessageCommand {
   access?: ActorAccess;
   idempotencyKey?: string;
   text: string;
-  followUp?: "queue" | "steer";
+  followUp?: FollowUpMode;
   dispatchFollowUpId?: string;
   dispatchAfterRunId?: AgentRunId;
   dispatchJobId?: JobId;

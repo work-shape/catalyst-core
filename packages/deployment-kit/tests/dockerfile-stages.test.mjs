@@ -9,6 +9,7 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, test } from "node:test";
+import { dockerCheckAsked } from "../lib/env.mjs";
 
 const root = resolve(import.meta.dirname, "../../..");
 const DOCKERFILES = [
@@ -72,7 +73,7 @@ describe("the stages of the Dockerfiles", () => {
     });
   }
 
-  const asked = process.env.CATALYST_DOCKER_CHECK === "1";
+  const asked = dockerCheckAsked();
   const daemon = asked
     ? spawnSync("docker", ["info", "--format", "{{.ServerVersion}}"], {
         encoding: "utf8",

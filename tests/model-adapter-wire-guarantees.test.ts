@@ -45,6 +45,11 @@ const resumedTurn: ModelMessage[] = [
   { role: "tool", toolCallId: "call_two", content: "The user declined this call. Nothing ran." }
 ];
 const saveData = { name: "save_data", description: "Saves data." };
+/**
+ * A message steered into the running turn (FU-2): it follows every result of the step it came
+ * in on (events-workflows-and-guardrails check 85).
+ */
+const steeredTurn: ModelMessage[] = [...resumedTurn, { role: "user", content: "Also save three." }];
 
 function openAiAnswer(api: Api): unknown {
   return api === "responses"
@@ -424,6 +429,39 @@ describe.each<Api>(["responses", "chat_completions"])("OpenAI-compatible wire: %
       ]);
     }
   });
+
+  it("sends a steered message after every result of the step it came in on", async () => {
+    const sent = openAiProvider(() => Response.json(openAiAnswer(api)));
+    await azureDeployment().complete(
+      {
+        providerId: "azure",
+        model: "dev-gpt-6.1-sol",
+        tools: [saveData],
+        messages: steeredTurn
+      },
+      {}
+    );
+
+    if (api === "responses") {
+      const items = records(sent[0]?.body.input);
+      expect(items.slice(-3, -1).map((item) => item.type)).toEqual([
+        "function_call_output",
+        "function_call_output"
+      ]);
+      expect(items.at(-1)).toMatchObject({ role: "user" });
+      expect(JSON.stringify(items.at(-1))).toContain("Also save three.");
+    } else {
+      const messages = records(sent[0]?.body.messages);
+      expect(messages.map((message) => message.role)).toEqual([
+        "user",
+        "assistant",
+        "tool",
+        "tool",
+        "user"
+      ]);
+      expect(JSON.stringify(messages.at(-1))).toContain("Also save three.");
+    }
+  });
 });
 
 describe("OpenAI Responses stream failures", () => {
@@ -628,6 +666,22 @@ describe("Google Vertex wire", () => {
         ]
       }
     ]);
+  });
+
+  it("sends a steered message after the function responses, in the same user turn", async () => {
+    const { sent } = google();
+    const adapter = await vertex();
+    await adapter.complete({ ...request, tools: [saveData], messages: steeredTurn });
+
+    const contents = records(sent[0]?.body.contents);
+    expect(contents.map((content) => content.role)).toEqual(["user", "model", "user"]);
+    const parts = records(contents.at(-1)?.parts);
+    expect(parts.map((part) => Object.keys(part)[0])).toEqual([
+      "functionResponse",
+      "functionResponse",
+      "text"
+    ]);
+    expect(parts.at(-1)).toEqual({ text: "Also save three." });
   });
 
   it("asks for no grounding, no cached content and no settings beyond the call", async () => {

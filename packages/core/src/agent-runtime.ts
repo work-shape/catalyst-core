@@ -5,9 +5,9 @@ import {
   LIVE_JOB_STATUSES,
   TOOL_CALL_STATES
 } from "@work-shape/catalyst-asset-schemas";
-import type { AuditActor } from "./audit";
+import type { AuditActor } from "./audit-actor";
 import type { ModelUsageRefusal } from "./errors";
-import type { ConversationFollowUp } from "./follow-ups";
+import type { ConversationFollowUp, FollowUpMode } from "./follow-ups";
 import type { ReasoningEffortConfig } from "./config";
 import type { AppendAssistantMessageInput, ChatMessage, CreateMessageInput } from "./conversation";
 import type { AttachmentManifest, ManagedFileRef, SubjectRowClaim } from "./files";
@@ -453,7 +453,7 @@ export interface PrepareConversationRunStartInput {
    * running turn takes in, where the run is the sender's own under the same authorization
    * (otherwise it is queued). Without an active run both start the run.
    */
-  followUp?: "queue" | "steer";
+  followUp?: FollowUpMode;
   /** Effective defaults captured only for a queued message; immediate runs keep caller selections. */
   followUpSelection?: Pick<CreateAgentRunInput, "modelBindingId" | "reasoningEffort">;
   /** Internal dispatch: starts with this oldest pending item under the conversation lock. */

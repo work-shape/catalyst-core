@@ -22,6 +22,7 @@ import type {
 } from "./knowledge-base-source";
 import { sourceFailureText, sourceItemCounts, sourceStateView } from "./knowledge-source-status";
 import { newKnowledgeSource, type KnowledgeSourceForm } from "./knowledge-sources-model";
+import type { ActionNotice } from "./build-model";
 
 // The synced sources of a Knowledge Base of documents (SRC-2): each reads the folders it names
 // through a Connection whose type is a document source. The list is part of the draft: a source
@@ -229,7 +230,7 @@ function SourceStatus({
 }) {
   const { locale, t } = useTranslation();
   const [busy, setBusy] = useState<"sync" | KnowledgeSourceFailureCode>();
-  const [notice, setNotice] = useState<{ tone: "success" | "error"; text: string }>();
+  const [notice, setNotice] = useState<ActionNotice>();
   if (status === undefined) return null;
   const view = sourceStateView(status);
   const counts = sourceItemCounts(status.items);

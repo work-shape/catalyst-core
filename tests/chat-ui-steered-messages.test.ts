@@ -92,8 +92,9 @@ function steeredProjection(status: AgentRun["status"], answered: boolean): Agent
       createdAt: at(3),
       toolCallId: asToolCallId("call_1"),
       toolName: "demo.look",
-      result: { status: "success", output: { rooms: 3 } }
-    } as AgentRuntimeEvent,
+      result: { status: "success", output: { rooms: 3 } },
+      modelOutput: '{"rooms":3}'
+    },
     ...(answered
       ? [
           {
@@ -102,13 +103,11 @@ function steeredProjection(status: AgentRun["status"], answered: boolean): Agent
             sequence: 5,
             createdAt: at(4),
             delta: "The attic is dry."
-          } as AgentRuntimeEvent
+          } satisfies AgentRuntimeEvent
         ]
       : [])
   ];
-  return agentRunProjectionSchema.parse(
-    projectAgentRun(run(status), events.map(observe))
-  ) as AgentRunProjection;
+  return agentRunProjectionSchema.parse(projectAgentRun(run(status), events.map(observe)));
 }
 
 const base = { conversationId: "conv_1", clientInstanceId: "client_1" };
@@ -225,7 +224,7 @@ describe("a steered message in the thread", () => {
   it("stands once after the rows were read through the API's contract", () => {
     // The client parses what the API answers: a steer that lost its delivery there was shown
     // a second time, and the thread broke on the repeated id.
-    const read = storedRows.map((row) => messageSchema.parse(row) as Message);
+    const read = storedRows.map((row) => messageSchema.parse(row));
     const shown = toUiMessages(read, undefined, { [runId]: steeredProjection("completed", true) });
     expect(new Set(shown.map((message) => message.id)).size).toBe(shown.length);
     expect(shape(shown)).toEqual([

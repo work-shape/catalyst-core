@@ -7,7 +7,13 @@ import { z } from "zod";
 import { asClientInstanceId } from "@work-shape/catalyst-core";
 import { createApiClient } from "@work-shape/catalyst-api-client";
 import { runCli, type CliRuntimeOptions } from "@work-shape/catalyst-cli";
-import { createOAuthWorld, landingOf, type OAuthWorld } from "./support/oauth-sign-in-world";
+import {
+  createOAuthWorld,
+  issuePersonalKey,
+  landingOf,
+  readSignIn,
+  type OAuthWorld
+} from "./support/oauth-sign-in-world";
 
 // CS-4b5, check 58 of connections-and-secrets.md: `catalyst connection connect` with a person's
 // key completes only in that person's signed-in browser, prints the binding's state and never
@@ -34,14 +40,10 @@ afterAll(async () => {
 
 /** A personal key the person issues in Settings, for reading and writing config assets. */
 async function personalKey(cookie: string): Promise<string> {
-  const response = await fetch(`${world.api}/api/v1/me/api-keys`, {
-    method: "POST",
-    headers: { cookie, origin: "http://localhost:5173", "content-type": "application/json" },
-    body: JSON.stringify({
-      name: "Terminal",
-      scopes: ["connection.read", "connection.write"],
-      expiresAt: new Date(Date.now() + 86_400_000).toISOString()
-    })
+  const response = await issuePersonalKey(world, cookie, {
+    name: "Terminal",
+    scopes: ["connection.read", "connection.write"],
+    expiresAt: new Date(Date.now() + 86_400_000).toISOString()
   });
   const answer: unknown = await response.json();
   expect(response.status, JSON.stringify(answer)).toBe(200);
@@ -145,10 +147,7 @@ describe("catalyst connection connect", () => {
       state: "waiting"
     });
     const stateOf = async (cookie: string, connection = "dcr") => {
-      const read = await fetch(
-        `${world.api}/api/v1/connections/${connection}/oauth/sign-ins/${signInId}`,
-        { headers: { cookie } }
-      );
+      const read = await readSignIn(world, cookie, connection, signInId);
       const body = await read.text();
       expect(read.status, body).toBe(200);
       return z.object({ state: z.string() }).parse(JSON.parse(body)).state;

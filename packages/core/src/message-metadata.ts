@@ -680,8 +680,8 @@ function isUnknownRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function isSteeredDelivery(value: unknown): value is SteeredUserMessageDelivery {
-  if (typeof value !== "object" || value === null) return false;
-  const delivery = value as Record<string, unknown>;
+  if (!isUnknownRecord(value)) return false;
+  const delivery = value;
   return (
     typeof delivery.runId === "string" &&
     typeof delivery.followUpId === "string" &&

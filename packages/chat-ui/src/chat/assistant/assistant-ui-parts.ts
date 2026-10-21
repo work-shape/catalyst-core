@@ -95,7 +95,7 @@ export function toSteeredUiMessage(segment: { messageId: string; text: string })
   return {
     id: segment.messageId,
     role: "user",
-    parts: [{ type: "text", text: segment.text, state: "done" } as UIMessage["parts"][number]]
+    parts: [{ type: "text", text: segment.text, state: "done" }]
   };
 }
 
@@ -122,7 +122,7 @@ export function toActiveRunUiMessages(activeRun: AssistantUiActiveRun): UIMessag
  * The active run's assistant message. `shown` is the part of the run it shows, the last answer
  * of a steered run; what the run surfaced is read from all of it.
  */
-export function toActiveRunUiMessage(
+function toActiveRunUiMessage(
   activeRun: AssistantUiActiveRun,
   shown: AgentRunProjection = activeRun.projection
 ): UIMessage {

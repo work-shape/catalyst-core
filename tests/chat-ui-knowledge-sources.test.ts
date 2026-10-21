@@ -33,18 +33,20 @@ const handbookSource: KnowledgeSourceForm = {
   exclude: ""
 };
 
+const initialSync = {
+  syncRunId: "sync_1",
+  mode: "initial",
+  startedAt: "2026-10-21T08:00:00.000Z",
+  itemsPerMinute: 12,
+  estimatedEndAt: "2026-10-21T09:30:00.000Z"
+} satisfies KnowledgeSourceStatus["running"];
+
 const running: KnowledgeSourceStatus = {
   id: "handbook-folders",
   connection: "handbook-folders",
   items: { discovered: 3, fetched: 1, indexed: 40, failed: 2, withdrawn: 5 },
   failures: [{ code: "knowledge_fetch_failed", count: 2 }],
-  running: {
-    syncRunId: "sync_1",
-    mode: "initial",
-    startedAt: "2026-10-21T08:00:00.000Z",
-    itemsPerMinute: 12,
-    estimatedEndAt: "2026-10-21T09:30:00.000Z"
-  },
+  running: initialSync,
   lastChangeAt: "2026-10-21T08:10:00.000Z",
   oldestOpenChangeAt: "2026-10-21T08:05:00.000Z"
 };
@@ -130,10 +132,10 @@ describe("the synced sources of a Knowledge Base's definition", () => {
   it("writes a changed source and leaves the rest of the definition as it was", () => {
     const form = knowledgeBaseConfigToForm(stored);
     const [first] = form.sources;
-    expect(first).toBeDefined();
+    if (!first) throw new Error("The form has no source");
     const written = knowledgeBaseFormToConfig({
       ...form,
-      sources: [{ ...first!, folders: " 100 ,\n200\n100\n", include: "\n" }]
+      sources: [{ ...first, folders: " 100 ,\n200\n100\n", include: "\n" }]
     });
     expect(written).toEqual({
       ...stored,
@@ -164,9 +166,7 @@ describe("the synced sources of a Knowledge Base's definition", () => {
 describe("the state of a synced source", () => {
   it("is the running sync's, else how the last one ended", () => {
     expect(sourceStateView(running).state).toBe("initial");
-    expect(sourceStateView({ running: { ...running.running!, mode: "changes" } }).state).toBe(
-      "syncing"
-    );
+    expect(sourceStateView({ running: { ...initialSync, mode: "changes" } }).state).toBe("syncing");
     expect(sourceStateView({}).state).toBe("never");
     const last = {
       syncRunId: "sync_0",

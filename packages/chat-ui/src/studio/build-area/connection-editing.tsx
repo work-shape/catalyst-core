@@ -33,6 +33,7 @@ import {
 import { connectionRefusalOf, type ConnectionRefusal } from "./connection-refusals";
 import type { ConnectionSource } from "./connection-source";
 import { RefusalNotice } from "./refusal-notice";
+import type { ActionNotice } from "./build-model";
 
 // The parts of the Connection page that change a Connection made on the instance: its
 // settings, its key and which tools it accepts. Each part saves on its own, through the
@@ -208,7 +209,7 @@ export function ConnectionSecretEditor({
   const { t } = useTranslation();
   const [value, setValue] = useState<string>();
   const [saving, setSaving] = useState(false);
-  const [result, setResult] = useState<{ tone: "success" | "error"; text: string }>();
+  const [result, setResult] = useState<ActionNotice>();
   if (value === undefined) {
     return (
       <div className="grid justify-items-start gap-1">

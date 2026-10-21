@@ -530,3 +530,28 @@ export function countRows(table: "connection_bindings" | "secrets"): Promise<num
     return Number(row?.count ?? 0);
   });
 }
+
+/** Issues a personal key as the person `cookie` signs in, as Settings does. */
+export function issuePersonalKey(
+  world: Pick<OAuthWorld, "api">,
+  cookie: string,
+  input: { name: string; scopes: string[]; expiresAt: string }
+): Promise<Response> {
+  return fetch(`${world.api}/api/v1/me/api-keys`, {
+    method: "POST",
+    headers: { cookie, origin: "http://localhost:5173", "content-type": "application/json" },
+    body: JSON.stringify(input)
+  });
+}
+
+/** Reads a Connection's sign-in as the person `cookie` signs in. */
+export function readSignIn(
+  world: Pick<OAuthWorld, "api">,
+  cookie: string,
+  connection: string,
+  signInId: string
+): Promise<Response> {
+  return fetch(`${world.api}/api/v1/connections/${connection}/oauth/sign-ins/${signInId}`, {
+    headers: { cookie }
+  });
+}

@@ -1,33 +1,21 @@
-import { AUDIT_EVENT_STATUSES, AUTH_PRINCIPAL_KINDS } from "@work-shape/catalyst-asset-schemas";
+import { AUDIT_EVENT_STATUSES } from "@work-shape/catalyst-asset-schemas";
 import {
   getAuthPrincipal,
   getSubjectUserId,
   isAuthenticatedServicePrincipal,
   type ActingServicePrincipal,
   type AuthenticatedIdentity,
-  type AuthenticatedUser,
-  type DelegatedActor,
-  type UserRole
+  type AuthenticatedUser
 } from "./identity";
-import type { ApiCredentialId, AuditEventId, ClientInstanceId } from "./ids";
+import type { AuditActor } from "./audit-actor";
+import type { AuditEventId, ClientInstanceId } from "./ids";
 import type { JsonObject } from "./json";
 import type { StorePage } from "./paging";
 import type { ISODateString } from "./time";
 
-export type { AuditEventName } from "./events";
+export type { AuditActor } from "./audit-actor";
 
-export interface AuditActor {
-  userId?: string;
-  externalUserId?: string;
-  displayLabel: string;
-  roles: UserRole[];
-  principalKind?: (typeof AUTH_PRINCIPAL_KINDS)[number];
-  principalId?: string;
-  principalDisplayLabel?: string;
-  credentialId?: ApiCredentialId;
-  subjectUserId?: string;
-  delegatedActor?: DelegatedActor;
-}
+export type { AuditEventName } from "./events";
 
 export type AuditEventStatus = (typeof AUDIT_EVENT_STATUSES)[number];
 

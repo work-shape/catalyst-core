@@ -174,6 +174,38 @@ describe("Bedrock adapter: what it sends", () => {
       source: { type: "base64", media_type: "image/png", data: Buffer.from([2]).toString("base64") }
     });
   });
+
+  // FU-2: a message steered into a running turn follows every tool result of the step it came in
+  // on (events-workflows-and-guardrails check 85).
+  it("sends a steered message after both results of a step, in the same user turn", async () => {
+    const sent = answerWith(() => Response.json(message([{ type: "text", text: "Done." }])));
+    await (
+      await bedrock()
+    ).complete({
+      model: RECORDED_BEDROCK_PROFILE,
+      messages: [
+        user("Weather in Berlin and Hamburg?"),
+        {
+          role: "assistant",
+          content: "",
+          toolCalls: [
+            { toolCallId: "toolu_1", toolName: "get_weather", input: { city: "Berlin" } },
+            { toolCallId: "toolu_2", toolName: "get_weather", input: { city: "Hamburg" } }
+          ]
+        },
+        { role: "tool", toolCallId: "toolu_1", content: "Sunny" },
+        { role: "tool", toolCallId: "toolu_2", content: "Rain" },
+        user("Also Munich, please.")
+      ],
+      tools: [weatherTool]
+    });
+
+    const turns = records(sent[0]?.body, "messages");
+    expect(turns.map((turn) => turn.role)).toEqual(["user", "assistant", "user"]);
+    const last = records(turns.at(-1), "content");
+    expect(last.map((block) => block.type)).toEqual(["tool_result", "tool_result", "text"]);
+    expect(last.at(-1)).toMatchObject({ text: "Also Munich, please." });
+  });
 });
 
 describe("Bedrock adapter: documents", () => {
