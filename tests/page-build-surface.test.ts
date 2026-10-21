@@ -19,7 +19,8 @@ import { fileRoute, htmlManifest, pageFiles, reactManifest, rootRoute } from "./
 // exact, and the build runs in the sandbox either way.
 
 const REVIEWED_ROUTER_GENERATOR = "1.167.41";
-const REVIEWED_ESBUILD = "0.28.0";
+// 0.28.1 changelog/diff: plugins, sandbox file/network access and our build options are unchanged.
+const REVIEWED_ESBUILD = "0.28.1";
 
 const packageRoot = resolve(process.cwd(), "packages/app-build");
 const requireFromPackage = createRequire(join(packageRoot, "package.json"));

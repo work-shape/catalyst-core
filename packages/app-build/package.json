@@ -53,7 +53,7 @@
   "dependencies": {
     "@tanstack/router-generator": "1.167.41",
     "@work-shape/catalyst-core": "workspace:*",
-    "esbuild": "0.28.0",
+    "esbuild": "0.28.1",
     "parse5": "7.3.0",
     "zod": "4.4.3"
   },

@@ -10,5 +10,14 @@ overrides:
   seroval@^1: 1.6.9
   find-my-way@^9: 9.7.0
   fast-uri@^3: 3.1.8
+  # Drizzle's legacy loader uses transform only; the patched esbuild line removes its dev-server CORS issue.
+  esbuild@^0.18: 0.25.0
+  # tsup still requests 0.27; the Windows dev-server fix starts at 0.28.1.
+  esbuild@^0.27: 0.28.1
+  esbuild@^0.28: 0.28.1
+  # Mermaid 11 keeps KaTeX on 0.16; 0.18.2 stops inherited options bypassing trust restrictions.
+  katex@^0.16: 0.18.2
+  # This patch moves docs CSS parsing to the fixed postcss-selector-parser 7 line.
+  "@expressive-code/core@^0.44": 0.44.3
   # Univer 0.25 pins nanoid 5.1.11 exactly (GHSA-28wg-ghj8-5hjv); drop with the move to Univer 1.
   "@univerjs/core>nanoid": 5.1.16
