@@ -11,6 +11,7 @@ import {
 import { AppActionCalls } from "../apps/action-call";
 import { AppActionList } from "../apps/action-list";
 import { AppWorkflow } from "../apps/app-service";
+import { DraftHosts } from "../apps/draft-hosts";
 import type { Route } from "../http/route";
 import type { ResolvedChatServerOptions } from "../types";
 
@@ -26,6 +27,7 @@ export function registerAppRoutes(route: Route, options: ResolvedChatServerOptio
   const workflow = new AppWorkflow(options);
   const actions = new AppActionCalls(options);
   const actionList = new AppActionList(options);
+  const draftHosts = new DraftHosts(options);
 
   route.operation(apiOperations["apps.create_from_page"], {
     authorize: (input, { actor, access }) => workflow.authorizeCreate(actor, access, input),
@@ -65,6 +67,21 @@ export function registerAppRoutes(route: Route, options: ResolvedChatServerOptio
     beforeEvents: (input) => [workflow.writeEventFromPage(input)],
     heldInputKeys: [PAGE_FILE_SET_HELD_KEY],
     execute: (input, context) => workflow.updateFromPage(context, input, context.beforeEvents)
+  });
+
+  // A person allows an outside host for their own view of a draft (DRAFT-HOSTS-1). Every check
+  // runs before the call is decided and again when it runs: a policy that waited does not
+  // carry a check over a change of the draft or of the person's rights.
+  route.operation(apiOperations["apps.allow_draft_host"], {
+    authorize: async (input, { actor, access }) => {
+      await draftHosts.target(actor, access, input);
+      return { allowed: true };
+    },
+    // A setting narrowed to a workspace or to Apps finds the call of an App's draft.
+    policyTargets: (input) => draftHosts.policyTargets(input.fileSetId),
+    changeClass: "reversible",
+    module: APPS_MODULE,
+    execute: (input, context) => draftHosts.allow(context, input)
   });
 
   // Asked by the surface of a Page each time it opens. What it tells of an App is decided by

@@ -49,6 +49,8 @@ personal storage is for preferences and a person's unfinished input, not shared 
 
 Network requests are restricted by `connect-src`: an unsaved preview or a draft has no
 outside network, and a published App reaches only reviewed hosts declared in its manifest.
+Where the release turns on [outside hosts in a draft](/configure/release-config/#outside-hosts-in-a-draft),
+the builder can allow a declared host for their own preview with one click.
 Use named actions for Connections and Data Stores, never fetch the instance API directly.
 Bundle fonts and libraries or use the kit; public CDNs do not load. When diagnosing a failure,
 check form handlers, storage availability and the declared network policy before blaming the data.

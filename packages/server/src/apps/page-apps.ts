@@ -18,6 +18,7 @@ import { recordAssetEvent, scopeOf } from "../assets/asset-target";
 import { AssetWorkflow } from "../assets/asset-service";
 import type { AssetWorkflowOptions } from "../types";
 import { appConfigOf } from "./app-kind";
+import { moveDraftHosts } from "./draft-hosts";
 
 // A Page becoming an App, and an App written again from its Page: the writes themselves, for a
 // Page its caller already reached. The API reaches the Page through its conversation's access;
@@ -83,6 +84,12 @@ export class PageApps {
       workspaceId: input.workspaceId,
       revision: created.revision,
       ...(created.commit === undefined ? {} : { commit: created.commit })
+    });
+    await moveDraftHosts(this.options, call, {
+      page,
+      source,
+      app: { id: created.id, name: input.name, workspaceId: input.workspaceId },
+      fileSetId: created.fileSetId
     });
     return {
       id: created.id,

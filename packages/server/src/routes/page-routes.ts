@@ -33,7 +33,7 @@ import {
   isHtmlContentType,
   mintAppContentToken
 } from "../pages/app-content";
-import { appOutsideHosts } from "../apps/app-outside-hosts";
+import { draftHostsOffer, frameOutsideHosts } from "../apps/draft-hosts";
 import { mayOpenAssetFileSet } from "../assets/asset-access";
 import { ConversationWorkflow } from "../conversations/conversation-service";
 import type { Route } from "../http/route";
@@ -211,13 +211,28 @@ export function registerPageRoutes(route: Route, options: ResolvedChatServerOpti
       pageSessionId,
       expiresAt
     });
+    // What the frame holds back of the hosts the Page lists, and which of them the caller may
+    // allow for their own view: a Page is the caller's own draft, never reviewed.
+    const hosts = await frameOutsideHosts(
+      options,
+      { ...fileSet, conversationId: page.conversationId },
+      { view: "draft", viewerId: getSubjectUserId(user) }
+    );
+    const draftHosts = draftHostsOffer(options, {
+      caller: user,
+      mayWrite: true,
+      heldBack: hosts.heldBack,
+      manifest: fileSet.manifest
+    });
     void reply.header("cache-control", "no-store");
     return {
       url: appContentPath(fileSet.id, token),
       expiresAt: new Date(expiresAt * 1000).toISOString(),
       fileSetId: fileSet.id,
       number: fileSet.number,
-      pageSessionId
+      pageSessionId,
+      heldBackHosts: hosts.heldBack,
+      ...(draftHosts ? { draftHosts } : {})
     };
   });
 
@@ -279,19 +294,16 @@ export function registerPageRoutes(route: Route, options: ResolvedChatServerOpti
         }
       : { persistent: false, session: checked.claims.pageSessionId, values: {} };
     const shell = composePageShell(new TextDecoder().decode(bytes), storage);
-    const outsideHosts = fileSet.asset
-      ? await appOutsideHosts(options.stores.pages, {
-          clientInstanceId: options.clientInstanceId,
-          assetId: fileSet.asset.id,
-          view: appContentView(checked.claims.mode, fileSet.asset),
-          shown: fileSet,
-          publishedFileSetId: fileSet.asset.publishedFileSetId
-        })
-      : undefined;
+    // The viewer is the one the token names: hosts that person allowed for their own view of
+    // a draft are theirs alone (DRAFT-HOSTS-1).
+    const outsideHosts = await frameOutsideHosts(options, fileSet, {
+      view: fileSet.asset ? appContentView(checked.claims.mode, fileSet.asset) : "draft",
+      viewerId: checked.claims.viewerId
+    });
     void reply.headers(
       appContentHeaders(frameAncestors, {
         pageScriptHash: shell.pageScriptHash,
-        outsideHosts: outsideHosts?.allowed ?? []
+        outsideHosts: outsideHosts.allowed
       })
     );
     // Personal snapshots change independently of the immutable revision.

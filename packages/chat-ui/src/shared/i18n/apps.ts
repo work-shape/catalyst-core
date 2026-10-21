@@ -144,6 +144,15 @@ export const apps = defineTranslations({
     "apps.failedKit":
       "The app could not be loaded: this instance does not have the kit version it was built with.",
     "apps.heldBackHosts": "This draft cannot call {hosts} until it is published.",
+    "apps.draftHostsAllow": "Allow for my preview",
+    "apps.draftHostsHeld":
+      "This draft calls {hosts}, which its preview holds back until it is published.",
+    "apps.draftHostsReadsData":
+      "The draft reads data through its actions: what your preview reads, it can send to that host.",
+    "apps.draftHostsOnlyYou":
+      "Allowing it changes only your own preview of this draft, not anyone else's and not the published app. Your preview can then send that host what it shows you.",
+    "apps.draftHostsWaits": "Allowing it waits for an approval.",
+    "apps.draftHostsFailed": "{hosts} could not be allowed. Try again.",
     "apps.linkCopied": "Link copied",
     "apps.linkBody":
       "The current draft of this app is replaced by this preview as it is now. The published version does not change until someone publishes the draft.",
@@ -390,6 +399,15 @@ export const apps = defineTranslations({
     "apps.failedKit":
       "Die App konnte nicht geladen werden: Diese Instanz hat die Kit-Version nicht, mit der sie gebaut wurde.",
     "apps.heldBackHosts": "Dieser Entwurf kann {hosts} erst aufrufen, wenn er veröffentlicht ist.",
+    "apps.draftHostsAllow": "Für meine Vorschau erlauben",
+    "apps.draftHostsHeld":
+      "Dieser Entwurf ruft {hosts} auf; seine Vorschau hält das zurück, bis er veröffentlicht ist.",
+    "apps.draftHostsReadsData":
+      "Der Entwurf liest Daten über seine Aktionen: Was deine Vorschau liest, kann sie an diesen Host senden.",
+    "apps.draftHostsOnlyYou":
+      "Das Erlauben ändert nur deine eigene Vorschau dieses Entwurfs, nicht die anderer und nicht die veröffentlichte App. Deine Vorschau kann diesem Host dann senden, was sie dir zeigt.",
+    "apps.draftHostsWaits": "Das Erlauben wartet auf eine Freigabe.",
+    "apps.draftHostsFailed": "{hosts} konnte nicht erlaubt werden. Versuch es noch einmal.",
     "apps.linkCopied": "Link kopiert",
     "apps.linkBody":
       "Der aktuelle Entwurf dieser App wird durch diese Vorschau ersetzt, so wie sie jetzt ist. Die veröffentlichte Version ändert sich erst, wenn jemand den Entwurf veröffentlicht.",

@@ -326,11 +326,57 @@ export type AppUserStorageMutation =
 /** Protects per-person state; larger business records belong in a Data Store. */
 export const APP_USER_STORAGE_MAX_BYTES = 64 * 1024;
 
+/**
+ * Whose draft an outside host was allowed for: an App's draft, or a Page of a conversation
+ * that is no App yet (DRAFT-HOSTS-1).
+ */
+export type DraftHostOwner = { kind: "app"; id: string } | { kind: "page"; id: PageId };
+
+/** One person's allowance of one outside host for their own view of one draft. */
+export interface DraftHostAllowanceKey {
+  clientInstanceId: ClientInstanceId;
+  owner: DraftHostOwner;
+  userId: UserId;
+}
+
 export interface PagesStore {
   getAppUserStorage(input: AppUserStorageKey): Promise<Record<string, string>>;
   mutateAppUserStorage(
     input: AppUserStorageKey & { mutation: AppUserStorageMutation }
   ): Promise<void>;
+
+  /**
+   * Allows `host` for the person's own view of the owner's draft, from the owner's file set
+   * `fileSetNumber` on. Allowed again, the row takes the new number and time. With `draftOf`,
+   * the row is stored only while the App's draft and published revision are still those, and
+   * a publish or discard that moves them waits for it or comes first: `false` says it came
+   * first and nothing was stored.
+   */
+  allowDraftHost(
+    input: DraftHostAllowanceKey & {
+      host: string;
+      fileSetNumber: number;
+      allowedAt: string;
+      draftOf?: { activeRevisionId: string; publishedRevisionId: string | undefined };
+    }
+  ): Promise<boolean>;
+  /**
+   * The hosts the person allowed that still hold for the owner's file set `shownNumber`: each
+   * allowed on that file set or an earlier one, and listed by the manifest of every file set of
+   * the owner from the one after it was allowed up to the shown one. A host that left the
+   * manifest in between is no longer allowed, also where a later draft lists it again.
+   */
+  listDraftHostAllowances(
+    input: DraftHostAllowanceKey & { shownNumber: number }
+  ): Promise<string[]>;
+  /**
+   * Removes every person's allowances of the owner's draft: the draft was published or
+   * discarded. Answers how many were removed.
+   */
+  removeDraftHostAllowances(input: {
+    clientInstanceId: ClientInstanceId;
+    owner: DraftHostOwner;
+  }): Promise<number>;
 
   /**
    * The Page of that name in the conversation, created when there is none. Refuses the name

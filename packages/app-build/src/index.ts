@@ -45,6 +45,7 @@ export {
   declaredConnectionsOf,
   declaredDataStoresOf,
   declaredExternalHostsOf,
+  externalHostSchema,
   type AppActionInputSchema,
   type CompiledAppAction
 } from "./action-input";

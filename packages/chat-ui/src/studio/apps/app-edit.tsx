@@ -1,6 +1,6 @@
 import { History, Trash2 } from "lucide-react";
 import { useId, useState, type ReactNode } from "react";
-import type { ConfigAssetRevision } from "@work-shape/catalyst-api-client";
+import type { AppPreviewResponse, ConfigAssetRevision } from "@work-shape/catalyst-api-client";
 import {
   Banner,
   Badge,
@@ -20,6 +20,7 @@ import { instanceSentence, PendingApprovalError } from "../build-area/build-refu
 import { CopyIdItem } from "../copy-id-item";
 import { useTranslation } from "../../shared/i18n";
 import { formatMoment } from "../../shared/locale-format";
+import { DraftHostsNotice } from "../pages/draft-hosts-notice";
 import { PreviewPane } from "../pages/preview-pane";
 import { workspaceRoutePath } from "../../shared/routes";
 import { AppDraftActions } from "./actions-view";
@@ -104,8 +105,9 @@ export function AppEdit({ app }: { app: string }) {
   const [revisionsOpen, setRevisionsOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
-  // The outside hosts the shown draft lists that its frame may not call before a publish.
-  const [heldBackHosts, setHeldBackHosts] = useState<readonly string[]>([]);
+  // The shown draft: the outside hosts its frame may not call before a publish, and whether the
+  // viewer may allow them for their own preview.
+  const [shown, setShown] = useState<AppPreviewResponse>();
   // The publish was sent and waits for an approver: the live revision stays until then.
   const [publishWaits, setPublishWaits] = useState(false);
   // Each save of the draft, also the agent's from the dock, is another revision: the frame asks
@@ -274,19 +276,19 @@ export function AppEdit({ app }: { app: string }) {
             />
           ) : (
             <div className="flex size-full flex-col">
-              {heldBackHosts.length > 0 ? (
-                <Banner layout="page" className="shrink-0">
-                  {t("apps.heldBackHosts", { hosts: heldBackHosts.join(", ") })}
-                </Banner>
-              ) : null}
+              <DraftHostsNotice
+                fileSetId={shown?.fileSetId}
+                heldBackHosts={shown?.heldBackHosts ?? []}
+                draftHosts={shown?.draftHosts}
+                fallback={
+                  <Banner layout="page" className="shrink-0">
+                    {t("apps.heldBackHosts", { hosts: shown?.heldBackHosts.join(", ") ?? "" })}
+                  </Banner>
+                }
+                onAllowed={() => setTurn((count) => count + 1)}
+              />
               <div className="min-h-0 flex-1">
-                <AppPreview
-                  app={app}
-                  mode="draft"
-                  name={name}
-                  turn={turn}
-                  onShown={(shown) => setHeldBackHosts(shown.heldBackHosts)}
-                />
+                <AppPreview app={app} mode="draft" name={name} turn={turn} onShown={setShown} />
               </div>
             </div>
           )}

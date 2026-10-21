@@ -338,6 +338,36 @@ The limits:
 
 The shell answers only requests a browser makes for a frame: a request whose `Sec-Fetch-Dest` header names anything else gets `403`. The shell runs under `sandbox`, so it and the view have an opaque origin and neither can read anything of the instance. The requests for the shell and for script files are still requests to the instance, and a browser may attach eligible cookies to them. The routes read none. A reverse proxy in front of the instance must route `/app-runtime/*` to the API. When it does not, views stay on "Loading view…".
 
+## Outside Hosts In A Draft
+
+An App's manifest lists the outside hosts its frame may connect to (`externalHosts`). A published revision connects to the hosts it lists: whoever publishes it reviews them. A draft connects only to the hosts its published revision lists, and a Page in a conversation connects to none. The preview names each host it holds back.
+
+`apps.draftHosts.enabled` lets a builder allow such a host for their own preview of a draft, before anyone publishes it:
+
+```yaml
+apps:
+  draftHosts:
+    enabled: true
+```
+
+The default is `false`. Off, the instance offers no click, refuses `apps.allow_draft_host` with `404` and reads no allowance stored while it was on.
+
+On, the preview of a draft offers **Allow for my preview** to a person who may write the App, or who reads the conversation of the Page. What an allowance does:
+
+- **Only that person's frame connects.** Every other builder's preview of the same draft still holds the host back, and so does the published App.
+- **Only a click in the person's own signed-in browser allows.** A key, a Service Principal, an embedding host's token and a call made for the person are refused, so an embedded chat offers no click.
+- **Only a host the draft lists, as the build reads it.** No scheme, port, path, wildcard or IP address, and no name of a private network: `localhost` and names under `.localhost`, `.local`, `.internal`, `.lan`, `.home.arpa`, `.home`, `.corp`, `.intranet`, `.private` and `.localdomain` are refused.
+- **It ends.** A draft that no longer lists the host ends it for good, and the next draft that lists it again holds it back again. A publish and a discard of the draft end every allowance of the App. A Page saved as an App keeps its builder's allowances for the App's first draft.
+- **It is recorded.** Each allowance writes an audit event with the host and the revision number: `app.draft_host_allowed` with the App, or `app.page_draft_host_allowed` with the Page and its conversation. It holds no file of the draft and nothing the draft read. The event that copies a Page's allowances to the App it is saved as names the Page in `movedFrom`.
+
+The limits:
+
+- **An allowed host receives what the preview shows.** The frame can send an allowed host what it shows its builder, what it keeps in the builder's App storage, and, where the draft reads data through its actions from a Connection, a Data Store or a Workflow, what the builder may read. The preview says so beside the click.
+- **Allow or deny, never an approval.** Only the person's own click allows, so a policy that holds `apps.allow_draft_host` for another person's approval can never complete it: the approved call is refused.
+- **DNS is not checked.** A public name that resolves to an address of a private network is allowed like any other name. A browser's own protection against requests to private networks is the only guard.
+- **Switching off and on again.** An allowance stored while the switch was on, whose draft still lists the host, holds again once the switch is back on.
+- **No runtime switch yet.** An administrator cannot turn the click off without a release. Once operation policies are stored centrally, a `deny` on `apps.allow_draft_host` refuses it.
+
 ## Agent And Skill Configuration Assets
 
 Agents and client skills remain source-controlled YAML and Markdown, but runtime reads them from the versioned configuration-asset store. A `catalyst.yaml` manifest selects the working-copy files and target instances:

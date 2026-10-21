@@ -1,4 +1,6 @@
+import { sql } from "drizzle-orm";
 import {
+  check,
   index,
   integer,
   jsonb,
@@ -118,4 +120,41 @@ export const appUserStorage = pgTable(
     values: jsonb("values").$type<Record<string, string>>().notNull()
   },
   (table) => [primaryKey({ columns: [table.clientInstanceId, table.appId, table.userId] })]
+);
+
+/**
+ * One person's allowance of one outside host for their own view of a draft (DRAFT-HOSTS-1):
+ * an App's draft or a Page of a conversation that is no App yet. A row holds until the App is
+ * published or its draft discarded, and goes with the App, the Page or the account. Whether it
+ * still holds for the file set shown is decided where it is read: the host must be listed by
+ * every file set of the owner since `file_set_number`.
+ */
+export const draftHostAllowances = pgTable(
+  "draft_host_allowances",
+  {
+    clientInstanceId: text("client_instance_id").$type<ClientInstanceId>().notNull(),
+    appId: text("app_id").references(() => configAssets.id, { onDelete: "cascade" }),
+    pageId: text("page_id")
+      .$type<PageId>()
+      .references(() => pages.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .$type<UserId>()
+      .notNull()
+      .references(() => productUsers.id, { onDelete: "cascade" }),
+    host: text("host").notNull(),
+    // The owner's file set the host was allowed on. File sets count up per owner.
+    fileSetNumber: integer("file_set_number").notNull(),
+    allowedAt: timestamp("allowed_at", { withTimezone: true }).notNull()
+  },
+  (table) => [
+    check(
+      "draft_host_allowances_owner_check",
+      sql`(${table.appId} is null) <> (${table.pageId} is null)`
+    ),
+    // A row of a Page has no App, and the other way round: each key is unique where it is set.
+    uniqueIndex("draft_host_allowances_app_idx").on(table.appId, table.userId, table.host),
+    uniqueIndex("draft_host_allowances_page_idx").on(table.pageId, table.userId, table.host),
+    // The delete of an account finds its rows.
+    index("draft_host_allowances_user_idx").on(table.userId)
+  ]
 );

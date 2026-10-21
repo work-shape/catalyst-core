@@ -17,6 +17,11 @@ import {
   type ServedFileSet
 } from "@work-shape/catalyst-core";
 import { getAppUserStorage, mutateAppUserStorage } from "./postgres-app-user-storage";
+import {
+  allowDraftHost,
+  listDraftHostAllowances,
+  removeDraftHostAllowances
+} from "./postgres-draft-host-allowances";
 import { publishedRevisions } from "./postgres-config-asset-revisions";
 import { type PostgresConnection } from "./postgres-database";
 import { configAssetRevisions, configAssets } from "./schema/configAssets";
@@ -583,6 +588,9 @@ export function createPostgresPagesStore(db: PostgresConnection): PagesStore {
   return {
     getAppUserStorage: (input) => getAppUserStorage(db, input),
     mutateAppUserStorage: (input) => mutateAppUserStorage(db, input),
+    allowDraftHost: (input) => allowDraftHost(db, input),
+    listDraftHostAllowances: (input) => listDraftHostAllowances(db, input),
+    removeDraftHostAllowances: (input) => removeDraftHostAllowances(db, input),
     ensurePage: (input) => ensurePage(db, input),
     createPageFileSet: (input) => createPageFileSet(db, input),
     listPages: (input) => listPages(db, input),

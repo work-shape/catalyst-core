@@ -27,6 +27,7 @@ import { createPageBridge, type PageBridge } from "./bridge-host";
 import { useFrameCallTexts } from "./frame-call-texts";
 import { FrameApprovalWait, type FrameWait } from "./frame-approval-wait";
 import { createFrameCalls, type FrameAddress } from "./frame-calls";
+import { DraftHostsNotice } from "./draft-hosts-notice";
 import {
   keepPageAddress,
   pageIsGone,
@@ -231,14 +232,25 @@ function PageSurface({
       revision={number}
       preview={
         state === "ready" && address ? (
-          <LivePagePreview
-            title={t("pages.previewOf", { name })}
-            pageId={pageId}
-            number={address.number}
-            session={address.pageSessionId}
-            url={pageFrameAddress(address.url, apiBaseUrl, window.location.href)}
-            address={address}
-          />
+          <div className="flex size-full flex-col">
+            {/* Only an offer to allow: a Page of a conversation names no hosts it holds back. */}
+            <DraftHostsNotice
+              fileSetId={address.fileSetId}
+              heldBackHosts={address.heldBackHosts ?? []}
+              draftHosts={address.draftHosts}
+              onAllowed={preview.reload}
+            />
+            <div className="min-h-0 flex-1">
+              <LivePagePreview
+                title={t("pages.previewOf", { name })}
+                pageId={pageId}
+                number={address.number}
+                session={address.pageSessionId}
+                url={pageFrameAddress(address.url, apiBaseUrl, window.location.href)}
+                address={address}
+              />
+            </div>
+          </div>
         ) : (
           <PreviewPane
             source={undefined}
@@ -296,16 +308,23 @@ function usePageAddress(conversationId: string, pageId: string, fileSetId: strin
     failed: false
   });
   const keeper = useRef<{ again: () => void }>(undefined);
+  // Each turn is a new mount of the frame: a valid address is not kept for it.
+  const [turn, setTurn] = useState(0);
   useEffect(() => {
+    if (turn > 0) {
+      setState({ gone: false, failed: false });
+    }
     const kept = keepPageAddress(
       () => client.pages.preview({ params: { conversationId, pageId }, body: { fileSetId } }),
       setState
     );
     keeper.current = kept;
     return kept.stop;
-  }, [client, conversationId, pageId, fileSetId]);
+  }, [client, conversationId, pageId, fileSetId, turn]);
   const again = useCallback(() => keeper.current?.again(), []);
-  return { ...state, again };
+  // A host allowed for this viewer reaches the frame only with a new address.
+  const reload = useCallback(() => setTurn((count) => count + 1), []);
+  return { ...state, again, reload };
 }
 
 /**

@@ -316,7 +316,16 @@ export function createAppAssetKind(): WorkflowAssetKind {
     missingUpsertRight: () => undefined,
     assertInteractiveUpsertAllowed: () => undefined,
     assertInteractiveDeleteAllowed: () => undefined,
-    onPublish: requireDataStores,
+    onPublish: async (input) => {
+      await requireDataStores(input);
+      // A publish reviews the hosts of the revision it publishes. What people allowed for
+      // their own view of the draft before ends with it, in the publish's transaction
+      // (DRAFT-HOSTS-1).
+      await input.stores.pages.removeDraftHostAllowances({
+        clientInstanceId: input.clientInstanceId,
+        owner: { kind: "app", id: input.assetId }
+      });
+    },
     publishReach: appPublishReach,
     // A write from files reads the name people see from the manifest. A manifest that names
     // none keeps the one the App was made with.

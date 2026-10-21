@@ -31,6 +31,7 @@ import { ConversationWorkflow } from "../conversations/conversation-service";
 import type { ChatServerOptions } from "../types";
 import { APP_ACTIONS } from "./app-kind";
 import { appOutsideHosts } from "./app-outside-hosts";
+import { draftHostsOffer, withViewerAllowances } from "./draft-hosts";
 import { appAddress, PageApps } from "./page-apps";
 
 /** What `apps.create_from_page` is called with. */
@@ -342,13 +343,28 @@ export class AppWorkflow {
     if (!fileSet || !contentKey) {
       throw new AppError("NOT_FOUND", "App is not available");
     }
-    const outsideHosts = await appOutsideHosts(this.options.stores.pages, {
-      clientInstanceId: this.options.clientInstanceId,
-      assetId: asset.id,
-      view: input.mode,
-      shown: fileSet,
-      publishedFileSetId: asset.publishedFileSetId
+    // The viewer's own allowances of hosts for this draft count for the viewer alone.
+    const outsideHosts = await withViewerAllowances(this.options, {
+      owner: { kind: "app", id: asset.id },
+      shownNumber: fileSet.number,
+      viewerId: getSubjectUserId(caller.user),
+      base: await appOutsideHosts(this.options.stores.pages, {
+        clientInstanceId: this.options.clientInstanceId,
+        assetId: asset.id,
+        view: input.mode,
+        shown: fileSet,
+        publishedFileSetId: asset.publishedFileSetId
+      })
     });
+    const draftHosts =
+      input.mode === "draft"
+        ? draftHostsOffer(this.options, {
+            caller: caller.user,
+            mayWrite: writes,
+            heldBack: outsideHosts.heldBack,
+            manifest: fileSet.manifest
+          })
+        : undefined;
     const expiresAt = Math.floor(Date.now() / 1000) + APP_CONTENT_TOKEN_TTL_SECONDS;
     const pageSessionId = randomUUID();
     const token = mintAppContentToken(contentKey, this.options.clientInstanceId, {
@@ -403,7 +419,8 @@ export class AppWorkflow {
         app: asset.name,
         mode: input.mode
       }),
-      heldBackHosts: outsideHosts.heldBack
+      heldBackHosts: outsideHosts.heldBack,
+      ...(draftHosts ? { draftHosts } : {})
     };
   }
 

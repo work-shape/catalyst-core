@@ -363,6 +363,22 @@ export const feedbackConfigSchema = z
   .strict()
   .prefault({});
 
+/**
+ * Apps of the module `apps`. `draftHosts.enabled: true` lets a person who builds an App allow
+ * an outside host its draft lists for their own view of that draft, with one click, before the
+ * draft is published (DRAFT-HOSTS-1). Off, the default, a draft connects only to the hosts of
+ * its published revision, and no click is offered or accepted.
+ */
+export const appsConfigSchema = z
+  .object({
+    draftHosts: z
+      .object({ enabled: z.boolean().default(false) })
+      .strict()
+      .prefault({})
+  })
+  .strict()
+  .prefault({});
+
 const perMinuteSchema = z.number().int().positive();
 
 /**
@@ -518,6 +534,8 @@ export const clientInstanceConfigSchema = z.object({
   modules: modulesConfigSchema,
   /** Read with the module `feedback` on. */
   feedback: feedbackConfigSchema,
+  /** Read with the module `apps` on. */
+  apps: appsConfigSchema,
   rateLimits: rateLimitsConfigSchema,
   capabilities: z.record(z.string(), z.unknown()).default({}),
   usage: z

@@ -1,5 +1,7 @@
 import { appPublishReview } from "../apps/app-publish-reach";
 import { prepareAppPublication } from "../apps/app-audience";
+import { removeDraftHosts } from "../apps/draft-hosts";
+import { APP_ASSET_KIND } from "@work-shape/catalyst-api-contract";
 import type { AppAudience } from "@work-shape/catalyst-core";
 import { createHash } from "node:crypto";
 import { clearLiveOnceSwitches } from "./asset-after-write";
@@ -593,6 +595,11 @@ export class AssetDraftWorkflow {
       // left behind are cleared first (ADR-0031).
       await clearLiveOnceSwitches(this.options, call, kind, name, asset.id);
     }
+    if (kind.kind === APP_ASSET_KIND) {
+      // The hosts people allowed for their own view of the draft end with it (DRAFT-HOSTS-1).
+      // Removed before the discard: a discard whose allowances stay is not made.
+      await removeDraftHosts(this.options, asset.id);
+    }
     let discarded: { revision: number };
     try {
       discarded = await this.options.configAssets.store.discardConfigAssetDraft({
@@ -615,6 +622,15 @@ export class AssetDraftWorkflow {
     });
     // The switches set for the discarded draft are cleared now, in the name of who discarded it.
     await clearLiveOnceSwitches(this.options, call, kind, name, asset.id);
+    if (kind.kind === APP_ASSET_KIND) {
+      // And any a person allowed while the discard ran.
+      await removeDraftHosts(this.options, asset.id).catch((error: unknown) => {
+        this.options.logger.error(
+          { correlationId: call.correlationId, error: error instanceof Error ? error.message : "" },
+          `The draft of App '${name}' was discarded but the hosts allowed for it were not removed`
+        );
+      });
+    }
     return { draftRevision: discarded.revision, publishedRevision: discarded.revision };
   }
 

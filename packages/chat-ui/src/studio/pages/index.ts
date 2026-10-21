@@ -54,4 +54,5 @@ export {
   pageSurfaceRendering,
   PageSurfaceView
 } from "./page-surface";
+export { DraftHostsNotice } from "./draft-hosts-notice";
 export { PreviewPane, type PreviewPaneProps } from "./preview-pane";
