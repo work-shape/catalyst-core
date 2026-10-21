@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { compiledActionsOf } from "@work-shape/catalyst-app-build";
 import { buildPage } from "@work-shape/catalyst-app-build/build";
+import { THEME_TOKEN_NAMES } from "@work-shape/catalyst-ui/theme";
 import { pageFiles } from "./support/page-build";
 
 // The docs pages an agent reads before it writes an App's actions, one per task. Every example
@@ -83,5 +84,29 @@ describe("the docs pages on building an App", () => {
     }
 
     expect([...kinds].sort()).toEqual(["connection", "sql", "workflow"]);
+  });
+
+  it("names only theme variables the kit keeps on a page, and Workshaper builds from them", async () => {
+    // APP-THEME-1: an App follows light and dark when its own rules read these variables.
+    const sandbox = await readFile(`${guideDirectory}sandbox.md`, "utf8");
+    const section = sandbox.slice(
+      sandbox.indexOf("## Light and dark"),
+      sandbox.indexOf("## Fonts and libraries")
+    );
+    const named = new Set(
+      [...section.matchAll(/`(--[a-z-]+)`|var\((--[a-z-]+)\)/gu)].map(
+        (match) => match[1] ?? match[2] ?? ""
+      )
+    );
+    expect(named.size).toBeGreaterThan(8);
+    const kept = new Set<string>(THEME_TOKEN_NAMES);
+    expect([...named].filter((name) => !kept.has(name))).toEqual([]);
+    const workshaper = await readFile(
+      new URL("../packages/client-assembly/src/workshaper.ts", import.meta.url),
+      "utf8"
+    );
+    const guided = [...workshaper.matchAll(/var\((--[a-z-]+)\)/gu)].map((match) => match[1]);
+    expect(guided).toContain("--background");
+    expect(guided.filter((name) => name === undefined || !kept.has(name))).toEqual([]);
   });
 });

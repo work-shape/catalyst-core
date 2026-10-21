@@ -258,6 +258,7 @@ test("a plain HTML Page has the platform's margin, type and colours, follows dar
       };
       return {
         dark: root.classList.contains("dark"),
+        colorScheme: getComputedStyle(root).colorScheme,
         background: getComputedStyle(body).backgroundColor,
         surface: computed("color", tokens.getPropertyValue("--background")),
         padding: getComputedStyle(body).paddingLeft,
@@ -281,6 +282,7 @@ test("a plain HTML Page has the platform's margin, type and colours, follows dar
   expect(light.padding).toBe(light.gutter);
   expect(light.headingSize).toBe(light.titleSize);
   expect(light.background).toBe(light.surface);
+  expect(light.colorScheme).not.toContain("dark");
   // A link is the colour of the text around it, and its line says it is one.
   expect([light.linkColor, light.linkLine]).toEqual([light.textColor, "underline"]);
   expect([light.buttonBorder, light.fieldBorder]).toEqual(["1px", "1px"]);
@@ -343,6 +345,8 @@ test("a plain HTML Page has the platform's margin, type and colours, follows dar
   await expect.poll(async () => (await look()).dark).toBe(true);
   const dark = await look();
   expect(dark.background).toBe(dark.surface);
+  // What the browser draws itself in the Page follows the mode too (APP-THEME-1).
+  expect(dark.colorScheme).toBe("dark");
   expect(dark.background).not.toBe(light.background);
   expect(dark.linkColor).toBe(dark.textColor);
   expect(dark.linkColor).not.toBe(light.linkColor);

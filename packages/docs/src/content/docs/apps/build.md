@@ -8,7 +8,7 @@ This guide is what an agent follows. [Apps for people](/automate/apps/) says wha
 | Task                                                                  | Page                                                     |
 | --------------------------------------------------------------------- | -------------------------------------------------------- |
 | Write the folder and `app.yaml`, open it, save it                     | This page                                                |
-| Forms, personal storage, network, fonts and libraries                 | [Sandbox and storage](/apps/sandbox/)                    |
+| Forms, personal storage, network, light and dark, fonts and libraries | [Sandbox and storage](/apps/sandbox/)                    |
 | Live data: the kinds of action, drafts and publishing, `actions.call` | [Actions](/apps/actions/)                                |
 | Read or change a connected system                                     | [Actions on a Connection](/apps/connection-actions/)     |
 | Keep records in a Data Store                                          | [Actions on a Data Store](/apps/data-store-actions/)     |
