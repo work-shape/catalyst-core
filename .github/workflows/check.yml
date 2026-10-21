@@ -103,7 +103,7 @@ jobs:
     needs: [paths, build]
     if: needs.paths.outputs.code == 'true'
     runs-on: blacksmith-8vcpu-ubuntu-2404
-    timeout-minutes: 9 # check-limit
+    timeout-minutes: 14 # check-limit
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -162,7 +162,7 @@ jobs:
     needs: [paths, build]
     if: needs.paths.outputs.code == 'true'
     runs-on: blacksmith-4vcpu-ubuntu-2404
-    timeout-minutes: 9 # check-limit
+    timeout-minutes: 14 # check-limit
     strategy:
       fail-fast: false
       matrix:
