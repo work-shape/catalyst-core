@@ -37,7 +37,7 @@ import { RefusalDetail } from "./refusal-notice";
 // permissions, with the client secret in the key's place.
 
 /** How a REST API proves itself, as the dialog offers it: a key, or an OAuth choice. */
-export type CreateAuth = "key" | ConnectionOAuthChoice;
+type CreateAuth = "key" | ConnectionOAuthChoice;
 
 /** What the dialog asks for beside the definition's settings. */
 export interface CreateFields {

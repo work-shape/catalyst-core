@@ -689,7 +689,8 @@ export const CONNECTION_AUTH_SCHEME_OAUTH = "oauth";
 export const CONNECTION_AUTH_SCHEME_OAUTH_CLIENT = "oauth_client";
 
 /** How a client authenticates at a token endpoint the Connection names itself. */
-export type ConnectorTokenAuthMethod = "client_secret_post" | "client_secret_basic";
+export const CONNECTOR_TOKEN_AUTH_METHODS = ["client_secret_post", "client_secret_basic"] as const;
+export type ConnectorTokenAuthMethod = (typeof CONNECTOR_TOKEN_AUTH_METHODS)[number];
 
 /**
  * The authorization server a Connection names in its own settings, where its type reads no

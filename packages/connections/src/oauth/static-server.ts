@@ -18,7 +18,7 @@ import { checkedServer } from "./server";
  * The name a setup session and a token set keep for such a server: the issuer the settings
  * name, else the token address. A refresh or revocation for another one is refused.
  */
-export function staticIssuerOf(endpoints: ConnectorOAuthEndpoints): string {
+function staticIssuerOf(endpoints: ConnectorOAuthEndpoints): string {
   return endpoints.issuer ?? endpoints.tokenUrl;
 }
 

@@ -2,6 +2,7 @@ import { retryAfterSeconds } from "../retry-after";
 import type { IncomingMessage } from "node:http";
 import {
   CONNECTION_CREDENTIAL_WORDS,
+  CONNECTOR_TOKEN_AUTH_METHODS,
   CONNECTION_REFUSALS,
   connectionCallError,
   connectionCallReasonOf,
@@ -214,7 +215,7 @@ const oauthSettingsSchema = z
           .regex(HEADER_VALUE_PATTERN, { message: "must be printable text on one line" })
       )
       .optional(),
-    tokenAuthMethod: z.enum(["client_secret_post", "client_secret_basic"]).optional(),
+    tokenAuthMethod: z.enum(CONNECTOR_TOKEN_AUTH_METHODS).optional(),
     issuer: oauthAddressSchema.optional()
   })
   .strict()

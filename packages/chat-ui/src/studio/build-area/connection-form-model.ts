@@ -1,4 +1,8 @@
-import { OPERATION_EFFECTS } from "@work-shape/catalyst-core";
+import {
+  CONNECTOR_TOKEN_AUTH_METHODS,
+  OPERATION_EFFECTS,
+  type ConnectorTokenAuthMethod
+} from "@work-shape/catalyst-core";
 // The form of a Connection made on the instance, and what it writes. Pure: the page holds the
 // state, these functions read and make definitions. No function here holds a credential: the
 // secret is entered beside the definition and sent on its own.
@@ -25,8 +29,8 @@ export type ConnectionOAuthChoice = (typeof CONNECTION_OAUTH_CHOICES)[number];
 export type ConnectionFormAuthScheme = ConnectionAuthChoice | ConnectionOAuthChoice;
 
 /** How a REST API's client proves itself at the token endpoint. */
-export const CONNECTION_TOKEN_AUTH_METHODS = ["client_secret_post", "client_secret_basic"] as const;
-export type ConnectionTokenAuthMethod = (typeof CONNECTION_TOKEN_AUTH_METHODS)[number];
+export const CONNECTION_TOKEN_AUTH_METHODS = CONNECTOR_TOKEN_AUTH_METHODS;
+export type ConnectionTokenAuthMethod = ConnectorTokenAuthMethod;
 
 /**
  * The authorization server a REST API names, as the form holds it. The client secret is not
