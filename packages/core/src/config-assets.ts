@@ -2,7 +2,8 @@ import type { AppAvailability, AppAudience } from "./app-audience";
 import {
   AGENT_AVAILABILITY_MODES,
   ASSET_REPO_BUNDLE_KINDS,
-  CONFIG_ASSET_CHANGE_OPERATIONS
+  CONFIG_ASSET_CHANGE_OPERATIONS,
+  type AgentUse
 } from "@work-shape/catalyst-asset-schemas";
 import type { AssetScope } from "./asset-kinds";
 import type { AuditActor } from "./audit";
@@ -15,6 +16,7 @@ import type {
   OperationRunId
 } from "./ids";
 import type { JsonObject } from "./json";
+import type { AccessDecision } from "./permissions";
 import { assetObjectPrefix, type FileSetId } from "./pages";
 import type { StorePage } from "./paging";
 
@@ -78,6 +80,20 @@ export function isAgentAvailableInWorkspace(
   return workspace.kind === "personal"
     ? availability.personalWorkspaces
     : workspace.id !== undefined && availability.collaborationWorkspaceIds.includes(workspace.id);
+}
+
+/**
+ * Why `agent.use` refuses an agent that is available where the caller is (AGENT-USE-1), from
+ * the decision of `agent.use` on it: a covering deny refuses any agent, and an agent limited to
+ * the right is refused where no row allows it. An agent set to Everyone needs no row.
+ */
+export function agentUseRefusalOf(
+  decision: AccessDecision,
+  limited: boolean
+): "no_grant" | "denied" | undefined {
+  if (decision.allowed) return undefined;
+  if (decision.reason === "denied" || decision.reason === "holder_inactive") return "denied";
+  return limited ? "no_grant" : undefined;
 }
 
 /**
@@ -771,4 +787,20 @@ export interface ConfigAssetStore {
     expectedAssetId?: string;
     expectedAvailability?: AgentAvailability | null;
   }): Promise<AgentAvailability>;
+  /** The names of the active agents only holders of `agent.use` may use (AGENT-USE-1). */
+  listAgentUseLimits(input: {
+    clientInstanceId: ClientInstanceId;
+    /** Only this agent, for a read of one agent that must not load every other. */
+    agentName?: string;
+  }): Promise<ReadonlySet<string>>;
+  /**
+   * Limits one active agent to holders of `agent.use`, or opens it to everyone where it is
+   * available. `expectedAssetId` refuses with `CONFLICT` where the name is another asset's.
+   */
+  setAgentUse(input: {
+    clientInstanceId: ClientInstanceId;
+    agentName: string;
+    use: AgentUse;
+    expectedAssetId?: string;
+  }): Promise<AgentUse>;
 }

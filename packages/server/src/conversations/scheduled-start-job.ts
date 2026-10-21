@@ -13,12 +13,17 @@ import {
   scheduledPromptDedupeKey,
   type AuthenticatedUser,
   type PlatformStores,
+  type UserRecord,
   type ScheduledStart,
   type ScheduledStartRun
 } from "@work-shape/catalyst-core";
 import { z } from "zod";
 import type { ChatServerOptions } from "../types";
-import { getWorkspaceAssetSnapshot } from "../workspaces/agent-availability";
+import {
+  agentUseRefusalIn,
+  callerAccess,
+  getWorkspaceAssetSnapshot
+} from "../workspaces/agent-availability";
 
 /** One saved start's due time. The subject lock and run row make a retried tick idempotent. */
 export const scheduledPromptJob = defineJobKind({
@@ -55,6 +60,23 @@ export function schedulePromptJob(
   );
 }
 
+/** The owner of a scheduled prompt as the run that starts it acts. */
+function scheduledOwner(owner: UserRecord): AuthenticatedUser {
+  const identity = owner.identities[0];
+  return {
+    id: owner.id,
+    subjectUserId: owner.id,
+    externalUserId: identity?.externalUserId ?? owner.id,
+    displayLabel: owner.displayLabel,
+    email: owner.email,
+    roles: owner.roles,
+    permissionRefs: owner.permissionRefs,
+    permissions: owner.permissions,
+    clientInstanceId: owner.clientInstanceId,
+    authSource: identity?.authSource ?? "scheduled-start"
+  };
+}
+
 /** A queued Agent Run and the next tick exist at the same commit as this attempt's history. */
 export function createScheduledPromptHandler(options: ChatServerOptions, now: () => Date) {
   return defineJobHandler({
@@ -70,9 +92,31 @@ export function createScheduledPromptHandler(options: ChatServerOptions, now: ()
         options.clientInstanceId,
         previous.collaborationWorkspaceId
       );
-      const assets = workspaceBefore
-        ? await getWorkspaceAssetSnapshot(options, workspaceBefore)
-        : undefined;
+      const ownerBefore = await options.stores.users.getUser({
+        clientInstanceId: options.clientInstanceId,
+        userId: asUserId(previous.ownerUserId)
+      });
+      // The agents its owner may use there now: available, and `agent.use` where the agent is
+      // limited to it (AGENT-USE-1). A refusal is recorded and the tick is skipped below.
+      const ownerAccess = ownerBefore && (await callerAccess(options, scheduledOwner(ownerBefore)));
+      const assets =
+        workspaceBefore && ownerBefore && ownerAccess
+          ? await getWorkspaceAssetSnapshot(options, workspaceBefore, ownerAccess)
+          : undefined;
+      if (
+        workspaceBefore &&
+        ownerAccess &&
+        ownerBefore &&
+        (job.payload.manual || previous.state === "active")
+      )
+        await agentUseRefusalIn(options, {
+          actor: scheduledOwner(ownerBefore),
+          access: ownerAccess,
+          workspace: workspaceBefore,
+          agentName: previous.agentName,
+          entry: "schedule",
+          correlationId: job.correlationId
+        });
       await control.transaction(async (tx) => {
         const start = await tx.scheduledStarts.get({
           clientInstanceId: options.clientInstanceId,
@@ -137,19 +181,7 @@ export function createScheduledPromptHandler(options: ChatServerOptions, now: ()
             if (!assets?.agents.some((agent) => agent.name === start.agentName))
               history.reason = "agent_unavailable";
             else {
-              const identity = owner.identities[0];
-              const user: AuthenticatedUser = {
-                id: owner.id,
-                subjectUserId: owner.id,
-                externalUserId: identity?.externalUserId ?? owner.id,
-                displayLabel: owner.displayLabel,
-                email: owner.email,
-                roles: owner.roles,
-                permissionRefs: owner.permissionRefs,
-                permissions: owner.permissions,
-                clientInstanceId: owner.clientInstanceId,
-                authSource: identity?.authSource ?? "scheduled-start"
-              };
+              const user = scheduledOwner(owner);
               const conversation = await tx.conversations.createConversation({
                 clientInstanceId: options.clientInstanceId,
                 collaborationWorkspaceId: start.collaborationWorkspaceId,

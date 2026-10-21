@@ -24,6 +24,7 @@ describe("permissions", () => {
       "agent.write",
       "agent.publish",
       "agent.delete",
+      "agent.use",
       "skill.read",
       "skill.write",
       "skill.delete",
@@ -88,6 +89,7 @@ describe("permissions", () => {
       action === "roles.edit_built_in" ||
       action === "feedback.review" ||
       action === "agent.publish" ||
+      action === "agent.use" ||
       action === "builder" ||
       action === "publisher";
     const keyed = ACTIONS.filter((action) => !unkeyed(action));
@@ -144,6 +146,7 @@ describe("permissions", () => {
       "agent.write",
       "agent.publish",
       "agent.delete",
+      "agent.use",
       "skill.read",
       "skill.write",
       "skill.delete",

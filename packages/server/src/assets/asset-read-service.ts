@@ -281,10 +281,16 @@ export class AssetReadWorkflow {
     // Whoever may not read the draft is answered the published revision and nothing of it.
     const publishedOnly = read.publishedView;
     if (publishedOnly) address = { ...address, revision: "published" };
-    const [defaultName, availability, content] = await Promise.all([
+    const [defaultName, availability, content, useLimits] = await Promise.all([
       this.defaultName(target.kind, target.scope),
       this.availability(call, target.kind, asset.name),
-      this.revisionContent(target, asset, address)
+      this.revisionContent(target, asset, address),
+      target.kind.kind === "agent"
+        ? this.options.configAssets.store.listAgentUseLimits({
+            clientInstanceId: this.options.clientInstanceId,
+            agentName: asset.name
+          })
+        : undefined
     ]);
     // Resolve only after authorization, from the revision the caller is allowed to read.
     const runsAs = await target.kind.readRunsAs?.(content.config);
@@ -390,6 +396,9 @@ export class AssetReadWorkflow {
       ...(appAudience ? { appAudience } : {}),
       ...(asset.name === defaultName ? { isDefault: true as const } : {}),
       ...(availability ? { availability } : {}),
+      ...(useLimits
+        ? { agentUse: useLimits.has(asset.name) ? ("granted" as const) : ("everyone" as const) }
+        : {}),
       ...(target.kind.hasWorkspaceAvailability
         ? {
             canSetAvailability:

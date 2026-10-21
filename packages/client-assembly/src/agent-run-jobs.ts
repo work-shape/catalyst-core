@@ -12,7 +12,9 @@ import {
 } from "@work-shape/catalyst-agent-runtime";
 import {
   AppError,
+  agentUseRefusalOf,
   asUserId,
+  createAuthorizer,
   isAgentAvailableInWorkspace,
   type AgentRun,
   type AuthenticatedUser,
@@ -107,6 +109,32 @@ export function readAgentRunWorkerConcurrency(env: ClientInstanceEnv): number | 
   return value;
 }
 
+/** Whether `agent.use` refuses the owner the agent now (AGENT-USE-1), as a new start decides. */
+async function scheduledAgentUseRefused(
+  store: PlatformStores,
+  owner: AuthenticatedUser,
+  agentName: string
+): Promise<boolean> {
+  const [limited, asset, access] = await Promise.all([
+    store.configAssets.listAgentUseLimits({ clientInstanceId: owner.clientInstanceId, agentName }),
+    store.configAssets.getConfigAsset({
+      clientInstanceId: owner.clientInstanceId,
+      kind: "agent",
+      name: agentName
+    }),
+    createAuthorizer(store.access).forActor(owner)
+  ]);
+  const resource = {
+    kind: "agent",
+    name: agentName,
+    ...(asset ? { assetId: asset.id } : {}),
+    ...(asset?.scope.kind === "workspace" ? { workspaceId: asset.scope.workspaceId } : {})
+  };
+  return (
+    agentUseRefusalOf(access.authorize("agent.use", resource), limited.has(agentName)) !== undefined
+  );
+}
+
 async function loadCurrentUser(
   store: PlatformStores,
   registry: Pick<OperationRegistry, "resolveMany">,
@@ -128,6 +156,27 @@ async function loadCurrentUser(
   if (!user || user.status !== "active") {
     throw new AppError("FORBIDDEN", "Agent run owner is unavailable or disabled");
   }
+  const principal = run.authorization?.principal;
+  const identity =
+    principal?.kind === "user"
+      ? user.identities.find(
+          (candidate) =>
+            candidate.authSource === principal.authSource &&
+            candidate.externalUserId === principal.externalUserId
+        )
+      : user.identities[0];
+  const current: AuthenticatedUser = {
+    id: user.id,
+    externalUserId: identity?.externalUserId ?? user.id,
+    displayLabel: user.displayLabel,
+    email: user.email,
+    roles: user.roles,
+    permissionRefs: user.permissionRefs,
+    permissions: user.permissions,
+    clientInstanceId: user.clientInstanceId,
+    authSource: identity?.authSource ?? "agent-worker",
+    subjectUserId: user.id
+  };
   // The queued job is not a permission snapshot. Revocation between tick and execution
   // closes it here, before a model or a tool sees the prompt.
   const scheduled = await store.scheduledStarts.isScheduledAgentRun({
@@ -158,32 +207,13 @@ async function loadCurrentUser(
     if (
       !workspace ||
       !member ||
-      !isAgentAvailableInWorkspace(availability.get(run.agentName), workspace)
+      !isAgentAvailableInWorkspace(availability.get(run.agentName), workspace) ||
+      (await scheduledAgentUseRefused(store, current, run.agentName))
     )
       throw new AppError(
         "FORBIDDEN",
         "Scheduled prompt owner can no longer use this agent in this workspace"
       );
   }
-  const principal = run.authorization?.principal;
-  const identity =
-    principal?.kind === "user"
-      ? user.identities.find(
-          (candidate) =>
-            candidate.authSource === principal.authSource &&
-            candidate.externalUserId === principal.externalUserId
-        )
-      : user.identities[0];
-  return {
-    id: user.id,
-    externalUserId: identity?.externalUserId ?? user.id,
-    displayLabel: user.displayLabel,
-    email: user.email,
-    roles: user.roles,
-    permissionRefs: user.permissionRefs,
-    permissions: user.permissions,
-    clientInstanceId: user.clientInstanceId,
-    authSource: identity?.authSource ?? "agent-worker",
-    subjectUserId: user.id
-  };
+  return current;
 }

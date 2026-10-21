@@ -136,6 +136,22 @@ export const configAssetAvailability = pgTable(
   ]
 );
 
+/**
+ * The agents only holders of `agent.use` may use where they are available (AGENT-USE-1). No
+ * row: everyone who may work in such a workspace uses the agent there.
+ */
+export const agentUseLimits = pgTable(
+  "agent_use_limits",
+  {
+    assetId: text("asset_id")
+      .primaryKey()
+      .references(() => configAssets.id, { onDelete: "cascade" }),
+    clientInstanceId: text("client_instance_id").notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull()
+  },
+  (table) => [index("agent_use_limits_client_idx").on(table.clientInstanceId)]
+);
+
 export const configAssetWorkspaceAvailability = pgTable(
   "config_asset_workspace_availability",
   {

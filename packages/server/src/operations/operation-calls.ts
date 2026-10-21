@@ -2,7 +2,9 @@ import {
   asUserId,
   createOperationRegistry,
   isAgentAvailableInWorkspace,
-  isAuthenticatedServicePrincipal
+  isAuthenticatedServicePrincipal,
+  type AuthenticatedIdentity,
+  type CollaborationWorkspaceId
 } from "@work-shape/catalyst-core";
 import type { RunOperationDeps } from "@work-shape/catalyst-tool-execution";
 import {
@@ -24,6 +26,11 @@ import type { ChatServerOptions, OperationCalls, ResolvedChatServerOptions } fro
 import { resolveOperationResource } from "./operation-resource";
 import { createAuditingEventEmitter } from "./event-emitter";
 import { holdsWorkspaceBundle } from "../workspaces/workspace-access";
+import {
+  agentUseRefusal,
+  callerAccess,
+  recordAgentUseRefusal
+} from "../workspaces/agent-availability";
 import type { GuardrailRunner } from "../guardrails/guardrail-runner";
 import { createPublishNarrator } from "../publish-narrative/publish-narrator";
 import type { PublishNarrativeStoredData } from "@work-shape/catalyst-core";
@@ -212,17 +219,7 @@ export function createOperationCalls(options: OperationCallsOptions): OperationC
       })) !== undefined ||
       (!isAuthenticatedServicePrincipal(actor) &&
         (await holdsWorkspaceBundle(options, actor, workspaceId))),
-    agentAvailable: async ({ agentName, workspaceId }) => {
-      const [workspace, availability] = await Promise.all([
-        options.stores.workspaces.getWorkspace(clientInstanceId, workspaceId),
-        options.stores.configAssets.listAgentAvailability({ clientInstanceId })
-      ]);
-      // The rule a new run is started under (`getWorkspaceAssetSnapshot`).
-      return (
-        workspace !== undefined &&
-        isAgentAvailableInWorkspace(availability.get(agentName), workspace)
-      );
-    },
+    agentAvailable: (input) => agentAvailableTo(options, input),
     logger: options.logger,
     now: options.operations?.now
   };
@@ -239,4 +236,60 @@ export function createOperationCalls(options: OperationCallsOptions): OperationC
     })
   );
   return { registry, deps, approvalRequestHandlers, publishNarrator };
+}
+
+/**
+ * Whether an agent is available in a workspace now, by the rule a new run is started under
+ * (`getWorkspaceAssetSnapshot`), and with an actor whether that person may use it there
+ * (`agent.use`, AGENT-USE-1). With a correlation id, a refusal of `agent.use` is recorded as a
+ * subagent's: the other caller, a call that waited, records its own refusal.
+ */
+async function agentAvailableTo(
+  options: OperationCallsOptions,
+  input: {
+    agentName: string;
+    workspaceId: CollaborationWorkspaceId;
+    actor?: AuthenticatedIdentity;
+    correlationId?: string;
+  }
+): Promise<boolean> {
+  const { clientInstanceId } = options;
+  const [workspace, availability] = await Promise.all([
+    options.stores.workspaces.getWorkspace(clientInstanceId, input.workspaceId),
+    options.stores.configAssets.listAgentAvailability({ clientInstanceId })
+  ]);
+  if (
+    workspace === undefined ||
+    !isAgentAvailableInWorkspace(availability.get(input.agentName), workspace)
+  )
+    return false;
+  if (input.actor === undefined) return true;
+  const [access, limited, asset] = await Promise.all([
+    callerAccess(options, input.actor),
+    options.stores.configAssets.listAgentUseLimits({
+      clientInstanceId,
+      agentName: input.agentName
+    }),
+    options.stores.configAssets.getConfigAsset({
+      clientInstanceId,
+      kind: "agent",
+      name: input.agentName
+    })
+  ]);
+  const keys = new Map(asset ? [[asset.name, { id: asset.id, scope: asset.scope }]] : []);
+  const refusal = agentUseRefusal(access, { agentKeys: keys }, limited, input.agentName);
+  if (refusal !== undefined && input.correlationId !== undefined)
+    await recordAgentUseRefusal(
+      options,
+      {
+        actor: input.actor,
+        workspace,
+        agentName: input.agentName,
+        entry: "subagent",
+        correlationId: input.correlationId
+      },
+      refusal,
+      asset?.id
+    );
+  return refusal === undefined;
 }

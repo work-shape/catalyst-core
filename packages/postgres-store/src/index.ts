@@ -5,6 +5,10 @@ import {
   listAgentAvailability as listPostgresAgentAvailability,
   setAgentAvailability as setPostgresAgentAvailability
 } from "./postgres-agent-availability";
+import {
+  listAgentUseLimits as listPostgresAgentUseLimits,
+  setAgentUse as setPostgresAgentUse
+} from "./postgres-agent-use";
 import { listConfigAssetPage as listPostgresConfigAssetPage } from "./postgres-config-asset-page";
 import {
   getConfigAssetPageOrigin as getPostgresConfigAssetPageOrigin,
@@ -155,7 +159,9 @@ function bindStores(
         listConfigAssetsFromPage: (input) => listPostgresConfigAssetsFromPage(db, input),
         listConfigAssetPage: (input) => listPostgresConfigAssetPage(db, input),
         listAgentAvailability: (input) => listPostgresAgentAvailability(db, input),
-        setAgentAvailability: (input) => setPostgresAgentAvailability(db, input)
+        setAgentAvailability: (input) => setPostgresAgentAvailability(db, input),
+        listAgentUseLimits: (input) => listPostgresAgentUseLimits(db, input),
+        setAgentUse: (input) => setPostgresAgentUse(db, input)
       },
       inTransaction
     ),

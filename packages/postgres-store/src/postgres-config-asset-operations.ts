@@ -709,6 +709,8 @@ export function createPostgresConfigAssetsStore(
     | "listConfigAssetPage"
     | "listAgentAvailability"
     | "setAgentAvailability"
+    | "listAgentUseLimits"
+    | "setAgentUse"
   >,
   inTransaction = false
 ): ConfigAssetStore {
@@ -780,6 +782,8 @@ export function createPostgresConfigAssetsStore(
       input: Parameters<ConfigAssetStore["setAgentAvailability"]>[0]
     ): ReturnType<ConfigAssetStore["setAgentAvailability"]> {
       return deps.setAgentAvailability(input);
-    }
+    },
+    listAgentUseLimits: (input) => deps.listAgentUseLimits(input),
+    setAgentUse: (input) => deps.setAgentUse(input)
   };
 }

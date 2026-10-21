@@ -6,6 +6,14 @@ export const configAssetEvents = {
     name: "config_asset.availability_set",
     subject: "config_asset"
   },
+  // Who uses an agent where it is available: everyone, or holders of `agent.use` (AGENT-USE-1).
+  "config_asset.use_set": {
+    name: "config_asset.use_set",
+    subject: "config_asset",
+    legacy: false,
+    audited: true,
+    phases: ["after"]
+  },
   "config_asset.default_agent_set": {
     ...LEGACY_AUDIT,
     name: "config_asset.default_agent_set",

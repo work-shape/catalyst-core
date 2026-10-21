@@ -8,6 +8,7 @@ import {
   type AccessResource,
   type ActorAccess,
   type AgentAvailability,
+  type AgentUse,
   type CollaborationWorkspace,
   type InitialAgentAvailability,
   type JsonObject,
@@ -210,6 +211,44 @@ export async function setAssetAvailability(
     collaborationWorkspaceIds: availability.collaborationWorkspaceIds
   });
   return availability;
+}
+
+/**
+ * Who uses one agent where it is available (AGENT-USE-1): everyone who may work there, or only
+ * holders of `agent.use` on it. It is decided like its availability and read by the next start.
+ */
+export async function setAgentUse(
+  options: AssetWorkflowOptions,
+  call: AssetCall,
+  input: { name: string; use: AgentUse; expectedAssetId?: string }
+): Promise<{ use: AgentUse }> {
+  await requirePlacementRight(options, call, { kind: "agent", name: input.name });
+  await authorizeInteractiveWrite(options, call.actor, call, call.audit);
+  const [before, asset] = await Promise.all([
+    options.configAssets.store.listAgentUseLimits({
+      clientInstanceId: options.clientInstanceId,
+      agentName: input.name
+    }),
+    options.configAssets.store.getConfigAsset({
+      clientInstanceId: options.clientInstanceId,
+      kind: "agent",
+      name: input.name
+    })
+  ]);
+  const use = await options.configAssets.store.setAgentUse({
+    clientInstanceId: options.clientInstanceId,
+    agentName: input.name,
+    use: input.use,
+    ...(input.expectedAssetId === undefined ? {} : { expectedAssetId: input.expectedAssetId })
+  });
+  await recordPlacement(call, "config_asset.use_set", {
+    kind: "agent",
+    name: input.name,
+    ...(asset ? { agentId: asset.id } : {}),
+    before: before.has(input.name) ? "granted" : "everyone",
+    use
+  });
+  return { use };
 }
 
 /**

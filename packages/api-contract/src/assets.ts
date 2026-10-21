@@ -1,4 +1,5 @@
 import {
+  AGENT_USE_SETTINGS,
   APP_AUDIENCES,
   OPERATION_EFFECTS,
   WORKSPACE_USE_ASSET_KINDS,
@@ -106,6 +107,13 @@ const isDefaultSchema = z.literal(true).optional();
  * `publishedRevision` both name the published revision, and `draftRevision` is left out.
  */
 /** Dependencies whose use is missing in one or more of the agent's workspaces. */
+/**
+ * Who uses an agent where it is available (AGENT-USE-1): `everyone` who may work there, or only
+ * those `agent.use` allows on it (`granted`).
+ */
+export const agentUseSchema = z.enum(AGENT_USE_SETTINGS);
+export type AgentUse = z.infer<typeof agentUseSchema>;
+
 export const dependencyAvailabilitySchema = z.object({
   /** The workspaces reviewed by the publisher; a later change must be read again. */
   availability: agentAvailabilitySchema.nullable().optional(),
@@ -276,6 +284,8 @@ export const assetSchema = z.object({
   availability: agentAvailabilitySchema.optional(),
   dependencyAvailability: dependencyAvailabilitySchema.optional(),
   canSetAvailability: z.boolean().optional(),
+  /** Only on agent reads: who uses the agent where it is available (AGENT-USE-1). */
+  agentUse: agentUseSchema.optional(),
   /** Only on agent reads. The stored config stays intact; these references cannot run. */
   unavailableTools: z.array(unavailableToolSchema).optional(),
   unavailableSkills: z.array(unavailableSkillSchema).optional(),

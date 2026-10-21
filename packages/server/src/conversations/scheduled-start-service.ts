@@ -12,6 +12,7 @@ import {
   scheduledPromptDedupeKey,
   SCHEDULED_START_MIN_INTERVAL_MINUTES,
   shortestCronGapMinutes,
+  type ActorAccess,
   type AuthenticatedUser,
   type OperationExecutionContext,
   type PlatformStores,
@@ -20,7 +21,7 @@ import {
 } from "@work-shape/catalyst-core";
 import type { ChatServerOptions } from "../types";
 import { ConversationWorkflow } from "./conversation-service";
-import { getWorkspaceAssetSnapshot } from "../workspaces/agent-availability";
+import { getWorkspaceAssetSnapshot, requireAgentUse } from "../workspaces/agent-availability";
 import { scheduledPromptJob, schedulePromptJob } from "./scheduled-start-job";
 
 type Fields = { agentName: string; prompt: string; cron: string; timeZone?: string };
@@ -71,7 +72,16 @@ export class ScheduledStartsWorkflow {
     return row;
   }
 
-  async requireAgent(user: AuthenticatedUser, workspaceId: string, agentName: string) {
+  /**
+   * A prompt is made for an agent its owner may use in the workspace: available there, and
+   * `agent.use` where the agent is limited to it (AGENT-USE-1).
+   */
+  async requireAgent(
+    caller: { user: AuthenticatedUser; access: ActorAccess; correlationId: string },
+    workspaceId: string,
+    agentName: string
+  ) {
+    const { user, access } = caller;
     const workspace = await new ConversationWorkflow(this.options).requireMemberWorkspace(
       user,
       asCollaborationWorkspaceId(workspaceId)
@@ -83,9 +93,18 @@ export class ScheduledStartsWorkflow {
     });
     if (!member)
       throw new AppError("NOT_FOUND", "This workspace is not available for your scheduled prompts");
-    const assets = await getWorkspaceAssetSnapshot(this.options, workspace);
-    if (!assets.agents.some((agent) => agent.name === agentName))
+    const assets = await getWorkspaceAssetSnapshot(this.options, workspace, access);
+    if (!assets.agents.some((agent) => agent.name === agentName)) {
+      await requireAgentUse(this.options, {
+        actor: user,
+        access,
+        workspace,
+        agentName,
+        entry: "schedule",
+        correlationId: caller.correlationId
+      });
       throw new AppError("NOT_FOUND", "This agent is not available in this workspace");
+    }
   }
 
   async list(
@@ -121,7 +140,11 @@ export class ScheduledStartsWorkflow {
     fields: Fields & { collaborationWorkspaceId: string }
   ) {
     const user = person(context);
-    await this.requireAgent(user, fields.collaborationWorkspaceId, fields.agentName);
+    await this.requireAgent(
+      { user, access: context.access, correlationId: context.correlationId },
+      fields.collaborationWorkspaceId,
+      fields.agentName
+    );
     const now = new Date();
     const timeZone = fields.timeZone ?? this.options.config.clientInstance.timeZone ?? "UTC";
     const start: ScheduledStart = {
@@ -149,7 +172,11 @@ export class ScheduledStartsWorkflow {
   async update(context: OperationExecutionContext, id: string, fields: Fields) {
     const user = person(context);
     const before = await this.requireOwn(this.options.stores, id, user);
-    await this.requireAgent(user, before.collaborationWorkspaceId, fields.agentName);
+    await this.requireAgent(
+      { user, access: context.access, correlationId: context.correlationId },
+      before.collaborationWorkspaceId,
+      fields.agentName
+    );
     const timeZone = fields.timeZone ?? before.timeZone;
     nextScheduledPrompt(fields.cron, timeZone, new Date());
     const consent = await this.personalConsent(context, user);

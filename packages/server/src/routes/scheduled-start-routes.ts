@@ -48,7 +48,11 @@ export function registerScheduledStartRoutes(route: Route, options: ChatServerOp
         input.timeZone ?? options.config.clientInstance.timeZone ?? "UTC",
         new Date()
       );
-      await workflow.requireAgent(context.actor, input.collaborationWorkspaceId, input.agentName);
+      await workflow.requireAgent(
+        { user: context.actor, access: context.access, correlationId: context.correlationId },
+        input.collaborationWorkspaceId,
+        input.agentName
+      );
       return permission;
     },
     changeClass: "reversible",
@@ -65,7 +69,11 @@ export function registerScheduledStartRoutes(route: Route, options: ChatServerOp
         context.actor
       );
       nextScheduledPrompt(input.cron, input.timeZone ?? current.timeZone, new Date());
-      await workflow.requireAgent(context.actor, current.collaborationWorkspaceId, input.agentName);
+      await workflow.requireAgent(
+        { user: context.actor, access: context.access, correlationId: context.correlationId },
+        current.collaborationWorkspaceId,
+        input.agentName
+      );
       return permission;
     },
     changeClass: "reversible",

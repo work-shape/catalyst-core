@@ -4,6 +4,7 @@ import {
   auditActorFromUser,
   getSubjectUserId,
   isSuperadmin,
+  type ActorAccess,
   type AuthenticatedUser,
   type CollaborationWorkspace,
   type CollaborationWorkspaceId,
@@ -116,15 +117,17 @@ export class CollaborationWorkspaceWorkflow {
     return { allowed: true };
   }
 
-  /** The runtime assets a member sees in this workspace. */
+  /** The runtime assets a member sees in this workspace: the agents they may use there. */
   async getAssetSnapshot(
     user: AuthenticatedUser,
+    access: ActorAccess,
     collaborationWorkspaceId: CollaborationWorkspaceId
   ): Promise<RuntimeAssetSnapshot> {
     await this.requireWorkspaceAccess(user, collaborationWorkspaceId);
     return getWorkspaceAssetSnapshot(
       this.options,
-      await this.requireWorkspace(collaborationWorkspaceId)
+      await this.requireWorkspace(collaborationWorkspaceId),
+      access
     );
   }
 

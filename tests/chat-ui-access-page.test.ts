@@ -636,8 +636,9 @@ describe("what the dialogs send", () => {
     const actions = (patch: Partial<GrantForm>) =>
       grantRequests({ ...form, ...patch })?.map((row) => `${row.effect} ${row.action}`);
     // An allow gives the level and every one below it.
-    expect(actions({})).toEqual(["allow agent.read", "allow agent.write"]);
-    expect(grantLevels("agent")).toEqual(["read", "write", "publish", "delete"]);
+    expect(actions({})).toEqual(["allow agent.read", "allow agent.use", "allow agent.write"]);
+    // Using an agent is its lowest level, below View (AGENT-USE-1).
+    expect(grantLevels("agent")).toEqual(["use", "read", "write", "publish", "delete"]);
     // A deny refuses the level and every one above it.
     expect(actions({ effect: "deny" })).toEqual([
       "deny agent.write",
@@ -686,7 +687,9 @@ describe("what the dialogs send", () => {
     // A workspace owns agents and skills (WS-OWN-1a), so "In workspace X" comes first.
     for (const kind of ["agent", "skill"] as const) {
       expect(grantVerbs(kind)).toEqual(
-        kind === "agent" ? ["read", "write", "publish", "delete"] : ["read", "write", "delete"]
+        kind === "agent"
+          ? ["read", "use", "write", "publish", "delete"]
+          : ["read", "write", "delete"]
       );
       expect(grantScopeKinds(kind)).toEqual(["workspace", "asset"]);
     }
@@ -754,17 +757,18 @@ describe("what the dialogs send", () => {
         scopeKind: "instance"
       }
     ]);
-    // An agent right in a workspace is one row on that workspace.
-    expect(inPlace("agent", "workspace")).toEqual([
-      {
+    // An agent right in a workspace is a row on that workspace per action of its level: View
+    // brings Use, the agents' lowest level (AGENT-USE-1).
+    expect(inPlace("agent", "workspace")).toEqual(
+      ["agent.read", "agent.use"].map((action) => ({
         holderKind: "user",
         holderId: "user-1",
-        action: "agent.read",
+        action,
         effect: "allow",
         scopeKind: "workspace",
         scopeId: "ws-1"
-      }
-    ]);
+      }))
+    );
   });
 
   it("names a Connection row and a workspace row in words", () => {

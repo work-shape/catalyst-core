@@ -389,6 +389,13 @@ export type ConfigAssetChangeOperation = (typeof CONFIG_ASSET_CHANGE_OPERATIONS)
 export const AGENT_AVAILABILITY_MODES = ["all", "selected"] as const;
 export type AgentAvailabilityMode = (typeof AGENT_AVAILABILITY_MODES)[number];
 
+/**
+ * Who uses an agent where it is available (AGENT-USE-1): everyone who may work there, or only
+ * those `agent.use` allows on it. Every agent starts at `everyone`.
+ */
+export const AGENT_USE_SETTINGS = ["everyone", "granted"] as const;
+export type AgentUse = (typeof AGENT_USE_SETTINGS)[number];
+
 export const AGENT_EDITABLE_FIELDS = [
   "displayName",
   "description",

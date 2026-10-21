@@ -167,11 +167,15 @@ export interface RunOperationDeps {
    * Whether an agent is available in a workspace now, by the rule a new run of it is started
    * under. Asked before an agent's call that waited for an approval is executed in a
    * workspace: an agent that was withdrawn from it meanwhile no longer acts there. Without it
-   * this process does not ask.
+   * this process does not ask. With an actor it also asks whether that person may use the
+   * agent there (`agent.use`, AGENT-USE-1); with a correlation id as well, a refusal of the
+   * right is recorded under it, as a subagent start's.
    */
   agentAvailable?(input: {
     agentName: string;
     workspaceId: CollaborationWorkspaceId;
+    actor?: AuthenticatedIdentity;
+    correlationId?: string;
   }): Promise<boolean>;
   logger: Logger;
   now?: () => Date;

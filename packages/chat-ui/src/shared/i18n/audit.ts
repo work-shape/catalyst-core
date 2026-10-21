@@ -13,6 +13,7 @@ export const audit = defineTranslations({
   en: {
     "audit.eventOther": "Other activity",
     "audit.reasonOther": "No description for this reason.",
+    "audit.event.agent.use_refused": "Refused the use of an agent",
     "audit.event.agent_run.recovered": "Picked up an interrupted agent run",
     "audit.event.agent_runtime.run_failed": "An agent run failed",
     "audit.event.api_access.connect_code_confirmed": "Confirmed a connect code",
@@ -57,6 +58,7 @@ export const audit = defineTranslations({
     "audit.event.config_asset.reverted": "Went back to an earlier version",
     "audit.event.config_asset.shipped_skill_unlisted": "Hid a built-in skill",
     "audit.event.config_asset.updated": "Changed an asset",
+    "audit.event.config_asset.use_set": "Set who may use an agent",
     "audit.event.connection.binding_connected": "Signed in to the outside system of a Connection",
     "audit.event.connection.binding_needs_reconnect":
       "The outside system of a Connection refused its sign-in",
@@ -239,6 +241,7 @@ export const audit = defineTranslations({
   de: {
     "audit.eventOther": "Sonstige Aktivität",
     "audit.reasonOther": "Für diesen Grund gibt es keine Beschreibung.",
+    "audit.event.agent.use_refused": "Verwendung eines Agenten abgelehnt",
     "audit.event.agent_run.recovered": "Unterbrochenen Agentenlauf fortgesetzt",
     "audit.event.agent_runtime.run_failed": "Agentenlauf fehlgeschlagen",
     "audit.event.api_access.connect_code_confirmed": "Verbindungscode bestätigt",
@@ -288,6 +291,7 @@ export const audit = defineTranslations({
     "audit.event.config_asset.reverted": "Zu einer früheren Version zurückgekehrt",
     "audit.event.config_asset.shipped_skill_unlisted": "Eingebauten Skill ausgeblendet",
     "audit.event.config_asset.updated": "Asset geändert",
+    "audit.event.config_asset.use_set": "Festgelegt, wer einen Agenten verwenden darf",
     "audit.event.connection.binding_connected": "Beim externen System einer Verbindung angemeldet",
     "audit.event.connection.binding_needs_reconnect":
       "Das externe System einer Verbindung hat die Anmeldung abgelehnt",

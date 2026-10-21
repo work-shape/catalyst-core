@@ -195,7 +195,11 @@ export function registerCollaborationWorkspaceRoutes(
   route(
     apiOperations["workspaces.agents.list"],
     async ({ user, access, params, request, query }) => {
-      const assets = await workspaces.getAssetSnapshot(user, collaborationWorkspaceId(params));
+      const assets = await workspaces.getAssetSnapshot(
+        user,
+        access,
+        collaborationWorkspaceId(params)
+      );
       const { defaultAgentName, agents } = createSafeConfigView(
         options.config,
         assets,

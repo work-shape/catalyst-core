@@ -2,6 +2,7 @@ import {
   AGENTS_RUN_OPERATION,
   answerAsTool,
   asAgentRunId,
+  type AuthenticatedIdentity,
   type ClientInstanceId,
   type CollaborationWorkspaceId,
   type ConfigAssetSource,
@@ -26,10 +27,15 @@ export interface SubagentOperationOptions {
     "agentRuns" | "childAgentRuns" | "conversations" | "scheduledStarts"
   >;
   assetSource: ConfigAssetSource;
-  /** Whether a person may use an agent in a workspace now: the rule a new run starts under. */
+  /**
+   * Whether a person may use an agent in a workspace now: the rule a new run starts under,
+   * availability and `agent.use` (AGENT-USE-1). A refusal of `agent.use` is recorded.
+   */
   agentAvailable(input: {
     agentName: string;
     workspaceId: CollaborationWorkspaceId;
+    actor: AuthenticatedIdentity;
+    correlationId: string;
   }): Promise<boolean>;
 }
 
@@ -102,7 +108,9 @@ export function subagentOperation(
         !exists ||
         !(await options.agentAvailable({
           agentName,
-          workspaceId: root.collaborationWorkspaceId
+          workspaceId: root.collaborationWorkspaceId,
+          actor: context.actor,
+          correlationId: context.correlationId
         }))
       ) {
         return refused(

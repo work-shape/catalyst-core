@@ -1,4 +1,5 @@
 {"name":"agent.before_publish","legacy":false,"audited":false,"phases":["before"]}
+{"name":"agent.use_refused","legacy":false,"audited":true,"phases":["after"]}
 {"name":"agent_run.recovered","legacy":true,"audited":true,"phases":["after"]}
 {"name":"api_access.connect_code_confirmed","legacy":true,"audited":true,"phases":["after"]}
 {"name":"api_access.credential_created","legacy":true,"audited":true,"phases":["after"]}
@@ -44,6 +45,7 @@
 {"name":"config_asset.reverted","legacy":true,"audited":true,"phases":["after"]}
 {"name":"config_asset.shipped_skill_unlisted","legacy":true,"audited":true,"phases":["after"]}
 {"name":"config_asset.updated","legacy":true,"audited":true,"phases":["after"]}
+{"name":"config_asset.use_set","legacy":false,"audited":true,"phases":["after"]}
 {"name":"connection.binding_connected","legacy":false,"audited":true,"phases":["after"]}
 {"name":"connection.binding_needs_reconnect","legacy":false,"audited":true,"phases":["after"]}
 {"name":"connection.binding_revoked","legacy":false,"audited":true,"phases":["after"]}

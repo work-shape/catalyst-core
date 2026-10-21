@@ -32,7 +32,12 @@ import {
   reasoningEffortsOffered
 } from "@work-shape/catalyst-core";
 import { resolveModelBinding } from "@work-shape/catalyst-config-schema";
-import { agentWriter, getWorkspaceAssetSnapshot } from "../workspaces/agent-availability";
+import {
+  agentWriter,
+  callerAccess,
+  getWorkspaceAssetSnapshot,
+  requireAgentUse
+} from "../workspaces/agent-availability";
 import { createEmptyAttachmentManifest } from "./attachments";
 import { monitorRunLifecycle } from "./run-lifecycle-monitor";
 import { createConversationTitle } from "./conversation-title";
@@ -86,7 +91,8 @@ export class RunStartWorkflow {
 
   /**
    * An agent that is unknown and one that is not available in this workspace are
-   * indistinguishable to the caller. A requested model must be one this agent offers to
+   * indistinguishable to the caller. One that is available and the caller may not use is
+   * refused naming `agent.use` (AGENT-USE-1); a preview is the writer's and asks no use. A requested model must be one this agent offers to
    * users: its own binding or one of its user-selectable bindings. A requested reasoning
    * effort must be one the model that will run offers to users, and for a caller who may not
    * write the agent one its author left open or the one its author set (UX audit ruling 4).
@@ -96,7 +102,7 @@ export class RunStartWorkflow {
     requestedAgentName: string | undefined,
     requestedModelBindingId: string | undefined,
     requestedReasoningEffort: ReasoningEffortConfig | undefined,
-    caller: { user: AuthenticatedUser; access?: ActorAccess },
+    caller: { user: AuthenticatedUser; access?: ActorAccess; correlationId: string },
     acceptedFollowUp = false,
     preview?: AgentPreview
   ): Promise<{
@@ -104,7 +110,8 @@ export class RunStartWorkflow {
     modelBindingId?: string;
     reasoningEffort?: ReasoningEffortConfig;
   }> {
-    const assets = await getWorkspaceAssetSnapshot(this.options, workspace);
+    const access = await callerAccess(this.options, caller.user, caller.access);
+    const assets = await getWorkspaceAssetSnapshot(this.options, workspace, access);
     const agentName = preview?.config.name ?? requestedAgentName ?? assets.defaultAgentName;
     if (!agentName) {
       throw new AppError(
@@ -115,6 +122,14 @@ export class RunStartWorkflow {
     const agent =
       preview?.config ?? assets.agents.find((candidate) => candidate.name === agentName);
     if (requestedAgentName !== undefined && !agent) {
+      await requireAgentUse(this.options, {
+        actor: caller.user,
+        access,
+        workspace,
+        agentName: requestedAgentName,
+        entry: acceptedFollowUp ? "follow_up" : "conversation",
+        correlationId: caller.correlationId
+      });
       throw new AppError("NOT_FOUND", `Agent '${requestedAgentName}' is not defined`);
     }
     if (
@@ -154,9 +169,7 @@ export class RunStartWorkflow {
       // other effort where its author set one, and may still name the author's.
       const authorEffort = agent && authorReasoningEffort(agent, bindingId);
       const mayWrite =
-        !agent ||
-        !caller.access ||
-        agentWriter({ user: caller.user, access: caller.access }, assets)(agent.name);
+        !agent || !caller.access || agentWriter({ user: caller.user, access }, assets)(agent.name);
       const offered = reasoningEffortsOffered(allowed, authorEffort, mayWrite);
       if (
         !offered.includes(requestedReasoningEffort) &&
@@ -229,7 +242,7 @@ export class RunStartWorkflow {
         command.agentName,
         command.modelBindingId,
         command.reasoningEffort,
-        { user, access: command.access },
+        { user, access: command.access, correlationId: context.correlationId },
         Boolean(command.dispatchFollowUpId),
         preview
       );
@@ -479,7 +492,7 @@ export class RunStartWorkflow {
         command.agentName,
         command.modelBindingId,
         command.reasoningEffort,
-        { user, access: command.access }
+        { user, access: command.access, correlationId: context.correlationId }
       );
       const conversation = await this.conversations.createConversation(user, context, {
         title: command.title ?? createConversationTitle(command.text),

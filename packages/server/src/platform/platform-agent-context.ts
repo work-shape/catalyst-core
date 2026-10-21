@@ -39,7 +39,7 @@ export async function readAgentPlatformContext(
   const locale = resolveConfigLocale(options.config.localization, {
     requestedLocale: context.locale
   });
-  const available = workspace && (await getWorkspaceAssetSnapshot(options, workspace));
+  const available = workspace && (await getWorkspaceAssetSnapshot(options, workspace, call.access));
   const { reads } = new AssetWorkflow(options);
   const apps =
     workspace && options.modules.isEnabled("apps")

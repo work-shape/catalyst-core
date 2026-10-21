@@ -14,6 +14,7 @@ import { readDefinitionName } from "../asset-kinds/shared";
 import {
   authorizeAssetPlacement,
   setAssetAvailability,
+  setAgentUse,
   setAssetDefault
 } from "../assets/asset-placement";
 import { publishPolicyFloor } from "../approvals/publish-approval";
@@ -187,6 +188,16 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
     changeClass: "reversible",
     module: ASSET_WRITE_MODULE,
     execute: (input, context) => setAssetAvailability(options, context, input)
+  });
+
+  route.operation(apiOperations["agents.use.set"], {
+    authorize: (input, { access }) =>
+      authorizeAssetPlacement(options, access, { kind: "agent", name: input.name }),
+    resource: (input) => assetResource({ kind: "agent", name: input.name }),
+    policyTargets: (input) => workflow.policyTargets({ ...input, kind: "agent" }),
+    changeClass: "reversible",
+    module: ASSET_WRITE_MODULE,
+    execute: (input, context) => setAgentUse(options, context, input)
   });
 
   route.operation(apiOperations["assets.revisions.list"], {
