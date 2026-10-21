@@ -19,6 +19,7 @@ import {
   getClientInstanceId,
   loadClientInstanceConfigFromFile
 } from "@work-shape/catalyst-config-schema";
+import { loadCatalogueEntries } from "@work-shape/catalyst-connections";
 import { type JobWorker, type Logger } from "@work-shape/catalyst-core";
 import { createFilesystemObjectStorage } from "@work-shape/catalyst-object-storage";
 import { createPostgresJobWorker } from "@work-shape/catalyst-postgres-store";
@@ -238,6 +239,8 @@ export function useSeededInstance(input: SeededInstanceInput): () => SeededInsta
     const instance = await createTestInstance({
       config,
       tools: [...demoTools, ...(input.tools ?? [])],
+      // The demo's catalogue entries, which its config names.
+      catalogue: loadCatalogueEntries(resolve("clients/demo/catalogue")),
       // The demo's own server runs with these.
       operations: demoOperations(() => running.instance),
       seedAssets: false,
