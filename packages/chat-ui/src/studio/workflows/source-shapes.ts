@@ -1,5 +1,6 @@
 import type {
   LiveOnceSwitchView,
+  WorkflowDefinitionView,
   WorkflowListItem,
   WorkflowRunView,
   WorkflowStepRunView,
@@ -132,4 +133,29 @@ interface WorkflowDraftsSource {
   runLiveOnce(workflow: string, step: string, expectedRevision: number): Promise<void>;
   /** The reader's own switches on the draft, and the test run that used each. */
   listLiveOnce(workflow: string, signal: AbortSignal): Promise<LiveOnceSwitchView[]>;
+  /** One revision as it is stored, such as the published one a draft is compared with. */
+  readRevision(
+    workflow: string,
+    revision: number,
+    signal: AbortSignal
+  ): Promise<WorkflowDefinitionView>;
+  /** What the instance would refuse in this config, asked without writing it. */
+  validate(workflow: string, config: Readonly<Record<string, unknown>>): Promise<WorkflowIssue[]>;
+  /**
+   * Saves this config as the next revision of the draft. `expectedRevision` is the revision the
+   * config was made from; a save over another one is refused with 412.
+   */
+  save(
+    workflow: string,
+    config: Readonly<Record<string, unknown>>,
+    expectedRevision: number
+  ): Promise<{ revision: number }>;
+}
+
+/** One thing the instance refuses in a definition: its sentence and where it is. */
+export interface WorkflowIssue {
+  message: string;
+  /** The place in the config, as the instance names it: segments, or one dotted path. */
+  path: readonly string[];
+  code?: string;
 }

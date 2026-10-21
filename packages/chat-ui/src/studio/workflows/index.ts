@@ -6,9 +6,15 @@ export { LoopEntriesView, defaultEntryFilter, loopEntries } from "./loop-entries
 export { createInstanceSource } from "./instance-source";
 export { scheduleInWords } from "./schedule-words";
 export { StepPanel, StepTranscriptView } from "./step-panel";
+export { StepSettings, StepSettingsBar } from "./step-settings";
+export { applyStepEdits, rebaseStepEdits, WORKFLOW_FIELDS, type StepEdit } from "./step-edits";
+export { draftChanges, withRemovedSteps } from "./draft-changes";
+export { earlierFields } from "./mapping-rows";
+export { editIssues, issuePlace, useWorkflowEditing } from "./workflow-editing";
 export { stepOutputRows } from "./step-output";
 export { countsLine, placedSteps, workflowGraph, type CanvasRun } from "./workflow-canvas-model";
 export {
+  workflowSteps,
   toWorkflow,
   toAssetWorkflowListItem,
   toWorkflowListItem,
@@ -19,6 +25,7 @@ export { WorkflowRunsPage, WorkflowRunsPageView } from "./runs-page";
 export {
   runListRefreshMs,
   runRefreshMs,
+  useWorkflow,
   type WorkflowRunList,
   type WorkflowRunRead
 } from "./workflow-data";

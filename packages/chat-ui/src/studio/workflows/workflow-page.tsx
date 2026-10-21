@@ -18,9 +18,10 @@ import {
   type WorkflowDraftBarState,
   type WorkflowEdit
 } from "./workflow-draft";
+import { useWorkflowEditing, type WorkflowEditing } from "./workflow-editing";
 import { WorkflowHead } from "./workflow-head";
 import { useTestRun } from "./test-run";
-import { runsReadable, startOffered } from "./workflow-model";
+import { editOffered, runsReadable, startOffered } from "./workflow-model";
 import type { WorkflowStartIssue, WorkflowStepView } from "./workflow-views";
 import { WorkflowsFrame, routeLink, type OpenRoute } from "./workflows-frame";
 import { useWorkflowsHost } from "./workflows-host";
@@ -61,6 +62,12 @@ export function WorkflowPage({ workflow, opened }: { workflow: string; opened?: 
   const edit = useEditWithAgent(shownId, read.workflow);
   const draft = useWorkflowDraft(shownId, read.workflow);
   const test = useTestRun(shownId, read.workflow);
+  const editing = useWorkflowEditing({
+    workspaceId: workspaceId ?? "",
+    workflowId: shownId,
+    workflow: read.workflow,
+    mayWrite: host !== undefined && editOffered(host.rights, read.workflow)
+  });
 
   if (!host || workspaceId === undefined) {
     return null;
@@ -81,6 +88,7 @@ export function WorkflowPage({ workflow, opened }: { workflow: string; opened?: 
         runsAvailable={runsAvailable}
         runsReadable={runsReadable(host.rights, read.workflow)}
         edit={edit}
+        editing={editing}
         draft={
           draft.bar === undefined || test === undefined
             ? draft.bar
@@ -116,6 +124,7 @@ export function WorkflowPageView({
   runsAvailable,
   runsReadable: readsRuns = true,
   edit,
+  editing,
   draft,
   onOpenChild,
   onOpenRoute,
@@ -133,6 +142,8 @@ export function WorkflowPageView({
   runsReadable?: boolean;
   /** "Edit with the agent", for a reader who may write the Workflow. */
   edit?: WorkflowEdit;
+  /** Editing by hand in a step's Settings, for a reader who may write the Workflow. */
+  editing?: WorkflowEditing;
   /** The bar of the draft, where the draft is not the published revision. */
   draft?: WorkflowDraftBarState;
   onOpenChild(step: WorkflowStepView): void;
@@ -225,6 +236,8 @@ export function WorkflowPageView({
             key={workflowId}
             workflow={shown.workflow}
             onOpenChild={onOpenChild}
+            {...(editing === undefined ? {} : { editing })}
+            {...(edit === undefined ? {} : { edit })}
           />
         )}
       </div>

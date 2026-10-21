@@ -6,10 +6,15 @@ import { useWorkspaceApiClient } from "../../shared/api/workspace-api-client";
 import { workspaceQueryKeys } from "../../shared/api/workspace-query-keys";
 import { PendingApprovalError } from "../build-area/build-refusals";
 import { retryUnlessGone } from "../pages/page-address";
-import type { WorkflowRunsSource, WorkflowStepRunStatusFilter } from "./source-shapes";
+import type {
+  WorkflowIssue,
+  WorkflowRunsSource,
+  WorkflowStepRunStatusFilter
+} from "./source-shapes";
 import { useWorkflowsSource } from "./workflow-source";
 import type {
   LiveOnceSwitchView,
+  WorkflowDefinitionView,
   WorkflowListItem,
   WorkflowRunView,
   WorkflowStepRunView,
@@ -477,4 +482,59 @@ export function useWorkflowDraftWrites(): WorkflowDraftWrites | undefined {
           .finally(() => queryClient.invalidateQueries({ queryKey: keys.liveOnce }))
     };
   }, [drafts, keys, queryClient]);
+}
+
+/**
+ * One stored revision of a Workflow, such as the published one its draft is compared with.
+ * Nothing is read without a revision or where the source holds no drafts.
+ */
+export function useWorkflowRevision(
+  workflow: string,
+  revision: number | undefined
+): WorkflowDefinitionView | undefined {
+  const { drafts } = useWorkflowsSource();
+  const keys = useWorkflowKeys();
+  const query = useQuery({
+    queryKey: [...keys.assets, "revision", workflow, revision ?? 0],
+    queryFn: ({ signal }) => drafts?.readRevision(workflow, revision ?? 0, signal),
+    enabled: drafts !== undefined && revision !== undefined,
+    // A revision never changes once it is stored.
+    staleTime: Number.POSITIVE_INFINITY,
+    retry: retryUnlessGone
+  });
+  return query.data;
+}
+
+/** What a person does to a draft by hand: asks what the instance would refuse, and saves. */
+export interface WorkflowEditWrites {
+  validate(workflow: string, config: Readonly<Record<string, unknown>>): Promise<WorkflowIssue[]>;
+  save(
+    workflow: string,
+    config: Readonly<Record<string, unknown>>,
+    expectedRevision: number
+  ): Promise<{ revision: number }>;
+  /** The draft as it is stored now, read again past every cache. */
+  reread(workspaceId: string, workflow: string): Promise<WorkflowView>;
+}
+
+/** Editing by hand, where the source holds drafts. A save drops every read of a Workflow. */
+export function useWorkflowEditWrites(): WorkflowEditWrites | undefined {
+  const source = useWorkflowsSource();
+  const { drafts } = source;
+  const queryClient = useQueryClient();
+  const keys = useWorkflowKeys();
+  return useMemo(() => {
+    if (drafts === undefined) {
+      return undefined;
+    }
+    return {
+      validate: (workflow, config) => drafts.validate(workflow, config),
+      save: async (workflow, config, expectedRevision) =>
+        drafts
+          .save(workflow, config, expectedRevision)
+          .finally(() => queryClient.invalidateQueries({ queryKey: keys.assets })),
+      reread: (workspaceId, workflow) =>
+        source.getWorkflow(workspaceId, workflow, new AbortController().signal)
+    };
+  }, [drafts, keys, queryClient, source]);
 }

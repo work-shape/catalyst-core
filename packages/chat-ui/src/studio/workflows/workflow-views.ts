@@ -156,6 +156,28 @@ export interface WorkflowView {
    * draft's. Absent for a reader who is answered the published revision.
    */
   draft?: WorkflowDraftView;
+  /**
+   * The revision the steps above are of, as it is stored: what editing by hand changes. Absent
+   * where the source holds no drafts, such as samples.
+   */
+  definition?: WorkflowDefinitionView;
+}
+
+/**
+ * What the instance says of each step beyond its definition, by step id, as its read answered
+ * it: among it what the step gets and what it returns (`inputSchema`, `outputSchema`).
+ */
+export type WorkflowStepFacts = Readonly<Record<string, Readonly<Record<string, unknown>>>>;
+
+/** A revision of a Workflow as it is stored: `workflow.yaml` and the files of its steps. */
+export interface WorkflowDefinitionView {
+  /** The whole config of the revision: its name, its manifest and its files. */
+  config: Readonly<Record<string, unknown>>;
+  /** `workflow.yaml`. */
+  manifest: Readonly<Record<string, unknown>>;
+  /** The revision's number: the one a save names as the revision it read. */
+  revision: number;
+  stepFacts?: WorkflowStepFacts;
 }
 
 /** The two pointers of a Workflow whose draft the reader is shown, as revision numbers. */

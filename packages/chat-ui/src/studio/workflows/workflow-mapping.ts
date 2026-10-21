@@ -29,6 +29,7 @@ import type {
   WorkflowStepKind,
   WorkflowStepRunView,
   WorkflowStepSource,
+  WorkflowStepFacts,
   WorkflowStepView,
   WorkflowView
 } from "./workflow-views";
@@ -689,6 +690,23 @@ function stepNames(value: unknown, names = new Map<string, string>()): Map<strin
 }
 
 /** One Workflow from its record: the definition is the record's `config`. */
+/** The steps of `workflow.yaml` as the screens show them, with what the instance says of each. */
+export function workflowSteps(
+  manifest: Readonly<Record<string, unknown>>,
+  facts?: WorkflowStepFacts
+): WorkflowStepView[] {
+  const triggerId = records(manifest.steps)
+    .filter((step) => step.type === "trigger")
+    .map((step) => text(step.id))[0];
+  return readSteps(manifest.steps, {
+    facts,
+    names: stepNames(manifest.steps),
+    tools: ids(manifest.tools),
+    triggerId,
+    loops: new Map()
+  });
+}
+
 export function toWorkflow(
   asset: Pick<Asset, "name" | "config" | "publishedRevision">,
   {
@@ -711,16 +729,7 @@ export function toWorkflow(
 ): WorkflowView {
   const definition = asset.config;
   const description = text(definition.description);
-  const triggerId = records(definition.steps)
-    .filter((step) => step.type === "trigger")
-    .map((step) => text(step.id))[0];
-  const steps = readSteps(definition.steps, {
-    facts: pointers.stepFacts,
-    names: stepNames(definition.steps),
-    tools: ids(definition.tools),
-    triggerId,
-    loops: new Map()
-  });
+  const steps = workflowSteps(definition, pointers.stepFacts);
   return {
     id: asset.name,
     name: text(definition.name) ?? asset.name,

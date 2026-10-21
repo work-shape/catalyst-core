@@ -1,4 +1,5 @@
 import type { ApiClient } from "@work-shape/catalyst-api-client";
+import type { Asset } from "@work-shape/catalyst-api-client";
 import { WORKFLOW_ASSET_KIND } from "@work-shape/catalyst-core";
 import { principalGrantRequest } from "../../admin/access/principal-grants-model";
 import { PendingApprovalError } from "../build-area/build-refusals";
@@ -11,7 +12,11 @@ import {
   toWorkflowStepRun
 } from "./workflow-mapping";
 import type { WorkflowRunsSource, WorkflowsSource } from "./source-shapes";
-import type { WorkflowListItem, WorkflowStepRunView } from "./workflow-views";
+import type {
+  WorkflowDefinitionView,
+  WorkflowListItem,
+  WorkflowStepRunView
+} from "./workflow-views";
 
 // The Workflow screens over the instance: the operations of the Workflows module and, for a
 // definition, the read of an asset.
@@ -390,16 +395,21 @@ export function createInstanceSource(client: WorkflowsClient, key: string): Work
         findSummary(client, workflow, signal)
       ]);
       learn(workflow, asset.scope);
-      const { manifest } = asset.config;
-      return toWorkflow(
-        {
-          name: asset.name,
-          config: isRecord(manifest) ? manifest : {},
-          publishedRevision: asset.publishedRevision
-        },
-        summary === undefined ? { ...listedOf(summary), runsAs: asset.runsAs } : listedOf(summary),
-        asset
-      );
+      const definition = definitionOf(asset);
+      return {
+        ...toWorkflow(
+          {
+            name: asset.name,
+            config: definition.manifest,
+            publishedRevision: asset.publishedRevision
+          },
+          summary === undefined
+            ? { ...listedOf(summary), runsAs: asset.runsAs }
+            : listedOf(summary),
+          asset
+        ),
+        definition
+      };
     },
     runs: runsSource(client),
     publishRights: {
@@ -457,6 +467,28 @@ export function createInstanceSource(client: WorkflowsClient, key: string): Work
             ? {}
             : { used: { runId: item.usedByRunId, at: item.usedAt } })
         })),
+      readRevision: async (workflow, revision, signal) =>
+        definitionOf(await readAsset(workflow, "", signal, revision)),
+      validate: async (workflow, config) =>
+        (
+          await client.assets.validate({
+            params: { kind: WORKFLOW_ASSET_KIND },
+            body: { config: { ...config }, ...ownerOf(workflow) }
+          })
+        ).issues.map((issue) => ({
+          message: issue.message,
+          path: issue.path ?? [],
+          ...(issue.code === undefined ? {} : { code: issue.code })
+        })),
+      save: async (workflow, config, expectedRevision) => {
+        const saved = done(
+          await client.assets.put({
+            params: { kind: WORKFLOW_ASSET_KIND, name: workflow },
+            body: { config: { ...config }, expectedRevision, ...ownerOf(workflow) }
+          })
+        );
+        return { revision: saved.revision };
+      },
       runLiveOnce: async (workflow, step, expectedRevision) => {
         done(
           await client.assets.run_live_once({
@@ -466,6 +498,19 @@ export function createInstanceSource(client: WorkflowsClient, key: string): Work
         );
       }
     }
+  };
+}
+
+/** A revision as the asset read answers it, for editing by hand. */
+function definitionOf(
+  asset: Pick<Asset, "config" | "revision" | "contentRevision" | "stepFacts">
+): WorkflowDefinitionView {
+  const { manifest } = asset.config;
+  return {
+    config: asset.config,
+    manifest: isRecord(manifest) ? manifest : {},
+    revision: asset.contentRevision ?? asset.revision,
+    ...(asset.stepFacts === undefined ? {} : { stepFacts: asset.stepFacts })
   };
 }
 

@@ -1,4 +1,5 @@
 import type {
+  FlowChange,
   FlowGraph,
   FlowGraphEdge,
   FlowGraphGroup,
@@ -260,6 +261,15 @@ function stepSummary(
 export type WorkflowGraph = FlowGraph & { groups: FlowGraphGroup[] };
 
 /**
+ * How a step of a draft differs from the published revision, for its mark on the canvas
+ * (workflow-canvas 9.5), and the published step a changed one was.
+ */
+export interface CanvasMark {
+  change: FlowChange;
+  was?: WorkflowStepView;
+}
+
+/**
  * The graph of a Workflow, and of one run of it where `run` is given. A step is a node, a
  * `loop` and a `parallel` are groups that hold their steps, a `condition` is a node with one
  * exit per path, and a `workflow` step is a node that opens the child. `condition` and
@@ -272,7 +282,9 @@ export function workflowGraph(
   /** The names of who a Notify step reaches, as far as the reader may read them. */
   recipients: RecipientNames = NO_RECIPIENT_NAMES,
   /** The instance's zone, for a schedule saved without one of its own. */
-  instanceTimeZone?: InstanceTimeZone
+  instanceTimeZone?: InstanceTimeZone,
+  /** The marks of a draft against the published revision, by step id. */
+  marks?: ReadonlyMap<string, CanvasMark>
 ): WorkflowGraph {
   const { t, locale } = text;
   const nodes: FlowGraphNode[] = [];
@@ -295,12 +307,29 @@ export function workflowGraph(
           locale
         );
 
+  const marked = (step: WorkflowStepView): Pick<FlowGraphNode, "change" | "oldSummary"> => {
+    const mark = marks?.get(step.id);
+    if (mark === undefined) return {};
+    // A changed step whose sentence changed shows the published one struck through.
+    const old =
+      mark.was === undefined || mark.change === "new" || mark.change === "removed"
+        ? undefined
+        : stepSummary(mark.was, text, recipients);
+    return {
+      change: mark.change,
+      ...(old === undefined || old === stepSummary(step, text, recipients)
+        ? {}
+        : { oldSummary: old })
+    };
+  };
+
   const base = (step: WorkflowStepView, place: Place) => ({
     id: step.id,
     ...(place.parentId === undefined ? {} : { parentId: place.parentId }),
     ...stepIcon(step),
     eyebrow: stepEyebrow(step, t),
-    title: stepTitle(step, text, instanceTimeZone)
+    title: stepTitle(step, text, instanceTimeZone),
+    ...marked(step)
   });
 
   /** What a run says on a part: its state, one line and a time. */

@@ -9,7 +9,10 @@ import {
   type StepPanelRun,
   type StepPanelTab
 } from "./step-panel";
+import { StepSettings, StepSettingsBar } from "./step-settings";
 import type { LiveOnceControl } from "./test-run";
+import type { WorkflowEdit } from "./workflow-draft";
+import type { WorkflowEditing } from "./workflow-editing";
 import { placedSteps, workflowGraph } from "./workflow-canvas-model";
 import { useRecipientNames, useWorkflowsHost } from "./workflows-host";
 import type {
@@ -60,10 +63,20 @@ export function WorkflowCanvas({
   workflow,
   run,
   onOpenChild,
-  focus
+  focus,
+  editing,
+  edit
 }: {
   /** The Workflow, once its record arrived. */
   workflow: WorkflowView | undefined;
+  /**
+   * Editing by hand, for a reader who may write the Workflow: the canvas draws the draft with
+   * what is not saved and marks what differs from the published revision; a step's panel has
+   * its Settings.
+   */
+  editing?: WorkflowEditing;
+  /** "Change with the agent", for what Settings does not edit. */
+  edit?: WorkflowEdit;
   run?: WorkflowCanvasRun;
   /** Opens what a `workflow` step starts: the child run where there is one, else its Workflow. */
   onOpenChild(step: WorkflowStepView, stepRun: WorkflowStepRunView | undefined): void;
@@ -79,7 +92,7 @@ export function WorkflowCanvas({
   // Once the reader chose a step, or closed the panel, it no longer opens by itself.
   const chose = useRef(false);
 
-  const steps = workflow?.steps;
+  const steps = workflow === undefined ? undefined : (editing?.steps ?? workflow.steps);
   const placed = useMemo(() => placedSteps(steps ?? []), [steps]);
   const stepRuns = run?.stepRuns;
   const frame = useMemo(
@@ -97,7 +110,8 @@ export function WorkflowCanvas({
       { locale, t },
       run === undefined ? undefined : { run: run.run, stepRuns: stepRuns ?? [], now: run.now },
       recipients,
-      host?.instanceTimeZone
+      host?.instanceTimeZone,
+      run === undefined ? editing?.marks : undefined
     )
   );
 
@@ -131,12 +145,20 @@ export function WorkflowCanvas({
     };
   };
 
+  // Settings for every step of the draft but one the draft removed; never in a run.
+  // A removed step has no Settings, but one the agent deleted while it was being changed keeps
+  // them open to say that the change was dropped.
+  const settingsOffered = (id: string) =>
+    run === undefined &&
+    editing !== undefined &&
+    (editing.marks.get(id)?.change !== "removed" || editing.dropped.includes(id));
+
   const open = (id: string, wanted?: StepPanelTab) => {
     const stepRun = runOf(id);
     const fallback: StepPanelTab = stepRun?.stepRun?.failure === undefined ? "what" : "run";
     const next = wanted ?? fallback;
     setSelectedId(id);
-    setTab(stepPanelTabs(stepRun).includes(next) ? next : "what");
+    setTab(stepPanelTabs(stepRun, settingsOffered(id)).includes(next) ? next : "what");
   };
 
   // The step a run failed at is what a reader of an ended run came for.
@@ -240,6 +262,17 @@ export function WorkflowCanvas({
                 ? () => onOpenChild(selected.step, selectedRun?.stepRun)
                 : undefined
             }
+            {...(editing === undefined || !settingsOffered(selected.step.id)
+              ? {}
+              : {
+                  settings: {
+                    content: (
+                      <StepSettings stepId={selected.step.id} editing={editing} edit={edit} />
+                    ),
+                    footer: <StepSettingsBar stepId={selected.step.id} editing={editing} />,
+                    editing: editing.unsaved.size > 0
+                  }
+                })}
             onClose={() => {
               chose.current = true;
               setSelectedId(undefined);

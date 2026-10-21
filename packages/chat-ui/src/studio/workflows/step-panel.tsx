@@ -48,7 +48,7 @@ import { useRecipientNames } from "./workflows-host";
 const OUTPUT_PREVIEW_LINES = 40;
 
 /** The views of a step's panel. */
-export type StepPanelTab = "what" | "run" | "entries";
+export type StepPanelTab = "what" | "settings" | "run" | "entries";
 
 /** What a run says about the step the panel is about. */
 export interface StepPanelRun {
@@ -67,10 +67,14 @@ export interface StepPanelRun {
   now: Date;
 }
 
-/** The tabs a step's panel has: what it does, what the run made of it, and a loop's entries. */
-export function stepPanelTabs(run: StepPanelRun | undefined): StepPanelTab[] {
+/**
+ * The tabs a step's panel has: what it does, its Settings for whoever may write it, what the
+ * run made of it, and a loop's entries.
+ */
+export function stepPanelTabs(run: StepPanelRun | undefined, settings = false): StepPanelTab[] {
   return [
     "what",
+    ...(settings ? (["settings"] as const) : []),
     ...(run !== undefined && (run.stepRun !== undefined || run.counts !== undefined)
       ? (["run"] as const)
       : []),
@@ -196,6 +200,7 @@ export function StepPanel({
   entries,
   transcript,
   onOpenChild,
+  settings,
   onClose
 }: {
   step: WorkflowStepView;
@@ -215,13 +220,16 @@ export function StepPanel({
   transcript?: ReactNode;
   /** On a `workflow` step: opens the Workflow it starts, or the child run. */
   onOpenChild?(): void;
+  /** The step's Settings and the bar that saves them, for a reader who may write it. */
+  settings?: { content: ReactNode; footer: ReactNode; editing: boolean };
   onClose(): void;
 }) {
   const { t } = useTranslation();
-  const tabs = stepPanelTabs(run);
+  const tabs = stepPanelTabs(run, settings !== undefined);
   const shown = tabs.includes(tab) ? tab : "what";
   const labels: Record<StepPanelTab, string> = {
     what: t("workflows.panel.what"),
+    settings: t("workflows.panel.settings"),
     run: t("workflows.panel.run"),
     entries: t("workflows.run.entries")
   };
@@ -245,10 +253,17 @@ export function StepPanel({
           : undefined
       }
       tab={shown}
-      onTabChange={(value) => onTabChange(value === "run" || value === "entries" ? value : "what")}
+      onTabChange={(value) =>
+        onTabChange(value === "run" || value === "entries" || value === "settings" ? value : "what")
+      }
+      {...(shown === "settings" && settings !== undefined
+        ? { footer: settings.footer, tall: settings.editing }
+        : {})}
       onClose={onClose}
     >
-      {shown === "what" ? (
+      {shown === "settings" && settings !== undefined ? (
+        settings.content
+      ) : shown === "what" ? (
         <StepDescription step={step} summary={part.summary} onOpenChild={onOpenChild} />
       ) : shown === "run" && run !== undefined ? (
         <StepRunDetails
