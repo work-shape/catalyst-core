@@ -7,7 +7,9 @@ import {
 describe("system instructions", () => {
   it("directs an agent without connection drafting to Studio without asking for credentials", () => {
     const content = createSystemInstructions("Help.", "de");
-    expect(content).toContain("without platform.connections.draft_tools");
+    expect(content).toContain(
+      "without platform.connections.propose or platform.connections.draft_tools"
+    );
     expect(content).toContain("Studio › Verbindungen");
     expect(content).toContain("Do not substitute HTTP or YAML dumps");
     expect(content).toContain("Never ask for keys or passwords in chat");

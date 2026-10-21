@@ -168,7 +168,7 @@ export function pendingOpen(input: {
 
 /** The run of the open conversation as the thread watches it. */
 export interface WatchedRun {
-  run: { id: string };
+  run: { id: string; agentName?: string };
   projection: { status: string; parts: readonly SubjectRunPart[] };
 }
 

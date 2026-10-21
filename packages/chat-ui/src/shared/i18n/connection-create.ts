@@ -135,7 +135,25 @@ export const connectionCreate = defineTranslations({
     "connectionCreate.draftCardReader": "Someone who may edit connections approves these tools.",
     "connectionCreate.draftCardNotRest":
       "{name} is no REST API connection: these tools do not fit it.",
-    "connectionCreate.draftCardFailed": "The connection could not be read. Try again."
+    "connectionCreate.draftCardFailed": "The connection could not be read. Try again.",
+    "connectionCreate.proposalCardTitle": "Connect {title}",
+    "connectionCreate.proposalCardMcp": "MCP server · {address}",
+    "connectionCreate.proposalCardRest": "REST API · {address}",
+    "connectionCreate.proposalCardOpen": "Set up connection",
+    "connectionCreate.proposalCardNote":
+      "You enter the key or sign in there. Nothing is saved before you press Connect.",
+    "connectionCreate.proposalCardReader": "Someone who may edit connections connects it.",
+    "connectionCreate.proposalCardExists": "{title} exists already. Its page is open.",
+    "connectionCreate.readyTools":
+      "{title} is connected ({name}), {count} tools approved for {surfaces}: {tools}.",
+    "connectionCreate.readyToolsOne":
+      "{title} is connected ({name}), 1 tool approved for {surfaces}: {tools}.",
+    "connectionCreate.readyNoTools": "{title} is connected ({name}), no tools approved yet.",
+    "connectionCreate.readyDraft": "{title} is connected ({name}). Please draft its tools.",
+    "connectionCreate.readySurfaceAgent": "agents",
+    "connectionCreate.readySurfaceBridge": "Apps",
+    "connectionCreate.readySurfaceWorkflow": "Workflows",
+    "connectionCreate.readyAnd": "and"
   },
   de: {
     "connectionCreate.title": "Neue Verbindung",
@@ -273,6 +291,25 @@ export const connectionCreate = defineTranslations({
     "connectionCreate.draftCardNotRest":
       "{name} ist keine REST-API-Verbindung: Diese Tools passen nicht zu ihr.",
     "connectionCreate.draftCardFailed":
-      "Die Verbindung ließ sich nicht lesen. Versuch es noch einmal."
+      "Die Verbindung ließ sich nicht lesen. Versuch es noch einmal.",
+    "connectionCreate.proposalCardTitle": "{title} verbinden",
+    "connectionCreate.proposalCardMcp": "MCP-Server · {address}",
+    "connectionCreate.proposalCardRest": "REST-API · {address}",
+    "connectionCreate.proposalCardOpen": "Verbindung einrichten",
+    "connectionCreate.proposalCardNote":
+      "Den Schlüssel gibst du dort ein oder meldest dich an. Gespeichert wird erst mit Verbinden.",
+    "connectionCreate.proposalCardReader": "Verbinden kann, wer Verbindungen bearbeiten darf.",
+    "connectionCreate.proposalCardExists": "{title} gibt es schon. Ihre Seite ist offen.",
+    "connectionCreate.readyTools":
+      "{title} ist verbunden ({name}), {count} Werkzeuge freigegeben für {surfaces}: {tools}.",
+    "connectionCreate.readyToolsOne":
+      "{title} ist verbunden ({name}), 1 Werkzeug freigegeben für {surfaces}: {tools}.",
+    "connectionCreate.readyNoTools":
+      "{title} ist verbunden ({name}), noch keine Werkzeuge freigegeben.",
+    "connectionCreate.readyDraft": "{title} ist verbunden ({name}). Entwirf bitte die Werkzeuge.",
+    "connectionCreate.readySurfaceAgent": "Agenten",
+    "connectionCreate.readySurfaceBridge": "Apps",
+    "connectionCreate.readySurfaceWorkflow": "Workflows",
+    "connectionCreate.readyAnd": "und"
   }
 });

@@ -6,6 +6,12 @@ import {
   type StartConversationRunResponse
 } from "@work-shape/catalyst-api-client";
 import { acceptStartedRun, listedOpenThread } from "../dock/dock-try";
+import {
+  createRunIdempotencyKey,
+  sendProductConversationMessage
+} from "../assistant/product-run-transport";
+import { openConnectionDraftIn } from "../../studio/build-area/connection-draft-card";
+import type { ConnectionDraft } from "../../studio/build-area/connection-draft";
 import { dockKindOfRoute } from "../dock/subject-starters";
 import { WORKFLOW_ASSET_KIND } from "@work-shape/catalyst-core";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -559,7 +565,8 @@ export function useWorkspaceChatModel({
     agentActions: {
       ...(buildWithAgent === undefined ? {} : { buildWithAgent }),
       ...(editWithAgent === undefined ? {} : { editWithAgent }),
-      startDockedChat
+      startDockedChat,
+      tellConversation
     }
   });
   const canViewAdministration = controlPlane.canViewAdministration;
@@ -605,6 +612,19 @@ export function useWorkspaceChatModel({
   const activeAgent = config?.agents.find((agent) => agent.name === activeAgentName);
   const selectedThread =
     threadQuery.data?.conversation.id === selectedConversationId ? threadQuery.data : undefined;
+  // The agent's proposal of a new Connection opens its dialog beside the conversation, for a
+  // person who may create Connections (CHAT-CONN-1).
+  const { openPage: openDockedPage } = dock;
+  const openProposal = useCallback(
+    (proposal: ConnectionDraft, from: { conversationId: string; agentName?: string }) => {
+      openConnectionDraftIn(proposal, {
+        client,
+        from,
+        showRoute: (target) => openDockedPage(target, from.conversationId)
+      }).catch(() => undefined);
+    },
+    [client, openDockedPage]
+  );
   const agentOpens = useAgentOpens({
     activeRun: controller.activeRun,
     messages,
@@ -616,7 +636,8 @@ export function useWorkspaceChatModel({
     dock,
     client,
     onSubjectChanged: workspaceCache.invalidateConversationStarted,
-    onError: setNotice
+    onError: setNotice,
+    ...(controlPlane.mayWriteConnections ? { openProposal } : {})
   });
   const modelPicks = conversationModelPicks({
     agent: activeAgent,
@@ -775,6 +796,32 @@ export function useWorkspaceChatModel({
     });
     setNotice(undefined);
     setPrivateStartIn(undefined);
+  }
+
+  /**
+   * Sends a message as the person to a conversation they are in, with its agent, queued behind
+   * a run that goes: the New connection dialog's word that the Connection the agent proposed is
+   * connected (CHAT-CONN-1). Its run is this tab's, so its opens move the person on.
+   */
+  async function tellConversation(
+    to: { conversationId: string; agentName?: string },
+    text: string
+  ): Promise<void> {
+    const response = await sendProductConversationMessage({
+      conversationId: to.conversationId,
+      client,
+      idempotencyKey: createRunIdempotencyKey(),
+      locale: activeLocale,
+      text,
+      ...(to.agentName === undefined ? {} : { agentName: to.agentName })
+    });
+    if ("followUp" in response) {
+      await workspaceCache.refreshThreadSnapshot(response.followUp.conversationId);
+      return;
+    }
+    agentOpens.sent(response.run.id);
+    workspaceCache.cacheRunStarted(response);
+    conversationListRefresh.runAccepted(response);
   }
 
   function streamError(conversationId: string, message: string, viewed: boolean) {

@@ -14,9 +14,16 @@ import {
 // connection dialog, filled with its type, name, address and header names. Nothing is saved
 // before the person approves. A draft holds no key: only what is read here reaches the card,
 // the page and the dialog, and no value of a header is among it.
+//
+// The agent's proposal of a new Connection (CHAT-CONN-1) is the same draft with no operation:
+// any Connector type, its id, name and address. It opens the New connection dialog, filled,
+// and the dialog tells the conversation it came from once the Connection is connected.
 
 /** The platform tool the agent drafts with. */
 export const CONNECTION_DRAFT_TOOL_NAME = "platform.connections.draft_tools";
+
+/** The platform tool the agent proposes a new Connection with (CHAT-CONN-1). */
+export const CONNECTION_PROPOSE_TOOL_NAME = "platform.connections.propose";
 
 /** The Connector type of a REST API. */
 const HTTP_API = "http_api";
@@ -25,15 +32,25 @@ const HTTP_API = "http_api";
 export interface ConnectionDraft {
   /** The Connection the tools are for, and what a new one is filled with. */
   connection: {
+    /** `http_api` for a draft of tools; any type for a proposal. */
+    connectorType: string;
     name: string;
     title: string;
+    /** The server's or the API's address. Empty for a type whose form asks for it. */
     baseUrl: string;
     headerNames: string[];
     /** The path the test reads, when the draft names one. */
     testPath?: string;
+    /** The header a proposal sends the key in, by name: the person types the key. */
+    keyHeader?: string;
   };
-  /** The drafted operations, as rows of the approval list. */
+  /** The drafted operations, as rows of the approval list. None for a proposal. */
   operations: ApprovalCandidate[];
+  /**
+   * The conversation whose agent proposed the Connection, and that agent: once the dialog has
+   * connected it, it tells that conversation, as the person.
+   */
+  from?: { conversationId: string; agentName?: string };
 }
 
 /**
@@ -62,16 +79,52 @@ export function readConnectionDraft(result: unknown): ConnectionDraft | undefine
   if (operations.length === 0) return undefined;
   return {
     connection: {
+      connectorType: HTTP_API,
       name,
       title,
       baseUrl,
-      headerNames: Array.isArray(headers)
-        ? headers.filter((header): header is string => typeof header === "string")
-        : [],
+      headerNames: namesOf(headers),
       ...(testPath === undefined ? {} : { testPath })
     },
     operations
   };
+}
+
+function namesOf(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((entry): entry is string => typeof entry === "string")
+    : [];
+}
+
+/**
+ * The new Connection the propose tool answered, as a draft with no operation, or nothing for
+ * an answer that is no proposal. Reads the members a proposal has and no other.
+ */
+export function readConnectionProposal(result: unknown): ConnectionDraft | undefined {
+  const connection = recordOf(toolAnswer(result)?.connection);
+  const connectorType = textOf(connection?.connectorType);
+  const name = textOf(connection?.name);
+  const title = textOf(connection?.title);
+  if (connectorType === undefined || name === undefined || title === undefined) return undefined;
+  const testPath = textOf(connection?.testPath);
+  const keyHeader = textOf(connection?.keyHeader);
+  return {
+    connection: {
+      connectorType,
+      name,
+      title,
+      baseUrl: textOf(connection?.url) ?? "",
+      headerNames: namesOf(connection?.headerNames),
+      ...(testPath === undefined ? {} : { testPath }),
+      ...(keyHeader === undefined ? {} : { keyHeader })
+    },
+    operations: []
+  };
+}
+
+/** A proposal of a new Connection: a draft with no operation of its own. */
+export function isConnectionProposal(draft: ConnectionDraft): boolean {
+  return draft.operations.length === 0;
 }
 
 /** The members of a declared operation a draft carries. Whatever else an answer holds stays out. */
@@ -96,6 +149,8 @@ function declarationOf(operation: Record<string, unknown>): Record<string, unkno
 export type ConnectionDraftOpening =
   /** The page of the Connection or the New connection dialog opens with the draft. */
   | "opened"
+  /** A proposal names a Connection that exists: its page opens, and no dialog. */
+  | "exists"
   /** A Connection of the draft's id exists and is no REST API. */
   | "not_rest"
   | "failed";
@@ -124,7 +179,7 @@ forgetWhenSessionEnds(() => {
 
 /**
  * Opens a draft: on the page of its Connection where one of its id exists, as a REST API;
- * else in the New connection dialog. `connectorTypeOf` reads the type of the Connection of an
+ * else in the New connection dialog. A proposal of a Connection that exists opens its page. `connectorTypeOf` reads the type of the Connection of an
  * id, or nothing where there is none; it throws where the read failed.
  */
 export async function openConnectionDraft(
@@ -146,6 +201,10 @@ export async function openConnectionDraft(
   }
   // The person signed in changed while the read was on its way: the draft is theirs no more.
   if (!sessionStillOn(mark)) return "failed";
+  if (connectorType !== undefined && isConnectionProposal(draft)) {
+    host.showConnection(draft.connection.name);
+    return "exists";
+  }
   if (connectorType !== undefined && connectorType !== HTTP_API) return "not_rest";
   requested = { draft, place: connectorType === undefined ? "new" : "page" };
   changed();

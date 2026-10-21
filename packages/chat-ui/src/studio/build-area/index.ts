@@ -44,13 +44,20 @@ export * from "./connection-connect";
 export { ConnectionCreateFlow } from "./connection-create-dialog";
 export { TypedConnectionCreate } from "./connection-typed-create";
 export * from "./connection-typed-model";
-export { openConnectionDraft, readConnectionDraft, type ConnectionDraft } from "./connection-draft";
+export {
+  openConnectionDraft,
+  readConnectionDraft,
+  readConnectionProposal,
+  type ConnectionDraft
+} from "./connection-draft";
 export {
   ConnectionDraftCard,
   ConnectionDraftCardView,
   ConnectionDraftHostProvider,
-  connectionDraftHost
+  connectionDraftHost,
+  openConnectionDraftIn
 } from "./connection-draft-card";
+export { connectionReadyMessage, type ConnectionReadyOutcome } from "./connection-ready";
 export * from "./connection-give";
 export {
   ConnectionApprovedBody,

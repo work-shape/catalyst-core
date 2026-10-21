@@ -32,8 +32,10 @@ import {
   createAppSaveTool,
   createConnectionDraftTool,
   createConnectionOfferTool,
+  createConnectionProposeTool,
   CONNECTION_DRAFT_TOOL_NAME,
   CONNECTION_OFFER_TOOL_NAME,
+  CONNECTION_PROPOSE_TOOL_NAME,
   createPlatformAssetBinding,
   createPlatformAssetTools,
   createPlatformDiscoveryTools,
@@ -198,6 +200,7 @@ function createConversationOffer(input: ConversationOfferInput): ConversationOff
                 ...SCHEDULED_START_TOOL_NAMES
               ]
             : []),
+          ...(holds ? [CONNECTION_PROPOSE_TOOL_NAME] : []),
           ...(holds || subject?.kind === "connection"
             ? [CONNECTION_DRAFT_TOOL_NAME, CONNECTION_OFFER_TOOL_NAME]
             : []),
@@ -275,6 +278,7 @@ export function createPlatformTools(
       createAppPublishTool(),
       ...(input.connections
         ? [
+            createConnectionProposeTool({ connectorTypes: input.connections.connectorTypes }),
             createConnectionDraftTool({
               connectorTypes: input.connections.connectorTypes,
               connectorType: HTTP_API_CONNECTOR_TYPE

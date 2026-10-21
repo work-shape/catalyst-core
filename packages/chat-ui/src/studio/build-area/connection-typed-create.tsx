@@ -50,16 +50,24 @@ export function TypedConnectionCreate({
   put,
   onBack,
   onClose,
-  onCreated
+  onCreated,
+  initial
 }: Pick<BuildCreateDialogProps, "checkName" | "put" | "onClose" | "onCreated"> & {
   offer: ConnectorTypeOffer;
   source: ConnectionSource;
   onBack(): void;
+  /** The name and id an agent proposed (CHAT-CONN-1): the form starts with them. */
+  initial?: { title: string; name: string };
 }) {
   const { locale, t } = useTranslation();
   const service = offerText(offer.service ?? offer.title, locale);
-  const [title, setTitle] = useState("");
-  const [typedId, setTypedId] = useState<string>();
+  const [title, setTitle] = useState(initial?.title ?? "");
+  const [typedId, setTypedId] = useState<string | undefined>(() =>
+    initial === undefined ||
+    initial.name === assetAddressFromName(initial.title, CONNECTION_ASSET_KIND)
+      ? undefined
+      : initial.name
+  );
   const [description, setDescription] = useState("");
   const [values, setValues] = useState<TypedValues>({});
   const [errors, setErrors] = useState<Errors>({});

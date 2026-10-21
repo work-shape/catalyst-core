@@ -15,6 +15,8 @@ import {
 } from "./request-with-origin";
 import { expect, test } from "./test";
 import { requestAnswered } from "./allowed-page-errors";
+const PROPOSE_TEST =
+  "de: the agent proposes an MCP server, the dialog opens beside the chat, and the chat hears it is connected";
 // The messages this spec's tests cause on purpose (see allowed-page-errors.ts).
 test.use({
   allowedPageErrors: {
@@ -31,6 +33,15 @@ test.use({
           (locale) =>
             `${locale}: the agent's draft is a card that opens the approval list, and only the approval saves it`
         )
+      },
+      {
+        name: "proposed-connection-that-is-new",
+        reason:
+          "Chromium's own log line: the agent's proposal reads the Connection of its id, for a new " +
+          "id the instance answers 404 and the New connection dialog opens, which the test asserts.",
+        matches: requestAnswered(404),
+        path: /^\/api\/v1\/assets\/connection\/e2e-propose-/u,
+        tests: [PROPOSE_TEST]
       }
     ]
   }
@@ -628,6 +639,83 @@ for (const locale of LOCALES) {
     }
   });
 }
+
+// The agent's proposal of a new Connection (CHAT-CONN-1): sent from the chat, it opens the New
+// connection dialog filled with it, the conversation docked beside it. The person enters the key
+// there; once the tools are approved, their tab sends the conversation a message that says so,
+// which names no address and no key, and the agent answers it.
+test(PROPOSE_TEST, async ({ page }) => {
+  test.setTimeout(150_000);
+  const id = `e2e-propose-${randomUUID().slice(0, 8)}`;
+  const proposedAddress = "https://sample.example.test/mcp";
+  const signedIn = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/auth/sign-in/email`, {
+    data: { ...admin, rememberMe: true }
+  });
+  expect(signedIn.ok()).toBe(true);
+  await page.addInitScript(() => {
+    window.localStorage.setItem("vivd-catalyst:locale", "de");
+  });
+  await page.emulateMedia({ colorScheme: "light" });
+  await page.setViewportSize({ width: 1280, height: 900 });
+  try {
+    await page.goto("/");
+    await sendToolCall(page, "platform.connections.propose", {
+      connectorType: "mcp",
+      connection: id,
+      title: "Beispielserver",
+      url: proposedAddress
+    });
+    // The tab that sent the message opens the dialog, on the Connections, with the chat docked.
+    const create = page.getByRole("dialog");
+    await expect(create.locator('[data-connection-create-form="mcp"]')).toBeVisible();
+    await expect(page).toHaveURL(
+      (url) => url.pathname.endsWith("/build/connections") && url.searchParams.has("chat")
+    );
+    const field = (name: string) => create.locator(`[data-connection-field="${name}"]`);
+    await expect(create.locator('[data-name-with-address-field="name"]')).toHaveValue(
+      "Beispielserver"
+    );
+    await expect(create.locator('[data-name-with-address-field="address"]')).toHaveValue(id);
+    await expect(field("url")).toHaveValue(proposedAddress);
+    await expect(field("secret")).toHaveValue("");
+    await shootModes(page, "de", "proposal-form");
+
+    // The suite's sample server stands in for the proposed address.
+    await field("url").fill(`${sampleBase}/mcp`);
+    await field("secret").fill(sampleKey);
+    await create.locator("[data-connection-connect]").click();
+    const tools = create.locator("li[data-approval-tool]");
+    await expect(tools).toHaveCount(6, { timeout: DISCOVERY_TIMEOUT_MS });
+    await create.locator("[data-connection-approve]").click();
+    await create.locator("[data-connection-approved-done]").click();
+    await expect(page).toHaveURL(new RegExp(`/build/connections/${id}(?:\\?|$)`, "u"));
+
+    // The person's message in the conversation, and the agent's answer to it.
+    const told = page.getByText(
+      new RegExp(
+        `^Beispielserver ist verbunden \\(${id}\\), 6 Werkzeuge freigegeben für Agenten: `,
+        "u"
+      )
+    );
+    await expect(told.first()).toBeVisible();
+    await expect(
+      page
+        .getByText("Local agent response: I received", { exact: false })
+        .filter({ hasText: "Beispielserver ist verbunden" })
+        .first()
+    ).toBeVisible();
+    // The card stays in the conversation and opens the existing Connection's page now.
+    await expect(
+      page.locator(`[data-connection-proposal="mcp"][data-connection="${id}"]`)
+    ).toContainText("Beispielserver verbinden");
+    await shootModes(page, "de", "proposal-told");
+    const content = await page.content();
+    expect(content).not.toContain(sampleKey);
+    expect(await told.first().textContent()).not.toContain("127.0.0.1");
+  } finally {
+    await removeConnection(page, id);
+  }
+});
 
 /** The agent the page test gives a new Connection's tools to; the test stores and deletes it. */
 const HANDOFF_AGENT_TITLE = "Handoff probe";

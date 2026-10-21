@@ -66,6 +66,7 @@ describe("the draft the card reads", () => {
     const read = draft();
     expect(JSON.stringify(read)).not.toContain(SECRET);
     expect(read.connection).toEqual({
+      connectorType: "http_api",
       name: "exampledata",
       title: "Exampledata",
       baseUrl: "https://api.exampledata.com",

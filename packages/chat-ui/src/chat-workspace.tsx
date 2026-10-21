@@ -490,7 +490,16 @@ function ChatWorkspaceContent({
     apiBaseUrl: model.auth.apiBaseUrl,
     authScope: WORKSPACE_AUTH_SCOPE,
     mayWriteConnections: model.controlPlane.mayWriteConnections,
-    showRoute: model.route.showRoute
+    // The dialog or page opens with the conversation of the card docked beside it.
+    showRoute: chat.openRoute,
+    ...(chat.selectedConversationId === undefined
+      ? {}
+      : {
+          from: {
+            conversationId: chat.selectedConversationId,
+            ...(chat.selectedAgentName === undefined ? {} : { agentName: chat.selectedAgentName })
+          }
+        })
   });
   // The agent's offer of a Connection's tools: its card gives them to an agent the person may
   // publish, with the person's own rights.

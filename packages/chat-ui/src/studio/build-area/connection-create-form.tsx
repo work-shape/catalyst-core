@@ -244,21 +244,23 @@ export function ConnectionCreateForm({
   );
 }
 
-/** The fields of a new REST API filled with the agent's draft. */
+/** The fields of a new MCP server or REST API filled with the agent's draft or proposal. */
 export function draftedFields(draft: ConnectionDraft): CreateFields {
-  const { name, title, baseUrl, headerNames, testPath } = draft.connection;
+  const { connectorType, name, title, baseUrl, headerNames, testPath, keyHeader } =
+    draft.connection;
   return {
     title,
     description: "",
     ...(name === assetAddressFromName(title, CONNECTION_ASSET_KIND) ? {} : { typedId: name }),
     form: {
       ...emptyConnectionForm(),
-      connectorType: "http_api",
+      connectorType: connectorType === "mcp" ? "mcp" : "http_api",
       url: baseUrl,
       headers: headerNames.map((header) => ({ name: header, value: "" })),
-      ...(testPath === undefined ? {} : { testPath })
+      ...(testPath === undefined ? {} : { testPath }),
+      ...(keyHeader === undefined ? {} : { headerName: keyHeader })
     },
     key: "",
-    sendAs: "bearer"
+    sendAs: keyHeader === undefined ? "bearer" : "header"
   };
 }

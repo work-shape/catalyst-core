@@ -1,7 +1,8 @@
 import { defineModule } from "@work-shape/catalyst-core";
 import {
   CONNECTION_DRAFT_TOOL_NAME,
-  CONNECTION_OFFER_TOOL_NAME
+  CONNECTION_OFFER_TOOL_NAME,
+  CONNECTION_PROPOSE_TOOL_NAME
 } from "@work-shape/catalyst-tool-execution";
 
 /**
@@ -27,9 +28,10 @@ export const connectionsModule = defineModule({
     "connections.connector_types"
   ],
   kinds: ["connection"],
-  // The agent's draft of a REST API's tools checks them against the instance's Connector types;
-  // its offer of a Connection's tools to an agent is a card the person confirms.
-  tools: [CONNECTION_DRAFT_TOOL_NAME, CONNECTION_OFFER_TOOL_NAME],
+  // The agent's proposal of a new Connection and its draft of a REST API's tools check them
+  // against the instance's Connector types; its offer of a Connection's tools to an agent is a
+  // card the person confirms.
+  tools: [CONNECTION_PROPOSE_TOOL_NAME, CONNECTION_DRAFT_TOOL_NAME, CONNECTION_OFFER_TOOL_NAME],
   jobKinds: [
     "connection.discover",
     "connection_setup_sessions.sweep",

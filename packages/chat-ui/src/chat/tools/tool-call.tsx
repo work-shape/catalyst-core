@@ -14,7 +14,9 @@ import {
 import { useTranslation } from "../../shared/i18n";
 import {
   CONNECTION_DRAFT_TOOL_NAME,
-  readConnectionDraft
+  CONNECTION_PROPOSE_TOOL_NAME,
+  readConnectionDraft,
+  readConnectionProposal
 } from "../../studio/build-area/connection-draft";
 import { ConnectionDraftCard } from "../../studio/build-area/connection-draft-card";
 import {
@@ -188,11 +190,16 @@ export function ToolCallPart({
     return <AssetOpenedLine open={opened} />;
   }
 
-  // The agent's draft of REST API tools: a card whose button opens the approval list.
+  // The agent's draft of REST API tools: a card whose button opens the approval list. Its
+  // proposal of a new Connection: a card whose button opens the New connection dialog.
   const connectionDraft =
-    toolName === CONNECTION_DRAFT_TOOL_NAME && state === "completed"
-      ? readConnectionDraft(result)
-      : undefined;
+    state !== "completed"
+      ? undefined
+      : toolName === CONNECTION_DRAFT_TOOL_NAME
+        ? readConnectionDraft(result)
+        : toolName === CONNECTION_PROPOSE_TOOL_NAME
+          ? readConnectionProposal(result)
+          : undefined;
   if (connectionDraft) {
     return <ConnectionDraftCard draft={connectionDraft} />;
   }

@@ -1,10 +1,23 @@
 import type { ApiClient, Message } from "@work-shape/catalyst-api-client";
 import { ENDED_AGENT_RUN_STATUSES } from "@work-shape/catalyst-core";
 import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
+import { buildRouteOfLocation } from "../../shared/build-route";
 import { showOwnerInStudio } from "../../shared/build-rights";
+import { CONNECTIONS_BUILD_PATH } from "../../studio/build-area/connection-tools";
 import { workspaceRoutePath, type WorkspaceRoute } from "../../shared/routes";
 import type { WorkspaceDock } from "../workspace/use-workspace-dock";
-import { lastRunParts, pendingOpen, planOpenMoves, type WatchedRun } from "./open-move";
+import {
+  CONNECTION_PROPOSE_TOOL_NAME,
+  readConnectionProposal,
+  type ConnectionDraft
+} from "../../studio/build-area/connection-draft";
+import {
+  lastRunParts,
+  pendingOpen,
+  placeFollowsOpens,
+  planOpenMoves,
+  type WatchedRun
+} from "./open-move";
 import {
   assetPageRoute,
   opensInRun,
@@ -62,6 +75,15 @@ export function useAgentOpens(input: {
   /** The conversation is about another asset now: its thread is read again. */
   onSubjectChanged(conversationId: string): void;
   onError(message: string): void;
+  /**
+   * Opens the New connection dialog a proposal of the agent fills, the conversation docked
+   * beside it (CHAT-CONN-1), where the person may create Connections. Called under the rule of
+   * an open: once per proposal, for a run this tab sent and watches, where opens take the person.
+   */
+  openProposal?(
+    proposal: ConnectionDraft,
+    from: { conversationId: string; agentName?: string }
+  ): void;
 }): AgentOpens {
   const {
     activeRun,
@@ -74,7 +96,8 @@ export function useAgentOpens(input: {
     dock,
     client,
     onSubjectChanged,
-    onError
+    onError,
+    openProposal
   } = input;
   const sentRuns = useRef(new Set<string>());
   // The runs seen going while their conversation was on the screen. A run seen only after it
@@ -113,6 +136,7 @@ export function useAgentOpens(input: {
   );
 
   const runId = activeRun?.run.id;
+  const runAgent = activeRun?.run.agentName;
   const status = activeRun?.projection.status;
   const parts = activeRun?.projection.parts;
   const { openPage } = dock;
@@ -153,7 +177,51 @@ export function useAgentOpens(input: {
       movedTo.current.set(conversationId, conversationMoves);
       routeRef.current = move.page;
     }
-  }, [conversationId, openPage, parts, runId, status, storedSubject, workspaceId]);
+    if (openProposal === undefined) return;
+    // The agent's proposal of a new Connection opens its dialog under the same rule.
+    const subjectPage =
+      storedSubject === undefined ? undefined : assetPageRoute(storedSubject, workspaceId);
+    for (const [index, part] of parts.entries()) {
+      const proposal =
+        part.toolName === CONNECTION_PROPOSE_TOOL_NAME && part.state === "output_available"
+          ? readConnectionProposal(part.output)
+          : undefined;
+      if (proposal === undefined) continue;
+      const key = `proposal:${part.toolCallId ?? `${runId}:${index}`}`;
+      if (handledOpens.current.has(key)) continue;
+      handledOpens.current.add(key);
+      const follows =
+        sentRuns.current.has(runId) &&
+        liveRuns.current.has(runId) &&
+        placeFollowsOpens({
+          here: routeRef.current,
+          conversationId,
+          subjectPage,
+          movedTo: conversationMoves,
+          ...(newFrom === undefined ? {} : { startedFrom: newFrom })
+        });
+      if (!follows) continue;
+      openProposal(proposal, {
+        conversationId,
+        ...(runAgent === undefined ? {} : { agentName: runAgent })
+      });
+      // A later open of the run takes the person on from the Connections.
+      conversationMoves.add(
+        workspaceRoutePath(buildRouteOfLocation({ kindPath: CONNECTIONS_BUILD_PATH }))
+      );
+      movedTo.current.set(conversationId, conversationMoves);
+    }
+  }, [
+    conversationId,
+    openPage,
+    openProposal,
+    parts,
+    runAgent,
+    runId,
+    status,
+    storedSubject,
+    workspaceId
+  ]);
 
   const goTo = useCallback(
     async (open: AssetOpen) => {

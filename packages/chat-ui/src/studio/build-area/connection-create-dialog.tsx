@@ -1,5 +1,5 @@
 import { ArrowLeft, Code, FileText, Plug } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ConnectionDetail } from "@work-shape/catalyst-api-client";
 import { CONNECTION_ASSET_KIND, assetAddressFromName } from "@work-shape/catalyst-core";
 import {
@@ -42,6 +42,7 @@ import {
   type CreateFields
 } from "./connection-create-form";
 import { useDraftForNewConnection } from "./connection-draft";
+import { connectionReadyMessage, type ConnectionReadyOutcome } from "./connection-ready";
 import {
   DISCOVERY_WAIT_MS,
   emptyConnectionForm,
@@ -126,9 +127,31 @@ export function ConnectionCreateFlow({
   const { locale, t } = useTranslation();
   const offers = source.useConnectorTypes?.() ?? [];
   // The agent's draft opened from its card: the dialog starts at the REST API's form, filled
-  // with it, and after Verbinden its tools wait in the approval list.
+  // with it, and after Verbinden its tools wait in the approval list. Its proposal of a new
+  // Connection starts at the form of its type, filled with it (CHAT-CONN-1).
   const drafted = useDraftForNewConnection();
-  const [stage, setStage] = useState<Stage>({ step: drafted ? "form" : "pick" });
+  const draftedType = drafted?.connection.connectorType;
+  const typedDraft =
+    draftedType !== undefined && draftedType !== "mcp" && draftedType !== "http_api";
+  const [stage, setStage] = useState<Stage>({ step: drafted && !typedDraft ? "form" : "pick" });
+  // A proposal of a type with a form of its own opens that form once the types are read.
+  const typedOpened = useRef(false);
+  useEffect(() => {
+    if (!typedDraft || typedOpened.current) return;
+    const offer = offers.find((entry) => entry.type === draftedType);
+    if (offer === undefined) return;
+    typedOpened.current = true;
+    setStage({ step: "typed", offer });
+  }, [draftedType, offers, typedDraft]);
+  // The conversation whose agent proposed the Connection hears once that it is connected.
+  const told = useRef(false);
+  const tellReady = (outcome: ConnectionReadyOutcome, connection = { name, title }) => {
+    const from = drafted?.from;
+    const tell = source.tellConversation;
+    if (from === undefined || tell === undefined || told.current) return;
+    told.current = true;
+    tell(from, connectionReadyMessage(connection, outcome, t)).catch(() => undefined);
+  };
   const [fields, setFields] = useState<CreateFields>(() =>
     drafted
       ? draftedFields(drafted)
@@ -140,10 +163,12 @@ export function ConnectionCreateFlow({
           sendAs: "bearer"
         }
   );
-  // A drafted id, header names or test path show under "Technical details", open from the start.
+  // A drafted id, key header, header names or test path show under "Technical details", open
+  // from the start.
   const [detailsOpen] = useState(
     () =>
       fields.typedId !== undefined ||
+      fields.sendAs === "header" ||
       fields.form.headers.length > 0 ||
       fields.form.testPath.trim() !== ""
   );
@@ -393,6 +418,7 @@ export function ConnectionCreateFlow({
       };
       written.current = config;
       setBusy(false);
+      tellReady({ kind: "approved", tools: chosen.map((operation) => operation.name), surfaces });
       // Where agents may use them, the done state offers them to one; else the page opens.
       if (source.give && surfaces.includes(AGENT_SURFACE)) {
         setStage({ step: "approved", count: chosen.length, forAgents: true });
@@ -437,6 +463,13 @@ export function ConnectionCreateFlow({
     }
     // Signing in: the Connection stays, and its page offers the sign-in again.
     // Connected: "Later" leaves it with no tool accepted, on its page.
+    if (stage.step !== "sign-in") tellReady({ kind: "none" });
+    onCreated(name);
+  };
+
+  /** "Later" after a connect: the Connection stays with no tool accepted, on its page. */
+  const later = () => {
+    tellReady({ kind: "none" });
     onCreated(name);
   };
 
@@ -451,17 +484,24 @@ export function ConnectionCreateFlow({
     });
   };
 
-  const draft = source.draftInChat
-    ? () => {
-        const request = t("connectionCreate.draftRequest", {
-          title,
-          name,
-          url: fields.form.url.trim()
-        });
-        const startChat = source.draftInChat;
-        onCreated(name, () => startChat?.(request));
-      }
-    : undefined;
+  // A proposal's REST API: its tools are drafted in the conversation it came from.
+  const draft =
+    drafted?.from !== undefined && source.tellConversation !== undefined
+      ? () => {
+          tellReady({ kind: "draft" });
+          onCreated(name);
+        }
+      : source.draftInChat
+        ? () => {
+            const request = t("connectionCreate.draftRequest", {
+              title,
+              name,
+              url: fields.form.url.trim()
+            });
+            const startChat = source.draftInChat;
+            onCreated(name, () => startChat?.(request));
+          }
+        : undefined;
 
   const heading = (() => {
     switch (stage.step) {
@@ -501,7 +541,16 @@ export function ConnectionCreateFlow({
         put={put}
         onBack={() => setStage({ step: "pick" })}
         onClose={onClose}
-        onCreated={onCreated}
+        onCreated={(created, after) => {
+          tellReady(
+            { kind: "none" },
+            { name: created, title: drafted?.connection.title ?? created }
+          );
+          onCreated(created, after);
+        }}
+        {...(drafted && stage.offer.type === draftedType
+          ? { initial: { title: drafted.connection.title, name: drafted.connection.name } }
+          : {})}
       />
     );
   }
@@ -744,7 +793,7 @@ export function ConnectionCreateFlow({
         return undefined;
       case "add":
         return (
-          <Button variant="outline" onClick={() => onCreated(name)}>
+          <Button variant="outline" onClick={later}>
             {t("connectionCreate.later")}
           </Button>
         );
@@ -797,7 +846,7 @@ export function ConnectionCreateFlow({
               onClick={() =>
                 stage.step === "review"
                   ? setStage({ step: stage.drafted ? "add" : "paste" })
-                  : onCreated(name)
+                  : later()
               }
             >
               {t(stage.step === "review" ? "connectionCreate.discard" : "connectionCreate.later")}

@@ -3,7 +3,9 @@ import { readKnowledgeCitationSources, RUN_AGENT_TOOL_NAME } from "@work-shape/c
 import { readApprovalRequestDisplay } from "../approvals/approval-request-model";
 import {
   CONNECTION_DRAFT_TOOL_NAME,
-  readConnectionDraft
+  CONNECTION_PROPOSE_TOOL_NAME,
+  readConnectionDraft,
+  readConnectionProposal
 } from "../../studio/build-area/connection-draft";
 import {
   CONNECTION_OFFER_TOOL_NAME,
@@ -225,7 +227,8 @@ function isPageSaveOutcome(parts: readonly AssistantPartOutline[], index: number
 
 /**
  * The agent's draft of REST API tools is a result of the run: its card is how the person opens
- * the approval list, so it stays in the thread. A refused draft folds away with the other steps.
+ * the approval list, so it stays in the thread. So does its proposal of a new Connection, whose
+ * card opens the New connection dialog. A refused one folds away with the other steps.
  */
 function isConnectionDraftCard(part: {
   type: string;
@@ -236,6 +239,8 @@ function isConnectionDraftCard(part: {
     part.type === "tool-call" &&
     ((part.toolName === CONNECTION_DRAFT_TOOL_NAME &&
       readConnectionDraft(part.result) !== undefined) ||
+      (part.toolName === CONNECTION_PROPOSE_TOOL_NAME &&
+        readConnectionProposal(part.result) !== undefined) ||
       // The offer of a Connection's tools to an agent is how the person gives them: it stays.
       (part.toolName === CONNECTION_OFFER_TOOL_NAME &&
         readConnectionOffer(part.result) !== undefined))

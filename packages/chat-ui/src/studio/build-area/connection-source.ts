@@ -152,6 +152,15 @@ export interface ConnectionSource {
    * composer, to send or change. Absent where the page has no dock.
    */
   draftInChat?: (request: string) => void;
+  /**
+   * Sends `text` to a conversation as the person's own message, queued behind a run that goes
+   * (CHAT-CONN-1): how the dialog a proposal opened says the Connection is connected. Absent
+   * where the page has no chat.
+   */
+  tellConversation?: (
+    to: { conversationId: string; agentName?: string },
+    text: string
+  ) => Promise<void>;
   /** A hook: the test of this page. */
   useTest(name: string): { run: ConnectionTestRun; start(): void };
   /**
@@ -194,7 +203,8 @@ export interface ConnectionSource {
  * `connections.test` runs the test.
  */
 export function useConnectionSource(): ConnectionSource {
-  const { apiBaseUrl, authScope, client, user, startDockedChat } = useSettingsPage();
+  const { apiBaseUrl, authScope, client, user, startDockedChat, tellConversation } =
+    useSettingsPage();
   const api = { apiBaseUrl, authScope, client };
   const calls = client.connections;
   // The rows are read by who manages users; the names of principals by who manages them.
@@ -423,6 +433,7 @@ export function useConnectionSource(): ConnectionSource {
       }
     },
     ...(startDockedChat ? { draftInChat: startDockedChat } : {}),
+    ...(tellConversation ? { tellConversation } : {}),
     principalHref: (principalId) =>
       principalHref(
         workspaceRoutePath({ kind: "settings", group: "instance", page: "api-access" }),

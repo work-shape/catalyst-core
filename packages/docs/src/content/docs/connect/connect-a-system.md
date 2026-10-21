@@ -31,6 +31,12 @@ The key is stored encrypted and is never shown again, to anyone. Later you repla
 
 Never type a key into a chat. An agent cannot take it from there, and an agent that asks you for one is wrong.
 
+### Let the agent set it up from the chat
+
+You can also ask an agent in the chat to connect a system. An agent that may propose Connections answers with a card, **Connect …** ("… verbinden"), and opens the New connection dialog for you, filled with the name, the id and the address, with the chat beside it. You check the fields, enter the key or sign in there, and click **Connect** ("Verbinden"); nothing is saved before that. The card stays in the chat and opens the dialog again with **Set up connection** ("Verbindung einrichten").
+
+When you have approved the tools, your chat gets a message from you that says what is connected and which tools you approved, such as "Brain ist verbunden (brain), 12 Werkzeuge freigegeben für Agenten: …". It holds no key and no address. The agent reads it and goes on with what you asked for.
+
 ## Choose what agents may do
 
 The instance asks the server which tools it offers. On the Connection's page, **Discovered tools** ("Gefundene Tools") lists them. Each says whether it only reads or also changes something.

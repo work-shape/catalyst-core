@@ -23,6 +23,7 @@ toolNames:
   - platform.assets.validate
   - platform.assets.put
   - platform.assets.operations
+  - platform.connections.propose
   - platform.connections.draft_tools
   - platform.connections.offer_to_agent
 initialPrompts:

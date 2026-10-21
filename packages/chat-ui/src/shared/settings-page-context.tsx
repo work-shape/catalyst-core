@@ -36,6 +36,15 @@ export interface SettingsAgentActions {
    * composer, for the person to send. Absent where the shell has no dock.
    */
   startDockedChat?: (prompt: string) => void;
+  /**
+   * Sends `text` to a conversation as the person's own message, with the agent named or the
+   * conversation's own, queued behind a run that goes: the New connection dialog's word that a
+   * Connection an agent proposed is connected (CHAT-CONN-1). Absent where the shell has no chat.
+   */
+  tellConversation?: (
+    to: { conversationId: string; agentName?: string },
+    text: string
+  ) => Promise<void>;
 }
 
 /**
