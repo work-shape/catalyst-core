@@ -32,9 +32,10 @@ import { workflowPrincipalRightsOperations } from "./workflow-principal-rights";
 
 /**
  * The operations of each area, keyed by the file that declares them. The path inventory pins one
- * file per area, so two changes to different areas do not edit the same pin.
+ * file per area, so two changes to different areas do not edit the same pin. Typed loosely on
+ * purpose: its inferred type would repeat every operation's type in the published declarations.
  */
-export const operationAreas = {
+export const operationAreas: Readonly<Record<string, Readonly<Record<string, unknown>>>> = {
   access: accessOperations,
   account: accountOperations,
   agents: agentOperations,
@@ -66,7 +67,7 @@ export const operationAreas = {
   users: userOperations,
   "workflow-principal-rights": workflowPrincipalRightsOperations,
   workflows: workflowOperations
-} as const;
+};
 
 /** Every product operation of the HTTP API, one file per area. */
 export const apiOperations = {
