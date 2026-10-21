@@ -11,11 +11,22 @@ import {
   asManagedArtifactId,
   asMessageId,
   asUserId,
-  createFileSetId
+  createConnectorTypeRegistry,
+  createFileSetId,
+  type ToolExecutionContext
 } from "@work-shape/catalyst-core";
+import {
+  createHttpApiConnectorType,
+  createMcpConnectorType,
+  HTTP_API_CONNECTOR_TYPE
+} from "@work-shape/catalyst-connections";
 import { platformContextSchema } from "@work-shape/catalyst-api-contract";
 import { PLATFORM_TOOL_NAMES } from "@work-shape/catalyst-client-assembly";
-import { createPlatformDiscoveryTools } from "@work-shape/catalyst-tool-execution";
+import {
+  CONNECTION_DRAFT_TOOL_NAME,
+  createConnectionDraftTool,
+  createPlatformDiscoveryTools
+} from "@work-shape/catalyst-tool-execution";
 import { drainRunEvents, injectStartConversationRun } from "./support/chat-server-run-harness";
 import { createTestConfig } from "./support/fixtures";
 import { createTestInstance, type TestInstance } from "./support/test-instance";
@@ -467,6 +478,82 @@ describe("the tools that find what is on the platform", () => {
       "only when the person asks for an existing shared account"
     );
     expect(context?.description).not.toContain("Settings > API access");
+  });
+
+  it("tells an agent which kinds of Connection the instance makes and how each signs in, and drafts REST tools only for an API without the provider's sign-in", async () => {
+    // Felix's run: asked for Gmail, the agent researched Google's OAuth documentation and drafted
+    // REST tools that sign in with nothing. The instance answers which types it has instead.
+    const clientInstanceId = asClientInstanceId("connector-types-client");
+    const toolContext: ToolExecutionContext = {
+      clientInstanceId,
+      correlationId: "corr_connector_types",
+      user: {
+        id: "user-connector-types",
+        externalUserId: "user-connector-types",
+        displayLabel: "Builder",
+        roles: ["user"],
+        permissionRefs: [],
+        clientInstanceId,
+        authSource: "test"
+      }
+    };
+    const read = {
+      instance: { name: "Test" },
+      modules: ["connections"],
+      kinds: [],
+      actions: [],
+      assetActions: [],
+      workspaces: []
+    };
+    const unused = () => Promise.reject(new Error("the context makes no search"));
+    const calls = {
+      readContext: () => Promise.resolve(read),
+      listAssets: unused,
+      listFiles: unused
+    };
+    const registry = createConnectorTypeRegistry([
+      createMcpConnectorType(),
+      createHttpApiConnectorType()
+    ]);
+    const context = createPlatformDiscoveryTools(calls, { connectorTypes: registry }).find(
+      (tool) => tool.name === "platform.context"
+    );
+    const result = await context?.execute({}, toolContext);
+    expect(result?.status).toBe("success");
+    const answer = z
+      .object({
+        connectorTypes: z.array(
+          z.object({ type: z.string(), description: z.string(), signIn: z.array(z.string()) })
+        )
+      })
+      .parse(result?.status === "success" ? result.output : undefined);
+    const signIn = Object.fromEntries(
+      answer.connectorTypes.map((type) => [type.type, type.signIn])
+    );
+    expect(signIn["mcp"]).toContain("oauth");
+    expect(signIn[HTTP_API_CONNECTOR_TYPE]).not.toContain("oauth");
+    expect(context?.description).toContain("connectorTypes lists the kinds of Connection");
+
+    // Without the module, no type is told.
+    const off = createPlatformDiscoveryTools(calls).find(
+      (tool) => tool.name === "platform.context"
+    );
+    const offResult = await off?.execute({}, toolContext);
+    expect(offResult?.status === "success" ? offResult.output : undefined).not.toHaveProperty(
+      "connectorTypes"
+    );
+
+    // The draft tool sends an OAuth API to its MCP server, never to unauthenticated tools.
+    const draft = createConnectionDraftTool({
+      connectorTypes: registry,
+      connectorType: HTTP_API_CONNECTOR_TYPE
+    });
+    expect(draft.name).toBe(CONNECTION_DRAFT_TOOL_NAME);
+    expect(draft.description).toContain(
+      "For an API that needs the person to sign in with the provider (OAuth), draft nothing"
+    );
+    expect(draft.description).toContain("once OAuth for REST APIs is available");
+    expect(draft.description).not.toMatch(/not supported yet/iu);
   });
 
   it("finds files the agent made for the person and none it only rendered to check its work", async () => {

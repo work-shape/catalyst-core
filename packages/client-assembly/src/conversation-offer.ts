@@ -268,7 +268,9 @@ export function createPlatformTools(
     skillSaveApproval: (context: ToolExecutionContext, name: string) =>
       platformAssets.calls.skillSaveApproval(context, name),
     tools: [
-      ...createPlatformDiscoveryTools(platformAssets.calls),
+      ...createPlatformDiscoveryTools(platformAssets.calls, {
+        connectorTypes: input.connections?.connectorTypes
+      }),
       ...createPlatformAssetTools(platformAssets.calls),
       ...createWorkflowTestTools(),
       ...createScheduledStartTools(),

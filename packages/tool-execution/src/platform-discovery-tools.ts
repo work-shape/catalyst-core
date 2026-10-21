@@ -3,6 +3,7 @@ import {
   FOUND_FILE_KINDS,
   COLLABORATION_WORKSPACE_KINDS,
   type CollaborationWorkspaceKind,
+  type ConnectorTypeRegistry,
   type FoundFile,
   type ToolExecutionContext
 } from "@work-shape/catalyst-core";
@@ -77,6 +78,26 @@ export interface PlatformContextRead {
     current?: true;
     actions: string[];
   }[];
+  /**
+   * The kinds of Connection this instance can make, where the module `connections` is on, and
+   * how each signs in to the outside system. An agent reads it before it plans to connect a
+   * system, instead of researching what the platform answers.
+   */
+  connectorTypes?: PlatformConnectorTypeRead[];
+}
+
+/** One kind of Connection this instance can make. */
+export interface PlatformConnectorTypeRead {
+  /** The id a Connection names as its `connectorType`, such as `mcp` or `http_api`. */
+  type: string;
+  description: string;
+  /**
+   * How a Connection of the type signs in: `none`, `bearer` or `header` (a key the person
+   * enters), `oauth` (the person signs in with the provider).
+   */
+  signIn: string[];
+  /** The system a ready-made type connects to, such as `gmail`. Absent for a generic type. */
+  service?: string;
 }
 
 /** One asset a search found: what it is called and what it is for, never what it holds. */
@@ -170,8 +191,28 @@ const contextOutputSchema = z.object({
       current: z.literal(true).optional(),
       actions: z.array(z.string())
     })
-  )
+  ),
+  connectorTypes: z
+    .array(
+      z.object({
+        type: z.string(),
+        description: z.string(),
+        signIn: z.array(z.string()),
+        service: z.string().optional()
+      })
+    )
+    .optional()
 });
+
+/** The Connector types of the build as an agent reads them. */
+function connectorTypesRead(registry: ConnectorTypeRegistry): PlatformConnectorTypeRead[] {
+  return registry.types.map((definition) => ({
+    type: definition.type,
+    description: definition.description,
+    signIn: [...definition.authSchemes],
+    ...(definition.form?.service ? { service: definition.form.service } : {})
+  }));
+}
 
 const listAssetsOutputSchema = z.object({
   assets: z.array(
@@ -201,7 +242,13 @@ const listFilesOutputSchema = z.object({
   truncated: z.boolean()
 });
 
-export function createPlatformDiscoveryTools(calls: PlatformDiscoveryCalls): AnyToolDefinition[] {
+export function createPlatformDiscoveryTools(
+  calls: PlatformDiscoveryCalls,
+  options: {
+    /** The Connector types of the instance, where the module `connections` is on. */
+    connectorTypes?: ConnectorTypeRegistry | undefined;
+  } = {}
+): AnyToolDefinition[] {
   const { context, listAssets, listFiles } = PLATFORM_DISCOVERY_TOOLS;
   return [
     defineTool({
@@ -218,6 +265,7 @@ export function createPlatformDiscoveryTools(calls: PlatformDiscoveryCalls): Any
         "Read what this instance can do and what the user may do on it: the modules that are on, the kinds of asset that exist (agent, skill, workflow, app, data_store, knowledge_base, connection, as far as they are on), and the user's rights.",
         "'actions' are rights on instance-owned assets of a kind, such as 'workflow.read', 'workflow.write' (save drafts) or 'workflow.publish'. 'assetActions' are read rights on some assets of a kind only. 'workspaces' names visible workspaces and the rights on their assets; current: true marks this conversation's workspace. Before refusing a create or change, check the actions of the workspace that owns it. A workspace skill.write allows creating a skill there even when actions has no skill.write; rights on another workspace do not apply here. A kind with createApproval, such as skill, is created here only once one of createApproval.approverNames approves this user's request; without it a create asks the user to confirm the exact call.",
         "Call it before you say whether something can be built here or whether the user may change it. availableHere lists the published agents and Apps offered in this conversation's workspace. Use their titles, never internal names. An asset found through platform.assets.list may be editable but unavailable to use here; never offer it as an available agent or App.",
+        "connectorTypes lists the kinds of Connection this instance can make and how each signs in to the outside system: none, bearer or header (a key the person enters) or oauth (the person signs in with the provider). Before you plan to connect a system, read them here instead of researching the provider's documentation: a type with a service connects that system ready-made, mcp connects the provider's MCP server, and http_api connects a REST API that needs no sign-in or a key.",
         "Leave runAs out of a new Workflow; publishing creates its own account. Use a name from workflowPrincipals only when the person asks for an existing shared account; never guess one or use integration or release accounts. Schedules use instance.timeZone; if timeZoneDefaulted, say that UTC is the instance default. Store the intended IANA timeZone on each schedule trigger; never shift the wall clock into UTC yourself. caller identifies the person you act for: use caller.id to notify 'me', without asking them for an id. Give person to resolve a recipient by name or email within this user's directory rights. An empty result means no known match; ask for a clearer name, never an internal id. If several match, ask which person by name/email."
       ].join(" "),
       inputSchema: z.object({
@@ -227,7 +275,12 @@ export function createPlatformDiscoveryTools(calls: PlatformDiscoveryCalls): Any
       }),
       outputSchema: contextOutputSchema,
       async execute(input, toolContext) {
-        const read = await calls.readContext(toolContext, input);
+        const read: PlatformContextRead = {
+          ...(await calls.readContext(toolContext, input)),
+          ...(options.connectorTypes
+            ? { connectorTypes: connectorTypesRead(options.connectorTypes) }
+            : {})
+        };
         return toolSuccess(read, {
           auditSummary: {
             action: context.name,

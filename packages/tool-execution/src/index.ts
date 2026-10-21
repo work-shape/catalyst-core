@@ -47,6 +47,7 @@ export {
   createPlatformDiscoveryTools,
   type PlatformAssetFound,
   type PlatformContextRead,
+  type PlatformConnectorTypeRead,
   type PlatformFileFound
 } from "./platform-discovery-tools";
 export * from "./workspace-tools";
