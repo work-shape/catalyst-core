@@ -137,10 +137,11 @@ test("an administrator grants by level, checks, denies and revokes rights", asyn
     await expect(inWorkspace).toBeChecked();
     await expect(grantDialog.getByRole("checkbox")).toHaveCount(0);
     const level = (name: string) => grantDialog.getByRole("radio", { name, exact: true });
-    for (const name of ["View", "Edit", "Publish", "Delete"]) {
+    // Use is the agents' lowest level (AGENT-USE-1).
+    for (const name of ["Use", "View", "Edit", "Publish", "Delete"]) {
       await expect(level(name)).toBeVisible();
     }
-    await expect(level("Edit")).toHaveAccessibleDescription("Includes view.");
+    await expect(level("Edit")).toHaveAccessibleDescription("Includes use and view.");
     await onAsset.check();
     await level("View").check();
     await pick(page, grantDialog.getByRole("button", { name: /^Asset: / }), "kai-helper");
@@ -149,7 +150,7 @@ test("an administrator grants by level, checks, denies and revokes rights", asyn
     const assetGrants = grantRows.filter({ hasText: "the agent Kai Helper" });
     await expect(grantRows).toHaveCount(1);
     await expect(assetGrants).toContainText("E2E Zz Access Rights");
-    await expect(assetGrants).toContainText("may view the agent Kai Helper");
+    await expect(assetGrants).toContainText("may view and use the agent Kai Helper");
     await expect(assetGrants).toContainText("E2E Admin");
 
     // A higher level adds the rows below it that are missing and says what it left alone.
@@ -164,9 +165,9 @@ test("an administrator grants by level, checks, denies and revokes rights", asyn
     await pick(page, grantDialog.getByRole("button", { name: /^Asset: / }), "kai-helper");
     await grantDialog.getByRole("button", { name: "Create right" }).click();
     await expect(grantDialog).toBeHidden();
-    await expect(page.getByText("1 added. 1 already there and left as they are.")).toBeVisible();
+    await expect(page.getByText("1 added. 2 already there and left as they are.")).toBeVisible();
     await expect(grantRows).toHaveCount(1);
-    await expect(assetGrants).toContainText("may view and edit the agent Kai Helper");
+    await expect(assetGrants).toContainText("may view, use, and edit the agent Kai Helper");
 
     // Rights in the shared workspace, which cover what it owns and not the instance's agents.
     await page.getByRole("button", { name: "New right" }).click();
@@ -182,7 +183,7 @@ test("an administrator grants by level, checks, denies and revokes rights", asyn
     await expect(grantRows).toHaveCount(2);
     await expect(workspaceGrants).toContainText("E2E Zz Access Rights");
     await expect(workspaceGrants).toContainText(
-      `may view, edit, publish, and delete agents in ${workspaceName}`
+      `may view, use, edit, publish, and delete agents in ${workspaceName}`
     );
 
     // The rights on kai-helper allow what they name, the workspace's do not reach the agent of
@@ -215,7 +216,7 @@ test("an administrator grants by level, checks, denies and revokes rights", asyn
     const revokeEdit = page.getByRole("dialog", { name: "Revoke this right?" });
     await revokeEdit.getByRole("button", { name: "Revoke" }).click();
     await expect(revokeEdit).toHaveCount(0);
-    await expect(assetGrants).toContainText("may view the agent Kai Helper");
+    await expect(assetGrants).toContainText("may view and use the agent Kai Helper");
     await expect(page.locator("[data-radix-focus-guard]")).toHaveCount(0);
 
     // A deny on the one agent refuses the action there. It joins the row of the person's rights
@@ -285,6 +286,7 @@ test("an administrator grants by level, checks, denies and revokes rights", asyn
     // The rights in the workspace are revoked one by one; each takes one verb out of the row's
     // sentence, and the last one the row.
     for (const [action, left] of [
+      ["Use agents", `may view, edit, publish, and delete agents in ${workspaceName}`],
       ["View agents", `may edit, publish, and delete agents in ${workspaceName}`],
       ["Edit agents", `may publish and delete agents in ${workspaceName}`],
       ["Publish agents", `may delete agents in ${workspaceName}`],
