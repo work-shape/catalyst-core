@@ -31,6 +31,23 @@ export interface GrantChoices {
 }
 
 /**
+ * The giver's loaded effective rights as the resolver answers them, for the rule of no
+ * escalation as the server asks it. A giver who is not active holds nothing.
+ */
+export function giverAccess(giver: EffectivePermissions | undefined) {
+  const entries = giver?.holderActive ? giver.items : [];
+  const transferable = transferableAccessEntries(entries);
+  return {
+    authorize: (action: string, resource?: AccessResource) =>
+      explainAccessEntries(entries, action, resource).decision,
+    authorizeTransfer: (action: string, resource?: AccessResource) =>
+      explainAccessEntries(transferable, action, resource).decision,
+    denials: (action: string) =>
+      entries.filter((entry) => entry.action === action && entry.effect === "deny")
+  };
+}
+
+/**
  * Choices from the giver's loaded effective rights, using the same resolver and lending rule
  * as the server. Missing rights or resource metadata never widen a choice. The server checks
  * again, including the Workflow principal for run data, when the person submits.
@@ -40,16 +57,7 @@ export function grantOptions(
   assets: Partial<Record<GrantKind, GrantChoices>>,
   workspaces: GrantChoices | undefined
 ) {
-  const entries = giver?.holderActive ? giver.items : [];
-  const transferable = transferableAccessEntries(entries);
-  const access = {
-    authorize: (action: string, resource?: AccessResource) =>
-      explainAccessEntries(entries, action, resource).decision,
-    authorizeTransfer: (action: string, resource?: AccessResource) =>
-      explainAccessEntries(transferable, action, resource).decision,
-    denials: (action: string) =>
-      entries.filter((entry) => entry.action === action && entry.effect === "deny")
-  };
+  const access = giverAccess(giver);
   const deniedAssets: DeniedAssets = new Map(
     Object.values(assets).flatMap((choices) =>
       (choices?.items ?? []).flatMap(({ id, resource }) =>

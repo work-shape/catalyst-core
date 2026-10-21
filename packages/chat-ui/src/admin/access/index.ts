@@ -42,3 +42,21 @@ export { grantOptions } from "./grant-options";
 export { listGrantChoiceAssets } from "./access-queries";
 
 export { DataScopes } from "./data-scopes";
+
+export { RolesTab, type RolesTabProps } from "./roles-tab";
+export { RolePage, type RolePageProps } from "./role-page";
+export { roleName, roleFailureText } from "./role-parts";
+export {
+  areaRightChoices,
+  canEditRole,
+  roleAreaActions,
+  roleAreaOf,
+  roleGrantsByArea,
+  rolesWithPending,
+  roleWriteFailure,
+  withAreaAllows,
+  withoutGrant,
+  ROLE_AREAS,
+  type RoleEditor
+} from "./role-model";
+export { grantSentences } from "./grant-sentences";

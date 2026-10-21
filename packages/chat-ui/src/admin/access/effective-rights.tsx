@@ -15,7 +15,11 @@ import {
 import { useTranslation, type TranslationContextValue } from "../../shared/i18n";
 import { useSettingsPage } from "../../shared/settings-page-context";
 import { useHolderRightsQuery } from "./access-queries";
-import { effectiveRightAreas, type EffectiveRightRow } from "./effective-rights-model";
+import {
+  effectiveRightAreas,
+  rightAreaLabelKey,
+  type EffectiveRightRow
+} from "./effective-rights-model";
 import { originLabel, placeLabel } from "./origin-words";
 import { actionLabel, rightVerb, verbLabel } from "./right-words";
 
@@ -106,7 +110,7 @@ export function EffectiveRights({ rights }: { rights: HolderRights }) {
 }
 
 function areaName(area: ReturnType<typeof effectiveRightAreas>[number], t: Translate): string {
-  return area.label === undefined ? t("access.effectiveAreaAdministration") : t(area.label);
+  return t(rightAreaLabelKey(area.area));
 }
 
 /**

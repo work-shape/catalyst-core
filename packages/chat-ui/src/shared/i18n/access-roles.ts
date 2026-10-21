@@ -56,16 +56,6 @@ export const accessRoles = defineTranslations({
     "access.roleBuiltInNotEditable":
       "You can view this role. Changing it needs the right “{right}”.",
 
-    "access.areaChat": "Chat",
-    "access.areaAgents": "Agents and skills",
-    "access.areaApps": "Apps",
-    "access.areaWorkflows": "Workflows",
-    "access.areaConnections": "Connections",
-    "access.areaKnowledge": "Knowledge",
-    "access.areaDataStores": "Data stores",
-    "access.areaGuardrails": "Guardrails",
-    "access.areaWorkspaces": "Building in workspaces",
-    "access.areaAdministration": "Administration",
     "access.areaNone": "No right in this area.",
     "access.areaEdit": "Edit",
     "access.areaEditLabel": "Edit the rights for {area}",
@@ -149,16 +139,6 @@ export const accessRoles = defineTranslations({
     "access.roleBuiltInNotEditable":
       "Du kannst diese Rolle ansehen. Um sie zu ändern, brauchst du das Recht „{right}“.",
 
-    "access.areaChat": "Chat",
-    "access.areaAgents": "Agenten und Skills",
-    "access.areaApps": "Apps",
-    "access.areaWorkflows": "Workflows",
-    "access.areaConnections": "Verbindungen",
-    "access.areaKnowledge": "Wissen",
-    "access.areaDataStores": "Datenspeicher",
-    "access.areaGuardrails": "Leitplanken",
-    "access.areaWorkspaces": "Bauen in Arbeitsbereichen",
-    "access.areaAdministration": "Verwaltung",
     "access.areaNone": "Kein Recht in diesem Bereich.",
     "access.areaEdit": "Bearbeiten",
     "access.areaEditLabel": "Rechte für {area} bearbeiten",

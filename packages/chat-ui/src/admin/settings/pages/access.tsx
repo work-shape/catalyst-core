@@ -11,8 +11,17 @@ import {
   type GrantKind
 } from "../../access/access-model";
 import type { GrantChoices } from "../../access/grants-tab";
-import { PageHeader, Tabs, TabsContent, TabsList, TabsTrigger } from "@work-shape/catalyst-ui";
-import { CheckTab, GrantsTab } from "../../access";
+import {
+  Banner,
+  Button,
+  PageHeader,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger
+} from "@work-shape/catalyst-ui";
+import { CheckTab, GrantsTab, RolesTab, roleName, rolesWithPending } from "../../access";
+import { useRoleMutations, useRolesQuery } from "../../access/role-queries";
 import {
   listGrantChoiceAssets,
   useAccessMutations,
@@ -32,14 +41,27 @@ import { DocsReference } from "../../../shared/docs-links";
 import { useTranslation } from "../../../shared/i18n";
 import { useSettingsPage } from "../../../shared/settings-page-context";
 
+/** The tab that opens one role's page, and the role, as a link names them. */
+const ROLE_PARAM = "role";
+
 /**
- * Instance > Access: the grant rows on the assets of every kind a right can be given on, and
- * what one person may do with one asset. Each tab gets its data from here and shows it.
+ * Instance > Access: the grant rows on the assets of every kind a right can be given on, the
+ * roles with their rights, and what one person may do with one asset. Each tab gets its data
+ * from here and shows it.
  */
 export function AccessPage() {
   const { t, locale } = useTranslation();
   const { apiBaseUrl, authScope, client, user } = useSettingsPage();
   const api = { apiBaseUrl, authScope, client };
+  const [selectedRoleId, setSelectedRoleId] = useState(
+    () => new URLSearchParams(window.location.search).get(ROLE_PARAM) || undefined
+  );
+  const [tab, setTab] = useState(selectedRoleId === undefined ? "grants" : "roles");
+  const rolesQuery = useRolesQuery(api);
+  const roleMutations = useRoleMutations({
+    ...api,
+    heldMessage: t("access.roleWaitsForApproval")
+  });
   const [checkedHolderId, setCheckedHolderId] = useState<string | undefined>();
   const [checkedKind, setCheckedKind] = useState("agent");
   const [checkedName, setCheckedName] = useState("");
@@ -122,8 +144,25 @@ export function AccessPage() {
       ];
     })
   );
-  // Builder and Publisher name a workspace, never an asset.
-  const kindAssets = { ...assetChoices, workspace: { items: [], failed: false } };
+  // Builder and Publisher name a workspace, never an asset; editing the built-in roles is a
+  // right on the whole instance.
+  const kindAssets = {
+    ...assetChoices,
+    workspace: { items: [], failed: false },
+    roles: { items: [], failed: false }
+  };
+  // What a role's grant names, as the Rights tab names a person's: a workspace by its name, an
+  // asset by the title its kind's list gives it.
+  const scopeNames = {
+    workspace: (workspaceId: string) =>
+      contextQuery.data?.workspaces.find((workspace) => workspace.id === workspaceId)?.name,
+    asset: (assetId: string) =>
+      Object.values(assetChoices)
+        .flatMap((choices) => choices.items ?? [])
+        .find((asset) => asset.id === assetId)?.name ??
+      overviewQuery.data?.assets.find((asset) => asset.id === assetId)?.name
+  };
+  const pendingRoles = rolesWithPending(rolesQuery.data);
   const namesWorkspaces = grantsNameWorkspaces(furtherKinds, grantsQuery.data ?? []);
   // The Check tab asks about every kind the instance has. Agents and skills come with the
   // agent configuration; the assets of any other kind are listed once the kind is chosen.
@@ -186,10 +225,40 @@ export function AccessPage() {
           </>
         }
       />
-      <Tabs defaultValue="grants">
+      {pendingRoles.length > 0 && !(tab === "roles" && selectedRoleId === undefined) ? (
+        // A release brought rights an edited role does not hold yet: the notice stays until
+        // each one is decided (ADR-0028).
+        <Banner
+          tone="warning"
+          className="mb-4"
+          data-testid="roles-pending-notice"
+          action={
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setSelectedRoleId(pendingRoles.length === 1 ? pendingRoles[0]?.id : undefined);
+                setTab("roles");
+              }}
+            >
+              {t("access.pendingNoticeOpen")}
+            </Button>
+          }
+        >
+          {t("access.pendingNotice", {
+            roles: new Intl.ListFormat(locale, { type: "conjunction" }).format(
+              pendingRoles.map((role) => roleName(role, t))
+            )
+          })}
+        </Banner>
+      ) : null}
+      <Tabs value={tab} onValueChange={setTab}>
         <TabsList label={t("access.tabs")}>
           <TabsTrigger value="grants" count={grantRowCount(grantsQuery.data)}>
             {t("access.tabGrants")}
+          </TabsTrigger>
+          <TabsTrigger value="roles" count={rolesQuery.data?.length}>
+            {t("access.tabRoles")}
           </TabsTrigger>
           <TabsTrigger value="data-scopes">{t("access.scopeTab")}</TabsTrigger>
           <TabsTrigger value="check">{t("access.tabCheck")}</TabsTrigger>
@@ -221,6 +290,28 @@ export function AccessPage() {
             instanceAdminName={user.instanceAdminName}
             onGrant={(requests) => mutations.grant.mutateAsync(requests)}
             onRevoke={(grantId) => mutations.revoke.mutateAsync(grantId)}
+          />
+        </TabsContent>
+        <TabsContent value="roles" className="pt-5">
+          <RolesTab
+            roles={rolesQuery.data}
+            loadFailed={Boolean(rolesQuery.error)}
+            onRetry={retry(rolesQuery)}
+            editor={{
+              superadmin: user.roles.includes("superadmin"),
+              rights: giverQuery.error === null ? giverQuery.data : undefined
+            }}
+            selectedRoleId={selectedRoleId}
+            onSelect={setSelectedRoleId}
+            names={scopeNames}
+            instanceAdminName={user.instanceAdminName}
+            onCreate={(body) => roleMutations.create.mutateAsync(body)}
+            onUpdate={(roleId, body) => roleMutations.update.mutateAsync({ roleId, body })}
+            onDelete={(roleId) => roleMutations.remove.mutateAsync(roleId)}
+            onReset={(roleId) => roleMutations.reset.mutateAsync(roleId)}
+            onDecide={(roleId, action, decision) =>
+              roleMutations.decide.mutateAsync({ roleId, action, decision })
+            }
           />
         </TabsContent>
         <TabsContent value="data-scopes" className="pt-5">

@@ -376,7 +376,8 @@ test("the User screen and the Check tab name the role a right comes from", async
       data: { displayLabel: `Lena ${suffix}`, roles: ["user"] }
     });
     expect(person.ok(), await person.text()).toBe(true);
-    personId = ((await person.json()) as { id: string }).id;
+    const created: { id: string } = await person.json();
+    personId = created.id;
     const role = await requestWithOrigin(
       page,
       "post",
@@ -392,7 +393,8 @@ test("the User screen and the Check tab name the role a right comes from", async
       }
     );
     expect(role.ok(), await role.text()).toBe(true);
-    roleId = ((await role.json()) as { id: string }).id;
+    const createdRole: { id: string } = await role.json();
+    roleId = createdRole.id;
     const assigned = await requestWithOrigin(
       page,
       "patch",
@@ -475,5 +477,174 @@ test("the User screen and the Check tab name the role a right comes from", async
       );
     }
     await requestWithOrigin(page, "delete", `${apiBaseUrl}/api/v1/workspaces/${workspaceId}`);
+  }
+});
+
+test("the roles of the instance: built-in first, superadmin read-only, a custom role from copy to delete", async ({
+  page,
+  browser,
+  baseURL,
+  // The test gives E2E Admin a right and writes a role: the turn on the grants.
+  accessState: _accessState
+}, testInfo) => {
+  test.setTimeout(90_000);
+  const superadminUser = {
+    email: "e2e-superadmin@example.test",
+    password: "e2e-superadmin-password"
+  };
+  const rootContext = await browser.newContext({ baseURL });
+  const root = await rootContext.newPage();
+  await signInViaApi(root, superadminUser);
+  await signInViaApi(page, adminUser);
+  const me = await page.request.get(`${apiBaseUrl}/api/v1/me`);
+  expect(me.ok()).toBe(true);
+  const { id: adminId }: { id: string } = await me.json();
+  const roleName = `E2E reviewers ${Date.now()}`;
+  const renamed = `${roleName} renamed`;
+  const grants: string[] = [];
+  const rolesPath = `${apiBaseUrl}/api/v1/instance/access/roles`;
+  const rows = page.getByTestId("role-row");
+  const rolePage = page.getByTestId("role-page");
+  try {
+    await page.setViewportSize(WIDE);
+    await page.goto(accessPath);
+    await tab(page, "Roles").click();
+
+    // User, Admin and Superadmin come first, in that order.
+    await expect(rows.first()).toBeVisible();
+    expect(
+      (
+        await rows.evaluateAll((items) => items.map((item) => item.getAttribute("data-role")))
+      ).slice(0, 3)
+    ).toEqual(["user", "admin", "superadmin"]);
+
+    // Superadmin is read-only, its rights shown by area.
+    await rows.filter({ hasText: "Superadmin" }).getByRole("button").first().click();
+    await expect(rolePage).toHaveAttribute("data-role", "superadmin");
+    await expect(rolePage.getByText("Read-only")).toBeVisible();
+    await expect(rolePage.getByRole("button", { name: /^Edit the rights for/u })).toHaveCount(0);
+    await expect(rolePage.getByRole("button", { name: "Reset to default" })).toHaveCount(0);
+    await expect(
+      rolePage.locator('[data-area="roles"]').getByText(/Edit the built-in roles/u)
+    ).toBeVisible();
+    await page.getByRole("button", { name: "All roles" }).click();
+
+    // An admin without the right views User and does not change it.
+    await rows.filter({ hasText: /^User/u }).getByRole("button").first().click();
+    await expect(rolePage).toHaveAttribute("data-role", "user");
+    await expect(
+      page.getByText(
+        "You can view this role. Changing it needs the right “Edit the built-in roles User and Admin”."
+      )
+    ).toBeVisible();
+    await expect(rolePage.getByRole("button", { name: "Reset to default" })).toHaveCount(0);
+    await page.getByRole("button", { name: "All roles" }).click();
+
+    // A new role copies the rights of another, then opens.
+    await page.getByRole("button", { name: "New role" }).click();
+    const create = page.getByRole("dialog", { name: "New role" });
+    await create.getByLabel("Copy the rights of").selectOption({ label: "User" });
+    await create.getByLabel("Name").fill(roleName);
+    await create.getByRole("button", { name: "Create role" }).click();
+    await expect(create).toHaveCount(0);
+    await expect(rolePage.getByRole("heading", { name: roleName })).toBeVisible();
+
+    // Its rights are edited by area: a right the admin holds is given, a superadmin's is not.
+    const administration = rolePage.locator('[data-area="administration"]');
+    await expect(administration).toContainText("No right in this area.");
+    await rolePage.getByRole("button", { name: "Edit the rights for Administration" }).click();
+    const area = page.getByRole("dialog", { name: `Administration in ${roleName}` });
+    await expect(area.getByRole("checkbox", { name: /^Manage API access/u })).toBeDisabled();
+    await area.getByRole("checkbox", { name: /^View usage/u }).check();
+    await area.getByRole("button", { name: "Save rights" }).click();
+    await expect(area).toHaveCount(0);
+    await expect(administration).not.toContainText("No right in this area.");
+
+    // Renamed and deleted from its menu.
+    await rolePage.getByRole("button", { name: `Actions for ${roleName}` }).click();
+    await page.getByRole("menuitem", { name: "Rename" }).click();
+    const rename = page.getByRole("dialog", { name: `Rename ${roleName}` });
+    await rename.getByLabel("Name").fill(renamed);
+    await rename.getByRole("button", { name: "Save" }).click();
+    await expect(rename).toHaveCount(0);
+    await expect(rolePage.getByRole("heading", { name: renamed })).toBeVisible();
+    await rolePage.getByRole("button", { name: `Actions for ${renamed}` }).click();
+    await page.getByRole("menuitem", { name: "Delete" }).click();
+    const remove = page.getByRole("dialog", { name: `Delete ${renamed}?` });
+    await remove.getByRole("button", { name: "Delete" }).click();
+    await expect(rolePage).toHaveCount(0);
+    await expect(rows.filter({ hasText: renamed })).toHaveCount(0);
+
+    // Given the right to edit the built-in roles, the admin edits User and may reset it.
+    const granted = await requestWithOrigin(
+      root,
+      "post",
+      `${apiBaseUrl}/api/v1/instance/access/grants`,
+      {
+        data: {
+          holderKind: "user",
+          holderId: adminId,
+          action: "roles.edit_built_in",
+          effect: "allow",
+          scopeKind: "instance"
+        }
+      }
+    );
+    expect(granted.ok(), await granted.text()).toBe(true);
+    const grant: { id: string } = await granted.json();
+    grants.push(grant.id);
+    await page.reload();
+    await tab(page, "Roles").click();
+    await rows.filter({ hasText: /^User/u }).getByRole("button").first().click();
+    await expect(rolePage).toHaveAttribute("data-role", "user");
+    await expect(
+      page.getByText("A change applies at once to everybody who holds this role.")
+    ).toBeVisible();
+    await expect(rolePage.getByRole("button", { name: "Reset to default" })).toBeVisible();
+    await expect(
+      rolePage.getByRole("button", { name: "Edit the rights for Administration" })
+    ).toBeVisible();
+
+    // In German, at 1280 wide: the list and the page of Admin.
+    await page.evaluate(() => window.localStorage.setItem("vivd-catalyst:locale", "de"));
+    await page.reload();
+    await tab(page, "Rollen").click();
+    await expect(rows.first()).toBeVisible();
+    await expectNoSidewaysScroll(page);
+    const shotsDir = process.env.E2E_SHOTS_DIR ?? testInfo.outputPath("shots");
+    await mkdir(shotsDir, { recursive: true });
+    await page.screenshot({
+      path: join(shotsDir, "roles-list-de-1280.png"),
+      animations: "disabled"
+    });
+    await rows
+      .filter({ hasText: /^Admin/u })
+      .getByRole("button")
+      .first()
+      .click();
+    await expect(rolePage).toHaveAttribute("data-role", "admin");
+    await expect(rolePage.getByRole("button", { name: "Auf Standard zurücksetzen" })).toBeVisible();
+    await expectNoSidewaysScroll(page);
+    await page.screenshot({
+      path: join(shotsDir, "role-admin-de-1280.png"),
+      animations: "disabled",
+      fullPage: true
+    });
+  } finally {
+    for (const grantId of grants) {
+      await requestWithOrigin(
+        root,
+        "delete",
+        `${apiBaseUrl}/api/v1/instance/access/grants/${grantId}`
+      );
+    }
+    const listed = await root.request.get(rolesPath);
+    if (listed.ok()) {
+      const { items }: { items: { id: string; name: string }[] } = await listed.json();
+      for (const role of items.filter((item) => item.name.startsWith(roleName))) {
+        await requestWithOrigin(root, "delete", `${rolesPath}/${role.id}`);
+      }
+    }
+    await rootContext.close();
   }
 });

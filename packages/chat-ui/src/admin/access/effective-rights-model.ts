@@ -2,8 +2,9 @@ import type { AccessOrigin, HolderRights } from "@work-shape/catalyst-api-client
 import type { TranslationKey } from "../../shared/i18n";
 import { assetKindLabelKey, grantKinds } from "./grant-words";
 
-// The User screen's effective rights, grouped by area as the rights screens group them. The
-// server decided every right and named where it comes from; this only orders and groups.
+// The User screen's effective rights, grouped by area as the rights screens group them: the
+// role page (AP-5b1) uses the same areas. The server decided every right and named where it
+// comes from; this only orders and groups.
 
 type HeldRight = HolderRights["rights"][number];
 
@@ -36,7 +37,7 @@ export interface EffectiveRightArea {
  * The kind an action belongs to, where the interface has words for it. A Builder or Publisher
  * bundle belongs to the workspace it is held in.
  */
-function areaOfAction(action: string): string {
+export function rightAreaOf(action: string): string {
   const dot = action.indexOf(".");
   const kind = dot < 0 ? "workspace" : action.slice(0, dot);
   return assetKindLabelKey(kind) === undefined ? ADMINISTRATION_AREA : kind;
@@ -55,7 +56,7 @@ function originKey(origin: AccessOrigin | undefined): string {
 export function effectiveRightAreas(rights: HolderRights["rights"]): EffectiveRightArea[] {
   const areas = new Map<string, Map<string, EffectiveRightRow>>();
   for (const right of rights) {
-    const area = areaOfAction(right.action);
+    const area = rightAreaOf(right.action);
     const key = [
       right.scopeKind,
       right.scopeId ?? "",
@@ -81,7 +82,7 @@ export function effectiveRightAreas(rights: HolderRights["rights"]): EffectiveRi
       });
     }
   }
-  const order = [...Object.keys(grantKinds), ADMINISTRATION_AREA];
+  const order = rightAreaOrder();
   return [...areas.entries()]
     .sort(([left], [right]) => order.indexOf(left) - order.indexOf(right))
     .map(([area, rows]) => ({
@@ -89,4 +90,17 @@ export function effectiveRightAreas(rights: HolderRights["rights"]): EffectiveRi
       label: area === ADMINISTRATION_AREA ? undefined : assetKindLabelKey(area),
       rows: [...rows.values()]
     }));
+}
+
+/** Every area in the order the rights screens show them: each kind, the administration last. */
+export function rightAreaOrder(): string[] {
+  return [...Object.keys(grantKinds), ADMINISTRATION_AREA];
+}
+
+/** The name of an area: its kind's, or the administration's. */
+export function rightAreaLabelKey(area: string): TranslationKey {
+  return (
+    (area === ADMINISTRATION_AREA ? undefined : assetKindLabelKey(area)) ??
+    "access.effectiveAreaAdministration"
+  );
 }

@@ -238,7 +238,13 @@ Catalyst has three roles. You set the **Role** of a person on **Settings > Insta
 | Admin      | Read and change agents and skills, approve changes, manage users, see usage and the audit log. Every right on Connections, where the module is on. |
 | Superadmin | Everything an Admin has, plus managing API access and the model settings of agents.                                                                |
 
-The three roles are fixed. You cannot change what a role carries, and you cannot create a role of your own.
+The table shows what the roles carry as delivered. **Settings > Instance > Access, Roles** lists User, Admin and Superadmin, then the roles of your own. A role's page shows its rights by area, in the same sentences as the Rights tab.
+
+- **A role of your own** starts as a copy of another role, and you change its rights, its name and its description, or delete it once nobody holds it. You need "Manage users", and you add only rights you hold.
+- **User and Admin** are changed, and reset to their default, by a holder of "Edit the built-in roles User and Admin" (`roles.edit_built_in`). Superadmins carry it; they can give it to a person, or to a role, like any other right. A change reaches everybody who holds the role at once. Its holder still adds only rights they hold, and only a Superadmin adds or removes "Manage API access" and "Manage agent model settings".
+- **Superadmin** is read-only: it carries every right of the release, so the instance can always be repaired from inside.
+
+When a release adds a right to the default of User or Admin, or takes one out, and you changed that role, the role keeps its rights and the page asks you to decide: **Add** or **Leave out** a new right, **Remove** or **Keep** one the default lost. The Access page shows a notice while a decision is open.
 
 Below the Role, the same page has a card named **Rights** with one switch per right. A switch adds a right the role does not carry, or takes away one it does. The card shows where each right comes from: "by role", "granted individually" or "revoked individually". A revoked right stays revoked even though the role carries it.
 
@@ -584,6 +590,7 @@ A release push reaches every agent and skill of the instance and is not held bac
 | -------------------------------------------------- | ---------------------------------------------- | ----------------------------------------------------------- |
 | Make somebody an Admin or a Superadmin             | Settings > Instance > Users, Role              | Manage users. Superadmin for the Superadmin role.           |
 | Give or take one right for the whole instance      | Settings > Instance > Users, Rights            | Manage users                                                |
+| Create a role, or change what a role carries      | Settings > Instance > Access, Roles            | Manage users; for User and Admin `roles.edit_built_in`      |
 | Let somebody edit an agent                         | Settings > Instance > Access, Rights           | Manage users                                                |
 | Find out why somebody can or cannot do something   | Settings > Instance > Access, Check            | Manage users and View agent configuration                   |
 | Create a key of your own for the CLI               | Settings > You > API keys, or `catalyst login` | The module `personalApiKeys` on                             |
