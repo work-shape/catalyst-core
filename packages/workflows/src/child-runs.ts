@@ -22,6 +22,7 @@ import { runKeyRefusal, type StartWorkflowRunInput } from "./run-open";
 import type { PreparedStart } from "./run-start";
 import type { RunOrigin } from "./scheduled-start";
 import { assertRunLinkIsAcyclic } from "./child-run-links";
+import { workflowResource } from "./workflow-resource";
 
 /** A start must record its durable run promptly; overdue Operation Runs can be recovered. */
 const WORKFLOW_START_OPERATION_TIMEOUT_MS = 30_000;
@@ -110,12 +111,7 @@ export function createWorkflowStartSource(options: {
       // structural lets an interrupted start recover its persisted run after republishing.
       inputSchema: jsonObjectSchema,
       outputSchema: z.object({ id: z.string() }),
-      resource: () => ({
-        kind: "workflow",
-        id: asset?.id ?? workflow,
-        name: workflow,
-        ...(asset ? { assetId: asset.id } : {})
-      }),
+      resource: () => workflowResource(workflow, asset),
       async execute(
         input: unknown,
         context: import("@work-shape/catalyst-core").OperationExecutionContext

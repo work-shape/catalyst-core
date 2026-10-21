@@ -188,6 +188,118 @@ describe("a Workflow a workspace owns", () => {
     );
   });
 
+  it("is started through its operation by the rights of its workspace: a grant there admits, a deny there refuses", async () => {
+    const { t, nordlicht } = await ready();
+    const revision = await put(t, t.admin.id, OWN, nordlicht, null);
+    await t.expectOk(t.root.id, "assets.publish", {
+      params: { kind: WORKFLOW_ASSET_KIND, name: OWN },
+      payload: { revision, workspaceId: nordlicht }
+    });
+    const operation = `workflow.${OWN}.start`;
+
+    // Lena's right in Nordlicht admits the operation as it admits workflows.start. Before the
+    // fix the operation asked no workspace and refused her.
+    await t.grant(t.lena.id, WORKFLOW_ACTIONS.use, { workspaceId: nordlicht });
+    const admitted = await t.invoke(
+      t.lena,
+      operation,
+      { note: NOTE },
+      { effect: "changing", idempotencyKey: "lena" }
+    );
+    expect(admitted.result.status).toBe("done");
+
+    // Kai may use every Workflow of the instance, and Nordlicht denies him its own: the deny
+    // holds on the operation too. Before the fix it was passed over.
+    for (const [effect, scope] of [
+      ["allow", { scopeKind: "instance" }],
+      ["deny", { scopeKind: "workspace", scopeId: nordlicht }]
+    ] as const)
+      await t.stores.access.createGrant({
+        clientInstanceId,
+        holderKind: "user",
+        holderId: t.kai.id,
+        action: WORKFLOW_ACTIONS.use,
+        effect,
+        ...scope,
+        grantedBy: t.root.id
+      });
+    const denied = await t.invoke(
+      t.kai,
+      operation,
+      { note: NOTE },
+      { effect: "changing", idempotencyKey: "kai" }
+    );
+    expect(denied.result.status).toBe("denied");
+    expect(
+      (await t.stores.workflowRuns.listRuns({ clientInstanceId, workflow: OWN })).map(
+        (run) => run.startedBy.id
+      )
+    ).toEqual([t.lena.id]);
+  });
+
+  it("goes with its workspace by its own delete: the name stays taken, the principal is retired and open runs end", async () => {
+    const { t, nordlicht, other } = await ready();
+    // Without `runAs` the publish gives the Workflow an account of its own (AP-10).
+    const { runAs: _runAs, ...ownAccount } = { ...notifyClients(), id: OWN };
+    const revision = await put(t, t.admin.id, OWN, nordlicht, null, ownAccount);
+    await t.expectOk(t.root.id, "assets.publish", {
+      params: { kind: WORKFLOW_ASSET_KIND, name: OWN },
+      payload: { revision, workspaceId: nordlicht }
+    });
+    const asset = await t.stores.configAssets.getConfigAsset({
+      clientInstanceId,
+      kind: WORKFLOW_ASSET_KIND,
+      name: OWN
+    });
+    if (!asset) throw new Error("The Workflow is not stored");
+    const owner = { kind: WORKFLOW_ASSET_KIND, assetId: asset.id };
+    expect(
+      await t.stores.apiAccess.findServicePrincipalByOwner({ clientInstanceId, owner })
+    ).toBeDefined();
+    // A run that has not ended when the workspace goes.
+    const open = runSchema.parse(
+      (await t.expectOk(t.root.id, "workflows.start", startOf(OWN))).json()
+    );
+
+    const deleted = await t.expectOk(t.admin.id, "workspaces.delete", {
+      params: { collaborationWorkspaceId: nordlicht },
+      payload: { confirmName: "Nordlicht" }
+    });
+    expect(deleted.json()).toMatchObject({ state: "deleted" });
+
+    // Before the fix the row went, and with it the name; the principal and the run stayed.
+    expect(
+      await t.stores.configAssets.getConfigAsset({
+        clientInstanceId,
+        kind: WORKFLOW_ASSET_KIND,
+        name: OWN
+      })
+    ).toMatchObject({ id: asset.id, status: "deleted", scope: { kind: "instance" } });
+    expect(
+      await t.stores.apiAccess.findServicePrincipalByOwner({ clientInstanceId, owner })
+    ).toBeUndefined();
+    expect(await t.stores.workflowRuns.readRun({ clientInstanceId, id: open.id })).toMatchObject({
+      status: "cancelled"
+    });
+    // A builder of another workspace makes no new Workflow of the name, so none inherits its
+    // runs: before the fix the name was free and the old runs were read through the new one.
+    await t.grant(t.lena.id, WORKFLOW_ACTIONS.write, { workspaceId: other });
+    await t.expectRefused(
+      t.lena.id,
+      "assets.put",
+      {
+        params: { kind: WORKFLOW_ASSET_KIND, name: OWN },
+        payload: {
+          config: { name: OWN, manifest: { ...notifyClients(), id: OWN } },
+          expectedRevision: null,
+          workspaceId: other
+        }
+      },
+      // What a name another owner holds is answered to one who may not read it.
+      { status: 412, code: "REVISION_CONFLICT" }
+    );
+  });
+
   it("names a child Workflow of its own workspace or of the instance, and none of another workspace", async () => {
     const { t, nordlicht, other } = await ready();
     await put(t, t.admin.id, FOREIGN, other, null);

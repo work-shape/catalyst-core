@@ -19,6 +19,7 @@ import {
 } from "./subject-deletion";
 import type { ChatServerOptions } from "../types";
 import { deleteConversationAggregate } from "./user-deletion";
+import { retireWorkspaceAssets } from "./workspace-assets";
 
 export interface WorkspaceDeletionResult {
   collaborationWorkspaceId: CollaborationWorkspaceId;
@@ -140,6 +141,12 @@ export async function completeWorkspaceDeletion(
   };
   // Usage events are kept for the accounting of the instance and no longer name the workspace.
   await clearUsageAttribution(options, { collaborationWorkspaceId });
+  // The workspace's Workflows go by their own delete, which the store requires (WS-OWN-1b).
+  await retireWorkspaceAssets(options, {
+    collaborationWorkspaceId,
+    actor: input.actor,
+    correlationId: input.correlationId
+  });
   return transaction(async (stores) => {
     // The store refuses while data of a deleted Conversation is still being removed.
     await stores.workspaces.deleteWorkspace(scope);

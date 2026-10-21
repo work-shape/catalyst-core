@@ -272,6 +272,8 @@ export interface WorkflowAssetKind extends RegisteredAssetKind<ConfigAssetKind> 
     clientInstanceId: ClientInstanceId;
     name: string;
     stores: PlatformStores;
+    /** What the caller may do: a warning names only what the caller may read. */
+    access: ActorAccess;
   }): Promise<{ code: string; message: string }[]>;
   /**
    * What a write or delete of a config revision must do in the same transaction: asked after
@@ -406,6 +408,20 @@ export interface WorkflowAssetKind extends RegisteredAssetKind<ConfigAssetKind> 
     /** The config that was published until the delete, where one was. */
     published?: JsonObject;
     stores: PlatformStores;
+  }): Promise<void>;
+  /**
+   * What the deletion of a workspace does to the kind's assets in it before the store removes
+   * what the workspace owns: the kind's own delete of each, which the store then requires. A
+   * kind without it loses its assets with the workspace. It is asked on every pass of the
+   * deletion with the assets still active, one page at a time; a throw leaves the rest of the
+   * deletion to the next pass.
+   */
+  retireWithWorkspace?(input: {
+    clientInstanceId: ClientInstanceId;
+    assets: readonly ConfigAssetRecord[];
+    stores: PlatformStores;
+    actor: AuditActor;
+    correlationId: string;
   }): Promise<void>;
 }
 

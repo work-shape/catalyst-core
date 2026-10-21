@@ -468,6 +468,15 @@ export interface WorkflowRunsStore {
     page?: StorePage;
   }): Promise<WorkflowRunView[]>;
   /**
+   * The ids of at most `limit` runs of one Workflow that have not ended, oldest first: what a
+   * retirement of the Workflow cancels. It walks the Workflow's runs, so it is for rare work.
+   */
+  listOpenRunIds(input: {
+    clientInstanceId: ClientInstanceId;
+    workflow: string;
+    limit: number;
+  }): Promise<WorkflowRunId[]>;
+  /**
    * The latest run of each of the named Workflows, by creation time and id. A Workflow that
    * never ran has no entry.
    */

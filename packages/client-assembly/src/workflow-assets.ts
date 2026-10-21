@@ -69,6 +69,7 @@ import {
   type WorkflowDefinitionSource,
   type WorkflowStepFile,
   type WorkflowStepFiles,
+  type WorkflowEngine,
   type WorkflowRunnerPackage
 } from "@work-shape/catalyst-workflows";
 import { z } from "zod";
@@ -154,6 +155,11 @@ export function createWorkflowAssetKind(
      * `limits` to and the publish question measures a raise by.
      */
     limits: WorkflowLimitContext;
+    /**
+     * The runs of the instance, once its engine is built: retiring a Workflow with its
+     * workspace cancels its open runs there. None in a process without an engine.
+     */
+    runs?: () => Pick<WorkflowEngine, "cancelOpenRuns"> | undefined;
   }
 ): WorkflowAssetKind {
   const { clientInstanceId, timeZone = "UTC", now = () => new Date(), limits } = options;
@@ -187,6 +193,23 @@ export function createWorkflowAssetKind(
       }
     );
   };
+  /** Retires the Workflow's principal with its grants: a Workflow that is not live acts as nobody. */
+  async function retirePrincipal(stores: PlatformStores, assetId: string): Promise<void> {
+    const principal = await stores.apiAccess.findServicePrincipalByOwner({
+      clientInstanceId,
+      owner: { kind: WORKFLOW_ASSET_KIND, assetId }
+    });
+    if (principal)
+      await stores.apiAccess.deleteServicePrincipal({
+        clientInstanceId,
+        servicePrincipalId: principal.id
+      });
+  }
+  /** Hands the datasets of a deleted Workflow's runs to their cleanup. */
+  async function releaseDatasets(stores: PlatformStores, workflow: string): Promise<void> {
+    await stores.workflowRunDatasets.claimWorkflow({ clientInstanceId, workflow });
+    await enqueueDatasetCleanup(stores, clientInstanceId, now().toISOString());
+  }
   async function reschedule(
     stores: PlatformStores,
     previous: JsonObject | undefined,
@@ -415,46 +438,77 @@ export function createWorkflowAssetKind(
     // Account revocation is part of the delete, never a best-effort after-write task.
     async withinWrite({ stores, assetId, config }) {
       if (config !== undefined || assetId === undefined) return undefined;
-      const principal = await stores.apiAccess.findServicePrincipalByOwner({
-        clientInstanceId,
-        owner: { kind: WORKFLOW_ASSET_KIND, assetId }
-      });
-      if (principal)
-        await stores.apiAccess.deleteServicePrincipal({
-          clientInstanceId,
-          servicePrincipalId: principal.id
-        });
+      await retirePrincipal(stores, assetId);
       return undefined;
     },
     // The live Apps that start it stop working without it: an unpublish and a delete say so.
     liveCallerWarnings: workflowLiveCallerWarnings,
     async onUnpublish({ stores, assetId, published }) {
-      const principal = await stores.apiAccess.findServicePrincipalByOwner({
-        clientInstanceId,
-        owner: { kind: WORKFLOW_ASSET_KIND, assetId }
-      });
-      if (principal)
-        await stores.apiAccess.deleteServicePrincipal({
-          clientInstanceId,
-          servicePrincipalId: principal.id
-        });
+      await retirePrincipal(stores, assetId);
       await reschedule(stores, published, undefined);
     },
     async onRemove({ stores, published, name }) {
       const parsed = workflowConfigSchema.safeParse(published);
       const workflow = name ?? (parsed.success ? parsed.data.name : undefined);
-      if (workflow !== undefined) {
-        await stores.workflowRunDatasets.claimWorkflow({
-          clientInstanceId,
-          workflow
-        });
-        await enqueueDatasetCleanup(
-          stores,
-          clientInstanceId,
-          (options.now?.() ?? new Date()).toISOString()
-        );
-      }
+      if (workflow !== undefined) await releaseDatasets(stores, workflow);
       await reschedule(stores, published, undefined);
+    },
+    // A workspace's Workflows go with it by the delete above, in one transaction, and their
+    // open runs end (WS-OWN-1b). The store then keeps each name taken as the instance's.
+    async retireWithWorkspace({ assets, stores, actor, correlationId }) {
+      const cancelOpen = async () => {
+        const runs = options.runs?.();
+        for (const asset of assets)
+          await runs?.cancelOpenRuns({ workflow: asset.name, actor, correlationId });
+      };
+      await cancelOpen();
+      await stores.transaction(async (tx) => {
+        const current: ConfigAssetRecord[] = [];
+        for (const asset of assets) {
+          const stored = await tx.configAssets.getConfigAsset({
+            clientInstanceId,
+            kind: WORKFLOW_ASSET_KIND,
+            name: asset.name
+          });
+          if (stored?.status === "active" && stored.id === asset.id) current.push(stored);
+        }
+        if (current.length === 0) return;
+        const key = (name: string) => `${WORKFLOW_ASSET_KIND}:${name}`;
+        await tx.configAssets.applyConfigAssetMutations({
+          clientInstanceId,
+          actor,
+          baseRevisions: Object.fromEntries(
+            current.map((asset) => [key(asset.name), asset.revision])
+          ),
+          baseAssetIds: Object.fromEntries(current.map((asset) => [key(asset.name), asset.id])),
+          mutations: current.map((asset) => ({
+            type: "delete" as const,
+            kind: WORKFLOW_ASSET_KIND,
+            name: asset.name,
+            scope: asset.scope
+          }))
+        });
+        for (const asset of current) {
+          await retirePrincipal(tx, asset.id);
+          await releaseDatasets(tx, asset.name);
+          await reschedule(tx, asset.publishedConfig, undefined);
+          await tx.audit.appendAuditEvent({
+            clientInstanceId,
+            type: "config_asset.deleted",
+            status: "success",
+            actor,
+            correlationId,
+            metadata: {
+              kind: WORKFLOW_ASSET_KIND,
+              name: asset.name,
+              revision: asset.revision,
+              requestedBy: "workspace_deletion"
+            }
+          });
+        }
+      });
+      // A run that started meanwhile, before the delete took the published revision away.
+      await cancelOpen();
     },
     assertScopedWrite: async ({ definition, stores, actor }) => {
       const parsed = workflowConfigSchema.parse(definition);

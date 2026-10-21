@@ -21,6 +21,7 @@ import {
 } from "@work-shape/catalyst-core";
 import { jsonObjectSchema, valuePosition } from "./json";
 import { WorkflowStepFailure } from "./step-failure";
+import { workflowResource } from "./workflow-resource";
 
 // A part bounds memory independently of dataset size. It is a checkpoint, not a customer cap.
 const DATASET_PART_BYTES = 4 * 1024 * 1024;
@@ -221,11 +222,7 @@ export function createWorkflowDatasets(options: WorkflowDatasetsOptions) {
         kind: "workflow",
         name: run.workflow
       });
-      input.access.require("workflow.read_run_data", {
-        kind: "workflow",
-        name: run.workflow,
-        ...(asset ? { assetId: asset.id } : {})
-      });
+      input.access.require("workflow.read_run_data", workflowResource(run.workflow, asset));
     }
     const parsed = workflowDatasetReferenceSchema.safeParse(input.reference);
     if (input.reference !== undefined && !parsed.success)

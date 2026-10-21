@@ -37,6 +37,7 @@ export const unusedWorkflowRunsStore: WorkflowRunsStore = {
   readRunView: unsupported,
   listRuns: unsupported,
   listLastRuns: unsupported,
+  listOpenRunIds: unsupported,
   readRunInput: unsupported,
   readCheckpoint: unsupported,
   readRunDefinition: unsupported,

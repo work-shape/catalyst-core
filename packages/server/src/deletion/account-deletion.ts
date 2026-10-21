@@ -21,6 +21,7 @@ import {
 } from "./subject-deletion";
 import { endHeldOperationCalls } from "../approvals/operation-call-approval-handler";
 import { requireActiveSuperadminRemains } from "../users/last-superadmin";
+import { retireWorkspaceAssets } from "./workspace-assets";
 import type { ChatServerOptions } from "../types";
 import { cleanupProductUserData, requireNoSoleOwnedSharedWorkspace } from "./user-deletion";
 
@@ -129,6 +130,12 @@ export async function completeAccountDeletion(
   if (personalWorkspaceId) {
     await retryPendingCleanup(options, { collaborationWorkspaceId: personalWorkspaceId });
     await clearUsageAttribution(options, { collaborationWorkspaceId: personalWorkspaceId });
+    // The personal workspace's Workflows go by their own delete, which the store requires.
+    await retireWorkspaceAssets(options, {
+      collaborationWorkspaceId: personalWorkspaceId,
+      actor: input.actor,
+      correlationId: input.correlationId
+    });
   }
   await retryPendingCleanup(options, { createdByUserId: user.id });
   const totals = await cleanupProductUserData({

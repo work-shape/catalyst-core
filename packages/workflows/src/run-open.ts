@@ -28,6 +28,7 @@ import type { WorkflowDefinitionRevision } from "./definition-source";
 import { workflowRunBounds, type WorkflowLimitContext } from "./run-limits";
 import type { PreparedStart } from "./run-start";
 import type { RunOrigin } from "./scheduled-start";
+import { workflowResource } from "./workflow-resource";
 
 // How a run comes to exist: its row, the step run of its trigger and the audit of its start,
 // in one transaction. A start by hand, a test run of a draft and a due time of a schedule all
@@ -189,11 +190,10 @@ export function createRunOpening(options: {
           kind: "workflow",
           name: source.workflow
         });
-        datasetAccess.access.require("workflow.read_run_data", {
-          kind: "workflow",
-          name: source.workflow,
-          ...(asset ? { assetId: asset.id } : {})
-        });
+        datasetAccess.access.require(
+          "workflow.read_run_data",
+          workflowResource(source.workflow, asset)
+        );
       }
       const offset = ref.offset ?? 0;
       const matchesRows =

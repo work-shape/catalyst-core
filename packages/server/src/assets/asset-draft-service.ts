@@ -553,7 +553,8 @@ export class AssetDraftWorkflow {
       (await kind.liveCallerWarnings?.({
         clientInstanceId: this.options.clientInstanceId,
         name,
-        stores: this.options.stores
+        stores: this.options.stores,
+        access: call.access
       })) ?? [];
     const unpublished = await this.options.stores.transaction(async (stores) => {
       const moved = await stores.configAssets.unpublishConfigAsset({

@@ -33,6 +33,7 @@ import {
   type WorkflowLoopCounts,
   type WorkflowManifest,
   type WorkflowRun,
+  type WorkflowRunId,
   type WorkflowRunsStore,
   type WorkflowRunView,
   type WorkflowStagedCode,
@@ -208,6 +209,25 @@ async function listWorkflowRuns(
     hasAgentSteps: row.hasAgentSteps,
     failedDescendantCount: counts.get(row.id) ?? 0
   }));
+}
+
+async function listOpenWorkflowRunIds(
+  db: PostgresConnection,
+  input: Input<"listOpenRunIds">
+): Promise<WorkflowRunId[]> {
+  const rows = await db
+    .select({ id: workflowRuns.id })
+    .from(workflowRuns)
+    .where(
+      and(
+        eq(workflowRuns.clientInstanceId, input.clientInstanceId),
+        eq(workflowRuns.workflow, input.workflow),
+        notEnded(workflowRuns.status)
+      )
+    )
+    .orderBy(asc(workflowRuns.createdAt), asc(workflowRuns.id))
+    .limit(input.limit);
+  return rows.map((row) => row.id);
 }
 
 async function listLastWorkflowRuns(
@@ -579,6 +599,7 @@ export function createPostgresWorkflowRunsStore(db: PostgresConnection): Workflo
     readRunView: (input) => readWorkflowRunView(db, input),
     listRuns: (input) => listWorkflowRuns(db, input),
     listLastRuns: (input) => listLastWorkflowRuns(db, input),
+    listOpenRunIds: (input) => listOpenWorkflowRunIds(db, input),
     readRunInput: (ref) => readWorkflowRunInput(db, ref),
     readRunDefinition: (input) => readWorkflowRunDefinition(db, input),
     markRunRunning: (ref) => markWorkflowRunRunning(db, ref),

@@ -28,6 +28,7 @@ import {
   workflowStepFileIssues,
   workflowsModule,
   type WorkflowDefinitionSource,
+  type WorkflowEngine,
   type WorkflowEngineOptions,
   type WorkflowLimitCeilings
 } from "@work-shape/catalyst-workflows";
@@ -120,6 +121,8 @@ export interface InstanceWorkflows {
    * where the module is off or the Workflow has no schedule.
    */
   planSchedule(workflow: string): Promise<{ workflow: string; dueAt: string } | undefined>;
+  /** Cancels the open runs of a Workflow, as retiring it with its workspace does. */
+  cancelOpenRuns: WorkflowEngine["cancelOpenRuns"];
 }
 
 /**
@@ -134,7 +137,8 @@ export function createInstanceWorkflows(parts: InstanceWorkflowsParts): Instance
       jobSchedules: [],
       pruneRunData: () => Promise.resolve({ runs: 0, stepRuns: 0, batches: 0 }),
       planSchedules: () => Promise.resolve([]),
-      planSchedule: () => Promise.resolve(undefined)
+      planSchedule: () => Promise.resolve(undefined),
+      cancelOpenRuns: () => Promise.resolve(0)
     };
   }
   const { clientInstanceId, stores, operationCalls } = parts;
@@ -264,7 +268,8 @@ export function createInstanceWorkflows(parts: InstanceWorkflowsParts): Instance
     jobSchedules: engine.jobSchedules,
     pruneRunData: () => engine.pruneRunData(),
     planSchedules: engine.planSchedules,
-    planSchedule: engine.planSchedule
+    planSchedule: engine.planSchedule,
+    cancelOpenRuns: engine.cancelOpenRuns
   };
 }
 
@@ -279,6 +284,7 @@ export const assembleWorkflows: ModuleSeam = ({ config, modules, clientInstanceI
   // engine and by the kind that queues the job of a schedule when its definition is published.
   const { timeZone } = config.clientInstance;
   let registry: InstanceWorkflowsParts["operationCalls"]["registry"] | undefined;
+  let runs: Pick<InstanceWorkflows, "cancelOpenRuns"> | undefined;
   const zone = timeZone === undefined ? {} : { timeZone };
   return {
     ...(modules.isEnabled(workflowsModule.name)
@@ -296,6 +302,7 @@ export const assembleWorkflows: ModuleSeam = ({ config, modules, clientInstanceI
               },
               ...zone,
               registry: () => registry,
+              runs: () => runs,
               mailSend: {
                 registered: outboundMailOf(config) !== undefined,
                 recipientDomains: outboundMailOf(config)?.outbound.recipientDomains ?? []
@@ -329,6 +336,7 @@ export const assembleWorkflows: ModuleSeam = ({ config, modules, clientInstanceI
           : {}),
         stepDataDays: config.retention.workflowStepDataDays
       });
+      runs = workflows;
       await workflows.planSchedules();
       return {
         routes: workflows.routes,

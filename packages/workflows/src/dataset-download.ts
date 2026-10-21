@@ -10,6 +10,7 @@ import {
 import { WorkflowStepFailure } from "./step-failure";
 import { datasetReferences } from "./dataset-schema";
 import { createWorkflowDatasets, type WorkflowDatasetsOptions } from "./datasets";
+import { workflowResource } from "./workflow-resource";
 
 /** Result membership and rights are checked together; a dataset id is never a bearer token. */
 export function createDatasetDownload(options: WorkflowDatasetsOptions) {
@@ -42,11 +43,7 @@ export function createDatasetDownload(options: WorkflowDatasetsOptions) {
       name: run.workflow
     });
     if (!starter)
-      input.access.require("workflow.read_run_data", {
-        kind: "workflow",
-        name: run.workflow,
-        ...(asset ? { assetId: asset.id } : {})
-      });
+      input.access.require("workflow.read_run_data", workflowResource(run.workflow, asset));
     // A result can carry a forged reference only if dispatch checks were missed. Keep this
     // final check even for the starter: the result grants no access the run never held.
     const reference = references.find((ref) => ref.offset === undefined);

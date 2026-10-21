@@ -340,6 +340,7 @@ export async function workflowFixture(
   };
   const ceilings = { ...workflowLimitCeilingsOf(), ...options.ceilings };
   const kind = instanceWorkflowAssetKind(storesOf, () => operationRegistry, {
+    runs: () => workflows,
     runnerPackages: options.runnerPackages ?? [],
     limits: { ceilings, stepSlots: options.stepSlots ?? 4 },
     ...(options.now ? { now: options.now } : {}),

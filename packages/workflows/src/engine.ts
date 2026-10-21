@@ -19,6 +19,7 @@ import {
   isWorkflowRunEnded,
   operationTimeoutKey,
   subjectDedupeKey,
+  type AuditActor,
   type AuthenticatedIdentity,
   type ClientInstanceId,
   type JobSchedule,
@@ -27,10 +28,12 @@ import {
   type Notices,
   type RegisteredJobHandler,
   type StorePage,
+  type UserId,
   type WorkflowAgentTranscript,
   type WorkflowLastRun,
   type WorkflowRun,
   type WorkflowRunError,
+  type WorkflowRunId,
   type WorkflowRunKeyFilter,
   type WorkflowRunView,
   type WorkflowStepRun,
@@ -86,6 +89,10 @@ import { createRunWaiting } from "./run-waiting";
 // so a worker that starts after another died executes the step run that was open and starts
 // nothing that has a step run. The run keeps the definition it started on, and nothing waits
 // in a process: the wait before another attempt and the run's own deadline are stored times.
+
+/** How many runs one page of `cancelOpenRuns` ends, and how many pages it reads at most. */
+const CANCEL_OPEN_RUNS_PAGE = 100;
+const CANCEL_OPEN_RUNS_PAGES = 100;
 
 export interface WorkflowEngineOptions {
   /** The validated release setting: jobs of the step kind served by one process. */
@@ -146,6 +153,15 @@ export interface WorkflowEngine {
     cancelledBy: AuthenticatedIdentity;
     correlationId: string;
   }): Promise<WorkflowRunView | undefined>;
+  /**
+   * Cancels every run of a Workflow that has not ended, as `cancel` does each: what retiring
+   * the Workflow with its workspace does (WS-OWN-1b). Answers how many it ended.
+   */
+  cancelOpenRuns(input: {
+    workflow: string;
+    actor: AuditActor;
+    correlationId: string;
+  }): Promise<number>;
   readRun(runId: string): Promise<WorkflowRunView | undefined>;
   /** The runs of a Workflow, newest first: all of them, or those of one key or key prefix. */
   listRuns(input: {
@@ -247,6 +263,57 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
    * and so does what is around that loop, up to the run. A refusal of the run's principal is
    * no failure of an item: no loop continues past it, and the run fails with its reason.
    */
+  /**
+   * Ends the live member of a Lauf as `cancelled`, addressed by any member's id. Answers the id
+   * of that member, or nothing where no run has the id.
+   */
+  async function cancelRun(
+    runId: string,
+    by: { actor: AuditActor; correlationId: string; cancelledBy?: UserId }
+  ): Promise<WorkflowRunId | undefined> {
+    return stores.transaction(async (tx) => {
+      const known = await tx.workflowRuns.readRun({ clientInstanceId, id: runId });
+      if (!known) return undefined;
+      // Use the same lock order as claims and continuation settlement. A cancel queued
+      // during handoff holds the Lauf root before any successor can claim its trigger.
+      const chain = await waiting.lockChain(tx, known.id);
+      if (!chain) return undefined;
+      let run = chain.run;
+      while (run.continuation?.successorRunId) {
+        const successor = await tx.workflowRuns.lockRun({
+          clientInstanceId,
+          id: run.continuation.successorRunId
+        });
+        if (!successor) return undefined;
+        run = successor;
+      }
+      const audit = { actor: by.actor, correlationId: by.correlationId };
+      const ended = await endRun(
+        tx,
+        run,
+        {
+          status: "cancelled",
+          ...(by.cancelledBy === undefined ? {} : { cancelledBy: by.cancelledBy })
+        },
+        audit
+      );
+      if (!ended) return run.id;
+      await tx.audit.appendAuditEvent({
+        clientInstanceId,
+        type: "workflow_run.cancelled",
+        status: "success",
+        ...audit,
+        subject: run.id,
+        metadata: {
+          workflow: run.workflow,
+          definitionRevisionId: run.definitionRevisionId,
+          stepRunCount: run.stepRunCount
+        }
+      });
+      return run.id;
+    });
+  }
+
   async function failStep(
     tx: PlatformStores,
     run: WorkflowRun,
@@ -750,56 +817,39 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     },
 
     async cancel(input) {
-      const cancelled = await stores.transaction(async (tx) => {
-        const known = await tx.workflowRuns.readRun({ clientInstanceId, id: input.runId });
-        if (!known) return false;
-        // Use the same lock order as claims and continuation settlement. A cancel queued
-        // during handoff holds the Lauf root before any successor can claim its trigger.
-        const chain = await waiting.lockChain(tx, known.id);
-        if (!chain) return false;
-        let run = chain.run;
-        while (run.continuation?.successorRunId) {
-          const successor = await tx.workflowRuns.lockRun({
-            clientInstanceId,
-            id: run.continuation.successorRunId
-          });
-          if (!successor) return false;
-          run = successor;
-        }
-        const { cancelledBy } = input;
-        const audit = {
-          actor: auditActorFromIdentity(cancelledBy),
-          correlationId: input.correlationId
-        };
-        const ended = await endRun(
-          tx,
-          run,
-          {
-            status: "cancelled",
-            // The contract names a person here. A service principal that cancels is in the audit.
-            ...(isAuthenticatedServicePrincipal(cancelledBy)
-              ? {}
-              : { cancelledBy: asUserId(cancelledBy.id) })
-          },
-          audit
-        );
-        if (!ended) return run.id;
-        await tx.audit.appendAuditEvent({
-          clientInstanceId,
-          type: "workflow_run.cancelled",
-          status: "success",
-          ...audit,
-          subject: run.id,
-          metadata: {
-            workflow: run.workflow,
-            definitionRevisionId: run.definitionRevisionId,
-            stepRunCount: run.stepRunCount
-          }
-        });
-        return run.id;
+      const { cancelledBy } = input;
+      const cancelled = await cancelRun(input.runId, {
+        actor: auditActorFromIdentity(cancelledBy),
+        correlationId: input.correlationId,
+        // The contract names a person here. A service principal that cancels is in the audit.
+        ...(isAuthenticatedServicePrincipal(cancelledBy)
+          ? {}
+          : { cancelledBy: asUserId(cancelledBy.id) })
       });
       if (!cancelled) return undefined;
       return stores.workflowRuns.readRunView({ clientInstanceId, id: cancelled });
+    },
+
+    async cancelOpenRuns({ workflow, actor, correlationId }) {
+      let ended = 0;
+      // A run that cannot be ended now stays open and is listed again: stop after a page of them.
+      for (let page = 0; page < CANCEL_OPEN_RUNS_PAGES; page++) {
+        const open = await stores.workflowRuns.listOpenRunIds({
+          clientInstanceId,
+          workflow,
+          limit: CANCEL_OPEN_RUNS_PAGE
+        });
+        if (open.length === 0) return ended;
+        for (const runId of open) {
+          await cancelRun(runId, {
+            actor,
+            correlationId,
+            ...(actor.userId === undefined ? {} : { cancelledBy: asUserId(actor.userId) })
+          });
+          ended += 1;
+        }
+      }
+      return ended;
     },
 
     ...createRunReads({ clientInstanceId, stores, definitions, stepSlots: options.stepSlots })

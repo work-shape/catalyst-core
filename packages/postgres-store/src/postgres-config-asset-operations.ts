@@ -5,7 +5,7 @@ import { removeAgentProposal } from "./postgres-agent-proposal-operations";
 import { chunksOf, type WrittenAsset } from "./config-asset-batch";
 import { writeAgentDraft, consumeAgentDraft, carryAgentSkillChange } from "./agent-draft-mutations";
 import { keysetFilter } from "./paging";
-import { and, asc, desc, eq, inArray, max, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, max, or, sql, type SQL } from "drizzle-orm";
 import {
   AppError,
   INSTANCE_ASSET_SCOPE,
@@ -13,6 +13,7 @@ import {
   assertConfigAssetBases,
   assetScopesEqual,
   createPlatformId,
+  WORKFLOW_ASSET_KIND,
   type ConfigAssetRecord,
   type ConfigAssetRevisionRecord,
   type ConfigAssetState,
@@ -602,6 +603,7 @@ export async function deleteWorkspaceOwnedAssets(
         eq(permissionGrants.scopeId, input.collaborationWorkspaceId)
       )
     );
+  await keepWorkflowNames(tx, owned);
   const [any] = await tx.select({ id: configAssets.id }).from(configAssets).where(owned).limit(1);
   if (!any) {
     return;
@@ -653,6 +655,30 @@ export async function deleteWorkspaceOwnedAssets(
       updatedAt: new Date()
     })
     .where(eq(configAssetState.clientInstanceId, input.clientInstanceId));
+}
+
+/**
+ * A Workflow's runs, its datasets and its audit name it by its name, so its name stays taken
+ * after its workspace as after its own delete (WS-OWN-1b). The workspace's Workflows were
+ * deleted by the Workflow's own delete before: an active one refuses the workspace delete, and
+ * each deleted one stays as the instance's, a tombstone that only a writer on the instance
+ * creates again by naming its revision. Its revisions stay, as a Workflow's delete keeps them.
+ */
+async function keepWorkflowNames(tx: PostgresTransaction, owned: SQL | undefined): Promise<void> {
+  const workflows = and(owned, eq(configAssets.kind, WORKFLOW_ASSET_KIND));
+  const [active] = await tx
+    .select({ name: configAssets.name })
+    .from(configAssets)
+    .where(and(workflows, eq(configAssets.status, "active")))
+    .limit(1);
+  if (active) {
+    throw new AppError(
+      "CONFLICT",
+      "A Workflow of the workspace is still active: it is deleted by its own delete first",
+      { reason: "workflow_not_retired" }
+    );
+  }
+  await tx.update(configAssets).set({ scopeKind: "instance", scopeId: null }).where(workflows);
 }
 
 export async function findConfigAssetRow(

@@ -237,4 +237,32 @@ describe("an App and the Workflows it starts, at the App's publish", () => {
       { code: "live_app_starts_workflow" }
     ]);
   });
+
+  it("names to one who takes the Workflow back only the Apps it may open, and counts the others", async () => {
+    const revision = await putWorkflow("hidden-pages");
+    await publishWorkflow("hidden-pages", revision);
+    expectStatus(await t.putApp(t.admin.id, "pages-d", pagesApp("pages-d", "hidden-pages")), 200);
+    expectStatus(await t.publish(t.admin.id, "pages-d", 1), 200);
+
+    // Lena may take the Workflow back and may not open the App: she learns that one exists,
+    // and neither its name nor its title. Before, the warning named it.
+    await t.withRight(
+      t.lena.id,
+      "workflow.publish",
+      { assetId: await t.assetId(WORKFLOW_ASSET_KIND, "hidden-pages") },
+      async () => {
+        const unpublished = await t.call(t.lena.id, "workflows.unpublish", {
+          params: { workflow: "hidden-pages" }
+        });
+        expectStatus(unpublished, 200);
+        expect(warningsSchema.parse(unpublished.json()).warnings).toEqual([
+          {
+            code: "live_app_starts_workflow",
+            message:
+              "A published App you may not open starts this Workflow. Its action answers workflow_unavailable until the Workflow is published again."
+          }
+        ]);
+      }
+    );
+  });
 });

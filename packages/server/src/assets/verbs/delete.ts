@@ -59,7 +59,8 @@ export async function deleteAsset(
     (await kind.liveCallerWarnings?.({
       clientInstanceId: scope.options.clientInstanceId,
       name,
-      stores: scope.options.stores
+      stores: scope.options.stores,
+      access: call.access
     })) ?? [];
   const stored = await loadStoredAssets(scope.options);
   await kind.assertRemovable?.({
