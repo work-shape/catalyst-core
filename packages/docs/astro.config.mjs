@@ -74,6 +74,7 @@ export default defineConfig({
           label: "Get started",
           items: [
             "start/first-conversation",
+            "start/workshaper",
             "start/workspaces",
             "getting-started/local-agent",
             "reference/glossary"

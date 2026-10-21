@@ -37,6 +37,9 @@ export const agentDraft = defineTranslations({
     "agentDraft.saveHint":
       "Saves a draft. People who use the agent get the published version until it is published.",
     "agentDraft.sectionMark": "Changed in the draft",
+    "agentDraft.shippedBadge": "Ships with the platform",
+    "agentDraft.shippedDiffers": "Differs from what the platform ships",
+    "agentDraft.shippedReset": "Reset to shipped",
     "agentDraft.stale":
       "The published version of “{name}” changed after this draft was written, so the draft cannot be published. Save a change to base it on the published version, or discard it."
   },
@@ -72,6 +75,9 @@ export const agentDraft = defineTranslations({
     "agentDraft.saveHint":
       "Speichert einen Entwurf. Wer den Agenten nutzt, bekommt die veröffentlichte Version, bis er veröffentlicht ist.",
     "agentDraft.sectionMark": "Im Entwurf geändert",
+    "agentDraft.shippedBadge": "Kommt mit der Plattform",
+    "agentDraft.shippedDiffers": "Weicht von dem ab, was die Plattform mitbringt",
+    "agentDraft.shippedReset": "Auf Auslieferung zurücksetzen",
     "agentDraft.stale":
       "Die veröffentlichte Version von „{name}“ hat sich geändert, nachdem dieser Entwurf geschrieben wurde. Darum lässt er sich nicht veröffentlichen. Speichere eine Änderung, um ihn auf die veröffentlichte Version zu stützen, oder verwirf ihn."
   }

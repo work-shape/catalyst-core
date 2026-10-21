@@ -55,6 +55,7 @@ import {
 import type { AgentDraftSource } from "./agent-draft-source";
 import type { DraftDecision } from "./build-data";
 import { PlatformInstructions } from "./platform-instructions";
+import { shippedFieldsView } from "./shipped-agent-fields";
 
 export function AgentEditor({
   frame,
@@ -188,6 +189,13 @@ export function AgentEditor({
   const showFastMode = form.fastMode || fastModeModelBindingIds.includes(form.modelBindingId);
 
   const update = (patch: Partial<AgentFormState>) => setForm((value) => ({ ...value, ...patch }));
+  // An agent the platform ships says under each field where the form differs from it.
+  const shipped = shippedFieldsView({
+    config: held?.config ?? frame.asset?.config,
+    form,
+    canEdit,
+    onReset: update
+  });
   const changedFields = countChangedFields(form, state.baseline);
   const dirty = changedFields > 0 || availabilityChanged;
   const latest = draft?.latest;
@@ -320,33 +328,42 @@ export function AgentEditor({
       description: t("configIdentityDescription"),
       body: (
         <>
-          {proposed.around(
+          {shipped.around(
             "displayName",
-            <LocalizedField
-              label={t("configDisplayName")}
-              required
-              readOnly={!canEdit("displayName")}
-              value={form.displayName}
-              onChange={(displayName) => update({ displayName })}
-            />
+            proposed.around(
+              "displayName",
+              <LocalizedField
+                label={t("configDisplayName")}
+                required
+                readOnly={!canEdit("displayName")}
+                value={form.displayName}
+                onChange={(displayName) => update({ displayName })}
+              />
+            )
           )}
-          {proposed.around(
+          {shipped.around(
             "description",
-            <LocalizedField
-              label={t("configDescription")}
-              readOnly={!canEdit("description")}
-              value={form.description}
-              onChange={(description) => update({ description })}
-            />
+            proposed.around(
+              "description",
+              <LocalizedField
+                label={t("configDescription")}
+                readOnly={!canEdit("description")}
+                value={form.description}
+                onChange={(description) => update({ description })}
+              />
+            )
           )}
-          {proposed.around(
+          {shipped.around(
             "welcomeMessage",
-            <LocalizedField
-              label={t("configWelcomeMessage")}
-              readOnly={!canEdit("welcomeMessage")}
-              value={form.welcomeMessage}
-              onChange={(welcomeMessage) => update({ welcomeMessage })}
-            />
+            proposed.around(
+              "welcomeMessage",
+              <LocalizedField
+                label={t("configWelcomeMessage")}
+                readOnly={!canEdit("welcomeMessage")}
+                value={form.welcomeMessage}
+                onChange={(welcomeMessage) => update({ welcomeMessage })}
+              />
+            )
           )}
           {proposed.around(
             "welcomeSubtitle",
@@ -369,21 +386,24 @@ export function AgentEditor({
             instructions={references?.platformInstructions}
             toolNames={state.baseline.toolNames}
           />
-          {proposed.around(
+          {shipped.around(
             "instructions",
-            <Field
-              label={t("configSystemPrompt")}
-              hint={t("configSystemPromptHint")}
-              required={canEdit("instructions")}
-            >
-              <Textarea
-                variant="code"
-                className="min-h-72"
-                value={form.instructions}
-                readOnly={!canEdit("instructions")}
-                onChange={(event) => update({ instructions: event.target.value })}
-              />
-            </Field>
+            proposed.around(
+              "instructions",
+              <Field
+                label={t("configSystemPrompt")}
+                hint={t("configSystemPromptHint")}
+                required={canEdit("instructions")}
+              >
+                <Textarea
+                  variant="code"
+                  className="min-h-72"
+                  value={form.instructions}
+                  readOnly={!canEdit("instructions")}
+                  onChange={(event) => update({ instructions: event.target.value })}
+                />
+              </Field>
+            )
           )}
           {proposed.around(
             "maxSteps",
@@ -470,6 +490,7 @@ export function AgentEditor({
             editable={canEdit("skillNames")}
             onChange={(skillNames) => update({ skillNames })}
           />
+          {shipped.around("skillNames", null)}
           {proposed.value("skillNames")}
           <FieldRefusals messages={refusalsOf(outcome, "skills")} />
         </>
@@ -536,6 +557,7 @@ export function AgentEditor({
             disabled={!canEdit("toolNames")}
             onChange={(toolNames) => update({ toolNames })}
           />
+          {shipped.around("toolNames", null)}
           {proposed.value("toolNames")}
           <FieldRefusals messages={refusalsOf(outcome, "tools")} />
         </>
@@ -553,6 +575,7 @@ export function AgentEditor({
             disabled={!canEdit("initialPrompts")}
             onChange={(initialPrompts) => update({ initialPrompts })}
           />
+          {shipped.around("initialPrompts", null)}
           {proposed.value("initialPrompts")}
         </>
       )
@@ -598,6 +621,11 @@ export function AgentEditor({
         <>
           {held === null ? null : <AgentDraftBadge draft={held} />}
           {isDefault ? <Badge>{t("configDefaultAgent")}</Badge> : null}
+          {shipped.shipped ? (
+            <Badge appearance="outline" data-shipped-agent="">
+              {t("agentDraft.shippedBadge")}
+            </Badge>
+          ) : null}
         </>
       }
       primaryAction={

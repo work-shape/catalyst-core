@@ -70,7 +70,9 @@ const agentEdits = {
   skillNames: [],
   knowledgeBases: [],
   initialPrompts: []
-} satisfies Required<AgentConfig>;
+  // `shipped` is server-carried: only the release seed writes it, and a pull skips the agents
+  // that carry it.
+} satisfies Required<Omit<AgentConfig, "shipped">>;
 const skill = {
   name: "guide",
   title: "Guide",
@@ -308,7 +310,9 @@ describe("config schema round trips", () => {
       origin: "release",
       icon: "book"
     };
-    expect(Object.keys(agentEdits).sort()).toEqual(Object.keys(agentConfigSchema.shape).sort());
+    expect([...Object.keys(agentEdits), "shipped"].sort()).toEqual(
+      Object.keys(agentConfigSchema.shape).sort()
+    );
     expect([...Object.keys(skillEdits), ...Object.keys(carried)].sort()).toEqual(
       Object.keys(skillConfigSchema.shape).sort()
     );

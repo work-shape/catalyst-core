@@ -249,7 +249,20 @@ export function preparedUpsert(
   kind: WorkflowAssetKind,
   input: Parameters<WorkflowAssetKind["prepareInteractiveUpsert"]>[0]
 ): Record<string, unknown> {
-  return isReleaseSync(access, surface) ? input.next : kind.prepareInteractiveUpsert(input);
+  return keptStored(
+    kind,
+    input.current,
+    isReleaseSync(access, surface) ? input.next : kind.prepareInteractiveUpsert(input)
+  );
+}
+
+/** What a write leaves of what the caller sent once the kind kept what only it writes. */
+export function keptStored(
+  kind: WorkflowAssetKind,
+  current: unknown,
+  next: Record<string, unknown>
+): Record<string, unknown> {
+  return kind.keepStored?.({ current, next }) ?? next;
 }
 
 /**
@@ -390,8 +403,10 @@ export function assertUpsertWithinLimits(
 export function assertDeleteWithinLimits(
   access: ActorAccess,
   surface: AssetWriteSurface,
-  kind: WorkflowAssetKind
+  kind: WorkflowAssetKind,
+  current: unknown
 ): void {
+  if (current !== undefined) kind.assertStoredDeletable?.({ current });
   if (!isReleaseSync(access, surface)) {
     kind.assertInteractiveDeleteAllowed({ surface });
   }

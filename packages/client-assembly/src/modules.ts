@@ -26,6 +26,7 @@ import { feedbackModule } from "./platform-modules/feedback";
 import { personalApiKeysModule } from "./platform-modules/personal-api-keys";
 import { resourcesModule } from "./platform-modules/resources";
 import { userInvitationsModule } from "./platform-modules/user-invitations";
+import { workshaperModule } from "./platform-modules/workshaper";
 import { assembleWorkflows, workflowsModule } from "./workflows";
 
 /**
@@ -41,7 +42,8 @@ export const platformModules = [
   dataStoresModule,
   knowledgeModule,
   personalApiKeysModule,
-  feedbackModule
+  feedbackModule,
+  workshaperModule
 ];
 
 /**

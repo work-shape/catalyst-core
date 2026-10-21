@@ -20,7 +20,8 @@ const AGENT_WRITE = "agent.write";
  * starts a run goes through here, so availability is enforced in one place.
  *
  * Default agent: the workspace's own default (not built yet), then the instance default if it
- * is available here, then the first available agent.
+ * is available here, then, where the instance names none, the agent the platform ships if it is
+ * available here, then the first available agent.
  */
 export async function getWorkspaceAssetSnapshot(
   options: Pick<ChatServerOptions, "configAssets" | "clientInstanceId">,
@@ -35,12 +36,17 @@ export async function getWorkspaceAssetSnapshot(
   const agents = assets.agents.filter((agent) =>
     isAgentAvailableInWorkspace(availability.get(agent.name), workspace)
   );
+  const offered = (name: string | undefined) => agents.some((agent) => agent.name === name);
   return {
     ...assets,
     agents,
-    defaultAgentName: agents.some((agent) => agent.name === assets.defaultAgentName)
+    defaultAgentName: offered(assets.defaultAgentName)
       ? assets.defaultAgentName
-      : agents[0]?.name
+      : // Where the instance names no default, the agent the platform ships is it wherever it
+        // is offered (Felix, 2026-10-21); an instance's own default is never replaced.
+        ((assets.defaultAgentName === undefined
+          ? agents.find((agent) => agent.shipped !== undefined)?.name
+          : undefined) ?? agents[0]?.name)
   };
 }
 

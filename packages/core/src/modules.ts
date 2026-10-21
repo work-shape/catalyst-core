@@ -16,7 +16,8 @@ export const MODULE_NAMES = [
   "dataStores",
   "knowledge",
   "personalApiKeys",
-  "feedback"
+  "feedback",
+  "workshaper"
 ] as const;
 
 export type ModuleName = (typeof MODULE_NAMES)[number];

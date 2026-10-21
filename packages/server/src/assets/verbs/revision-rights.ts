@@ -12,6 +12,7 @@ import {
   clearsLastDefault,
   loadStoredAssets,
   assertUpsertPolicyAndMissingRight,
+  keptStored,
   listsModelBindings,
   loadAgentLists,
   missingUpsertRightOf,
@@ -113,7 +114,7 @@ async function furtherRight(
     const action = check(access, "put", kind, {
       name,
       current,
-      next: kind.prepareInteractiveUpsert({ current, next: config }),
+      next: keptStored(kind, current, kind.prepareInteractiveUpsert({ current, next: config })),
       modelBindingsListed: listsModelBindings(
         await loadAgentLists(
           scope.options,

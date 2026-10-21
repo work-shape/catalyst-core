@@ -23,6 +23,7 @@ import {
   listsModelBindings,
   assertUpsertWithinLimits,
   assetKey,
+  keptStored,
   loadStoredAssets,
   requireOwnerWorkspace,
   toJsonObject,
@@ -94,11 +95,15 @@ export async function upsertAsset(
   requireInstanceDefaultChange(call.access, kind, setsDefault);
   // A revert restores what was stored: only what the kind's server decides is kept as it is.
   const principalId = call.actor.id;
-  const definition = write.releaseDraft
-    ? config
-    : write.operation === "revert"
-      ? (kind.prepareRevert?.({ current, restored: config, principalId }) ?? config)
-      : kind.prepareInteractiveUpsert({ current, next: config, principalId });
+  const definition = keptStored(
+    kind,
+    current,
+    write.releaseDraft
+      ? config
+      : write.operation === "revert"
+        ? (kind.prepareRevert?.({ current, restored: config, principalId }) ?? config)
+        : kind.prepareInteractiveUpsert({ current, next: config, principalId })
+  );
   /** The set as the write would leave it. */
   const written = (set: AssetSet) => {
     const replaced = withDefinition(set, kind.kind, name, definition);

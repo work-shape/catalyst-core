@@ -183,7 +183,14 @@ async function checkBatch(
       entry.absent = true;
       continue;
     }
-    entry.refusal = refusalOf(() => assertDeleteWithinLimits(call.access, "sync", entry.kind));
+    entry.refusal = refusalOf(() =>
+      assertDeleteWithinLimits(
+        call.access,
+        "sync",
+        entry.kind,
+        active ? entry.asset?.config : undefined
+      )
+    );
   }
   stopIfRefused();
 

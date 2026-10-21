@@ -35,12 +35,18 @@ export interface AgentAssetKindOptions {
    * agents the write adds or changes; a rule that tolerates what is stored reads only them.
    */
   validateAgents?(agents: AgentConfig[], changed: AgentConfig[]): string[];
+  /**
+   * The names of every agent the platform ships, also those of a module that is off: no write
+   * but the release seed's creates an agent of one of them.
+   */
+  shippedAgentNames?: readonly string[];
 }
 
 /** The agent kind: instructions with a model, tools and skills, usable where it is available. */
 export function createAgentAssetKind(options: AgentAssetKindOptions): WorkflowAssetKind {
   const policy = () => options.config.administration.agentConfiguration;
   const defaultLocale = options.config.localization.defaultLocale;
+  const shippedNames = new Set(options.shippedAgentNames ?? []);
   return {
     ...defineAssetKind({
       kind: "agent",
@@ -96,7 +102,10 @@ export function createAgentAssetKind(options: AgentAssetKindOptions): WorkflowAs
         return {
           name: agent.name,
           title: resolveLocalizedString(agent.displayName, locale, defaultLocale),
-          ...(description === undefined ? {} : { description })
+          ...(description === undefined ? {} : { description }),
+          // A shipped agent is no part of the instance's working copy: no pull brings it and no
+          // prune deletes it, as with a shipped skill.
+          ...(agent.shipped === undefined ? {} : { attributes: { origin: "release" } })
         };
       }
     }),
@@ -122,6 +131,29 @@ export function createAgentAssetKind(options: AgentAssetKindOptions): WorkflowAs
             )
           : [])
       ];
+    },
+
+    // What a shipped agent was shipped as is the release seed's alone: every write keeps it.
+    keepStored({ current, next }) {
+      const shipped = readDefinitionField(current, "shipped");
+      if (current === undefined && typeof next.name === "string" && shippedNames.has(next.name)) {
+        throw new AppError(
+          "FORBIDDEN",
+          `The platform ships an agent named '${next.name}', also where its module is off: choose a name of your own`,
+          { reason: "shipped_agent_name" }
+        );
+      }
+      const { shipped: _sent, ...rest } = next;
+      return shipped === undefined ? rest : { ...rest, shipped };
+    },
+
+    assertStoredDeletable({ current }) {
+      if (readDefinitionField(current, "shipped") === undefined) return;
+      throw new AppError(
+        "FORBIDDEN",
+        `The agent '${readDefinitionName(current) ?? ""}' ships with the platform and cannot be deleted. To hide it, offer it in no workspace`,
+        { reason: "shipped_agent" }
+      );
     },
 
     // Switching to a binding without fast-mode support clears the flag instead of failing the save.

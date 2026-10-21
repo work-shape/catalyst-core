@@ -351,7 +351,9 @@ describe("the snapshot in a running instance", () => {
       dataStores: { enabled: true },
       knowledge: { enabled: false },
       personalApiKeys: { enabled: true },
-      feedback: { enabled: false }
+      feedback: { enabled: false },
+      // It ships Workshaper, offered nowhere until an admin offers it.
+      workshaper: { enabled: true }
     });
     expect(safe.features).toEqual({
       attachments: { enabled: false, accept: "" },
@@ -404,7 +406,8 @@ describe("the snapshot in a running instance", () => {
         dataStores: { enabled: false },
         knowledge: { enabled: false },
         personalApiKeys: { enabled: false },
-        feedback: { enabled: false }
+        feedback: { enabled: false },
+        workshaper: { enabled: false }
       });
       expect(answer.features.resources).toEqual({ enabled: false });
     } finally {

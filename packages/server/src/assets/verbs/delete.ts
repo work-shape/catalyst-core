@@ -44,7 +44,12 @@ export async function deleteAsset(
   const expectedRevision = requirePrecondition(input, input.expectedRevision);
   await scope.authorizeEditing(call, "delete");
   assertStoredWritable(target, call.access);
-  assertDeleteWithinLimits(call.access, "delete", kind);
+  assertDeleteWithinLimits(
+    call.access,
+    "delete",
+    kind,
+    target.asset?.status === "active" ? target.asset.config : undefined
+  );
   await requireDeletable(scope.options, call, target, expectedRevision);
   assertStoredWritable(target, "always");
   if (kind.representation === "files") {

@@ -71,6 +71,10 @@ modules:
   # Settings or by confirming the code `catalyst login` shows.
   personalApiKeys:
     enabled: true
+  # Workshaper: the agent that ships with the platform, stored at start and offered in no
+  # workspace until an admin offers it in "Available in".
+  workshaper:
+    enabled: true
 # The file area per conversation and the commands an agent runs in it. The commands run in the
 # Docker sandbox, so the Compose files start a workspace command worker and build its runner image.
 executionWorkspaces:

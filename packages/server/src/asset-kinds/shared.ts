@@ -180,6 +180,14 @@ export interface WorkflowAssetKind extends RegisteredAssetKind<ConfigAssetKind> 
    */
   assertStoredWritable?(input: { current: unknown }): void;
   /**
+   * What every write keeps of the stored definition, a release's and a revert included: the
+   * fields only the platform writes, such as what a shipped agent was shipped as. It throws
+   * where no write but the platform's may create the asset.
+   */
+  keepStored?(input: { current: unknown; next: Record<string, unknown> }): Record<string, unknown>;
+  /** Throws where the stored asset may not be deleted, by a release either. */
+  assertStoredDeletable?(input: { current: unknown }): void;
+  /**
    * Throws where this caller may not make this revision the one the asset's users are served,
    * whatever the kind's publish right says: the revision lends something its writer could not
    * give, such as the grants of the service principal a Workflow runs as. It is asked of the

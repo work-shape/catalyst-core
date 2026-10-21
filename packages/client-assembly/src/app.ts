@@ -6,6 +6,7 @@ import {
   type WorkerLocalAgentRuntimeOptions
 } from "@work-shape/catalyst-agent-runtime";
 import {
+  RUN_AGENT_TOOL_NAME,
   StoreBackedAuditRecorder,
   type AgentConfig,
   type ApprovalRequestHandlerRegistry,
@@ -65,7 +66,9 @@ import { createClientInstanceAuth } from "./auth";
 import { createInstanceConnections, withConnections } from "./connections";
 import { createInstanceAssetKinds } from "./instance-asset-kinds";
 import { seedInstance } from "./instance-seed";
-import { shippedSkillNamesOf, shippedSkillsOf } from "./shipped-skills";
+import { offeredSkillNames, shippedSkillNamesOf, shippedSkillsOf } from "./shipped-skills";
+import { SHIPPED_AGENT_NAMES, shippedAgentsOf } from "./shipped-agents";
+import { workshaperAgent } from "./workshaper";
 import {
   createClientInstanceMail,
   createInstanceNotices,
@@ -439,7 +442,7 @@ export async function createClientInstanceExecutionAssembly(
     store: store.configAssets,
     source: assetSource,
     kinds: createInstanceAssetKinds({
-      agent: { config, validationRefs, validateAgents },
+      agent: { config, validationRefs, validateAgents, shippedAgentNames: SHIPPED_AGENT_NAMES },
       skill: { config, shippedSkillNames: shippedSkillNamesOf(capabilities) },
       connections,
       modules,
@@ -578,6 +581,19 @@ export async function createClientInstanceExecutionAssembly(
     capabilities,
     hasTool: (toolName) => toolRegistry.has(toolName)
   });
+  // Asked of an agent with no model of its own, as a shipped agent is until the instance gives
+  // it one: a tool its default model cannot run does not ship.
+  const shippedAgentProbe: AgentConfig = workshaperAgent({ toolNames: [], skillNames: [] });
+  const shippedAgents = shippedAgentsOf({
+    modules,
+    listableToolNames: agentListableToolNames(releaseToolNames(config)),
+    runsTool: (name) =>
+      modules.offModuleOf("tool", name) === undefined &&
+      validationRefs.isToolAvailable?.(shippedAgentProbe, name) !== false,
+    shippedSkills,
+    offeredSkillNames: offeredSkillNames(undefined, modules),
+    runAgentToolName: RUN_AGENT_TOOL_NAME
+  });
   const noticeMail = await createClientInstanceMail({
     config,
     registry: infrastructure.registry,
@@ -677,6 +693,7 @@ export async function createClientInstanceExecutionAssembly(
     clientInstanceId,
     store,
     shippedSkills,
+    shippedAgents,
     attachments,
     managedObjects,
     jobRetries: [...jobRetries, ...modulesStarted.jobRetries],

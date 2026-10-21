@@ -12,6 +12,7 @@ import {
   findIssuesOfChange,
   loadReferableAssets,
   loadStoredAssets,
+  keptStored,
   storedWritableIssues,
   setsInitialDefault,
   writeIssuesOf
@@ -42,11 +43,11 @@ export async function validateAssetDefinition(
   const stored = await loadStoredAssets(options);
   const view = loadReferableAssets(options, call.access, stored);
   const current = name === undefined ? undefined : findDefinition(view.set, kind.kind, name);
-  const prepared = kind.prepareInteractiveUpsert({
+  const prepared = keptStored(
+    kind,
     current,
-    next: input.config,
-    principalId: call.actor.id
-  });
+    kind.prepareInteractiveUpsert({ current, next: input.config, principalId: call.actor.id })
+  );
   const drafted = (set: AssetSet) => withDefinition(set, kind.kind, name ?? "", prepared);
   const found = findAssetSetIssues(kinds, drafted(view.set), view.set);
   const ofDefinition = view.complete

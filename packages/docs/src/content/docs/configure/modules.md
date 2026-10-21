@@ -32,6 +32,7 @@ modules:
 | `knowledge`       | Reserved for Knowledge Bases. It is registered and adds nothing.                                                                                         | Nothing.                                                                                                                                                       |
 | `personalApiKeys` | Keys a person issues that act as them, and `catalyst login`. See [the CLI](/configure/cli/).                                                             | Nothing. Off, no personal key signs in; stored keys stay.                                                                                                      |
 | `feedback` | Written feedback under an agent's answers, and its review in the Inbox. See [Feedback](#feedback). | Nothing. A reviewer holds `feedback.review`. |
+| `workshaper` | Workshaper, the agent that ships with the platform, stored at start and refreshed by each release. See [Workshaper](/start/workshaper/). | Nothing. It starts offered in no workspace. Off, the stored agent stays as it is. |
 
 The document processing capability is part of the paid capabilities and not in the open repository. The other modules ship with the open platform.
 

@@ -73,6 +73,7 @@ export { SCHEDULED_START_MIN_INTERVAL_MINUTES } from "./schedule-cron";
 export { shortestCronGapMinutes } from "./schedule-cron";
 export * from "./scheduled-starts";
 export * from "./secrets";
+export * from "./shipped-agents";
 export * from "./subagents";
 export * from "./time";
 export * from "./types";
