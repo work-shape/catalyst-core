@@ -15,6 +15,7 @@ import {
 } from "./support/access-instance";
 import { appFiles, expectStatus, setupAppInstance } from "./support/app-instance";
 import { setupPersonalKeyInstance } from "./support/personal-api-keys";
+import type { TestCallInput, TestOperationName } from "./support/operations";
 import { createTestFetch } from "./support/test-instance";
 import { fileTestDatabaseUrl } from "./support/test-database";
 import { withTestSql } from "./support/test-sql";
@@ -397,6 +398,238 @@ describe("editing the built-in roles is a right of its own (Felix, 2026-10-21)",
       { params: { roleId: "user" }, payload: { grants: [instanceAllow("usage.view")] } },
       t.forbidden("roles.edit_built_in", "denied")
     );
+  });
+});
+
+describe("reset, a pending right and a role's deny stay inside the rules (review, 2026-10-21)", () => {
+  const rightsSchema = z.object({
+    rights: z.array(
+      z
+        .object({
+          action: z.string(),
+          scopeKind: z.string(),
+          scopeId: z.string().optional(),
+          allowed: z.boolean()
+        })
+        .loose()
+    )
+  });
+
+  /** What the holder may do, each right at its place, as the server decides it. */
+  async function allowed(t: AccessInstance, userId: string): Promise<Set<string>> {
+    const { rights } = rightsSchema.parse(
+      (
+        await t.expectOk(t.root.id, "permissions.rights", {
+          query: { holderKind: "user", holderId: userId }
+        })
+      ).json()
+    );
+    return new Set(
+      rights
+        .filter((right) => right.allowed)
+        .map((right) => `${right.action}@${right.scopeKind}:${right.scopeId ?? ""}`)
+    );
+  }
+
+  const without = (actions: readonly string[], ...left: string[]) =>
+    actions.filter((action) => !left.includes(action));
+
+  /** Kai holds `admin`, as the superadmin narrowed it, and `roles.edit_built_in` of his own. */
+  async function kaiEditsBuiltInRoles(t: AccessInstance, admin: readonly string[]) {
+    await t.expectOk(t.root.id, "roles.update", {
+      params: { roleId: "admin" },
+      payload: { grants: admin.map(instanceAllow) }
+    });
+    await t.expectOk(t.root.id, "users.update", {
+      params: { userId: t.kai.id },
+      payload: { roles: ["user", "admin"] }
+    });
+    await t.expectOk(t.root.id, "permissions.grant", {
+      payload: {
+        holderKind: "user",
+        holderId: t.kai.id,
+        action: "roles.edit_built_in",
+        scopeKind: "instance"
+      }
+    });
+  }
+
+  async function setPending(roleId: string, pending: { action: string; change: string }[]) {
+    await withTestSql(
+      (sql) =>
+        sql`update roles set pending_actions = ${JSON.stringify(pending)}::text::jsonb where id = ${roleId} and client_instance_id = ${clientInstanceId}`
+    );
+  }
+
+  it("refuses a reset that gives back a right its caller lacks", async () => {
+    const t = await setup();
+    const narrowed = without(ROLE_DEFAULT_ACTIONS.admin, "audit.view");
+    await kaiEditsBuiltInRoles(t, narrowed);
+    const before = await allowed(t, t.kai.id);
+    expect(before.has("audit.view@instance:")).toBe(false);
+
+    await t.expectRefused(
+      t.kai.id,
+      "roles.reset",
+      { params: { roleId: "admin" } },
+      t.forbidden("audit.view", "no_grant")
+    );
+    await t.expectRefused(t.kai.id, "audit_events.list", {}, t.forbidden("audit.view", "no_grant"));
+    expect((await role(t, "admin")).grants.map((grant) => grant.action).sort()).toEqual(
+      [...narrowed].sort()
+    );
+    expect(await allowed(t, t.kai.id)).toEqual(before);
+    // A superadmin resets it.
+    await t.expectOk(t.root.id, "roles.reset", { params: { roleId: "admin" } });
+    await t.expectOk(t.kai.id, "audit_events.list");
+  });
+
+  it("refuses to apply a pending right its caller lacks, and to lift the role's deny of it", async () => {
+    const t = await setup();
+    const narrowed = without(ROLE_DEFAULT_ACTIONS.admin, "audit.view", "usage.view");
+    await kaiEditsBuiltInRoles(t, narrowed);
+    await t.expectOk(t.root.id, "roles.update", {
+      params: { roleId: "admin" },
+      payload: {
+        grants: [
+          ...narrowed.map(instanceAllow),
+          { action: "usage.view", effect: "deny", scopeKind: "instance" }
+        ]
+      }
+    });
+    await setPending("admin", [
+      { action: "audit.view", change: "added" },
+      { action: "usage.view", change: "added" }
+    ]);
+    const before = await allowed(t, t.kai.id);
+
+    // Y = `audit.view`, which Kai lacks.
+    await t.expectRefused(
+      t.kai.id,
+      "roles.pending.decide",
+      { params: { roleId: "admin" }, payload: { action: "audit.view", decision: "apply" } },
+      t.forbidden("audit.view", "no_grant")
+    );
+    // Applying `usage.view` would also lift the role's deny of it, which refuses Kai.
+    await t.expectRefused(
+      t.kai.id,
+      "roles.pending.decide",
+      { params: { roleId: "admin" }, payload: { action: "usage.view", decision: "apply" } },
+      t.forbidden("usage.view", "denied")
+    );
+    const admin = await role(t, "admin");
+    expect(admin.pendingActions).toHaveLength(2);
+    expect(admin.grants).toContainEqual({
+      action: "usage.view",
+      effect: "deny",
+      scopeKind: "instance"
+    });
+    expect(await allowed(t, t.kai.id)).toEqual(before);
+
+    // Leaving a right out gives nothing, so it is Kai's to decide.
+    await t.expectOk(t.kai.id, "roles.pending.decide", {
+      params: { roleId: "admin" },
+      payload: { action: "audit.view", decision: "dismiss" }
+    });
+    // A superadmin applies the other.
+    await t.expectOk(t.root.id, "roles.pending.decide", {
+      params: { roleId: "admin" },
+      payload: { action: "usage.view", decision: "apply" }
+    });
+    expect((await role(t, "admin")).pendingActions).toEqual([]);
+    await t.expectOk(t.kai.id, "usage.get_summary");
+  });
+
+  it("leaves nobody but a superadmin holding a right they lacked after a reset or an apply", async () => {
+    const t = await setup();
+    const narrowed = without(ROLE_DEFAULT_ACTIONS.admin, "usage.view");
+    await kaiEditsBuiltInRoles(t, narrowed);
+    // `user` carries rights Kai holds through admin, and one he lacks.
+    await t.expectOk(t.root.id, "roles.update", {
+      params: { roleId: "user" },
+      payload: { grants: [instanceAllow("audit.view"), instanceAllow("usage.view")] }
+    });
+    await setPending("admin", [{ action: "users.manage", change: "removed" }]);
+
+    const steps: [TestOperationName, TestCallInput][] = [
+      ["roles.reset", { params: { roleId: "user" } }],
+      [
+        "roles.pending.decide",
+        { params: { roleId: "admin" }, payload: { action: "users.manage", decision: "dismiss" } }
+      ]
+    ];
+    for (const [operation, input] of steps) {
+      const before = await allowed(t, t.kai.id);
+      await t.expectOk(t.kai.id, operation, input);
+      const after = await allowed(t, t.kai.id);
+      expect([...after].filter((right) => !before.has(right))).toEqual([]);
+    }
+    expect(await allowed(t, t.kai.id)).not.toContain("usage.view@instance:");
+
+    // An apply Kai is refused changes nothing for him either.
+    await setPending("admin", [{ action: "usage.view", change: "added" }]);
+    const before = await allowed(t, t.kai.id);
+    await t.expectRefused(
+      t.kai.id,
+      "roles.pending.decide",
+      { params: { roleId: "admin" }, payload: { action: "usage.view", decision: "apply" } },
+      t.forbidden("usage.view", "no_grant")
+    );
+    expect(await allowed(t, t.kai.id)).toEqual(before);
+  });
+
+  it("never lets a role's deny take a right from a superadmin, so a superadmin can always repair user and admin", async () => {
+    const t = await setup();
+    const editors = roleSchema.parse(
+      (
+        await t.expectOk(t.root.id, "roles.create", {
+          payload: {
+            name: "Role editors",
+            grants: ["users.manage", "roles.edit_built_in", "usage.view"].map(instanceAllow)
+          }
+        })
+      ).json()
+    );
+    await t.expectOk(t.root.id, "users.update", {
+      params: { userId: t.kai.id },
+      payload: { roles: ["user", editors.id] }
+    });
+    const deny = (action: string) => ({ action, effect: "deny", scopeKind: "instance" });
+    // Kai holds both rights, so the rule of no escalation lets him refuse them in `user` and
+    // `admin`, the roles every superadmin holds. `admin` first: the deny in `user` reaches Kai.
+    for (const roleId of ["admin", "user"]) {
+      const current = (await role(t, roleId)).grants.filter(
+        (grant) => grant.action !== "usage.view"
+      );
+      await t.expectOk(t.kai.id, "roles.update", {
+        params: { roleId },
+        payload: { grants: [...current, deny("roles.edit_built_in"), deny("usage.view")] }
+      });
+    }
+    // The deny reaches Kai, who holds `user`.
+    await t.expectRefused(
+      t.kai.id,
+      "roles.update",
+      { params: { roleId: "user" }, payload: { grants: [] } },
+      t.forbidden("roles.edit_built_in", "denied")
+    );
+    await t.expectRefused(t.kai.id, "usage.get_summary", {}, t.forbidden("usage.view", "denied"));
+    // It never reaches the superadmin, who still holds every right of the floor.
+    const root = await allowed(t, t.root.id);
+    expect(root.has("roles.edit_built_in@instance:")).toBe(true);
+    await t.expectOk(t.root.id, "usage.get_summary");
+    for (const roleId of ["user", "admin"]) {
+      await t.expectOk(t.root.id, "roles.update", {
+        params: { roleId },
+        payload: { grants: [instanceAllow("usage.view")] }
+      });
+      await t.expectOk(t.root.id, "roles.reset", { params: { roleId } });
+    }
+    await t.expectOk(t.root.id, "roles.update", {
+      params: { roleId: editors.id },
+      payload: { grants: [deny("usage.view"), deny("roles.edit_built_in")] }
+    });
+    expect(await allowed(t, t.root.id)).toEqual(root);
   });
 });
 

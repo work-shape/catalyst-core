@@ -61,7 +61,7 @@ export const permissionGrants = pgTable(
  * superadmin's first edit on. Its grants are rows of `permission_grants` with the role as
  * holder. A built-in role without a row holds its release default, and `superadmin` never has
  * one. `default_actions` is the default a built-in role was last reconciled with, and
- * `pending_actions` what a release changed in that default since, waiting for a superadmin.
+ * `pending_actions` what a release changed in that default since, waiting for a decision.
  */
 export const roles = pgTable(
   "roles",

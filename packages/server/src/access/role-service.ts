@@ -247,7 +247,14 @@ export class RoleWorkflow {
       throw refused("role_not_resettable", "Only the built-in roles 'user' and 'admin' are reset");
     }
     const before = await this.whileRightsHeld(context, async (held, now) => {
-      requireAuthorized(await held.authorizeWrite(now.actor, now.access, operation, { roleId }));
+      // A reset writes the release's default: every allow it adds and every deny it lifts asks
+      // what an edit to the same grants asks, so a reset gives back nothing its caller lacks.
+      requireAuthorized(
+        await held.authorizeWrite(now.actor, now.access, operation, {
+          roleId,
+          grants: defaultRoleGrants(roleId)
+        })
+      );
       const existing = await held.findOrThrow(roleId);
       await held.options.stores.roles.deleteRole({
         clientInstanceId: this.options.clientInstanceId,
@@ -288,6 +295,13 @@ export class RoleWorkflow {
           : pending.change === "added"
             ? [...others, instanceAllow]
             : others;
+      // Applying writes these grants: the allow it adds, and a refusal of the action it lifts,
+      // ask what an edit to the same grants asks.
+      if (grants !== existing.grants) {
+        requireAuthorized(
+          await held.authorizeWrite(now.actor, now.access, operation, { roleId, grants })
+        );
+      }
       return {
         decided: pending,
         saved: await held.options.stores.roles.saveRole({

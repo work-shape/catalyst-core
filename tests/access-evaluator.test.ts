@@ -228,6 +228,45 @@ describe("access evaluator: deny wins", () => {
     expect(decide({ holder: superadmin, grants: [grant({ effect: "deny" })] })).toEqual(denied);
   });
 
+  it("never refuses a superadmin through a role's or a group's deny, and refuses everybody else (ADR-0028, 2026-10-21)", () => {
+    const superadmin = holder({ roles: ["user", "admin", "superadmin"] });
+    const admin = holder({ roles: ["user", "admin"] });
+    const custom = "role_reviewers";
+    const access = (who: AccessHolder, grants: PermissionGrant[], action: string) =>
+      evaluateAccess({
+        holder: { ...who, roles: [...who.roles, custom] },
+        persisted: { holderActive: true, grants, storedRoleIds: ["user", "admin", custom] },
+        action
+      });
+    for (const action of ["roles.edit_built_in", "users.manage", "audit.view"]) {
+      for (const holderId of ["user", "admin", custom]) {
+        const roleDeny = grant({ holderKind: "role", holderId, action, effect: "deny" });
+        const adminAllows = [grant({ holderKind: "role", holderId: "admin", action }), roleDeny];
+        expect(access(superadmin, adminAllows, action), `${holderId} ${action}`).toEqual({
+          allowed: true,
+          source: "role"
+        });
+        expect(access(admin, adminAllows, action), `${holderId} ${action}`).toEqual(denied);
+      }
+      const groupDeny = grant({
+        holderKind: "group",
+        holderId: "everyone",
+        action,
+        effect: "deny"
+      });
+      expect(access(superadmin, [groupDeny], action)).toEqual({ allowed: true, source: "role" });
+    }
+    // A deny on the person, which only a superadmin writes, reaches them, except on users.manage.
+    expect(decide({ holder: superadmin, grants: [grant({ effect: "deny" })] })).toEqual(denied);
+    expect(
+      decide({
+        holder: superadmin,
+        action: "users.manage",
+        grants: [grant({ action: "users.manage", effect: "deny" })]
+      })
+    ).toEqual({ allowed: true, source: "role" });
+  });
+
   it("reads a legacy revocation, now instance deny rows, as a deny on every target, over a row and over a role", () => {
     const admin = holder({ roles: ["user", "admin"] });
     const revocation = legacyRows(["!config_assets.write"]);

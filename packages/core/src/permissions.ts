@@ -392,13 +392,17 @@ export function listAccessEntries(holder: AccessHolder, persisted: PersistedAcce
     if (!isPlatformAction(grant.action)) {
       continue;
     }
-    // A deny never takes `users.manage` on the instance from a superadmin (ADR-0028): it is
-    // the right that repairs every other one.
+    // A superadmin is the floor (ADR-0028, amended 2026-10-21). A deny held through a role or
+    // a group never reaches one: a role is written by people who are no superadmin, and a role
+    // every superadmin holds, `user` or `admin`, would otherwise refuse all of them at once. A
+    // deny written on the person reaches them, since only a superadmin writes one; even that
+    // never takes `users.manage` on the instance, the right that repairs every other one.
     if (
       grant.effect === "deny" &&
-      grant.action === "users.manage" &&
-      grant.scopeKind === "instance" &&
-      holder.roles.includes("superadmin")
+      holder.roles.includes("superadmin") &&
+      (grant.holderKind === "role" ||
+        grant.holderKind === "group" ||
+        (grant.action === "users.manage" && grant.scopeKind === "instance"))
     ) {
       continue;
     }
