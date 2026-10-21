@@ -43,6 +43,9 @@ export interface ConnectionDraftHost {
   connectionOf(name: string): Promise<ExistingConnection | undefined>;
 }
 
+/** A Connection title that ends in the word API, such as "Billing-API" or "Billing API". */
+const API_TITLE = /(?:^|[\s-])api$/iu;
+
 const ConnectionDraftHostContext = createContext<ConnectionDraftHost | undefined>(undefined);
 
 export function ConnectionDraftHostProvider({
@@ -193,10 +196,13 @@ export function ConnectionDraftCardView({
   const { name, connectorType, baseUrl } = draft.connection;
   const count = draft.operations.length;
   const proposal = isConnectionProposal(draft);
-  const heading = t(
-    proposal ? "connectionCreate.proposalCardTitle" : "connectionCreate.draftCardTitle",
-    { title }
-  );
+  // What the card is. A draft: tools an agent drafted for an API, not yet connected; a title
+  // that names the API already, such as "Billing-API", is not given a second "API".
+  const heading = proposal
+    ? t("connectionCreate.proposalCardTitle", { title })
+    : API_TITLE.test(title.trim())
+      ? t("connectionCreate.draftCardTitleApi", { title })
+      : t("connectionCreate.draftCardTitle", { title });
   const meta = proposal
     ? connectorType === "mcp"
       ? t("connectionCreate.proposalCardMcp", { address: baseUrl })
@@ -231,7 +237,7 @@ export function ConnectionDraftCardView({
           {proposal ? <Plug aria-hidden="true" /> : <Braces aria-hidden="true" />}
         </IconTile>
         <div className="grid min-w-0 flex-1 gap-0.5">
-          <p className="truncate text-label text-foreground">{heading}</p>
+          <p className="break-words text-label text-foreground">{heading}</p>
           <p className="truncate text-caption text-muted-foreground">{meta}</p>
         </div>
       </div>

@@ -235,8 +235,8 @@ describe("the card's host", () => {
         queryFn: async () => (await host.connectionOf("exampledata")) ?? null
       });
       const markup = renderCard(queryClient, host);
-      expect(markup).toContain("Tools for Kanzlei-API");
-      expect(markup).not.toContain("Tools for Exampledata");
+      expect(markup).toContain("Tools the agent drafted for the Kanzlei-API");
+      expect(markup).not.toContain("for the Exampledata API");
       expect(markup).not.toContain("data-connection-draft-open");
     } finally {
       queryClient.clear();
@@ -265,7 +265,7 @@ describe("the card's host", () => {
           queryFn: async () => (await host.connectionOf("exampledata")) ?? null
         });
         const markup = renderCard(queryClient, host);
-        expect(markup).toContain("Tools for Exampledata");
+        expect(markup).toContain("Tools the agent drafted for the Exampledata API");
         expect(markup).not.toContain("data-connection-draft-open");
       } finally {
         queryClient.clear();
@@ -298,13 +298,13 @@ describe("the card's host", () => {
       cacheList(API_SCOPE.apiBaseUrl, "other-reader", "Private title");
       cacheList("https://other.example.test", API_SCOPE.authScope, "Other instance");
       let markup = renderCard(queryClient, host);
-      expect(markup).toContain("Tools for Exampledata");
+      expect(markup).toContain("Tools the agent drafted for the Exampledata API");
       expect(markup).not.toContain("Private title");
       expect(markup).not.toContain("Private target title");
       expect(markup).not.toContain("Other instance");
       cacheList(API_SCOPE.apiBaseUrl, API_SCOPE.authScope, "Cached Kanzlei-API");
       markup = renderCard(queryClient, host);
-      expect(markup).toContain("Tools for Cached Kanzlei-API");
+      expect(markup).toContain("Tools the agent drafted for the Cached Kanzlei-API");
       expect(markup).not.toContain("data-connection-draft-open");
     } finally {
       queryClient.clear();
@@ -327,15 +327,15 @@ describe("the card", () => {
 
   it("names the Connection and its tools, and says nothing is saved before the approval", () => {
     const en = render("en", true);
-    expect(en).toContain("Tools for Exampledata");
-    expect(en).toContain("Draft · 2 tools, reading");
+    expect(en).toContain("Tools the agent drafted for the Exampledata API");
+    expect(en).toContain("Not connected yet · 2 reading tools");
     expect(en).toContain("Mandanten auflisten");
     expect(en).toContain("Review and approve");
     expect(en).toContain("Nothing is saved before you approve.");
     expect(en).not.toContain(SECRET);
     const de = render("de", true);
-    expect(de).toContain("Tools für Exampledata");
-    expect(de).toContain("Entwurf · 2 Tools, lesend");
+    expect(de).toContain("Werkzeuge, die der Agent für die Exampledata-API entworfen hat");
+    expect(de).toContain("Noch nicht verbunden · 2 lesende Werkzeuge");
     expect(de).toContain("Prüfen und freigeben");
     expect(de).toContain("Gespeichert wird erst mit deiner Freigabe.");
   });
@@ -348,7 +348,7 @@ describe("the card", () => {
         createElement(ConnectionDraftCardView, { draft: draft(), title: "Kanzlei-API" })
       )
     );
-    expect(markup).toContain("Tools für Kanzlei-API");
+    expect(markup).toContain("Werkzeuge, die der Agent für die Kanzlei-API entworfen hat");
     expect(markup).not.toContain("Exampledata");
   });
 
