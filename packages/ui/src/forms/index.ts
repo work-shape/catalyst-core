@@ -46,6 +46,7 @@ export {
 export {
   ScheduleField,
   isScheduleZone,
+  scheduleZoneWords,
   type ScheduleFieldProps,
   type ScheduleValue,
   type ScheduleWeekday

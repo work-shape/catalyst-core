@@ -238,8 +238,9 @@ describe("the Settings tab of a Workflow (WF-EDIT-5)", () => {
     };
     const container = await mount(sourceOf(manifestWith([yearly]), saves));
     expect(container.querySelector('[data-slot="schedule-field"]')).toBeNull();
+    // The zone is said as the schedule field says it, never by its id.
     expect(required(container.querySelector("[data-schedule-unread]")).textContent).toContain(
-      "Every year on"
+      "Every year on January 1, 09:00 AM (Berlin time)"
     );
     await type(input(container, t("workflows.workflowSettings.name")), "Yearly bookings");
     await settled(() => expect(save(container).disabled).toBe(false));

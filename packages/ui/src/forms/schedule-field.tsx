@@ -53,8 +53,11 @@ export function isScheduleZone(zone: string): boolean {
   }
 }
 
-/** A zone in words: "Berlin time" for "Europe/Berlin". The id itself is never shown. */
-function zoneWords(zone: string, labels: UiLabels): string {
+/**
+ * A zone in words: "Berlin time" for "Europe/Berlin". The id itself is never shown, here or
+ * wherever an interface says a schedule's zone.
+ */
+export function scheduleZoneWords(zone: string, labels: UiLabels): string {
   if (zone === "UTC" || zone === "Etc/UTC") return labels.scheduleZoneUtc;
   const city = (zone.split("/").at(-1) ?? zone).replaceAll("_", " ");
   return labels.scheduleZoneCity.replace("{city}", city);
@@ -87,12 +90,12 @@ export function ScheduleField({
   const zones = useMemo<PickerOption[]>(
     () =>
       zoneIds()
-        .map((zone) => ({ value: zone, label: zoneWords(zone, labels), keywords: zone }))
+        .map((zone) => ({ value: zone, label: scheduleZoneWords(zone, labels), keywords: zone }))
         .sort((a, b) => a.label.localeCompare(b.label)),
     [labels]
   );
   const zoneValid = isScheduleZone(value.zone);
-  const zoneLabel = zoneValid ? zoneWords(value.zone, labels) : undefined;
+  const zoneLabel = zoneValid ? scheduleZoneWords(value.zone, labels) : undefined;
   const changeKind = (kind: string) => {
     const time = value.kind === "hour" ? `09:${String(value.minute).padStart(2, "0")}` : value.time;
     const zone = value.zone;

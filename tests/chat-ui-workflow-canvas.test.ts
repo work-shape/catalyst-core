@@ -640,21 +640,21 @@ describe("a schedule's zone on the canvas", () => {
   it("names the schedule's own zone, else the instance's, and the default where none is set", () => {
     const instance = { timeZone: "America/New_York", defaulted: false };
     expect(titleOf({ cron: "25 23 * * *", timeZone: "Europe/Berlin" }, de, instance)).toBe(
-      "Jeden Tag, 23:25 (Europe/Berlin)"
+      "Jeden Tag, 23:25 (Ortszeit Berlin)"
     );
     // Saved before schedules named a zone: it runs in the instance's.
     expect(titleOf({ cron: "25 23 * * *" }, de, instance)).toBe(
-      "Jeden Tag, 23:25 (America/New_York)"
+      "Jeden Tag, 23:25 (Ortszeit New York)"
     );
     expect(titleOf({ cron: "25 23 * * *" }, en, { timeZone: "UTC", defaulted: true })).toBe(
       "Every day, 11:25 PM (UTC, the default time zone)"
     );
     // A fixed date reads as one, and a form without words still names its zone.
     expect(titleOf({ cron: "34 21 18 10 *", timeZone: "Europe/Berlin" })).toBe(
-      "Jedes Jahr am 18. Oktober, 21:34 (Europe/Berlin)"
+      "Jedes Jahr am 18. Oktober, 21:34 (Ortszeit Berlin)"
     );
     expect(titleOf({ cron: "*/5 * * * *", timeZone: "Europe/Berlin" })).toBe(
-      "Nach Zeitplan (Europe/Berlin)"
+      "Nach Zeitplan (Ortszeit Berlin)"
     );
   });
 });

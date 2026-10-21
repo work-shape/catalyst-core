@@ -18,7 +18,7 @@ import {
 } from "@work-shape/catalyst-ui";
 import { useTranslation, type TranslationContextValue } from "../../shared/i18n";
 import { cronSchedule, scheduleCron } from "./schedule-cron";
-import { scheduleInWords } from "./schedule-words";
+import { scheduleInWords, withZone } from "./schedule-words";
 import { fieldListProblems, fieldsSchema, schemaFields } from "./schema-fields";
 import { useStartRun } from "./start-run";
 import { sameValue, WORKFLOW_FIELDS, type WorkflowManifest } from "./step-edits";
@@ -493,9 +493,7 @@ function scheduleWords(
   translation: Pick<TranslationContextValue, "locale" | "t">
 ): string {
   const words = scheduleInWords(cron, translation) ?? translation.t("workflows.schedule.custom");
-  return timeZone === ""
-    ? words
-    : translation.t("workflows.schedule.zone", { schedule: words, zone: timeZone });
+  return timeZone === "" ? words : withZone(words, timeZone, translation);
 }
 
 function onFailureWords(onFailure: unknown, t: Translate): string {

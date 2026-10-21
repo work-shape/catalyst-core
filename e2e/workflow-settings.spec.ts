@@ -156,4 +156,16 @@ test("a Workflow's Settings set every weekday at 07:30 Berlin time, due after th
   // The page shows it as set: the field reads the published schedule back.
   await page.reload();
   await expect(schedule.getByLabel("At", { exact: true })).toHaveValue("07:30");
+
+  // The canvas's trigger says the zone as the field does, never by its id.
+  await page
+    .getByRole("navigation", { name: "Views of the workflow" })
+    .getByRole("link", { name: "Workflow", exact: true })
+    .click();
+  const trigger = page
+    .getByTestId("workflow-page")
+    .getByTestId("workflow-canvas")
+    .locator('[data-flow-id="start"]');
+  await expect(trigger).toContainText("(Berlin time)");
+  await expect(trigger).not.toContainText(ZONE);
 });
