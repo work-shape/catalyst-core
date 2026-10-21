@@ -4,7 +4,7 @@ import type { WorkflowEditing } from "./workflow-editing";
 
 // What the forms of the kinds of step in a step's Settings tab share (workflow-canvas 9.4).
 
-export type Step = Readonly<Record<string, unknown>>;
+type Step = Readonly<Record<string, unknown>>;
 export type Translate = ReturnType<typeof useTranslation>["t"];
 
 /** What the form of one kind of step is given. */

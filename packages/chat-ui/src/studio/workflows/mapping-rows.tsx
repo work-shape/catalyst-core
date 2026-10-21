@@ -22,14 +22,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 const text = (value: unknown): string | undefined =>
   typeof value === "string" && value !== "" ? value : undefined;
 
-/** One field of an earlier result, as a step may read it. */
-export interface EarlierField {
-  step: string;
-  path: string;
-  /** The field holds a list: a loop may run over it. */
-  list: boolean;
-}
-
 /** The key of a field among the options of a picker. A step id holds no `#`. */
 export const fieldKey = (field: { step: string; path: string }) => `${field.step}#${field.path}`;
 

@@ -8,7 +8,7 @@ import type { FieldListItem } from "@work-shape/catalyst-ui";
 // it read-only and leaves it to the agent.
 
 /** The kinds of a field, by the value `FieldListEditor` names them with. */
-export const ANSWER_FIELD_KINDS = [
+const ANSWER_FIELD_KINDS = [
   "text",
   "number",
   "integer",
@@ -142,16 +142,17 @@ export function schemaFields(schema: unknown): FieldListItem[] | undefined {
   return isRecord(schema) ? fieldsOf(schema, "", outerField) : undefined;
 }
 
+/** Why one field cannot be saved yet: its name is missing or taken twice, or it has no choice. */
+type FieldProblem = { name?: "missing" | "taken"; choices?: "missing" };
+
 /** Why a list of fields cannot be saved yet, by field id: a name missing or taken twice. */
-export function fieldListProblems(
-  items: readonly FieldListItem[]
-): Record<string, { name?: "missing" | "taken"; choices?: "missing" }> {
-  const problems: Record<string, { name?: "missing" | "taken"; choices?: "missing" }> = {};
+export function fieldListProblems(items: readonly FieldListItem[]): Record<string, FieldProblem> {
+  const problems: Record<string, FieldProblem> = {};
   const visit = (list: readonly FieldListItem[]) => {
     const seen = new Set<string>();
     for (const item of list) {
       const name = item.name.trim();
-      const problem: { name?: "missing" | "taken"; choices?: "missing" } = {};
+      const problem: FieldProblem = {};
       if (name === "") problem.name = "missing";
       else if (seen.has(name)) problem.name = "taken";
       seen.add(name);

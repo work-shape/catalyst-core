@@ -4,7 +4,7 @@
 // (decision 6). Neither knows a form: the Settings tab makes the operations, the page saves.
 
 /** A step's fields as the manifest holds them: any key but its id and its type. */
-export type StepFields = Readonly<Record<string, unknown>>;
+type StepFields = Readonly<Record<string, unknown>>;
 
 /**
  * One operation on a step. `set` gives fields their new value, and `undefined` takes a field
@@ -55,9 +55,7 @@ export function workflowFiles(config: unknown): WorkflowFile[] {
 }
 
 /** The path of a code step's script in the Workflow's folder. */
-export function scriptPath(
-  step: Readonly<Record<string, unknown>> | undefined
-): string | undefined {
+function scriptPath(step: Readonly<Record<string, unknown>> | undefined): string | undefined {
   return step?.type === "code" && typeof step.file === "string" && step.file !== ""
     ? `${STEP_FILES_FOLDER}/${step.file}`
     : undefined;
@@ -287,7 +285,7 @@ export function rebaseStepEdits(input: {
 }
 
 /** The edits with the fields of one step taken together: the last value of a field stands. */
-export function mergedEdits(edits: readonly StepEdit[]): StepEdit[] {
+function mergedEdits(edits: readonly StepEdit[]): StepEdit[] {
   const byStep = new Map<string, Record<string, unknown>>();
   for (const edit of edits) {
     byStep.set(edit.step, { ...byStep.get(edit.step), ...edit.fields });

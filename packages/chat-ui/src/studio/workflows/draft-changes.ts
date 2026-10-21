@@ -6,7 +6,7 @@ import type { WorkflowStepView } from "./workflow-views";
 // the draft bar lists it. Whoever made a change, the agent or a person, it is marked alike.
 
 /** How a step of the draft differs from the published revision. */
-export type DraftChange = "new" | "changed" | "removed";
+type DraftChange = "new" | "changed" | "removed";
 
 /** A step of the published revision the draft no longer holds, with where it stood. */
 export interface RemovedStep {
@@ -25,7 +25,7 @@ export interface DraftChanges {
   removed: readonly RemovedStep[];
 }
 
-export const NO_DRAFT_CHANGES: DraftChanges = { steps: new Map(), fields: new Map(), removed: [] };
+const NO_DRAFT_CHANGES: DraftChanges = { steps: new Map(), fields: new Map(), removed: [] };
 
 /** The keys of a step that hold other steps: they are compared as steps of their own. */
 const INNER_KEYS: ReadonlySet<string> = new Set(["steps", "branches", "then", "else"]);

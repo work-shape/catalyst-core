@@ -116,7 +116,7 @@ export function editIssues(
 const isConflict = (error: unknown) => error instanceof ApiError && error.status === 412;
 
 /** How the canvas marks a part, and the published step a changed one was. */
-export interface StepMark {
+interface StepMark {
   change: FlowChange;
   /** The published step, for the sentence it had. */
   was?: WorkflowStepView;
