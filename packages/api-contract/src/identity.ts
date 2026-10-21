@@ -4,6 +4,7 @@ import {
   AUTH_PRINCIPAL_KINDS,
   DELETION_STATES,
   FIRST_PARTY_AUTH_SCOPES,
+  FOLLOW_UP_MODES,
   SERVICE_PRINCIPAL_PERMISSIONS,
   SERVICE_PRINCIPAL_STATUSES,
   USER_STATUSES
@@ -63,6 +64,11 @@ export const apiUserSchema = z.object({
   emailVerified: z.boolean().optional(),
   /** The language the person chose. Left out, they get the instance's default language. */
   locale: localeCodeSchema.optional(),
+  /**
+   * What a message the person sends during their own run does: `queue` waits as the next turn,
+   * `steer` is read by the running turn. Left out where the answer names no record: `queue`.
+   */
+  followUpMode: z.enum(FOLLOW_UP_MODES).optional(),
   /** An active instance admin a signed-in person can ask for help; no directory access needed. */
   instanceAdminName: z.string().optional(),
   roles: z.array(z.string()),
@@ -165,11 +171,16 @@ export const updateAdministeredUserRequestSchema = z.object({
 export const updateCurrentUserRequestSchema = z
   .object({
     displayLabel: z.string().min(1).optional(),
-    locale: localeCodeSchema.nullable().optional()
+    locale: localeCodeSchema.nullable().optional(),
+    followUpMode: z.enum(FOLLOW_UP_MODES).optional()
   })
-  .refine((body) => body.displayLabel !== undefined || body.locale !== undefined, {
-    message: "Name displayLabel, locale or both"
-  });
+  .refine(
+    (body) =>
+      body.displayLabel !== undefined ||
+      body.locale !== undefined ||
+      body.followUpMode !== undefined,
+    { message: "Name displayLabel, locale, followUpMode or several" }
+  );
 
 export const changeCurrentUserPasswordRequestSchema = z.object({
   currentPassword: z.string().min(1),

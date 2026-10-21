@@ -21,6 +21,7 @@ import { useTranslation, type TranslationContextValue } from "../../shared/i18n"
 import { FollowUpQueue, useFollowUpQueue } from "./follow-up-queue";
 import { shouldQueueSend, type SendBlock } from "./send-block";
 import { ComposerAction } from "./composer-action";
+import { followUpModeOfSend } from "./follow-up-shortcut";
 
 export interface LocalUploadingAttachment {
   id: string;
@@ -103,19 +104,28 @@ export function AssistantComposer({
   const followUps = useFollowUpQueue();
   // While a run goes, a message waits in the conversation's queue and starts as the next turn.
   const queuesFollowUp = Boolean(conversationRunning && followUps);
-  const queueFollowUp = useCallback(() => {
-    const currentText = composerRuntime.getState().text;
-    const text = currentText.trim();
-    if (!followUps || followUps.queueing || text.length === 0) {
-      return;
-    }
-    followUps.queue(text, () => {
-      // Text typed while the message went out stays in the field.
-      if (composerRuntime.getState().text === currentText) {
-        composerRuntime.setText("");
+  // The reader's own mode, or with the modifier the other one (FU-2). The server queues a
+  // steer that cannot reach the run, such as one into someone else's run.
+  const queueFollowUp = useCallback(
+    (otherMode = false) => {
+      const currentText = composerRuntime.getState().text;
+      const text = currentText.trim();
+      if (!followUps || followUps.queueing || text.length === 0) {
+        return;
       }
-    });
-  }, [composerRuntime, followUps]);
+      followUps.queue(
+        text,
+        () => {
+          // Text typed while the message went out stays in the field.
+          if (composerRuntime.getState().text === currentText) {
+            composerRuntime.setText("");
+          }
+        },
+        followUpModeOfSend(followUps.mode, otherMode)
+      );
+    },
+    [composerRuntime, followUps]
+  );
   // A keystroke updates the composer before React renders it. Submission reads that current
   // state, so a fast Enter or click never sends the previous render's text (or starter).
   // Readiness is read the same way: an open conversation sends through the thread runtime,
@@ -157,16 +167,16 @@ export function AssistantComposer({
         event.key !== "Enter" ||
         event.shiftKey ||
         event.altKey ||
-        event.ctrlKey ||
-        event.metaKey ||
         event.nativeEvent.isComposing
       ) {
         return;
       }
+      // Cmd+Enter (Ctrl+Enter) sends in the other mode during a run, and just sends without one.
+      const otherMode = event.ctrlKey || event.metaKey;
 
       if (queuesFollowUp && !submitBlocked) {
         event.preventDefault();
-        queueFollowUp();
+        queueFollowUp(otherMode);
         return;
       }
       if (submitBlocked || !runtimeReady()) {
@@ -377,8 +387,10 @@ export function AssistantComposer({
               currentText={currentText}
               canQueueFollowUp={Boolean(followUps)}
               queueingFollowUp={followUps?.queueing ?? false}
+              followUpMode={followUps?.mode ?? "queue"}
+              steersOwnRun={followUps?.ownRun ?? false}
               onCancelRun={onCancelRun}
-              onQueueFollowUp={queueFollowUp}
+              onQueueFollowUp={() => queueFollowUp()}
               onQueueSend={queueSend}
               onSubmitMessage={onSubmitMessage}
             />

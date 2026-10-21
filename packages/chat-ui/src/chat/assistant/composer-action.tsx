@@ -1,10 +1,12 @@
 import { ComposerPrimitive, useAuiState, useComposerRuntime } from "@assistant-ui/react";
 import { Send, Square } from "lucide-react";
 import { useCallback } from "react";
+import type { FollowUpMode } from "@work-shape/catalyst-api-client";
 import { Button, cn } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../../shared/i18n";
 import { composerActions } from "./thread-activity";
 import type { SendBlock } from "./send-block";
+import { otherShortcutKeys } from "./follow-up-shortcut";
 
 export function ComposerAction({
   sendBlock,
@@ -14,6 +16,8 @@ export function ComposerAction({
   currentText,
   canQueueFollowUp,
   queueingFollowUp,
+  followUpMode,
+  steersOwnRun,
   onCancelRun,
   onQueueFollowUp,
   onQueueSend,
@@ -27,6 +31,10 @@ export function ComposerAction({
   /** A message sent while the run goes waits in the conversation's queue. */
   canQueueFollowUp: boolean;
   queueingFollowUp: boolean;
+  /** What the button and Enter do with the reader's message during a run. */
+  followUpMode: FollowUpMode;
+  /** The run that goes is the reader's: a steer reaches it. */
+  steersOwnRun: boolean;
   onCancelRun: () => void;
   onQueueFollowUp: () => void;
   onQueueSend: () => void;
@@ -48,6 +56,12 @@ export function ComposerAction({
     ? emptyText
     : Boolean(sendBlock) || Boolean(onSubmitMessage && emptyText);
   const composer = useComposerRuntime();
+  // The tooltip names the mode Enter sends in and what the modifier does instead (FU-2). In
+  // someone else's run every message waits, so there is nothing else to offer.
+  const steers = followUpMode === "steer" && steersOwnRun;
+  const followUpTitle = !steersOwnRun
+    ? t(followUpMode === "steer" ? "followUpSteerNotOwn" : "followUpSend")
+    : t(steers ? "followUpSteerTitle" : "followUpSendTitle", { keys: otherShortcutKeys() });
   const handleSendClick = useCallback(() => {
     onSubmitMessage?.(composer.getState().text);
   }, [composer, onSubmitMessage]);
@@ -81,8 +95,8 @@ export function ComposerAction({
           size="icon"
           variant="solid"
           className="size-9"
-          aria-label={t("followUpSend")}
-          title={sendBlock?.reason ?? t("followUpSend")}
+          aria-label={t(steers ? "followUpSteer" : "followUpSend")}
+          title={sendBlock?.reason ?? followUpTitle}
           disabled={Boolean(sendBlock)}
           loading={queueingFollowUp}
           onClick={onQueueFollowUp}

@@ -6,6 +6,9 @@ import type {
   ReasoningEffortConfig
 } from "@work-shape/catalyst-asset-schemas";
 
+/** What a message sent while a run goes does: wait as the next turn, or steer the run. */
+export type FollowUpMode = (typeof FOLLOW_UP_MODES)[number];
+
 /** A message accepted behind an active run; it is not yet part of the transcript. */
 export interface ConversationFollowUp {
   id: string;
@@ -15,7 +18,7 @@ export interface ConversationFollowUp {
   /** Read-time label of an active author with current conversation access; never stored in run events. */
   authorDisplayLabel?: string;
   text: string;
-  mode: (typeof FOLLOW_UP_MODES)[number];
+  mode: FollowUpMode;
   status: (typeof FOLLOW_UP_STATUSES)[number];
   position: number;
   agentName: string;

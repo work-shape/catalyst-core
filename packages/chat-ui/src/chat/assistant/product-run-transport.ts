@@ -2,6 +2,7 @@ import type { ChatTransport, UIMessage, UIMessageChunk } from "ai";
 import type {
   ApiClient,
   ConversationFollowUp,
+  FollowUpMode,
   LocaleCode,
   StartConversationRunResponse
 } from "@work-shape/catalyst-api-client";
@@ -172,9 +173,12 @@ export async function startProductConversationRun({
 export async function sendProductConversationMessage({
   conversationId,
   client,
+  followUp = "queue",
   ...selection
 }: {
   conversationId: string;
+  /** While a run goes: wait as the next turn, or steer the run where the server allows it. */
+  followUp?: FollowUpMode;
   agentName?: string;
   modelBindingId?: string;
   reasoningEffort?: ReasoningEffort;
@@ -185,7 +189,7 @@ export async function sendProductConversationMessage({
 }): Promise<StartConversationRunResponse | QueuedConversationMessage> {
   return client.conversations.runs.start({
     params: { conversationId },
-    body: { ...runStartRequest(selection), followUp: "queue" }
+    body: { ...runStartRequest(selection), followUp }
   });
 }
 

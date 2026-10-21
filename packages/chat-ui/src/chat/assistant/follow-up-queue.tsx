@@ -1,4 +1,5 @@
 import { useComposerRuntime } from "@assistant-ui/react";
+import type { FollowUpMode } from "@work-shape/catalyst-api-client";
 import { Pencil, X } from "lucide-react";
 import { createContext, useContext, useState, type ReactNode } from "react";
 import {
@@ -22,6 +23,10 @@ import { useTranslation, type TranslationContextValue } from "../../shared/i18n"
 export interface FollowUpQueueModel {
   /** Pending messages, oldest first. */
   items: readonly FollowUpQueueItem[];
+  /** What Enter does with the reader's message during a run; the modifier does the other. */
+  mode: FollowUpMode;
+  /** A run goes and the reader started it: only then does a steer reach it. */
+  ownRun: boolean;
   phase: FollowUpQueuePhase;
   /** Messages whose withdrawal is on its way. */
   withdrawingIds: ReadonlySet<string>;
@@ -31,8 +36,11 @@ export interface FollowUpQueueModel {
   dispatching: boolean;
   /** What went wrong with the reader's last action on the queue. */
   error: string | undefined;
-  /** Puts a message into the queue; `onQueued` runs once the server holds it. */
-  queue(text: string, onQueued: () => void): void;
+  /**
+   * Puts a message into the queue, or steers the reader's own run with it; `onQueued` runs once
+   * the server holds it. The server queues a steer it cannot deliver.
+   */
+  queue(text: string, onQueued: () => void, mode?: FollowUpMode): void;
   /** Takes the reader's own message out of the queue; `onWithdrawn` gets its text back. */
   withdraw(id: string, onWithdrawn?: (text: string) => void): void;
   /** Takes all of the reader's messages out of the queue; `onDone` runs once each is answered. */
@@ -201,6 +209,9 @@ function itemDescription(
   t: TranslationContextValue["t"],
   { sendsNowOnlyByAuthor }: { sendsNowOnlyByAuthor: boolean }
 ): string | undefined {
+  if (item.steering) {
+    return t("followUpSteerPending");
+  }
   if (item.own) {
     return undefined;
   }

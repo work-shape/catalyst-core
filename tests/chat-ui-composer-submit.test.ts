@@ -216,21 +216,12 @@ describe("composer submission before its next render", () => {
     let accepted: (() => void) | undefined;
     const { composer } = mountComposer(
       { conversationRunning: true },
-      {
-        items: [],
-        phase: "waiting",
-        withdrawingIds: new Set(),
-        queueing: false,
-        dispatching: false,
-        error: undefined,
+      followUpModel({
         queue(text, onQueued) {
           messages.push(text);
           accepted = onQueued;
-        },
-        withdraw() {},
-        discardOwn() {},
-        sendNow() {}
-      }
+        }
+      })
     );
     const input = required(container.querySelector("textarea"));
     act(() => {
@@ -244,4 +235,86 @@ describe("composer submission before its next render", () => {
     });
     expect(composer.getState().text).toBe("Still writing");
   });
+
+  it("sends during the person's own run in their mode, and in the other with Cmd or Ctrl", () => {
+    for (const mode of ["queue", "steer"] as const) {
+      const sent: Array<[string, string | undefined]> = [];
+      const { composer } = mountComposer(
+        { conversationRunning: true },
+        followUpModel({ mode, queue: (text, _onQueued, sentAs) => sent.push([text, sentAs]) })
+      );
+      const input = required(container.querySelector("textarea"));
+      const other = mode === "queue" ? "steer" : "queue";
+      act(() => {
+        composer.setText("Plain");
+        input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+        composer.setText("With Cmd");
+        input.dispatchEvent(
+          new KeyboardEvent("keydown", { key: "Enter", metaKey: true, bubbles: true })
+        );
+        composer.setText("With Ctrl");
+        input.dispatchEvent(
+          new KeyboardEvent("keydown", { key: "Enter", ctrlKey: true, bubbles: true })
+        );
+      });
+      expect(sent).toEqual([
+        ["Plain", mode],
+        ["With Cmd", other],
+        ["With Ctrl", other]
+      ]);
+      // The button names the mode and the keys that send in the other one.
+      const send = required(
+        container.querySelector<HTMLButtonElement>(
+          '[aria-label="Send after this answer"], [aria-label="Steer the running answer"]'
+        )
+      );
+      expect(send.title).toMatch(
+        mode === "steer"
+          ? /^Steer: read after the current step\. (⌘|Ctrl)\+Enter sends after this answer instead\.$/u
+          : /^Send after this answer\. (⌘|Ctrl)\+Enter steers the answer instead\.$/u
+      );
+    }
+  });
+
+  it("just sends with Cmd or Ctrl and Enter while no run goes", () => {
+    const { composer, submitted } = mountComposer();
+    const input = required(container.querySelector("textarea"));
+    act(() => {
+      composer.setText("No run");
+      input.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Enter", metaKey: true, bubbles: true })
+      );
+    });
+    expect(submitted).toEqual(["No run"]);
+  });
+
+  it("says a steer into someone else's run waits for its answer", () => {
+    const { composer } = mountComposer(
+      { conversationRunning: true },
+      followUpModel({ mode: "steer", ownRun: false })
+    );
+    act(() => composer.setText("From a colleague"));
+    const send = required(
+      container.querySelector<HTMLButtonElement>('[aria-label="Send after this answer"]')
+    );
+    expect(send.title).toBe("Sends after the current answer. Only who started it can steer it.");
+  });
 });
+
+function followUpModel(overrides: Partial<FollowUpQueueModel> = {}): FollowUpQueueModel {
+  return {
+    items: [],
+    mode: "queue",
+    ownRun: true,
+    phase: "waiting",
+    withdrawingIds: new Set(),
+    queueing: false,
+    dispatching: false,
+    error: undefined,
+    queue() {},
+    withdraw() {},
+    discardOwn() {},
+    sendNow() {},
+    ...overrides
+  };
+}

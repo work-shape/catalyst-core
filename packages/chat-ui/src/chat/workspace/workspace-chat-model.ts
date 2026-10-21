@@ -285,6 +285,7 @@ export function useWorkspaceChatModel({
   const followUpSource = useFollowUpSource({
     followUps: controller.followUps,
     currentUserId: meQuery.data?.id,
+    followUpMode: meQuery.data?.followUpMode ?? "queue",
     refreshThread: workspaceCache.refreshThreadSnapshot
   });
   const conversationsQuery = railConversations.query;

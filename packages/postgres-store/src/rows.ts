@@ -619,6 +619,7 @@ export function mapUserRecord(
     status: row.deletionRequestedAt ? "deleting" : row.status,
     // A language the release no longer ships reads as none: the default applies.
     ...(row.locale && isLocaleCode(row.locale) ? { locale: row.locale } : {}),
+    ...(row.followUpMode === "steer" ? { followUpMode: "steer" as const } : {}),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     lastAuthenticatedAt: row.lastAuthenticatedAt?.toISOString(),

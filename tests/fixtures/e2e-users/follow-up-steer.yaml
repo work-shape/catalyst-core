@@ -1,0 +1,11 @@
+# The person of the steer spec, used by no other spec: they choose Steer, which changes what
+# Enter does in every one of their runs. The label sorts after every other for the reason in
+# e2e-app.yaml.
+- email: e2e-steer@example.test
+  displayLabel: E2E Zz Steer
+  passwordEnvName: E2E_STEER_PASSWORD
+  developmentPassword: e2e-steer-password
+  roles:
+    - user
+  permissionRefs:
+    - demo-tools

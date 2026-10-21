@@ -63,6 +63,38 @@ describe("chat context indicator", () => {
     expect(indicatorMarkup).not.toContain(">50%<");
   });
 
+  it("offers what Enter does during a run, Queue by default, in both product locales", () => {
+    const chosen: string[] = [];
+    const view = (locale: "de" | "en", followUpMode?: "queue" | "steer") =>
+      renderToStaticMarkup(
+        createElement(
+          TranslationProvider,
+          { children: null, locale },
+          createElement(LanguageAppearanceView, {
+            locales: ["de", "en"],
+            locale,
+            selectLocale: () => undefined,
+            themePreference: "system",
+            selectThemePreference: () => undefined,
+            showContextIndicator: false,
+            setShowContextIndicator: () => undefined,
+            ...(followUpMode ? { followUpMode } : {}),
+            selectFollowUpMode: (mode) => chosen.push(mode)
+          })
+        )
+      );
+    const german = view("de");
+    expect(german).toContain("Enter während einer Antwort");
+    expect(german).toContain("Warteschlange");
+    expect(german).toContain("Lenken");
+    expect(german).toMatch(
+      /aria-checked="true"[^>]*>Warteschlange|data-state="on"[^>]*>Warteschlange/u
+    );
+    expect(view("en", "steer")).toMatch(
+      /aria-checked="true"[^>]*>Steer|data-state="on"[^>]*>Steer/u
+    );
+  });
+
   it("estimates non-zero usage for conversations without a provider snapshot", () => {
     const usage = resolveContextUsage(
       [

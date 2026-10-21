@@ -32,6 +32,7 @@ export function registerConfigRoutes(route: Route, options: ChatServerOptions): 
     return {
       ...user,
       ...(record?.locale ? { locale: record.locale } : {}),
+      followUpMode: record?.followUpMode ?? "queue",
       permissions: allowedLegacyPermissions(access),
       instanceAdminName: await readInstanceAdminName(options.stores.users, options.clientInstanceId)
     };

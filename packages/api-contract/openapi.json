@@ -32481,6 +32481,13 @@
           "locale": {
             "$ref": "#/components/schemas/LocaleCode"
           },
+          "followUpMode": {
+            "type": "string",
+            "enum": [
+              "queue",
+              "steer"
+            ]
+          },
           "instanceAdminName": {
             "type": "string"
           },
@@ -42538,6 +42545,13 @@
               {
                 "type": "null"
               }
+            ]
+          },
+          "followUpMode": {
+            "type": "string",
+            "enum": [
+              "queue",
+              "steer"
             ]
           }
         }

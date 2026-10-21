@@ -5,6 +5,7 @@ import {
   auditActorFromUser,
   authenticatedUserFromRecord,
   type AuthenticatedUser,
+  type FollowUpMode,
   type LocaleCode,
   type RuntimeCallContext,
   type UserRecord
@@ -18,6 +19,7 @@ interface UpdateCurrentUserCommand {
   displayLabel?: string;
   /** `null` goes back to the instance's default language. */
   locale?: LocaleCode | null;
+  followUpMode?: FollowUpMode;
 }
 
 interface ChangeCurrentUserPasswordCommand {
@@ -32,7 +34,7 @@ export class UserAccountWorkflow {
     actor: AuthenticatedUser,
     context: RuntimeCallContext,
     command: UpdateCurrentUserCommand
-  ): Promise<AuthenticatedUser & Pick<UserRecord, "locale">> {
+  ): Promise<AuthenticatedUser & Pick<UserRecord, "locale"> & { followUpMode: FollowUpMode }> {
     const { supportedLocales } = this.options.config.localization;
     if (command.locale && !supportedLocales.includes(command.locale)) {
       throw new AppError(
@@ -45,7 +47,8 @@ export class UserAccountWorkflow {
       clientInstanceId: this.options.clientInstanceId,
       userId: asUserId(actor.id),
       ...(command.displayLabel === undefined ? {} : { displayLabel: command.displayLabel }),
-      ...(command.locale === undefined ? {} : { locale: command.locale })
+      ...(command.locale === undefined ? {} : { locale: command.locale }),
+      ...(command.followUpMode === undefined ? {} : { followUpMode: command.followUpMode })
     });
 
     await this.options.auditRecorder.record({
@@ -55,7 +58,7 @@ export class UserAccountWorkflow {
       subject: updated.id,
       correlationId: context.correlationId,
       metadata: {
-        fields: (["displayLabel", "locale"] as const).filter(
+        fields: (["displayLabel", "locale", "followUpMode"] as const).filter(
           (field) => command[field] !== undefined
         )
       }
@@ -70,7 +73,8 @@ export class UserAccountWorkflow {
         },
         correlationId: context.correlationId
       }),
-      ...(updated.locale ? { locale: updated.locale } : {})
+      ...(updated.locale ? { locale: updated.locale } : {}),
+      followUpMode: updated.followUpMode ?? "queue"
     };
   }
 

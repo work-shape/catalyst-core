@@ -97,18 +97,22 @@ describe("follow-up queue above the composer", () => {
     id: "fu_own",
     text: "Also check the March numbers",
     own: true,
-    authorLabel: undefined
+    authorLabel: undefined,
+    steering: false
   };
   const others: FollowUpQueueItem = {
     id: "fu_other",
     text: "And add a summary",
     own: false,
-    authorLabel: "Anna Berg"
+    authorLabel: "Anna Berg",
+    steering: false
   };
 
   function model(overrides: Partial<FollowUpQueueModel>): FollowUpQueueModel {
     return {
       items: [own, others],
+      mode: "queue",
+      ownRun: true,
       phase: "waiting",
       withdrawingIds: new Set(),
       queueing: false,
@@ -161,15 +165,30 @@ describe("follow-up queue above the composer", () => {
   };
 
   it.each(["en", "de"] as const)("shows B's server label in A's tab in %s", (locale) => {
-    const item = followUpQueueItem(fromB, "a");
+    const item = followUpQueueItem(fromB, "a", undefined);
     expect(item.own).toBe(false);
     const markup = render(model({ items: [item] }), locale);
     expect(markup).toContain(locale === "en" ? "From Bea Berg" : "Von Bea Berg");
     expect(markup).not.toContain('aria-label="Edit"');
   });
 
+  it.each(["en", "de"] as const)(
+    "says a steer into the live run is read after the current step in %s",
+    (locale) => {
+      const steer = { ...fromB, mode: "steer" as const, dispatchedRunId: "run_live" };
+      const item = followUpQueueItem(steer, "b", "run_live");
+      expect(item.steering).toBe(true);
+      expect(render(model({ items: [item] }), locale)).toContain(
+        locale === "en" ? "Read after the current step" : "Wird nach dem aktuellen Schritt gelesen"
+      );
+      // Once its run ended, it waits as any queued message.
+      expect(followUpQueueItem(steer, "b", undefined).steering).toBe(false);
+      expect(followUpQueueItem(steer, "b", "run_next").steering).toBe(false);
+    }
+  );
+
   it("keeps B's own tab unchanged when the server includes B's label", () => {
-    const item = followUpQueueItem(fromB, "b");
+    const item = followUpQueueItem(fromB, "b", undefined);
     expect(item.own).toBe(true);
     const markup = render(model({ items: [item] }));
     expect(markup).toContain('aria-label="Edit"');
@@ -180,7 +199,7 @@ describe("follow-up queue above the composer", () => {
   it.each(["en", "de"] as const)(
     "uses the generic text for an unavailable author in %s",
     (locale) => {
-      const item = followUpQueueItem({ ...fromB, authorDisplayLabel: undefined }, "a");
+      const item = followUpQueueItem({ ...fromB, authorDisplayLabel: undefined }, "a", undefined);
       const markup = render(model({ items: [item] }), locale);
       expect(markup).toContain(
         locale === "en" ? "From another member" : "Von einem anderen Mitglied"

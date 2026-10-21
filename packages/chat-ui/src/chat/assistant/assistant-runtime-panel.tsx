@@ -317,6 +317,8 @@ function AssistantRuntimePane({
     client,
     conversationId: selectedConversationId,
     runStatus: activeRun?.run.status,
+    runId: activeRun?.run.id,
+    runOwnerUserId: activeRun?.projection.ownerUserId,
     agentName: selectedAgentName,
     modelBindingId: selectedModelBindingId,
     reasoningEffort: requestedReasoningEffort,

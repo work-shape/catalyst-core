@@ -913,6 +913,8 @@ export type RunCommandRequest = z.infer<typeof runCommandRequestSchema>;
 export type RunCommandResponse = z.infer<typeof runCommandResponseSchema>;
 export type ConversationUserState = z.infer<typeof conversationUserStateSchema>;
 export type ConversationFollowUp = z.infer<typeof conversationFollowUpSchema>;
+/** What a message sent while a run goes does: wait as the next turn, or steer the run. */
+export type FollowUpMode = (typeof FOLLOW_UP_MODES)[number];
 export type SubagentSummary = z.infer<typeof subagentSummarySchema>;
 
 export type ConversationThreadSnapshot = z.infer<typeof conversationThreadSnapshotSchema>;

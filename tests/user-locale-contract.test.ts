@@ -18,7 +18,8 @@ describe("the account locale contract", () => {
     expect(update.parse({ locale: "de" })).toEqual({ locale: "de" });
     expect(update.parse({ locale: null })).toEqual({ locale: null });
     expect(update.parse({ displayLabel: "Kai" })).toEqual({ displayLabel: "Kai" });
-    for (const refused of [{}, { locale: "fr" }, { displayLabel: "" }])
+    expect(update.parse({ followUpMode: "steer" })).toEqual({ followUpMode: "steer" });
+    for (const refused of [{}, { locale: "fr" }, { displayLabel: "" }, { followUpMode: "now" }])
       expect(update.safeParse(refused).success).toBe(false);
     const me = { ...apiOperations["me.get"].response.schema.parse(currentUser), locale: "de" };
     expect(apiOperations["me.get"].response.schema.parse(me).locale).toBe("de");

@@ -35,6 +35,12 @@ export const assistant = defineTranslations({
     followUpQueued: "Queued",
     followUpRemove: "Remove",
     followUpSend: "Send after this answer",
+    followUpSendTitle: "Send after this answer. {keys} steers the answer instead.",
+    followUpSteer: "Steer the running answer",
+    followUpSteerTitle:
+      "Steer: read after the current step. {keys} sends after this answer instead.",
+    followUpSteerNotOwn: "Sends after the current answer. Only who started it can steer it.",
+    followUpSteerPending: "Read after the current step",
     followUpSendNow: "Send now",
     followUpSending: "Sending the next message…",
     followUpWaitingHint: "Sends after the current answer.",
@@ -123,6 +129,13 @@ export const assistant = defineTranslations({
     followUpQueued: "In der Warteschlange",
     followUpRemove: "Entfernen",
     followUpSend: "Nach dieser Antwort senden",
+    followUpSendTitle: "Nach dieser Antwort senden. {keys} lenkt stattdessen die Antwort.",
+    followUpSteer: "Laufende Antwort lenken",
+    followUpSteerTitle:
+      "Lenken: wird nach dem aktuellen Schritt gelesen. {keys} sendet stattdessen nach dieser Antwort.",
+    followUpSteerNotOwn:
+      "Wird nach der aktuellen Antwort gesendet. Nur wer sie gestartet hat, kann sie lenken.",
+    followUpSteerPending: "Wird nach dem aktuellen Schritt gelesen",
     followUpSendNow: "Jetzt senden",
     followUpSending: "Nächste Nachricht wird gesendet…",
     followUpWaitingHint: "Wird nach der aktuellen Antwort gesendet.",

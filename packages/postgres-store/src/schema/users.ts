@@ -9,6 +9,7 @@ import {
   uniqueIndex
 } from "drizzle-orm/pg-core";
 import type {
+  FollowUpMode,
   LocaleCode,
   UserModelPreference,
   UserRecord,
@@ -30,6 +31,8 @@ export const productUsers = pgTable(
     modelPreference: jsonb("model_preference").$type<UserModelPreference>(),
     /** The language the person chose; null follows the instance's default. */
     locale: text("locale").$type<LocaleCode>(),
+    /** What a message sent during the person's own run does: wait as the next turn, or steer it. */
+    followUpMode: text("follow_up_mode").$type<FollowUpMode>().notNull().default("queue"),
     /** Set when the deletion of the account was accepted. The user is closed from then on. */
     deletionRequestedAt: timestamp("deletion_requested_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),

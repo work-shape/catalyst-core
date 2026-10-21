@@ -2,6 +2,7 @@ import { USER_STATUSES } from "@work-shape/catalyst-asset-schemas";
 import type { ReasoningEffortConfig } from "./config";
 import { AppError } from "./errors";
 import type { AuthenticatedUser, UserRole } from "./identity";
+import type { FollowUpMode } from "./follow-ups";
 import type { ClientInstanceId, UserId } from "./ids";
 import { createPlatformId } from "./ids";
 import type { LocaleCode } from "./localization";
@@ -46,6 +47,11 @@ export interface UserRecord {
    * This preference lives with the account and is removed with it.
    */
   locale?: LocaleCode;
+  /**
+   * What Enter does with a message sent during the person's own run (FU-2). Left out, it waits
+   * in the queue.
+   */
+  followUpMode?: FollowUpMode;
   createdAt: ISODateString;
   updatedAt: ISODateString;
   lastAuthenticatedAt?: ISODateString;
@@ -95,6 +101,7 @@ export interface UpdateUserInput {
   status?: UserStatus;
   /** `null` goes back to the instance's default language. */
   locale?: LocaleCode | null;
+  followUpMode?: FollowUpMode;
 }
 
 export interface UpsertUserIdentityInput {

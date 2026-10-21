@@ -3,6 +3,7 @@ import type {
   AgentRun,
   ApiClient,
   ConversationFollowUp,
+  FollowUpMode,
   LocaleCode,
   StartConversationRunResponse
 } from "@work-shape/catalyst-api-client";
@@ -34,15 +35,17 @@ export interface FollowUpSource {
   /** The pending follow-ups of the thread, oldest first. */
   followUps: readonly ConversationFollowUp[];
   currentUserId: string | undefined;
+  /** What Enter does with a message the reader sends during their own run. */
+  followUpMode: FollowUpMode;
   /** Reads the thread again: nothing reaches the page about a queue while no run goes. */
   refreshThread(conversationId: string): Promise<unknown>;
 }
 
 export function useFollowUpSource(input: FollowUpSource): FollowUpSource {
-  const { currentUserId, followUps, refreshThread } = input;
+  const { currentUserId, followUps, followUpMode, refreshThread } = input;
   return useMemo(
-    () => ({ followUps, currentUserId, refreshThread }),
-    [currentUserId, followUps, refreshThread]
+    () => ({ followUps, currentUserId, followUpMode, refreshThread }),
+    [currentUserId, followUps, followUpMode, refreshThread]
   );
 }
 
@@ -56,6 +59,9 @@ export function useFollowUpQueueModel(input: {
   conversationId: string | undefined;
   /** The status of the run the thread names last, if it still names one. */
   runStatus: AgentRun["status"] | undefined;
+  /** That run and who started it: only they steer it. */
+  runId: string | undefined;
+  runOwnerUserId: string | undefined;
   agentName: string | undefined;
   modelBindingId: string | undefined;
   reasoningEffort: ReasoningEffort | undefined;
@@ -65,6 +71,7 @@ export function useFollowUpQueueModel(input: {
   t: TranslationContextValue["t"];
 }): FollowUpQueueModel | undefined {
   const { source, client, conversationId, runStatus, messageSubmitted, runStarted, t } = input;
+  const { runId, runOwnerUserId } = input;
   const { agentName, modelBindingId, reasoningEffort, locale } = input;
   const { refreshThread } = source;
   // A message the server took stands in the list at once. It stays until the thread changes,
@@ -146,7 +153,7 @@ export function useFollowUpQueueModel(input: {
   );
 
   const sendToQueue = useCallback(
-    async (text: string): Promise<boolean> => {
+    async (text: string, followUp: FollowUpMode): Promise<boolean> => {
       if (!conversationId) {
         return false;
       }
@@ -161,7 +168,8 @@ export function useFollowUpQueueModel(input: {
           conversationId,
           idempotencyKey: createRunIdempotencyKey(),
           locale,
-          text
+          text,
+          followUp
         });
         messageSubmitted(conversationId);
         if ("followUp" in response) {
@@ -225,8 +233,8 @@ export function useFollowUpQueueModel(input: {
   );
 
   const queue = useCallback(
-    (text: string, onQueued: () => void) => {
-      sendToQueue(text)
+    (text: string, onQueued: () => void, mode: FollowUpMode = "queue") => {
+      sendToQueue(text, mode)
         .then((queued) => queued && onQueued())
         .catch(() => undefined);
     },
@@ -287,9 +295,17 @@ export function useFollowUpQueueModel(input: {
     if (!conversationId) {
       return undefined;
     }
-    const items = followUps.map((followUp) => followUpQueueItem(followUp, source.currentUserId));
+    const liveRunId = runLive ? runId : undefined;
+    const items = followUps.map((followUp) =>
+      followUpQueueItem(followUp, source.currentUserId, liveRunId)
+    );
     return {
       items,
+      mode: source.followUpMode,
+      ownRun:
+        liveRunId !== undefined &&
+        runOwnerUserId !== undefined &&
+        runOwnerUserId === source.currentUserId,
       phase,
       withdrawingIds,
       queueing,
@@ -309,6 +325,9 @@ export function useFollowUpQueueModel(input: {
     phase,
     queue,
     queueing,
+    runId,
+    runLive,
+    runOwnerUserId,
     runStatus,
     sendNow,
     source,

@@ -19,18 +19,24 @@ export interface FollowUpQueueItem {
   own: boolean;
   /** Who wrote it, for a message of another member. */
   authorLabel: string | undefined;
+  /** A steer the running turn reads after its current step (FU-2). */
+  steering: boolean;
 }
 
 /** The server's queued message as seen by this reader. */
 export function followUpQueueItem(
   followUp: ConversationFollowUp,
-  currentUserId: string | undefined
+  currentUserId: string | undefined,
+  /** The run that goes now, if one does. A steer for a run that ended waits as any message. */
+  liveRunId: string | undefined
 ): FollowUpQueueItem {
   return {
     id: followUp.id,
     text: followUp.text,
     own: followUp.authorUserId === currentUserId,
-    authorLabel: followUp.authorDisplayLabel
+    authorLabel: followUp.authorDisplayLabel,
+    steering:
+      followUp.mode === "steer" && liveRunId !== undefined && followUp.dispatchedRunId === liveRunId
   };
 }
 
