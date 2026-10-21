@@ -112,8 +112,8 @@ describe("a scheduled prompt in words", () => {
   });
 
   it("says the schedule with its zone in English and German, a custom one as written", () => {
-    expect(scheduleLine(start, en)).toBe("Every weekday, 08:00 AM (Europe/Berlin)");
-    expect(scheduleLine(start, de)).toBe("Werktags, 08:00 (Europe/Berlin)");
+    expect(scheduleLine(start, en)).toBe("Every weekday, 08:00 AM (Berlin time)");
+    expect(scheduleLine(start, de)).toBe("Werktags, 08:00 (Ortszeit Berlin)");
     expect(scheduleLine({ cron: "0 9 * * 1", timeZone: "UTC" }, de)).toBe(
       "Jeden Montag, 09:00 (UTC)"
     );
@@ -260,7 +260,7 @@ describe("one scheduled prompt", () => {
     const markup = renderCard({});
     const words = text(markup);
     expect(words).toContain("Summarise yesterday's new support tickets");
-    expect(words).toContain("Support assistant · Every weekday, 08:00 AM (Europe/Berlin)");
+    expect(words).toContain("Support assistant · Every weekday, 08:00 AM (Berlin time)");
     expect(words).toContain("Next run:");
     expect(words).toContain("Not run yet.");
     expect(words).toContain("Run now");
@@ -354,8 +354,10 @@ describe("the dialog that makes and changes a scheduled prompt", () => {
     expect(markup).toMatch(/<option value="writer" selected="">Writer<\/option>/u);
     expect(markup).toMatch(/<option value="weekdays" selected="">/u);
     expect(markup).toMatch(/<option value="Europe\/Berlin" selected="">/u);
+    // A zone is offered as the schedule field says it, never by its id.
+    expect(markup).toMatch(/<option value="Europe\/Berlin" selected="">Berlin time<\/option>/u);
     expect(markup).toContain('value="08:00"');
-    expect(text(markup)).toContain("Every weekday, 08:00 AM (Europe/Berlin)");
+    expect(text(markup)).toContain("Every weekday, 08:00 AM (Berlin time)");
     // A scheduled prompt has no name of its own.
     expect(text(markup)).not.toMatch(/\bName\b/u);
   });
@@ -434,7 +436,7 @@ describe("an agent's call on a scheduled prompt", () => {
     const words = text(markup);
     expect(words).toContain("Agent Support assistant");
     expect(words).toContain("Fasse die Tickets zusammen.");
-    expect(words).toContain("Wann Werktags, 08:00 (Europe/Berlin)");
+    expect(words).toContain("Wann Werktags, 08:00 (Ortszeit Berlin)");
     expect(words).toContain("Läuft als Du, mit deinen Rechten zum Zeitpunkt jedes Laufs");
     // The raw input stands only under the details.
     const summaryAt = markup.indexOf('data-testid="scheduled-confirmation"');

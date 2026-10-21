@@ -1,4 +1,4 @@
-import { scheduleZoneWords } from "@work-shape/catalyst-ui";
+import { isScheduleZone, scheduleZoneWords } from "@work-shape/catalyst-ui";
 import type { TranslationContextValue } from "../../shared/i18n";
 import { uiLabelsFor } from "../../shared/ui-labels";
 import type { InstanceTimeZone } from "./workflow-model";
@@ -94,16 +94,18 @@ export function triggerInWords(
 }
 
 /**
- * A schedule in words with the zone its time is in, the zone said as the schedule field says
- * it: "(Berlin time)", never its id.
+ * A zone as the schedule field says it: "Berlin time", never its id. A zone the browser does
+ * not know, or a phrase such as "the instance's time zone", is said as given.
  */
+export function zoneInWords(zone: string, locale: TranslationContextValue["locale"]): string {
+  return isScheduleZone(zone) ? scheduleZoneWords(zone, uiLabelsFor(locale)) : zone;
+}
+
+/** A schedule in words with the zone its time is in: "Every day, 09:00 (Berlin time)". */
 export function withZone(
   words: string,
   zone: string,
   { t, locale }: Pick<TranslationContextValue, "locale" | "t">
 ): string {
-  return t("workflows.schedule.zone", {
-    schedule: words,
-    zone: scheduleZoneWords(zone, uiLabelsFor(locale))
-  });
+  return t("workflows.schedule.zone", { schedule: words, zone: zoneInWords(zone, locale) });
 }

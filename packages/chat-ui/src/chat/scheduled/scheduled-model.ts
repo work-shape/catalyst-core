@@ -6,7 +6,7 @@ import {
 } from "@work-shape/catalyst-core";
 import type { BadgeTone } from "@work-shape/catalyst-ui";
 import type { TranslationContextValue, TranslationKey } from "../../shared/i18n";
-import { scheduleInWords } from "../../studio/workflows/schedule-words";
+import { scheduleInWords, withZone } from "../../studio/workflows/schedule-words";
 
 // The Scheduled page's own words for what the instance keeps: a saved prompt that an agent is
 // asked at the times of a cron expression, and the runs it made. The screens read these types;
@@ -184,10 +184,11 @@ export function scheduleLine(
     fields.length === 5 && fields[2] === "*" && fields[3] === "*" && fields[4] === "1-5"
       ? weekdaysInWords(fields[0] ?? "", fields[1] ?? "", text)
       : scheduleInWords(start.cron, text);
-  return t("scheduled.schedule.inWords", {
-    schedule: words ?? t("scheduled.schedule.custom", { cron: start.cron.trim() }),
-    zone: start.timeZone
-  });
+  return withZone(
+    words ?? t("scheduled.schedule.custom", { cron: start.cron.trim() }),
+    start.timeZone,
+    text
+  );
 }
 
 function weekdaysInWords(

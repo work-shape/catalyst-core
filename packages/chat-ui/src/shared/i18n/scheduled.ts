@@ -100,7 +100,6 @@ export const scheduled = defineTranslations({
     "scheduled.confirm.resume": "Resume it: it runs again at its next time.",
     "scheduled.confirm.delete": "Delete it. The conversations it already started stay.",
     "scheduled.schedule.weekdays": "Every weekday, {time}",
-    "scheduled.schedule.inWords": "{schedule} ({zone})",
     "scheduled.schedule.custom": "Custom: {cron}"
   },
   de: {
@@ -206,7 +205,6 @@ export const scheduled = defineTranslations({
     "scheduled.confirm.resume": "Fortsetzen: Er läuft wieder zu seinem nächsten Termin.",
     "scheduled.confirm.delete": "Löschen. Die Unterhaltungen, die er schon gestartet hat, bleiben.",
     "scheduled.schedule.weekdays": "Werktags, {time}",
-    "scheduled.schedule.inWords": "{schedule} ({zone})",
     "scheduled.schedule.custom": "Eigener Zeitplan: {cron}"
   }
 });

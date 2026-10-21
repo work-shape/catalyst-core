@@ -252,7 +252,7 @@ test("in German, dark and narrow the page and its dialog fit the screen", async 
 
     const card = page.getByTestId("scheduled-start").filter({ hasText: marker });
     await expect(card.getByRole("heading", { name: prompt })).toBeVisible();
-    await expect(card).toContainText("Werktags, 08:00 (Europe/Berlin)");
+    await expect(card).toContainText("Werktags, 08:00 (Ortszeit Berlin)");
     await expect(card.getByRole("button", { name: "Jetzt ausführen" })).toBeVisible();
     await noSidewaysScroll(page);
     await shoot(page, "de-dark-narrow-list");
@@ -302,7 +302,7 @@ test("an agent's scheduled prompt is confirmed in words and then stands on the p
     await expect(summary).toBeVisible({ timeout: 90_000 });
     await expect(summary).toHaveAttribute("data-verb", "create");
     await expect(summary).toContainText(prompt);
-    await expect(summary).toContainText(/Every weekday, 0?8:00\s?AM \(Europe\/Berlin\)/u);
+    await expect(summary).toContainText(/Every weekday, 0?8:00\s?AM \(Berlin time\)/u);
     await expect(summary).toContainText("You, with your rights at each run");
     await shoot(page, "en-light-wide-confirmation");
     await page.getByRole("button", { name: /^(?:Allow|Erlauben)$/u }).click();
@@ -311,7 +311,7 @@ test("an agent's scheduled prompt is confirmed in words and then stands on the p
     await page.goto(`/w/${workspaceId}/scheduled`);
     const card = page.getByTestId("scheduled-start").filter({ hasText: marker });
     await expect(card.getByRole("heading", { name: prompt })).toBeVisible();
-    await expect(card).toContainText("Europe/Berlin");
+    await expect(card).toContainText("(Berlin time)");
   } finally {
     await deleteStarts(page, workspaceId, marker);
   }

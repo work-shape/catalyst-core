@@ -10,6 +10,7 @@ import {
 } from "@work-shape/catalyst-ui";
 import { SCHEDULED_START_MIN_INTERVAL_MINUTES } from "@work-shape/catalyst-core";
 import { useTranslation, type TranslationKey } from "../../shared/i18n";
+import { zoneInWords } from "../../studio/workflows/schedule-words";
 import {
   DEFAULT_SCHEDULE,
   SCHEDULE_PRESETS,
@@ -94,7 +95,14 @@ export function ScheduledDialog({
   const [timeZone, setTimeZone] = useState(draft.timeZone ?? instanceTimeZone);
   // Field errors show once the person tried to save, and go as the field is put right.
   const [checked, setChecked] = useState(false);
-  const zones = useMemo(() => timeZoneChoices(timeZone), [timeZone]);
+  // Each zone as the schedule field says it, "Berlin time", in the order of those words.
+  const zones = useMemo(
+    () =>
+      timeZoneChoices(timeZone)
+        .map((zone) => ({ zone, label: zoneInWords(zone, locale) }))
+        .sort((left, right) => left.label.localeCompare(right.label, locale)),
+    [timeZone, locale]
+  );
   const weekdays = useMemo(() => weekdayNames(locale), [locale]);
 
   const cron = cronOf(schedule);
@@ -245,9 +253,9 @@ export function ScheduledDialog({
             value={timeZone}
             onChange={(event) => setTimeZone(event.target.value)}
           >
-            {zones.map((zone) => (
+            {zones.map(({ zone, label }) => (
               <option key={zone} value={zone}>
-                {zone}
+                {label}
               </option>
             ))}
           </Select>
