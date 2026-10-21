@@ -1020,7 +1020,7 @@
         "",
         "### A new Knowledge Base",
         "",
-        "A Knowledge Base of documents made on its page with **New knowledge base** (**Neue Wissensbasis**) is published when it is created, where you may publish it, and is available in no workspace, so you can add files under **Documents** (**Dokumente**) at once and choose its workspaces under **Available in** when it is ready. Later changes of its definition are saved as a draft and need **Publish**. One that syncs from a source, one of tables, and one written by `catalyst config push` or by an agent start as a draft. Before its first publish the page says under its head what publishing opens. Its **Source** (**Quelle**) section names the systems the instance can sync folders from.",
+        "A Knowledge Base of documents made on its page with **New knowledge base** (**Neue Wissensbasis**) is published when it is created, where you may publish it, and is available in no workspace, so you can add files under **Documents** (**Dokumente**) at once and choose its workspaces under **Available in** when it is ready. Later changes of its definition are saved as a draft and need **Publish**. One that syncs from a source, one of tables, and one written by `catalyst config push` or by an agent start as a draft. Before its first publish the page says under its head what publishing opens. Where no Connection can sync folders yet, its **Synced sources** (**Synchronisierte Quellen**) section names the systems the instance can sync folders from and offers **New connection** (**Neue Verbindung**).",
         "",
         "### The files of a skill",
         "",

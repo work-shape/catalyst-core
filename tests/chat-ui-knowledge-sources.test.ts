@@ -1,6 +1,7 @@
 import { createElement } from "react";
 import { describe, expect, it } from "vitest";
 import {
+  BuildNavigationProvider,
   KnowledgeSourcesSection,
   PublishQuestionLines,
   knowledgeBaseConfigToForm,
@@ -51,7 +52,11 @@ const running: KnowledgeSourceStatus = {
   oldestOpenChangeAt: "2026-10-21T08:05:00.000Z"
 };
 
-function sourceWith(sources: KnowledgeSources): KnowledgeBaseSource {
+function sourceWith(
+  sources: KnowledgeSources,
+  connections: readonly { name: string; title: string }[],
+  sourceTypes: readonly string[] | undefined
+): KnowledgeBaseSource {
   const failed = { ok: false as const, refused: false, message: undefined };
   return {
     useState: () => ({ status: "loading" }),
@@ -67,8 +72,21 @@ function sourceWith(sources: KnowledgeSources): KnowledgeBaseSource {
     addFiles: async () => ({ ok: true, data: { count: 0 } }),
     uploadFile: async () => ({ ok: true, data: { count: 0 } }),
     useOpenableFiles: () => ready({ items: [] }),
-    useSourceConnections: () =>
-      ready({ items: [{ name: "handbook-folders", title: "Handbook folders" }] }),
+    useSourceConnections: () => ready({ items: [...connections] }),
+    ...(sourceTypes === undefined
+      ? {}
+      : {
+          useSourceTypes: () =>
+            sourceTypes.map((title) => ({
+              type: title.toLowerCase(),
+              title,
+              description: "",
+              documentSource: true,
+              authScheme: "none" as const,
+              settings: {},
+              fields: []
+            }))
+        }),
     useSources: () => ready(sources),
     syncSource: async () => ({ ok: true, data: {} }),
     retrySource: async () => ({ ok: true, data: { queued: 2 } })
@@ -81,28 +99,47 @@ function render(
     canWrite = true,
     unpublished = false,
     sources = [handbookSource],
-    status = { sources: [running] }
+    status = { sources: [running] },
+    connections = [{ name: "handbook-folders", title: "Handbook folders" }],
+    sourceTypes,
+    inBuild = false
   }: {
     canWrite?: boolean;
     /** No revision is published yet. */
     unpublished?: boolean;
     sources?: KnowledgeSourceForm[];
     status?: KnowledgeSources;
+    /** The Connections the reader may choose for a source. */
+    connections?: readonly { name: string; title: string }[];
+    /** The titles of the Connector types the instance can sync documents from. */
+    sourceTypes?: readonly string[];
+    /** The section sits in Studio, which can open the New connection dialog. */
+    inBuild?: boolean;
   } = {}
 ): string {
+  const section = createElement(KnowledgeSourcesSection, {
+    source: sourceWith(status, connections, sourceTypes),
+    knowledgeBase: "handbook-kb",
+    published: unpublished ? undefined : 2,
+    owner: undefined,
+    sources,
+    canWrite,
+    onChange: () => undefined
+  });
   return renderToStaticMarkup(
     createElement(
       TranslationProvider,
       { children: null, locale },
-      createElement(KnowledgeSourcesSection, {
-        source: sourceWith(status),
-        knowledgeBase: "handbook-kb",
-        published: unpublished ? undefined : 2,
-        owner: undefined,
-        sources,
-        canWrite,
-        onChange: () => undefined
-      })
+      inBuild
+        ? createElement(BuildNavigationProvider, {
+            value: {
+              location: { kindPath: "knowledge-bases", name: "handbook-kb" },
+              open: () => undefined,
+              href: (place) => `/build/${place.kindPath ?? ""}`
+            },
+            children: section
+          })
+        : section
     )
   );
 }
@@ -237,6 +274,36 @@ describe("the state of a synced source", () => {
     const page = render("en", { sources: [handbookSource, added] });
     expect(page).toContain("It syncs once it is published.");
     expect(render("en", { unpublished: true })).not.toContain("Initial import running");
+  });
+
+  it("where no Connection can sync folders, says in one neutral line what to connect first", () => {
+    const page = render("de", {
+      sources: [],
+      connections: [],
+      sourceTypes: ["Box", "SharePoint"],
+      inBuild: true
+    });
+    expect(page).toContain(
+      "Um Ordner aus Box oder SharePoint zu synchronisieren, lege zuerst eine Verbindung an."
+    );
+    expect(page).toMatch(
+      /<a[^>]*href="\/build\/connections"[^>]*data-knowledge-source-connect=""/u
+    );
+    expect(page).toContain("Neue Verbindung");
+    // No empty list, no chooser, no error and no note on the draft beside it.
+    expect(page).not.toContain("Noch keine Quelle.");
+    expect(page).not.toContain("Quelle hinzufügen");
+    expect(page).not.toContain("Lege zuerst unter Verbindungen");
+    expect(page).not.toContain("sobald der Entwurf veröffentlicht ist");
+    const none = render("en", { sources: [], connections: [], sourceTypes: [], inBuild: true });
+    expect(none).toContain("This instance connects no document source yet.");
+    expect(none).not.toContain("data-knowledge-source-connect");
+    // A reader who may not create Connections is told no type and offered no dialog.
+    const unknown = render("en", { sources: [], connections: [] });
+    expect(unknown).toContain("No connection here syncs folders yet.");
+    expect(unknown).not.toContain("data-knowledge-source-connect");
+    // With a Connection to choose, the chooser stands as before.
+    expect(render("en", { sources: [], sourceTypes: ["Box"] })).toContain("Add source");
   });
 });
 

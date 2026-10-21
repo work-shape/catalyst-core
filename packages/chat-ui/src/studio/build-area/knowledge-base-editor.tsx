@@ -44,7 +44,6 @@ import {
   type KnowledgeTableForm
 } from "./knowledge-base-model";
 import type { KnowledgeBaseSource, KnowledgeHoldersRead } from "./knowledge-base-source";
-import { offerText } from "./connection-typed-model";
 import { uploadFormatList, uploadFormats } from "./knowledge-upload-model";
 
 /** The sections of the data Workflows on the page, by what they do to it. */
@@ -122,7 +121,6 @@ export function KnowledgeBaseEditor({
   // What only a published Knowledge Base has: its documents, its status and a test.
   const live = asset !== undefined && published !== undefined;
   // The Connector types of the instance its documents can be synced from, named under Source.
-  const sourceTypes = source.useSourceTypes?.();
   // The data Workflows that fill or process it arrive with the state the Status section reads:
   // the same read, not another. A section stands only where one is named or counted.
   const stateRead = source.useState(asset?.name ?? "", published);
@@ -259,21 +257,6 @@ export function KnowledgeBaseEditor({
               onValueChange={(holds) => update({ holds })}
             />
           )}
-          {documents && sourceTypes !== undefined ? (
-            <KeyValueList layout="stacked">
-              <KeyValue label={t("knowledgeSources.title")}>
-                <span data-knowledge-source-types="">
-                  {sourceTypes.length === 0
-                    ? t("knowledge.syncsFromNone")
-                    : t("knowledge.syncsFrom", {
-                        types: new Intl.ListFormat(locale, { type: "conjunction" }).format(
-                          sourceTypes.map((type) => offerText(type.service ?? type.title, locale))
-                        )
-                      })}
-                </span>
-              </KeyValue>
-            </KeyValueList>
-          ) : null}
           {documents ? null : (
             <TablesSource
               source={source}

@@ -139,9 +139,6 @@ export const knowledge = defineTranslations({
       "Not published yet. Publish it to add documents, see its status and try a search.",
     "knowledge.createsLive":
       "Goes live when it is created, available in no workspace, so you can add files at once. Later changes are saved as a draft.",
-    "knowledge.syncsFrom": "This instance can sync folders from {types}.",
-    "knowledge.syncsFromNone":
-      "This instance connects no document source yet. Files are added under Documents.",
     "knowledge.documentsTitle": "Documents",
     "knowledge.documentsDescription":
       "Everyone who may use this knowledge base finds every document in it, once the document is searchable.",
@@ -383,9 +380,6 @@ export const knowledge = defineTranslations({
       "Noch nicht veröffentlicht. Veröffentliche sie, um Dokumente hinzuzufügen, ihren Status zu sehen und eine Suche zu testen.",
     "knowledge.createsLive":
       "Ist sofort veröffentlicht und in keinem Arbeitsbereich verfügbar, damit du gleich Dateien hinzufügen kannst. Spätere Änderungen werden als Entwurf gespeichert.",
-    "knowledge.syncsFrom": "Diese Instanz kann Ordner aus {types} synchronisieren.",
-    "knowledge.syncsFromNone":
-      "Diese Instanz verbindet noch keine Dokumentquelle. Dateien fügst du unter Dokumente hinzu.",
     "knowledge.documentsTitle": "Dokumente",
     "knowledge.documentsDescription":
       "Jeder, der diese Wissensbasis nutzen darf, findet jedes Dokument darin, sobald es durchsuchbar ist.",
