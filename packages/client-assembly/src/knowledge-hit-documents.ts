@@ -25,6 +25,9 @@ export function createKnowledgeHitDocuments(input: {
   const { clientInstanceId, stores } = input;
   return {
     async open({ user, conversationId, fileId, signal }) {
+      // A file no Knowledge Base holds, such as a conversation's own, ends at its first read.
+      const found = await input.knowledgeBases.hitDocument(input.files, fileId, signal);
+      if (!found) return undefined;
       let workspaceId: string;
       try {
         ({ collaborationWorkspaceId: workspaceId } = await requireConversationAccess(
@@ -36,8 +39,6 @@ export function createKnowledgeHitDocuments(input: {
         if (isAppError(error) && error.code === "NOT_FOUND") return undefined;
         throw error;
       }
-      const found = await input.knowledgeBases.hitDocument(input.files, fileId, signal);
-      if (!found) return undefined;
       const access = await createAuthorizer(stores.access).forActor(user, { workspaceId });
       return access.authorize(KNOWLEDGE_BASE_ACTIONS.use, found.resource).allowed
         ? found.document
