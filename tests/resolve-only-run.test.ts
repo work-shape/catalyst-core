@@ -5,9 +5,9 @@ import { tmpdir, totalmem } from "node:os";
 import { join } from "node:path";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { createTestConfig } from "./support/fixtures";
-import { killTestProcess, startTestProcess } from "./support/test-process";
+import { bundleTestProcess, killTestProcess, startTestProcess } from "./support/test-process";
 
-// A bound on a hang: the processes of a test start through the TypeScript loader.
+// A bound on a hang.
 const ENDED_WITHIN_MS = 120_000;
 const MARKER = "resolve-only: this process starts with this config";
 const PROCESSES = [
@@ -23,10 +23,16 @@ type Build =
 
 describe("a resolve-only run, as the release gate starts every built entry point", () => {
   let directory = "";
+  let instanceProcess: URL;
   const children: ChildProcess[] = [];
 
+  // The file runs about thirty processes, and the bundle starts each in a tenth of the time.
   beforeAll(async () => {
     directory = await mkdtemp(join(tmpdir(), "catalyst-resolve-only-"));
+    instanceProcess = await bundleTestProcess(
+      new URL("./support/instance-process.ts", import.meta.url),
+      directory
+    );
   });
 
   // A run that did not end is not left behind when its test gives up.
@@ -61,7 +67,7 @@ describe("a resolve-only run, as the release gate starts every built entry point
 
   /** A run of the process, a start on the host where `--resolve-only` is not given. */
   async function run(name: string, build: Build, configPath: string, flags: string[] = []) {
-    const child = startTestProcess(new URL("./support/instance-process.ts", import.meta.url), {
+    const child = startTestProcess(instanceProcess, {
       args: [name, build, ...flags],
       env: { PATH: process.env.PATH, CLIENT_CONFIG_PATH: configPath },
       stdio: ["ignore", "pipe", "pipe"]

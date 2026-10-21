@@ -23,7 +23,7 @@ import {
 import { fetchTestOperation, listenTestInstance } from "./support/test-instance";
 import { clientInstanceId } from "./support/access-instance";
 import { operationOf, write } from "./support/connection-operations";
-import { stepRunsOf } from "./support/workflow-runs";
+import { skipStepWaits, stepRunsOf } from "./support/workflow-runs";
 
 let t: WorkflowFixture | undefined;
 afterEach(async () => {
@@ -446,12 +446,17 @@ it("runs a paged step above sixty minutes under the EW-LIM operator ceiling", as
 });
 
 // These regressions adapt the independent verifier's crash, sweep and retry probes.
-async function finishDeferred(f: WorkflowFixture, id: string) {
+/**
+ * Gives a worker passes until the run has ended. The waits of its step job before a page is read
+ * again are cut short and kept in `waits`.
+ */
+async function finishDeferred(f: WorkflowFixture, id: string, waits: number[] = []) {
   const worker = f.worker();
   let result: Awaited<ReturnType<WorkflowFixture["finish"]>> | undefined;
   await waitUntil(
     async () => {
       result = await f.finish(id, worker, 1).catch(() => undefined);
+      if (result === undefined) waits.push(...(await skipStepWaits()));
       return result !== undefined;
     },
     "the deferred paged run ends",
@@ -546,13 +551,17 @@ it("backs off failed pages for two and four seconds, preserving the attempt coun
     stamps.push(Date.now());
     throw connectionCallError("connection_unavailable");
   });
-  expect(await finishDeferred(f, id)).toMatchObject({
+  const waits: number[] = [];
+  expect(await finishDeferred(f, id, waits)).toMatchObject({
     status: "failed",
     error: { code: "operation_page_failed" }
   });
   expect(stamps).toHaveLength(3);
-  expect(required(stamps[1]) - required(stamps[0])).toBeGreaterThanOrEqual(2_000);
-  expect(required(stamps[2]) - required(stamps[1])).toBeGreaterThanOrEqual(4_000);
+  // The page was due again two seconds after the attempt that failed it began, and then four:
+  // the waits the test cut short.
+  expect(waits).toHaveLength(2);
+  expect(required(waits[0])).toBeGreaterThanOrEqual(2_000);
+  expect(required(waits[1])).toBeGreaterThanOrEqual(4_000);
 });
 it("fails immediately when a cursor repeats", async () => {
   const { fixture: f, id } = await setup({ by: "cursor", param: "c", cursor: "next" });

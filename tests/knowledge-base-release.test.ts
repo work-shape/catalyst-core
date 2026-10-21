@@ -350,6 +350,10 @@ describe("synced originals are released after extraction (KB 76)", () => {
         bytes
       );
       await world.platform`update platform_jobs set lease_expires_at=now()-interval '1 second' where kind='knowledge_base.delete_originals' and status='running'`;
+      // The next pass queues the deletion again after its ten-second backoff, which the test
+      // does not wait out.
+      await world.worker.runDue();
+      await world.platform`update platform_jobs set run_after=now() where kind='knowledge_base.delete_originals' and status='queued'`;
       await world.drain(run);
       await expect(
         readObjectBytes(world.objects, String(required(copy).object_key))

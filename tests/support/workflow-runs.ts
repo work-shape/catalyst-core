@@ -1,4 +1,5 @@
 import type { JsonValue } from "@work-shape/catalyst-core";
+import { withTestSql } from "./test-sql";
 import {
   runSchema,
   stepRunsSchema,
@@ -171,4 +172,30 @@ export async function reach(t: WorkflowFixture, inCall: Promise<void>) {
   }
   if (!there) throw new Error("The held call was not reached");
   return worker;
+}
+
+/**
+ * Makes each step job that waits out its backoff after a failed or lost attempt due at once, so
+ * a test does not sleep through the wait. Returns each wait it cut short, in milliseconds from
+ * the start of the attempt before it. A wait that gives back its attempt, as after a 429, stays.
+ */
+export const skipStepBackoffs = () => skipWaits(true);
+
+/** Makes each waiting step job due at once, a deferral among them; see `skipStepBackoffs`. */
+export const skipStepWaits = () => skipWaits(false);
+
+async function skipWaits(backoffsOnly: boolean): Promise<number[]> {
+  return withTestSql(async (sql) => {
+    const rows = await sql<{ wait_ms: number }[]>`
+      with waiting as (
+        select id, run_after - started_at as wait from platform_jobs
+        where kind = 'workflow_run.execute_step' and status = 'queued' and run_after > now()
+          and (${!backoffsOnly} or error_code is not null)
+        for update
+      )
+      update platform_jobs set run_after = now() from waiting
+      where platform_jobs.id = waiting.id
+      returning (extract(epoch from waiting.wait) * 1000)::float8 as wait_ms`;
+    return rows.map((row) => row.wait_ms);
+  });
 }

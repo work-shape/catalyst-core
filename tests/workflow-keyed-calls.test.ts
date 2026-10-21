@@ -14,6 +14,7 @@ import {
   holdingFirst,
   reach,
   readyWorkflows,
+  skipStepBackoffs,
   start,
   stepRunsOf,
   writesOf
@@ -65,10 +66,11 @@ describe("a changing call that carries its key to the outside system", () => {
     );
 
     // The next worker finds the lease ended and queues the step again after the wait before a
-    // second attempt, so it is given passes for as long as that takes.
+    // second attempt, which the test cuts short, so it is given passes until the run ends.
     const worker = t.worker();
     let run = await t.finish(started.id, worker, 1).catch(() => undefined);
     for (const until = Date.now() + 30_000; !run && Date.now() < until;) {
+      await skipStepBackoffs();
       await new Promise((resolve) => setTimeout(resolve, 200));
       run = await t.finish(started.id, worker, 1).catch(() => undefined);
     }
@@ -109,11 +111,12 @@ describe("a changing call that carries its key to the outside system", () => {
         })
       ]
     });
-  /** Gives a worker passes until the run has ended, the waits before further attempts among them. */
+  /** Gives a worker passes until the run has ended, and cuts the waits before further attempts short. */
   async function finishInTime(t: WorkflowFixture, runId: string, worker = t.worker()) {
     for (const until = Date.now() + 40_000; Date.now() < until;) {
       const run = await t.finish(runId, worker, 1).catch(() => undefined);
       if (run) return run;
+      await skipStepBackoffs();
       await new Promise((resolve) => setTimeout(resolve, 200));
     }
     throw new Error("The run did not end");
@@ -177,6 +180,7 @@ describe("a changing call that carries its key to the outside system", () => {
     // A pass does not end while its call is held, so the passes are waited for at the end.
     const passes: Promise<unknown>[] = [];
     for (const until = Date.now() + 30_000; !there && Date.now() < until;) {
+      await skipStepBackoffs();
       passes.push(next.runDue().catch(() => undefined));
       await Promise.race([arrived, new Promise((resolve) => setTimeout(resolve, 200))]);
     }
@@ -271,10 +275,15 @@ describe("a changing call that carries its key to the outside system", () => {
 });
 
 describe("a reading call's retries", () => {
-  async function finishRead(t: WorkflowFixture, id: string) {
+  /**
+   * Gives workers passes until the run has ended. The waits before further attempts are cut
+   * short and kept in `backoffs`; a wait that gives back its attempt, as after a 429, is not.
+   */
+  async function finishRead(t: WorkflowFixture, id: string, backoffs: number[] = []) {
     for (const until = Date.now() + 30_000; Date.now() < until;) {
       const run = await t.finish(id, t.worker(), 1).catch(() => undefined);
       if (run) return run;
+      backoffs.push(...(await skipStepBackoffs()));
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
     throw new Error("The reading run did not end");
@@ -363,12 +372,16 @@ describe("a reading call's retries", () => {
         }
         return answer(operation, input);
       });
-      const run = await finishRead(t, (await start(t)).id);
+      const backoffs: number[] = [];
+      const run = await finishRead(t, (await start(t)).id, backoffs);
       expect(run.status).toBe("failed");
       expect(run.error?.code).toBe(connectionCallError(reason).code);
       expect(times).toHaveLength(3);
-      expect((times[1] ?? 0) - (times[0] ?? 0)).toBeGreaterThanOrEqual(2_000);
-      expect((times[2] ?? 0) - (times[1] ?? 0)).toBeGreaterThanOrEqual(4_000);
+      // The second attempt was due two seconds after the first began, the third four after the
+      // second: the backoff the test cut short.
+      expect(backoffs).toHaveLength(2);
+      expect(backoffs[0]).toBeGreaterThanOrEqual(2_000);
+      expect(backoffs[1]).toBeGreaterThanOrEqual(4_000);
     }
   );
 
