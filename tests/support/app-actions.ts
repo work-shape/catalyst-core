@@ -3,8 +3,13 @@ import { z } from "zod";
 import type { PageBuildOutcome } from "@work-shape/catalyst-app-build";
 import { buildPage } from "@work-shape/catalyst-app-build/build";
 import { storePageFileSet } from "@work-shape/catalyst-server";
-import { asConversationId, type OperationRun, type RateLimiter } from "@work-shape/catalyst-core";
-import { clientInstanceId, errorSchema } from "./access-instance";
+import {
+  asConversationId,
+  type OperationRun,
+  type PlatformEventEmitter,
+  type RateLimiter
+} from "@work-shape/catalyst-core";
+import { clientInstanceId, errorSchema, type AccessInstance } from "./access-instance";
 import {
   expectStatus,
   setupAppInstance,
@@ -103,13 +108,15 @@ function frameOf(preview: unknown): Frame {
 /** What a test adds to the instance: a limiter of its own, and what a further module brings. */
 export interface AppActionsOptions extends Pick<
   AppInstanceOptions,
-  "furtherKinds" | "modules" | "register"
+  "explicitCredentials" | "furtherKinds" | "modules" | "register"
 > {
   /** What the real build answered, changed: a build is a sandboxed process that is not trusted. */
   tamper?(built: PageBuildOutcome): PageBuildOutcome;
   rateLimiter?: RateLimiter;
   /** The person context header the Connector type `test` sends. None when absent. */
   personContextHeader?: string;
+  /** The events of the call path, such as one whose guardrails run. Audited ones when absent. */
+  events?: (stores: AccessInstance["stores"]) => PlatformEventEmitter;
   /** Further server options, made with the ones the fixture built, such as its call path. */
   server?: (
     stores: Parameters<NonNullable<AppInstanceOptions["server"]>>[0],
@@ -132,15 +139,19 @@ const instance = (further: AppActionsOptions) =>
           return { ...built, ...further.server?.(stores, config, built) };
         },
         ...(further.register ? { register: further.register } : {}),
+        ...(further.explicitCredentials ? { explicitCredentials: true } : {}),
         // The real build, in this process: it compiles the action files into the manifest.
         build: async ({ files, signal }) => {
           const built = await buildPage({ files, signal });
           return further.tamper?.(built) ?? built;
         }
       }),
-    further.personContextHeader === undefined
-      ? {}
-      : { personContextHeader: further.personContextHeader }
+    {
+      ...(further.personContextHeader === undefined
+        ? {}
+        : { personContextHeader: further.personContextHeader }),
+      ...(further.events ? { events: further.events } : {})
+    }
   );
 type Base = Awaited<ReturnType<typeof instance>>;
 type Called = Awaited<ReturnType<Base["call"]>>;

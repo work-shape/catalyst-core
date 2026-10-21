@@ -8,14 +8,13 @@ import {
 import {
   AppError,
   WORKFLOW_ACTIONS,
-  WORKFLOW_ASSET_KIND,
-  appReachesDataStore,
   appWorkflowRefusalError,
   isAppError,
   isAuthenticatedServicePrincipal,
   type ActorAccess,
   type AuthenticatedIdentity,
   type ConfigAssetRecord,
+  type JsonObject,
   type OperationAuthorization,
   type OperationExecutionContext,
   type OperationOrigin,
@@ -26,6 +25,7 @@ import { accessResource, decide } from "../assets/asset-access";
 import { AssetWorkflow } from "../assets/asset-service";
 import type { ResolvedChatServerOptions } from "../types";
 import type { AppActionCalls } from "./action-call";
+import { appWorkflowClosure, assetTitle, workflowPending } from "./app-closure";
 import { APP_ACTIONS, appWorkflowInputMisfit } from "./app-kind";
 import type { AppWorkflow } from "./app-service";
 
@@ -37,11 +37,8 @@ import type { AppWorkflow } from "./app-service";
 type Refusal = AppPublishReview["app"]["refusals"][number];
 type ReviewItem = AppPublishReview["app"];
 
-/**
- * One Publish of the App publishes only the App until DP-3 publishes the Workflow drafts it
- * calls with it.
- */
-const PUBLISHES_TOGETHER = false;
+/** How many of a Workflow's newest runs the review looks through for its last test run. */
+const RECENT_RUNS_READ = 50;
 
 export class AppDraftTries {
   private readonly options: ResolvedChatServerOptions;
@@ -156,19 +153,27 @@ export class AppDraftTries {
       if (action.kind !== "workflow") continue;
       calls.set(action.workflow, [...(calls.get(action.workflow) ?? []), action.name]);
     }
+    // Every Workflow the App reaches, its children through the revision of each that will be
+    // live: the draft, which one Publish of the App makes live with it, or the published one.
+    const closure = config
+      ? await appWorkflowClosure(this.options, { scope: row.scope, config }, (asset) =>
+          workflowPending(asset) ? (asset.config ?? undefined) : asset.publishedConfig
+        )
+      : [];
     const workflows: AppPublishReview["workflows"] = [];
-    for (const [name, actions] of calls) {
-      const asset = await this.options.stores.configAssets.getConfigAsset({
-        clientInstanceId: this.options.clientInstanceId,
-        kind: WORKFLOW_ASSET_KIND,
-        name
-      });
-      if (asset?.status !== "active" || !appReachesDataStore(row.scope, asset.scope)) {
+    for (const { name, asset } of closure) {
+      if (!asset) {
         item.refusals.push(refusalOf(appWorkflowRefusalError("workflow_unavailable", name)));
         continue;
       }
       const read = await this.item(context, asset);
-      workflows.push({ ...read.item, actions });
+      const actions = calls.get(name) ?? [];
+      // Its runs are read with the right to read the Workflow, as `workflows.list_runs` asks.
+      const lastTestRun = context.access.authorize(WORKFLOW_ACTIONS.read, resourceOf(asset)).allowed
+        ? await this.lastTestRun(name)
+        : undefined;
+      workflows.push({ ...read.item, actions, ...(lastTestRun ? { lastTestRun } : {}) });
+      if (actions.length === 0) continue;
       if (!context.access.authorize(WORKFLOW_ACTIONS.use, resourceOf(asset)).allowed) {
         item.refusals.push({
           reason: "no_grant",
@@ -176,8 +181,6 @@ export class AppDraftTries {
           message: `Publishing the App asks your right to use the Workflow '${name}', which its actions start.`
         });
       }
-      // The revision of the Workflow that will be live when the App is: its draft, which is
-      // published first, or the published one.
       const live = read.item.pending ? read.config : asset.publishedConfig;
       for (const action of compiledActionsOf(config?.manifest)) {
         if (action.kind !== "workflow" || action.workflow !== name) continue;
@@ -188,9 +191,22 @@ export class AppDraftTries {
     return {
       app: item,
       workflows,
-      publishesTogether: PUBLISHES_TOGETHER,
+      publishesTogether: true,
       ready: [item, ...workflows].every(({ refusals }) => refusals.length === 0)
     };
+  }
+
+  /**
+   * The newest test run among a Workflow's recent runs: one page of its runs, newest first.
+   */
+  private async lastTestRun(workflow: string) {
+    const runs = await this.options.stores.workflowRuns.listRuns({
+      clientInstanceId: this.options.clientInstanceId,
+      workflow,
+      page: { limit: RECENT_RUNS_READ }
+    });
+    const run = runs.find((candidate) => candidate.mode === "test");
+    return run && { runId: run.id, status: run.status, at: run.finishedAt ?? run.createdAt };
   }
 
   /** An App's row, wherever it stands. */
@@ -210,7 +226,7 @@ export class AppDraftTries {
   private async item(
     context: OperationExecutionContext,
     row: ConfigAssetRecord
-  ): Promise<{ item: ReviewItem; config: Record<string, unknown> | undefined }> {
+  ): Promise<{ item: ReviewItem; config: JsonObject | undefined }> {
     const address = {
       kind: row.kind,
       name: row.name,
@@ -249,15 +265,23 @@ export class AppDraftTries {
         refusals.push(refusalOf(error));
       }
     }
-    const title = read.config.title;
+    const lastChangedBy = (
+      await this.options.configAssets.store.getConfigAssetRevision({
+        clientInstanceId: this.options.clientInstanceId,
+        kind: row.kind,
+        name: row.name,
+        revision: draftRevision
+      })
+    )?.actor?.displayLabel;
     return {
       item: {
         ...base,
-        title: typeof title === "string" ? title : row.name,
+        title: assetTitle(read.config, row.name),
         draftRevision,
         ...(publishedRevision === undefined ? {} : { publishedRevision }),
         pending,
         ...(read.publishNarrative ? { narrative: read.publishNarrative } : {}),
+        ...(lastChangedBy ? { lastChangedBy } : {}),
         refusals
       },
       config: read.config

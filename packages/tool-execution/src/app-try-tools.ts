@@ -44,7 +44,7 @@ export function createAppTryTools(): AnyToolDefinition[] {
       effect: "reading",
       description: [
         "Read what publishing an App's draft comes to, before you ask the person: the App and each Workflow its actions call, whether each has a pending draft, the sentence its publish question leads with, and what would refuse each publish now (a missing right or a check). It changes nothing. Only the conversation's subject App or an App this conversation created.",
-        "When ready is true and publishesTogether is true, one Publish of the App makes all of it live: tell the person that, with the revisions. When publishesTogether is false, each pending Workflow is published first, then the App: offer them in that order with assets.publish. Name every refusal and who can resolve it; never claim anything is live."
+        "Workflows come children first, and pending ones are made live with the App by one Publish: when the person wants it live and ready is true, call assets.publish with kind app, the App's draftRevision and, in workflows, each pending Workflow with its draftRevision, and tell them in one sentence what that one click makes live. Name every refusal and who can resolve it; never claim anything is live."
       ].join(" "),
       inputSchema: z.object({ app }),
       execute

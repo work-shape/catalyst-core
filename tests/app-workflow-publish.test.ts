@@ -13,6 +13,10 @@ import {
 import { clientInstanceId } from "./support/access-instance";
 import { action, setupAppActions, type AppActionsInstance } from "./support/app-actions";
 import { expectStatus } from "./support/app-instance";
+import { guardedEvents } from "./support/guardrails";
+import { createTestFetch, getTestJobs } from "./support/test-instance";
+import { testOperations } from "./support/operations";
+import { runCli } from "@work-shape/catalyst-cli";
 import { instanceWorkflowAssetKind } from "./support/workflow-instance";
 
 // DP-0 (drafts together): an App is published only with the Workflows its `workflow` actions
@@ -20,14 +24,23 @@ import { instanceWorkflowAssetKind } from "./support/workflow-instance";
 // reads its published revision. Before DP-0 the publish of an App whose Workflow had never
 // been published went through, and every click of the live App failed.
 
-/** A Workflow that starts by hand and takes a page, as the App below maps it. */
+/**
+ * A Workflow that starts by hand and takes a page, as the App below maps it. One whose inputs
+ * ask no page also starts as the child of another.
+ */
 const pageWorkflow = (id: string, inputs: Record<string, unknown>) => ({
   id,
   name: "Page log",
   inputs,
   outputs: { type: "object", properties: { page: { type: "string" } } },
   steps: [
-    { id: "start", name: "Start by hand", type: "trigger", triggers: [{ kind: "manual" }] },
+    {
+      id: "start",
+      name: "Start by hand",
+      type: "trigger",
+      triggers:
+        inputs === PAGE_INPUTS ? [{ kind: "manual" }] : [{ kind: "manual" }, { kind: "parent" }]
+    },
     {
       id: "result",
       name: "Result",
@@ -36,6 +49,8 @@ const pageWorkflow = (id: string, inputs: Record<string, unknown>) => ({
     }
   ]
 });
+/** A child's inputs that ask nothing of the parent's step. */
+const NOTE_INPUTS = { type: "object", properties: { note: { type: "string" } } };
 const PAGE_INPUTS = {
   type: "object",
   properties: { page: { type: "string" }, source: { type: "string" } },
@@ -68,6 +83,22 @@ const refusalSchema = z.object({
     details: z.looseObject({ reason: z.string() }).optional()
   })
 });
+/** A guardrail at the publish of a Workflow whose revision holds `marker`. */
+const guardrailOn = (marker: string, outcome: "block" | "require_approval") => ({
+  displayName: `Workflows with ${marker}`,
+  on: "workflow.before_publish",
+  check: { kind: "pattern", pattern: `\\b${marker}\\b`, reason: "Not without a look." },
+  outcome
+});
+/** A child's inputs that ask nothing of the parent's step and hold `marker`. */
+const markedInputs = (marker: string) => ({
+  type: "object",
+  properties: { [marker]: { type: "string" } }
+});
+const heldSchema = z.object({
+  status: z.literal("pending_approval"),
+  approvalRequestId: z.string()
+});
 const warningsSchema = z.object({
   warnings: z.array(z.object({ code: z.string(), message: z.string() }))
 });
@@ -89,6 +120,15 @@ describe("an App and the Workflows it starts, at the App's publish", () => {
     t = await setupAppActions({
       modules: { workflows: { enabled: true } },
       furtherKinds: [kind],
+      // The CLI signs in with an API key, as on an instance.
+      explicitCredentials: true,
+      // A Workflow revision that holds guarded_note is blocked at its publish, one that holds
+      // held_note waits for an approver; the guardrails ask nothing of the others.
+      events: (instanceStores) =>
+        guardedEvents(instanceStores, {
+          "guarded-workflows": guardrailOn("guarded_note", "block"),
+          "held-workflows": guardrailOn("held_note", "require_approval")
+        }).events,
       server(instanceStores, config, built) {
         if (!built.operationCalls) throw new Error("The instance built no call path");
         stores = instanceStores;
@@ -112,10 +152,14 @@ describe("an App and the Workflows it starts, at the App's publish", () => {
   });
 
   /** Writes a Workflow's draft as the superadmin. Answers its revision. */
-  async function putWorkflow(id: string, inputs: Record<string, unknown> = PAGE_INPUTS) {
+  async function putWorkflow(
+    id: string,
+    inputs: Record<string, unknown> = PAGE_INPUTS,
+    expectedRevision: number | null = null
+  ) {
     const response = await t.expectOk(t.root.id, "assets.put", {
       params: { kind: WORKFLOW_ASSET_KIND, name: id },
-      payload: { config: { name: id, manifest: pageWorkflow(id, inputs) }, expectedRevision: null }
+      payload: { config: { name: id, manifest: pageWorkflow(id, inputs) }, expectedRevision }
     });
     return z.object({ revision: z.number() }).parse(response.json()).revision;
   }
@@ -127,6 +171,47 @@ describe("an App and the Workflows it starts, at the App's publish", () => {
       }),
       200
     );
+  };
+
+  /**
+   * Writes a Workflow that starts `child` as a step, as the superadmin. Answers its revision.
+   * Its save reads the child's published contract, so the child has a published revision.
+   */
+  async function putParent(id: string, child: string) {
+    const manifest = pageWorkflow(id, PAGE_INPUTS);
+    const steps = [
+      manifest.steps[0],
+      { id: "child", name: "Child", type: "workflow", workflow: child, input: {} },
+      manifest.steps[1]
+    ];
+    const response = await t.expectOk(t.root.id, "assets.put", {
+      params: { kind: WORKFLOW_ASSET_KIND, name: id },
+      payload: { config: { name: id, manifest: { ...manifest, steps } }, expectedRevision: null }
+    });
+    return z.object({ revision: z.number() }).parse(response.json()).revision;
+  }
+  const publishedRevisionOf = async (kind: string, name: string) =>
+    (await t.stores.configAssets.getConfigAsset({ clientInstanceId, kind, name }))
+      ?.publishedRevision;
+  const publishTogether = (
+    userId: string,
+    app: string,
+    workflows: { name: string; revision: number }[]
+  ) =>
+    t.call(userId, "assets.publish", {
+      params: { kind: "app", name: app },
+      payload: { revision: 1, workspaceId: t.workspaceId, audience: "workspace", workflows }
+    });
+
+  /** Runs `work` while `userId` holds each of the rights, and takes them back. */
+  const withRights = async (
+    userId: string,
+    rights: readonly (readonly [string, { assetId: string } | { workspaceId: string }])[],
+    work: () => Promise<void>
+  ): Promise<void> => {
+    const [first, ...rest] = rights;
+    if (!first) return work();
+    return t.withRight(userId, first[0], first[1], () => withRights(userId, rest, work));
   };
 
   const click = async (app: string, key: string) =>
@@ -292,5 +377,229 @@ describe("an App and the Workflows it starts, at the App's publish", () => {
         ]);
       }
     );
+  });
+
+  // DP-3: one Publish of an App makes the Workflow drafts it reaches live with it. Fails
+  // without it: the App's publish refused the never-published Workflow (see the first test),
+  // and the person published each Workflow first.
+  it("publishes an App and the Workflow drafts it reaches in one Publish, children first", async () => {
+    // The child is live at r1 and has a pending draft; the parent was never published.
+    await publishWorkflow(
+      "together-child",
+      await putWorkflow("together-child", { type: "object" })
+    );
+    const child = await putWorkflow("together-child", NOTE_INPUTS, 1);
+    const parent = await putParent("together-parent", "together-child");
+    expectStatus(
+      await t.putApp(t.admin.id, "pages-t", pagesApp("pages-t", "together-parent")),
+      200
+    );
+
+    const response = await publishTogether(t.admin.id, "pages-t", [
+      { name: "together-parent", revision: parent },
+      { name: "together-child", revision: child }
+    ]);
+
+    expectStatus(response, 200);
+    expect(response.json()).toMatchObject({
+      publishedRevision: 1,
+      publishedWith: [
+        { kind: WORKFLOW_ASSET_KIND, name: "together-child", publishedRevision: child },
+        { kind: WORKFLOW_ASSET_KIND, name: "together-parent", publishedRevision: parent }
+      ]
+    });
+    expect(await publishedRevisionOf(WORKFLOW_ASSET_KIND, "together-child")).toBe(child);
+    expect(await publishedRevisionOf(WORKFLOW_ASSET_KIND, "together-parent")).toBe(parent);
+    expect(await publishedRevisionOf("app", "pages-t")).toBe(1);
+    expectStatus(await click("pages-t", "together-1"), 200);
+  });
+
+  it("publishes nothing when the publish of one Workflow named with the App is refused", async () => {
+    await publishWorkflow("refused-child", await putWorkflow("refused-child", { type: "object" }));
+    const child = await putWorkflow("refused-child", NOTE_INPUTS, 1);
+    const parent = await putParent("refused-parent", "refused-child");
+    expectStatus(await t.putApp(t.admin.id, "pages-r", pagesApp("pages-r", "refused-parent")), 200);
+    const named = [
+      { name: "refused-parent", revision: parent },
+      { name: "refused-child", revision: child }
+    ];
+    const parentId = await t.assetId(WORKFLOW_ASSET_KIND, "refused-parent");
+
+    // Kai may publish the App and the parent and use the parent, not publish the child.
+    await t.withRight(t.kai.id, "app.publish", { workspaceId: t.workspaceId }, () =>
+      t.withRight(t.kai.id, "workflow.use", { assetId: parentId }, () =>
+        t.withRight(t.kai.id, "workflow.publish", { assetId: parentId }, async () => {
+          const refused = await publishTogether(t.kai.id, "pages-r", named);
+          expectStatus(refused, 403);
+          expect(refusalSchema.parse(refused.json()).error).toMatchObject({
+            code: "FORBIDDEN",
+            details: expect.objectContaining({ action: "workflow.publish" })
+          });
+        })
+      )
+    );
+
+    expect(await publishedRevisionOf(WORKFLOW_ASSET_KIND, "refused-child")).toBe(1);
+    expect(await publishedRevisionOf(WORKFLOW_ASSET_KIND, "refused-parent")).toBeUndefined();
+    expect(await publishedRevisionOf("app", "pages-r")).toBeUndefined();
+  });
+
+  it("refuses to publish with the App a Workflow its revision does not reach", async () => {
+    await publishWorkflow("reached-pages", await putWorkflow("reached-pages"));
+    const other = await putWorkflow("unreached-pages");
+    expectStatus(await t.putApp(t.admin.id, "pages-u", pagesApp("pages-u", "reached-pages")), 200);
+
+    const response = await publishTogether(t.admin.id, "pages-u", [
+      { name: "unreached-pages", revision: other }
+    ]);
+
+    expectStatus(response, 422);
+    expect(refusalSchema.parse(response.json()).error.details).toEqual({
+      reason: "workflow_not_reached",
+      workflow: "unreached-pages"
+    });
+    expect(await publishedRevisionOf(WORKFLOW_ASSET_KIND, "unreached-pages")).toBeUndefined();
+    expect(await publishedRevisionOf("app", "pages-u")).toBeUndefined();
+  });
+
+  it("publishes nothing when a guardrail blocks the publish of one Workflow named with the App", async () => {
+    await publishWorkflow("guarded-child", await putWorkflow("guarded-child", { type: "object" }));
+    const child = await putWorkflow("guarded-child", markedInputs("guarded_note"), 1);
+    const parent = await putParent("guarded-parent", "guarded-child");
+    expectStatus(await t.putApp(t.admin.id, "pages-x", pagesApp("pages-x", "guarded-parent")), 200);
+
+    const refused = await publishTogether(t.admin.id, "pages-x", [
+      { name: "guarded-parent", revision: parent },
+      { name: "guarded-child", revision: child }
+    ]);
+
+    expectStatus(refused, 403);
+    expect(refused.json()).toMatchObject({ error: { code: "GUARDRAIL_BLOCKED" } });
+    expect(await publishedRevisionOf(WORKFLOW_ASSET_KIND, "guarded-child")).toBe(1);
+    expect(await publishedRevisionOf(WORKFLOW_ASSET_KIND, "guarded-parent")).toBeUndefined();
+    expect(await publishedRevisionOf("app", "pages-x")).toBeUndefined();
+  });
+
+  it("holds the App and the Workflows published with it as one approval, which makes them all live", async () => {
+    await publishWorkflow("held-child", await putWorkflow("held-child", { type: "object" }));
+    const child = await putWorkflow("held-child", markedInputs("held_note"), 1);
+    const parent = await putParent("held-parent", "held-child");
+    expectStatus(await t.putApp(t.admin.id, "pages-h", pagesApp("pages-h", "held-parent")), 200);
+    const named = [
+      { name: "held-parent", revision: parent },
+      { name: "held-child", revision: child }
+    ];
+    const parentId = await t.assetId(WORKFLOW_ASSET_KIND, "held-parent");
+    const childId = await t.assetId(WORKFLOW_ASSET_KIND, "held-child");
+
+    // Kai may publish and use all three and approves nothing: the guardrail asks an approver.
+    // The approved call runs as Kai's, so Kai holds the rights until it ran.
+    await withRights(
+      t.kai.id,
+      [
+        ["app.publish", { workspaceId: t.workspaceId }],
+        // The parent's account acts with the child, a right Kai lends it at the publish.
+        ...[parentId, childId].flatMap((assetId) => [
+          ["workflow.use", { assetId }] as const,
+          ["workflow.read", { assetId }] as const,
+          ["workflow.publish", { assetId }] as const
+        ])
+      ],
+      async () => {
+        const response = await publishTogether(t.kai.id, "pages-h", named);
+
+        expectStatus(response, 202);
+        const { approvalRequestId } = heldSchema.parse(response.json());
+        expect(await publishedRevisionOf(WORKFLOW_ASSET_KIND, "held-child")).toBe(1);
+        expect(await publishedRevisionOf("app", "pages-h")).toBeUndefined();
+        const filed = await t.expectOk(t.root.id, "approval_requests.get", {
+          params: { requestId: approvalRequestId }
+        });
+        expect(filed.json()).toMatchObject({
+          kind: "app_publish",
+          payload: {
+            subject: {
+              name: "pages-h",
+              publishedWith: [
+                { name: "held-child", revision: child, liveRevision: 1 },
+                { name: "held-parent", revision: parent, liveRevision: null }
+              ]
+            }
+          },
+          preview: {
+            review: {
+              publishedWith: [
+                expect.objectContaining({ name: "held-child" }),
+                expect.objectContaining({ name: "held-parent" })
+              ]
+            }
+          }
+        });
+
+        expectStatus(
+          await t.call(t.root.id, "approval_requests.decide", {
+            params: { requestId: approvalRequestId },
+            payload: { decision: "approve" }
+          }),
+          200
+        );
+        await getTestJobs(t.instance).runDue();
+      }
+    );
+
+    expect(await publishedRevisionOf(WORKFLOW_ASSET_KIND, "held-child")).toBe(child);
+    expect(await publishedRevisionOf(WORKFLOW_ASSET_KIND, "held-parent")).toBe(parent);
+    expect(await publishedRevisionOf("app", "pages-h")).toBe(1);
+  });
+
+  it("names what `catalyst app publish` makes live with the App and publishes it all on one yes", async () => {
+    await publishWorkflow("cli-pages", await putWorkflow("cli-pages"));
+    const revision = await putWorkflow("cli-pages", { ...PAGE_INPUTS, title: "Pages" }, 1);
+    expectStatus(await t.putApp(t.admin.id, "pages-cli", pagesApp("pages-cli", "cli-pages")), 200);
+    const serverFetch = createTestFetch(t.instance, { "x-test-user": t.admin.id });
+    const out: string[] = [];
+    const err: string[] = [];
+
+    const code = await runCli(
+      [
+        "app",
+        "publish",
+        "pages-cli",
+        "--audience",
+        "workspace",
+        "--workspace",
+        t.workspaceId,
+        "--instance",
+        "https://catalyst.test"
+      ],
+      {
+        cwd: process.cwd(),
+        env: { CATALYST_API_KEY: "cat_personal" },
+        fetchImpl: async (input, init) => {
+          const request = input instanceof Request ? input : new Request(input, init);
+          if (new URL(request.url).pathname === testOperations["access_tokens.exchange"].path) {
+            return Response.json({
+              accessToken: "access-token",
+              expiresAt: new Date(Date.now() + 60_000).toISOString()
+            });
+          }
+          return serverFetch(request);
+        },
+        prompt: () => Promise.resolve("y"),
+        stdout: (text) => out.push(text),
+        stderr: (text) => err.push(text)
+      }
+    );
+
+    expect(code, err.join("")).toBe(0);
+    expect(out.join("")).toContain(
+      "Publishes together, Workflows first and the App last, or none of them:"
+    );
+    expect(out.join("")).toContain(
+      `Workflow 'Page log' (cli-pages): revision ${revision} in place of 1`
+    );
+    expect(out.join("")).toContain(`Published revision ${revision} of Workflow 'cli-pages'.`);
+    expect(await publishedRevisionOf(WORKFLOW_ASSET_KIND, "cli-pages")).toBe(revision);
+    expect(await publishedRevisionOf("app", "pages-cli")).toBe(1);
   });
 });

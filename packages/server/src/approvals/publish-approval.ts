@@ -50,13 +50,8 @@ export const PUBLISH_APPROVAL_KINDS: readonly string[] = Object.values(PUBLISH_A
   ({ kind }) => kind
 );
 
-/** What a held publish is about, frozen when it is filed: the asset and its two pointers then. */
-const publishSubjectSchema = z.object({
-  audience: appAudienceSchema.optional(),
-  liveAudience: appAudienceSchema.optional(),
-  liveAudienceUserId: z.string().optional(),
-  audiencePersonName: z.string().optional(),
-  publish_widens: z.boolean().optional(),
+/** One asset of a held publish and its two pointers when the request was filed. */
+const publishedAssetSchema = z.object({
   kind: z.string().min(1),
   name: z.string().min(1),
   /** The name people read, when the request was filed. */
@@ -68,6 +63,20 @@ const publishSubjectSchema = z.object({
   draftRevision: z.number().int().positive(),
   /** The live revision when the request was filed. Null before the first publish. */
   liveRevision: z.number().int().positive().nullable()
+});
+
+/** What a held publish is about, frozen when it is filed: the asset and its two pointers then. */
+const publishSubjectSchema = publishedAssetSchema.extend({
+  /**
+   * The Workflows a publish of an App makes live with it (DP-3), children first. The request
+   * holds the set as one item: it moves when any of them moves.
+   */
+  publishedWith: z.array(publishedAssetSchema).optional(),
+  audience: appAudienceSchema.optional(),
+  liveAudience: appAudienceSchema.optional(),
+  liveAudienceUserId: z.string().optional(),
+  audiencePersonName: z.string().optional(),
+  publish_widens: z.boolean().optional()
 });
 
 type PublishSubject = z.infer<typeof publishSubjectSchema>;
@@ -172,7 +181,8 @@ const MOVED_SENTENCES: Readonly<Record<PublishMoved, (name: string) => string>> 
 
 async function publishMoved(
   clientInstanceId: ClientInstanceId,
-  subject: PublishSubject,
+  subject: z.infer<typeof publishedAssetSchema> &
+    Pick<PublishSubject, "liveAudience" | "liveAudienceUserId">,
   store: Pick<ConfigAssetStore, "getConfigAsset">
 ): Promise<PublishMoved | undefined> {
   const asset = await store.getConfigAsset({
@@ -216,20 +226,44 @@ export function publishApprovalKinds(options: PublishApprovalKindsOptions): Held
     async moved(subject, store) {
       const parsed = publishSubjectSchema.safeParse(subject);
       if (!parsed.success) return "The request names no revision it publishes.";
-      const moved = await publishMoved(clientInstanceId, parsed.data, store);
-      return moved && MOVED_SENTENCES[moved](parsed.data.name);
+      for (const asset of [...(parsed.data.publishedWith ?? []), parsed.data]) {
+        const moved = await publishMoved(clientInstanceId, asset, store);
+        if (moved) return MOVED_SENTENCES[moved](asset.name);
+      }
+      return undefined;
     },
     async review(subject, inList, viewer): Promise<JsonObject | undefined> {
       const parsed = publishSubjectSchema.safeParse(subject);
       if (!parsed.success) return undefined;
       // A row of a list reads nothing: it names what is published as it was filed.
+      const together = parsed.data.publishedWith ?? [];
       if (inList) {
-        const { kind, name, title, revision, liveRevision } = parsed.data;
-        return { kind, name, title, revision, liveRevision };
+        const row = ({ kind, name, title, revision, liveRevision }: typeof parsed.data) => ({
+          kind,
+          name,
+          title,
+          revision,
+          liveRevision
+        });
+        return {
+          ...row(parsed.data),
+          ...(together.length > 0 ? { publishedWith: together.map(row) } : {})
+        };
       }
-      const moved = await publishMoved(clientInstanceId, parsed.data, options.store);
+      // The first of the set that moved names why none of it can be approved.
+      let moved: PublishMoved | undefined;
+      for (const asset of [...together, parsed.data]) {
+        moved ??= await publishMoved(clientInstanceId, asset, options.store);
+      }
       return {
         ...(await publishReview(options, parsed.data, viewer)),
+        ...(together.length > 0
+          ? {
+              publishedWith: await Promise.all(
+                together.map((asset) => publishReview(options, asset, viewer))
+              )
+            }
+          : {}),
         ...(moved ? { stale: moved } : {})
       };
     },

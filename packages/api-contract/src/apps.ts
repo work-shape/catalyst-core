@@ -289,25 +289,32 @@ const appPublishReviewItemSchema = z.object({
   pending: z.boolean(),
   /** The sentence the person's publish question leads with, for the draft revision. */
   narrative: publishNarrativeSchema.optional(),
+  /** Who wrote the draft revision, as people read their name. */
+  lastChangedBy: z.string().optional(),
   refusals: z.array(appPublishRefusalSchema)
 });
 
 /**
  * What publishing an App's draft comes to, read before the person is asked (DP-2): the App and
- * the Workflows its `workflow` actions call, each with its pending draft, what its publish
- * question says, and what would refuse it. It changes nothing.
+ * the Workflows it reaches, children before the Workflows that start them, each with its
+ * pending draft, what its publish question says, and what would refuse it. It changes nothing.
  */
 export const appPublishReviewSchema = z.object({
   app: appPublishReviewItemSchema,
   workflows: z.array(
     appPublishReviewItemSchema.extend({
-      /** The actions of the App's draft that call it. */
-      actions: z.array(z.string())
+      /** The actions of the App's draft that call it. None for a child of another Workflow. */
+      actions: z.array(z.string()),
+      /** The newest test run of the Workflow among its recent runs, by anyone. */
+      lastTestRun: z
+        .object({ runId: z.string(), status: z.enum(WORKFLOW_RUN_STATUSES), at: z.string() })
+        .optional()
     })
   ),
   /**
-   * One Publish of the App also publishes the Workflow drafts it calls. Where false, each
-   * pending Workflow is published before the App, by its own publish.
+   * One Publish of the App also publishes the pending Workflow drafts it reaches, when the
+   * publish names them in `workflows` (DP-3). Where false, each pending Workflow is published
+   * before the App, by its own publish.
    */
   publishesTogether: z.boolean(),
   /** Nothing in the review would be refused. */

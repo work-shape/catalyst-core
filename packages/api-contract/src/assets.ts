@@ -53,6 +53,9 @@ export const assetScopeSchema = z.discriminatedUnion("kind", [
 
 const revisionNumberSchema = z.number().int().positive();
 
+/** How many Workflow drafts one publish of an App makes live with it at most. */
+export const APP_PUBLISH_WORKFLOWS_MAX = 20;
+
 /**
  * The revision a write was made against. Every write of an asset names one: the server
  * refuses a write without it with `PRECONDITION_REQUIRED` and never takes it as leave to
@@ -420,7 +423,17 @@ export const publishAssetRequestSchema = z.object({
    * never means "whatever the draft is now". Naming an earlier number is the way back.
    */
   revision: revisionNumberSchema,
-  workspaceId: workspaceIdSchema
+  workspaceId: workspaceIdSchema,
+  /**
+   * Of an App only: the Workflow drafts this publish makes live with it (DP-3), each with the
+   * revision the person reviewed, as `apps.publish_review` lists the pending ones. Each must be
+   * a Workflow the App's revision reaches, directly or as a child. They are published children
+   * first and then the App, in one transaction: a refusal of any publishes none of them.
+   */
+  workflows: z
+    .array(z.object({ name: z.string().min(1), revision: revisionNumberSchema }).strict())
+    .max(APP_PUBLISH_WORKFLOWS_MAX)
+    .optional()
 });
 
 export const discardAssetDraftRequestSchema = z.object({
@@ -434,7 +447,18 @@ export const assetPointersResponseSchema = z.object({
   draftRevision: revisionNumberSchema,
   publishedRevision: revisionNumberSchema,
   /** The revision that was published before a publish, left out on the first one. */
-  replacedRevision: revisionNumberSchema.optional()
+  replacedRevision: revisionNumberSchema.optional(),
+  /** The Workflows a publish of an App made live with it, in the order they were published. */
+  publishedWith: z
+    .array(
+      z.object({
+        kind: z.literal("workflow"),
+        name: z.string(),
+        publishedRevision: revisionNumberSchema,
+        replacedRevision: revisionNumberSchema.optional()
+      })
+    )
+    .optional()
 });
 
 /** The bound of the name of an App action or a Workflow step that "Run live once" names. */

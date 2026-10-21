@@ -7,7 +7,6 @@ import {
 import { ASSET_PUT_BODY_LIMIT_BYTES } from "../assets/asset-files";
 import {
   assetWriteEvent,
-  publishEvents,
   revertWriteEvents,
   syncWriteEvents
 } from "../guardrails/asset-guardrail-events";
@@ -19,6 +18,7 @@ import {
 } from "../assets/asset-placement";
 import { publishPolicyFloor } from "../approvals/publish-approval";
 import { AssetWorkflow } from "../assets/asset-service";
+import { AppPublishTogether } from "../apps/app-publish-together";
 
 import { ConfigAssetWorkflow } from "../config-assets/config-asset-service";
 import { TryConversations } from "../conversations/try-conversations";
@@ -38,6 +38,7 @@ const ASSET_WRITE_MODULE = "assetManagement";
 export function registerAssetRoutes(route: Route, options: ChatServerOptions): void {
   const workflow = new AssetWorkflow(options);
   const tries = new TryConversations(options);
+  const together = new AppPublishTogether(options, workflow);
 
   route.operation(apiOperations["assets.list"], {
     // The list decides the right per asset. A caller without one receives an empty page.
@@ -111,21 +112,23 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
     execute: (input, context) => workflow.put(context, input)
   });
 
+  // An App's publish may name the Workflow drafts it makes live with it (DP-3): they are asked,
+  // held and published together with the App.
   route.operation(apiOperations["assets.publish"], {
     authorize: (input, { actor, access, origin }) =>
-      workflow.authorizePublish({ actor, access, origin }, input),
+      together.authorize({ actor, access, origin }, input),
     resource: assetResource,
     policyTargets: (input) => workflow.policyTargets(input),
     changeClass: "reversible",
-    beforeEvents: (input, _origin, actor) => publishEvents(options, input, actor),
+    beforeEvents: (input, _origin, actor) => together.events(input, actor),
     // A publish a guardrail holds waits for the holders of the kind's `approve` right.
-    approval: (input) => workflow.publishApproval(input),
+    approval: (input) => together.approval(input),
     policyFloorOf: (origin, input) =>
       typeof input === "object" && input !== null && "kind" in input && input.kind === "agent"
         ? undefined
         : publishPolicyFloor(origin),
     execute: async (input, context) => {
-      if (input.kind !== "agent") return workflow.drafts.publish(context, input);
+      if (input.kind !== "agent") return together.publish(context, input);
       const result = await workflow.agentDrafts.publish(context, input);
       await tries.settled(context, input, "published");
       return result;

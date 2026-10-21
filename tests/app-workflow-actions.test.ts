@@ -551,16 +551,31 @@ describe("an App that starts a Workflow", () => {
     expect(liveIds(after)).toEqual(liveIds(live));
   });
 
-  it("reviews what publishing the App's draft comes to: the App, the Workflows it calls, what is pending and what would refuse it (DP-2)", async () => {
+  it("reviews what publishing the App's draft comes to: the App, the Workflows it calls, what is pending and what would refuse it (DP-2, DP-3)", async () => {
     const review = await t.call(t.admin.id, "apps.publish_review", { params: { app: "visits" } });
     expectStatus(review, 200);
     expect(review.json()).toMatchObject({
-      app: { name: "visits", draftRevision: 2, publishedRevision: 1, pending: true, refusals: [] },
+      app: {
+        name: "visits",
+        draftRevision: 2,
+        publishedRevision: 1,
+        pending: true,
+        lastChangedBy: expect.any(String),
+        refusals: []
+      },
       workflows: [
         { name: UNPUBLISHED_WORKFLOW, pending: true, actions: ["log-unpublished"], refusals: [] },
-        { name: WORKFLOW, pending: false, publishedRevision: 1, actions: ["log-visit"] }
+        {
+          name: WORKFLOW,
+          pending: false,
+          publishedRevision: 1,
+          actions: ["log-visit"],
+          // The try above started a test run of it.
+          lastTestRun: expect.objectContaining({ runId: expect.any(String) })
+        }
       ],
-      publishesTogether: false,
+      // One Publish of the App makes the pending Workflow live with it.
+      publishesTogether: true,
       ready: true
     });
 
