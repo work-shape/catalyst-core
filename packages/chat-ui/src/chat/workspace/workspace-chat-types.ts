@@ -231,6 +231,11 @@ export interface SelectedChatModel {
   selectedConversationRetainedUntil: string | undefined;
   /** The asset the open conversation is about, once its thread has loaded. */
   selectedConversationSubject: { kind: string; name: string } | undefined;
+  /**
+   * The workspace the open conversation belongs to, once its thread has loaded: where an asset
+   * its first save made stands. Undefined in an embedded session, which reads no workspace.
+   */
+  selectedConversationWorkspaceId: string | undefined;
   /** The open conversation's title, once its thread has loaded. */
   selectedConversationTitle: string | undefined;
   /**

@@ -188,6 +188,9 @@ for (const [locale, theme] of [
       // With agents to give the tools to, the step says so; Fertig opens the Connection.
       await reviewDialog.locator("[data-connection-approved-done]").click();
       await expect(page).toHaveURL(new RegExp(`/build/connections/${id}$`, "u"));
+      // The Connection's page has read the Connection and shows its state. Read later, after the
+      // cleanup's delete, it would be answered 404.
+      await expect(page.locator("[data-connection-health]")).toBeVisible();
 
       const approved = await readAsset(page, `${apiBaseUrl}/api/v1/assets/connection/${id}`);
       expect(approved?.config).toMatchObject({

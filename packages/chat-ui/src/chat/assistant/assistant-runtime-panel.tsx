@@ -97,6 +97,7 @@ function AssistantRuntimePane({
     selectedConversationId,
     selectedConversationRetainedUntil,
     selectedConversationSubject,
+    selectedConversationWorkspaceId,
     docked,
     dockKind,
     agentOpens,
@@ -182,7 +183,10 @@ function AssistantRuntimePane({
   const conversationSubject = useConversationSubject({
     activeRun,
     storedSubject: selectedConversationSubject,
-    workspaceId: collaborationWorkspaceId
+    // The conversation's own workspace arrives with its subject. The active one is not known
+    // on a page outside a workspace until the workspace list arrives, and a read of the subject
+    // without it misses an asset that its workspace owns.
+    workspaceId: selectedConversationWorkspaceId ?? collaborationWorkspaceId
   });
   useReportDockSubject(conversationSubject);
   const pendingOpen = agentOpens.pending;

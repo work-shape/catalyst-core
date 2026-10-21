@@ -993,6 +993,9 @@ export function useWorkspaceChatModel({
       selectedConversationId,
       selectedConversationRetainedUntil: selectedThread?.conversation.retainedUntil,
       selectedConversationSubject: selectedThread?.conversation.subject,
+      selectedConversationWorkspaceId: collaborationWorkspacesAvailable
+        ? selectedThread?.conversation.collaborationWorkspaceId
+        : undefined,
       selectedConversationTitle: selectedThread?.conversation.title,
       // On its own route a conversation that is gone says so; the dock opens empty instead.
       conversationGone:
