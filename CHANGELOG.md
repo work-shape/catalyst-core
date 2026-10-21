@@ -7,6 +7,16 @@ The entries of the next release are files in `changes/unreleased/`, one per chan
 adds such a file and does not edit this one (see "Changelog" in README.md). The release folds them
 in, and `pnpm changelog` prints the next release's section as it will read.
 
+## 0.8.0-rc.6 — 2026-10-21
+
+### Changed
+
+- **Tooling:** The hosted Check gives `static` and each unit test shard 14 minutes instead of 9; a release run, which adds the scale tests, hit the old limit without a failing test.
+
+### Fixed
+
+- The deployment image Dockerfile defines `runner-system` before the `api` and `artifact-preview-worker` stages that copy its package manifest, so deployment image builds no longer fail with "cannot copy from stage".
+
 ## 0.8.0-rc.5 — 2026-10-21
 
 ### Added
