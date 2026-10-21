@@ -263,6 +263,27 @@ describe("an App that starts a Workflow", () => {
     });
   });
 
+  it("hands the frame a run's whole output of 5,000 characters, not the interface's preview of it (DP-0b)", async () => {
+    const page = `/${"long-page/".repeat(500)}`;
+    const frame = await t.openApp(t.root.id, "published", "visits");
+    const response = await t.callAction(
+      t.root.id,
+      frame,
+      "log-visit",
+      { page },
+      { "idempotency-key": "long-output-1" }
+    );
+    expectStatus(response, 200);
+    const started = startedSchema.parse(response.json());
+
+    const run = await followToEnd(t.root.id, frame, started.result.id);
+
+    expect(page.length).toBeGreaterThan(5_000);
+    expect(run.status).toBe("done");
+    expect(run.output).toEqual({ page });
+    expect(run.outputTruncated).toBeUndefined();
+  });
+
   it("follows no run of a Workflow the App does not start, none of another viewer's frame, and none another viewer started", async () => {
     const other = await t.call(t.root.id, "workflows.start", {
       params: { workflow: OTHER_WORKFLOW },

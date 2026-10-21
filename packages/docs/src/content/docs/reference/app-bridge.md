@@ -66,6 +66,6 @@ The result of an action is one of:
 - `{ runId, status: "pending_approval" }`: the call waits for another person's approval. The run says how it ends.
 - `{ status: "dry_run", message, result }` (kit 1.3.0 and later): a draft or a Page of a conversation carried nothing out. `message` is the platform's sentence of what the call would have done; show it as it is.
 
-A run (`workflow_run_result`) holds `id`, `workflow`, `status` (`queued`, `running`, `waiting`, `done`, `failed`, `cancelled` or `limit_reached`), and where known `output` or `outputTruncated`, `error`, `startedAt` and `finishedAt`.
+A run (`workflow_run_result`) holds `id`, `workflow`, `status` (`queued`, `running`, `waiting`, `done`, `failed`, `cancelled` or `limit_reached`), and where known `output` or `outputTruncated`, `error`, `startedAt` and `finishedAt`. `output` is the run's whole output up to 256 KiB as JSON; a larger output is answered as `outputTruncated: true` alone, and the App reads what it needs from where the Workflow wrote it.
 
 An error holds `code` (such as `action_unknown`, `draft_safe_mode`, `forbidden`, `input_invalid`, `rate_limited` or `connection_call_removed`), `message`, and optionally `right` (the right a `forbidden` call lacks), `retryable` (`false` where the same call cannot come out differently) and `runId`. The kit rejects with an `AppCallError` that carries the same fields. A call nothing answers within 180 seconds rejects with `timeout`.

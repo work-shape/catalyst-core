@@ -18,6 +18,7 @@ import {
   APP_ACTION_CALLS_PER_MINUTE_PER_SESSION,
   APP_ACTION_INPUT_MAX_BYTES,
   AppError,
+  appWorkflowRunOutput,
   CONNECTION_ACTIONS,
   CONNECTION_ASSET_KIND,
   getSubjectUserId,
@@ -386,7 +387,17 @@ export class AppActionCalls {
     if (!started.has(workflow) || startedBy.kind !== "user" || startedBy.id !== session.viewer.id) {
       throw none();
     }
-    return appWorkflowRunOf(run.data);
+    // The run's own output, not the interface's preview of it (DP-0b). A run with no preview
+    // has no output yet.
+    const output = run.data.outputPreview ? await this.runOutput(run.data.id) : undefined;
+    return appWorkflowRunOf(run.data, output);
+  }
+
+  /** The whole output of a run, as the store keeps it. */
+  private async runOutput(runId: string): Promise<{ value: unknown } | undefined> {
+    const { stores, clientInstanceId } = this.options;
+    const stored = await stores.workflowRuns.readRun({ clientInstanceId, id: runId });
+    return stored && stores.workflowRuns.readRunOutput({ clientInstanceId, id: stored.id });
   }
 
   /** The limit of one page session and the size of one input, before anything is read. */
@@ -648,21 +659,14 @@ function appOrigin(
 }
 
 /**
- * A Workflow Run as a frame follows it. A read of a run answers the start of its result as
- * JSON text; a frame is given the result itself where that text is all of it.
+ * A Workflow Run as a frame follows it, with the run's whole output up to the size of an
+ * action result (`appWorkflowRunOutput`).
  */
-function appWorkflowRunOf(run: z.infer<typeof workflowRunSchema>): AppWorkflowRun {
-  const preview = run.outputPreview;
-  let output: { output?: unknown; outputTruncated?: true } = {};
-  if (preview?.truncated) {
-    output = { outputTruncated: true };
-  } else if (preview) {
-    try {
-      output = { output: JSON.parse(preview.text) };
-    } catch {
-      output = { outputTruncated: true };
-    }
-  }
+function appWorkflowRunOf(
+  run: z.infer<typeof workflowRunSchema>,
+  stored: { value: unknown } | undefined
+): AppWorkflowRun {
+  const output = stored ? appWorkflowRunOutput(stored.value) : {};
   return {
     id: run.id,
     workflow: run.workflow,

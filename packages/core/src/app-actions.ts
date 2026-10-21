@@ -68,6 +68,27 @@ export function parseAppActionOperationName(
 export const APP_ACTION_INPUT_MAX_BYTES = 256 * 1024;
 
 /**
+ * How large the output of a Workflow Run may be, as JSON in bytes, for a frame to be handed it
+ * by `apps.sessions.get_workflow_run`: the size of the result an operation run keeps of an
+ * action. A larger one is answered as `outputTruncated` without the output (DP-0b). The
+ * engine keeps a run's output within `WORKFLOW_STEP_DATA_MAX_BYTES`, the same size, so this
+ * holds for an output stored under a larger bound before.
+ */
+export const APP_WORKFLOW_RUN_OUTPUT_MAX_BYTES = 256 * 1024;
+
+/**
+ * The output of a Workflow Run as a frame is answered it: the whole value up to
+ * `APP_WORKFLOW_RUN_OUTPUT_MAX_BYTES` as JSON, and above that only that it was cut. Not the
+ * interface's 2,000-character preview of a run.
+ */
+export function appWorkflowRunOutput(
+  value: unknown
+): { output: unknown } | { outputTruncated: true } {
+  const bytes = new TextEncoder().encode(JSON.stringify(value) ?? "").byteLength;
+  return bytes > APP_WORKFLOW_RUN_OUTPUT_MAX_BYTES ? { outputTruncated: true } : { output: value };
+}
+
+/**
  * How many calls one page session may make in a minute, actions and reads of Workflow Runs together.
  * A page session is one mount of one frame for one viewer, so the limit bounds what one open
  * tile can ask of a Connection whatever its code does.

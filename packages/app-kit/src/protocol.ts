@@ -76,7 +76,7 @@ export interface AppWorkflowRun {
   workflow: string;
   status: AppWorkflowRunStatus;
   /**
-   * What the run answered, once it is `done`. A result of more than 2,000 characters as JSON
+   * What the run answered, once it is `done`, whole. A result of more than 256 KiB as JSON
    * is not handed to a Page: `outputTruncated` says so, and the Page reads what it needs from
    * where the Workflow wrote it, such as a Data Store.
    */

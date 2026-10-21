@@ -157,9 +157,9 @@ export type AppBridgeContext = z.infer<typeof appBridgeContextSchema>;
 
 /**
  * A Workflow Run that a `workflow` action of the shown manifest started, as the frame follows
- * it: its state and, once it is done, its result. The result is the run's own where it is at
- * most `WORKFLOW_RUN_OUTPUT_PREVIEW_MAX_CHARS` long as JSON; a longer one is not answered and
- * `outputTruncated` says so.
+ * it: its state and, once it is done, its result. The result is the run's whole output where
+ * it is at most `APP_WORKFLOW_RUN_OUTPUT_MAX_BYTES` (256 KiB) as JSON; a larger one is not
+ * answered and `outputTruncated` says so.
  */
 export const appWorkflowRunSchema = z.strictObject({
   id: z.string(),
