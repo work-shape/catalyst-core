@@ -258,7 +258,9 @@ export const unusedConfigAssetStore: ConfigAssetStore = {
   sweepAssetRepoSaves: unsupported,
   getAssetCheckout: unsupported,
   listAgentAvailability: unsupported,
-  setAgentAvailability: unsupported
+  setAgentAvailability: unsupported,
+  listAgentUseLimits: unsupported,
+  setAgentUse: unsupported
 };
 export const unusedAuditEventStore: AuditEventStore = {
   getAssetPublication: unsupported,

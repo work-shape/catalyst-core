@@ -28,6 +28,9 @@ export type ConfigAssetKind = string;
 
 export type AgentAvailabilityMode = (typeof AGENT_AVAILABILITY_MODES)[number];
 
+/** Who uses an agent where it is available (AGENT-USE-1). */
+export type { AgentUse };
+
 /**
  * Where an asset may be used. The existing agent shape is shared by Connections and Knowledge
  * Bases; without a record, none of them receives workspace availability.

@@ -95,7 +95,6 @@ export { ACCESS_SOURCES } from "@work-shape/catalyst-asset-schemas";
 export { ACTIVE_AGENT_RUN_STATUSES } from "@work-shape/catalyst-asset-schemas";
 export { ADMINISTERED_USER_STATUSES } from "@work-shape/catalyst-asset-schemas";
 export { AGENT_AVAILABILITY_MODES } from "@work-shape/catalyst-asset-schemas";
-export { AGENT_USE_SETTINGS, type AgentUse } from "@work-shape/catalyst-asset-schemas";
 export { AGENT_EDITABLE_FIELDS } from "@work-shape/catalyst-asset-schemas";
 export { AGENT_RUN_FAILURE_CATEGORIES } from "@work-shape/catalyst-asset-schemas";
 export { AGENT_RUN_STATUSES } from "@work-shape/catalyst-asset-schemas";

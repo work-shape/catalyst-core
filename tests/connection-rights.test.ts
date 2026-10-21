@@ -126,7 +126,9 @@ describe("the vocabulary of Connection rights", () => {
       );
       expect(scopes.includes("instance"), action).toBe(
         !bundle &&
-          !/^(?:agent|skill)\./u.test(action) &&
+          // Using an agent is no legacy key's, so it is written for the whole instance too
+          // (AGENT-USE-1).
+          (!/^(?:agent|skill)\./u.test(action) || action === "agent.use") &&
           action !== "workflow.read_run_data" &&
           action !== "mail_sender.use"
       );

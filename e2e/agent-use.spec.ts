@@ -71,10 +71,12 @@ test("an administrator limits an agent to holders of Use and gives the right", a
     await page.getByRole("button", { name: "Änderungen speichern", exact: true }).click();
     await expect(granted).toBeChecked();
     await expect
-      .poll(
-        async () =>
-          ((await (await page.request.get(assetPath)).json()) as { agentUse?: string }).agentUse
-      )
+      .poll(async () => {
+        const read: unknown = await (await page.request.get(assetPath)).json();
+        return typeof read === "object" && read !== null && "agentUse" in read
+          ? read.agentUse
+          : undefined;
+      })
       .toBe("granted");
     await section.scrollIntoViewIfNeeded();
     await page.screenshot({
