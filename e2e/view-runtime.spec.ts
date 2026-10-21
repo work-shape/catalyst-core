@@ -240,22 +240,18 @@ test.describe("a generated view loads its runtime from the instance alone", () =
     );
 
     const traffic = await allowInstanceOnly(context, siteOrigin);
-    // The widget as the interface serves it. A token session opens no conversation by itself,
-    // so the site passes the conversation's route among the widget's options.
-    const widgetPath = `/@fs${resolve("packages/chat-ui/src/widget.tsx")}`;
-    // The site's own page mounts the widget where the standalone interface mounts itself.
-    const interfacePage = await (await request.get(`${uiOrigin}/`)).text();
-    const interfaceEntry = '<script type="module" src="/src/chat-main.tsx"></script>';
-    expect(interfacePage).toContain(interfaceEntry);
+    // The site's own page, bundled with the widget as a site embeds it (clients/demo's
+    // e2e-widget.html). A token session opens no conversation by itself, so the site passes the
+    // conversation's route among the widget's options.
+    const sitePage = await (await request.get(`${uiOrigin}/e2e-widget.html`)).text();
+    expect(sitePage).toContain("</body>");
     await page.route(`${siteOrigin}/another-site`, (route) =>
       route.fulfill({
         contentType: "text/html",
-        body: interfacePage.replace(
-          interfaceEntry,
+        body: sitePage.replace(
+          "</body>",
           `<script type="module">
-            import "/src/styles.css";
-            import { mountChatWidget } from ${JSON.stringify(widgetPath)};
-            mountChatWidget({
+            window.mountChatWidget({
               container: document.getElementById("root"),
               apiBaseUrl: ${JSON.stringify(apiOrigin)},
               token: ${JSON.stringify(chatSessionToken)},
@@ -265,7 +261,7 @@ test.describe("a generated view loads its runtime from the instance alone", () =
                 conversationId: conversation.id
               })}
             });
-          </script>`
+          </script></body>`
         )
       })
     );

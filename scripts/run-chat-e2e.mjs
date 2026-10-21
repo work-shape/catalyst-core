@@ -418,7 +418,8 @@ async function createConfigApiKey() {
  * The interface the suite opens, built once and served as files. The dev server answered each
  * page load with about a thousand module requests, which made every load of a page seconds long
  * on a hosted runner. The build is React's development build, so the warnings the page-error
- * watch fails a test on still reach the console; it takes a few seconds.
+ * watch fails a test on still reach the console; it takes a few seconds. vite.e2e.config.ts adds
+ * the page of another site that embeds the widget.
  */
 async function startUiServer() {
   const cwd = resolve(repoRoot, "clients/demo");
@@ -428,13 +429,14 @@ async function startUiServer() {
     VITE_CHAT_API_PORT: e2eApiPort,
     VITE_CHAT_API_URL: e2eApiUrl
   };
+  const config = ["--config", "vite.e2e.config.ts"];
   await run(
     localBin("vite"),
-    ["build", "--mode", "development", "--outDir", e2eUiDir, "--emptyOutDir"],
+    ["build", ...config, "--mode", "development", "--outDir", e2eUiDir, "--emptyOutDir"],
     { cwd, env, label: "chat ui build" }
   );
   const serve = ["--outDir", e2eUiDir, "--host", e2eHost, "--port", e2eUiPort, "--strictPort"];
-  return spawnManaged(localBin("vite"), ["preview", ...serve], {
+  return spawnManaged(localBin("vite"), ["preview", ...config, ...serve], {
     cwd,
     env,
     label: "chat ui"

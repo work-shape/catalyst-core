@@ -86,6 +86,7 @@
         "src/chat-main.tsx",
         "src/server.ts",
         "src/e2e-server.ts",
+        "src/e2e-widget.ts",
         "src/seed-auth.ts",
         "src/demo-seed.ts",
         "src/seed/index.ts",
