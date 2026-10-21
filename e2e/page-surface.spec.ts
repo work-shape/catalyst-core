@@ -637,3 +637,29 @@ test("a new save opens a closed Page again, and coming back to the conversation 
   await page.getByTestId("page-card").last().getByRole("button", { name: "Open" }).click();
   await expectShownRevision(surface, 2);
 });
+
+// Fails with the dock as it was: beside a page that is no conversation, such as the Agents or
+// a Workflow, the dock's surface stood outside the interface's page host, so nothing answered
+// the kit's `ready`, `getContext()` never settled and after 10 s an App said "The interface
+// did not answer." The member of this file has no Workflows; the Agents stand for them.
+test("a Page opened from the dock beside another page is told who looks at it", async ({
+  page
+}) => {
+  await openChat(page);
+  await writePageFiles(page, patchThatAdds(plainPageSource));
+  await savePage(page);
+  await expect(builtPage(page).getByText("Shown to E2E Pages")).toBeVisible();
+  const [, workspace, conversation] =
+    /\/w\/([^/]+)\/c\/([^/?#]+)/u.exec(new URL(page.url()).pathname) ?? [];
+  if (!workspace || !conversation) throw new Error(`No conversation in ${page.url()}`);
+
+  await page.goto(`/w/${workspace}/agents?chat=${conversation}`);
+  const dock = page.getByRole("region", { name: "Chat" });
+  const card = dock.getByTestId("page-card").last();
+  await expect(card).toBeVisible();
+  await expect(pageSurface(page)).toBeHidden();
+  await card.getByRole("button", { name: "Open" }).click();
+  // The surface covers the Agents beside the dock, and the Page's `getContext()` settled.
+  await expect(page).toHaveURL(/\/agents\?chat=/u);
+  await expect(builtPage(page).getByText("Shown to E2E Pages")).toBeVisible();
+});
