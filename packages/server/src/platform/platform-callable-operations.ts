@@ -4,6 +4,8 @@ import {
   KNOWLEDGE_OPERATION_PREFIX,
   WORKFLOW_OPERATION_PREFIX,
   unknownToJsonValue,
+  type CallableOperationsPage,
+  type CallableOperationView,
   type JsonObject,
   type OperationDefinition,
   type ConversationId,
@@ -19,6 +21,7 @@ import type { AssetCall } from "../assets/asset-access";
 import type { AssetWorkflowOptions } from "../types";
 import { resolveOperationResource } from "../operations/operation-resource";
 import { paginate, pageScope, storePage } from "../http/paging";
+import { operationTitle, readOperationSource, sourceReader } from "./operation-sources";
 
 // Who would call the operations `platform.assets.operations` lists: a step of a Workflow, or a
 // `connection` action of an App. Each audience is offered the operations exposed to its own
@@ -49,14 +52,23 @@ function callableByAudience(name: string, audience: PlatformOperationsAudience):
  * of a Page of the agent's conversation. An operation not exposed to that surface is none the
  * audience may name. A Page names no App, so no App is asked.
  */
-function listingOrigin(
-  audience: PlatformOperationsAudience,
-  conversationId: ConversationId
-): OperationOrigin {
-  return audience === "app"
-    ? { kind: "app", appRevisionId: "", actionName: "", pageSessionId: "", conversationId }
+function listingOrigin(audience: CallableAudience): OperationOrigin {
+  return audience.for === "app"
+    ? {
+        kind: "app",
+        appRevisionId: "",
+        actionName: "",
+        pageSessionId: "",
+        conversationId: audience.conversationId
+      }
     : { kind: "workflow", workflowRunId: "", stepRunId: "" };
 }
+
+/**
+ * Who would call: a step of a Workflow, or an action of a Page of the conversation the agent
+ * builds in. Only the agent lists for an App.
+ */
+export type CallableAudience = { for: "workflow" } | { for: "app"; conversationId: ConversationId };
 
 const jsonObjectSchema = z.record(z.string(), z.unknown());
 
@@ -79,12 +91,11 @@ export function jsonSchemaOf(
 /** The caller's callable operations, using the catalog's scoped, exclusive name cursor. */
 export async function listCallableOperations(
   options: AssetWorkflowOptions,
-  call: AssetCall,
-  conversationId: ConversationId,
-  audience: PlatformOperationsAudience,
+  call: Pick<AssetCall, "actor" | "access" | "correlationId">,
+  audience: CallableAudience,
   input: PlatformOperationsQuery
-) {
-  const query = { ...input, for: audience, limit: MAX_LIST_LIMIT };
+): Promise<CallableOperationsPage> {
+  const query = { ...input, for: audience.for, limit: MAX_LIST_LIMIT };
   const scope = pageScope("operations.list_callable", {}, query);
   const paging = storePage(query, ["name"], scope);
   const after = paging.after?.[0];
@@ -92,7 +103,7 @@ export async function listCallableOperations(
   const candidates = (listing?.operations ?? [])
     .filter(
       (definition) =>
-        callableByAudience(definition.name, audience) &&
+        callableByAudience(definition.name, audience.for) &&
         (input.name === undefined || definition.name === input.name) &&
         (input.prefix === undefined || definition.name.startsWith(input.prefix)) &&
         (typeof after !== "string" ||
@@ -114,14 +125,23 @@ export async function listCallableOperations(
               {},
               {
                 actor: call.actor,
-                origin: listingOrigin(audience, conversationId),
+                origin: listingOrigin(audience),
                 correlationId: call.correlationId,
                 access: call.access,
                 resource
               }
             );
       if (!decision.allowed) continue;
-    } catch {
+    } catch (error) {
+      // Left out like a refused one. Logged by name only: never the input or the error's text,
+      // which may carry a value of the source.
+      options.logger.debug(
+        {
+          operation: definition.name,
+          errorName: error instanceof Error ? error.name : typeof error
+        },
+        "A callable operation's check failed; it is not listed"
+      );
       continue;
     }
     visible.push(definition);
@@ -129,17 +149,26 @@ export async function listCallableOperations(
     if (visible.length === paging.limit) break;
   }
   const page = paginate(visible, query, ["name"], false, scope);
+  // Only a listed operation is told; its source's title and service only to a reader of it.
+  const readSource = sourceReader(options, call.access);
+  const operations: CallableOperationView[] = [];
+  for (const definition of page.items) {
+    const inputSchema = jsonSchemaOf(definition.inputJsonSchema, definition.inputSchema);
+    const outputSchema = jsonSchemaOf(definition.outputJsonSchema, definition.outputSchema);
+    const { source } = await readOperationSource(readSource, definition.name);
+    operations.push({
+      name: definition.name,
+      effect: definition.effect,
+      title: operationTitle(definition),
+      ...(definition.description ? { description: definition.description } : {}),
+      source,
+      available: definition.available ?? true,
+      ...(inputSchema ? { inputSchema } : {}),
+      ...(outputSchema ? { outputSchema } : {})
+    });
+  }
   return {
-    operations: page.items.map((definition) => {
-      const inputSchema = jsonSchemaOf(definition.inputJsonSchema, definition.inputSchema);
-      const outputSchema = jsonSchemaOf(definition.outputJsonSchema, definition.outputSchema);
-      return {
-        name: definition.name,
-        effect: definition.effect,
-        ...(inputSchema ? { inputSchema } : {}),
-        ...(outputSchema ? { outputSchema } : {})
-      };
-    }),
+    operations,
     ...(page.nextCursor ? { nextCursor: page.nextCursor } : {}),
     truncated: !!page.nextCursor || (listing?.truncated.length ?? 0) > 0
   };

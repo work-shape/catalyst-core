@@ -41,6 +41,8 @@ export interface PlantedConnection {
     effect: "reading" | "changing";
     exposure: readonly string[];
     enabled: boolean;
+    /** What the operation is called for people, such as "Load the bookings". */
+    title?: string;
   }[];
 }
 

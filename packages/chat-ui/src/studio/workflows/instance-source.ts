@@ -1,6 +1,6 @@
 import type { ApiClient } from "@work-shape/catalyst-api-client";
 import type { Asset } from "@work-shape/catalyst-api-client";
-import { WORKFLOW_ASSET_KIND } from "@work-shape/catalyst-core";
+import { WORKFLOW_ACTIONS, WORKFLOW_ASSET_KIND } from "@work-shape/catalyst-core";
 import { principalGrantRequest } from "../../admin/access/principal-grants-model";
 import { PendingApprovalError } from "../build-area/build-refusals";
 import {
@@ -11,7 +11,11 @@ import {
   toWorkflowRun,
   toWorkflowStepRun
 } from "./workflow-mapping";
-import type { WorkflowRunsSource, WorkflowsSource } from "./source-shapes";
+import type {
+  WorkflowRunsSource,
+  WorkflowStepChoicesSource,
+  WorkflowsSource
+} from "./source-shapes";
 import type {
   WorkflowDefinitionView,
   WorkflowListItem,
@@ -38,7 +42,57 @@ const WORKFLOW_SUMMARY_PAGE_SIZE = 200;
 const LIST_READS_PER_PAGE = 5;
 
 /** The part of the client the Workflow screens call. */
-type WorkflowsClient = Pick<ApiClient, "workflows" | "assets" | "permissions">;
+type WorkflowsClient = Pick<ApiClient, "workflows" | "assets" | "permissions" | "operations">;
+
+/**
+ * What a step's Settings offer: the operations the reader may call from a step, and the
+ * published Workflows that list the trigger `parent`, of the instance and of the workspace.
+ * One the reader may only use is not offered: the step's own read of it would be refused.
+ */
+function stepChoicesSource(client: WorkflowsClient): WorkflowStepChoicesSource {
+  return {
+    listOperations: async (cursor, signal) => {
+      const page = await client.operations.list_callable({
+        query: { for: "workflow", ...(cursor === undefined ? {} : { cursor }) },
+        signal
+      });
+      return {
+        items: page.operations.map((operation) => ({
+          name: operation.name,
+          title: operation.title,
+          ...(operation.description === undefined ? {} : { description: operation.description }),
+          effect: operation.effect,
+          source: operation.source,
+          available: operation.available,
+          ...(operation.inputSchema === undefined ? {} : { inputSchema: operation.inputSchema })
+        })),
+        nextCursor: page.nextCursor
+      };
+    },
+    listChildWorkflows: async (workspaceId, cursor, signal) => {
+      const page = await client.workflows.list({
+        query: { limit: WORKFLOW_SUMMARY_PAGE_SIZE, ...(cursor === undefined ? {} : { cursor }) },
+        signal
+      });
+      return {
+        items: page.items
+          .filter(
+            (row) =>
+              (row.workspaceId === undefined || row.workspaceId === workspaceId) &&
+              (row.triggers ?? []).includes("parent") &&
+              row.actions.includes(WORKFLOW_ACTIONS.read)
+          )
+          .map((row) => ({
+            id: row.id,
+            name: row.name.trim() || row.id,
+            ...(row.inputs === undefined ? {} : { inputs: row.inputs }),
+            mayStart: row.actions.includes(WORKFLOW_ACTIONS.use)
+          })),
+        nextCursor: page.nextCursor
+      };
+    }
+  };
+}
 
 function runsSource(client: WorkflowsClient): WorkflowRunsSource {
   return {
@@ -412,6 +466,7 @@ export function createInstanceSource(client: WorkflowsClient, key: string): Work
       };
     },
     runs: runsSource(client),
+    stepChoices: stepChoicesSource(client),
     publishRights: {
       read: async (workflow, signal) =>
         client.workflows.principal_rights({ params: { workflow }, signal }),

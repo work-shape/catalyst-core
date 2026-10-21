@@ -1,3 +1,4 @@
 operations.decide  POST /api/v1/operations/runs/:runId/decision
 operations.get_run  GET /api/v1/operations/runs/:runId
+operations.list_callable  GET /api/v1/operations/callable
 operations.list_runs  GET /api/v1/operations/runs

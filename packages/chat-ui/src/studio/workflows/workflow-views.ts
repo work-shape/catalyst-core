@@ -2,6 +2,7 @@ import {
   NOTIFY_CHANNELS,
   type WorkflowKind,
   OPERATION_EFFECTS,
+  type OperationSourceKind,
   OPERATION_TARGETS,
   WORKFLOW_RESERVED_STEP_TYPES,
   type WorkflowDatasetState,
@@ -168,6 +169,40 @@ export interface WorkflowView {
  * it: among it what the step gets and what it returns (`inputSchema`, `outputSchema`).
  */
 export type WorkflowStepFacts = Readonly<Record<string, Readonly<Record<string, unknown>>>>;
+
+/**
+ * One operation a step may call, as the instance lists it for the reader
+ * (`operations.list_callable`): only what the reader may call is listed.
+ */
+export interface CallableOperationOption {
+  /** What the step writes under `operation`. */
+  name: string;
+  title: string;
+  description?: string;
+  effect: (typeof OPERATION_EFFECTS)[number];
+  /** What it belongs to; a source the reader may not read has its kind alone. */
+  source: {
+    kind: OperationSourceKind;
+    title?: string;
+    service?: string;
+  };
+  /** False where a call cannot reach its source now. */
+  available: boolean;
+  inputSchema?: Readonly<Record<string, unknown>>;
+}
+
+/** A published Workflow a step may start and wait for: one that lists the trigger `parent`. */
+export interface ChildWorkflowOption {
+  id: string;
+  name: string;
+  /** What it asks for when started, as JSON Schema. */
+  inputs?: Readonly<Record<string, unknown>>;
+  /**
+   * Whether the reader may start it too (`workflow.use`), which a parent's start of it needs.
+   * One the reader may only read is shown, and cannot be picked.
+   */
+  mayStart: boolean;
+}
 
 /** A revision of a Workflow as it is stored: `workflow.yaml` and the files of its steps. */
 export interface WorkflowDefinitionView {

@@ -29,6 +29,7 @@ export {
 import { createHttpRuntime } from "./http/runtime";
 import { registerAuditRoutes } from "./routes/audit-routes";
 import { registerOperationRunRoutes } from "./routes/operation-run-routes";
+import { registerOperationCallableRoutes } from "./routes/operation-callable-routes";
 import { registerOperationDecisionRoutes } from "./routes/operation-decision-routes";
 import { registerJobRoutes } from "./routes/job-routes";
 import { registerInfrastructureRoutes } from "./routes/infrastructure-routes";
@@ -280,6 +281,7 @@ export async function createChatServer(
   registerDraftAttachmentRoutes(route, options);
   registerAuditRoutes(route, options);
   registerOperationRunRoutes(route, options);
+  registerOperationCallableRoutes(route, options);
   registerOperationDecisionRoutes(route, options);
   registerJobRoutes(route, options);
   registerInfrastructureRoutes(route, options);

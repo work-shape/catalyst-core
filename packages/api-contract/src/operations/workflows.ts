@@ -322,6 +322,11 @@ export const workflowSummarySchema = z.object({
    */
   inputs: z.record(z.string(), z.unknown()).optional(),
   /**
+   * How the published revision is started, the kinds of its trigger: `manual`, `schedule`,
+   * `parent` (by a step of another Workflow). Missing where the definition cannot be read.
+   */
+  triggers: z.array(z.string()).optional(),
+  /**
    * The display label of the service principal every run of the Workflow acts as. Missing
    * where that principal is disabled or gone, which `reasons` then says.
    */

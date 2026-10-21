@@ -13,6 +13,8 @@ import type {
 } from "./source-shapes";
 import { useWorkflowsSource } from "./workflow-source";
 import type {
+  CallableOperationOption,
+  ChildWorkflowOption,
   LiveOnceSwitchView,
   WorkflowDefinitionView,
   WorkflowListItem,
@@ -56,6 +58,7 @@ function useWorkflowKeys() {
         source.key
       ] as const,
       runs: ["workflow-runs", source.key] as const,
+      choices: ["workflow-step-choices", source.key] as const,
       liveOnce: ["workflow-live-once", source.key] as const
     }),
     [apiBaseUrl, source.key]
@@ -537,4 +540,78 @@ export function useWorkflowEditWrites(): WorkflowEditWrites | undefined {
         source.getWorkflow(workspaceId, workflow, new AbortController().signal)
     };
   }, [drafts, keys, queryClient, source]);
+}
+
+/** At most so many pages of what a step's Settings offer are read; that more exists is said. */
+const STEP_CHOICE_PAGES = 10;
+
+/** What a step's Settings offer to pick, as far as it was read. */
+export interface StepChoices<Row> {
+  /** Absent until read, and where the source offers none. */
+  rows: readonly Row[] | undefined;
+  /** More exists than was read. */
+  more: boolean;
+  failed: boolean;
+}
+
+async function choicePages<Row>(
+  read: (
+    cursor: string | undefined
+  ) => Promise<{ items: readonly Row[]; nextCursor: string | undefined }>
+): Promise<{ rows: Row[]; more: boolean }> {
+  const rows: Row[] = [];
+  let cursor: string | undefined;
+  for (let page = 0; page < STEP_CHOICE_PAGES; page += 1) {
+    const got = await read(cursor);
+    rows.push(...got.items);
+    cursor = got.nextCursor;
+    if (cursor === undefined) return { rows, more: false };
+  }
+  return { rows, more: true };
+}
+
+/** The operations a step may call, as the reader may call them. Nothing is read unless enabled. */
+export function useCallableOperations(enabled: boolean): StepChoices<CallableOperationOption> {
+  const { stepChoices } = useWorkflowsSource();
+  const keys = useWorkflowKeys();
+  const query = useQuery({
+    queryKey: [...keys.choices, "operations"],
+    queryFn: ({ signal }) =>
+      choicePages((cursor) =>
+        stepChoices === undefined
+          ? Promise.resolve({ items: [], nextCursor: undefined })
+          : stepChoices.listOperations(cursor, signal)
+      ),
+    enabled: enabled && stepChoices !== undefined
+  });
+  return {
+    rows: query.data?.rows,
+    more: query.data?.more ?? false,
+    failed: query.isError
+  };
+}
+
+/** The Workflows a step may start: published, with the trigger `parent`, and readable. */
+export function useChildWorkflows(
+  workspaceId: string,
+  enabled: boolean
+): StepChoices<ChildWorkflowOption> {
+  const { stepChoices } = useWorkflowsSource();
+  const keys = useWorkflowKeys();
+  const query = useQuery({
+    // Under the key of the asset reads: a publish elsewhere drops it.
+    queryKey: [...keys.assets, "children", workspaceId],
+    queryFn: ({ signal }) =>
+      choicePages((cursor) =>
+        stepChoices === undefined
+          ? Promise.resolve({ items: [], nextCursor: undefined })
+          : stepChoices.listChildWorkflows(workspaceId, cursor, signal)
+      ),
+    enabled: enabled && stepChoices !== undefined
+  });
+  return {
+    rows: query.data?.rows,
+    more: query.data?.more ?? false,
+    failed: query.isError
+  };
 }

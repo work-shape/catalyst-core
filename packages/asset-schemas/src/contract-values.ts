@@ -903,6 +903,19 @@ export const WORKFLOW_STEP_SOURCE_KINDS = [
   "other"
 ] as const;
 export type WorkflowStepSourceKind = (typeof WORKFLOW_STEP_SOURCE_KINDS)[number];
+
+/**
+ * What an operation a step may call belongs to (`operations.list_callable`, WF-EDIT-3). `other`
+ * is an operation of the release.
+ */
+export const OPERATION_SOURCE_KINDS = [
+  "connection",
+  "data_store",
+  "knowledge_base",
+  "workflow",
+  "other"
+] as const satisfies readonly WorkflowStepSourceKind[];
+export type OperationSourceKind = (typeof OPERATION_SOURCE_KINDS)[number];
 export type NotifyChannel = (typeof NOTIFY_CHANNELS)[number];
 
 export const PRINCIPAL_HOLDER_KINDS = [

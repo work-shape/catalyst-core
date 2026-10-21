@@ -62,8 +62,7 @@ export function discoveryCalls(
       return listCallableOperations(
         options,
         await callOf(context),
-        conversation.id,
-        audience,
+        audience === "app" ? { for: "app", conversationId: conversation.id } : { for: "workflow" },
         input
       );
     }

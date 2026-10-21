@@ -22,7 +22,9 @@ import {
   schemaFields,
   type AnswerFieldKind
 } from "./schema-fields";
-import { sameValue } from "./step-edits";
+import { sameValue, WORKFLOW_FIELDS } from "./step-edits";
+import { ToolsPicker } from "./operation-picker";
+import { useCallableOperations } from "./workflow-data";
 import { fieldWords, isRecord, type KindProps, type Translate } from "./step-settings-parts";
 
 // The Settings of an AI step (workflow-canvas 9.4, WF-EDIT-2): its instructions, what it gets
@@ -222,7 +224,27 @@ export function AgentSettings(props: KindProps & { changeWithAgent: ReactNode })
         </Field>
         {under("instructions")}
       </div>
+      <WorkflowTools editing={editing} />
       <StepInputsAndAnswers {...props} />
     </>
+  );
+}
+
+/** What every AI step of the Workflow may use: the Workflow's `tools`. */
+function WorkflowTools({ editing }: Pick<KindProps, "editing">) {
+  const choices = useCallableOperations(true);
+  const tools = Array.isArray(editing.manifest.tools)
+    ? editing.manifest.tools.filter((name) => typeof name === "string")
+    : [];
+  return (
+    <div className="grid gap-2" data-workflow-tools="">
+      <ToolsPicker
+        value={tools}
+        choices={choices}
+        onChange={(next) =>
+          editing.set(WORKFLOW_FIELDS, { tools: next.length === 0 ? undefined : next })
+        }
+      />
+    </div>
   );
 }

@@ -52,7 +52,9 @@ export {
   workflowsRowShown
 } from "./workflow-model";
 export { StartDialog } from "./start-run";
-export type { WorkflowsSource } from "./source-shapes";
+export type { WorkflowsSource, WorkflowStepChoicesSource } from "./source-shapes";
+export type { CallableOperationOption, ChildWorkflowOption } from "./workflow-views";
+export { missingInputs, schemaInputFields } from "./step-settings-operation";
 export { WorkflowsSourceProvider } from "./workflow-source";
 export { WorkflowsHostProvider, type WorkflowsHost } from "./workflows-host";
 export type { LiveOnceControl } from "./test-run";

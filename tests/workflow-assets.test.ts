@@ -45,6 +45,7 @@ const listSchema = z.object({
       actions: z.array(z.string()),
       inputs: z.record(z.string(), z.unknown()).optional(),
       runsAs: z.string().optional(),
+      triggers: z.array(z.string()).optional(),
       lastRun: z.object({ id: z.string(), status: z.string() }).loose().optional()
     })
   )
@@ -307,6 +308,8 @@ describe("a Workflow stored as an asset", () => {
         inputs: notifyClients().inputs,
         // Whom every run acts as, by the label people read: the page's "Runs as".
         runsAs: t.principal.displayLabel,
+        // How it is started: the child picker offers only one a parent may start.
+        triggers: ["manual"],
         actions: ["workflow.read", "workflow.use"]
       }
     ]);

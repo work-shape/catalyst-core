@@ -37,6 +37,8 @@ import type { WorkflowEditing } from "./workflow-editing";
 import { fieldWords, isRecord, type KindProps } from "./step-settings-parts";
 import { AgentSettings } from "./step-settings-agent";
 import { CodeSettings } from "./step-settings-code";
+import { ChildWorkflowSettings, missingInputs, OperationSettings } from "./step-settings-operation";
+import { useCallableOperations, useChildWorkflows } from "./workflow-data";
 import { useRecipientNames } from "./workflows-host";
 
 // The Settings tab of a step (workflow-canvas 9.4): the step's form for a holder of
@@ -227,6 +229,26 @@ export function StepSettings({
           set={set}
           changeWithAgent={changeWithAgent}
         />
+      ) : step.type === "operation" ? (
+        <OperationSettings
+          step={step}
+          stepId={stepId}
+          editing={editing}
+          issue={issue}
+          under={under}
+          set={set}
+          changeWithAgent={changeWithAgent}
+        />
+      ) : step.type === "workflow" ? (
+        <ChildWorkflowSettings
+          step={step}
+          stepId={stepId}
+          editing={editing}
+          issue={issue}
+          under={under}
+          set={set}
+          changeWithAgent={changeWithAgent}
+        />
       ) : step.type === "output" ? (
         <ResultSettings step={step} stepId={stepId} editing={editing} under={under} />
       ) : (
@@ -249,8 +271,25 @@ export function StepSettings({
 export function StepSettingsBar({ stepId, editing }: { stepId: string; editing: WorkflowEditing }) {
   const { t } = useTranslation();
   const step = findStep(editing.manifest, stepId);
+  const operations = useCallableOperations(step?.type === "operation");
+  const children = useChildWorkflows(editing.workspaceId, step?.type === "workflow");
   const incomplete =
     editing.held.has(stepId) ||
+    (step?.type === "operation" &&
+      (text(step.operation) === "" ||
+        missingInputs(
+          operations.rows?.find((operation) => operation.name === step.operation)?.inputSchema ??
+            editing.stepFacts?.[stepId]?.inputSchema,
+          step.input
+        ).length > 0 ||
+        pendingPick(step.input))) ||
+    (step?.type === "workflow" &&
+      (text(step.workflow) === "" ||
+        missingInputs(
+          children.rows?.find((child) => child.id === step.workflow)?.inputs,
+          step.input
+        ).length > 0 ||
+        pendingPick(step.input))) ||
     text(step?.name).trim() === "" ||
     (step?.type === "agent" && text(step.instructions).trim() === "") ||
     (step?.type === "notify" &&
@@ -276,6 +315,14 @@ export function StepSettingsBar({ stepId, editing }: { stepId: string; editing: 
       }}
     />
   );
+}
+
+/** A value of the input to be picked from a step whose field is not chosen yet. */
+function pendingPick(input: unknown): boolean {
+  return Object.values(isRecord(input) ? input : {}).some((value) => {
+    const shown = sourcedOf(value);
+    return shown?.kind === "picked" && shown.option === "";
+  });
 }
 
 function LoopSettings({ step, stepId, editing, issue, under, set }: KindProps) {

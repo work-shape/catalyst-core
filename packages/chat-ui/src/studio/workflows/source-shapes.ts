@@ -1,4 +1,6 @@
 import type {
+  CallableOperationOption,
+  ChildWorkflowOption,
   LiveOnceSwitchView,
   WorkflowDefinitionView,
   WorkflowListItem,
@@ -101,12 +103,39 @@ export interface WorkflowsSource {
   /** Absent where the source has no technical accounts, such as samples. */
   publishRights?: WorkflowPublishRightsSource;
   /**
+   * What a step's Settings offer to pick: the operations a step may call and the Workflows a
+   * step may start. Absent where the source offers none, such as samples.
+   */
+  stepChoices?: WorkflowStepChoicesSource;
+  /**
    * The instance's sentence on what publishing one revision makes live (PUBQ-1), as the asset
    * read answers it: `publishNarrative` or nothing. Absent where the source words none.
    */
   publishNarrative?: {
     read(workflow: string, revision: number, signal: AbortSignal): Promise<unknown>;
   };
+}
+
+/** One page of what a step's Settings offer, and where the next read starts. */
+interface ChoicesPage<Row> {
+  items: readonly Row[];
+  nextCursor: string | undefined;
+}
+
+/**
+ * `operations.list_callable` for a step of a Workflow, and the published Workflows of
+ * `workflows.list` that list the trigger `parent`, of the instance and of one workspace.
+ */
+export interface WorkflowStepChoicesSource {
+  listOperations(
+    cursor: string | undefined,
+    signal: AbortSignal
+  ): Promise<ChoicesPage<CallableOperationOption>>;
+  listChildWorkflows(
+    workspaceId: string,
+    cursor: string | undefined,
+    signal: AbortSignal
+  ): Promise<ChoicesPage<ChildWorkflowOption>>;
 }
 
 /**

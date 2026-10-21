@@ -109,7 +109,7 @@ export const configSchema = z
   .describe(
     "The whole config as the read answered it under 'config', with your changes: every field it had, in the shape it had. What a config holds is decided by the kind of the asset, not by this tool."
   );
-export const jsonObjectSchema = z.record(z.string(), z.unknown());
+const jsonObjectSchema = z.record(z.string(), z.unknown());
 
 export const readOutputSchema = z.object({
   saveApproval: z.object({ approverNames: z.array(z.string()) }).optional(),

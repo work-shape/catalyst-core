@@ -124,6 +124,9 @@ interface StepMark {
 
 /** Editing by hand of one Workflow, for a reader who may write it. */
 export interface WorkflowEditing {
+  /** The workspace the page is in, and the Workflow being edited. */
+  workspaceId: string;
+  workflowId: string;
   /** The draft with what is not saved: what the canvas draws and the form shows. */
   manifest: WorkflowManifest;
   /** The files of the draft with what is not saved: the scripts of code steps. */
@@ -403,6 +406,8 @@ export function useWorkflowEditing(input: {
   const heldSteps = new Set([...holds].map((key) => key.slice(0, key.indexOf("\n"))));
 
   return {
+    workspaceId: input.workspaceId,
+    workflowId: input.workflowId,
     manifest,
     files,
     steps: drawn.steps,

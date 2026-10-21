@@ -16,7 +16,8 @@ import {
   appWorkflowRefusalError,
   workflowDurationMs,
   type JobSchedule,
-  type RegisteredJobHandler
+  type RegisteredJobHandler,
+  type WorkflowManifest
 } from "@work-shape/catalyst-core";
 import {
   codeStepIssues,
@@ -42,6 +43,12 @@ import {
 } from "./workflow-assets";
 
 export { workflowsModule };
+
+/** How a published revision is started: the kinds of its trigger. */
+function triggerKinds(manifest: WorkflowManifest): string[] {
+  const [trigger] = manifest.steps;
+  return trigger?.type === "trigger" ? trigger.triggers.map(({ kind }) => kind) : [];
+}
 
 /** The ceilings of a Workflow's `limits` as release config sets them (`workflows.limits`). */
 export function workflowLimitCeilingsOf(
@@ -223,7 +230,12 @@ export function createInstanceWorkflows(parts: InstanceWorkflowsParts): Instance
         definitionRevisionId: revisionId,
         runnable: reasons.length === 0,
         reasons,
-        ...(definition.ok ? { inputs: definition.manifest.inputs } : {}),
+        ...(definition.ok
+          ? {
+              inputs: definition.manifest.inputs,
+              triggers: triggerKinds(definition.manifest)
+            }
+          : {}),
         ...(principal ? { runsAs: principal.displayLabel } : {}),
         ...(lastRun ? { lastRun } : {})
       });

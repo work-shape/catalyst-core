@@ -4,7 +4,8 @@ import {
   WORKSPACE_USE_ASSET_KINDS,
   ASSET_ACCESS_VERBS,
   ASSET_NAME_REFUSAL_REASONS,
-  ASSET_SYNC_CHANGE_TYPES
+  ASSET_SYNC_CHANGE_TYPES,
+  operationSourceSchema
 } from "@work-shape/catalyst-asset-schemas";
 import { z } from "zod";
 import {
@@ -202,11 +203,7 @@ export const publishNarrativeSchema = z.object({
 export const saveApprovalSchema = z.object({ approverNames: z.array(z.string()) });
 
 /** Facts resolved for the revision read, with unreadable sources reduced to their kind. */
-const workflowFactSourceSchema = z.object({
-  kind: z.enum(["connection", "data_store", "knowledge_base", "workflow", "other"]),
-  title: z.string().optional(),
-  service: z.string().optional()
-});
+const workflowFactSourceSchema = operationSourceSchema;
 const workflowOperationFactSchema = z.object({
   source: workflowFactSourceSchema,
   title: z.string().optional(),
