@@ -9,6 +9,7 @@ import {
   type CreatePersonalApiKeyResponse
 } from "@work-shape/catalyst-api-client";
 import { workspaceQueryKeys } from "./workspace-query-keys";
+import { retryUnlessRefused } from "./workspace-queries";
 
 interface PersonalApiKeysInput {
   apiBaseUrl: string;
@@ -21,6 +22,8 @@ export function useOwnApiKeysQuery(input: PersonalApiKeysInput & { enabled: bool
   return useQuery({
     queryKey: workspaceQueryKeys.ownApiKeys(input.apiBaseUrl, input.authScope),
     queryFn: () => listAll((paging) => input.client.me.api_keys.list({ query: paging })),
+    // A refusal is said at once, naming whom to ask: asking again would be refused again.
+    retry: retryUnlessRefused,
     enabled: input.enabled
   });
 }

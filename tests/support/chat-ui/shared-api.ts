@@ -29,7 +29,7 @@ export {
   getCurrentUserWithinDeadline,
   listCollaborationWorkspacesWithPersonal,
   readThreadAgain,
-  threadQueryRetry,
+  retryUnlessRefused,
   threadRetryDelay,
   useWorkspaceCacheActions,
   workspaceConfigQueryOptions

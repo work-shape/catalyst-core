@@ -48,15 +48,15 @@ const plantedRequest = {
   createdAt: "2026-10-16T09:30:00.000Z"
 };
 
-const VIEWS = [
+const SIZES = [
   { width: 1280, height: 800 },
   { width: 390, height: 844 }
-].flatMap((size) =>
-  (["light", "dark"] as const).flatMap((theme) =>
-    (["en", "de"] as const).map((locale) => ({ ...size, theme, locale }))
-  )
+] as const;
+const LOOKS = (["light", "dark"] as const).flatMap((theme) =>
+  (["en", "de"] as const).map((locale) => ({ theme, locale }))
 );
-type View = (typeof VIEWS)[number];
+type Look = (typeof LOOKS)[number];
+type View = Look & (typeof SIZES)[number];
 
 const words = {
   en: {
@@ -141,18 +141,39 @@ async function instanceAdminName(page: Page): Promise<string> {
   return meSchema.parse(await response.json()).instanceAdminName;
 }
 
-/** Opens `path` in the view's size, theme and language. */
-async function open(page: Page, path: string, view: View): Promise<void> {
-  await page.setViewportSize({ width: view.width, height: view.height });
-  await page.goto(path);
+/**
+ * Opens `path` in the look's theme and language, read when the interface loads: one load where the
+ * page already stands on the interface, two only for the first.
+ */
+async function open(page: Page, path: string, look: Look): Promise<void> {
+  if (page.url() === "about:blank") await page.goto(path);
   await page.evaluate(
     ({ theme, locale }) => {
       window.localStorage.setItem("vivd-catalyst:theme", theme);
       window.localStorage.setItem("vivd-catalyst:locale", locale);
     },
-    { theme: view.theme, locale: view.locale }
+    { theme: look.theme, locale: look.locale }
   );
-  await page.reload();
+  await page.goto(path);
+}
+
+/**
+ * Each theme and language loads `path` once at the wide size; `check` then runs at each width in
+ * turn, as a person narrows the window.
+ */
+async function eachView(
+  page: Page,
+  path: string,
+  check: (view: View) => Promise<void>
+): Promise<void> {
+  for (const look of LOOKS) {
+    await page.setViewportSize(SIZES[0]);
+    await open(page, path, look);
+    for (const size of SIZES) {
+      await page.setViewportSize(size);
+      await check({ ...look, ...size });
+    }
+  }
 }
 
 /**
@@ -248,9 +269,9 @@ test("Usage opens with the month's cost of its budget and the tokens under it, a
     });
   });
 
-  for (const view of VIEWS) {
+  const usagePage = "/settings/instance/usage";
+  await eachView(page, usagePage, async (view) => {
     const said = words[view.locale];
-    await open(page, "/settings/instance/usage", view);
     const lead = page.getByTestId("usage-month-budget");
     await expect(lead).toBeVisible();
     // The first block of the page, before the cost cards and the budget progress.
@@ -268,25 +289,23 @@ test("Usage opens with the month's cost of its budget and the tokens under it, a
     await expect(lead).toContainText(tokensSaid);
     await expect(lead.getByRole("progressbar")).toBeVisible();
     await shoot(page, "usage", view);
-  }
+  });
 
   // Nothing priced yet: the answer says so, and the configured budget still stands.
   month = "unknown";
-  for (const view of VIEWS) {
+  await eachView(page, usagePage, async (view) => {
     const said = words[view.locale];
-    await open(page, "/settings/instance/usage", view);
     const lead = page.getByTestId("usage-month-budget");
     const amount = new Intl.NumberFormat(view.locale, { style: "currency", currency: "EUR" });
     await expect(lead.getByTestId("usage-month-cost")).toHaveText(said.costUnknown);
     await expect(lead.getByTestId("usage-budget-limit")).toHaveText(amount.format(monthlyLimit));
     await shoot(page, "usage-cost-unknown", view);
-  }
+  });
 
   // Over the budget: the month's card says the limit is reached and new calls are blocked.
   month = "over";
-  for (const view of VIEWS) {
+  await eachView(page, usagePage, async (view) => {
     const said = words[view.locale];
-    await open(page, "/settings/instance/usage", view);
     const lead = page.getByTestId("usage-month-budget");
     const amount = new Intl.NumberFormat(view.locale, { style: "currency", currency: "EUR" });
     await expect(lead.getByTestId("usage-month-cost")).toHaveText(
@@ -295,12 +314,11 @@ test("Usage opens with the month's cost of its budget and the tokens under it, a
     await expect(lead).toContainText(said.limitReached);
     await expect(lead).toContainText(said.blockedMonth);
     await shoot(page, "usage-over-budget", view);
-  }
+  });
 
   await page.unroute("**/api/v1/instance/usage");
   await page.route("**/api/v1/instance/usage", refuse);
-  for (const view of VIEWS) {
-    await open(page, "/settings/instance/usage", view);
+  await eachView(page, usagePage, async (view) => {
     const said = words[view.locale];
     const refusal = page.locator('[data-tone="info"]', {
       hasText: `${said.usageRefused} ${said.ask(adminName)}`
@@ -308,7 +326,7 @@ test("Usage opens with the month's cost of its budget and the tokens under it, a
     await expect(refusal).toBeVisible();
     await expect(page.getByText(/Settings >|Einstellungen >/u)).toHaveCount(0);
     await shoot(page, "usage-refused", view);
-  }
+  });
 });
 
 test("API keys open with the person's keys, and refusals name an instance admin", async ({
@@ -329,9 +347,8 @@ test("API keys open with the person's keys, and refusals name an instance admin"
   const keyId = z.object({ key: idSchema }).parse(await created.json()).key.id;
 
   try {
-    for (const view of VIEWS) {
+    await eachView(page, "/settings/you/api-keys", async (view) => {
       const said = words[view.locale];
-      await open(page, "/settings/you/api-keys", view);
       const yourKeys = page.getByRole("heading", { level: 2, name: said.yourKeys, exact: true });
       const connect = page.getByRole("heading", { level: 2, name: said.connect, exact: true });
       await expect(page.getByText(keyName)).toBeVisible();
@@ -403,22 +420,21 @@ test("API keys open with the person's keys, and refusals name an instance admin"
       await close.click();
       await expect(question).toBeHidden();
       await page.unrouteAll({ behavior: "ignoreErrors" });
-    }
+    });
 
     // The list itself refused.
     await page.route("**/api/v1/me/api-keys**", (route) =>
       route.request().method() === "GET" ? refuse(route) : route.fallback()
     );
-    for (const view of VIEWS) {
+    await eachView(page, "/settings/you/api-keys", async (view) => {
       const said = words[view.locale];
-      await open(page, "/settings/you/api-keys", view);
       await expect(
         page.locator('[data-tone="info"]', {
           hasText: `${said.listRefused} ${said.ask(adminName)}`
         })
       ).toBeVisible();
       await shoot(page, "api-keys-list-refused", view);
-    }
+    });
   } finally {
     await page.unrouteAll({ behavior: "ignoreErrors" });
     await requestWithOrigin(page, "post", `${apiBaseUrl}/api/v1/me/api-keys/${keyId}/revoke`);
@@ -439,17 +455,17 @@ test("Members come first, requests show only while somebody asks, and a refusal 
   });
   expect(created.ok(), await created.text()).toBe(true);
   const workspaceId = idSchema.parse(await created.json()).id;
-  const membersPage = async (view: View) => {
-    await open(page, `/w/${workspaceId}`, view);
-    await open(page, "/settings/workspace/members", view);
-    await expect(page.getByTestId("collaboration-workspace-member-row").first()).toBeVisible();
-  };
+  const membersPath = "/settings/workspace/members";
+  const memberRow = page.getByTestId("collaboration-workspace-member-row").first();
 
   try {
+    // The browser remembers the workspace last opened, which the Workspace pages change.
+    await page.goto(`/w/${workspaceId}`);
+    await expect(page).toHaveURL(new RegExp(`/w/${workspaceId}`, "u"));
     // A workspace people can find, with nobody asking: no Requests section at all.
-    for (const view of VIEWS) {
+    await eachView(page, membersPath, async (view) => {
       const said = words[view.locale];
-      await membersPage(view);
+      await expect(memberRow).toBeVisible();
       // One title, with Add member in the page's head, as API keys has New key.
       await expect(
         page.getByRole("heading", { level: 1, name: said.members, exact: true })
@@ -464,7 +480,7 @@ test("Members come first, requests show only while somebody asks, and a refusal 
         page.getByRole("heading", { level: 2, name: said.requests, exact: true })
       ).toHaveCount(0);
       await shoot(page, "members", view);
-    }
+    });
 
     // Somebody asks: Requests stands below Members, and approving it is refused here.
     // A predicate on the path, so the list's paging query matches too.
@@ -477,9 +493,12 @@ test("Members come first, requests show only while somebody asks, and a refusal 
           : route.fallback()
     );
     await page.route("**/api/v1/workspaces/*/access-requests/*/approve", refuse);
-    for (const view of VIEWS) {
+    // Each view loads the page again: approving changes what the next picture would show.
+    for (const view of LOOKS.flatMap((look) => SIZES.map((size) => ({ ...look, ...size })))) {
       const said = words[view.locale];
-      await membersPage(view);
+      await page.setViewportSize(view);
+      await open(page, membersPath, view);
+      await expect(memberRow).toBeVisible();
       const members = page.getByTestId("collaboration-workspace-members");
       const requests = page.getByRole("heading", { level: 2, name: said.requests, exact: true });
       const requestsSection = page.locator("section").filter({ has: requests });

@@ -7,7 +7,7 @@ import {
 } from "@work-shape/catalyst-api-client";
 import {
   getCurrentUserWithinDeadline,
-  threadQueryRetry,
+  retryUnlessRefused,
   threadRetryDelay,
   workspaceConfigQueryOptions
 } from "./support/chat-ui";
@@ -286,14 +286,14 @@ describe("loading the instance configuration", () => {
   });
 });
 
-describe("loading a conversation thread", () => {
+describe("loading a conversation thread or a Settings page's own list", () => {
   it("never asks again for a refusal, but does for a timeout or a rate limit", () => {
-    expect(threadQueryRetry(0, new ApiError(404, "not found", undefined))).toBe(false);
-    expect(threadQueryRetry(0, new ApiError(403, "forbidden", undefined))).toBe(false);
-    expect(threadQueryRetry(0, new ApiError(408, "timeout", undefined))).toBe(true);
-    expect(threadQueryRetry(0, new ApiError(429, "slow down", undefined))).toBe(true);
-    expect(threadQueryRetry(0, new ApiError(503, "unavailable", undefined))).toBe(true);
-    expect(threadQueryRetry(3, new ApiError(429, "slow down", undefined))).toBe(false);
+    expect(retryUnlessRefused(0, new ApiError(404, "not found", undefined))).toBe(false);
+    expect(retryUnlessRefused(0, new ApiError(403, "forbidden", undefined))).toBe(false);
+    expect(retryUnlessRefused(0, new ApiError(408, "timeout", undefined))).toBe(true);
+    expect(retryUnlessRefused(0, new ApiError(429, "slow down", undefined))).toBe(true);
+    expect(retryUnlessRefused(0, new ApiError(503, "unavailable", undefined))).toBe(true);
+    expect(retryUnlessRefused(3, new ApiError(429, "slow down", undefined))).toBe(false);
   });
 
   it("waits as long as a rate limit asks, and backs off otherwise", () => {

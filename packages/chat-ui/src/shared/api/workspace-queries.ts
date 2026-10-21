@@ -313,14 +313,14 @@ export function useWorkspaceThreadQuery(
       }),
     // A thread the instance refuses, as one the person may not read, is not asked for again:
     // the dock that names it opens empty at once. A timeout or a rate limit passes, so it is.
-    retry: threadQueryRetry,
+    retry: retryUnlessRefused,
     retryDelay: threadRetryDelay,
     enabled: input.enabled
   });
 }
 
 /** As often as a query is tried again by default. */
-const THREAD_LOAD_RETRIES = 3;
+const QUERY_RETRIES = 3;
 
 /** Statuses below 500 that pass by themselves: a request timeout and a rate limit. */
 const PASSING_CLIENT_STATUSES = new Set([408, 429]);
@@ -334,8 +334,12 @@ function isRefusal(error: unknown): boolean {
   );
 }
 
-export function threadQueryRetry(failureCount: number, error: unknown): boolean {
-  return failureCount < THREAD_LOAD_RETRIES && !isRefusal(error);
+/**
+ * Tries a read again as often as by default, except one the instance refused: the same person
+ * asking again is refused again, and the page would wait for nothing before saying so.
+ */
+export function retryUnlessRefused(failureCount: number, error: unknown): boolean {
+  return failureCount < QUERY_RETRIES && !isRefusal(error);
 }
 
 /** The longest single wait before a thread is asked for again. */
@@ -407,6 +411,8 @@ export function useWorkspaceUsageQuery(
   return useQuery({
     queryKey: workspaceQueryKeys.usage(input.apiBaseUrl, input.authScope),
     queryFn: () => input.client.usage.get_summary(),
+    // A refusal is said at once, naming whom to ask: asking again would be refused again.
+    retry: retryUnlessRefused,
     enabled: input.enabled
   });
 }
