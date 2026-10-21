@@ -3,6 +3,7 @@ import { createClientBranding, createSafeConfigView } from "@work-shape/catalyst
 import {
   allowedLegacyPermissions,
   asUserId,
+  DEFAULT_FOLLOW_UP_MODE,
   getSubjectUserId,
   moduleConfigKey,
   readDatabaseReadiness
@@ -32,7 +33,8 @@ export function registerConfigRoutes(route: Route, options: ChatServerOptions): 
     return {
       ...user,
       ...(record?.locale ? { locale: record.locale } : {}),
-      followUpMode: record?.followUpMode ?? "queue",
+      // Without a record nothing can steer, so the message waits.
+      followUpMode: record ? (record.followUpMode ?? DEFAULT_FOLLOW_UP_MODE) : "queue",
       permissions: allowedLegacyPermissions(access),
       instanceAdminName: await readInstanceAdminName(options.stores.users, options.clientInstanceId)
     };

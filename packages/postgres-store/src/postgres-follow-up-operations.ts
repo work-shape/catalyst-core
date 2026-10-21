@@ -27,6 +27,7 @@ import {
 } from "@work-shape/catalyst-core";
 import type { PostgresConnection } from "./postgres-database";
 import { lockActiveConversation } from "./postgres-conversation-operations";
+import { declineConfirmationsForSteer } from "./postgres-agent-run-decision-operations";
 import { mapConversationAttachment } from "./rows";
 import {
   agentRuns,
@@ -285,6 +286,98 @@ export async function queueFollowUp(
   return followUp;
 }
 
+/**
+ * Whether a person's steer may go into this active run (FU-2): only into their own run, one of
+ * the conversation itself that is not ending. The credential and the attachments are the
+ * caller's to check.
+ */
+export function runTakesSteerFrom(
+  run: typeof agentRuns.$inferSelect,
+  authorUserId: string
+): boolean {
+  return (
+    run.ownerUserId === authorUserId &&
+    run.status !== "cancelling" &&
+    run.parentRunId === null &&
+    run.workflowStepRunId === null
+  );
+}
+
+/**
+ * Turns the author's queued message into a steer of their running turn, as if it had been
+ * sent with `steer`: same run owner, same credential, no attachments. Otherwise CONFLICT and
+ * it stays queued. `queued` is called when a declined confirmation queued the run again.
+ */
+async function steerQueuedFollowUp(
+  db: PostgresConnection,
+  input: FollowUpScope & { followUpId: string; authorUserId: string },
+  queued: () => void
+): Promise<ConversationFollowUp> {
+  return db.transaction(async (tx) => {
+    if (!(await lockActiveConversation(tx, input.clientInstanceId, input.conversationId)))
+      throw new AppError("NOT_FOUND", "Conversation is not available");
+    const [item] = await followUpsWithAuthors(tx)
+      .where(and(scopeWhere(input), eq(conversationFollowUps.id, input.followUpId)))
+      .limit(1);
+    if (!item) throw new AppError("NOT_FOUND", "Follow-up is not available");
+    if (item.authorUserId !== input.authorUserId)
+      throw new AppError("FORBIDDEN", "Only the author may steer with this follow-up");
+    if (item.status !== "pending")
+      throw new AppError("CONFLICT", "Follow-up was already dispatched");
+    const [run] = await tx
+      .select()
+      .from(agentRuns)
+      .where(
+        and(
+          eq(agentRuns.clientInstanceId, input.clientInstanceId),
+          eq(agentRuns.conversationId, input.conversationId),
+          inArray(agentRuns.status, ACTIVE_AGENT_RUN_STATUSES)
+        )
+      )
+      .limit(1);
+    if (item.mode === "steer" && run && item.dispatchedRunId === run.id) return mapFollowUp(item);
+    if (!run || !runTakesSteerFrom(run, input.authorUserId))
+      throw new AppError("CONFLICT", "Only your own running turn can be steered");
+    const [same] = await tx
+      .select({ id: agentRuns.id })
+      .from(agentRuns)
+      .innerJoin(conversationFollowUps, eq(conversationFollowUps.id, item.id))
+      .where(
+        and(
+          eq(agentRuns.id, run.id),
+          sql`${agentRuns.authorizationContext} = ${conversationFollowUps.authorizationContext}`
+        )
+      )
+      .limit(1);
+    if (!same)
+      throw new AppError("CONFLICT", "This message was sent with another credential than the run");
+    const [attachment] = await tx
+      .select({ id: conversationAttachments.id })
+      .from(conversationAttachments)
+      .where(
+        and(
+          eq(conversationAttachments.clientInstanceId, input.clientInstanceId),
+          eq(conversationAttachments.followUpId, item.id),
+          ne(conversationAttachments.status, "deleted")
+        )
+      )
+      .limit(1);
+    if (attachment)
+      throw new AppError("CONFLICT", "A message with attachments waits for the next turn");
+    const [row] = await tx
+      .update(conversationFollowUps)
+      .set({ mode: "steer", dispatchedRunId: run.id, updatedAt: new Date() })
+      .where(eq(conversationFollowUps.id, item.id))
+      .returning();
+    if (!row) throw new AppError("INTERNAL", "Follow-up was not changed");
+    const result = mapFollowUp({ ...row, authorDisplayLabel: item.authorDisplayLabel });
+    await observeFollowUpChange(tx, result);
+    // A steer while the run waits on its person's confirmation declines that call.
+    await declineConfirmationsForSteer(tx, run, queued);
+    return result;
+  });
+}
+
 /** Caller holds the conversation lock. Stop at the first incompatible pending item. */
 export async function getPendingFollowUpTurn(db: PostgresConnection, input: FollowUpScope) {
   const pending = and(scopeWhere(input), eq(conversationFollowUps.status, "pending"));
@@ -325,9 +418,10 @@ export async function getPendingFollowUpTurn(db: PostgresConnection, input: Foll
     .orderBy(asc(conversationFollowUps.position));
 }
 
+/** `enqueued` is called for every job this store inserts, before its transaction commits. */
 export function createPostgresFollowUpStore(
   db: PostgresConnection,
-  deps: { lockActiveConversation: typeof lockActiveConversation }
+  deps: { lockActiveConversation: typeof lockActiveConversation; enqueued: () => void }
 ): ConversationFollowUpStore {
   const pending = (input: FollowUpScope, connection: PostgresConnection = db) =>
     followUpsWithAuthors(connection)
@@ -395,6 +489,14 @@ export function createPostgresFollowUpStore(
           )
           .orderBy(asc(conversationAttachments.createdAt), asc(conversationAttachments.id))
       ).map(mapConversationAttachment);
+    },
+    async steer(input) {
+      let resumed = false;
+      const followUp = await steerQueuedFollowUp(db, input, () => {
+        resumed = true;
+      });
+      if (resumed) deps.enqueued();
+      return followUp;
     },
     async cancel(input) {
       return db.transaction(async (tx) => {

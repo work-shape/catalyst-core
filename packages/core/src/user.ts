@@ -48,8 +48,8 @@ export interface UserRecord {
    */
   locale?: LocaleCode;
   /**
-   * What Enter does with a message sent during the person's own run (FU-2). Left out, it waits
-   * in the queue.
+   * What Enter does with a message sent during the person's own run (FU-2). Left out, it is
+   * `DEFAULT_FOLLOW_UP_MODE`: the message steers the run.
    */
   followUpMode?: FollowUpMode;
   createdAt: ISODateString;

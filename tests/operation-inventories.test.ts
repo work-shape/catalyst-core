@@ -59,14 +59,16 @@ describe("a changing operation is registered or named as plain", () => {
     expect(Object.keys(list.changing).sort()).toEqual([...plainChanging].sort());
   });
 
-  // FU-1a F4/F5 explicitly approves these new unaudited queue controls. They are not
-  // pre-existing plain operations. Keep this reviewed allowance finite; adding another
-  // plain operation still exceeds the unchanged baseline below.
+  // FU-1a F4/F5 explicitly approves these new unaudited queue controls, and FU-2 the queued
+  // message's Steer now, whose steer is audited as `message.created` once the run takes it in.
+  // They are not pre-existing plain operations. Keep this reviewed allowance finite; adding
+  // another plain operation still exceeds the unchanged baseline below.
   const approvedFollowUpControls = new Set<string>([
     "conversations.follow_ups.withdraw",
-    "conversations.follow_ups.dispatch"
+    "conversations.follow_ups.dispatch",
+    "conversations.follow_ups.steer"
   ]);
-  it("keeps the two approved follow-up controls changing, unaudited and conversation-authorized", () => {
+  it("keeps the approved follow-up controls changing, unaudited and conversation-authorized", () => {
     for (const name of approvedFollowUpControls) {
       expect(list.changing[name]).toMatchObject({ class: "conversation" });
       expect(list.rightDecidedBy[name]).toBe("conversation_access");

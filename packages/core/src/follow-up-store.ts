@@ -23,6 +23,13 @@ export interface ConversationFollowUpStore {
     input: FollowUpScope & { followUpId: string }
   ): Promise<AgentRunAuthorization | undefined>;
   listAttachments(input: FollowUpScope & { followUpId: string }): Promise<ConversationAttachment[]>;
+  /**
+   * Hands the author's queued message to their own running turn, as a steer (FU-2), under the
+   * conversation lock. CONFLICT where it could not have been sent as one; it stays queued.
+   */
+  steer(
+    input: FollowUpScope & { followUpId: string; authorUserId: string }
+  ): Promise<ConversationFollowUp>;
   /** Cancels under the conversation lock. With an author, refuses another person's item. */
   cancel(
     input: FollowUpScope & { followUpId: string; authorUserId?: string }

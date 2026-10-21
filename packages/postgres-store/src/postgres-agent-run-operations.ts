@@ -60,6 +60,7 @@ import {
   getPendingFollowUpTurn,
   observeFollowUpChange,
   mapFollowUp,
+  runTakesSteerFrom,
   withFollowUpAuthorLabels
 } from "./postgres-follow-up-operations";
 import { enqueueJob } from "./jobs/store";
@@ -177,13 +178,7 @@ async function steersInto(
   run: typeof agentRuns.$inferSelect,
   input: PrepareConversationRunStartInput
 ): Promise<boolean> {
-  if (
-    run.ownerUserId !== input.ownerUserId ||
-    run.status === "cancelling" ||
-    run.parentRunId !== null ||
-    run.workflowStepRunId !== null
-  )
-    return false;
+  if (!runTakesSteerFrom(run, input.ownerUserId)) return false;
   const [same] = await tx
     .select({ id: agentRuns.id })
     .from(agentRuns)

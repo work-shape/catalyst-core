@@ -42,6 +42,7 @@ import {
   asToolCallId,
   asClientInstanceId,
   asUserId,
+  DEFAULT_FOLLOW_UP_MODE,
   isLocaleCode,
   asApiCredentialId,
   asServicePrincipalId,
@@ -619,7 +620,7 @@ export function mapUserRecord(
     status: row.deletionRequestedAt ? "deleting" : row.status,
     // A language the release no longer ships reads as none: the default applies.
     ...(row.locale && isLocaleCode(row.locale) ? { locale: row.locale } : {}),
-    ...(row.followUpMode === "steer" ? { followUpMode: "steer" as const } : {}),
+    ...(row.followUpMode === DEFAULT_FOLLOW_UP_MODE ? {} : { followUpMode: row.followUpMode }),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     lastAuthenticatedAt: row.lastAuthenticatedAt?.toISOString(),

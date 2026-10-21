@@ -39,6 +39,9 @@ export function registerAgentRunRoutes(route: Route, options: ChatServerOptions)
   route(apiOperations["conversations.follow_ups.withdraw"], async ({ user, params }) => ({
     followUp: await followUps.withdraw(conversationIdParam(params), params.followUpId, user)
   }));
+  route(apiOperations["conversations.follow_ups.steer"], async ({ user, params }) => ({
+    followUp: await followUps.steer(conversationIdParam(params), params.followUpId, user)
+  }));
   route(apiOperations["conversations.follow_ups.dispatch"], async ({ user, params, context }) => {
     await followUps.requestDispatch(conversationIdParam(params), user, context);
     return {};

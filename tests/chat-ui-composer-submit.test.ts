@@ -270,8 +270,8 @@ describe("composer submission before its next render", () => {
       );
       expect(send.title).toMatch(
         mode === "steer"
-          ? /^Steer: read after the current step\. (⌘|Ctrl)\+Enter sends after this answer instead\.$/u
-          : /^Send after this answer\. (⌘|Ctrl)\+Enter steers the answer instead\.$/u
+          ? /^Steer: the agent reads it after its current step\. (⌘|Ctrl)\+Enter sends it after the whole answer instead\.$/u
+          : /^Queue: sent once the agent has finished this whole answer\. (⌘|Ctrl)\+Enter steers instead\.$/u
       );
     }
   });
@@ -297,7 +297,9 @@ describe("composer submission before its next render", () => {
     const send = required(
       container.querySelector<HTMLButtonElement>('[aria-label="Send after this answer"]')
     );
-    expect(send.title).toBe("Sends after the current answer. Only who started it can steer it.");
+    expect(send.title).toBe(
+      "Sent once the agent has finished this answer. Only the person who started it can steer it."
+    );
   });
 });
 
@@ -312,6 +314,7 @@ function followUpModel(overrides: Partial<FollowUpQueueModel> = {}): FollowUpQue
     dispatching: false,
     error: undefined,
     queue() {},
+    steer() {},
     withdraw() {},
     discardOwn() {},
     sendNow() {},

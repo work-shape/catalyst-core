@@ -81,7 +81,10 @@ export function useFollowUpQueueModel(input: {
     seenWith: readonly ConversationFollowUp[];
   }>();
   const [withdrawnIds, setWithdrawnIds] = useState<ReadonlySet<string>>(new Set());
+  /** Messages whose withdrawal or steer is on its way. */
   const [withdrawingIds, setWithdrawingIds] = useState<ReadonlySet<string>>(new Set());
+  /** Messages the server turned into a steer, until the thread says so itself. */
+  const [steeredIds, setSteeredIds] = useState<ReadonlySet<string>>(new Set());
   const [queueing, setQueueing] = useState(false);
   const [dispatching, setDispatching] = useState(false);
   const [error, setError] = useState<string>();
@@ -241,6 +244,37 @@ export function useFollowUpQueueModel(input: {
     [sendToQueue]
   );
 
+  /** Hands the reader's queued message to their own running turn, keeping its place on refusal. */
+  const steer = useCallback(
+    (id: string) => {
+      if (!conversationId) {
+        return;
+      }
+      setWithdrawingIds((current) => new Set(current).add(id));
+      setError(undefined);
+      client.conversations.follow_ups
+        .steer({ params: { conversationId, followUpId: id }, body: {} })
+        .then(({ followUp }) => {
+          // The stream tells every tab as well; this tab need not wait for it.
+          setSteeredIds((current) => new Set(current).add(followUp.id));
+        })
+        .catch((cause: unknown) => {
+          setError(
+            t(apiErrorStatus(cause) === 409 ? "followUpSteerRefused" : "followUpActionFailed")
+          );
+          refreshThread(conversationId).catch(() => undefined);
+        })
+        .finally(() =>
+          setWithdrawingIds((current) => {
+            const next = new Set(current);
+            next.delete(id);
+            return next;
+          })
+        );
+    },
+    [client, conversationId, refreshThread, t]
+  );
+
   const withdraw = useCallback(
     (id: string, onWithdrawn?: (text: string) => void) => {
       withdrawOne(id)
@@ -297,7 +331,13 @@ export function useFollowUpQueueModel(input: {
     }
     const liveRunId = runLive ? runId : undefined;
     const items = followUps.map((followUp) =>
-      followUpQueueItem(followUp, source.currentUserId, liveRunId)
+      followUpQueueItem(
+        steeredIds.has(followUp.id) && followUp.mode === "queue" && liveRunId !== undefined
+          ? { ...followUp, mode: "steer", dispatchedRunId: liveRunId }
+          : followUp,
+        source.currentUserId,
+        liveRunId
+      )
     );
     return {
       items,
@@ -312,6 +352,7 @@ export function useFollowUpQueueModel(input: {
       dispatching,
       error,
       queue,
+      steer,
       withdraw,
       discardOwn,
       sendNow
@@ -331,6 +372,8 @@ export function useFollowUpQueueModel(input: {
     runStatus,
     sendNow,
     source,
+    steer,
+    steeredIds,
     withdraw,
     withdrawingIds
   ]);

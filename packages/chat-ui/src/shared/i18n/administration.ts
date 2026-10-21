@@ -12,7 +12,7 @@ export const administration = defineTranslations({
     contextIndicatorDescription: "Show current context usage beside the message composer.",
     followUpMode: "Enter while an answer runs",
     followUpModeDescription:
-      "Queue sends your message after the answer. Steer gives it to the agent after its current step, in a run you started. {keys} does the other.",
+      "Steer: the agent reads your message after its current step, in a run you started. Queue: it is sent once the agent has finished the whole answer. {keys} does the other.",
     followUpModeNotSaved: "The choice could not be saved.",
     followUpModeQueue: "Queue",
     followUpModeSteer: "Steer",
@@ -211,7 +211,7 @@ export const administration = defineTranslations({
     contextIndicatorDescription: "Zeigt die aktuelle Kontextnutzung neben dem Nachrichtenfeld.",
     followUpMode: "Enter während einer Antwort",
     followUpModeDescription:
-      "Warteschlange sendet deine Nachricht nach der Antwort. Lenken gibt sie dem Agenten nach seinem aktuellen Schritt, in einem Lauf, den du gestartet hast. {keys} macht das andere.",
+      "Lenken: Der Agent liest deine Nachricht nach seinem aktuellen Schritt, in einem Lauf, den du gestartet hast. Warteschlange: Sie wird gesendet, sobald der Agent mit der ganzen Antwort fertig ist. {keys} macht das andere.",
     followUpModeNotSaved: "Die Auswahl konnte nicht gespeichert werden.",
     followUpModeQueue: "Warteschlange",
     followUpModeSteer: "Lenken",

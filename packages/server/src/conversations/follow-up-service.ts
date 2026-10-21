@@ -37,6 +37,19 @@ export class FollowUpWorkflow {
     });
   }
 
+  /** The author's queued message steers their own running turn instead (FU-2). */
+  async steer(conversationId: ConversationId, followUpId: string, user: AuthenticatedUser) {
+    // A steer is a message the running turn reads: as sending one, it needs both scopes.
+    requireAuthScope(user, "run:start");
+    await this.conversations.requireChatConversationAccess(conversationId, user);
+    return this.options.stores.followUps.steer({
+      clientInstanceId: this.options.clientInstanceId,
+      conversationId,
+      followUpId,
+      authorUserId: getSubjectUserId(user)
+    });
+  }
+
   async requestDispatch(
     conversationId: ConversationId,
     user: AuthenticatedUser,

@@ -1,6 +1,7 @@
 conversations.create  POST /api/v1/conversations
 conversations.delete  DELETE /api/v1/conversations/:conversationId
 conversations.follow_ups.dispatch  POST /api/v1/conversations/:conversationId/follow-ups/dispatch
+conversations.follow_ups.steer  POST /api/v1/conversations/:conversationId/follow-ups/:followUpId/steer
 conversations.follow_ups.withdraw  POST /api/v1/conversations/:conversationId/follow-ups/:followUpId/withdraw
 conversations.list  GET /api/v1/conversations
 conversations.messages.list  GET /api/v1/conversations/:conversationId/messages

@@ -339,6 +339,60 @@ describe("steering a running turn", () => {
     await f.until(next, "completed");
   });
 
+  it("lets the author steer with a message already queued, in their own run only", async () => {
+    const f = await fixture();
+    const { run: started } = await f.start();
+    await waitUntil(async () => f.requests.length === 1, "the step calls the waiting tool");
+    const mine = await f.send("Look at the cellar", "queue");
+    const theirs = await f.send("Steer from a colleague", "queue", "other");
+    const steer = (followUpId: string, as = "author") =>
+      f.app.call(
+        "conversations.follow_ups.steer",
+        { params: { conversationId: f.scope.conversationId, followUpId }, payload: {} },
+        as
+      );
+
+    // Only the author may, and only into a run they started.
+    expect((await steer(mine.id, "other")).statusCode).toBe(403);
+    expect((await steer(theirs.id, "other")).statusCode).toBe(409);
+    expect(await f.followUp(theirs.id)).toMatchObject({ mode: "queue", status: "pending" });
+
+    const steered = await steer(mine.id);
+    expect(steered.statusCode, steered.body).toBe(200);
+    expect(steered.json<{ followUp: ConversationFollowUp }>().followUp).toMatchObject({
+      id: mine.id,
+      mode: "steer",
+      status: "pending",
+      position: mine.position,
+      dispatchedRunId: started.id
+    });
+    // A second click changes nothing.
+    expect((await steer(mine.id)).statusCode).toBe(200);
+    const events = await withTestSql(
+      (sql) =>
+        sql`select payload from agent_run_observations where run_id = ${started.id} and type = 'follow_up_changed' order by sequence`
+    );
+    expect(events.at(-1)?.payload).toMatchObject({ followUp: { id: mine.id, mode: "steer" } });
+
+    f.releaseTool();
+    await waitUntil(async () => f.requests.length === 2, "the next model call went out");
+    expect(modelContentText(required(required(f.requests[1]).messages.at(-1)).content)).toBe(
+      "Look at the cellar"
+    );
+    expect(await f.followUp(mine.id)).toMatchObject({ status: "consumed" });
+    // A message taken in is no longer pending.
+    expect((await steer(mine.id)).statusCode).toBe(409);
+    await f.release(1);
+    await f.until(started.id, "completed");
+
+    // The colleague's message waited and runs as its own turn.
+    await f.dispatch();
+    await waitUntil(async () => f.requests.length === 3, "the queued message ran");
+    const next = required((await f.followUp(theirs.id))?.dispatchedRunId);
+    await f.release(2);
+    await f.until(next, "completed");
+  });
+
   it("keeps a steer it took in when it goes on after a confirmation", async () => {
     const f = await fixture();
     const { run: started } = await f.start();

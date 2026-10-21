@@ -119,6 +119,7 @@ describe("follow-up queue above the composer", () => {
       dispatching: false,
       error: undefined,
       queue: () => undefined,
+      steer: () => undefined,
       withdraw: () => undefined,
       discardOwn: () => undefined,
       sendNow: () => undefined,
@@ -173,13 +174,27 @@ describe("follow-up queue above the composer", () => {
   });
 
   it.each(["en", "de"] as const)(
-    "says a steer into the live run is read after the current step in %s",
+    "says a steer into the live run is read after the agent's current step in %s",
     (locale) => {
       const steer = { ...fromB, mode: "steer" as const, dispatchedRunId: "run_live" };
       const item = followUpQueueItem(steer, "b", "run_live");
       expect(item.steering).toBe(true);
-      expect(render(model({ items: [item] }), locale)).toContain(
-        locale === "en" ? "Read after the current step" : "Wird nach dem aktuellen Schritt gelesen"
+      // Alone, the heading says it; it waits for no answer.
+      const alone = render(model({ items: [item] }), locale);
+      expect(alone).toContain(locale === "en" ? "Steering" : "Lenkt die Antwort");
+      expect(alone).toContain(
+        locale === "en"
+          ? "The agent reads it after its current step and keeps answering."
+          : "Der Agent liest sie nach seinem aktuellen Schritt und antwortet weiter."
+      );
+      expect(alone).not.toContain(locale === "en" ? "whole answer" : "ganzen Antwort");
+      // Beside a queued message, its own row says it is read sooner.
+      const mixed = render(model({ items: [item, own] }), locale);
+      expect(mixed).toContain(locale === "en" ? "Queued" : "In der Warteschlange");
+      expect(mixed).toContain(
+        locale === "en"
+          ? "Steers: the agent reads it after its current step"
+          : "Lenkt: Der Agent liest sie nach seinem aktuellen Schritt"
       );
       // Once its run ended, it waits as any queued message.
       expect(followUpQueueItem(steer, "b", undefined).steering).toBe(false);
@@ -212,7 +227,7 @@ describe("follow-up queue above the composer", () => {
     const markup = render(model({}));
     expect(markup).toContain('aria-label="Queued messages"');
     expect(markup).toContain("Queued");
-    expect(markup).toContain("Sends after the current answer.");
+    expect(markup).toContain("Sent once the agent has finished this whole answer.");
     expect(markup.indexOf(own.text)).toBeLessThan(markup.indexOf(others.text));
     expect(markup).not.toContain("Send now");
   });
@@ -228,13 +243,39 @@ describe("follow-up queue above the composer", () => {
     expect(ownMarkup).toContain('aria-label="Remove"');
   });
 
+  it.each(["en", "de"] as const)(
+    "offers Steer now on the reader's queued message in their own run in %s",
+    (locale) => {
+      const label = locale === "en" ? "Steer now" : "Jetzt lenken";
+      const steered: string[] = [];
+      const markup = render(model({ steer: (id) => steered.push(id) }), locale);
+      expect(markup.split(`>${label}<`)).toHaveLength(2);
+      expect(markup).toContain(
+        locale === "en"
+          ? 'title="The agent reads it after its current step, instead of after the whole answer."'
+          : 'title="Der Agent liest sie nach seinem aktuellen Schritt, nicht erst nach der ganzen Antwort."'
+      );
+      expect(markup).toContain(
+        locale === "en"
+          ? "Sent once the agent has finished this whole answer."
+          : "Wird gesendet, sobald der Agent mit der ganzen Antwort fertig ist."
+      );
+      // Not in someone else's run, not while the queue stands still, not on a steer already.
+      expect(render(model({ ownRun: false }), locale)).not.toContain(`>${label}<`);
+      expect(render(model({ phase: "paused" }), locale)).not.toContain(`>${label}<`);
+      expect(render(model({ items: [{ ...own, steering: true }] }), locale)).not.toContain(
+        `>${label}<`
+      );
+    }
+  );
+
   it("says the queue is paused after a stop, with Send now and Discard", () => {
     const markup = render(model({ phase: "paused" }));
     expect(markup).toContain("Queue paused");
     // The run's own notice says why. The queue says what restarts it: a message sent now runs
     // first, and the queue goes on after its answer.
     expect(markup).toContain("Continues after the next message is answered.");
-    expect(markup).not.toContain("Sends after the current answer.");
+    expect(markup).not.toContain("Sent once the agent has finished this whole answer.");
     expect(markup).toContain("Send now");
     expect(markup).toContain("Discard");
     // The oldest message is the reader's own; the other one's row only names its author.

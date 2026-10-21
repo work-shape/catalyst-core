@@ -35,15 +35,23 @@ export const assistant = defineTranslations({
     followUpQueued: "Queued",
     followUpRemove: "Remove",
     followUpSend: "Send after this answer",
-    followUpSendTitle: "Send after this answer. {keys} steers the answer instead.",
+    followUpSendTitle:
+      "Queue: sent once the agent has finished this whole answer. {keys} steers instead.",
     followUpSteer: "Steer the running answer",
     followUpSteerTitle:
-      "Steer: read after the current step. {keys} sends after this answer instead.",
-    followUpSteerNotOwn: "Sends after the current answer. Only who started it can steer it.",
-    followUpSteerPending: "Read after the current step",
+      "Steer: the agent reads it after its current step. {keys} sends it after the whole answer instead.",
+    followUpSteerNotOwn:
+      "Sent once the agent has finished this answer. Only the person who started it can steer it.",
+    followUpSteerNow: "Steer now",
+    followUpSteerNowTitle:
+      "The agent reads it after its current step, instead of after the whole answer.",
+    followUpSteerPending: "Steers: the agent reads it after its current step",
+    followUpSteerRefused: "This message cannot steer the answer, so it stays queued.",
+    followUpSteering: "Steering",
+    followUpSteeringHint: "The agent reads it after its current step and keeps answering.",
     followUpSendNow: "Send now",
     followUpSending: "Sending the next message…",
-    followUpWaitingHint: "Sends after the current answer.",
+    followUpWaitingHint: "Sent once the agent has finished this whole answer.",
     chatStarters: "Suggestions to start with",
     genericWelcome: "How can I help?",
     instanceNotConfigured: "This instance isn't configured yet. No agents have been published.",
@@ -129,16 +137,24 @@ export const assistant = defineTranslations({
     followUpQueued: "In der Warteschlange",
     followUpRemove: "Entfernen",
     followUpSend: "Nach dieser Antwort senden",
-    followUpSendTitle: "Nach dieser Antwort senden. {keys} lenkt stattdessen die Antwort.",
+    followUpSendTitle:
+      "Warteschlange: wird gesendet, sobald der Agent mit der ganzen Antwort fertig ist. {keys} lenkt stattdessen.",
     followUpSteer: "Laufende Antwort lenken",
     followUpSteerTitle:
-      "Lenken: wird nach dem aktuellen Schritt gelesen. {keys} sendet stattdessen nach dieser Antwort.",
+      "Lenken: Der Agent liest sie nach seinem aktuellen Schritt. {keys} sendet sie stattdessen nach der ganzen Antwort.",
     followUpSteerNotOwn:
-      "Wird nach der aktuellen Antwort gesendet. Nur wer sie gestartet hat, kann sie lenken.",
-    followUpSteerPending: "Wird nach dem aktuellen Schritt gelesen",
+      "Wird gesendet, sobald der Agent mit dieser Antwort fertig ist. Lenken kann nur, wer sie gestartet hat.",
+    followUpSteerNow: "Jetzt lenken",
+    followUpSteerNowTitle:
+      "Der Agent liest sie nach seinem aktuellen Schritt, nicht erst nach der ganzen Antwort.",
+    followUpSteerPending: "Lenkt: Der Agent liest sie nach seinem aktuellen Schritt",
+    followUpSteerRefused:
+      "Diese Nachricht kann die Antwort nicht lenken und bleibt in der Warteschlange.",
+    followUpSteering: "Lenkt die Antwort",
+    followUpSteeringHint: "Der Agent liest sie nach seinem aktuellen Schritt und antwortet weiter.",
     followUpSendNow: "Jetzt senden",
     followUpSending: "Nächste Nachricht wird gesendet…",
-    followUpWaitingHint: "Wird nach der aktuellen Antwort gesendet.",
+    followUpWaitingHint: "Wird gesendet, sobald der Agent mit der ganzen Antwort fertig ist.",
     chatStarters: "Vorschläge für den Einstieg",
     genericWelcome: "Wie kann ich helfen?",
     instanceNotConfigured:

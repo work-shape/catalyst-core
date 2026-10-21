@@ -28,7 +28,7 @@ export interface FollowUpQueueModel {
   /** A run goes and the reader started it: only then does a steer reach it. */
   ownRun: boolean;
   phase: FollowUpQueuePhase;
-  /** Messages whose withdrawal is on its way. */
+  /** Messages whose withdrawal or steer is on its way. */
   withdrawingIds: ReadonlySet<string>;
   /** A message is on its way into the queue. */
   queueing: boolean;
@@ -41,6 +41,11 @@ export interface FollowUpQueueModel {
    * the server holds it. The server queues a steer it cannot deliver.
    */
   queue(text: string, onQueued: () => void, mode?: FollowUpMode): void;
+  /**
+   * Hands the reader's queued message to their own running turn, which reads it after its
+   * current step. Where the server refuses, it stays queued and the error says why.
+   */
+  steer(id: string): void;
   /** Takes the reader's own message out of the queue; `onWithdrawn` gets its text back. */
   withdraw(id: string, onWithdrawn?: (text: string) => void): void;
   /** Takes all of the reader's messages out of the queue; `onDone` runs once each is answered. */
@@ -80,6 +85,11 @@ export function FollowUpQueue() {
   const paused = queue.phase === "paused";
   // Only the author of the oldest message may start it.
   const nextIsOwn = queue.items[0]?.own === true;
+  // Where every message steers, none waits for the end of the answer.
+  const allSteer = queue.items.length > 0 && queue.items.every((item) => item.steering);
+  // A queued message of the reader's may still steer the run they started (FU-2).
+  const canSteer = (item: FollowUpQueueItem) =>
+    item.own && !item.steering && queue.ownRun && queue.phase === "waiting";
 
   const edit = (item: FollowUpQueueItem) =>
     queue.withdraw(item.id, (text) =>
@@ -102,9 +112,9 @@ export function FollowUpQueue() {
               do not fit, and so do the actions. */}
             <div className="flex min-h-8 flex-wrap items-center gap-x-2 gap-y-1 px-2">
               <span className="shrink-0 text-label whitespace-nowrap text-foreground">
-                {paused ? t("followUpPaused") : t("followUpQueued")}
+                {paused ? t("followUpPaused") : t(allSteer ? "followUpSteering" : "followUpQueued")}
               </span>
-              <QueueHint phase={queue.phase} t={t} />
+              <QueueHint phase={queue.phase} allSteer={allSteer} t={t} />
               {paused && ownItems.length > 0 ? (
                 <span className="ml-auto flex shrink-0 items-center gap-1">
                   <Button
@@ -136,13 +146,26 @@ export function FollowUpQueue() {
                   title={item.text}
                   description={itemDescription(item, t, {
                     // Where Send now is missing, the oldest row says why.
-                    sendsNowOnlyByAuthor: paused && index === 0
+                    sendsNowOnlyByAuthor: paused && index === 0,
+                    // Beside queued messages, a steer says it is read sooner.
+                    mixed: !allSteer
                   })}
                   descriptionWraps
                   actionsVisible
                   actions={
                     item.own ? (
                       <>
+                        {canSteer(item) ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            title={t("followUpSteerNowTitle")}
+                            disabled={queue.withdrawingIds.has(item.id)}
+                            onClick={() => queue.steer(item.id)}
+                          >
+                            {t("followUpSteerNow")}
+                          </Button>
+                        ) : null}
                         <IconButton
                           label={t("followUpEdit")}
                           size="sm"
@@ -188,11 +211,21 @@ export function FollowUpQueue() {
 }
 
 /** What the queue waits for. Why it paused is the run's own notice, right above it. */
-function QueueHint({ phase, t }: { phase: FollowUpQueuePhase; t: TranslationContextValue["t"] }) {
+function QueueHint({
+  phase,
+  allSteer,
+  t
+}: {
+  phase: FollowUpQueuePhase;
+  allSteer: boolean;
+  t: TranslationContextValue["t"];
+}) {
   return (
     <span className="flex min-w-0 flex-1 basis-48 items-center gap-1.5 text-caption text-muted-foreground">
       {phase === "sending" ? <Spinner size="xs" className="shrink-0" /> : null}
-      <span className="min-w-0">{t(QUEUE_HINTS[phase])}</span>
+      <span className="min-w-0">
+        {t(phase === "waiting" && allSteer ? "followUpSteeringHint" : QUEUE_HINTS[phase])}
+      </span>
     </span>
   );
 }
@@ -207,10 +240,10 @@ const QUEUE_HINTS = {
 function itemDescription(
   item: FollowUpQueueItem,
   t: TranslationContextValue["t"],
-  { sendsNowOnlyByAuthor }: { sendsNowOnlyByAuthor: boolean }
+  { sendsNowOnlyByAuthor, mixed }: { sendsNowOnlyByAuthor: boolean; mixed: boolean }
 ): string | undefined {
   if (item.steering) {
-    return t("followUpSteerPending");
+    return mixed ? t("followUpSteerPending") : undefined;
   }
   if (item.own) {
     return undefined;

@@ -9,8 +9,8 @@ import { apiOrigin, uiOrigin } from "./view-fixtures";
 
 /** The person of this spec, from `tests/fixtures/e2e-users/follow-up-steer-confirmation.yaml`. */
 const person = { email: "e2e-steer-confirm@example.test", password: "e2e-steer-confirm-password" };
-/** A new person sends with Queue, so the other key steers. */
-const STEER = process.platform === "darwin" ? "Meta+Enter" : "Control+Enter";
+/** A new person steers their own run with Enter. */
+const STEER = "Enter";
 
 async function signIn(page: Page): Promise<void> {
   const signedIn = await page.request.post(`${apiOrigin}/api/auth/sign-in/email`, {

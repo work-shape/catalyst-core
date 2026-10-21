@@ -9,6 +9,9 @@ import type {
 /** What a message sent while a run goes does: wait as the next turn, or steer the run. */
 export type FollowUpMode = (typeof FOLLOW_UP_MODES)[number];
 
+/** What Enter does during a person's own run until they choose otherwise. */
+export const DEFAULT_FOLLOW_UP_MODE: FollowUpMode = "steer";
+
 /** A message accepted behind an active run; it is not yet part of the transcript. */
 export interface ConversationFollowUp {
   id: string;

@@ -63,7 +63,7 @@ describe("chat context indicator", () => {
     expect(indicatorMarkup).not.toContain(">50%<");
   });
 
-  it("offers what Enter does during a run, Queue by default, in both product locales", () => {
+  it("offers what Enter does during a run, Steer by default, in both product locales", () => {
     const chosen: string[] = [];
     const view = (locale: "de" | "en", followUpMode?: "queue" | "steer") =>
       renderToStaticMarkup(
@@ -87,12 +87,14 @@ describe("chat context indicator", () => {
     expect(german).toContain("Enter während einer Antwort");
     expect(german).toContain("Warteschlange");
     expect(german).toContain("Lenken");
-    expect(german).toMatch(
-      /aria-checked="true"[^>]*>Warteschlange|data-state="on"[^>]*>Warteschlange/u
+    expect(german).toMatch(/aria-checked="true"[^>]*>Lenken|data-state="on"[^>]*>Lenken/u);
+    expect(german).toContain(
+      "Lenken: Der Agent liest deine Nachricht nach seinem aktuellen Schritt"
     );
-    expect(view("en", "steer")).toMatch(
-      /aria-checked="true"[^>]*>Steer|data-state="on"[^>]*>Steer/u
+    expect(view("en", "queue")).toMatch(
+      /aria-checked="true"[^>]*>Queue|data-state="on"[^>]*>Queue/u
     );
+    expect(view("en")).toContain("Queue: it is sent once the agent has finished the whole answer.");
   });
 
   it("estimates non-zero usage for conversations without a provider snapshot", () => {

@@ -79,6 +79,11 @@ async function signIn(page: Page, person: { email: string; password: string }): 
   expect(signedIn.ok()).toBe(true);
   // The instance knows a person of the config from their first call on.
   expect((await page.request.get(`${apiOrigin}/api/v1/me`)).ok()).toBe(true);
+  // A new person steers their own run with Enter; the people of this spec queue (FU-2).
+  const queues = await requestWithOrigin(page, "patch", `${apiOrigin}/api/v1/me`, {
+    data: { followUpMode: "queue" }
+  });
+  expect(queues.ok()).toBe(true);
 }
 
 /** A workspace of the owner whose conversations its members see, with `invite` as a member. */
@@ -234,7 +239,7 @@ test("a message sent during a run waits in a queue both members see, and starts 
 
   const ownText = `Then check the March numbers ${suffix}`;
   await queueMessage(page, ownText);
-  await expect(queueOf(page)).toContainText("Sends after the current answer.");
+  await expect(queueOf(page)).toContainText("Sent once the agent has finished this whole answer.");
   // The member's tab follows the run, and the queue change is one more event on its stream.
   const memberQueue = queueOf(memberPage);
   await expect(memberQueue.getByText(ownText)).toBeVisible();

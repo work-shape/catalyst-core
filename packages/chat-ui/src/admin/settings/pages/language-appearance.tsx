@@ -18,8 +18,8 @@ import {
 } from "../../../shared/settings-page-context";
 
 const followUpChoices: readonly { value: FollowUpMode; labelKey: TranslationKey }[] = [
-  { value: "queue", labelKey: "followUpModeQueue" },
-  { value: "steer", labelKey: "followUpModeSteer" }
+  { value: "steer", labelKey: "followUpModeSteer" },
+  { value: "queue", labelKey: "followUpModeQueue" }
 ];
 
 const themeChoices: readonly { value: ThemeModePreference; labelKey: TranslationKey }[] = [
@@ -56,7 +56,7 @@ export function LanguageAppearancePage() {
 
   return (
     <LanguageAppearanceView
-      followUpMode={followUpMode ?? "queue"}
+      followUpMode={followUpMode ?? "steer"}
       selectFollowUpMode={(mode) => update.mutate({ followUpMode: mode })}
       followUpModeError={update.isError ? t("followUpModeNotSaved") : undefined}
       locales={locales}
@@ -158,7 +158,7 @@ export function LanguageAppearanceView({
           >
             <SegmentedControl
               label={t("followUpMode")}
-              value={followUpMode ?? "queue"}
+              value={followUpMode ?? "steer"}
               onValueChange={(value) => {
                 const next = followUpChoices.find((choice) => choice.value === value);
                 if (next) {

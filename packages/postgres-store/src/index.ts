@@ -130,7 +130,7 @@ function bindStores(
       listExpiredConversations: (input) => listExpiredConversations(db, input),
       expireConversation: (input) => expireConversation(db, input)
     }),
-    followUps: createPostgresFollowUpStore(db, { lockActiveConversation }),
+    followUps: createPostgresFollowUpStore(db, { lockActiveConversation, enqueued }),
     scheduledStarts: createPostgresScheduledStartsStore(db),
     agentRuns: createPostgresAgentRunsStore(db, enqueued),
     childAgentRuns: createPostgresChildAgentRunStore(db, enqueued),

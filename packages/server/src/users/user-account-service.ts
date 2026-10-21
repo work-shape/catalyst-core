@@ -4,6 +4,7 @@ import {
   asUserId,
   auditActorFromUser,
   authenticatedUserFromRecord,
+  DEFAULT_FOLLOW_UP_MODE,
   type AuthenticatedUser,
   type FollowUpMode,
   type LocaleCode,
@@ -74,7 +75,7 @@ export class UserAccountWorkflow {
         correlationId: context.correlationId
       }),
       ...(updated.locale ? { locale: updated.locale } : {}),
-      followUpMode: updated.followUpMode ?? "queue"
+      followUpMode: updated.followUpMode ?? DEFAULT_FOLLOW_UP_MODE
     };
   }
 

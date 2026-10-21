@@ -65,8 +65,9 @@ export const apiUserSchema = z.object({
   /** The language the person chose. Left out, they get the instance's default language. */
   locale: localeCodeSchema.optional(),
   /**
-   * What a message the person sends during their own run does: `queue` waits as the next turn,
-   * `steer` is read by the running turn. Left out where the answer names no record: `queue`.
+   * What a message the person sends during their own run does: `steer` (the default) is read
+   * by the running turn, `queue` waits as the next turn. Left out where the answer names no
+   * record: `queue`.
    */
   followUpMode: z.enum(FOLLOW_UP_MODES).optional(),
   /** An active instance admin a signed-in person can ask for help; no directory access needed. */

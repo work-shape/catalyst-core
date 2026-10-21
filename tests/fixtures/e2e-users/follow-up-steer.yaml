@@ -1,4 +1,4 @@
-# The person of the steer spec, used by no other spec: they choose Steer, which changes what
+# The person of the steer spec, used by no other spec: they choose Queue, which changes what
 # Enter does in every one of their runs. The label sorts after every other for the reason in
 # e2e-app.yaml.
 - email: e2e-steer@example.test
