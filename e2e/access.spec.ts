@@ -408,6 +408,11 @@ test("the User screen and the Check tab name the role a right comes from", async
     await page.goto("/settings/instance/users");
     await page.evaluate(() => window.localStorage.setItem("vivd-catalyst:locale", "de"));
     await page.reload();
+    // Found by search, as a person finds one among many: the table shows a page of the instance's
+    // people, and a full run has made more of them than one page holds.
+    await page
+      .getByRole("searchbox", { name: "Benutzer suchen", exact: true })
+      .fill(`Lena ${suffix}`);
     await page.getByText(`Lena ${suffix}`, { exact: true }).click();
     const card = page
       .locator("[data-card]", {
