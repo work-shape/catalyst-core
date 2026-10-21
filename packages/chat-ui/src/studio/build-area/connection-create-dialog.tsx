@@ -45,9 +45,12 @@ import { useDraftForNewConnection } from "./connection-draft";
 import { connectionReadyMessage, type ConnectionReadyOutcome } from "./connection-ready";
 import {
   DISCOVERY_WAIT_MS,
+  credentialOriginKey,
   emptyConnectionForm,
   newConnectionConfig,
+  oauthFormComplete,
   withApprovedOperations,
+  type ConnectionFormState,
   type ConnectionFormType
 } from "./connection-form-model";
 import {
@@ -160,7 +163,8 @@ export function ConnectionCreateFlow({
           description: "",
           form: emptyConnectionForm(),
           key: "",
-          sendAs: "bearer"
+          sendAs: "bearer",
+          auth: "key"
         }
   );
   // A drafted id, key header, header names or test path show under "Technical details", open
@@ -191,6 +195,8 @@ export function ConnectionCreateFlow({
   const created = memory.current.revision !== undefined;
   const mayDiscard = mayDelete();
   const rest = fields.form.connectorType === "http_api";
+  /** A REST API's OAuth choice, or nothing where the Connection sends a key. */
+  const oauthChoice = rest && fields.auth !== "key" ? fields.auth : undefined;
 
   /** One write of the definition over the revision the dialog wrote last. */
   const rewrite = async (config: Record<string, unknown>) => {
@@ -211,6 +217,14 @@ export function ConnectionCreateFlow({
     {
       enabled: stage.step === "sign-in",
       onConnected: () => {
+        if (rest) {
+          // A REST API names no tools: after the sign-in its tools are added or drafted.
+          source
+            .test(name)
+            .catch(() => undefined)
+            .then(enterRestTools, enterRestTools);
+          return;
+        }
         readSignedInTools().catch(() => enterTools(undefined));
       },
       ...(browser ? { browser } : {})
@@ -224,15 +238,26 @@ export function ConnectionCreateFlow({
 
   // Once the dialog wrote the Connection, its id is its own: nothing is checked any more.
   const check = useAddressCheck(created ? undefined : checkName, name);
+  const formWithChoice = {
+    ...fields.form,
+    ...(oauthChoice === undefined ? {} : { authScheme: oauthChoice })
+  };
   const complete =
-    title !== "" && name !== "" && fields.form.url.trim() !== "" && !addressBlocksCreate(check);
+    title !== "" &&
+    name !== "" &&
+    fields.form.url.trim() !== "" &&
+    !addressBlocksCreate(check) &&
+    oauthFormComplete(formWithChoice) &&
+    // The client credentials grant has no client without its secret.
+    (oauthChoice !== "oauth_client" || fields.key !== "");
 
   const connect = async () => {
     const key = fields.key;
-    const config = newConnectionConfig(
-      { name, title, description: fields.description },
-      { ...fields.form, authScheme: key === "" ? "none" : fields.sendAs }
-    );
+    const form: ConnectionFormState = {
+      ...fields.form,
+      authScheme: oauthChoice ?? (key === "" ? "none" : fields.sendAs)
+    };
+    const config = newConnectionConfig({ name, title, description: fields.description }, form);
     written.current = config;
     setBusy(true);
     setErrors({});
@@ -270,7 +295,13 @@ export function ConnectionCreateFlow({
         pause: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
         now: () => Date.now()
       },
-      { config, url: fields.form.url, key, discovers: !rest },
+      {
+        config,
+        url: fields.form.url,
+        key,
+        discovers: !rest,
+        ...(oauthChoice === undefined ? {} : { origin: credentialOriginKey(form) ?? "" })
+      },
       memory.current,
       (step, state) =>
         setSteps((current) =>
@@ -288,13 +319,7 @@ export function ConnectionCreateFlow({
       case "connected":
         setSteps([]);
         if (rest) {
-          if (drafted && drafted.operations.length > 0) {
-            approval.reset(drafted.operations);
-            setRefusals(undefined);
-            setStage({ step: "review", candidates: drafted.operations, drafted: true });
-          } else {
-            setStage({ step: "add" });
-          }
+          enterRestTools();
           return;
         }
         enterTools(outcome.detail);
@@ -312,7 +337,13 @@ export function ConnectionCreateFlow({
           // A refused key is never shown again: the field is empty and waits for a new one.
           setFields((current) => ({ ...current, key: "" }));
           setErrors({
-            key: t(key === "" ? "connectionCreate.errorKeyMissing" : "connectionCreate.errorKey")
+            key: t(
+              oauthChoice !== undefined
+                ? "connectionCreate.errorClient"
+                : key === ""
+                  ? "connectionCreate.errorKeyMissing"
+                  : "connectionCreate.errorKey"
+            )
           });
         } else {
           setErrors({
@@ -360,7 +391,10 @@ export function ConnectionCreateFlow({
     setFields((current) => ({ ...current, key: "" }));
     setBusy(true);
     try {
-      await rewrite({ ...written.current, authScheme: "oauth" });
+      // A REST API's sign-in was written with the definition already.
+      if (written.current.authScheme !== "oauth") {
+        await rewrite({ ...written.current, authScheme: "oauth" });
+      }
       discoveredBefore.current = (await source.readDetail(name).catch(() => undefined))
         ?.discoveredAt;
     } catch (error) {
@@ -389,6 +423,17 @@ export function ConnectionCreateFlow({
         return;
       }
       await new Promise((resolve) => setTimeout(resolve, SIGNED_IN_READ_MS));
+    }
+  };
+
+  /** A REST API is connected: the agent's drafted tools to review, or how its tools come in. */
+  const enterRestTools = () => {
+    if (drafted && drafted.operations.length > 0) {
+      approval.reset(drafted.operations);
+      setRefusals(undefined);
+      setStage({ step: "review", candidates: drafted.operations, drafted: true });
+    } else {
+      setStage({ step: "add" });
     }
   };
 
@@ -528,7 +573,13 @@ export function ConnectionCreateFlow({
     }
   })();
   const connectedLine = t(
-    memory.current.sent ? "connectionCreate.connectedRest" : "connectionCreate.connectedRestNoKey",
+    oauthChoice === "oauth"
+      ? "connectionCreate.connectedRestOAuth"
+      : oauthChoice === "oauth_client"
+        ? "connectionCreate.connectedRestClient"
+        : memory.current.sent
+          ? "connectionCreate.connectedRest"
+          : "connectionCreate.connectedRestNoKey",
     { name: title }
   );
 

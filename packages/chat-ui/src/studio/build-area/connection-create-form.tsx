@@ -16,17 +16,28 @@ import type { ConnectStep, ConnectStepState } from "./connection-connect";
 import type { ConnectionDraft } from "./connection-draft";
 import {
   ConnectionHeaderRows,
+  ConnectionOAuthDetailFields,
+  ConnectionOAuthFields,
   ConnectionPersonContextHeaderField,
   ConnectionTestPathField
 } from "./connection-form";
-import { emptyConnectionForm, type ConnectionFormState } from "./connection-form-model";
+import {
+  emptyConnectionForm,
+  type ConnectionFormState,
+  type ConnectionOAuthChoice
+} from "./connection-form-model";
 import { RefusalDetail } from "./refusal-notice";
 
 // The second step of the New connection dialog: the name, what the Connection is for, the
 // address and the key, with the
 // id, how the key is sent and, for a REST API, its fixed headers and test path under
 // "Technical details". The id follows the name until it is typed and is checked as it
-// changes. The auth scheme follows the key field: empty sends none.
+// changes. The auth scheme follows the key field: empty sends none. A REST API may sign in
+// with OAuth instead (CONN-OAUTH-1): its authorization server's addresses, the client and the
+// permissions, with the client secret in the key's place.
+
+/** How a REST API proves itself, as the dialog offers it: a key, or an OAuth choice. */
+export type CreateAuth = "key" | ConnectionOAuthChoice;
 
 /** What the dialog asks for beside the definition's settings. */
 export interface CreateFields {
@@ -39,11 +50,13 @@ export interface CreateFields {
   /** The key, in this browser only until the dialog closes. */
   key: string;
   sendAs: "bearer" | "header";
+  /** For a REST API: a key, or an OAuth choice whose client secret is `key`. */
+  auth: CreateAuth;
 }
 
 /** Where a field says what is wrong with it. */
 export type CreateFieldErrors = Partial<
-  Record<"id" | "url" | "key" | "headerName" | "headers" | "testPath" | "general", string>
+  Record<"id" | "url" | "key" | "headerName" | "headers" | "testPath" | "oauth" | "general", string>
 > & {
   /** The instance's sentences behind the refusals, which only an administrator is shown. */
   detail?: string;
@@ -78,6 +91,8 @@ export function ConnectionCreateForm({
 }) {
   const { t } = useTranslation();
   const rest = fields.form.connectorType === "http_api";
+  const auth: CreateAuth = rest ? fields.auth : "key";
+  const oauth = auth !== "key";
   const form = (next: Partial<ConnectionFormState>) =>
     onChange({ ...fields, form: { ...fields.form, ...next } });
   const detailsShown =
@@ -108,23 +123,32 @@ export function ConnectionCreateForm({
         disabled={busy}
         advanced={
           <>
-            <Field label={t("connectionCreate.sendAs")}>
-              <Select
-                value={fields.sendAs}
+            {oauth ? (
+              <ConnectionOAuthDetailFields
+                oauth={fields.form.oauth}
+                signsIn={auth === "oauth"}
                 disabled={busy}
-                data-connection-field="sendAs"
-                onChange={(event) =>
-                  onChange({
-                    ...fields,
-                    sendAs: event.target.value === "header" ? "header" : "bearer"
-                  })
-                }
-              >
-                <option value="bearer">{t("connectionCreate.sendAsBearer")}</option>
-                <option value="header">{t("connectionCreate.sendAsHeader")}</option>
-              </Select>
-            </Field>
-            {fields.sendAs === "header" ? (
+                onChange={(next) => form({ oauth: next })}
+              />
+            ) : (
+              <Field label={t("connectionCreate.sendAs")}>
+                <Select
+                  value={fields.sendAs}
+                  disabled={busy}
+                  data-connection-field="sendAs"
+                  onChange={(event) =>
+                    onChange({
+                      ...fields,
+                      sendAs: event.target.value === "header" ? "header" : "bearer"
+                    })
+                  }
+                >
+                  <option value="bearer">{t("connectionCreate.sendAsBearer")}</option>
+                  <option value="header">{t("connectionCreate.sendAsHeader")}</option>
+                </Select>
+              </Field>
+            )}
+            {!oauth && fields.sendAs === "header" ? (
               <Field label={t("connectionCreate.headerName")} error={errors.headerName} required>
                 <Input
                   className="font-mono"
@@ -192,10 +216,56 @@ export function ConnectionCreateForm({
             onChange={(event) => form({ url: event.target.value })}
           />
         </Field>
+        {rest ? (
+          <Field
+            label={t("connectionCreate.auth")}
+            hint={
+              auth === "oauth"
+                ? t("connectionCreate.authOAuthHint")
+                : auth === "oauth_client"
+                  ? t("connectionCreate.authOAuthClientHint")
+                  : undefined
+            }
+          >
+            <Select
+              value={auth}
+              disabled={busy}
+              data-connection-field="auth"
+              onChange={(event) => {
+                const value = event.target.value;
+                onChange({
+                  ...fields,
+                  auth: value === "oauth" || value === "oauth_client" ? value : "key"
+                });
+              }}
+            >
+              <option value="key">{t("connectionCreate.authKey")}</option>
+              <option value="oauth">{t("connectionCreate.authOAuth")}</option>
+              <option value="oauth_client">{t("connectionCreate.authOAuthClient")}</option>
+            </Select>
+          </Field>
+        ) : null}
+        {oauth ? (
+          <ConnectionOAuthFields
+            oauth={fields.form.oauth}
+            signsIn={auth === "oauth"}
+            disabled={busy}
+            errors={errors.oauth === undefined ? {} : { oauth: errors.oauth }}
+            onChange={(next) => form({ oauth: next })}
+          />
+        ) : null}
         <Field
-          label={t("connectionCreate.key")}
-          optional
-          hint={t(rest ? "connectionCreate.keyHint" : "connectionCreate.keyHintMcp")}
+          label={t(oauth ? "connectionCreate.oauthClientSecret" : "connectionCreate.key")}
+          {...(auth === "oauth_client" ? { required: true } : { optional: true })}
+          hint={t(
+            auth === "oauth_client"
+              ? "connectionCreate.oauthClientSecretRequired"
+              : oauth
+                ? "connectionCreate.oauthClientSecretHint"
+                : rest
+                  ? "connectionCreate.keyHint"
+                  : "connectionCreate.keyHintMcp"
+          )}
           error={errors.key}
         >
           <Input
@@ -220,7 +290,9 @@ export function ConnectionCreateForm({
                 step === "server"
                   ? "connectionCreate.stepServer"
                   : step === "key"
-                    ? "connectionCreate.stepKey"
+                    ? oauth
+                      ? "connectionCreate.stepClient"
+                      : "connectionCreate.stepKey"
                     : "connectionCreate.stepTools"
               )}
             />
@@ -261,6 +333,7 @@ export function draftedFields(draft: ConnectionDraft): CreateFields {
       ...(keyHeader === undefined ? {} : { headerName: keyHeader })
     },
     key: "",
-    sendAs: keyHeader === undefined ? "bearer" : "header"
+    sendAs: keyHeader === undefined ? "bearer" : "header",
+    auth: "key"
   };
 }

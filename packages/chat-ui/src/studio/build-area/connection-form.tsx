@@ -1,6 +1,6 @@
 import { X } from "lucide-react";
 import { useId } from "react";
-import { Button, Field, IconButton, Input, RadioGroup } from "@work-shape/catalyst-ui";
+import { Button, Field, IconButton, Input, RadioGroup, Select } from "@work-shape/catalyst-ui";
 import {
   useTranslation,
   type TranslationContextValue,
@@ -8,10 +8,13 @@ import {
 } from "../../shared/i18n";
 import {
   CONNECTION_AUTH_CHOICES,
+  CONNECTION_OAUTH_CHOICES,
+  isOAuthChoice,
   sendsSecret,
   type ConnectionFormAuthScheme,
   type ConnectionFormState,
-  type ConnectionHeaderRow
+  type ConnectionHeaderRow,
+  type ConnectionOAuthForm
 } from "./connection-form-model";
 
 const AUTH_LABELS: Record<
@@ -19,6 +22,7 @@ const AUTH_LABELS: Record<
   { label: TranslationKey; text: TranslationKey }
 > = {
   oauth: { label: "connections.authOAuth", text: "connections.authOAuthText" },
+  oauth_client: { label: "connections.authOAuthClient", text: "connections.authOAuthClientText" },
   none: { label: "connections.authNone", text: "connections.authNoneText" },
   bearer: { label: "connections.authBearer", text: "connections.authBearerText" },
   header: { label: "connections.authHeader", text: "connections.authHeaderText" }
@@ -92,28 +96,53 @@ export function ConnectionServerFields({
   );
 }
 
-/** The fixed headers of a REST API: a name and a value per row, never a credential. */
+/** What a list of name and value rows is called: fixed headers, or extra parameters. */
+const ROW_TEXTS = {
+  headers: {
+    label: "connectionCreate.headers",
+    hint: "connectionCreate.headersHint",
+    name: "connectionCreate.headerRowName",
+    value: "connectionCreate.headerRowValue",
+    add: "connectionCreate.headerAdd",
+    remove: "connectionCreate.headerRemove"
+  },
+  params: {
+    label: "connectionCreate.oauthParams",
+    hint: "connectionCreate.oauthParamsHint",
+    name: "connectionCreate.oauthParamName",
+    value: "connectionCreate.oauthParamValue",
+    add: "connectionCreate.oauthParamAdd",
+    remove: "connectionCreate.oauthParamRemove"
+  }
+} as const satisfies Record<string, Record<string, TranslationKey>>;
+
+/**
+ * The fixed headers of a REST API, or the extra parameters of its authorization address: a
+ * name and a value per row, never a credential.
+ */
 export function ConnectionHeaderRows({
   rows,
   onChange,
-  disabled = false
+  disabled = false,
+  kind = "headers"
 }: {
   rows: readonly ConnectionHeaderRow[];
   onChange(rows: ConnectionHeaderRow[]): void;
   disabled?: boolean;
+  kind?: keyof typeof ROW_TEXTS;
 }) {
   const { t } = useTranslation();
+  const texts = ROW_TEXTS[kind];
   // The field's label names the first header's name; every other input has an id of its own.
   const base = useId();
   const change = (index: number, row: ConnectionHeaderRow) =>
     onChange(rows.map((current, at) => (at === index ? row : current)));
   return (
-    <div className="grid min-w-0 gap-2" data-connection-field="headers">
-      <Field
-        label={t("connectionCreate.headers")}
-        hint={t("connectionCreate.headersHint")}
-        optional
-      >
+    <div
+      className="grid min-w-0 gap-2"
+      data-connection-field={kind === "headers" ? "headers" : "oauthParams"}
+    >
+      <Field label={t(texts.label)} hint={t(texts.hint)} optional>
         <div className="grid min-w-0 gap-2">
           {rows.map((row, index) => (
             <div key={index} className="flex min-w-0 items-center gap-2">
@@ -122,8 +151,8 @@ export function ConnectionHeaderRows({
                 className="min-w-0 flex-1 font-mono"
                 autoComplete="off"
                 spellCheck={false}
-                aria-label={t("connectionCreate.headerRowName")}
-                placeholder={t("connectionCreate.headerRowName")}
+                aria-label={t(texts.name)}
+                placeholder={t(texts.name)}
                 value={row.name}
                 disabled={disabled}
                 onChange={(event) => change(index, { ...row, name: event.target.value })}
@@ -133,14 +162,14 @@ export function ConnectionHeaderRows({
                 className="min-w-0 flex-1 font-mono"
                 autoComplete="off"
                 spellCheck={false}
-                aria-label={t("connectionCreate.headerRowValue")}
-                placeholder={t("connectionCreate.headerRowValue")}
+                aria-label={t(texts.value)}
+                placeholder={t(texts.value)}
                 value={row.value}
                 disabled={disabled}
                 onChange={(event) => change(index, { ...row, value: event.target.value })}
               />
               <IconButton
-                label={t("connectionCreate.headerRemove", { name: row.name })}
+                label={t(texts.remove, { name: row.name })}
                 disabled={disabled}
                 onClick={() => onChange(rows.filter((_, at) => at !== index))}
               >
@@ -155,7 +184,7 @@ export function ConnectionHeaderRows({
             disabled={disabled}
             onClick={() => onChange([...rows, { name: "", value: "" }])}
           >
-            {t("connectionCreate.headerAdd")}
+            {t(texts.add)}
           </Button>
         </div>
       </Field>
@@ -240,20 +269,38 @@ export function ConnectionAuthFields({
   offersOAuth?: boolean;
 }) {
   const { t } = useTranslation();
+  const rest = form.connectorType === "http_api";
+  // A REST API names its authorization server itself, so it may always choose OAuth; an MCP
+  // server keeps OAuth only where its server asked for a sign-in.
+  const choices: readonly ConnectionFormAuthScheme[] = rest
+    ? [...CONNECTION_AUTH_CHOICES, ...CONNECTION_OAUTH_CHOICES]
+    : [...(offersOAuth ? (["oauth"] as const) : []), ...CONNECTION_AUTH_CHOICES];
   return (
     <>
       <RadioGroup<ConnectionFormAuthScheme>
         label={t("connections.authTitle")}
         value={form.authScheme}
         onValueChange={(authScheme) => onChange({ ...form, authScheme })}
-        options={[...(offersOAuth ? (["oauth"] as const) : []), ...CONNECTION_AUTH_CHOICES].map(
-          (choice) => ({
-            value: choice,
-            label: t(AUTH_LABELS[choice].label),
-            description: t(AUTH_LABELS[choice].text)
-          })
-        )}
+        options={choices.map((choice) => ({
+          value: choice,
+          label: t(AUTH_LABELS[choice].label),
+          description: t(AUTH_LABELS[choice].text)
+        }))}
       />
+      {rest && isOAuthChoice(form.authScheme) ? (
+        <>
+          <ConnectionOAuthFields
+            oauth={form.oauth}
+            signsIn={form.authScheme === "oauth"}
+            onChange={(oauth) => onChange({ ...form, oauth })}
+          />
+          <ConnectionOAuthDetailFields
+            oauth={form.oauth}
+            signsIn={form.authScheme === "oauth"}
+            onChange={(oauth) => onChange({ ...form, oauth })}
+          />
+        </>
+      ) : null}
       {form.authScheme === "header" ? (
         <Field label={t("connections.headerName")} hint={t("connections.headerNameHint")} required>
           <Input
@@ -292,5 +339,159 @@ export function ConnectionSecretField({
         onChange={(event) => onChange(event.target.value)}
       />
     </Field>
+  );
+}
+
+/** The address fields of a REST API's authorization server, and its client and permissions. */
+export function ConnectionOAuthFields({
+  oauth,
+  signsIn,
+  onChange,
+  disabled = false,
+  errors = {}
+}: {
+  oauth: ConnectionOAuthForm;
+  /** A person signs in (`oauth`): the authorization address is asked for too. */
+  signsIn: boolean;
+  onChange(next: ConnectionOAuthForm): void;
+  disabled?: boolean;
+  errors?: { oauth?: string };
+}) {
+  const { t } = useTranslation();
+  const set = (next: Partial<ConnectionOAuthForm>) => onChange({ ...oauth, ...next });
+  return (
+    <>
+      {signsIn ? (
+        <Field
+          label={t("connectionCreate.oauthAuthorizationUrl")}
+          hint={t("connectionCreate.oauthAuthorizationUrlHint")}
+          required
+        >
+          <Input
+            type="url"
+            inputMode="url"
+            autoComplete="off"
+            spellCheck={false}
+            className="font-mono"
+            value={oauth.authorizationUrl}
+            disabled={disabled}
+            data-connection-field="oauthAuthorizationUrl"
+            onChange={(event) => set({ authorizationUrl: event.target.value })}
+          />
+        </Field>
+      ) : null}
+      <Field
+        label={t("connectionCreate.oauthTokenUrl")}
+        hint={t("connectionCreate.oauthTokenUrlHint")}
+        error={errors.oauth}
+        required
+      >
+        <Input
+          type="url"
+          inputMode="url"
+          autoComplete="off"
+          spellCheck={false}
+          className="font-mono"
+          value={oauth.tokenUrl}
+          disabled={disabled}
+          data-connection-field="oauthTokenUrl"
+          onChange={(event) => set({ tokenUrl: event.target.value })}
+        />
+      </Field>
+      <Field label={t("connectionCreate.oauthClientId")} required>
+        <Input
+          autoComplete="off"
+          spellCheck={false}
+          className="font-mono"
+          value={oauth.clientId}
+          disabled={disabled}
+          data-connection-field="oauthClientId"
+          onChange={(event) => set({ clientId: event.target.value })}
+        />
+      </Field>
+      <Field
+        label={t("connectionCreate.oauthScopes")}
+        hint={t("connectionCreate.oauthScopesHint")}
+        optional
+      >
+        <Input
+          autoComplete="off"
+          spellCheck={false}
+          className="font-mono"
+          value={oauth.scopes}
+          disabled={disabled}
+          data-connection-field="oauthScopes"
+          onChange={(event) => set({ scopes: event.target.value })}
+        />
+      </Field>
+    </>
+  );
+}
+
+/**
+ * What of a REST API's authorization server only some providers need: the revocation address,
+ * how the client proves itself at the token address and, for a sign-in, extra parameters.
+ */
+export function ConnectionOAuthDetailFields({
+  oauth,
+  signsIn,
+  onChange,
+  disabled = false
+}: {
+  oauth: ConnectionOAuthForm;
+  signsIn: boolean;
+  onChange(next: ConnectionOAuthForm): void;
+  disabled?: boolean;
+}) {
+  const { t } = useTranslation();
+  const set = (next: Partial<ConnectionOAuthForm>) => onChange({ ...oauth, ...next });
+  return (
+    <>
+      <Field label={t("connectionCreate.oauthAuthMethod")}>
+        <Select
+          value={oauth.tokenAuthMethod}
+          disabled={disabled}
+          data-connection-field="oauthAuthMethod"
+          onChange={(event) =>
+            set({
+              tokenAuthMethod:
+                event.target.value === "client_secret_basic"
+                  ? "client_secret_basic"
+                  : "client_secret_post"
+            })
+          }
+        >
+          <option value="client_secret_post">{t("connectionCreate.oauthAuthMethodPost")}</option>
+          <option value="client_secret_basic">{t("connectionCreate.oauthAuthMethodBasic")}</option>
+        </Select>
+      </Field>
+      {signsIn ? (
+        <>
+          <Field
+            label={t("connectionCreate.oauthRevocationUrl")}
+            hint={t("connectionCreate.oauthRevocationUrlHint")}
+            optional
+          >
+            <Input
+              type="url"
+              inputMode="url"
+              autoComplete="off"
+              spellCheck={false}
+              className="font-mono"
+              value={oauth.revocationUrl}
+              disabled={disabled}
+              data-connection-field="oauthRevocationUrl"
+              onChange={(event) => set({ revocationUrl: event.target.value })}
+            />
+          </Field>
+          <ConnectionHeaderRows
+            kind="params"
+            rows={oauth.params}
+            disabled={disabled}
+            onChange={(params) => set({ params })}
+          />
+        </>
+      ) : null}
+    </>
   );
 }

@@ -119,6 +119,11 @@ export interface ConnectionSignIn {
   choosesScopes: boolean;
   /** The client may be entered here. */
   entersClient: boolean;
+  /**
+   * The redirect URI of a client the provider issued, to copy into its app: the instance names
+   * it once the Connection is saved. Nothing for a client registered by DCR.
+   */
+  redirectUri?: string;
   client: { id: string; secret: string };
   setTicked(scope: string, ticked: boolean): void;
   setClient(client: { id: string; secret: string }): void;
@@ -145,6 +150,7 @@ export function useConnectionSignIn(
   const [offered, setOffered] = useState<readonly string[]>([]);
   const [ticked, setTickedSet] = useState<ReadonlySet<string>>(new Set());
   const [client, setClient] = useState({ id: "", secret: "" });
+  const [redirectUri, setRedirectUri] = useState<string>();
   // The latest calls and callback, read by work that outlives a render.
   const latest = useRef({ calls, onConnected: options.onConnected });
   latest.current = { calls, onConnected: options.onConnected };
@@ -168,6 +174,9 @@ export function useConnectionSignIn(
     setState({ phase: "starting" });
     const detail = await latest.current.calls.readDetail().catch(() => undefined);
     before.current = detail;
+    setRedirectUri(
+      detail?.oauth?.registration === "preregistered" ? detail.oauth.redirectUri : undefined
+    );
     try {
       const start = await latest.current.calls.start();
       spent.current = false;
@@ -270,6 +279,7 @@ export function useConnectionSignIn(
     ticked,
     choosesScopes: calls.writeOAuth !== undefined,
     entersClient: calls.writeOAuth !== undefined,
+    ...(redirectUri === undefined ? {} : { redirectUri }),
     client,
     setTicked(scope, on) {
       setTickedSet((current) => {
@@ -437,6 +447,20 @@ export function SignInBody({ signIn }: { signIn: ConnectionSignIn }) {
           <Banner layout="line" data-sign-in-shared="">
             {t("connectionSignIn.shared")}
           </Banner>
+          {signIn.redirectUri ? (
+            <KeyValueList>
+              <KeyValue label={t("connectionSignIn.redirectUri")} copyValue={signIn.redirectUri}>
+                <span className="grid gap-1">
+                  <code className="font-mono text-code break-all" data-sign-in-redirect-uri="">
+                    {signIn.redirectUri}
+                  </code>
+                  <span className="text-caption text-muted-foreground">
+                    {t("connectionSignIn.redirectUriHint")}
+                  </span>
+                </span>
+              </KeyValue>
+            </KeyValueList>
+          ) : null}
           <SignInScopes signIn={signIn} disabled={state.opening} />
           {state.error ? (
             <FormNotice tone="error" data-sign-in-error={state.error.failure}>

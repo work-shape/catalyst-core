@@ -36,6 +36,8 @@ export const connectionSignIn = defineTranslations({
     "connectionSignIn.clientSecretHint":
       "Stored encrypted. Nobody can read it back. Leave empty if the provider issued none.",
     "connectionSignIn.clientSave": "Save and continue",
+    "connectionSignIn.redirectUriHint":
+      "Enter this address at the provider as the redirect URI of the app, if it is not there yet.",
     "connectionSignIn.signedIn": "Signed in",
     "connectionSignIn.readTools": "Read tools",
     "connectionSignIn.errorDenied": "The sign-in was declined or cancelled at {host}.",
@@ -121,6 +123,8 @@ export const connectionSignIn = defineTranslations({
     "connectionSignIn.clientSecretHint":
       "Verschlüsselt gespeichert. Niemand kann es wieder lesen. Leer lassen, wenn der Anbieter keins ausgegeben hat.",
     "connectionSignIn.clientSave": "Speichern und weiter",
+    "connectionSignIn.redirectUriHint":
+      "Trage diese Adresse beim Anbieter als Redirect-URI der App ein, falls sie dort noch fehlt.",
     "connectionSignIn.signedIn": "Angemeldet",
     "connectionSignIn.readTools": "Tools lesen",
     "connectionSignIn.errorDenied": "Die Anmeldung wurde bei {host} abgelehnt oder abgebrochen.",

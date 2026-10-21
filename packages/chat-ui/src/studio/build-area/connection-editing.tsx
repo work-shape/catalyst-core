@@ -26,6 +26,7 @@ import {
 import {
   connectionConfigToForm,
   countConnectionFormChanges,
+  holdsSecret,
   sendsSecret,
   withApprovedOperations,
   withConnectionForm
@@ -139,7 +140,11 @@ export function ConnectionSettingsEditor({
         onChange={setForm}
         offersOAuth={stored.authScheme === "oauth"}
       />
-      {keyUsers && sendsSecret(stored.authScheme) && form.authScheme === "none" ? (
+      {keyUsers &&
+      (stored.connectorType === "http_api"
+        ? holdsSecret(stored.authScheme)
+        : sendsSecret(stored.authScheme)) &&
+      form.authScheme === "none" ? (
         <Banner layout="line" tone="warning" data-connection-key-clears="">
           {keyRemovalWarning(keyUsers, locale, t)}
         </Banner>

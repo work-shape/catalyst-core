@@ -55,6 +55,10 @@ const callbackPathOf = (connection: string) => `/api/v1/connections/${connection
  */
 const REGISTERED_CONNECTION = `e2e-oauth-en-${randomUUID().slice(0, 8)}`;
 const REGISTERED_CLIENT_ID = "e2e-registered-client";
+/** The REST API of the sample's REST provider (CONN-OAUTH-1), and the client it issued. */
+const REST_CONNECTION = `e2e-oauth-rest-${randomUUID().slice(0, 8)}`;
+const REST_CLIENT_ID = "e2e-rest-client";
+const REST_CLIENT_SECRET = randomUUID() + randomUUID();
 
 type Locale = "en" | "de";
 const WORDS: Record<Locale, { newConnection: string; later: string }> = {
@@ -78,7 +82,10 @@ test.beforeEach(async ({ releaseConnections: _releaseConnections, baseURL }) => 
       PORT: String(samplePort),
       SAMPLE_OAUTH_ISSUER_BASE: sampleBase,
       SAMPLE_OAUTH_CLIENT_ID: REGISTERED_CLIENT_ID,
-      SAMPLE_OAUTH_REDIRECT_URI: `${baseURL}${callbackPathOf(REGISTERED_CONNECTION)}`
+      SAMPLE_OAUTH_REDIRECT_URI: `${baseURL}${callbackPathOf(REGISTERED_CONNECTION)}`,
+      SAMPLE_OAUTH_REST_CLIENT_ID: REST_CLIENT_ID,
+      SAMPLE_OAUTH_REST_CLIENT_SECRET: REST_CLIENT_SECRET,
+      SAMPLE_OAUTH_REST_REDIRECT_URI: `${baseURL}${callbackPathOf(REST_CONNECTION)}`
     },
     stdio: "ignore"
   });
@@ -322,6 +329,73 @@ test("en: a provider that registers no client asks for the one it issued, and an
     await expect(section).toContainText(`${baseURL}${callbackPathOf(id)}`);
     await section.scrollIntoViewIfNeeded();
     await shoot(page, "en", "page-registered");
+  } finally {
+    await removeConnection(page, id);
+  }
+});
+
+test("de: a REST API names its authorization server, signs in from the dialog and goes on to its tools", async ({
+  page,
+  baseURL
+}) => {
+  test.setTimeout(150_000);
+  const id = REST_CONNECTION;
+  await routeProvider(page.context());
+  const authorizations: URL[] = [];
+  page.context().on("request", (request) => {
+    const url = new URL(request.url());
+    if (url.pathname.endsWith("/authorize")) authorizations.push(url);
+  });
+  await signInAs(page, "de");
+  await page.goto("/build/connections");
+  const main = page.getByRole("region", { name: "Studio" });
+  await main.getByRole("button", { name: WORDS.de.newConnection }).first().click();
+  const dialog = page.getByRole("dialog").first();
+  await dialog.locator('[data-connection-type="http_api"]').getByRole("button").click();
+  try {
+    await dialog.locator('[data-name-with-address-field="name"]').fill("Beispiel REST");
+    await dialog.locator("[data-name-with-address-fold]").click();
+    await dialog.locator('[data-name-with-address-field="address"]').fill(id);
+    await dialog.locator('[data-connection-field="url"]').fill(`${sampleBase}/oauth-rest/api`);
+    await dialog.locator('[data-connection-field="auth"]').selectOption("oauth");
+    await dialog
+      .locator('[data-connection-field="oauthAuthorizationUrl"]')
+      .fill(`${sampleBase}/oauth-rest/authorize`);
+    await dialog
+      .locator('[data-connection-field="oauthTokenUrl"]')
+      .fill(`${sampleBase}/oauth-rest/token`);
+    await dialog.locator('[data-connection-field="oauthClientId"]').fill(REST_CLIENT_ID);
+    await dialog.locator('[data-connection-field="secret"]').fill(REST_CLIENT_SECRET);
+    await dialog.locator('[data-connection-field="oauthScopes"]').fill("sample.read");
+    await dialog
+      .locator('[data-connection-field="oauthRevocationUrl"]')
+      .fill(`${sampleBase}/oauth-rest/revoke`);
+    await expect(dialog.getByText("OAuth-Anmeldung").first()).toBeAttached();
+    await dialog.locator('[data-connection-field="oauthRevocationUrl"]').blur();
+    await dialog.locator('[data-connection-field="url"]').scrollIntoViewIfNeeded();
+    await shoot(page, "de", "rest-form");
+
+    await dialog.locator("[data-connection-connect]").click();
+    const step = dialog.locator('[data-sign-in-step="ready"]');
+    await expect(step).toBeVisible();
+    // The redirect URI to enter at the provider stands at the step, to copy.
+    await expect(step.locator("[data-sign-in-redirect-uri]")).toHaveText(
+      `${baseURL}${callbackPathOf(id)}`
+    );
+    await shoot(page, "de", "rest-step");
+
+    const tab = await openProvider(page, dialog);
+    await tab.waitForEvent("close");
+    expect(authorizations).toHaveLength(1);
+    expect(authorizations[0]?.searchParams.get("client_id")).toBe(REST_CLIENT_ID);
+    expect(authorizations[0]?.searchParams.has("resource")).toBe(false);
+
+    await expect(dialog.locator("[data-connection-connected]")).toHaveText(
+      "Mit Beispiel REST verbunden. Aufrufe nutzen das angemeldete Konto."
+    );
+    await shoot(page, "de", "rest-connected");
+    // The client secret never stands in the page.
+    expect(await page.content()).not.toContain(REST_CLIENT_SECRET);
   } finally {
     await removeConnection(page, id);
   }

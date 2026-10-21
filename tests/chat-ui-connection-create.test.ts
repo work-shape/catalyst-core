@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { ConnectionDetail, ConnectionTestResult } from "@work-shape/catalyst-api-client";
 import {
   ConnectionCreateFlow,
+  ConnectionCreateForm,
   DISCOVERY_WAIT_MS,
   PendingApprovalError,
   connectConnection,
@@ -15,7 +16,8 @@ import {
   withApprovedOperations,
   type ConnectCalls,
   type ConnectMemory,
-  type ConnectionSource
+  type ConnectionSource,
+  type CreateFields
 } from "@work-shape/catalyst-chat-ui/build-area";
 import { connectionDetail } from "./chat-ui-connection-fixtures";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
@@ -416,5 +418,83 @@ describe("the dialog's first step", () => {
     expect(de).toContain("Neue Verbindung");
     expect(de).toContain("MCP-Server");
     expect(de).toContain("Du legst fest, was sie liest.");
+  });
+});
+
+describe("a REST API that signs in with OAuth (CONN-OAUTH-1)", () => {
+  const fields = (auth: CreateFields["auth"]): CreateFields => ({
+    title: "Graph",
+    description: "",
+    form: { ...emptyConnectionForm("http_api"), url: "https://graph.example.test/v1.0" },
+    key: "",
+    sendAs: "bearer",
+    auth
+  });
+  const render = (locale: "en" | "de", auth: CreateFields["auth"]) =>
+    renderToStaticMarkup(
+      createElement(
+        TranslationProvider,
+        { children: null, locale },
+        createElement(ConnectionCreateForm, {
+          fields: fields(auth),
+          check: { state: "free" },
+          errors: {},
+          busy: false,
+          steps: [],
+          onChange: () => undefined
+        })
+      )
+    );
+
+  it("asks for the server's addresses, the client and its secret, in German and in English", () => {
+    const de = render("de", "oauth");
+    for (const text of [
+      "Anmeldung",
+      "OAuth-Anmeldung",
+      "OAuth Client Credentials",
+      "Autorisierungs-URL",
+      "Token-URL",
+      "Client-ID",
+      "Client-Secret",
+      "Berechtigungen (Scopes)"
+    ]) {
+      expect(de).toContain(text);
+    }
+    expect(de).toContain('data-connection-field="oauthAuthorizationUrl"');
+    const en = render("en", "oauth");
+    expect(en).toContain("Authorization URL");
+    expect(en).toContain("Token URL");
+    // The client credentials grant needs no page to sign in at.
+    const client = render("en", "oauth_client");
+    expect(client).not.toContain('data-connection-field="oauthAuthorizationUrl"');
+    expect(client).toContain('data-connection-field="oauthTokenUrl"');
+    // A key is asked for as before.
+    expect(render("en", "key")).not.toContain('data-connection-field="oauthTokenUrl"');
+  });
+
+  it("sends the client secret again once the token address moves to another host", async () => {
+    const run = scriptedCalls({ tests: ["oauth_required", "oauth_required"] });
+    let memory: ConnectMemory = {};
+    const attempt = (origin: string) =>
+      connectConnection(
+        run.api,
+        {
+          config: config("http_api", "https://graph.example.test/v1.0", KEY),
+          url: "https://graph.example.test/v1.0",
+          key: KEY,
+          discovers: false,
+          origin
+        },
+        memory,
+        () => undefined
+      );
+    const first = await attempt("https://graph.example.test https://login.example.test app-1");
+    expect(first).toMatchObject({ status: "refused", reason: "oauth_required" });
+    memory = first.memory;
+    await attempt("https://graph.example.test https://login.example.test app-1");
+    expect(run.secrets).toHaveLength(1);
+    memory = (await attempt("https://graph.example.test https://other.example.test app-1")).memory;
+    expect(run.secrets).toHaveLength(2);
+    expect(memory.sent?.origin).toContain("other.example.test");
   });
 });

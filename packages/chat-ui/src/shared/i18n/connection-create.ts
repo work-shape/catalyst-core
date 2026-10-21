@@ -77,6 +77,46 @@ export const connectionCreate = defineTranslations({
       "Connected to {name}. Its tools are still being read; you find them on the connection's page.",
     "connectionCreate.connectedRest": "Connected to {name}. The key was accepted.",
     "connectionCreate.connectedRestNoKey": "Connected to {name}.",
+    "connectionCreate.auth": "Authentication",
+    "connectionCreate.authKey": "Key",
+    "connectionCreate.authOAuth": "OAuth sign-in",
+    "connectionCreate.authOAuthClient": "OAuth client credentials",
+    "connectionCreate.authOAuthHint":
+      "After Connect a person signs in at the provider. Every call uses that account.",
+    "connectionCreate.authOAuthClientHint":
+      "The instance signs in as its own client, with client ID and client secret, without a person.",
+    "connectionCreate.oauthAuthorizationUrl": "Authorization URL",
+    "connectionCreate.oauthAuthorizationUrlHint": "The provider's page where a person signs in.",
+    "connectionCreate.oauthTokenUrl": "Token URL",
+    "connectionCreate.oauthTokenUrlHint": "Where the instance fetches its tokens.",
+    "connectionCreate.oauthClientId": "Client ID",
+    "connectionCreate.oauthClientSecret": "Client secret",
+    "connectionCreate.oauthClientSecretHint":
+      "Stored encrypted. Nobody can read it back. Leave empty if the provider issued none.",
+    "connectionCreate.oauthClientSecretRequired": "Stored encrypted. Nobody can read it back.",
+    "connectionCreate.oauthScopes": "Permissions (scopes)",
+    "connectionCreate.oauthScopesHint": "Separated by spaces, as the provider names them.",
+    "connectionCreate.oauthRevocationUrl": "Revocation URL",
+    "connectionCreate.oauthRevocationUrlHint":
+      "Disconnecting revokes the sign-in there. Without it, only the instance forgets it.",
+    "connectionCreate.oauthAuthMethod": "Client authentication",
+    "connectionCreate.oauthAuthMethodPost": "In the request body (client_secret_post)",
+    "connectionCreate.oauthAuthMethodBasic": "HTTP Basic (client_secret_basic)",
+    "connectionCreate.oauthParams": "Extra parameters",
+    "connectionCreate.oauthParamsHint":
+      "Added to the authorization URL, such as prompt=consent. No secrets.",
+    "connectionCreate.oauthParamName": "Parameter",
+    "connectionCreate.oauthParamValue": "Value",
+    "connectionCreate.oauthParamAdd": "Add parameter",
+    "connectionCreate.oauthParamRemove": "Remove parameter {name}",
+    "connectionCreate.oauthSettings": "OAuth",
+    "connectionCreate.stepClient": "Checking the client",
+    "connectionCreate.errorClient":
+      "The provider refused the client ID or the client secret. Check both and connect again.",
+    "connectionCreate.connectedRestOAuth":
+      "Connected to {name}. Calls use the account that signed in.",
+    "connectionCreate.connectedRestClient":
+      "Connected to {name}. The provider accepted the client.",
     "connectionCreate.mayUse": "May use them",
     "connectionCreate.surfaceAgent": "Agents",
     "connectionCreate.surfaceBridge": "Apps",
@@ -233,6 +273,48 @@ export const connectionCreate = defineTranslations({
       "Mit {name} verbunden. Seine Tools werden noch gelesen, du findest sie auf der Seite der Verbindung.",
     "connectionCreate.connectedRest": "Mit {name} verbunden. Der Schlüssel wurde angenommen.",
     "connectionCreate.connectedRestNoKey": "Mit {name} verbunden.",
+    "connectionCreate.auth": "Anmeldung",
+    "connectionCreate.authKey": "Schlüssel",
+    "connectionCreate.authOAuth": "OAuth-Anmeldung",
+    "connectionCreate.authOAuthClient": "OAuth Client Credentials",
+    "connectionCreate.authOAuthHint":
+      "Nach dem Verbinden meldet sich eine Person beim Anbieter an. Jeder Aufruf nutzt dieses Konto.",
+    "connectionCreate.authOAuthClientHint":
+      "Die Instanz meldet sich mit Client-ID und Client-Secret selbst an, ohne Person.",
+    "connectionCreate.oauthAuthorizationUrl": "Autorisierungs-URL",
+    "connectionCreate.oauthAuthorizationUrlHint":
+      "Die Seite des Anbieters, auf der sich eine Person anmeldet.",
+    "connectionCreate.oauthTokenUrl": "Token-URL",
+    "connectionCreate.oauthTokenUrlHint": "Hier holt die Instanz ihre Tokens.",
+    "connectionCreate.oauthClientId": "Client-ID",
+    "connectionCreate.oauthClientSecret": "Client-Secret",
+    "connectionCreate.oauthClientSecretHint":
+      "Wird verschlüsselt gespeichert, niemand kann es auslesen. Leer lassen, wenn der Anbieter keines ausgegeben hat.",
+    "connectionCreate.oauthClientSecretRequired":
+      "Wird verschlüsselt gespeichert, niemand kann es auslesen.",
+    "connectionCreate.oauthScopes": "Berechtigungen (Scopes)",
+    "connectionCreate.oauthScopesHint": "Durch Leerzeichen getrennt, wie der Anbieter sie nennt.",
+    "connectionCreate.oauthRevocationUrl": "Widerrufs-URL",
+    "connectionCreate.oauthRevocationUrlHint":
+      "Beim Trennen wird die Anmeldung dort widerrufen. Ohne sie vergisst nur die Instanz sie.",
+    "connectionCreate.oauthAuthMethod": "Client-Authentifizierung",
+    "connectionCreate.oauthAuthMethodPost": "Im Anfragetext (client_secret_post)",
+    "connectionCreate.oauthAuthMethodBasic": "HTTP Basic (client_secret_basic)",
+    "connectionCreate.oauthParams": "Zusätzliche Parameter",
+    "connectionCreate.oauthParamsHint":
+      "Werden an die Autorisierungs-URL gehängt, etwa prompt=consent. Keine Geheimnisse.",
+    "connectionCreate.oauthParamName": "Parameter",
+    "connectionCreate.oauthParamValue": "Wert",
+    "connectionCreate.oauthParamAdd": "Parameter hinzufügen",
+    "connectionCreate.oauthParamRemove": "Parameter {name} entfernen",
+    "connectionCreate.oauthSettings": "OAuth",
+    "connectionCreate.stepClient": "Client wird geprüft",
+    "connectionCreate.errorClient":
+      "Der Anbieter hat Client-ID oder Client-Secret abgelehnt. Prüfe beide und verbinde erneut.",
+    "connectionCreate.connectedRestOAuth":
+      "Mit {name} verbunden. Aufrufe nutzen das angemeldete Konto.",
+    "connectionCreate.connectedRestClient":
+      "Mit {name} verbunden. Der Anbieter hat den Client angenommen.",
     "connectionCreate.mayUse": "Nutzen dürfen",
     "connectionCreate.surfaceAgent": "Agenten",
     "connectionCreate.surfaceBridge": "Apps",

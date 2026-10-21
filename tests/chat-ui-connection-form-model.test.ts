@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   DISCOVERY_WAIT_MS,
   connectionConfigToForm,
+  credentialOriginKey,
   newConnectionConfig,
   emptyConnectionForm,
+  emptyOAuthForm,
+  oauthFormComplete,
   waitsForDiscovery,
   withApprovedOperations,
   withConnectionForm,
@@ -58,7 +61,8 @@ describe("the form of a Connection", () => {
       headerName: "X-Key",
       headers: [],
       testPath: "",
-      personContextHeader: ""
+      personContextHeader: "",
+      oauth: emptyOAuthForm()
     });
     const config = newConnectionConfig({ name: "crm", title: "CRM", copyOf: copied }, form);
     expect(config).toMatchObject({ description: "The CRM.", operations: copied.operations });
@@ -100,7 +104,8 @@ describe("the form of a Connection", () => {
       headerName: "X-Api-Key",
       headers: [{ name: "x-client-instance-id", value: "7c1e" }],
       testPath: "/health",
-      personContextHeader: ""
+      personContextHeader: "",
+      oauth: emptyOAuthForm()
     });
     // Without a key nothing is sent, and the settings name no header and no test path.
     expect(
@@ -109,6 +114,69 @@ describe("the form of a Connection", () => {
         { ...emptyConnectionForm("http_api"), url: "https://open.example.test", authScheme: "none" }
       )
     ).toMatchObject({ settings: { baseUrl: "https://open.example.test" }, authScheme: "none" });
+  });
+
+  it("writes a REST API's OAuth sign-in with its server, client and permissions, and reads it back", () => {
+    const form: ConnectionFormState = {
+      ...emptyConnectionForm("http_api"),
+      url: "https://graph.example.test/v1.0",
+      authScheme: "oauth",
+      oauth: {
+        authorizationUrl: " https://login.example.test/authorize ",
+        tokenUrl: "https://login.example.test/token",
+        revocationUrl: "",
+        clientId: " app-1 ",
+        scopes: "  User.Read offline_access User.Read ",
+        params: [
+          { name: "prompt", value: "consent" },
+          { name: "", value: "no parameter" }
+        ],
+        tokenAuthMethod: "client_secret_basic"
+      }
+    };
+    expect(oauthFormComplete(form)).toBe(true);
+    const config = newConnectionConfig({ name: "graph", title: "Graph" }, form);
+    expect(config).toMatchObject({
+      authScheme: "oauth",
+      settings: {
+        baseUrl: "https://graph.example.test/v1.0",
+        oauth: {
+          authorizationUrl: "https://login.example.test/authorize",
+          tokenUrl: "https://login.example.test/token",
+          clientId: "app-1",
+          scopes: ["User.Read", "offline_access"],
+          authorizationParams: { prompt: "consent" },
+          tokenAuthMethod: "client_secret_basic"
+        }
+      }
+    });
+    expect(config.settings).not.toHaveProperty("oauth.revocationUrl");
+    expect(connectionConfigToForm(config).oauth).toEqual({
+      ...form.oauth,
+      authorizationUrl: "https://login.example.test/authorize",
+      clientId: "app-1",
+      scopes: "User.Read offline_access",
+      params: [{ name: "prompt", value: "consent" }]
+    });
+    // The client credentials grant names no authorization address and no extra parameters.
+    const machine = withConnectionForm(config, { ...form, authScheme: "oauth_client" });
+    expect(machine).toMatchObject({ authScheme: "oauth_client" });
+    expect(machine.settings).not.toHaveProperty("oauth.authorizationUrl");
+    expect(machine.settings).not.toHaveProperty("oauth.authorizationParams");
+    // Another scheme drops the server; a sign-in without its addresses is not complete.
+    expect(
+      withConnectionForm(config, { ...form, authScheme: "bearer" }).settings
+    ).not.toHaveProperty("oauth");
+    expect(oauthFormComplete({ ...form, oauth: { ...form.oauth, authorizationUrl: "" } })).toBe(
+      false
+    );
+    // The client secret is sent again when the token address moves to another host.
+    expect(credentialOriginKey(form)).not.toBe(
+      credentialOriginKey({
+        ...form,
+        oauth: { ...form.oauth, tokenUrl: "https://other.example.test/token" }
+      })
+    );
   });
 
   it("approves tools at once, pinned to what was read, takes one off, and accepts a new description", () => {

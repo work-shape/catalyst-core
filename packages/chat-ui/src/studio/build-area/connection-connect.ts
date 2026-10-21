@@ -62,7 +62,17 @@ const DISCOVERY_READ_MS = 1_000;
 
 export async function connectConnection(
   calls: ConnectCalls,
-  attempt: { config: Record<string, unknown>; url: string; key: string; discovers: boolean },
+  attempt: {
+    config: Record<string, unknown>;
+    url: string;
+    key: string;
+    discovers: boolean;
+    /**
+     * What the key is bound to, where more than the address's origin: a REST API's client
+     * secret is bound to its authorization server too. Left out, the origin of `url`.
+     */
+    origin?: string;
+  },
   before: ConnectMemory,
   onStep: (step: ConnectStep, state: ConnectStepState) => void
 ): Promise<ConnectOutcome> {
@@ -80,7 +90,7 @@ export async function connectConnection(
   const created = memory.revision === undefined;
   memory = { ...memory, revision };
 
-  const origin = addressOrigin(attempt.url);
+  const origin = attempt.origin ?? addressOrigin(attempt.url);
   // A key typed anew, or the old one for a new address: the instance dropped the stored key
   // when the address moved to another host.
   const sends =

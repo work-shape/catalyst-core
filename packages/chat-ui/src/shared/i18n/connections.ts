@@ -33,6 +33,9 @@ export const connections = defineTranslations({
     "connections.authBearerText": "The key is sent in the Authorization header.",
     "connections.authHeader": "Key in a header",
     "connections.authHeaderText": "The key is sent in a header the server names.",
+    "connections.authOAuthClient": "OAuth client credentials",
+    "connections.authOAuthClientText":
+      "The instance signs in as its own client, with client ID and client secret, without a person.",
     "connections.headerName": "Header name",
     "connections.headerNameHint": "The header the server reads the key from, such as X-API-Key.",
     "connections.secret": "Key",
@@ -57,6 +60,10 @@ export const connections = defineTranslations({
       "The instance did not accept these settings. Check that the address starts with https:// or http:// and has no user name, password, query or fragment.",
     "connections.refusedTestPath":
       "Enter the test path as a path that starts with /, without query (?).",
+    "connections.refusedOAuth":
+      "Check the OAuth addresses: https, without user name or fragment. Extra parameters may not name a parameter of the protocol.",
+    "connections.refusedOAuthEgress":
+      "The operator's network rule blocks an address of the sign-in server. Send the operator the host named in the details.",
     "connections.refusedUnknown":
       "The instance did not accept this connection. An administrator of the instance sees why under Technical details.",
     "connections.writeFailed": "The change could not be saved.",
@@ -292,6 +299,9 @@ export const connections = defineTranslations({
     "connections.authHeader": "Schlüssel in einem Header",
     "connections.authHeaderText":
       "Der Schlüssel wird in einem Header gesendet, den der Server nennt.",
+    "connections.authOAuthClient": "OAuth Client Credentials",
+    "connections.authOAuthClientText":
+      "Die Instanz meldet sich mit Client-ID und Client-Secret selbst an, ohne Person.",
     "connections.headerName": "Header-Name",
     "connections.headerNameHint":
       "Der Header, aus dem der Server den Schlüssel liest, etwa X-API-Key.",
@@ -318,6 +328,10 @@ export const connections = defineTranslations({
       "Die Instanz hat diese Einstellungen nicht angenommen. Prüfe, ob die Adresse mit https:// oder http:// beginnt und keinen Benutzernamen, kein Passwort, keine Abfrage und kein Fragment enthält.",
     "connections.refusedTestPath":
       "Gib den Testpfad als Pfad an, der mit / beginnt, ohne Abfrage (?).",
+    "connections.refusedOAuth":
+      "Prüfe die OAuth-Adressen: https, ohne Benutzername oder Fragment. Zusätzliche Parameter dürfen keinen Parameter des Protokolls nennen.",
+    "connections.refusedOAuthEgress":
+      "Die Netzwerkregel des Betreibers sperrt eine Adresse des Anmeldeservers. Schicke dem Betreiber den Host aus den Details.",
     "connections.refusedUnknown":
       "Die Instanz hat diese Verbindung nicht angenommen. Ein Administrator der Instanz sieht den Grund unter Technische Details.",
     "connections.writeFailed": "Die Änderung konnte nicht gespeichert werden.",

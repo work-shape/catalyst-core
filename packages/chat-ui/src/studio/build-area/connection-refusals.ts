@@ -17,6 +17,8 @@ export interface ConnectionRefusal {
 
 /** The field of the New connection dialog an issue is about: the address for a refused egress. */
 function fieldOfIssue({ path, code }: { path: readonly unknown[]; code?: string }) {
+  // The authorization server a REST API names: its addresses, client and permissions.
+  if (path[0] === "settings" && path[1] === "oauth") return "oauth";
   if (code === EGRESS_DENIED) return "url";
   if (path.includes("url") || path.includes("baseUrl")) return "url";
   if (path.includes("headers")) return "headers";
@@ -32,6 +34,7 @@ const FIELD_FALLBACK: Record<ReturnType<typeof fieldOfIssue>, TranslationKey> = 
   headers: "connections.refusedHeaders",
   headerName: "connections.refusedHeaders",
   testPath: "connections.refusedTestPath",
+  oauth: "connections.refusedOAuth",
   id: "connections.refusedName",
   general: "connections.refusedUnknown"
 };
@@ -79,13 +82,16 @@ export function connectionWriteErrors(
     const field = fieldOfIssue(issue);
     const egress = issue.code === EGRESS_DENIED;
     const known = issueRefusal(issue, t);
-    const message =
-      egress && url !== undefined
+    // An address of the authorization server is blocked: which one, the detail says.
+    const oauthEgress = egress && field === "oauth";
+    const message = oauthEgress
+      ? t("connections.refusedOAuthEgress")
+      : egress && url !== undefined
         ? egressRefusal(url, t)
         : known.asSent
           ? t(FIELD_FALLBACK[field])
           : known.message;
-    if (!egress) details.push(issue.message);
+    if (!egress || oauthEgress) details.push(issue.message);
     const before = errors[field];
     errors[field] =
       before === undefined || before.includes(message) ? message : `${before} ${message}`;

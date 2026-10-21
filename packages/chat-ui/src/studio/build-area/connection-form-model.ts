@@ -11,11 +11,40 @@ export const CONNECTION_AUTH_CHOICES = ["none", "bearer", "header"] as const;
 export type ConnectionAuthChoice = (typeof CONNECTION_AUTH_CHOICES)[number];
 
 /**
- * The auth scheme as the form holds it: a choice, or `oauth`, which a Connection takes when its
- * server asks for a sign-in. The form offers `oauth` only to a Connection that has it, and keeps
- * its `settings.oauth` while it stays.
+ * The auth schemes of a REST API that names its authorization server (CONN-OAUTH-1): a person
+ * signs in (`oauth`), or the instance signs in as its own client (`oauth_client`).
  */
-export type ConnectionFormAuthScheme = ConnectionAuthChoice | "oauth";
+export const CONNECTION_OAUTH_CHOICES = ["oauth", "oauth_client"] as const;
+export type ConnectionOAuthChoice = (typeof CONNECTION_OAUTH_CHOICES)[number];
+
+/**
+ * The auth scheme as the form holds it: a choice, or `oauth`, which an MCP Connection takes when
+ * its server asks for a sign-in, or a REST API's OAuth choice. The form offers `oauth` to an MCP
+ * Connection only where it has it, and keeps its `settings.oauth` while it stays.
+ */
+export type ConnectionFormAuthScheme = ConnectionAuthChoice | ConnectionOAuthChoice;
+
+/** How a REST API's client proves itself at the token endpoint. */
+export const CONNECTION_TOKEN_AUTH_METHODS = ["client_secret_post", "client_secret_basic"] as const;
+export type ConnectionTokenAuthMethod = (typeof CONNECTION_TOKEN_AUTH_METHODS)[number];
+
+/**
+ * The authorization server a REST API names, as the form holds it. The client secret is not
+ * here: it is the Connection's own secret, entered beside the definition.
+ */
+export interface ConnectionOAuthForm {
+  /** Where a person signs in. Only `oauth` reads it. */
+  authorizationUrl: string;
+  tokenUrl: string;
+  /** Empty for none: a disconnect then forgets the sign-in without telling the provider. */
+  revocationUrl: string;
+  clientId: string;
+  /** The permissions asked for, separated by spaces, as typed. */
+  scopes: string;
+  /** Fixed extra parameters of the authorization address, such as `prompt`. */
+  params: ConnectionHeaderRow[];
+  tokenAuthMethod: ConnectionTokenAuthMethod;
+}
 
 /** A fixed header of a REST API, as the form lists it: never a credential. */
 export interface ConnectionHeaderRow {
@@ -39,6 +68,8 @@ export interface ConnectionFormState {
    * a call runs for, or empty for none. A call for someone without a mapping is refused.
    */
   personContextHeader: string;
+  /** For `http_api` with an OAuth choice: the authorization server it names. */
+  oauth: ConnectionOAuthForm;
 }
 
 /** One operation a write accepts, as the definition holds it. */
@@ -61,8 +92,111 @@ function textOf(value: unknown): string {
 }
 
 function authChoiceOf(value: unknown): ConnectionFormAuthScheme {
-  if (value === "oauth") return "oauth";
-  return CONNECTION_AUTH_CHOICES.find((choice) => choice === value) ?? "none";
+  return (
+    CONNECTION_OAUTH_CHOICES.find((choice) => choice === value) ??
+    CONNECTION_AUTH_CHOICES.find((choice) => choice === value) ??
+    "none"
+  );
+}
+
+/** Whether the scheme is a REST API's OAuth choice, whose `settings.oauth` the form writes. */
+export function isOAuthChoice(scheme: ConnectionFormAuthScheme): scheme is ConnectionOAuthChoice {
+  return scheme === "oauth" || scheme === "oauth_client";
+}
+
+/** A REST API's authorization server before anything is typed. */
+export function emptyOAuthForm(): ConnectionOAuthForm {
+  return {
+    authorizationUrl: "",
+    tokenUrl: "",
+    revocationUrl: "",
+    clientId: "",
+    scopes: "",
+    params: [],
+    tokenAuthMethod: "client_secret_post"
+  };
+}
+
+/** The authorization server a stored definition names, as the form holds it. */
+function oauthFormOf(value: unknown): ConnectionOAuthForm {
+  const oauth = recordOf(value);
+  const scopes = Array.isArray(oauth.scopes)
+    ? oauth.scopes.filter((scope): scope is string => typeof scope === "string")
+    : [];
+  return {
+    authorizationUrl: textOf(oauth.authorizationUrl),
+    tokenUrl: textOf(oauth.tokenUrl),
+    revocationUrl: textOf(oauth.revocationUrl),
+    clientId: textOf(oauth.clientId),
+    scopes: scopes.join(" "),
+    params: Object.entries(recordOf(oauth.authorizationParams)).map(([name, param]) => ({
+      name,
+      value: textOf(param)
+    })),
+    tokenAuthMethod:
+      oauth.tokenAuthMethod === "client_secret_basic" ? "client_secret_basic" : "client_secret_post"
+  };
+}
+
+/** The scopes as typed, each once, in their order. */
+function scopesOf(text: string): string[] {
+  return [...new Set(text.split(/\s+/u).filter((scope) => scope !== ""))];
+}
+
+/**
+ * The `settings.oauth` the form writes for a REST API's OAuth choice. What the form does not
+ * show, such as an `issuer` written elsewhere, stays.
+ */
+function oauthSettingsOf(
+  form: ConnectionOAuthForm,
+  scheme: ConnectionOAuthChoice,
+  stored: unknown
+): Record<string, unknown> {
+  const { issuer } = recordOf(stored);
+  const params = headersOf(form.params);
+  const authorizationUrl = form.authorizationUrl.trim();
+  const revocationUrl = form.revocationUrl.trim();
+  return {
+    ...(scheme === "oauth" && authorizationUrl !== "" ? { authorizationUrl } : {}),
+    tokenUrl: form.tokenUrl.trim(),
+    ...(scheme === "oauth" && revocationUrl !== "" ? { revocationUrl } : {}),
+    clientId: form.clientId.trim(),
+    scopes: scopesOf(form.scopes),
+    ...(scheme === "oauth" && Object.keys(params).length > 0
+      ? { authorizationParams: params }
+      : {}),
+    tokenAuthMethod: form.tokenAuthMethod,
+    ...(typeof issuer === "string" ? { issuer } : {})
+  };
+}
+
+/** Whether the OAuth fields a REST API's choice needs are filled. */
+export function oauthFormComplete(form: ConnectionFormState): boolean {
+  if (form.connectorType !== "http_api" || !isOAuthChoice(form.authScheme)) return true;
+  const { oauth } = form;
+  return (
+    oauth.tokenUrl.trim() !== "" &&
+    oauth.clientId.trim() !== "" &&
+    (form.authScheme === "oauth_client" || oauth.authorizationUrl.trim() !== "")
+  );
+}
+
+/**
+ * What a REST API's client secret is bound to: the base address's origin and, with an OAuth
+ * choice, the origins of the server's addresses and the client id. The instance drops the
+ * secret when one of them changes, so the dialog sends it again then.
+ */
+export function credentialOriginKey(form: ConnectionFormState): string | undefined {
+  const base = addressOrigin(form.url);
+  if (form.connectorType !== "http_api" || !isOAuthChoice(form.authScheme)) return base;
+  const { oauth } = form;
+  return [
+    base,
+    addressOrigin(oauth.tokenUrl),
+    form.authScheme === "oauth" ? addressOrigin(oauth.authorizationUrl) : undefined,
+    form.authScheme === "oauth" ? addressOrigin(oauth.revocationUrl) : undefined,
+    oauth.clientId.trim()
+  ].join(" ");
 }
 
 /** The form of a stored or copied definition. */
@@ -79,7 +213,8 @@ export function connectionConfigToForm(config: Record<string, unknown>): Connect
       value: textOf(value)
     })),
     testPath: textOf(settings.testPath),
-    personContextHeader: textOf(settings.personContextHeader)
+    personContextHeader: textOf(settings.personContextHeader),
+    oauth: connectorType === "http_api" ? oauthFormOf(settings.oauth) : emptyOAuthForm()
   };
 }
 
@@ -94,7 +229,8 @@ export function emptyConnectionForm(
     headerName: "",
     headers: [],
     testPath: "",
-    personContextHeader: ""
+    personContextHeader: "",
+    oauth: emptyOAuthForm()
   };
 }
 
@@ -121,6 +257,14 @@ export function sendsSecret(authScheme: ConnectionFormAuthScheme): boolean {
 }
 
 /**
+ * Whether a REST API with this scheme holds a secret of its own: a key, or the client secret
+ * of its OAuth choice. A change to no authentication deletes it.
+ */
+export function holdsSecret(authScheme: ConnectionFormAuthScheme): boolean {
+  return sendsSecret(authScheme) || authScheme === "oauth_client" || authScheme === "oauth";
+}
+
+/**
  * The definition with the form's address and auth scheme, and everything else as it was. The
  * header name is only written for the scheme that reads it.
  */
@@ -143,6 +287,10 @@ export function withConnectionForm(
   const headers = headersOf(form.headers);
   const testPath = form.testPath.trim();
   const personContextHeader = form.personContextHeader.trim();
+  // The authorization server is written only with an OAuth choice; another scheme drops it.
+  const oauth = isOAuthChoice(form.authScheme)
+    ? { oauth: oauthSettingsOf(form.oauth, form.authScheme, recordOf(config.settings).oauth) }
+    : {};
   return {
     ...config,
     settings: {
@@ -150,7 +298,8 @@ export function withConnectionForm(
       ...(Object.keys(headers).length === 0 ? {} : { headers }),
       ...(testPath === "" ? {} : { testPath }),
       ...(personContextHeader === "" ? {} : { personContextHeader }),
-      ...credentialHeader
+      ...credentialHeader,
+      ...oauth
     },
     authScheme: form.authScheme
   };
@@ -339,7 +488,17 @@ export function countConnectionFormChanges(
   baseline: ConnectionFormState
 ): number {
   const headerCounts = form.authScheme === "header" || baseline.authScheme === "header";
+  const oauthCounts =
+    form.connectorType === "http_api" &&
+    (isOAuthChoice(form.authScheme) || isOAuthChoice(baseline.authScheme));
+  const oauth = (state: ConnectionFormState) =>
+    JSON.stringify(
+      isOAuthChoice(state.authScheme)
+        ? oauthSettingsOf(state.oauth, state.authScheme, undefined)
+        : undefined
+    );
   return (
+    Number(oauthCounts && oauth(form) !== oauth(baseline)) +
     Number(form.url.trim() !== baseline.url.trim()) +
     Number(form.authScheme !== baseline.authScheme) +
     Number(headerCounts && form.headerName.trim() !== baseline.headerName.trim()) +

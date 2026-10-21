@@ -421,7 +421,8 @@ const SETTING_LABELS = new Map<string, TranslationKey>([
   ["testPath", "connectionCreate.testPath"],
   ["headerName", "connections.headerName"],
   ["headers", "connectionCreate.headers"],
-  ["personContextHeader", "connectionCreate.personContextHeader"]
+  ["personContextHeader", "connectionCreate.personContextHeader"],
+  ["oauth", "connectionCreate.oauthSettings"]
 ]);
 
 /**
