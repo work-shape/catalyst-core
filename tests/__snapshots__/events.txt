@@ -11,6 +11,8 @@
 {"name":"api_access.service_principals_viewed","legacy":true,"audited":true,"phases":["after"]}
 {"name":"app.before_publish","legacy":false,"audited":false,"phases":["before"]}
 {"name":"app.created","legacy":true,"audited":true,"phases":["after"]}
+{"name":"app.draft_host_allowed","legacy":false,"audited":true,"phases":["after"]}
+{"name":"app.page_draft_host_allowed","legacy":false,"audited":true,"phases":["after"]}
 {"name":"app.published","legacy":true,"audited":true,"phases":["after"]}
 {"name":"approval_request.before_create","legacy":false,"audited":false,"phases":["before"]}
 {"name":"approval_request.created","legacy":true,"audited":true,"phases":["after"]}

@@ -137,6 +137,8 @@ describe("the file sets of a Page", () => {
     const { save, scope } = await arrange("no_update");
     // What the store offers. A call that changes a file set would have to be added here.
     expect(Object.keys(db.store.pages).sort()).toEqual([
+      // A draft host allowance belongs to a person and a host, not to a file set.
+      "allowDraftHost",
       // A file set of an asset is stored, read and deleted as one of a Page is.
       "createAssetFileSet",
       // The build calls are about the row a save waits on, not about a file set.
@@ -154,9 +156,11 @@ describe("the file sets of a Page", () => {
       "getPageFileSet",
       "getServedFileSet",
       "listConversationPageIds",
+      "listDraftHostAllowances",
       "listPageFileSets",
       "listPages",
-      "mutateAppUserStorage"
+      "mutateAppUserStorage",
+      "removeDraftHostAllowances"
     ]);
     const saved = await save("Offer");
     const sameId = db.store.pages.createPageFileSet({
