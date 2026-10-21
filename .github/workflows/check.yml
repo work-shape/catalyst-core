@@ -1,44 +1,30 @@
-# PR selection (git diff from the merge base, including both sides of renames):
-# - Hosted checks are opt-in: add/re-add the `ci` PR label, or dispatch a branch.
-# - Opening, pushing, reopening and marking a PR ready do not start hosted checks.
-# - Dispatches, main pushes and release tags run in full, including draft branches.
-# - Docs-only: packages/docs/**, changes/** and *.md outside packages/*/src/** run
-#   docs, format and changes, plus the small selection/required-result jobs.
-# - Other changes run build, static, docs, four test shards, upgrade/compatibility,
-#   and release packaging. Browser tests additionally need clients/demo, server
-#   or any of their transitive workspace dependencies, e2e/** or tests/fixtures/**.
-# - Images additionally need a demo/server dependency change, docker/**, any
-#   Dockerfile, package.json or lockfile (including source-only import changes).
-# - Workflows/actions/scripts, quality-config, any lockfile or config file, root
-#   configuration and unknown paths select EVERYTHING (even inside a docs PR).
-# - Release branches, release tags and the nightly main run always select EVERYTHING.
+# Hosted Check runs nightly and for releases only (Blacksmith budget: $100/month).
+# - Nightly main runs at 03:17 UTC; release/** branch and v* tag pushes run in full.
+# - Manual dispatch is allowed only on refs/heads/release/** and refs/tags/v*.
+#   Other refs fail before checkout; the release procedure dispatches release/<version>.
+# - PR events and labels never start hosted checks.
 # - A push to main runs nothing: the lander pushes only a batch that passed the full gate
 #   locally (scripts/lane/lander). The nightly run is the hosted record and catches drift.
 # Keep `check` as the stable aggregate: selected failures/cancellations fail it;
 # intentionally skipped jobs pass. `browser` remains for existing check consumers.
 name: Check
 on:
-  pull_request:
-    types: [labeled]
   workflow_dispatch:
   schedule:
-    - cron: "0 2 * * *"
+    - cron: "17 3 * * *"
   push:
     branches: ["release/**"]
     tags: ["v*"]
 permissions:
   contents: read
   packages: read
-# Explicit CI label requests share a PR group and cancel superseded requests.
-# Unrelated label events get unique groups so they cannot displace a requested run.
-# A dispatch on a branch other than main cancels the branch's earlier dispatch: only the
-# newest push needs a result. Main/tag/schedule runs get unique groups, including re-runs.
+# A release-branch dispatch cancels the branch's earlier dispatch.
+# Pushes, tags and scheduled runs get unique groups, including re-runs.
 concurrency:
-  group: ${{ github.workflow }}-${{ (github.event_name == 'pull_request' && github.event.label.name == 'ci' && github.ref) || (github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main' && format('dispatch-{0}', github.ref)) || format('{0}-{1}-{2}', github.ref, github.run_id, github.run_attempt) }}
-  cancel-in-progress: ${{ (github.event_name == 'pull_request' && github.event.label.name == 'ci') || (github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main') }}
+  group: ${{ github.workflow }}-${{ (github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/heads/release/') && format('dispatch-{0}', github.ref)) || format('{0}-{1}-{2}', github.ref, github.run_id, github.run_attempt) }}
+  cancel-in-progress: ${{ github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/heads/release/') }}
 jobs:
   paths:
-    if: github.event_name != 'pull_request' || github.event.label.name == 'ci'
     runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 3
     outputs:
@@ -46,12 +32,23 @@ jobs:
       browser: ${{ steps.select.outputs.browser }}
       images: ${{ steps.select.outputs.images }}
     steps:
+      - name: Enforce hosted Check policy
+        if: github.event_name == 'workflow_dispatch'
+        timeout-minutes: 1
+        run: |
+          case "$GITHUB_REF" in
+            refs/heads/release/*|refs/tags/v*) ;;
+            *)
+              echo "::error::Hosted Check runs nightly and for releases only. Dispatch requires refs/heads/release/** or refs/tags/v*; received $GITHUB_REF."
+              exit 1
+              ;;
+          esac
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
           fetch-depth: 0
-      - name: Verify path selection
-        run: node --test .github/scripts/check-paths.test.mjs
+      - name: Verify Check scripts
+        run: node --test .github/scripts/*.test.mjs
       - name: Select affected jobs
         id: select
         env:
@@ -403,7 +400,7 @@ jobs:
   # Both aggregates enforce the same selected/skipped contract; neither runs tests.
   check:
     needs: [paths, changes, build, static, docs, tests, upgrade, release, images, browser-shard]
-    if: ${{ always() && (github.event_name != 'pull_request' || github.event.label.name == 'ci') }}
+    if: ${{ always() }}
     runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 2
     steps:
