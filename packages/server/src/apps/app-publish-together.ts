@@ -1,5 +1,6 @@
 import {
   AppError,
+  WORKFLOW_ACTIONS,
   WORKFLOW_ASSET_KIND,
   type ActorAccess,
   type AuthenticatedIdentity,
@@ -7,7 +8,8 @@ import {
   type OperationApproval,
   type OperationAuthorization,
   type OperationBeforeEvent,
-  type OperationOrigin
+  type OperationOrigin,
+  type PolicyTarget
 } from "@work-shape/catalyst-core";
 import { transactionalAssetCall, type AssetCall } from "../assets/asset-access";
 import { AssetWorkflow } from "../assets/asset-service";
@@ -83,8 +85,22 @@ export class AppPublishTogether {
   }
 
   /**
+   * What the policy is asked about: the App and each Workflow published with it, so a setting
+   * that holds a Workflow's publish holds the joint one too.
+   */
+  async policyTargets(input: PublishTogetherInput): Promise<PolicyTarget[]> {
+    const own = this.assets.policyTargets(input);
+    const members = await this.members(input).catch(() => []);
+    return [
+      ...own,
+      ...members.map((member) => this.assets.policyTargets(addressOf(member))).flat()
+    ];
+  }
+
+  /**
    * The App's held publish, with the Workflows published with it frozen in its subject: the
-   * set is one item that is approved as a whole, and moves when any of them moves.
+   * set is one item that is approved as a whole, and moves when any of them moves. Only someone
+   * who may approve each member's publish decides it, or approves it by their own click.
    */
   async approval(input: PublishTogetherInput): Promise<OperationApproval | undefined> {
     const own = await this.assets.publishApproval(input);
@@ -92,6 +108,7 @@ export class AppPublishTogether {
     if (!own?.subject || members.length === 0) return own;
     return {
       ...own,
+      alsoActions: [WORKFLOW_ACTIONS.approve],
       subject: {
         ...own.subject,
         publishedWith: members.map(({ name, revision, asset }) => ({

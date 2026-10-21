@@ -67,6 +67,12 @@ export interface OperationApproval {
   /** The instance-level right that decides it, such as `app.approve`. */
   action: string;
   /**
+   * Further instance-level rights who decides it must hold as well: of an App's publish that
+   * makes Workflows live with it, `workflow.approve` (DP-3). The caller's own click approves
+   * it only where they hold every one.
+   */
+  alsoActions?: readonly string[];
+  /**
    * What the request is about, frozen when it is filed, such as the revision a publish makes
    * live and the live one then. The request's kind reads it to show it and to tell whether
    * it moved.

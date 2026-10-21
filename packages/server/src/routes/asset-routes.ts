@@ -118,7 +118,7 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
     authorize: (input, { actor, access, origin }) =>
       together.authorize({ actor, access, origin }, input),
     resource: assetResource,
-    policyTargets: (input) => workflow.policyTargets(input),
+    policyTargets: (input) => together.policyTargets(input),
     changeClass: "reversible",
     beforeEvents: (input, _origin, actor) => together.events(input, actor),
     // A publish a guardrail holds waits for the holders of the kind's `approve` right.

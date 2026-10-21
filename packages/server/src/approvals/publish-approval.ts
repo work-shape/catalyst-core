@@ -223,6 +223,15 @@ export function publishApprovalKinds(options: PublishApprovalKindsOptions): Held
   return Object.values(PUBLISH_APPROVALS).map(({ kind, approve }) => ({
     kind,
     requiredPermission: approve,
+    furtherPermissions(subject) {
+      // Each Workflow published with an App is decided by someone who may approve its own publish.
+      const parsed = publishSubjectSchema.safeParse(subject);
+      if (!parsed.success) return [];
+      const further = (parsed.data.publishedWith ?? []).map(
+        (member) => PUBLISH_APPROVALS[member.kind]?.approve ?? approve
+      );
+      return [...new Set(further)].filter((right) => right !== approve);
+    },
     async moved(subject, store) {
       const parsed = publishSubjectSchema.safeParse(subject);
       if (!parsed.success) return "The request names no revision it publishes.";

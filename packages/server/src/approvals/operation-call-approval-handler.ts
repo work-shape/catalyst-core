@@ -136,6 +136,13 @@ export function createOperationCallApprovalHandler(
   return {
     kind: held?.kind ?? OPERATION_CALL_APPROVAL_KIND,
     requiredPermission: held?.requiredPermission ?? "operations.approve",
+    furtherPermissions(payload) {
+      const call = parsePayload(payload);
+      const about = subjectKindOf(call);
+      return about?.furtherPermissions && call.subject
+        ? about.furtherPermissions(call.subject)
+        : [];
+    },
     validate(payload) {
       return toJsonObject(parsePayload(payload));
     },

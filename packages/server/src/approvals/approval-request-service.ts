@@ -26,6 +26,8 @@ import {
   type ClientInstanceId,
   type JsonObject,
   type OperationBeforeEvent,
+  type Permission,
+  type PlatformAction,
   type ApprovalTransactionStores,
   type RuntimeCallContext
 } from "@work-shape/catalyst-core";
@@ -279,6 +281,7 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
     // they reach it here.
     if (request.addresseeUserId === undefined) {
       access.require(handler.requiredPermission, resourceOfRequest(handler, request));
+      for (const permission of furtherPermissionsOf(handler, request)) access.require(permission);
     } else if (command.decision === "request_changes") {
       throw new AppError("VALIDATION_FAILED", "A confirmation is allowed or denied");
     }
@@ -393,6 +396,7 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
     const request = await this.visibleRequest(user, access, requestId);
     const handler = this.handler(request.kind);
     access.require(handler.requiredPermission, resourceOfRequest(handler, request));
+    for (const permission of furtherPermissionsOf(handler, request)) access.require(permission);
     const revert = handler.revert?.bind(handler);
     if (!revert)
       throw new AppError("CONFLICT", "This approval request kind does not support revert");
@@ -573,7 +577,11 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
     const decides =
       request.addresseeUserId !== undefined
         ? request.addresseeUserId === user.id
-        : access.authorize(handler.requiredPermission, resourceOfRequest(handler, request)).allowed;
+        : access.authorize(handler.requiredPermission, resourceOfRequest(handler, request))
+            .allowed &&
+          furtherPermissionsOf(handler, request).every(
+            (permission) => access.authorize(permission).allowed
+          );
     const preview = await handler.preview(handler.validate(request.payload), {
       ...this.handlerContext(request, context),
       viewer,
@@ -740,6 +748,18 @@ const NARROWER_SCOPES = GRANT_SCOPE_KINDS.filter((scope) => scope !== "instance"
  * The asset a request's right is asked on, where its kind names one. A payload the kind cannot
  * read names none, and the right is asked of the instance.
  */
+/**
+ * The further rights one request asks of who decides it (a joint publish: each member kind's
+ * `approve` right). A payload the kind cannot read throws, as its preview does: it is never
+ * decided on its own right alone.
+ */
+function furtherPermissionsOf(
+  handler: ApprovalRequestHandler,
+  request: ApprovalRequest
+): readonly (Permission | PlatformAction)[] {
+  return handler.furtherPermissions?.(handler.validate(request.payload)) ?? [];
+}
+
 export function resourceOfRequest(
   handler: ApprovalRequestHandler,
   request: ApprovalRequest

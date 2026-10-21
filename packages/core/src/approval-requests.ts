@@ -103,6 +103,12 @@ export interface ApprovalRequestHandler<TPayload extends JsonObject = JsonObject
    */
   resourceOf?(payload: TPayload): AccessResource;
   /**
+   * Further rights one request asks of who decides it, beside `requiredPermission`: a joint
+   * publish asks the `approve` right of each kind it makes live (DP-3). Who lacks one of them
+   * may read the request and not decide it.
+   */
+  furtherPermissions?(payload: TPayload): readonly (Permission | PlatformAction)[];
+  /**
    * The subjects of the requests one holder may review, where the right on the instance does
    * not cover every asset for them (they hold it on some assets only, or are denied it on
    * some): what `payload.subject` holds of each request `resourceOf` admits them to. Lists and

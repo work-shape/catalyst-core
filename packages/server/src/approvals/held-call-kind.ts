@@ -14,6 +14,11 @@ export interface HeldCallApprovalKind {
   /** Who decides, and who is shown the request among those to decide. */
   requiredPermission: PlatformAction;
   /**
+   * Further rights the request of one held call asks of who decides it, read from its
+   * subject: a joint publish asks the `approve` right of each kind it makes live (DP-3).
+   */
+  furtherPermissions?(subject: JsonObject): readonly PlatformAction[];
+  /**
    * Why the call can no longer be approved, though it still waits: what it is about moved
    * since. Read through the stores of the decision's transaction.
    */

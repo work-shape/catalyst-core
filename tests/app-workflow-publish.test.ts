@@ -552,6 +552,115 @@ describe("an App and the Workflows it starts, at the App's publish", () => {
     expect(await publishedRevisionOf("app", "pages-h")).toBe(1);
   });
 
+  // DP-3 rights review: the joint item was held and decided as the App's own publish, so a
+  // setting that holds a Workflow's publish let the joint one through, and the App's approver
+  // alone made the Workflows live. Both fail without the fix.
+  it("holds the joint publish when a setting holds the publish of a Workflow, not of the App", async () => {
+    await publishWorkflow("policy-child", await putWorkflow("policy-child", { type: "object" }));
+    const child = await putWorkflow("policy-child", NOTE_INPUTS, 1);
+    const parent = await putParent("policy-parent", "policy-child");
+    expectStatus(await t.putApp(t.admin.id, "pages-p", pagesApp("pages-p", "policy-parent")), 200);
+
+    t.state.centralSettings = [
+      { operation: "assets.publish", value: "approval", assetKind: WORKFLOW_ASSET_KIND }
+    ];
+    try {
+      const response = await publishTogether(t.admin.id, "pages-p", [
+        { name: "policy-parent", revision: parent },
+        { name: "policy-child", revision: child }
+      ]);
+      expectStatus(response, 202);
+      heldSchema.parse(response.json());
+    } finally {
+      t.state.centralSettings = [];
+    }
+
+    expect(await publishedRevisionOf(WORKFLOW_ASSET_KIND, "policy-child")).toBe(1);
+    expect(await publishedRevisionOf(WORKFLOW_ASSET_KIND, "policy-parent")).toBeUndefined();
+    expect(await publishedRevisionOf("app", "pages-p")).toBeUndefined();
+  });
+
+  it("lets only one who may approve the App's and each Workflow's publish approve the joint item", async () => {
+    await publishWorkflow("rights-child", await putWorkflow("rights-child", { type: "object" }));
+    const child = await putWorkflow("rights-child", markedInputs("held_note"), 1);
+    const parent = await putParent("rights-parent", "rights-child");
+    expectStatus(await t.putApp(t.admin.id, "pages-j", pagesApp("pages-j", "rights-parent")), 200);
+    const named = [
+      { name: "rights-parent", revision: parent },
+      { name: "rights-child", revision: child }
+    ];
+    const parentId = await t.assetId(WORKFLOW_ASSET_KIND, "rights-parent");
+    const childId = await t.assetId(WORKFLOW_ASSET_KIND, "rights-child");
+    const instanceRight = async (holderId: string, action: string) =>
+      (
+        await t.stores.access.createGrant({
+          clientInstanceId,
+          holderKind: "user",
+          holderId,
+          action,
+          effect: "allow",
+          scopeKind: "instance",
+          grantedBy: t.admin.id
+        })
+      ).id;
+    const requestOf = async (userId: string, requestId: string) =>
+      z
+        .object({ canDecide: z.boolean() })
+        .parse(
+          (await t.expectOk(userId, "approval_requests.get", { params: { requestId } })).json()
+        );
+    const decide = (userId: string, requestId: string) =>
+      t.call(userId, "approval_requests.decide", {
+        params: { requestId },
+        payload: { decision: "approve" }
+      });
+
+    // Kai and Lena each may approve an App's publish, not a Workflow's.
+    const grants = [await instanceRight(t.kai.id, "app.approve")];
+    grants.push(await instanceRight(t.lena.id, "app.approve"));
+    try {
+      await withRights(
+        t.kai.id,
+        [
+          ["app.publish", { workspaceId: t.workspaceId }],
+          ...[parentId, childId].flatMap((assetId) => [
+            ["workflow.use", { assetId }] as const,
+            ["workflow.read", { assetId }] as const,
+            ["workflow.publish", { assetId }] as const
+          ])
+        ],
+        async () => {
+          // Kai's own click approves the App's part only, so the guardrail holds the whole.
+          const response = await publishTogether(t.kai.id, "pages-j", named);
+          expectStatus(response, 202);
+          const { approvalRequestId } = heldSchema.parse(response.json());
+
+          expect(await requestOf(t.lena.id, approvalRequestId)).toEqual(
+            expect.objectContaining({ canDecide: false })
+          );
+          expectStatus(await decide(t.lena.id, approvalRequestId), 403);
+          expect(await publishedRevisionOf(WORKFLOW_ASSET_KIND, "rights-child")).toBe(1);
+          expect(await publishedRevisionOf("app", "pages-j")).toBeUndefined();
+
+          grants.push(await instanceRight(t.lena.id, "workflow.approve"));
+          expect(await requestOf(t.lena.id, approvalRequestId)).toEqual(
+            expect.objectContaining({ canDecide: true })
+          );
+          expectStatus(await decide(t.lena.id, approvalRequestId), 200);
+          await getTestJobs(t.instance).runDue();
+        }
+      );
+    } finally {
+      for (const grantId of grants) {
+        await t.stores.access.deleteGrant({ clientInstanceId, grantId });
+      }
+    }
+
+    expect(await publishedRevisionOf(WORKFLOW_ASSET_KIND, "rights-child")).toBe(child);
+    expect(await publishedRevisionOf(WORKFLOW_ASSET_KIND, "rights-parent")).toBe(parent);
+    expect(await publishedRevisionOf("app", "pages-j")).toBe(1);
+  });
+
   it("names what `catalyst app publish` makes live with the App and publishes it all on one yes", async () => {
     await publishWorkflow("cli-pages", await putWorkflow("cli-pages"));
     const revision = await putWorkflow("cli-pages", { ...PAGE_INPUTS, title: "Pages" }, 1);
