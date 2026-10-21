@@ -1,3 +1,4 @@
+import type { Catalogue, CatalogueEntryView } from "./catalogue/catalogue";
 import {
   AppError,
   CONNECTION_ASSET_KIND,
@@ -177,8 +178,11 @@ export interface ConnectionManagement extends ReturnType<
   ): Promise<ConnectionTestView>;
   /** The tools an agent can carry, of the Connections `readable` admits. */
   listTools(readable: (resource: AccessResource) => boolean): Promise<ConnectionToolsView>;
-  /** The Connector types of the build that the New connection dialog offers with a form. */
-  connectorTypes(): { types: ConnectorTypeOfferView[] };
+  /**
+   * The Connector types of the build that the New connection dialog offers with a form, and
+   * the catalogue's entries.
+   */
+  connectorTypes(): { types: ConnectorTypeOfferView[]; entries: CatalogueEntryView[] };
   /**
    * Stores the shared secret of a Connection made on the instance, as the next version. The
    * value is written once and never read back. `expectedVersion` is the version the writer
@@ -307,6 +311,8 @@ export function createConnectionManagement(
     Pick<ConnectionSignInDeps, "publicUrl" | "oauth"> & {
       /** The keys of the Secret Store. Without them no secret is stored. */
       keyring?: SecretKeyring;
+      /** The catalogue's entries, which New connection shows in "Dienste". */
+      catalogue?: Pick<Catalogue, "entries">;
       now?: () => Date;
     }
 ): ConnectionManagement {
@@ -601,7 +607,7 @@ export function createConnectionManagement(
         ? undefined
         : signInLandingUrl(deps.publicUrl, outcome, connectionName),
 
-    connectorTypes: () => connectorTypeOffers(deps.connectorTypes),
+    connectorTypes: () => connectorTypeOffers(deps.connectorTypes, deps.catalogue),
 
     async listTools(readable) {
       const connections = (await readConnections(deps))

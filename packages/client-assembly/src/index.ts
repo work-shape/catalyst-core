@@ -1,6 +1,7 @@
 export { shippedSkillsOf } from "./shipped-skills";
 export { readRunnerPackageManifest, RUNNER_PACKAGE_MANIFEST_PATH } from "./runner-packages";
 export type { ClientInstanceEnv } from "./env";
+export { loadCatalogueEntries, type CatalogueEntry } from "@work-shape/catalyst-connections";
 export type {
   ConnectorTypeDefinition,
   StructuredDataPublicationReviewer

@@ -1,3 +1,4 @@
+import type { Catalogue, CatalogueEntryView } from "./catalogue/catalogue";
 import type {
   ConnectorTypeRegistry,
   JsonObject,
@@ -28,13 +29,19 @@ export interface ConnectorTypeOfferView {
 }
 
 /**
- * The types of the build that declare a form, by type id. A type without one, such as `mcp`
- * and `http_api` with their own dialog, is not listed.
+ * The types of the build that declare a form, by type id, and the catalogue's entries. A type
+ * without a form, such as `mcp` and `http_api` with their own dialog, is not listed. The
+ * dialog shows an entry's card in place of the card of a type the entry names.
  */
-export function connectorTypeOffers(registry: ConnectorTypeRegistry): {
+export function connectorTypeOffers(
+  registry: ConnectorTypeRegistry,
+  catalogue?: Pick<Catalogue, "entries">
+): {
   types: ConnectorTypeOfferView[];
+  entries: CatalogueEntryView[];
 } {
   return {
+    entries: [...(catalogue?.entries ?? [])],
     types: registry.types
       .flatMap((definition) => {
         const { form } = definition;

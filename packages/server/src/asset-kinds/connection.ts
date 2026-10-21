@@ -21,6 +21,7 @@ import {
   endConnectionSignIn,
   type AssetValidationIssue,
   type ConnectionBindingEndReason,
+  type ConnectionCatalogueLink,
   type ConnectionConfig,
   type ConnectionSignInEnding,
   type ConnectorOAuthEndpoints,
@@ -48,6 +49,67 @@ export interface ConnectionAssetKindOptions {
    * Left out, where the instance has no Secret Store, the sign-in ends on the instance only.
    */
   signInEnding?: ConnectionSignInEnding;
+  /**
+   * The catalogue of the instance. A write that sets or changes a Connection's `catalogue`
+   * link is refused unless the entry is offered and its part makes a Connection of that type.
+   * Left out, an instance offers no entry and every new link is refused.
+   */
+  catalogue?: {
+    linkIssue(link: ConnectionCatalogueLink, connectorType: string): string | undefined;
+  };
+}
+
+/** The catalogue link a definition holds, as written, or nothing. */
+function catalogueLinkOf(config: unknown): ConnectionCatalogueLink | undefined {
+  const link = readDefinitionField(config, "catalogue");
+  if (typeof link !== "object" || link === null) return undefined;
+  const entry = readDefinitionField(link, "entry");
+  const part = readDefinitionField(link, "part");
+  const version = readDefinitionField(link, "version");
+  return typeof entry === "string" &&
+    (part === "tools" || part === "source") &&
+    typeof version === "number"
+    ? { entry, part, version }
+    : undefined;
+}
+
+/**
+ * Refuses a write that sets or changes a Connection's catalogue link to an entry the instance
+ * does not offer. The link only names where a Connection came from: it grants nothing, so a
+ * link that stays as it was, or goes, is never refused, also after the operator stopped
+ * offering the entry.
+ */
+function assertCatalogueLink(
+  options: ConnectionAssetKindOptions,
+  current: unknown,
+  next: Record<string, unknown>
+): void {
+  const link = readDefinitionField(next, "catalogue");
+  if (link === undefined) return;
+  const before = catalogueLinkOf(current);
+  const after = catalogueLinkOf(next);
+  if (
+    after !== undefined &&
+    before !== undefined &&
+    before.entry === after.entry &&
+    before.part === after.part &&
+    before.version === after.version &&
+    readDefinitionField(current, "connectorType") === next.connectorType
+  ) {
+    return;
+  }
+  // A malformed link is the schema's to refuse, with its own path.
+  if (after === undefined) return;
+  const connectorType = typeof next.connectorType === "string" ? next.connectorType : "";
+  const issue =
+    options.catalogue?.linkIssue(after, connectorType) ??
+    (options.catalogue === undefined
+      ? `${CONNECTION_REFUSALS.catalogueEntryNotOffered}: this instance offers no catalogue entry`
+      : undefined);
+  if (issue === undefined) return;
+  throw new AppError("VALIDATION_FAILED", issue, {
+    reason: CONNECTION_REFUSALS.catalogueEntryNotOffered
+  });
 }
 
 /** Why a write ends the Connection's sign-in, or nothing where the sign-in stays. */
@@ -322,6 +384,10 @@ export function createConnectionAssetKind(options: ConnectionAssetKindOptions): 
           enabled: connection.enabled,
           // Only picks the icon a list shows.
           ...(connection.service === undefined ? {} : { service: connection.service }),
+          // The catalogue entry it was installed from, by id.
+          ...(connection.catalogue === undefined
+            ? {}
+            : { catalogueEntry: connection.catalogue.entry }),
           // A Knowledge Base can sync documents through it: its page offers it as a source.
           ...(options.connectorTypes.get(connection.connectorType)?.documentSource === undefined
             ? {}
@@ -332,8 +398,10 @@ export function createConnectionAssetKind(options: ConnectionAssetKindOptions): 
     references: () => [],
     holdsInstanceDefault: false,
     hasWorkspaceAvailability: true,
-    prepareInteractiveUpsert: ({ current, next, principalId }) =>
-      withServerFields(current, next, principalId),
+    prepareInteractiveUpsert: ({ current, next, principalId }) => {
+      assertCatalogueLink(options, current, next);
+      return withServerFields(current, next, principalId);
+    },
     // An earlier revision may name a handle the Connection no longer has: its secret is stored
     // under the one the Connection holds now, and a call resolves the handle of the revision.
     // A revision of release config stays one, and the write refuses it.

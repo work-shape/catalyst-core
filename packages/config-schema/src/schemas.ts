@@ -26,6 +26,7 @@ import { dataScopesSchema, AGENT_EDITABLE_FIELDS } from "@work-shape/catalyst-co
 import { z } from "zod";
 import { developmentAuthConfigSchema, standaloneAuthConfigSchema } from "./auth-schema";
 import {
+  catalogueConfigSchema,
   egressConfigSchema,
   releaseConnectionsConfigSchema,
   secretStoreConfigSchema
@@ -557,6 +558,8 @@ export const clientInstanceConfigSchema = z.object({
   dataStores: dataStoresConfigSchema,
   /** The outside targets Connections may reach. Empty refuses all of them. */
   egress: egressConfigSchema,
+  /** The catalogue entries this instance offers in New connection. */
+  catalogue: catalogueConfigSchema,
   ui: uiConfigSchema,
   policy: policyConfigSchema
 });

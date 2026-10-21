@@ -10,6 +10,7 @@ import {
   withSignInRefresh,
   createConnectionOperationSource,
   createConnectionToolSource,
+  createCatalogue,
   createEgressChecker,
   createHttpApiConnectorType,
   createMcpConnectorType,
@@ -18,6 +19,8 @@ import {
   platformStoreTargetsOf,
   readConnections,
   seedReleaseConnections,
+  type Catalogue,
+  type CatalogueEntry,
   type ReleaseSeedResult,
   type SecretKeyring
 } from "@work-shape/catalyst-connections";
@@ -51,6 +54,8 @@ import { PLATFORM_SECRET_NAMES } from "./infrastructure";
 /** What an instance with the module `connections` on has for its Connections. */
 export interface InstanceConnections {
   readonly connectorTypes: ConnectorTypeRegistry;
+  /** The catalogue entries of the build, and which of them this instance offers. */
+  readonly catalogue: Catalogue;
   readonly openDocumentSource: ReturnType<typeof createDocumentSourceOpener>;
   /** The one egress checker of this process. */
   readonly egress: EgressChecker;
@@ -135,10 +140,12 @@ export function withConnections(
 export async function createInstanceConnections(
   input: InstanceConnectionParts,
   /** The Connector types of this build. */
-  connectorTypes: readonly ConnectorTypeDefinition[] = []
+  connectorTypes: readonly ConnectorTypeDefinition[] = [],
+  /** The catalogue entries of this build. */
+  catalogueEntries: readonly CatalogueEntry[] = []
 ): Promise<InstanceConnections | undefined> {
   try {
-    return await buildInstanceConnections(input, connectorTypes);
+    return await buildInstanceConnections(input, connectorTypes, catalogueEntries);
   } catch (error) {
     // A missing Secret Store key stops the start here, before anything else is built. The
     // store was opened for this start and nothing else holds it yet.
@@ -158,7 +165,8 @@ interface InstanceConnectionParts {
 
 async function buildInstanceConnections(
   input: InstanceConnectionParts,
-  types: readonly ConnectorTypeDefinition[]
+  types: readonly ConnectorTypeDefinition[],
+  catalogueEntries: readonly CatalogueEntry[]
 ): Promise<InstanceConnections | undefined> {
   const { config, clientInstanceId, secrets, stores, logger } = input;
   const configured = Object.keys(config.connections).length > 0;
@@ -176,6 +184,13 @@ async function buildInstanceConnections(
     createHttpApiConnectorType(),
     ...types
   ]);
+  // Every shipped entry is checked now, so a broken one stops the start; an entry that
+  // `catalogue.entries` names and the build cannot install stops it too, with its name.
+  const catalogue = createCatalogue({
+    entries: catalogueEntries,
+    named: config.catalogue.entries,
+    connectorTypes
+  });
   // Named keys are needed: a release Connection's secret or one entered on the instance is
   // stored under them.
   let keyring: SecretKeyring | undefined;
@@ -211,7 +226,8 @@ async function buildInstanceConnections(
     );
   }
   const egress = createEgressChecker({
-    allow: config.egress.allow,
+    // The hosts of an offered entry join the operator's list; an entry only names them.
+    allow: [...config.egress.allow, ...catalogue.egress],
     allowPublicHttps: config.egress.allowPublicHttps === true,
     platformStore: platformStore ?? [],
     platformStoreUnknown: platformStore === undefined
@@ -251,6 +267,7 @@ async function buildInstanceConnections(
   const slots = new ConnectionCallSlots();
   return {
     connectorTypes,
+    catalogue,
     openDocumentSource: createDocumentSourceOpener(operations, slots),
     egress,
     ...(credentials ? { credentials } : {}),
@@ -262,6 +279,7 @@ async function buildInstanceConnections(
       ...createConnectionManagement({
         ...operations,
         ...(keyring ? { keyring } : {}),
+        catalogue,
         // Where the provider of an OAuth sign-in sends the browser back to.
         ...(config.instance.publicUrl === undefined ? {} : { publicUrl: config.instance.publicUrl })
       }),

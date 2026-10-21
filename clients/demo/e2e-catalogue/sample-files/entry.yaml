@@ -1,0 +1,29 @@
+# An entry of the browser suite only (CAT-1): the suite's folder source as a Knowledge Base
+# source part. The suite's config does not name it, so New connection shows it greyed and the
+# instance refuses to install it.
+id: sample-files
+version: 1
+service: sample-files
+title:
+  en: Sample files
+  de: Beispieldateien
+description:
+  en: Fixed folders of the browser suite, for a Knowledge Base.
+  de: Feste Ordner der Browser-Tests, für eine Wissensdatenbank.
+category: files
+examplePrompts:
+  - en: What does the handbook say?
+    de: Was steht im Handbuch?
+mark:
+  color: "#5b4b8a"
+source:
+  connectorType: test_folders
+  name: sample-files
+  description:
+    en: A Knowledge Base syncs the folders you choose.
+    de: Eine Wissensdatenbank synchronisiert die Ordner, die du wählst.
+  egress:
+    - { protocol: https, host: 127.0.0.1, port: 8443, network: private, cidrs: [127.0.0.0/8] }
+  sharedAccountNote:
+    en: The folders are read with one shared account. Everyone the Knowledge Base is given to reads what it syncs.
+    de: Die Ordner werden mit einem gemeinsamen Konto gelesen. Wer die Wissensdatenbank bekommt, liest, was sie synchronisiert.

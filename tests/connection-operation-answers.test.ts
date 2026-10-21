@@ -641,9 +641,11 @@ describe("the Connection routes", () => {
             }
           ]
         }
-      ]
+      ],
+      // The instance names no catalogue entry.
+      entries: []
     });
-    // Using one Connection makes no new one: the types are not offered.
+    // Using one Connection makes no new one: neither the types nor the entries are offered.
     for (const user of [t.kai, t.lena]) {
       await t.expectRefused(
         user.id,

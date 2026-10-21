@@ -12,7 +12,11 @@ import {
   CONNECTION_ORIGINS,
   CONNECTION_SECRET_STATES,
   CONNECTOR_TEST_STATUSES,
+  CATALOGUE_CATEGORIES,
+  CATALOGUE_PARTS,
   OPERATION_EFFECTS,
+  type CatalogueCategory,
+  type CataloguePart,
   type ConnectionExposure,
   type ConnectionHealth
 } from "@work-shape/catalyst-asset-schemas";
@@ -188,6 +192,19 @@ export interface ConnectionOperationConfig extends ConnectionOperationDeclaratio
 /** The `service` of a Connection: lowercase letters, digits and hyphens, 1 to 40 characters. */
 export const CONNECTION_SERVICE_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$/u;
 
+export { CATALOGUE_CATEGORIES, CATALOGUE_PARTS };
+export type { CatalogueCategory, CataloguePart };
+
+/**
+ * The catalogue entry a Connection was installed from: the entry's id, the part and the entry's
+ * version at install. It links them and nothing more: no right, egress rule or call reads it.
+ */
+export interface ConnectionCatalogueLink {
+  entry: string;
+  part: CataloguePart;
+  version: number;
+}
+
 /** A Connection as its revision holds it. It never holds a secret value. */
 export interface ConnectionConfig {
   name: string;
@@ -199,6 +216,8 @@ export interface ConnectionConfig {
    * egress rule or behaviour reads it.
    */
   service?: string;
+  /** The catalogue entry it was installed from, where it was. */
+  catalogue?: ConnectionCatalogueLink;
   connectorType: string;
   /** The user or service principal accountable for the Connection. It bypasses no right. */
   ownerPrincipalId: string;
@@ -728,7 +747,10 @@ export interface ConnectorTypeForm {
   title: LocalizedStringConfig;
   /** What a Connection of the type is for, on the card. */
   description: LocalizedStringConfig;
-  /** The service whose mark the card shows, as a Connection's `service` names it. */
+  /**
+   * The `service` slug every Connection the form makes holds, such as `box`
+   * (`CONNECTION_SERVICE_PATTERN`). The card shows the form's title, never this slug.
+   */
   service?: string;
   /** The auth scheme a Connection the form makes uses. */
   authScheme: string;
@@ -866,6 +888,12 @@ export function createConnectorTypeRegistry(
         `The form of Connector type '${definition.type}' must use one of its auth schemes and ask for one secret at most`
       );
     }
+    if (form?.service !== undefined && !CONNECTION_SERVICE_PATTERN.test(form.service)) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        `The form of Connector type '${definition.type}' names the service '${form.service}': a service is a lowercase slug, such as 'box'`
+      );
+    }
     if (byType.has(definition.type)) {
       throw new AppError(
         "VALIDATION_FAILED",
@@ -893,7 +921,12 @@ export const CONNECTION_REFUSALS = {
   /** The instance names no key of the Secret Store, so no secret can be stored. */
   secretStoreUnavailable: "secret_store_unavailable",
   /** Apps do not send person context yet, so a Connection that sends it is not for Apps. */
-  personContextAppUnavailable: "person_context_app_unavailable"
+  personContextAppUnavailable: "person_context_app_unavailable",
+  /**
+   * A Connection names a catalogue entry, or a part of one, that this instance does not offer:
+   * the entry is not in `catalogue.entries`, it has no such part, or the part is of another type.
+   */
+  catalogueEntryNotOffered: "catalogue_entry_not_offered"
 } as const;
 
 /** What a person is told where App exposure and a person context header meet. */

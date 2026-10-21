@@ -42,7 +42,7 @@ export const folderSourceConnector: ConnectorTypeDefinition = {
       en: "Fixed folders of the browser suite.",
       de: "Feste Ordner der Browser-Tests."
     },
-    service: "Test folders",
+    service: "test-folders",
     authScheme: "client_credentials",
     settings: { region: "eu" },
     fields: [

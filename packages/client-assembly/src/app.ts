@@ -1,3 +1,4 @@
+import type { CatalogueEntry } from "@work-shape/catalyst-connections";
 import { createLogger } from "./logger";
 import {
   StoreBackedAgentRuntime,
@@ -118,6 +119,8 @@ export interface CreateClientInstanceAppInput {
   tools: ToolAssemblyDefinition[];
   /** The Connector types of this build. A Connection of another type stops startup. */
   connectorTypes?: ConnectorTypeDefinition[];
+  /** The catalogue entries of this build; release config names the ones it offers. */
+  catalogue?: readonly CatalogueEntry[];
   /** The capabilities of this build, the same ones every process of the instance is given. */
   capabilities: readonly ClientInstanceCapability[];
   structuredDataPublicationReviewer?: StructuredDataPublicationReviewer;
@@ -327,7 +330,11 @@ export async function createClientInstanceExecutionAssembly(
     logger
   });
   const connectionParts = { config, modules, clientInstanceId, secrets, stores: store, logger };
-  const connections = await createInstanceConnections(connectionParts, input.connectorTypes);
+  const connections = await createInstanceConnections(
+    connectionParts,
+    input.connectorTypes,
+    input.catalogue
+  );
   const moduleAssembly = await assembleModules({
     ...connectionParts,
     ...(connections ? { connections } : {})

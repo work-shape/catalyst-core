@@ -1,0 +1,110 @@
+# The demo's sample of a catalogue entry (CAT-1): the invented accounting ledger of the sample
+# server (sample-mcp), over its REST surface, which pages like a DATEV gateway does. It names
+# no vendor: it is the fixture the demo and the browser suite install from.
+id: sample-accounting
+version: 1
+service: sample-accounting
+title:
+  en: Sample accounting
+  de: Beispielbuchhaltung
+description:
+  en: Clients, fiscal years and bookings of an invented tax consultancy.
+  de: Mandanten, Wirtschaftsjahre und Buchungen einer erfundenen Kanzlei.
+category: accounting
+examplePrompts:
+  - en: Which clients have bookings in September?
+    de: Welche Mandanten haben im September gebucht?
+  - en: List the fiscal years of client 1402.
+    de: Zeig mir die Wirtschaftsjahre von Mandant 1402.
+  - en: Summarise the bookings of client 1402 for last month.
+    de: Fass die Buchungen von Mandant 1402 im letzten Monat zusammen.
+mark:
+  color: "#2f6f4f"
+tools:
+  connectorType: http_api
+  name: sample-accounting
+  title:
+    en: Sample accounting
+    de: Beispielbuchhaltung
+  description:
+    en: Agents read clients, fiscal years and bookings live. Sample data, read only.
+    de: Agenten lesen Mandanten, Wirtschaftsjahre und Buchungen live. Beispieldaten, nur lesend.
+  authScheme: bearer
+  settings:
+    testPath: /api/monitoring/instance/demo-local/datev-connect-health
+  fields:
+    - setting: baseUrl
+      label:
+        en: Address
+        de: Adresse
+      help:
+        en: Where the sample server's REST surface answers.
+        de: Wo die REST-Schnittstelle des Beispielservers antwortet.
+      default: http://sample-mcp:8787/rest
+    - setting: headers.x-client-instance-id
+      label:
+        en: Instance ID
+        de: Instanz-ID
+      help:
+        en: The instance the gateway serves. The sample answers to demo-local.
+        de: Die Instanz, die das Gateway bedient. Das Beispiel antwortet auf demo-local.
+      default: demo-local
+    - secret: true
+      label:
+        en: Key
+        de: Schlüssel
+      help:
+        en: DEMO_SAMPLE_MCP_KEY of the demo's environment.
+        de: DEMO_SAMPLE_MCP_KEY aus der Umgebung der Demo.
+  prerequisites:
+    - text:
+        en: Start the sample server with the demo (pnpm dev:demo starts it).
+        de: Starte den Beispielserver mit der Demo (pnpm dev:demo startet ihn).
+  egress:
+    - protocol: http
+      host: sample-mcp
+      port: 8787
+      network: private
+      cidrs: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16]
+  sharedAccountNote:
+    en: The key belongs to the sample server, not to a person. Everyone who may use this connection reads what the key reads.
+    de: Der Schlüssel gehört zum Beispielserver, nicht zu einer Person. Wer diese Verbindung nutzen darf, liest alles, was der Schlüssel liest.
+  operations:
+    - name: listClients
+      title: List clients
+      description: List clients before reading their fiscal years. Use top (1 to 1000) and skip; results are under items.
+      effect: reading
+      recommended: true
+      method: GET
+      path: /datevconnect/master-data/v1/clients
+      query:
+        top:
+          schema: { type: integer, minimum: 1, maximum: 1000 }
+        skip:
+          schema: { type: integer, minimum: 0 }
+    - name: listFiscalYears
+      title: List fiscal years
+      description: List one client's fiscal years. clientId is an id from listClients; id in the result is the fiscalYearId.
+      effect: reading
+      recommended: true
+      method: GET
+      path: /datevconnect/accounting/v1/clients/{clientId}/fiscal-years
+      pathParams:
+        clientId:
+          schema: { type: string, pattern: "^[0-9]+$" }
+    - name: listAccountPostings
+      title: List account postings
+      description: Read one client's fiscal-year bookings. clientId and fiscalYearId come from listClients and listFiscalYears; results are under items.
+      effect: reading
+      method: GET
+      path: /datevconnect/accounting/v1/clients/{clientId}/fiscal-years/{fiscalYearId}/account-postings
+      pathParams:
+        clientId:
+          schema: { type: string, pattern: "^[0-9]+$" }
+        fiscalYearId:
+          schema: { type: string, pattern: "^[0-9]{8}$" }
+      query:
+        top:
+          schema: { type: integer, minimum: 1, maximum: 1000 }
+        skip:
+          schema: { type: integer, minimum: 0 }

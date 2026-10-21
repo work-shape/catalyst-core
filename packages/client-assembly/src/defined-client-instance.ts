@@ -1,3 +1,4 @@
+import type { CatalogueEntry } from "@work-shape/catalyst-connections";
 import { existsSync } from "node:fs";
 import { isAbsolute, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -45,7 +46,7 @@ import {
 /** What a caller still gives a process of this instance: the build and the config path are its own. */
 type OfThisBuild<Input> = Omit<
   Input,
-  "configPath" | "tools" | "connectorTypes" | "capabilities"
+  "configPath" | "tools" | "connectorTypes" | "catalogue" | "capabilities"
 > & { configPath?: string };
 
 export interface DefineClientInstanceInput {
@@ -58,6 +59,12 @@ export interface DefineClientInstanceInput {
    * API, which seeds and manages Connections, and the worker, whose agents call them.
    */
   connectorTypes?: ConnectorTypeDefinition[];
+  /**
+   * The catalogue entries this build ships, such as `loadCatalogueEntries(directory)` of the
+   * capabilities repo and the deployment's own. Release config's `catalogue.entries` names
+   * which of them the instance offers.
+   */
+  catalogue?: readonly CatalogueEntry[];
   capabilities?: ClientInstanceCapability[];
   structuredDataPublicationReviewer?: StructuredDataPublicationReviewer;
   allowedOrigins?: string | string[];
@@ -115,6 +122,7 @@ export function defineClientInstance(input: DefineClientInstanceInput): DefinedC
   const build = {
     tools: input.tools ?? [],
     connectorTypes: input.connectorTypes ?? [],
+    catalogue: input.catalogue ?? [],
     capabilities: input.capabilities ?? []
   };
 

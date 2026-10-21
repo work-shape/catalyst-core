@@ -1,3 +1,4 @@
+import type { CatalogueEntry } from "@work-shape/catalyst-connections";
 import { createLogger } from "./logger";
 import {
   AppError,
@@ -25,6 +26,8 @@ export interface CreateClientInstanceAgentRunWorkerInput {
   tools: ToolAssemblyDefinition[];
   /** The Connector types of this build, the same ones the API process is given. */
   connectorTypes?: ConnectorTypeDefinition[];
+  /** The catalogue entries of this build: their hosts join the egress list where offered. */
+  catalogue?: readonly CatalogueEntry[];
   /** The capabilities of this build, the same ones the API process is given. */
   capabilities: readonly ClientInstanceCapability[];
   structuredDataPublicationReviewer?: StructuredDataPublicationReviewer;

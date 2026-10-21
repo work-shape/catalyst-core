@@ -5,6 +5,7 @@ import {
   OPERATION_EFFECTS
 } from "@work-shape/catalyst-asset-schemas";
 import {
+  CATALOGUE_PARTS,
   CONNECTION_EXPOSURES,
   CONNECTION_MAX_ACCEPTED_OPERATIONS,
   CONNECTION_NAME_MAX_LENGTH,
@@ -298,12 +299,28 @@ const connectionOperationSchema = z
   })
   .strict();
 
+/** A catalogue entry's id: lowercase words joined by hyphens, as a `service` is written. */
+export const CATALOGUE_ENTRY_ID_PATTERN = CONNECTION_SERVICE_PATTERN;
+
+/**
+ * The catalogue entry a Connection was installed from. It links them and grants nothing: a
+ * write that sets it is checked against the entries the instance offers.
+ */
+export const connectionCatalogueLinkSchema = z
+  .object({
+    entry: z.string().regex(CATALOGUE_ENTRY_ID_PATTERN),
+    part: z.enum(CATALOGUE_PARTS),
+    version: z.number().int().min(1)
+  })
+  .strict();
+
 export const connectionConfigSchema: z.ZodType<ConnectionConfig, unknown> = z
   .object({
     name: connectionNameSchema,
     displayName: z.string().trim().min(1).max(120),
     description: z.string().max(2000).optional(),
     service: z.string().regex(CONNECTION_SERVICE_PATTERN).optional(),
+    catalogue: connectionCatalogueLinkSchema.optional(),
     connectorType: z.string().regex(CONNECTOR_TYPE_PATTERN),
     limits: operationLimitsSchema.optional(),
     ownerPrincipalId: z.string().min(1),
@@ -472,7 +489,7 @@ const EGRESS_HOST_PATTERN = /^(?:[a-z0-9_](?:[a-z0-9_.-]{0,251}[a-z0-9_])?|[0-9a
 const EGRESS_CIDR_PATTERN =
   /^(?:\d{1,3}(?:\.\d{1,3}){3}\/(?:\d|[12]\d|3[0-2])|(?=[0-9a-f.]*:)[0-9a-f:.]{2,45}\/\d{1,3})$/iu;
 
-const egressAllowEntrySchema = z
+export const egressAllowEntrySchema = z
   .object({
     protocol: z.enum(EGRESS_PROTOCOLS),
     host: z.string().regex(EGRESS_HOST_PATTERN, {
@@ -519,6 +536,27 @@ const egressAllowEntrySchema = z
  * `https` target on port 443 whose addresses are all public, for an instance whose admins
  * connect services themselves. Off unless set.
  */
+/**
+ * The catalogue entries the operator offers on this instance, by id. An entry the release ships
+ * and this list does not name is shown greyed and cannot be installed; a named one's hosts join
+ * the instance's egress list.
+ */
+export const catalogueConfigSchema = z
+  .object({
+    entries: z
+      .array(
+        z.string().regex(CATALOGUE_ENTRY_ID_PATTERN, {
+          message: "An entry id is a lowercase slug, such as 'box'"
+        })
+      )
+      .default([])
+      .refine((entries) => new Set(entries).size === entries.length, {
+        message: "An entry is named once"
+      })
+  })
+  .strict()
+  .prefault({});
+
 export const egressConfigSchema = z
   .object({
     allow: z.array(egressAllowEntrySchema).default([]),

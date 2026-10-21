@@ -273,6 +273,14 @@ export const APP_ERROR_CODES = [
 
 export const OPERATION_EFFECTS = ["reading", "changing"] as const;
 
+/** The parts a catalogue entry can bring: tools agents call, or a Knowledge Base source. */
+export const CATALOGUE_PARTS = ["tools", "source"] as const;
+export type CataloguePart = (typeof CATALOGUE_PARTS)[number];
+
+/** The categories a catalogue entry's card is filed under. */
+export const CATALOGUE_CATEGORIES = ["mail", "files", "accounting", "databases", "other"] as const;
+export type CatalogueCategory = (typeof CATALOGUE_CATEGORIES)[number];
+
 export const OPERATION_TARGETS = ["live", "test", "dry_run"] as const;
 export type OperationTarget = (typeof OPERATION_TARGETS)[number];
 
