@@ -19,7 +19,7 @@ import type { ChatServerOptions } from "../types";
 /** The agent kind and the rights that write one and use one, as the kind registers them. */
 const AGENT_KIND = "agent";
 const AGENT_WRITE = "agent.write";
-export const AGENT_USE = "agent.use";
+const AGENT_USE = "agent.use";
 
 type WorkspaceRef = { kind: CollaborationWorkspace["kind"]; id?: CollaborationWorkspace["id"] };
 type SnapshotOptions = Pick<ChatServerOptions, "configAssets" | "clientInstanceId">;
@@ -27,10 +27,10 @@ type UseCheckOptions = SnapshotOptions & Pick<ChatServerOptions, "stores">;
 
 /** Where a person reached for an agent, as `agent.use_refused` names it: a message in a
  * conversation (from the chat or the API alike), a queued follow-up, a scheduled prompt, a subagent. */
-export type AgentUseEntry = "conversation" | "follow_up" | "schedule" | "subagent";
+type AgentUseEntry = "conversation" | "follow_up" | "schedule" | "subagent";
 
 /** One start of an agent by a caller, as `requireAgentUse` decides and records it. */
-export interface AgentUseCheck {
+interface AgentUseCheck {
   actor: AuthenticatedIdentity;
   access: ActorAccess;
   workspace: WorkspaceRef;
@@ -40,7 +40,7 @@ export interface AgentUseCheck {
 }
 
 /** Why `agent.use` refuses an agent that is available: no row allows it, or one denies it. */
-export type AgentUseRefusal = "no_grant" | "denied";
+type AgentUseRefusal = "no_grant" | "denied";
 
 /**
  * The agents offered in one workspace, before the caller's rights: the instance's snapshot,
