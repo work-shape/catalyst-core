@@ -11,6 +11,7 @@ import { createWorkflowDatasets } from "./datasets";
 import { createDatasetLifetime } from "./dataset-lifetime";
 import {
   AppError,
+  WORKFLOW_ACTIONS,
   appWorkflowRefusalError,
   asUserId,
   auditActorFromIdentity,
@@ -742,6 +743,13 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       now,
       prepare: prepareStart,
       open: openRun,
+      // The tester's own rights: the principal that bounds a test run writes no Workflow.
+      mayWrite: async (actor, resource) =>
+        (
+          await operationCalls.deps.authorizer.forActor(actor, {
+            workspaceId: resource.workspaceId ?? null
+          })
+        ).authorize(WORKFLOW_ACTIONS.write, resource).allowed,
       start: async (input, mode) => {
         const published = await definitions.read(input.workflow);
         if (!published) throw new AppError("NOT_FOUND", "There is no such Workflow");

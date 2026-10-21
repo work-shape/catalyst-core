@@ -5,6 +5,7 @@ import {
   WORKFLOW_START_KEY_INPUT,
   auditActorFromIdentity,
   isWorkflowRunEnded,
+  type AuthenticatedIdentity,
   workflowRunKeySchema,
   workflowStartOperationName,
   type ClientInstanceId,
@@ -78,6 +79,11 @@ export function createWorkflowStartSource(options: {
     origin: RunOrigin,
     mode: WorkflowRun["mode"]
   ): Promise<WorkflowRun | undefined>;
+  /** Whether the person testing may write a Workflow, by their own rights, not the principal's. */
+  mayWrite?(
+    actor: AuthenticatedIdentity,
+    resource: ReturnType<typeof workflowResource>
+  ): Promise<boolean>;
 }): OperationSource {
   const { clientInstanceId, stores, definitions } = options;
   async function resolve(name: string, readers?: OperationResolutionStores) {
@@ -90,6 +96,17 @@ export function createWorkflowStartSource(options: {
       kind: "workflow",
       name: workflow
     });
+    /**
+     * The revision a parent's step starts: the published one, and in a test run the child's
+     * draft where the person testing may write the child (DP-4). A draft never runs live.
+     */
+    const childRevision = async (parentRunId: string, actor: AuthenticatedIdentity) => {
+      if (!definitions.draft || !options.mayWrite) return published;
+      const parent = await stores.workflowRuns.readRun({ clientInstanceId, id: parentRunId });
+      if (parent?.mode !== "test") return published;
+      if (!(await options.mayWrite(actor, workflowResource(workflow, asset)))) return published;
+      return (await definitions.draft(workflow)) ?? published;
+    };
     return {
       name,
       effect: "changing" as const,
@@ -153,14 +170,15 @@ export function createWorkflowStartSource(options: {
         if (existing) return { id: existing.id };
         // A retried attempt of a step whose start a key answered: the run it links to.
         if (step.linkedRunId) return { id: step.linkedRunId };
-        if (!published) throw new AppError("NOT_FOUND", "There is no published child Workflow");
-        const [trigger] = published.manifest.steps;
+        const revision = await childRevision(step.runId, context.actor);
+        if (!revision) throw new AppError("NOT_FOUND", "There is no published child Workflow");
+        const [trigger] = revision.manifest.steps;
         if (trigger?.type !== "trigger" || !trigger.triggers.some((t) => t.kind === "parent")) {
           throw new AppError("CONFLICT", "The child Workflow does not accept a parent", {
             reason: "no_parent_trigger"
           });
         }
-        const prepared = await options.prepare(published, inputs);
+        const prepared = await options.prepare(revision, inputs);
         const run = await stores.transaction(async (tx) => {
           // Keyed starts may link existing runs. Serialize their guard reads through the
           // link write, before either run row lock; disjoint row pairs can close a cycle.

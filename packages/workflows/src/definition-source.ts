@@ -42,6 +42,12 @@ export interface WorkflowDefinitionSource {
     /** Database-backed sources use these readers while a publish holds its transaction. */
     configAssets?: Pick<ConfigAssetStore, "getConfigAsset">
   ): Promise<WorkflowDefinitionRevision | undefined>;
+  /**
+   * The draft of the Workflow of this id: its newest revision, published or not. A parent's
+   * test run runs it for a tester who may write the child (DP-4). Without it a test run's child
+   * is always the published revision.
+   */
+  draft?(id: string): Promise<WorkflowDefinitionRevision | undefined>;
   /** The published schedules and their zones even when another step cannot be run.
    * Database-backed sources keep refused definitions scheduled until repaired or withdrawn. */
   readSchedules?(id: string): Promise<Extract<WorkflowTrigger, { kind: "schedule" }>[]>;

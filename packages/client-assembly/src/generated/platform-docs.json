@@ -809,7 +809,7 @@
         "1. On the draft banner, click **Test run** (\"Testlauf\").",
         "2. Read the dialog and click **Start test run** (\"Testlauf starten\").",
         "",
-        "A test run reads real data, but only what both you and the Workflow may see. Steps that would change something are only simulated: each says what it would have done, and nothing is changed. Each step shows where its call went: **Live**, **Test** or **Simulated** (\"Simuliert\"). A test run writes no new draft and changes nothing about the published version.",
+        "A test run reads real data, but only what both you and the Workflow may see. Steps that would change something are only simulated: each says what it would have done, and nothing is changed. Each step shows where its call went: **Live**, **Test** or **Simulated** (\"Simuliert\"). A test run writes no new draft and changes nothing about the published version. A step that starts another Workflow runs that Workflow's draft too, in the same test mode, where you may edit it; otherwise it runs its published version.",
         "",
         "To try one changing step for real:",
         "",

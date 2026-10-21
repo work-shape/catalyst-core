@@ -356,6 +356,86 @@ describe("child Workflow contracts and publish checks", () => {
     });
   });
 
+  // DP-4: before it, a parent's test run always ran the child's published revision, so a child
+  // changed together with its parent was tried only after it was published.
+  it("runs the child's draft in a parent's test run for a tester who may write the child, else its published revision", async () => {
+    const t = await assets();
+    await t.allow({ kind: "service_principal", id: t.principal.id }, "workflow.use");
+    for (const action of ["workflow.use", "connection.use"])
+      await t.allow({ kind: "user", id: t.kai.id }, action);
+    await put(t, child());
+    expect((await publish(t, "child")).statusCode).toBe(200);
+    // The draft answers a value of its own, so the parent's result says which revision ran.
+    const draft = child();
+    await put(
+      t,
+      {
+        ...draft,
+        steps: draft.steps.map((step) =>
+          step.type === "output" ? { ...step, input: { value: { value: "draft" } } } : step
+        )
+      },
+      1
+    );
+    const asset = await t.stores.configAssets.getConfigAsset({
+      clientInstanceId,
+      kind: "workflow",
+      name: "child"
+    });
+    await put(t, parent());
+    const parentAsset = await t.stores.configAssets.getConfigAsset({
+      clientInstanceId,
+      kind: "workflow",
+      name: "parent"
+    });
+    const test = async (userId: string) => {
+      const tested = runSchema.parse(
+        (
+          await t.expectOk(userId, "workflows.test", {
+            params: { workflow: "parent" },
+            payload: { input: {} }
+          })
+        ).json()
+      );
+      expect((await t.finish(tested.id)).status).toBe("done");
+      const [run] = await children(t, tested.id);
+      return run;
+    };
+
+    // The superadmin may write the child: its draft runs, in mode test.
+    expect(await test(t.root.id)).toMatchObject({
+      mode: "test",
+      definitionRevisionId: asset?.activeRevisionId
+    });
+    expect(asset?.activeRevisionId).not.toBe(asset?.publishedRevisionId);
+
+    // Kai may write the parent, not the child: the child's published revision runs.
+    const grant = await t.stores.access.createGrant({
+      clientInstanceId,
+      holderKind: "user",
+      holderId: t.kai.id,
+      action: "workflow.write",
+      effect: "allow",
+      scopeKind: "asset",
+      scopeId: parentAsset?.id ?? "missing",
+      grantedBy: t.admin.id
+    });
+    expect(await test(t.kai.id)).toMatchObject({
+      mode: "test",
+      definitionRevisionId: asset?.publishedRevisionId
+    });
+    await t.stores.access.deleteGrant({ clientInstanceId, grantId: grant.id });
+
+    // A live run of the published parent never runs the child's draft.
+    expect((await publish(t, "parent")).statusCode).toBe(200);
+    const live = await start(t);
+    expect((await t.finish(live.id)).status).toBe("done");
+    expect((await children(t, live.id))[0]).toMatchObject({
+      mode: "live",
+      definitionRevisionId: asset?.publishedRevisionId
+    });
+  });
+
   it("refuses starts of a parent-only Workflow by a person, agent, App and schedule", async () => {
     const t = await assets();
     await put(t, child());
