@@ -18,7 +18,10 @@ import {
   IconButton,
   List,
   ListRow,
-  Section
+  Section,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger
 } from "@work-shape/catalyst-ui";
 import { useTranslation, type TranslationContextValue } from "../../shared/i18n";
 import { refusalAskingInstanceAdmin } from "../settings/ask-instance-admin";
@@ -30,12 +33,15 @@ import {
   EDIT_BUILT_IN_ROLES_ACTION,
   areaRightChoices,
   canEditRole,
+  pendingApplyBlock,
+  resetBlock,
   roleAreaOf,
   roleGrantsByArea,
   withAreaAllows,
   withoutGrant,
   type RightLock,
   type RoleArea,
+  type RoleChangeBlock,
   type RoleEditor,
   type RoleGrant
 } from "./role-model";
@@ -149,15 +155,11 @@ export function RolePage({
           ) : null}
         </div>
         {editable && editableBuiltIn ? (
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={role.equalsDefault === true && role.pendingActions.length === 0}
-            onClick={() => setResetting(true)}
-          >
-            <RotateCcw aria-hidden="true" />
-            {t("access.roleResetToDefault")}
-          </Button>
+          <ResetButton
+            block={resetBlock(role, editor)}
+            unchanged={role.equalsDefault === true && role.pendingActions.length === 0}
+            onReset={() => setResetting(true)}
+          />
         ) : editable && !role.builtIn ? (
           <RoleMenu name={name} onRename={onRename} onDelete={onDelete} />
         ) : null}
@@ -186,7 +188,13 @@ export function RolePage({
           </Banner>
         )
       )}
-      <PendingActions role={role} editable={editable} deciding={deciding} onDecide={decide} />
+      <PendingActions
+        role={role}
+        editor={editor}
+        editable={editable}
+        deciding={deciding}
+        onDecide={decide}
+      />
       {areas.map(({ area, grants, places }) => {
         const areaName = t(rightAreaLabelKey(area));
         return (
@@ -353,17 +361,63 @@ function grantLabel(grant: RoleGrant, t: Translate, names: ScopeNames): string {
     : t("access.rowOwnAt", { action, scope: scopeLabel(placeOf(grant), t, names) });
 }
 
+/** Why the server would refuse a role write, in the words of its refusal. */
+function roleChangeBlockText(block: RoleChangeBlock, t: Translate): string {
+  return block.kind === "superadminOnly"
+    ? t("access.roleSuperadminOnly")
+    : t("access.roleNeedsRight", { right: actionLabel(block.action, t) });
+}
+
+/** "Reset to default", held back with the reason where the server would refuse it. */
+function ResetButton({
+  block,
+  unchanged,
+  onReset
+}: {
+  block: RoleChangeBlock | undefined;
+  unchanged: boolean;
+  onReset(): void;
+}) {
+  const { t } = useTranslation();
+  const button = (
+    <Button
+      variant="outline"
+      size="sm"
+      disabled={unchanged || block !== undefined}
+      onClick={onReset}
+    >
+      <RotateCcw aria-hidden="true" />
+      {t("access.roleResetToDefault")}
+    </Button>
+  );
+  if (block === undefined || unchanged) return button;
+  const reason = roleChangeBlockText(block, t);
+  // A disabled button takes no pointer or focus: the reason hangs on what wraps it.
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span tabIndex={0} data-testid="role-reset-blocked">
+          {button}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>{reason}</TooltipContent>
+    </Tooltip>
+  );
+}
+
 /**
  * What a release changed in the default of an edited built-in role and nobody decided yet:
  * each new right with Add and Leave out, each right the default lost with Remove and Keep.
  */
 function PendingActions({
   role,
+  editor,
   editable,
   deciding,
   onDecide
 }: {
   role: Role;
+  editor: RoleEditor;
   editable: boolean;
   deciding: string | undefined;
   onDecide(action: string, decision: RolePendingDecision): void;
@@ -391,39 +445,47 @@ function PendingActions({
         }
       >
         <List aria-label={title}>
-          {pending.map((entry) => (
-            <ListRow
-              key={entry.action}
-              data-testid="role-pending-action"
-              data-action={entry.action}
-              title={actionLabel(entry.action, t)}
-              description={t(rightAreaLabelKey(roleAreaOf(entry.action)))}
-              actionsVisible
-              actions={
-                editable ? (
-                  <div className="flex items-center gap-1">
-                    <Button
-                      size="sm"
-                      variant={change === "added" ? "primary" : "outline"}
-                      loading={deciding === entry.action}
-                      disabled={deciding !== undefined}
-                      onClick={() => onDecide(entry.action, "apply")}
-                    >
-                      {t(change === "added" ? "access.pendingAdd" : "access.pendingTakeAway")}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      disabled={deciding !== undefined}
-                      onClick={() => onDecide(entry.action, "dismiss")}
-                    >
-                      {t(change === "added" ? "access.pendingLeaveOut" : "access.pendingKeep")}
-                    </Button>
-                  </div>
-                ) : undefined
-              }
-            />
-          ))}
+          {pending.map((entry) => {
+            // The server would refuse to apply it: say why, and offer only to leave it.
+            const block = editable ? pendingApplyBlock(role, entry, editor) : undefined;
+            return (
+              <ListRow
+                key={entry.action}
+                data-testid="role-pending-action"
+                data-action={entry.action}
+                title={actionLabel(entry.action, t)}
+                description={
+                  block === undefined
+                    ? t(rightAreaLabelKey(roleAreaOf(entry.action)))
+                    : roleChangeBlockText(block, t)
+                }
+                actionsVisible
+                actions={
+                  editable ? (
+                    <div className="flex items-center gap-1">
+                      <Button
+                        size="sm"
+                        variant={change === "added" ? "primary" : "outline"}
+                        loading={deciding === entry.action}
+                        disabled={deciding !== undefined || block !== undefined}
+                        onClick={() => onDecide(entry.action, "apply")}
+                      >
+                        {t(change === "added" ? "access.pendingAdd" : "access.pendingTakeAway")}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={deciding !== undefined}
+                        onClick={() => onDecide(entry.action, "dismiss")}
+                      >
+                        {t(change === "added" ? "access.pendingLeaveOut" : "access.pendingKeep")}
+                      </Button>
+                    </div>
+                  ) : undefined
+                }
+              />
+            );
+          })}
         </List>
       </Section>
     );

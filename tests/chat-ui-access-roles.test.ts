@@ -3,6 +3,8 @@ import { ApiError, type EffectivePermissions, type Role } from "@work-shape/cata
 import {
   areaRightChoices,
   canEditRole,
+  pendingApplyBlock,
+  resetBlock,
   RolePage,
   RolesTab,
   roleAreaActions,
@@ -138,6 +140,50 @@ describe("the role model", () => {
     expect(
       areaRightChoices("administration", [], root).find((c) => c.action === "api_access.manage")
     ).toEqual({ action: "api_access.manage", checked: false });
+  });
+
+  it("holds back a reset or an applied release change the server would refuse, and says why", () => {
+    const narrow: RoleEditor = {
+      superadmin: false,
+      rights: rights(["users.manage", "roles.edit_built_in", "audit.view"])
+    };
+    const deny = (action: string) => ({ ...allow(action), effect: "deny" as const });
+    const narrowed = builtIn("admin", {
+      grants: [allow("audit.view"), deny("usage.view")],
+      equalsDefault: false
+    });
+    // A reset gives back every default allow and lifts the deny: it needs what it gives.
+    expect(resetBlock(narrowed, narrow)).toMatchObject({ kind: "needsRight" });
+    expect(
+      resetBlock(builtIn("user", { grants: [deny("usage.view")], equalsDefault: false }), narrow)
+    ).toEqual({ kind: "needsRight", action: "usage.view" });
+    expect(resetBlock(narrowed, adminWithEdit)).toBeUndefined();
+    // Taking away a right only a superadmin hands out is a superadmin's, also by a reset.
+    const widened = builtIn("admin", {
+      grants: [...ROLE_DEFAULT_ACTIONS.admin.map(allow), allow("api_access.manage")],
+      equalsDefault: false
+    });
+    expect(resetBlock(widened, adminWithEdit)).toEqual({ kind: "superadminOnly" });
+    expect(resetBlock(widened, root)).toBeUndefined();
+    expect(resetBlock(reviewers, narrow)).toBeUndefined();
+
+    const added = (action: string) => ({ action, change: "added" as const });
+    const removed = (action: string) => ({ action, change: "removed" as const });
+    expect(pendingApplyBlock(narrowed, added("usage.view"), narrow)).toEqual({
+      kind: "needsRight",
+      action: "usage.view"
+    });
+    expect(pendingApplyBlock(narrowed, added("usage.view"), adminWithEdit)).toBeUndefined();
+    expect(pendingApplyBlock(narrowed, added("agent_models.manage"), adminWithEdit)).toEqual({
+      kind: "superadminOnly"
+    });
+    expect(pendingApplyBlock(narrowed, added("agent_models.manage"), root)).toBeUndefined();
+    // A removal takes only the allow away and leaves a deny: nothing to hold for it.
+    expect(pendingApplyBlock(narrowed, removed("audit.view"), narrow)).toBeUndefined();
+    expect(pendingApplyBlock(narrowed, removed("usage.view"), narrow)).toBeUndefined();
+    expect(pendingApplyBlock(widened, removed("api_access.manage"), adminWithEdit)).toEqual({
+      kind: "superadminOnly"
+    });
   });
 
   it("replaces only the area's instance-wide allows, and keeps refusals and places", () => {
@@ -296,6 +342,33 @@ describe("a role's page", () => {
     expect(html).toContain("Entfernen");
     expect(html).toContain("Behalten");
     expect(html).toContain("Rechte für Verwaltung bearbeiten");
+  });
+
+  it("holds back Reset and Add where the server would refuse them, with the reason", () => {
+    const html = page(
+      builtIn("admin", {
+        grants: [...ROLE_DEFAULT_ACTIONS.admin.map(allow), allow("api_access.manage")],
+        equalsDefault: false,
+        pendingActions: [
+          { action: "agent_models.manage", change: "added" },
+          { action: "audit.view", change: "removed" }
+        ]
+      }),
+      adminWithEdit,
+      "de"
+    );
+    expect(html).toContain('data-testid="role-reset-blocked"');
+    const row = (action: string) =>
+      html.split(`data-action="${action}"`)[1]?.split('data-testid="role-pending-action"')[0] ?? "";
+    expect(row("agent_models.manage")).toContain(
+      "Nur Superadmins vergeben oder entziehen dieses Recht."
+    );
+    expect(row("agent_models.manage")).toMatch(/<button[^>]*disabled=""[^>]*>[^]*?Hinzufügen/);
+    expect(row("audit.view")).not.toContain("Nur Superadmins");
+    expect(row("audit.view")).not.toContain('disabled=""');
+    expect(page(builtIn("admin", { equalsDefault: false }), root)).not.toContain(
+      "role-reset-blocked"
+    );
   });
 
   it("says a custom role's refusals as refusals", () => {

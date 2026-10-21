@@ -281,20 +281,21 @@ export class RoleWorkflow {
       const pending = existing.pendingActions.find((entry) => entry.action === command.action);
       if (!pending)
         throw new AppError("NOT_FOUND", `'${command.action}' is not pending for this role`);
-      const others = existing.grants.filter(
-        (grant) => !(grant.action === command.action && grant.scopeKind === "instance")
-      );
+      const onInstance = (grant: RoleGrant) =>
+        grant.action === command.action && grant.scopeKind === "instance";
       const instanceAllow: RoleGrant = {
         action: command.action,
         effect: "allow",
         scopeKind: "instance"
       };
+      // An added action becomes the role's allow on the instance, in place of a refusal of it.
+      // A removed one takes only that allow away: a deny someone wrote on purpose stays.
       const grants =
         command.decision === "dismiss"
           ? existing.grants
           : pending.change === "added"
-            ? [...others, instanceAllow]
-            : others;
+            ? [...existing.grants.filter((grant) => !onInstance(grant)), instanceAllow]
+            : existing.grants.filter((grant) => !(onInstance(grant) && grant.effect === "allow"));
       // Applying writes these grants: the allow it adds, and a refusal of the action it lifts,
       // ask what an edit to the same grants asks.
       if (grants !== existing.grants) {

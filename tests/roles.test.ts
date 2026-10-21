@@ -15,7 +15,6 @@ import {
 } from "./support/access-instance";
 import { appFiles, expectStatus, setupAppInstance } from "./support/app-instance";
 import { setupPersonalKeyInstance } from "./support/personal-api-keys";
-import type { TestCallInput, TestOperationName } from "./support/operations";
 import { createTestFetch } from "./support/test-instance";
 import { fileTestDatabaseUrl } from "./support/test-database";
 import { withTestSql } from "./support/test-sql";
@@ -542,40 +541,144 @@ describe("reset, a pending right and a role's deny stay inside the rules (review
 
   it("leaves nobody but a superadmin holding a right they lacked after a reset or an apply", async () => {
     const t = await setup();
-    const narrowed = without(ROLE_DEFAULT_ACTIONS.admin, "usage.view");
+    // Kai holds `usage.view` and `audit.view` through a role of his own, and `admin` without them.
+    const narrowed = without(ROLE_DEFAULT_ACTIONS.admin, "usage.view", "audit.view");
     await kaiEditsBuiltInRoles(t, narrowed);
-    // `user` carries rights Kai holds through admin, and one he lacks.
+    const own = roleSchema.parse(
+      (
+        await t.expectOk(t.root.id, "roles.create", {
+          payload: { name: "Kai's own", grants: ["usage.view", "audit.view"].map(instanceAllow) }
+        })
+      ).json()
+    );
+    await t.expectOk(t.root.id, "users.update", {
+      params: { userId: t.kai.id },
+      payload: { roles: ["user", "admin", own.id] }
+    });
     await t.expectOk(t.root.id, "roles.update", {
       params: { roleId: "user" },
-      payload: { grants: [instanceAllow("audit.view"), instanceAllow("usage.view")] }
+      payload: { grants: [instanceAllow("audit.view"), instanceAllow("agent.read")] }
     });
-    await setPending("admin", [{ action: "users.manage", change: "removed" }]);
+    const actionsOf = async (roleId: string) =>
+      (await role(t, roleId)).grants.map((grant) => `${grant.effect}:${grant.action}`).sort();
 
-    const steps: [TestOperationName, TestCallInput][] = [
-      ["roles.reset", { params: { roleId: "user" } }],
-      [
-        "roles.pending.decide",
-        { params: { roleId: "admin" }, payload: { action: "users.manage", decision: "dismiss" } }
-      ]
+    // Each step changes a role for real, made by Kai, who is no superadmin.
+    const steps: {
+      roleId: string;
+      /** What a superadmin or a release did before Kai's step. */
+      prepare?: () => Promise<unknown>;
+      run: () => Promise<unknown>;
+    }[] = [
+      // Takes away what `user` carried.
+      {
+        roleId: "user",
+        run: () => t.expectOk(t.kai.id, "roles.reset", { params: { roleId: "user" } })
+      },
+      // Gives `admin` `usage.view` and `audit.view` back, which Kai holds.
+      {
+        roleId: "admin",
+        run: () => t.expectOk(t.kai.id, "roles.reset", { params: { roleId: "admin" } })
+      },
+      // Adds a right a release brought, which Kai holds.
+      {
+        roleId: "admin",
+        prepare: async () => {
+          await t.expectOk(t.root.id, "roles.update", {
+            params: { roleId: "admin" },
+            payload: {
+              grants: without(ROLE_DEFAULT_ACTIONS.admin, "audit.view").map(instanceAllow)
+            }
+          });
+          await setPending("admin", [{ action: "audit.view", change: "added" }]);
+        },
+        run: () =>
+          t.expectOk(t.kai.id, "roles.pending.decide", {
+            params: { roleId: "admin" },
+            payload: { action: "audit.view", decision: "apply" }
+          })
+      },
+      // Takes away a right a release took out of the default.
+      {
+        roleId: "admin",
+        prepare: () => setPending("admin", [{ action: "agent.read", change: "removed" }]),
+        run: () =>
+          t.expectOk(t.kai.id, "roles.pending.decide", {
+            params: { roleId: "admin" },
+            payload: { action: "agent.read", decision: "apply" }
+          })
+      }
     ];
-    for (const [operation, input] of steps) {
+    for (const step of steps) {
+      await step.prepare?.();
       const before = await allowed(t, t.kai.id);
-      await t.expectOk(t.kai.id, operation, input);
+      const grantsBefore = await actionsOf(step.roleId);
+      await step.run();
+      expect(await actionsOf(step.roleId)).not.toEqual(grantsBefore);
       const after = await allowed(t, t.kai.id);
       expect([...after].filter((right) => !before.has(right))).toEqual([]);
     }
-    expect(await allowed(t, t.kai.id)).not.toContain("usage.view@instance:");
+    expect(await actionsOf("user")).toEqual([]);
+    expect(await actionsOf("admin")).toContain("allow:audit.view");
+    expect(await actionsOf("admin")).not.toContain("allow:agent.read");
 
     // An apply Kai is refused changes nothing for him either.
-    await setPending("admin", [{ action: "usage.view", change: "added" }]);
+    await t.expectOk(t.root.id, "roles.update", {
+      params: { roleId: "admin" },
+      payload: {
+        grants: without(ROLE_DEFAULT_ACTIONS.admin, "operations.approve").map(instanceAllow)
+      }
+    });
+    await setPending("admin", [{ action: "operations.approve", change: "added" }]);
     const before = await allowed(t, t.kai.id);
+    expect(before.has("operations.approve@instance:")).toBe(false);
     await t.expectRefused(
       t.kai.id,
       "roles.pending.decide",
-      { params: { roleId: "admin" }, payload: { action: "usage.view", decision: "apply" } },
-      t.forbidden("usage.view", "no_grant")
+      { params: { roleId: "admin" }, payload: { action: "operations.approve", decision: "apply" } },
+      t.forbidden("operations.approve", "no_grant")
     );
     expect(await allowed(t, t.kai.id)).toEqual(before);
+  });
+
+  it("takes only the allow away when a removal is applied, and keeps a deny written on purpose", async () => {
+    const t = await setup();
+    const editors = roleSchema.parse(
+      (
+        await t.expectOk(t.root.id, "roles.create", {
+          payload: {
+            name: "Role editors",
+            grants: ["users.manage", "roles.edit_built_in", "usage.view"].map(instanceAllow)
+          }
+        })
+      ).json()
+    );
+    await t.expectOk(t.root.id, "users.update", {
+      params: { userId: t.kai.id },
+      payload: { roles: ["user", editors.id] }
+    });
+    // A superadmin replaced `usage.view` in admin with a refusal of it.
+    const refusal = { action: "usage.view", effect: "deny", scopeKind: "instance" };
+    await t.expectOk(t.root.id, "roles.update", {
+      params: { roleId: "admin" },
+      payload: {
+        grants: [...without(ROLE_DEFAULT_ACTIONS.admin, "usage.view").map(instanceAllow), refusal]
+      }
+    });
+    await t.expectOk(t.root.id, "roles.update", {
+      params: { roleId: "user" },
+      payload: { grants: [instanceAllow("usage.view")] }
+    });
+    // A release took `usage.view` out of admin's default.
+    await setPending("admin", [{ action: "usage.view", change: "removed" }]);
+    await t.expectOk(t.kai.id, "roles.pending.decide", {
+      params: { roleId: "admin" },
+      payload: { action: "usage.view", decision: "apply" }
+    });
+    const admin = await role(t, "admin");
+    expect(admin.pendingActions).toEqual([]);
+    expect(admin.grants).toContainEqual(refusal);
+    // Admins hold `user`, which allows it; the refusal in `admin` still wins.
+    await t.expectRefused(t.admin.id, "usage.get_summary", {}, t.forbidden("usage.view", "denied"));
   });
 
   it("never lets a role's deny take a right from a superadmin, so a superadmin can always repair user and admin", async () => {

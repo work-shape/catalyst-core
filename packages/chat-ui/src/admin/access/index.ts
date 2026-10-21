@@ -49,6 +49,8 @@ export { roleName, roleFailureText } from "./role-parts";
 export {
   areaRightChoices,
   canEditRole,
+  pendingApplyBlock,
+  resetBlock,
   roleAreaActions,
   roleAreaOf,
   roleGrantsByArea,

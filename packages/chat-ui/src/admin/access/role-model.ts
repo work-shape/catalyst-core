@@ -226,6 +226,74 @@ export function copiedGrants(role: Pick<Role, "grants">): RoleGrantInput[] {
   return role.grants.map(grantInput);
 }
 
+/** Why the server would refuse a role write before it is sent, as far as the page can tell. */
+export type RoleChangeBlock = { kind: "needsRight"; action: string } | { kind: "superadminOnly" };
+
+const grantKey = (grant: RoleGrant) =>
+  [grant.action, grant.effect, grant.scopeKind, grant.scopeId ?? ""].join("|");
+
+/**
+ * What the server asks of a change from one set of grants to another (role-service
+ * `authorizeWrite`): only a superadmin adds or removes a right only a superadmin hands out, and
+ * the editor holds every right the change adds and every right a deny it lifts refused. A right
+ * in one place is left to the server.
+ */
+function roleChangeBlock(
+  before: readonly RoleGrant[],
+  after: readonly RoleGrant[],
+  editor: RoleEditor
+): RoleChangeBlock | undefined {
+  const had = new Set(before.map(grantKey));
+  const has = new Set(after.map(grantKey));
+  const added = after.filter((grant) => !had.has(grantKey(grant)));
+  const removed = before.filter((grant) => !has.has(grantKey(grant)));
+  if (
+    !editor.superadmin &&
+    [...added, ...removed].some((grant) => isSuperadminGrantedAction(grant.action))
+  ) {
+    return { kind: "superadminOnly" };
+  }
+  const missing = [...added, ...removed.filter((grant) => grant.effect === "deny")].find(
+    (grant) => grant.scopeKind === "instance" && !editorHolds(editor, grant.action)
+  );
+  return missing === undefined ? undefined : { kind: "needsRight", action: missing.action };
+}
+
+/** Why "Reset to default" would be refused, or nothing. */
+export function resetBlock(role: Role, editor: RoleEditor): RoleChangeBlock | undefined {
+  return role.defaultGrants === undefined
+    ? undefined
+    : roleChangeBlock(role.grants, role.defaultGrants, editor);
+}
+
+/**
+ * The grants once a pending action is applied, as the server writes them: an added action
+ * becomes the role's allow on the instance in place of a refusal of it; a removed one takes
+ * only that allow away.
+ */
+function pendingAppliedGrants(
+  grants: readonly RoleGrant[],
+  entry: Role["pendingActions"][number]
+): RoleGrant[] {
+  const onInstance = (grant: RoleGrant) =>
+    grant.action === entry.action && grant.scopeKind === "instance";
+  return entry.change === "added"
+    ? [
+        ...grants.filter((grant) => !onInstance(grant)),
+        { action: entry.action, effect: "allow", scopeKind: "instance" }
+      ]
+    : grants.filter((grant) => !(onInstance(grant) && grant.effect === "allow"));
+}
+
+/** Why applying a pending action would be refused, or nothing. */
+export function pendingApplyBlock(
+  role: Role,
+  entry: Role["pendingActions"][number],
+  editor: RoleEditor
+): RoleChangeBlock | undefined {
+  return roleChangeBlock(role.grants, pendingAppliedGrants(role.grants, entry), editor);
+}
+
 /** The roles with actions a release changed that nobody decided yet. */
 export function rolesWithPending(roles: readonly Role[] | undefined): Role[] {
   return (roles ?? []).filter((role) => role.pendingActions.length > 0);
