@@ -34,7 +34,7 @@ test.afterEach(async ({ page }) => {
 for (const locale of ["en", "de"] as const) {
   for (const theme of ["light", "dark"] as const) {
     const size = theme === "dark" ? "phone" : "short";
-    test(`an administrator edits data scope assignments in ${locale}, ${theme}, at ${size} size`, async ({
+    test(`an administrator sees who lacks a data scope and gives values as chips in ${locale}, ${theme}, at ${size} size`, async ({
       page,
       accessState: _accessState
     }) => {
@@ -51,12 +51,6 @@ for (const locale of ["en", "de"] as const) {
       };
       member = await signIn("e2e-user@example.test", "e2e-user-password");
       await signIn("e2e-admin@example.test", "e2e-admin-password");
-      // The tab opens on the administrator's own assignment, which they cannot save.
-      const chooseMember = async () => {
-        await page.getByRole("button", { name: "E2E Admin", exact: true }).click();
-        await page.getByRole("option", { name: /E2E User/u }).click();
-        await expect(page.getByRole("listbox")).toHaveCount(0);
-      };
       await clear(page);
       await page.addInitScript(
         ({ locale, theme }) => {
@@ -72,36 +66,50 @@ for (const locale of ["en", "de"] as const) {
         exact: true
       });
       await scopeTab.click();
-      await chooseMember();
-      const values = page.getByLabel(
-        locale === "de" ? "Werte, durch Komma getrennt" : "Values, separated by commas"
-      );
-      await expect(values).toBeVisible();
-      await values.fill("101, 102");
-      const saved = page.waitForResponse(
-        (response) => response.url() === assignmentPath && response.request().method() === "PUT"
-      );
+      const memberRow = page
+        .getByTestId("scope-row")
+        .filter({ has: page.getByText("E2E User", { exact: true }) });
+      // A person without values is marked in the overview.
+      await expect(
+        memberRow.getByText(locale === "de" ? "Kein Mandant zugeordnet" : "No Mandant assigned")
+      ).toBeVisible();
+      // Nobody changes their own row, so the administrator's own has no change button.
+      await expect(
+        page.getByRole("button", {
+          name: locale === "de" ? "Mandant für E2E Admin ändern" : "Change Mandant for E2E Admin"
+        })
+      ).toHaveCount(0);
       await page
         .getByRole("button", {
-          name: locale === "de" ? "Zuordnung speichern" : "Save assignment",
+          name: locale === "de" ? "Mandant für E2E User ändern" : "Change Mandant for E2E User",
           exact: true
         })
         .click();
+      const dialog = page.getByRole("dialog");
+      const values = dialog.getByLabel(locale === "de" ? "Werte für Mandant" : "Mandant values");
+      await expect(values).toBeVisible();
+      await values.fill("101,");
+      await values.fill("102");
+      await values.press("Enter");
+      const saved = page.waitForResponse(
+        (response) => response.url() === assignmentPath && response.request().method() === "PUT"
+      );
+      await dialog
+        .getByRole("button", { name: locale === "de" ? "Speichern" : "Save", exact: true })
+        .click();
       expect((await saved).ok()).toBe(true);
+      await expect(dialog).toHaveCount(0);
+      await expect(memberRow.getByText("101, 102", { exact: true })).toBeVisible();
       await expect(
-        page.getByText(locale === "de" ? "Zuordnung gespeichert." : "Assignment saved.", {
-          exact: true
-        })
+        memberRow.getByText(locale === "de" ? "direkt zugeordnet" : "assigned directly")
       ).toBeVisible();
       for (let step = 0; step < 2; step++) {
         await page
           .getByRole("tab", { name: locale === "de" ? "Prüfen" : "Check", exact: true })
           .click();
         await scopeTab.click();
-        await chooseMember();
-        await expect(values).toHaveValue("101, 102");
+        await expect(memberRow.getByText("101, 102", { exact: true })).toBeVisible();
       }
-      await values.scrollIntoViewIfNeeded();
       expect(
         await page.evaluate(
           () => document.documentElement.scrollWidth <= document.documentElement.clientWidth

@@ -90,6 +90,10 @@ export interface GalleryText
   availabilityAll: string;
   availabilitySelected: string;
   nameHint: string;
+  chipValues: string;
+  chipValuesHint: string;
+  chipValuesPlaceholder: string;
+  chipValuesError: string;
   advanced: string;
   address: string;
   addressHint: string;
@@ -330,6 +334,10 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     availabilityAll: "All workspaces",
     availabilitySelected: "Selected workspaces",
     nameHint: "Shown in the agent list and in every conversation.",
+    chipValues: "Client numbers",
+    chipValuesHint: "Enter or a comma adds a value.",
+    chipValuesPlaceholder: "e.g. 10101",
+    chipValuesError: "Enter at least one value.",
     advanced: "Advanced",
     address: "Address",
     addressHint: "It cannot be changed later.",
@@ -603,6 +611,10 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     availabilityAll: "Allen Workspaces",
     availabilitySelected: "Ausgewählten Workspaces",
     nameHint: "Erscheint in der Agentenliste und in jeder Unterhaltung.",
+    chipValues: "Mandantennummern",
+    chipValuesHint: "Enter oder ein Komma fügt einen Wert hinzu.",
+    chipValuesPlaceholder: "z. B. 10101",
+    chipValuesError: "Gib mindestens einen Wert ein.",
     advanced: "Erweitert",
     address: "Adresse",
     addressHint: "Sie lässt sich später nicht ändern.",

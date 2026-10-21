@@ -1,12 +1,14 @@
 import {
   authorizePrincipalHolderWrite,
   holderNotAdministrable,
-  requireManageableHolder
+  requireManageableHolder,
+  seesPrincipals
 } from "../access/grant-holder-rules";
 import { requireAuthorized, withRightsHeld } from "../access/rights-held";
 import {
   auditActorFromUser,
   asUserId,
+  isSuperadmin,
   resolveDataScope,
   type PlatformStores
 } from "@work-shape/catalyst-core";
@@ -51,7 +53,7 @@ export function registerAccessRoutes(route: Route, options: ChatServerOptions): 
     await requireHolder(options.stores, personOf(user), query);
     const assignments = await options.stores.access.listScopeAssignments({
       clientInstanceId: options.clientInstanceId,
-      ...query
+      holder: { kind: query.holderKind, id: query.holderId }
     });
     const persisted =
       query.holderKind === "group"
@@ -72,6 +74,49 @@ export function registerAccessRoutes(route: Route, options: ChatServerOptions): 
       effective[dimension] = scope === "all" ? scope : [...scope];
     }
     return { dimensions: options.config.scopes ?? {}, assignments, effective };
+  });
+  // Instance > Access > Data access: every holder's rows at once. A superadmin's rows are shown
+  // to a superadmin only, and a principal's to whoever is shown principals, as for grants.
+  route(apiOperations["scope_assignments.overview"], async ({ user, access }) => {
+    const actor = personOf(user);
+    const dimensions = options.config.scopes ?? {};
+    const [rows, people] = await Promise.all([
+      options.stores.access.listScopeAssignments({ clientInstanceId: options.clientInstanceId }),
+      options.stores.users.listUsers({
+        clientInstanceId: options.clientInstanceId,
+        activeOnly: true,
+        excludeSuperadmins: !isSuperadmin(actor)
+      })
+    ]);
+    // An inactive person holds nothing, and their rows are not listed.
+    const shown = new Set<string>(people.map((person) => person.id));
+    const principals = seesPrincipals(actor, access);
+    const assignments = rows.filter((row) =>
+      row.holderKind === "user" ? shown.has(row.holderId) : row.holderKind === "group" || principals
+    );
+    return {
+      dimensions,
+      assignments,
+      people: people.map((person) => {
+        const groups = [...(person.groups ?? [])];
+        const inherited = rows.filter(
+          (row) =>
+            (row.holderKind === "user" && row.holderId === person.id) ||
+            (row.holderKind === "group" && groups.includes(row.holderId))
+        );
+        return {
+          id: person.id,
+          displayLabel: person.displayLabel,
+          groups,
+          effective: Object.fromEntries(
+            Object.keys(dimensions).map((dimension) => {
+              const scope = resolveDataScope(inherited, dimension);
+              return [dimension, scope === "all" ? scope : [...scope]];
+            })
+          )
+        };
+      })
+    };
   });
   route.operation(apiOperations["scope_assignments.set"], {
     resource: ({ holderKind, holderId }) => ({ kind: holderKind, id: holderId }),

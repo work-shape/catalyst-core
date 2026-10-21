@@ -173,7 +173,7 @@ export function createPostgresAccessStore(
       };
     },
 
-    async listScopeAssignments({ clientInstanceId, holderKind, holderId }) {
+    async listScopeAssignments({ clientInstanceId, holder }) {
       return db
         .select({
           dimension: scopeAssignments.dimension,
@@ -186,8 +186,8 @@ export function createPostgresAccessStore(
         .where(
           and(
             eq(scopeAssignments.clientInstanceId, clientInstanceId),
-            eq(scopeAssignments.holderKind, holderKind),
-            eq(scopeAssignments.holderId, holderId)
+            holder ? eq(scopeAssignments.holderKind, holder.kind) : undefined,
+            holder ? eq(scopeAssignments.holderId, holder.id) : undefined
           )
         );
     },

@@ -1,4 +1,5 @@
 export { Checkbox, type CheckboxProps, type CheckboxState } from "./checkbox";
+export { ChipInput, type ChipInputProps } from "./chip-input";
 export {
   ComposerFrame,
   type ComposerFrameProps,

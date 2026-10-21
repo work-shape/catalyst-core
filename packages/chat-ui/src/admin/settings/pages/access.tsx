@@ -1,4 +1,4 @@
-import { DataScopes } from "../../access/data-scopes";
+import { DataScopes, declaresDataScope, useDataScopeOverview } from "../../access/data-scopes";
 // @rights-screen: included in the rights wording guard.
 import { useState } from "react";
 import { ApiError } from "@work-shape/catalyst-api-client";
@@ -180,6 +180,8 @@ export function AccessPage() {
     retry: false
   });
   const mutations = useAccessMutations(api);
+  // Most instances declare no dimension to separate data by, and then show no tab for it.
+  const dataScope = declaresDataScope(useDataScopeOverview(api).data);
   const overview = overviewQuery.data;
   // The Check tab asks the server about the asset its rows name: the active asset of the name,
   // or the one a row of the person still names after it was deleted.
@@ -260,7 +262,7 @@ export function AccessPage() {
           <TabsTrigger value="roles" count={rolesQuery.data?.length}>
             {t("access.tabRoles")}
           </TabsTrigger>
-          <TabsTrigger value="data-scopes">{t("access.scopeTab")}</TabsTrigger>
+          {dataScope ? <TabsTrigger value="data-scopes">{t("access.scopeTab")}</TabsTrigger> : null}
           <TabsTrigger value="check">{t("access.tabCheck")}</TabsTrigger>
         </TabsList>
         <TabsContent value="grants" className="pt-5">
@@ -314,9 +316,11 @@ export function AccessPage() {
             }
           />
         </TabsContent>
-        <TabsContent value="data-scopes" className="pt-5">
-          <DataScopes client={client} userId={user.id} users={usersQuery.data} />
-        </TabsContent>
+        {dataScope ? (
+          <TabsContent value="data-scopes" className="pt-5">
+            <DataScopes api={api} userId={user.id} />
+          </TabsContent>
+        ) : null}
         <TabsContent value="check" className="pt-5">
           <CheckTab
             kinds={contextQuery.data?.kinds}

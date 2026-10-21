@@ -6,10 +6,10 @@ import type { RightsLock } from "./rights-lock";
 
 /** The store behind grants: the evaluator's port plus the administration writes. */
 export interface AccessAdministrationStore extends AccessStore, RightsLock {
+  /** One holder's rows, or every row of the instance when no holder is named. */
   listScopeAssignments(input: {
     clientInstanceId: ClientInstanceId;
-    holderKind: ScopeAssignmentInput["holderKind"];
-    holderId: string;
+    holder?: { kind: ScopeAssignmentInput["holderKind"]; id: string };
   }): Promise<ScopeAssignmentInput[]>;
   setScopeAssignment(
     input: ScopeAssignmentInput & { clientInstanceId: ClientInstanceId }

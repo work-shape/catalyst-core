@@ -16498,6 +16498,63 @@
         "x-catalyst-rate-class": "write"
       }
     },
+    "/api/v1/instance/access/scope-assignments/overview": {
+      "get": {
+        "operationId": "scope_assignments.overview",
+        "summary": "Read the declared data scope, every assignment the reader may see, and each active person's groups and effective values",
+        "tags": [
+          "Access"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "user_admin:read"
+            ]
+          },
+          {
+            "sessionToken": [
+              "user_admin:read"
+            ]
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScopeAssignmentsOverview"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-requires": [
+          "users.manage"
+        ],
+        "x-catalyst-rate-class": "read"
+      }
+    },
     "/api/v1/instance/access/workspaces": {
       "get": {
         "operationId": "workspaces.limits.list",
@@ -43720,6 +43777,143 @@
         },
         "required": [
           "approverNames"
+        ]
+      },
+      "ScopeAssignmentsOverview": {
+        "type": "object",
+        "properties": {
+          "dimensions": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{0,62}$"
+            },
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "label": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 120
+                },
+                "valueType": {
+                  "type": "string",
+                  "const": "text"
+                }
+              },
+              "required": [
+                "label",
+                "valueType"
+              ]
+            }
+          },
+          "assignments": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "dimension": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_]{0,62}$"
+                },
+                "holderKind": {
+                  "type": "string",
+                  "enum": [
+                    "user",
+                    "group",
+                    "service_principal"
+                  ]
+                },
+                "holderId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "effect": {
+                  "type": "string",
+                  "enum": [
+                    "allow",
+                    "deny"
+                  ]
+                },
+                "values": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "const": "all"
+                    },
+                    {
+                      "maxItems": 10000,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      }
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "dimension",
+                "holderKind",
+                "holderId",
+                "effect",
+                "values"
+              ]
+            }
+          },
+          "people": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "displayLabel": {
+                  "type": "string"
+                },
+                "groups": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "effective": {
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "const": "all"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "id",
+                "displayLabel",
+                "groups",
+                "effective"
+              ]
+            }
+          }
+        },
+        "required": [
+          "dimensions",
+          "assignments",
+          "people"
         ]
       },
       "SendAdministeredUserInvitationResponse": {

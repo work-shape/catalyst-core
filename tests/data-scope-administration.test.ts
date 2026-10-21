@@ -125,4 +125,67 @@ describe("data scope administration", () => {
     ).toEqual(["auditors"]);
     expect(await effective()).toEqual({ mandant: ["102"] });
   });
+
+  it("lists every holder's rows with each person's groups and effective values, hiding superadmins from an administrator", async () => {
+    const world = await setupAccessInstance({ scopes });
+    const member = await world.stores.users.resolveUserIdentity({
+      clientInstanceId,
+      authSource: "test",
+      externalUserId: "overview-member",
+      displayLabel: "Overview member",
+      roles: ["user"],
+      permissionRefs: [],
+      permissions: [],
+      groups: ["staff"]
+    });
+    for (const [writer, payload] of [
+      [
+        world.admin.id,
+        { holderKind: "group", holderId: "staff", effect: "allow", values: ["101"] }
+      ],
+      [
+        world.admin.id,
+        { holderKind: "user", holderId: member.id, effect: "allow", values: ["102"] }
+      ],
+      [
+        world.admin.id,
+        { holderKind: "user", holderId: world.kai.id, effect: "allow", values: "all" }
+      ],
+      [
+        world.admin.id,
+        { holderKind: "user", holderId: world.root.id, effect: "allow", values: "all" }
+      ]
+    ] as const) {
+      const saved = await world.call(writer, "scope_assignments.set", {
+        payload: { dimension: "mandant", ...payload }
+      });
+      // An administrator writes no superadmin's row; the superadmin's own is refused too.
+      if (payload.holderId === world.root.id) expect(saved.statusCode).toBe(403);
+      else expect(saved.statusCode, saved.body).toBe(200);
+    }
+    const overview = z.object({
+      dimensions: z.unknown(),
+      assignments: z.array(z.object({ holderKind: z.string(), holderId: z.string() })),
+      people: z.array(
+        z.object({ id: z.string(), groups: z.array(z.string()), effective: z.unknown() })
+      )
+    });
+    const read = await world.call(world.admin.id, "scope_assignments.overview", {});
+    expect(read.statusCode, read.body).toBe(200);
+    const body = overview.parse(read.json());
+    expect(body.dimensions).toEqual(scopes);
+    expect(body.assignments.map((row) => row.holderId).sort()).toEqual(
+      [member.id, world.kai.id, "staff"].sort()
+    );
+    expect(body.people.find((person) => person.id === member.id)).toMatchObject({
+      groups: ["staff"],
+      effective: { mandant: expect.arrayContaining(["101", "102"]) }
+    });
+    expect(body.people.find((person) => person.id === world.kai.id)?.effective).toEqual({
+      mandant: "all"
+    });
+    expect(body.people.some((person) => person.id === world.root.id)).toBe(false);
+    const refused = await world.call(world.kai.id, "scope_assignments.overview", {});
+    expect(refused.statusCode).toBe(403);
+  });
 });

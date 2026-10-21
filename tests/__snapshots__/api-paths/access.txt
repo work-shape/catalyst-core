@@ -5,6 +5,7 @@ permissions.list  GET /api/v1/instance/access/grants
 permissions.revoke  DELETE /api/v1/instance/access/grants/:grantId
 permissions.rights  GET /api/v1/instance/access/rights
 scope_assignments.list  GET /api/v1/instance/access/scope-assignments
+scope_assignments.overview  GET /api/v1/instance/access/scope-assignments/overview
 scope_assignments.set  PUT /api/v1/instance/access/scope-assignments
 workspaces.limits.list  GET /api/v1/instance/access/workspaces
 workspaces.limits.update  PATCH /api/v1/instance/access/workspaces/:collaborationWorkspaceId

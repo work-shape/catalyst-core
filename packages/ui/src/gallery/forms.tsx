@@ -3,6 +3,7 @@ import { Search, Send } from "lucide-react";
 import { useState } from "react";
 import { Button } from "../actions/button";
 import { Checkbox } from "../forms/checkbox";
+import { ChipInput } from "../forms/chip-input";
 import { ComposerFrame } from "../forms/composer-frame";
 import { Field } from "../forms/field";
 import { Input, Textarea } from "../forms/input";
@@ -17,6 +18,28 @@ import { Samples, type GalleryGroup } from "./entry";
 import type { GalleryText } from "./text";
 
 const rowAgents = ["rowAgent", "rowWorkflow", "rowKnowledge"] as const;
+
+/** A list of short values as chips: empty, filled, wrong and disabled. */
+function ChipInputSamples({ text }: { text: GalleryText }) {
+  const [empty, setEmpty] = useState<readonly string[]>([]);
+  const [filled, setFilled] = useState<readonly string[]>(["10101", "10102", "20417"]);
+  return (
+    <div className="grid w-full max-w-sm gap-6">
+      <Field label={text.chipValues} hint={text.chipValuesHint}>
+        <ChipInput value={empty} onChange={setEmpty} placeholder={text.chipValuesPlaceholder} />
+      </Field>
+      <Field label={text.chipValues} hint={text.chipValuesHint}>
+        <ChipInput value={filled} onChange={setFilled} />
+      </Field>
+      <Field label={text.chipValues} error={text.chipValuesError}>
+        <ChipInput value={[]} onChange={() => undefined} />
+      </Field>
+      <Field label={text.chipValues}>
+        <ChipInput value={["10101"]} onChange={() => undefined} disabled />
+      </Field>
+    </div>
+  );
+}
 
 /** A select-all box over three rows: it is indeterminate while only some rows are checked. */
 function SelectAllSample({ text }: { text: GalleryText }) {
@@ -380,6 +403,11 @@ export const formsGallery: GalleryGroup = {
           <Switch aria-label={text.switchMixed} mixed />
         </Samples>
       )
+    },
+    {
+      name: "ChipInput",
+      components: ["ChipInput"],
+      render: (text) => <ChipInputSamples text={text} />
     },
     {
       name: "Field",
