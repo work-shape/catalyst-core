@@ -24,7 +24,7 @@ export function originRoleName(
   return builtIn === undefined ? (role?.name ?? roleId) : t(builtIn);
 }
 
-/** Where a right or an origin applies, in a few words. Never an id. */
+/** Where a right or an origin applies, in a few words. Never an id. An asset by its title. */
 export function placeLabel(place: NamedPlace, t: Translate): string {
   switch (place.scopeKind) {
     case "instance":
@@ -40,9 +40,11 @@ export function placeLabel(place: NamedPlace, t: Translate): string {
       const asset = place.scopeAsset;
       if (asset?.active === false) return t("access.scopeAssetGone");
       const words = asset && wordsOfKind(asset.kind);
-      return asset?.name === undefined || words === undefined
+      // The title people read, with the asset's name where it has none.
+      const name = asset?.title ?? asset?.name;
+      return name === undefined || words === undefined
         ? t("access.scopeAssetHidden")
-        : t(words.scopeAsset, { name: asset.name });
+        : t(words.scopeAsset, { name });
     }
   }
 }
@@ -60,4 +62,34 @@ export function originLabel(
   }
   if (origin.source === "membership") return t("access.originMembership");
   return t(deny ? "access.originGrantDeny" : "access.originGrant");
+}
+
+type NamedWorkspace = NonNullable<AccessOrigin["scopeWorkspace"]>;
+
+/** The workspaces a right holds in only, as one line; nothing where it holds everywhere. */
+export function onlyInLabel(
+  workspaces: readonly NamedWorkspace[] | undefined,
+  t: Translate,
+  locale: string
+): string | undefined {
+  if (workspaces === undefined) return undefined;
+  const places = workspaces.map((workspace) =>
+    placeLabel({ scopeKind: "workspace", scopeWorkspace: workspace }, t)
+  );
+  return t("access.onlyInWorkspaces", {
+    places: new Intl.ListFormat(locale, { type: "disjunction" }).format(places)
+  });
+}
+
+/** The App's audience where it, and not an entry, decided: "Verfügbar für alle". */
+export function availabilityLabel(
+  availability: string | undefined,
+  allowed: boolean,
+  t: Translate
+): string | undefined {
+  if (availability === "instance") return t("access.availabilityInstance");
+  if (availability === "self") {
+    return t(allowed ? "access.availabilitySelfAllowed" : "access.availabilitySelfRefused");
+  }
+  return undefined;
 }

@@ -42,7 +42,7 @@ import {
   type LoadFailure
 } from "./access-model";
 import { assetKindLabelKey } from "./grant-words";
-import { originRoleName } from "./origin-words";
+import { onlyInLabel, originRoleName } from "./origin-words";
 import { verbLabel } from "./right-words";
 
 /** From this many entries on, a picker of the check shows its search field. */
@@ -54,6 +54,8 @@ const reasonLabelKeys: Record<CheckedAction["reason"], TranslationKey> = {
   role: "access.reasonRole",
   legacy: "access.reasonLegacy",
   grant: "access.reasonGrant",
+  membership: "access.reasonMembership",
+  availability: "access.reasonAvailability",
   deny: "access.reasonDeny",
   no_grant: "access.reasonNoGrant",
   holder_inactive: "access.reasonHolderInactive"
@@ -74,6 +76,14 @@ function decidedBy(action: CheckedAction, t: Translate, roles: AssetRightsCheck[
   if (action.reason === "holder_inactive") {
     return t("access.reasonHolderInactive");
   }
+  if (action.availability === "instance") return t("access.decidedByAvailabilityInstance");
+  if (action.availability === "self") {
+    return t(
+      action.allowed
+        ? "access.decidedByAvailabilitySelfAllowed"
+        : "access.decidedByAvailabilitySelfRefused"
+    );
+  }
   if (!entry) {
     return t("access.decidedByNothing");
   }
@@ -90,6 +100,10 @@ function decidedBy(action: CheckedAction, t: Translate, roles: AssetRightsCheck[
           : place === "Instance"
             ? t("access.decidedByRole", { role })
             : t(`access.decidedByRole${place}`, { role });
+  } else if (entry.source === "membership" && !deny) {
+    sentence = t(
+      place === "Asset" ? "access.decidedByMembershipAsset" : "access.decidedByMembershipWorkspace"
+    );
   } else if (entry.source === "legacy_ref") {
     sentence = t(deny ? "access.decidedByLegacyDeny" : "access.decidedByLegacy");
   } else {
@@ -365,7 +379,7 @@ function CheckResult({
   assetName: string;
   check: AssetRightsCheck;
 }) {
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
   const actions = checkedActions(check);
   const allowed = (verb: CheckedAction["verb"]) =>
     actions.find((action) => action.verb === verb && action.allowed);
@@ -400,6 +414,11 @@ function CheckResult({
                 </TableCell>
                 <TableCell className="text-muted-foreground">
                   {decidedBy(action, t, check.roles)}
+                  {action.onlyInWorkspaces === undefined ? null : (
+                    <span className="block text-xs">
+                      {onlyInLabel(action.onlyInWorkspaces, t, locale)}
+                    </span>
+                  )}
                 </TableCell>
               </TableRow>
             ))}

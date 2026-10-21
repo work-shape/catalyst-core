@@ -31336,6 +31336,9 @@
               "name": {
                 "type": "string"
               },
+              "title": {
+                "type": "string"
+              },
               "active": {
                 "type": "boolean"
               }
@@ -34822,6 +34825,31 @@
             "items": {
               "type": "object",
               "properties": {
+                "availability": {
+                  "type": "string",
+                  "enum": [
+                    "self",
+                    "workspace",
+                    "instance"
+                  ]
+                },
+                "onlyInWorkspaces": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "personal": {
+                        "type": "boolean"
+                      },
+                      "name": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "personal"
+                    ]
+                  }
+                },
                 "verb": {
                   "type": "string",
                   "enum": [
@@ -38422,6 +38450,9 @@
                     "name": {
                       "type": "string"
                     },
+                    "title": {
+                      "type": "string"
+                    },
                     "active": {
                       "type": "boolean"
                     }
@@ -38444,6 +38475,31 @@
                   "required": [
                     "personal"
                   ]
+                },
+                "availability": {
+                  "type": "string",
+                  "enum": [
+                    "self",
+                    "workspace",
+                    "instance"
+                  ]
+                },
+                "onlyInWorkspaces": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "personal": {
+                        "type": "boolean"
+                      },
+                      "name": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "personal"
+                    ]
+                  }
                 }
               },
               "required": [

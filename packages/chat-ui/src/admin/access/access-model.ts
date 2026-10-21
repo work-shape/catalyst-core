@@ -528,23 +528,32 @@ export interface CheckableAsset {
   name: string;
 }
 
-/**
- * The source of an allowed action as the check names it. A membership allows nothing on the
- * kinds checked here: it is the right to open what a workspace published, so it reads as the
- * grant it stands in for.
- */
-function checkedReason(source: (typeof ACCESS_SOURCES)[number]): "role" | "legacy" | "grant" {
-  if (source === "legacy_ref") return "legacy";
-  return source === "membership" ? "grant" : source;
+/** The source of an allowed action as the check names it. */
+function checkedReason(
+  source: (typeof ACCESS_SOURCES)[number]
+): "role" | "legacy" | "grant" | "membership" {
+  return source === "legacy_ref" ? "legacy" : source;
 }
 
 /** What one action on the checked asset comes to, and what says so. */
 export interface CheckedAction {
   verb: AccessVerb;
   allowed: boolean;
-  reason: "role" | "legacy" | "grant" | "deny" | "no_grant" | "holder_inactive";
+  reason:
+    | "role"
+    | "legacy"
+    | "grant"
+    | "membership"
+    | "availability"
+    | "deny"
+    | "no_grant"
+    | "holder_inactive";
   /** The entry that decided. Absent when nothing covers the asset or the holder is inactive. */
   entry?: AccessOrigin;
+  /** The App's audience, where it and not an entry decided. */
+  availability?: CheckAnswer["availability"];
+  /** The workspaces the right holds in only; absent where it holds everywhere. */
+  onlyInWorkspaces?: CheckAnswer["onlyInWorkspaces"];
   /**
    * The verb of the deny that refuses a delete the holder is otherwise allowed: whoever is
    * denied reading or writing an asset does not delete it.
@@ -579,13 +588,25 @@ export function checkedAssetId(
 export function checkedActions(check: AssetRightsCheck): CheckedAction[] {
   return check.actions.flatMap((answer: CheckAnswer): CheckedAction[] => {
     const entry = answer.decidedBy === undefined ? {} : { entry: answer.decidedBy };
+    const conditions = {
+      ...(answer.availability === undefined ? {} : { availability: answer.availability }),
+      ...(answer.onlyInWorkspaces === undefined
+        ? {}
+        : { onlyInWorkspaces: answer.onlyInWorkspaces })
+    };
     if (answer.allowed) {
       return [
         {
           verb: answer.verb,
           allowed: true,
-          reason: answer.decidedBy ? checkedReason(answer.decidedBy.source) : "grant",
-          ...entry
+          reason:
+            answer.availability !== undefined
+              ? "availability"
+              : answer.decidedBy
+                ? checkedReason(answer.decidedBy.source)
+                : "grant",
+          ...entry,
+          ...conditions
         }
       ];
     }
@@ -594,13 +615,16 @@ export function checkedActions(check: AssetRightsCheck): CheckedAction[] {
         ? "deny"
         : answer.reason === "holder_inactive"
           ? "holder_inactive"
-          : "no_grant";
+          : answer.availability !== undefined
+            ? "availability"
+            : "no_grant";
     return [
       {
         verb: answer.verb,
         allowed: false,
         reason,
         ...(reason === "deny" ? entry : {}),
+        ...conditions,
         ...(answer.deniedThrough === undefined ? {} : { deniedThrough: answer.deniedThrough })
       }
     ];

@@ -22,6 +22,10 @@ export interface EffectiveRightRow {
   reason: HeldRight["reason"];
   grantedBy: AccessOrigin[];
   deniedBy: AccessOrigin | undefined;
+  /** The App's audience, where it and not an entry decided. */
+  availability: HeldRight["availability"];
+  /** The workspaces the line holds in only; absent where it holds everywhere. */
+  onlyInWorkspaces: HeldRight["onlyInWorkspaces"];
 }
 
 /** The rights of one kind, or of the administration. */
@@ -63,7 +67,9 @@ export function effectiveRightAreas(rights: HolderRights["rights"]): EffectiveRi
       right.allowed,
       right.reason ?? "",
       right.grantedBy.map(originKey).sort().join("|"),
-      originKey(right.deniedBy)
+      originKey(right.deniedBy),
+      right.availability ?? "",
+      JSON.stringify(right.onlyInWorkspaces ?? null)
     ].join("\u0000");
     const rows = areas.get(area) ?? new Map<string, EffectiveRightRow>();
     areas.set(area, rows);
@@ -78,7 +84,9 @@ export function effectiveRightAreas(rights: HolderRights["rights"]): EffectiveRi
         allowed: right.allowed,
         reason: right.reason,
         grantedBy: right.grantedBy,
-        deniedBy: right.deniedBy
+        deniedBy: right.deniedBy,
+        availability: right.availability,
+        onlyInWorkspaces: right.onlyInWorkspaces
       });
     }
   }

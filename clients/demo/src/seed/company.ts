@@ -476,7 +476,15 @@ export const cliPrincipal = {
 };
 
 /** What the Check tab answers for one action, in the tab's own reasons. */
-export type CheckReason = "role" | "individual_right" | "grant" | "deny" | "no_grant" | "inactive";
+export type CheckReason =
+  | "role"
+  | "individual_right"
+  | "grant"
+  | "membership"
+  | "availability"
+  | "deny"
+  | "no_grant"
+  | "inactive";
 
 interface CheckQuestion<Kind extends string = AssetKind, Action extends string = Verb> {
   person: PersonKey;

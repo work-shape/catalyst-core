@@ -82,4 +82,50 @@ describe("the effective rights of a person", () => {
     expect(html).toContain("Dieses Konto ist nicht aktiv");
     expect(html).toContain("Diese Person hat kein Recht.");
   });
+
+  it("name an asset by its title, the App's audience, and the workspaces a use holds in only", () => {
+    const html = render({
+      holderActive: true,
+      roles: [{ id: "role-buchhaltung", name: "Buchhaltung", builtIn: false }],
+      rights: [
+        {
+          action: "agent.write",
+          scopeKind: "asset",
+          scopeId: "agent-1",
+          scopeAsset: {
+            kind: "agent",
+            name: "ledger_helper",
+            title: "Ledger Helper",
+            active: true
+          },
+          allowed: true,
+          grantedBy: [{ source: "grant", effect: "allow", scopeKind: "asset", scopeId: "agent-1" }]
+        },
+        {
+          action: "app.use",
+          ...asset("app-3", "app", "tagebuch"),
+          allowed: false,
+          reason: "no_grant",
+          availability: "self",
+          grantedBy: [{ ...role, ...asset("app-3", "app", "tagebuch") }]
+        },
+        {
+          action: "connection.use",
+          ...asset("connection-2", "connection", "crm"),
+          allowed: true,
+          onlyInWorkspaces: [{ personal: false, name: "Alpha" }, { personal: true }],
+          grantedBy: [
+            { source: "membership", effect: "allow", ...asset("connection-2", "connection", "crm") }
+          ]
+        }
+      ]
+    });
+    expect(html).toContain("Agent Ledger Helper");
+    expect(html).not.toContain("ledger_helper");
+    expect(html).toContain("Nur für eine andere Person verfügbar");
+    expect(html).toContain(
+      "Gilt nur bei der Arbeit in: Arbeitsbereich Alpha oder Persönlicher Arbeitsbereich"
+    );
+    expect(html).toContain("Mitgliedschaft");
+  });
 });

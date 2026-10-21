@@ -1,6 +1,7 @@
 import {
   AppError,
   asUserId,
+  evaluateAccess,
   auditActorFromUser,
   isAuthenticatedServicePrincipal,
   isGrantableAction,
@@ -24,6 +25,7 @@ import {
   type HeldRight,
   type JsonObject,
   type OperationAuthorization,
+  type PersistedAccess,
   type OperationExecutionContext,
   type PermissionGrant,
   type StorePage,
@@ -57,6 +59,7 @@ import {
   decideHeldRights,
   nameRoles,
   namePlaces,
+  type Deciding,
   type PlaceNames
 } from "./effective-rights";
 import { READ_RUN_DATA_ACTION, authorizeRunDataGrant } from "./run-data-grant";
@@ -438,13 +441,14 @@ export class AccessWorkflow {
    * The read of `effective`, under its rule.
    */
   async rights(actor: AuthenticatedUser, access: ActorAccess, input: HolderInput) {
-    const { holderActive, entries } = await this.holderEntries(actor, access, input);
-    const places = await namePlaces(this.namingOptions(), { actor, access }, entries);
-    const decided = decideHeldRights(
-      entries,
-      holderActive,
-      (assetId) => places.assets.get(assetId)?.workspaceId
-    );
+    const held = await this.holderEntries(actor, access, input);
+    const { holderActive, entries } = held;
+    const deciding = await this.deciding(held);
+    const places = await namePlaces(this.namingOptions(), { actor, access }, [
+      ...entries,
+      ...deciding.workspacePlaces
+    ]);
+    const decided = decideHeldRights(entries, holderActive, places.factsOf, deciding);
     const origin = (entry: AccessEntry) => originView(entry, places.placeOf(entry));
     return {
       holderActive,
@@ -452,9 +456,10 @@ export class AccessWorkflow {
         this.namingOptions(),
         decided.flatMap((right) => [...right.grantedBy, right.deniedBy])
       ),
-      rights: decided.map(({ grantedBy, deniedBy, ...right }) => ({
+      rights: decided.map(({ grantedBy, deniedBy, onlyIn, ...right }) => ({
         ...right,
         ...places.placeOf(right),
+        ...conditionsView(onlyIn, places.placeOf),
         grantedBy: grantedBy.map(origin),
         ...(deniedBy === undefined ? {} : { deniedBy: origin(deniedBy) })
       }))
@@ -463,8 +468,9 @@ export class AccessWorkflow {
 
   /**
    * What one holder may do with one asset of a kind, per right the kind names, decided on the
-   * server with the entry that decides it. Without an asset id, only what holds on every
-   * asset of the kind decides. The read of `effective`, under its rule.
+   * server by the evaluator with the entry that decides it, and with the App's availability.
+   * An id of another kind, or of no asset of this instance, names no asset: then only what
+   * holds on every asset of the kind decides. The read of `effective`, under its rule.
    */
   async check(
     actor: AuthenticatedUser,
@@ -475,33 +481,76 @@ export class AccessWorkflow {
     if (!kind) {
       throw new AppError("NOT_FOUND", "Asset kind not found", { reason: "unknown_kind" });
     }
-    const { holderActive, entries } = await this.holderEntries(actor, access, input);
-    const asset =
-      input.assetId === undefined
-        ? undefined
-        : (
-            await this.options.stores.access.listGrantScopeAssets({
-              clientInstanceId: this.options.clientInstanceId,
-              assetIds: [input.assetId]
-            })
-          ).find((candidate) => candidate.kind === kind.kind);
-    // An id of another kind names no asset of this one; only what holds everywhere decides.
+    const held = await this.holderEntries(actor, access, input);
+    const { holderActive, entries } = held;
+    const deciding = await this.deciding(held);
+    const places = await namePlaces(this.namingOptions(), { actor, access }, [
+      ...entries,
+      ...(input.assetId === undefined
+        ? []
+        : [{ scopeKind: "asset" as const, scopeId: input.assetId }]),
+      ...deciding.workspacePlaces
+    ]);
+    const asset = input.assetId === undefined ? undefined : places.assets.get(input.assetId);
+    const facts = asset?.kind === kind.kind ? places.factsOf(asset.id) : undefined;
     const resource = {
       kind: kind.kind,
-      ...(asset === undefined ? {} : { assetId: asset.id, name: asset.name }),
-      ...(asset?.workspaceId === undefined ? {} : { workspaceId: asset.workspaceId })
+      ...(asset === undefined || facts === undefined
+        ? {}
+        : { assetId: asset.id, name: asset.name, ...facts })
     };
-    const decided = decideAssetActions(entries, holderActive, kind.actions, resource);
-    const deciding = decided.flatMap((action) => action.decidedBy ?? []);
-    const places = await namePlaces(this.namingOptions(), { actor, access }, deciding);
+    const decided = decideAssetActions(entries, holderActive, kind.actions, resource, deciding);
+    const deciders = decided.flatMap((action) => action.decidedBy ?? []);
     return {
       holderActive,
-      roles: await nameRoles(this.namingOptions(), deciding),
-      actions: decided.map(({ decidedBy, ...action }) => ({
+      roles: await nameRoles(this.namingOptions(), deciders),
+      actions: decided.map(({ decidedBy, onlyIn, ...action }) => ({
         ...action,
+        ...conditionsView(onlyIn, places.placeOf),
         ...(decidedBy === undefined
           ? {}
           : { decidedBy: originView(decidedBy, places.placeOf(decidedBy)) })
+      }))
+    };
+  }
+
+  /**
+   * The holder's evaluator over the access just loaded, and the workspaces in which an asset's
+   * availability gives the holder its use. The load without a workspace counts availability
+   * through every membership; a call is decided narrowed to its workspace, so each membership
+   * is loaded narrowed once to say where such a use holds.
+   */
+  private async deciding(held: {
+    holder: AccessHolder;
+    persisted: PersistedAccess;
+  }): Promise<Deciding & { workspacePlaces: { scopeKind: "workspace"; scopeId: string }[] }> {
+    const { holder, persisted } = held;
+    const availableIn = new Map<string, string[]>();
+    if ((persisted.availableAssets ?? []).length > 0) {
+      const memberships = [...(persisted.memberWorkspaceIds ?? [])].sort();
+      const narrowed = await Promise.all(
+        memberships.map(async (workspaceId) => ({
+          workspaceId,
+          access: await this.options.stores.access.loadPersistedAccess({
+            clientInstanceId: this.options.clientInstanceId,
+            holder: { kind: holder.kind, id: holder.id },
+            workspaceId
+          })
+        }))
+      );
+      for (const { workspaceId, access } of narrowed) {
+        for (const { assetId } of access.availableAssets ?? []) {
+          availableIn.set(assetId, [...(availableIn.get(assetId) ?? []), workspaceId]);
+        }
+      }
+    }
+    return {
+      evaluate: (action, resource) =>
+        evaluateAccess({ holder, persisted, action, ...(resource ? { resource } : {}) }),
+      availableIn: (assetId) => availableIn.get(assetId) ?? [],
+      workspacePlaces: [...new Set([...availableIn.values()].flat())].map((scopeId) => ({
+        scopeKind: "workspace",
+        scopeId
       }))
     };
   }
@@ -514,7 +563,12 @@ export class AccessWorkflow {
     actor: AuthenticatedUser,
     access: ActorAccess,
     input: HolderInput
-  ): Promise<{ holderActive: boolean; entries: AccessEntry[] }> {
+  ): Promise<{
+    holder: AccessHolder;
+    persisted: PersistedAccess;
+    holderActive: boolean;
+    entries: AccessEntry[];
+  }> {
     if (input.holderKind === "user" && input.holderId !== actor.id) {
       access.require(MANAGE_ACTION);
     }
@@ -529,6 +583,8 @@ export class AccessWorkflow {
       this.options.configAssets.kinds.kinds.flatMap((kind) => Object.values(kind.actions))
     );
     return {
+      holder,
+      persisted,
       holderActive: persisted.holderActive,
       entries: listAccessEntries(holder, persisted).filter(
         (entry) => entry.source !== "membership" || kindActions.has(entry.action)
@@ -756,6 +812,19 @@ export class AccessWorkflow {
 }
 
 /** An entry as an origin of a right: what it gives or refuses, at its named place. */
+/** The workspaces a right holds in only, named as the caller may read them. */
+function conditionsView(
+  onlyIn: readonly string[] | undefined,
+  placeOf: (place: { scopeKind: "workspace"; scopeId: string }) => PlaceNames
+) {
+  if (onlyIn === undefined) return {};
+  return {
+    onlyInWorkspaces: onlyIn.flatMap(
+      (scopeId) => placeOf({ scopeKind: "workspace", scopeId }).scopeWorkspace ?? []
+    )
+  };
+}
+
 function originView(entry: AccessEntry, place: PlaceNames) {
   const { action: _action, ...origin } = entry;
   return { ...origin, ...place };

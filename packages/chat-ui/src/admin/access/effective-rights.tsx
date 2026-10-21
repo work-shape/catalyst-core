@@ -20,7 +20,7 @@ import {
   rightAreaLabelKey,
   type EffectiveRightRow
 } from "./effective-rights-model";
-import { originLabel, placeLabel } from "./origin-words";
+import { availabilityLabel, onlyInLabel, originLabel, placeLabel } from "./origin-words";
 import { actionLabel, rightVerb, verbLabel } from "./right-words";
 
 type Translate = TranslationContextValue["t"];
@@ -63,6 +63,8 @@ export function EffectiveRights({ rights }: { rights: HolderRights }) {
                   row.deniedBy.scopeId !== row.place.scopeId)
                   ? placeLabel(row.deniedBy, t)
                   : undefined;
+              const onlyIn = onlyInLabel(row.onlyInWorkspaces, t, locale);
+              const availability = availabilityLabel(row.availability, row.allowed, t);
               return (
                 <li
                   key={row.key}
@@ -74,6 +76,9 @@ export function EffectiveRights({ rights }: { rights: HolderRights }) {
                   <div className="grid min-w-0 gap-0.5">
                     <span className="font-medium">{rowActions(row, area.area, t, locale)}</span>
                     <span className="text-xs text-muted-foreground">{place}</span>
+                    {onlyIn === undefined ? null : (
+                      <span className="text-xs text-muted-foreground">{onlyIn}</span>
+                    )}
                     {denyPlace === undefined ? null : (
                       <span className="text-xs text-muted-foreground">
                         {t("access.originDenyPlace", { place: denyPlace })}
@@ -93,6 +98,15 @@ export function EffectiveRights({ rights }: { rights: HolderRights }) {
                         {originLabel(origin, rights.roles, t)}
                       </Badge>
                     ))}
+                    {availability === undefined ? null : (
+                      <Badge
+                        {...(row.allowed ? {} : { tone: "danger" as const })}
+                        appearance="outline"
+                        className="font-normal"
+                      >
+                        {availability}
+                      </Badge>
+                    )}
                     {row.deniedBy === undefined ? null : (
                       <Badge tone="danger" appearance="outline" className="font-normal">
                         {originLabel(row.deniedBy, rights.roles, t)}
@@ -130,7 +144,9 @@ export function UserEffectiveRightsCard({ holderId }: { holderId: string }) {
         </CardTitle>
       </CardHeader>
       <CardContent className="@container grid gap-3 p-4 pt-2">
-        <p className="text-sm text-muted-foreground">{t("access.effectiveDescription")}</p>
+        <p className="text-sm text-muted-foreground">
+          {t("access.effectiveDescription")} {t("access.effectiveAppsNote")}
+        </p>
         {query.data ? (
           <EffectiveRights rights={query.data} />
         ) : query.error ? (

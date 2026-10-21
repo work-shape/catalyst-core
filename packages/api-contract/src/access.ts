@@ -1,5 +1,6 @@
 import {
   ACCESS_SOURCES,
+  APP_AUDIENCES,
   GRANT_EFFECTS,
   GRANT_HOLDER_KINDS,
   GRANT_SCOPE_KINDS,
@@ -106,13 +107,34 @@ export const effectivePermissionsSchema = z.object({
   items: z.array(accessEntrySchema)
 });
 
+const namedWorkspaceSchema = z.object({ personal: z.boolean(), name: z.string().optional() });
+
 /**
- * The place an entry names, as far as the caller may read it. `scopeAsset` as on a grant row;
+ * The place an entry names, as far as the caller may read it. `scopeAsset` as on a grant row,
+ * with the asset's `title`, the name people read, beside its `name` where both are shown;
  * `scopeWorkspace` for workspace scope, its name left out for a caller who may not read it.
  */
 const namedPlaceSchema = z.object({
-  scopeAsset: permissionGrantSchema.shape.scopeAsset,
-  scopeWorkspace: z.object({ personal: z.boolean(), name: z.string().optional() }).optional()
+  scopeAsset: z
+    .object({
+      kind: z.string(),
+      name: z.string().optional(),
+      title: z.string().optional(),
+      active: z.boolean()
+    })
+    .optional(),
+  scopeWorkspace: namedWorkspaceSchema.optional()
+});
+
+/**
+ * What decides a right beside the entries. `availability`: the App's audience decided its use
+ * (`instance`: anybody of the instance uses it; `self`: only the person who chose Only me does).
+ * `onlyInWorkspaces`: the right holds only while the holder works in one of these workspaces,
+ * because the asset is available there and nothing else gives it; outside them it is refused.
+ */
+const rightConditionsSchema = z.object({
+  availability: z.enum(APP_AUDIENCES).optional(),
+  onlyInWorkspaces: z.array(namedWorkspaceSchema).optional()
 });
 
 /** Where a right comes from: one entry that gives or refuses it, with its place named. */
@@ -163,6 +185,7 @@ export const holderRightsSchema = z.object({
         deniedBy: accessOriginSchema.optional()
       })
       .extend(namedPlaceSchema.shape)
+      .extend(rightConditionsSchema.shape)
   )
 });
 
@@ -185,7 +208,7 @@ export const assetRightsCheckSchema = z.object({
   holderActive: z.boolean(),
   roles: z.array(accessOriginRoleSchema),
   actions: z.array(
-    z.object({
+    rightConditionsSchema.extend({
       verb: assetCheckVerbSchema,
       action: z.string(),
       allowed: z.boolean(),

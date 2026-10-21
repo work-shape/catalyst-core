@@ -219,7 +219,21 @@ export const access = defineTranslations({
     "access.originGrant": "Granted directly",
     "access.originGrantDeny": "Denied directly",
     "access.originMembership": "Membership",
-    "access.originDenyPlace": "The deny applies to: {place}"
+    "access.originDenyPlace": "The deny applies to: {place}",
+    "access.onlyInWorkspaces": "Holds only while working in: {places}",
+    "access.availabilityInstance": "Available to everyone",
+    "access.availabilitySelfAllowed": "Available to this person only",
+    "access.availabilitySelfRefused": "Available to one other person only",
+    "access.reasonMembership": "Membership",
+    "access.reasonAvailability": "Availability",
+    "access.decidedByMembershipWorkspace":
+      "The person is a member of the workspace that owns the asset.",
+    "access.decidedByMembershipAsset": "The asset is available in a workspace of the person.",
+    "access.decidedByAvailabilityInstance": "The App is available to everyone on the instance.",
+    "access.decidedByAvailabilitySelfAllowed": "The App is available to this person only.",
+    "access.decidedByAvailabilitySelfRefused": "The App is available to one other person only.",
+    "access.effectiveAppsNote":
+      "An App available to everyone can be used by anyone; Check shows it for one App."
   },
   de: {
     "access.scopeTab": "Datenzugriff",
@@ -442,6 +456,21 @@ export const access = defineTranslations({
     "access.originGrant": "Direkt vergeben",
     "access.originGrantDeny": "Direkt verweigert",
     "access.originMembership": "Mitgliedschaft",
-    "access.originDenyPlace": "Die Verweigerung gilt für: {place}"
+    "access.originDenyPlace": "Die Verweigerung gilt für: {place}",
+    "access.onlyInWorkspaces": "Gilt nur bei der Arbeit in: {places}",
+    "access.availabilityInstance": "Verfügbar für alle",
+    "access.availabilitySelfAllowed": "Nur für diese Person verfügbar",
+    "access.availabilitySelfRefused": "Nur für eine andere Person verfügbar",
+    "access.reasonMembership": "Mitgliedschaft",
+    "access.reasonAvailability": "Verfügbarkeit",
+    "access.decidedByMembershipWorkspace":
+      "Die Person ist Mitglied des Arbeitsbereichs, dem das Asset gehört.",
+    "access.decidedByMembershipAsset":
+      "Das Asset ist in einem Arbeitsbereich der Person verfügbar.",
+    "access.decidedByAvailabilityInstance": "Die App ist für alle in der Instanz verfügbar.",
+    "access.decidedByAvailabilitySelfAllowed": "Die App ist nur für diese Person verfügbar.",
+    "access.decidedByAvailabilitySelfRefused": "Die App ist nur für eine andere Person verfügbar.",
+    "access.effectiveAppsNote":
+      "Eine App, die für alle verfügbar ist, kann jede Person verwenden; Prüfen zeigt das für eine App."
   }
 });

@@ -377,6 +377,43 @@ function checkOf(
   };
 }
 
+describe("what decides a check beside the entries", () => {
+  it("names an App's audience and a membership as what decided, with the workspaces a use holds in", () => {
+    const answers = checkedActions({
+      holderActive: true,
+      roles: [],
+      actions: [
+        { verb: "use", action: "app.use", allowed: true, availability: "instance" },
+        {
+          verb: "read",
+          action: "app.read",
+          allowed: false,
+          reason: "no_grant",
+          availability: "self"
+        },
+        {
+          verb: "write",
+          action: "app.write",
+          allowed: true,
+          decidedBy: { source: "membership", effect: "allow", scopeKind: "workspace" },
+          onlyInWorkspaces: [{ personal: false, name: "Alpha" }]
+        }
+      ]
+    });
+    expect(answers).toEqual([
+      { verb: "use", allowed: true, reason: "availability", availability: "instance" },
+      { verb: "read", allowed: false, reason: "availability", availability: "self" },
+      {
+        verb: "write",
+        allowed: true,
+        reason: "membership",
+        entry: { source: "membership", effect: "allow", scopeKind: "workspace" },
+        onlyInWorkspaces: [{ personal: false, name: "Alpha" }]
+      }
+    ]);
+  });
+});
+
 describe("what a check decides, and how the tab names it", () => {
   /** Allowed to change and delete one agent, `asset-1`. */
   const effective: EffectivePermissions = {
