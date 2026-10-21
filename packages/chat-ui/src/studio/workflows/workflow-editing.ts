@@ -6,17 +6,25 @@ import { useTranslation } from "../../shared/i18n";
 import { draftChanges, withRemovedSteps, type DraftChanges } from "./draft-changes";
 import type { WorkflowIssue } from "./source-shapes";
 import {
+  applyFileEdits,
   applyStepEdits,
   effectiveEdits,
   findStep,
   rebaseStepEdits,
   type EditConflict,
   type StepEdit,
-  type WorkflowManifest
+  type WorkflowFile,
+  type WorkflowManifest,
+  workflowFiles
 } from "./step-edits";
 import { useWorkflowEditWrites, useWorkflowRevision } from "./workflow-data";
 import { workflowSteps } from "./workflow-mapping";
-import type { WorkflowStepFacts, WorkflowStepView, WorkflowView } from "./workflow-views";
+import type {
+  WorkflowDefinitionView,
+  WorkflowStepFacts,
+  WorkflowStepView,
+  WorkflowView
+} from "./workflow-views";
 
 // Editing a Workflow by hand on its page (workflow-canvas 9.4 and 9.5): the operations a person
 // made and has not saved, what the canvas draws of them, the save with the rebase after a
@@ -118,6 +126,8 @@ export interface StepMark {
 export interface WorkflowEditing {
   /** The draft with what is not saved: what the canvas draws and the form shows. */
   manifest: WorkflowManifest;
+  /** The files of the draft with what is not saved: the scripts of code steps. */
+  files: readonly WorkflowFile[];
   /** The steps the canvas draws: the edited draft's, with the removed ones put back. */
   steps: readonly WorkflowStepView[];
   marks: ReadonlyMap<string, StepMark>;
@@ -133,6 +143,13 @@ export interface WorkflowEditing {
   takeTheirs(step: string, field: string): void;
   /** Drops what is not saved of one step. */
   cancel(step: string): void;
+  /**
+   * Holds the save of a step back, or lets it go, for a value the form has not finished, such
+   * as an answer field with no name yet. `key` tells the holds of one step apart.
+   */
+  hold(step: string, key: string, held: boolean): void;
+  /** The steps whose save is held back. */
+  held: ReadonlySet<string>;
   /** Asks the instance what it would refuse now, as a field loses focus. */
   validate(): void;
   save(): Promise<void>;
@@ -176,6 +193,7 @@ export function useWorkflowEditing(input: {
   const [issues, setIssues] = useState<EditIssues>(NO_ISSUES);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>();
+  const [holds, setHolds] = useState<ReadonlySet<string>>(new Set());
   const asked = useRef(0);
 
   // A draft another writer saved becomes the base; what is not saved is carried over to it.
@@ -185,7 +203,9 @@ export function useWorkflowEditing(input: {
       const rebased = rebaseStepEdits({
         base: base.manifest,
         latest: latest.manifest,
-        edits
+        edits,
+        baseFiles: workflowFiles(base.config),
+        latestFiles: workflowFiles(latest.config)
       });
       setEdits(rebased.edits);
       setConflicts((before) => [
@@ -212,9 +232,15 @@ export function useWorkflowEditing(input: {
     () => (baseManifest === undefined ? {} : applyStepEdits(baseManifest, edits)),
     [baseManifest, edits]
   );
+  const baseConfig = base?.config;
+  const baseFiles = useMemo(() => workflowFiles(baseConfig), [baseConfig]);
+  const files = useMemo(
+    () => (baseManifest === undefined ? [] : applyFileEdits(manifest, baseFiles, edits)),
+    [baseManifest, manifest, baseFiles, edits]
+  );
   const unsavedEdits = useMemo(
-    () => (baseManifest === undefined ? [] : effectiveEdits(baseManifest, edits)),
-    [baseManifest, edits]
+    () => (baseManifest === undefined ? [] : effectiveEdits(baseManifest, edits, baseFiles)),
+    [baseManifest, edits, baseFiles]
   );
   const published =
     publishedRevision === undefined
@@ -277,7 +303,18 @@ export function useWorkflowEditing(input: {
   if (!input.mayWrite || writes === undefined || base === undefined) {
     return undefined;
   }
-  const configOf = (next: WorkflowManifest) => ({ ...base.config, manifest: next });
+  /** The config of a draft with these operations applied: its manifest and its files. */
+  const configOf = (from: WorkflowDefinitionView, operations: readonly StepEdit[]) => {
+    const manifestNow = applyStepEdits(from.manifest, operations);
+    const filesBefore = workflowFiles(from.config);
+    const filesNow = applyFileEdits(manifestNow, filesBefore, operations);
+    return {
+      ...from.config,
+      manifest: manifestNow,
+      // A config without files gets them only once a script is written.
+      ...(filesNow.length === 0 && !Array.isArray(from.config.files) ? {} : { files: filesNow })
+    };
+  };
 
   const save = async () => {
     setSaving(true);
@@ -288,8 +325,8 @@ export function useWorkflowEditing(input: {
       // One save, and once more after a revision conflict where the agent changed none of the fields.
       for (let attempt = 0; attempt < 2; attempt += 1) {
         try {
-          const saved = applyStepEdits(from.manifest, pending);
-          const config = { ...from.config, manifest: saved };
+          const config = configOf(from, pending);
+          const saved = config.manifest;
           const { revision } = await writes.save(input.workflowId, config, from.revision);
           // What was saved is the base at once: a change made before the draft is read again
           // is carried over from it, not from the revision before it.
@@ -314,6 +351,8 @@ export function useWorkflowEditing(input: {
           let next = { base: current.base, edits: current.edits, conflicts: current.conflicts };
           if (now.revision > current.base.revision) {
             const rebased = rebaseStepEdits({
+              baseFiles: workflowFiles(current.base.config),
+              latestFiles: workflowFiles(now.config),
               base: current.base.manifest,
               latest: now.manifest,
               edits: current.edits
@@ -330,7 +369,12 @@ export function useWorkflowEditing(input: {
           // The person decides: their value stands, the agent's is shown under it.
           if (next.conflicts.length > 0) return;
           // Nothing is left to save where every change was to a step the agent deleted.
-          if (effectiveEdits(next.base.manifest, next.edits).length === 0) return;
+          if (
+            effectiveEdits(next.base.manifest, next.edits, workflowFiles(next.base.config))
+              .length === 0
+          ) {
+            return;
+          }
           from = next.base;
           pending = next.edits;
         }
@@ -356,8 +400,11 @@ export function useWorkflowEditing(input: {
     }
   };
 
+  const heldSteps = new Set([...holds].map((key) => key.slice(0, key.indexOf("\n"))));
+
   return {
     manifest,
+    files,
     steps: drawn.steps,
     marks,
     published,
@@ -380,17 +427,29 @@ export function useWorkflowEditing(input: {
     },
     cancel: (step) => {
       setEdits((before) => before.filter((edit) => edit.step !== step));
+      setHolds((before) => new Set([...before].filter((key) => !key.startsWith(`${step}\n`))));
       setConflicts((before) => before.filter((c) => c.step !== step));
       setIssues(NO_ISSUES);
       setError(undefined);
     },
+    hold: (step, key, held) => {
+      const entry = `${step}\n${key}`;
+      setHolds((before) => {
+        if (before.has(entry) === held) return before;
+        const next = new Set(before);
+        if (held) next.add(entry);
+        else next.delete(entry);
+        return next;
+      });
+    },
+    held: heldSteps,
     validate: () => {
       if (unsavedEdits.length === 0) return;
       asked.current += 1;
       const ask = asked.current;
       const checked = manifest;
       writes
-        .validate(input.workflowId, configOf(checked))
+        .validate(input.workflowId, configOf(base, edits))
         .then((found) => {
           // An answer to an older question says nothing of the form as it is now.
           if (ask === asked.current) setIssues(editIssues(found, checked));

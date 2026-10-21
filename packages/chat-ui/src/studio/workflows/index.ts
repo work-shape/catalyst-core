@@ -7,9 +7,19 @@ export { createInstanceSource } from "./instance-source";
 export { scheduleInWords } from "./schedule-words";
 export { StepPanel, StepTranscriptView } from "./step-panel";
 export { StepSettings, StepSettingsBar } from "./step-settings";
-export { applyStepEdits, rebaseStepEdits, WORKFLOW_FIELDS, type StepEdit } from "./step-edits";
+export {
+  applyFileEdits,
+  applyStepEdits,
+  rebaseStepEdits,
+  SCRIPT_FIELD,
+  stepValue,
+  WORKFLOW_FIELDS,
+  type StepEdit,
+  type WorkflowFile
+} from "./step-edits";
+export { fieldListProblems, fieldsSchema, schemaFields } from "./schema-fields";
 export { draftChanges, withRemovedSteps } from "./draft-changes";
-export { earlierFields } from "./mapping-rows";
+export { draftValueOf, earlierFields, mappingOf, pickedSchema, rowsOf } from "./mapping-rows";
 export { editIssues, issuePlace, useWorkflowEditing } from "./workflow-editing";
 export { stepOutputRows } from "./step-output";
 export { countsLine, placedSteps, workflowGraph, type CanvasRun } from "./workflow-canvas-model";

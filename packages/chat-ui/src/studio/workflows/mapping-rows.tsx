@@ -139,14 +139,7 @@ export function earlierFields(
   };
   // The entry of each loop around the step: the fields of one item of the list it runs over.
   for (const loop of [...scope.loops].reverse()) {
-    const items = isRecord(loop.items) ? loop.items : undefined;
-    const source = text(items?.step);
-    const from = source === undefined ? undefined : findStep(manifest, source);
-    const list =
-      from === undefined
-        ? undefined
-        : schemaAt(resultSchema(manifest, from, facts), text(items?.path) ?? "");
-    const item = isRecord(list) ? list.items : undefined;
+    const item = loopItemSchema(manifest, loop, facts);
     add(words.entry(text(loop.itemName) ?? text(loop.name) ?? ""), text(loop.id) ?? "", item);
   }
   for (const step of [...scope.before].reverse()) {
@@ -159,6 +152,71 @@ export function earlierFields(
   }
   return groups;
 }
+
+/** The schema of one item of the list a loop runs over, where the definition says it. */
+function loopItemSchema(
+  manifest: WorkflowManifest,
+  loop: Readonly<Record<string, unknown>>,
+  facts: WorkflowStepFacts | undefined
+): unknown {
+  const items = isRecord(loop.items) ? loop.items : undefined;
+  const source = text(items?.step);
+  const from = source === undefined ? undefined : findStep(manifest, source);
+  const list =
+    from === undefined
+      ? undefined
+      : schemaAt(resultSchema(manifest, from, facts), text(items?.path) ?? "");
+  return isRecord(list) ? list.items : undefined;
+}
+
+/**
+ * The schema of the field a reference names: of a loop's entry, of what the run was started
+ * with, or of an earlier step's result. Nothing where no schema says it.
+ */
+export function pickedSchema(
+  manifest: WorkflowManifest,
+  facts: WorkflowStepFacts | undefined,
+  ref: { step: string; path: string }
+): Record<string, unknown> | undefined {
+  const from = findStep(manifest, ref.step);
+  if (from === undefined) return undefined;
+  const whole =
+    from.type === "loop"
+      ? loopItemSchema(manifest, from, facts)
+      : resultSchema(manifest, from, facts);
+  const found = schemaAt(whole, ref.path);
+  return isRecord(found) ? found : undefined;
+}
+
+/**
+ * The schema of one named value: the kind of a fixed value, or the schema of the field it was
+ * picked from. `kept` is what was written before; it stands where it still fits.
+ */
+export function rowSchema(
+  row: MappingRow,
+  kept: unknown,
+  manifest: WorkflowManifest,
+  facts: WorkflowStepFacts | undefined
+): Record<string, unknown> {
+  if (row.value.kind === "fixed") {
+    const value = row.value.value;
+    const type =
+      typeof value === "string"
+        ? "string"
+        : typeof value === "number"
+          ? "number"
+          : typeof value === "boolean"
+            ? "boolean"
+            : undefined;
+    if (isRecord(kept) && (type === undefined || kept.type === type)) return kept;
+    return type === undefined ? {} : { type };
+  }
+  const field = fieldOfKey(pickedOption(row.value));
+  const picked = field === undefined ? undefined : pickedSchema(manifest, facts, field);
+  return picked ?? (isRecord(kept) ? kept : {});
+}
+
+const pickedOption = (sourced: SourcedValue) => (sourced.kind === "picked" ? sourced.option : "");
 
 /** One field of a step's input as the manifest holds it: a value, a reference or a text. */
 export type InputValue = Readonly<Record<string, unknown>>;
@@ -181,6 +239,8 @@ export function sourcedOf(value: unknown): SourcedValue | undefined {
     return shownValue(value.value) ? { kind: "fixed", value: value.value } : undefined;
   }
   if (isRecord(value.ref)) {
+    // A value to be picked from a step whose field is not chosen yet.
+    if (value.ref.step === "") return { kind: "picked", option: "" };
     const step = text(value.ref.step);
     const path = typeof value.ref.path === "string" ? value.ref.path : undefined;
     return step === undefined || path === undefined
@@ -195,6 +255,17 @@ export function inputValueOf(value: SourcedValue): InputValue | undefined {
   if (value.kind === "fixed") return { value: value.value };
   const field = fieldOfKey(value.option);
   return field === undefined ? undefined : { ref: field };
+}
+
+/**
+ * The field's value as the form keeps it while it is changed: what `inputValueOf` gives, and
+ * a pick of no field yet as a reference to nothing, which holds the save back.
+ */
+export function draftValueOf(value: SourcedValue): InputValue {
+  return (
+    inputValueOf(value) ??
+    (value.kind === "picked" ? { ref: { step: "", path: "" } } : { value: "" })
+  );
 }
 
 /** How a fixed value is typed in, by what it holds now. */

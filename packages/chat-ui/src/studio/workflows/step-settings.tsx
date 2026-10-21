@@ -22,30 +22,27 @@ import { useTranslation } from "../../shared/i18n";
 import {
   earlierFields,
   fieldKey,
+  draftValueOf,
   inputValueOf,
   kindOf,
   mappingOf,
   MappingRows,
+  rowSchema,
   rowsOf,
-  sourcedOf,
-  type MappingRow
+  sourcedOf
 } from "./mapping-rows";
 import { findStep, sameValue, WORKFLOW_FIELDS } from "./step-edits";
 import type { WorkflowEdit } from "./workflow-draft";
 import type { WorkflowEditing } from "./workflow-editing";
+import { fieldWords, isRecord, type KindProps } from "./step-settings-parts";
+import { AgentSettings } from "./step-settings-agent";
+import { CodeSettings } from "./step-settings-code";
 import { useRecipientNames } from "./workflows-host";
 
 // The Settings tab of a step (workflow-canvas 9.4): the step's form for a holder of
 // `workflow.write`. Every step has its name and what it does; a loop, a notice and the result
 // have their fields here. What the form does not edit stays read-only with "Change with the
 // agent". The form writes ids and paths itself and never shows them.
-
-type Step = Readonly<Record<string, unknown>>;
-type Translate = ReturnType<typeof useTranslation>["t"];
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 const text = (value: unknown): string => (typeof value === "string" ? value : "");
 
@@ -210,6 +207,26 @@ export function StepSettings({
           set={set}
           changeWithAgent={changeWithAgent}
         />
+      ) : step.type === "agent" ? (
+        <AgentSettings
+          step={step}
+          stepId={stepId}
+          editing={editing}
+          issue={issue}
+          under={under}
+          set={set}
+          changeWithAgent={changeWithAgent}
+        />
+      ) : step.type === "code" ? (
+        <CodeSettings
+          step={step}
+          stepId={stepId}
+          editing={editing}
+          issue={issue}
+          under={under}
+          set={set}
+          changeWithAgent={changeWithAgent}
+        />
       ) : step.type === "output" ? (
         <ResultSettings step={step} stepId={stepId} editing={editing} under={under} />
       ) : (
@@ -233,7 +250,14 @@ export function StepSettingsBar({ stepId, editing }: { stepId: string; editing: 
   const { t } = useTranslation();
   const step = findStep(editing.manifest, stepId);
   const incomplete =
+    editing.held.has(stepId) ||
     text(step?.name).trim() === "" ||
+    (step?.type === "agent" && text(step.instructions).trim() === "") ||
+    (step?.type === "notify" &&
+      [step.title, step.text].some((value) => {
+        const shown = sourcedOf(value);
+        return shown?.kind === "picked" && shown.option === "";
+      })) ||
     (step?.type === "loop" && !isRecord(step.items)) ||
     (step?.type === "output" && mappingOf(rowsOf(step.input) ?? []) === undefined);
   return (
@@ -254,25 +278,9 @@ export function StepSettingsBar({ stepId, editing }: { stepId: string; editing: 
   );
 }
 
-interface KindProps {
-  step: Step;
-  stepId: string;
-  editing: WorkflowEditing;
-  issue(field: string): string | undefined;
-  under(field: string): ReactNode;
-  set(fields: Record<string, unknown>): void;
-}
-
-function useFieldWords(t: Translate) {
-  return {
-    entry: (loop: string) => t("workflows.settings.entryOf", { loop }),
-    input: t("workflows.settings.runInput")
-  };
-}
-
 function LoopSettings({ step, stepId, editing, issue, under, set }: KindProps) {
   const { t } = useTranslation();
-  const words = useFieldWords(t);
+  const words = fieldWords(t);
   const lists = earlierFields(editing.manifest, stepId, editing.stepFacts, words, { lists: true });
   const items = isRecord(step.items) ? step.items : undefined;
   const picked: SourcedValue = {
@@ -383,7 +391,7 @@ function NotifySettings({
 }: KindProps & { changeWithAgent: ReactNode }) {
   const { t } = useTranslation();
   const names = useRecipientNames();
-  const words = useFieldWords(t);
+  const words = fieldWords(t);
   const options = earlierFields(editing.manifest, stepId, editing.stepFacts, words);
   const to = isRecord(step.to) ? step.to : {};
   const users = Array.isArray(to.users) ? to.users.filter((id) => typeof id === "string") : [];
@@ -445,7 +453,7 @@ function NotifySettings({
           options={options}
           error={issue(field)}
           onBlur={editing.validate}
-          onChange={(next) => set({ [field]: inputValueOf(next) })}
+          onChange={(next) => set({ [field]: draftValueOf(next) })}
         />
         {under(field)}
       </div>
@@ -542,24 +550,6 @@ function NotifySettings({
   );
 }
 
-/** The schema of a result value: the kind of a fixed one, the kept one of an unchanged name. */
-function valueSchema(row: MappingRow, kept: unknown): Record<string, unknown> {
-  if (row.value.kind === "fixed") {
-    const value = row.value.value;
-    const type =
-      typeof value === "string"
-        ? "string"
-        : typeof value === "number"
-          ? "number"
-          : typeof value === "boolean"
-            ? "boolean"
-            : undefined;
-    if (isRecord(kept) && (type === undefined || kept.type === type)) return kept;
-    return type === undefined ? {} : { type };
-  }
-  return isRecord(kept) ? kept : {};
-}
-
 function ResultSettings({
   step,
   stepId,
@@ -567,7 +557,7 @@ function ResultSettings({
   under
 }: Pick<KindProps, "step" | "stepId" | "editing" | "under">) {
   const { t } = useTranslation();
-  const words = useFieldWords(t);
+  const words = fieldWords(t);
   const options = earlierFields(editing.manifest, stepId, editing.stepFacts, words);
   const rows = rowsOf(step.input);
   if (rows === undefined) {
@@ -593,13 +583,14 @@ function ResultSettings({
         onBlur={editing.validate}
         onChange={(next) => {
           // Rows still being named are kept in the form; the mapping is written once complete.
-          const input = Object.fromEntries(
-            next.map((row) => [row.name, inputValueOf(row.value) ?? { value: "" }])
-          );
+          const input = Object.fromEntries(next.map((row) => [row.name, draftValueOf(row.value)]));
           editing.set(stepId, { input });
           const named = next.filter((row) => row.name.trim() !== "");
           const nextProperties = Object.fromEntries(
-            named.map((row) => [row.name, valueSchema(row, properties[row.name])])
+            named.map((row) => [
+              row.name,
+              rowSchema(row, properties[row.name], editing.manifest, editing.stepFacts)
+            ])
           );
           const nextOutputs = {
             ...outputs,

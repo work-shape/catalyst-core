@@ -28,6 +28,76 @@ const FIXED_WORKFLOW_FIELDS: ReadonlySet<string> = new Set(["id", "steps"]);
 /** `workflow.yaml` as the asset holds it under `manifest`. */
 export type WorkflowManifest = Readonly<Record<string, unknown>>;
 
+/**
+ * The field a code step's script is edited as (WF-EDIT-2): the text of the file the step
+ * names, which the config holds under `files` and not in the manifest. A field whose name
+ * starts with `$` is never a key of a step.
+ */
+export const SCRIPT_FIELD = "$script";
+
+/** One file of the Workflow's folder as the config holds it. */
+export interface WorkflowFile {
+  path: string;
+  content: string;
+}
+
+/** Where the step files of a Workflow stand in its folder (`WORKFLOW_STEP_FILES_FOLDER`). */
+const STEP_FILES_FOLDER = "steps";
+
+/** The files of a config, where it holds any. */
+export function workflowFiles(config: unknown): WorkflowFile[] {
+  const files = isRecord(config) && Array.isArray(config.files) ? config.files : [];
+  return files.flatMap((file) =>
+    isRecord(file) && typeof file.path === "string" && typeof file.content === "string"
+      ? [{ path: file.path, content: file.content }]
+      : []
+  );
+}
+
+/** The path of a code step's script in the Workflow's folder. */
+export function scriptPath(
+  step: Readonly<Record<string, unknown>> | undefined
+): string | undefined {
+  return step?.type === "code" && typeof step.file === "string" && step.file !== ""
+    ? `${STEP_FILES_FOLDER}/${step.file}`
+    : undefined;
+}
+
+/** The value of one field of a step, the script of a code step among them. */
+export function stepValue(
+  manifest: WorkflowManifest,
+  files: readonly WorkflowFile[],
+  stepId: string,
+  field: string
+): unknown {
+  const step = findStep(manifest, stepId);
+  if (field !== SCRIPT_FIELD) return step?.[field];
+  const path = scriptPath(step);
+  return path === undefined ? undefined : files.find((file) => file.path === path)?.content;
+}
+
+/**
+ * The files with the scripts the operations set, after `applyStepEdits` made `manifest`. A
+ * script whose file is not there yet is added; nothing else of the folder changes.
+ */
+export function applyFileEdits(
+  manifest: WorkflowManifest,
+  files: readonly WorkflowFile[],
+  edits: readonly StepEdit[]
+): WorkflowFile[] {
+  const next = [...files];
+  for (const edit of edits) {
+    if (!Object.hasOwn(edit.fields, SCRIPT_FIELD)) continue;
+    const path = scriptPath(findStep(manifest, edit.step));
+    const content = edit.fields[SCRIPT_FIELD];
+    if (path === undefined || typeof content !== "string") continue;
+    const at = next.findIndex((file) => file.path === path);
+    if (at === -1) next.push({ path, content });
+    else next[at] = { path, content };
+  }
+  return next;
+}
+
 /** The fields an edit never sets: the server names a step by them. */
 const FIXED_FIELDS: ReadonlySet<string> = new Set([
   "id",
@@ -137,7 +207,7 @@ export function applyStepEdits(
     if (edit.step === WORKFLOW_FIELDS) {
       const changed: Record<string, unknown> = { ...next };
       for (const [field, value] of Object.entries(edit.fields)) {
-        if (FIXED_WORKFLOW_FIELDS.has(field)) continue;
+        if (FIXED_WORKFLOW_FIELDS.has(field) || field.startsWith("$")) continue;
         if (value === undefined) delete changed[field];
         else changed[field] = value;
       }
@@ -149,7 +219,7 @@ export function applyStepEdits(
       steps: replaced(next.steps, edit.step, (step) => {
         const changed: Record<string, unknown> = { ...step };
         for (const [field, value] of Object.entries(edit.fields)) {
-          if (FIXED_FIELDS.has(field)) continue;
+          if (FIXED_FIELDS.has(field) || field.startsWith("$")) continue;
           if (value === undefined) delete changed[field];
           else changed[field] = value;
         }
@@ -191,6 +261,9 @@ export function rebaseStepEdits(input: {
   base: WorkflowManifest;
   latest: WorkflowManifest;
   edits: readonly StepEdit[];
+  /** The files of each draft, for a script the operations set. */
+  baseFiles?: readonly WorkflowFile[];
+  latestFiles?: readonly WorkflowFile[];
 }): RebasedEdits {
   const edits: StepEdit[] = [];
   const conflicts: EditConflict[] = [];
@@ -201,10 +274,10 @@ export function rebaseStepEdits(input: {
       if (!dropped.includes(edit.step)) dropped.push(edit.step);
       continue;
     }
-    const before = findStep(input.base, edit.step);
     for (const field of Object.keys(edit.fields)) {
-      const theirs = now[field];
-      if (!sameValue(before?.[field], theirs) && !sameValue(edit.fields[field], theirs)) {
+      const before = stepValue(input.base, input.baseFiles ?? [], edit.step, field);
+      const theirs = stepValue(input.latest, input.latestFiles ?? [], edit.step, field);
+      if (!sameValue(before, theirs) && !sameValue(edit.fields[field], theirs)) {
         conflicts.push({ step: edit.step, field, theirs });
       }
     }
@@ -226,11 +299,16 @@ export function mergedEdits(edits: readonly StepEdit[]): StepEdit[] {
  * The edits less every field that already says what the manifest says: what a form holds
  * that is no change. An edit with no field left is left out.
  */
-export function effectiveEdits(manifest: WorkflowManifest, edits: readonly StepEdit[]): StepEdit[] {
+export function effectiveEdits(
+  manifest: WorkflowManifest,
+  edits: readonly StepEdit[],
+  files: readonly WorkflowFile[] = []
+): StepEdit[] {
   return mergedEdits(edits).flatMap((edit) => {
-    const step = findStep(manifest, edit.step);
     const fields = Object.fromEntries(
-      Object.entries(edit.fields).filter(([field, value]) => !sameValue(step?.[field], value))
+      Object.entries(edit.fields).filter(
+        ([field, value]) => !sameValue(stepValue(manifest, files, edit.step, field), value)
+      )
     );
     return Object.keys(fields).length === 0 ? [] : [{ ...edit, fields }];
   });
