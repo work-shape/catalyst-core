@@ -304,16 +304,16 @@ test.describe("a synced source on a Knowledge Base's page", () => {
       const current = await page.request.get(assetUrl);
       const config = field(await current.json(), "config");
       const sources = field(config, "sources");
-      expect(Array.isArray(sources)).toBe(true);
+      if (typeof config !== "object" || config === null || !Array.isArray(sources)) {
+        throw new Error("The Knowledge Base answered no definition with sources");
+      }
+      const listed: unknown[] = sources;
       const widened = await requestWithOrigin(page, "put", assetUrl, {
         data: {
           expectedRevision: await assetRevision(page, assetUrl),
           config: {
-            ...(config as Record<string, unknown>),
-            sources: [
-              ...(sources as unknown[]),
-              { id: "other-folder", connection, folders: ["200"] }
-            ]
+            ...config,
+            sources: [...listed, { id: "other-folder", connection, folders: ["200"] }]
           }
         }
       });
@@ -333,7 +333,8 @@ test.describe("a synced source on a Knowledge Base's page", () => {
       const refused = publisher.page.locator("[data-build-failure]");
       // Refused for the Connection's right, not for anything else about the draft.
       await expect(refused).toContainText("connection.use");
-      await expect(publisher.page.locator("[data-build-draft-state]")).toBeVisible();
+      // The draft state stays; the head may fold its chip away beside a long name.
+      await expect(publisher.page.locator("[data-build-draft-state]")).toHaveCount(1);
       await picture(publisher.page, "publish-refused-de-1280");
       expect(field(await (await page.request.get(assetUrl)).json(), "publishedRevision")).toBe(
         publishedBefore
