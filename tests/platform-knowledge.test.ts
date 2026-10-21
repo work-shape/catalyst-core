@@ -325,7 +325,7 @@ describe("the shipped skill platform-docs", () => {
   });
   it("tells an agent asked for a Google font to carry fonts and libraries locally or use the kit", () => {
     const guide = platformDocsSkill.resources?.find(
-      (resource) => resource.path === "references/apps/build.md"
+      (resource) => resource.path === "references/apps/sandbox.md"
     );
     expect(guide?.content).toContain(
       "Put fonts and libraries in the App's folder or use the kit's; an outside address (Google Fonts, Adobe Fonts or a CDN) will not load."

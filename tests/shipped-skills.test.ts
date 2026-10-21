@@ -494,7 +494,7 @@ it("teaches the App sandbox before sending an agent to the detailed guide", () =
   ])
     expect(platformDocsSkill.content).toContain(rule);
   const guide = platformDocsSkill.resources?.find(
-    (resource) => resource.path === "references/apps/build.md"
+    (resource) => resource.path === "references/apps/sandbox.md"
   );
   for (const rule of [
     "draft preview",

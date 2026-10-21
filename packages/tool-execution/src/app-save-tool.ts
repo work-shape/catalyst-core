@@ -148,7 +148,7 @@ export function createAppSaveTool(calls: AppSaveCalls): AnyToolDefinition {
       "Needs the person's right to build in the workspace; without it the call is refused: tell the person who can grant it. A conversation shared with a workspace makes no App: ask the person to start a conversation of their own.",
       "Answers the App's id, its name and its draft revision: tell the person the App's name, and each of the 'warnings', as it says.",
       "Choosing a View, an App or a Workflow: references/apps/app-or-workflow.md in 'platform-docs'.",
-      "To give the App live data, add named actions to the same folder, open it and save it again: the page references/apps/build.md of the skill 'platform-docs', where you have that skill, shows how to write each kind. Tell the person that a change made through an action is carried out only once they publish the App; in the draft it answers what it would have done, and 'Run live once' on the App's Actions list carries out their next call of one action."
+      "To give the App live data, add named actions to the same folder, open it and save it again: the pages references/apps/connection-actions.md, data-store-actions.md and workflow-actions.md of the skill 'platform-docs', where you have that skill, show how to write each kind. Tell the person that a change made through an action is carried out only once they publish the App; in the draft it answers what it would have done, and 'Run live once' on the App's Actions list carries out their next call of one action."
     ].join(" "),
     inputSchema,
     outputSchema,

@@ -1,18 +1,30 @@
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { compiledActionsOf } from "@work-shape/catalyst-app-build";
 import { buildPage } from "@work-shape/catalyst-app-build/build";
 import { pageFiles } from "./support/page-build";
 
-// The docs page an agent reads before it writes an App's actions. Every example on it is built
-// here as the build builds a saved Page: the code blocks with a `title` under one `##` heading
-// are the files of one App, the title being the file's path. An example that does not build
-// fails here, so the page cannot teach a manifest or an action file the build refuses.
+// The docs pages an agent reads before it writes an App's actions, one per task. Every example
+// on them is built here as the build builds a saved Page: the code blocks with a `title` under
+// one `##` heading of one page are the files of one App, the title being the file's path. An
+// example that does not build fails here, so no page can teach a manifest or an action file the
+// build refuses.
 
-const guide = fileURLToPath(
-  new URL("../packages/docs/src/content/docs/apps/build.md", import.meta.url)
+const guideDirectory = fileURLToPath(
+  new URL("../packages/docs/src/content/docs/apps/", import.meta.url)
 );
+
+/** Every page of the App guide, one after another, each section named by its page. */
+async function guidePages(): Promise<string> {
+  const pages = (await readdir(guideDirectory)).filter((name) => name.endsWith(".md")).sort();
+  const texts = await Promise.all(
+    pages.map(async (name) =>
+      (await readFile(`${guideDirectory}${name}`, "utf8")).replaceAll(/^## /gmu, `## ${name}: `)
+    )
+  );
+  return texts.join("\n");
+}
 
 /**
  * The titled code blocks of the page, as files by path, per `##` section, and the untitled
@@ -49,9 +61,9 @@ function examplesOf(markdown: string): {
   return { examples, shownAlone };
 }
 
-describe("the docs page on building an App", () => {
+describe("the docs pages on building an App", () => {
   it("has examples that build, each with a manifest, and together every kind of action", async () => {
-    const { examples, shownAlone } = examplesOf(await readFile(guide, "utf8"));
+    const { examples, shownAlone } = examplesOf(await guidePages());
     expect(examples.size).toBeGreaterThanOrEqual(2);
     // An action file the page shows on its own is one the examples build.
     const built = [...examples.values()].flatMap((files) => Object.values(files));
