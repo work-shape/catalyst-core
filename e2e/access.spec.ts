@@ -1,3 +1,6 @@
+import { randomUUID } from "node:crypto";
+import { mkdir } from "node:fs/promises";
+import { join } from "node:path";
 import { type Locator, type Page } from "@playwright/test";
 import { expect, test } from "./test";
 import { assetBaseRevision, assetRevision, requestWithOrigin } from "./request-with-origin";
@@ -309,4 +312,168 @@ test("an administrator grants by level, checks, denies and revokes rights", asyn
     .click();
   await expect(orphanedDeny).toHaveCount(0);
   await expect(page.getByText("No right given yet.")).toBeVisible();
+});
+
+// AP-5b2, acceptance check 5 of the access spec: a custom role's rights on the User screen are
+// exactly what the role lists, each with the role as where it comes from, and the Check tab
+// says the same. The server decides both; the page only shows them.
+test("the User screen and the Check tab name the role a right comes from", async ({
+  page
+}, testInfo) => {
+  test.setTimeout(150_000);
+  const superadmin = { email: "e2e-superadmin@example.test", password: "e2e-superadmin-password" };
+  await signInViaApi(page, superadmin);
+  const suffix = randomUUID().slice(0, 8);
+  const roleName = `Buchhaltung ${suffix}`;
+  const workspace = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/v1/workspaces`, {
+    data: { name: `Buchhaltung ${suffix}` }
+  });
+  expect(workspace.ok()).toBe(true);
+  const { id: workspaceId }: { id: string } = await workspace.json();
+  let personId: string | undefined;
+  let roleId: string | undefined;
+  try {
+    const apps: { id: string; name: string; title: string }[] = [];
+    for (const [slug, title] of [
+      ["ledger", "Hauptbuch"],
+      ["invoices", "Rechnungen"]
+    ] as const) {
+      const name = `${slug}-${suffix}`;
+      const saved = await requestWithOrigin(
+        page,
+        "put",
+        `${apiBaseUrl}/api/v1/assets/app/${name}`,
+        {
+          data: {
+            workspaceId,
+            expectedRevision: null,
+            files: [
+              {
+                path: "app.yaml",
+                text: `id: ${name}\nname: ${title}\nkit: 1.1.0\nentry: index.html\n`
+              },
+              { path: "index.html", text: `<!doctype html><title>${title}</title><p>${title}</p>` }
+            ]
+          },
+          timeout: 90_000
+        }
+      );
+      expect(saved.ok(), await saved.text()).toBe(true);
+      const asset: { id: string } = await (
+        await page.request.get(`${apiBaseUrl}/api/v1/assets/app/${name}?workspaceId=${workspaceId}`)
+      ).json();
+      apps.push({ id: asset.id, name, title });
+    }
+    // An agent of the instance, for the Check tab, which lists the instance's assets of a kind.
+    const overview: { assets: { id?: string; kind: string; name: string }[] } = await (
+      await page.request.get(`${apiBaseUrl}/api/v1/instance/config/assets`)
+    ).json();
+    const agentId = overview.assets.find(
+      (asset) => asset.kind === "agent" && asset.name === "application_assistant"
+    )?.id;
+    expect(agentId).toBeDefined();
+    const person = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/v1/instance/users`, {
+      data: { displayLabel: `Lena ${suffix}`, roles: ["user"] }
+    });
+    expect(person.ok(), await person.text()).toBe(true);
+    personId = ((await person.json()) as { id: string }).id;
+    const role = await requestWithOrigin(
+      page,
+      "post",
+      `${apiBaseUrl}/api/v1/instance/access/roles`,
+      {
+        data: {
+          name: roleName,
+          grants: [
+            ...apps.map((app) => ({ action: "app.use", scopeKind: "asset", scopeId: app.id })),
+            { action: "agent.write", scopeKind: "asset", scopeId: agentId }
+          ]
+        }
+      }
+    );
+    expect(role.ok(), await role.text()).toBe(true);
+    roleId = ((await role.json()) as { id: string }).id;
+    const assigned = await requestWithOrigin(
+      page,
+      "patch",
+      `${apiBaseUrl}/api/v1/instance/users/${personId}`,
+      { data: { roles: ["user", roleId] } }
+    );
+    expect(assigned.ok(), await assigned.text()).toBe(true);
+
+    // In German, at 1280 wide.
+    await page.setViewportSize(WIDE);
+    await page.goto("/settings/instance/users");
+    await page.evaluate(() => window.localStorage.setItem("vivd-catalyst:locale", "de"));
+    await page.reload();
+    await page.getByText(`Lena ${suffix}`, { exact: true }).click();
+    const card = page
+      .locator("[data-card]", {
+        has: page.getByText("Wirksame Rechte", { exact: true })
+      })
+      .last();
+    await expect(card).toBeVisible();
+    const fromRole = card.locator('[data-testid="effective-right"]', {
+      hasText: `Rolle ${roleName}`
+    });
+    // Exactly the role's rights: the use of each App and editing the agent, allowed, from the
+    // role.
+    await expect(fromRole).toHaveCount(3);
+    await expect(fromRole.filter({ hasText: "application_assistant" })).toHaveAttribute(
+      "data-area",
+      "agent"
+    );
+    for (const app of apps) {
+      const row = fromRole.filter({ hasText: app.name });
+      await expect(row).toHaveAttribute("data-area", "app");
+      await expect(row).toHaveAttribute("data-allowed", "true");
+      await expect(row).toContainText("Erlaubt");
+    }
+    // Nothing else the person holds comes from that role, and no id is shown.
+    await expect(card.getByText(roleId)).toHaveCount(0);
+    await expect(card.getByText("app.use")).toHaveCount(0);
+    await expectNoSidewaysScroll(page);
+    const shotsDir = process.env.E2E_SHOTS_DIR ?? testInfo.outputPath("shots");
+    await mkdir(shotsDir, { recursive: true });
+    await card.scrollIntoViewIfNeeded();
+    await page.screenshot({
+      path: join(shotsDir, "user-effective-rights-de-1280.png"),
+      animations: "disabled"
+    });
+    await card.screenshot({
+      path: join(shotsDir, "user-effective-rights-card-de-1280.png"),
+      animations: "disabled"
+    });
+
+    // The Check tab: editing the agent is the role's.
+    await page.goto(accessPath);
+    await tab(page, "Prüfen").click();
+    await pick(
+      page,
+      page.getByRole("button", { name: /^Person: / }),
+      new RegExp(`Lena ${suffix}`, "u")
+    );
+    await page.getByRole("combobox", { name: "Art" }).selectOption("agent");
+    await pick(page, page.getByRole("button", { name: /^Asset: / }), "Application Assistant");
+    const write = page.locator('[data-testid="check-row"][data-verb="write"]');
+    await expect(write).toContainText("Erlaubt");
+    await expect(write).toContainText(roleName);
+    await expectNoSidewaysScroll(page);
+    await page.screenshot({
+      path: join(shotsDir, "access-check-role-de-1280.png"),
+      animations: "disabled"
+    });
+  } finally {
+    if (personId !== undefined) {
+      await requestWithOrigin(page, "delete", `${apiBaseUrl}/api/v1/instance/users/${personId}`);
+    }
+    if (roleId !== undefined) {
+      await requestWithOrigin(
+        page,
+        "delete",
+        `${apiBaseUrl}/api/v1/instance/access/roles/${roleId}`
+      );
+    }
+    await requestWithOrigin(page, "delete", `${apiBaseUrl}/api/v1/workspaces/${workspaceId}`);
+  }
 });
