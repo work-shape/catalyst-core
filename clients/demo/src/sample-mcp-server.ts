@@ -7,9 +7,21 @@ import {
 } from "../sample-mcp/server.js";
 import { readSampleMcpEnvironment } from "./env.js";
 
+/** The variable of the REST provider's client secret, where it serves one. */
+const SAMPLE_OAUTH_REST_CLIENT_SECRET_NAME = "SAMPLE_OAUTH_REST_CLIENT_SECRET";
+
 try {
   const environment = readSampleMcpEnvironment();
   const { oauthIssuerBase, oauthBrowserBase, oauthClientId, oauthRedirectUri } = environment;
+  const { oauthRestClientId, oauthRestRedirectUri } = environment;
+  const restClient =
+    oauthRestClientId === undefined || oauthRestRedirectUri === undefined
+      ? undefined
+      : {
+          clientId: oauthRestClientId,
+          clientSecret: await environment.secrets.resolve(SAMPLE_OAUTH_REST_CLIENT_SECRET_NAME),
+          redirectUri: oauthRestRedirectUri
+        };
   const server = createSampleMcpServer({
     ...(oauthIssuerBase === undefined
       ? {}
@@ -19,7 +31,8 @@ try {
             ...(oauthBrowserBase === undefined ? {} : { browserBase: oauthBrowserBase }),
             ...(oauthClientId === undefined || oauthRedirectUri === undefined
               ? {}
-              : { registeredClient: { clientId: oauthClientId, redirectUri: oauthRedirectUri } })
+              : { registeredClient: { clientId: oauthClientId, redirectUri: oauthRedirectUri } }),
+            ...(restClient === undefined ? {} : { restClient })
           }
         }),
     key: await environment.secrets.resolve(SAMPLE_MCP_KEY_NAME),
@@ -58,7 +71,7 @@ try {
     error instanceof SampleMcpKeyError ||
     (error instanceof Error && error.name === "SecretNotResolvedError")
       ? error.message
-      : "The sample MCP server could not start. Check SAMPLE_DATA_ANCHOR, SAMPLE_ACCOUNTING_* settings, SAMPLE_OAUTH_ISSUER_BASE, SAMPLE_OAUTH_BROWSER_BASE, SAMPLE_OAUTH_REDIRECT_URI, PORT and HOST.";
+      : "The sample MCP server could not start. Check SAMPLE_DATA_ANCHOR, SAMPLE_ACCOUNTING_* settings, SAMPLE_OAUTH_ISSUER_BASE, SAMPLE_OAUTH_BROWSER_BASE, SAMPLE_OAUTH_REDIRECT_URI, SAMPLE_OAUTH_REST_*, PORT and HOST.";
   console.error(message);
   process.exitCode = 1;
 }

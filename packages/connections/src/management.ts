@@ -359,12 +359,17 @@ export function createConnectionManagement(
     const chosen = settings.success ? type.signIn.oauthSettings(settings.data) : {};
     const registered = registeredClientOf(connection.state?.oauthClient);
     const redirectUri = signIn.redirectUri(config.name);
+    // A server the settings name shows the host of its authorization address; a registration
+    // made by DCR the host of the server it was made at.
+    const named = settings.success ? type.oauthEndpoints?.(settings.data) : undefined;
     let providerHost: string | undefined;
     try {
       providerHost =
-        registered === undefined || chosen.clientId !== undefined
-          ? undefined
-          : new URL(registered.issuer).host;
+        named?.authorizationUrl !== undefined
+          ? new URL(named.authorizationUrl).host
+          : registered === undefined || chosen.clientId !== undefined
+            ? undefined
+            : new URL(registered.issuer).host;
     } catch {
       providerHost = undefined;
     }

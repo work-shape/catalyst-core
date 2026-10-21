@@ -10,6 +10,7 @@ import {
   type ConnectionCallReason,
   type ConnectionOperationConfig,
   type ConnectorContext,
+  type ConnectorOAuthEndpoints,
   type ConnectorTestStatus,
   type ConnectorTypeDefinition,
   type JsonObject,
@@ -129,6 +130,114 @@ const headerNameSchema = z.string().regex(HEADER_NAME_PATTERN, {
   message: "must be a header name of letters, digits and hyphens"
 });
 
+/** Whether a host is the machine itself, where plain `http` is a local server under test. */
+function isLoopbackHost(hostname: string): boolean {
+  const host = hostname.toLowerCase();
+  return (
+    host === "localhost" ||
+    host.endsWith(".localhost") ||
+    host === "[::1]" ||
+    /^127(?:\.\d{1,3}){3}$/u.test(host)
+  );
+}
+
+/**
+ * An address of the authorization server: `https`, or plain `http` on the machine itself for
+ * local development and tests, without user name, password or fragment. The browser carries a
+ * state and a code to it, the instance a client secret and a refresh token.
+ */
+const oauthAddressSchema = z
+  .string()
+  .max(HTTP_API_URL_MAX_CHARS)
+  .refine((value) => {
+    let url: URL;
+    try {
+      url = new URL(value);
+    } catch {
+      return false;
+    }
+    return (
+      (url.protocol === "https:" || (url.protocol === "http:" && isLoopbackHost(url.hostname))) &&
+      url.hostname !== "" &&
+      url.username === "" &&
+      url.password === "" &&
+      url.hash === ""
+    );
+  }, "must be an https address without user name, password or fragment");
+
+/**
+ * The parameters of the authorization request the protocol sets itself, and the client secret,
+ * which never travels through a browser. An extra parameter may name none of them.
+ */
+const OAUTH_PROTOCOL_PARAMS: ReadonlySet<string> = new Set([
+  "response_type",
+  "client_id",
+  "client_secret",
+  "redirect_uri",
+  "scope",
+  "state",
+  "code_challenge",
+  "code_challenge_method",
+  "resource"
+]);
+/** How many fixed extra parameters a sign-in sends. */
+const OAUTH_EXTRA_PARAMS_MAX = 8;
+/** A scope as RFC 6749 3.3 writes one: printable, no space, quote or backslash. */
+const SCOPE_PATTERN = /^[\x21\x23-\x5B\x5D-\x7E]{1,256}$/u;
+
+/**
+ * The authorization server an `http_api` Connection names itself (CONN-OAUTH-1). Read by the
+ * auth schemes `oauth` (a person signs in) and `oauth_client` (the client credentials grant).
+ */
+const oauthSettingsSchema = z
+  .object({
+    authorizationUrl: oauthAddressSchema.optional(),
+    tokenUrl: oauthAddressSchema,
+    revocationUrl: oauthAddressSchema.optional(),
+    clientId: z
+      .string()
+      .min(1)
+      .max(512)
+      .regex(HEADER_VALUE_PATTERN, { message: "must be printable text on one line" }),
+    scopes: z
+      .array(z.string().regex(SCOPE_PATTERN, { message: "must be one scope without spaces" }))
+      .max(64)
+      .optional(),
+    authorizationParams: z
+      .record(
+        z.string().regex(/^[A-Za-z0-9_.-]{1,64}$/u, {
+          message: "must be a parameter name of letters, digits, '_', '.' and '-'"
+        }),
+        z
+          .string()
+          .max(FIXED_HEADER_VALUE_MAX_CHARS)
+          .regex(HEADER_VALUE_PATTERN, { message: "must be printable text on one line" })
+      )
+      .optional(),
+    tokenAuthMethod: z.enum(["client_secret_post", "client_secret_basic"]).optional(),
+    issuer: oauthAddressSchema.optional()
+  })
+  .strict()
+  .superRefine((oauth, context) => {
+    const params = Object.keys(oauth.authorizationParams ?? {});
+    if (params.length > OAUTH_EXTRA_PARAMS_MAX) {
+      context.addIssue({
+        code: "custom",
+        path: ["authorizationParams"],
+        message: `A sign-in sends at most ${OAUTH_EXTRA_PARAMS_MAX} extra parameters`
+      });
+    }
+    for (const name of params) {
+      if (OAUTH_PROTOCOL_PARAMS.has(name.toLowerCase())) {
+        context.addIssue({
+          code: "custom",
+          path: ["authorizationParams", name],
+          message: `The parameter '${name}' is set by the sign-in itself`
+        });
+      }
+    }
+  });
+
 const settingsSchema = z
   .object({
     baseUrl: baseUrlSchema,
@@ -148,7 +257,9 @@ const settingsSchema = z
     testPath: testPathSchema.optional(),
     /** The header the key goes into under the auth scheme `header`. */
     headerName: headerNameSchema.optional(),
-    personContextHeader: headerNameSchema.optional()
+    personContextHeader: headerNameSchema.optional(),
+    /** The authorization server, for the auth schemes `oauth` and `oauth_client`. */
+    oauth: oauthSettingsSchema.optional()
   })
   .strict()
   .superRefine((settings, context) => {
@@ -205,6 +316,22 @@ const settingsSchema = z
   });
 
 type HttpApiSettings = z.infer<typeof settingsSchema>;
+
+/** The authorization server of the settings, as the platform's OAuth flow reads one. */
+function oauthEndpointsOf(settings: HttpApiSettings): ConnectorOAuthEndpoints | undefined {
+  const { oauth } = settings;
+  if (oauth === undefined) return undefined;
+  return {
+    ...(oauth.authorizationUrl === undefined ? {} : { authorizationUrl: oauth.authorizationUrl }),
+    tokenUrl: oauth.tokenUrl,
+    ...(oauth.revocationUrl === undefined ? {} : { revocationUrl: oauth.revocationUrl }),
+    clientId: oauth.clientId,
+    scopes: [...new Set(oauth.scopes ?? [])],
+    authorizationParams: oauth.authorizationParams ?? {},
+    tokenAuthMethod: oauth.tokenAuthMethod ?? "client_secret_post",
+    ...(oauth.issuer === undefined ? {} : { issuer: oauth.issuer })
+  };
+}
 
 function settingsOf(settings: JsonObject): HttpApiSettings {
   const read = settingsSchema.safeParse(settings);
@@ -445,9 +572,21 @@ export function createHttpApiConnectorType(): ConnectorTypeDefinition {
     type: HTTP_API_CONNECTOR_TYPE,
     description: "A REST interface over HTTPS, read by declared GET requests.",
     settingsSchema,
-    authSchemes: ["none", "bearer", "header"],
+    authSchemes: ["none", "bearer", "header", "oauth", "oauth_client"],
     secretFields: ["key"],
     target: (settings) => egressTargetOfUrl(settingsOf(settings).baseUrl),
+    oauthEndpoints: (settings) => oauthEndpointsOf(settingsOf(settings)),
+    // The sign-in reads the authorization server from the settings: no server is asked first.
+    signIn: {
+      resourceUrl: (settings) => settingsOf(settings).baseUrl,
+      oauthSettings(settings) {
+        const endpoints = oauthEndpointsOf(settingsOf(settings));
+        return endpoints === undefined
+          ? {}
+          : { clientId: endpoints.clientId, scopes: endpoints.scopes };
+      },
+      challenge: () => Promise.resolve(undefined)
+    },
     credentialHeaderName: (settings) => settingsOf(settings).headerName,
     personContextHeaderName: (settings) => settingsOf(settings).personContextHeader?.toLowerCase(),
     limits: {

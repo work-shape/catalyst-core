@@ -37,6 +37,10 @@ export const redirectUriOf = (connectionName: string) =>
 const LANDING = `${PUBLIC_URL}/build/connections`;
 /** The client the provider issued for the Connection `registered`. */
 export const REGISTERED_CLIENT_ID = "catalyst-registered";
+/** The client the sample's REST provider issued, for `http_api` Connections (CONN-OAUTH-1). */
+export const REST_CLIENT_ID = "catalyst-rest";
+/** The `http_api` Connection a test makes to sign in at the REST provider. */
+export const REST_CONNECTION = "rest";
 
 const PEOPLE = {
   alice: "alice@example.test",
@@ -68,6 +72,8 @@ export interface OAuthWorld {
   readonly secrets: string[];
   /** The client secret of the Connection `registered`. */
   readonly clientSecret: string;
+  /** The client secret of the REST provider's client. */
+  readonly restClientSecret: string;
   /** What the sample's metadata and registration say. A test sets them and resets after. */
   readonly provider: {
     adjustMetadata?: SampleOAuthOptions["adjustMetadata"];
@@ -105,6 +111,13 @@ export interface OAuthWorld {
   start(name: string, cookie: string): Promise<{ status: number; body: unknown }>;
   /** `connections.oauth_start` with a bearer token instead of a browser session. */
   startWithToken(name: string, token: string): Promise<number>;
+  /** `connections.set_secret` in the person's browser session: its status. */
+  setSecret(
+    name: string,
+    value: string,
+    cookie: string,
+    expectedVersion?: number | null
+  ): Promise<number>;
   /** `connections.test` in the person's browser session: its status and its text. */
   test(name: string, cookie: string): Promise<{ status: number; text: string }>;
   /** `connections.get` in the person's browser session, as text. */
@@ -155,6 +168,7 @@ export async function createOAuthWorld(): Promise<OAuthWorld> {
   const secrets: string[] = [];
   const provider: OAuthWorld["provider"] = {};
   const clientSecret = generateTestSecret();
+  const restClientSecret = generateTestSecret();
   const passwords = { alice: generateTestSecret(), bob: generateTestSecret() };
   const serverCredential = generateTestSecret();
   const sessions = new Map<Person, string>();
@@ -170,6 +184,11 @@ export async function createOAuthWorld(): Promise<OAuthWorld> {
         clientId: REGISTERED_CLIENT_ID,
         clientSecret,
         redirectUri: redirectUriOf("registered")
+      },
+      restClient: {
+        clientId: REST_CLIENT_ID,
+        clientSecret: restClientSecret,
+        redirectUri: redirectUriOf(REST_CONNECTION)
       },
       adjustMetadata: (mode, kind, metadata) =>
         provider.adjustMetadata?.(mode, kind, metadata) ?? metadata,
@@ -332,6 +351,7 @@ export async function createOAuthWorld(): Promise<OAuthWorld> {
     trap: trap.trap,
     secrets,
     clientSecret,
+    restClientSecret,
     provider,
     oauth: sampleOAuth,
     identityOf,
@@ -447,6 +467,15 @@ export async function createOAuthWorld(): Promise<OAuthWorld> {
         method: "POST",
         headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
         body: "{}"
+      });
+      await response.body?.cancel();
+      return response.status;
+    },
+    async setSecret(name, value, cookie, expectedVersion = null) {
+      const response = await fetch(`${api}/api/v1/connections/${name}/secret`, {
+        method: "PUT",
+        headers: { cookie, origin: PUBLIC_URL, "content-type": "application/json" },
+        body: JSON.stringify({ value, expectedVersion })
       });
       await response.body?.cancel();
       return response.status;

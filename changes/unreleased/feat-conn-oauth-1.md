@@ -1,0 +1,7 @@
+---
+section: Added
+---
+
+- **Connections:** a REST API (`http_api`) Connection signs in with OAuth (CONN-OAUTH-1). Its settings name the authorization server under `settings.oauth` (`tokenUrl`, `clientId`, `scopes`, and for a sign-in `authorizationUrl`, optionally `revocationUrl`, `authorizationParams`, `tokenAuthMethod`, `issuer`). The auth scheme `oauth` signs a person in with the authorization code, PKCE and refresh, through the same sign-in, refresh, keep-alive and disconnect as an MCP Connection, without discovery, Dynamic Client Registration or an RFC 8707 `resource`. The auth scheme `oauth_client` uses the client credentials grant; its token is kept in the memory of the process only, shared by concurrent calls and fetched again after a 401. The client secret is the Connection's own secret, bound to the token, authorization and revocation addresses and the client id: a change of them ends the sign-in and deletes the secret. Every address of the server must pass the egress list at the save and at each request.
+- **Studio:** the New connection dialog and the Connection page offer "OAuth sign-in" and "OAuth client credentials" for a REST API, with the server's addresses, the client and the permissions; the sign-in step shows the redirect URI to copy.
+- **Demo:** the sample MCP server serves a REST provider under `/oauth-rest` where `SAMPLE_OAUTH_REST_CLIENT_ID` and `SAMPLE_OAUTH_REST_REDIRECT_URI` are set, with the client secret from `SAMPLE_OAUTH_REST_CLIENT_SECRET`.

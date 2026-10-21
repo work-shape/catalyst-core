@@ -264,6 +264,55 @@ export function egressOriginOf(target: EgressTarget): string {
   return `${target.protocol}://${normalizeEgressHost(target.host)}:${target.port}`;
 }
 
+/** The origin of an address, `protocol://host:port`, as `egressOriginOf` writes one. */
+function originOfAddress(address: string): string {
+  const url = new URL(address);
+  const protocol = url.protocol.replace(/:$/u, "");
+  const port = url.port === "" ? (protocol === "https" ? 443 : 80) : Number(url.port);
+  return `${protocol}://${normalizeEgressHost(url.hostname)}:${port}`;
+}
+
+/**
+ * The targets of the addresses of an authorization server a Connection names, each of which
+ * the operator's egress list must admit: token, authorization and revocation. The settings
+ * hold only `https` and `http` addresses.
+ */
+export function connectionOAuthTargets(endpoints: ConnectorOAuthEndpoints): EgressTarget[] {
+  const addresses = [endpoints.tokenUrl, endpoints.authorizationUrl, endpoints.revocationUrl];
+  return addresses.flatMap((address) => {
+    if (address === undefined) return [];
+    const url = new URL(address);
+    const protocol = url.protocol === "https:" ? "https" : "http";
+    const port = url.port === "" ? (protocol === "https" ? 443 : 80) : Number(url.port);
+    return [{ protocol, host: normalizeEgressHost(url.hostname), port }];
+  });
+}
+
+/**
+ * What a Connection's own secret and its sign-in are bound to: the origin of its target and,
+ * where the Connection names its authorization server itself, the origins of its token,
+ * authorization and revocation addresses and its client id. A secret or a sign-in made for
+ * other values is none for these, so a writer cannot have a client secret, a code or a refresh
+ * token sent to another host. Holds no `|`, which the Secret Store's associated data refuses.
+ */
+export function connectionCredentialOrigin(
+  target: EgressTarget,
+  endpoints: ConnectorOAuthEndpoints | undefined
+): string {
+  const origin = egressOriginOf(target);
+  if (endpoints === undefined) return origin;
+  const of = (address: string | undefined) =>
+    address === undefined ? "-" : originOfAddress(address);
+  return [
+    origin,
+    "oauth",
+    of(endpoints.tokenUrl),
+    of(endpoints.authorizationUrl),
+    of(endpoints.revocationUrl),
+    encodeURIComponent(endpoints.clientId)
+  ].join(" ");
+}
+
 /**
  * The release config setting that lets a target no entry names through, as the sentence a
  * refusal ends with: an entry under `egress.allow`, and for `https` on port 443 also
@@ -634,6 +683,34 @@ export interface ConnectorSignIn {
   }): Promise<ConnectorSignInChallenge | undefined>;
 }
 
+/** The auth scheme of a Connection whose credential is a sign-in by a person (CS-4b). */
+export const CONNECTION_AUTH_SCHEME_OAUTH = "oauth";
+/** The auth scheme of a Connection that obtains its token by the client credentials grant. */
+export const CONNECTION_AUTH_SCHEME_OAUTH_CLIENT = "oauth_client";
+
+/** How a client authenticates at a token endpoint the Connection names itself. */
+export type ConnectorTokenAuthMethod = "client_secret_post" | "client_secret_basic";
+
+/**
+ * The authorization server a Connection names in its own settings, where its type reads no
+ * metadata from the server (`http_api`, CONN-OAUTH-1). Every address is checked against the
+ * egress list on a save and before it is used, and the client secret and a sign-in are bound
+ * to their origins and the client id (`connectionCredentialOrigin`).
+ */
+export interface ConnectorOAuthEndpoints {
+  /** Where the person's browser signs in. Absent for the client credentials grant alone. */
+  authorizationUrl?: string;
+  tokenUrl: string;
+  revocationUrl?: string;
+  clientId: string;
+  scopes: readonly string[];
+  /** Fixed extra parameters of the authorization request. Never a protocol parameter. */
+  authorizationParams: Readonly<Record<string, string>>;
+  tokenAuthMethod: ConnectorTokenAuthMethod;
+  /** The issuer an RFC 9207 `iss` in the authorization answer must name. Unchecked without. */
+  issuer?: string;
+}
+
 /**
  * One field of a Connector type's form in the New connection dialog: a setting, by its dotted
  * path in `settings`, or the Connection's secret, which goes through `connections.set_secret`
@@ -693,6 +770,12 @@ interface ConnectorTypeBase {
   carriesIdempotencyKey?: true;
   /** The type's part of an OAuth sign-in, where it offers the auth scheme `oauth`. */
   signIn?: ConnectorSignIn;
+  /**
+   * The authorization server a Connection of this type names in its settings, where it names
+   * one. Present, the sign-in reads it instead of discovering one, and the auth scheme
+   * `oauth_client` asks its token endpoint.
+   */
+  oauthEndpoints?(settings: JsonObject): ConnectorOAuthEndpoints | undefined;
   /** A bounded check of reachability and authentication. It changes nothing outside. */
   test(context: ConnectorContext): Promise<{ status: ConnectorTestStatus }>;
   execute(operation: string, input: JsonValue, context: ConnectorContext): Promise<JsonValue>;
@@ -889,6 +972,45 @@ function declarationIssues(
  * settings the type does not read, an auth scheme it does not offer, a declared operation it
  * does not accept. No issue repeats a value of the settings.
  */
+/**
+ * Whether the OAuth settings of a Connection whose type names its own authorization server fit
+ * its auth scheme: both OAuth schemes need them, a sign-in also an authorization address, and
+ * no other scheme carries them.
+ */
+function oauthSchemeIssues(
+  endpoints: ConnectorOAuthEndpoints | undefined,
+  authScheme: string
+): AssetValidationIssue[] {
+  const oauth =
+    authScheme === CONNECTION_AUTH_SCHEME_OAUTH ||
+    authScheme === CONNECTION_AUTH_SCHEME_OAUTH_CLIENT;
+  if (oauth && endpoints === undefined) {
+    return [
+      {
+        message: `The auth scheme '${authScheme}' needs 'settings.oauth' with the token address and the client id`,
+        path: ["settings", "oauth"]
+      }
+    ];
+  }
+  if (!oauth && endpoints !== undefined) {
+    return [
+      {
+        message: `'settings.oauth' is read only with the auth schemes '${CONNECTION_AUTH_SCHEME_OAUTH}' and '${CONNECTION_AUTH_SCHEME_OAUTH_CLIENT}'`,
+        path: ["settings", "oauth"]
+      }
+    ];
+  }
+  if (authScheme === CONNECTION_AUTH_SCHEME_OAUTH && endpoints?.authorizationUrl === undefined) {
+    return [
+      {
+        message: "A sign-in needs 'settings.oauth.authorizationUrl', where the person signs in",
+        path: ["settings", "oauth", "authorizationUrl"]
+      }
+    ];
+  }
+  return [];
+}
+
 export function findConnectorTypeIssues(
   registry: ConnectorTypeRegistry,
   connection: Pick<ConnectionConfig, "connectorType" | "settings" | "authScheme" | "operations">
@@ -914,6 +1036,8 @@ export function findConnectorTypeIssues(
       message: `Connector type '${type.type}' offers the auth schemes: ${type.authSchemes.join(", ")}`,
       path: ["authScheme"]
     });
+  } else if (settings.success && type.oauthEndpoints) {
+    issues.push(...oauthSchemeIssues(type.oauthEndpoints(settings.data), connection.authScheme));
   }
   return [...issues, ...declarationIssues(type, connection.operations)];
 }

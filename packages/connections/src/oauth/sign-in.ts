@@ -13,13 +13,14 @@ import {
   connectionOAuthError,
   connectionOAuthCallbackPath,
   connectionOAuthReasonOf,
-  egressOriginOf,
   signInSecretSubject,
   type AuditActor,
   type AuditRecorder,
   type ConnectionSetupSessionRecord,
+  type ConnectorOAuthEndpoints,
   type ConnectorSignIn,
   type ConnectorTypeDefinition,
+  type EgressGrant,
   type JsonObject,
   type OperationResource
 } from "@work-shape/catalyst-core";
@@ -29,7 +30,8 @@ import {
   type ConnectionOperationSourceDeps,
   type StoredConnection
 } from "../connection-reads";
-import { NO_CREDENTIALS } from "../connector-context";
+import { NO_CREDENTIALS, credentialOriginOf } from "../connector-context";
+import { egressTargetOfUrl } from "../egress";
 import { createSecretStore, type SecretKeyring } from "../secret-store";
 import { onOrigins, resourceAllowed, scopesOf, stateHashOf } from "./checks";
 import {
@@ -38,9 +40,10 @@ import {
   type ClientRegistrationDeps
 } from "./client-registration";
 import { createOAuthFetch, type OAuthFetch } from "./fetch";
-import type { OAuthPort, OAuthServerMetadata } from "./port";
+import type { OAuthClient, OAuthPort, OAuthServerMetadata } from "./port";
 import { createSdkOAuthPort } from "./sdk-adapter";
 import { checkedServer, portFailure } from "./server";
+import { signInServerOf, staticServerOf, withAuthorizationParams } from "./static-server";
 import { writeTokenSet } from "./token-set";
 
 // The shared OAuth sign-in of a Connection (CS-4b2): its start and its callback. The start
@@ -264,20 +267,73 @@ export function createConnectionSignIn(deps: ConnectionSignInDeps): ConnectionSi
     });
   }
 
-  async function start(
-    connection: StoredConnection,
-    starter: SignInStarter,
-    audit: SignInAudit,
-    signal: AbortSignal
-  ): Promise<OAuthStartAnswer> {
-    const { keyring, publicUrl, redirect } = required(connection.config.name);
-    const { type, signIn, settings } = signInOf(connection);
-    const target = await deps.egress.check(type.target(settings));
-    const origin = egressOriginOf(target);
-    const resourceUrl = signIn.resourceUrl(settings);
-    const chosen = signIn.oauthSettings(settings);
-    const fetch = createOAuthFetch({ egress: deps.egress, signal });
+  /** What a start found: the server, the scopes asked for and the client that asks. */
+  interface Found {
+    server: OAuthServerMetadata;
+    scopes: string[];
+    client: OAuthClient;
+    /** The RFC 8707 `resource` kept on the session. */
+    resource: string;
+    /** Whether `resource` is sent: never to a server the settings name. */
+    sendsResource: boolean;
+  }
 
+  /** What a start of one Connection knows before it asks anybody. */
+  interface Starting {
+    connection: StoredConnection;
+    keyring: SecretKeyring;
+    origin: string;
+    resourceUrl: string;
+    fetch: OAuthFetch;
+  }
+
+  /**
+   * The server the settings name (CONN-OAUTH-1): each of its addresses passes the egress
+   * checker now, before the browser is sent anywhere, and the client is the one it issued.
+   */
+  async function namedServer(
+    starting: Starting,
+    endpoints: ConnectorOAuthEndpoints
+  ): Promise<Found> {
+    for (const address of [
+      endpoints.authorizationUrl,
+      endpoints.tokenUrl,
+      endpoints.revocationUrl
+    ]) {
+      if (address !== undefined) await deps.egress.check(egressTargetOfUrl(address));
+    }
+    const client = await clientOfSession(registration(starting.keyring), {
+      connection: starting.connection,
+      origin: starting.origin,
+      clientId: endpoints.clientId,
+      preregisteredId: endpoints.clientId
+    });
+    return {
+      server: staticServerOf(endpoints),
+      scopes: [...endpoints.scopes],
+      client,
+      // Kept on the session for the record; never sent to a server the settings name.
+      resource: starting.resourceUrl,
+      sendsResource: false
+    };
+  }
+
+  /** The server the Connection's server names (CS-4b): discovered, its client registered. */
+  async function discoveredServer(
+    starting: Starting,
+    input: {
+      signIn: ConnectorSignIn;
+      settings: JsonObject;
+      target: EgressGrant;
+      redirect: string;
+      publicUrl: string;
+      audit: SignInAudit;
+      signal: AbortSignal;
+    }
+  ): Promise<Found> {
+    const { connection, keyring, origin, resourceUrl, fetch } = starting;
+    const { signIn, settings, target, redirect, publicUrl, audit, signal } = input;
+    const chosen = signIn.oauthSettings(settings);
     const challenge = await signIn.challenge({ target, settings, signal });
     const connectionOrigin = new URL(resourceUrl).origin;
     // The challenge is the server's answer, so the metadata it names is on the server's origin.
@@ -330,7 +386,40 @@ export function createConnectionSignIn(deps: ConnectionSignInDeps): ConnectionSi
       fetch,
       audit
     });
+    return { server, scopes, client, resource: resource.resource, sendsResource: true };
+  }
 
+  async function start(
+    connection: StoredConnection,
+    starter: SignInStarter,
+    audit: SignInAudit,
+    signal: AbortSignal
+  ): Promise<OAuthStartAnswer> {
+    const { keyring, publicUrl, redirect } = required(connection.config.name);
+    const { type, signIn, settings } = signInOf(connection);
+    const target = await deps.egress.check(type.target(settings));
+    const starting: Starting = {
+      connection,
+      keyring,
+      origin: credentialOriginOf(type, settings, target),
+      resourceUrl: signIn.resourceUrl(settings),
+      fetch: createOAuthFetch({ egress: deps.egress, signal })
+    };
+    const endpoints = type.oauthEndpoints?.(settings);
+    const found =
+      endpoints === undefined
+        ? await discoveredServer(starting, {
+            signIn,
+            settings,
+            target,
+            redirect,
+            publicUrl,
+            audit,
+            signal
+          })
+        : await namedServer(starting, endpoints);
+    const { server, scopes, client } = found;
+    const scope = scopes.length > 0 ? scopes.join(" ") : undefined;
     const state = randomBytes(32).toString("base64url");
     const authorization = await port
       .authorizationUrl({
@@ -339,7 +428,7 @@ export function createConnectionSignIn(deps: ConnectionSignInDeps): ConnectionSi
         redirectUri: redirect,
         ...(scope === undefined ? {} : { scope }),
         state,
-        resource: resource.resource
+        ...(found.sendsResource ? { resource: found.resource } : {})
       })
       .catch((error: unknown) => {
         throw portFailure(error, "oauth_discovery_failed");
@@ -373,14 +462,14 @@ export function createConnectionSignIn(deps: ConnectionSignInDeps): ConnectionSi
       verifier: sealed,
       redirectUri: redirect,
       issuer: server.issuer,
-      resource: resource.resource,
+      resource: found.resource,
       clientId: client.clientId,
       scopes,
       ttlMs: CONNECTION_OAUTH_SESSION_TTL_MS
     });
     return {
       signInId: session.id,
-      authorizationUrl: authorization.url,
+      authorizationUrl: withAuthorizationParams(authorization.url, endpoints),
       providerHost: new URL(server.authorizationEndpoint).host,
       scopes,
       expiresAt: session.expiresAt
@@ -415,19 +504,31 @@ export function createConnectionSignIn(deps: ConnectionSignInDeps): ConnectionSi
     // The config of the session's revision: what the start discovered and signed in for.
     const { type, signIn, settings } = signInOf(connection);
     const target = await deps.egress.check(type.target(settings));
-    const origin = egressOriginOf(target);
+    const origin = credentialOriginOf(type, settings, target);
     if (query.error !== undefined) throw connectionOAuthError("oauth_denied");
     if (query.code === undefined || query.code.length === 0) {
       throw connectionOAuthError("oauth_state_invalid", "the provider sent no code");
     }
     const fetch = createOAuthFetch({ egress: deps.egress, signal });
-    const server = await serverOf(
-      session.issuer,
-      new URL(signIn.resourceUrl(settings)).origin,
+    const { server, endpoints } = await signInServerOf({
+      port,
+      type,
+      settings,
+      issuer: session.issuer,
+      connectionOrigin: new URL(signIn.resourceUrl(settings)).origin,
       fetch
-    );
-    // RFC 9207: a server that names itself in its answer must name the issuer asked.
-    if (server.authorizationResponseIssParameterSupported || query.iss !== undefined) {
+    });
+    if (endpoints !== undefined) {
+      // A server the settings name: its `iss` is compared with the issuer they name, if any.
+      if (
+        endpoints.issuer !== undefined &&
+        query.iss !== undefined &&
+        query.iss !== endpoints.issuer
+      ) {
+        throw connectionOAuthError("oauth_issuer_mismatch");
+      }
+    } else if (server.authorizationResponseIssParameterSupported || query.iss !== undefined) {
+      // RFC 9207: a server that names itself in its answer must name the issuer asked.
       if (query.iss !== server.issuer) throw connectionOAuthError("oauth_issuer_mismatch");
     }
     const opened = keyring.open({
@@ -451,7 +552,7 @@ export function createConnectionSignIn(deps: ConnectionSignInDeps): ConnectionSi
         code: query.code,
         codeVerifier,
         redirectUri: session.redirectUri,
-        resource: session.resource,
+        ...(endpoints === undefined ? { resource: session.resource } : {}),
         fetch
       });
     } catch (error) {

@@ -8,6 +8,12 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 // - `dcr`: a client registers itself by Dynamic Client Registration (RFC 7591).
 // - `registered`: the client is the one the provider issued, named in the options.
 //
+// Beside them, under `/oauth-rest`, a server as a plain REST API's provider runs one (the
+// `http_api` sign-in of CONN-OAUTH-1): no metadata the client reads, a pre-registered client
+// with a secret, a `resource` refused as Microsoft's v2 endpoints refuse it, no `iss` in the
+// answer, the client credentials grant beside the authorization code, and one JSON endpoint,
+// `GET /oauth-rest/api/customers`, that takes its bearer tokens.
+//
 // What it insists on is what a real provider insists on: PKCE with S256, the exact redirect
 // URI of the client, a `resource` (RFC 8707) equal to the resource that was asked, codes used
 // once and soon. It signs in one fixed demo account without a page to click: the request that
@@ -17,6 +23,9 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 /** The modes, each served under its own path. */
 export const SAMPLE_OAUTH_MODES = ["dcr", "registered"] as const;
 export type SampleOAuthMode = (typeof SAMPLE_OAUTH_MODES)[number];
+
+/** The path the REST provider's server and API are served under. */
+export const SAMPLE_OAUTH_REST_PATH = "/oauth-rest";
 
 /** The one scope the sample tools need. */
 export const SAMPLE_OAUTH_SCOPE = "sample.read";
@@ -39,6 +48,8 @@ export interface SampleOAuthOptions {
   browserBase?: string;
   /** The client of the mode `registered`, as a provider issues one. */
   registeredClient?: { clientId: string; clientSecret?: string; redirectUri: string };
+  /** The client of the REST provider, which always has a secret. Left out, it serves nothing. */
+  restClient?: { clientId: string; clientSecret: string; redirectUri: string };
   /** Changes what the metadata says. For tests of a provider that says something else. */
   adjustMetadata?: (
     mode: SampleOAuthMode,
@@ -64,6 +75,7 @@ export interface SampleOAuthCounts {
   authorizationCode: number;
   refreshToken: number;
   revocation: number;
+  clientCredentials: number;
 }
 
 interface Client {
@@ -72,8 +84,11 @@ interface Client {
   redirectUris: string[];
 }
 
+/** Who a grant is for: one of the modes, or the REST provider. */
+type GrantMode = SampleOAuthMode | "rest";
+
 interface Grant {
-  mode: SampleOAuthMode;
+  mode: GrantMode;
   clientId: string;
   resource: string;
   scope: string;
@@ -164,6 +179,23 @@ function basicCredentials(header: string | undefined): { id: string; secret: str
   return { id: decode(decoded.slice(0, colon)), secret: decode(decoded.slice(colon + 1)) };
 }
 
+/** The parameters of an authorization request the protocol defines. */
+const AUTHORIZATION_PROTOCOL_PARAMS: ReadonlySet<string> = new Set([
+  "response_type",
+  "client_id",
+  "redirect_uri",
+  "scope",
+  "state",
+  "code_challenge",
+  "code_challenge_method",
+  "resource"
+]);
+
+/** The path a grant mode's endpoints are served under. */
+function pathOf(mode: GrantMode): string {
+  return mode === "rest" ? SAMPLE_OAUTH_REST_PATH : `/${mode}`;
+}
+
 export function createSampleOAuth(options: SampleOAuthOptions, log?: SampleOAuthLog) {
   const issuerBase = new URL(options.issuerBase).origin;
   const browserBase = new URL(options.browserBase ?? options.issuerBase).origin;
@@ -190,7 +222,21 @@ export function createSampleOAuth(options: SampleOAuthOptions, log?: SampleOAuth
     requiredScope: undefined,
     challengeMetadataBase: undefined
   };
-  const counts: SampleOAuthCounts = { authorizationCode: 0, refreshToken: 0, revocation: 0 };
+  const counts: SampleOAuthCounts = {
+    authorizationCode: 0,
+    refreshToken: 0,
+    revocation: 0,
+    clientCredentials: 0
+  };
+  /** The parameters of the last authorization request beside the protocol's, for tests. */
+  let lastExtraParams: Record<string, string> = {};
+  if (options.restClient) {
+    clients.set(options.restClient.clientId, {
+      clientId: options.restClient.clientId,
+      clientSecret: options.restClient.clientSecret,
+      redirectUris: [options.restClient.redirectUri]
+    });
+  }
   if (options.registeredClient) {
     clients.set(options.registeredClient.clientId, {
       clientId: options.registeredClient.clientId,
@@ -202,6 +248,10 @@ export function createSampleOAuth(options: SampleOAuthOptions, log?: SampleOAuth
   }
 
   const resourceOf = (mode: SampleOAuthMode) => `${issuerBase}/${mode}/mcp`;
+  const restBase = `${issuerBase}${SAMPLE_OAUTH_REST_PATH}`;
+  /** What a grant is for: the mode's MCP address, or the REST provider's API. */
+  const grantResourceOf = (mode: GrantMode) =>
+    mode === "rest" ? `${restBase}/api` : resourceOf(mode);
   const issuerOf = (mode: SampleOAuthMode) => `${issuerBase}/${mode}`;
   const resourceMetadataUrlOf = (mode: SampleOAuthMode) =>
     `${issuerBase}/.well-known/oauth-protected-resource/${mode}/mcp`;
@@ -248,8 +298,11 @@ export function createSampleOAuth(options: SampleOAuthOptions, log?: SampleOAuth
     return client;
   }
 
-  function authorize(mode: SampleOAuthMode, url: URL, response: ServerResponse): void {
+  function authorize(mode: GrantMode, url: URL, response: ServerResponse): void {
     const query = url.searchParams;
+    lastExtraParams = Object.fromEntries(
+      [...query].filter(([name]) => !AUTHORIZATION_PROTOCOL_PARAMS.has(name))
+    );
     const client = clients.get(query.get("client_id") ?? "");
     const redirectUri = query.get("redirect_uri") ?? "";
     // Without a known client and its exact redirect URI the browser is sent nowhere.
@@ -259,16 +312,20 @@ export function createSampleOAuth(options: SampleOAuthOptions, log?: SampleOAuth
     const back = new URL(redirectUri);
     const state = query.get("state");
     if (state !== null) back.searchParams.set("state", state);
-    back.searchParams.set("iss", issuerOf(mode));
+    if (mode !== "rest") back.searchParams.set("iss", issuerOf(mode));
     const challenge = query.get("code_challenge") ?? "";
     const refusal =
       query.get("response_type") !== "code"
         ? "unsupported_response_type"
         : query.get("code_challenge_method") !== "S256" || !/^[A-Za-z0-9_-]{43}$/u.test(challenge)
           ? "invalid_request"
-          : query.get("resource") !== resourceOf(mode)
-            ? "invalid_target"
-            : undefined;
+          : mode === "rest"
+            ? query.has("resource")
+              ? "invalid_target"
+              : undefined
+            : query.get("resource") !== resourceOf(mode)
+              ? "invalid_target"
+              : undefined;
     if (refusal !== undefined) {
       back.searchParams.set("error", refusal);
     } else {
@@ -279,39 +336,61 @@ export function createSampleOAuth(options: SampleOAuthOptions, log?: SampleOAuth
         clientId: client.clientId,
         redirectUri,
         challenge,
-        resource: resourceOf(mode),
+        resource: grantResourceOf(mode),
         scope: SAMPLE_OAUTH_SCOPE,
         expiresAt: Date.now() + CODE_TTL_MS
       });
       back.searchParams.set("code", code);
     }
-    log?.(`GET /${mode}/authorize 302${refusal === undefined ? "" : ` ${refusal}`}`);
+    log?.(`GET ${pathOf(mode)}/authorize 302${refusal === undefined ? "" : ` ${refusal}`}`);
     response.writeHead(302, { Location: back.href, "Cache-Control": "no-store" });
     response.end();
   }
 
-  function issue(grant: Grant): Record<string, unknown> {
+  /** A token for `grant`, with a refresh token unless `refreshable` is false. */
+  function issue(grant: Grant, refreshable = true): Record<string, unknown> {
     const accessToken = opaque();
-    const refreshToken = opaque();
     options.onSecret?.(accessToken);
-    options.onSecret?.(refreshToken);
     const expiresIn = controls.accessTtlSeconds;
     accessTokens.set(accessToken, { ...grant, expiresAt: Date.now() + expiresIn * 1000 });
-    refreshTokens.set(refreshToken, grant);
+    let refreshToken: string | undefined;
+    if (refreshable) {
+      refreshToken = opaque();
+      options.onSecret?.(refreshToken);
+      refreshTokens.set(refreshToken, grant);
+    }
     return {
       access_token: accessToken,
       token_type: "Bearer",
       expires_in: expiresIn,
-      refresh_token: refreshToken,
+      ...(refreshToken === undefined ? {} : { refresh_token: refreshToken }),
       scope: grant.scope
     };
   }
 
-  async function token(mode: SampleOAuthMode, request: IncomingMessage): Promise<unknown> {
+  async function token(mode: GrantMode, request: IncomingMessage): Promise<unknown> {
     const form = await readForm(request);
     const client = authenticateClient(request, form);
-    if (form.get("resource") !== resourceOf(mode)) throw new OAuthError(400, "invalid_target");
+    const presented = form.get("client_secret");
+    if (presented !== null && presented.length > 0) options.onSecret?.(presented);
+    // The REST provider refuses an RFC 8707 resource, as Microsoft's v2 endpoints do.
+    if (mode === "rest" ? form.has("resource") : form.get("resource") !== resourceOf(mode)) {
+      throw new OAuthError(400, "invalid_target");
+    }
     const grantType = form.get("grant_type");
+    if (grantType === "client_credentials" && mode === "rest") {
+      counts.clientCredentials += 1;
+      if (client.clientSecret === undefined) throw new OAuthError(401, "invalid_client");
+      return issue(
+        {
+          mode,
+          clientId: client.clientId,
+          resource: grantResourceOf(mode),
+          scope: form.get("scope") ?? SAMPLE_OAUTH_SCOPE
+        },
+        false
+      );
+    }
     if (grantType === "authorization_code") {
       counts.authorizationCode += 1;
       const code = form.get("code") ?? "";
@@ -385,7 +464,53 @@ export function createSampleOAuth(options: SampleOAuthOptions, log?: SampleOAuth
     }
   }
 
+  /** The REST provider: its authorization, token and revocation endpoints and its one API. */
+  async function handleRest(
+    request: IncomingMessage,
+    response: ServerResponse,
+    path: string,
+    url: URL
+  ): Promise<void> {
+    const route = `${request.method ?? ""} ${path.slice(SAMPLE_OAUTH_REST_PATH.length)}`;
+    try {
+      if (route === "GET /authorize") {
+        authorize("rest", url, response);
+      } else if (route === "POST /token") {
+        json(response, 200, await token("rest", request));
+        log?.(`POST ${SAMPLE_OAUTH_REST_PATH}/token 200`);
+      } else if (route === "POST /revoke") {
+        await revoke(request);
+        response.writeHead(200).end();
+        log?.(`POST ${SAMPLE_OAUTH_REST_PATH}/revoke 200`);
+      } else if (route === "GET /api/customers") {
+        const bearer = /^Bearer ([^\s]+)$/u.exec(request.headers.authorization ?? "")?.[1];
+        const grant = bearer === undefined ? undefined : accessTokens.get(bearer);
+        if (grant === undefined || grant.mode !== "rest" || grant.expiresAt <= Date.now()) {
+          response.setHeader("WWW-Authenticate", "Bearer");
+          json(response, 401, { error: "invalid_token" });
+          log?.(`GET ${SAMPLE_OAUTH_REST_PATH}/api/customers 401`);
+          return;
+        }
+        json(response, 200, {
+          customers: [
+            { id: "c-1", name: "Muster GmbH" },
+            { id: "c-2", name: "Beispiel AG" }
+          ]
+        });
+        log?.(`GET ${SAMPLE_OAUTH_REST_PATH}/api/customers 200`);
+      } else {
+        json(response, 404, { error: "not_found" });
+      }
+    } catch (error) {
+      if (!(error instanceof OAuthError)) throw error;
+      log?.(`${request.method ?? ""} ${path} ${error.status} ${error.error}`);
+      json(response, error.status, { error: error.error });
+    }
+  }
+
   return {
+    /** The address of the REST provider's server and API, as a Connection names them. */
+    restBase,
     /** The resource address of a mode, the address a Connection names. */
     resourceOf,
     /** The value of `WWW-Authenticate` that a request of a mode without a valid token gets. */
@@ -397,7 +522,7 @@ export function createSampleOAuth(options: SampleOAuthOptions, log?: SampleOAuth
       return `Bearer resource_metadata="${metadata}", scope="${SAMPLE_OAUTH_SCOPE}"`;
     },
     /** Whether a bearer token is one this server issued for the mode's resource. */
-    accepts(mode: SampleOAuthMode, bearer: string | undefined): boolean {
+    accepts(mode: GrantMode, bearer: string | undefined): boolean {
       if (bearer === undefined) return false;
       const grant = accessTokens.get(bearer);
       return grant !== undefined && grant.mode === mode && grant.expiresAt > Date.now();
@@ -420,12 +545,18 @@ export function createSampleOAuth(options: SampleOAuthOptions, log?: SampleOAuth
     expireAccessTokens: () => accessTokens.clear(),
     /** How many token and revocation requests were answered, whatever their outcome. */
     counts: (): SampleOAuthCounts => ({ ...counts }),
+    /** The parameters of the last authorization request beside the protocol's. */
+    lastExtraParams: (): Record<string, string> => ({ ...lastExtraParams }),
     /**
      * Answers a request this server serves and says so; leaves every other one.
      * The MCP endpoints of the modes stay with the caller.
      */
     async handle(request: IncomingMessage, response: ServerResponse, path: string) {
       const url = new URL(request.url ?? "/", issuerBase);
+      if (options.restClient && path.startsWith(`${SAMPLE_OAUTH_REST_PATH}/`)) {
+        await handleRest(request, response, path, url);
+        return true;
+      }
       for (const mode of SAMPLE_OAUTH_MODES) {
         const route = `${request.method ?? ""} ${path}`;
         try {

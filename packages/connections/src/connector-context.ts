@@ -3,8 +3,10 @@ import {
   CREDENTIAL_REFUSALS,
   EGRESS_DENIED,
   LOG_REDACTION,
+  CONNECTION_AUTH_SCHEME_OAUTH_CLIENT,
   SHARED_CREDENTIAL_SUBJECT,
   connectionCallError,
+  connectionCredentialOrigin,
   egressOriginOf,
   type ConnectionConfig,
   type ConnectionCredential,
@@ -13,10 +15,17 @@ import {
   type ConnectorTypeDefinition,
   type EgressChecker,
   type EgressGrant,
+  type EgressTarget,
   type JsonObject,
   type JsonValue
 } from "@work-shape/catalyst-core";
 import { isSameEgressOrigin } from "./egress";
+import {
+  createTokenCache,
+  requestClientCredentialsToken,
+  secretFingerprint
+} from "./oauth/client-credentials";
+import { createOAuthFetch } from "./oauth/fetch";
 
 // The connector auth component. It is the one place a Connector type gets a context from,
 // and so the one place a credential is resolved: after the caller was authorized, after the
@@ -30,6 +39,20 @@ export const AUTH_SCHEME_NONE = "none";
  * outside system. The token comes from the Connection's binding, never from its own secret.
  */
 export const AUTH_SCHEME_OAUTH = "oauth";
+
+/**
+ * The auth scheme of a Connection that obtains its token by the client credentials grant at
+ * the token endpoint it names. Its own secret is the client secret, never sent to the API.
+ */
+export const AUTH_SCHEME_OAUTH_CLIENT = CONNECTION_AUTH_SCHEME_OAUTH_CLIENT;
+
+/**
+ * The tokens of the client credentials grant this process obtained, by Connection. Held in
+ * memory only, until shortly before they expire.
+ */
+const clientCredentialTokens = createTokenCache();
+/** How long one request of the client credentials grant may take. */
+const CLIENT_CREDENTIALS_TIMEOUT_MS = 15_000;
 
 /** A resolver for a process without Secret Store keys: it has no credential to hand out. */
 export const NO_CREDENTIALS: ConnectionCredentialResolver = {
@@ -116,7 +139,7 @@ function credentialOf(
   settings: JsonObject,
   secret: string
 ): ConnectionCredential {
-  if (scheme === "bearer" || scheme === AUTH_SCHEME_OAUTH) {
+  if (scheme === "bearer" || scheme === AUTH_SCHEME_OAUTH || scheme === AUTH_SCHEME_OAUTH_CLIENT) {
     return sealCredential(scheme, secret, { authorization: `Bearer ${secret}` });
   }
   if (scheme === "header") {
@@ -134,8 +157,22 @@ function credentialOf(
 }
 
 /**
+ * What a Connection's secret and sign-in are bound to, for settings its type accepted: the
+ * origin of `target` and, where the Connection names its authorization server itself, that
+ * server's origins and client id (`connectionCredentialOrigin`).
+ */
+export function credentialOriginOf(
+  type: ConnectorTypeDefinition,
+  settings: JsonObject,
+  target: EgressTarget
+): string {
+  return connectionCredentialOrigin(target, type.oauthEndpoints?.(settings));
+}
+
+/**
  * The origin a Connection's secret is set for and sent to: that of its target, read from the
- * settings as a call reads them. Nothing where the settings do not fit the type.
+ * settings as a call reads them, with the authorization server it names itself. Nothing where
+ * the settings do not fit the type.
  */
 export function connectionOriginOf(
   type: ConnectorTypeDefinition,
@@ -144,7 +181,7 @@ export function connectionOriginOf(
   const settings = type.settingsSchema.safeParse(config.settings);
   if (!settings.success) return undefined;
   try {
-    return egressOriginOf(type.target(settings.data));
+    return credentialOriginOf(type, settings.data, type.target(settings.data));
   } catch {
     return undefined;
   }
@@ -208,19 +245,32 @@ export async function openConnectorContext(
   let credential: ConnectionCredential | undefined;
   if (config.authScheme !== AUTH_SCHEME_NONE) {
     // Only a secret set, or a sign-in made, for the origin the call goes to is handed out.
+    const origin = credentialOriginOf(type, settings.data, target);
+    const ownSecret = () =>
+      credentials.resolve({
+        handle: storedSecretHandle(config),
+        binding: { connectionAssetId: connection.id, subject: SHARED_CREDENTIAL_SUBJECT },
+        origin
+      });
     const secret =
       config.authScheme === AUTH_SCHEME_OAUTH
         ? await credentials.resolveSignIn({
             connectionAssetId: connection.id,
-            origin: egressOriginOf(target),
+            origin,
             ...(input.refused === undefined ? {} : { refused: input.refused }),
             signal
           })
-        : await credentials.resolve({
-            handle: storedSecretHandle(config),
-            binding: { connectionAssetId: connection.id, subject: SHARED_CREDENTIAL_SUBJECT },
-            origin: egressOriginOf(target)
-          });
+        : config.authScheme === AUTH_SCHEME_OAUTH_CLIENT
+          ? await clientCredentialToken({
+              type,
+              settings: settings.data,
+              connection,
+              origin,
+              egress,
+              clientSecret: await ownSecret(),
+              ...(input.refused === undefined ? {} : { refused: input.refused })
+            })
+          : await ownSecret();
     // A call that ended while its credential was read is handed none: the secret stays where
     // it was resolved and no type sees it.
     if (signal.aborted) throw connectionCallError("upstream_timeout");
@@ -266,6 +316,51 @@ export async function openConnectorContext(
     ...(input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : {}),
     signal
   };
+}
+
+/**
+ * The access token of the client credentials grant for one call: the one this process holds
+ * for the same Connection revision, origin and client secret, or one asked for now at the token
+ * endpoint the Connection names, through the egress checker.
+ */
+async function clientCredentialToken(input: {
+  type: ConnectorTypeDefinition;
+  settings: JsonObject;
+  connection: { id: string; revision: number };
+  origin: string;
+  egress: EgressChecker;
+  clientSecret: string;
+  refused?: string;
+}): Promise<string> {
+  const endpoints = input.type.oauthEndpoints?.(input.settings);
+  if (endpoints === undefined) {
+    throw new AppError(
+      "CONFLICT",
+      `${CREDENTIAL_REFUSALS.notConfigured}: the Connection names no token address for its client`,
+      { reason: CREDENTIAL_REFUSALS.notConfigured }
+    );
+  }
+  const { egress, clientSecret } = input;
+  return clientCredentialTokens.get({
+    key: input.connection.id,
+    fingerprint: [
+      input.connection.revision,
+      input.origin,
+      endpoints.scopes.join(" "),
+      secretFingerprint(clientSecret)
+    ].join("|"),
+    ...(input.refused === undefined ? {} : { refused: input.refused }),
+    // The request runs to its end whoever stops waiting for it: another call may need it.
+    issue: () =>
+      requestClientCredentialsToken({
+        endpoints,
+        clientSecret,
+        fetch: createOAuthFetch({
+          egress,
+          signal: AbortSignal.timeout(CLIENT_CREDENTIALS_TIMEOUT_MS)
+        })
+      })
+  });
 }
 
 /** A value as text may hold it: as it is, escaped as JSON once or twice, and encoded. */

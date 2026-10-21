@@ -11,7 +11,9 @@ import {
   type ConnectionProviderRevocation,
   type ConnectionSignInEnded,
   type ConnectionSignInEnding,
+  type ConnectorTypeDefinition,
   type ConnectorTypeRegistry,
+  type JsonObject,
   type EgressChecker,
   type Logger
 } from "@work-shape/catalyst-core";
@@ -25,7 +27,7 @@ import { clientOfSession } from "./client-registration";
 import { createOAuthFetch } from "./fetch";
 import type { OAuthClient, OAuthPort, OAuthTokenTypeHint } from "./port";
 import { createSdkOAuthPort } from "./sdk-adapter";
-import { checkedServer } from "./server";
+import { signInServerOf } from "./static-server";
 import type { StoredTokenSet } from "./token-set";
 
 // The end of a Connection's sign-in with the provider told (RFC 7009). Inside the transaction
@@ -57,6 +59,9 @@ interface Revocable {
   issuer: string;
   client: OAuthClient;
   connectionOrigin: string;
+  /** The type and settings the sign-in was made under, whose server may be named in them. */
+  type: ConnectorTypeDefinition;
+  settings: JsonObject;
 }
 
 export function createSignInEnding(deps: SignInEndingDeps): ConnectionSignInEnding {
@@ -134,7 +139,9 @@ export function createSignInEnding(deps: SignInEndingDeps): ConnectionSignInEndi
       tokenSet,
       issuer: tokenSet.issuer,
       client,
-      connectionOrigin: new URL(type.signIn.resourceUrl(settings.data)).origin
+      connectionOrigin: new URL(type.signIn.resourceUrl(settings.data)).origin,
+      type,
+      settings: settings.data
     };
   }
 
@@ -152,8 +159,10 @@ export function createSignInEnding(deps: SignInEndingDeps): ConnectionSignInEndi
       const signal = AbortSignal.timeout(REVOCATION_TIMEOUT_MS);
       const fetch = createOAuthFetch({ egress: deps.egress, signal });
       try {
-        const server = await checkedServer({
+        const { server } = await signInServerOf({
           port,
+          type: held.type,
+          settings: held.settings,
           issuer: held.issuer,
           connectionOrigin: held.connectionOrigin,
           fetch

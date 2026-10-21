@@ -24,7 +24,11 @@ export function readSampleMcpEnvironment() {
     oauthIssuerBase: process.env.SAMPLE_OAUTH_ISSUER_BASE,
     oauthBrowserBase: process.env.SAMPLE_OAUTH_BROWSER_BASE,
     oauthClientId: process.env.SAMPLE_OAUTH_CLIENT_ID,
-    oauthRedirectUri: process.env.SAMPLE_OAUTH_REDIRECT_URI
+    oauthRedirectUri: process.env.SAMPLE_OAUTH_REDIRECT_URI,
+    // The REST provider under `/oauth-rest` (CONN-OAUTH-1), served where its client id and
+    // redirect URI are set. Its client secret is read from the secret resolver.
+    oauthRestClientId: process.env.SAMPLE_OAUTH_REST_CLIENT_ID,
+    oauthRestRedirectUri: process.env.SAMPLE_OAUTH_REST_REDIRECT_URI
   };
 }
 

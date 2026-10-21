@@ -5,6 +5,7 @@ import {
   SHARED_CREDENTIAL_SUBJECT,
   StoreBackedAuditRecorder,
   connectionCallError,
+  connectionOAuthReasonOf,
   signInSecretSubject,
   type AuditActor,
   type ClientInstanceId,
@@ -24,7 +25,7 @@ import { clientOfSession } from "./client-registration";
 import { createOAuthFetch } from "./fetch";
 import { OAuthPortError, type OAuthPort } from "./port";
 import { createSdkOAuthPort } from "./sdk-adapter";
-import { checkedServer } from "./server";
+import { signInServerOf } from "./static-server";
 import { writeTokenSet, type StoredTokenSet } from "./token-set";
 
 // The access token of a sign-in as a call is handed it, refreshed where it is about to expire
@@ -322,8 +323,10 @@ export function createSignInTokens(deps: SignInTokensDeps): SignInTokens {
     const fetch = createOAuthFetch({ egress: deps.egress, signal });
     let tokens;
     try {
-      const server = await checkedServer({
+      const { server, endpoints } = await signInServerOf({
         port,
+        type: connection.type,
+        settings: settings.data,
         issuer,
         connectionOrigin: new URL(connection.type.signIn.resourceUrl(settings.data)).origin,
         fetch
@@ -343,13 +346,26 @@ export function createSignInTokens(deps: SignInTokensDeps): SignInTokens {
           preregisteredId: connection.type.signIn.oauthSettings(settings.data).clientId
         }
       );
-      tokens = await port.refresh({ server, client, refreshToken, resource, fetch });
+      // A server the settings name is sent no `resource`, as at the sign-in.
+      tokens = await port.refresh({
+        server,
+        client,
+        refreshToken,
+        ...(endpoints === undefined ? { resource } : {}),
+        fetch
+      });
     } catch (error) {
       if (
         error instanceof OAuthPortError &&
         (error.failure === "invalid_grant" || error.failure === "invalid_client")
       ) {
         await refuse(leased, error.failure);
+        throw needsReconnect();
+      }
+      // The settings now name another authorization server at the same origins (another
+      // token path or issuer): the sign-in was made at the old one, and only a new one helps.
+      if (connectionOAuthReasonOf(error) === "oauth_connection_changed") {
+        await refuse(leased, "invalid_client");
         throw needsReconnect();
       }
       // Anything else may pass: the token that is still valid is used, else the call fails

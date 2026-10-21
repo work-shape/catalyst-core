@@ -9,6 +9,8 @@ import {
   CONNECTION_REFUSALS,
   EGRESS_DENIED,
   SHARED_CREDENTIAL_SUBJECT,
+  connectionCredentialOrigin,
+  connectionOAuthTargets,
   createConnectionSecretHandle,
   defineAssetKind,
   egressOriginOf,
@@ -21,6 +23,7 @@ import {
   type ConnectionBindingEndReason,
   type ConnectionConfig,
   type ConnectionSignInEnding,
+  type ConnectorOAuthEndpoints,
   type JsonObject,
   type ConnectorTypeRegistry,
   type EgressChecker,
@@ -128,8 +131,40 @@ function targetOf(
 }
 
 /**
- * Why a Connection's target is refused on a save, or nothing. Only the operator's list is
- * asked, never DNS: the address is judged again by every test, discovery and call.
+ * The authorization server a Connection names in its settings (CONN-OAUTH-1), or nothing
+ * where it names none or its settings cannot be read.
+ */
+function oauthEndpointsOf(
+  options: ConnectionAssetKindOptions,
+  connection: ConnectionConfig
+): ConnectorOAuthEndpoints | undefined {
+  const type = options.connectorTypes.get(connection.connectorType);
+  const settings = type?.settingsSchema.safeParse(connection.settings);
+  if (!type?.oauthEndpoints || !settings?.success) return undefined;
+  try {
+    return type.oauthEndpoints(settings.data);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * What the Connection's own secret and its sign-in are bound to: its target's origin and, where
+ * it names its authorization server, that server's origins and the client id.
+ */
+function credentialOriginOf(
+  options: ConnectionAssetKindOptions,
+  connection: ConnectionConfig
+): string | undefined {
+  const target = targetOf(options, connection);
+  if (target === undefined) return undefined;
+  return connectionCredentialOrigin(target, oauthEndpointsOf(options, connection));
+}
+
+/**
+ * Why a Connection's target, or an address of the authorization server it names, is refused
+ * on a save, or nothing. Only the operator's list is asked, never DNS: the address is judged
+ * again by every test, discovery, sign-in and call.
  */
 function egressIssue(
   options: ConnectionAssetKindOptions,
@@ -137,14 +172,20 @@ function egressIssue(
 ): AssetValidationIssue | undefined {
   if (!options.connectorTypes.get(connection.connectorType)) return undefined;
   const target = targetOf(options, connection);
-  if (target && options.egress.admits(target)) return undefined;
-  const place = target ? ` ${target.host}:${target.port}` : "";
-  const setting = target
-    ? egressSettingFor(target)
+  const endpoints = oauthEndpointsOf(options, connection);
+  const refused = target
+    ? [target, ...(endpoints ? connectionOAuthTargets(endpoints) : [])].find(
+        (candidate) => !options.egress.admits(candidate)
+      )
+    : undefined;
+  if (target && refused === undefined) return undefined;
+  const place = refused ? ` ${refused.host}:${refused.port}` : "";
+  const setting = refused
+    ? egressSettingFor(refused)
     : "An operator adds it under 'egress.allow' in release config";
   return {
     message: `${EGRESS_DENIED}: the address${place} is not on this instance's egress list. ${setting}`,
-    path: ["settings"],
+    path: refused && refused !== target ? ["settings", "oauth"] : ["settings"],
     code: EGRESS_DENIED
   };
 }
@@ -168,7 +209,11 @@ function originMoved(
     after === undefined ||
     before.protocol !== after.protocol ||
     before.host !== after.host ||
-    before.port !== after.port
+    before.port !== after.port ||
+    // A client secret and a sign-in are also bound to the authorization server and the client
+    // the Connection names: a writer cannot have them sent to another token address.
+    (stored.success ? credentialOriginOf(options, stored.data) : undefined) !==
+      credentialOriginOf(options, next)
   );
 }
 
@@ -420,8 +465,7 @@ export function createConnectionAssetKind(options: ConnectionAssetKindOptions): 
           oauthClient: null
         });
       }
-      const target = targetOf(options, connection);
-      const origin = target === undefined ? undefined : egressOriginOf(target);
+      const origin = credentialOriginOf(options, connection);
       const configured = !authenticates || (await credentialFor(origin));
       /**
        * Whether the Connection holds what calls to `origin` need. One that signs in has a

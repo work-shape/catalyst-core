@@ -107,7 +107,8 @@ export interface OAuthPort {
     redirectUri: string;
     scope?: string;
     state: string;
-    resource: string;
+    /** RFC 8707's `resource`. Left out for a server the settings name, which may refuse it. */
+    resource?: string;
   }): Promise<{ url: string; codeVerifier: string }>;
   exchange(input: {
     server: OAuthServerMetadata;
@@ -115,7 +116,7 @@ export interface OAuthPort {
     code: string;
     codeVerifier: string;
     redirectUri: string;
-    resource: string;
+    resource?: string;
     fetch: OAuthFetch;
   }): Promise<OAuthTokenSet>;
   /**
@@ -127,7 +128,7 @@ export interface OAuthPort {
     server: OAuthServerMetadata;
     client: OAuthClient;
     refreshToken: string;
-    resource: string;
+    resource?: string;
     fetch: OAuthFetch;
   }): Promise<OAuthTokenSet>;
   /**

@@ -10,6 +10,7 @@ export { connectSampleMcpClient } from "./client.js";
 export { createSampleData, utcMonthAnchor } from "./data.js";
 export {
   SAMPLE_OAUTH_MODES,
+  SAMPLE_OAUTH_REST_PATH,
   SAMPLE_OAUTH_SCOPE,
   type SampleOAuthMode,
   type SampleOAuthOptions

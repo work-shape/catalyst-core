@@ -205,7 +205,7 @@ export function createSdkOAuthPort(): OAuthPort {
           redirectUrl: redirectUri,
           ...(scope === undefined ? {} : { scope }),
           state,
-          resource
+          ...(resource === undefined ? {} : { resource })
         })
       );
       return { url: started.authorizationUrl.href, codeVerifier: started.codeVerifier };
@@ -218,7 +218,7 @@ export function createSdkOAuthPort(): OAuthPort {
           authorizationCode: code,
           codeVerifier,
           redirectUri,
-          resource,
+          ...(resource === undefined ? {} : { resource }),
           fetchFn: fetchLike(fetch)
         })
       );
@@ -231,7 +231,7 @@ export function createSdkOAuthPort(): OAuthPort {
           metadata: sdkMetadata(server),
           clientInformation: sdkClient(client),
           refreshToken,
-          resource,
+          ...(resource === undefined ? {} : { resource }),
           fetchFn: fetchLike(fetch)
         });
       } catch (error) {

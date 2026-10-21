@@ -2,6 +2,7 @@ import { resolveConnectionPersonContext } from "./person-context";
 import { retryAfterSecondsOf } from "./retry-after";
 import {
   AppError,
+  CONNECTION_AUTH_SCHEME_OAUTH_CLIENT,
   CONNECTION_CALL_REASONS,
   CONNECTION_TRANSIENT_CALL_REASONS,
   EGRESS_UNRESOLVED,
@@ -667,6 +668,11 @@ function refuseAppPersonContext(found: Callable, context: ConnectionCallContext)
 
 /** The auth scheme of a Connection that signs in at its outside system. */
 const AUTH_SCHEME_OAUTH = "oauth";
+/** The auth schemes whose token is obtained anew after the outside system refused it. */
+const RENEWED_TOKEN_SCHEMES: ReadonlySet<string> = new Set([
+  AUTH_SCHEME_OAUTH,
+  CONNECTION_AUTH_SCHEME_OAUTH_CLIENT
+]);
 
 /**
  * Refuses a call that waited for a decision while the Connection's sign-in changed: a call
@@ -850,12 +856,13 @@ async function call(
       try {
         result = await attempt();
       } catch (error) {
-        // A sign-in's token the outside system refused although it was believed valid gets one
-        // refresh. A reading call is made once more with the new token; a changing call is
-        // never made again, since the system may have carried it out.
+        // A sign-in's token, or one of the client credentials grant, the outside system refused
+        // although it was believed valid is obtained anew once. A reading call is made once more
+        // with the new token; a changing call is never made again, since the system may have
+        // carried it out.
         const refusedToken = secret;
         if (
-          connection.config.authScheme !== AUTH_SCHEME_OAUTH ||
+          !RENEWED_TOKEN_SCHEMES.has(connection.config.authScheme) ||
           refusedToken === undefined ||
           deadline.signal.aborted ||
           connectionCallReasonOf(error) !== "upstream_unauthorized"
