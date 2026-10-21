@@ -372,7 +372,7 @@ async function publish(
   );
   // A publish of the draft makes the pending Workflows it reaches live with it.
   const together =
-    number === (candidate.draftRevision ?? candidate.revision)
+    number === (candidate.draftRevision ?? candidate.revision) && startsWorkflows(candidate.config)
       ? await appPublishTogether(target.api, app)
       : { workflows: [], lines: [] };
   const question = [formatReview(app, review), storedData, together.lines.join("\n")]
@@ -447,6 +447,15 @@ async function publish(
         ].join("\n")
   );
   return EXIT.done;
+}
+
+/** Whether a revision's manifest has a `workflow` action: only then can Workflows go with it. */
+function startsWorkflows(config: unknown): boolean {
+  const manifest = isRecord(config) && isRecord(config.manifest) ? config.manifest : undefined;
+  return (
+    Array.isArray(manifest?.actions) &&
+    manifest.actions.some((action: unknown) => isRecord(action) && action.kind === "workflow")
+  );
 }
 
 async function status(
