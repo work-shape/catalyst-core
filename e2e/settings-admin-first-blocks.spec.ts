@@ -39,8 +39,8 @@ const admin = { email: "e2e-admin@example.test", password: "e2e-admin-password" 
 // Of this spec alone: the owner of its workspace. A member holds no right a key could carry, so
 // the keys are the admin's, each named by this spec.
 const owner = { email: "e2e-first-blocks@example.test", password: "e2e-first-blocks-password" };
-// Requests that reach the Inbox are made only in inbox.spec.ts, so the one request to join is
-// planted in the answer of the request list.
+// Requests that reach the Inbox are made only by the Inbox and publish specs, so the one request
+// to join is planted in the answer of the request list.
 const plantedRequest = {
   userId: "user_first_blocks_requester",
   displayLabel: "Elif Requester",

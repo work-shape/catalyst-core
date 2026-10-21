@@ -8,8 +8,6 @@ import {
   signIn,
   tabName
 } from "./inbox-fixtures";
-import { publishQuestionsLeadWithTheSentence } from "./publish-narrative-fixtures";
-import { shareAsksForWhom } from "./share-1-fixtures";
 import { allowOnInstance, approveMemberPublish } from "./publish-approval-fixtures";
 import { assetRevision, requestWithOrigin } from "./request-with-origin";
 import type { Response } from "@playwright/test";
@@ -917,13 +915,3 @@ test("a member's held publish of an instance Workflow leads the reviewer to the 
     await context.close();
   }
 });
-
-test(
-  "PUBQ-1: every publish question leads with the plain sentence in the reader's language, the lists behind Details",
-  publishQuestionsLeadWithTheSentence
-);
-
-test(
-  "SHARE-1: the Publish dialog asks “For whom?” first, the Inbox names the choice, and the save line shares",
-  shareAsksForWhom
-);

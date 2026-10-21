@@ -7,12 +7,11 @@ import { allowOnInstance } from "./publish-approval-fixtures";
 import { requestWithOrigin } from "./request-with-origin";
 import { expect, test, type PageErrorWatch } from "./test";
 
-// PUBQ-1 in the browser, run from the serial Inbox spec because it makes a held publish: the
-// three publish questions lead with the instance's one plain sentence on what the publish makes
-// live, in the reader's language, with the lists behind one "Details": the App's Publish
-// dialog, the Workflow's publish question and the Inbox item of a held publish. The instance
-// words the sentence in the language of the reader's account (#318), so the scenario sets it
-// on an account of its own; the interface's language follows.
+// PUBQ-1 in the browser: the three publish questions lead with the instance's one plain sentence on
+// what the publish makes live, in the reader's language, with the lists behind one "Details": the
+// App's Publish dialog, the Workflow's publish question and the Inbox item of a held publish. The
+// instance words the sentence in the language of the reader's account (#318), so the scenario sets
+// it on an account of its own; the interface's language follows.
 //
 // The Workflow adds rows to a Data Store in a step a guardrail in force stops, so its question
 // warns before the click. The App reads that store with one action and adds rows with another,

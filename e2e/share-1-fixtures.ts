@@ -11,12 +11,11 @@ import { allowOnInstance } from "./publish-approval-fixtures";
 import { requestWithOrigin } from "./request-with-origin";
 import { expect, test, type PageErrorWatch } from "./test";
 
-// SHARE-1 in the browser, run from the serial Inbox spec because it makes a held publish. An
-// App's Publish dialog opens with "For whom?"; each choice rewords the instance's sentence and
-// the line on who sees the stored data (DS-13b). A person who may not publish at instance scope
-// is not offered the whole instance. The held publish's Inbox item names the audience chosen.
-// The line the agent's save leaves says who can use the App now, and its "Share" opens the
-// same dialog.
+// SHARE-1 in the browser. An App's Publish dialog opens with "For whom?"; each choice rewords the
+// instance's sentence and the line on who sees the stored data (DS-13b). A person who may not
+// publish at instance scope is not offered the whole instance. The held publish's Inbox item names
+// the audience chosen. The line the agent's save leaves says who can use the App now, and its
+// "Share" opens the same dialog.
 //
 // Fix round: a live App may be published again for another audience only; a workspace
 // publisher of an instance-wide App is offered what they may choose, the widest chosen, and
