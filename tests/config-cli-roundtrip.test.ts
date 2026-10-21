@@ -70,8 +70,8 @@ const agentEdits = {
   skillNames: [],
   knowledgeBases: [],
   initialPrompts: []
-  // `shipped` is server-carried: only the release seed writes it, and a pull skips the agents
-  // that carry it.
+  // `shipped` is server-carried: only the release seed writes it, and a working copy leaves it
+  // out.
 } satisfies Required<Omit<AgentConfig, "shipped">>;
 const skill = {
   name: "guide",
@@ -317,6 +317,11 @@ describe("config schema round trips", () => {
       Object.keys(skillConfigSchema.shape).sort()
     );
     expect(canonicalizeAgentConfig(agent)).toEqual(agentConfigSchema.parse(agent));
+    // A shipped agent such as Workshaper is pulled like any agent; what the release shipped of
+    // it stays on the instance and is never a local change.
+    expect(canonicalizeAgentConfig({ ...agent, shipped: { instructions: "As shipped." } })).toEqual(
+      canonicalizeAgentConfig(agent)
+    );
     expect(canonicalizeSkillConfig({ ...skill, ...carried })).toEqual(skill);
     for (const key of Object.keys(skillEdits)) {
       const without = Object.fromEntries(Object.entries(skill).filter(([name]) => name !== key));

@@ -102,10 +102,7 @@ export function createAgentAssetKind(options: AgentAssetKindOptions): WorkflowAs
         return {
           name: agent.name,
           title: resolveLocalizedString(agent.displayName, locale, defaultLocale),
-          ...(description === undefined ? {} : { description }),
-          // A shipped agent is no part of the instance's working copy: no pull brings it and no
-          // prune deletes it, as with a shipped skill.
-          ...(agent.shipped === undefined ? {} : { attributes: { origin: "release" } })
+          ...(description === undefined ? {} : { description })
         };
       }
     }),

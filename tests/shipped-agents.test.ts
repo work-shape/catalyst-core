@@ -110,9 +110,8 @@ describe("the agent that ships with the platform", () => {
     const listed = listSchema.parse(
       (await app.call("assets.list", { params: { kind: "agent" } })).json()
     ).items;
-    expect(listed.find((agent) => agent.name === NAME)?.attributes).toMatchObject({
-      origin: "release"
-    });
+    // A working copy pulls it like any agent of the instance: it is the instance's to change.
+    expect(listed.find((agent) => agent.name === NAME)?.attributes?.origin).toBeUndefined();
     // Only an admin's "Available in" offers it; until then no chat lists it.
     expect((await chatConfig(app)).agents.map((agent) => agent.name)).not.toContain(NAME);
   });
