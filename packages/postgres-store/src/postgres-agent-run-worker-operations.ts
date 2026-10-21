@@ -221,26 +221,6 @@ async function insertClaimedRunObservation(
     await settleEndedAgentRuns(tx, claim.clientInstanceId, [run], new Date(event.createdAt));
   }
 
-  // A steer the run did not take in before it ended becomes a queued follow-up: never lost.
-  if (
-    terminal.status &&
-    terminal.status !== "waiting_for_decision" &&
-    run.parentRunId === null &&
-    run.workflowStepRunId === null
-  )
-    await tx
-      .update(conversationFollowUps)
-      .set({ mode: "queue", dispatchedRunId: null, updatedAt: new Date(event.createdAt) })
-      .where(
-        and(
-          eq(conversationFollowUps.clientInstanceId, claim.clientInstanceId),
-          eq(conversationFollowUps.conversationId, run.conversationId),
-          eq(conversationFollowUps.dispatchedRunId, run.id),
-          eq(conversationFollowUps.status, "pending"),
-          eq(conversationFollowUps.mode, "steer")
-        )
-      );
-
   // A subagent's thread takes no follow-ups: it has no composer.
   if (
     event.type === "run_completed" &&
@@ -355,8 +335,8 @@ export async function appendClaimedAgentRunMessage(
 
 /**
  * The steers sent into this run, taken in at a step boundary (FU-2). Each becomes a user row
- * stored now, so the transcript's order is the order the model read; its attachments move to
- * the row, the follow-up ends `consumed`, and every tab is told with `follow_up_changed` and
+ * stored now, so the transcript's order is the order the model read; the follow-up ends
+ * `consumed`, and every tab is told with `follow_up_changed` and
  * `user_message_steered`. The audit names the person and the run, never the text.
  */
 export async function takeClaimedAgentRunSteers(
@@ -373,7 +353,8 @@ export async function takeClaimedAgentRunSteers(
       .limit(1)
       .for("update");
     if (!run) throw new AppError("CONFLICT", "Agent run has ended");
-    if (run.ownerUserId === null) return [];
+    // A run asked to cancel answers nothing more: its steers are released when it ends.
+    if (run.ownerUserId === null || run.status !== "running") return [];
     const steers = await tx
       .select()
       .from(conversationFollowUps)

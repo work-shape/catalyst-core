@@ -8,6 +8,7 @@ import {
   defineProvider,
   readUserMessageMetadata,
   type AgentRunStatus,
+  type CentralPolicySetting,
   type ConversationFollowUp
 } from "@work-shape/catalyst-core";
 import {
@@ -62,16 +63,28 @@ async function fixture() {
       return toolSuccess({ waited: true });
     }
   });
+  // A call that waits for its person's confirmation, asked for by the steer "Change it".
+  const change = defineTool({
+    name: "demo.change",
+    effect: "changing",
+    permission: { mode: "allow" },
+    description: "Changes something.",
+    inputSchema: z.object({}),
+    execute: () => toolSuccess({ changed: true })
+  });
+  const confirmChange: CentralPolicySetting = { operation: change.name, value: "confirm" };
   const reply = async (request: ModelAdapterRequest): Promise<ModelCompletion> => {
     const index = requests.length;
     requests.push(request);
     const lastUser = request.messages.findLastIndex((message) => message.role === "user");
     const said = modelContentText(request.messages[lastUser]?.content ?? "");
+    const call = (toolName: string) => ({
+      ...answer,
+      toolCalls: [{ toolCallId: createPlatformId("toolcall"), toolName, input: {} }]
+    });
     if (said === "Go" && !request.messages.some((message) => message.role === "tool"))
-      return {
-        ...answer,
-        toolCalls: [{ toolCallId: createPlatformId("toolcall"), toolName: wait.name, input: {} }]
-      };
+      return call(wait.name);
+    if (said === "Change it" && request.messages.at(-1)?.role === "user") return call(change.name);
     const gate = deferred<void>();
     gates[index] = gate;
     await gate.promise;
@@ -101,8 +114,11 @@ async function fixture() {
     gates.forEach((gate) => gate?.resolve());
   };
   const config = createTestConfig({
-    tools: [{ name: wait.name, enabled: true }],
-    toolNames: [wait.name],
+    tools: [
+      { name: wait.name, enabled: true },
+      { name: change.name, enabled: true }
+    ],
+    toolNames: [wait.name, change.name],
     developmentAuth: {
       enabled: true,
       defaultUserId: "author",
@@ -121,7 +137,8 @@ async function fixture() {
     config,
     env: {},
     capabilities: [{ name: "steer-test", providers: [provider], create: () => ({}) }],
-    tools: [wait]
+    tools: [wait, change],
+    operations: { centralPolicySettings: () => [confirmChange] }
   });
   close = () => app.close();
   const clientInstanceId = asClientInstanceId(getTestConfig(app).clientInstance.id);
@@ -175,6 +192,25 @@ async function fixture() {
       return response.json<{ followUp: ConversationFollowUp }>().followUp;
     },
     followUp: (followUpId: string) => app.stores.followUps.get({ ...scope, followUpId }),
+    async confirmCallOf(runId: string) {
+      const [waiting] = (await app.stores.operationRuns.list({ clientInstanceId })).filter(
+        (operation) => operation.origin.kind === "agent" && operation.origin.agentRunId === runId
+      );
+      const decided = await app.call(
+        "operations.decide",
+        { params: { runId: required(waiting).id }, payload: { decision: "confirm" } },
+        "author"
+      );
+      expect(decided.statusCode, decided.body).toBe(200);
+    },
+    async cancel(runId: string) {
+      const response = await app.call(
+        "conversations.runs.cancel",
+        { params: { conversationId, runId }, payload: {} },
+        "author"
+      );
+      expect(response.statusCode, response.body).toBe(200);
+    },
     messages: () => app.stores.conversations.listMessages(scope),
     dispatch: () => getTestJobs(app).runDue()
   };
@@ -283,5 +319,45 @@ describe("steering a running turn", () => {
     expect((await f.run(next)).ownerUserId).toBe(theirs.authorUserId);
     await f.release(2);
     await f.until(next, "completed");
+  });
+
+  it("keeps a steer it took in when it goes on after a confirmation", async () => {
+    const f = await fixture();
+    const { run: started } = await f.start();
+    await waitUntil(async () => f.requests.length === 1, "the step calls the waiting tool");
+    await f.send("Change it", "steer");
+    f.releaseTool();
+    // The steer asks for a call that waits for its person's confirmation.
+    await f.until(started.id, "waiting_for_decision");
+    await f.confirmCallOf(started.id);
+    await waitUntil(async () => f.requests.length === 3, "the resumed step went out");
+    const resumed = required(f.requests[2]).messages.map((message) => ({
+      role: message.role,
+      text: message.role === "user" ? modelContentText(message.content) : undefined
+    }));
+    // The resumed input is the input the run had: the steer stands before the confirmed call.
+    expect(resumed.slice(-5)).toEqual([
+      { role: "assistant", text: undefined },
+      { role: "tool", text: undefined },
+      { role: "user", text: "Change it" },
+      { role: "assistant", text: undefined },
+      { role: "tool", text: undefined }
+    ]);
+    await f.release(2);
+    await f.until(started.id, "completed");
+  });
+
+  it("takes no steer in once the run is asked to stop, and queues it when the run ends", async () => {
+    const f = await fixture();
+    const { run: started } = await f.start();
+    await waitUntil(async () => f.requests.length === 1, "the step calls the waiting tool");
+    const steer = await f.send("Never mind", "steer");
+    await f.cancel(started.id);
+    f.releaseTool();
+    await f.until(started.id, "cancelled");
+    expect(f.requests).toHaveLength(1);
+    expect(await f.followUp(steer.id)).toMatchObject({ mode: "queue", status: "pending" });
+    expect((await f.followUp(steer.id))?.dispatchedRunId).toBeUndefined();
+    expect((await f.messages()).some((message) => message.text === "Never mind")).toBe(false);
   });
 });

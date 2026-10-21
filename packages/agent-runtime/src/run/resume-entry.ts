@@ -2,6 +2,7 @@ import {
   AppError,
   asToolCallId,
   readAgentRuntimeMessageMetadata,
+  readUserMessageMetadata,
   type AgentRunId,
   type AgentRunResumeState,
   type ChatMessage,
@@ -34,7 +35,7 @@ import {
  * input message and that message, as the run started with them, then the messages the run
  * wrote itself after it. A run whose answer compacted the context starts at the step message
  * of that answer instead, as it did while it worked. Nothing another run or person wrote
- * after the input message is part of it.
+ * after the input message is part of it, except the steers the run itself took in.
  */
 export async function resumedModelMessages(input: {
   runId: AgentRunId;
@@ -86,7 +87,11 @@ export async function resumedModelMessages(input: {
   ];
 }
 
+/** The run a row belongs to: its own steps and results, and the steers it took in (FU-2). */
 function runIdOf(message: ChatMessage): string | undefined {
+  if (message.role === "user") {
+    return readUserMessageMetadata(message.metadata)?.steered?.runId;
+  }
   const runtime = readAgentRuntimeMessageMetadata(message.metadata);
   return runtime?.kind === "assistant_tool_calls" || runtime?.kind === "tool_result"
     ? runtime.runId

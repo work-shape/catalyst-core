@@ -13,7 +13,7 @@ import { enqueueJob } from "./jobs/store";
 import { lockAgentRunConversations } from "./postgres-agent-run-locks";
 import type { PostgresConnection } from "./postgres-database";
 import { withdrawUnclaimedWorkspaceCommandsOfRuns } from "./postgres-execution-workspace-operations";
-import { agentRunObservations, agentRuns } from "./schema";
+import { agentRunObservations, agentRuns, conversationFollowUps } from "./schema";
 
 // What ties a subagent's end to its parent run (CR-1). Lock order, everywhere: the parent's
 // root conversation, the parent run, the child's thread, the child run. Every transaction that
@@ -84,6 +84,12 @@ export async function settleEndedAgentRuns(
       )
     );
   for (const child of workflowAgents) await wakeWorkflowAgentStep(tx, child);
+  await releaseUntakenSteers(
+    tx,
+    clientInstanceId,
+    ended.map((run) => run.id),
+    at
+  );
   await cancelOpenChildren(
     tx,
     clientInstanceId,
@@ -98,6 +104,41 @@ export async function settleEndedAgentRuns(
     if (await wakeParentIfDone(tx, clientInstanceId, parentId)) queuedParents += 1;
   }
   return { queuedParents };
+}
+
+/**
+ * A steer an ended run did not take in becomes a queued follow-up, whichever way the run ended:
+ * it is never lost (FU-2). The conversations are read first so the update uses the pending
+ * index. A run waiting for a decision has not ended; its steers stay for its resume.
+ */
+async function releaseUntakenSteers(
+  tx: PostgresConnection,
+  clientInstanceId: ClientInstanceId,
+  runIds: readonly string[],
+  at: Date
+): Promise<void> {
+  const conversations = await tx
+    .selectDistinct({ id: agentRuns.conversationId })
+    .from(agentRuns)
+    .where(
+      and(eq(agentRuns.clientInstanceId, clientInstanceId), inArray(agentRuns.id, [...runIds]))
+    );
+  if (conversations.length === 0) return;
+  await tx
+    .update(conversationFollowUps)
+    .set({ mode: "queue", dispatchedRunId: null, updatedAt: at })
+    .where(
+      and(
+        eq(conversationFollowUps.clientInstanceId, clientInstanceId),
+        inArray(
+          conversationFollowUps.conversationId,
+          conversations.map((conversation) => conversation.id)
+        ),
+        eq(conversationFollowUps.status, "pending"),
+        eq(conversationFollowUps.mode, "steer"),
+        inArray(conversationFollowUps.dispatchedRunId, [...runIds])
+      )
+    );
 }
 
 /** Whether a run has a subagent that has not ended. */

@@ -124,7 +124,8 @@ export async function projectRunOwnMessages(
               : message.text
         };
       }
-      if (message.role !== "assistant") return undefined;
+      // A run's own user rows are the steers it took in (FU-2), read as the step read them.
+      if (message.role !== "assistant" && message.role !== "user") return undefined;
       if (message.id === stepToolCalls?.messageId) {
         return { role: "assistant", content: message.text, toolCalls: stepToolCalls.toolCalls };
       }

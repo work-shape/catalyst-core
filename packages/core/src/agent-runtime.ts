@@ -693,9 +693,10 @@ export interface AgentRunStore {
   appendClaimedAgentRunMessage(input: AppendClaimedAgentRunMessageInput): Promise<ChatMessage>;
   /**
    * Takes the run's pending steers in position order, under the job's lease and the
-   * Conversation row lock: each becomes a user row at this moment, its attachments move to
-   * that row, the follow-up ends `consumed` and `message.created` is audited without payload.
-   * Only steers by the run's own person are taken. Refused as `appendClaimedAgentRunMessage`.
+   * Conversation row lock: each becomes a user row at this moment, the follow-up ends
+   * `consumed` and `message.created` is audited without payload. Only steers by the run's own
+   * person are taken, and none while the run is asked to cancel; a steer never carries
+   * attachments, which queue instead. Refused as `appendClaimedAgentRunMessage`.
    */
   takeClaimedAgentRunSteers(input: TakeClaimedAgentRunSteersInput): Promise<SteeredUserMessage[]>;
   /**
