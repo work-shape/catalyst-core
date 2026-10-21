@@ -14,7 +14,8 @@ export const connectionSignIn = defineTranslations({
       "Everyone who may use this connection reads and acts through this account.",
     "connectionSignIn.scopes": "Permissions it asks for",
     "connectionSignIn.scopesHint": "Unticked permissions are not asked for.",
-    "connectionSignIn.scopesFixed": "The release config sets which permissions are asked for.",
+    "connectionSignIn.scopesFixed":
+      "Which permissions are asked for is set when the instance is set up.",
     "connectionSignIn.scopesNone":
       "The provider asks for no single permissions: it grants what its app is set up for.",
     "connectionSignIn.open": "Sign in at {host}",
@@ -27,10 +28,10 @@ export const connectionSignIn = defineTranslations({
     "connectionSignIn.clientText":
       "This provider registers no apps on its own. Create an app there, enter this address as its redirect URI, and copy its client ID and client secret here.",
     "connectionSignIn.clientTextFixed":
-      "This provider registers no apps on its own. An operator enters the client ID it issued in the release config.",
+      "This provider registers no apps on its own. The team that runs this instance enters the client ID it issued.",
     "connectionSignIn.redirectUri": "Redirect URI",
     "connectionSignIn.redirectUriMissing":
-      "The instance has no public address yet, so there is no redirect URI. An operator sets 'instance.publicUrl' in the release config.",
+      "The instance has no public address yet, so there is no redirect URI. The team that runs this instance sets one.",
     "connectionSignIn.clientId": "Client ID",
     "connectionSignIn.clientSecret": "Client secret",
     "connectionSignIn.clientSecretHint":
@@ -44,15 +45,15 @@ export const connectionSignIn = defineTranslations({
     "connectionSignIn.errorDeniedUnnamed": "The sign-in was declined or cancelled at the provider.",
     "connectionSignIn.errorExpired": "The sign-in took too long. Start it again.",
     "connectionSignIn.errorEgress":
-      "The instance may not reach {host}. An operator has to allow this host first.",
+      "The instance may not reach {host}. The team that runs this instance has to allow this host first.",
     "connectionSignIn.errorEgressUnnamed":
-      "The instance may not reach the provider's server. An operator has to allow its host first.",
+      "The instance may not reach the provider's server. The team that runs this instance has to allow its host first.",
     "connectionSignIn.errorPkce":
       "{host} does not offer PKCE with S256, so this connection cannot be signed in safely.",
     "connectionSignIn.errorPkceUnnamed":
       "The provider does not offer PKCE with S256, so this connection cannot be signed in safely.",
     "connectionSignIn.errorRedirect":
-      "The instance has no public address, so the provider has nowhere to send you back. An operator sets 'instance.publicUrl' in the release config.",
+      "The instance has no public address, so the provider has nowhere to send you back. The team that runs this instance sets one.",
     "connectionSignIn.errorDiscovery": "The server's sign-in details could not be read.",
     "connectionSignIn.errorRegistration": "The provider refused to register the instance.",
     "connectionSignIn.errorIssuer": "The sign-in server answered for another issuer.",
@@ -101,7 +102,7 @@ export const connectionSignIn = defineTranslations({
     "connectionSignIn.scopes": "Berechtigungen, nach denen gefragt wird",
     "connectionSignIn.scopesHint": "Nach abgewählten Berechtigungen wird nicht gefragt.",
     "connectionSignIn.scopesFixed":
-      "Nach welchen Berechtigungen gefragt wird, legt die Release-Konfiguration fest.",
+      "Nach welchen Berechtigungen gefragt wird, ist bei der Einrichtung der Instanz festgelegt.",
     "connectionSignIn.scopesNone":
       "Der Anbieter fragt nach keinen einzelnen Berechtigungen: Er gewährt, wofür seine App eingerichtet ist.",
     "connectionSignIn.open": "Bei {host} anmelden",
@@ -114,10 +115,10 @@ export const connectionSignIn = defineTranslations({
     "connectionSignIn.clientText":
       "Dieser Anbieter registriert Apps nicht von selbst. Leg dort eine App an, trag diese Adresse als Redirect-URI ein und kopier Client-ID und Client-Secret hierher.",
     "connectionSignIn.clientTextFixed":
-      "Dieser Anbieter registriert Apps nicht von selbst. Ein Betreiber trägt die Client-ID, die er ausgegeben hat, in der Release-Konfiguration ein.",
+      "Dieser Anbieter registriert Apps nicht von selbst. Das Team, das diese Instanz betreibt, trägt die Client-ID ein, die er ausgegeben hat.",
     "connectionSignIn.redirectUri": "Redirect-URI",
     "connectionSignIn.redirectUriMissing":
-      "Die Instanz hat noch keine öffentliche Adresse und damit keine Redirect-URI. Ein Betreiber setzt 'instance.publicUrl' in der Release-Konfiguration.",
+      "Die Instanz hat noch keine öffentliche Adresse und damit keine Redirect-URI. Das Team, das diese Instanz betreibt, legt eine fest.",
     "connectionSignIn.clientId": "Client-ID",
     "connectionSignIn.clientSecret": "Client-Secret",
     "connectionSignIn.clientSecretHint":
@@ -132,15 +133,15 @@ export const connectionSignIn = defineTranslations({
       "Die Anmeldung wurde beim Anbieter abgelehnt oder abgebrochen.",
     "connectionSignIn.errorExpired": "Die Anmeldung hat zu lange gedauert. Starte sie neu.",
     "connectionSignIn.errorEgress":
-      "Die Instanz darf {host} nicht erreichen. Ein Betreiber muss diesen Host erst freigeben.",
+      "Die Instanz darf {host} nicht erreichen. Das Team, das diese Instanz betreibt, muss diesen Host erst freigeben.",
     "connectionSignIn.errorEgressUnnamed":
-      "Die Instanz darf den Server des Anbieters nicht erreichen. Ein Betreiber muss seinen Host erst freigeben.",
+      "Die Instanz darf den Server des Anbieters nicht erreichen. Das Team, das diese Instanz betreibt, muss seinen Host erst freigeben.",
     "connectionSignIn.errorPkce":
       "{host} bietet kein PKCE mit S256 an. So lässt sich diese Verbindung nicht sicher anmelden.",
     "connectionSignIn.errorPkceUnnamed":
       "Der Anbieter bietet kein PKCE mit S256 an. So lässt sich diese Verbindung nicht sicher anmelden.",
     "connectionSignIn.errorRedirect":
-      "Die Instanz hat keine öffentliche Adresse, also kann der Anbieter dich nicht zurückschicken. Ein Betreiber setzt 'instance.publicUrl' in der Release-Konfiguration.",
+      "Die Instanz hat keine öffentliche Adresse, also kann der Anbieter dich nicht zurückschicken. Das Team, das diese Instanz betreibt, legt eine fest.",
     "connectionSignIn.errorDiscovery": "Die Anmeldedaten des Servers ließen sich nicht lesen.",
     "connectionSignIn.errorRegistration":
       "Der Anbieter hat die Registrierung der Instanz abgelehnt.",

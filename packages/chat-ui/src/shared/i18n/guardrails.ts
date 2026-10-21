@@ -4,7 +4,7 @@ export const guardrails = defineTranslations({
   en: {
     "guardrails.kind": "Guardrails",
     "guardrails.description":
-      "The operator's guardrails come from the release config; further ones are written with the CLI and enforce once published. An instance admin switches the guardrail the platform ships here.",
+      "Guardrails that come with the instance's setup always apply; further ones are written with the CLI and enforce once published. An instance admin switches the guardrail the platform ships here.",
     "guardrails.shippedHeading": "Shipped with the platform",
     "guardrails.shippedPublishTitle": "Publishing needs an instance admin's approval",
     "guardrails.shippedPublishText":
@@ -24,7 +24,7 @@ export const guardrails = defineTranslations({
     "guardrails.shippedSwitchFailed": "The switch was not saved.",
     "guardrails.search": "Search guardrails",
     "guardrails.empty":
-      "No further guardrails yet. A guardrail checks an action before it happens and warns, holds it for approval or blocks it. The operator sets them in the release config, and further ones are written with the CLI.",
+      "No further guardrails yet. A guardrail checks an action before it happens and warns, holds it for approval or blocks it. Some come with the instance's setup, and further ones are written with the CLI.",
     "guardrails.missing": "There is no guardrail with the id {name}.",
     "guardrails.scopeInstance": "Instance",
     "guardrails.whenItRuns": "When it runs",
@@ -65,7 +65,7 @@ export const guardrails = defineTranslations({
     "guardrails.runs.instanceWide": "instance-wide",
     "guardrails.runs.inWorkspace": "in workspace {name}",
     "guardrails.runs.inSomeWorkspace": "in one workspace",
-    "guardrails.runs.setByOperator": "{where}, set by the operator",
+    "guardrails.runs.setByOperator": "{where}, part of the instance's setup",
     "guardrails.runs.checkPattern": "Checks the content for a text pattern.",
     "guardrails.runs.checkJudge": "Checks the content for breaches of its rule, with a model.",
     "guardrails.runs.blocksOnCheck": "Blocks if the check fails.",
@@ -128,7 +128,7 @@ export const guardrails = defineTranslations({
   de: {
     "guardrails.kind": "Leitplanken",
     "guardrails.description":
-      "Die Leitplanken des Betreibers kommen aus der Release-Konfiguration; weitere werden mit der CLI geschrieben und gelten, sobald sie veröffentlicht sind. Die Leitplanke der Plattform schaltet ein Instanz-Admin hier um.",
+      "Die Leitplanken aus der Einrichtung der Instanz gelten immer; weitere werden mit der CLI geschrieben und gelten, sobald sie veröffentlicht sind. Die Leitplanke der Plattform schaltet ein Instanz-Admin hier um.",
     "guardrails.shippedHeading": "Mit der Plattform geliefert",
     "guardrails.shippedPublishTitle": "Veröffentlichen braucht die Freigabe eines Instanz-Admins",
     "guardrails.shippedPublishText":
@@ -148,7 +148,7 @@ export const guardrails = defineTranslations({
     "guardrails.shippedSwitchFailed": "Das Umschalten wurde nicht gespeichert.",
     "guardrails.search": "Leitplanken durchsuchen",
     "guardrails.empty":
-      "Noch keine weiteren Leitplanken. Eine Leitplanke prüft eine Aktion, bevor sie geschieht, und warnt, hält sie zur Freigabe an oder blockiert sie. Der Betreiber legt sie in der Release-Konfiguration fest, weitere werden mit der CLI geschrieben.",
+      "Noch keine weiteren Leitplanken. Eine Leitplanke prüft eine Aktion, bevor sie geschieht, und warnt, hält sie zur Freigabe an oder blockiert sie. Manche kommen mit der Einrichtung der Instanz, weitere werden mit der CLI geschrieben.",
     "guardrails.missing": "Es gibt keine Leitplanke mit der Kennung {name}.",
     "guardrails.scopeInstance": "Instanz",
     "guardrails.whenItRuns": "Wann sie greift",
@@ -188,7 +188,7 @@ export const guardrails = defineTranslations({
     "guardrails.runs.instanceWide": "instanzweit",
     "guardrails.runs.inWorkspace": "im Workspace {name}",
     "guardrails.runs.inSomeWorkspace": "in einem Workspace",
-    "guardrails.runs.setByOperator": "{where}, vom Betreiber festgelegt",
+    "guardrails.runs.setByOperator": "{where}, aus der Einrichtung der Instanz",
     "guardrails.runs.checkPattern": "Prüft den Inhalt auf ein Textmuster.",
     "guardrails.runs.checkJudge":
       "Prüft den Inhalt mit einem Modell auf Verstöße gegen ihre Regel.",

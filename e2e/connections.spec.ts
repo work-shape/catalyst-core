@@ -25,9 +25,9 @@ const shotsDir = process.env.E2E_SHOTS_DIR;
 
 const EMPTY_EN = "No connections yet. A connection holds the access to an outside system.";
 const DESCRIPTION_EN =
-  "Connections give agents, apps and workflows access to outside systems. Those from the release config are read-only here.";
+  "Connections give agents, apps and workflows access to outside systems. Those that come with the instance's setup are read-only here.";
 const DESCRIPTION_DE =
-  "Verbindungen geben Agenten, Apps und Workflows Zugang zu externen Systemen. Die aus der Release-Konfiguration sind hier schreibgeschützt.";
+  "Verbindungen geben Agenten, Apps und Workflows Zugang zu externen Systemen. Die aus der Einrichtung der Instanz sind hier schreibgeschützt.";
 const EMPTY_DE =
   "Noch keine Verbindungen. Eine Verbindung hält den Zugang zu einem externen System.";
 

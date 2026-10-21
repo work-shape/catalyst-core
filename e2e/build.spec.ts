@@ -115,7 +115,7 @@ function agentList(page: Page): Locator {
 }
 
 function instructions(page: Page): Locator {
-  return page.locator("form").getByRole("textbox", { name: /^System prompt/u });
+  return page.locator("form").getByRole("textbox", { name: /^Agent instructions/u });
 }
 
 /** Deletes an agent if it is there. What a test leaves behind must not meet the next run. */
@@ -302,7 +302,7 @@ test("a workspace holder builds an agent in the workspace, is refused, meets a c
     await expect(staleHistory.locator(`[data-revision="${created + 1}"]`)).not.toContainText(
       "Current"
     );
-    await expect(staleHistory.getByRole("button", { name: /^Restore revision/u })).toHaveCount(0);
+    await expect(staleHistory.getByRole("button", { name: /^Restore version/u })).toHaveCount(0);
     await page.keyboard.press("Escape");
     await expect(staleHistory).toBeHidden();
     await loadNewerVersion(page);
@@ -315,14 +315,14 @@ test("a workspace holder builds an agent in the workspace, is refused, meets a c
     for (const revision of [created, created + 1, created + 2]) {
       await expect(history.locator(`[data-revision="${revision}"]`)).toBeVisible();
     }
-    await history.getByRole("button", { name: `Restore revision ${created}`, exact: true }).click();
+    await history.getByRole("button", { name: `Restore version ${created}`, exact: true }).click();
     await page
-      .getByRole("dialog", { name: `Restore revision ${created}?`, exact: true })
+      .getByRole("dialog", { name: `Restore version ${created}?`, exact: true })
       .getByRole("button", { name: "Restore", exact: true })
       .click();
     // The restored content is the asset now: the drawer closes on the editor that shows it.
     await expect(history).toBeHidden();
-    await expect(page.locator("[data-build-restored]")).toHaveText(`Revision ${created} restored.`);
+    await expect(page.locator("[data-build-restored]")).toHaveText(`Version ${created} restored.`);
     await publishAgentDraft(admin, inWorkspace("team-helper"));
     await page.reload();
     await expect(instructions(page)).toHaveValue("You help Kai.");
@@ -584,7 +584,7 @@ test("an asset that was deleted meanwhile says so, keeps the text and offers the
     await page.getByRole("button", { name: "History", exact: true }).click();
     const history = page.getByRole("dialog", { name: "History", exact: true });
     await expect(history.locator("[data-revision]").first()).toContainText("Deleted");
-    await expect(history.getByRole("button", { name: /^Restore revision/u })).toHaveCount(0);
+    await expect(history.getByRole("button", { name: /^Restore version/u })).toHaveCount(0);
     await page.keyboard.press("Escape");
     await expect(history).toBeHidden();
 

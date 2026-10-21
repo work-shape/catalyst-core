@@ -631,8 +631,8 @@ describe.each<{
     tryTab: "Try",
     preview: "Preview",
     live: "Running the published version",
-    draft: "Running draft revision 4",
-    now: "Now running draft revision 5",
+    draft: "Running draft version 4",
+    now: "Now running draft version 5",
     opening: "Opening Try…"
   },
   {
@@ -641,8 +641,8 @@ describe.each<{
     tryTab: "Ausprobieren",
     preview: "Vorschau",
     live: "Läuft mit der veröffentlichten Version",
-    draft: "Läuft mit Entwurfsrevision 4",
-    now: "Läuft jetzt mit Entwurfsrevision 5",
+    draft: "Läuft mit Entwurfsversion 4",
+    now: "Läuft jetzt mit Entwurfsversion 5",
     opening: "Ausprobieren wird geöffnet…"
   }
 ])("the dock's head on an agent's page in $locale", (text) => {

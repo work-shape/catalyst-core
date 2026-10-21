@@ -58,12 +58,18 @@ describe("A refused Connection address", () => {
     const { t } = createTranslationContext(locale);
     const refusal = readBuildRefusal(egressRefusal(), t, locale);
     const [said] = refusalsOf(refusal, undefined);
-    // ACCEPT-FIX-7 C9: the operator's network rule blocks it, and the person sends the operator
+    // ACCEPT-FIX-7 C9: a network rule of the instance blocks it, and the person sends the team that runs it
     // the host. Nobody is told to ask an administrator, and nothing English stands under it.
     expect(said).toContain(
-      locale === "en" ? "The operator's network rule blocks" : "Netzwerkregel des Betreibers sperrt"
+      locale === "en"
+        ? "A network rule of this instance blocks"
+        : "Netzwerkregel dieser Instanz sperrt"
     );
-    expect(said).toContain(locale === "en" ? "send the operator the host" : "schick dem Betreiber");
+    expect(said).toContain(
+      locale === "en"
+        ? "send the team that runs this instance the host"
+        : "schick dem Team, das diese Instanz betreibt"
+    );
     expect(said).not.toMatch(/administrator/iu);
     expect(said).not.toContain("egress");
     expect(said).not.toContain("release config");
@@ -198,14 +204,14 @@ describe("A refused new Connection", () => {
     "tells a refused address at the address field once, with the host to send the operator (%j)",
     async (roles) => {
       const page = await connectRefused(egressRefusal(), roles);
-      await vi.waitFor(() => expect(addressError(page)).toContain("Netzwerkregel des Betreibers"));
+      await vi.waitFor(() => expect(addressError(page)).toContain("Netzwerkregel dieser Instanz"));
       expect(addressError(page)).toBe(
-        "Eine Netzwerkregel des Betreibers sperrt dieses Ziel. Damit es erlaubt wird, schick dem Betreiber den Host api.exampledata.com."
+        "Eine Netzwerkregel dieser Instanz sperrt dieses Ziel. Damit es erlaubt wird, schick dem Team, das diese Instanz betreibt, den Host api.exampledata.com."
       );
       // ACCEPT-FIX-7 C9: told once, in German, with no English sentence under Technical details.
       expect(page.textContent).not.toContain("egress");
       expect(page.querySelector("[data-refusal-detail]")).toBeNull();
-      expect(page.textContent?.split("Netzwerkregel des Betreibers").length).toBe(2);
+      expect(page.textContent?.split("Netzwerkregel dieser Instanz").length).toBe(2);
       // Nothing was saved, so nothing is said to be in the list.
       expect(page.querySelector("[data-connection-create-saved]")).toBeNull();
     }
@@ -249,7 +255,7 @@ describe("A refused save on the Connection page", () => {
   async function refusedSave(
     roles: string[],
     refusal: ApiError = egressRefusal(),
-    said = "The operator's network rule blocks"
+    said = "A network rule of this instance blocks"
   ): Promise<HTMLElement> {
     const asset = connectionAsset("sample-business", { origin: "runtime" });
     const detailPath = apiOperations["connections.get"].path.replace(":name", asset.name);

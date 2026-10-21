@@ -345,13 +345,13 @@ describe("the lines of the asset tools", () => {
         { toolName: "platform.assets.put", result: { saved: true, revision: 5 } },
         t
       )
-    ).toBe("Saved revision 5");
+    ).toBe("Saved version 5");
     expect(
       assetToolSentence(
         { toolName: "platform.assets.put", result: { saved: true, revision: 5 } },
         de
       )
-    ).toBe("Revision 5 gespeichert");
+    ).toBe("Version 5 gespeichert");
     expect(
       assetToolSentence(
         { toolName: "platform.assets.put", result: { saved: false, issues: [{}] } },

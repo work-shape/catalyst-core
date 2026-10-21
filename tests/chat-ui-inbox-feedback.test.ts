@@ -36,7 +36,7 @@ describe("inbox item of feedback", () => {
     );
     expect(markup).toMatch(/<h3[^>]*>Feedback on loans display<\/h3>/u);
     expect(markup).toContain("From Kai, ");
-    expect(markup).toContain("Revision 4");
+    expect(markup).toContain("Version 4");
     expect(markup).toContain("The answer forgot the land register extract.");
     expect(markup).toContain("The exchange");
     expect(markup).toContain('href="/build/agents/loans"');

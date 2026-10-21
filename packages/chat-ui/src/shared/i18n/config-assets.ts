@@ -46,8 +46,6 @@ export const configAssets = defineTranslations({
     configBehaviorDescription: "Core instructions for this agent.",
     configBehaviorDescriptionWithControls:
       "Core instructions and permitted runtime controls for this agent.",
-    configCapabilities: "Capabilities",
-    configCapabilitiesDescription: "Only tools enabled for this deployment can be assigned here.",
     configChangeSaveFailed: "The change could not be saved.",
     configChangeWaitsForApproval: "This change waits for an approval. Nothing has changed yet.",
     configChangedDescription:
@@ -61,10 +59,10 @@ export const configAssets = defineTranslations({
     configDefaultAgent: "Default agent",
     configDelete: "Delete",
     configDeleteAgentDescription:
-      "The agent stops being available for new conversations right away. Its revision history is kept, so it can be restored later.",
+      "The agent stops being available for new conversations right away. Its version history is kept, so it can be restored later.",
     configDeleteAgentTitle: "Delete agent '{name}'?",
     configDeleteSkillDescription:
-      "The skill stops being available for new conversations right away. Its revision history is kept, so it can be restored later.",
+      "The skill stops being available for new conversations right away. Its version history is kept, so it can be restored later.",
     configDeleteSkillTitle: "Delete skill '{name}'?",
     configDescription: "Description",
     configDisplayName: "Display name",
@@ -79,7 +77,8 @@ export const configAssets = defineTranslations({
     configMakeDefault: "Make default",
     configMarkdown: "Markdown",
     configMaxSteps: "Max steps",
-    configMaxStepsHint: "Maximum model and tool turns for one response. Empty uses release config.",
+    configMaxStepsHint:
+      "Maximum model and tool turns for one response. Empty uses the instance's setting.",
     configModelDefault: "Model default",
     configModelIsDefault: "Default",
     configModelUserSelectable: "Selectable by users",
@@ -91,7 +90,7 @@ export const configAssets = defineTranslations({
     configNewAgentPrompt: "Build a new agent that ",
     configNewSkill: "New skill",
     configNewSkillPrompt: "Write a new skill that ",
-    configNoRevisions: "No revisions yet.",
+    configNoRevisions: "No versions yet.",
     configNoSkills: "No skills defined yet.",
     configNoTools: "No tools are enabled for this instance.",
     configToolModuleOff: "Not available: the module {module} is off. Remove it to save.",
@@ -117,8 +116,8 @@ export const configAssets = defineTranslations({
     configRestore: "Restore",
     configRevisionCreate: "Created",
     configRevisionDelete: "Deleted",
-    configRevisionHistory: "Revision history",
-    configRevisionLoadFailed: "Could not load the revision history.",
+    configRevisionHistory: "Version history",
+    configRevisionLoadFailed: "Could not load the version history.",
     configRevisionRevert: "Restored",
     configRevisionUpdate: "Updated",
     configSaveChanges: "Save changes",
@@ -133,8 +132,8 @@ export const configAssets = defineTranslations({
     configSkillTitleHint: "Shown to the model in the skill list.",
     configStarterPrompts: "Starter prompts",
     configStarterPromptsDescription: "Suggestion cards shown before the first message is sent.",
-    configSystemPrompt: "System prompt",
-    configSystemPromptHint: "The agent's system prompt.",
+    configSystemPrompt: "Agent instructions",
+    configSystemPromptHint: "What the agent follows in every conversation.",
     configPlatformInstructions: "Platform instructions",
     configPlatformInstructionsHint:
       "The platform sends these before the instructions below. They come with each release and cannot be changed here.",
@@ -167,7 +166,7 @@ export const configAssets = defineTranslations({
     configToolGroupFilesText: "Works on files and runs code in the conversation's own files.",
     configToolGroupResults: "Results",
     configToolGroupResultsText:
-      "Shows and keeps results: widgets, previews, apps and recorded facts.",
+      "Shows and keeps results: cards, previews, apps and recorded facts.",
     configToolGroupSkills: "Skills",
     configToolGroupSkillsText: "Reads its skills and proposes changes to them.",
     configToolGroupPlatform: "Platform",
@@ -226,9 +225,6 @@ export const configAssets = defineTranslations({
     configBehaviorDescription: "Grundlegende Anweisungen für diesen Agenten.",
     configBehaviorDescriptionWithControls:
       "Grundlegende Anweisungen und zulässige Laufzeitsteuerung für diesen Agenten.",
-    configCapabilities: "Fähigkeiten",
-    configCapabilitiesDescription:
-      "Hier können nur Werkzeuge zugewiesen werden, die für diese Bereitstellung aktiviert sind.",
     configChangeSaveFailed: "Die Änderung konnte nicht gespeichert werden.",
     configChangeWaitsForApproval:
       "Diese Änderung wartet auf eine Freigabe. Bisher wurde nichts geändert.",
@@ -320,8 +316,8 @@ export const configAssets = defineTranslations({
     configStarterPrompts: "Einstiegsvorschläge",
     configStarterPromptsDescription:
       "Vorschlagskarten, die vor dem Senden der ersten Nachricht angezeigt werden.",
-    configSystemPrompt: "Systemanweisung",
-    configSystemPromptHint: "Die Systemanweisung des Agenten.",
+    configSystemPrompt: "Anweisungen des Agenten",
+    configSystemPromptHint: "Was der Agent in jeder Unterhaltung befolgt.",
     configPlatformInstructions: "Plattform-Anweisungen",
     configPlatformInstructionsHint:
       "Die Plattform sendet sie vor den Anweisungen unten. Sie kommen mit jedem Release und lassen sich hier nicht ändern.",
@@ -355,7 +351,7 @@ export const configAssets = defineTranslations({
       "Arbeitet mit Dateien und führt Code auf den Dateien der Unterhaltung aus.",
     configToolGroupResults: "Ergebnisse",
     configToolGroupResultsText:
-      "Zeigt und behält Ergebnisse: Widgets, Vorschauen, Apps und festgehaltene Fakten.",
+      "Zeigt und behält Ergebnisse: Karten, Vorschauen, Apps und festgehaltene Fakten.",
     configToolGroupSkills: "Skills",
     configToolGroupSkillsText: "Liest seine Skills und schlägt Änderungen daran vor.",
     configToolGroupPlatform: "Plattform",

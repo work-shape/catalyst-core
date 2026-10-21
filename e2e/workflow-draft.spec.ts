@@ -169,7 +169,7 @@ test("the builder of a Workflow edits it with the agent and publishes or discard
     // The publish names the revision the page read, after one question.
     await bar.getByRole("button", { name: "Publish", exact: true }).click();
     const publish = page.getByRole("dialog", { name: `Publish “${NAME}”?` });
-    await expect(publish).toContainText("Revision 1 becomes the version that runs");
+    await expect(publish).toContainText("Version 1 becomes the one that runs");
     await publish.getByRole("button", { name: "Publish", exact: true }).click();
     await expect(publish).toBeHidden();
     // The draft is the published revision now: no bar, and the Workflow can be started.
@@ -226,7 +226,7 @@ test("the builder of a Workflow edits it with the agent and publishes or discard
       expectedRevision: await assetRevision(page, assetUrlOf(id))
     });
     await expect(bar).toHaveAttribute("data-workflow-draft", "ahead");
-    await expect(await lastWorkLine(page)).toHaveText(/^Saved revision \d+$/u);
+    await expect(await lastWorkLine(page)).toHaveText(/^Saved version \d+$/u);
     await shootThemes(page, "workflow-from-page", async () => {
       await expect(bar).toHaveAttribute("data-workflow-draft", "ahead");
       await expect(workflowPage.getByText("What the run returns.")).toBeVisible();
@@ -272,7 +272,7 @@ test("the builder of a Workflow edits it with the agent and publishes or discard
     // The discard puts the draft back on the published revision, after one question.
     await bar.getByRole("button", { name: "Discard", exact: true }).click();
     const discard = page.getByRole("dialog", { name: `Discard the draft of “${NAME}”?` });
-    await expect(discard).toContainText("The draft goes back to the published revision 1");
+    await expect(discard).toContainText("The draft goes back to the published version 1");
     await discard.getByRole("button", { name: "Discard", exact: true }).click();
     await expect(discard).toBeHidden();
     await expect(bar).toHaveCount(0);

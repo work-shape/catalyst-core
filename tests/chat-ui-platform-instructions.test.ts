@@ -78,7 +78,9 @@ describe("the platform instructions on an agent's page", () => {
     const section = instructionsSection([]);
     expect(section).toContain("data-platform-instructions");
     expect(section).toContain("Platform instructions");
-    expect(section.indexOf("Platform instructions")).toBeLessThan(section.indexOf("System prompt"));
+    expect(section.indexOf("Platform instructions")).toBeLessThan(
+      section.indexOf("Agent instructions")
+    );
     expect(instructionsSection([], false)).not.toContain("Platform instructions");
   });
 

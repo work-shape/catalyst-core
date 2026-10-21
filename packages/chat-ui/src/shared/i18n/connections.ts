@@ -6,9 +6,9 @@ export const connections = defineTranslations({
     "connections.personContextAppUnavailable":
       "Person context is not available in Apps yet. Remove App exposure or the person context header.",
     "connections.description":
-      "Connections give agents, apps and workflows access to outside systems. Those from the release config are read-only here.",
+      "Connections give agents, apps and workflows access to outside systems. Those that come with the instance's setup are read-only here.",
     "connections.releaseNotice":
-      "This connection is defined in the release config. The operator changes it there; it cannot be changed here.",
+      "This connection comes with the instance's setup. The team that runs this instance changes it there; it cannot be changed here.",
     "connections.new": "New connection",
     "connections.titleLabel": "Name",
     "connections.deleteTitle": "Delete connection '{name}'?",
@@ -18,7 +18,7 @@ export const connections = defineTranslations({
     "connections.create": "Create connection",
     "connections.serverTitle": "Server",
     "connections.serverDescription":
-      "The remote MCP server this connection reaches. The instance reaches only hosts the operator allowed.",
+      "The remote MCP server this connection reaches. The instance reaches only hosts that are allowed for it.",
     "connections.url": "Server address",
     "connections.urlHint":
       "The https address of the server with the path of its MCP endpoint, as its provider gives it. Moving to another server removes the key entered for this one.",
@@ -63,7 +63,7 @@ export const connections = defineTranslations({
     "connections.refusedOAuth":
       "Check the OAuth addresses: https, without user name or fragment. Extra parameters may not name a parameter of the protocol.",
     "connections.refusedOAuthEgress":
-      "The operator's network rule blocks an address of the sign-in server. Send the operator the host named in the details.",
+      "A network rule of this instance blocks an address of the sign-in server. Send the team that runs this instance the host named in the details.",
     "connections.refusedUnknown":
       "The instance did not accept this connection. An administrator of the instance sees why under Technical details.",
     "connections.writeFailed": "The change could not be saved.",
@@ -100,18 +100,19 @@ export const connections = defineTranslations({
     "connections.disabled": "Disabled",
     "connections.empty": "No connections yet. A connection holds the access to an outside system.",
     "connections.healthFailed": "Failed",
-    "connections.healthFailedNext": "Test again. If it fails again, ask the operator.",
+    "connections.healthFailedNext":
+      "Test again. If it fails again, ask the team that runs this instance.",
     "connections.healthFailedText": "The test failed for a reason the instance does not name.",
     "connections.healthNetworkDeniedNext":
-      "The operator lets the instance reach this host and restarts it. Then test again.",
+      "The team that runs this instance lets it reach this host and restarts it. Then test again.",
     "connections.healthNotConfiguredNext":
-      "The operator supplies the credential in the instance's environment and restarts the instance. Then test again.",
+      "The team that runs this instance supplies the credential and restarts the instance. Then test again.",
     "connections.healthSecretUnreadableNext":
-      "The operator restores the Secret Store key the credential was stored with, or supplies the credential again in the instance's environment, and restarts the instance. Then test again.",
+      "The team that runs this instance restores the key the credential was stored with, or supplies the credential again, and restarts the instance. Then test again.",
     "connections.healthUnauthorizedNext":
-      "The operator sets a new credential in the instance's environment and restarts the instance. Then test again.",
+      "The team that runs this instance sets a new credential and restarts the instance. Then test again.",
     "connections.healthUnavailableNext":
-      "Check the address under Settings. The operator of this instance can change it.",
+      "Check the address under Settings. The team that runs this instance can change it.",
     "connections.statusDescription": "Whether the instance reaches the outside system.",
     "connections.accessTitle": "Additional use rights",
     "connections.accessDescription":
@@ -131,7 +132,7 @@ export const connections = defineTranslations({
     "connections.connectorType": "Connector type",
     "connections.credential": "Credential",
     "connections.credentialNeverShown":
-      "The credential stays in the Secret Store. This page shows only whether it is there.",
+      "The credential stays in the instance's protected store. This page shows only whether it is there.",
     "connections.credentialNoneNeeded": "None needed",
     "connections.credentialNoneNeededText": "The outside system asks for no credential.",
     "connections.credentialNotSet": "Not set",
@@ -154,7 +155,7 @@ export const connections = defineTranslations({
     "connections.exposureWorkflow": "Workflows",
     "connections.healthNetworkDenied": "Network denied",
     "connections.healthNetworkDeniedText":
-      "The instance may not reach this address. Its host is not among the outside addresses the operator allowed.",
+      "The instance may not reach this address. Its host is not among the outside addresses allowed for it.",
     "connections.healthNeverTested": "Not tested",
     "connections.healthNeverTestedText": "This connection has not been tested yet.",
     "connections.healthSignInNeeded": "Sign-in needed",
@@ -164,7 +165,7 @@ export const connections = defineTranslations({
       "An administrator signs in under Sign-in. Until then nothing can call the connection.",
     "connections.healthNotConfigured": "Not configured",
     "connections.healthNotConfiguredText":
-      "The credential of this connection is missing. Until the operator supplies it, no call reaches the outside system.",
+      "The credential of this connection is missing. Until the team that runs this instance supplies it, no call reaches the outside system.",
     "connections.healthReady": "Ready",
     "connections.healthReadyText": "The outside system answered the test.",
     "connections.healthSecretUnreadable": "Credential unreadable",
@@ -207,10 +208,10 @@ export const connections = defineTranslations({
     "connections.statusAwaitingDiscoveryText":
       "The instance has not read this operation from the outside system yet. It cannot be called until then.",
     "connections.statusDisabled": "Disabled",
-    "connections.statusDisabledText": "Switched off by the operator of this instance.",
+    "connections.statusDisabledText": "Switched off in the instance's setup.",
     "connections.statusNeedsReview": "Needs review",
     "connections.statusNeedsReviewText":
-      "The outside system now describes this operation differently than was accepted. It cannot be called until the operator accepts the new description.",
+      "The outside system now describes this operation differently than was accepted. It cannot be called until someone who may change this connection accepts the new description.",
     "connections.statusNeedsReviewFingerprint": "New fingerprint:",
     "connections.statusReady": "Ready",
     "connections.statusTitle": "Status",
@@ -271,9 +272,9 @@ export const connections = defineTranslations({
     "connections.personContextAppUnavailable":
       "Personenkontext ist in Apps noch nicht verfügbar. Entfernen Sie die App-Freigabe oder den Header für den Personenkontext.",
     "connections.description":
-      "Verbindungen geben Agenten, Apps und Workflows Zugang zu externen Systemen. Die aus der Release-Konfiguration sind hier schreibgeschützt.",
+      "Verbindungen geben Agenten, Apps und Workflows Zugang zu externen Systemen. Die aus der Einrichtung der Instanz sind hier schreibgeschützt.",
     "connections.releaseNotice":
-      "Diese Verbindung ist in der Release-Konfiguration festgelegt. Der Betreiber ändert sie dort; hier lässt sie sich nicht ändern.",
+      "Diese Verbindung gehört zur Einrichtung der Instanz. Das Team, das diese Instanz betreibt, ändert sie dort; hier lässt sie sich nicht ändern.",
     "connections.new": "Neue Verbindung",
     "connections.titleLabel": "Name",
     "connections.deleteTitle": "Verbindung „{name}“ löschen?",
@@ -283,7 +284,7 @@ export const connections = defineTranslations({
     "connections.create": "Verbindung anlegen",
     "connections.serverTitle": "Server",
     "connections.serverDescription":
-      "Der entfernte MCP-Server, den diese Verbindung erreicht. Die Instanz erreicht nur Hosts, die der Betreiber erlaubt hat.",
+      "Der entfernte MCP-Server, den diese Verbindung erreicht. Die Instanz erreicht nur Hosts, die für sie erlaubt sind.",
     "connections.url": "Serveradresse",
     "connections.urlHint":
       "Die https-Adresse des Servers mit dem Pfad seines MCP-Endpunkts, wie sein Anbieter sie angibt. Beim Wechsel zu einem anderen Server wird der für diesen eingegebene Schlüssel entfernt.",
@@ -331,7 +332,7 @@ export const connections = defineTranslations({
     "connections.refusedOAuth":
       "Prüfe die OAuth-Adressen: https, ohne Benutzername oder Fragment. Zusätzliche Parameter dürfen keinen Parameter des Protokolls nennen.",
     "connections.refusedOAuthEgress":
-      "Die Netzwerkregel des Betreibers sperrt eine Adresse des Anmeldeservers. Schicke dem Betreiber den Host aus den Details.",
+      "Eine Netzwerkregel dieser Instanz sperrt eine Adresse des Anmeldeservers. Schick dem Team, das diese Instanz betreibt, den Host aus den Details.",
     "connections.refusedUnknown":
       "Die Instanz hat diese Verbindung nicht angenommen. Ein Administrator der Instanz sieht den Grund unter Technische Details.",
     "connections.writeFailed": "Die Änderung konnte nicht gespeichert werden.",
@@ -370,17 +371,17 @@ export const connections = defineTranslations({
     "connections.healthFailedText":
       "Der Test ist aus einem Grund fehlgeschlagen, den die Instanz nicht nennt.",
     "connections.healthFailedNext":
-      "Teste erneut. Schlägt der Test wieder fehl, wende dich an den Betreiber.",
+      "Teste erneut. Schlägt der Test wieder fehl, wende dich an das Team, das diese Instanz betreibt.",
     "connections.healthNetworkDeniedNext":
-      "Der Betreiber erlaubt der Instanz diesen Host und startet sie neu. Teste danach erneut.",
+      "Das Team, das diese Instanz betreibt, erlaubt ihr diesen Host und startet sie neu. Teste danach erneut.",
     "connections.healthNotConfiguredNext":
-      "Der Betreiber stellt die Zugangsdaten in der Umgebung der Instanz bereit und startet die Instanz neu. Teste danach erneut.",
+      "Das Team, das diese Instanz betreibt, stellt die Zugangsdaten bereit und startet die Instanz neu. Teste danach erneut.",
     "connections.healthSecretUnreadableNext":
-      "Der Betreiber stellt den Secret-Store-Schlüssel wieder her, mit dem die Zugangsdaten gespeichert wurden, oder stellt die Zugangsdaten in der Umgebung der Instanz erneut bereit, und startet die Instanz neu. Teste danach erneut.",
+      "Das Team, das diese Instanz betreibt, stellt den Schlüssel wieder her, mit dem die Zugangsdaten gespeichert wurden, oder stellt die Zugangsdaten erneut bereit, und startet die Instanz neu. Teste danach erneut.",
     "connections.healthUnauthorizedNext":
-      "Der Betreiber setzt neue Zugangsdaten in der Umgebung der Instanz und startet die Instanz neu. Teste danach erneut.",
+      "Das Team, das diese Instanz betreibt, setzt neue Zugangsdaten und startet die Instanz neu. Teste danach erneut.",
     "connections.healthUnavailableNext":
-      "Prüfe die Adresse unter Einstellungen. Ändern kann sie der Betreiber dieser Instanz.",
+      "Prüfe die Adresse unter Einstellungen. Ändern kann sie das Team, das diese Instanz betreibt.",
     "connections.statusDescription": "Ob die Instanz das externe System erreicht.",
     "connections.accessTitle": "Zusätzliche Nutzungsrechte",
     "connections.accessDescription":
@@ -400,7 +401,7 @@ export const connections = defineTranslations({
     "connections.connectorType": "Konnektortyp",
     "connections.credential": "Zugangsdaten",
     "connections.credentialNeverShown":
-      "Die Zugangsdaten bleiben im Secret Store. Diese Seite zeigt nur, ob sie vorhanden sind.",
+      "Die Zugangsdaten bleiben im geschützten Speicher der Instanz. Diese Seite zeigt nur, ob sie vorhanden sind.",
     "connections.credentialNoneNeeded": "Nicht nötig",
     "connections.credentialNoneNeededText": "Das externe System verlangt keine Zugangsdaten.",
     "connections.credentialNotSet": "Nicht gesetzt",
@@ -426,7 +427,7 @@ export const connections = defineTranslations({
     "connections.exposureWorkflow": "Workflows",
     "connections.healthNetworkDenied": "Netzwerk gesperrt",
     "connections.healthNetworkDeniedText":
-      "Die Instanz darf diese Adresse nicht erreichen. Ihr Host gehört nicht zu den externen Adressen, die der Betreiber erlaubt hat.",
+      "Die Instanz darf diese Adresse nicht erreichen. Ihr Host gehört nicht zu den externen Adressen, die für sie erlaubt sind.",
     "connections.healthNeverTested": "Nicht getestet",
     "connections.healthNeverTestedText": "Diese Verbindung wurde noch nicht getestet.",
     "connections.healthSignInNeeded": "Anmeldung nötig",
@@ -436,7 +437,7 @@ export const connections = defineTranslations({
       "Eine Administratorin oder ein Administrator meldet sie unter Anmeldung an. Bis dahin kann nichts die Verbindung aufrufen.",
     "connections.healthNotConfigured": "Nicht konfiguriert",
     "connections.healthNotConfiguredText":
-      "Die Zugangsdaten dieser Verbindung fehlen. Bis der Betreiber sie bereitstellt, erreicht kein Aufruf das externe System.",
+      "Die Zugangsdaten dieser Verbindung fehlen. Bis das Team, das diese Instanz betreibt, sie bereitstellt, erreicht kein Aufruf das externe System.",
     "connections.healthReady": "Bereit",
     "connections.healthReadyText": "Das externe System hat auf den Test geantwortet.",
     "connections.healthSecretUnreadable": "Zugangsdaten nicht lesbar",
@@ -480,10 +481,10 @@ export const connections = defineTranslations({
     "connections.statusAwaitingDiscoveryText":
       "Die Instanz hat diese Operation noch nicht vom externen System gelesen. Bis dahin kann sie nicht aufgerufen werden.",
     "connections.statusDisabled": "Deaktiviert",
-    "connections.statusDisabledText": "Vom Betreiber dieser Instanz abgeschaltet.",
+    "connections.statusDisabledText": "In der Einrichtung der Instanz abgeschaltet.",
     "connections.statusNeedsReview": "Prüfung nötig",
     "connections.statusNeedsReviewText":
-      "Das externe System beschreibt diese Operation jetzt anders als akzeptiert. Sie kann erst wieder aufgerufen werden, wenn der Betreiber die neue Beschreibung akzeptiert.",
+      "Das externe System beschreibt diese Operation jetzt anders als akzeptiert. Sie kann erst wieder aufgerufen werden, wenn jemand, der diese Verbindung ändern darf, die neue Beschreibung akzeptiert.",
     "connections.statusNeedsReviewFingerprint": "Neuer Fingerabdruck:",
     "connections.statusReady": "Bereit",
     "connections.statusTitle": "Status",

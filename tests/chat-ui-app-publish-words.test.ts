@@ -14,8 +14,8 @@ import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harn
 // what is published. A Personal Workspace is named after its owner ("Mara's workspace"); the
 // name stored on its row, "Personal workspace" in every language, is never shown beside it.
 // An App published before SHARE-1 is live for its workspace, and the instance's label for that
-// carries the stored name. After a publish the head says "Published · revision 1", not
-// "Draft · revision 1".
+// carries the stored name. After a publish the head says "Published · version 1", not
+// "Draft · version 1".
 
 const render = (node: ReactNode, locale: "en" | "de" = "en") =>
   renderToStaticMarkup(createElement(TranslationProvider, { locale, children: node }));
@@ -118,15 +118,15 @@ describe("the head of an App's draft", () => {
 
   it("says the App is published once its draft is what is published", () => {
     const german = head({ draftRevision: 1, publishedRevision: 1 }, "de");
-    expect(german).toContain("Veröffentlicht · Revision 1");
-    expect(german).not.toContain("Entwurf · Revision 1");
+    expect(german).toContain("Veröffentlicht · Version 1");
+    expect(german).not.toContain("Entwurf · Version 1");
     const english = head({ draftRevision: 1, publishedRevision: 1 });
-    expect(english).toContain("Published · revision 1");
-    expect(english).not.toContain("Draft · revision 1");
+    expect(english).toContain("Published · version 1");
+    expect(english).not.toContain("Draft · version 1");
   });
 
   it("names the draft's number while the draft is ahead, and says when nothing is published", () => {
-    expect(head({ draftRevision: 2, publishedRevision: 1 })).toContain("Draft · revision 2");
+    expect(head({ draftRevision: 2, publishedRevision: 1 })).toContain("Draft · version 2");
     expect(head({ draftRevision: 1 }, "de")).toContain("Entwurf · nicht veröffentlicht");
   });
 
@@ -153,7 +153,7 @@ describe("the head of an App's draft", () => {
     );
     // Published: the line about "once published" is gone.
     const published = withFact({ draftRevision: 1, publishedRevision: 1 });
-    expect(published).toContain("Veröffentlicht · Revision 1");
+    expect(published).toContain("Veröffentlicht · Version 1");
     expect(published).not.toContain('data-testid="app-stored-data-fact"');
   });
 });

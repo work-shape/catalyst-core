@@ -156,10 +156,10 @@ test("the agent page saves a draft twice, publishes it, and discards the next on
     // Save draft writes the draft; the page shows it and the live agent stays.
     await instructionsOf(page).fill("Check every contract for a signature and name the clause.");
     await saveDraftOf(page).click();
-    await expect(badgeOf(page)).toHaveText("Draft revision 1");
+    await expect(badgeOf(page)).toHaveText("Draft version 1");
     // The banner names the author and the time; the head's badge only the revision.
     await expect(page.locator('[data-agent-draft="pending"]')).toContainText(
-      "Draft revision 1, saved by E2E Superadmin on "
+      "Draft version 1, saved by E2E Superadmin on "
     );
     await expect(instructionsOf(page)).toHaveValue(
       "Check every contract for a signature and name the clause."
@@ -173,7 +173,7 @@ test("the agent page saves a draft twice, publishes it, and discards the next on
     // A second save writes the draft again, on the revision the first one wrote.
     await instructionsOf(page).fill("Name the clause that misses a signature.");
     await saveDraftOf(page).click();
-    await expect(badgeOf(page)).toHaveText("Draft revision 2");
+    await expect(badgeOf(page)).toHaveText("Draft version 2");
     await expect(page.locator("[data-agent-draft-behind]")).toHaveCount(0);
     expect(await draftRevision(page, name)).toBe(2);
     expect(await liveInstructions(page, name)).toBe("Check every contract for a signature.");
@@ -205,7 +205,7 @@ test("the agent page saves a draft twice, publishes it, and discards the next on
     // Discard, from the "…" menu and behind a dialog, drops the next draft; the agent stays.
     await instructionsOf(page).fill("Only read the contract.");
     await saveDraftOf(page).click();
-    await expect(badgeOf(page)).toHaveText(/^Draft revision \d+$/u);
+    await expect(badgeOf(page)).toHaveText(/^Draft version \d+$/u);
     await page.getByRole("button", { name: "More actions", exact: true }).click();
     await page.getByRole("menuitem", { name: "Discard draft", exact: true }).click();
     const discard = page.getByRole("dialog", { name: `Discard the draft of ${displayName}?` });
@@ -248,7 +248,7 @@ test("a writer without agent.publish, a draft written meanwhile, a reader, and a
     writerPage.setDefaultTimeout(30_000);
     await signIn(writerPage, writer);
     await writerPage.goto(`/build/agents/${name}`);
-    await expect(badgeOf(writerPage)).toHaveText("Draft revision 1");
+    await expect(badgeOf(writerPage)).toHaveText("Draft version 1");
     await expect(writerPage.locator('[data-agent-draft="pending"]')).toContainText(
       "saved by E2E Superadmin on "
     );
@@ -270,18 +270,18 @@ test("a writer without agent.publish, a draft written meanwhile, a reader, and a
     await putAgent(page, name, displayName, "Read the contract three times.");
     await saveDraftOf(writerPage).click();
     const behind = writerPage.locator('[data-agent-draft-behind="2"]');
-    await expect(behind).toContainText("E2E Superadmin saved draft revision 2 on");
+    await expect(behind).toContainText("E2E Superadmin saved draft version 2 on");
     await expect(instructionsOf(writerPage)).toHaveValue("Mine.");
     await expect(saveDraftOf(writerPage)).toBeDisabled();
     await behind.scrollIntoViewIfNeeded();
     await shootOnce(writerPage, "ad-4-behind-1280-light-en");
     await behind.getByRole("button", { name: "Load the newer draft", exact: true }).click();
-    await expect(badgeOf(writerPage)).toHaveText("Draft revision 2");
+    await expect(badgeOf(writerPage)).toHaveText("Draft version 2");
     await expect(instructionsOf(writerPage)).toHaveValue("Read the contract three times.");
     // The writer goes on from the newer draft and saves on it.
     await instructionsOf(writerPage).fill("Read the contract three times, slowly.");
     await saveDraftOf(writerPage).click();
-    await expect(badgeOf(writerPage)).toHaveText("Draft revision 3");
+    await expect(badgeOf(writerPage)).toHaveText("Draft version 3");
     await expect(writerPage.locator('[data-agent-draft="pending"]')).toContainText(
       "saved by E2E Zz Agent Draft Writer on "
     );
@@ -343,7 +343,7 @@ test("a writer without agent.publish, a draft written meanwhile, a reader, and a
     expect(publishGranted.ok(), await publishGranted.text()).toBe(true);
     grants.push(idSchema.parse(await publishGranted.json()).id);
     await writerPage.reload();
-    await expect(badgeOf(writerPage)).toHaveText("Draft revision 3");
+    await expect(badgeOf(writerPage)).toHaveText("Draft version 3");
     await writerPage.locator("[data-agent-publish]").click();
     await writerPage
       .getByRole("dialog", { name: `Publish ${displayName}?` })

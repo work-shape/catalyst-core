@@ -71,7 +71,7 @@ test("an agent made in a workspace's Studio scope is the workspace's, listed wit
     await create.getByRole("button", { name: "Continue", exact: true }).click();
     await page
       .locator("form")
-      .getByRole("textbox", { name: /^System prompt/u })
+      .getByRole("textbox", { name: /^Agent instructions/u })
       .fill("You help the team.");
     await page.getByRole("button", { name: "Create agent", exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`/build/agents/${agentName}$`, "u"));

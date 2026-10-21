@@ -81,7 +81,7 @@ test("an App form validates and fires submit in every sandbox layer", async ({
   await expect(dialog.getByTestId("app-publish-audience")).toBeVisible();
   await dialog.getByRole("button", { name: "Publish", exact: true }).click();
   await expect(dialog).toBeHidden();
-  await expect(page.getByText("Published · revision 1", { exact: true })).toBeVisible();
+  await expect(page.getByText("Published · version 1", { exact: true })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("accept-fix-2-published-draft.png") });
 });
 

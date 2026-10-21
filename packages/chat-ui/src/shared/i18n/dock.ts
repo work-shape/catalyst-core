@@ -67,10 +67,10 @@ export const dock = defineTranslations({
     "dock.tabBuild": "Build",
     "dock.tabs": "Build or try the agent",
     "dock.tabTry": "Try",
-    "dock.tryDraft": "Running draft revision {revision}",
+    "dock.tryDraft": "Running draft version {revision}",
     "dock.tryFailed": "Try could not be opened.",
     "dock.tryLive": "Running the published version",
-    "dock.tryNowDraft": "Now running draft revision {revision}",
+    "dock.tryNowDraft": "Now running draft version {revision}",
     "dock.tryNowLive": "Now running the published version",
     "dock.tryOpening": "Opening Try…"
   },
@@ -137,10 +137,10 @@ export const dock = defineTranslations({
     "dock.tabBuild": "Bauen",
     "dock.tabs": "Agent bauen oder ausprobieren",
     "dock.tabTry": "Ausprobieren",
-    "dock.tryDraft": "Läuft mit Entwurfsrevision {revision}",
+    "dock.tryDraft": "Läuft mit Entwurfsversion {revision}",
     "dock.tryFailed": "Ausprobieren konnte nicht geöffnet werden.",
     "dock.tryLive": "Läuft mit der veröffentlichten Version",
-    "dock.tryNowDraft": "Läuft jetzt mit Entwurfsrevision {revision}",
+    "dock.tryNowDraft": "Läuft jetzt mit Entwurfsversion {revision}",
     "dock.tryNowLive": "Läuft jetzt mit der veröffentlichten Version",
     "dock.tryOpening": "Ausprobieren wird geöffnet…"
   }

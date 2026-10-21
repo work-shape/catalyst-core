@@ -429,7 +429,7 @@ describe("Studio frame", () => {
     expect(list).not.toContain("More actions");
     // The list says what Connections are and which of them are read-only, with rows and without.
     expect(list).toContain(
-      "Connections give agents, apps and workflows access to outside systems. Those from the release config are read-only here."
+      "Connections give agents, apps and workflows access to outside systems. Those that come with the instance&#x27;s setup are read-only here."
     );
     // The address of a Connection the instance does not hold says so, and names the way back.
     const missing = render(
@@ -456,7 +456,7 @@ describe("Studio frame", () => {
       "No connections yet. A connection holds the access to an outside system."
     );
     expect(empty("de")).toContain(
-      "Verbindungen geben Agenten, Apps und Workflows Zugang zu externen Systemen. Die aus der Release-Konfiguration sind hier schreibgeschützt."
+      "Verbindungen geben Agenten, Apps und Workflows Zugang zu externen Systemen. Die aus der Einrichtung der Instanz sind hier schreibgeschützt."
     );
     expect(empty("en")).toContain(">New connection<");
     expect(empty("de")).toContain(

@@ -134,11 +134,11 @@ describe("the App's Publish dialog", () => {
     // The revision sentence is no lead of its own any more: it stands in Details.
     const fold = details(markup);
     expect(fold).toContain(">Details<");
-    expect(fold).toContain("Everyone in Kai Spezis gets revision 3 when they open the app.");
+    expect(fold).toContain("Everyone in Kai Spezis gets version 3 when they open the app.");
     expect(fold).toContain("Connections it uses");
     expect(fold).toContain(">crm</code>");
     expect(fold).toContain(">api.example.com</code>");
-    expect(at(markup, "Everyone in Kai Spezis gets revision 3")).toBeGreaterThan(summary);
+    expect(at(markup, "Everyone in Kai Spezis gets version 3")).toBeGreaterThan(summary);
     // Folded, the lists stay in the page, hidden, so the reads inside them still run.
     expect(fold).toMatch(/data-state="closed"[^>]*class="[^"]*data-\[state=closed\]:hidden/u);
     expect(disabled(publishButton(markup))).toBe(false);
@@ -169,7 +169,7 @@ describe("the App's Publish dialog", () => {
   it("asks as before where the instance words no sentence, as a sample or an older instance", () => {
     const markup = dialog();
     expect(markup).not.toContain('data-testid="publish-details"');
-    expect(markup).toContain("Everyone in Kai Spezis gets revision 3 when they open the app.");
+    expect(markup).toContain("Everyone in Kai Spezis gets version 3 when they open the app.");
     expect(disabled(publishButton(markup))).toBe(false);
   });
 });

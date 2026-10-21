@@ -3195,7 +3195,7 @@ test("Studio opens on a list, and a list and an asset each have an address", asy
   await expect(page).toHaveURL(/\/build\/agents\/research_assistant$/u);
   await expect(page.getByRole("heading", { name: "Research Assistant", level: 1 })).toBeVisible();
   await expect(
-    page.locator("form").getByRole("textbox", { name: /^System prompt/u })
+    page.locator("form").getByRole("textbox", { name: /^Agent instructions/u })
   ).toBeVisible();
   await page.goBack();
   await expect(page).toHaveURL(/\/build\/agents$/u);
@@ -3276,7 +3276,7 @@ test("a Studio row is a link, the heading takes the focus, and unsaved changes a
 
   // Unsaved changes: the back button asks, and staying keeps what was typed.
   await research.click();
-  const instructions = page.locator("form").getByRole("textbox", { name: /^System prompt/u });
+  const instructions = page.locator("form").getByRole("textbox", { name: /^Agent instructions/u });
   await instructions.fill("Unsaved instructions.");
   const question = page.getByRole("dialog", { name: "Leave without saving?", exact: true });
   await page.getByRole("button", { name: "Back to Agents", exact: true }).click();
@@ -3586,7 +3586,7 @@ test("superadmin manages config assets with validation and conflict protection",
     await expect(page.getByRole("link", { name: /^Config E2E skill/u })).toHaveCount(0);
 
     await clickAgent();
-    const instructions = form().getByRole("textbox", { name: /^System prompt/u });
+    const instructions = form().getByRole("textbox", { name: /^Agent instructions/u });
     const serverInstructions = `${String(originalResearchAgent?.instructions)}\n\nServer change.`;
     const serverChange = await requestWithOrigin(page, "put", researchAgentUrl, {
       data: {

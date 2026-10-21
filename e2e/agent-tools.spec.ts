@@ -148,7 +148,7 @@ test.describe("the Tools section of an agent, as rows", () => {
       '- checkbox "All tools of Files and code" [checked=false]'
     );
     await expect(toolRow(tools, "package:results")).toContainText(
-      "Shows and keeps results: widgets, previews, apps and recorded facts."
+      "Shows and keeps results: cards, previews, apps and recorded facts."
     );
     await expect(toolRow(tools, "own:demo.workflow_summary")).toContainText(
       "demo.workflow_summary"

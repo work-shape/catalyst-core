@@ -286,7 +286,7 @@ describe("an open App (layout 2)", () => {
     const order = [
       'href="/w/cw_1/apps"',
       ">Angebotsrechner</h1>",
-      "Published · revision 2",
+      "Published · version 2",
       'aria-label="More actions"',
       "the app"
     ].map((part) => markup.indexOf(part));
@@ -308,7 +308,7 @@ describe("an open App (layout 2)", () => {
     expect(markup).toMatch(/<button[^>]*>(?:<svg.*?<\/svg>)?Copy link<\/button>/u);
     expect(markup).not.toContain("Details");
     // A publisher is a builder and reads the number, also without the right to write.
-    expect(frame({ ...NO_APP_RIGHTS, publish: true })).toContain("Published · revision 2");
+    expect(frame({ ...NO_APP_RIGHTS, publish: true })).toContain("Published · version 2");
   });
 
   it("tells whoever uses the App where its data comes from, with no right to read the App", () => {
@@ -374,7 +374,7 @@ describe("the draft of an App (layout 3)", () => {
     const markup = frame(ALL);
     const order = [
       ">Angebotsrechner</h1>",
-      "Draft · revision 3",
+      "Draft · version 3",
       ">Discard</button>",
       "Publish</button>",
       'aria-label="More actions"',
@@ -564,7 +564,7 @@ describe("the draft of an App (layout 3)", () => {
 
     expect(markup).toContain("Publish “Angebotsrechner”?");
     expect(markup).toContain(
-      "Everyone in Nordlicht Beratung gets revision 3 when they open the app."
+      "Everyone in Nordlicht Beratung gets version 3 when they open the app."
     );
     expect(markup).toContain("Connections it uses");
     expect(markup).toContain(">crm</code>");
@@ -631,17 +631,17 @@ describe("the revisions of an App", () => {
 
     expect(markup).toContain("Every saved state of Angebotsrechner, the newest first.");
     expect(markup.match(/Jana Petersen/gu)).toHaveLength(3);
-    expect(markup).toContain("Revision 3");
+    expect(markup).toContain("Version 3");
     expect(markup).toMatch(/data-revision="3"(?:(?!data-revision).)*>Draft</u);
     expect(markup).toMatch(/data-revision="2"(?:(?!data-revision).)*>Published</u);
-    expect(markup).not.toContain("Publish this revision");
+    expect(markup).not.toContain("Publish this version");
   });
 
   it("lets a holder of the publish right publish every revision but the published one", () => {
     const markup = drawer(() => undefined);
 
-    expect(markup.match(/Publish this revision/gu)).toHaveLength(2);
-    expect(markup).not.toMatch(/data-revision="2"(?:(?!data-revision).)*Publish this revision/u);
+    expect(markup.match(/Publish this version/gu)).toHaveLength(2);
+    expect(markup).not.toMatch(/data-revision="2"(?:(?!data-revision).)*Publish this version/u);
   });
 });
 

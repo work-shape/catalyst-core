@@ -178,7 +178,7 @@ describe("Connection page", () => {
     expect(markup).not.toContain(">sample-business<");
     expect(markup).toContain(">Instance<");
     expect(markup).toContain(
-      "This connection is defined in the release config. The operator changes it there; it cannot be changed here."
+      "This connection comes with the instance&#x27;s setup. The team that runs this instance changes it there; it cannot be changed here."
     );
     // Where it comes from is a sentence at the top of the page and no chip.
     expect(markup).not.toContain("Defined in release config");
@@ -194,7 +194,7 @@ describe("Connection page", () => {
     expect(markup).toContain('aria-label="More actions"');
     expect(markup).toContain(">Copy to edit<");
     expect(renderPage({ locale: "de" })).toContain(
-      "Diese Verbindung ist in der Release-Konfiguration festgelegt. Der Betreiber ändert sie dort; hier lässt sie sich nicht ändern."
+      "Diese Verbindung gehört zur Einrichtung der Instanz. Das Team, das diese Instanz betreibt, ändert sie dort; hier lässt sie sich nicht ändern."
     );
     expect(renderPage({ asset: connectionAsset("ledger", { origin: "runtime" }) })).not.toContain(
       "data-build-read-only"
@@ -232,7 +232,7 @@ describe("Connection page", () => {
     expect(readOnly).toContain(">Set<");
     expect(readOnly).not.toContain("version 2");
     expect(markup).toContain(
-      "The credential stays in the Secret Store. This page shows only whether it is there."
+      "The credential stays in the instance&#x27;s protected store. This page shows only whether it is there."
     );
     // The revision names the handle of the credential. The page reads named members only.
     expect(markup).not.toContain(FIXTURE_SECRET_HANDLE);
@@ -285,8 +285,8 @@ describe("Connection page", () => {
       [
         "networkDenied",
         "network_denied",
-        "The instance may not reach this address. Its host is not among the outside addresses the operator allowed.",
-        "Die Instanz darf diese Adresse nicht erreichen. Ihr Host gehört nicht zu den externen Adressen, die der Betreiber erlaubt hat."
+        "The instance may not reach this address. Its host is not among the outside addresses allowed for it.",
+        "Die Instanz darf diese Adresse nicht erreichen. Ihr Host gehört nicht zu den externen Adressen, die für sie erlaubt sind."
       ],
       [
         "unavailable",
@@ -297,8 +297,8 @@ describe("Connection page", () => {
       [
         "notConfigured",
         "not_configured",
-        "The credential of this connection is missing. Until the operator supplies it, no call reaches the outside system.",
-        "Die Zugangsdaten dieser Verbindung fehlen. Bis der Betreiber sie bereitstellt, erreicht kein Aufruf das externe System."
+        "The credential of this connection is missing. Until the team that runs this instance supplies it, no call reaches the outside system.",
+        "Die Zugangsdaten dieser Verbindung fehlen. Bis das Team, das diese Instanz betreibt, sie bereitstellt, erreicht kein Aufruf das externe System."
       ],
       [
         "secretUnreadable",
@@ -317,33 +317,33 @@ describe("Connection page", () => {
     const steps: [keyof typeof recordedStates, string, string][] = [
       [
         "unauthorized",
-        "The operator sets a new credential in the instance's environment and restarts the instance. Then test again.",
-        "Der Betreiber setzt neue Zugangsdaten in der Umgebung der Instanz und startet die Instanz neu. Teste danach erneut."
+        "The team that runs this instance sets a new credential and restarts the instance. Then test again.",
+        "Das Team, das diese Instanz betreibt, setzt neue Zugangsdaten und startet die Instanz neu. Teste danach erneut."
       ],
       [
         "networkDenied",
-        "The operator lets the instance reach this host and restarts it. Then test again.",
-        "Der Betreiber erlaubt der Instanz diesen Host und startet sie neu. Teste danach erneut."
+        "The team that runs this instance lets it reach this host and restarts it. Then test again.",
+        "Das Team, das diese Instanz betreibt, erlaubt ihr diesen Host und startet sie neu. Teste danach erneut."
       ],
       [
         "unavailable",
-        "Check the address under Settings. The operator of this instance can change it.",
-        "Prüfe die Adresse unter Einstellungen. Ändern kann sie der Betreiber dieser Instanz."
+        "Check the address under Settings. The team that runs this instance can change it.",
+        "Prüfe die Adresse unter Einstellungen. Ändern kann sie das Team, das diese Instanz betreibt."
       ],
       [
         "notConfigured",
-        "The operator supplies the credential in the instance's environment and restarts the instance. Then test again.",
-        "Der Betreiber stellt die Zugangsdaten in der Umgebung der Instanz bereit und startet die Instanz neu. Teste danach erneut."
+        "The team that runs this instance supplies the credential and restarts the instance. Then test again.",
+        "Das Team, das diese Instanz betreibt, stellt die Zugangsdaten bereit und startet die Instanz neu. Teste danach erneut."
       ],
       [
         "secretUnreadable",
-        "The operator restores the Secret Store key the credential was stored with, or supplies the credential again in the instance's environment, and restarts the instance. Then test again.",
-        "Der Betreiber stellt den Secret-Store-Schlüssel wieder her, mit dem die Zugangsdaten gespeichert wurden, oder stellt die Zugangsdaten in der Umgebung der Instanz erneut bereit, und startet die Instanz neu. Teste danach erneut."
+        "The team that runs this instance restores the key the credential was stored with, or supplies the credential again, and restarts the instance. Then test again.",
+        "Das Team, das diese Instanz betreibt, stellt den Schlüssel wieder her, mit dem die Zugangsdaten gespeichert wurden, oder stellt die Zugangsdaten erneut bereit, und startet die Instanz neu. Teste danach erneut."
       ],
       [
         "failedUnnamed",
-        "Test again. If it fails again, ask the operator.",
-        "Teste erneut. Schlägt der Test wieder fehl, wende dich an den Betreiber."
+        "Test again. If it fails again, ask the team that runs this instance.",
+        "Teste erneut. Schlägt der Test wieder fehl, wende dich an das Team, das diese Instanz betreibt."
       ]
     ];
     for (const [state, english, german] of steps) {
@@ -642,7 +642,7 @@ describe("Connection page", () => {
     expect(row("top_products")).toContain("The outside system does not offer this operation.");
     // An operation that is switched off reads as disabled.
     expect(row("delete_order")).toContain("Disabled");
-    expect(row("delete_order")).toContain("Switched off by the operator of this instance.");
+    expect(row("delete_order")).toContain("Switched off in the instance&#x27;s setup.");
 
     const german = renderPage({ locale: "de" });
     for (const text of ["Lesend", "Ändernd", "Aufrufbar durch", "Prüfung nötig", "Bereit"]) {

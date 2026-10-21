@@ -60,7 +60,7 @@ export const build = defineTranslations({
     "build.editWithAgentRefused": "You can no longer open this, or it is gone.",
     "build.editWithAgentClose": "Close",
     "build.publishSaveFirst": "Save your changes first: only a saved draft can be published.",
-    "build.historyDescription": "Every saved revision of {name}, the newest first.",
+    "build.historyDescription": "Every saved version of {name}, the newest first.",
     "build.historyStale":
       "This page holds an older version. Load the newer version before you restore one.",
     "build.loadNewer": "Load the newer version",
@@ -93,7 +93,7 @@ export const build = defineTranslations({
       "Belongs to the workspace {workspace}. Only a person who may edit in this workspace can change it.",
     "build.readOnlyPlatform":
       "Ships with the platform and is updated with each release. To change it, copy it and edit the copy.",
-    "build.restored": "Revision {number} restored.",
+    "build.restored": "Version {number} restored.",
     "build.refusedModelInWorkspace":
       "The model {model} is not allowed in the workspace {workspace}. An instance admin sets its models on Instance > Workspaces.",
     "build.refusedModelRequiredInWorkspace":
@@ -101,19 +101,19 @@ export const build = defineTranslations({
     "build.refusedToolInWorkspace":
       "The tool {tool} is not allowed in the workspace {workspace}. An instance admin sets its tools on Instance > Workspaces.",
     "build.refusedEgress":
-      "The operator's network rule blocks this destination. To have it allowed, send the operator the host of the address.",
+      "A network rule of this instance blocks this destination. To have it allowed, send the team that runs this instance the host of the address.",
     "build.refusedReadOnlyOrigin":
-      "The operator of the instance set up this connection, so it cannot be changed here.",
+      "This connection is part of how the instance is set up, so it cannot be changed here.",
     "build.refusedDependencyReview":
       "Where this agent will be available changed after you checked what it uses. Nothing was created. Create it again to check the list once more.",
     "build.dependencyCheckFailed":
       "Could not check what this agent uses where it will be available. Nothing was created. Try again.",
     "build.removePrompt": "Remove prompt {number}",
     "build.restoreDescription":
-      "The asset gets a new revision with that content. Changes on this page that are not saved are lost.",
-    "build.restoreRevision": "Restore revision {number}",
-    "build.restoreTitle": "Restore revision {number}?",
-    "build.revisionNumber": "Revision {number}",
+      "It gets a new version with that content. Changes on this page that are not saved are lost.",
+    "build.restoreRevision": "Restore version {number}",
+    "build.restoreTitle": "Restore version {number}?",
+    "build.revisionNumber": "Version {number}",
     "build.sectionModel": "Model",
     "build.sectionOverview": "Overview",
     "build.selectableModels": "Models people can choose in chat",
@@ -258,16 +258,16 @@ export const build = defineTranslations({
     "build.refusedToolInWorkspace":
       "Das Werkzeug {tool} ist im Arbeitsbereich {workspace} nicht erlaubt. Seine Werkzeuge legt ein Instanz-Admin unter Instanz > Arbeitsbereiche fest.",
     "build.refusedEgress":
-      "Eine Netzwerkregel des Betreibers sperrt dieses Ziel. Damit es erlaubt wird, schick dem Betreiber den Host der Adresse.",
+      "Eine Netzwerkregel dieser Instanz sperrt dieses Ziel. Damit es erlaubt wird, schick dem Team, das diese Instanz betreibt, den Host der Adresse.",
     "build.refusedReadOnlyOrigin":
-      "Diese Verbindung hat der Betreiber der Instanz eingerichtet, deshalb lässt sie sich hier nicht ändern.",
+      "Diese Verbindung gehört zur Einrichtung der Instanz, deshalb lässt sie sich hier nicht ändern.",
     "build.refusedDependencyReview":
       "Wo dieser Agent verfügbar sein wird, hat sich nach deiner Prüfung geändert. Es wurde nichts erstellt. Erstelle ihn noch einmal, um die Liste erneut zu prüfen.",
     "build.dependencyCheckFailed":
       "Es ließ sich nicht prüfen, was dieser Agent dort verwendet, wo er verfügbar sein wird. Es wurde nichts erstellt. Versuch es noch einmal.",
     "build.removePrompt": "Vorschlag {number} entfernen",
     "build.restoreDescription":
-      "Das Asset erhält eine neue Version mit diesem Inhalt. Nicht gespeicherte Änderungen auf dieser Seite gehen verloren.",
+      "Es entsteht eine neue Version mit diesem Inhalt. Nicht gespeicherte Änderungen auf dieser Seite gehen verloren.",
     "build.restoreRevision": "Version {number} wiederherstellen",
     "build.restoreTitle": "Version {number} wiederherstellen?",
     "build.revisionNumber": "Version {number}",

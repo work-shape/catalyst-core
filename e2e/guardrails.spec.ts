@@ -174,7 +174,7 @@ test("Studio lists the Guardrails with when each runs, and a Guardrail's page sh
       await expect(privacyRow).toContainText("Blocks");
       // Each row says when the guardrail runs, in words.
       await expect(privacyRow).toContainText(
-        "Runs before anyone asks for an approval of the kind Skill change, instance-wide, set by the operator."
+        "Runs before anyone asks for an approval of the kind Skill change, instance-wide, part of the instance's setup."
       );
       const assetRow = main.locator(`a[href="/build/guardrails/${assetGuardrail}"]`);
       await expect(assetRow).toContainText(
@@ -194,7 +194,7 @@ test("Studio lists the Guardrails with when each runs, and a Guardrail's page sh
       ).toBeVisible();
       await expect(
         main.getByText(
-          "Runs before anyone asks for an approval of the kind Skill change, instance-wide, set by the operator.",
+          "Runs before anyone asks for an approval of the kind Skill change, instance-wide, part of the instance's setup.",
           { exact: false }
         )
       ).toBeVisible();

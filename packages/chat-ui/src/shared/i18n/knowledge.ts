@@ -178,9 +178,9 @@ export const knowledge = defineTranslations({
       "A knowledge base cannot read this format. It reads PDF, DOCX, TXT and Markdown.",
     "knowledge.failureOverLimit": "The file or its text is too large to read.",
     "knowledge.failureTooManyPages":
-      "Page limit reached. Split the file, or ask the operator for a higher limit and retry.",
+      "Page limit reached. Split the file, or ask the team that runs this instance for a higher limit and retry.",
     "knowledge.failureTooManyPagesLimit":
-      "Page limit reached. The current limit is {limit} pages. Split the file, or ask the operator for a higher limit and retry.",
+      "Page limit reached. The current limit is {limit} pages. Split the file, or ask the team that runs this instance for a higher limit and retry.",
     "knowledge.failureFileUnreadable":
       "The file is damaged, encrypted, or not the format its name says.",
     "knowledge.failureFileMissing": "The file is gone. Add it again.",
@@ -418,9 +418,9 @@ export const knowledge = defineTranslations({
       "Dieses Format kann eine Wissensbasis nicht lesen. Sie liest PDF, DOCX, TXT und Markdown.",
     "knowledge.failureOverLimit": "Die Datei oder ihr Text ist zu groß zum Auslesen.",
     "knowledge.failureTooManyPages":
-      "Seitengrenze erreicht. Teile die Datei, oder bitte den Betreiber um eine höhere Grenze und versuche es dann erneut.",
+      "Seitengrenze erreicht. Teile die Datei, oder bitte das Team, das diese Instanz betreibt, um eine höhere Grenze und versuche es dann erneut.",
     "knowledge.failureTooManyPagesLimit":
-      "Seitengrenze erreicht. Die aktuelle Grenze liegt bei {limit} Seiten. Teile die Datei, oder bitte den Betreiber um eine höhere Grenze und versuche es dann erneut.",
+      "Seitengrenze erreicht. Die aktuelle Grenze liegt bei {limit} Seiten. Teile die Datei, oder bitte das Team, das diese Instanz betreibt, um eine höhere Grenze und versuche es dann erneut.",
     "knowledge.failureFileUnreadable":
       "Die Datei ist beschädigt, verschlüsselt oder nicht das Format, das ihr Name angibt.",
     "knowledge.failureFileMissing": "Die Datei ist nicht mehr da. Füge sie neu hinzu.",

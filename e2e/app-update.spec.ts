@@ -245,7 +245,7 @@ test("a Page saved as an App updates the draft of that App, and nothing that is 
   await done.getByRole("button", { name: "Open the draft", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`${draftPathOf(appPath)}$`, "u"));
   const draftReady = async () => {
-    await expect(edit).toContainText(/(?:Draft · revision|Entwurf · Revision) 2/u);
+    await expect(edit).toContainText(/(?:Draft · version|Entwurf · Version) 2/u);
     await expect(
       appIn(page, "app-edit").getByRole("heading", { name: THIRD_HEADING })
     ).toBeVisible();
@@ -260,9 +260,9 @@ test("a Page saved as an App updates the draft of that App, and nothing that is 
   await page.goto(draftPathOf(appPath));
   await draftReady();
   await edit.getByRole("button", { name: "More actions" }).click();
-  await page.getByRole("menuitem", { name: "Revisions" }).click();
-  const revisions = page.getByRole("dialog", { name: "Revisions" });
-  await revisions.getByRole("button", { name: "Publish this revision" }).first().click();
+  await page.getByRole("menuitem", { name: "Versions" }).click();
+  const revisions = page.getByRole("dialog", { name: "Versions" });
+  await revisions.getByRole("button", { name: "Publish this version" }).first().click();
   const publishSecond = page.getByRole("dialog", { name: `Publish “${appName}”?` });
   await chooseWorkspaceAudience(publishSecond);
   await publishSecond.getByRole("button", { name: "Publish", exact: true }).click();
@@ -318,7 +318,7 @@ test("a Page saved as an App updates the draft of that App, and nothing that is 
   await expect(done).toBeVisible();
   expect(await asset()).toMatchObject({ draftRevision: 4, publishedRevision: 2 });
   await done.getByRole("button", { name: "Open the draft", exact: true }).click();
-  await expect(edit).toContainText("Draft · revision 4");
+  await expect(edit).toContainText("Draft · version 4");
   await expect(
     appIn(page, "app-edit").getByRole("heading", { name: FOURTH_HEADING })
   ).toBeVisible();
@@ -568,7 +568,7 @@ test("a Page is put into an App that was saved before Apps remembered their Page
   await done.getByRole("button", { name: "Open the draft", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`${draftPathOf(appPath)}$`, "u"));
   const edit = page.getByTestId("app-edit");
-  await expect(edit).toContainText("Draft · revision 2");
+  await expect(edit).toContainText("Draft · version 2");
   await expect(appIn(page, "app-edit").getByRole("heading", { name: THIRD_HEADING })).toBeVisible();
   await page.goto(appPath);
   await expect(appIn(page, "app-view").getByRole("heading", { name: FIRST_HEADING })).toBeVisible();

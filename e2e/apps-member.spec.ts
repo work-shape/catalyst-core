@@ -22,7 +22,7 @@ const draftPathOf = (appPath: string) => appPath.replace("/apps/", "/app-drafts/
 // What a member who only uses an App is shown of it, beside what its builder is shown: the list
 // and the head name the App and leave out its revision, its id and its workspace, and the head
 // offers the link as one button where a builder has a menu. Fails without the member view: the
-// member reads "Published · revision 1" in both places and finds a menu of one item.
+// member reads "Published · version 1" in both places and finds a menu of one item.
 
 /** Where the pictures of a run go. Without it the test takes none. */
 const shotsDir = process.env.E2E_SHOTS_DIR;
@@ -33,7 +33,7 @@ const member = { email: "e2e-apps-member@example.test", password: "e2e-apps-memb
 
 const WORKSPACE = "Field team";
 const HEADING = "Trips overview";
-const PUBLISHED = /(?:Published · revision|Veröffentlicht · Revision) 1/u;
+const PUBLISHED = /(?:Published · version|Veröffentlicht · Version) 1/u;
 
 const idSchema = z.object({ id: z.string() });
 

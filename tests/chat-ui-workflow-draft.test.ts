@@ -324,7 +324,7 @@ describe("the page of a Workflow with a draft", () => {
       t("workflows.draft.publishBodySchedule", { number: 6 })
     );
     expect(body({ byHand: true, onSchedule: true })).toContain(
-      "Revision 6 becomes the version that runs, by hand and on its schedule."
+      "Version 6 becomes the one that runs, by hand and on its schedule."
     );
     expect(body()).not.toContain("schedule");
   });

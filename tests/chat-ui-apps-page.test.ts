@@ -102,7 +102,7 @@ describe("the Apps page", () => {
     expect(markup).toContain("Rechnet ein Angebot aus Tagessatz und Tagen.");
     // The list is the one of the open workspace: no row names it.
     expect(markup).not.toContain("Nordlicht Beratung");
-    expect(markup).toContain("Published · revision 2");
+    expect(markup).toContain("Published · version 2");
     expect(markup).toContain("Unpublished changes");
     expect(markup).toContain('href="/w/cw_1/apps/angebotsrechner"');
     expect(markup).toContain('aria-label="Actions for Angebotsrechner"');
@@ -166,7 +166,7 @@ describe("the Apps page", () => {
   it("keeps the draft's news from a reader who does not write", () => {
     const markup = render(appsPage([summary()], { ...NO_APP_RIGHTS, publish: true }));
 
-    expect(markup).toContain("Published · revision 2");
+    expect(markup).toContain("Published · version 2");
     expect(markup).not.toContain("Unpublished changes");
   });
 
@@ -236,6 +236,6 @@ describe("the Apps page", () => {
     expect(markup).toContain(de("apps.empty"));
     expect(markup).toContain(">Eine mit dem Agenten bauen</button>");
     expect(de("apps.empty")).not.toBe(t("apps.empty"));
-    expect(render(appsPage([summary()], ALL), "de")).toContain("Veröffentlicht · Revision 2");
+    expect(render(appsPage([summary()], ALL), "de")).toContain("Veröffentlicht · Version 2");
   });
 });

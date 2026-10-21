@@ -65,10 +65,10 @@ describe("the sentence of when a guardrail runs", () => {
       setByOperator: true
     };
     expect(sentence(floor)).toBe(
-      "Runs before anyone asks for an approval of the kind Skill change, instance-wide, set by the operator. Checks the content for breaches of its rule, with a model. Warns if the check fails."
+      "Runs before anyone asks for an approval of the kind Skill change, instance-wide, part of the instance's setup. Checks the content for breaches of its rule, with a model. Warns if the check fails."
     );
     expect(sentence(floor, "de")).toBe(
-      "Läuft, bevor jemand eine Freigabe der Art Skill change anfragt, instanzweit, vom Betreiber festgelegt. Prüft den Inhalt mit einem Modell auf Verstöße gegen ihre Regel. Warnt, wenn die Prüfung anschlägt."
+      "Läuft, bevor jemand eine Freigabe der Art Skill change anfragt, instanzweit, aus der Einrichtung der Instanz. Prüft den Inhalt mit einem Modell auf Verstöße gegen ihre Regel. Warnt, wenn die Prüfung anschlägt."
     );
   });
 

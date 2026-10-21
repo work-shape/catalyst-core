@@ -51,7 +51,7 @@ export const connectionCreate = defineTranslations({
     "connectionCreate.errorTestPath":
       "The test path gave no successful answer. Check the address, the key and the test path, then connect again.",
     "connectionCreate.errorEgress":
-      "The operator's network rule blocks this destination. To have it allowed, send the operator the host {host}.",
+      "A network rule of this instance blocks this destination. To have it allowed, send the team that runs this instance the host {host}.",
     "connectionCreate.errorKey":
       "The server refused the key. Enter it again or create a new one there.",
     "connectionCreate.errorKeyMissing": "The server asks for a key. Enter it and connect again.",
@@ -245,7 +245,7 @@ export const connectionCreate = defineTranslations({
     "connectionCreate.errorTestPath":
       "Der Testpfad hat nicht erfolgreich geantwortet. Prüf Adresse, Schlüssel und Testpfad und verbinde erneut.",
     "connectionCreate.errorEgress":
-      "Eine Netzwerkregel des Betreibers sperrt dieses Ziel. Damit es erlaubt wird, schick dem Betreiber den Host {host}.",
+      "Eine Netzwerkregel dieser Instanz sperrt dieses Ziel. Damit es erlaubt wird, schick dem Team, das diese Instanz betreibt, den Host {host}.",
     "connectionCreate.errorKey":
       "Der Server hat den Schlüssel abgelehnt. Gib ihn erneut ein oder erzeuge dort einen neuen.",
     "connectionCreate.errorKeyMissing":

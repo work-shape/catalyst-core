@@ -276,8 +276,8 @@ describe("saving the agent page", () => {
     expect(world.puts).toEqual([{ expectedRevision: LIVE_REVISION, expectedDraftRevision: null }]);
     // The page shows the draft it wrote, and the badge names it.
     expect(instructions().value).toBe("Help the user and cite the contract.");
-    expect(badge()).toBe("Draft revision 1");
-    expect(pending()).toContain("Draft revision 1, saved by Me on ");
+    expect(badge()).toBe("Draft version 1");
+    expect(pending()).toContain("Draft version 1, saved by Me on ");
     expect(host.querySelector('[data-published-field="instructions"]')?.textContent).toContain(
       "Help the user."
     );
@@ -285,7 +285,7 @@ describe("saving the agent page", () => {
     type("Help the user, cite the contract and name the clause.");
     await saveDraft();
     expect(world.puts[1]).toEqual({ expectedRevision: LIVE_REVISION, expectedDraftRevision: 1 });
-    expect(badge()).toBe("Draft revision 2");
+    expect(badge()).toBe("Draft version 2");
     expect(host.querySelector("[data-agent-draft-behind]")).toBeNull();
   });
 
@@ -294,7 +294,7 @@ describe("saving the agent page", () => {
     world.writtenBy("Ana Writer", "Help the user.");
     mount(world);
     await settle();
-    expect(badge()).toBe("Draft revision 1");
+    expect(badge()).toBe("Draft version 1");
     expect(pending()).toContain("saved by Ana Writer on ");
 
     // Somebody else saves the draft while this page has it open.
@@ -306,7 +306,7 @@ describe("saving the agent page", () => {
       expectedDraftRevision: 1
     });
     const behind = host.querySelector('[data-agent-draft-behind="2"]');
-    expect(behind?.textContent).toContain("Ben Builder saved draft revision 2 on");
+    expect(behind?.textContent).toContain("Ben Builder saved draft version 2 on");
     expect(behind?.textContent).toContain("Load the newer draft");
     // What was typed stays; nothing is saved over the newer draft, and Publish waits.
     expect(instructions().value).toBe("Mine.");

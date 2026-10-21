@@ -161,7 +161,7 @@ describe("the agent page with a draft", () => {
     expect(markup).toMatch(/data-published-field="instructions"[\s\S]*Help the user\./u);
     expect(markup).toMatch(/data-published-field="skillNames"[\s\S]*?Tax review/u);
     expect(markup).toMatch(
-      /Draft revision 2, saved by Ana Writer on .+? 2026, .+?, is not live\. Everyone who uses “Assistant” gets the published version until the draft is published\./u
+      /Draft version 2, saved by Ana Writer on .+? 2026, .+?, is not live\. Everyone who uses “Assistant” gets the published version until the draft is published\./u
     );
   });
 
@@ -197,7 +197,7 @@ describe("the agent page with a draft", () => {
 
   it("carries a short draft badge, and the banner names the author and the time", () => {
     const markup = agentPage(source(draftOf(drafted)));
-    expect(markup).toMatch(/data-agent-draft-badge="2"[^>]*>(?:<span[^>]*>)?Draft revision 2</u);
+    expect(markup).toMatch(/data-agent-draft-badge="2"[^>]*>(?:<span[^>]*>)?Draft version 2</u);
     expect(markup).toMatch(/data-agent-draft="pending"[\s\S]*saved by Ana Writer on .+? 2026/u);
     const german = agentPage(source(draftOf(drafted)), { locale: "de" });
     expect(german).toMatch(/data-agent-draft-badge="2"[^>]*>(?:<span[^>]*>)?Entwurfsversion 2</u);
@@ -240,7 +240,7 @@ describe("the agent page with a draft", () => {
   it("says a newer draft was read in place of the one Publish named", () => {
     const markup = agentPage(source(draftOf(drafted), { answerFor: () => ({ kind: "changed" }) }));
     expect(markup).toMatch(
-      /data-agent-draft="pending"[\s\S]*Someone saved a newer draft while you were looking at it\.[\s\S]*Draft revision 2, saved by Ana Writer on /u
+      /data-agent-draft="pending"[\s\S]*Someone saved a newer draft while you were looking at it\.[\s\S]*Draft version 2, saved by Ana Writer on /u
     );
   });
 

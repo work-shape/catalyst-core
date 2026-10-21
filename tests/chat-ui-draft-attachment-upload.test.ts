@@ -232,10 +232,10 @@ describe("the notice of a run that ended as failed or cancelled", () => {
     expect(terminalRunNotice(notPriced, de)).toContain("Wähle ein anderes Modell");
     // The interface names no config key: where the price is set is the operator's knowledge.
     expect(terminalRunNotice(notPriced, en, { seesRateCard: true })).toBe(
-      "This model has no price on the rate card, so its cost cannot be counted against the spend budget. Choose another model until the operator has added the price."
+      "This model has no price on the rate card, so its cost cannot be counted against the spend budget. Choose another model until the team that runs this instance has added the price."
     );
     expect(terminalRunNotice(notPriced, de, { seesRateCard: true })).toBe(
-      "Für dieses Modell steht kein Preis in der Preisliste, deshalb lassen sich seine Kosten nicht auf das Budget anrechnen. Wähle ein anderes Modell, bis der Betreiber den Preis eingetragen hat."
+      "Für dieses Modell steht kein Preis in der Preisliste, deshalb lassen sich seine Kosten nicht auf das Budget anrechnen. Wähle ein anderes Modell, bis das Team, das diese Instanz betreibt, den Preis eingetragen hat."
     );
   });
 

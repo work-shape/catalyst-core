@@ -202,7 +202,7 @@ describe("chat UI conversation controller", () => {
                   de: `${named.de} ${advice.de}`
                 });
                 expect(operator.en).toBe(
-                  `${named.en} Your answer so far is kept. Settings › Usage shows the usage limits and what has been used. Ask the instance operator to review the limits they set.`
+                  `${named.en} Your answer so far is kept. Settings › Usage shows the usage limits and what has been used. Ask the team that runs this instance to review the limits.`
                 );
                 expect(operator.de).toContain(`${named.de} Was bisher geantwortet wurde`);
                 expect(operator.de).toContain("Einstellungen › Nutzung");

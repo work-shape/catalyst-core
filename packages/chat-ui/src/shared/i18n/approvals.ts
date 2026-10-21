@@ -63,7 +63,7 @@ export const approvals = defineTranslations({
     approvalRevisionMessageTargetResource: "Affected: reference {name}",
     approvalRevisionMessageTargetRoot: "Affected: the skill's instructions",
     approvalRevisionStartFailed:
-      "The revision could not be started. Your message is in the input field; send it to start.",
+      "The rework could not be started. Your message is in the input field; send it to start.",
     approvalStatusApproved: "Accepted",
     approvalStatusExecuting: "Approved, running",
     approvalStatusExecuted: "Approved and executed",

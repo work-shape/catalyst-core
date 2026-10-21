@@ -521,11 +521,11 @@ test("a store's page names the Workflow that fills it with its Connection and ac
 
     // Publishing an older revision again names what that revision reads, not what is live.
     await edit.getByRole("button", { name: "More actions" }).click();
-    await page.getByRole("menuitem", { name: "Revisions" }).click();
-    const revisions = page.getByRole("dialog", { name: "Revisions" });
+    await page.getByRole("menuitem", { name: "Versions" }).click();
+    const revisions = page.getByRole("dialog", { name: "Versions" });
     await revisions
       .locator('[data-revision="1"]')
-      .getByRole("button", { name: "Publish this revision" })
+      .getByRole("button", { name: "Publish this version" })
       .click();
     await expect(publishDialog.locator(`[data-data-store="${store}"]`)).toContainText(
       "The action list_kunden reads from it."

@@ -64,7 +64,7 @@ export const dataStores = defineTranslations({
     "dataStores.kindSingular": "Data store",
     "dataStores.draftUnpublished": "Draft · not published",
     "dataStores.draftUnpublishedText":
-      "This Data Store has no published revision yet, so it has no database. Publishing creates it and applies these migrations.",
+      "This Data Store has no published version yet, so it has no database. Publishing creates it and applies these migrations.",
     "dataStores.draftMigrationsTitle": "Draft migrations",
     "dataStores.draftMigrationsDescription": "What publishing applies, in this order.",
     "dataStores.draftMigrationsEmpty": "The draft has no migration.",
@@ -87,7 +87,7 @@ export const dataStores = defineTranslations({
       "Publishing makes the draft live. It adds no migration, so no table changes.",
     "dataStores.deleteTitle": "Delete the data store {name}?",
     "dataStores.deleteDescription":
-      "Apps, workflows and agents can no longer reach its rows. The rows stay on the database server until whoever runs it removes them, and the name stays taken until then.",
+      "Apps, workflows and agents can no longer reach its rows. The rows stay on the database server until they are removed there, and the name stays taken until then.",
     "dataStores.deleteDescriptionDraft":
       "It was never published, so it has no database and no rows. Its draft and migrations are deleted.",
     "dataStores.agentsTitle": "Agents",
@@ -165,7 +165,7 @@ export const dataStores = defineTranslations({
     "dataStores.stateFailed": "The state of the store could not be loaded.",
     "dataStores.stateMigrationFailed": "Migration failed",
     "dataStores.stateMigrationFailedText":
-      "A migration of the published revision failed. The store stays at its level and its rows are reached.",
+      "A migration of the published version failed. The store stays at its level and its rows are reached.",
     "dataStores.stateMigrationsPending": "Migrations pending",
     "dataStores.stateMigrationsPendingText":
       "Published migrations wait to be applied. The rows are reached at the current level.",
@@ -279,7 +279,7 @@ export const dataStores = defineTranslations({
     "dataStores.kindSingular": "Datenspeicher",
     "dataStores.draftUnpublished": "Entwurf · nicht veröffentlicht",
     "dataStores.draftUnpublishedText":
-      "Dieser Datenspeicher hat noch keine veröffentlichte Revision und darum keine Datenbank. Beim Veröffentlichen wird sie angelegt, und diese Migrationen werden angewendet.",
+      "Dieser Datenspeicher hat noch keine veröffentlichte Version und darum keine Datenbank. Beim Veröffentlichen wird sie angelegt, und diese Migrationen werden angewendet.",
     "dataStores.draftMigrationsTitle": "Migrationen des Entwurfs",
     "dataStores.draftMigrationsDescription":
       "Was beim Veröffentlichen angewendet wird, in dieser Reihenfolge.",
@@ -303,7 +303,7 @@ export const dataStores = defineTranslations({
       "Beim Veröffentlichen wird der Entwurf wirksam. Er bringt keine Migration mit, darum ändert sich keine Tabelle.",
     "dataStores.deleteTitle": "Den Datenspeicher {name} löschen?",
     "dataStores.deleteDescription":
-      "Apps, Workflows und Agenten erreichen seine Zeilen dann nicht mehr. Die Zeilen bleiben auf dem Datenbankserver, bis die Betreiber des Servers sie entfernen, und bis dahin bleibt der Name vergeben.",
+      "Apps, Workflows und Agenten erreichen seine Zeilen dann nicht mehr. Die Zeilen bleiben auf dem Datenbankserver, bis sie dort entfernt werden, und bis dahin bleibt der Name vergeben.",
     "dataStores.deleteDescriptionDraft":
       "Er wurde nie veröffentlicht und hat darum keine Datenbank und keine Zeilen. Sein Entwurf und seine Migrationen werden gelöscht.",
     "dataStores.agentsTitle": "Agenten",
@@ -384,7 +384,7 @@ export const dataStores = defineTranslations({
     "dataStores.stateFailed": "Der Zustand des Speichers konnte nicht geladen werden.",
     "dataStores.stateMigrationFailed": "Migration fehlgeschlagen",
     "dataStores.stateMigrationFailedText":
-      "Eine Migration der veröffentlichten Revision ist fehlgeschlagen. Der Speicher bleibt auf seinem Stand, seine Zeilen sind erreichbar.",
+      "Eine Migration der veröffentlichten Version ist fehlgeschlagen. Der Speicher bleibt auf seinem Stand, seine Zeilen sind erreichbar.",
     "dataStores.stateMigrationsPending": "Migrationen ausstehend",
     "dataStores.stateMigrationsPendingText":
       "Veröffentlichte Migrationen warten auf ihre Anwendung. Die Zeilen sind auf dem aktuellen Stand erreichbar.",

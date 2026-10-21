@@ -288,7 +288,7 @@ test("a Connection's page shows its definition, its state in every case and the 
       await expect(page.getByRole("heading", { name: "Sample business", level: 1 })).toBeVisible();
       await expect(
         main.getByText(
-          "This connection is defined in the release config. The operator changes it there; it cannot be changed here.",
+          "This connection comes with the instance's setup. The team that runs this instance changes it there; it cannot be changed here.",
           {
             exact: true
           }
@@ -369,9 +369,11 @@ test("a Connection's page shows its definition, its state in every case and the 
       await testButton.click();
       await expect(health).toHaveAttribute("data-connection-health", "network_denied");
       await expect(health).toContainText(
-        "The instance may not reach this address. Its host is not among the outside addresses the operator allowed."
+        "The instance may not reach this address. Its host is not among the outside addresses allowed for it."
       );
-      await expect(health).toContainText("The operator lets the instance reach this host");
+      await expect(health).toContainText(
+        "The team that runs this instance lets it reach this host"
+      );
       await open(walled);
       await expect(health).toHaveAttribute("data-connection-health", "network_denied");
       await shoot("network-denied", walled);
@@ -396,7 +398,7 @@ test("a Connection's page shows its definition, its state in every case and the 
       await open(walled, { locale: "de" });
       await expect(
         main.getByText(
-          "Diese Verbindung ist in der Release-Konfiguration festgelegt. Der Betreiber ändert sie dort; hier lässt sie sich nicht ändern.",
+          "Diese Verbindung gehört zur Einrichtung der Instanz. Das Team, das diese Instanz betreibt, ändert sie dort; hier lässt sie sich nicht ändern.",
           { exact: true }
         )
       ).toBeVisible();
@@ -419,7 +421,9 @@ test("a Connection's page shows its definition, its state in every case and the 
           await open(keyless);
           await expect(health).toHaveAttribute("data-connection-health", "unauthorized");
           await expect(health).toContainText("The outside system refused the credential.");
-          await expect(health).toContainText("The operator sets a new credential");
+          await expect(health).toContainText(
+            "The team that runs this instance sets a new credential"
+          );
           // The answer of `connections.get` in full: every status of an operation, and who uses it.
           await expect(main.locator('[data-connection-operation="list_customers"]')).toContainText(
             "Awaiting discovery"
@@ -447,7 +451,9 @@ test("a Connection's page shows its definition, its state in every case and the 
         async () => {
           await open(keyless);
           await expect(health).toHaveAttribute("data-connection-health", "failed");
-          await expect(health).toContainText("Test again. If it fails again, ask the operator.");
+          await expect(health).toContainText(
+            "Test again. If it fails again, ask the team that runs this instance."
+          );
           await shoot("failed-unnamed", keyless);
         },
         keyless
@@ -458,7 +464,7 @@ test("a Connection's page shows its definition, its state in every case and the 
           await open(keyless);
           await expect(health).toHaveAttribute("data-connection-health", "secret_unreadable");
           await expect(health).toContainText("the instance cannot read it");
-          await expect(health).toContainText("The operator restores the Secret Store key");
+          await expect(health).toContainText("The team that runs this instance restores the key");
           await expect(main.getByText("Unreadable", { exact: true })).toBeVisible();
           await shoot("secret-unreadable", keyless);
         },

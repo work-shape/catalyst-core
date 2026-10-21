@@ -151,7 +151,7 @@ export const settings = defineTranslations({
     "settings.usageSafeguardTokensPerMonth": "Tokens per person per month",
     "settings.usageSafeguards": "Safeguards per person",
     "settings.usageSafeguardsMeaning":
-      "Each person's ceiling against a runaway loop, not a budget. A person who reaches one gets no further reply until their day or month is over. The operator of the instance sets them.",
+      "Each person's ceiling against a runaway loop, not a budget. A person who reaches one gets no further reply until their day or month is over. They are part of the instance's setup.",
     "settings.usageSearchBillable": "Search billable",
     "settings.usageSearchCostMonth": "Search cost this month",
     "settings.usageSearchCostToday": "Search cost today",
@@ -400,7 +400,7 @@ export const settings = defineTranslations({
     "settings.usageSafeguardTokensPerMonth": "Tokens pro Person und Monat",
     "settings.usageSafeguards": "Obergrenzen pro Person",
     "settings.usageSafeguardsMeaning":
-      "Die Obergrenze jeder Person gegen eine Schleife, die außer Kontrolle gerät, kein Budget. Wer eine erreicht, bekommt bis zum Ende ihres Tages oder Monats keine weitere Antwort. Der Betreiber der Instanz legt sie fest.",
+      "Die Obergrenze jeder Person gegen eine Schleife, die außer Kontrolle gerät, kein Budget. Wer eine erreicht, bekommt bis zum Ende ihres Tages oder Monats keine weitere Antwort. Sie gehören zur Einrichtung der Instanz.",
     "settings.usageSearchBillable": "Suchkosten",
     "settings.usageSearchCostMonth": "Suchkosten diesen Monat",
     "settings.usageSearchCostToday": "Suchkosten heute",

@@ -9,14 +9,14 @@ export const agentDraft = defineTranslations({
     "agentDraft.authorRelease": "a release push",
     "agentDraft.authorUnknown": "someone no longer here",
     "agentDraft.authorWithAgent": "{name} with the agent",
-    "agentDraft.badge": "Draft revision {revision}",
+    "agentDraft.badge": "Draft version {revision}",
     "agentDraft.behind":
-      "{author} saved draft revision {revision} on {time}, while you were editing. Your text is still here and nothing was overwritten, but it can no longer be saved. Loading the newer draft replaces your text, so copy what you want to keep first.",
+      "{author} saved draft version {revision} on {time}, while you were editing. Your text is still here and nothing was overwritten, but it can no longer be saved. Loading the newer draft replaces your text, so copy what you want to keep first.",
     "agentDraft.changed":
       "Someone saved a newer draft while you were looking at it. It is shown now: read it before you publish.",
     "agentDraft.discard": "Discard draft",
     "agentDraft.discardDescription":
-      "Draft revision {revision} is removed. The published version stays as it is.",
+      "Draft version {revision} is removed. The published version stays as it is.",
     "agentDraft.discardTitle": "Discard the draft of {name}?",
     "agentDraft.empty": "Empty",
     "agentDraft.failed": "That did not work. Try again.",
@@ -29,9 +29,9 @@ export const agentDraft = defineTranslations({
     "agentDraft.off": "Off",
     "agentDraft.on": "On",
     "agentDraft.pending":
-      "Draft revision {revision}, saved by {author} on {time}, is not live. Everyone who uses “{name}” gets the published version until the draft is published.",
+      "Draft version {revision}, saved by {author} on {time}, is not live. Everyone who uses “{name}” gets the published version until the draft is published.",
     "agentDraft.publishDescription":
-      "Draft revision {revision} becomes the version everyone who uses “{name}” gets, from now on.",
+      "Draft version {revision} becomes what everyone who uses “{name}” gets, from now on.",
     "agentDraft.publishNeedsRight": "Publishing needs the right “{right}”.",
     "agentDraft.saveDraft": "Save draft",
     "agentDraft.saveHint":

@@ -105,7 +105,7 @@ describe("check 56: the App's Publish dialog asks “For whom?” first", () => 
     const markup = dialog({ offer: offer("self"), locale: "de" });
     expect(at(markup, "Für wen?")).toBeLessThan(at(markup, ">Nur für mich<"));
     expect(markup).toContain(">Ganze Instanz<");
-    expect(markup).toContain("Nur du bekommst Revision 3, wenn du die App öffnest.");
+    expect(markup).toContain("Nur du bekommst Version 3, wenn du die App öffnest.");
   });
 
   it("offers no whole instance where the instance does not", () => {
@@ -120,13 +120,13 @@ describe("check 56: the App's Publish dialog asks “For whom?” first", () => 
 
   it("names the chosen audience in the revision sentence", () => {
     expect(dialog({ offer: offer("self", undefined, "Only you") })).toContain(
-      "Only you get revision 3 when you open the app."
+      "Only you get version 3 when you open the app."
     );
     expect(dialog({ offer: offer("workspace") })).toContain(
-      "Everyone in Kai Spezis gets revision 3 when they open the app."
+      "Everyone in Kai Spezis gets version 3 when they open the app."
     );
     expect(dialog({ offer: offer("instance", undefined, "Everyone on the instance") })).toContain(
-      "Everyone on this instance gets revision 3 when they open the app."
+      "Everyone here gets version 3 when they open the app."
     );
   });
 
