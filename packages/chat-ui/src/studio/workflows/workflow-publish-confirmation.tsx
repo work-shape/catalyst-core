@@ -19,6 +19,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export interface WorkflowPublishCall {
   workflow: string;
   revision: number;
+  /** The workspace that owns the Workflow, where the call names one (WS-OWN-1b). */
+  workspaceId?: string;
 }
 
 /** The Workflow publish a waiting call is, or nothing for any other call. */
@@ -34,9 +36,9 @@ export function workflowPublishCall(decision: {
   ) {
     return undefined;
   }
-  const { name, revision } = input;
+  const { name, revision, workspaceId } = input;
   return typeof name === "string" && typeof revision === "number"
-    ? { workflow: name, revision }
+    ? { workflow: name, revision, ...(typeof workspaceId === "string" ? { workspaceId } : {}) }
     : undefined;
 }
 
@@ -51,7 +53,10 @@ export function useWorkflowPublishConfirmation(
       (
         await client.assets.get({
           params: { kind: WORKFLOW_ASSET_KIND, name: call.workflow },
-          query: { revision: String(call.revision) },
+          query: {
+            revision: String(call.revision),
+            ...(call.workspaceId === undefined ? {} : { workspaceId: call.workspaceId })
+          },
           signal
         })
       ).publishNarrative

@@ -71,19 +71,21 @@ describe("WF-PANEL-1a the server's step facts on a real Workflow", () => {
     const calls = recordedApiClient(({ operation }) =>
       operation === "assets.get"
         ? ASSET
-        : {
-            items: [
-              {
-                id: "month-end",
-                name: "Month end",
-                definitionRevisionId: "r1",
-                runnable: false,
-                reasons: [NOT_BUILT],
-                actions: [],
-                inputs: {}
-              }
-            ]
-          }
+        : operation === "assets.list"
+          ? { items: [] }
+          : {
+              items: [
+                {
+                  id: "month-end",
+                  name: "Month end",
+                  definitionRevisionId: "r1",
+                  runnable: false,
+                  reasons: [NOT_BUILT],
+                  actions: [],
+                  inputs: {}
+                }
+              ]
+            }
     );
     const source = createInstanceSource(calls.client, "instance");
     const workflow = await source.getWorkflow("cw_1", "month-end", signal);

@@ -102,6 +102,22 @@ describe("one conversation that builds what an App needs", () => {
     );
     expect(created).toMatchObject({ revision: 1, kind: WORKFLOW_ASSET_KIND, name: CREATED });
     expect(await subjectOf(id)).toEqual(APP);
+    // It is owned by the conversation's workspace, as the App beside it is (WS-OWN-1b).
+    const conversation = await t.app.stores.conversations.getConversation(
+      t.clientInstanceId,
+      asConversationId(id)
+    );
+    const workspaceId = conversation?.collaborationWorkspaceId;
+    expect(workspaceId).toBeDefined();
+    expect(
+      (
+        await t.app.stores.configAssets.getConfigAsset({
+          clientInstanceId: t.clientInstanceId,
+          kind: WORKFLOW_ASSET_KIND,
+          name: CREATED
+        })
+      )?.scope
+    ).toEqual({ kind: "workspace", workspaceId });
 
     // It keeps checking and saving the draft it created, twice, naming it.
     expect(
@@ -173,14 +189,14 @@ describe("one conversation that builds what an App needs", () => {
     await t.ok(
       t.app.call("assets.delete", {
         params: { kind: WORKFLOW_ASSET_KIND, name: CREATED },
-        payload: { expectedRevision: revision }
+        payload: { expectedRevision: revision, workspaceId }
       })
     );
     await t.ok(
       t.app.call("assets.put", {
         params: { kind: WORKFLOW_ASSET_KIND, name: CREATED },
         // Made again, it names the revision of its delete.
-        payload: { config: config(), expectedRevision: revision + 1 }
+        payload: { config: config(), expectedRevision: revision + 1, workspaceId }
       })
     );
     const anew = await t.app.stores.configAssets.getConfigAsset({

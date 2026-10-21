@@ -111,6 +111,9 @@ describe("the draft of a Workflow over an instance", () => {
       switch (operation) {
         case "assets.get":
           return answer;
+        case "assets.list":
+          // The open workspace owns no Workflow here.
+          return { items: [] };
         case "workflows.list":
           return {
             items: [

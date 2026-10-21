@@ -50,11 +50,12 @@ async function workflowPrincipalRights(
     kind: WORKFLOW_ASSET_KIND,
     name: workflow
   });
-  caller.access.require(WORKFLOW_ACTIONS.publish, {
-    kind: WORKFLOW_ASSET_KIND,
-    name: workflow,
-    ...(asset ? { assetId: asset.id } : {})
-  });
+  caller.access.require(
+    WORKFLOW_ACTIONS.publish,
+    asset
+      ? accessResource(WORKFLOW_ASSET_KIND, workflow, asset.scope, asset.id)
+      : { kind: WORKFLOW_ASSET_KIND, name: workflow }
+  );
   const accounts = asset?.status === "active" ? await kind?.principalRights?.(workflow) : undefined;
   if (!accounts) throw new AppError("NOT_FOUND", "Workflow not found");
   const administers = authorizePrincipalHolderWrite(

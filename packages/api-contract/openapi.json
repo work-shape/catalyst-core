@@ -27122,6 +27122,9 @@
                           "definitionRevisionId": {
                             "type": "string"
                           },
+                          "workspaceId": {
+                            "type": "string"
+                          },
                           "runnable": {
                             "type": "boolean"
                           },

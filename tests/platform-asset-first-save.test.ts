@@ -180,7 +180,7 @@ describe("the agent's first save of a conversation", () => {
     ).toBeUndefined();
   });
 
-  it("creates a new Workflow of the instance as a draft with its first save and makes it the subject", async () => {
+  it("creates a new Workflow of the conversation's workspace as a draft with its first save and makes it the subject", async () => {
     const t = await fixture();
     const { id } = z.object({ id: z.string() }).parse((await t.ok(t.converse())).json());
     const NEW = "new-close";
@@ -209,13 +209,14 @@ describe("the agent's first save of a conversation", () => {
       );
     expect(thread.conversation.subject).toEqual({ kind: WORKFLOW_ASSET_KIND, name: NEW });
 
-    // A draft of the instance that nobody published: it runs nothing.
+    // A draft nobody published, owned by the conversation's workspace (WS-OWN-1b): it runs
+    // nothing.
     const stored = await t.app.stores.configAssets.getConfigAsset({
       clientInstanceId: t.clientInstanceId,
       kind: WORKFLOW_ASSET_KIND,
       name: NEW
     });
-    expect(stored?.scope).toEqual({ kind: "instance" });
+    expect(stored?.scope).toEqual({ kind: "workspace", workspaceId: expect.any(String) });
     expect(stored?.publishedRevisionId).toBeUndefined();
 
     // The next save is a save of the subject, against the revision the first one made.

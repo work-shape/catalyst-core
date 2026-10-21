@@ -109,10 +109,15 @@ describe("a right on a Workflow given through grant administration", () => {
       WORKFLOW_ACTIONS.write,
       WORKFLOW_ACTIONS.publish
     ] as const) {
-      expect(GRANTABLE_ACTION_SCOPES[action], action).toEqual(["asset", "instance"]);
+      expect(GRANTABLE_ACTION_SCOPES[action], action).toEqual(["workspace", "asset", "instance"]);
     }
-    // RIGHTS-1c: deleting is given as reading is; the run data is one Workflow's (D4).
-    expect(GRANTABLE_ACTION_SCOPES[WORKFLOW_ACTIONS.delete]).toEqual(["asset", "instance"]);
+    // RIGHTS-1c: deleting is given as reading is; the run data is one Workflow's (D4). A
+    // workspace owns Workflows since WS-OWN-1b.
+    expect(GRANTABLE_ACTION_SCOPES[WORKFLOW_ACTIONS.delete]).toEqual([
+      "workspace",
+      "asset",
+      "instance"
+    ]);
     expect(GRANTABLE_ACTION_SCOPES[WORKFLOW_ACTIONS.readRunData]).toEqual(["asset"]);
   });
 
@@ -242,7 +247,7 @@ describe("a right on a Workflow given through grant administration", () => {
     expect(await rowsOf(t, t.kai.id)).toHaveLength(2);
   });
 
-  it("writes a row on one Workflow or for the instance, and none for a workspace or a place the action has none", async () => {
+  it("writes a row on one Workflow, in a workspace or for the instance, and none for a place the action has none", async () => {
     const t = await ready();
     const notify = await t.assetId(WORKFLOW_ASSET_KIND, NOTIFY);
     const workspaceId = await t.sharedWorkspace("Team");
@@ -258,22 +263,35 @@ describe("a right on a Workflow given through grant administration", () => {
     const onNotify = { scopeKind: "asset", scopeId: notify };
 
     for (const action of [WORKFLOW_ACTIONS.read, WORKFLOW_ACTIONS.use]) {
-      // No workspace owns a Workflow, and an instance row names no place.
+      // An instance row names no place.
       await refusedFor(action, { scopeKind: "instance", scopeId: notify }, "invalid_scope");
-      await refusedFor(action, { scopeKind: "workspace", scopeId: workspaceId }, "invalid_scope");
       await refusedFor(
         action,
         { scopeKind: "asset", scopeId: await t.assetId("agent", "assistant") },
         "invalid_scope"
       );
     }
-    // The rights 1c opens have no workspace either, and the run data is given on one Workflow
-    // only.
-    for (const action of [WORKFLOW_ACTIONS.delete, WORKFLOW_ACTIONS.readRunData]) {
-      await refusedFor(action, { scopeKind: "workspace", scopeId: workspaceId }, "invalid_scope");
-    }
+    // The run data is given on one Workflow only.
+    await refusedFor(
+      WORKFLOW_ACTIONS.readRunData,
+      { scopeKind: "workspace", scopeId: workspaceId },
+      "invalid_scope"
+    );
     await refusedFor(WORKFLOW_ACTIONS.readRunData, { scopeKind: "instance" }, "invalid_scope");
     expect(await rowsOf(t, t.kai.id)).toEqual([]);
+    // A row in a workspace reaches the Workflows it owns (WS-OWN-1b); the instance owns these.
+    const inWorkspace = await t.expectOk(t.admin.id, "permissions.grant", {
+      payload: {
+        holderKind: "user",
+        holderId: t.kai.id,
+        action: WORKFLOW_ACTIONS.use,
+        scopeKind: "workspace",
+        scopeId: workspaceId
+      }
+    });
+    expect(await rowsOf(t, t.kai.id)).toEqual([[WORKFLOW_ACTIONS.use, "workspace"]]);
+    expect(await listed(t, t.kai.id)).toEqual([]);
+    await revoke(t, grantSchema.parse(inWorkspace.json()).id);
     const deleting = await t.expectOk(t.admin.id, "permissions.grant", {
       payload: {
         holderKind: "user",

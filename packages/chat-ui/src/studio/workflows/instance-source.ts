@@ -105,7 +105,10 @@ function done<Output>(
   throw new PendingApprovalError();
 }
 
-/** The two lists are in byte order of name. A cursor retains each unread position. */
+/**
+ * The lists are in byte order of name: the engine's, the instance's assets and the open
+ * workspace's assets (WS-OWN-1b). A cursor retains each unread position.
+ */
 interface ListPart {
   cursor?: string | undefined;
   after?: string | undefined;
@@ -114,6 +117,7 @@ interface ListPart {
 interface ListPosition {
   published: ListPart;
   assets: ListPart;
+  workspaceAssets: ListPart;
 }
 
 function listPartOf(value: unknown): ListPart {
@@ -129,11 +133,20 @@ function listPartOf(value: unknown): ListPart {
 }
 
 function listPositionOf(cursor: string | undefined): ListPosition {
-  if (cursor === undefined) return { published: { done: false }, assets: { done: false } };
+  if (cursor === undefined)
+    return {
+      published: { done: false },
+      assets: { done: false },
+      workspaceAssets: { done: false }
+    };
   try {
     const value: unknown = JSON.parse(cursor);
     if (!isRecord(value)) throw new Error("Invalid Workflow list cursor");
-    return { published: listPartOf(value.published), assets: listPartOf(value.assets) };
+    return {
+      published: listPartOf(value.published),
+      assets: listPartOf(value.assets),
+      workspaceAssets: listPartOf(value.workspaceAssets)
+    };
   } catch {
     throw new Error("Invalid Workflow list cursor");
   }
@@ -186,6 +199,37 @@ function listReader<Row>(
   };
 }
 
+type ListReader<Row> = ReturnType<typeof listReader<Row>>;
+
+/**
+ * Two readers of rows that never share a name, as one in byte order of name: the assets of the
+ * instance and those of one workspace, since a name is unique on the instance.
+ */
+function mergedReader<Row>(
+  first: ListReader<Row>,
+  second: ListReader<Row>,
+  keyOf: (row: Row) => string
+): Pick<ListReader<Row>, "peek" | "take"> {
+  const from = new Map<string, ListReader<Row>>();
+  return {
+    async peek() {
+      const [a, b] = await Promise.all([first.peek(), second.peek()]);
+      if (!a.ready || !b.ready) return { ready: false };
+      const row =
+        a.row === undefined
+          ? b.row
+          : b.row === undefined || keyOf(a.row) <= keyOf(b.row)
+            ? a.row
+            : b.row;
+      if (row !== undefined) from.set(keyOf(row), row === a.row ? first : second);
+      return { ready: true, row };
+    },
+    take(row: Row) {
+      (from.get(keyOf(row)) ?? first).take(row);
+    }
+  };
+}
+
 /** The engine's summary of one published Workflow, read page after page until it is found. */
 async function findSummary(client: WorkflowsClient, workflow: string, signal: AbortSignal) {
   let cursor: string | undefined;
@@ -201,35 +245,106 @@ async function findSummary(client: WorkflowsClient, workflow: string, signal: Ab
   return undefined;
 }
 
+/** The owners of the Workflows read so far, per client of an instance (see `createInstanceSource`). */
+const knownOwners = new WeakMap<WorkflowsClient, Map<string, string | undefined>>();
+function ownersOf(client: WorkflowsClient): Map<string, string | undefined> {
+  const known = knownOwners.get(client) ?? new Map<string, string | undefined>();
+  knownOwners.set(client, known);
+  return known;
+}
+
 /**
  * The source of an instance. The list joins engine start/run summaries with asset rights,
  * including Workflows held by write or publish alone. A definition is read as an asset.
  */
 export function createInstanceSource(client: WorkflowsClient, key: string): WorkflowsSource {
+  // The workspace that owns each Workflow read so far (WS-OWN-1b): an asset is addressed in
+  // the scope of its owner, and a name is unique on the instance. Kept per client, not per
+  // source: every screen makes a source of its own.
+  const owners = ownersOf(client);
+  const learn = (workflow: string, scope: { kind: string; workspaceId?: string } | undefined) => {
+    if (scope !== undefined)
+      owners.set(workflow, scope.kind === "workspace" ? scope.workspaceId : undefined);
+  };
+  const ownerOf = (workflow: string): { workspaceId?: string } => {
+    const workspaceId = owners.get(workflow);
+    return workspaceId === undefined ? {} : { workspaceId };
+  };
+  /**
+   * The owner of a Workflow not read before: the open workspace where its list holds it, else
+   * the instance. Asked by a list, as a conversation's subject is, so no read answers 404.
+   */
+  const findOwner = async (workflow: string, workspaceId: string, signal: AbortSignal) => {
+    const here = await client.assets.list({
+      params: { kind: WORKFLOW_ASSET_KIND },
+      query: { workspaceId, prefix: workflow, limit: 50 },
+      signal
+    });
+    const owned = here.items.some(
+      (item) => item.name === workflow && item.scope.kind === "workspace"
+    );
+    owners.set(workflow, owned ? workspaceId : undefined);
+  };
+  /** The asset of a Workflow, read in the scope of its owner. */
+  const readAsset = async (
+    workflow: string,
+    workspaceId: string,
+    signal: AbortSignal,
+    revision?: number
+  ) => {
+    if (!owners.has(workflow) && workspaceId !== "") await findOwner(workflow, workspaceId, signal);
+    return client.assets.get({
+      params: { kind: WORKFLOW_ASSET_KIND, name: workflow },
+      query: {
+        ...ownerOf(workflow),
+        ...(revision === undefined ? {} : { revision: String(revision) })
+      },
+      signal
+    });
+  };
   return {
     key,
     // Join the engine's start/run summaries with per-asset rights, including published
     // Workflows held by write or publish alone. Each source advances independently.
-    listWorkflows: async (_workspaceId, query, signal) => {
+    listWorkflows: async (workspaceId, query, signal) => {
       const position = listPositionOf(query.cursor);
       let reads = 0;
       const takeRead = () => reads++ < LIST_READS_PER_PAGE;
+      // The instance's Workflows and the open workspace's; another workspace's are its own.
       const published = listReader(
         position.published,
-        (cursor) => client.workflows.list({ query: { limit: query.limit, cursor }, signal }),
+        async (cursor) => {
+          const page = await client.workflows.list({
+            query: { limit: query.limit, cursor },
+            signal
+          });
+          return {
+            ...page,
+            items: page.items.filter(
+              (row) => row.workspaceId === undefined || row.workspaceId === workspaceId
+            )
+          };
+        },
         (row) => row.id,
         takeRead
       );
-      const assets = listReader(
-        position.assets,
-        (cursor) =>
-          client.assets.list({
-            params: { kind: WORKFLOW_ASSET_KIND },
-            query: { limit: query.limit, cursor },
-            signal
-          }),
-        (row) => row.name,
-        takeRead
+      const assetsIn = (part: ListPart, scope: { workspaceId?: string }) =>
+        listReader(
+          part,
+          (cursor) =>
+            client.assets.list({
+              params: { kind: WORKFLOW_ASSET_KIND },
+              query: { limit: query.limit, cursor, ...scope },
+              signal
+            }),
+          (row) => row.name,
+          takeRead
+        );
+      if (workspaceId === "") position.workspaceAssets.done = true;
+      const assets = mergedReader(
+        assetsIn(position.assets, {}),
+        assetsIn(position.workspaceAssets, { workspaceId }),
+        (row) => row.name
       );
       const items: WorkflowListItem[] = [];
       while (items.length < query.limit) {
@@ -241,10 +356,19 @@ export function createInstanceSource(client: WorkflowsClient, key: string): Work
           (asset.row === undefined || engine.row.id <= asset.row.name)
         ) {
           const same = engine.row.id === asset.row?.name;
+          learn(
+            engine.row.id,
+            same
+              ? asset.row?.scope
+              : engine.row.workspaceId === undefined
+                ? { kind: "instance" }
+                : { kind: "workspace", workspaceId: engine.row.workspaceId }
+          );
           items.push(toWorkflowListItem(engine.row, same ? asset.row : undefined));
           published.take(engine.row);
           if (same && asset.row !== undefined) assets.take(asset.row);
         } else if (asset.row !== undefined) {
+          learn(asset.row.name, asset.row.scope);
           items.push(toAssetWorkflowListItem(asset.row));
           assets.take(asset.row);
         }
@@ -252,17 +376,20 @@ export function createInstanceSource(client: WorkflowsClient, key: string): Work
       return {
         items,
         nextCursor:
-          position.published.done && position.assets.done ? undefined : JSON.stringify(position)
+          position.published.done && position.assets.done && position.workspaceAssets.done
+            ? undefined
+            : JSON.stringify(position)
       };
     },
     // The definition is the Workflow's asset, and so is whether a revision is published;
     // whether the instance starts it, and the id of its published revision, are on its entry
     // of the list. A Workflow the list does not name is not the reader's to start.
-    getWorkflow: async (_workspaceId, workflow, signal) => {
+    getWorkflow: async (workspaceId, workflow, signal) => {
       const [asset, summary] = await Promise.all([
-        client.assets.get({ params: { kind: WORKFLOW_ASSET_KIND, name: workflow }, signal }),
+        readAsset(workflow, workspaceId, signal),
         findSummary(client, workflow, signal)
       ]);
+      learn(workflow, asset.scope);
       const { manifest } = asset.config;
       return toWorkflow(
         {
@@ -294,13 +421,7 @@ export function createInstanceSource(client: WorkflowsClient, key: string): Work
     // The sentence on a publish is the one the asset read of that revision words.
     publishNarrative: {
       read: async (workflow, revision, signal) =>
-        (
-          await client.assets.get({
-            params: { kind: WORKFLOW_ASSET_KIND, name: workflow },
-            query: { revision: String(revision) },
-            signal
-          })
-        ).publishNarrative
+        (await readAsset(workflow, "", signal, revision)).publishNarrative
     },
     // A draft is published and discarded as the draft of any asset is.
     drafts: {
@@ -308,7 +429,7 @@ export function createInstanceSource(client: WorkflowsClient, key: string): Work
         done(
           await client.assets.publish({
             params: { kind: WORKFLOW_ASSET_KIND, name: workflow },
-            body: { revision }
+            body: { revision, ...ownerOf(workflow) }
           })
         );
       },
@@ -316,7 +437,7 @@ export function createInstanceSource(client: WorkflowsClient, key: string): Work
         done(
           await client.assets.discard_draft({
             params: { kind: WORKFLOW_ASSET_KIND, name: workflow },
-            body: { expectedRevision }
+            body: { expectedRevision, ...ownerOf(workflow) }
           })
         );
       },
@@ -326,6 +447,7 @@ export function createInstanceSource(client: WorkflowsClient, key: string): Work
         (
           await client.assets.list_live_once({
             params: { kind: WORKFLOW_ASSET_KIND, name: workflow },
+            query: ownerOf(workflow),
             signal
           })
         ).items.map((item) => ({
@@ -339,7 +461,7 @@ export function createInstanceSource(client: WorkflowsClient, key: string): Work
         done(
           await client.assets.run_live_once({
             params: { kind: WORKFLOW_ASSET_KIND, name: workflow },
-            body: { part: step, expectedRevision }
+            body: { part: step, expectedRevision, ...ownerOf(workflow) }
           })
         );
       }

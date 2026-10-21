@@ -48,6 +48,8 @@ interface Held {
   actions?: readonly ("workflow.read" | "workflow.use")[];
   /** The engine names a latest run. */
   ran?: boolean;
+  /** The workspace that owns it (WS-OWN-1b). Absent: the instance. */
+  owner?: string;
 }
 
 const manifestOf = (name: string) => ({
@@ -71,7 +73,10 @@ function assetOf(name: string, held: Held, record: boolean) {
     kind: "workflow",
     name,
     title: titleOf(name),
-    scope: { kind: "instance" },
+    scope:
+      held.owner === undefined
+        ? { kind: "instance" }
+        : { kind: "workspace", workspaceId: held.owner },
     revision: 3,
     draftRevision: 3,
     ...(published ? { publishedRevision: 2 } : {}),
@@ -108,7 +113,7 @@ const runOf = (workflow: string, status: "running" | "failed") => ({
 
 /** The instance, over the release's own client: the source the screens read in the shell. */
 function instanceOf(workflows: Record<string, Held>, run?: ReturnType<typeof runOf>) {
-  return recordedApiClient(({ operation, params }: RecordedApiCall) => {
+  return recordedApiClient(({ operation, params, query }: RecordedApiCall) => {
     switch (operation) {
       case "workflows.list":
         return {
@@ -119,6 +124,7 @@ function instanceOf(workflows: Record<string, Held>, run?: ReturnType<typeof run
               id: name,
               name: titleOf(name),
               definitionRevisionId: "rev_2",
+              ...(held.owner === undefined ? {} : { workspaceId: held.owner }),
               actions: [...(held.actions ?? [])],
               runnable: true,
               reasons: [],
@@ -135,13 +141,21 @@ function instanceOf(workflows: Record<string, Held>, run?: ReturnType<typeof run
             }))
         };
       case "assets.list":
+        // A list is of one owner: the instance, or the workspace the query names.
         return {
           items: Object.entries(workflows)
+            .filter(([, held]) => held.owner === query.workspaceId)
             .sort(([a], [b]) => (a < b ? -1 : 1))
             .map(([name, held]) => assetOf(name, held, false))
         };
       case "assets.get": {
         const name = params.name ?? "";
+        // An asset is read in the scope of its owner; in another one it is not there.
+        if (workflows[name]?.owner !== query.workspaceId)
+          return Response.json(
+            { error: { code: "NOT_FOUND", message: "Not found", correlationId: "corr_1" } },
+            { status: 404 }
+          );
         return assetOf(name, workflows[name] ?? {}, true);
       }
       case "workflows.list_runs":
@@ -314,6 +328,48 @@ describe("the list of Workflows, by what the reader may do to each", () => {
     await waitForText(container, "Builder");
     expect(runsLinks(container)).toEqual([runsPath("reader")]);
     expect(startedFromCards(container).sort()).toEqual(["Builder", "Starter"]);
+  });
+});
+
+describe("the Workflows of the open workspace beside the instance's (WS-OWN-1b)", () => {
+  it("lists the open workspace's own with its chip, and none of another workspace", async () => {
+    const { client } = instanceOf({
+      ownflow: { allowed: ["read"], actions: ["workflow.read"], owner: OPEN },
+      shared: { allowed: ["read"], actions: ["workflow.read"] },
+      elsewhere: { allowed: ["read"], actions: ["workflow.read"], owner: "cw_other" }
+    });
+    const container = await mount(createElement(WorkflowsPage), createInstanceSource(client, "k"));
+    await waitForText(container, "Ownflow");
+    expect(container.textContent).toContain("Shared");
+    expect(container.textContent).not.toContain("Elsewhere");
+    // The chip names the open workspace on its own Workflow alone.
+    expect(container.textContent?.split("Office").length).toBe(2);
+  });
+
+  it("reads and publishes a Workflow of the open workspace in that workspace's scope", async () => {
+    const { client, calls } = instanceOf({
+      ownflow: { allowed: ["read", "write", "publish"], published: false, owner: OPEN },
+      shared: { allowed: ["read"], actions: ["workflow.read"] }
+    });
+    const source = createInstanceSource(client, "k");
+
+    const view = await source.getWorkflow(OPEN, "ownflow", new AbortController().signal);
+    await source.getWorkflow(OPEN, "shared", new AbortController().signal);
+    await source.drafts?.publish("ownflow", 3).catch(() => undefined);
+
+    expect(view.ownerWorkspaceId).toBe(OPEN);
+    // The open workspace's list says whose each one is, so each is read once, where it is,
+    // and no read answers 404.
+    expect(
+      calls
+        .filter((call) => call.operation === "assets.get")
+        .map((call) => [call.params.name, call.query.workspaceId])
+    ).toEqual([
+      ["ownflow", OPEN],
+      ["shared", undefined]
+    ]);
+    const publish = calls.find((call) => call.operation === "assets.publish");
+    expect(JSON.parse(publish?.body ?? "{}")).toEqual({ revision: 3, workspaceId: OPEN });
   });
 });
 

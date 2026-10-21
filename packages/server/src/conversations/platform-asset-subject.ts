@@ -136,7 +136,7 @@ export const CREATED_FROM_CHAT: readonly string[] = [
 
 /**
  * Who owns an asset a conversation creates: the conversation's workspace, where the kind can
- * be owned by one, else the instance (WS-OWN-1a; a Workflow belongs to the instance).
+ * be owned by one, else the instance (WS-OWN-1a; a Workflow since WS-OWN-1b).
  */
 export const ownerOf = (
   kind: { owners: readonly string[] },

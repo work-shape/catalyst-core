@@ -48,8 +48,10 @@ function asset(name: string, allowed: Verb[], published = true) {
 }
 
 function sourceFor(records: ReturnType<typeof asset>[], listed: string[] = []) {
-  const { client, calls } = recordedApiClient(({ operation, params }) => {
-    if (operation === "assets.list") return { items: records };
+  const { client, calls } = recordedApiClient(({ operation, params, query }) => {
+    // The records are the instance's; the open workspace owns none (WS-OWN-1b).
+    if (operation === "assets.list")
+      return { items: query.workspaceId === undefined ? records : [] };
     if (operation === "assets.get") return records.find((record) => record.name === params.name);
     if (operation === "workflows.list")
       return {
@@ -79,7 +81,11 @@ describe("Workflow rights from the API answer to its controls", () => {
       published: true,
       allowed: ["write"]
     });
-    expect(calls.map((call) => call.operation).sort()).toEqual(["assets.list", "workflows.list"]);
+    expect(calls.map((call) => call.operation).sort()).toEqual([
+      "assets.list",
+      "assets.list",
+      "workflows.list"
+    ]);
     const mine = await source.getWorkflow("open", "mine", signal);
     const other = await source.getWorkflow("open", "other", signal);
     expect(mine.published).toBe(true);

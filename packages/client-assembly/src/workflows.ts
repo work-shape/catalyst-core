@@ -183,7 +183,7 @@ export function createInstanceWorkflows(parts: InstanceWorkflowsParts): Instance
       workflows: published.map((workflow) => workflow.id)
     });
     const entries: WorkflowListEntry[] = [];
-    for (const { id, assetId, name, description, revisionId, definition, files } of published) {
+    for (const { id, asset, name, description, revisionId, definition, files } of published) {
       // The active principal answers both whether a run can start and whom it acts as.
       const principal = definition.ok
         ? await workflowRunPrincipal(
@@ -212,7 +212,7 @@ export function createInstanceWorkflows(parts: InstanceWorkflowsParts): Instance
       entries.push({
         kind: definition.ok ? (definition.manifest.kind ?? "process") : "process",
         id,
-        ...(assetId === undefined ? {} : { assetId }),
+        ...(asset === undefined ? {} : { asset }),
         name,
         ...(description === undefined ? {} : { description }),
         definitionRevisionId: revisionId,
@@ -255,7 +255,7 @@ export function createInstanceWorkflows(parts: InstanceWorkflowsParts): Instance
             return engine.test({ draft, ...start });
           },
           // Definitions a test hands in are no assets: a right on them is decided by name.
-          assetIdOf: (workflow) => (given ? Promise.resolve(undefined) : assets.assetIdOf(workflow))
+          assetOf: (workflow) => (given ? Promise.resolve(undefined) : assets.assetOf(workflow))
         },
         parts
       )

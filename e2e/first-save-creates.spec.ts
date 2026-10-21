@@ -75,7 +75,9 @@ test("New workflow opens the dock, and the agent's first save creates the draft 
   const personalId = await personalWorkspaceId(page);
   const listPath = `/w/${personalId}/workflows`;
   const stored = async () =>
-    (await page.request.get(`${apiBaseUrl}/api/v1/assets/workflow/${id}`)).status();
+    (
+      await page.request.get(`${apiBaseUrl}/api/v1/assets/workflow/${id}?workspaceId=${personalId}`)
+    ).status();
 
   // "New workflow" opens the dock with a started sentence and creates nothing; leaving the
   // list leaves it as it was.
@@ -93,7 +95,8 @@ test("New workflow opens the dock, and the agent's first save creates the draft 
   await page.goto(listPath);
   await page.getByRole("button", { name: NEW_WORKFLOW }).first().click();
 
-  // The agent's first save creates the draft of the instance, and the person moves to it.
+  // The agent's first save creates the draft of the conversation's workspace (WS-OWN-1b), and
+  // the person moves to it.
   await sendToolCall(page, "platform.assets.put", {
     kind: "workflow",
     name: id,
@@ -201,9 +204,13 @@ test("a Workflow draft the agent creates beside the subject moves nobody and off
   const head = page.getByTestId("dock-head");
   await expect(head).toHaveAttribute("data-subject-kind", "workflow");
   await expect(head).toContainText(`Working on: ${firstTitle}`);
-  expect((await page.request.get(`${apiBaseUrl}/api/v1/assets/workflow/${second}`)).status()).toBe(
-    200
-  );
+  expect(
+    (
+      await page.request.get(
+        `${apiBaseUrl}/api/v1/assets/workflow/${second}?workspaceId=${personalId}`
+      )
+    ).status()
+  ).toBe(200);
   await shootLocales(page, "build-all-1-created-line", async () => {
     await expect(page.getByTestId("asset-created-line").last()).toBeVisible();
   });

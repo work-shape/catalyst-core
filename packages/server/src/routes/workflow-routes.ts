@@ -83,7 +83,7 @@ function registerWorkflowRoutes(
 
   /** The Workflow of this name as rights are decided on it, with its asset where it has one. */
   async function resourceOf(workflow: string): Promise<AccessResource> {
-    return workflowOf(workflow, await workflows?.assetIdOf(workflow));
+    return workflowOf(workflow, await workflows?.assetOf(workflow));
   }
 
   /** The run, for a caller its Workflow lets through. Any other is told there is none. */
@@ -154,16 +154,18 @@ function registerWorkflowRoutes(
         storePage(input, ["id"], scope),
         (page) => required().listWorkflows(page),
         (workflow) =>
-          listedWorkflowActions(access, actor, workflowOf(workflow.id, workflow.assetId)).length >
-          0,
+          listedWorkflowActions(access, actor, workflowOf(workflow.id, workflow.asset)).length > 0,
         (workflow) => [workflow.id]
       );
       const page = paginate(rows, input, ["id"], false, scope);
       return {
         ...page,
-        items: page.items.flatMap(({ assetId, ...workflow }) => {
-          const actions = listedWorkflowActions(access, actor, workflowOf(workflow.id, assetId));
-          return actions.length > 0 ? [{ ...workflow, actions }] : [];
+        items: page.items.flatMap(({ asset, ...workflow }) => {
+          const actions = listedWorkflowActions(access, actor, workflowOf(workflow.id, asset));
+          // The workspace that owns it, so a page names the owner (WS-OWN-1b).
+          const owner =
+            asset?.scope.kind === "workspace" ? { workspaceId: asset.scope.workspaceId } : {};
+          return actions.length > 0 ? [{ ...workflow, ...owner, actions }] : [];
         })
       };
     }

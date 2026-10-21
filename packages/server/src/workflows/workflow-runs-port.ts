@@ -2,6 +2,7 @@ import type { WorkflowKind } from "@work-shape/catalyst-core";
 import type {
   WorkflowDatasetDownloadFormat,
   ActorAccess,
+  AssetScope,
   AuthenticatedIdentity,
   AuthenticatedUser,
   JsonObject,
@@ -83,18 +84,25 @@ export interface WorkflowRunsPort {
    */
   listWorkflows(page?: StorePage): Promise<WorkflowListEntry[]>;
   /**
-   * The id of the asset that holds the Workflow, where one does. A right is decided on it, so
-   * a grant on that one asset opens the calls on its Workflow and on its runs.
+   * The asset that holds the Workflow, where one does: its id and its owner. A right is decided
+   * on them, so a grant on that one asset, or in the workspace that owns it, opens the calls on
+   * its Workflow and on its runs.
    */
-  assetIdOf(workflow: string): Promise<string | undefined>;
+  assetOf(workflow: string): Promise<WorkflowAssetRef | undefined>;
+}
+
+/** The asset of a Workflow as rights are decided on it. */
+export interface WorkflowAssetRef {
+  id: string;
+  scope: AssetScope;
 }
 
 /** One published Workflow as the list of the instance names it. */
 export interface WorkflowListEntry {
   kind?: WorkflowKind;
   id: string;
-  /** The id of the asset that holds the Workflow. Decides the right; no part of the answer. */
-  assetId?: string;
+  /** The asset that holds the Workflow. Decides the right; its owner is in the answer. */
+  asset?: WorkflowAssetRef;
   name: string;
   description?: string;
   /** The published revision: what a run started now keeps as its `definitionRevisionId`. */

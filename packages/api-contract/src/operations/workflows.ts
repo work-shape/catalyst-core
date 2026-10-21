@@ -295,6 +295,8 @@ export const workflowSummarySchema = z.object({
   description: z.string().optional(),
   /** The published revision: what a run started now has as its `definitionRevisionId`. */
   definitionRevisionId: z.string(),
+  /** The workspace that owns the Workflow (WS-OWN-1b). Missing where the instance owns it. */
+  workspaceId: z.string().optional(),
   /** Whether a start by hand is accepted now, as far as that is known before its input. */
   runnable: z.boolean(),
   /** Why not. Empty exactly where `runnable` is true. */

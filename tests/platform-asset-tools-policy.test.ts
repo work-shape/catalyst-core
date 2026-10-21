@@ -210,6 +210,6 @@ describe("a policy on assets.put and the agent's save", () => {
     t.settings.splice(0);
     const saved = await t.firstSave("year-end");
     expect(saved.said).toContain('"created":true');
-    expect(saved.stored?.scope).toEqual({ kind: "instance" });
+    expect(saved.stored?.scope).toEqual({ kind: "workspace", workspaceId: expect.any(String) });
   }, 120_000);
 });

@@ -77,7 +77,7 @@ async function fixture() {
     listStepRuns: vi.fn(),
     readStepTranscript: vi.fn(),
     listWorkflows: vi.fn(),
-    assetIdOf: vi.fn()
+    assetOf: vi.fn()
   };
   const registry = createOperationRegistry();
   registerModuleOperations(registry, [

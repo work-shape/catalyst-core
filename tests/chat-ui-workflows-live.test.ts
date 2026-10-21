@@ -125,6 +125,10 @@ function instance(
     workflowPages?: Readonly<Record<string, { items: readonly unknown[]; nextCursor?: string }>>;
     /** The Workflow assets a page at a time, by the cursor each page is asked from. */
     assetPages?: Readonly<Record<string, { items: readonly unknown[]; nextCursor?: string }>>;
+    /** The open workspace's Workflow assets, a page at a time. None unless given. */
+    workspaceAssetPages?: Readonly<
+      Record<string, { items: readonly unknown[]; nextCursor?: string }>
+    >;
     startIssues?: { code: string; message: string; principalDisplayLabel?: string }[];
   } = {}
 ) {
@@ -161,6 +165,10 @@ function instance(
       case "assets.get":
         return ASSET;
       case "assets.list":
+        // The open workspace's own Workflows (WS-OWN-1b), apart from the instance's.
+        if (query.workspaceId !== undefined) {
+          return answers.workspaceAssetPages?.[query.cursor ?? ""] ?? { items: [] };
+        }
         if (answers.assetPages !== undefined) {
           return answers.assetPages[query.cursor ?? ""];
         }
@@ -226,10 +234,12 @@ describe("the Workflow screens over the engine of an instance", () => {
   it("lists what the engine lists, each Workflow with its latest run, and the drafts never published", async () => {
     const { source, calls } = instance();
     const list = await wholeList(source);
-    // The two name-ordered pages are joined, retaining asset rights on engine summaries.
+    // The name-ordered pages are joined, retaining asset rights on engine summaries: the
+    // assets of the instance and of the open workspace (WS-OWN-1b).
     expect(calls.map((call) => [call.operation, call.query])).toEqual([
       ["workflows.list", { limit: "50" }],
-      ["assets.list", { limit: "50" }]
+      ["assets.list", { limit: "50" }],
+      ["assets.list", { limit: "50", workspaceId: "cw_1" }]
     ]);
     expect(list).toEqual(
       [
@@ -386,6 +396,7 @@ describe("the Workflow screens over the engine of an instance", () => {
     expect(calls.map((call) => [call.operation, call.query.cursor])).toEqual([
       ["workflows.list", undefined],
       ["assets.list", undefined],
+      ["assets.list", undefined],
       ["workflows.list", "e2"]
     ]);
 
@@ -415,7 +426,11 @@ describe("the Workflow screens over the engine of an instance", () => {
     );
     expect(first.items.map((item) => [item.id, item.published])).toEqual([["only-draft", false]]);
     expect(first.nextCursor).toBeUndefined();
-    expect(calls.map((call) => call.operation)).toEqual(["workflows.list", "assets.list"]);
+    expect(calls.map((call) => call.operation)).toEqual([
+      "workflows.list",
+      "assets.list",
+      "assets.list"
+    ]);
   });
 
   it("reads past an empty asset page to the draft after it", async () => {
@@ -438,6 +453,7 @@ describe("the Workflow screens over the engine of an instance", () => {
     expect(first.nextCursor).toBeUndefined();
     expect(calls.map((call) => [call.operation, call.query.cursor])).toEqual([
       ["workflows.list", undefined],
+      ["assets.list", undefined],
       ["assets.list", undefined],
       ["assets.list", "a2"]
     ]);
@@ -473,9 +489,15 @@ describe("the Workflow screens over the engine of an instance", () => {
   it("reads a Workflow from its asset, and from the list whether it starts and its revision", async () => {
     const { source, calls } = instance();
     const workflow = await source.getWorkflow("cw_1", "month-end", signal);
+    // The open workspace's list says it is not that workspace's, so it is read on the instance.
     expect(calls.map((call) => [call.operation, call.params, call.query])).toEqual([
-      ["assets.get", { kind: "workflow", name: "month-end" }, {}],
-      ["workflows.list", {}, { limit: "200" }]
+      [
+        "assets.list",
+        { kind: "workflow" },
+        { workspaceId: "cw_1", prefix: "month-end", limit: "50" }
+      ],
+      ["workflows.list", {}, { limit: "200" }],
+      ["assets.get", { kind: "workflow", name: "month-end" }, {}]
     ]);
     expect(workflow).toMatchObject({
       id: "month-end",

@@ -7,7 +7,8 @@ import {
   type ActorAccess,
   type AuthenticatedIdentity
 } from "@work-shape/catalyst-core";
-import { decide } from "../assets/asset-access";
+import { accessResource, decide } from "../assets/asset-access";
+import type { WorkflowAssetRef } from "./workflow-runs-port";
 
 /** The rights an entry of the list names, each with the scope of the calls it opens. */
 const LISTED_ACTIONS = [
@@ -15,12 +16,14 @@ const LISTED_ACTIONS = [
   { action: WORKFLOW_ACTIONS.use, scope: apiOperations["workflows.start"].scope }
 ] as const;
 
-/** What a right on one Workflow is decided on: its name and, where it is stored, its asset. */
-export const workflowOf = (name: string, assetId?: string): AccessResource => ({
-  kind: WORKFLOW_ASSET_KIND,
-  name,
-  ...(assetId === undefined ? {} : { assetId })
-});
+/**
+ * What a right on one Workflow is decided on: its name and, where it is stored, its asset and
+ * the workspace that owns it (WS-OWN-1b).
+ */
+export const workflowOf = (name: string, asset?: WorkflowAssetRef): AccessResource =>
+  asset === undefined
+    ? { kind: WORKFLOW_ASSET_KIND, name }
+    : accessResource(WORKFLOW_ASSET_KIND, name, asset.scope, asset.id);
 
 /**
  * What `workflows.list` names of one published Workflow for this caller: the right on this

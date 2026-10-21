@@ -18,6 +18,7 @@ import {
   workflowLiveCallerWarnings,
   type PublishReach,
   type WorkflowAssetKind,
+  type WorkflowAssetRef,
   type WorkflowRunAsOptions
 } from "@work-shape/catalyst-server";
 import {
@@ -26,6 +27,7 @@ import {
   workflowConfigSchema
 } from "@work-shape/catalyst-config-schema";
 import {
+  ASSET_OWNER_KINDS,
   AppError,
   WORKFLOW_ACTIONS,
   WORKFLOW_ASSET_KIND,
@@ -117,7 +119,7 @@ function parseStoredManifest(manifest: unknown): WorkflowDefinitionResult {
 
 /**
  * The Workflow kind: one definition with a draft and a published revision, owned by the
- * instance. A write moves the draft and starts nothing. Both a write and a publish ask the
+ * instance or by one workspace (WS-OWN-1b). A write moves the draft and starts nothing. Both a write and a publish ask the
  * engine's own parser, so a definition the engine refuses is refused there with the engine's
  * code as the reason. A publish also asks whether its caller may let a Workflow act as the
  * service principal the revision names. A release does not carry the kind: it is written by
@@ -207,6 +209,8 @@ export function createWorkflowAssetKind(
     ...defineAssetKind({
       kind: WORKFLOW_ASSET_KIND,
       plural: "workflows",
+      // A workspace owns the Workflows made in it, as it owns its agents and Apps (WS-OWN-1b).
+      owners: [...ASSET_OWNER_KINDS],
       schema: workflowConfigSchema,
       nameRule: { pattern: WORKFLOW_NAME_PATTERN, description: WORKFLOW_NAME_RULE },
       actions: {
@@ -576,8 +580,8 @@ function workflowPublishReach(next: JsonObject, live: JsonObject | undefined): P
 /** One published revision as the store holds it, read with the engine's parser. */
 export interface PublishedWorkflow {
   id: string;
-  /** The id of the asset that holds it, where it is stored as one. */
-  assetId?: string;
+  /** The asset that holds it, where it is stored as one: its id and its owner. */
+  asset?: WorkflowAssetRef;
   name: string;
   description?: string;
   /** The id of the published revision. A run started on it keeps it to its end. */
@@ -619,7 +623,7 @@ function publishedWorkflowOf(asset: ConfigAssetRecord): PublishedWorkflow | unde
   const shown = definition.ok ? definition.manifest : config.data?.manifest;
   return {
     id: asset.name,
-    assetId: asset.id,
+    asset: { id: asset.id, scope: asset.scope },
     name: (shown?.name ?? asset.name).slice(0, WORKFLOW_LIST_NAME_MAX),
     ...(shown?.description === undefined
       ? {}
@@ -667,7 +671,7 @@ export function createWorkflowAssetDefinitions(options: {
   /** One page of published Workflows, including those this engine refuses. */
   published(page?: StorePage): Promise<PublishedWorkflow[]>;
   /** The retained asset id, including drafts and deleted assets: what rights are decided on. */
-  assetIdOf(id: string): Promise<string | undefined>;
+  assetOf(id: string): Promise<WorkflowAssetRef | undefined>;
   /**
    * The draft of the Workflow of this id, which a test run runs: the asset's newest revision,
    * published or not. Nothing where no asset has the id; a draft the engine cannot run is
@@ -692,10 +696,10 @@ export function createWorkflowAssetDefinitions(options: {
       : Promise.resolve(undefined);
   return {
     published,
-    async assetIdOf(id) {
+    async assetOf(id) {
       const asset = await assetOf(id);
       // Deletion retains the row and its grants; retained runs keep the same deny boundary.
-      return asset?.id;
+      return asset && { id: asset.id, scope: asset.scope };
     },
     async draft(id) {
       const asset = await assetOf(id);

@@ -38,7 +38,8 @@ function operationOf(
 
 /**
  * The release's own client over no instance: each request is read back as the operation of
- * the catalog it names, kept in `calls`, and answered with what `answer` gives as JSON. So a
+ * the catalog it names, kept in `calls`, and answered with what `answer` gives as JSON, or with
+ * the `Response` it gives. So a
  * test of a caller of the client names operations and no path.
  */
 export function recordedApiClient(answer: (call: RecordedApiCall) => unknown): {
@@ -61,7 +62,9 @@ export function recordedApiClient(answer: (call: RecordedApiCall) => unknown): {
         body: await request.text()
       };
       calls.push(call);
-      return Response.json(answer(call));
+      // A test that answers an error hands its own response.
+      const answered = answer(call);
+      return answered instanceof Response ? answered : Response.json(answered);
     }
   });
   return { client, calls };

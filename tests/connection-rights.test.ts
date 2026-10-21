@@ -119,7 +119,10 @@ describe("the vocabulary of Connection rights", () => {
         bundle ||
           /^(?:agent|skill|app|data_store|guardrail)\./u.test(action) ||
           // Feedback on the agents a workspace owns is reviewed there (LU-4).
-          action === "feedback.review"
+          action === "feedback.review" ||
+          // A workspace owns the Workflows made in it; their run data is granted one by one
+          // (WS-OWN-1b).
+          (/^workflow\./u.test(action) && action !== "workflow.read_run_data")
       );
       expect(scopes.includes("instance"), action).toBe(
         !bundle &&

@@ -25,7 +25,18 @@ export function registerWorkflowUnpublishRoute(route: Route, options: ChatServer
     },
     changeClass: "reversible",
     module: "workflows",
-    execute: (input, context) =>
-      workflow.drafts.unpublish(context, { kind: WORKFLOW_ASSET_KIND, name: input.workflow })
+    // Addressed in the scope of its owner, which a workspace may be (WS-OWN-1b).
+    execute: async (input, context) => {
+      const asset = await options.configAssets.store.getConfigAsset({
+        clientInstanceId: options.clientInstanceId,
+        kind: WORKFLOW_ASSET_KIND,
+        name: input.workflow
+      });
+      return workflow.drafts.unpublish(context, {
+        kind: WORKFLOW_ASSET_KIND,
+        name: input.workflow,
+        ...(asset?.scope.kind === "workspace" ? { workspaceId: asset.scope.workspaceId } : {})
+      });
+    }
   });
 }

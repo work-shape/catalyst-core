@@ -173,8 +173,17 @@ describe("rights on a Workflow", () => {
         scopeId: "asset-wf"
       }))
     );
-    // No workspace owns a Workflow, so no such row is asked for.
-    expect(grantRequests({ ...form, scopeKind: "workspace", workspaceId: "ws-1" })).toBeUndefined();
+    // A workspace owns the Workflows made in it, so a row in a workspace reaches those (WS-OWN-1b).
+    expect(grantRequests({ ...form, scopeKind: "workspace", workspaceId: "ws-1" })).toEqual(
+      ["workflow.read", "workflow.use"].map((action) => ({
+        holderKind: "user",
+        holderId: member.id,
+        action,
+        effect: "allow",
+        scopeKind: "workspace",
+        scopeId: "ws-1"
+      }))
+    );
   });
 
   it("lists a row on one Workflow under the Workflow's name and the rights in their order", () => {

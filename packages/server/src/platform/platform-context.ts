@@ -197,8 +197,15 @@ async function visibleSections(
   const writes =
     hasAuthScope(caller.actor, SCOPE_OF_VERB.write) &&
     (caller.access.authorize(WORKFLOW_ACTIONS.write, { kind: WORKFLOW_ASSET_KIND }).allowed ||
-      caller.access.holdsGrantAt(WORKFLOW_ACTIONS.write, ["asset"]));
-  if (writes) {
+      caller.access.holdsGrantAt(WORKFLOW_ACTIONS.write, ["asset", "workspace"]));
+  // A right in a workspace reaches the Workflows it owns (WS-OWN-1b): the row is there for
+  // them as for the instance's.
+  const inWorkspace =
+    hasAuthScope(caller.actor, SCOPE_OF_VERB.read) &&
+    [WORKFLOW_ACTIONS.read, WORKFLOW_ACTIONS.use].some((action) =>
+      caller.access.holdsGrantAt(action, ["workspace"])
+    );
+  if (writes || inWorkspace) {
     return ["workflows"];
   }
   const kind = options.configAssets.kinds.get(WORKFLOW_ASSET_KIND);
@@ -216,8 +223,11 @@ async function visibleSections(
           accessResource(asset.kind, asset.name, asset.scope, asset.id)
         )) ||
       (asset.published === true &&
-        listedWorkflowActions(caller.access, caller.actor, workflowOf(asset.name, asset.id))
-          .length > 0)
+        listedWorkflowActions(
+          caller.access,
+          caller.actor,
+          workflowOf(asset.name, { id: asset.id, scope: asset.scope })
+        ).length > 0)
   });
   return listed.length > 0 ? ["workflows"] : [];
 }

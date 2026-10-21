@@ -82,6 +82,7 @@ export function WorkflowsPage() {
     <>
       <WorkflowsPageView
         workspaceId={host.workspace.id}
+        workspaceName={host.workspace.name}
         list={{ ...list, rows }}
         now={now}
         runsAvailable={runsAvailable}
@@ -101,6 +102,7 @@ export function WorkflowsPage() {
 /** The list of Workflows as it stands for a given list. */
 export function WorkflowsPageView({
   workspaceId,
+  workspaceName,
   list,
   now,
   runsAvailable,
@@ -110,6 +112,8 @@ export function WorkflowsPageView({
   onStart
 }: {
   workspaceId: string;
+  /** The open workspace's name: the chip of a Workflow it owns. */
+  workspaceName?: string;
   list: WorkflowList;
   now: Date;
   /** The instance runs Workflows: a card offers a start where the reader may make one. */
@@ -195,6 +199,7 @@ export function WorkflowsPageView({
                     <WorkflowCard
                       workflow={workflow}
                       workspaceId={workspaceId}
+                      {...(workspaceName === undefined ? {} : { workspaceName })}
                       now={now}
                       canStart={runsAvailable && startOffered(workflow)}
                       runsShown={runsAvailable && readsRuns(workflow)}
@@ -238,6 +243,7 @@ function cannotStart(workflow: WorkflowListItem): boolean {
 function WorkflowCard({
   workflow,
   workspaceId,
+  workspaceName,
   now,
   canStart,
   runsShown,
@@ -246,6 +252,7 @@ function WorkflowCard({
 }: {
   workflow: WorkflowListItem;
   workspaceId: string;
+  workspaceName?: string;
   now: Date;
   canStart: boolean;
   /** The reader may read the Workflow's runs. */
@@ -266,6 +273,10 @@ function WorkflowCard({
             <CardTitle id={titleId} clamp className="min-w-0">
               {workflow.name}
             </CardTitle>
+            {/* Whose it is: the open workspace's, as Studio's lists say it (WS-OWN-1b). */}
+            {workflow.ownerWorkspaceId === workspaceId ? (
+              <Chip size="sm">{workspaceName ?? t("workflows.ownerWorkspace")}</Chip>
+            ) : null}
             {workflow.published ? null : (
               <Badge tone="neutral" size="sm">
                 {t("workflows.draft.unpublished")}

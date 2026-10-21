@@ -107,8 +107,10 @@ test("a Workflow written in chat without runAs publishes with its own account an
   page.setDefaultTimeout(30_000);
   await mkdir(shotsDir, { recursive: true });
   await plantConnection(connection);
+  // The draft is the conversation's workspace's, the person's own (WS-OWN-1b).
+  const personalId = await personalWorkspaceId(page);
+  const ownedUrl = `${assetUrl}?workspaceId=${personalId}`;
   try {
-    const personalId = await personalWorkspaceId(page);
     await page.evaluate(() => window.localStorage.setItem("vivd-catalyst:locale", "en"));
 
     // The agent's first save, from a new conversation, creates the draft with no `runAs`.
@@ -142,7 +144,7 @@ test("a Workflow written in chat without runAs publishes with its own account an
     await expect(page).toHaveURL((url) => url.pathname === workflowPath);
     const stored = z
       .object({ config: z.object({ manifest: z.record(z.string(), z.unknown()) }) })
-      .parse(await (await page.request.get(assetUrl)).json());
+      .parse(await (await page.request.get(ownedUrl)).json());
     expect(stored.config.manifest).not.toHaveProperty("runAs");
 
     // The publish question names the Workflow's own account and what it may use, in English.
@@ -216,10 +218,10 @@ test("a Workflow written in chat without runAs publishes with its own account an
     await page.screenshot({ path: join(shotsDir, "live-1-run-done.png"), animations: "disabled" });
   } finally {
     // Deleting the Workflow deletes its own account; the rows on the Connection go with it.
-    const revision = await assetRevision(page, assetUrl).catch(() => undefined);
+    const revision = await assetRevision(page, ownedUrl).catch(() => undefined);
     if (revision !== undefined) {
       await requestWithOrigin(page, "post", `${assetUrl}/delete`, {
-        data: { expectedRevision: revision }
+        data: { expectedRevision: revision, workspaceId: personalId }
       });
     }
     await removeGrantsOn(connection.id);

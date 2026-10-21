@@ -354,6 +354,8 @@ export interface WorkflowSummaryResource {
   kind?: WorkflowKind;
   /** The id of the published revision: what a run started now names as its own. */
   definitionRevisionId?: string;
+  /** The workspace that owns it. Absent where the instance does. */
+  workspaceId?: string;
   /** Why the instance accepts no start by hand now. Empty where it does. */
   reasons?: readonly WorkflowStartIssue[];
   /** What the caller may do with the Workflow, by the names of the actions. */
@@ -445,6 +447,10 @@ export function toWorkflowListItem(
     refusedFor: startIssues(summary),
     mayStart: mayStartOf(summary),
     ...assetRightsOf(asset),
+    // A reader who only starts it reads no asset row: the engine's entry names the owner.
+    ...(asset?.scope === undefined && summary.workspaceId !== undefined
+      ? { ownerWorkspaceId: summary.workspaceId }
+      : {}),
     startForm: startFormOf(summary.inputs),
     ...(lastRun === undefined
       ? {}

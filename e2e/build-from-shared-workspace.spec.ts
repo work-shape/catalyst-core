@@ -118,7 +118,13 @@ test("a build refused in a shared conversation goes on privately with the reques
   const sharedPath = new URL(page.url()).pathname;
   const sharedId = sharedPath.split("/").at(-1) ?? "";
   expect(await conversation(page, sharedId)).toMatchObject({ visibility: "workspace" });
-  expect((await page.request.get(`${apiBaseUrl}/api/v1/assets/workflow/${id}`)).status()).toBe(404);
+  expect(
+    (
+      await page.request.get(
+        `${apiBaseUrl}/api/v1/assets/workflow/${id}?workspaceId=${workspaceId}`
+      )
+    ).status()
+  ).toBe(404);
 
   // One press: the workspace's start page with the request to send again. As a new chat, it
   // makes no conversation before the send (ACCEPT-2e: an empty one stayed when the person left).
