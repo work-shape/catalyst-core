@@ -228,8 +228,10 @@ describe("catalog CLI commands", () => {
     const fetchImpl = apiFetch((request) => {
       const path = new URL(request.url).pathname;
       requests.push(`${request.method} ${path}`);
+      if (path.endsWith("/oauth/sign-ins/setup_1")) return Response.json({ state: "waiting" });
       if (request.method === "GET") return Response.json(connectionDetail());
       return Response.json({
+        signInId: "setup_1",
         authorizationUrl: "https://provider.test/authorize?state=s",
         providerHost: "provider.test",
         scopes: [],
@@ -249,7 +251,8 @@ describe("catalog CLI commands", () => {
     expect(requests).toEqual([
       "POST /api/v1/connections/outside/oauth/start",
       "GET /api/v1/connections/outside",
-      "GET /api/v1/connections/outside"
+      "GET /api/v1/connections/outside",
+      "GET /api/v1/connections/outside/oauth/sign-ins/setup_1"
     ]);
 
     const misplaced = await run(["connection", "test", "outside", "--no-browser"], { fetchImpl });

@@ -253,6 +253,14 @@ export interface ConnectionBindingsStore {
     clientInstanceId: ClientInstanceId;
     stateHash: string;
   }): Promise<ConsumedConnectionSetupSession>;
+  /**
+   * Who started a session that waits for its callback and has not expired, or `undefined`
+   * where a callback took it, it expired or there is none.
+   */
+  readWaitingConnectionSetupSession(input: {
+    clientInstanceId: ClientInstanceId;
+    id: string;
+  }): Promise<Pick<ConnectionSetupSessionRecord, "connectionAssetId" | "actorUserId"> | undefined>;
   /** Removes the sessions that expired. Answers how many. */
   sweepExpiredConnectionSetupSessions(input: {
     clientInstanceId: ClientInstanceId;

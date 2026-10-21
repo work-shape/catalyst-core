@@ -185,6 +185,20 @@ export function registerConnectionRoutes(route: Route, options: ChatServerOption
       })
   });
 
+  route.operation(apiOperations["connections.oauth_sign_in"], {
+    authorize: (input, { access }) => authorizeOn(access, CONNECTION_ACTIONS.read, input.name),
+    resource: connectionResource,
+    module: CONNECTIONS_MODULE,
+    execute: async (input, context) => ({
+      state: (await required().oauthWaiting(input.name, {
+        signInId: input.signInId,
+        userId: context.actor.id
+      }))
+        ? ("waiting" as const)
+        : ("ended" as const)
+    })
+  });
+
   route.operation(apiOperations["connections.oauth_complete"], {
     // Whose sign-in it is and the right on the Connection are checked once the state is read;
     // the state must name the Connection of the path.

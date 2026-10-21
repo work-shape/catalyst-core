@@ -192,6 +192,8 @@ export interface ConnectionManagement extends ReturnType<
   oauthStart: ConnectionSignIn["start"];
   /** Completes a sign-in at its callback. See `ConnectionSignIn`. */
   oauthComplete: ConnectionSignIn["complete"];
+  /** Whether a person's sign-in still waits for its callback. See `ConnectionSignIn`. */
+  oauthWaiting: ConnectionSignIn["waiting"];
   /** The in-app address a callback sends the browser to, or nothing without a public URL. */
   oauthLandingUrl(outcome: string, connectionName?: string): string | undefined;
   /**
@@ -588,6 +590,7 @@ export function createConnectionManagement(
 
     oauthStart: (name, input) => signIn.start(name, input),
     oauthComplete: (input) => signIn.complete(input),
+    oauthWaiting: (name, input) => signIn.waiting(name, input),
     oauthLandingUrl: (outcome, connectionName) =>
       deps.publicUrl === undefined
         ? undefined

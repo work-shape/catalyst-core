@@ -18,6 +18,7 @@ export const connectionsModule = defineModule({
     "connections.set_secret",
     "connections.discover",
     "connections.oauth_start",
+    "connections.oauth_sign_in",
     "connections.oauth_complete",
     "connections.disconnect",
     "connections.person_context",

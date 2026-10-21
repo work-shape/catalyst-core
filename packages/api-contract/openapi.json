@@ -5293,6 +5293,97 @@
         "x-catalyst-rate-class": "write"
       }
     },
+    "/api/v1/connections/{name}/oauth/sign-ins/{signInId}": {
+      "get": {
+        "operationId": "connections.oauth_sign_in",
+        "summary": "Read whether a shared OAuth sign-in the caller started still waits for the browser to come back",
+        "tags": [
+          "Connections"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "config_assets:read"
+            ]
+          },
+          {
+            "sessionToken": [
+              "config_assets:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "signInId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "waiting",
+                        "ended"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "state"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlocked"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-rate-class": "read"
+      }
+    },
     "/api/v1/connections/{name}/oauth/start": {
       "post": {
         "operationId": "connections.oauth_start",
@@ -5341,6 +5432,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "signInId": {
+                      "type": "string"
+                    },
                     "authorizationUrl": {
                       "type": "string",
                       "format": "uri"
@@ -5359,6 +5453,7 @@
                     }
                   },
                   "required": [
+                    "signInId",
                     "authorizationUrl",
                     "providerHost",
                     "scopes",

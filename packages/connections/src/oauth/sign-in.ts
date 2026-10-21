@@ -91,6 +91,8 @@ export interface SignInCompleter {
 }
 
 export interface OAuthStartAnswer {
+  /** The id of the session that waits for the callback. It proves nothing and opens nothing. */
+  signInId: string;
   authorizationUrl: string;
   providerHost: string;
   scopes: string[];
@@ -133,6 +135,12 @@ export interface ConnectionSignIn {
     audit: SignInAudit;
     signal?: AbortSignal;
   }): Promise<{ location: string; connectionName: string }>;
+  /**
+   * Whether the sign-in `signInId` of the Connection, started by `userId`, still waits for its
+   * callback. `false` once a callback took it, whatever its outcome, once it expired, and for
+   * a sign-in of another person or another Connection.
+   */
+  waiting(connectionName: string, input: { signInId: string; userId: string }): Promise<boolean>;
   /** The redirect URI of a Connection, or nothing without `instance.publicUrl`. */
   redirectUri(connectionName: string): string | undefined;
 }
@@ -371,6 +379,7 @@ export function createConnectionSignIn(deps: ConnectionSignInDeps): ConnectionSi
       ttlMs: CONNECTION_OAUTH_SESSION_TTL_MS
     });
     return {
+      signInId: session.id,
       authorizationUrl: authorization.url,
       providerHost: new URL(server.authorizationEndpoint).host,
       scopes,
@@ -550,6 +559,16 @@ export function createConnectionSignIn(deps: ConnectionSignInDeps): ConnectionSi
         await refused(audit, "start", error, connection);
         throw error;
       }
+    },
+
+    async waiting(name, { signInId, userId }) {
+      const connection = await readConnection(deps, name);
+      if (!connection) throw new AppError("NOT_FOUND", `Connection '${name}' does not exist`);
+      const session = await deps.stores.connections.readWaitingConnectionSetupSession({
+        clientInstanceId: deps.clientInstanceId,
+        id: signInId
+      });
+      return session?.actorUserId === userId && session.connectionAssetId === connection.assetId;
     },
 
     async complete({ connectionName, query, completer, mayWrite, audit, signal }) {

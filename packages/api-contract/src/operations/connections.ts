@@ -154,10 +154,21 @@ export const connectionDetailSchema = z.object({
  * kept nowhere. `providerHost` is the host the browser goes to and `scopes` what is asked for.
  */
 export const connectionOAuthStartSchema = z.object({
+  /** The sign-in, for `connections.oauth_sign_in`. It proves nothing and opens nothing. */
+  signInId: z.string(),
   authorizationUrl: z.string().url(),
   providerHost: z.string(),
   scopes: z.array(z.string()),
   expiresAt: timestampSchema
+});
+
+/**
+ * Whether a sign-in the caller started still waits for its callback. `ended` once a browser
+ * came back with it, whatever the outcome, once it expired, and for a sign-in of someone else:
+ * a sign-in that ended without connecting cannot be completed any more.
+ */
+export const connectionOAuthSignInSchema = z.object({
+  state: z.enum(["waiting", "ended"])
 });
 
 /**
@@ -274,6 +285,7 @@ export type ConnectionOperationDetail = z.infer<typeof connectionOperationDetail
 export type ConnectionTestResult = z.infer<typeof connectionTestResultSchema>;
 export type ConnectionTools = z.infer<typeof connectionToolsSchema>;
 export type ConnectionOAuthStart = z.infer<typeof connectionOAuthStartSchema>;
+export type ConnectionOAuthSignIn = z.infer<typeof connectionOAuthSignInSchema>;
 
 /** The one field these operations take: the Connection's name, from the path. */
 export const connectionNameParamsSchema = z.object({ name: connectionNameSchema });
@@ -402,6 +414,21 @@ export const connectionOperations = {
     response: json(connectionOAuthStartSchema),
     errors: ["NOT_FOUND", "CONFLICT"],
     rateClass: "write"
+  }),
+  "connections.oauth_sign_in": defineRegisteredOperation({
+    id: "connections.oauth_sign_in",
+    method: "GET",
+    path: "/api/v1/connections/:name/oauth/sign-ins/:signInId",
+    summary:
+      "Read whether a shared OAuth sign-in the caller started still waits for the browser to come back",
+    tag: "Connections",
+    auth: "user",
+    scope: "config_assets:read",
+    requires: [],
+    effect: "reading",
+    response: json(connectionOAuthSignInSchema),
+    errors: ["NOT_FOUND"],
+    rateClass: "read"
   }),
   // One callback per Connection: a code sent back for one Connection is never taken for
   // another's sign-in.

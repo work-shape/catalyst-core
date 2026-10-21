@@ -140,6 +140,11 @@ export interface ConnectionManagementPort {
     audit: ConnectionSignInAudit;
     signal?: AbortSignal;
   }): Promise<{ location: string; connectionName: string }>;
+  /**
+   * Whether the sign-in a person started still waits for its callback: `false` once a callback
+   * took it, whatever its outcome, once it expired, and for another person's sign-in.
+   */
+  oauthWaiting(name: string, input: { signInId: string; userId: string }): Promise<boolean>;
   /** The in-app address of an outcome, or nothing where `instance.publicUrl` is not set. */
   oauthLandingUrl(outcome: string, connectionName?: string): string | undefined;
   /**

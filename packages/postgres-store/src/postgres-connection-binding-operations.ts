@@ -3,6 +3,7 @@ import {
   asc,
   eq,
   getTableColumns,
+  gt,
   isNotNull,
   ne,
   isNull,
@@ -377,6 +378,22 @@ export function createPostgresConnectionBindingOperations(
       const consumed = mapSession(session);
       // A session started before the release that stores its resource cannot be completed.
       return consumed ? { outcome: "consumed", session: consumed } : { outcome: "expired" };
+    },
+    async readWaitingConnectionSetupSession({ clientInstanceId, id }) {
+      const [row] = await db
+        .select({
+          connectionAssetId: connectionSetupSessions.connectionAssetId,
+          actorUserId: connectionSetupSessions.actorUserId
+        })
+        .from(connectionSetupSessions)
+        .where(
+          and(
+            eq(connectionSetupSessions.clientInstanceId, clientInstanceId),
+            eq(connectionSetupSessions.id, id),
+            gt(connectionSetupSessions.expiresAt, statementTime)
+          )
+        );
+      return row;
     },
     async sweepExpiredConnectionSetupSessions({ clientInstanceId }) {
       // Sessions are made by people who connect a Connection and live 15 minutes, so the

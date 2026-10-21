@@ -57,6 +57,7 @@ afterEach(() => {
 
 function start(n: number, scopes = ["files.read", "files.write"]): ConnectionOAuthStart {
   return {
+    signInId: `setup_${n}`,
     authorizationUrl: `https://${HOST}/authorize?attempt=${n}`,
     providerHost: HOST,
     scopes,

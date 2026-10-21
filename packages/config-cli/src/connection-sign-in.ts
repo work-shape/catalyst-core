@@ -16,11 +16,17 @@ export interface SignInOptions extends ConfigCommandOptions {
 
 /** How often the CLI reads the Connection while the browser signs in. */
 const READ_EVERY_MS = 2_000;
+/**
+ * The reads after the browser came back before a sign-in that is not in counts as refused: a
+ * callback takes the sign-in first and connects only after the code exchange, which the
+ * instance bounds at 30 seconds.
+ */
+const SETTLE_READS = 16;
 
 /**
  * Starts the sign-in, opens or prints the provider's address, and waits until the Connection
- * is connected by a newer sign-in than before, or the sign-in session ends. Exit 0 connected,
- * 1 not completed.
+ * is connected by a newer sign-in than before, or the sign-in ends: a browser came back with
+ * it and it was refused, or it expired. Exit 0 connected, 1 not completed.
  */
 export async function connectConnection(
   api: ConfigApi,
@@ -47,11 +53,20 @@ export async function connectConnection(
     options.sleep ??
     ((milliseconds: number) => new Promise((resolve) => setTimeout(resolve, milliseconds)));
   const until = Date.parse(start.expiresAt);
+  let readsSinceEnded = 0;
   for (;;) {
     const detail = await readDetail(api, name);
     if (signedIn(detail, before)) {
       writeOutput(options, JSON.stringify({ connection: name, binding: detail.binding }, null, 2));
       return 0;
+    }
+    if (readsSinceEnded > 0 || (await ended(api, name, start.signInId))) readsSinceEnded += 1;
+    if (readsSinceEnded > SETTLE_READS) {
+      writeError(
+        options,
+        `The sign-in of '${name}' ended in the browser without connecting the Connection; the page the browser came back to says why. Run the command again.`
+      );
+      return 1;
     }
     if (Date.now() >= until) {
       writeError(
@@ -66,6 +81,14 @@ export async function connectConnection(
 
 function readDetail(api: ConfigApi, name: string): Promise<ConnectionDetail> {
   return api.read((client) => client.connections.get({ params: { name } }));
+}
+
+/** A browser came back with the sign-in, or it expired: it can no longer be completed. */
+async function ended(api: ConfigApi, name: string, signInId: string): Promise<boolean> {
+  const signIn = await api.read((client) =>
+    client.connections.oauth_sign_in({ params: { name, signInId } })
+  );
+  return signIn.state === "ended";
 }
 
 /** Connected by a sign-in that was not in before the start. */

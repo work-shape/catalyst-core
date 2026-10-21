@@ -5,6 +5,7 @@ import { Readable } from "node:stream";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 import { asClientInstanceId } from "@work-shape/catalyst-core";
+import { createApiClient } from "@work-shape/catalyst-api-client";
 import { runCli, type CliRuntimeOptions } from "@work-shape/catalyst-cli";
 import { createOAuthWorld, landingOf, type OAuthWorld } from "./support/oauth-sign-in-world";
 
@@ -103,29 +104,58 @@ describe("catalyst connection connect", () => {
     expect(JSON.parse(ended.out)).toEqual({ state: "revoked", providerRevocation: "confirmed" });
   });
 
-  it("does not complete in another person's browser, and keeps waiting", async () => {
+  it("does not complete in another person's browser, and stops waiting once it came back", async () => {
     const key = await personalKey(await world.signIn("alice"));
     const opened: string[] = [];
     const landings: Record<string, string>[] = [];
     const signsIn = browser(() => world.signIn("bob"), opened);
     let printed = "";
+    let reads = 0;
     const result = await cli(["connection", "connect", "dcr", "--no-browser"], key, {
       openUrl: (address) => opened.push(`opened ${address}`),
       stderr: (text) => {
         printed += text;
       },
       sleep: async () => {
+        reads += 1;
+        if (reads > 20) throw new Error("Still waiting");
+        if (landings.length > 0) return;
         // No browser was opened: the person copies the printed address.
-        if (landings.length === 0) expect(opened).toEqual([]);
-        if (landings.length === 0) opened.push(/^https?:\/\/\S+$/mu.exec(printed)?.[0] ?? "");
-        if (landings.length > 0) throw new Error("Stopped waiting");
+        expect(opened).toEqual([]);
+        opened.push(/^https?:\/\/\S+$/mu.exec(printed)?.[0] ?? "");
         landings.push(await signsIn());
       }
     });
     expect(landings).toEqual([{ signIn: "oauth_state_invalid" }]);
-    expect(result.code).toBe(1);
+    expect(result.code, result.err).toBe(1);
     expect(result.out).toBe("");
-    expect(result.err).toContain("Stopped waiting");
+    expect(result.err).toContain("ended in the browser without connecting");
+  });
+
+  it("answers a sign-in as waiting only to the person who started it", async () => {
+    const alice = await world.signIn("alice");
+    const key = await personalKey(alice);
+    const { accessToken } = await createApiClient({
+      baseUrl: world.api,
+      getToken: () => key
+    }).access_tokens.exchange();
+    const client = createApiClient({ baseUrl: world.api, getToken: () => accessToken });
+    const { signInId } = await client.connections.oauth_start({ params: { name: "dcr" } });
+    expect(await client.connections.oauth_sign_in({ params: { name: "dcr", signInId } })).toEqual({
+      state: "waiting"
+    });
+    const stateOf = async (cookie: string, connection = "dcr") => {
+      const read = await fetch(
+        `${world.api}/api/v1/connections/${connection}/oauth/sign-ins/${signInId}`,
+        { headers: { cookie } }
+      );
+      const body = await read.text();
+      expect(read.status, body).toBe(200);
+      return z.object({ state: z.string() }).parse(JSON.parse(body)).state;
+    };
+    expect(await stateOf(alice)).toBe("waiting");
+    expect(await stateOf(alice, "registered")).toBe("ended");
+    expect(await stateOf(await world.signIn("bob"))).toBe("ended");
   });
 
   it("refuses a Service Principal's key before anything starts", async () => {
