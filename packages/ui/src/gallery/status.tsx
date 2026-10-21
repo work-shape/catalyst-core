@@ -15,13 +15,16 @@ import {
 } from "../status/registry-icon";
 import { IconTile } from "../status/icon-tile";
 import { ConnectionIcon, type ConnectionIconSize } from "../status/connection-icon";
+import { ServiceMark, type ServiceMarkSize } from "../status/service-mark";
 import { KnowsHowTo, SkillIcon, type SkillIconSize } from "../status/skill-icon";
 import { TargetBadge, type CallTarget } from "../status/target-badge";
+import { SERVICE_MARK_SAMPLE_COLORS, SERVICE_MARK_SAMPLE_LOGO } from "../theme/service-mark";
 import { Samples, type GalleryGroup } from "./entry";
 import type { GalleryText } from "./text";
 
 const skillIconSizes: readonly SkillIconSize[] = ["sm", "md", "lg"];
 const connectionIconSizes: readonly ConnectionIconSize[] = ["sm", "md", "lg"];
+const serviceMarkSizes: readonly ServiceMarkSize[] = ["sm", "md", "lg"];
 // The four pages, then the line icons of platform skills that make no file, on the tile.
 const shippedSkillIcons = [
   "spreadsheet",
@@ -402,6 +405,46 @@ export const statusGallery: GalleryGroup = {
           <Samples label={text.connectionIconUnknownService}>
             <ConnectionIcon service="not-registered" category="database" />
             <ConnectionIcon service="not-registered" />
+          </Samples>
+        </>
+      )
+    },
+    {
+      name: "ServiceMark",
+      components: ["ServiceMark"],
+      render: (text) => (
+        <>
+          <Samples label={text.serviceMarkInitial}>
+            {serviceMarkSizes.map((size) => (
+              <span
+                key={size}
+                data-gallery-sample={`service-mark-${size}`}
+                className="flex items-center gap-4"
+              >
+                <ServiceMark
+                  size={size}
+                  name={text.serviceMarkLedger}
+                  color={SERVICE_MARK_SAMPLE_COLORS.ledger}
+                />
+                <ServiceMark
+                  size={size}
+                  name={text.serviceMarkFiles}
+                  color={SERVICE_MARK_SAMPLE_COLORS.files}
+                />
+              </span>
+            ))}
+          </Samples>
+          <Samples label={text.serviceMarkLogo}>
+            <ServiceMark name={text.serviceMarkFiles} logo={SERVICE_MARK_SAMPLE_LOGO} />
+            <ServiceMark
+              name={text.serviceMarkLedger}
+              size="lg"
+              logo={SERVICE_MARK_SAMPLE_LOGO}
+              showName={false}
+            />
+          </Samples>
+          <Samples label={text.serviceMarkNeutral}>
+            <ServiceMark name={text.serviceMarkLedger} />
           </Samples>
         </>
       )

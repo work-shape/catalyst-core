@@ -38,4 +38,11 @@ export {
   type SkillIconProps,
   type SkillIconSize
 } from "./skill-icon";
+export {
+  ServiceMark,
+  serviceInitial,
+  type ServiceMarkArt,
+  type ServiceMarkProps,
+  type ServiceMarkSize
+} from "./service-mark";
 export { TargetBadge, type CallTarget, type TargetBadgeProps } from "./target-badge";

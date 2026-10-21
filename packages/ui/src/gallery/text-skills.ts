@@ -19,6 +19,11 @@ export interface SkillsGalleryText {
   skillOfferStructure: string;
   connectionIconSizes: string;
   connectionIconUnknownService: string;
+  serviceMarkInitial: string;
+  serviceMarkLogo: string;
+  serviceMarkNeutral: string;
+  serviceMarkLedger: string;
+  serviceMarkFiles: string;
   starterListLabel: string;
   starterSheet: string;
   starterSheetHint: string;
@@ -54,6 +59,12 @@ export const skillsGalleryText: Record<"en" | "de", SkillsGalleryText> = {
     skillOfferStructure: "Offer structure",
     connectionIconSizes: "The generic Connection and the four categories, in the three sizes",
     connectionIconUnknownService: "A service nobody registered: its category, else the generic one",
+    serviceMarkInitial:
+      "The white initial on the service's colour, with its name, in the three sizes",
+    serviceMarkLogo: "A logo the service's owner permits, drawn unchanged; and without the name",
+    serviceMarkNeutral: "No colour given: the neutral tile",
+    serviceMarkLedger: "Ledger",
+    serviceMarkFiles: "Files",
     starterListLabel: "Suggestions to start with",
     starterSheet: "Turn a list into a spreadsheet",
     starterSheetHint: "With formulas and a chart",
@@ -91,6 +102,13 @@ export const skillsGalleryText: Record<"en" | "de", SkillsGalleryText> = {
     connectionIconSizes: "Die allgemeine Connection und die vier Kategorien, in den drei Größen",
     connectionIconUnknownService:
       "Ein Dienst, den niemand registriert hat: seine Kategorie, sonst das allgemeine Symbol",
+    serviceMarkInitial:
+      "Der weiße Anfangsbuchstabe auf der Farbe des Dienstes, mit dem Namen, in den drei Größen",
+    serviceMarkLogo:
+      "Ein Logo, das der Inhaber des Dienstes erlaubt, unverändert; und ohne den Namen",
+    serviceMarkNeutral: "Ohne Farbe: die neutrale Kachel",
+    serviceMarkLedger: "Hauptbuch",
+    serviceMarkFiles: "Dateien",
     starterListLabel: "Vorschläge für den Einstieg",
     starterSheet: "Aus einer Liste eine Tabelle machen",
     starterSheetHint: "Mit Formeln und einem Diagramm",
