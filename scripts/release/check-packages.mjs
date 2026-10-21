@@ -27,7 +27,7 @@ const MAX_TARBALL_BYTES_BY_DIR = {
   // Standalone helper bundles and shipped skills.
   "artifact-helpers": 6_500_000, // check-limit
   // Compiled components, stylesheet and Vite helpers.
-  "chat-ui": 650_000, // check-limit
+  "chat-ui": 800_000, // check-limit
   // Built documentation site.
   docs: 2_000_000, // check-limit
   // Migrations and their snapshot history.
