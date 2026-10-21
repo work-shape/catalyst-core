@@ -43,6 +43,30 @@ export function sourceWords(source: CallableOperationOption["source"], t: Transl
   }
 }
 
+/** `workflow.<id>.start`: the id of the Workflow it starts. */
+const STARTS = /^workflow\.([^.]+)\.start$/u;
+
+/**
+ * An operation in words: its title and where it belongs. An operation that starts a Workflow
+ * has no title of its own, so it is named by the Workflow it starts.
+ */
+function operationWords(
+  operation: CallableOperationOption,
+  t: Translate
+): { label: string; source: string | undefined } {
+  const started =
+    operation.source.kind === "workflow" ? STARTS.exec(operation.name)?.[1] : undefined;
+  return started === undefined
+    ? { label: operation.title, source: sourceWords(operation.source, t) }
+    : {
+        label: t("workflows.settings.startWorkflow", { name: operation.source.title ?? started }),
+        source: undefined
+      };
+}
+
+const pickedWords = ({ label, source }: { label: string; source: string | undefined }) =>
+  source === undefined ? label : `${label} · ${source}`;
+
 /** The operations as the picker's groups, one per kind of source. */
 function operationGroups(
   operations: readonly CallableOperationOption[],
@@ -52,17 +76,21 @@ function operationGroups(
     heading: headingOf(kind, t),
     options: operations
       .filter((operation) => operation.source.kind === kind)
-      .map((operation) => ({
-        value: operation.name,
-        label: operation.title,
-        description: `${sourceWords(operation.source, t)} · ${t(
+      .map((operation) => {
+        const words = operationWords(operation, t);
+        const effect = t(
           operation.effect === "reading" ? "workflows.step.reading" : "workflows.step.changing"
-        )}`,
-        keywords: operation.name,
-        ...(operation.available
-          ? {}
-          : { disabled: true, disabledReason: t("workflows.settings.operationUnavailable") })
-      }))
+        );
+        return {
+          value: operation.name,
+          label: words.label,
+          description: words.source === undefined ? effect : `${words.source} · ${effect}`,
+          keywords: operation.name,
+          ...(operation.available
+            ? {}
+            : { disabled: true, disabledReason: t("workflows.settings.operationUnavailable") })
+        };
+      })
   })).filter((group) => group.options.length > 0);
 }
 
@@ -110,9 +138,7 @@ export function OperationPicker({
       >
         <PickerButton
           label={label}
-          value={
-            picked === undefined ? shown : `${picked.title} · ${sourceWords(picked.source, t)}`
-          }
+          value={picked === undefined ? shown : pickedWords(operationWords(picked, t))}
           placeholder={t("workflows.settings.chooseOperation")}
           onBlur={onBlur}
         />

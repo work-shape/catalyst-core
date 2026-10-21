@@ -51,6 +51,7 @@ export function ChildPicker({
         }))}
         value={value}
         search
+        wrapDescriptions
         {...(note === undefined ? {} : { note })}
         onValueChange={(id) => {
           const child = children.find((candidate) => candidate.id === id);

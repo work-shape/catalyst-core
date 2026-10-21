@@ -25,9 +25,9 @@ import { CONDITION_WAIT_MS, required } from "./support/assertions";
 // The Settings of an operation step and of a step that starts another Workflow (WF-EDIT-3,
 // Events check 126): picking "Load the bookings" writes the step's operation and shows one row
 // per field of its input schema, a required one holding the save back; an operation that cannot
-// be reached now cannot be picked; the child picker offers the Workflows the person may start,
-// shows one they may only read as disabled, and never the Workflow itself; the tools picker
-// writes the Workflow's `tools`. Fails without WF-EDIT-3: these steps were left to the agent.
+// be reached now cannot be picked, and one that starts a Workflow is named by it; the child
+// picker offers the Workflows the person may start, shows one they may only read as disabled,
+// and never the Workflow itself; the tools picker writes the Workflow's `tools`. Fails without WF-EDIT-3: these steps were left to the agent.
 
 const { t } = createTranslationContext("en");
 const WORKFLOW = "bookings";
@@ -96,6 +96,14 @@ const OPERATIONS: CallableOperationOption[] = [
     effect: "changing",
     source: { kind: "connection" },
     available: false
+  },
+  // Starting a Workflow has no title of its own: it is named by the Workflow it starts.
+  {
+    name: "workflow.report-ok.start",
+    title: "start",
+    effect: "changing",
+    source: { kind: "workflow", title: "Send the report" },
+    available: true
   }
 ];
 const CHILDREN: ChildWorkflowOption[] = [
@@ -274,6 +282,11 @@ describe("the Settings of an operation step and of a child Workflow step (WF-EDI
     expect(rowOf("Write the note").getAttribute("aria-disabled")).toBe("true");
     expect(rowOf("Write the note").textContent).toContain(
       t("workflows.settings.operationUnavailable")
+    );
+    expect(
+      rowOf(t("workflows.settings.startWorkflow", { name: "Send the report" })).textContent
+    ).toBe(
+      `${t("workflows.settings.startWorkflow", { name: "Send the report" })}${t("workflows.step.changing")}`
     );
     await act(async () => rowOf("Load the bookings").click());
     await settled(() => expect(fields(container)).toEqual(["from", "limit"]));
