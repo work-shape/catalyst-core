@@ -949,6 +949,36 @@
                     },
                     "finishedAt": {
                       "type": "string"
+                    },
+                    "mode": {
+                      "type": "string",
+                      "const": "test"
+                    },
+                    "workflowRevision": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "draft",
+                            "published"
+                          ]
+                        },
+                        "number": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "kind"
+                      ]
+                    },
+                    "simulatedSteps": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
                     }
                   },
                   "required": [
@@ -25679,6 +25709,38 @@
                     "operationRunId": {
                       "type": "string"
                     },
+                    "startedFrom": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "const": "app"
+                        },
+                        "app": {
+                          "type": "string"
+                        },
+                        "appRevisionId": {
+                          "type": "string"
+                        },
+                        "action": {
+                          "type": "string"
+                        },
+                        "workflowRevision": {
+                          "type": "string",
+                          "enum": [
+                            "draft",
+                            "published"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "app",
+                        "appRevisionId",
+                        "action",
+                        "workflowRevision"
+                      ]
+                    },
                     "parentRunId": {
                       "type": "string"
                     },
@@ -26063,6 +26125,38 @@
                     },
                     "operationRunId": {
                       "type": "string"
+                    },
+                    "startedFrom": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "const": "app"
+                        },
+                        "app": {
+                          "type": "string"
+                        },
+                        "appRevisionId": {
+                          "type": "string"
+                        },
+                        "action": {
+                          "type": "string"
+                        },
+                        "workflowRevision": {
+                          "type": "string",
+                          "enum": [
+                            "draft",
+                            "published"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "app",
+                        "appRevisionId",
+                        "action",
+                        "workflowRevision"
+                      ]
                     },
                     "parentRunId": {
                       "type": "string"
@@ -27682,6 +27776,38 @@
                           "operationRunId": {
                             "type": "string"
                           },
+                          "startedFrom": {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "const": "app"
+                              },
+                              "app": {
+                                "type": "string"
+                              },
+                              "appRevisionId": {
+                                "type": "string"
+                              },
+                              "action": {
+                                "type": "string"
+                              },
+                              "workflowRevision": {
+                                "type": "string",
+                                "enum": [
+                                  "draft",
+                                  "published"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "app",
+                              "appRevisionId",
+                              "action",
+                              "workflowRevision"
+                            ]
+                          },
                           "parentRunId": {
                             "type": "string"
                           },
@@ -28094,6 +28220,38 @@
                     },
                     "operationRunId": {
                       "type": "string"
+                    },
+                    "startedFrom": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "const": "app"
+                        },
+                        "app": {
+                          "type": "string"
+                        },
+                        "appRevisionId": {
+                          "type": "string"
+                        },
+                        "action": {
+                          "type": "string"
+                        },
+                        "workflowRevision": {
+                          "type": "string",
+                          "enum": [
+                            "draft",
+                            "published"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "app",
+                        "appRevisionId",
+                        "action",
+                        "workflowRevision"
+                      ]
                     },
                     "parentRunId": {
                       "type": "string"
@@ -28530,6 +28688,38 @@
                     },
                     "operationRunId": {
                       "type": "string"
+                    },
+                    "startedFrom": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "const": "app"
+                        },
+                        "app": {
+                          "type": "string"
+                        },
+                        "appRevisionId": {
+                          "type": "string"
+                        },
+                        "action": {
+                          "type": "string"
+                        },
+                        "workflowRevision": {
+                          "type": "string",
+                          "enum": [
+                            "draft",
+                            "published"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "app",
+                        "appRevisionId",
+                        "action",
+                        "workflowRevision"
+                      ]
                     },
                     "parentRunId": {
                       "type": "string"

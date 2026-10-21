@@ -11,6 +11,7 @@ import type {
   WorkflowAgentTranscript,
   WorkflowLastRun,
   WorkflowRunKeyFilter,
+  WorkflowRunStartedFrom,
   WorkflowRunView,
   WorkflowStepRunFilter,
   WorkflowStepRunView
@@ -43,7 +44,9 @@ export interface WorkflowRunsPort {
   /**
    * Starts a test run of the Workflow's draft, as the person who starts it bounded by the
    * principal the draft names (ADR-0031). Refuses a Workflow without a draft, a draft that
-   * cannot be run and a principal that is missing or disabled.
+   * cannot be run and a principal that is missing or disabled. With `revision: "published"`
+   * the published revision runs in mode test instead: an App draft's tester who may use the
+   * Workflow but not write it (DP-1); a Workflow never published is refused as unavailable.
    */
   test(input: {
     workflow: string;
@@ -53,6 +56,9 @@ export interface WorkflowRunsPort {
     startedBy: AuthenticatedUser;
     operationRunId?: OperationRunId;
     correlationId: string;
+    revision?: WorkflowRunStartedFrom["workflowRevision"];
+    /** The action of an App's draft whose click started the test (DP-1). */
+    startedFrom?: WorkflowRunStartedFrom;
   }): Promise<WorkflowRunView>;
   /** Ends a run as `cancelled`. A run that has ended is answered as it is; none answers nothing. */
   cancel(input: {

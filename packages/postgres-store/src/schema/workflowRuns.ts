@@ -28,6 +28,7 @@ import type {
   WorkflowDatasetReference,
   WorkflowCodeOutcome,
   WorkflowRunBounds,
+  WorkflowRunStartedFrom,
   WorkflowRunError,
   WorkflowStagedCode,
   WorkflowStepRunLog,
@@ -103,6 +104,8 @@ export const workflowRuns = pgTable(
     // The run key a start gave the run (EW-13k). Text of a person or a step, never in an audit.
     runKey: text("run_key"),
     labels: jsonb("labels").$type<Record<string, string>>(),
+    // The App draft action that started a test run (DP-1): names only. Null on every other run.
+    startedFrom: jsonb("started_from").$type<WorkflowRunStartedFrom>(),
     continuation: jsonb("continuation").$type<{
       rootRunId: WorkflowRunId;
       previousRunId?: WorkflowRunId;

@@ -26,6 +26,7 @@ import type { PageBuildError, SurfaceOf } from "../../chat/surface/surface";
 import { createPageBridge, type PageBridge } from "./bridge-host";
 import { useFrameCallTexts } from "./frame-call-texts";
 import { FrameApprovalWait, type FrameWait } from "./frame-approval-wait";
+import { FrameTestRun, type FrameTestRunShown } from "./frame-test-run";
 import { createFrameCalls, type FrameAddress } from "./frame-calls";
 import { DraftHostsNotice } from "./draft-hosts-notice";
 import {
@@ -471,6 +472,10 @@ export function LivePagePreview({
   const [wait, setWait] = useState<FrameWait>();
   const waitingRun = wait?.session === session ? wait.runId : undefined;
   const endWait = useCallback(() => setWait(undefined), []);
+  // The last test run a call of the draft started, in the frame session it was made from.
+  const [testRun, setTestRun] = useState<FrameTestRunShown>();
+  const shownTestRun = testRun?.session === session ? testRun.run : undefined;
+  const closeTestRun = useCallback(() => setTestRun(undefined), []);
   const context: AppBridgeContext | undefined = host
     ? {
         ...host,
@@ -516,7 +521,8 @@ export function LivePagePreview({
       // The frame fills the surface, whatever height the Page's content has.
       onResize: () => undefined,
       calls: () => callsRef.current,
-      onCallWaits: (runId) => setWait({ session, runId })
+      onCallWaits: (runId) => setWait({ session, runId }),
+      onTestRun: (run) => setTestRun({ session, run })
     });
     bridgeRef.current = bridge;
     const onMessage = (event: MessageEvent) => bridge.receive(event);
@@ -536,9 +542,12 @@ export function LivePagePreview({
   }, [mode, theme]);
 
   return (
-    <div className="relative size-full">
+    <div className="relative flex size-full flex-col">
+      {shownTestRun === undefined ? null : (
+        <FrameTestRun run={shownTestRun} onClose={closeTestRun} />
+      )}
       {/* While a call waits, the frame stays loaded but takes no keys and no pointer. */}
-      <div className="size-full" inert={waitingRun !== undefined}>
+      <div className="min-h-0 w-full flex-1" inert={waitingRun !== undefined}>
         <PreviewPane
           frameRef={frameRef}
           source={{ kind: "bundle", url }}

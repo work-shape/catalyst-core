@@ -13,6 +13,7 @@ import {
 } from "@work-shape/catalyst-server";
 import {
   AppError,
+  appWorkflowRefusalError,
   workflowDurationMs,
   type JobSchedule,
   type RegisteredJobHandler
@@ -245,9 +246,18 @@ export function createInstanceWorkflows(parts: InstanceWorkflowsParts): Instance
               }
             : {}),
           listWorkflows,
-          async test({ workflow, ...start }) {
-            // Definitions a test hands in are published revisions without a draft.
-            const draft = given ? undefined : await assets.draft(workflow);
+          async test({ workflow, revision = "draft", ...start }) {
+            // The published revision in mode test, for an App draft's tester who may not write
+            // the Workflow (DP-1). Definitions a test hands in are published revisions without
+            // a draft.
+            const draft =
+              revision === "published"
+                ? await (given ?? assets).read(workflow)
+                : given
+                  ? undefined
+                  : await assets.draft(workflow);
+            if (!draft && revision === "published")
+              throw appWorkflowRefusalError("workflow_unavailable", workflow);
             if (!draft) throw new AppError("NOT_FOUND", `There is no Workflow '${workflow}'`);
             // The principal bounds the test run and lends it nothing: it is asked to exist and
             // be active, and no right over it is asked of the tester (ADR-0031).

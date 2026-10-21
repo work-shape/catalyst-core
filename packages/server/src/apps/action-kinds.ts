@@ -62,6 +62,12 @@ export function unlistedDataStore(
 export interface AppActionBinding {
   /** The operation of the registry the action stands for, by name. */
   readonly operation: string;
+  /**
+   * The operation a call from an App's draft runs instead, whose call goes to the target
+   * `test` (DP-1): a `workflow` action starts a test run there. A kind without it calls
+   * `operation` from a draft as well, where the call path simulates a change.
+   */
+  readonly draftOperation?: string;
   /** What a run of the action names as reached. */
   readonly target: AppCallTarget;
   /** The kind of asset the operation belongs to, which a setting of the policy may name. */
@@ -235,12 +241,14 @@ function dataStoreBinding(action: ActionOfKind<"sql">): AppActionBinding {
 }
 
 /**
- * A `workflow` action starts a run of the published revision of its Workflow, as the viewer:
- * the viewer needs `workflow.use` on the Workflow beside the right on the App, by the rule of
- * `workflows.start` itself, in a draft as in the published App. The run acts as the
- * Workflow's own principal, never with the rights of the person who started it. The answer is
- * the run as `workflows.start` answers it; its state is read later with
- * `apps.sessions.get_workflow_run`.
+ * A `workflow` action of a published App starts a run of the published revision of its
+ * Workflow, as the viewer: the viewer needs `workflow.use` on the Workflow beside the right on
+ * the App, by the rule of `workflows.start` itself. The run acts as the Workflow's own
+ * principal, never with the rights of the person who started it. In an App's draft the click
+ * starts a test run instead (`workflows.test`, target `test`, DP-1): of the Workflow's draft
+ * where the viewer may write the Workflow, else of its published revision, in mode test either
+ * way, with the viewer's rights bounded by the principal. The answer is the run as the start
+ * answers it; its state is read later with `apps.sessions.get_workflow_run`.
  */
 function workflowBinding(action: ActionOfKind<"workflow">): AppActionBinding {
   const startOf = (parameters: JsonObject) => ({
@@ -249,6 +257,7 @@ function workflowBinding(action: ActionOfKind<"workflow">): AppActionBinding {
   });
   return {
     operation: "workflows.start",
+    draftOperation: "workflows.test",
     target: { workflow: action.workflow },
     assetKind: WORKFLOW_ASSET_KIND,
     module: "workflows",

@@ -59,13 +59,13 @@ An App takes the look of the interface around it. The build links the kit's styl
 
 A plain element without a rule of the App's own already has these colours. A rule of the App's own sets colours from the variables, not from fixed values, or the App stays light in a dark interface:
 
-| Variable                                   | For                                                    |
-| ------------------------------------------ | ------------------------------------------------------ |
-| `--background`, `--foreground`             | The page and its text                                  |
-| `--card`, `--card-foreground`              | A raised surface, such as a card or a panel, and its text |
-| `--muted`, `--muted-foreground`            | A quiet surface, and quiet text such as a hint         |
-| `--primary`, `--primary-foreground`        | The accent: the main button and its text               |
-| `--border`, `--input`, `--ring`            | Lines, a field's border, the focus ring                |
+| Variable                                            | For                                                                        |
+| --------------------------------------------------- | -------------------------------------------------------------------------- |
+| `--background`, `--foreground`                      | The page and its text                                                      |
+| `--card`, `--card-foreground`                       | A raised surface, such as a card or a panel, and its text                  |
+| `--muted`, `--muted-foreground`                     | A quiet surface, and quiet text such as a hint                             |
+| `--primary`, `--primary-foreground`                 | The accent: the main button and its text                                   |
+| `--border`, `--input`, `--ring`                     | Lines, a field's border, the focus ring                                    |
 | `--destructive`, `--success`, `--warning`, `--info` | A state; each has `-foreground`, `-soft`, `-soft-foreground` and `-border` |
 
 ```css
@@ -85,6 +85,6 @@ Use fixed colours only where the person asks for a look of their own, such as a 
 
 Put fonts and libraries in the App's folder or use the kit's; an outside address (Google Fonts, Adobe Fonts or a CDN) will not load.
 
-Kit 1.6.0 and later supply Inter (400, 600, 700), Lora (400, 700 and 400 italic), IBM Plex Mono (400, 600) and Bungee (400), with Latin coverage including German: link `/app-runtime/kit/1.7.0/fonts/fonts.css` and use the family name in CSS. The font sources and licences are in `/app-runtime/kit/1.7.0/fonts/README.md`.
+Kit 1.6.0 and later supply Inter (400, 600, 700), Lora (400, 700 and 400 italic), IBM Plex Mono (400, 600) and Bungee (400), with Latin coverage including German: link `/app-runtime/kit/1.8.0/fonts/fonts.css` and use the family name in CSS. The font sources and licences are in `/app-runtime/kit/1.8.0/fonts/README.md`.
 
-A React App imports its CSS from a route (for example, `import "../fonts.css"`); in that CSS, write `@import url("/app-runtime/kit/1.7.0/fonts/fonts.css");` and `body { font-family: Lora; }`.
+A React App imports its CSS from a route (for example, `import "../fonts.css"`); in that CSS, write `@import url("/app-runtime/kit/1.8.0/fonts/fonts.css");` and `body { font-family: Lora; }`.

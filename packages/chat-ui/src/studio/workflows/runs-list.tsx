@@ -5,6 +5,7 @@ import { useTranslation } from "../../shared/i18n";
 import type { WorkflowRunList } from "./workflow-data";
 import { doneWithFailedRuns, runFailedBecause } from "./workflow-model";
 import { runsListEntries, type RunGroup, type RunPart } from "./run-groups";
+import { TestRunBadge } from "./test-run-badge";
 import type { WorkflowRunView } from "./workflow-views";
 import { RunStateBadge, durationText, routeLink, type OpenRoute } from "./workflows-frame";
 
@@ -233,11 +234,7 @@ function RunRow({
               {t("workflows.runs.partRevision")}
             </Badge>
           ) : null}
-          {run.test ? (
-            <Badge tone="info" size="sm" data-test-run="">
-              {t("workflows.run.testBadge")}
-            </Badge>
-          ) : null}
+          <TestRunBadge run={run} />
           <RunStateBadge status={run.status} withFailedEntries={doneWithFailedRuns(run)} />
         </>
       }
@@ -372,11 +369,7 @@ function RunGroupRow({
       }
       chips={
         <>
-          {latest.test ? (
-            <Badge tone="info" size="sm" data-test-run="">
-              {t("workflows.run.testBadge")}
-            </Badge>
-          ) : null}
+          <TestRunBadge run={latest} />
           <RunStateBadge
             status={latest.status}
             stopping={latest.stopping}

@@ -59,6 +59,9 @@ export type FrameCallAnswer =
 export type FrameWorkflowRunAnswer =
   { ok: true; run: AppWorkflowRun } | { ok: false; error: NonNullable<CallAnswer["error"]> };
 
+/** A test run a call of an App's draft started (DP-1), as its last read answered it. */
+export type FrameTestRun = AppWorkflowRun & { mode: "test" };
+
 /** What the bridge of a frame calls the instance through. */
 export interface FrameCalls {
   /** What each action would come to for the viewer, or nothing where it could not be read. */

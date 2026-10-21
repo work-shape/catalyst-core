@@ -103,6 +103,11 @@ export interface AppActionHost extends AppActionOwner {
    * publish holds for everybody who may use it. A draft and a Page were never published.
    */
   published: boolean;
+  /**
+   * The revision is an App's draft: an action whose kind has a draft operation runs that one,
+   * whose call goes to the target `test` (DP-1). A Page of a conversation is no draft of an App.
+   */
+  draft?: boolean;
   /** Whether the caller may use this Page or this revision of the App. Asked first. */
   authorize(
     context: OperationAuthorizeContext
@@ -162,8 +167,12 @@ export async function appActionDefinition(
     binding.module !== undefined && !environment.modules.isEnabled(binding.module)
       ? binding.module
       : undefined;
+  // A draft's `workflow` action starts a test run, which the call path sends to `test`.
+  const draftOperation = host.draft === true ? binding.draftOperation : undefined;
   const target =
-    offModule === undefined ? await environment.registry.resolve(binding.operation) : undefined;
+    offModule === undefined
+      ? await environment.registry.resolve(draftOperation ?? binding.operation)
+      : undefined;
   const admitted =
     offModule === undefined ? binding.admit(target, host) : { refusal: moduleOffError(offModule) };
   const floor = target
@@ -179,6 +188,7 @@ export async function appActionDefinition(
   const definition: OperationDefinition = {
     name: host.operationName(action.name),
     effect: action.effect,
+    ...(draftOperation === undefined ? {} : { draftTarget: "test" as const }),
     // A read of a customer's system or of a customer's rows is recorded, every time.
     ...(action.effect === "reading" ? { recordsEveryCall: true as const } : {}),
     ...(floor === undefined || floor === "allow" ? {} : { policyFloor: floor }),
@@ -275,8 +285,12 @@ export async function preloadedEnvironment(
   environment: AppActionEnvironment,
   actions: readonly CompiledAppAction[]
 ): Promise<AppActionEnvironment> {
+  // A draft's action may stand for its kind's draft operation (DP-1), so both are read.
   const targets = await environment.registry.resolveMany(
-    actions.map((action) => appActionBinding(action).operation)
+    actions.flatMap((action) => {
+      const { operation, draftOperation } = appActionBinding(action);
+      return draftOperation === undefined ? [operation] : [operation, draftOperation];
+    })
   );
   let settings: Promise<readonly CentralPolicySetting[]> | undefined;
   return {
@@ -405,6 +419,7 @@ export function appRevisionHost(
     resource,
     dataStores,
     published: view === "published",
+    draft: view === "draft",
     authorize: (context) =>
       view === "published"
         ? authorizePublishedApp(context, resource)

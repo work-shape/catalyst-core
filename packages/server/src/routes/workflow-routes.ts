@@ -13,6 +13,7 @@ import {
   type ClientInstanceId,
   type PlatformStores,
   type WorkflowRunError,
+  type WorkflowRunStartedFrom,
   type WorkflowRunView,
   type WorkflowStepRunView
 } from "@work-shape/catalyst-core";
@@ -221,6 +222,22 @@ function registerWorkflowRoutes(
     }
   }
 
+  /**
+   * Which revision a test run starts and the right that admits it. A person's own test runs
+   * the draft and asks `workflow.write`. A click of a `workflow` action in an App's draft
+   * (DP-1) runs the draft for a tester who may write the Workflow, and otherwise its published
+   * revision, still in mode test, admitted by `workflow.use`: a draft never starts a live run.
+   */
+  function testRevisionOf(
+    access: ActorAccess,
+    resource: AccessResource,
+    origin: OperationOrigin
+  ): { revision: WorkflowRunStartedFrom["workflowRevision"]; decision: OperationAuthorization } {
+    const write = decide(access, WORKFLOW_ACTIONS.write, resource);
+    if (write.allowed || origin.kind !== "app") return { revision: "draft", decision: write };
+    return { revision: "published", decision: decide(access, WORKFLOW_ACTIONS.use, resource) };
+  }
+
   // A test run of the draft (ADR-0031). It acts as the person who starts it, bounded by the
   // Workflow's principal, so it needs the right to write the Workflow and nothing that lends
   // the principal's grants: publishing still asks that. Only a person starts one.
@@ -234,19 +251,24 @@ function registerWorkflowRoutes(
             reason: "no_grant",
             message: "Only a person starts a test run of a Workflow's draft"
           }
-        : decide(access, WORKFLOW_ACTIONS.write, await resourceOf(input.workflow));
+        : testRevisionOf(access, await resourceOf(input.workflow), origin).decision;
       if (decision.allowed) await requireTestSubject(input.workflow, origin);
       return decision;
     },
     resource: workflowResource,
     module: WORKFLOWS_MODULE,
     execute: async (input, context) => {
-      const { actor } = context;
+      const { actor, origin } = context;
       // The check above refused every other caller; the types do not carry it here.
       if (isAuthenticatedServicePrincipal(actor)) {
         throw new AppError("FORBIDDEN", "Only a person starts a test run of a Workflow's draft");
       }
-      await requireTestSubject(input.workflow, context.origin);
+      await requireTestSubject(input.workflow, origin);
+      const { revision } = testRevisionOf(
+        context.access,
+        await resourceOf(input.workflow),
+        origin
+      );
       return toRunResource(
         await required().test({
           workflow: input.workflow,
@@ -254,7 +276,19 @@ function registerWorkflowRoutes(
           ...(input.key === undefined ? {} : { key: input.key }),
           startedBy: actor,
           operationRunId: context.runId,
-          correlationId: context.correlationId
+          correlationId: context.correlationId,
+          revision,
+          ...(origin.kind === "app" && origin.appName !== undefined
+            ? {
+                startedFrom: {
+                  kind: "app" as const,
+                  app: origin.appName,
+                  appRevisionId: origin.appRevisionId,
+                  action: origin.actionName,
+                  workflowRevision: revision
+                }
+              }
+            : {})
         })
       );
     }

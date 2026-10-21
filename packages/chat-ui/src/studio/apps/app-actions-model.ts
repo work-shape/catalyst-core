@@ -70,16 +70,19 @@ export function appActionTestable(view: AppMode, rights: Pick<AppRights, "write"
 /**
  * Whether the row offers "Run live once": a changing action of a draft, to whoever writes the
  * App, where the policy lets the call run. A call that needs an approval cannot wait from a
- * draft, and a refused one stays refused, so the switch would carry out nothing.
+ * draft, and a refused one stays refused, so the switch would carry out nothing. A `workflow`
+ * action of a draft starts a test run, whose switches belong to the Workflow's steps.
  */
 export function appActionLiveOnceOffered(
-  action: Pick<AppAction, "effect" | "policy" | "unavailable">,
+  action: Pick<AppAction, "kind" | "effect" | "policy" | "unavailable">,
   view: AppMode,
   rights: Pick<AppRights, "write">
 ): boolean {
   return (
     rights.write &&
     view === "draft" &&
+    // A `workflow` action of a draft starts a test run, which no switch makes live (DP-1).
+    action.kind !== "workflow" &&
     action.effect === "changing" &&
     action.unavailable === undefined &&
     (action.policy === "allow" || action.policy === "confirm")

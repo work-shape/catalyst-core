@@ -75,4 +75,23 @@ describe("Run live once on the Actions side of a draft", () => {
     const gone = { ...simulated, unavailable: "connection_missing" as const };
     expect(appActionLiveOnceOffered(gone, "draft", writer)).toBe(false);
   });
+
+  // Fails before DP-1: a draft's `workflow` action offered the switch, though its call starts a
+  // test run of the Workflow that no switch makes live.
+  it("is not offered on a workflow action, whose draft call is a test run", () => {
+    const {
+      connection: _connection,
+      operation: _operation,
+      unavailable: _u,
+      ...shared
+    } = simulated;
+    const run: AppAction = {
+      ...shared,
+      kind: "workflow",
+      workflow: { name: "notify-clients" },
+      target: "test"
+    };
+    expect(appActionLiveOnceOffered(run, "draft", { write: true })).toBe(false);
+    expect(rowOf(run)).not.toContain("data-run-live-once");
+  });
 });

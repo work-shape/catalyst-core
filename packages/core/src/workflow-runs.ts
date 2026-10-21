@@ -1,6 +1,9 @@
 import type { WorkflowDatasetReference } from "./workflows";
 import type { WorkflowRunDataset } from "./workflow-datasets";
-import { WORKFLOW_ENDED_STATUSES } from "@work-shape/catalyst-asset-schemas";
+import {
+  WORKFLOW_ENDED_STATUSES,
+  type WorkflowTestRevision
+} from "@work-shape/catalyst-asset-schemas";
 import type { ServicePrincipalRecord } from "./api-access";
 import type { ClientInstanceId, OperationRunId, WorkflowRunId, WorkflowStepRunId } from "./ids";
 import type { JsonObject, JsonValue } from "./json";
@@ -107,6 +110,11 @@ export interface WorkflowRun
   scheduledFor?: ISODateString;
   /** The Operation Run of the call that started the run. */
   operationRunId?: OperationRunId;
+  /**
+   * Where a test run was started from besides a person's own start: the action of an App's
+   * draft whose click started it (DP-1). Names only, no value. Missing on every other run.
+   */
+  startedFrom?: WorkflowRunStartedFrom;
   /** Step runs created so far, the steps of every loop iteration among them. */
   stepRunCount: number;
   /**
@@ -137,6 +145,19 @@ export interface WorkflowRun
 }
 
 /**
+ * The draft of an App whose `workflow` action started a test run: the App, its revision, the
+ * action, and which revision of the Workflow the tester's rights chose.
+ */
+export interface WorkflowRunStartedFrom {
+  kind: "app";
+  app: string;
+  appRevisionId: string;
+  action: string;
+  /** The Workflow's draft for a tester who may write it, else its published revision. */
+  workflowRevision: WorkflowTestRevision;
+}
+
+/**
  * The bounds of one run: its Workflow's `limits` within the operator's ceilings, the
  * release's defaults for what the Workflow leaves out. A child run takes the concurrency of
  * its root, so the runs of one Workflow and their descendants share its slots.
@@ -164,6 +185,7 @@ export type NewWorkflowRun = Pick<
   | "startedBy"
   | "scheduledFor"
   | "operationRunId"
+  | "startedFrom"
   | "runKey"
   | "labels"
   | "continuation"

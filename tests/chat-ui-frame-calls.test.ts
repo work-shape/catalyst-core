@@ -18,10 +18,14 @@ import {
   frameCallFailure,
   workflowRunResultMessage,
   frameSessionProof,
+  FrameTestRunView,
+  frameTestRunTitle,
   useFrameCallTexts,
   type ArrivedMessage,
   type FrameCallAnswer,
-  type FrameCalls
+  type FrameCalls,
+  type FrameTestRun,
+  type FrameWorkflowRunAnswer
 } from "@work-shape/catalyst-chat-ui/pages";
 
 const NOT_ASKED = { code: "failed", message: "not asked" };
@@ -71,7 +75,11 @@ function frames() {
 describe("a call a Page asks the interface to make", () => {
   const settled = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-  function bridge(calls: FrameCalls | undefined, onCallWaits?: (runId: string) => void) {
+  function bridge(
+    calls: FrameCalls | undefined,
+    onCallWaits?: (runId: string) => void,
+    onTestRun?: (run: FrameTestRun) => void
+  ) {
     const windows = frames();
     let frame: { length: number; [index: number]: unknown } | undefined = windows.holder;
     const made = createPageBridge({
@@ -81,7 +89,8 @@ describe("a call a Page asks the interface to make", () => {
       onNavigate: () => undefined,
       onResize: () => undefined,
       calls: () => calls,
-      ...(onCallWaits ? { onCallWaits } : {})
+      ...(onCallWaits ? { onCallWaits } : {}),
+      ...(onTestRun ? { onTestRun } : {})
     });
     return {
       ...windows,
@@ -218,6 +227,100 @@ describe("a call a Page asks the interface to make", () => {
     setFrame({ length: 1, 0: { postMessage() {} } });
     await settled();
     expect(waits).toEqual(["run-held"]);
+  });
+
+  // Fails before DP-1: a test run the draft started looked like a live one in the frame.
+  it("tells the host of a test run a call of the draft started, and of each read of it", async () => {
+    const test = {
+      id: "wfr-7",
+      workflow: "notify-clients",
+      status: "running" as const,
+      mode: "test" as const,
+      workflowRevision: { kind: "draft" as const, number: 7 }
+    };
+    const reads: FrameWorkflowRunAnswer[] = [
+      { ok: true, run: test },
+      { ok: true, run: { ...test, status: "done", simulatedSteps: ["send"] } },
+      { ok: true, run: { id: "wfr-8", workflow: "notify-clients", status: "done" } }
+    ];
+    const answers: FrameCallAnswer[] = [
+      {
+        ok: true,
+        result: { runId: "op-1", status: "done", result: { id: "wfr-7", mode: "test" } }
+      },
+      { ok: true, result: { runId: "op-2", status: "done", result: { id: "wfr-8", mode: "live" } } }
+    ];
+    const shown: FrameTestRun[] = [];
+    const { made, page, from, message } = bridge(
+      {
+        writeStorage: () => Promise.resolve(),
+        can: () => Promise.resolve(undefined),
+        run: () => Promise.resolve(answers.shift() ?? { ok: false, error: NOT_ASKED }),
+        workflowRun: () => Promise.resolve(reads.shift() ?? { ok: false, error: NOT_ASKED })
+      },
+      undefined,
+      (run) => shown.push(run)
+    );
+    const call = (requestId: string) =>
+      from(page, message({ type: "action", session: "s-1", requestId, name: "notify", input: {} }));
+    const read = (requestId: string, runId: string) =>
+      from(page, message({ type: "workflow_run", session: "s-1", requestId, runId }));
+
+    // The call's answer names a test run: the host reads it once for which revision ran.
+    made.receive(call("r-1"));
+    await settled();
+    await settled();
+    expect(shown).toEqual([test]);
+    // The Page's own reads tell the rest, such as the steps that were simulated.
+    made.receive(read("r-2", "wfr-7"));
+    await settled();
+    expect(shown.at(-1)).toMatchObject({ status: "done", simulatedSteps: ["send"] });
+    // A live run is no test run, and a read of one tells the host nothing.
+    made.receive(call("r-3"));
+    await settled();
+    made.receive(read("r-4", "wfr-8"));
+    await settled();
+    expect(shown).toHaveLength(2);
+  });
+
+  // Fails before DP-1: the frame said nothing of a test run, so its result read as real.
+  it("marks a test run over the frame with the revision that ran and the steps simulated", () => {
+    const route = {
+      kind: "workflow-run" as const,
+      collaborationWorkspaceId: "cw_1",
+      workflow: "notify-clients",
+      run: "wfr-7"
+    };
+    const strip = (run: Parameters<typeof FrameTestRunView>[0]["run"], locale: "en" | "de") =>
+      renderToStaticMarkup(
+        createElement(TranslationProvider, {
+          locale,
+          children: createElement(FrameTestRunView, {
+            run,
+            route,
+            onOpen: () => undefined,
+            onClose: () => undefined
+          })
+        })
+      );
+    const draft = strip(
+      { id: "wfr-7", workflowRevision: { kind: "draft", number: 7 }, simulatedSteps: ["a", "b"] },
+      "de"
+    );
+    expect(draft).toContain("Testlauf des Entwurfs · Workflow-Entwurf");
+    // The frame names no revision number, as nothing of an App's preview does (OPEN-1f).
+    expect(draft).not.toContain("r7");
+    expect(draft).toContain("2 Schritte simuliert");
+    expect(draft).toContain("Lauf ansehen");
+    expect(draft).toContain('href="/w/cw_1/workflows/notify-clients/runs/wfr-7"');
+    const published = strip(
+      { id: "wfr-7", workflowRevision: { kind: "published", number: 5 }, simulatedSteps: [] },
+      "en"
+    );
+    expect(published).toContain("Test run · published Workflow");
+    expect(published).not.toContain("simulated");
+    expect(published).toContain("View run");
+    expect(frameTestRunTitle({})).toBe("pages.testRunDraft");
   });
 
   // Fails before the removal: the bridge made the call of a Connection operation the Page named.

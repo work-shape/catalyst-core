@@ -75,6 +75,8 @@ const runGovernance = {
   principalLabel: true,
   startedBy: true,
   operationRunId: true,
+  // Names of the App, its revision and its action: governance, not a value of the run.
+  startedFrom: true,
   parentRunId: true,
   parentStepRunId: true,
   rootRunId: true,

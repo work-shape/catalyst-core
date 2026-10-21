@@ -247,6 +247,39 @@ describe("the page of a test run", () => {
     expect(markup).not.toContain("data-run-revision");
   });
 
+  // Fails before DP-1: a test run an App's draft started read as any test run.
+  it("names the App draft a test run came from", () => {
+    const fromApp = toWorkflowRun(testRun({ startedFrom: { kind: "app", app: "Mandantenbrief" } }));
+    expect(fromApp.fromApp).toBe("Mandantenbrief");
+    expect(toWorkflowRun(testRun()).fromApp).toBeUndefined();
+    const markup = (locale: "en" | "de") =>
+      render(
+        createElement(WorkflowRunPageView, {
+          workspaceId: "cw_1",
+          workflowId: "notify-clients",
+          workflow: draft,
+          read: {
+            run: fromApp,
+            problem: undefined,
+            silentSince: undefined,
+            stepsFailed: false,
+            stepRuns: steps,
+            retry: noop
+          },
+          now,
+          canCancel: false,
+          canRunAgain: true,
+          stopping: false,
+          onCancel: noop,
+          onRunAgain: noop,
+          onOpenRoute: noop
+        }),
+        locale
+      );
+    expect(markup("de")).toContain("Test · aus App-Entwurf „Mandantenbrief“");
+    expect(markup("en")).toContain("Test · from App draft “Mandantenbrief”");
+  });
+
   /** The panel of one step of the test run, with "Run live once" where it is offered. */
   const panel = (
     stepId: string,

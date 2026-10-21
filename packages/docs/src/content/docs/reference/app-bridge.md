@@ -13,7 +13,7 @@ The bridge protocol is version 1. Every message of either side carries `catalyst
 - Changes to version 1 are additive only: a new message type, a new call of the kit, or a new optional field. An App written against version 1 keeps working.
 - A new call needs a named App that cannot be built without it. It is added as a new member, never by renaming one.
 - A breaking change, such as removing or renaming a message, a field or a call, or changing what one means, is version 2. Version 2 runs beside version 1, and the interface keeps answering version 1.
-- A kit version is frozen too. An App names the exact kit version it was built with (`kit` in `app.yaml`) and keeps loading those files. A new Page or App names kit 1.7.0.
+- A kit version is frozen too. An App names the exact kit version it was built with (`kit` in `app.yaml`) and keeps loading those files. A new Page or App names kit 1.8.0.
 
 ## Calls of the kit
 
@@ -66,6 +66,6 @@ The result of an action is one of:
 - `{ runId, status: "pending_approval" }`: the call waits for another person's approval. The run says how it ends.
 - `{ status: "dry_run", message, result }` (kit 1.3.0 and later): a draft or a Page of a conversation carried nothing out. `message` is the platform's sentence of what the call would have done; show it as it is.
 
-A run (`workflow_run_result`) holds `id`, `workflow`, `status` (`queued`, `running`, `waiting`, `done`, `failed`, `cancelled` or `limit_reached`), and where known `output` or `outputTruncated`, `error`, `startedAt` and `finishedAt`. `output` is the run's whole output up to 256 KiB as JSON; a larger output is answered as `outputTruncated: true` alone, and the App reads what it needs from where the Workflow wrote it.
+A run (`workflow_run_result`) holds `id`, `workflow`, `status` (`queued`, `running`, `waiting`, `done`, `failed`, `cancelled` or `limit_reached`), and where known `output` or `outputTruncated`, `error`, `startedAt` and `finishedAt`. `output` is the run's whole output up to 256 KiB as JSON; a larger output is answered as `outputTruncated: true` alone, and the App reads what it needs from where the Workflow wrote it. A test run that a `workflow` action of the App's draft started also holds `mode: "test"`, `workflowRevision` (`kind` `draft` or `published`, and `number` where known) and `simulatedSteps`, the ids of the steps whose calls were simulated; kit 1.8.0 and later pass them to the App.
 
 An error holds `code` (such as `action_unknown`, `draft_safe_mode`, `forbidden`, `input_invalid`, `rate_limited` or `connection_call_removed`), `message`, and optionally `right` (the right a `forbidden` call lacks), `retryable` (`false` where the same call cannot come out differently) and `runId`. The kit rejects with an `AppCallError` that carries the same fields. A call nothing answers within 180 seconds rejects with `timeout`.

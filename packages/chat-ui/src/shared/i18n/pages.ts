@@ -41,6 +41,11 @@ export const pages = defineTranslations({
     "pages.savedToApp": "Saved to the draft of {title}",
     "pages.showFileList": "All files",
     "pages.shown": "Shown",
+    "pages.testRunDraft": "Test run of the draft · Workflow draft",
+    "pages.testRunPublished": "Test run · published Workflow",
+    "pages.testRunSimulated": "{count} steps simulated",
+    "pages.testRunSimulatedOne": "1 step simulated",
+    "pages.testRunView": "View run",
     "pages.unnamed": "Preview",
     "pages.view": "Content of the preview"
   },
@@ -85,6 +90,11 @@ export const pages = defineTranslations({
     "pages.savedToApp": "Im Entwurf von {title} gespeichert",
     "pages.showFileList": "Alle Dateien",
     "pages.shown": "Angezeigt",
+    "pages.testRunDraft": "Testlauf des Entwurfs · Workflow-Entwurf",
+    "pages.testRunPublished": "Testlauf · veröffentlichter Workflow",
+    "pages.testRunSimulated": "{count} Schritte simuliert",
+    "pages.testRunSimulatedOne": "1 Schritt simuliert",
+    "pages.testRunView": "Lauf ansehen",
     "pages.unnamed": "Vorschau",
     "pages.view": "Inhalt der Vorschau"
   }

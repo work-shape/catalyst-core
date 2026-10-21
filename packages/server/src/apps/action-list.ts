@@ -308,7 +308,8 @@ export class AppActionList {
   /**
    * Where the reader's next call of each action of a draft goes, by the rule of the call path
    * (`draftCallTarget`) and the reader's own "Run live once" switches of that revision: a
-   * switch somebody else set covers no call of the reader's. Nothing for a published revision.
+   * switch somebody else set covers no call of the reader's. A `workflow` action goes to
+   * `test`. Nothing for a published revision.
    */
   private async draftTargets(
     reader: AuthenticatedIdentity,
@@ -326,7 +327,11 @@ export class AppActionList {
         set.revisionId === revision.revisionId && set.usedByRunId === undefined ? [set.part] : []
       )
     );
-    return (action) => draftCallTarget({ effect: action.effect, liveOnce: mine.has(action.name) });
+    // A `workflow` action of a draft starts a test run, which no switch makes live (DP-1).
+    return (action) =>
+      action.kind === "workflow"
+        ? "test"
+        : draftCallTarget({ effect: action.effect, liveOnce: mine.has(action.name) });
   }
 
   private app(name: string): Promise<ConfigAssetRecord | undefined> {

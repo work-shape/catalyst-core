@@ -202,7 +202,9 @@ describe("the agent projections of Workflow testing", () => {
       input: { note: "test" },
       startedBy: user,
       operationRunId: context.runId,
-      correlationId: context.correlationId
+      correlationId: context.correlationId,
+      // An agent's test runs the draft; only an App's draft may run the published revision.
+      revision: "draft"
     });
   });
 

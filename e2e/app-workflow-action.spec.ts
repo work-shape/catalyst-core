@@ -19,7 +19,7 @@ test.use({
         matches: requestAnswered(403),
         path: /^\/api\/v1\/app-content-sessions\/[^/]+\/actions\/log-visit$/u,
         tests: [
-          "an App button starts a published Workflow and shows its output; the draft and a member without the right start nothing"
+          "an App button starts a published Workflow and shows its output; the draft starts a test run and a member without the right nothing"
         ]
       }
     ]
@@ -29,9 +29,11 @@ test.use({
 // A button of a published App starts a published Workflow through a named action: the frame
 // asks the interface, the instance starts the Workflow as whoever looks, and the App follows
 // the run with the kit's `useWorkflowRun` until it shows what the Workflow answered. A member
-// without the use right on the Workflow is refused with the platform's sentence, and the draft
-// of the App starts nothing and says what it would have started. Fails without APP-6a: no
-// action could name a Workflow, and kit 1.3.0, which follows a run, did not exist.
+// without the use right on the Workflow is refused with the platform's sentence. The draft of
+// the App starts a test run (DP-1): of the published Workflow for a tester who may only use
+// it, of its draft for one who may write it, marked over the frame, and no live run. Fails
+// without APP-6a: no action could name a Workflow, and kit 1.3.0, which follows a run, did not
+// exist. The draft's part fails before DP-1, when the draft started nothing.
 
 /** Where the pictures of a run go. Without it the test takes none. */
 const shotsDir = process.env.E2E_SHOTS_DIR;
@@ -262,7 +264,7 @@ async function shoot(page: Page, name: string): Promise<void> {
 }
 
 // The test writes grants: it takes its turn with the tests that count grants.
-test("an App button starts a published Workflow and shows its output; the draft and a member without the right start nothing", async ({
+test("an App button starts a published Workflow and shows its output; the draft starts a test run and a member without the right nothing", async ({
   page,
   browser,
   baseURL,
@@ -380,22 +382,81 @@ test("an App button starts a published Workflow and shows its output; the draft 
     await expect(memberApp.getByTestId("run-status")).toHaveCount(0);
     await shoot(memberPage, "app-workflow-action-refused");
 
-    // A draft starts nothing: the same button says what it would have started.
+    // A draft starts a test run, of the Workflow's draft, since the builder, an admin, may
+    // write the Workflow.
     const drafted = await write("Visit log draft", 1);
     expect(drafted.ok(), await drafted.text()).toBe(true);
     await page.goto(`/w/${workspaceId}/app-drafts/${appId}`);
     const draft = appIn(page, "app-edit");
     await expect(draft.getByText("Visit log draft")).toBeVisible();
     await draft.getByRole("button", { name: "Log visit" }).click();
-    await expect(draft.getByTestId("dry-run")).toContainText(
-      `Would have started the Workflow '${workflow}' with {"page":"/pricing","source":"app"}.`
-    );
-    await expect(draft.getByTestId("run-status")).toHaveCount(0);
+    await expect(draft.getByTestId("run-status")).toHaveText("done");
+    await expect(draft.getByTestId("run-output")).toHaveText('{"page":"/pricing","source":"app"}');
+    await expect(draft.getByTestId("dry-run")).toHaveCount(0);
+    const strip = page.getByTestId("app-edit").getByTestId("frame-test-run");
+    await expect(strip).toContainText("Test run of the draft · Workflow draft");
     await shoot(page, "app-workflow-action-draft");
-    const after = await root.request.get(`${apiOrigin}/api/v1/workflows/${workflow}/runs`);
-    expect(z.object({ items: z.array(z.unknown()) }).parse(await after.json()).items).toHaveLength(
-      1
+    const runsSchema = z.object({
+      items: z.array(
+        z.looseObject({
+          id: z.string(),
+          mode: z.string(),
+          startedFrom: z.looseObject({ app: z.string(), workflowRevision: z.string() }).optional()
+        })
+      )
+    });
+    const readRuns = async () =>
+      runsSchema.parse(
+        await (await root.request.get(`${apiOrigin}/api/v1/workflows/${workflow}/runs`)).json()
+      ).items;
+    const afterDraft = await readRuns();
+    // One live run, of the published App; the draft's is a test run that names it.
+    expect(afterDraft.filter((run) => run.mode === "live")).toHaveLength(1);
+    const tests = afterDraft.filter((run) => run.mode === "test");
+    expect(tests).toEqual([
+      expect.objectContaining({
+        startedFrom: expect.objectContaining({ app: appId, workflowRevision: "draft" })
+      })
+    ]);
+
+    // A tester who may not write the Workflow gets a test run of its published revision.
+    const denied = await requestWithOrigin(
+      root,
+      "post",
+      `${apiOrigin}/api/v1/instance/access/grants`,
+      {
+        data: {
+          holderKind: "user",
+          holderId: builderId,
+          action: "workflow.write",
+          effect: "deny",
+          scopeKind: "asset",
+          scopeId: workflowAssetId
+        }
+      }
     );
+    expect(denied.ok(), await denied.text()).toBe(true);
+    grants.push(idSchema.parse(await denied.json()).id);
+    await page.reload();
+    const again = appIn(page, "app-edit");
+    await again.getByRole("button", { name: "Log visit" }).click();
+    await expect(again.getByTestId("run-status")).toHaveText("done");
+    await expect(strip).toContainText("Test run · published Workflow");
+    await shoot(page, "app-workflow-action-draft-published-workflow");
+    const afterDeny = await readRuns();
+    expect(afterDeny.filter((run) => run.mode === "live")).toHaveLength(1);
+    expect(
+      afterDeny.filter((run) => run.startedFrom?.workflowRevision === "published")
+    ).toHaveLength(1);
+
+    // The strip leads to the run, which the Workflows pages mark as the App draft's.
+    const latest = afterDeny.find((run) => run.startedFrom?.workflowRevision === "published");
+    await strip.getByRole("link", { name: "View run" }).click();
+    await expect(page).toHaveURL(new RegExp(`/workflows/${workflow}/runs/${latest?.id}$`, "u"));
+    await expect(page.locator("[data-test-run]").first()).toHaveText(
+      `Test · from App draft “${appId}”`
+    );
+    await shoot(page, "app-workflow-action-test-run-page");
   } finally {
     for (const grantId of grants) {
       await requestWithOrigin(

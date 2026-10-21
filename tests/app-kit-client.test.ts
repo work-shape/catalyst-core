@@ -20,6 +20,7 @@ import {
   BRIDGE_VERSION,
   envelope,
   readHostMessage,
+  type AppWorkflowRun,
   type HostMessage,
   type PageMessage
 } from "@work-shape/catalyst-app-kit/protocol";
@@ -133,13 +134,15 @@ describe("the two halves of the bridge", () => {
   // Fails before kit 1.4.0: every released kit offered `connections.call` to a new Page.
   // Fails before kit 1.7.0: a call without the interface said only "The interface did not
   // answer.", and an agent added retries to the App for a fault of the host.
-  it("ship kit 1.7.0 with personal JSON storage, without a free call of a Connection, and naming the host's fault", () => {
-    expect(RELEASED_KIT_VERSIONS.at(-1)).toBe("1.7.0");
-    const kit = loadAppKitFiles().get("1.7.0")?.get("kit.js")?.bytes.toString("utf8");
+  // Fails before kit 1.8.0: a Page could not tell a test run its draft started (DP-1).
+  it("ship kit 1.8.0 with personal JSON storage, without a free call of a Connection, naming the host's fault and test runs", () => {
+    expect(RELEASED_KIT_VERSIONS.at(-1)).toBe("1.8.0");
+    const kit = loadAppKitFiles().get("1.8.0")?.get("kit.js")?.bytes.toString("utf8");
     expect(kit).not.toMatch(/connection/u);
     expect(kit).toMatch(/\bas actions\b/u);
     expect(kit).toMatch(/\bas storage\b/u);
     expect(kit).toMatch(/trying again inside the App does not help/u);
+    expect(kit).toMatch(/simulatedSteps/u);
   });
 
   it("agree on what the interface sends: the client reads what the schema allows", () => {
@@ -389,14 +392,19 @@ describe("the kit client", () => {
         result: dryRun
       })
     );
-    const ended = {
+    const ended: AppWorkflowRun = {
       id: "wfr_1",
       workflow: "visit-log",
       status: "done",
       output: { page: "/pricing" },
       startedAt: "2026-10-13T10:00:00.000Z",
-      finishedAt: "2026-10-13T10:00:01.000Z"
-    } as const;
+      finishedAt: "2026-10-13T10:00:01.000Z",
+      // A run a click in a draft started says it is a test, of which Workflow revision, and
+      // which steps were simulated; kit 1.7.0 dropped these.
+      mode: "test",
+      workflowRevision: { kind: "draft", number: 7 },
+      simulatedSteps: ["notify"]
+    };
     // An answer of another kind under the id of a read is no answer to it.
     deliver(
       hostMessage({

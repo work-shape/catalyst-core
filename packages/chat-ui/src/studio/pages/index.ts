@@ -15,9 +15,12 @@ export {
   frameSessionProof,
   type FrameAddress,
   type FrameCallAnswer,
-  type FrameCalls
+  type FrameCalls,
+  type FrameTestRun,
+  type FrameWorkflowRunAnswer
 } from "./frame-calls";
 export { useFrameCallTexts } from "./frame-call-texts";
+export { FrameTestRunView, frameTestRunTitle } from "./frame-test-run";
 export {
   PAGE_ADDRESS_LIFETIME_MS,
   PAGE_ADDRESS_RENEWAL_MARGIN_MS,

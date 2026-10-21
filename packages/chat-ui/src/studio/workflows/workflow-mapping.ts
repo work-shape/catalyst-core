@@ -116,6 +116,8 @@ export interface WorkflowRunResource extends TimesResource, Partial<OnTheWire<Wo
   trigger: (typeof WORKFLOW_TRIGGER_KINDS)[number];
   /** `test` on a test run of the draft. */
   mode?: (typeof WORKFLOW_RUN_MODES)[number];
+  /** On a test run an App's draft started: the App, by name (DP-1). */
+  startedFrom?: { kind: "app"; app: string };
   status: WorkflowRunStatus;
   startedBy: { id: string; label: string };
   /** The account the run acts as. */
@@ -281,6 +283,9 @@ export function toWorkflowRun(run: WorkflowRunResource): WorkflowRunView {
     ...toDatasets(run.datasets),
     ...(run.definitionRevisionId === undefined ? {} : { revisionId: run.definitionRevisionId }),
     test: run.mode === "test",
+    ...(run.mode === "test" && run.startedFrom !== undefined
+      ? { fromApp: run.startedFrom.app }
+      : {}),
     ...(run.runKey === undefined ? {} : { runKey: run.runKey }),
     ...(run.continuation === undefined ? {} : { continuation: run.continuation }),
     ...(run.labels === undefined || Object.keys(run.labels).length === 0

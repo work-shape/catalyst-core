@@ -19,6 +19,7 @@ import {
   type PlatformStores,
   type WorkflowRun,
   type WorkflowRunMode,
+  type WorkflowRunStartedFrom,
   type WorkflowRunView,
   type WorkflowStep
 } from "@work-shape/catalyst-core";
@@ -62,8 +63,11 @@ export interface StartWorkflowRunInput {
  * starts it. Only a person starts one; no trigger does.
  */
 export interface TestWorkflowRunInput extends Omit<StartWorkflowRunInput, "workflow"> {
+  /** The revision the test runs: the draft, or for an App's tester without the write right the published one (DP-1). */
   draft: WorkflowDefinitionRevision;
   startedBy: AuthenticatedUser;
+  /** The action of an App's draft whose click started the test run (DP-1). */
+  startedFrom?: WorkflowRunStartedFrom;
 }
 
 /** The refusal of a start whose key is empty, too long, or no text. */
@@ -263,7 +267,7 @@ export function createRunOpening(options: {
   /** Opens a run that a person or a credential starts by hand, and answers it as it is read. */
   async function startByHand(
     revision: WorkflowDefinitionRevision,
-    input: Omit<StartWorkflowRunInput, "workflow">,
+    input: Omit<StartWorkflowRunInput, "workflow"> & { startedFrom?: WorkflowRunStartedFrom },
     mode: WorkflowRunMode
   ): Promise<WorkflowRunView> {
     if (input.operationRunId) {
@@ -298,6 +302,7 @@ export function createRunOpening(options: {
             },
             ...(input.operationRunId ? { operationRunId: input.operationRunId } : {}),
             ...(input.key === undefined ? {} : { runKey: input.key }),
+            ...(input.startedFrom ? { startedFrom: input.startedFrom } : {}),
             actor: auditActorFromIdentity(startedBy),
             correlationId: input.correlationId
           },

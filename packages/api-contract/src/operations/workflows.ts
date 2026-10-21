@@ -9,6 +9,7 @@ import {
   WORKFLOW_RUN_MODES,
   WORKFLOW_RUN_STATUSES,
   WORKFLOW_STEP_RUN_STATUSES,
+  WORKFLOW_TEST_REVISIONS,
   WORKFLOW_STEP_TYPES,
   WORKFLOW_DATASET_DOWNLOAD_FORMATS,
   WORKFLOW_TRIGGER_KINDS
@@ -116,6 +117,20 @@ export const workflowRunSchema = z.object({
     .optional(),
   /** The Operation Run of the call that started the run. */
   operationRunId: z.string().optional(),
+  /**
+   * The action of an App's draft whose click started this test run (DP-1): the App, the
+   * revision of its draft and the action, by name, and whether the Workflow's draft or its
+   * published revision ran. Missing on every other run.
+   */
+  startedFrom: z
+    .object({
+      kind: z.literal("app"),
+      app: z.string(),
+      appRevisionId: z.string(),
+      action: z.string(),
+      workflowRevision: z.enum(WORKFLOW_TEST_REVISIONS)
+    })
+    .optional(),
   parentRunId: z.string().optional(),
   parentStepRunId: z.string().optional(),
   rootRunId: z.string(),

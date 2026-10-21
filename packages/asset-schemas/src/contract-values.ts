@@ -921,6 +921,13 @@ export type ConnectionOperationPolicy = (typeof CONNECTION_OPERATION_POLICIES)[n
 export const WORKFLOW_RUN_MODES = ["live", "test"] as const satisfies readonly OperationTarget[];
 export type WorkflowRunMode = (typeof WORKFLOW_RUN_MODES)[number];
 
+/**
+ * Which revision of a Workflow a test run an App's draft started ran (DP-1): its draft, for a
+ * tester who may write it, or its published revision.
+ */
+export const WORKFLOW_TEST_REVISIONS = ["draft", "published"] as const;
+export type WorkflowTestRevision = (typeof WORKFLOW_TEST_REVISIONS)[number];
+
 export const APP_ACTION_CALL_STATUSES = [
   "done",
   "pending_approval"

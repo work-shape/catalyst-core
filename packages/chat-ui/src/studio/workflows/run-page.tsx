@@ -1,7 +1,6 @@
 import { Bot, RotateCw } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
-  Badge,
   Banner,
   Breadcrumb,
   Button,
@@ -22,6 +21,7 @@ import { fixWithAgentPrompt } from "./fix-with-agent";
 import { runKeyText, startedByText } from "./runs-list";
 import { useStartRun } from "./start-run";
 import { useRunLiveOnce, useTestRun, type LiveOnceControl } from "./test-run";
+import { TestRunBadge } from "./test-run-badge";
 import { WorkflowCanvas, type WorkflowCanvasFocus } from "./workflow-canvas";
 import { EditRefusedBanner, useEditWithAgent, type WorkflowEdit } from "./workflow-draft";
 import {
@@ -302,11 +302,7 @@ export function WorkflowRunPageView({
         state={
           run === undefined ? undefined : (
             <>
-              {run.test ? (
-                <Badge tone="info" size="sm" data-test-run="">
-                  {t("workflows.run.testBadge")}
-                </Badge>
-              ) : null}
+              <TestRunBadge run={run} />
               {/* A done run's state waits for its step runs: they say whether entries failed. */}
               {run.status === "done" &&
               read.stepRuns === undefined &&

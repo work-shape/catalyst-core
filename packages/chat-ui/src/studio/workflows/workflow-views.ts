@@ -299,6 +299,8 @@ export interface WorkflowRunView {
    * account, and simulates the steps that change something.
    */
   test: boolean;
+  /** On a test run a click in an App's draft started: the App, by name (DP-1). */
+  fromApp?: string;
   /** The run whose step started this one, where it is a child run. */
   parent?: { runId: string; workflowId: string };
   /**

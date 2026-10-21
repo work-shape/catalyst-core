@@ -8,7 +8,12 @@ import {
   type AppBridgeHostMessage,
   type AppBridgePageMessage
 } from "@work-shape/catalyst-api-client";
-import type { FrameCallAnswer, FrameCalls, FrameWorkflowRunAnswer } from "./frame-calls";
+import type {
+  FrameCallAnswer,
+  FrameCalls,
+  FrameTestRun,
+  FrameWorkflowRunAnswer
+} from "./frame-calls";
 
 // The interface's side of the bridge to a Page. A Page is code an agent wrote, running in a
 // frame without an origin. So the interface decides by three things whether it listens: the
@@ -107,6 +112,25 @@ export function workflowRunResultMessage(
   });
 }
 
+/**
+ * The id of the Workflow Run a call answered when that run is a test run (DP-1): a draft's
+ * `workflow` action answers the run `workflows.test` started.
+ */
+function testRunStarted(
+  answer: Extract<FrameCallAnswer, { ok: true }>["result"]
+): string | undefined {
+  if (answer.status !== "done") return undefined;
+  const run: unknown = answer.result;
+  return typeof run === "object" &&
+    run !== null &&
+    "mode" in run &&
+    run.mode === "test" &&
+    "id" in run &&
+    typeof run.id === "string"
+    ? run.id
+    : undefined;
+}
+
 /** What a Page is told where no call can be made, and where a call got no answer. */
 const NOT_AVAILABLE = { code: "not_available", message: "This frame cannot make calls." };
 const NOT_MADE = { code: "failed", message: "The call could not be made." };
@@ -149,6 +173,11 @@ export function createPageBridge(input: {
    * says so over the frame: the Page is told only the answer.
    */
   onCallWaits?(runId: string): void;
+  /**
+   * A call of the draft started a test run of a Workflow, or a read of the Page answered one
+   * (DP-1), as it stands now. The host marks it over the frame: the Page need not.
+   */
+  onTestRun?(run: FrameTestRun): void;
 }): PageBridge {
   let page: PageWindow | undefined;
   let storageWrites = Promise.resolve();
@@ -163,6 +192,12 @@ export function createPageBridge(input: {
       return true;
     }
     return false;
+  };
+  /** Tells the host of a test run a read answered. */
+  const noteTestRun = (answer: FrameWorkflowRunAnswer) => {
+    if (answer.ok && answer.run.mode === "test") {
+      input.onTestRun?.({ ...answer.run, mode: "test" });
+    }
   };
   return {
     receive(event) {
@@ -231,7 +266,9 @@ export function createPageBridge(input: {
           // The Page always gets an answer to a read, so that it never waits for nothing.
           .catch((): FrameWorkflowRunAnswer => ({ ok: false, error: NOT_MADE }))
           .then((result) => {
-            post(source, workflowRunResultMessage(input.session, requestId, result));
+            if (post(source, workflowRunResultMessage(input.session, requestId, result))) {
+              noteTestRun(result);
+            }
           })
           .catch(() => undefined);
       } else if (message.type === "connection_call") {
@@ -262,6 +299,15 @@ export function createPageBridge(input: {
               result.result.status === "pending_approval"
             ) {
               input.onCallWaits?.(result.result.runId);
+            }
+            // A test run the draft started is read once at once, for which revision ran; the
+            // Page's own reads of it tell the rest.
+            const started = told && result.ok ? testRunStarted(result.result) : undefined;
+            if (started !== undefined && calls) {
+              calls
+                .workflowRun(started)
+                .then(noteTestRun)
+                .catch(() => undefined);
             }
           })
           .catch(() => undefined);

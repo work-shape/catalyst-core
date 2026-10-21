@@ -27,6 +27,7 @@ import {
   isFileSetId,
   operationDenialError,
   pageActionOperationName,
+  WORKFLOW_ASSET_KIND,
   type ActorAccess,
   type AppActionRefusal,
   type AppCallTarget,
@@ -127,6 +128,9 @@ function refusal(
 
 const sessionInvalid = () =>
   refusal("NOT_FOUND", "session_invalid", "The page session is not valid. Reload the page.");
+
+/** How many step runs of a test run a frame's read looks through for simulated steps. */
+const TEST_RUN_STEP_RUNS_READ = 500;
 
 /** The name a read of a Workflow Run from a frame carries as its action. */
 const WORKFLOW_RUN_READ_NAME = "workflow_runs.get";
@@ -383,14 +387,66 @@ export class AppActionCalls {
     }
     const run = result.status === "done" ? workflowRunSchema.safeParse(result.output) : undefined;
     if (!run?.success) throw none();
-    const { workflow, startedBy } = run.data;
+    const { workflow, startedBy, mode, startedFrom } = run.data;
     if (!started.has(workflow) || startedBy.kind !== "user" || startedBy.id !== session.viewer.id) {
       throw none();
     }
+    // A test run is read by the App whose draft started it (DP-1).
+    if (mode === "test" && startedFrom?.app !== session.appName) throw none();
     // The run's own output, not the interface's preview of it (DP-0b). A run with no preview
     // has no output yet.
     const output = run.data.outputPreview ? await this.runOutput(run.data.id) : undefined;
-    return appWorkflowRunOf(run.data, output);
+    return {
+      ...appWorkflowRunOf(run.data, output),
+      ...(mode === "test" ? await this.testRunFacts(run.data) : {})
+    };
+  }
+
+  /**
+   * What a frame says of a test run its draft started (DP-1): which revision of the Workflow
+   * ran, and the steps whose calls were simulated, so a page knows which part of the result is
+   * not real. One point read of the Workflow and one page of the run's step runs.
+   */
+  private async testRunFacts(
+    run: z.infer<typeof workflowRunSchema>
+  ): Promise<Pick<AppWorkflowRun, "mode" | "workflowRevision" | "simulatedSteps">> {
+    const { stores, clientInstanceId } = this.options;
+    const asset = await stores.configAssets.getConfigAsset({
+      clientInstanceId,
+      kind: WORKFLOW_ASSET_KIND,
+      name: run.workflow
+    });
+    // Which revision ran is the run's own fact; its number holds while that revision is still
+    // the draft or the published one.
+    const workflowRevision =
+      run.startedFrom?.workflowRevision === "published"
+        ? {
+            kind: "published" as const,
+            ...(asset?.publishedRevisionId === run.definitionRevisionId &&
+            asset.publishedRevision !== undefined
+              ? { number: asset.publishedRevision }
+              : {})
+          }
+        : {
+            kind: "draft" as const,
+            ...(asset?.activeRevisionId === run.definitionRevisionId
+              ? { number: asset.revision }
+              : {})
+          };
+    const stored = await stores.workflowRuns.readRun({ clientInstanceId, id: run.id });
+    const stepRuns = stored
+      ? await stores.workflowRuns.listStepRuns({
+          clientInstanceId,
+          runId: stored.id,
+          page: { limit: TEST_RUN_STEP_RUNS_READ }
+        })
+      : [];
+    const simulatedSteps = [
+      ...new Set(
+        stepRuns.flatMap((step) => (step.target === "dry_run" ? [step.stepId] : []))
+      )
+    ];
+    return { mode: "test", workflowRevision, simulatedSteps };
   }
 
   /** The whole output of a run, as the store keeps it. */

@@ -86,6 +86,18 @@ export interface AppWorkflowRun {
   error?: { code: string; message: string };
   startedAt?: string;
   finishedAt?: string;
+  /**
+   * `test` on a run a click in the App's draft started: it ran as a test, and nothing of it is
+   * live. Missing on a run of a published App.
+   */
+  mode?: "test";
+  /**
+   * On a test run: the revision of the Workflow that ran, its draft or its published one, with
+   * its number while that revision is still the draft or the published one.
+   */
+  workflowRevision?: { kind: "draft" | "published"; number?: number };
+  /** On a test run: the steps whose calls were simulated, by step id. Their results are not real. */
+  simulatedSteps?: string[];
 }
 
 /** Why a call was refused or failed, as the interface told it. */
@@ -252,7 +264,28 @@ function readWorkflowRun(value: unknown): AppWorkflowRun | undefined {
       ? { error: { code: error.code, message: error.message } }
       : {}),
     ...(typeof value.startedAt === "string" ? { startedAt: value.startedAt } : {}),
-    ...(typeof value.finishedAt === "string" ? { finishedAt: value.finishedAt } : {})
+    ...(typeof value.finishedAt === "string" ? { finishedAt: value.finishedAt } : {}),
+    ...(value.mode === "test" ? { mode: "test" as const } : {}),
+    ...readRunRevision(value.workflowRevision),
+    ...(Array.isArray(value.simulatedSteps)
+      ? {
+          simulatedSteps: value.simulatedSteps.filter(
+            (step): step is string => typeof step === "string"
+          )
+        }
+      : {})
+  };
+}
+
+function readRunRevision(value: unknown): Pick<AppWorkflowRun, "workflowRevision"> {
+  if (!isRecord(value) || (value.kind !== "draft" && value.kind !== "published")) {
+    return {};
+  }
+  return {
+    workflowRevision: {
+      kind: value.kind,
+      ...(typeof value.number === "number" ? { number: value.number } : {})
+    }
   };
 }
 

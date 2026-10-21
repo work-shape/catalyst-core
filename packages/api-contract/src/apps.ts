@@ -282,8 +282,9 @@ const listedAppAction = {
   /**
    * In the draft (ADR-0031): where the caller's next call of the action goes. `live` for a
    * reading action, and for a changing one the caller switched "Run live once" on for;
-   * `dry_run` for any other changing action, which is simulated. Missing for a published
-   * revision, every call of which is live.
+   * `dry_run` for any other changing action, which is simulated; `test` for a `workflow` action,
+   * which starts a test run of the Workflow (DP-1). Missing for a published revision, every
+   * call of which is live.
    */
   target: operationTargetSchema.optional(),
   /** An agent that lists `toolName` carries the action as a tool now. */

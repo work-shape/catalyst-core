@@ -184,6 +184,7 @@ export function createContinuation(options: {
       startedBy: run.startedBy,
       correlationId: run.correlationId,
       ...(run.runKey === undefined ? {} : { runKey: run.runKey }),
+      ...(run.startedFrom === undefined ? {} : { startedFrom: run.startedFrom }),
       labels: run.labels ?? {},
       continuation,
       actor: principalActor(run),

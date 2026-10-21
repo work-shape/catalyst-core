@@ -20,7 +20,13 @@ input:
     client: "{{client}}"
 ```
 
-`workflow` is the Workflow's name. The mapping makes the input the Workflow declares. The call starts a run of the Workflow's published revision as the viewer, who needs the right to use that Workflow. The answer's `result` is the Workflow Run; follow it with `useWorkflowRun(result.id)` from the kit, or `workflowRuns.get(result.id)` in a plain HTML App. A `workflow` action has no `effect` key and no `connection`; it needs kit `1.3.0` or later.
+`workflow` is the Workflow's name. The mapping makes the input the Workflow declares. The call starts a run of the Workflow's published revision as the viewer, who needs the right to use that Workflow. The answer's `result` is the Workflow Run; follow it with `useWorkflowRun(result.id)` from the kit, or `workflowRuns.get(result.id)` in a plain HTML App. In the App's draft it starts a [test run](#in-the-apps-draft) instead. A `workflow` action has no `effect` key and no `connection`; it needs kit `1.3.0` or later.
+
+## In the App's draft
+
+In the App's draft a `workflow` action is not simulated: it starts a test run of the Workflow, so the App and the Workflow are tried together before either is published. A person who may write the Workflow gets a test run of its draft; one who may only use it gets a test run of its published revision. Either way the run's reading, model and code steps are real and its changing steps are simulated or go to a test target, and nothing of it is live. A Workflow that was never published answers a person who may not write it `workflow_unavailable`. "Run live once" is not offered on a `workflow` action: the switches belong to the Workflow's steps.
+
+The run the App reads (kit `1.8.0` or later) then carries `mode: "test"`, `workflowRevision` (`{ kind: "draft" | "published", number }`, the number while that revision is still the draft or the published one) and `simulatedSteps`, the ids of the steps whose calls were simulated: their part of `output` is not real. The page around the App marks the result itself; an App may say so too, but needs no marker of its own. The published App never gets these fields.
 
 ## The run's output
 

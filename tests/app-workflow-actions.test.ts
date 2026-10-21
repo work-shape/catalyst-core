@@ -26,8 +26,9 @@ import { instanceWorkflowAssetKind, runSchema } from "./support/workflow-instanc
 
 // APP-6a: an App starts a published Workflow through a named action of kind `workflow`. The
 // frame's call starts the run as the viewer, by the rule of `workflows.start`, and the frame
-// follows the run it started through `apps.sessions.get_workflow_run`. A draft starts nothing
-// and answers what it would have started. Real build, real call path, real engine on a real
+// follows the run it started through `apps.sessions.get_workflow_run`. A draft starts a test
+// run (DP-1): of the Workflow's draft for a tester who may write it, else of its published
+// revision, and never a live one. Real build, real call path, real engine on a real
 // database, Workflows as published assets; the Workflow echoes the page it is given.
 //
 // Every test here fails without the change: the build refused an action file that names a
@@ -43,6 +44,8 @@ const silent: Logger = {
 
 const WORKFLOW = "visit-log";
 const OTHER_WORKFLOW = "visit-other";
+/** A Workflow with a draft and no published revision. */
+const UNPUBLISHED_WORKFLOW = "visit-unpublished";
 
 /** A Workflow that starts by hand and answers the page it was given. */
 const visitWorkflow = (id: string) => ({
@@ -69,22 +72,28 @@ const visitWorkflow = (id: string) => ({
   ]
 });
 
-/** The App `visits`: one button that starts the Workflow with the page it names. */
+const visitAction = (workflow: string) =>
+  action([
+    `workflow: ${workflow}`,
+    "input:",
+    "  schema: { type: object, properties: { page: { type: string } }, required: [page] }",
+    '  mapping: { page: "{{page}}", source: app }'
+  ]);
+
+/**
+ * The App `visits`: one button that starts the Workflow with the page it names. Its draft
+ * adds one that starts a Workflow nobody has published.
+ */
 const visitsApp = (marker: string) => [
   {
     path: "app.yaml",
     text: JSON.stringify({ id: "visits", name: "Visits", kit: "1.3.0", entry: "index.html" })
   },
   { path: "index.html", text: `<!doctype html><title>Visits</title><p>${marker}</p>` },
-  {
-    path: "actions/log-visit.action.yaml",
-    text: action([
-      `workflow: ${WORKFLOW}`,
-      "input:",
-      "  schema: { type: object, properties: { page: { type: string } }, required: [page] }",
-      '  mapping: { page: "{{page}}", source: app }'
-    ])
-  }
+  { path: "actions/log-visit.action.yaml", text: visitAction(WORKFLOW) },
+  ...(marker === "draft"
+    ? [{ path: "actions/log-unpublished.action.yaml", text: visitAction(UNPUBLISHED_WORKFLOW) }]
+    : [])
 ];
 
 const startedSchema = z.object({
@@ -97,7 +106,12 @@ const followedSchema = z.object({
   workflow: z.string(),
   status: z.string(),
   output: z.unknown().optional(),
-  outputTruncated: z.boolean().optional()
+  outputTruncated: z.boolean().optional(),
+  mode: z.literal("test").optional(),
+  workflowRevision: z
+    .object({ kind: z.enum(["draft", "published"]), number: z.number().optional() })
+    .optional(),
+  simulatedSteps: z.array(z.string()).optional()
 });
 
 describe("an App that starts a Workflow", () => {
@@ -148,6 +162,13 @@ describe("an App that starts a Workflow", () => {
       const { revision } = z.object({ revision: z.number() }).parse(put.json());
       await t.expectOk(t.root.id, "assets.publish", { params: address, payload: { revision } });
     }
+    await t.expectOk(t.root.id, "assets.put", {
+      params: { kind: WORKFLOW_ASSET_KIND, name: UNPUBLISHED_WORKFLOW },
+      payload: {
+        config: { name: UNPUBLISHED_WORKFLOW, manifest: visitWorkflow(UNPUBLISHED_WORKFLOW) },
+        expectedRevision: null
+      }
+    });
     worker = createJobWorker({
       stores: t.stores,
       clientInstanceId,
@@ -176,6 +197,11 @@ describe("an App that starts a Workflow", () => {
       grantedBy: t.admin.id
     });
     grantId = grant.id;
+  }
+  /** Takes back what `letKaiStart` gave. */
+  async function stopKai(): Promise<void> {
+    if (grantId) await t.stores.access.deleteGrant({ clientInstanceId, grantId });
+    grantId = undefined;
   }
 
   async function readRun(userId: string, frame: Frame, runId: string) {
@@ -315,34 +341,54 @@ describe("an App that starts a Workflow", () => {
     expectStatus(await readRun(t.kai.id, kaiFrame, "wfr_none"), 404);
   });
 
-  it("answers in a draft what it would have started, and starts nothing", async () => {
-    const before = await t.stores.workflowRuns.listRuns({ clientInstanceId, workflow: WORKFLOW });
-    const actionRuns = (await t.runs()).length;
+  /** A click in the draft of `visits`, followed to its end as the frame follows it. */
+  async function clickInDraft(userId: string, frame: Frame, page: string, key: string) {
+    const response = await t.callAction(userId, frame, "log-visit", { page }, { "idempotency-key": key });
+    expectStatus(response, 200);
+    const started = startedSchema.parse(response.json());
+    return { started, run: await followToEnd(userId, frame, started.result.id) };
+  }
+
+  it("starts a test run of the Workflow's draft for a tester who may write it, and nothing live (DP-1)", async () => {
+    const live = await t.stores.workflowRuns.listRuns({ clientInstanceId, workflow: WORKFLOW });
     const frame = await t.openApp(t.admin.id, "draft", "visits");
     expect(await t.can(t.admin.id, frame)).toEqual({
-      "log-visit": expect.not.stringMatching(/deny/u)
+      "log-visit": expect.not.stringMatching(/deny/u),
+      "log-unpublished": expect.not.stringMatching(/deny/u)
     });
 
-    const response = await t.callAction(
+    const { started, run } = await clickInDraft(t.admin.id, frame, "/draft", "draft-visit");
+
+    expect(run).toMatchObject({
+      status: "done",
+      output: { page: "/draft" },
+      mode: "test",
+      workflowRevision: { kind: "draft", number: 1 },
+      simulatedSteps: []
+    });
+    // The click leaves its Operation Run with the target that says it was a test (ADR-0031).
+    expect(await t.runOf(started.runId)).toMatchObject({ target: "test", effect: "changing" });
+    // The run is a test run that names the App's draft and the action that started it.
+    const stored = await t.stores.workflowRuns.readRun({ clientInstanceId, id: started.result.id });
+    expect(stored).toMatchObject({
+      mode: "test",
+      startedBy: { kind: "user", id: t.admin.id },
+      startedFrom: {
+        kind: "app",
+        app: "visits",
+        action: "log-visit",
+        workflowRevision: "draft"
+      }
+    });
+    // A draft's Workflow with no published revision is tested too, by its writer.
+    const unpublished = await t.callAction(
       t.admin.id,
       frame,
-      "log-visit",
-      { page: "/draft" },
-      { "idempotency-key": "draft-visit" }
+      "log-unpublished",
+      { page: "/unpublished" },
+      { "idempotency-key": "draft-unpublished" }
     );
-
-    expectStatus(response, 200);
-    expect(response.json()).toEqual({
-      status: "dry_run",
-      message:
-        'Would have started the Workflow \'visit-log\' with {"page":"/draft","source":"app"}. The draft of an App runs in safe mode and carries out nothing that changes something. Publish the App, or switch on "Run live once" for this action, to carry it out.',
-      result: { workflow: WORKFLOW, input: { page: "/draft", source: "app" } }
-    });
-    // The simulated call leaves its run, with the target that says so (ADR-0031).
-    expect(await t.runOf(response.headers["operation-run-id"])).toMatchObject({
-      target: "dry_run",
-      effect: "changing"
-    });
+    expectStatus(unpublished, 200);
     // Its parameters are checked as a call checks them.
     const invalid = await t.callAction(
       t.admin.id,
@@ -353,13 +399,60 @@ describe("an App that starts a Workflow", () => {
     );
     expectStatus(invalid, 422);
     expect(t.refusal(invalid).details).toMatchObject({ reason: "input_invalid" });
-    expect(await t.stores.workflowRuns.listRuns({ clientInstanceId, workflow: WORKFLOW })).toEqual(
-      before
-    );
-    expect(await t.runs()).toHaveLength(actionRuns + 1);
+    // Nothing live: every run the draft started is a test run.
+    const after = await t.stores.workflowRuns.listRuns({ clientInstanceId, workflow: WORKFLOW });
+    const liveIds = (runs: typeof live) =>
+      runs.filter((one) => one.mode !== "test").map((one) => one.id);
+    expect(liveIds(after)).toEqual(liveIds(live));
   });
 
-  afterAll(async () => {
-    if (grantId) await t.stores.access.deleteGrant({ clientInstanceId, grantId });
+  it("starts the published revision in mode test for a tester who may only use the Workflow, and refuses one who may not (DP-1)", async () => {
+    // kai holds no right to use a Workflow from the tests before.
+    await stopKai();
+    const appId = await t.assetId("app", "visits");
+    await t.withRight(t.kai.id, "app.write", { assetId: appId }, async () => {
+      const frame = await t.openApp(t.kai.id, "draft", "visits");
+      // In a draft App the tester's own rights apply: kai may not use the Workflow.
+      const refused = await t.callAction(
+        t.kai.id,
+        frame,
+        "log-visit",
+        { page: "/refused" },
+        { "idempotency-key": "draft-kai-refused" }
+      );
+      expectStatus(refused, 403);
+      expect(t.refusal(refused)).toMatchObject({
+        details: expect.objectContaining({ action: "workflow.use" })
+      });
+
+      const workflowId = await t.assetId(WORKFLOW_ASSET_KIND, WORKFLOW);
+      await t.withRight(t.kai.id, "workflow.use", { assetId: workflowId }, async () => {
+        const { started, run } = await clickInDraft(t.kai.id, frame, "/kai", "draft-kai");
+        expect(run).toMatchObject({
+          status: "done",
+          output: { page: "/kai" },
+          mode: "test",
+          workflowRevision: { kind: "published", number: 1 }
+        });
+        expect(
+          await t.stores.workflowRuns.readRun({ clientInstanceId, id: started.result.id })
+        ).toMatchObject({ mode: "test", startedFrom: { workflowRevision: "published" } });
+      });
+
+      // A Workflow nobody published has no revision a tester who may not write it runs.
+      const unpublishedId = await t.assetId(WORKFLOW_ASSET_KIND, UNPUBLISHED_WORKFLOW);
+      await t.withRight(t.kai.id, "workflow.use", { assetId: unpublishedId }, async () => {
+        const unavailable = await t.callAction(
+          t.kai.id,
+          frame,
+          "log-unpublished",
+          { page: "/none" },
+          { "idempotency-key": "draft-kai-unpublished" }
+        );
+        expect(t.refusal(unavailable).details).toMatchObject({ reason: "workflow_unavailable" });
+      });
+    });
   });
+
+  afterAll(stopKai);
 });

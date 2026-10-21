@@ -49,6 +49,7 @@ export const workflows = defineTranslations({
     "workflows.test.refused": "You may not test this workflow.",
     "workflows.run.testAgain": "Test again",
     "workflows.run.testBadge": "Test run",
+    "workflows.run.testFromApp": "Test · from App draft “{app}”",
     "workflows.run.testLine":
       "Test run of the draft. It reads live data as {person}; steps that change something are simulated unless they run live once.",
     "workflows.run.testTitle": "Test run of {date}",
@@ -453,6 +454,7 @@ export const workflows = defineTranslations({
     "workflows.test.refused": "Du darfst diesen Workflow nicht testen.",
     "workflows.run.testAgain": "Erneut testen",
     "workflows.run.testBadge": "Testlauf",
+    "workflows.run.testFromApp": "Test · aus App-Entwurf „{app}“",
     "workflows.run.testLine":
       "Testlauf des Entwurfs. Er liest echte Daten als {person}; Schritte, die etwas ändern, werden simuliert, außer sie sollen einmal live laufen.",
     "workflows.run.testTitle": "Testlauf vom {date}",
