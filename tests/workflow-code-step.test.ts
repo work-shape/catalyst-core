@@ -1,10 +1,11 @@
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { mkdir, mkdtemp, readdir, rm, utimes } from "node:fs/promises";
+import { mkdtempSync } from "node:fs";
+import { mkdir, mkdtemp, readFile, readdir, rm, utimes } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import type { JsonValue } from "@work-shape/catalyst-core";
 import {
@@ -471,13 +472,57 @@ print(json.dumps({"sum": sum(data["numbers"])}))
 // file on its command line: a test looks for it on the host after the step, and the file
 // kills every process with the mark after each test, whatever the test found, so a test that
 // fails leaves nothing running. A process that left its session is no child of anything the
-// test knows, and only the mark finds it.
+// test knows, and only the mark finds it. A writer on this host also writes its pid to a file
+// the cleanup reads, and that pid is killed too while it carries the mark: where `pkill` is
+// missing or misses it.
+// A writer ends by itself all the same, at WRITER_SECONDS or WRITER_BYTES, whichever comes
+// first: a run that is killed before its cleanup leaves a writer that stops, never one that
+// fills the disk with a file nobody can see any more.
 const MARK = `catalyst-writer-${randomUUID()}`;
 let marks = 0;
 /** A mark of its own for one test, which the file's mark finds too. */
 const nextMark = () => `${MARK}-${String((marks += 1))}`;
-afterEach(async () => {
+const WRITERS = mkdtempSync(join(tmpdir(), "code-step-writers-"));
+/** Where each writer started on this host writes its pid. A container's writer cannot. */
+const WRITER_PIDS = join(WRITERS, "pids");
+
+/** The command line of a process, or "" where there is none. */
+async function commandLineOf(pid: number): Promise<string> {
+  try {
+    if (process.platform === "linux") {
+      return (await readFile(`/proc/${String(pid)}/cmdline`, "utf8")).replaceAll("\0", " ");
+    }
+    const { stdout } = await promisify(execFile)("ps", [
+      "-ww",
+      "-o",
+      "command=",
+      "-p",
+      String(pid)
+    ]);
+    return stdout;
+  } catch {
+    return "";
+  }
+}
+
+/** Kills every writer of this file: by its mark, and by the pid it wrote. */
+async function killWriters(): Promise<void> {
   await promisify(execFile)("pkill", ["-KILL", "-f", MARK]).catch(() => undefined);
+  const pids = await readFile(WRITER_PIDS, "utf8").catch(() => "");
+  for (const pid of pids.split(/\s+/u).filter(Boolean).map(Number)) {
+    // A pid the host has given to another process since is left alone.
+    if (!(await commandLineOf(pid)).includes(MARK)) continue;
+    try {
+      process.kill(pid, "SIGKILL");
+    } catch {
+      // It ended in the meantime.
+    }
+  }
+}
+afterEach(killWriters);
+afterAll(async () => {
+  await killWriters();
+  await rm(WRITERS, { recursive: true, force: true });
 });
 
 /** How a script starts a process that outlives it, unless the sandbox ends it. */
@@ -488,13 +533,37 @@ const WAYS = [
 ] as const;
 type Way = (typeof WAYS)[number];
 
-/** Python that appends to `output.json` without end, as one line of a string literal. */
-const WRITE =
-  "import time\\nwith open('output.json', 'a') as out:\\n    while True:\\n        out.write('1,' * 4096)\\n        out.flush()\\n        time.sleep(0.001)";
+/** How long a writer writes at most, unless something ends it before. */
+const WRITER_SECONDS = 120;
+/** How much a writer writes at most: some 80 to 100 seconds of writing. */
+const WRITER_BYTES = 64 * 1024 * 1024;
 
 /**
- * A script that starts a process that keeps appending to `output.json`, waits until it
- * wrote, and ends `seconds` later. The writer is started by name: the sandbox of these tests
+ * Python that appends to `output.json` until something ends it, or until WRITER_SECONDS or
+ * WRITER_BYTES, as one line of a string literal. Its arguments are its mark and the file it
+ * writes its pid to. It writes up to 800 KB a second: past a result's limit within a script's
+ * second, and still writing long after any test of it looked.
+ */
+const WRITE = [
+  "import os, sys, time",
+  "try:",
+  "    with open(sys.argv[2], 'a') as pids:",
+  "        pids.write(' %d ' % os.getpid())",
+  "except OSError:",
+  "    pass",
+  `end = time.monotonic() + ${String(WRITER_SECONDS)}`,
+  "written = 0",
+  "with open('output.json', 'a') as out:",
+  `    while written < ${String(WRITER_BYTES)} and time.monotonic() < end:`,
+  "        out.write('1,' * 4096)",
+  "        out.flush()",
+  "        written += 8192",
+  "        time.sleep(0.01)"
+].join("\\n");
+
+/**
+ * A script that starts a process that keeps appending to `output.json` (WRITE), waits until
+ * it wrote, and ends `seconds` later. The writer is started by name: the sandbox of these tests
  * hands a script no PATH, and without one Python on Linux does not know its own path
  * (`sys.executable` is empty). A writer that `holdsStreams` keeps the script's output and
  * error streams open; any other has none of them.
@@ -525,7 +594,7 @@ function startsWriter(
   }[way];
   return [
     "import os, subprocess, sys, time",
-    `argv = ["python3", "-c", "${WRITE}", "${mark}"]`,
+    `argv = ["python3", "-c", "${WRITE}", "${mark}", ${JSON.stringify(WRITER_PIDS)}]`,
     options.holdsStreams
       ? "quiet = {}"
       : "quiet = dict(stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)",
