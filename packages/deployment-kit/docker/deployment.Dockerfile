@@ -79,6 +79,68 @@ RUN kit=node_modules/@work-shape/catalyst-deployment-kit/docker \
   && mkdir -p "/opt/document-worker/${DEPLOYMENT_DIR}" \
   && cp -R config "/opt/document-worker/${DEPLOYMENT_DIR}/config"
 
+# Copied from the stage runner-base of capabilities/docker/catalyst-runner-base.Dockerfile.
+FROM node:24-trixie-slim AS runner-system
+
+WORKDIR /opt/catalyst
+ENV NODE_ENV=production
+ENV LANG=C.UTF-8
+ENV LC_ALL=C.UTF-8
+ENV WORKSPACE_DIR=/workspace
+ENV HOME=/workspace
+ENV CATALYST_LAYOUT_LIBRARY_DIR=/usr/local/share/catalyst-layout-library
+ENV PATH="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+ENV SAL_USE_VCLPLUGIN=svp
+
+RUN --mount=type=cache,id=vivd-runner-apt-lists,target=/var/lib/apt/lists,sharing=locked \
+  --mount=type=cache,id=vivd-runner-apt-cache,target=/var/cache/apt,sharing=locked \
+  apt-get update \
+  && apt-get install -y --no-install-recommends \
+    bash \
+    ca-certificates \
+    coreutils \
+    file \
+    fontconfig \
+    git \
+    fonts-crosextra-caladea \
+    fonts-crosextra-carlito \
+    fonts-dejavu \
+    fonts-inter-variable \
+    fonts-lato \
+    fonts-liberation \
+    fonts-montserrat \
+    fonts-noto-cjk \
+    fonts-noto-color-emoji \
+    fonts-noto-core \
+    fonts-open-sans \
+    fonts-roboto \
+    fonts-urw-base35 \
+    libreoffice-calc-nogui \
+    libreoffice-impress-nogui \
+    libreoffice-writer-nogui \
+    poppler-utils \
+    python3 \
+    python-is-python3 \
+    python3-pip \
+    unzip \
+  && python3 -m pip install --break-system-packages --no-cache-dir \
+    numpy==2.1.3 \
+    openpyxl==3.1.5 \
+    pandas==2.2.3 \
+    pdfplumber==0.11.4 \
+    Pillow==10.4.0 \
+    pypdf==4.3.1 \
+    python-docx==1.1.2 \
+    python-pptx==0.6.23 \
+    reportlab==4.2.2 \
+  && mkdir -p /usr/local/share/catalyst \
+  && python3 -m pip list --format=json > /usr/local/share/catalyst/runner-packages.json \
+  && rm -rf /var/lib/apt/lists/*
+
+RUN corepack enable \
+  && corepack prepare pnpm@10.29.3 --activate \
+  && pnpm --version
+
 FROM node:24-bookworm-slim AS api
 
 WORKDIR /app
@@ -223,68 +285,6 @@ RUN test -f "${DOCUMENT_WORKER_ENTRY}"
 
 EXPOSE 4110
 CMD ["sh", "-c", "node ${DOCUMENT_WORKER_ENTRY}"]
-
-# Copied from the stage runner-base of capabilities/docker/catalyst-runner-base.Dockerfile.
-FROM node:24-trixie-slim AS runner-system
-
-WORKDIR /opt/catalyst
-ENV NODE_ENV=production
-ENV LANG=C.UTF-8
-ENV LC_ALL=C.UTF-8
-ENV WORKSPACE_DIR=/workspace
-ENV HOME=/workspace
-ENV CATALYST_LAYOUT_LIBRARY_DIR=/usr/local/share/catalyst-layout-library
-ENV PATH="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
-ENV SAL_USE_VCLPLUGIN=svp
-
-RUN --mount=type=cache,id=vivd-runner-apt-lists,target=/var/lib/apt/lists,sharing=locked \
-  --mount=type=cache,id=vivd-runner-apt-cache,target=/var/cache/apt,sharing=locked \
-  apt-get update \
-  && apt-get install -y --no-install-recommends \
-    bash \
-    ca-certificates \
-    coreutils \
-    file \
-    fontconfig \
-    git \
-    fonts-crosextra-caladea \
-    fonts-crosextra-carlito \
-    fonts-dejavu \
-    fonts-inter-variable \
-    fonts-lato \
-    fonts-liberation \
-    fonts-montserrat \
-    fonts-noto-cjk \
-    fonts-noto-color-emoji \
-    fonts-noto-core \
-    fonts-open-sans \
-    fonts-roboto \
-    fonts-urw-base35 \
-    libreoffice-calc-nogui \
-    libreoffice-impress-nogui \
-    libreoffice-writer-nogui \
-    poppler-utils \
-    python3 \
-    python-is-python3 \
-    python3-pip \
-    unzip \
-  && python3 -m pip install --break-system-packages --no-cache-dir \
-    numpy==2.1.3 \
-    openpyxl==3.1.5 \
-    pandas==2.2.3 \
-    pdfplumber==0.11.4 \
-    Pillow==10.4.0 \
-    pypdf==4.3.1 \
-    python-docx==1.1.2 \
-    python-pptx==0.6.23 \
-    reportlab==4.2.2 \
-  && mkdir -p /usr/local/share/catalyst \
-  && python3 -m pip list --format=json > /usr/local/share/catalyst/runner-packages.json \
-  && rm -rf /var/lib/apt/lists/*
-
-RUN corepack enable \
-  && corepack prepare pnpm@10.29.3 --activate \
-  && pnpm --version
 
 FROM runner-system AS runner
 
