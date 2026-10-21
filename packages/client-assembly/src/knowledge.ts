@@ -1,4 +1,5 @@
 import { knowledgeDocumentRoutes } from "./knowledge-document-routes";
+import { createKnowledgeHitDocuments } from "./knowledge-hit-documents";
 import { z } from "zod";
 import type { AgentRunWorkerPlacement } from "./agent-run-jobs";
 import { apiOperations } from "@work-shape/catalyst-api-contract";
@@ -313,6 +314,12 @@ export const assembleKnowledge: ModuleSeam = (parts, earlier) => {
           })
         ],
         dataToolSources: [knowledgeBases.toolSource],
+        knowledgeDocuments: createKnowledgeHitDocuments({
+          knowledgeBases,
+          files: runtime.files,
+          clientInstanceId: parts.clientInstanceId,
+          stores: parts.stores
+        }),
         jobHandlers: [
           ...fileJobs.handlers,
           ...(runtime.files && sourceJobs

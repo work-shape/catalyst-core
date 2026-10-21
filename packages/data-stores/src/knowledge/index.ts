@@ -1,4 +1,5 @@
 import { openKnowledgeDocument } from "./open-document";
+import { knowledgeHitDocument } from "./hit-document";
 import { FIELD_OUTPUT_MIN_TOKENS } from "./field-budget";
 import {
   confirmKnowledgeProcessing,
@@ -119,6 +120,15 @@ export interface KnowledgeBases {
     body: AsyncIterable<Uint8Array>;
     inline?: boolean;
   }>;
+  /**
+   * The document a search hit names by its file id, with its Knowledge Base as a resource;
+   * the caller checks `knowledge_base.use` on it before it hands the document on (KB-7c).
+   */
+  hitDocument(
+    files: KnowledgeFiles | undefined,
+    fileId: string,
+    signal?: AbortSignal
+  ): ReturnType<typeof knowledgeHitDocument>;
   /** Describes the one knowledge tool to an agent that lists Knowledge Bases. */
   readonly toolSource: DataToolSource;
   publishQuestion(input: {
@@ -164,6 +174,7 @@ export function createKnowledgeBases(input: {
     now: input.now ?? (() => new Date())
   };
   return {
+    hitDocument: (files, fileId, signal) => knowledgeHitDocument(runtime, files, fileId, signal),
     async openDocument(files, knowledgeBase, documentId, signal) {
       const asset = await input.stores.configAssets.getConfigAsset({
         clientInstanceId: input.clientInstanceId,

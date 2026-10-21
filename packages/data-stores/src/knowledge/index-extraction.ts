@@ -55,7 +55,7 @@ async function availableCopy(runtime: KnowledgeRuntime, knowledgeBaseId: string,
   return copy;
 }
 
-async function readCopy(
+export async function readCopy(
   runtime: KnowledgeRuntime,
   files: KnowledgeFiles,
   knowledgeBaseId: string,
@@ -77,7 +77,7 @@ interface ContentKey {
   contentSha256: string;
 }
 
-async function readExtraction(
+export async function readExtraction(
   files: KnowledgeFiles,
   content: ContentKey
 ): Promise<KnowledgeExtractionResult | "invalid" | undefined> {

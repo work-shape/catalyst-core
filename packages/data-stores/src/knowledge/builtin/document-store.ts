@@ -1,6 +1,7 @@
 import { listKnowledgeDocuments } from "./document-listing";
 import { hasOutdatedProcessor, processingSummary } from "./processing-summary";
 import { createKnowledgeFieldStore } from "./field-store";
+import { documentOfFile } from "./document-of-file";
 import { processingContents } from "./processing-store";
 import { visibleSourceHits } from "./source-visibility";
 import { z } from "zod";
@@ -247,6 +248,11 @@ export function createBuiltinDocumentStore(
           await release(rows.map((row) => row.managed_file_id));
           return rows.length === input.limit ? rows.at(-1)?.managed_file_id : undefined;
         }
+      );
+    },
+    documentOfFile(fileId, signal) {
+      return inStore("Reading a document", KNOWLEDGE_DOCUMENTS_TIMEOUT_MS, signal, (sql) =>
+        documentOfFile(sql, fileId)
       );
     },
     readContent(contentSha256, signal) {

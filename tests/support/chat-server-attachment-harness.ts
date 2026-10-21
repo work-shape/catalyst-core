@@ -8,6 +8,7 @@ import {
   type DraftAttachment,
   type FileAttachmentFormat,
   type ImageFileFormat,
+  type KnowledgeHitDocuments,
   type ManagedFileId
 } from "@work-shape/catalyst-core";
 import { MemoryObjectStorage } from "./memory-object-storage";
@@ -48,7 +49,10 @@ export function createManagedObjectTestAttachmentCapability(
   capability: ClientInstanceCapability;
   objects: MemoryObjectStorage;
   deletedObjectKeys: string[];
+  /** What the last instance that created the capability hands it for Knowledge Base hits. */
+  knowledgeDocuments(): KnowledgeHitDocuments;
 } {
+  let knowledgeDocuments: KnowledgeHitDocuments | undefined;
   const deletedObjectKeys: string[] = [];
   const objects = new (class extends MemoryObjectStorage {
     override async delete(key: string): Promise<void> {
@@ -59,9 +63,14 @@ export function createManagedObjectTestAttachmentCapability(
   return {
     objects,
     deletedObjectKeys,
+    knowledgeDocuments() {
+      if (!knowledgeDocuments) throw new Error("No instance created the capability");
+      return knowledgeDocuments;
+    },
     capability: {
       name: "managed-object-test-attachments",
       create(context) {
+        knowledgeDocuments = context.knowledgeDocuments;
         const managedObjects = context.managedObjectAccess.createAccess({
           byteStore: objects,
           keyFactory: {

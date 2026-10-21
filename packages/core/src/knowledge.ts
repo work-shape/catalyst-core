@@ -670,6 +670,18 @@ export function knowledgeDocumentStateOf(state: KnowledgeContentState): Knowledg
   return state === "extracted" ? "indexed" : state;
 }
 
+/** A document as a document tool finds it by its file id. */
+export interface KnowledgeFileDocument {
+  documentId: string;
+  contentSha256: string;
+  format: KnowledgeDocumentFormat;
+  fileName: string;
+  /** The pages its extraction found, where it has pages. */
+  pageCount?: number;
+  /** Whether a synced source keeps the document: its text is the stored extraction. */
+  synced: boolean;
+}
+
 /** One content as the index job reads it, with one document that holds it. */
 export interface KnowledgeContentToIndex {
   contentSha256: string;
@@ -884,6 +896,11 @@ export interface KnowledgeDocumentStore {
     contentSha256: string,
     signal?: AbortSignal
   ): Promise<KnowledgeContentToIndex | undefined>;
+  /**
+   * The document, not withdrawn and with its content indexed, that names `fileId`: what a
+   * document tool reads on a search hit's file id (KB-7c). None for any other file.
+   */
+  documentOfFile(fileId: string, signal?: AbortSignal): Promise<KnowledgeFileDocument | undefined>;
   /**
    * Replaces the content's chunks with `chunks` at the revisions, in one transaction, and marks
    * it `extracted` where `complete`; otherwise it stays `pending` until `completeContent`, as a

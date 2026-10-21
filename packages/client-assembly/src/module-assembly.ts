@@ -11,6 +11,7 @@ import type {
   JobSchedule,
   KnowledgeBackend,
   KnowledgeFiles,
+  KnowledgeHitDocuments,
   Logger,
   Notices,
   ModuleSnapshot,
@@ -74,6 +75,8 @@ interface ModuleRuntimeAssembly {
   readonly routes?: readonly RouteRegistration[];
   /** Operations of the module's Assets as tools an agent may carry, beside the Connections'. */
   readonly dataToolSources?: readonly DataToolSource[];
+  /** What the document tools read on a Knowledge Base search hit's file id (KB-7c). */
+  readonly knowledgeDocuments?: KnowledgeHitDocuments;
   /** Gives back what the module opened, such as a pool. Called when the process closes. */
   close?(): Promise<void>;
 }
@@ -129,6 +132,8 @@ export interface StartedModules {
   readonly jobRetries: readonly JobRetry[];
   readonly routes: readonly RouteRegistration[];
   readonly dataToolSources: readonly DataToolSource[];
+  /** The first started module's documents of Knowledge Bases, where one offers them. */
+  readonly knowledgeDocuments?: KnowledgeHitDocuments;
   /** Closes every started module, the last started first. */
   close(): Promise<void>;
 }

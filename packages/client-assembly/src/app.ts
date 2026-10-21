@@ -24,6 +24,7 @@ import {
   type ConnectorTypeDefinition,
   type HttpRuntime,
   type JobWorker,
+  type KnowledgeHitDocuments,
   type PlatformStores,
   type SecretResolver
 } from "@work-shape/catalyst-core";
@@ -338,6 +339,9 @@ export async function createClientInstanceExecutionAssembly(
   // of its binding can do.
   const models = await createInstanceModels({ config, clientInstanceId, infrastructure, store });
   const { governance: usageGovernance, gateway: modelGateway } = models;
+  // The Knowledge Base module starts after the capabilities: their tools reach its documents
+  // once it has.
+  let knowledgeDocuments: KnowledgeHitDocuments | undefined;
   const capabilityContributions = await createCapabilityContributions(capabilities, {
     logger,
     capabilitiesConfig: config.capabilities,
@@ -351,6 +355,9 @@ export async function createClientInstanceExecutionAssembly(
     jobs: store.jobs,
     transaction: (fn) => store.transaction((tx) => fn({ files: tx.files, jobs: tx.jobs })),
     models: models.capabilityModels,
+    knowledgeDocuments: {
+      open: async (request) => knowledgeDocuments?.open(request)
+    },
     managedObjectAccess: {
       createAccess(accessInput) {
         return createManagedObjectAccess({
@@ -603,6 +610,7 @@ export async function createClientInstanceExecutionAssembly(
         })
   });
   const { dataToolSources } = modulesStarted;
+  knowledgeDocuments = modulesStarted.knowledgeDocuments;
   const toolOptions = withConnections(
     connections,
     operationCalls,

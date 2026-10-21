@@ -10,6 +10,7 @@ import {
   type KnowledgeProcessorOutput,
   knowledgeIndexJob,
   type AssetScope,
+  type ConfigAssetRecord,
   type AuditRecorder,
   type BuiltinKnowledgeTarget,
   type ClientInstanceId,
@@ -139,6 +140,7 @@ export interface KnowledgeIndexJobInput {
 
 /** The Knowledge Base a job names, while it is published on the built-in backend. */
 interface IndexTarget {
+  asset: ConfigAssetRecord;
   target: BuiltinKnowledgeTarget;
   store: KnowledgeDocumentStore;
   /** Who owns the Knowledge Base: its workspace is the one embedding usage counts against. */
@@ -146,7 +148,8 @@ interface IndexTarget {
   definition: KnowledgeBaseDefinition;
 }
 
-async function indexTargetOf(
+/** The published, built-in Knowledge Base of an asset id, with its store of documents. */
+export async function indexTargetOf(
   runtime: KnowledgeRuntime,
   knowledgeBaseId: string
 ): Promise<IndexTarget | undefined> {
@@ -168,7 +171,7 @@ async function indexTargetOf(
   const target = knowledgeTargetOf(definition.data, knowledgeBaseId);
   if (target.backend !== "builtin") return undefined;
   const store = runtime.backend.documentStore(target);
-  return store && { target, store, scope: asset.scope, definition: definition.data };
+  return store && { asset, target, store, scope: asset.scope, definition: definition.data };
 }
 
 /**

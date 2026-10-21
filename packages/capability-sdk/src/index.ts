@@ -7,6 +7,7 @@ import {
   readObjectBytes,
   type AttachmentManifest,
   type ClientInstanceId,
+  type KnowledgeHitDocuments,
   type ConversationAttachment,
   type ConversationId,
   type DraftAttachment,
@@ -115,6 +116,11 @@ export interface ClientInstanceCapabilityContext {
   managedObjectAccess: ManagedObjectAccessFactory;
   /** The instance's models. Every call a capability makes to a model goes through here. */
   models: ClientInstanceCapabilityModels;
+  /**
+   * The documents of Knowledge Bases that a search hit names by file id, as the person may read
+   * them (KB-7c). Answers none where Knowledge Bases are off or the process keeps no files.
+   */
+  knowledgeDocuments?: KnowledgeHitDocuments;
 }
 
 /** What a capability calls a model for. It names the call on its usage record. */

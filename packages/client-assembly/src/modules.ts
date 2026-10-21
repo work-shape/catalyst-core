@@ -2,6 +2,7 @@ import {
   AppError,
   createModuleRegistry,
   moduleConfigKey,
+  type KnowledgeHitDocuments,
   type ModuleRegistry,
   type ModuleSnapshot
 } from "@work-shape/catalyst-core";
@@ -81,6 +82,7 @@ export async function assembleModules(parts: ModuleAssemblyParts): Promise<Assem
         jobRetries: started.flatMap((module) => module.jobRetries ?? []),
         routes: started.flatMap((module) => module.routes ?? []),
         dataToolSources: started.flatMap((module) => module.dataToolSources ?? []),
+        ...withKnowledgeDocuments(started.find((module) => module.knowledgeDocuments)),
         async close() {
           for (const module of [...started].reverse()) {
             await module.close?.();
@@ -168,4 +170,10 @@ function firstPublishNarrativeData(
 ): Pick<AssembledModules, "publishNarrativeData"> {
   const found = assemblies.find((assembly) => assembly.publishNarrativeData)?.publishNarrativeData;
   return found ? { publishNarrativeData: found } : {};
+}
+
+function withKnowledgeDocuments(
+  module: { knowledgeDocuments?: KnowledgeHitDocuments } | undefined
+) {
+  return module?.knowledgeDocuments ? { knowledgeDocuments: module.knowledgeDocuments } : {};
 }
