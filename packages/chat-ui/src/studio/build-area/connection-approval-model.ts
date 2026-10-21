@@ -25,6 +25,11 @@ export interface ApprovalCandidate extends ApprovedOperation {
   description?: string;
   /** For a declared operation: its method and path, as the row shows them. */
   request?: { method: string; path: string };
+  /**
+   * What a catalogue entry says of a reading operation: ticked at the start, or not. Left out,
+   * every reading operation starts ticked. A changing one never does, whatever it says.
+   */
+  recommended?: boolean;
 }
 
 /** Every enum in a path or query parameter's schema, including nested schema branches. */
@@ -102,11 +107,17 @@ export function outsideReadingCut(candidate: ApprovalCandidate): boolean {
 
 /**
  * What the list starts with ticked: the tools that only read. For a custom MCP server that is
- * a tool whose `readOnlyHint` is true; the hint is trusted only at this one confirmation.
+ * a tool whose `readOnlyHint` is true; the hint is trusted only at this one confirmation. A
+ * catalogue entry's reading operation that it does not recommend starts unticked.
  */
 export function readingNames(candidates: readonly ApprovalCandidate[]): string[] {
   return candidates
-    .filter((candidate) => candidate.effect === "reading" && !outsideReadingCut(candidate))
+    .filter(
+      (candidate) =>
+        candidate.effect === "reading" &&
+        candidate.recommended !== false &&
+        !outsideReadingCut(candidate)
+    )
     .map((candidate) => candidate.name);
 }
 

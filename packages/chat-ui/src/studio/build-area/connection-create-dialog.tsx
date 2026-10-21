@@ -71,6 +71,13 @@ import {
 import { useConnectionSource, type ConnectionSource } from "./connection-source";
 import { ConnectionApprovedBody, useGiveToAgent } from "./connection-give-step";
 import { TypedConnectionCreate } from "./connection-typed-create";
+import { CatalogueInstall } from "./connection-catalogue-install";
+import { CatalogueServices } from "./connection-catalogue-services";
+import {
+  entriesToShow,
+  typesWithEntries,
+  type CatalogueEntryOffer
+} from "./connection-catalogue-model";
 import { offerText, type ConnectorTypeOffer } from "./connection-typed-model";
 
 // The New connection dialog (CS-5a 2/2): pick what to connect, give it a name, its address and
@@ -81,6 +88,8 @@ type Stage =
   | { step: "pick" }
   /** A type of the build with a form of its own, such as a document source. */
   | { step: "typed"; offer: ConnectorTypeOffer }
+  /** A catalogue entry: one of its parts, installed through its type's form (CAT-1). */
+  | { step: "entry"; entry: CatalogueEntryOffer }
   | { step: "form" }
   /** A call waits for somebody's approval in the Inbox. */
   | { step: "held" }
@@ -128,7 +137,11 @@ export function ConnectionCreateFlow({
   onCreated
 }: BuildCreateDialogProps & { source: ConnectionSource; browser?: SignInBrowser }) {
   const { locale, t } = useTranslation();
-  const offers = source.useConnectorTypes?.() ?? [];
+  const allOffers = source.useConnectorTypes?.() ?? [];
+  const entries = entriesToShow(source.useCatalogueEntries?.() ?? []);
+  // An entry's card stands in for the card of a type it names.
+  const replaced = typesWithEntries(entries);
+  const offers = allOffers.filter((offer) => !replaced.has(offer.type));
   // The agent's draft opened from its card: the dialog starts at the REST API's form, filled
   // with it, and after Verbinden its tools wait in the approval list. Its proposal of a new
   // Connection starts at the form of its type, filled with it (CHAT-CONN-1).
@@ -141,11 +154,11 @@ export function ConnectionCreateFlow({
   const typedOpened = useRef(false);
   useEffect(() => {
     if (!typedDraft || typedOpened.current) return;
-    const offer = offers.find((entry) => entry.type === draftedType);
+    const offer = allOffers.find((entry) => entry.type === draftedType);
     if (offer === undefined) return;
     typedOpened.current = true;
     setStage({ step: "typed", offer });
-  }, [draftedType, offers, typedDraft]);
+  }, [draftedType, allOffers, typedDraft]);
   // The conversation whose agent proposed the Connection hears once that it is connected.
   const told = useRef(false);
   const tellReady = (outcome: ConnectionReadyOutcome, connection = { name, title }) => {
@@ -552,6 +565,7 @@ export function ConnectionCreateFlow({
     switch (stage.step) {
       case "pick":
       case "typed":
+      case "entry":
         return t("connectionCreate.title");
       case "form":
         return t(rest ? "connectionCreate.restHeading" : "connectionCreate.mcpHeading");
@@ -582,6 +596,20 @@ export function ConnectionCreateFlow({
           : "connectionCreate.connectedRestNoKey",
     { name: title }
   );
+
+  if (stage.step === "entry") {
+    return (
+      <CatalogueInstall
+        entry={stage.entry}
+        source={source}
+        checkName={checkName}
+        put={put}
+        onBack={() => setStage({ step: "pick" })}
+        onClose={onClose}
+        onCreated={onCreated}
+      />
+    );
+  }
 
   if (stage.step === "typed") {
     return (
@@ -649,9 +677,10 @@ export function ConnectionCreateFlow({
   function body() {
     switch (stage.step) {
       case "typed":
+      case "entry":
         return null;
-      case "pick":
-        return (
+      case "pick": {
+        const own = (
           <div
             className="grid min-w-0 gap-2"
             role="group"
@@ -689,6 +718,20 @@ export function ConnectionCreateFlow({
             ))}
           </div>
         );
+        if (entries.length === 0) return own;
+        return (
+          <div className="grid min-w-0 gap-5">
+            <CatalogueServices
+              entries={entries}
+              onChoose={(entry) => setStage({ step: "entry", entry })}
+            />
+            <section className="grid min-w-0 gap-2" data-connection-own="">
+              <h3 className="text-label text-muted-foreground">{t("connectionCatalogue.own")}</h3>
+              {own}
+            </section>
+          </div>
+        );
+      }
       case "form":
         return (
           <ConnectionCreateForm
@@ -804,6 +847,7 @@ export function ConnectionCreateFlow({
     switch (stage.step) {
       case "pick":
       case "typed":
+      case "entry":
         return undefined;
       case "form":
         return (

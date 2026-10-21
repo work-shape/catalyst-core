@@ -436,7 +436,7 @@ function NoSourceConnection({ source }: { source: KnowledgeBaseSource }) {
           ? t("knowledgeSources.noDocumentTypes")
           : t("knowledgeSources.noConnectionsFor", {
               types: new Intl.ListFormat(locale, { type: "disjunction" }).format(
-                types.map((type) => offerText(type.service ?? type.title, locale))
+                types.map((type) => offerText(type.title, locale))
               )
             })}
     </EmptyState>

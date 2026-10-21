@@ -28,6 +28,7 @@ import { apiErrorCode } from "../../shared/workspace-utils";
 import { instanceSentence, PendingApprovalError } from "./build-refusals";
 import { waitsForDiscovery, type DiscoveryWait } from "./connection-form-model";
 import { useAvailabilityChoice, type AvailabilityFrame } from "./asset-availability";
+import type { CatalogueEntryOffer } from "./connection-catalogue-model";
 import type { AvailabilityChoice } from "./asset-availability-fields";
 import { connectionGiveSource } from "./connection-give";
 import type { ConnectionGiveHost } from "./connection-give-step";
@@ -131,6 +132,11 @@ export interface ConnectionSource {
    * connection dialog. Nothing until they are read; a failed read offers none.
    */
   useConnectorTypes?(): readonly ConnectorTypeOffer[] | undefined;
+  /**
+   * A hook: the catalogue's entries, for the "Dienste" group of the New connection dialog,
+   * read with the Connector types. Nothing until they are read; a failed read offers none.
+   */
+  useCatalogueEntries?(): readonly CatalogueEntryOffer[] | undefined;
   /** Reads the Connection's state now, beside the hook, as the New connection dialog waits. */
   readDetail(name: string): Promise<ConnectionDetail>;
   /** Tests the Connection. Throws `PendingApprovalError` when somebody approves the test first. */
@@ -229,6 +235,16 @@ export function useConnectionSource(): ConnectionSource {
       invalidateOfferedAgents(queryClient, apiBaseUrl, authScope).catch(() => undefined);
     }
   };
+  // One read of the Connector types and the catalogue's entries. Offered to whoever may make a
+  // Connection; nobody else asks.
+  const useConnectorTypeOffers = () =>
+    useQuery({
+      queryKey: ["connector-types", apiBaseUrl, authScope],
+      queryFn: ({ signal }) => calls.connector_types({ signal }),
+      enabled: context.data?.actions.includes(CONNECTION_WRITE_ACTION) ?? false,
+      retry: false,
+      staleTime: Infinity
+    });
   const personContextKey = (name: string, subject: PersonContextSubject) => [
     "connection-person-context",
     apiBaseUrl,
@@ -321,15 +337,12 @@ export function useConnectionSource(): ConnectionSource {
     },
     readDetail: (name) => calls.get({ params: { name } }),
     useConnectorTypes() {
-      const query = useQuery({
-        queryKey: ["connector-types", apiBaseUrl, authScope],
-        queryFn: ({ signal }) => calls.connector_types({ signal }),
-        // Offered to whoever may make a Connection; nobody else asks.
-        enabled: context.data?.actions.includes(CONNECTION_WRITE_ACTION) ?? false,
-        retry: false,
-        staleTime: Infinity
-      });
+      const query = useConnectorTypeOffers();
       return query.isError ? [] : query.data?.types;
+    },
+    useCatalogueEntries() {
+      const query = useConnectorTypeOffers();
+      return query.isError ? [] : query.data?.entries;
     },
     async oauthStart(name) {
       try {

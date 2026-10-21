@@ -1,5 +1,5 @@
 import { ArrowLeft } from "lucide-react";
-import { useRef, useState } from "react";
+import { Fragment, useRef, useState, type ReactNode } from "react";
 import { CONNECTION_ASSET_KIND, assetAddressFromName } from "@work-shape/catalyst-core";
 import {
   Banner,
@@ -24,6 +24,7 @@ import {
   type ConnectStep,
   type ConnectStepState
 } from "./connection-connect";
+import type { CataloguePartName } from "./connection-catalogue-model";
 import { connectionWriteErrors } from "./connection-refusals";
 import type { ConnectionSource } from "./connection-source";
 import {
@@ -43,6 +44,24 @@ import { RefusalDetail } from "./refusal-notice";
 
 type Errors = Partial<Record<"id" | "secret" | "general", string>> & { detail?: string };
 
+/** A Connection installed from a catalogue entry's part (CAT-1). */
+export interface TypedInstall {
+  /** The link the definition keeps to the entry. It grants nothing. */
+  link: { entry: string; part: CataloguePartName; version: number };
+  /** Above the fields: what the part does, example prompts, the checklist. */
+  intro?: ReactNode;
+  /** Before the secret field: whose account it is and who reads what it reads. */
+  note: ReactNode;
+}
+
+/** What a connected Connection is, for a flow that goes on after the connect. */
+export interface TypedConnected {
+  name: string;
+  title: string;
+  config: Record<string, unknown>;
+  revision: number;
+}
+
 export function TypedConnectionCreate({
   offer,
   source,
@@ -51,16 +70,26 @@ export function TypedConnectionCreate({
   onBack,
   onClose,
   onCreated,
-  initial
+  initial,
+  install,
+  defaults,
+  onConnected
 }: Pick<BuildCreateDialogProps, "checkName" | "put" | "onClose" | "onCreated"> & {
   offer: ConnectorTypeOffer;
   source: ConnectionSource;
   onBack(): void;
   /** The name and id an agent proposed (CHAT-CONN-1): the form starts with them. */
   initial?: { title: string; name: string };
+  /** The catalogue entry's part this form installs, where it does. */
+  install?: TypedInstall;
+  /** What the fields start with, by position. Never a secret. */
+  defaults?: TypedValues;
+  /** Where the flow goes on once connected; without it the Connection's page opens. */
+  onConnected?(connected: TypedConnected): void;
 }) {
   const { locale, t } = useTranslation();
-  const service = offerText(offer.service ?? offer.title, locale);
+  // The service in words: the form's title. Its `service` is a slug for the mark only.
+  const service = offerText(offer.title, locale);
   const [title, setTitle] = useState(initial?.title ?? "");
   const [typedId, setTypedId] = useState<string | undefined>(() =>
     initial === undefined ||
@@ -69,7 +98,7 @@ export function TypedConnectionCreate({
       : initial.name
   );
   const [description, setDescription] = useState("");
-  const [values, setValues] = useState<TypedValues>({});
+  const [values, setValues] = useState<TypedValues>(() => ({ ...defaults }));
   const [errors, setErrors] = useState<Errors>({});
   const [steps, setSteps] = useState<{ step: ConnectStep; state: ConnectStepState }[]>([]);
   const [busy, setBusy] = useState(false);
@@ -88,7 +117,10 @@ export function TypedConnectionCreate({
 
   const connect = async () => {
     const key = typedSecret(offer, values);
-    const config = typedConnectionConfig(offer, { name, title: title.trim(), description }, values);
+    const config = {
+      ...typedConnectionConfig(offer, { name, title: title.trim(), description }, values),
+      ...(install === undefined ? {} : { catalogue: install.link })
+    };
     setBusy(true);
     setErrors({});
     const order: ConnectStep[] = ["server", ...(key === "" ? [] : (["key"] as const))];
@@ -114,14 +146,20 @@ export function TypedConnectionCreate({
     );
     memory.current = outcome.memory;
     setBusy(false);
-    answer(outcome);
+    answer(outcome, config);
   };
 
-  const answer = (outcome: ConnectOutcome) => {
+  const answer = (outcome: ConnectOutcome, config: Record<string, unknown>) => {
     switch (outcome.status) {
-      case "connected":
+      case "connected": {
+        const revision = outcome.memory.revision;
+        if (onConnected && revision !== undefined) {
+          onConnected({ name, title: title.trim(), config, revision });
+          return;
+        }
         onCreated(name);
         return;
+      }
       case "held":
         setHeld(true);
         return;
@@ -235,6 +273,7 @@ export function TypedConnectionCreate({
           data-connection-create-form={offer.type}
           onSubmit={(event) => event.preventDefault()}
         >
+          {install?.intro}
           <NameWithAddress
             autoFocus
             value={{ name: title, typedAddress: typedId }}
@@ -264,26 +303,28 @@ export function TypedConnectionCreate({
               />
             </Field>
             {offer.fields.map((field, index) => (
-              <Field
-                // The fields are the type's, in its order: they never move.
-                key={field.setting ?? "secret"}
-                label={offerText(field.label, locale)}
-                hint={field.help === undefined ? undefined : offerText(field.help, locale)}
-                {...(field.optional ? { optional: true } : { required: true })}
-                {...(field.secret && errors.secret ? { error: errors.secret } : {})}
-              >
-                <Input
-                  type={field.secret ? "password" : "text"}
-                  autoComplete={field.secret ? "new-password" : "off"}
-                  spellCheck={false}
-                  value={values[index] ?? ""}
-                  disabled={busy}
-                  data-connection-field={field.setting ?? "secret"}
-                  onChange={(event) =>
-                    setValues((current) => ({ ...current, [index]: event.target.value }))
-                  }
-                />
-              </Field>
+              // The fields are the type's, in its order: they never move.
+              <Fragment key={field.setting ?? "secret"}>
+                {field.secret && install ? install.note : null}
+                <Field
+                  label={offerText(field.label, locale)}
+                  hint={field.help === undefined ? undefined : offerText(field.help, locale)}
+                  {...(field.optional ? { optional: true } : { required: true })}
+                  {...(field.secret && errors.secret ? { error: errors.secret } : {})}
+                >
+                  <Input
+                    type={field.secret ? "password" : "text"}
+                    autoComplete={field.secret ? "new-password" : "off"}
+                    spellCheck={false}
+                    value={values[index] ?? ""}
+                    disabled={busy}
+                    data-connection-field={field.setting ?? "secret"}
+                    onChange={(event) =>
+                      setValues((current) => ({ ...current, [index]: event.target.value }))
+                    }
+                  />
+                </Field>
+              </Fragment>
             ))}
           </NameWithAddress>
           {steps.length > 0 ? (

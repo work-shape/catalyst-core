@@ -1,5 +1,6 @@
 import {
   defineClientInstance,
+  loadCatalogueEntries,
   type ClientInstanceApp,
   type ClientInstanceCapability,
   type ConnectorTypeDefinition
@@ -141,6 +142,11 @@ const client = defineClientInstance({
   rootDir: new URL("..", import.meta.url),
   tools: [...demoTools, recordNote, confirmNote],
   connectorTypes: [testConnector, folderSourceConnector],
+  // The demo's entry, and one of the suite's own that its config does not offer.
+  catalogue: [
+    ...loadCatalogueEntries(new URL("../catalogue", import.meta.url)),
+    ...loadCatalogueEntries(new URL("../e2e-catalogue", import.meta.url))
+  ],
   capabilities: [generalSkills]
 });
 

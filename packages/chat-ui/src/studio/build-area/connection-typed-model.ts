@@ -53,6 +53,8 @@ export function typedConnectionConfig(
     name: start.name,
     displayName: start.title,
     ...(description === "" ? {} : { description }),
+    // The slug picks the mark a list shows; it is checked as every `service` is.
+    ...(offer.service === undefined ? {} : { service: offer.service }),
     connectorType: offer.type,
     authScheme: offer.authScheme,
     settings,

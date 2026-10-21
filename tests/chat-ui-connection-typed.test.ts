@@ -26,7 +26,7 @@ const offer: ConnectorTypeOffer = {
   type: "folder_store",
   title: { en: "Folder store", de: "Ordnerablage" },
   description: { en: "Syncs shared folders.", de: "Synchronisiert geteilte Ordner." },
-  service: "Folder store",
+  service: "folder-store",
   documentSource: true,
   authScheme: "client_credentials",
   settings: { subject: { type: "enterprise" } },
@@ -66,6 +66,7 @@ describe("the definition of a Connection of a type with a form", () => {
     expect(config).toEqual({
       name: "documents",
       displayName: "Documents",
+      service: "folder-store",
       connectorType: "folder_store",
       authScheme: "client_credentials",
       settings: { clientId: "client-1", subject: { type: "enterprise", id: "4242" } },

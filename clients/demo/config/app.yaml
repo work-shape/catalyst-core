@@ -284,6 +284,10 @@ egress:
         - 10.0.0.0/8
         - 172.16.0.0/12
         - 192.168.0.0/16
+# The catalogue entries New connection offers under "Dienste". The demo ships its sample
+# entry (catalogue/sample-accounting); its host joins the egress list above.
+catalogue:
+  entries: [sample-accounting]
 # The sample business system: customers, orders and invoices of an invented wholesale company,
 # served by the Compose service `sample-mcp` (clients/demo/sample-mcp). The key is named here
 # and read from the environment once, at start; the database holds it encrypted.

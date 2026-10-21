@@ -116,6 +116,9 @@ egress:
   allow:
     - { protocol: https, host: 127.0.0.1, port: 8443, network: private, cidrs: [127.0.0.0/8] }
     - { protocol: http, host: 127.0.0.1, port: 4219, network: private, cidrs: [127.0.0.0/8] }
+# The demo's sample entry is offered; the suite's own `sample-files` is not, so it shows greyed.
+catalogue:
+  entries: [sample-accounting]
 # The key of the secrets of Connections made in the suite. The runner makes a new one per run.
 secretStore:
   keys:
