@@ -37,7 +37,9 @@ const formatted = "js,jsx,mjs,cjs,ts,tsx,mts,cts,json,css,scss,html,yml,yaml".sp
 // machine's default. It is the ceiling: a target that nears it is split, as the lint was.
 // On 19 October 2026 the type check of the tests passed 4 GB on a batch of four PRs. 6 GB holds
 // it, and like the lint the tests are now checked in bounded root-file groups in separate
-// processes; imported dependencies and ambient declarations remain in each.
+// processes; imported dependencies and ambient declarations remain in each. On 21 October 2026
+// a group needed 2 GB once it reported only its own files, and three run at a time, as the
+// lint's parts do.
 const heapMegabytes = 6144;
 const testFilesPerProcess = 150;
 const testPartFlag = "--types-part=";
@@ -169,32 +171,41 @@ const lintPart = async (part) => {
 };
 
 /**
- * Starts this program again for one part and returns what it printed.
- * @param {number} index
- * @returns {Promise<LintPart>}
+ * Starts this program again for each part of a target, at most three processes at a time, and
+ * returns what each part printed, in the order of the parts. Three parts together stay well
+ * within a runner's memory and a shared machine's.
+ * @template T
+ * @param {number} parts
+ * @param {(index: number) => string[]} args
+ * @returns {Promise<T[]>}
  */
-const startPart = (index) =>
-  new Promise((done, failed) => {
-    const child = spawn(
-      process.execPath,
-      [
-        ...process.execArgv,
-        process.argv[1] ?? "",
-        "lint",
-        `${partFlag}${index}`,
-        ...(scopeFlag ? [scopeFlag] : [])
-      ],
-      { cwd: root, stdio: ["ignore", "pipe", "inherit"] }
-    );
-    /** @type {Buffer[]} */
-    const output = [];
-    child.stdout.on("data", (chunk) => output.push(chunk));
-    child.on("error", failed);
-    child.on("close", (status) => {
-      if (status === 0) done(JSON.parse(Buffer.concat(output).toString("utf8")));
-      else failed(new Error(`lint part ${index} failed with status ${status}`));
+const startParts = async (parts, args) => {
+  /** @param {number} index @returns {Promise<T>} */
+  const start = (index) =>
+    new Promise((done, failed) => {
+      const child = spawn(
+        process.execPath,
+        [...process.execArgv, process.argv[1] ?? "", ...args(index)],
+        { cwd: root, stdio: ["ignore", "pipe", "inherit"] }
+      );
+      /** @type {Buffer[]} */
+      const output = [];
+      child.stdout.on("data", (chunk) => output.push(chunk));
+      child.on("error", failed);
+      child.on("close", (status) => {
+        if (status === 0) done(JSON.parse(Buffer.concat(output).toString("utf8")));
+        else failed(new Error(`${target} part ${index} failed with status ${status}`));
+      });
     });
-  });
+  /** @type {T[]} */
+  const printed = Array.from({ length: parts });
+  let next = 0;
+  const worker = async () => {
+    for (let index = next++; index < parts; index = next++) printed[index] = await start(index);
+  };
+  await Promise.all(Array.from({ length: Math.min(3, availableParallelism(), parts) }, worker));
+  return printed;
+};
 
 if (target === "aliases") {
   if (
@@ -248,12 +259,11 @@ if (target === "aliases") {
     process.exit(0);
   }
   /** @type {LintPart[]} */
-  const linted = Array.from({ length: parts });
-  let next = 0;
-  const worker = async () => {
-    for (let index = next++; index < parts; index = next++) linted[index] = await startPart(index);
-  };
-  await Promise.all(Array.from({ length: Math.min(3, availableParallelism(), parts) }, worker));
+  const linted = await startParts(parts, (index) => [
+    "lint",
+    `${partFlag}${index}`,
+    ...(scopeFlag ? [scopeFlag] : [])
+  ]);
   for (const part of linted)
     for (const message of part.messages) report(message.rule, message.file, message.detail);
   const results = linted.flatMap((part) => part.files.map((filePath) => ({ filePath })));
@@ -425,47 +435,61 @@ if (target === "aliases") {
   };
   for (const file of sources) if (!order.has(file)) visit(file);
 } else if (target === "types:packages" || target === "types:tests") {
+  // Every file is checked by the program built for it: a package's source by its package's
+  // program, a test by the program of its part. A program reports the files it was built for
+  // and, of what they import, only the files no program is built for. Before, every program
+  // checked all it imported, so each part of the tests checked the source of most packages
+  // again, and each package the packages it depends on.
+  const packageConfigs = files.filter(
+    (file) =>
+      /^(?:packages|clients)\/[^/]+\/tsconfig\.json$/.test(file) &&
+      readJson(`${dirname(file)}/package.json`).scripts?.typecheck?.startsWith("tsc ")
+  );
+  // A repository without tests of its own has no tests configuration.
+  const tests =
+    target === "types:tests" || existsSync(resolve(root, "tsconfig.tests.json"))
+      ? parseProject("tsconfig.tests.json")
+      : undefined;
+  const parsedPackages = new Map(packageConfigs.map((config) => [config, parseProject(config)]));
+  const owned = new Set(
+    [
+      ...(tests?.fileNames ?? []),
+      ...[...parsedPackages.values()].flatMap((parsed) => parsed.fileNames)
+    ].map((file) => resolve(file))
+  );
   const ownTestPart = process.argv.find((argument) => argument.startsWith(testPartFlag));
-  if (target === "types:tests" && !ownTestPart) {
-    const parsed = parseProject("tsconfig.tests.json");
+  if (tests && target === "types:tests" && !ownTestPart) {
+    /** @type {Finding[][]} */
+    const parts = await startParts(
+      Math.ceil(tests.fileNames.length / testFilesPerProcess),
+      (index) => ["types:tests", `${testPartFlag}${index}`, ...(scopeFlag ? [scopeFlag] : [])]
+    );
     const seen = new Set();
-    for (let index = 0; index < Math.ceil(parsed.fileNames.length / testFilesPerProcess); index++) {
-      const result = run(
-        process.execPath,
-        [...process.execArgv, ...process.argv.slice(1), `${testPartFlag}${index}`],
-        [0]
-      );
-      /** @type {Finding[]} */
-      const part = JSON.parse(result.stdout);
-      for (const finding of part) {
-        const key = `${finding.file}:${finding.detail}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
-        findings.push(finding);
-      }
+    for (const finding of parts.flat()) {
+      const key = `${finding.file}:${finding.detail}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      findings.push(finding);
     }
   } else {
     const configs =
-      target === "types:tests"
-        ? ["tsconfig.tests.json"]
-        : files.filter(
-            (file) =>
-              inScope(file) &&
-              /^(?:packages|clients)\/[^/]+\/tsconfig\.json$/.test(file) &&
-              readJson(`${dirname(file)}/package.json`).scripts?.typecheck?.startsWith("tsc ")
-          );
+      target === "types:tests" ? ["tsconfig.tests.json"] : packageConfigs.filter(inScope);
     const seen = new Set();
     for (const config of configs) {
-      const parsed = parseProject(config);
+      const parsed = parsedPackages.get(config) ?? tests;
+      if (!parsed) throw new Error(`No compiler project for ${config}`);
       const index = ownTestPart ? Number(ownTestPart.slice(testPartFlag.length)) : undefined;
-      const roots =
+      const own =
         index === undefined
           ? parsed.fileNames
+          : parsed.fileNames.slice(index * testFilesPerProcess, (index + 1) * testFilesPerProcess);
+      // Declarations and globals change types in files that never import them, so every part
+      // of the tests has them, and reports them only in the part they belong to.
+      const roots =
+        index === undefined
+          ? own
           : [
-              ...parsed.fileNames.slice(
-                index * testFilesPerProcess,
-                (index + 1) * testFilesPerProcess
-              ),
+              ...own,
               ...parsed.fileNames.filter((file) => {
                 const source = readFileSync(file, "utf8");
                 return (
@@ -481,7 +505,17 @@ if (target === "aliases") {
         noUnusedLocals: true,
         noUnusedParameters: true
       });
-      for (const diagnostic of [...parsed.errors, ...ts.getPreEmitDiagnostics(program)]) {
+      const reported = new Set(own.map((file) => resolve(file)));
+      const diagnostics = [
+        ...parsed.errors,
+        ...program
+          .getSourceFiles()
+          .filter(
+            (file) => reported.has(resolve(file.fileName)) || !owned.has(resolve(file.fileName))
+          )
+          .flatMap((file) => ts.getPreEmitDiagnostics(program, file))
+      ];
+      for (const diagnostic of diagnostics) {
         const file = diagnostic.file?.fileName ?? config;
         const position = diagnostic.file?.getLineAndCharacterOfPosition(diagnostic.start ?? 0);
         const place = position ? `${position.line + 1}:${position.character + 1} ` : "";

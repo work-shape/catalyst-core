@@ -425,6 +425,26 @@ export const product = { namespaceId: "example" };
     }
   });
 
+  it("reports an imported file where it is checked, or where it is imported when nothing checks it", () => {
+    const packagesBefore = measure("types:packages");
+    const testsBefore = measure("types:tests");
+    // Alpha's package check owns its source; beta has no type check of its own.
+    const fixtures: Record<string, string> = {
+      "packages/beta/src/loose.ts": 'export const loose: number = "text";\n',
+      "tests/imports-alpha.test.ts": `export { wrong } from "../${source}/type-error";\n`,
+      "tests/imports-beta.test.ts": 'export { loose } from "../packages/beta/src/loose";\n'
+    };
+    try {
+      write(fixtures);
+      expect(measure("types:packages")).toEqual(packagesBefore);
+      expect(measure("types:tests")).toEqual(
+        [...testsBefore, "typescript/test-errors packages/beta/src/loose.ts"].sort()
+      );
+    } finally {
+      for (const file of Object.keys(fixtures)) rmSync(join(directory, file), { force: true });
+    }
+  });
+
   it("returns every finding when a test group writes more than a pipe buffer", () => {
     const file = "tests/many-errors.test.ts";
     try {

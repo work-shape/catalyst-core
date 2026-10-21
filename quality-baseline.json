@@ -394,34 +394,6 @@
       "owner": "EW-1"
     },
     {
-      "target": "types:tests",
-      "rule": "typescript/unused",
-      "scope": "clients/demo",
-      "count": 1,
-      "owner": "CB-8b"
-    },
-    {
-      "target": "types:tests",
-      "rule": "typescript/unused",
-      "scope": "packages/agent-runtime",
-      "count": 1,
-      "owner": "CB-7c"
-    },
-    {
-      "target": "types:tests",
-      "rule": "typescript/unused",
-      "scope": "packages/chat-ui",
-      "count": 4,
-      "owner": "G-5c"
-    },
-    {
-      "target": "types:tests",
-      "rule": "typescript/unused",
-      "scope": "packages/tool-execution",
-      "count": 2,
-      "owner": "EW-1"
-    },
-    {
       "target": "lint",
       "rule": "catalyst/duplicate-literal-list",
       "scope": "packages/api-contract",
