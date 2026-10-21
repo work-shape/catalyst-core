@@ -251,6 +251,52 @@ describe("the definitions a folder holds", () => {
     ).toContainEqual(["reference_out_of_scope", "steps.each"]);
   });
 
+  // Fails without the change (AGENT-FRICTION-1): the refusal said only what a schema may hold,
+  // not which key or which field of the author's schema was the fault.
+  it("names the field and the key of an agent output schema that no binding supports", () => {
+    const agentWith = (outputSchema: Record<string, unknown>) => {
+      const result = parseWorkflowManifest(
+        sample({
+          steps: [
+            trigger,
+            {
+              id: "check",
+              name: "Check",
+              type: "agent",
+              instructions: "check.md",
+              input: {},
+              inputSchema: { type: "object" },
+              outputSchema
+            },
+            output()
+          ]
+        })
+      );
+      return result.ok ? [] : result.issues.map(({ path, message }) => ({ path, message }));
+    };
+    expect(
+      agentWith({
+        type: "object",
+        properties: { code: { type: "string", pattern: "^[A-Z]+$" } }
+      })
+    ).toEqual([
+      {
+        path: "steps.check.outputSchema",
+        message: expect.stringContaining(
+          "'outputSchema.properties.code' has 'pattern', which an agent output schema does not support."
+        )
+      }
+    ]);
+    expect(
+      agentWith({ type: "object", properties: { list: { items: { type: "string" } } } })
+    ).toEqual([
+      {
+        path: "steps.check.outputSchema",
+        message: expect.stringContaining("'outputSchema.properties.list.type' is missing")
+      }
+    ]);
+  });
+
   it("checks both notify mappings against the same reference scope as every other step", () => {
     const notify = {
       id: "tell",

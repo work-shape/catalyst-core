@@ -201,6 +201,48 @@ describe("the action files of a Page", () => {
     ]);
   });
 
+  // Fails without the change (AGENT-FRICTION-1): a parameter with a key it does not take, such
+  // as `pattern`, was refused with "Invalid input", and the agent could not tell which key.
+  it("name a key of the input schema that a parameter does not take, with the keys it does", async () => {
+    const withSchema = (schema: string) =>
+      errorsOf(
+        page(
+          { connections: ["crm"], entry: "index.html" },
+          {
+            "actions/find.action.yaml": `connection: crm\noperation: find\neffect: reading\ninput:\n  schema:\n${schema}`
+          }
+        )
+      );
+    expect(
+      await withSchema(
+        "    type: object\n    properties:\n      code: { type: string, pattern: '^[A-Z]+$' }\n"
+      )
+    ).toEqual([
+      {
+        file: "actions/find.action.yaml",
+        code: "action_invalid",
+        message:
+          "'input.schema.properties.code' has the key 'pattern', which a parameter of type 'string' does not take. It takes 'type', 'description', 'format', 'minLength', 'maxLength' and 'enum'. An action checks no pattern: use 'enum' or 'format' (date or date-time), or check the text in the App's code."
+      }
+    ]);
+    expect(
+      await withSchema(
+        "    type: object\n    properties:\n      ids: { type: array, items: { type: integer, multipleOf: 2 } }\n"
+      )
+    ).toEqual([
+      expect.objectContaining({
+        message:
+          "'input.schema.properties.ids.items' has the key 'multipleOf', which a parameter of type 'integer' does not take. It takes 'type', 'description', 'minimum' and 'maximum'."
+      })
+    ]);
+    expect(await withSchema("    type: object\n    properties: {}\n    title: Find\n")).toEqual([
+      expect.objectContaining({
+        message:
+          "'input.schema' has the key 'title'. 'input.schema' takes 'type', 'properties', 'required' and 'additionalProperties', with each parameter under 'properties'."
+      })
+    ]);
+  });
+
   // Fails without the change: a YAML file of `actions/` with another ending was passed over, so
   // the action was missing at the first call, and a missing key read "expected string, received
   // undefined".

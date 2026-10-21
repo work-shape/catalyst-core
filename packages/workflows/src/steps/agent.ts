@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { agentOutputSchemaSupported } from "../agent-schema";
+import { agentOutputSchemaProblem } from "../agent-schema";
 import { namesDatasetType } from "../json";
 import {
   declared,
@@ -23,14 +23,15 @@ export const agentStep = {
     namesDatasetType(step.inputSchema)
       ? [notSupported(`${at}.inputSchema`, "a dataset in an agent input (EW-14)")]
       : [],
-  structural: (step: StepOf<"agent">, id: string) =>
-    agentOutputSchemaSupported(step.outputSchema)
+  structural: (step: StepOf<"agent">, id: string) => {
+    const problem = agentOutputSchemaProblem(step.outputSchema);
+    return problem === undefined
       ? []
       : [
           {
             path: `steps.${id}.outputSchema`,
-            message:
-              "An agent output schema supports named objects, arrays, strings, numbers, booleans, enums and required fields, without references or recursion"
+            message: `An agent output schema supports named objects, arrays, strings, numbers, booleans, enums and required fields, without references or recursion. ${problem}`
           }
-        ]
+        ];
+  }
 } satisfies StepModule<"agent">;

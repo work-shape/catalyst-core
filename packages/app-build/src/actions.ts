@@ -11,8 +11,10 @@ import {
   APP_ACTION_DESCRIPTION_MAX_CHARS,
   APP_ACTION_MAPPING_MAX_DEPTH,
   APP_ACTION_MAPPING_MAX_NODES,
+  APP_ACTION_INPUT_SCHEMA_KEYS,
   APP_ACTION_POLICY_VALUES,
   appActionInputSchemaSchema,
+  appActionParameterKeys,
   readMappingText,
   type AppActionInputSchema,
   type CompiledAppAction,
@@ -599,8 +601,53 @@ const ACTION_FILE_KEY_HINTS: Readonly<Record<string, string>> = {
     "'reading' or 'changing', as the operation was accepted on the Connection; an action file that starts a Workflow has 'workflow: <Workflow id>' in place of connection, operation and effect"
 };
 
+/** A list of keys as a sentence reads it: 'a', 'b' and 'c'. */
+function keyList(keys: readonly string[]): string {
+  const quoted = keys.map((key) => `'${key}'`);
+  return quoted.length > 1
+    ? `${quoted.slice(0, -1).join(", ")} and ${quoted[quoted.length - 1]}`
+    : (quoted[0] ?? "");
+}
+
+/** The value at `path` in what the file holds, or nothing where the path leads nowhere. */
+function valueAt(value: unknown, path: readonly PropertyKey[]): unknown {
+  let current = value;
+  for (const key of path) {
+    if (typeof current !== "object" || current === null || typeof key === "symbol") return;
+    current = Object.hasOwn(current, key) ? Reflect.get(current, key) : undefined;
+  }
+  return current;
+}
+
+/**
+ * Keys `input.schema` does not take, said with the keys it does: for the schema itself, or
+ * for one parameter of it by the parameter's type. Nothing for a key anywhere else.
+ */
+function describeInputSchemaKeys(
+  issue: z.core.$ZodIssueUnrecognizedKeys,
+  value: unknown
+): string | undefined {
+  const [input, schema, properties, name] = issue.path;
+  if (input !== "input" || schema !== "schema") return undefined;
+  const where = `'${issue.path.join(".")}'`;
+  const unknown = `${issue.keys.length > 1 ? "the keys" : "the key"} ${keyList(issue.keys)}`;
+  if (issue.path.length === 2) {
+    return `${where} has ${unknown}. 'input.schema' takes ${keyList(APP_ACTION_INPUT_SCHEMA_KEYS)}, with each parameter under 'properties'.`;
+  }
+  if (properties !== "properties" || typeof name !== "string") return undefined;
+  const type = valueAt(value, [...issue.path, "type"]);
+  const supported = appActionParameterKeys(type);
+  if (supported === undefined) return undefined;
+  const pattern = issue.keys.includes("pattern")
+    ? " An action checks no pattern: use 'enum' or 'format' (date or date-time), or check the text in the App's code."
+    : "";
+  return `${where} has ${unknown}, which a parameter of type '${String(type)}' does not take. It takes ${keyList(supported)}.${pattern}`;
+}
+
 function describeIssue(issue: z.core.$ZodIssue, keys: string, value: unknown): string {
   if (issue.code === "unrecognized_keys") {
+    const inSchema = describeInputSchemaKeys(issue, value);
+    if (inSchema !== undefined) return inSchema;
     const where = issue.path.length > 0 ? ` under '${issue.path.join(".")}'` : "";
     return `Unknown key${issue.keys.length > 1 ? "s" : ""} ${issue.keys.map((key) => `'${key}'`).join(", ")}${where}. ${keys}`;
   }

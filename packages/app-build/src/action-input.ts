@@ -49,15 +49,28 @@ const scalarParameter = z.discriminatedUnion("type", [
   z.strictObject({ type: z.literal("boolean"), description })
 ]);
 
-const parameter = z.union([
-  scalarParameter,
-  z.strictObject({
-    type: z.literal("array"),
-    description,
-    items: scalarParameter,
-    maxItems: z.number().int().min(0).optional()
-  })
-]);
+const arrayParameter = z.strictObject({
+  type: z.literal("array"),
+  description,
+  items: scalarParameter,
+  maxItems: z.number().int().min(0).optional()
+});
+
+// One union by `type`, so that a parameter of a known type with a key it does not take is
+// refused with that key, not with "Invalid input" for the union as a whole.
+const parameter = z.discriminatedUnion("type", [scalarParameter, arrayParameter]);
+
+/**
+ * The keys a parameter of `type` takes, or nothing for a type no parameter has. A key that is
+ * not listed, such as `pattern`, is refused: a pattern would be an author's expression run
+ * against every caller's text.
+ */
+export function appActionParameterKeys(type: unknown): readonly string[] | undefined {
+  const option = [...scalarParameter.options, arrayParameter].find(
+    (candidate) => candidate.shape.type.safeParse(type).success
+  );
+  return option && Object.keys(option.shape);
+}
 
 /**
  * What an action takes: named parameters that are text, numbers, booleans or lists of them.
@@ -74,6 +87,11 @@ export const appActionInputSchemaSchema = z.strictObject({
   required: z.array(parameterName).max(APP_ACTION_MAX_PARAMETERS).optional(),
   additionalProperties: z.literal(false).optional()
 });
+
+/** The keys of `input.schema` itself. */
+export const APP_ACTION_INPUT_SCHEMA_KEYS: readonly string[] = Object.keys(
+  appActionInputSchemaSchema.shape
+);
 
 export type AppActionInputSchema = z.infer<typeof appActionInputSchemaSchema>;
 
