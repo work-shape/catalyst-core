@@ -199,12 +199,15 @@ describe("catalog CLI commands", () => {
           ? { status: "ready", testedAt: new Date().toISOString() }
           : path.endsWith("/discover")
             ? { status: "queued" }
-            : { connections: [] }
+            : path.endsWith("/disconnect")
+              ? { state: "revoked", providerRevocation: "confirmed" }
+              : { connections: [] }
       );
     });
     for (const args of [
       ["connection", "test", "outside"],
       ["connection", "discover", "outside"],
+      ["connection", "disconnect", "outside"],
       ["connection", "tools"]
     ]) {
       const result = await run(args, { fetchImpl });
@@ -214,8 +217,44 @@ describe("catalog CLI commands", () => {
     expect(requests).toEqual([
       "POST /api/v1/connections/outside/test",
       "POST /api/v1/connections/outside/discover",
+      "POST /api/v1/connections/outside/disconnect",
       "GET /api/v1/connection-tools"
     ]);
+  });
+
+  it("stops waiting for a sign-in once it expired, and takes --no-browser only there", async () => {
+    const requests: string[] = [];
+    const opened: string[] = [];
+    const fetchImpl = apiFetch((request) => {
+      const path = new URL(request.url).pathname;
+      requests.push(`${request.method} ${path}`);
+      if (request.method === "GET") return Response.json(connectionDetail());
+      return Response.json({
+        authorizationUrl: "https://provider.test/authorize?state=s",
+        providerHost: "provider.test",
+        scopes: [],
+        expiresAt: new Date(Date.now() - 1).toISOString()
+      });
+    });
+    const result = await run(["connection", "connect", "outside"], {
+      fetchImpl,
+      openUrl: (address) => opened.push(address),
+      sleep: async () => {}
+    });
+    expect(result.code).toBe(1);
+    expect(result.out).toBe("");
+    expect(result.err).toContain("https://provider.test/authorize?state=s");
+    expect(result.err).toContain("was not completed before it expired");
+    expect(opened).toEqual(["https://provider.test/authorize?state=s"]);
+    expect(requests).toEqual([
+      "POST /api/v1/connections/outside/oauth/start",
+      "GET /api/v1/connections/outside",
+      "GET /api/v1/connections/outside"
+    ]);
+
+    const misplaced = await run(["connection", "test", "outside", "--no-browser"], { fetchImpl });
+    expect(misplaced.code).toBe(2);
+    expect(misplaced.err).toContain("--no-browser belongs to 'catalyst connection connect'");
   });
 });
 

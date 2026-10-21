@@ -1,7 +1,7 @@
 import { operationHelpText, runOperationCommand } from "../operation-commands";
 import type { CommandGroup } from "./types";
 
-const connectionVerbs = ["secret", "test", "discover", "tools"];
+const connectionVerbs = ["secret", "test", "discover", "tools", "connect", "disconnect"];
 export const operationsGroup: CommandGroup = {
   names: [
     "call",

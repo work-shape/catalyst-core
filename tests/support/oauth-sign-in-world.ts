@@ -207,7 +207,11 @@ export async function createOAuthWorld(): Promise<OAuthWorld> {
       sessionToken: { issuer: "embedding-host", ttlSeconds: 900 }
     },
     instance: { publicUrl: PUBLIC_URL },
-    modules: { connections: { enabled: true }, assetManagement: { enabled: true } },
+    modules: {
+      connections: { enabled: true },
+      assetManagement: { enabled: true },
+      personalApiKeys: { enabled: true }
+    },
     secretStore: { keys: [{ id: "k1", ref: "CATALYST_SECRET_STORE_KEY" }] },
     egress: {
       allow: [

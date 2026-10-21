@@ -689,6 +689,8 @@
         "3. The instance reads the tools the server offers. On the Connection's page, accept the operations agents may call. **Test connection** checks the address and the key.",
         "4. Give an agent the tools, as the next section says.",
         "",
+        "A build can ship further connector types with a form of their own, such as a document source a Knowledge Base syncs from. **New connection** offers each as a card beside **MCP server** and **REST API**. Its form asks for a name and the fields the type declares, with the secret hidden as it is typed; **Connect** saves the Connection, stores the secret and runs the type's test. A refused secret empties its field and says so; the Connection is saved already and waits for the right one. Such a Connection reads no tools, and its page shows its settings without changing them. The list of these types is the operation `connections.connector_types`, answered to a person who may change Connections (`connection.write`).",
+        "",
         "The rights this needs:",
         "",
         "| Step                                                                          | Right                                                                                                |",
@@ -1136,9 +1138,13 @@
         "catalyst connection test reporting",
         "catalyst connection discover reporting",
         "catalyst connection tools",
+        "catalyst connection connect reporting",
+        "catalyst connection disconnect reporting",
         "```",
         "",
         "`connection secret set <name>` reads stdin or asks at a terminal with echo disabled. The hidden prompt accepts one line; Enter submits it. Send multi-line secrets, such as PEM keys, through stdin (`catalyst connection secret set reporting < key.pem`). It accepts no secret argument, removes one final line ending from stdin, and prints only the secret state and version. It reads the current version before writing; a concurrent replacement is refused. A key without the required scope or right gets the same refusal as the API.",
+        "",
+        "`connection connect <name>` signs a Connection that uses OAuth in to its shared account. It starts the sign-in, opens the provider's page in your default browser and prints its address on stderr; `--no-browser` only prints it. Complete the sign-in in a browser where you are signed in to the instance as the person whose personal API key the CLI uses. The CLI waits until the Connection is connected, then prints the binding's state as JSON, never a token. A Service Principal's key is refused: a person chooses the account a Connection signs in to. If the sign-in expires first, the command exits 1; run it again. `connection disconnect <name>` ends the sign-in and revokes it at the provider.",
         "",
         "For multipart operations, the JSON input's `file` names a local upload path. Binary responses print JSON with `contentType` and `base64`; streaming operations print one JSON event per line."
       ]
