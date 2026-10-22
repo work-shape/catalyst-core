@@ -260,13 +260,20 @@ describe("the Settings tab of a Workflow (WF-EDIT-5)", () => {
     const inputs = required(container.querySelector("[data-workflow-inputs]"));
     await act(async () => required(button(inputs, uiLabelsEn.addField)).click());
     const added = required(inputs.querySelectorAll("[data-field-id]")[1]);
-    // A person gives the title; the key comes from it and shows only as a detail.
-    await type(input(added, uiLabelsEn.fieldTitle), "Client name");
-    expect(required(added.querySelector("[data-field-key]")).textContent).toContain("client_name");
     // A saved field keeps its key when its title changes: later steps read it by that key.
     const month = required(inputs.querySelectorAll("[data-field-id]")[0]);
     await type(input(month, uiLabelsEn.fieldTitle), "Billing month");
     expect(required(month.querySelector("[data-field-key]")).textContent).toContain("month");
+    // The new field's missing title is said at the first Save, not before, and nothing is saved.
+    const missing = t("workflows.settings.answerTitleMissing");
+    expect(added.textContent).not.toContain(missing);
+    await act(async () => save(container).click());
+    await settled(() => expect(added.textContent).toContain(missing));
+    expect(save(container).disabled).toBe(true);
+    expect(saves).toHaveLength(0);
+    // A person gives the title; the key comes from it and shows only as a detail.
+    await type(input(added, uiLabelsEn.fieldTitle), "Client name");
+    expect(required(added.querySelector("[data-field-key]")).textContent).toContain("client_name");
     await settled(() => expect(save(container).disabled).toBe(false));
     await act(async () => save(container).click());
     await settled(() => expect(saves).toHaveLength(1));

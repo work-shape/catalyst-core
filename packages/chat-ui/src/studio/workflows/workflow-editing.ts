@@ -202,6 +202,13 @@ export interface WorkflowEditing {
   /** The steps whose save is held back. */
   held: ReadonlySet<string>;
   /**
+   * Like `hold`, for a value the form lacks, such as a field with no title: the save is not
+   * held at once; its first Save says what lacks, as for a field of the step (WF-EDIT-4).
+   */
+  lack(step: string, key: string, lacking: boolean): void;
+  /** The steps the form says lack a value. */
+  lacking: ReadonlySet<string>;
+  /**
    * Whether the form says that a field of a step has no value yet: once the field was left, or
    * once a Save of the step was tried. A new step opens without a word against what it lacks.
    */
@@ -254,6 +261,7 @@ export function useWorkflowEditing(input: {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>();
   const [holds, setHolds] = useState<ReadonlySet<string>>(new Set());
+  const [lacks, setLacks] = useState<ReadonlySet<string>>(new Set());
   // `<step>\n<field>` for a field that was left, `<step>\n` once a Save of the step was tried.
   const [said, setSaid] = useState<ReadonlySet<string>>(new Set());
   const say = (entry: string) =>
@@ -403,6 +411,8 @@ export function useWorkflowEditing(input: {
           setEdits((current) => current.filter((edit) => !pending.includes(edit)));
           setConflicts([]);
           setIssues(NO_ISSUES);
+          // A saved step lacks nothing: a field added later opens without a word again.
+          setSaid(new Set());
           return;
         } catch (failure) {
           if (!isConflict(failure) || attempt > 0) throw failure;
@@ -511,7 +521,17 @@ export function useWorkflowEditing(input: {
     }
   };
 
-  const heldSteps = new Set([...holds].map((key) => key.slice(0, key.indexOf("\n"))));
+  const stepsOf = (entries: ReadonlySet<string>) =>
+    new Set([...entries].map((key) => key.slice(0, key.indexOf("\n"))));
+  const ofOtherSteps = (step: string) => (before: ReadonlySet<string>) =>
+    new Set([...before].filter((key) => !key.startsWith(`${step}\n`)));
+  const toggle = (entry: string, on: boolean) => (before: ReadonlySet<string>) => {
+    if (before.has(entry) === on) return before;
+    const next = new Set(before);
+    if (on) next.add(entry);
+    else next.delete(entry);
+    return next;
+  };
 
   return {
     workspaceId: input.workspaceId,
@@ -549,23 +569,17 @@ export function useWorkflowEditing(input: {
     },
     cancel: (step) => {
       setEdits((before) => before.filter((edit) => edit.step !== step));
-      setHolds((before) => new Set([...before].filter((key) => !key.startsWith(`${step}\n`))));
-      setSaid((before) => new Set([...before].filter((key) => !key.startsWith(`${step}\n`))));
+      setHolds(ofOtherSteps(step));
+      setLacks(ofOtherSteps(step));
+      setSaid(ofOtherSteps(step));
       setConflicts((before) => before.filter((c) => c.step !== step));
       setIssues(NO_ISSUES);
       setError(undefined);
     },
-    hold: (step, key, held) => {
-      const entry = `${step}\n${key}`;
-      setHolds((before) => {
-        if (before.has(entry) === held) return before;
-        const next = new Set(before);
-        if (held) next.add(entry);
-        else next.delete(entry);
-        return next;
-      });
-    },
-    held: heldSteps,
+    hold: (step, key, held) => setHolds(toggle(`${step}\n${key}`, held)),
+    held: stepsOf(holds),
+    lack: (step, key, lacking) => setLacks(toggle(`${step}\n${key}`, lacking)),
+    lacking: stepsOf(lacks),
     saysMissing: (step, field) => said.has(`${step}\n`) || said.has(`${step}\n${field}`),
     leave: (step, field) => say(`${step}\n${field}`),
     trySave: (step) => say(`${step}\n`),

@@ -16,18 +16,13 @@ import {
   rowsOf,
   type MappingRow
 } from "./mapping-rows";
-import {
-  fieldListProblems,
-  fieldsSchema,
-  schemaFields,
-  withKeys,
-  type AnswerFieldKind
-} from "./schema-fields";
+import { fieldsSchema, schemaFields, withKeys, type AnswerFieldKind } from "./schema-fields";
 import { findStep, sameValue, WORKFLOW_FIELDS } from "./step-edits";
 import { ToolsPicker } from "./operation-picker";
 import { useCallableOperations } from "./workflow-data";
 import {
-  fieldListErrors,
+  fieldListState,
+  leftField,
   fieldWords,
   isRecord,
   type KindProps,
@@ -93,15 +88,22 @@ function AnswerFields({
       </div>
     );
   }
-  const problems = fieldListProblems(items);
-  const errors = fieldListErrors(problems, t);
+  const field = (id: string) => `answers.${id}`;
+  const state = fieldListState(items, (id) => editing.saysMissing(stepId, field(id)), t);
   return (
-    <div className="grid gap-2" data-step-answers="">
+    <div
+      className="grid gap-2"
+      data-step-answers=""
+      onBlur={(event) => {
+        const left = leftField(event.target);
+        if (left !== undefined) editing.leave(stepId, field(left));
+      }}
+    >
       <FieldListEditor
         label={t("workflows.settings.answers")}
         value={items}
         kinds={answerKinds(t)}
-        errors={errors}
+        errors={state.errors}
         error={issue("outputSchema")}
         titled
         keyHint={t("workflows.settings.answerKeyHint")}
@@ -109,7 +111,9 @@ function AnswerFields({
           const next = withKeys(changed, findStep(editing.saved, stepId)?.outputSchema);
           const written = fieldsSchema(next, schema);
           setShown({ schema: written, items: next });
-          editing.hold(stepId, "answers", Object.keys(fieldListProblems(next)).length > 0);
+          const now = fieldListState(next, () => false, t);
+          editing.hold(stepId, "answers", now.held);
+          editing.lack(stepId, "answers", now.lacking);
           if (!sameValue(written, schema)) set({ outputSchema: written });
         }}
       />

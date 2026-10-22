@@ -319,6 +319,7 @@ export function StepSettingsBar({ stepId, editing }: { stepId: string; editing: 
   const held = editing.held.has(stepId);
   // A value missing is said at the first Save, or once its field was left.
   const incomplete =
+    editing.lacking.has(stepId) ||
     (step?.type === "operation" &&
       (text(step.operation) === "" ||
         missingInputs(

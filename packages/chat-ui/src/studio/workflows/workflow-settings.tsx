@@ -19,10 +19,10 @@ import {
 import { useTranslation, type TranslationContextValue } from "../../shared/i18n";
 import { cronSchedule, scheduleCron } from "./schedule-cron";
 import { scheduleInWords, withZone } from "./schedule-words";
-import { fieldListProblems, fieldsSchema, schemaFields, withKeys } from "./schema-fields";
+import { fieldsSchema, schemaFields, withKeys } from "./schema-fields";
 import { useStartRun } from "./start-run";
 import { sameValue, WORKFLOW_FIELDS, type WorkflowManifest } from "./step-edits";
-import { fieldListErrors } from "./step-settings-parts";
+import { fieldListState, leftField } from "./step-settings-parts";
 import { useRunsAvailable, useWorkflow, type WorkflowReadProblem } from "./workflow-data";
 import {
   useEditWithAgent,
@@ -551,15 +551,26 @@ function StartFields({
       </section>
     );
   }
-  const problems = fieldListProblems(shown.items);
-  const errors = fieldListErrors(problems, t);
+  const field = (id: string) => `inputs.${id}`;
+  const state = fieldListState(
+    shown.items,
+    (id) => editing?.saysMissing(WORKFLOW_FIELDS, field(id)) ?? false,
+    t
+  );
   return (
-    <section className="grid gap-2" data-workflow-inputs="">
+    <section
+      className="grid gap-2"
+      data-workflow-inputs=""
+      onBlur={(event) => {
+        const left = leftField(event.target);
+        if (left !== undefined) editing?.leave(WORKFLOW_FIELDS, field(left));
+      }}
+    >
       <FieldListEditor
         label={label}
         value={shown.items}
         kinds={inputKinds(t)}
-        errors={errors}
+        errors={state.errors}
         readOnly={editing === undefined}
         titled
         keyHint={t("workflows.workflowSettings.asksKeyHint")}
@@ -567,7 +578,9 @@ function StartFields({
           const next = withKeys(changed, editing?.saved.inputs);
           const written = fieldsSchema(next, schema);
           setShown({ schema: written, items: next });
-          editing?.hold(WORKFLOW_FIELDS, "inputs", Object.keys(fieldListProblems(next)).length > 0);
+          const now = fieldListState(next, () => false, t);
+          editing?.hold(WORKFLOW_FIELDS, "inputs", now.held);
+          editing?.lack(WORKFLOW_FIELDS, "inputs", now.lacking);
           if (!sameValue(written, schema)) set({ inputs: written });
         }}
       />
@@ -592,18 +605,29 @@ function WorkflowSettingsBar({
   const { t } = useTranslation();
   const steps = [WORKFLOW_FIELDS, ...(triggerId === "" ? [] : [triggerId])];
   const name = text(editing.manifest.name);
+  // A start field without a title is said at the first Save, or once it was left.
+  const lacking = editing.lacking.has(WORKFLOW_FIELDS);
   return (
     <SaveBar
       label={t("workflows.settings.save")}
       dirty={steps.some((step) => editing.unsaved.has(step))}
       whenClean="hidden"
       saving={editing.saving}
-      disabled={incomplete || name.trim() === "" || steps.some((step) => editing.held.has(step))}
+      disabled={
+        incomplete ||
+        name.trim() === "" ||
+        steps.some((step) => editing.held.has(step)) ||
+        (lacking && editing.saysMissing(WORKFLOW_FIELDS, ""))
+      }
       discardLabel={t("workflows.settings.cancel")}
       onDiscard={() => {
         for (const step of steps) editing.cancel(step);
       }}
       onSave={() => {
+        if (lacking) {
+          editing.trySave(WORKFLOW_FIELDS);
+          return;
+        }
         // A save says what went wrong on the form itself.
         editing.save().catch(() => undefined);
       }}

@@ -819,6 +819,9 @@ describe("FieldListEditor", () => {
     expect(Array.from(field.querySelectorAll("label")).map((label) => label.textContent)).toContain(
       "Title"
     );
+    // A field without a title yet is called by its place in the list.
+    input('[data-field-id="a"] input', "");
+    expect(field.querySelector("legend")?.textContent).toBe("Field 1");
   });
 });
 

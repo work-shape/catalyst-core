@@ -181,8 +181,9 @@ export function FieldListEditor({
       <div className="grid min-w-0 gap-3">
         {items.map((item, index) => {
           const kind = allowedKinds.find((candidate) => candidate.value === item.kind);
-          const name =
-            (titled ? item.title : undefined) || item.name || `${labels.fieldName} ${index + 1}`;
+          const name = titled
+            ? item.title || `${labels.field} ${index + 1}`
+            : item.name || `${labels.fieldName} ${index + 1}`;
           return (
             <fieldset
               key={item.id}

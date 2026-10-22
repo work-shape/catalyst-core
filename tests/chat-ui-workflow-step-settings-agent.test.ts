@@ -231,11 +231,17 @@ describe("the Settings of an AI step and of a script (WF-EDIT-2)", () => {
     await type(control(container, t("workflows.settings.instructions")), "Write one line.");
     const answers = required(container.querySelector("[data-step-answers]"));
     await act(async () => button(answers, uiLabelsEn.addField).click());
-    // A field with no title holds the save back.
-    await settled(() =>
-      expect(button(container, t("workflows.settings.save")).disabled).toBe(true)
-    );
     const added = required(answers.querySelectorAll("[data-field-id]")[1]);
+    // A new field opens without a word against its missing title (WF-EDIT-4's rule): the
+    // first Save says it and saves nothing; after that Save waits for the title.
+    expect(added.textContent).not.toContain(t("workflows.settings.answerTitleMissing"));
+    expect(button(container, t("workflows.settings.save")).disabled).toBe(false);
+    await act(async () => button(container, t("workflows.settings.save")).click());
+    await settled(() =>
+      expect(added.textContent).toContain(t("workflows.settings.answerTitleMissing"))
+    );
+    expect(button(container, t("workflows.settings.save")).disabled).toBe(true);
+    expect(saves).toHaveLength(0);
     await type(control(added, uiLabelsEn.fieldTitle), "Short summary");
     // Its key comes from the title, with the hint that later steps read the field by it.
     const key = required(added.querySelector("[data-field-key]")).textContent;
@@ -260,6 +266,20 @@ describe("the Settings of an AI step and of a script (WF-EDIT-2)", () => {
     });
     // The files of the draft are saved as they were.
     expect(saves[0]?.config.files).toEqual(initial.files);
+  });
+
+  it("says a new answer field's missing title once the field is left", async () => {
+    const container = await mount(sourceOf([]), "summary");
+    await settled(() => expect(container.querySelector("[data-step-answers]")).not.toBeNull());
+    const answers = required(container.querySelector("[data-step-answers]"));
+    await act(async () => button(answers, uiLabelsEn.addField).click());
+    const added = required(answers.querySelectorAll("[data-field-id]")[1]);
+    const title = control(added, uiLabelsEn.fieldTitle);
+    expect(added.textContent).not.toContain(t("workflows.settings.answerTitleMissing"));
+    await act(async () => {
+      title.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
+    });
+    expect(added.textContent).toContain(t("workflows.settings.answerTitleMissing"));
   });
 
   it("refuses to save an AI step without instructions, and says so once the field is left", async () => {

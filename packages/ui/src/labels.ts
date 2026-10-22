@@ -13,6 +13,8 @@ export interface UiLabels {
   chooseValue: string;
   fieldName: string;
   fieldTitle: string;
+  /** A field of a list that has no title yet, before its number. */
+  field: string;
   fieldKey: string;
   fieldKind: string;
   fieldDescription: string;
@@ -129,6 +131,7 @@ export const uiLabelsEn: UiLabels = {
   chooseValue: "Choose a value",
   fieldName: "Name",
   fieldTitle: "Title",
+  field: "Field",
   fieldKey: "Key",
   fieldKind: "Kind",
   fieldDescription: "Description",
@@ -220,6 +223,7 @@ export const uiLabelsDe: UiLabels = {
   chooseValue: "Wert auswählen",
   fieldName: "Name",
   fieldTitle: "Titel",
+  field: "Feld",
   fieldKey: "Schlüssel",
   fieldKind: "Art",
   fieldDescription: "Beschreibung",

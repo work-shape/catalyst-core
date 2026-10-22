@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { useTranslation } from "../../shared/i18n";
-import type { fieldListProblems } from "./schema-fields";
+import type { FieldListItem } from "@work-shape/catalyst-ui";
+import { fieldListProblems } from "./schema-fields";
 import type { WorkflowEditing } from "./workflow-editing";
 
 // What the forms of the kinds of step in a step's Settings tab share (workflow-canvas 9.4).
@@ -39,20 +40,44 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-/** What a list of fields says against each field that cannot be saved yet, by field id. */
-export function fieldListErrors(problems: ReturnType<typeof fieldListProblems>, t: Translate) {
-  return Object.fromEntries(
-    Object.entries(problems).map(([id, problem]) => [
+/**
+ * What a list of fields says and holds (WF-EDIT-4): a key twice holds the save and is said at
+ * once; a missing title or choice is said once the field was left or a Save was tried, and
+ * lets the first Save say it.
+ */
+export function fieldListState(
+  items: readonly FieldListItem[],
+  says: (id: string) => boolean,
+  t: Translate
+) {
+  const problems = fieldListProblems(items);
+  const entries = Object.entries(problems);
+  const errors = Object.fromEntries(
+    entries.map(([id, problem]) => [
       id,
       {
-        ...(problem.title === undefined
+        ...(problem.title === undefined || !says(id)
           ? {}
           : { title: t("workflows.settings.answerTitleMissing") }),
         ...(problem.name === undefined ? {} : { name: t("workflows.settings.answerNameTaken") }),
-        ...(problem.choices === undefined
+        ...(problem.choices === undefined || !says(id)
           ? {}
           : { choices: t("workflows.settings.answerChoicesMissing") })
       }
     ])
   );
+  return {
+    errors,
+    held: entries.some(([, problem]) => problem.name !== undefined),
+    lacking: entries.some(
+      ([, problem]) => problem.title !== undefined || problem.choices !== undefined
+    )
+  };
+}
+
+/** The field of a list whose control lost the focus, for `WorkflowEditing.leave`. */
+export function leftField(target: EventTarget): string | undefined {
+  return target instanceof Element
+    ? (target.closest("[data-field-id]")?.getAttribute("data-field-id") ?? undefined)
+    : undefined;
 }
