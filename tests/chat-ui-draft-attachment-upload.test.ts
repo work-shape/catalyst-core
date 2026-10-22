@@ -15,7 +15,7 @@ import {
   isAbandonedDraftConversation,
   terminalRunNotice
 } from "./support/chat-ui";
-import { createTranslationContext } from "@work-shape/catalyst-chat-ui";
+import { createTranslationContext } from "./support/chat-ui/shared";
 
 const file = () => new File(["content"], "Perso.pdf", { type: "application/pdf" });
 const { t } = createTranslationContext("de");

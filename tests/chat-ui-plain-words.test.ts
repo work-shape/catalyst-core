@@ -8,7 +8,7 @@ import { createRoot } from "react-dom/client";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
 import type { AuditActivity, AuditEvent } from "@work-shape/catalyst-api-client";
-import { TranslationProvider } from "@work-shape/catalyst-chat-ui";
+import { TranslationProvider } from "./support/chat-ui/shared";
 import { AuditView } from "@work-shape/catalyst-chat-ui/control-plane";
 import { EVENTS } from "@work-shape/catalyst-core";
 import { UiRoot, uiLabelsDe } from "@work-shape/catalyst-ui";

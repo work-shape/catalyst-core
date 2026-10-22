@@ -1,6 +1,6 @@
 import { createElement, type ReactNode } from "react";
 import { expect, it } from "vitest";
-import { createTranslationContext } from "@work-shape/catalyst-chat-ui";
+import { createTranslationContext } from "./support/chat-ui/shared";
 import { CancelRunDialog } from "@work-shape/catalyst-chat-ui/workflows";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 

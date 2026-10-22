@@ -25,7 +25,7 @@ import {
   type SignInCalls,
   type SignInLanding
 } from "@work-shape/catalyst-chat-ui/build-area";
-import { useTranslation } from "@work-shape/catalyst-chat-ui";
+import { useTranslation } from "./support/chat-ui/shared";
 import { UiRoot, uiLabelsEn } from "@work-shape/catalyst-ui";
 import { connectionDetail } from "./chat-ui-connection-fixtures";
 import { TranslationProvider } from "./chat-ui-render-harness";

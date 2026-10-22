@@ -5,7 +5,7 @@ import { act, createElement, useCallback, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ApprovalRequestView } from "@work-shape/catalyst-api-client";
-import { TranslationProvider } from "@work-shape/catalyst-chat-ui";
+import { TranslationProvider } from "./support/chat-ui/shared";
 import { UiRoot, uiLabelsEn } from "@work-shape/catalyst-ui";
 import { item } from "./chat-ui-inbox-harness";
 import {

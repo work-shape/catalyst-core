@@ -6,7 +6,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { APP_BRIDGE_MARK, APP_BRIDGE_VERSION, type ApiUser } from "@work-shape/catalyst-api-client";
-import { TranslationProvider } from "@work-shape/catalyst-chat-ui";
+import { TranslationProvider } from "./support/chat-ui/shared";
 import { PageHostProvider } from "@work-shape/catalyst-chat-ui/pages";
 import { UiRoot, uiLabelsEn } from "@work-shape/catalyst-ui";
 import {

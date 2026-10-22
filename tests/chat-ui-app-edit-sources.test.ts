@@ -5,7 +5,7 @@ import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { apiOperations } from "@work-shape/catalyst-api-contract";
-import { TranslationProvider } from "@work-shape/catalyst-chat-ui";
+import { TranslationProvider } from "./support/chat-ui/shared";
 import {
   AppEdit,
   AppsHostProvider,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createTranslationContext } from "@work-shape/catalyst-chat-ui";
+import { createTranslationContext } from "./support/chat-ui/shared";
 import { WORKFLOW_MAX_BLOCK_DEPTH } from "@work-shape/catalyst-core";
 import {
   countsLine,

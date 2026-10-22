@@ -5,5 +5,10 @@ import base from "./vitest.config";
 // that release's migrations from its tag, so it runs beside the suite instead of inside it.
 export default defineConfig({
   ...base,
-  test: { ...base.test, include: ["tests/upgrade/**/*.upgrade.ts"] }
+  test: {
+    ...base.test,
+    projects: undefined,
+    globalSetup: ["tests/support/postgres-global-setup.ts"],
+    include: ["tests/upgrade/**/*.upgrade.ts"]
+  }
 });

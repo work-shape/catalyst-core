@@ -1,7 +1,7 @@
 import { createElement, type ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 import { appAudienceSchema } from "@work-shape/catalyst-api-contract";
-import { createTranslationContext } from "@work-shape/catalyst-chat-ui";
+import { createTranslationContext } from "./support/chat-ui/shared";
 import {
   appManifestSummary,
   appPublishCall,

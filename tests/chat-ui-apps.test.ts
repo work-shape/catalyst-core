@@ -6,7 +6,7 @@ import {
   type ConfigAssetRevision
 } from "@work-shape/catalyst-api-client";
 import { describe, expect, it } from "vitest";
-import { createTranslationContext } from "@work-shape/catalyst-chat-ui";
+import { createTranslationContext } from "./support/chat-ui/shared";
 import {
   AppDeleteDialog,
   appDraftIsAhead,

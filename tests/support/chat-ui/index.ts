@@ -16,6 +16,7 @@ export * from "./chat-subagents";
 export * from "./chat-surface";
 export * from "./chat-tools";
 export * from "./chat-workspace";
+export * from "./chat-views";
 export * from "./public";
 export * from "./root";
 export * from "./shared";

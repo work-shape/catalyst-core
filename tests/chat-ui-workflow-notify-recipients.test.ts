@@ -2,7 +2,7 @@ import { createElement, type ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createApiClient } from "@work-shape/catalyst-api-client";
 import { describe, expect, it } from "vitest";
-import { createTranslationContext } from "@work-shape/catalyst-chat-ui";
+import { createTranslationContext } from "./support/chat-ui/shared";
 import {
   StepPanel,
   WorkflowsHostProvider,

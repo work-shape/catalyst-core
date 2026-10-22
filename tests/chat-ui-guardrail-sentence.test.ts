@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { GUARDRAIL_EVENTS } from "@work-shape/catalyst-core";
-import { createTranslationContext } from "@work-shape/catalyst-chat-ui";
+import { createTranslationContext } from "./support/chat-ui/shared";
 import {
   guardrailRunSentence,
   type GuardrailRunFacts

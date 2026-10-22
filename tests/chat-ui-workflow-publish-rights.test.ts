@@ -1,7 +1,7 @@
 import { createElement, type ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 import { ApiError } from "@work-shape/catalyst-api-client";
-import { createTranslationContext } from "@work-shape/catalyst-chat-ui";
+import { createTranslationContext } from "./support/chat-ui/shared";
 import {
   RightsLacking,
   createInstanceSource,

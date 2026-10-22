@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createTranslationContext } from "@work-shape/catalyst-chat-ui";
+import { createTranslationContext } from "./support/chat-ui/shared";
 import { demoCompany } from "@work-shape/catalyst-demo/seed";
 
 // ACCEPT-1c: asked for a personal reminder, the demo's agent named it `hr-weekly-document-reminder`.

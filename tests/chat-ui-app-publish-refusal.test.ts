@@ -1,6 +1,6 @@
 import { ApiError } from "@work-shape/catalyst-api-client";
 import { describe, expect, it } from "vitest";
-import { createTranslationContext } from "@work-shape/catalyst-chat-ui";
+import { createTranslationContext } from "./support/chat-ui/shared";
 import { appPublishRefusal } from "@work-shape/catalyst-chat-ui/apps";
 
 // DP-0: a publish of an App whose Workflow is not live, or whose action does not fit that

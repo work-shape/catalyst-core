@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { UsageSummary } from "@work-shape/catalyst-api-client";
 import { UsageView } from "@work-shape/catalyst-chat-ui/control-plane";
-import { TranslationProvider } from "@work-shape/catalyst-chat-ui";
+import { TranslationProvider } from "./support/chat-ui/shared";
 import { createApiClient } from "@work-shape/catalyst-api-client";
 import { administration } from "@work-shape/catalyst-chat-ui/admin";
 import { resolveInstanceModules } from "@work-shape/catalyst-client-assembly";

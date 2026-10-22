@@ -2,7 +2,7 @@ import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { AdministeredUser } from "@work-shape/catalyst-api-client";
-import { TranslationProvider } from "@work-shape/catalyst-chat-ui";
+import { TranslationProvider } from "./support/chat-ui/shared";
 import { UiRoot, uiLabelsDe } from "@work-shape/catalyst-ui";
 import {
   UserAdministrationPanel,

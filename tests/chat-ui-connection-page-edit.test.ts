@@ -4,7 +4,7 @@ import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ConnectionDetail } from "@work-shape/catalyst-api-client";
 import { apiOperations } from "@work-shape/catalyst-api-contract";
-import { createTranslationContext } from "@work-shape/catalyst-chat-ui";
+import { createTranslationContext } from "./support/chat-ui/shared";
 import {
   buildAssetKinds,
   listedHealth,

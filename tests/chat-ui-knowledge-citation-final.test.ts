@@ -6,7 +6,7 @@ import { AssistantRuntimeProvider, ThreadPrimitive } from "@assistant-ui/react";
 import { useChatRuntime } from "@assistant-ui/react-ai-sdk";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Message } from "@work-shape/catalyst-api-client";
-import { TranslationProvider } from "@work-shape/catalyst-chat-ui";
+import { TranslationProvider } from "./support/chat-ui/shared";
 import {
   createAssistantFinalMetadata,
   createAssistantToolCallsMetadata,

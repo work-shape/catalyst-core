@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { createElement, createRef } from "react";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { createTranslationContext } from "@work-shape/catalyst-chat-ui";
+import { createTranslationContext } from "./support/chat-ui/shared";
 import {
   readBuildRefusal,
   SkillEditor,

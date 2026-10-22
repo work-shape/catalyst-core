@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createTranslationContext } from "@work-shape/catalyst-chat-ui";
+import { createTranslationContext } from "./support/chat-ui/shared";
 
 // ACCEPT-FIX-10 B1: the guardrails page said further guardrails are written "with the CLI or the
 // Build Agent", but the Build Agent cannot write one. The page names only the way that works.

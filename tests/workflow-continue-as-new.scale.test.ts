@@ -1,8 +1,9 @@
 import { afterEach, expect, it } from "vitest";
 import type { WorkflowStep } from "@work-shape/catalyst-core";
 import { clientInstanceId } from "./support/access-instance";
-import type { WorkflowFixture } from "./support/workflow-instance";
-import { start, stepRunsOf, writesOf } from "./support/workflow-runs";
+import { type WorkflowFixture, publishedDefinitions } from "./support/workflow-instance";
+import { MemoryObjectStorage } from "./support/memory-object-storage";
+import { readyWorkflows, start, stepRunsOf, writesOf } from "./support/workflow-runs";
 import {
   definition,
   finishChain,
@@ -179,6 +180,71 @@ it.each(Array.from({ length: 16 }, (_, offset) => 8 + offset))(
     const last = chain.at(-1);
     if (!last) throw new Error("Missing final history");
     expect(await t.stores.workflowRuns.readRunOutput({ clientInstanceId, id: last.id })).toEqual({
+      value: { sent: 3, failed: 0 }
+    });
+  }
+);
+
+async function ready(manifest: unknown) {
+  const definitions = publishedDefinitions();
+  definitions.publish(manifest);
+  const t = await readyWorkflows(
+    (fixture) => {
+      open = fixture;
+    },
+    {
+      definitions: definitions.source,
+      datasetObjects: new MemoryObjectStorage()
+    }
+  );
+  return { t, definitions };
+}
+
+it.each(
+  [1, 3, 8].flatMap((concurrency) => [7, 10, 12, 16].map((budget) => ({ concurrency, budget })))
+)(
+  "checkpoints nested items once at outer concurrency $concurrency and budget $budget",
+  chainRun,
+  async ({ concurrency, budget }) => {
+    const manifest = definition();
+    const before = {
+      id: "before",
+      name: "Before inner",
+      type: "operation",
+      operation: "connection.crm.write",
+      input: { client: { ref: { step: "each_client", path: "id" } }, phase: { value: "before" } }
+    };
+    const inner = {
+      id: "inner",
+      name: "Inner",
+      type: "loop",
+      items: { step: "clients", path: "clients" },
+      steps: [
+        {
+          id: "pair",
+          name: "Write pair",
+          type: "operation",
+          operation: "connection.crm.write",
+          input: {
+            client: { ref: { step: "each_client", path: "id" } },
+            inner: { ref: { step: "inner", path: "id" } }
+          }
+        }
+      ]
+    };
+    manifest.steps = manifest.steps.map((step) =>
+      step.id === "each_client" ? { ...step, concurrency, steps: [before, inner] } : step
+    );
+    const { t } = await ready({ ...manifest, limits: { stepRuns: budget } });
+    await start(t);
+    const chain = await finishChain(t);
+    expect(chain.some((run) => run.status === "done")).toBe(true);
+    expect(chain.every((run) => run.status === "continued" || run.status === "done")).toBe(true);
+    expect(writesOf(t)).toHaveLength(12);
+    expect(new Set(writesOf(t).map((write) => JSON.stringify(write))).size).toBe(12);
+    const final = chain.find((run) => run.status === "done");
+    if (!final) throw new Error("Missing final nested history");
+    expect(await t.stores.workflowRuns.readRunOutput({ clientInstanceId, id: final.id })).toEqual({
       value: { sent: 3, failed: 0 }
     });
   }

@@ -8,7 +8,7 @@ import type {
   CollaborationWorkspaceWithRole
 } from "@work-shape/catalyst-api-client";
 import { safeConfigSchema } from "@work-shape/catalyst-api-contract";
-import { TranslationProvider } from "@work-shape/catalyst-chat-ui";
+import { TranslationProvider } from "./support/chat-ui/shared";
 import {
   SettingsPageProvider,
   type SettingsPageContextValue

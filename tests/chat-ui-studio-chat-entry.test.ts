@@ -3,7 +3,7 @@
 import { act, createElement, useState, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createTranslationContext, TranslationProvider } from "@work-shape/catalyst-chat-ui";
+import { createTranslationContext, TranslationProvider } from "./support/chat-ui/shared";
 import {
   DockCreationScopeProvider,
   DockPageChatProvider,

@@ -6,6 +6,8 @@ export default defineConfig({
   ...base,
   test: {
     ...base.test,
+    projects: undefined,
+    globalSetup: ["tests/support/postgres-global-setup.ts"],
     include: ["tests/data-store-chat.live.ts"],
     testTimeout: 600_000,
     hookTimeout: 60_000,

@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
-import { composeViewDocument, viewRuntimeAddress } from "@work-shape/catalyst-chat-ui";
+import { composeViewDocument, viewRuntimeAddress } from "./support/chat-ui/chat-views";
 import { uiConfigSchema } from "@work-shape/catalyst-config-schema";
 import {
   contrastRatio,

@@ -1,6 +1,6 @@
 import { createElement } from "react";
 import { describe, expect, it } from "vitest";
-import { createTranslationContext } from "@work-shape/catalyst-chat-ui";
+import { createTranslationContext } from "./support/chat-ui/shared";
 import {
   WorkflowRunsPageView,
   toWorkflow,

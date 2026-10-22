@@ -3,7 +3,7 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { TranslationProvider } from "@work-shape/catalyst-chat-ui";
+import { TranslationProvider } from "./support/chat-ui/shared";
 import { ToolCallPart, ToolSubjectsProvider } from "@work-shape/catalyst-chat-ui/tool-call";
 import { ToolDisplayPanelProvider } from "@work-shape/catalyst-chat-ui/tool-display-panel";
 import { UiRoot, uiLabelsEn } from "@work-shape/catalyst-ui";

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { htmlTitle } from "@work-shape/catalyst-app-build";
-import { createTranslationContext } from "@work-shape/catalyst-chat-ui";
+import { createTranslationContext } from "./support/chat-ui/shared";
 import { saveAsAppInput } from "@work-shape/catalyst-chat-ui/apps";
 import { pageSurface, readPageSave } from "@work-shape/catalyst-chat-ui/pages";
 import {

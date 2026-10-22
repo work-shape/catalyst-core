@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createTranslationContext } from "@work-shape/catalyst-chat-ui";
+import { createTranslationContext } from "./support/chat-ui/shared";
 import { createInstanceSource, workflowGraph } from "@work-shape/catalyst-chat-ui/workflows";
 import { recordedApiClient } from "./support/recorded-api-client";
 const signal = new AbortController().signal;

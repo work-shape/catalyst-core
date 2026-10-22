@@ -8,7 +8,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { apiOperations } from "@work-shape/catalyst-api-contract";
 import type { Message } from "@work-shape/catalyst-api-client";
-import { TranslationProvider } from "@work-shape/catalyst-chat-ui";
+import { TranslationProvider } from "./support/chat-ui/shared";
 import { createAssistantFinalMetadata } from "@work-shape/catalyst-core";
 import { UiRoot, uiLabelsEn } from "@work-shape/catalyst-ui";
 import {

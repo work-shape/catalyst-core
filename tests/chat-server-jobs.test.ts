@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createChatServerJobs, generateConversationTitleJob } from "@work-shape/catalyst-server";
 import { createJobWorker } from "@work-shape/catalyst-client-assembly";
-import { createTranslationContext } from "@work-shape/catalyst-chat-ui";
+import { createTranslationContext } from "./support/chat-ui/shared";
 import {
   ATTACHED_FILE_TITLES,
   asClientInstanceId,

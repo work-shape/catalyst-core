@@ -29,7 +29,12 @@ export {
   readStoredContextIndicatorPreference,
   writeStoredContextIndicatorPreference
 } from "../../../packages/chat-ui/src/shared/workspace-utils";
-export { useDocumentLanguage } from "../../../packages/chat-ui/src/shared/i18n";
+export {
+  createTranslationContext,
+  TranslationProvider,
+  useTranslation,
+  useDocumentLanguage
+} from "../../../packages/chat-ui/src/shared/i18n";
 export {
   narrativeHolds,
   parsePublishNarrative,
@@ -46,3 +51,5 @@ export {
   subscribeToShellCache,
   type ShellSession
 } from "../../../packages/chat-ui/src/shared/shell-session";
+
+export type { SettingsViewer } from "../../../packages/chat-ui/src/shared/page-definition";

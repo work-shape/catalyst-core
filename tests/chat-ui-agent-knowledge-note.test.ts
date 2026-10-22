@@ -2,7 +2,7 @@
 
 import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createTranslationContext } from "@work-shape/catalyst-chat-ui";
+import { createTranslationContext } from "./support/chat-ui/shared";
 import type { BuildAsset } from "@work-shape/catalyst-chat-ui/build-area";
 import {
   listedKind,

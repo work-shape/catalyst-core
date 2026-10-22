@@ -6,7 +6,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "@work-shape/catalyst-api-client";
 import { apiOperations } from "@work-shape/catalyst-api-contract";
-import { createTranslationContext } from "@work-shape/catalyst-chat-ui";
+import { createTranslationContext } from "./support/chat-ui/shared";
 import {
   buildAssetKinds,
   ConnectionCreateFlow,

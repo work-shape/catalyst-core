@@ -9,7 +9,7 @@ import {
   PrincipalRights,
   principalGrantViews
 } from "@work-shape/catalyst-chat-ui/access";
-import { createTranslationContext } from "@work-shape/catalyst-chat-ui";
+import { createTranslationContext } from "./support/chat-ui/shared";
 import { ACTIONS, PERMISSIONS, PRINCIPAL_GRANTABLE_ACTIONS } from "@work-shape/catalyst-core";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";

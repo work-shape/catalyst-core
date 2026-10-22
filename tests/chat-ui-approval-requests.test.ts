@@ -13,7 +13,7 @@ import {
   InboxItemView,
   type InboxItemActions
 } from "./support/chat-ui";
-import { TranslationProvider, createTranslationContext } from "@work-shape/catalyst-chat-ui";
+import { TranslationProvider, createTranslationContext } from "./support/chat-ui/shared";
 
 const skillChangePreview = {
   skillName: "payroll",

@@ -5,7 +5,7 @@ import { act, createElement, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { apiOperations } from "@work-shape/catalyst-api-contract";
-import { createTranslationContext, TranslationProvider } from "@work-shape/catalyst-chat-ui";
+import { createTranslationContext, TranslationProvider } from "./support/chat-ui/shared";
 import { DraftHostsNotice } from "@work-shape/catalyst-chat-ui/pages";
 import { WorkspaceApiClientProvider } from "@work-shape/catalyst-chat-ui/workspace-api-client";
 import { UiRoot, uiLabelsEn } from "@work-shape/catalyst-ui";

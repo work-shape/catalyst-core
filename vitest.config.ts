@@ -10,6 +10,8 @@ import {
   workersForConnections
 } from "./scripts/test-postgres-capacity.mjs";
 
+import { testProjects } from "./vitest.projects.config";
+
 const rootDir = dirname(fileURLToPath(import.meta.url));
 
 /**
@@ -43,23 +45,44 @@ async function testWorkers(): Promise<number> {
 }
 
 const maxWorkers = await testWorkers();
+const { pure, isolated } = testProjects(rootDir);
 
 export default defineConfig({
   resolve: {
     alias: sourceAliases(rootDir)
   },
   test: {
-    globalSetup: ["tests/support/postgres-global-setup.ts"],
     // See scripts/test-postgres-capacity.mjs for the arithmetic.
     maxWorkers,
     // Close suite connections/held transactions before the file fixture is reset or dropped.
     sequence: { hooks: "stack", sequencer: DurationSequencer },
     hookTimeout: 60000, // check-limit
     testTimeout: 30000, // check-limit
-    include: ["tests/**/*.test.ts"],
-    // A scale test proves a property at the volume a customer reaches and takes minutes. It runs
-    // in the nightly hosted check and before a release, which turn CATALYST_SCALE_TESTS on, and
-    // not in the lander's gate or a PR's checks.
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: "pure",
+          pool: "threads",
+          isolate: false,
+          setupFiles: ["tests/support/pure-file-cleanup.ts"],
+          include: pure,
+          // Keep this pool together so persistence files do not interrupt worker reuse.
+          sequence: { groupOrder: 1 }
+        }
+      },
+      {
+        extends: true,
+        test: {
+          name: "isolated",
+          isolate: true,
+          include: isolated,
+          globalSetup: ["tests/support/postgres-global-setup.ts"]
+        }
+      }
+    ],
+    // Scale tests prove properties at customer volume. They require an explicit opt-in;
+    // ordinary tests and the lander's gate leave them out.
     exclude:
       process.env.CATALYST_SCALE_TESTS === "1"
         ? configDefaults.exclude

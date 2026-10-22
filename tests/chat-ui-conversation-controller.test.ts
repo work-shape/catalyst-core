@@ -12,7 +12,7 @@ import {
   staleThreadReread,
   terminalRunNotice
 } from "./support/chat-ui";
-import { createTranslationContext } from "@work-shape/catalyst-chat-ui";
+import { createTranslationContext } from "./support/chat-ui/shared";
 
 describe("chat UI conversation controller", () => {
   it("shows the preparing tool until the real tool call starts", () => {

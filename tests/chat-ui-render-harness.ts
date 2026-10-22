@@ -3,7 +3,7 @@ import { renderToStaticMarkup as renderMarkup } from "react-dom/server";
 import { UiRoot, uiLabelsEn } from "@work-shape/catalyst-ui";
 
 /** Tests take the chat UI's translation provider from here. */
-export { TranslationProvider } from "@work-shape/catalyst-chat-ui";
+export { TranslationProvider } from "./support/chat-ui/shared";
 
 /**
  * Renders chat UI the way the product does: inside a `UiRoot`. Library components that open an

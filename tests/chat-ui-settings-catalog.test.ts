@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ApiUser, CollaborationWorkspaceWithRole } from "@work-shape/catalyst-api-client";
-import { createTranslationContext, type SettingsViewer } from "@work-shape/catalyst-chat-ui";
+import { createTranslationContext, type SettingsViewer } from "./support/chat-ui/shared";
 import type { WorkspaceRoute } from "@work-shape/catalyst-chat-ui/shell";
 import { administration } from "@work-shape/catalyst-chat-ui/admin";
 import {

@@ -2,7 +2,7 @@ import { AssistantRuntimeProvider, useLocalRuntime } from "@assistant-ui/react";
 import { createElement, type ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 import type { SafeConfig } from "@work-shape/catalyst-api-client";
-import { createTranslationContext } from "@work-shape/catalyst-chat-ui";
+import { createTranslationContext } from "./support/chat-ui/shared";
 import { safeConfigSchema } from "@work-shape/catalyst-api-contract";
 import { resolveInstanceModules } from "@work-shape/catalyst-client-assembly";
 import { createSafeConfigView } from "@work-shape/catalyst-config-schema";

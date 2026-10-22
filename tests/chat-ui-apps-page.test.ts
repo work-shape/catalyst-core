@@ -1,7 +1,7 @@
 import { createElement, type ReactNode } from "react";
 import type { AssetSummary } from "@work-shape/catalyst-api-client";
 import { describe, expect, it } from "vitest";
-import { createTranslationContext } from "@work-shape/catalyst-chat-ui";
+import { createTranslationContext } from "./support/chat-ui/shared";
 import { AppsPageView, NO_APP_RIGHTS, type AppRights } from "@work-shape/catalyst-chat-ui/apps";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 

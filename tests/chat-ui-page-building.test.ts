@@ -1,6 +1,6 @@
 import { createElement, type ReactNode } from "react";
 import { describe, expect, it } from "vitest";
-import { createTranslationContext } from "@work-shape/catalyst-chat-ui";
+import { createTranslationContext } from "./support/chat-ui/shared";
 import {
   PageSaveCardView,
   pageBuildingSurface,

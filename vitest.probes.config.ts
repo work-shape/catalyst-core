@@ -8,6 +8,8 @@ export default defineConfig({
   ...base,
   test: {
     ...base.test,
+    projects: undefined,
+    globalSetup: ["tests/support/postgres-global-setup.ts"],
     include: ["tests/probes/**/*.probe.ts", "tests/workflow-worker-kill.test.ts"],
     // One at a time: each starts server processes and measures them.
     fileParallelism: false

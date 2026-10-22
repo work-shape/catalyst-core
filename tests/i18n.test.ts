@@ -1,7 +1,7 @@
 import { chatUiSources } from "./support/chat-ui";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createTranslationContext } from "@work-shape/catalyst-chat-ui";
+import { createTranslationContext } from "./support/chat-ui/shared";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
 

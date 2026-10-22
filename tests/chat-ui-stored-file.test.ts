@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { describe, expect, it } from "vitest";
 import { CodeBlock } from "@work-shape/catalyst-ui";
-import { createTranslationContext } from "@work-shape/catalyst-chat-ui";
+import { createTranslationContext } from "./support/chat-ui/shared";
 import {
   codeColouring,
   HIGHLIGHT_MAX_CHARS,

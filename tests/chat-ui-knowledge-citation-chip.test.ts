@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createApiClient } from "@work-shape/catalyst-api-client";
 import { apiOperations, buildApiPath } from "@work-shape/catalyst-api-contract";
 import type { KnowledgeCitationSource } from "@work-shape/catalyst-core";
-import { TranslationProvider } from "@work-shape/catalyst-chat-ui";
+import { TranslationProvider } from "./support/chat-ui/shared";
 import { UiRoot, uiLabelsDe, uiLabelsEn } from "@work-shape/catalyst-ui";
 import {
   AssistantSourcePart,
