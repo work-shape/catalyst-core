@@ -1,6 +1,6 @@
 {
   "measuredAt": "2026-10-22",
-  "source": "Release Check 39757198912, commit 89e4c4247; existing job logs, no new hosted run. Initial local landing at 6a4402a7d on 2026-10-22 (Node 26.6.0, shared heavy slot); locally measured additions name that source in their reasons. Agent-story subprocess cost: passing Node 22.23.4 targeted budget run at c0df4bc69 on 2026-10-22. Completed passing samples from the Node 22.23.4 local landing at d7fc470bf on 2026-10-22, canceled after discovering additional baseline offenders.",
+  "source": "Release Check 39757198912, commit 89e4c4247; existing job logs, no new hosted run. Initial local landing at 6a4402a7d on 2026-10-22 (Node 26.6.0, shared heavy slot); locally measured additions name that source in their reasons. Agent-story subprocess cost: passing Node 22.23.4 targeted budget run at c0df4bc69 on 2026-10-22. Completed passing samples from the Node 22.23.4 local landing at d7fc470bf on 2026-10-22, canceled after discovering additional baseline offenders. Complete Node 22.23.4 local baseline at e5d271de8 on 2026-10-22, two Vitest workers: 936 files and 10,812 tests passed; additional passing cost outliers from that run are included below.",
   "notes": "Vitest identities use file > fullName (nested suites separated by >); file exceptions do not exempt tests. File durations cover tests and hooks, excluding module imports. Browser durations sum all reported attempts per spec in the selected run, including retries, excluding gaps between files. Entries were measured in the release or initial local run; failed assertions are not added as successful baseline measurements; removed test titles and .scale.test.ts files are omitted. Remove exceptions as the test-suite diet makes them unnecessary.",
   "vitestFiles": {
     "tests/agent-run-approvals.test.ts": {
@@ -90,6 +90,18 @@
     "tests/job-worker-idle-process.test.ts": {
       "measuredMs": 35914,
       "reason": "Existing persisted instance, worker and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/knowledge-base-add-files.test.ts": {
+      "measuredMs": 21926,
+      "reason": "Existing Knowledge Base file ingestion and attachment integration. Passed in the complete Node 22.23.4 local baseline (two Vitest workers) at e5d271de8 on 2026-10-22."
+    },
+    "tests/knowledge-base-api.test.ts": {
+      "measuredMs": 21652,
+      "reason": "Existing Knowledge Base API lifecycle, assignment and authorization integration. Passed in the complete Node 22.23.4 local baseline (two Vitest workers) at e5d271de8 on 2026-10-22."
+    },
+    "tests/knowledge-base-embeddings.test.ts": {
+      "measuredMs": 20724,
+      "reason": "Existing embedding ingestion, indexing and query integration. Passed in the complete Node 22.23.4 local baseline (two Vitest workers) at e5d271de8 on 2026-10-22."
     },
     "tests/knowledge-base-release.test.ts": {
       "measuredMs": 22471,
@@ -203,6 +215,10 @@
       "measuredMs": 24298,
       "reason": "Existing Workflow coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
     },
+    "tests/workflow-engine.test.ts": {
+      "measuredMs": 23069,
+      "reason": "Existing persisted Workflow execution, scheduling and recovery integration. Passed in the complete Node 22.23.4 local baseline (two Vitest workers) at e5d271de8 on 2026-10-22."
+    },
     "tests/workflow-keyed-calls.test.ts": {
       "measuredMs": 35975,
       "reason": "Existing Workflow coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
@@ -285,6 +301,10 @@
       "measuredMs": 5603,
       "reason": "Existing persisted instance, worker and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
     },
+    "tests/chat-server-job-admin.test.ts > Instance > Jobs: the summary on a large queue > is answered from the claim index without reading the table of 500,000 jobs, and so is the list": {
+      "measuredMs": 5366,
+      "reason": "Real claim-index and listing-plan checks over 500,000 queued jobs, including vacuum and visibility checks. Passed in the complete Node 22.23.4 local baseline (two Vitest workers) at e5d271de8 on 2026-10-22."
+    },
     "tests/chat-ui-right-verb-words.test.ts > the verbs of the rights screens > are core's words for a right, in both languages": {
       "measuredMs": 5497,
       "reason": "Existing UI rendering and polling coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
@@ -312,6 +332,10 @@
     "tests/client-assembly-knowledge-worker.test.ts > knowledge worker process isolation > returns leased work on SIGTERM and resumes without duplicate documents or chunks": {
       "measuredMs": 6562,
       "reason": "Real ingestion-worker subprocess SIGTERM and resume recovery. Completed passing sample in the initial Node 22.23.4 local landing at d7fc470bf on 2026-10-22; retained as existing baseline cost."
+    },
+    "tests/connection-person-context.test.ts > person context on a shared Connection, with Postgres and real HTTP > checks the Workflow principal at publish, and child runs send their own principal's context": {
+      "measuredMs": 5562,
+      "reason": "Real HTTP and persisted principal-context checks across published Workflows and child runs. Passed in the complete Node 22.23.4 local baseline (two Vitest workers) at e5d271de8 on 2026-10-22."
     },
     "tests/conversation-follow-ups.test.ts > server follow-up queue on Postgres > streams 64 deltas through concurrent queue edits, withdrawal and completion without sequence gaps or deadlocks (repetition 1)": {
       "measuredMs": 5819,
@@ -424,6 +448,10 @@
     "tests/knowledge-base-release.test.ts > synced originals are released after extraction (KB 76) > keeps original bytes and committed text when a worker is SIGKILLed before delete": {
       "measuredMs": 5412,
       "reason": "Existing knowledge ingestion and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/knowledge-base-removal.test.ts > removing documents from a Knowledge Base > deletes a large Knowledge Base in committed pages and continues after an interruption": {
+      "measuredMs": 5219,
+      "reason": "Large Knowledge Base deletion in committed pages with interrupted-job recovery. Passed in the complete Node 22.23.4 local baseline (two Vitest workers) at e5d271de8 on 2026-10-22."
     },
     "tests/knowledge-base-removal.test.ts > removing documents from a Knowledge Base > purges past an object it cannot delete, ends failed with a code, and finishes on retry": {
       "measuredMs": 5507,
@@ -669,6 +697,10 @@
       "measuredMs": 5774,
       "reason": "Existing Workflow coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
     },
+    "tests/workflow-data-store-rights.test.ts > a Data Store right given to the service principal of a Workflow > lets a step add rows to the one store its principal was given, and to no other": {
+      "measuredMs": 5761,
+      "reason": "Persisted service-principal rights and real Data Store writes through Workflow execution. Passed in the complete Node 22.23.4 local baseline (two Vitest workers) at e5d271de8 on 2026-10-22."
+    },
     "tests/workflow-dataset-consumers.test.ts > Workflow dataset consumers > loads the full streamed query once per step run and refuses foreign load references over HTTP": {
       "measuredMs": 9198,
       "reason": "Real streamed query and cross-owner HTTP refusal coverage."
@@ -725,9 +757,17 @@
       "measuredMs": 9385,
       "reason": "Concurrent pruning orders against persisted step and run data."
     },
+    "tests/workflow-run-failures.test.ts > Workflow failure projections > uses the partial tree index on the real projection query across 219365 runs": {
+      "measuredMs": 6736,
+      "reason": "Real failure-projection query and partial-index plan across 219,365 runs. Passed in the complete Node 22.23.4 local baseline (two Vitest workers) at e5d271de8 on 2026-10-22."
+    },
     "tests/workflow-run-key-migration.test.ts > Workflow run key migrations (EW-13k) > keeps both uniqueness guarantees on 300,000 runs through a cancelled build and its rerun": {
       "measuredMs": 5884,
       "reason": "Cancellation and rerun of an index build over 300,000 stored runs."
+    },
+    "tests/workflow-run-keys.test.ts > Workflow run keys on a workflow step > runs only the failed child when a parent is started again for a month ten days later, and receives every result (WF 44)": {
+      "measuredMs": 6089,
+      "reason": "Real parent/child rerun and retained-result integration across time-dependent run keys. Passed in the complete Node 22.23.4 local baseline (two Vitest workers) at e5d271de8 on 2026-10-22."
     },
     "tests/workflow-sample-rest.test.ts > the seeded accounting REST Connection > passes its health test, lets an agent read clients, and defers a rate-limited Workflow without spending an attempt": {
       "measuredMs": 6021,
