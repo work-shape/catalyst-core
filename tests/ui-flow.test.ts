@@ -164,7 +164,22 @@ describe("FlowNode", () => {
   it("leaves the change to the frame when compact, and names it to a screen reader", () => {
     const compact = node({ compact: true, change: "unsaved" }).split('data-slot="flow-compact"')[1];
     expect(classesOf(slot(compact ?? "", "flow-change"))).toEqual(["sr-only"]);
-    expect(classesOf(slot(node({ change: "unsaved" }), "flow-change"))).toContain("shrink-0");
+    expect(classesOf(slot(node({ change: "unsaved" }), "flow-change"))).toContain(
+      "justify-self-start"
+    );
+  });
+
+  it("puts the change tag on a line of its own under the type, and wraps a title between words", () => {
+    const markup = node({ eyebrow: "AI agent", title: "Check the receipts", change: "unsaved" });
+    // In the column of type and title, between them: never beside the title.
+    const order = ["flow-eyebrow", "flow-change", "flow-title"].map((name) =>
+      markup.indexOf(`data-slot="${name}"`)
+    );
+    expect(order).toEqual([...order].sort((left, right) => left - right));
+    const title = classesOf(slot(markup, "flow-title"));
+    expect(title).toContain("wrap-normal");
+    expect(title).not.toContain("break-words");
+    expect(title).not.toContain("wrap-anywhere");
   });
 
   it("draws a second frame behind a node that holds a graph of its own", () => {

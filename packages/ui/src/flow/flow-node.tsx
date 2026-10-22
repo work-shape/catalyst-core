@@ -145,29 +145,31 @@ export function FlowHead({
             {eyebrow}
           </span>
         )}
+        {change === undefined ? null : (
+          <span
+            data-slot="flow-change"
+            // A line of its own under the type, so the title keeps the whole width. Zoomed
+            // out, the frame alone shows the change.
+            className={cn(
+              compact
+                ? "sr-only"
+                : "my-0.5 justify-self-start rounded-md bg-primary-soft px-1.5 py-0.5 text-caption leading-3.5 font-medium text-primary-soft-foreground"
+            )}
+          >
+            {labels[flowChangeLabels[change]]}
+          </span>
+        )}
         <span
           data-slot="flow-title"
+          // A title wraps between its words only; a word longer than the line ends in "…".
           className={cn(
-            "min-w-0 break-words",
+            "min-w-0 overflow-hidden text-ellipsis wrap-normal",
             compact ? "line-clamp-2 text-title-lg leading-6 font-medium" : "text-label leading-4.5"
           )}
         >
           {title}
         </span>
       </div>
-      {change === undefined ? null : (
-        <span
-          data-slot="flow-change"
-          // Zoomed out, the frame alone shows the change: the tag would leave the title no room.
-          className={cn(
-            compact
-              ? "sr-only"
-              : "shrink-0 rounded-md bg-primary-soft px-1.5 py-0.5 text-caption font-medium text-primary-soft-foreground"
-          )}
-        >
-          {labels[flowChangeLabels[change]]}
-        </span>
-      )}
       {end}
     </div>
   );
