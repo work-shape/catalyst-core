@@ -1,0 +1,10 @@
+# The person the access spec's administrator gives rights to, checks, denies and revokes. No
+# other spec uses this person: a spec that read E2E User saw the rights while they stood.
+- email: e2e-access-rights@example.test
+  displayLabel: E2E Zz Access Rights
+  passwordEnvName: E2E_ACCESS_RIGHTS_PASSWORD
+  developmentPassword: e2e-access-rights-password
+  roles:
+    - user
+  permissionRefs:
+    - demo-tools

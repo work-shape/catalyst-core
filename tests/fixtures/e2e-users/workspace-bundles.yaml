@@ -1,0 +1,10 @@
+# The person the workspace bundles spec makes a Builder of a workspace. No other spec uses this
+# person: a spec that read E2E User saw the Builder right while it stood.
+- email: e2e-workspace-bundles@example.test
+  displayLabel: E2E Zz Workspace Bundles
+  passwordEnvName: E2E_WORKSPACE_BUNDLES_PASSWORD
+  developmentPassword: e2e-workspace-bundles-password
+  roles:
+    - user
+  permissionRefs:
+    - demo-tools

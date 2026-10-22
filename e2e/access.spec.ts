@@ -6,7 +6,11 @@ import { expect, test } from "./test";
 import { assetBaseRevision, assetRevision, requestWithOrigin } from "./request-with-origin";
 
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
-const normalUser = { email: "e2e-user@example.test", password: "e2e-user-password" };
+/** From `tests/fixtures/e2e-users/access.yaml`: the person this spec gives rights to. */
+const rightsHolder = {
+  email: "e2e-access-rights@example.test",
+  password: "e2e-access-rights-password"
+};
 const adminUser = { email: "e2e-admin@example.test", password: "e2e-admin-password" };
 const accessPath = "/settings/instance/access";
 const assetPath = `${apiBaseUrl}/api/v1/assets/agent/kai-helper`;
@@ -36,12 +40,12 @@ async function pick(page: Page, trigger: Locator, option: string | RegExp): Prom
   await expect(page.getByRole("listbox")).toHaveCount(0);
 }
 
-/** Asks the Check tab what E2E User may do with one agent, picked by the title it is listed by. */
+/** Asks the Check tab what the rights holder may do with one agent, picked by its listed title. */
 async function check(page: Page, assetName: string): Promise<void> {
   await tab(page, "Check").click();
   const person = page.getByRole("button", { name: /^Person: / });
-  if ((await person.getAttribute("aria-label")) !== "Person: E2E User") {
-    await pick(page, person, /E2E User/u);
+  if ((await person.getAttribute("aria-label")) !== "Person: E2E Zz Access Rights") {
+    await pick(page, person, /E2E Zz Access Rights/u);
   }
   const asset = page.getByRole("button", { name: /^Asset: / });
   if ((await asset.getAttribute("aria-label")) !== `Asset: ${assetName}`) {
@@ -65,7 +69,7 @@ test("an administrator grants by level, checks, denies and revokes rights", asyn
 }) => {
   test.setTimeout(90_000);
   // A seeded user is listed once the user has signed in and made a first call.
-  await signInViaApi(page, normalUser);
+  await signInViaApi(page, rightsHolder);
   expect((await page.request.get(`${apiBaseUrl}/api/v1/me`)).ok()).toBe(true);
   await signInViaApi(page, adminUser);
   const workspaceName = "Access rights scope";
@@ -117,13 +121,17 @@ test("an administrator grants by level, checks, denies and revokes rights", asyn
       })
     ).toHaveAttribute("href", `${rightsDocs}#do-you-hold-the-right-here`);
 
-    // Grant E2E User viewing kai-helper. An agent right is given in a shared workspace, which
-    // the dialog starts in (WS-OWN-1a), or on one agent. The right is one level of the kind,
+    // Grant the rights holder viewing kai-helper. An agent right is given in a shared workspace,
+    // which the dialog starts in (WS-OWN-1a), or on one agent. The right is one level of the kind,
     // not a box per action.
     await tab(page, "Rights").click();
     await expect(page.getByText("No right given yet.")).toBeVisible();
     await page.getByRole("button", { name: "New right" }).click();
-    await pick(page, grantDialog.getByRole("button", { name: /^Person: / }), /E2E User/u);
+    await pick(
+      page,
+      grantDialog.getByRole("button", { name: /^Person: / }),
+      /E2E Zz Access Rights/u
+    );
     const inWorkspace = grantDialog.getByRole("radio", { name: /^In a shared workspace/u });
     const onAsset = grantDialog.getByRole("radio", { name: /^On one asset/u });
     await expect(inWorkspace).toBeChecked();
@@ -140,13 +148,17 @@ test("an administrator grants by level, checks, denies and revokes rights", asyn
     await expect(grantDialog).toBeHidden();
     const assetGrants = grantRows.filter({ hasText: "the agent Kai Helper" });
     await expect(grantRows).toHaveCount(1);
-    await expect(assetGrants).toContainText("E2E User");
+    await expect(assetGrants).toContainText("E2E Zz Access Rights");
     await expect(assetGrants).toContainText("may view the agent Kai Helper");
     await expect(assetGrants).toContainText("E2E Admin");
 
     // A higher level adds the rows below it that are missing and says what it left alone.
     await page.getByRole("button", { name: "New right" }).click();
-    await pick(page, grantDialog.getByRole("button", { name: /^Person: / }), /E2E User/u);
+    await pick(
+      page,
+      grantDialog.getByRole("button", { name: /^Person: / }),
+      /E2E Zz Access Rights/u
+    );
     await level("Edit").check();
     await onAsset.check();
     await pick(page, grantDialog.getByRole("button", { name: /^Asset: / }), "kai-helper");
@@ -158,13 +170,17 @@ test("an administrator grants by level, checks, denies and revokes rights", asyn
 
     // Rights in the shared workspace, which cover what it owns and not the instance's agents.
     await page.getByRole("button", { name: "New right" }).click();
-    await pick(page, grantDialog.getByRole("button", { name: /^Person: / }), /E2E User/u);
+    await pick(
+      page,
+      grantDialog.getByRole("button", { name: /^Person: / }),
+      /E2E Zz Access Rights/u
+    );
     await level("Delete").check();
     await pick(page, grantDialog.getByRole("button", { name: /^Workspace/u }), workspaceName);
     await grantDialog.getByRole("button", { name: "Create right" }).click();
     await expect(grantDialog).toBeHidden();
     await expect(grantRows).toHaveCount(2);
-    await expect(workspaceGrants).toContainText("E2E User");
+    await expect(workspaceGrants).toContainText("E2E Zz Access Rights");
     await expect(workspaceGrants).toContainText(
       `may view, edit, publish, and delete agents in ${workspaceName}`
     );
@@ -205,7 +221,11 @@ test("an administrator grants by level, checks, denies and revokes rights", asyn
     // A deny on the one agent refuses the action there. It joins the row of the person's rights
     // on that agent, as a sentence of its own.
     await page.getByRole("button", { name: "New right" }).click();
-    await pick(page, grantDialog.getByRole("button", { name: /^Person: / }), /E2E User/u);
+    await pick(
+      page,
+      grantDialog.getByRole("button", { name: /^Person: / }),
+      /E2E Zz Access Rights/u
+    );
     await level("Delete").check();
     await onAsset.check();
     await pick(page, grantDialog.getByRole("button", { name: /^Asset: / }), "kai-helper");

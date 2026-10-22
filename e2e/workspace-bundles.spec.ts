@@ -9,7 +9,11 @@ import { requestWithOrigin } from "./request-with-origin";
 
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
 const shotsDir = process.env.E2E_SHOTS_DIR;
-const normalUser = { email: "e2e-user@example.test", password: "e2e-user-password" };
+/** From `tests/fixtures/e2e-users/workspace-bundles.yaml`: the person this spec makes a Builder. */
+const builderUser = {
+  email: "e2e-workspace-bundles@example.test",
+  password: "e2e-workspace-bundles-password"
+};
 const adminUser = { email: "e2e-admin@example.test", password: "e2e-admin-password" };
 const superadminUser = {
   email: "e2e-superadmin@example.test",
@@ -57,7 +61,7 @@ test("an instance admin gives Builder in a workspace and sets the workspace's bu
   await page.addInitScript((theme) => {
     window.localStorage.setItem("vivd-catalyst:theme", theme);
   }, shotsTheme);
-  await signInViaApi(page, normalUser);
+  await signInViaApi(page, builderUser);
   const holder: { id: string } = await (await page.request.get(`${apiBaseUrl}/api/v1/me`)).json();
   await signInViaApi(page, adminUser);
   const name = `Builder bundles ${Date.now()}`;
@@ -73,7 +77,11 @@ test("an instance admin gives Builder in a workspace and sets the workspace's bu
     await page.getByRole("tab", { name: /^Rights/u }).click();
     await page.getByRole("button", { name: "New right" }).click();
     const dialog = page.getByRole("dialog", { name: "New right" });
-    await pick(page, dialog.getByRole("button", { name: /^Person: / }), /E2E User/u);
+    await pick(
+      page,
+      dialog.getByRole("button", { name: /^Person: / }),
+      /E2E Zz Workspace Bundles/u
+    );
     await dialog.getByRole("radio", { name: "Building in a workspace" }).check();
     await expect(dialog.getByRole("radio", { name: /^On one asset/u })).toHaveCount(0);
     await dialog.getByLabel("Builder", { exact: true }).check();
@@ -82,7 +90,7 @@ test("an instance admin gives Builder in a workspace and sets the workspace's bu
     await dialog.getByRole("button", { name: "Create right" }).click();
     await expect(dialog).toBeHidden();
     const row = page.getByTestId("grant-row").filter({ hasText: name });
-    await expect(row).toContainText("E2E User");
+    await expect(row).toContainText("E2E Zz Workspace Bundles");
     await expect(row).toContainText("Builder");
     await pictures(page, "access-builder-row");
 
@@ -148,7 +156,7 @@ test("a Builder who is no member opens an App draft of the workspace and nothing
   await builder.addInitScript((theme) => {
     window.localStorage.setItem("vivd-catalyst:theme", theme);
   }, shotsTheme);
-  await signInViaApi(builder, normalUser);
+  await signInViaApi(builder, builderUser);
   const me: { id: string } = await (await builder.request.get(`${apiBaseUrl}/api/v1/me`)).json();
   const name = `Outside builder ${Date.now()}`;
   const app = `outside-draft-${Date.now()}`;
