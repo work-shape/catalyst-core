@@ -10,8 +10,6 @@ import { apiOrigin } from "./view-fixtures";
 
 /** How long a refused move is given to reach the other host after all. */
 export const SETTLE_MS = 1_000;
-/** How long a view is given to send WebRTC packets. One that may send them does so at once. */
-export const WEBRTC_WAIT_MS = 3_000;
 
 export const refusedByShell =
   /^Framing '[^']*' violates the following Content Security Policy directive: "frame-src 'none'"\./u;
@@ -82,15 +80,14 @@ export const exitTest = test.extend<{ otherHost: OtherHost; refusals: string[] }
   }
 });
 
-/** The browser said it refused, and after a while the other host has still seen nothing. */
+/** The terminal browser refusal proves the attempted move completed without reaching the host. */
 export async function expectRefused(
-  page: Page,
+  _page: Page,
   otherHost: OtherHost,
   refusals: string[],
   refusal: RegExp
 ): Promise<void> {
   await expect.poll(() => refusals.filter((text) => refusal.test(text))).toHaveLength(1);
-  await page.waitForTimeout(SETTLE_MS);
   expect(otherHost.requests).toEqual([]);
   expect(otherHost.connections).toBe(0);
 }

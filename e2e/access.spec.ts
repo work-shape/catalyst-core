@@ -339,9 +339,7 @@ test("an administrator grants by level, checks, denies and revokes rights", asyn
 // AP-5b2, acceptance check 5 of the access spec: a custom role's rights on the User screen are
 // exactly what the role lists, each with the role as where it comes from, and the Check tab
 // says the same. The server decides both; the page only shows them.
-test("the User screen and the Check tab name the role a right comes from", async ({
-  page
-}, testInfo) => {
+test("the User screen and the Check tab name the role a right comes from", async ({ page }) => {
   test.setTimeout(150_000);
   const superadmin = { email: "e2e-superadmin@example.test", password: "e2e-superadmin-password" };
   await signInViaApi(page, superadmin);
@@ -374,7 +372,10 @@ test("the User screen and the Check tab name the role a right comes from", async
                 path: "app.yaml",
                 text: `id: ${name}\nname: ${title}\nkit: 1.1.0\nentry: index.html\n`
               },
-              { path: "index.html", text: `<!doctype html><title>${title}</title><p>${title}</p>` }
+              {
+                path: "index.html",
+                text: `<!doctype html><title>${title}</title><p>${title}</p>`
+              }
             ]
           },
           timeout: 90_000
@@ -463,17 +464,19 @@ test("the User screen and the Check tab name the role a right comes from", async
     await expect(card.getByText(roleId)).toHaveCount(0);
     await expect(card.getByText("app.use")).toHaveCount(0);
     await expectNoSidewaysScroll(page);
-    const shotsDir = process.env.E2E_SHOTS_DIR ?? testInfo.outputPath("shots");
-    await mkdir(shotsDir, { recursive: true });
+    const shotsDir = process.env.E2E_SHOTS_DIR;
+    if (shotsDir) await mkdir(shotsDir, { recursive: true });
     await card.scrollIntoViewIfNeeded();
-    await page.screenshot({
-      path: join(shotsDir, "user-effective-rights-de-1280.png"),
-      animations: "disabled"
-    });
-    await card.screenshot({
-      path: join(shotsDir, "user-effective-rights-card-de-1280.png"),
-      animations: "disabled"
-    });
+    if (shotsDir)
+      await page.screenshot({
+        path: join(shotsDir, "user-effective-rights-de-1280.png"),
+        animations: "disabled"
+      });
+    if (shotsDir)
+      await card.screenshot({
+        path: join(shotsDir, "user-effective-rights-card-de-1280.png"),
+        animations: "disabled"
+      });
 
     // The Check tab: editing the agent is the role's.
     await page.goto(accessPath);
@@ -489,10 +492,11 @@ test("the User screen and the Check tab name the role a right comes from", async
     await expect(write).toContainText("Erlaubt");
     await expect(write).toContainText(roleName);
     await expectNoSidewaysScroll(page);
-    await page.screenshot({
-      path: join(shotsDir, "access-check-role-de-1280.png"),
-      animations: "disabled"
-    });
+    if (shotsDir)
+      await page.screenshot({
+        path: join(shotsDir, "access-check-role-de-1280.png"),
+        animations: "disabled"
+      });
   } finally {
     if (personId !== undefined) {
       await requestWithOrigin(page, "delete", `${apiBaseUrl}/api/v1/instance/users/${personId}`);
@@ -514,7 +518,7 @@ test("the roles of the instance: built-in first, superadmin read-only, a custom 
   baseURL,
   // The test gives E2E Admin a right and writes a role: the turn on the grants.
   accessState: _accessState
-}, testInfo) => {
+}) => {
   test.setTimeout(90_000);
   const superadminUser = {
     email: "e2e-superadmin@example.test",
@@ -581,7 +585,9 @@ test("the roles of the instance: built-in first, superadmin read-only, a custom 
     const administration = rolePage.locator('[data-area="administration"]');
     await expect(administration).toContainText("No right in this area.");
     await rolePage.getByRole("button", { name: "Edit the rights for Administration" }).click();
-    const area = page.getByRole("dialog", { name: `Administration in ${roleName}` });
+    const area = page.getByRole("dialog", {
+      name: `Administration in ${roleName}`
+    });
     await expect(area.getByRole("checkbox", { name: /^Manage API access/u })).toBeDisabled();
     await area.getByRole("checkbox", { name: /^View usage/u }).check();
     await area.getByRole("button", { name: "Save rights" }).click();
@@ -639,12 +645,13 @@ test("the roles of the instance: built-in first, superadmin read-only, a custom 
     await tab(page, "Rollen").click();
     await expect(rows.first()).toBeVisible();
     await expectNoSidewaysScroll(page);
-    const shotsDir = process.env.E2E_SHOTS_DIR ?? testInfo.outputPath("shots");
-    await mkdir(shotsDir, { recursive: true });
-    await page.screenshot({
-      path: join(shotsDir, "roles-list-de-1280.png"),
-      animations: "disabled"
-    });
+    const shotsDir = process.env.E2E_SHOTS_DIR;
+    if (shotsDir) await mkdir(shotsDir, { recursive: true });
+    if (shotsDir)
+      await page.screenshot({
+        path: join(shotsDir, "roles-list-de-1280.png"),
+        animations: "disabled"
+      });
     await rows
       .filter({ hasText: /^Admin/u })
       .getByRole("button")
@@ -653,11 +660,12 @@ test("the roles of the instance: built-in first, superadmin read-only, a custom 
     await expect(rolePage).toHaveAttribute("data-role", "admin");
     await expect(rolePage.getByRole("button", { name: "Auf Standard zurücksetzen" })).toBeVisible();
     await expectNoSidewaysScroll(page);
-    await page.screenshot({
-      path: join(shotsDir, "role-admin-de-1280.png"),
-      animations: "disabled",
-      fullPage: true
-    });
+    if (shotsDir)
+      await page.screenshot({
+        path: join(shotsDir, "role-admin-de-1280.png"),
+        animations: "disabled",
+        fullPage: true
+      });
   } finally {
     for (const grantId of grants) {
       await requestWithOrigin(

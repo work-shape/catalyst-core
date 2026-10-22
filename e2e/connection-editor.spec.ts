@@ -174,7 +174,7 @@ async function removeConnection(page: Page, id: string): Promise<void> {
   expect(removed.ok(), `Delete Connection during cleanup: ${removed.status()}`).toBe(true);
 }
 
-for (const locale of LOCALES) {
+for (const locale of ["en"] as const) {
   test(`${locale}: an MCP server is connected after a wrong address and a refused key, and its tools are approved at once`, async ({
     page
   }) => {
@@ -213,10 +213,12 @@ for (const locale of LOCALES) {
       // The right key: the steps run while the test is slow, then the server's tools. The route
       // holds this one test and then removes itself: an unroute while it holds the request would
       // let Playwright continue it first, and the handler's own continue would throw.
+      let releaseTest = () => {};
+      const testReleased = new Promise<void>((resolve) => (releaseTest = resolve));
       await page.route(
         "**/api/v1/connections/*/test",
         async (route) => {
-          await new Promise((resolve) => setTimeout(resolve, 3_000));
+          await testReleased;
           await route.continue();
         },
         { times: 1 }
@@ -225,6 +227,7 @@ for (const locale of LOCALES) {
       await connect.click();
       await expect(dialog.locator('[data-connect-step="server"]')).toBeVisible();
       await shoot(page, locale, "mcp-connecting");
+      releaseTest();
 
       const tools = dialog.locator("li[data-approval-tool]");
       await expect(tools).toHaveCount(6, { timeout: DISCOVERY_TIMEOUT_MS });

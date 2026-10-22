@@ -1,3 +1,6 @@
+import { mkdir } from "node:fs/promises";
+import { join } from "node:path";
+import { layoutVariants } from "./layout-variants";
 import { randomUUID } from "node:crypto";
 import type { Locator, Route } from "@playwright/test";
 import { z } from "zod";
@@ -48,8 +51,8 @@ test.use({
 // the suite's `egress.allow` permits, and nothing is called. The admin chooses a person and a
 // service principal by name, saves, meets a change made elsewhere, and removes the mapping.
 // The read failing, the list failing and a reader who may not list people are shown with the
-// instance's answer replaced on its way to the page. Pictures go to the test's output folder
-// and are attached to its report, in English and German, light and dark, wide and at 390.
+// instance's answer replaced on its way to the page. E2E_SHOTS_DIR enables attached pictures
+// in light English at 1280 and 390, plus German at 390.
 
 const host = process.env.E2E_HOST ?? "127.0.0.1";
 const apiBaseUrl = process.env.E2E_API_URL ?? `http://${host}:4210`;
@@ -212,8 +215,11 @@ test("person context mappings are chosen by name, saved, refused when stale and 
       await expect(section).toContainText(HEADER);
     };
     const shoot = async (label: string, target: Locator = section) => {
+      const shotsDir = process.env.E2E_SHOTS_DIR;
+      if (!shotsDir) return;
+      await mkdir(shotsDir, { recursive: true });
       await target.scrollIntoViewIfNeeded();
-      const path = test.info().outputPath(`evidence-person-context-${label}.png`);
+      const path = join(shotsDir, `evidence-person-context-${label}.png`);
       await page.screenshot({ path, animations: "disabled" });
       await test.info().attach(`person-context-${label}`, { path, contentType: "image/png" });
     };
@@ -230,35 +236,35 @@ test("person context mappings are chosen by name, saved, refused when stale and 
     };
     const button = (label: string) => section.getByRole("button", { name: label, exact: true });
 
-    for (const locale of ["en", "de"] as const) {
+    for (const [theme, locale, width] of layoutVariants(1280)) {
       const words = WORDS[locale];
-      await open({ locale, theme: "light", width: 1280 });
+      await open({ locale, theme, width });
       // Nobody is chosen: the list offers names, and no technical ID field stands beside it.
       await expect(chooser).toBeVisible();
       await expect(section.locator('[data-connection-field="personContextSubjectId"]')).toHaveCount(
         0
       );
       await expect(mapping).toHaveCount(0);
-      await shoot(`${locale}-light-1280-start`);
+      await shoot(`${locale}-${theme}-${width}-start`);
 
       // The admin's own mapping, chosen by name.
       await choose({ label: me.displayLabel, text: me.email });
       await expect(mapping).toHaveAttribute("data-person-context-mapping", "mapped");
       await expect(valueField).toHaveValue("ref-seed-001");
-      await shoot(`${locale}-light-1280-person-mapped`);
+      await shoot(`${locale}-${theme}-${width}-person-mapped`);
 
       // The service principal, chosen by name: it has no mapping yet.
       await section.getByRole("radio", { name: words.principal }).click();
       await expect(mapping).toHaveCount(0);
       await choose({ label: principalName, text: principalName });
       await expect(mapping).toHaveAttribute("data-person-context-mapping", "unmapped");
-      await shoot(`${locale}-light-1280-principal-unmapped`);
+      await shoot(`${locale}-${theme}-${width}-principal-unmapped`);
 
-      // Dark and at phone width.
-      await open({ locale, theme: "dark", width: 390 });
+      // Switching back to the person shows their stored mapping again.
+      await section.getByRole("radio").first().click();
       await choose({ label: me.displayLabel, text: me.email });
       await expect(mapping).toHaveAttribute("data-person-context-mapping", "mapped");
-      await shoot(`${locale}-dark-390-person-mapped`);
+      await shoot(`${locale}-${theme}-${width}-person-restored`);
       const overflow = await page.evaluate(
         () => document.documentElement.scrollWidth - document.documentElement.clientWidth
       );
@@ -353,7 +359,7 @@ test("person context mappings are chosen by name, saved, refused when stale and 
         (url) => isPath(usersPath)(url),
         (route) => refuse(route, 403)
       );
-      await open({ locale, theme: locale === "de" ? "dark" : "light", width: 390 });
+      await open({ locale, theme: "light", width: 390 });
       const hidden = section.locator('[data-person-context-list="hidden"]');
       await expect(hidden).toContainText(WORDS[locale].peopleHidden);
       const idField = section.locator('[data-connection-field="personContextSubjectId"]');

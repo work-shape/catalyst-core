@@ -1,3 +1,6 @@
+import { mkdir } from "node:fs/promises";
+import { join } from "node:path";
+import { layoutVariants } from "./layout-variants";
 import { randomUUID } from "node:crypto";
 import type { Locator, Page, TestInfo } from "@playwright/test";
 import { assetBaseRevision, assetRevision, requestWithOrigin } from "./request-with-origin";
@@ -5,9 +8,8 @@ import { expect, test } from "./test";
 
 // UXA-4, the agent page as one form: the model section says what reasoning effort changes and
 // why a default model cannot be changed, and an agent has one mark on the Agents page, in Studio
-// and in the dock. Each test writes an agent of its own and deletes it by name. Every run keeps
-// pictures of what changed, 1280 and 390 wide, in English and German, light and dark, as
-// `uxa-4-*.png` in the test's output folder.
+// and in the dock. Each test writes an agent of its own and deletes it by name. E2E_SHOTS_DIR
+// enables pictures in light English at 1280 and 390, plus German at 390.
 
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
 /** Reads and writes every agent of the instance, its models included. */
@@ -72,7 +74,7 @@ async function markOf(mark: Locator) {
 }
 
 /**
- * Pictures of one screen at 1280 and 390 pixels, in English and German, light and dark. The
+ * Optional pictures of the three layout variants. The
  * language and the theme are read when the interface loads, so `open` loads the screen anew
  * for each and answers what to bring into view. The page is left light, in English, at 1280.
  */
@@ -82,6 +84,9 @@ async function shoot(
   surface: string,
   open: () => Promise<Locator>
 ): Promise<void> {
+  const shotsDir = process.env.E2E_SHOTS_DIR;
+  if (!shotsDir) return;
+  await mkdir(shotsDir, { recursive: true });
   const show = async (size: typeof WIDE, locale: string, theme: string) => {
     await page.evaluate(
       ([localeValue, themeValue]) => {
@@ -93,19 +98,16 @@ async function shoot(
     await page.setViewportSize(size);
     return open();
   };
-  for (const size of [WIDE, PHONE]) {
-    for (const locale of ["en", "de"]) {
-      for (const theme of ["light", "dark"]) {
-        const target = await show(size, locale, theme);
-        await target.scrollIntoViewIfNeeded();
-        const path = testInfo.outputPath(`uxa-4-${surface}-${size.width}-${locale}-${theme}.png`);
-        await page.screenshot({ path, animations: "disabled" });
-        await testInfo.attach(`uxa-4-${surface}-${size.width}-${locale}-${theme}`, {
-          path,
-          contentType: "image/png"
-        });
-      }
-    }
+  for (const [theme, locale, width] of layoutVariants(1280)) {
+    const size = width === 390 ? PHONE : WIDE;
+    const target = await show(size, locale, theme);
+    await target.scrollIntoViewIfNeeded();
+    const path = join(shotsDir, `uxa-4-${surface}-${size.width}-${locale}-${theme}.png`);
+    await page.screenshot({ path, animations: "disabled" });
+    await testInfo.attach(`uxa-4-${surface}-${size.width}-${locale}-${theme}`, {
+      path,
+      contentType: "image/png"
+    });
   }
   await show(WIDE, "en", "light");
 }

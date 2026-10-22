@@ -16,8 +16,6 @@ const WIDE = { width: 1440, height: 900 };
 const NARROW = { width: 390, height: 640 };
 /** How long a cleanup request may take; a slow one never hides the test's own failure. */
 const CLEANUP_TIMEOUT_MS = 10_000;
-/** How long the list read is held, so its loading state shows. */
-const LIST_HOLD_MS = 1_000;
 
 const shotsDir = process.env.E2E_SHOTS_DIR;
 const idSchema = z.object({ id: z.string() });
@@ -81,7 +79,9 @@ async function deleteStarts(page: Page, workspaceId: string, marker: string): Pr
   try {
     const response = await page.request.get(
       `${apiOrigin}/api/v1/scheduled-starts?collaborationWorkspaceId=${workspaceId}&limit=100`,
-      { timeout: CLEANUP_TIMEOUT_MS }
+      {
+        timeout: CLEANUP_TIMEOUT_MS
+      }
     );
     if (!response.ok()) return;
     const { items } = startsSchema.parse(await response.json());
@@ -101,16 +101,19 @@ async function shoot(page: Page, name: string): Promise<void> {
   await page.screenshot({ path: join(shotsDir, `scheduled-${name}.png`), animations: "disabled" });
 }
 
-/** Holds each read of the list for a second, so its loading state can be seen. */
-async function holdListReads(page: Page): Promise<void> {
+/** Holds only the first list read until its skeleton has been asserted. */
+async function holdListRead(page: Page): Promise<() => void> {
+  let release = () => {};
+  const released = new Promise<void>((resolve) => (release = resolve));
   await page.route(
     (url) => url.origin === apiOrigin && url.pathname === "/api/v1/scheduled-starts",
     async (route) => {
-      if (route.request().method() === "GET")
-        await new Promise((resolve) => setTimeout(resolve, LIST_HOLD_MS));
+      if (route.request().method() === "GET") await released;
       await route.fallback();
-    }
+    },
+    { times: 1 }
   );
+  return release;
 }
 
 async function noSidewaysScroll(page: Page): Promise<void> {
@@ -196,13 +199,17 @@ test("the list loads, scrolls and stays across switching to another area and bac
   const workspaceId = await signedIn(page);
   const marker = randomUUID().slice(0, 8);
   const prompts = Array.from({ length: 5 }, (_, index) => `Weekly report ${index + 1} ${marker}`);
+  await page.clock.install();
   try {
     for (const prompt of prompts) await saveStart(page, workspaceId, prompt);
-    await holdListReads(page);
+    const releaseList = await holdListRead(page);
     await page.goto(`/w/${workspaceId}/scheduled`);
     // While the held read runs, the list stands as a skeleton.
-    await expect(page.locator('[aria-busy="true"]').first()).toBeVisible();
+    await expect(
+      page.getByTestId("scheduled-area").locator('[aria-busy="true"]').first()
+    ).toBeVisible();
     await shoot(page, "en-light-wide-loading");
+    releaseList();
     const cards = page.getByTestId("scheduled-start").filter({ hasText: marker });
     await expect(cards).toHaveCount(prompts.length);
     await shoot(page, "en-light-wide-list");
@@ -228,9 +235,11 @@ test("the list loads, scrolls and stays across switching to another area and bac
       await expect(cards).toHaveCount(prompts.length);
     }
 
+    // Advance the idle list refresh after the external write, without waiting thirty seconds.
     // A start saved from chat or another tab appears without leaving this open page.
     await saveStart(page, workspaceId, `Added while the list is open ${marker}`);
-    await expect(cards).toHaveCount(prompts.length + 1, { timeout: 40_000 });
+    await page.clock.fastForward(30_000);
+    await expect(cards).toHaveCount(prompts.length + 1);
   } finally {
     await page.unrouteAll({ behavior: "ignoreErrors" });
     await deleteStarts(page, workspaceId, marker);
@@ -245,10 +254,13 @@ test("in German, dark and narrow the page and its dialog fit the screen", async 
   const prompt = `Fasse die offenen Fristen der Mandanten zusammen ${marker}`;
   try {
     await saveStart(page, workspaceId, prompt);
-    await holdListReads(page);
+    const releaseList = await holdListRead(page);
     await page.goto(`/w/${workspaceId}/scheduled`);
-    await expect(page.locator('[aria-busy="true"]').first()).toBeVisible();
+    await expect(
+      page.getByTestId("scheduled-area").locator('[aria-busy="true"]').first()
+    ).toBeVisible();
     await shoot(page, "de-dark-narrow-loading");
+    releaseList();
 
     const card = page.getByTestId("scheduled-start").filter({ hasText: marker });
     await expect(card.getByRole("heading", { name: prompt })).toBeVisible();

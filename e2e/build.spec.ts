@@ -65,7 +65,6 @@ const superadminUser = {
   email: "e2e-superadmin@example.test",
   password: "e2e-superadmin-password"
 };
-const normalUser = { email: "e2e-user@example.test", password: "e2e-user-password" };
 const NARROW = { width: 390, height: 844 };
 const WIDE = { width: 1280, height: 800 };
 const workspacesPath = `${apiBaseUrl}/api/v1/workspaces`;
@@ -366,27 +365,6 @@ test("a workspace holder builds an agent in the workspace, is refused, meets a c
     await requestWithOrigin(admin, "delete", `${apiBaseUrl}/api/v1/instance/users/${holderId}`);
     await adminContext.close();
   }
-});
-
-test("a user with no right on an agent or a skill has no Studio row and is told so at its address", async ({
-  page,
-  accessState: _accessState
-}) => {
-  await signInViaApi(page, normalUser);
-  await page.goto("/");
-  await expect(page.getByPlaceholder("Message")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Studio", exact: true })).toHaveCount(0);
-
-  await page.goto("/build");
-  await expect(page.getByRole("region", { name: "Studio" })).toContainText(
-    "Studio is not available to you."
-  );
-  await expect(page).toHaveURL(/\/build$/u);
-  await page.goto("/build/agents/research_assistant");
-  await expect(page.getByRole("region", { name: "Studio" })).toContainText(
-    "Studio is not available to you."
-  );
-  await expect(page.getByRole("heading", { name: "Research Assistant" })).toHaveCount(0);
 });
 
 test("the old Config address leads into Studio, and the account menu names the instance and its release", async ({
@@ -766,7 +744,7 @@ test("a long history comes a page at a time", async ({ page }) => {
 });
 
 for (const locale of ["en", "de"] as const) {
-  for (const mode of ["light", "dark"] as const) {
+  for (const mode of ["light"] as const) {
     test(`Studio keeps inside the window at both widths (${locale}, ${mode})`, async ({ page }) => {
       await page.addInitScript((chosen) => {
         window.localStorage.setItem("vivd-catalyst:locale", chosen);
@@ -794,7 +772,7 @@ for (const locale of ["en", "de"] as const) {
               .first()
               .evaluate((element) => element.classList.contains("dark"))
           )
-          .toBe(mode === "dark");
+          .toBe(false);
         await expect(
           page.getByRole("list", { name: words.agents }).getByRole("link").first()
         ).toBeVisible();

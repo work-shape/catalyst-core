@@ -1,3 +1,4 @@
+import { layoutVariants } from "./layout-variants";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { FrameLocator, Page } from "@playwright/test";
@@ -78,11 +79,8 @@ const assetSchema = z.looseObject({
 });
 
 type Variant = readonly [theme: "light" | "dark", locale: "en" | "de", width: 1440 | 390];
-const BOTH: readonly Variant[] = [
-  ["light", "en", 1440],
-  ["dark", "en", 1440]
-];
-const ALL: readonly Variant[] = [...BOTH, ["light", "en", 390], ["light", "de", 1440]];
+const ALL: readonly Variant[] = layoutVariants(1440);
+const ENGLISH = ALL.filter(([, locale]) => locale === "en");
 
 /** The App inside the frame of the screen with this test id. */
 function appIn(page: Page, screen: "app-view" | "app-edit"): FrameLocator {
@@ -182,7 +180,7 @@ test("a Page saved as an App updates the draft of that App, and nothing that is 
   await expect(saveAsApp).toBeVisible();
   await expect(updateApp).toHaveCount(0);
   const conversationUrl = page.url();
-  await shoot(page, "page-save-as-app", BOTH, async () => {
+  await shoot(page, "page-save-as-app", ENGLISH, async () => {
     await openSurface();
     await expect(saveAsApp).toBeVisible();
   });
@@ -196,7 +194,9 @@ test("a Page saved as an App updates the draft of that App, and nothing that is 
   const edit = page.getByTestId("app-edit");
   await expect(edit).toContainText("Draft · not published");
   await edit.getByRole("button", { name: "Publish", exact: true }).click();
-  const publishDialog = page.getByRole("dialog", { name: `Publish “${appName}”?` });
+  const publishDialog = page.getByRole("dialog", {
+    name: `Publish “${appName}”?`
+  });
   await chooseWorkspaceAudience(publishDialog);
   await publishDialog.getByRole("button", { name: "Publish", exact: true }).click();
   await expect(publishDialog).toBeHidden();
@@ -231,7 +231,9 @@ test("a Page saved as an App updates the draft of that App, and nothing that is 
     await expect(dialog).toBeVisible();
   });
   await asked.getByRole("button", { name: "Update draft", exact: true }).click();
-  const done = page.getByRole("dialog", { name: `The draft of “${appName}” is updated` });
+  const done = page.getByRole("dialog", {
+    name: `The draft of “${appName}” is updated`
+  });
   await expect(done).toContainText("Open the draft to check and publish it.");
   if (shotsDir) {
     await page.screenshot({
@@ -251,7 +253,7 @@ test("a Page saved as an App updates the draft of that App, and nothing that is 
     ).toBeVisible();
   };
   await draftReady();
-  await shoot(page, "app-draft-after-update", BOTH, draftReady);
+  await shoot(page, "app-draft-after-update", ENGLISH, draftReady);
   // Whoever uses the App is shown what was published, as before.
   await page.goto(appPath);
   await expect(appIn(page, "app-view").getByRole("heading", { name: FIRST_HEADING })).toBeVisible();
@@ -263,7 +265,9 @@ test("a Page saved as an App updates the draft of that App, and nothing that is 
   await page.getByRole("menuitem", { name: "Versions" }).click();
   const revisions = page.getByRole("dialog", { name: "Versions" });
   await revisions.getByRole("button", { name: "Publish this version" }).first().click();
-  const publishSecond = page.getByRole("dialog", { name: `Publish “${appName}”?` });
+  const publishSecond = page.getByRole("dialog", {
+    name: `Publish “${appName}”?`
+  });
   await chooseWorkspaceAudience(publishSecond);
   await publishSecond.getByRole("button", { name: "Publish", exact: true }).click();
   await expect(publishSecond).toBeHidden();
@@ -429,69 +433,64 @@ test("a Page is put into an App that was saved before Apps remembered their Page
     `This name is already taken by the app “${appName}”. Choose another name, or update the app.`
   );
   // The short conflict offer and the name field stay inside the name-only dialog in both
-  // languages and themes, even when the taken App has a long name.
-  for (const theme of ["light", "dark"] as const) {
-    for (const locale of ["en", "de"] as const) {
-      for (const width of [390, 1440] as const) {
-        await page.evaluate(
-          ([mode, language]) => {
-            localStorage.setItem("vivd-catalyst:theme", mode);
-            localStorage.setItem("vivd-catalyst:locale", language);
-          },
-          [theme, locale] as const
-        );
-        await page.setViewportSize({ width, height: 640 });
-        await page.reload();
-        await reopened();
-        const heading = surface.locator("header").getByRole("heading", { level: 2 });
-        await expect(heading).toHaveText(previewName);
-        const titleWidth = await heading.evaluate((element) => ({
-          needed: element.scrollWidth,
-          available: element.clientWidth
-        }));
-        expect(
-          titleWidth.needed,
-          `${theme}/${locale}/${width}: full panel title`
-        ).toBeLessThanOrEqual(titleWidth.available);
-        await expect(heading).not.toHaveAttribute("tabindex");
-        if (width === 390) {
-          const showChat = surface.getByRole("button", { name: /^(?:Show chat|Chat anzeigen)$/u });
-          await expect(showChat).toHaveText("");
-        }
-        if (shotsDir)
-          await page.screenshot({
-            path: join(shotsDir, `phone-real-panel-${theme}-${locale}-${width}.png`),
-            animations: "disabled"
-          });
-        await untilOffered();
-        const form = dialog.locator("form");
-        const bounds = await form.boundingBox();
-        if (!bounds) throw new Error("The save form has no box");
-        for (const control of [offer, dialog.getByRole("textbox", { name: /^Name/u })]) {
-          const box = await control.boundingBox();
-          if (!box) throw new Error("The save control has no box");
-          expect(box.x).toBeGreaterThanOrEqual(bounds.x);
-          expect(box.x + box.width).toBeLessThanOrEqual(bounds.x + bounds.width + 1);
-          expect(box.x + box.width).toBeLessThan(width);
-        }
-        expect(await form.evaluate((element) => element.scrollWidth)).toBeLessThanOrEqual(
-          Math.ceil(bounds.width)
-        );
-        if (width === 390) {
-          expect(
-            await offer.evaluate(
-              (element) =>
-                element.clientHeight / Number.parseFloat(getComputedStyle(element).lineHeight)
-            )
-          ).toBeLessThanOrEqual(2);
-        }
-        if (shotsDir) {
-          await page.screenshot({
-            path: join(shotsDir, `phone-update-offer-${theme}-${locale}-${width}.png`),
-            animations: "disabled"
-          });
-        }
-      }
+  // languages, even when the taken App has a long name.
+  for (const [theme, locale, width] of layoutVariants(1440)) {
+    await page.evaluate(
+      ([mode, language]) => {
+        localStorage.setItem("vivd-catalyst:theme", mode);
+        localStorage.setItem("vivd-catalyst:locale", language);
+      },
+      [theme, locale] as const
+    );
+    await page.setViewportSize({ width, height: 640 });
+    await page.reload();
+    await reopened();
+    const heading = surface.locator("header").getByRole("heading", { level: 2 });
+    await expect(heading).toHaveText(previewName);
+    const titleWidth = await heading.evaluate((element) => ({
+      needed: element.scrollWidth,
+      available: element.clientWidth
+    }));
+    expect(titleWidth.needed, `${theme}/${locale}/${width}: full panel title`).toBeLessThanOrEqual(
+      titleWidth.available
+    );
+    await expect(heading).not.toHaveAttribute("tabindex");
+    if (width === 390) {
+      const showChat = surface.getByRole("button", { name: /^(?:Show chat|Chat anzeigen)$/u });
+      await expect(showChat).toHaveText("");
+    }
+    if (shotsDir)
+      await page.screenshot({
+        path: join(shotsDir, `phone-real-panel-${theme}-${locale}-${width}.png`),
+        animations: "disabled"
+      });
+    await untilOffered();
+    const form = dialog.locator("form");
+    const bounds = await form.boundingBox();
+    if (!bounds) throw new Error("The save form has no box");
+    for (const control of [offer, dialog.getByRole("textbox", { name: /^Name/u })]) {
+      const box = await control.boundingBox();
+      if (!box) throw new Error("The save control has no box");
+      expect(box.x).toBeGreaterThanOrEqual(bounds.x);
+      expect(box.x + box.width).toBeLessThanOrEqual(bounds.x + bounds.width + 1);
+      expect(box.x + box.width).toBeLessThan(width);
+    }
+    expect(await form.evaluate((element) => element.scrollWidth)).toBeLessThanOrEqual(
+      Math.ceil(bounds.width)
+    );
+    if (width === 390) {
+      expect(
+        await offer.evaluate(
+          (element) =>
+            element.clientHeight / Number.parseFloat(getComputedStyle(element).lineHeight)
+        )
+      ).toBeLessThanOrEqual(2);
+    }
+    if (shotsDir) {
+      await page.screenshot({
+        path: join(shotsDir, `phone-update-offer-${theme}-${locale}-${width}.png`),
+        animations: "disabled"
+      });
     }
   }
   await page.evaluate(() => {
@@ -522,7 +521,9 @@ test("a Page is put into an App that was saved before Apps remembered their Page
 
   // The offer says what it replaces and what stays, before anything is written.
   await offer.click();
-  const asked = page.getByRole("dialog", { name: `Update “${appName}” from this preview?` });
+  const asked = page.getByRole("dialog", {
+    name: `Update “${appName}” from this preview?`
+  });
   const replace = asked.getByRole("button", { name: "Replace draft", exact: true });
   await expect(asked).toContainText(
     "The current draft of this app is replaced by this preview as it is now. The published version does not change until someone publishes the draft."
@@ -549,7 +550,9 @@ test("a Page is put into an App that was saved before Apps remembered their Page
   await page.setViewportSize({ width: 1440, height: 900 });
 
   await replace.click();
-  const done = page.getByRole("dialog", { name: `The draft of “${appName}” is updated` });
+  const done = page.getByRole("dialog", {
+    name: `The draft of “${appName}” is updated`
+  });
   await expect(done).toContainText(
     `The app keeps its name “${appName}”. The preview is called “${previewName}”.`
   );
@@ -574,7 +577,9 @@ test("a Page is put into an App that was saved before Apps remembered their Page
   await expect(appIn(page, "app-view").getByRole("heading", { name: FIRST_HEADING })).toBeVisible();
   await page.goto(draftPathOf(appPath));
   await edit.getByRole("button", { name: "Publish", exact: true }).click();
-  const publishDialog = page.getByRole("dialog", { name: `Publish “${appName}”?` });
+  const publishDialog = page.getByRole("dialog", {
+    name: `Publish “${appName}”?`
+  });
   await chooseWorkspaceAudience(publishDialog);
   await publishDialog.getByRole("button", { name: "Publish", exact: true }).click();
   await expect(publishDialog).toBeHidden();

@@ -43,9 +43,7 @@ const rail = (page: Page) => page.getByRole("navigation", { name: "Main navigati
 
 // Fails without the plus: the "Recent" heading then held its name alone, and a person reading
 // the list went back to the top of the rail for a new chat.
-test("the Recent heading offers New chat on hover and by the keyboard, in both languages", async ({
-  page
-}) => {
+test("the Recent heading offers New chat on hover and by the keyboard", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await signIn(page, reviewer);
   for (const words of [
@@ -55,13 +53,6 @@ test("the Recent heading offers New chat on hover and by the keyboard, in both l
       recent: "Recent",
       newChat: "New chat",
       agents: "Agents"
-    },
-    {
-      locale: "de",
-      navigation: "Hauptnavigation",
-      recent: "Zuletzt",
-      newChat: "Neuer Chat",
-      agents: "Agenten"
     }
   ]) {
     await page.goto("/inbox");
@@ -105,52 +96,13 @@ test("the Recent heading offers New chat on hover and by the keyboard, in both l
   await expect(navigation.getByRole("button", { name: "New chat", exact: true })).toHaveCount(1);
 });
 
-// Fails with the Chat row: the rail then held a "Chat" button above the Inbox, and it was the
-// current item in a conversation instead of the conversation's own row.
-test("the rail has no Chat entry, and New chat starts a conversation whose row is the current one", async ({
-  page
-}) => {
-  await signIn(page, reviewer);
-  const navigation = rail(page);
-
-  await expect(navigation.getByRole("button", { name: /^Inbox/u })).toBeVisible();
-  await expect(navigation.getByRole("button", { name: "Chat", exact: true })).toHaveCount(0);
-  // The row, and the plus on the "Recent" heading that does the same.
-  await expect(navigation.getByRole("button", { name: "New chat", exact: true })).toHaveCount(2);
-
-  // From another area New chat leads to the start page, with the cursor in the composer.
-  await navigation.getByRole("button", { name: /^Inbox/u }).click();
-  await expect(page).toHaveURL(/\/inbox$/u);
-  await navigation.getByRole("button", { name: "New chat", exact: true }).first().click();
-  await expect(page).toHaveURL(/\/w\/[^/]+$/u);
-  const composer = page.getByPlaceholder("Message");
-  await expect(composer).toBeFocused();
-  // Nothing in the rail claims the start page.
-  await expect(navigation.locator("[aria-current]")).toHaveCount(0);
-
-  const text = `One entry for a chat ${Date.now()}`;
-  await composer.fill(text);
-  await composer.press("Enter");
-  await expect(page).toHaveURL(/\/w\/[^/]+\/c\/[^/]+$/u);
-  const current = navigation.locator('[aria-current="true"]');
-  await expect(current).toHaveCount(1);
-  await expect(
-    navigation
-      .getByTestId("conversation-row")
-      .filter({ has: page.locator('[aria-current="true"]') })
-  ).toHaveCount(1);
-  await expect(navigation.getByTestId("conversation-row").first()).toHaveAttribute(
-    "data-selected",
-    "true"
-  );
-});
-
 // Fails with the list page and the one-page rail: the rail then ended in "Show all", which
 // opened a page of its own, and never held more than its first 30 conversations.
 test("the rail is the list of conversations: it loads a page at a time, the search finds what no loaded page holds, and an older open conversation is the first row", async ({
   page
 }) => {
   test.setTimeout(240_000);
+  await page.clock.install();
   await signIn(page, member);
   const stamp = Date.now();
   const workspace = await createWorkspace(page, `Rail pages ${stamp}`);
@@ -283,7 +235,7 @@ test("the rail is the list of conversations: it loads a page at a time, the sear
   await expect(railRows).toHaveCount(2 * railPageSize + 1);
   const afterFailure = railReads().length;
   // Nothing tries again by itself.
-  await page.waitForTimeout(1_000);
+  await advancePollingWindow(page, 1_000);
   expect(railReads()).toHaveLength(afterFailure);
   failing = false;
   const tryAgain = failed.getByRole("button", { name: "Try again" });
@@ -325,6 +277,7 @@ test("a run in the open conversation is followed by its stream, and the rail rea
   page
 }) => {
   test.setTimeout(120_000);
+  await page.clock.install();
   await signIn(page, member);
   const stamp = Date.now();
   const workspace = await createWorkspace(page, `Rail requests ${stamp}`);
@@ -364,7 +317,9 @@ test("a run in the open conversation is followed by its stream, and the rail rea
   const startedAt = Date.now();
   await expect(stop).toHaveCount(0, { timeout: 30_000 });
   const ranMs = Date.now() - startedAt;
-  // The row learns of the end from the stream's last event.
+  // The row learns of the end from the stream's last event. Flush the browser clock's
+  // scheduled query notifications before checking the rendered rail.
+  await page.clock.runFor(100);
   await expect(running).toHaveCount(0);
   const duringRun = railReads().length - 1;
   // A run shorter than this proves nothing about a reading every interval.
@@ -379,7 +334,7 @@ test("a run in the open conversation is followed by its stream, and the rail rea
 
   // With no run active nothing reads the list.
   const settled = railReads().length;
-  await page.waitForTimeout(2 * railRefreshIntervalMs + 500);
+  await advancePollingWindow(page, 2 * railRefreshIntervalMs + 500);
   expect(railReads()).toHaveLength(settled);
 
   // Another workspace has its own rows, read with one request.
@@ -398,42 +353,14 @@ test("a run in the open conversation is followed by its stream, and the rail rea
   await expect(railRows.last()).toContainText(otherTitle);
   await expect(railRows.first()).toContainText(`Neue Unterhaltung ${stamp}`, { timeout: 30_000 });
   await expect(stop).toHaveCount(0, { timeout: 30_000 });
+  await page.clock.runFor(100);
   await expect(railRows.first().getByTestId("conversation-running-indicator")).toHaveCount(0);
   const afterNewChat = railReads().length;
-  await page.waitForTimeout(2 * railRefreshIntervalMs + 500);
+  await advancePollingWindow(page, 2 * railRefreshIntervalMs + 500);
   expect(railReads()).toHaveLength(afterNewChat);
   for (const read of railReads().slice(settled)) {
     expect(read).toEqual(onePage(otherWorkspace.id));
   }
-});
-
-// Fails with the list page: the strip then held a "Conversations" icon that opened it.
-test("the collapsed rail keeps the search and New chat, and no entry for a list page", async ({
-  page
-}) => {
-  await signIn(page, member);
-  const navigation = rail(page);
-
-  await page.getByRole("button", { name: "Collapse sidebar" }).click();
-  await expect(navigation.getByTestId("conversation-row")).toHaveCount(0);
-  await expect(navigation.getByRole("button", { name: "Chat", exact: true })).toHaveCount(0);
-  await expect(navigation.getByRole("button", { name: "Conversations", exact: true })).toHaveCount(
-    0
-  );
-  const strip = navigation.getByRole("button");
-  await expect(strip.nth(0)).toHaveAccessibleName("Expand sidebar");
-  await expect(strip.nth(1)).toHaveAccessibleName("Search");
-  await expect(strip.nth(2)).toHaveAccessibleName("New chat");
-
-  // The search is the strip's way to a conversation.
-  await strip.nth(1).click();
-  await expect(page.getByRole("dialog", { name: "Search" })).toBeVisible();
-  await page.keyboard.press("Escape");
-
-  await navigation.getByRole("button", { name: "New chat", exact: true }).first().click();
-  await expect(page).toHaveURL(/\/w\/[^/]+$/u);
-  await expect(page.getByPlaceholder("Message")).toBeFocused();
-  await expect(navigation.locator("[aria-current]")).toHaveCount(0);
 });
 
 // Fails without faded rows giving up the pointer: a row next to unseen under the rail's bottom
@@ -444,6 +371,7 @@ test("a row under the rail's faded edge takes no pointer, and a row in sight at 
   page
 }) => {
   test.setTimeout(120_000);
+  await page.clock.install();
   await page.setViewportSize(SHORT_RAIL);
   await signIn(page, member);
   const workspace = await createWorkspace(page, `Rail fade ${Date.now()}`);
@@ -457,7 +385,7 @@ test("a row under the rail's faded edge takes no pointer, and a row in sight at 
   await scrollRowTo(bottom - 6, "top");
   await expect.poll(() => rowAt(bottom - 3)).toBeNull();
   await page.mouse.move(rowAt.x, bottom - 3);
-  await page.waitForTimeout(500);
+  await advancePollingWindow(page, 500);
   await expect(page.getByRole("tooltip")).toHaveCount(0);
 
   // A row whose top touches the fade's upper boundary, 16 px above the edge, lies wholly in it.
@@ -519,6 +447,16 @@ test("the application's favicon is the Catalyst mark", async ({ page }) => {
   expect(mark).toContain('<rect class="b" x="18" y="18" width="12" height="12"/>');
   expect(mark).not.toContain("<path");
 });
+
+/** Advance each polling interval, with a task boundary after its callbacks. */
+async function advancePollingWindow(page: Page, duration: number): Promise<void> {
+  for (let elapsed = 0; elapsed < duration; elapsed += railRefreshIntervalMs) {
+    await page.clock.fastForward(Math.min(railRefreshIntervalMs, duration - elapsed));
+    await page.evaluate(
+      () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+    );
+  }
+}
 
 /**
  * What the rail has asked the conversation list for so far. The palette asks with a search

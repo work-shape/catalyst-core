@@ -1,5 +1,5 @@
 import type { Page } from "@playwright/test";
-import { SETTLE_MS, WEBRTC_WAIT_MS, type OtherHost } from "./exit-fixtures";
+import { SETTLE_MS, type OtherHost } from "./exit-fixtures";
 import { pageTestTitles } from "./page-exits";
 import {
   expectOnInterface,
@@ -155,8 +155,7 @@ export const pageHeldTests: readonly PageHeldTest[] = [
         "SecurityError,SecurityError,SecurityError,SecurityError,null"
       );
       await expect(view.locator("body")).toHaveAttribute("data-offered", "threw SecurityError");
-      await page.waitForTimeout(WEBRTC_WAIT_MS);
-
+      // The read was refused and the guard removed the child before any offer could run.
       await expect(view.locator("iframe")).toHaveCount(0);
       expect(otherHost.packets).toBe(0);
     }

@@ -1,3 +1,4 @@
+import { layoutVariants } from "./layout-variants";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { Locator, Page } from "@playwright/test";
@@ -48,14 +49,13 @@ const member = {
 };
 
 /**
- * The fixture model echoes a message word by word, about 20 ms a word: 500 words keep a run
- * going for some ten seconds, long enough to queue behind it and stop it. The test with two
- * members opens a second browser before it queues, which took more than those ten seconds on
- * the hosted runner, so its run is five times as long. Pictures reload the page eight times
- * while it goes, so their run is longer still.
+ * The fixture model echoes a word every 20 ms: 500 words leave ten seconds to queue a turn.
+ * Both members sign in before the run starts; their shared run leaves thirty seconds for the
+ * queue and reload checks on slower runners. Optional pictures keep the run going longer
+ * while their three layout variants reload the page.
  */
 const RUN_WORDS = shotsDir ? 6_000 : 500;
-const SHARED_RUN_WORDS = shotsDir ? 6_000 : 2_500;
+const SHARED_RUN_WORDS = shotsDir ? 6_000 : 1_500;
 /** The time limit of a test with a long run, and the wait for one to end. */
 const RUN_TEST_TIMEOUT_MS = shotsDir ? 600_000 : 240_000;
 const RUN_END_TIMEOUT_MS = shotsDir ? 240_000 : 120_000;
@@ -152,13 +152,9 @@ async function queueMessage(page: Page, text: string): Promise<void> {
   await expect(input).toHaveValue("");
 }
 
-const VARIANTS = (["light", "dark"] as const).flatMap((theme) =>
-  (["en", "de"] as const).flatMap((locale) =>
-    ([1280, 390] as const).map((width) => [theme, locale, width] as const)
-  )
-);
+const VARIANTS = layoutVariants(1280);
 
-type Variant = (typeof VARIANTS)[number];
+type Variant = readonly [theme: "light", locale: "en" | "de", width: 1280 | 390];
 
 /**
  * Loads the address again in a theme, language and width: both are read when the interface
@@ -186,11 +182,14 @@ async function picture(page: Page, name: string): Promise<void> {
     return;
   }
   await mkdir(shotsDir, { recursive: true });
-  await page.screenshot({ path: join(shotsDir, `${name}.png`), animations: "disabled" });
+  await page.screenshot({
+    path: join(shotsDir, `${name}.png`),
+    animations: "disabled"
+  });
 }
 
 /**
- * Pictures of the conversation in both themes and languages at both widths, each after `ready`.
+ * Optional pictures in the three layout variants, each after `ready`.
  * The page is left in light English at 1280.
  */
 async function shoot(page: Page, name: string, ready: () => Promise<void>): Promise<void> {
@@ -450,6 +449,7 @@ test("when the oldest message of a paused queue is withdrawn, the next author ca
   });
   await pageErrors.watch(memberContext);
   const memberPage = await memberContext.newPage();
+  await memberPage.clock.install();
   await signIn(memberPage, member);
   const workspaceId = await sharedWorkspace(page, `Withdrawn queue ${suffix}`, member.email);
   const conversationPath = await startLongRun(
@@ -479,7 +479,8 @@ test("when the oldest message of a paused queue is withdrawn, the next author ca
 
   await queueOf(page).getByRole("button", { name: "Remove" }).click();
   await expect(queueOf(page).getByText(ownText)).toHaveCount(0);
-  // Nothing streams a paused queue: the member's open tab reads the thread again by itself.
+  // Nothing streams a paused queue: drive its ten-second reread in the browser clock.
+  await memberPage.clock.fastForward(10_000);
   await expect(memberQueue.getByText(ownText)).toHaveCount(0, {
     timeout: PAUSED_QUEUE_CHANGE_TIMEOUT_MS
   });
@@ -539,7 +540,7 @@ test("pictures of the queue's passing states", async ({ page }) => {
     });
   });
   for (const locale of ["en", "de"] as const) {
-    await showVariant(page, ["light", locale, 1280], async () => {
+    await showVariant(page, ["light", locale, locale === "de" ? 390 : 1280], async () => {
       await expect(
         page.getByText(/^(?:The reply was interrupted|Die Antwort wurde unterbrochen)/u)
       ).toBeVisible();

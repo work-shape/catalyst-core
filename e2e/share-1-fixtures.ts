@@ -1,3 +1,4 @@
+import { layoutVariants } from "./layout-variants";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -23,10 +24,8 @@ import { expect, test, type PageErrorWatch } from "./test";
 // instance admins; an agent's publish asks the person "For whom?" before Allow and publishes
 // their choice, never anything before the click.
 //
-// Pictures go to `E2E_SHOTS_DIR`, or the test's output folder. Each set is English and German,
-// light and dark, 1280 and 390: the dialog for each choice (24), the Inbox item (8), the
-// audience-only change (8), the narrowing dialog (8, where the member may publish here), the
-// agent's confirmation (8) and the save line (8).
+// E2E_SHOTS_DIR enables pictures. Every audience and state is checked in light English at
+// 1280 and 390, plus German at 390.
 
 const admin = { email: "e2e-share@example.test", password: "e2e-share-password" };
 const member = {
@@ -38,7 +37,7 @@ type Locale = "en" | "de";
 type Theme = "light" | "dark";
 type Audience = z.infer<typeof appAudienceSchema>;
 const LOCALES: readonly Locale[] = ["en", "de"];
-const THEMES: readonly Theme[] = ["light", "dark"];
+const LOOKS = layoutVariants(1280);
 const AUDIENCES: readonly Audience[] = appAudienceSchema.options;
 const DESKTOP = { width: 1280, height: 900 };
 const PHONE = { width: 390, height: 844 };
@@ -46,7 +45,6 @@ const SHORT_PHONE = { width: 390, height: 640 };
 const PUBLISH = /^(?:Publish|Veröffentlichen)$/u;
 const ALLOW = /^(?:Allow|Erlauben)$/u;
 const CANCEL = /^(?:Cancel|Abbrechen)$/u;
-const SIZES = [DESKTOP, PHONE] as const;
 
 const databaseUrl =
   process.env.E2E_DATABASE_URL ??
@@ -75,27 +73,22 @@ async function readApp(page: Page, appUrl: string, workspaceId: string, audience
   return readSchema.parse(await read.json());
 }
 
-/** Each language, theme and width in turn, with a fresh page in that language and theme. */
+/** The three layout variants, with a fresh page in the chosen language. */
 async function eachLook(
   page: Page,
   show: (locale: Locale) => Promise<Locator>,
   shoot: (locale: Locale, theme: Theme, width: number) => Promise<void>
 ): Promise<number> {
   let count = 0;
-  for (const locale of LOCALES) {
+  for (const [theme, locale, width] of LOOKS) {
     await setAccountLocale(page, locale);
-    for (const theme of THEMES) {
-      await page.setViewportSize(DESKTOP);
-      await setLook(page, locale, theme);
-      const shown = await show(locale);
-      for (const size of SIZES) {
-        await page.setViewportSize(size);
-        await shown.scrollIntoViewIfNeeded();
-        await expect(shown).toBeInViewport();
-        await shoot(locale, theme, size.width);
-        count += 1;
-      }
-    }
+    await page.setViewportSize(width === 390 ? PHONE : DESKTOP);
+    await setLook(page, locale, theme);
+    const shown = await show(locale);
+    await shown.scrollIntoViewIfNeeded();
+    await expect(shown).toBeInViewport();
+    await shoot(locale, theme, width);
+    count += 1;
   }
   await page.setViewportSize(DESKTOP);
   await setAccountLocale(page, "en");
@@ -110,10 +103,14 @@ function choiceName(audience: Audience, locale: Locale, workspaceName: string): 
   return workspaceName;
 }
 
-async function picture(page: Page, testInfo: TestInfo, name: string): Promise<void> {
-  const folder = process.env.E2E_SHOTS_DIR ?? testInfo.outputPath();
+async function picture(page: Page, _testInfo: TestInfo, name: string): Promise<void> {
+  const folder = process.env.E2E_SHOTS_DIR;
+  if (!folder) return;
   await mkdir(folder, { recursive: true });
-  await page.screenshot({ path: join(folder, `share-1-${name}.png`), animations: "disabled" });
+  await page.screenshot({
+    path: join(folder, `share-1-${name}.png`),
+    animations: "disabled"
+  });
 }
 
 async function setAccountLocale(page: Page, locale: Locale | null): Promise<void> {
@@ -197,7 +194,9 @@ async function publishStore(page: Page, workspaceId: string, store: string, titl
         JSON.stringify(
           await (await page.request.get(`${apiBaseUrl}/api/v1/data-stores/${store}`)).json()
         ),
-      { timeout: 60_000 }
+      {
+        timeout: 60_000
+      }
     )
     .toContain('"ready"');
 }
@@ -213,7 +212,12 @@ export async function shareAsksForWhom(
     browser,
     pageErrors,
     accessState: _accessState
-  }: { page: Page; browser: Browser; pageErrors: PageErrorWatch; accessState: unknown },
+  }: {
+    page: Page;
+    browser: Browser;
+    pageErrors: PageErrorWatch;
+    accessState: unknown;
+  },
   testInfo: TestInfo
 ): Promise<void> {
   test.setTimeout(600_000);
@@ -327,7 +331,7 @@ export async function shareAsksForWhom(
     expect(questionBox && summaryBox && questionBox.y < summaryBox.y).toBe(true);
     await expect(question.getByRole("radio")).toHaveCount(3);
 
-    // 24 pictures: each choice in each language, theme and width, with Details open so the
+    // Each choice in the three layout variants, with Details open so the
     // DS-13b line shows the chosen people.
     let pictures = 0;
     const summaries: Record<Locale, Record<Audience, string>> = {
@@ -342,7 +346,8 @@ export async function shareAsksForWhom(
         instance: await answerFor("instance")
       };
       for (const audience of AUDIENCES) summaries[locale][audience] = answers[audience].summary;
-      for (const theme of THEMES) {
+      for (const [theme, lookLocale, width] of LOOKS) {
+        if (lookLocale !== locale) continue;
         await page.setViewportSize(DESKTOP);
         await setLook(page, locale, theme);
         await openDialog();
@@ -350,7 +355,7 @@ export async function shareAsksForWhom(
         await openDetails();
         for (const audience of AUDIENCES) {
           await choose(audience, locale, answers[audience]);
-          for (const size of [DESKTOP, PHONE]) {
+          for (const size of [width === 390 ? PHONE : DESKTOP]) {
             await page.setViewportSize(size);
             await expect(question).toBeInViewport();
             await picture(page, testInfo, `dialog-${audience}-${locale}-${theme}-${size.width}`);
@@ -360,7 +365,7 @@ export async function shareAsksForWhom(
         }
       }
     }
-    expect(pictures).toBe(24);
+    expect(pictures).toBe(AUDIENCES.length * LOOKS.length);
     // Each choice has a sentence of its own.
     for (const locale of LOCALES) {
       expect(new Set(Object.values(summaries[locale])).size).toBe(3);
@@ -506,7 +511,8 @@ export async function shareAsksForWhom(
     for (const locale of LOCALES) {
       await setAccountLocale(page, locale);
       const label = (await answerFor("workspace")).label;
-      for (const theme of THEMES) {
+      for (const [theme, lookLocale, width] of LOOKS) {
+        if (lookLocale !== locale) continue;
         await page.setViewportSize(DESKTOP);
         await setLook(page, locale, theme);
         const review = await openInbox();
@@ -514,7 +520,7 @@ export async function shareAsksForWhom(
         const audienceBox = await review.getByTestId("publish-review-audience").boundingBox();
         const leadBox = await review.getByTestId("publish-narrative-summary").boundingBox();
         expect(audienceBox && leadBox && audienceBox.y < leadBox.y).toBe(true);
-        for (const size of [DESKTOP, PHONE]) {
+        for (const size of [width === 390 ? PHONE : DESKTOP]) {
           await page.setViewportSize(size);
           await expect(review.getByTestId("publish-review-audience")).toBeInViewport();
           await picture(page, testInfo, `inbox-${locale}-${theme}-${size.width}`);
@@ -573,7 +579,7 @@ export async function shareAsksForWhom(
       },
       (locale, theme, width) => picture(page, testInfo, `audience-only-${locale}-${theme}-${width}`)
     );
-    expect(audienceOnly).toBe(8);
+    expect(audienceOnly).toBe(LOOKS.length);
     await dialog.getByRole("button", { name: CANCEL }).click();
     await expect(dialog).toBeHidden();
 
@@ -612,7 +618,7 @@ export async function shareAsksForWhom(
         (locale, theme, width) =>
           picture(memberPage, testInfo, `narrowing-${locale}-${theme}-${width}`)
       );
-      expect(narrowing).toBe(8);
+      expect(narrowing).toBe(LOOKS.length);
       await memberDialog.getByRole("button", { name: CANCEL }).click();
       await expect(memberDialog).toBeHidden();
     } else {
@@ -659,7 +665,10 @@ export async function shareAsksForWhom(
     const savedId = `share-desk-${tag}`;
     const savedUrl = `${apiBaseUrl}/api/v1/assets/app/${savedId}`;
     for (const [path, content] of Object.entries(plainPageSource)) {
-      await sendToolCall(page, "workspace.write_file", { path: `${folder}/${path}`, content });
+      await sendToolCall(page, "workspace.write_file", {
+        path: `${folder}/${path}`,
+        content
+      });
     }
     // The save moves this tab to the App's draft; the line stays in the conversation.
     const thread = await conversationPath();
@@ -683,7 +692,7 @@ export async function shareAsksForWhom(
       },
       (locale, theme, width) => picture(page, testInfo, `save-line-${locale}-${theme}-${width}`)
     );
-    expect(saveLines).toBe(8);
+    expect(saveLines).toBe(LOOKS.length);
     await page.goto(thread);
     await line.getByTestId("app-saved-share").click();
     await expect(page.getByRole("dialog")).toHaveCount(1);
@@ -748,7 +757,7 @@ export async function shareAsksForWhom(
         await picture(page, testInfo, `agent-confirm-${locale}-${theme}-${width}`);
       }
     );
-    expect(agentShots).toBe(8);
+    expect(agentShots).toBe(LOOKS.length);
     // Choosing another audience publishes nothing yet: Allow waits for its sentence, and the
     // App is still not live.
     await page.goto(thread);

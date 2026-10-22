@@ -1,7 +1,6 @@
 import type { Page } from "@playwright/test";
 import {
   SETTLE_MS,
-  WEBRTC_WAIT_MS,
   exitTest,
   expectRefused,
   linkClicks,
@@ -533,7 +532,8 @@ exitTest.describe("WebRTC from a view", () => {
     async ({ page, otherHost }) => {
       await openView(page, "html.rendered", webRtcScript(otherHost.stunServer));
       await expect(viewFrame(page).locator("body")).toHaveAttribute("data-offered", "true");
-      await page.waitForTimeout(WEBRTC_WAIT_MS);
+      // A positive packet is the completion condition of this known-open probe.
+      await expect.poll(() => otherHost.packets).toBeGreaterThan(0);
 
       // Everything above must work. Only the count below is expected to fail, and when it one
       // day holds, a browser has closed WebRTC for such a frame: then this is an ordinary test,
@@ -547,7 +547,11 @@ exitTest.describe("WebRTC from a view", () => {
     await openView(page, "private_hydrated_view", webRtcScript(otherHost.stunServer));
     await expect(viewFrame(page).getByRole("heading", { name: viewTitle })).toBeVisible();
     await expect(page.getByText("Loading view…")).toHaveCount(0);
-    await page.waitForTimeout(WEBRTC_WAIT_MS);
+    // The loaded frame explicitly forbids scripts, so no delayed offer can run.
+    await expect(viewFrame(page).owner()).toHaveAttribute(
+      "sandbox",
+      /^(?!.*\ballow-scripts\b).*$/u
+    );
 
     // Its frame runs no script, so nothing in it can open a connection.
     await expect(viewFrame(page).locator("body")).not.toHaveAttribute("data-offered");
@@ -782,13 +786,13 @@ exitTest.describe("a Page is held where the interface put it", () => {
   // Page's own realm, is in the way. What this test holds is narrower. The names are gone, and
   // the way a view gets them back, a frame of its own, is not there in a Page.
   exitTest(pageTestTitles.webRtc, async ({ page, otherHost }) => {
-    const open = `var peer = new RTCPeerConnection({ iceServers: [{ urls: ${JSON.stringify(otherHost.stunServer)} }] }); peer.createDataChannel("rows"); peer.createOffer().then(function (offer) { return peer.setLocalDescription(offer); }).then(function () { parent.postMessage("offered", "*"); });`;
+    const open = `parent.postMessage("child-started", "*"); var peer = new RTCPeerConnection({ iceServers: [{ urls: ${JSON.stringify(otherHost.stunServer)} }] }); peer.createDataChannel("rows"); peer.createOffer().then(function (offer) { return peer.setLocalDescription(offer); }).then(function () { parent.postMessage("offered", "*"); });`;
 
     const view = await openPage(page, {
       script: [
         `document.body.setAttribute("data-webrtc", [typeof RTCPeerConnection, typeof webkitRTCPeerConnection, typeof mozRTCPeerConnection].join(","));`,
-        `addEventListener("message", (event) => { if (event.data === "offered") { document.body.setAttribute("data-offered", "true"); } });`,
-        `const frame = document.createElement("iframe"); frame.srcdoc = "<script src='assets/rtc.js'></scr" + "ipt>"; document.body.appendChild(frame);`
+        `let childStarted = false; addEventListener("message", (event) => { if (event.data === "child-started") childStarted = true; if (event.data === "offered") document.body.setAttribute("data-offered", "true"); if (event.data === "observe-child") { document.body.setAttribute("data-child-connected", String(frame.isConnected)); document.body.setAttribute("data-child-started", String(childStarted)); } });`,
+        `const frame = document.createElement("iframe"); frame.srcdoc = "<script src='assets/rtc.js'></scr" + "ipt>"; document.body.appendChild(frame); setTimeout(() => { window.postMessage("observe-child", "*"); }, 0);`
       ].join("\n"),
       files: { "assets/rtc.js": open }
     });
@@ -797,7 +801,10 @@ exitTest.describe("a Page is held where the interface put it", () => {
       "data-webrtc",
       "undefined,undefined,undefined"
     );
-    await page.waitForTimeout(WEBRTC_WAIT_MS);
+    // The next task observes the guard's removal; the child's script never reached its constructor.
+    await expect(view.locator("body")).toHaveAttribute("data-child-connected", "false");
+    await expect(view.locator("body")).toHaveAttribute("data-child-started", "false");
+    await expect(view.locator("iframe")).toHaveCount(0);
 
     await expect(view.locator("body")).not.toHaveAttribute("data-offered");
     expect(otherHost.packets).toBe(0);

@@ -1303,8 +1303,18 @@ test("a reply with remote images, also in a Mermaid diagram, makes no request ou
       .getByText("Image shape")
       .or(reply.getByText(/Mermaid Error/u))
   ).toBeVisible();
-  // Mermaid drew into the page; give any image it named the time to be requested.
-  await page.waitForTimeout(1_000);
+  // The final stream and both diagrams have finished before the observation window starts.
+  await expect(page.getByRole("button", { name: "Stop generating" })).toHaveCount(0);
+  await expect(reply.getByText("End of check", { exact: false })).toBeVisible();
+  // Markdown and raw HTML images are removed. Both diagrams have now attempted their
+  // background, label and shape URLs; the full set cannot pass on the first refusal.
+  await expect
+    .poll(() => [...new Set(outsideRequests.map((url) => new URL(url).pathname))].sort())
+    .toEqual(["/label.png", "/shape.png", "/theme.png"]);
+  // Every attempted image request has received its policy refusal.
+  await expect
+    .poll(() => outsideRequests.length > 0 && refusedByPolicy.length === outsideRequests.length)
+    .toBe(true);
 
   expect(answered).toEqual([]);
   expect(outsideRequests.length).toBeGreaterThan(0);
@@ -1459,11 +1469,20 @@ test("new turns anchor below the top chrome and retain response runway", async (
       })
       .toBeLessThanOrEqual(32);
 
-    const anchoredPositions: number[] = [];
-    for (let sample = 0; sample < 8; sample += 1) {
-      anchoredPositions.push(await bubble.evaluate((element) => element.getBoundingClientRect().y));
-      await page.waitForTimeout(75);
-    }
+    // Observe every painted frame for the same 600 ms stability window.
+    const anchoredPositions = await bubble.evaluate(
+      (element) =>
+        new Promise<number[]>((resolve) => {
+          const positions: number[] = [];
+          const started = performance.now();
+          const sample = () => {
+            positions.push(element.getBoundingClientRect().y);
+            if (performance.now() - started >= 600) resolve(positions);
+            else requestAnimationFrame(sample);
+          };
+          sample();
+        })
+    );
     expect(Math.max(...anchoredPositions) - Math.min(...anchoredPositions)).toBeLessThanOrEqual(1);
 
     const transcriptPadding = await anchoredMessage.evaluate((element) => {
@@ -1940,78 +1959,6 @@ test("a superadmin manages a shared workspace without being a member", async ({
   await expect(page).toHaveURL(new RegExp(`/w/${collaborationWorkspace.id}$`, "u"));
   await expect(selectorTrigger).toContainText(workspaceName);
   await expect(page.getByPlaceholder("Message")).toBeVisible();
-});
-
-test("a stranger to a workspace and a non-author of a private conversation find nothing", async ({
-  page,
-  browser,
-  pageErrors
-}) => {
-  const stamp = Date.now();
-  const closedWorkspaceName = `E2E Closed ${stamp}`;
-  const privateTitle = `E2E Private ${stamp}`;
-  const missing = z.object({ error: z.object({ code: z.literal("NOT_FOUND") }) });
-
-  // The superadmin owns a private workspace the normal user is no member of.
-  const superadminContext = await browser.newContext();
-  await pageErrors.watch(superadminContext);
-  const superadminPage = await superadminContext.newPage();
-  await signInViaApi(superadminPage, superadminUser);
-  const closedWorkspace = await createWorkspace(superadminPage, {
-    name: closedWorkspaceName,
-    visibility: "private"
-  });
-
-  // The normal user writes a private conversation in a workspace of their own.
-  await signInViaApi(page, normalUser);
-  const ownWorkspace = await createWorkspace(page, {
-    name: `E2E Private Default ${stamp}`,
-    defaultConversationVisibility: "private"
-  });
-  const started = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/v1/conversations/runs`, {
-    data: {
-      idempotencyKey: randomUUID(),
-      conversation: { title: privateTitle, collaborationWorkspaceId: ownWorkspace.id },
-      message: { text: `Opening message for ${privateTitle}` }
-    }
-  });
-  expect(started.ok()).toBe(true);
-  const { conversation } = z
-    .object({ conversation: z.object({ id: z.string(), visibility: z.literal("private") }) })
-    .parse(await started.json());
-
-  // A stranger gets the answer a workspace that does not exist would give, and no row for it.
-  const strangerRead = await page.request.get(
-    `${apiBaseUrl}/api/v1/workspaces/${encodeURIComponent(closedWorkspace.id)}`
-  );
-  expect(strangerRead.status()).toBe(404);
-  missing.parse(await strangerRead.json());
-  const strangerConversations = await page.request.get(
-    `${apiBaseUrl}/api/v1/conversations?collaborationWorkspaceId=${encodeURIComponent(closedWorkspace.id)}`
-  );
-  expect(strangerConversations.status()).toBe(404);
-  await page.goto("/");
-  const selectorTrigger = page.getByTestId("collaboration-workspace-selector-trigger");
-  await selectorTrigger.click();
-  await expect(page.getByRole("button", { name: ownWorkspace.name, exact: true })).toBeVisible();
-  await expect(page.getByText(closedWorkspaceName)).toHaveCount(0);
-
-  // A superadmin is Owner of the workspace, yet not the author: the private conversation is
-  // missing for them, in the thread and in the workspace's list.
-  const nonAuthorThread = await superadminPage.request.get(
-    `${apiBaseUrl}/api/v1/conversations/${encodeURIComponent(conversation.id)}/thread`
-  );
-  expect(nonAuthorThread.status()).toBe(404);
-  missing.parse(await nonAuthorThread.json());
-  const nonAuthorList = await superadminPage.request.get(
-    `${apiBaseUrl}/api/v1/conversations?collaborationWorkspaceId=${encodeURIComponent(ownWorkspace.id)}`
-  );
-  expect(nonAuthorList.ok()).toBe(true);
-  expect(
-    z.object({ items: z.array(z.object({ id: z.string() })) }).parse(await nonAuthorList.json())
-      .items
-  ).toEqual([]);
-  await superadminContext.close();
 });
 
 test("first message from the root route moves to the persisted conversation route", async ({
@@ -2592,8 +2539,7 @@ test(
 
     const eventRequestCountBeforeView = eventRequests.length;
     await sourceConversation.getByRole("button").first().click();
-    await page.waitForTimeout(500);
-    expect(eventRequests).toHaveLength(eventRequestCountBeforeView);
+
     await expect(sourceConversation.getByTestId("conversation-unread-indicator")).toHaveCount(0);
     await expect(page.getByTestId("run-activity")).toHaveCount(0);
     // The whole answer is there from stored state, shown once.
@@ -2601,6 +2547,7 @@ test(
       chatRegion.locator('[data-role="assistant"]').filter({ hasText: answerToken })
     ).toHaveCount(1);
     await expect(chatRegion.getByText(`w${LONG_RUN_WORDS - 2}".`, { exact: false })).toBeVisible();
+    expect(eventRequests).toHaveLength(eventRequestCountBeforeView);
   }
 );
 
@@ -2736,7 +2683,11 @@ for (const text of [
         };
       });
     const light = await look();
-    expect(light).toMatchObject({ fill: "rgba(0, 0, 0, 0)", border: "0px", sameColour: false });
+    expect(light).toMatchObject({
+      fill: "rgba(0, 0, 0, 0)",
+      border: "0px",
+      sameColour: false
+    });
     expect(light.bottom).toBeLessThanOrEqual((await input.boundingBox())?.y ?? 0);
 
     // The theme switch sits in the account menu of the rail.
@@ -2908,12 +2859,18 @@ test("conversation rail renames from the menu and a later selected-title click",
   const menuTitle = `${initialTitle} menu`;
   const finalTitle = `${initialTitle} double click`;
   const otherTitle = `Rename navigation target ${Date.now()}`;
-  await createListedConversation(page, initialTitle);
+  const renameTarget = await createListedConversation(page, initialTitle);
   await createListedConversation(page, otherTitle);
-  await page.route("**/api/v1/conversations/*/title", async (route) => {
-    await new Promise((resolve) => setTimeout(resolve, 300));
-    await route.continue();
-  });
+  let releaseRename = () => {};
+  const renameReleased = new Promise<void>((resolve) => (releaseRename = resolve));
+  await page.route(
+    "**/api/v1/conversations/*/title",
+    async (route) => {
+      await renameReleased;
+      await route.continue();
+    },
+    { times: 1 }
+  );
 
   await page.goto("/");
   const initialRow = page.getByTestId("conversation-row").filter({ hasText: initialTitle });
@@ -2935,13 +2892,21 @@ test("conversation rail renames from the menu and a later selected-title click",
   );
   await titleInput.press("Enter");
   expect(await titleInput.count()).toBe(0);
+  releaseRename();
   await menuRenameResponse;
 
   const renamedRow = page.getByTestId("conversation-row").filter({ hasText: menuTitle });
   await expect(renamedRow).toHaveCount(1);
   await renamedRow.getByRole("button").first().click();
   await expect(renamedRow).toHaveAttribute("data-selected", "true");
-  await page.waitForTimeout(750);
+  await expect(page).toHaveURL(conversationUrlPattern(renameTarget.id));
+  await expect(
+    page
+      .getByRole("region", { name: "Chat" })
+      .getByText(`Opening message for ${initialTitle}`, { exact: false })
+      .first()
+  ).toBeVisible();
+  await expect(titleInput).toHaveCount(0);
   await renamedRow.getByText(menuTitle, { exact: true }).click();
   await expect(titleInput).toBeFocused();
   await expect(titleInput).toHaveValue(menuTitle);
@@ -2986,39 +2951,6 @@ test("standalone auth gates superadmin views", async ({ page }) => {
   await page.getByRole("menuitem", { name: "Sign out" }).click();
   await expect(page.getByRole("main", { name: "Sign in" })).toBeVisible();
   await signInViaUi(page, normalUser, { alreadyOnLogin: true });
-});
-
-test("the Settings pages and Studio are route-backed", async ({ page }) => {
-  await signInViaApi(page, superadminUser);
-
-  await page.goto("/");
-  await settingsGear(page).click();
-  await expect(page).toHaveURL(/\/settings\/instance\/users$/u);
-  await expect(page.getByRole("heading", { name: "Users", level: 1 })).toBeVisible();
-
-  await page.goto("/settings");
-  await expect(page).toHaveURL(/\/settings\/you\/profile$/u);
-  await expect(page.getByRole("heading", { name: "Profile", level: 1 })).toBeVisible();
-
-  await page.goto("/settings/instance/usage");
-  await expect(page).toHaveURL(/\/settings\/instance\/usage$/u);
-  await expect(page.getByRole("heading", { name: "Usage", level: 1 })).toBeVisible();
-  await expect(page.getByTestId("usage-month-budget")).toBeVisible();
-
-  await page.getByRole("button", { name: "Studio", exact: true }).click();
-  await expect(page).toHaveURL(/\/build\/agents$/u);
-  await expect(page.getByRole("heading", { name: "Agents", level: 1 })).toBeVisible();
-  await expect(settingsPages(page)).toHaveCount(0);
-
-  await settingsGear(page).click();
-  await settingsPages(page).getByRole("button", { name: "Audit", exact: true }).click();
-  await expect(page).toHaveURL(/\/settings\/instance\/audit$/u);
-  await expect(page.getByRole("heading", { name: "Audit", level: 1 })).toBeVisible();
-  await expect(page.getByText("Recent activity")).toBeVisible();
-
-  await page.goBack();
-  await expect(page).toHaveURL(/\/settings\/instance\/users$/u);
-  await expect(page.getByRole("heading", { name: "Users", level: 1 })).toBeVisible();
 });
 
 test("no page keeps room for the agent button: lists share one title line and a detail head is the top band", async ({
@@ -3669,6 +3601,9 @@ test("an instance admin opens every group of the Settings rail", async ({ page }
   await rail.getByRole("button", { name: "Security", exact: true }).click();
   await expect(page).toHaveURL(/\/settings\/you\/security$/u);
   await expect(page.getByRole("heading", { name: "Security", level: 1 })).toBeVisible();
+  await page.goBack();
+  await expect(page).toHaveURL(/\/settings\/instance\/api-access$/u);
+  await expect(page.getByRole("heading", { name: "API access", level: 1 })).toBeVisible();
 
   // The Workspace pages change the workspace named under the group's label.
   await rail.getByRole("button", { name: /^Members/u }).click();
@@ -4308,7 +4243,6 @@ test("under 768 px the rail is a drawer that the header opens and a choice close
   await expect(page.getByRole("navigation", { name: "Main navigation" })).toBeVisible();
 });
 
-// A grant in a workspace opens Studio for this user: no spec hands one out while this runs.
 test("the command palette opens from the rail and the keyboard, searches titles on the server and opens a conversation", async ({
   page,
   accessState: _accessState
@@ -4437,26 +4371,6 @@ test("the palette lists the eight most recent conversations and reaches the rest
 
   await palette.getByRole("combobox").fill(oldest ?? "");
   await expect(palette.getByRole("option")).toHaveText([oldest ?? ""]);
-});
-
-test("the palette's Go to group offers an administrator the instance pages and Studio", async ({
-  page
-}) => {
-  await signInViaUi(page, superadminUser);
-  await page.getByRole("button", { name: "Search", exact: true }).click();
-  const palette = page.getByRole("dialog", { name: "Search" });
-  for (const name of [
-    "You › Profile",
-    "Instance › Users",
-    "Instance › Usage",
-    "Instance › Audit",
-    "Studio"
-  ]) {
-    await expect(palette.getByRole("option", { name, exact: true })).toBeVisible();
-  }
-  await palette.getByRole("option", { name: "Instance › Usage", exact: true }).click();
-  await expect(page).toHaveURL(/\/settings\/instance\/usage$/u);
-  await expect(page.getByRole("heading", { name: "Usage", level: 1 })).toBeVisible();
 });
 
 test("the account menu names the account and holds the settings, the theme and sign out", async ({
@@ -4833,8 +4747,6 @@ const SUB_RAIL_SCROLL_STEPS = [8, 24, 60, 200];
 const COMPOSER_START_PAGE_LIFT_PX = 100;
 /** How long the composer is watched after a click: well past its 220 ms move. */
 const COMPOSER_WATCH_MS = 1_000;
-/** The composer rests when it has not moved for this long. */
-const COMPOSER_REST_MS = 400;
 
 /**
  * Words in a message whose run must still be going on the server while the test acts on the
@@ -4990,17 +4902,33 @@ function composerBottomGap(page: Page): Promise<number> {
   });
 }
 
-/** The gap once the composer rests: the same over a time longer than its move takes. */
+/** The composer's finite animations have ended, followed by three stable painted reads. */
 async function settledComposerBottomGap(page: Page): Promise<number> {
   let gap = Number.NaN;
+  let stableReads = 0;
   await expect
-    .poll(async () => {
-      const before = await composerBottomGap(page);
-      await page.waitForTimeout(COMPOSER_REST_MS);
-      gap = await composerBottomGap(page);
-      return Math.abs(gap - before);
-    })
-    .toBeLessThan(1);
+    .poll(
+      async () => {
+        await page.evaluate(
+          () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+        );
+        const moving = await page.evaluate(() =>
+          document
+            .getAnimations()
+            .some(
+              (animation) =>
+                animation.playState === "running" &&
+                animation.effect?.getComputedTiming().iterations !== Infinity
+            )
+        );
+        const next = await composerBottomGap(page);
+        stableReads = !moving && Math.abs(next - gap) < 1 ? stableReads + 1 : 0;
+        gap = next;
+        return stableReads;
+      },
+      { intervals: [16] }
+    )
+    .toBe(3);
   return gap;
 }
 

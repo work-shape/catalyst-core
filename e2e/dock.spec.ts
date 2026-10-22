@@ -1,3 +1,4 @@
+import { layoutVariants } from "./layout-variants";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -245,29 +246,28 @@ test("in a narrow window the dock lies over the page, and each brings the other 
   await expect(page.getByRole("tooltip")).toHaveText("Show page");
   const shotsDir = process.env.E2E_SHOTS_DIR;
   if (shotsDir) await mkdir(shotsDir, { recursive: true });
-  for (const theme of ["light", "dark"] as const) {
-    for (const locale of ["en", "de"] as const) {
-      await page.evaluate(
-        ([mode, language]) => {
-          localStorage.setItem("vivd-catalyst:theme", mode);
-          localStorage.setItem("vivd-catalyst:locale", language);
-        },
-        [theme, locale] as const
-      );
-      await page.setViewportSize({ width: 390, height: 640 });
-      await page.reload();
-      await expect(chatColumn(page)).toBeVisible();
-      await expect(page.locator("[data-dock-page]")).toHaveAttribute("inert", "");
-      await expect(
-        dockHead(page).getByRole("button", { name: /^(?:Show page|Seite anzeigen)$/u })
-      ).toHaveText("");
-      await page.mouse.move(0, 0);
-      if (shotsDir)
-        await page.screenshot({
-          path: join(shotsDir, `phone-dock-overlay-${theme}-${locale}-390.png`),
-          animations: "disabled"
-        });
-    }
+  for (const [theme, locale, width] of layoutVariants(700)) {
+    await page.evaluate(
+      ([mode, language]) => {
+        localStorage.setItem("vivd-catalyst:theme", mode);
+        localStorage.setItem("vivd-catalyst:locale", language);
+      },
+      [theme, locale] as const
+    );
+    await page.setViewportSize({ width, height: 640 });
+    await page.reload();
+    await expect(chatColumn(page)).toBeVisible();
+    await expect(page.locator("[data-dock-page]")).toHaveAttribute("inert", "");
+    const showPage = dockHead(page).getByRole("button", {
+      name: /^(?:Show page|Seite anzeigen)$/u
+    });
+    await expect(showPage).toHaveText(width === 390 ? "" : "Show page");
+    await page.mouse.move(0, 0);
+    if (shotsDir)
+      await page.screenshot({
+        path: join(shotsDir, `phone-dock-overlay-${theme}-${locale}-${width}.png`),
+        animations: "disabled"
+      });
   }
 });
 

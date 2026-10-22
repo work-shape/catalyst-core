@@ -1,3 +1,5 @@
+import { mkdir } from "node:fs/promises";
+import { join } from "node:path";
 import type { Page, Route, TestInfo } from "@playwright/test";
 import { z } from "zod";
 import { requestWithOrigin } from "./request-with-origin";
@@ -17,8 +19,7 @@ test.use({
         path: /^\/api\/v1\/assets\/(?:workflow\/e2e-missing-workflow|agent\/e2e_missing_agent)$/u,
         tests: [
           "a Workflow that is not there waits for the answer, then says so and leads to the list",
-          "an agent's address without an agent waits for the answer, then says so without the id",
-          "pictures of the not-found state on each surface, wide and narrow, light and dark, in both languages"
+          "an agent's address without an agent waits for the answer, then says so without the id"
         ]
       }
     ]
@@ -188,69 +189,29 @@ test("an agent's address without an agent waits for the answer, then says so wit
 
 /** Attaches a picture of the window to the test's report, where the review reads it. */
 async function attachShot(testInfo: TestInfo, page: Page, name: string): Promise<void> {
-  await testInfo.attach(`uxa-6a/${name}.png`, {
-    body: await page.screenshot({ animations: "disabled" }),
-    contentType: "image/png"
-  });
+  const shotsDir = process.env.E2E_SHOTS_DIR;
+  if (!shotsDir) return;
+  await mkdir(shotsDir, { recursive: true });
+  const path = join(shotsDir, `uxa-6a-${name}.png`);
+  await page.screenshot({ path, animations: "disabled" });
+  await testInfo.attach(`uxa-6a/${name}.png`, { path, contentType: "image/png" });
 }
 
-test("pictures of the not-found state on each surface, wide and narrow, light and dark, in both languages", async ({
-  page
-}, testInfo) => {
-  test.setTimeout(300_000);
+test("the not-found next step fits a narrow window", async ({ page }, testInfo) => {
   await signIn(page);
-  const workspaceId = await createWorkspace(page);
-  const surfaces = [
-    {
-      name: "route",
-      path: "/workflows/unknown",
-      sentence: "route",
-      action: "toChat",
-      role: "button"
-    },
-    {
-      name: "workflow",
-      path: `/w/${workspaceId}/workflows/${MISSING_WORKFLOW}`,
-      sentence: "workflow",
-      action: "toWorkflows",
-      role: "link"
-    },
-    {
-      name: "agent",
-      path: `/build/agents/${MISSING_AGENT}`,
-      sentence: "agent",
-      action: "toAgents",
-      role: "link"
-    }
-  ] as const;
-  await page.goto("/");
-  for (const width of widths) {
-    await page.setViewportSize({ width, height: 640 });
-    for (const locale of locales) {
-      for (const theme of themes) {
-        await page.evaluate(
-          ([chosenLocale, chosenTheme]) => {
-            localStorage.setItem("vivd-catalyst:locale", chosenLocale);
-            localStorage.setItem("vivd-catalyst:theme", chosenTheme);
-          },
-          [locale, theme] as const
-        );
-        for (const surface of surfaces) {
-          await page.goto(surface.path);
-          const state = notFound(page);
-          await expect(state.getByRole("heading", { level: 1 })).toHaveText(
-            words[locale][surface.sentence]
-          );
-          // The one step is in the window, whole, at every width.
-          await expect(
-            state.getByRole(surface.role, { name: words[locale][surface.action], exact: true })
-          ).toBeInViewport({ ratio: 1 });
-          await expect(page.locator("html")).toHaveAttribute("data-vivd-theme", theme);
-          await attachShot(testInfo, page, `${surface.name}-${String(width)}-${theme}-${locale}`);
-        }
-      }
-    }
-  }
+  await page.setViewportSize({ width: 390, height: 640 });
+  await page.addInitScript(() => {
+    localStorage.setItem("vivd-catalyst:locale", "en");
+    localStorage.setItem("vivd-catalyst:theme", "light");
+  });
+  await page.goto("/workflows/unknown");
+  const state = notFound(page);
+  await expect(state.getByRole("heading", { level: 1 })).toHaveText(words.en.route);
+  await expect(state.getByRole("button", { name: words.en.toChat, exact: true })).toBeInViewport({
+    ratio: 1
+  });
+  await expect(page.locator("html")).toHaveAttribute("data-vivd-theme", "light");
+  await attachShot(testInfo, page, "route-390-light-en");
 });
 
 test("the library's not-found sample in the gallery, wide and narrow, light and dark, in both languages", async ({

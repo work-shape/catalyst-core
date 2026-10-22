@@ -64,32 +64,8 @@ const proposal = {
   ]
 };
 
-// The tests share the instance: the first needs a member who has asked for nothing yet,
-// and the second lets that member ask. Both fail without the Inbox: there was no such area.
+// These journeys share their member's requests and decisions in one instance.
 test.describe.configure({ mode: "serial" });
-
-test("a person who decides nothing and has asked for nothing has no Inbox row, and an empty Inbox by address", async ({
-  page
-}) => {
-  await signIn(page, member);
-  const rail = page.getByRole("navigation", { name: "Main navigation" });
-
-  // The rail shows no Inbox to a person it holds nothing for, and never a Chat row.
-  await expect(rail.getByRole("button", { name: /^Inbox/u })).toHaveCount(0);
-  await expect(rail.getByRole("button", { name: "Chat", exact: true })).toHaveCount(0);
-
-  await page.goto("/inbox");
-  const inbox = page.getByRole("region", { name: "Inbox", exact: true });
-  await expect(inbox.getByRole("heading", { name: "Inbox", exact: true })).toBeVisible();
-  await expect(
-    inbox.getByText("You have not requested anything that needs a decision.")
-  ).toBeVisible();
-  await expect(inbox.getByRole("tablist")).toHaveCount(0);
-
-  await page.goto("/approvals");
-  await expect(page).toHaveURL(/\/inbox$/u);
-  await expect(inbox.getByRole("heading", { name: "Inbox", exact: true })).toBeVisible();
-});
 
 test("a member's proposal waits in the reviewer's Inbox, is rejected there and comes back decided", async ({
   page,

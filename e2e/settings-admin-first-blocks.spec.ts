@@ -1,3 +1,6 @@
+import { mkdir } from "node:fs/promises";
+import { join } from "node:path";
+import { layoutVariants } from "./layout-variants";
 import { randomUUID } from "node:crypto";
 import type { Locator, Page, Route } from "@playwright/test";
 import { z } from "zod";
@@ -28,9 +31,8 @@ test.use({
 // Settings for an admin (UXA-5): Usage opens with the month's cost of its budget and the tokens
 // under it, API keys with the person's own keys, Members with the members and requests only
 // while somebody asks. A refusal on these pages names an instance admin to ask, never a page the
-// person cannot open, and is information where a failure is an error. Every surface is pictured
-// at 1280 and 390, light and dark, English and German, in every run: each picture is attached
-// with its bytes and written under the test's output in `shots/`.
+// person cannot open, and is information where a failure is an error. Each state runs in light
+// English at 1280 and 390, plus German at 390. E2E_SHOTS_DIR enables attached pictures.
 
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
 // At a short window, the refusal must stay beside the actions while the fields scroll.
@@ -48,15 +50,14 @@ const plantedRequest = {
   createdAt: "2026-10-16T09:30:00.000Z"
 };
 
-const SIZES = [
-  { width: 1280, height: 800 },
-  { width: 390, height: 844 }
-] as const;
-const LOOKS = (["light", "dark"] as const).flatMap((theme) =>
-  (["en", "de"] as const).map((locale) => ({ theme, locale }))
-);
-type Look = (typeof LOOKS)[number];
-type View = Look & (typeof SIZES)[number];
+const VIEWS = layoutVariants(1280).map(([theme, locale, width]) => ({
+  theme,
+  locale,
+  width,
+  height: width === 390 ? 844 : 800
+}));
+type View = (typeof VIEWS)[number];
+type Look = Pick<View, "theme" | "locale">;
 
 const words = {
   en: {
@@ -157,32 +158,26 @@ async function open(page: Page, path: string, look: Look): Promise<void> {
   await page.goto(path);
 }
 
-/**
- * Each theme and language loads `path` once at the wide size; `check` then runs at each width in
- * turn, as a person narrows the window.
- */
+/** Opens each of the three layout variants and checks its state. */
 async function eachView(
   page: Page,
   path: string,
   check: (view: View) => Promise<void>
 ): Promise<void> {
-  for (const look of LOOKS) {
-    await page.setViewportSize(SIZES[0]);
-    await open(page, path, look);
-    for (const size of SIZES) {
-      await page.setViewportSize(size);
-      await check({ ...look, ...size });
-    }
+  for (const view of VIEWS) {
+    await page.setViewportSize({ width: view.width, height: view.height });
+    await open(page, path, view);
+    await check(view);
   }
 }
 
-/**
- * Pictures the page under the test's output in `shots/`, and attaches the picture's bytes: the
- * JSON report the hosted check always keeps carries them, so every run holds its pictures.
- */
+/** Attaches a picture only when E2E_SHOTS_DIR names its output folder. */
 async function shoot(page: Page, name: string, view: View): Promise<void> {
+  const shotsDir = process.env.E2E_SHOTS_DIR;
+  if (!shotsDir) return;
+  await mkdir(shotsDir, { recursive: true });
   const file = `${name}-${view.width}-${view.theme}-${view.locale}.png`;
-  const path = test.info().outputPath("shots", file);
+  const path = join(shotsDir, file);
   const body = await page.screenshot({ path, animations: "disabled" });
   await test.info().attach(file, { body, contentType: "image/png" });
 }
@@ -494,7 +489,7 @@ test("Members come first, requests show only while somebody asks, and a refusal 
     );
     await page.route("**/api/v1/workspaces/*/access-requests/*/approve", refuse);
     // Each view loads the page again: approving changes what the next picture would show.
-    for (const view of LOOKS.flatMap((look) => SIZES.map((size) => ({ ...look, ...size })))) {
+    for (const view of VIEWS) {
       const said = words[view.locale];
       await page.setViewportSize(view);
       await open(page, membersPath, view);
