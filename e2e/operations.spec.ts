@@ -19,6 +19,7 @@ const shotsDir = process.env.E2E_SHOTS_DIR;
 /** No spec creates an agent of this name, so reading it fails with `NOT_FOUND`. */
 const MISSING_AGENT = "op_reads_missing_agent";
 const EFFECT_FILTER = /^(?:Filter by effect|Nach Wirkung filtern)$/u;
+const OPERATION_FILTER = /^(?:Operation, exact name|Operation, genauer Name)$/u;
 
 test("the Operations page opens on changing calls and lists a read only when it failed", async ({
   page
@@ -73,12 +74,19 @@ test("the Operations page opens on changing calls and lists a read only when it 
     await expect(listed().first()).toBeVisible();
   });
 
-  // The reads: the one that failed is there, the allowed ones are on no view.
+  // The reads: the allowed ones are on no view, and the one that failed is there. It is found
+  // by its operation's name, as an administrator looks for one: the list shows a page of the
+  // newest runs, and a full browser run on one instance can record a page of them in seconds.
   await effect.selectOption("reading");
-  await expect(failedRow).toHaveAttribute("data-status", "failed");
-  await expect(failedRow).toContainText("assets.get");
+  await expect(listed().first()).toBeVisible();
   await expect(allowedReads).toHaveCount(0);
   await expect(readsNote).toHaveText(READS_NOTE);
+  await page
+    .locator("[data-operation-run-filters]")
+    .getByRole("searchbox", { name: OPERATION_FILTER })
+    .fill("assets.get");
+  await expect(failedRow).toHaveAttribute("data-status", "failed");
+  await expect(failedRow).toContainText("assets.get");
   await shoot(page, "operations-reads", async () => {
     await effect.selectOption("reading");
     await expect(failedRow).toBeVisible();
