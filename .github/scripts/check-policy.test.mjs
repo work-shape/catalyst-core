@@ -6,11 +6,11 @@ import { runInNewContext } from "node:vm";
 
 const workflow = readFileSync(new URL("../workflows/check.yml", import.meta.url), "utf8");
 
-test("hosted Check triggers only nightly and on release pushes or manual dispatch", () => {
+test("hosted Check triggers only on release pushes or a release dispatch", () => {
   const triggers = workflow.match(/^on:\n([\s\S]*?)^permissions:/mu)?.[1];
   assert.equal(
     triggers,
-    '  workflow_dispatch:\n  schedule:\n    - cron: "17 3 * * *"\n  push:\n    branches: ["release/**"]\n    tags: ["v*"]\n'
+    '  workflow_dispatch:\n  push:\n    branches: ["release/**"]\n    tags: ["v*"]\n'
   );
   assert.doesNotMatch(workflow, /github\.event\.label/u);
 });
@@ -43,7 +43,7 @@ test("the first job rejects disallowed dispatches before checkout within one min
     assert.ifError(result.error);
     assert.equal(result.status, allowed ? 0 : 1, ref);
     if (!allowed) {
-      assert.match(result.stdout, /::error::Hosted Check runs nightly and for releases only/u);
+      assert.match(result.stdout, /::error::Hosted Check runs for releases only/u);
       assert.ok(result.stdout.includes(ref));
     }
   }
@@ -77,7 +77,6 @@ test("only dispatches on the same release branch cancel each other", () => {
   for (const [event, runRef] of [
     ["push", ref],
     ["push", "refs/tags/v0.8.0"],
-    ["schedule", "refs/heads/main"],
     ["workflow_dispatch", "refs/tags/v0.8.0"],
     ["workflow_dispatch", "refs/heads/main"],
     ["workflow_dispatch", "refs/heads/feature/example"]

@@ -1,17 +1,16 @@
-# Hosted Check runs nightly and for releases only (Blacksmith budget: $100/month).
-# - Nightly main runs at 03:17 UTC; release/** branch and v* tag pushes run in full.
+# Hosted Check runs for releases only (Blacksmith budget: $100/month; Felix, 2026-10-22).
+# - release/** branch and v* tag pushes run in full. Main has no hosted run: the full suite
+#   runs every night on the Mac mini (scripts/lane/nightly) and before each release.
 # - Manual dispatch is allowed only on refs/heads/release/** and refs/tags/v*.
 #   Other refs fail before checkout; the release procedure dispatches release/<version>.
 # - PR events and labels never start hosted checks.
 # - A push to main runs nothing: the lander pushes only a batch that passed the full gate
-#   locally (scripts/lane/lander). The nightly run is the hosted record and catches drift.
+#   locally (scripts/lane/land.sh). The Mini's nightly full run catches drift.
 # Keep `check` as the stable aggregate: selected failures/cancellations fail it;
 # intentionally skipped jobs pass. `browser` remains for existing check consumers.
 name: Check
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "17 3 * * *"
   push:
     branches: ["release/**"]
     tags: ["v*"]
@@ -19,7 +18,7 @@ permissions:
   contents: read
   packages: read
 # A release-branch dispatch cancels the branch's earlier dispatch.
-# Pushes, tags and scheduled runs get unique groups, including re-runs.
+# Pushes and tags get unique groups, including re-runs.
 concurrency:
   group: ${{ github.workflow }}-${{ (github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/heads/release/') && format('dispatch-{0}', github.ref)) || format('{0}-{1}-{2}', github.ref, github.run_id, github.run_attempt) }}
   cancel-in-progress: ${{ github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/heads/release/') }}
@@ -39,7 +38,7 @@ jobs:
           case "$GITHUB_REF" in
             refs/heads/release/*|refs/tags/v*) ;;
             *)
-              echo "::error::Hosted Check runs nightly and for releases only. Dispatch requires refs/heads/release/** or refs/tags/v*; received $GITHUB_REF."
+              echo "::error::Hosted Check runs for releases only. Dispatch requires refs/heads/release/** or refs/tags/v*; received $GITHUB_REF."
               exit 1
               ;;
           esac
@@ -166,7 +165,7 @@ jobs:
         shard: [1, 2, 3, 4]
     env:
       POSTGRES_STORE_TEST_DATABASE_URL: postgresql://catalyst:local-check@localhost:5432/catalyst_test
-      # The scale tests (tests/**/*.scale.test.ts) run nightly, on a dispatch and on a release
+      # The scale tests (tests/**/*.scale.test.ts) run on a release dispatch and a release
       # push. A PR's `ci` run leaves them out, as the lander's local gate does.
       CATALYST_SCALE_TESTS: ${{ github.event_name != 'pull_request' && '1' || '0' }}
     steps:
