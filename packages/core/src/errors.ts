@@ -164,7 +164,7 @@ export function toErrorEnvelope(error: unknown, correlationId: string): ErrorEnv
   };
 }
 
-const INTERNAL_ERROR_MESSAGE = "Internal server error";
+export const INTERNAL_ERROR_MESSAGE = "Internal server error";
 
 export function assertNever(value: never): never {
   throw new AppError("INTERNAL", `Unhandled value: ${String(value)}`);

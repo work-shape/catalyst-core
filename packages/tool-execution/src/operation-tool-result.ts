@@ -1,4 +1,5 @@
 import {
+  INTERNAL_ERROR_MESSAGE,
   INTERRUPTED_RUN_ERROR,
   type ToolExecutionResult,
   type ToolHandlerFailureResult
@@ -42,7 +43,7 @@ export function toolResultFromOperationResult(
     case "failed":
       // The error envelope replaces an unexposed message with this fixed text. An exposed
       // timeout message is the handler's answer and must reach the agent unchanged.
-      if (result.error.code === "TIMEOUT" && result.error.message === "Internal server error")
+      if (result.error.code === "TIMEOUT" && result.error.message === INTERNAL_ERROR_MESSAGE)
         return toolTimeoutFailure(names);
       return result.error.code === "INTERNAL"
         ? internalFailure(names.correlationId)
