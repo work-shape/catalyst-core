@@ -54,6 +54,7 @@ export default defineConfig({
   test: {
     // See scripts/test-postgres-capacity.mjs for the arithmetic.
     maxWorkers,
+    reporters: ["default", "./scripts/vitest-budget-reporter.ts"],
     // Close suite connections/held transactions before the file fixture is reset or dropped.
     sequence: { hooks: "stack", sequencer: DurationSequencer },
     hookTimeout: 60000, // check-limit

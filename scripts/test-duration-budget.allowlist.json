@@ -1,0 +1,319 @@
+{
+  "measuredAt": "2026-10-22",
+  "source": "Release Check 39757198912, commit 89e4c4247; existing job logs, no new hosted run.",
+  "notes": "Vitest identities use file > fullName (nested suites separated by >); file exceptions do not exempt tests. File durations cover tests and hooks, excluding module imports. Browser durations sum all reported attempts per spec in the selected run, including retries, excluding gaps between files. All entries below were measured in the source run; removed test titles and .scale.test.ts files are omitted. Remove exceptions as the test-suite diet makes them unnecessary.",
+  "vitestFiles": {
+    "tests/agent-run-approvals.test.ts": {
+      "measuredMs": 20999,
+      "reason": "Persisted approval and agent execution integration across several cases."
+    },
+    "tests/chat-ui-workflow-run-steps.test.ts": {
+      "measuredMs": 21847,
+      "reason": "Real polling and retry intervals in run-step rendering; move these waits to a fake clock."
+    },
+    "tests/conversation-follow-ups.test.ts": {
+      "measuredMs": 26397,
+      "reason": "Persisted follow-up queue and agent-run integration across many cases."
+    },
+    "tests/data-store-api.test.ts": {
+      "measuredMs": 29699,
+      "reason": "Full Data Store API lifecycle and authorization integration."
+    },
+    "tests/data-store-loads.test.ts": {
+      "measuredMs": 23060,
+      "reason": "Real streamed Data Store loads and contention coverage."
+    },
+    "tests/data-store-worker-kill.test.ts": {
+      "measuredMs": 22533,
+      "reason": "Real process kill and idempotent Data Store insert recovery."
+    },
+    "tests/demo-sample-accounting-findings.test.ts": {
+      "measuredMs": 24098,
+      "reason": "Full sample accounting Workflow and findings integration."
+    },
+    "tests/knowledge-base-release.test.ts": {
+      "measuredMs": 22471,
+      "reason": "Persisted knowledge release and ingestion lifecycle coverage."
+    },
+    "tests/knowledge-base-sync.test.ts": {
+      "measuredMs": 62459,
+      "reason": "Real knowledge sync, paged ingestion and SIGKILL recovery; volume cases are being moved to scale tests."
+    },
+    "tests/knowledge-source-withdrawal.test.ts": {
+      "measuredMs": 31969,
+      "reason": "Real ingestion and source withdrawal across the persisted knowledge lifecycle."
+    },
+    "tests/object-storage-contract.test.ts": {
+      "measuredMs": 25071,
+      "reason": "Real streamed object transfer and unresponsive-store cancellation."
+    },
+    "tests/openapi.test.ts": {
+      "measuredMs": 40035,
+      "reason": "Contract generation and scope-alternative permutations; narrow the permutations in the test-suite diet."
+    },
+    "tests/platform-discovery-tools.test.ts": {
+      "measuredMs": 103353,
+      "reason": "Large seeded discovery worlds; reduce fixture volume in the test-suite diet."
+    },
+    "tests/quality-collector.test.ts": {
+      "measuredMs": 54585,
+      "reason": "Runs real TypeScript, ESLint and Prettier against quality fixtures."
+    },
+    "tests/workflow-agent-step.test.ts": {
+      "measuredMs": 29220,
+      "reason": "Agent execution and approval through real Workflow jobs."
+    },
+    "tests/workflow-batch.test.ts": {
+      "measuredMs": 38989,
+      "reason": "Persisted dataset batch coverage; the large-volume cases are being moved to scale tests."
+    },
+    "tests/workflow-code-step.test.ts": {
+      "measuredMs": 31219,
+      "reason": "Real code-step execution and container-start recovery."
+    },
+    "tests/workflow-continue-as-new.test.ts": {
+      "measuredMs": 55920,
+      "reason": "Persisted checkpoint and continuation coverage; reduce the matrix in the test-suite diet."
+    },
+    "tests/workflow-run-children.test.ts": {
+      "measuredMs": 23381,
+      "reason": "Real child-run scheduling, timer wakeups and descendant cancellation."
+    },
+    "tests/workflow-worker-kill.test.ts": {
+      "measuredMs": 52875,
+      "reason": "Real worker processes, lease expiry, kill and restart recovery."
+    }
+  },
+  "vitestTests": {
+    "tests/agent-runtime.test.ts > local agent runtime > waits out a rate limit with growing pauses and gives up after a minute of waiting": {
+      "measuredMs": 7900,
+      "reason": "Exercises real rate-limit backoff; replace the long wait with the existing fake clock."
+    },
+    "tests/chat-ui-usage-budget.test.ts > Usage opens with the month's single answer (UXA-5) > a failure that is no refusal names nobody": {
+      "measuredMs": 7023,
+      "reason": "Real asynchronous usage-query failure state in the render harness."
+    },
+    "tests/chat-ui-workflow-run-steps.test.ts > the steps of a run on its page > reads the run and its steps again on Try again, and shows the steps that arrive": {
+      "measuredMs": 6051,
+      "reason": "Real polling and retry intervals in run-step rendering; move these waits to a fake clock."
+    },
+    "tests/chat-ui-workflow-run-steps.test.ts > the steps of a run on its page > says a later reading of the steps of a going run failed, until Try again reads them": {
+      "measuredMs": 5101,
+      "reason": "Real polling and retry intervals in run-step rendering; move these waits to a fake clock."
+    },
+    "tests/chat-ui-workflow-run-steps.test.ts > the steps of a run on its page > says only that the instance is silent where the run it holds and its steps both fail": {
+      "measuredMs": 7082,
+      "reason": "Real polling and retry intervals in run-step rendering; move these waits to a fake clock."
+    },
+    "tests/client-assembly-knowledge-worker.test.ts > knowledge worker process isolation > does not claim ingestion in the API and serves HTTP and an agent run while all worker connections are held": {
+      "measuredMs": 6688,
+      "reason": "Real worker connection saturation alongside API and agent execution."
+    },
+    "tests/data-store-load-timeouts.test.ts > timeouts after an unscoped replacement gets its table lock > keeps a later-chunk row wait as TIMEOUT": {
+      "measuredMs": 7329,
+      "reason": "Real row-lock timeout after streamed replacement has acquired its table lock."
+    },
+    "tests/data-store-worker-kill.test.ts > a Workflow Run that inserts into a Data Store and whose worker process is killed > makes the insert again under its key after each kill, and the store holds each row once": {
+      "measuredMs": 22520,
+      "reason": "Real process kill and idempotent Data Store insert recovery."
+    },
+    "tests/demo-sample-accounting.test.ts > demo sample accounting > opens every month of every client with the month's exact count": {
+      "measuredMs": 7494,
+      "reason": "Reads the full sample monthly accounting fixture."
+    },
+    "tests/job-worker-idle-process.test.ts > an idle job worker in a process of its own > ends with code 0 when it is told to stop": {
+      "measuredMs": 9510,
+      "reason": "Real subprocess lifetime, database reconnect and graceful shutdown."
+    },
+    "tests/job-worker-idle-process.test.ts > an idle job worker in a process of its own > stays up when the lifetime of its database connection ends": {
+      "measuredMs": 5244,
+      "reason": "Real subprocess lifetime, database reconnect and graceful shutdown."
+    },
+    "tests/knowledge-base-sync.test.ts > initial and full source import (KB 72, 73) > resumes after SIGKILL with one platform connection and no duplicate items, documents, contents or chunks": {
+      "measuredMs": 9093,
+      "reason": "Real knowledge sync, paged ingestion and SIGKILL recovery; volume cases are being moved to scale tests."
+    },
+    "tests/knowledge-processing-scale.test.ts > Knowledge Base processing review at scale > keeps asset GET independent of content count and aggregates a changed draft in one statement": {
+      "measuredMs": 6684,
+      "reason": "Existing large ingestion fixture predates the .scale naming convention."
+    },
+    "tests/mcp-connector-hardening.test.ts > the Connector type mcp against a server that holds on > the end of a session > does not wait for a server that never answers the end of the session": {
+      "measuredMs": 6040,
+      "reason": "Real unresponsive MCP session shutdown deadline."
+    },
+    "tests/object-storage-contract.test.ts > object storage contract: 's3' > moves a 64 MB object in and out without holding it": {
+      "measuredMs": 5399,
+      "reason": "Real streamed object transfer and unresponsive-store cancellation."
+    },
+    "tests/object-storage-contract.test.ts > the check of an S3 store > ends the request to a store that never answers and leaves no connection open": {
+      "measuredMs": 5053,
+      "reason": "Real streamed object transfer and unresponsive-store cancellation."
+    },
+    "tests/openapi.test.ts > the breaking-change comparison > compares every scope alternative of a scheme without depending on their order": {
+      "measuredMs": 20510,
+      "reason": "Contract generation and scope-alternative permutations; narrow the permutations in the test-suite diet."
+    },
+    "tests/openapi.test.ts > the breaking-change comparison > fails on a new required request field and on a removed answered field": {
+      "measuredMs": 5303,
+      "reason": "Contract generation and scope-alternative permutations; narrow the permutations in the test-suite diet."
+    },
+    "tests/platform-asset-tools-worker.test.ts > reads and writes the conversation's asset as its owner through a separate agent-run worker process": {
+      "measuredMs": 7253,
+      "reason": "Separate agent-run worker process exercises asset reads and writes."
+    },
+    "tests/platform-asset-tools-worker.test.ts > tests the subject and reads its run and steps through a separate agent-run worker": {
+      "measuredMs": 11086,
+      "reason": "Separate agent-run worker process exercises asset reads and writes."
+    },
+    "tests/platform-discovery-tools.test.ts > the tools that find what is on the platform > finds the Pages and files of every conversation of the workspace the user may read, from any chat, and nothing else": {
+      "measuredMs": 6964,
+      "reason": "Large seeded discovery worlds; reduce fixture volume in the test-suite diet."
+    },
+    "tests/platform-discovery-tools.test.ts > the tools that find what is on the platform > lets an agent in a conversation about nothing read the platform skill, see what the instance has and find the assets its user may read, and nothing of the others": {
+      "measuredMs": 42762,
+      "reason": "Large seeded discovery worlds; reduce fixture volume in the test-suite diet."
+    },
+    "tests/platform-discovery-tools.test.ts > the tools that find what is on the platform > marks only this conversation's workspace as current, even without build rights here": {
+      "measuredMs": 6330,
+      "reason": "Large seeded discovery worlds; reduce fixture volume in the test-suite diet."
+    },
+    "tests/platform-discovery-tools.test.ts > the tools that find what is on the platform > resolves notification people by literal name or email only within the caller's rights, with bounded matches": {
+      "measuredMs": 38071,
+      "reason": "Large seeded discovery worlds; reduce fixture volume in the test-suite diet."
+    },
+    "tests/postgres-executor.test.ts > Postgres executor on a customer's database > deadline > cancels on the server a query the database's timeout has not reached at the deadline": {
+      "measuredMs": 5009,
+      "reason": "Real PostgreSQL timeout and connection-pool contention."
+    },
+    "tests/postgres-executor.test.ts > Postgres executor on a customer's database > pool > holds four connections under fifty calls and fails the rest as busy after the wait": {
+      "measuredMs": 6076,
+      "reason": "Real PostgreSQL timeout and connection-pool contention."
+    },
+    "tests/quality-collector.test.ts > quality collector > allows environment reads only in a package's one env module and checks import.meta.env outside named frontend entries": {
+      "measuredMs": 5260,
+      "reason": "Runs real TypeScript, ESLint and Prettier against quality fixtures."
+    },
+    "tests/quality-collector.test.ts > quality collector > ratchets repeated allowed-value lists across packages": {
+      "measuredMs": 7789,
+      "reason": "Runs real TypeScript, ESLint and Prettier against quality fixtures."
+    },
+    "tests/quality-collector.test.ts > quality collector > ratchets retired terms in identifiers, strings, templates and JSX per package": {
+      "measuredMs": 7925,
+      "reason": "Runs real TypeScript, ESLint and Prettier against quality fixtures."
+    },
+    "tests/quality-collector.test.ts > quality collector > reports an imported file where it is checked, or where it is imported when nothing checks it": {
+      "measuredMs": 6637,
+      "reason": "Runs real TypeScript, ESLint and Prettier against quality fixtures."
+    },
+    "tests/quality-collector.test.ts > quality collector > reports unformatted files and formatting suppressions against the baseline": {
+      "measuredMs": 6509,
+      "reason": "Runs real TypeScript, ESLint and Prettier against quality fixtures."
+    },
+    "tests/workflow-code-step.test.ts > a code step whose sandbox gives way > tries again where the container could not be started, and fails the step when no attempt could": {
+      "measuredMs": 6910,
+      "reason": "Real code-step execution and container-start recovery."
+    },
+    "tests/workflow-continuation-scale.test.ts > check 112: processes a 50,000-row dataset at 20,000 step runs as one three-part Lauf, without skipped or repeated rows": {
+      "measuredMs": 5815,
+      "reason": "Existing large continuation fixture predates the .scale naming convention."
+    },
+    "tests/workflow-continue-as-new.test.ts > continue-as-new > persists bounded histories across the real store with exactly one call per dataset row": {
+      "measuredMs": 5825,
+      "reason": "Persisted checkpoint and continuation coverage; reduce the matrix in the test-suite diet."
+    },
+    "tests/workflow-continue-as-new.test.ts > reserves the inner tail, the rest of the outer item and the outer tail": {
+      "measuredMs": 5697,
+      "reason": "Persisted checkpoint and continuation coverage; reduce the matrix in the test-suite diet."
+    },
+    "tests/workflow-dataset-consumers.test.ts > Workflow dataset consumers > loads the full streamed query once per step run and refuses foreign load references over HTTP": {
+      "measuredMs": 9198,
+      "reason": "Real streamed query and cross-owner HTTP refusal coverage."
+    },
+    "tests/workflow-discovery-paging.test.ts > published Workflow discovery beyond the former 500 total > discovers the agent start operation of every one of 501 Workflows": {
+      "measuredMs": 8042,
+      "reason": "Discovery over 501 published Workflows crosses the page bound."
+    },
+    "tests/workflow-limits.test.ts > limits.concurrency of a Workflow > holds a Workflow to its 2 slots across its runs and children while another keeps its own, on two workers": {
+      "measuredMs": 8542,
+      "reason": "Real concurrent workers, deadlines and per-Workflow admission slots."
+    },
+    "tests/workflow-limits.test.ts > time a run spends waiting > leaves a waiting run alone when its deadline job comes due, and ends it after the wait": {
+      "measuredMs": 6354,
+      "reason": "Real concurrent workers, deadlines and per-Workflow admission slots."
+    },
+    "tests/workflow-notify-step.test.ts > Workflow notify steps and grouped failure notices > creates exactly one notice for fifty failed children even when the root failure job runs twice": {
+      "measuredMs": 8725,
+      "reason": "Fifty child failures and replayed notification jobs."
+    },
+    "tests/workflow-publish-burst.test.ts > Workflows published at once beyond the platform's pool > publishes 32 Workflows with Data Store dataset contracts at once": {
+      "measuredMs": 5078,
+      "reason": "Real simultaneous publication across a seeded Workflow volume."
+    },
+    "tests/workflow-run-children.test.ts > a deadline while every step waits > wakes from its timer and cancels descendants without a runnable step": {
+      "measuredMs": 10277,
+      "reason": "Real child-run scheduling, timer wakeups and descendant cancellation."
+    },
+    "tests/workflow-run-data-pruning.test.ts > two passes of the job at once > leave the rows as one pass does, whichever statement meets a row second": {
+      "measuredMs": 9385,
+      "reason": "Concurrent pruning orders against persisted step and run data."
+    },
+    "tests/workflow-run-key-migration.test.ts > Workflow run key migrations (EW-13k) > keeps both uniqueness guarantees on 300,000 runs through a cancelled build and its rerun": {
+      "measuredMs": 5884,
+      "reason": "Cancellation and rerun of an index build over 300,000 stored runs."
+    },
+    "tests/workflow-sample-rest.test.ts > the seeded accounting REST Connection > passes its health test, lets an agent read clients, and defers a rate-limited Workflow without spending an attempt": {
+      "measuredMs": 6021,
+      "reason": "Real sample REST pagination and rate-limited Workflow execution."
+    },
+    "tests/workflow-sample-rest.test.ts > the seeded accounting REST Connection > reads the large client's whole month in one paged run with three filter values": {
+      "measuredMs": 8474,
+      "reason": "Real sample REST pagination and rate-limited Workflow execution."
+    },
+    "tests/workflow-schedule-clock.test.ts > a schedule whose process and database disagree on the time > queues the next due time when every attempt of one failed": {
+      "measuredMs": 6392,
+      "reason": "Real failed-attempt scheduling and next-due-time persistence."
+    },
+    "tests/workflow-worker-kill.test.ts > a Workflow Run whose worker process is killed > is taken up by a new process within a lease, makes its changing call again under the same key, and finishes": {
+      "measuredMs": 38774,
+      "reason": "Real worker processes, lease expiry, kill and restart recovery."
+    },
+    "tests/workflow-worker-kill.test.ts > a Workflow Run whose worker process is killed > never makes a changing call again that carries no key to the outside system, and says how to change that": {
+      "measuredMs": 14038,
+      "reason": "Real worker processes, lease expiry, kill and restart recovery."
+    },
+    "tests/workspace-open-tool.test.ts > a save on an instance where no worker takes builds > builds a save that waited behind builds that ended back to back for longer than the unclaimed time": {
+      "measuredMs": 7451,
+      "reason": "Real build queue and unclaimed-command deadline coverage."
+    }
+  },
+  "browserFiles": {
+    "e2e/app-update.spec.ts": {
+      "measuredMs": 66100,
+      "reason": "Published App update journey across the existing layout matrix."
+    },
+    "e2e/chat-standalone.spec.ts": {
+      "measuredMs": 371200,
+      "reason": "Large multi-journey chat spec; shared sessions and redundant cases are in the test-suite diet."
+    },
+    "e2e/connection-editor.spec.ts": {
+      "measuredMs": 120200,
+      "reason": "Connection editing journeys and real sample MCP integration."
+    },
+    "e2e/follow-up-queue.spec.ts": {
+      "measuredMs": 146700,
+      "reason": "Follow-up queue journeys with existing locale/layout matrices and long re-read waits."
+    },
+    "e2e/navigation.spec.ts": {
+      "measuredMs": 79200,
+      "reason": "Navigation and rail journeys with existing animation waits."
+    },
+    "e2e/share-1.spec.ts": {
+      "measuredMs": 77200,
+      "reason": "Sharing journey across the existing theme, locale and width matrix."
+    },
+    "e2e/view-exits.spec.ts": {
+      "measuredMs": 254800,
+      "reason": "Navigation-exit matrix across real browser pages; batching and fixed-wait removal are in the test-suite diet."
+    }
+  }
+}

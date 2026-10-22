@@ -1,4 +1,5 @@
 import { parse } from "yaml";
+import { balanceTests } from "../../scripts/e2e-duration-shards.mjs";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
@@ -154,4 +155,24 @@ test("shared builds transfer across host and Playwright containers without zstd"
   assert.ok(!setup.runs.steps.some((step) => step.uses?.startsWith("actions/cache/restore@")));
   const policy = jobs.changes.steps.find((step) => step.name === "Check workflow policy");
   assert.equal(policy.run, "node --test .github/scripts/check-policy.test.mjs");
+});
+
+test("no release browser shard is planned above ten minutes of measured work", () => {
+  const { tests: durations } = JSON.parse(
+    readFileSync(new URL("../../e2e/durations.json", import.meta.url), "utf8")
+  );
+  const tests = Object.keys(durations).map((key) => ({ key, file: key.split(" › ")[1] }));
+  const shards = balanceTests(tests, durations, jobs["browser-shard"].strategy.matrix.shard.length);
+  for (const [index, shard] of shards.entries())
+    assert.ok(
+      shard.durationMs <= 600_000,
+      `browser shard ${index + 1}: ${shard.durationMs} ms exceeds 10 minutes`
+    );
+});
+
+test("release reporter overrides retain both test time budgets", () => {
+  const unit = jobs.tests.steps.find((step) => step.run?.includes("vitest run"));
+  assert.ok(unit.run.includes("--reporter=./scripts/vitest-budget-reporter.ts"));
+  const browser = jobs["browser-shard"].steps.find((step) => step.name === "Browser suite");
+  assert.ok(browser.run.includes("./scripts/playwright-budget-reporter.ts"));
 });
