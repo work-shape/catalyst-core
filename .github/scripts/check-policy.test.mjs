@@ -8,10 +8,7 @@ const workflow = readFileSync(new URL("../workflows/check.yml", import.meta.url)
 
 test("hosted Check triggers only on release pushes or a release dispatch", () => {
   const triggers = workflow.match(/^on:\n([\s\S]*?)^permissions:/mu)?.[1];
-  assert.equal(
-    triggers,
-    '  workflow_dispatch:\n  push:\n    branches: ["release/**"]\n    tags: ["v*"]\n'
-  );
+  assert.equal(triggers, '  workflow_dispatch:\n  push:\n    branches: ["release/**"]\n');
   assert.doesNotMatch(workflow, /github\.event\.label/u);
 });
 
@@ -25,8 +22,8 @@ test("the first job rejects disallowed dispatches before checkout within one min
   for (const [ref, allowed] of [
     ["refs/heads/release/0.8.0", true],
     ["refs/heads/release/0.8.0/rc.1", true],
-    ["refs/tags/v0.8.0", true],
-    ["refs/tags/v0.8.0-rc.1", true],
+    ["refs/tags/v0.8.0", false],
+    ["refs/tags/v0.8.0-rc.1", false],
     ["refs/heads/main", false],
     ["refs/heads/feature/example", false],
     ["refs/heads/release-candidate", false],
@@ -76,8 +73,6 @@ test("only dispatches on the same release branch cancel each other", () => {
 
   for (const [event, runRef] of [
     ["push", ref],
-    ["push", "refs/tags/v0.8.0"],
-    ["workflow_dispatch", "refs/tags/v0.8.0"],
     ["workflow_dispatch", "refs/heads/main"],
     ["workflow_dispatch", "refs/heads/feature/example"]
   ]) {

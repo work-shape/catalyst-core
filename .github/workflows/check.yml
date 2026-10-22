@@ -1,7 +1,8 @@
 # Hosted Check runs for releases only (Blacksmith budget: $100/month; Felix, 2026-10-22).
-# - release/** branch and v* tag pushes run in full. Main has no hosted run: the full suite
+# - release/** branch pushes run in full. A v* tag runs nothing: it points at a commit the
+#   release branch's Check already proved. Main has no hosted run: the full suite
 #   runs every night on the Mac mini (scripts/lane/nightly) and before each release.
-# - Manual dispatch is allowed only on refs/heads/release/** and refs/tags/v*.
+# - Manual dispatch is allowed only on refs/heads/release/**.
 #   Other refs fail before checkout; the release procedure dispatches release/<version>.
 # - PR events and labels never start hosted checks.
 # - A push to main runs nothing: the lander pushes only a batch that passed the full gate
@@ -13,12 +14,11 @@ on:
   workflow_dispatch:
   push:
     branches: ["release/**"]
-    tags: ["v*"]
 permissions:
   contents: read
   packages: read
 # A release-branch dispatch cancels the branch's earlier dispatch.
-# Pushes and tags get unique groups, including re-runs.
+# Pushes get unique groups, including re-runs.
 concurrency:
   group: ${{ github.workflow }}-${{ (github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/heads/release/') && format('dispatch-{0}', github.ref)) || format('{0}-{1}-{2}', github.ref, github.run_id, github.run_attempt) }}
   cancel-in-progress: ${{ github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/heads/release/') }}
@@ -36,9 +36,9 @@ jobs:
         timeout-minutes: 1
         run: |
           case "$GITHUB_REF" in
-            refs/heads/release/*|refs/tags/v*) ;;
+            refs/heads/release/*) ;;
             *)
-              echo "::error::Hosted Check runs for releases only. Dispatch requires refs/heads/release/** or refs/tags/v*; received $GITHUB_REF."
+              echo "::error::Hosted Check runs for releases only. Dispatch requires refs/heads/release/**; received $GITHUB_REF."
               exit 1
               ;;
           esac
