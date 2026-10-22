@@ -632,7 +632,6 @@
     "tests/postgres-timestamp-order-ties.test.ts": 1721,
     "tests/postgres-tool-error-redaction.test.ts": 312,
     "tests/postgres-version-guard.test.ts": 2,
-    "tests/postgres-workspace-apply-patch.test.ts": 251,
     "tests/postgres-workspace-command-claim.test.ts": 222,
     "tests/principal-grant-asset-deletion.test.ts": 2346,
     "tests/principal-grant-workspace-visibility.test.ts": 1218,

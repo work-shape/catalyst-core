@@ -11,7 +11,6 @@ import {
   pageSource,
   pageSurface,
   ownSurfacePageSource,
-  patchThatAdds,
   plainPageSource,
   rewritePageFile,
   savePage,
@@ -53,7 +52,7 @@ test("a Page built in chat shows beside the conversation, changes with the next 
 
   await openChat(page);
   await expect(pageSurface(page)).toBeHidden();
-  await writePageFiles(page, patchThatAdds(pageSource("Revenue overview")));
+  await writePageFiles(page, pageSource("Revenue overview"));
   await savePage(page);
 
   // The save opened the Page beside the conversation, as revision 1.
@@ -227,7 +226,7 @@ test("a plain HTML Page has the platform's margin, type and colours, follows dar
     }
   });
   await openChat(page);
-  await writePageFiles(page, patchThatAdds(plainPageSource));
+  await writePageFiles(page, plainPageSource);
   await savePage(page);
   const built = builtPage(page);
   const heading = built.getByRole("heading", { name: "Margin calculator" });
@@ -408,7 +407,7 @@ test("a plain HTML Page with a surface of its own keeps every plain element read
   page
 }) => {
   await openChat(page);
-  await writePageFiles(page, patchThatAdds(ownSurfacePageSource));
+  await writePageFiles(page, ownSurfacePageSource);
   await savePage(page);
   const built = builtPage(page);
   await expect(built.getByRole("heading", { name: "Margin calculator" })).toBeVisible();
@@ -520,7 +519,7 @@ test("a save the build refuses says what it found, in the thread and under the P
   page
 }) => {
   await openChat(page);
-  await writePageFiles(page, patchThatAdds(pageSource("Revenue overview")));
+  await writePageFiles(page, pageSource("Revenue overview"));
   await savePage(page);
   await expect(builtPage(page).getByRole("heading", { name: "Revenue overview" })).toBeVisible();
 
@@ -553,7 +552,7 @@ test("a new save opens a closed Page again, and coming back to the conversation 
   page
 }) => {
   await openChat(page);
-  await writePageFiles(page, patchThatAdds(pageSource("Revenue overview")));
+  await writePageFiles(page, pageSource("Revenue overview"));
   await savePage(page);
   const surface = pageSurface(page);
   await expectShownRevision(surface, 1);
@@ -599,7 +598,7 @@ test("a new save opens a closed Page again, and coming back to the conversation 
   expect(hairline.chat).toEqual(hairline.panel);
   expect(hairline.chat).not.toEqual(hairline.background);
 
-  // The messages hold long strings without a break, the patch and the answer to it. They wrap
+  // The messages hold long strings without a break, the file content and the answer to it. They wrap
   // inside the conversation and none runs under the Page.
   const texts = page.locator(".chat-markdown");
   await expect(texts.first()).toBeVisible();
@@ -650,7 +649,7 @@ test("a Page opened from the dock beside another page is told who looks at it", 
   page
 }) => {
   await openChat(page);
-  await writePageFiles(page, patchThatAdds(plainPageSource));
+  await writePageFiles(page, plainPageSource);
   await savePage(page);
   await expect(builtPage(page).getByText("Shown to E2E Pages")).toBeVisible();
   const [, workspace, conversation] =

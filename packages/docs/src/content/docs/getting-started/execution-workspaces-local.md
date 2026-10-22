@@ -3,7 +3,7 @@ title: Run code execution locally
 description: Test execution workspaces from the repository and see what an instance needs to run them.
 ---
 
-Execution workspaces give an agent a file area per conversation and a bounded command tool. The code is in the open repository: the tools `workspace.exec`, `workspace.write_file`, `workspace.edit_file`, `workspace.apply_patch`, `workspace.import_files`, `workspace.list_files`, `workspace.read_file`, `workspace.preview_images` and `workspace.promote_artifact`, the command queue, the worker and the runner image.
+Execution workspaces give an agent a file area per conversation and a bounded command tool. The code is in the open repository: the tools `workspace.exec`, `workspace.write_file`, `workspace.edit_file`, `workspace.import_files`, `workspace.list_files`, `workspace.read_file`, `workspace.preview_images` and `workspace.promote_artifact`, the command queue, the worker and the runner image.
 
 The reference client enables execution workspaces with the Docker sandbox: its Compose files build the runner image and start a workspace command worker, and its agent names the workspace tools. Another client assembly has to do the same, as described under [What An Instance Needs](#what-an-instance-needs).
 

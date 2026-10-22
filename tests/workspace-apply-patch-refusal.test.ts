@@ -1,72 +1,102 @@
-import { describe, expect, it } from "vitest";
-import { z } from "zod";
+import { describe, expect, it, vi } from "vitest";
+import {
+  agentConfigSchema,
+  findAgentToolReferenceIssues,
+  formerAgentToolWarnings,
+  formerReleaseToolWarnings,
+  resolveStoredAgentReferences
+} from "@work-shape/catalyst-config-schema";
+import { createLogger } from "@work-shape/catalyst-client-assembly";
+import { asClientInstanceId, isJsonObject, unknownToJsonValue } from "@work-shape/catalyst-core";
+import { createTestConfig } from "./support/fixtures";
+import { createTestInstance } from "./support/test-instance";
+import { applyAtCurrentRevisions } from "./support/asset-revisions";
+import { WorkspaceCommandService } from "@work-shape/catalyst-tool-execution";
 import { createWorkspaceHarness } from "./support/workspace-tools-harness";
 
-// What an agent reads when `workspace.apply_patch` refuses a patch that does not fit the file.
-//
-// Fails without the change: the refusal named a line number and neither showed the line the
-// file has there nor said what to do next.
-
-type Harness = Awaited<ReturnType<typeof createWorkspaceHarness>>;
-
-const failureSchema = z.object({
-  status: z.literal("failed"),
-  error: z.object({
-    message: z.string(),
-    details: z.record(z.string(), z.unknown()).optional()
-  })
+const retiredAgent = agentConfigSchema.parse({
+  name: "retired_patch_agent",
+  displayName: "Retired patch agent",
+  instructions: "Edit with workspace.apply_patch.",
+  modelProviderId: "local",
+  toolNames: ["workspace.apply_patch", "workspace.read_file"],
+  skillNames: []
 });
 
-async function refusal(harness: Harness, toolName: string, input: unknown) {
-  return failureSchema.parse(await harness.runTool(toolName, input)).error;
-}
+const warning = (where: string) =>
+  `${where} names the retired tool 'workspace.apply_patch'. Use 'workspace.edit_file' with exact text edits instead; the old patch input is unsupported and has no alias.`;
 
-describe("a refused workspace.apply_patch", () => {
-  it("shows the line the file has where the context differs, and says to read the file again", async () => {
+describe("retired workspace.apply_patch", () => {
+  it("is absent from the registry and service, without an alias to edit_file", async () => {
     const harness = await createWorkspaceHarness();
-    await harness.putWorkspaceFile({
-      path: "notes.txt",
-      objectKey: "workspace/notes.txt",
-      bytes: "one\n\ttwo  \nthree\n",
-      mimeType: "text/plain"
-    });
+    expect(harness.tools.map((tool) => tool.name)).not.toContain("workspace.apply_patch");
+    expect(harness.tools.map((tool) => tool.name)).toContain("workspace.edit_file");
+    expect(WorkspaceCommandService.prototype).not.toHaveProperty("applyPatch");
+  });
 
-    const mismatch = await refusal(harness, "workspace.apply_patch", {
-      patch: ["--- a/notes.txt", "+++ b/notes.txt", "@@ -1,2 +1,2 @@", " one", "-two", "+2"].join(
-        "\n"
-      )
+  it("accepts stale references with a retirement warning and never grants either editing tool", () => {
+    expect(
+      findAgentToolReferenceIssues({
+        agents: [retiredAgent],
+        enabledToolNames: ["workspace.read_file", "workspace.edit_file"]
+      })
+    ).toEqual([]);
+    expect(formerReleaseToolWarnings(["workspace.apply_patch"])).toEqual([
+      warning("The release config")
+    ]);
+    expect(formerAgentToolWarnings(retiredAgent)).toEqual([warning("Agent 'retired_patch_agent'")]);
+    expect(formerAgentToolWarnings({ ...retiredAgent, toolNames: [] })).toEqual([
+      warning("Agent 'retired_patch_agent'")
+    ]);
+    const resolved = resolveStoredAgentReferences(retiredAgent, [], {
+      enabledToolNames: ["workspace.read_file", "workspace.edit_file"],
+      modelProviderIds: ["local"],
+      modelBindingIds: []
     });
+    expect(resolved.unavailableTools).toEqual([]);
+    expect(resolved.agent.toolNames).toEqual(["workspace.read_file"]);
+  });
 
-    expect(mismatch.message).toContain(
-      "context did not match file content at line 2 of 'notes.txt'"
-    );
-    // Quoted, so that the tab and the blanks at the end can be seen.
-    expect(mismatch.message).toContain('The file has "\\ttwo  " there.');
-    expect(mismatch.message).toContain("Read the file again with workspace.read_file");
-    expect(mismatch.message).toContain("rebuild the patch");
-    expect(mismatch.details).toMatchObject({ path: "notes.txt", line: 2, fileLineCount: 3 });
-
-    const pastEnd = await refusal(harness, "workspace.apply_patch", {
-      patch: [
-        "--- a/notes.txt",
-        "+++ b/notes.txt",
-        "@@ -3,2 +3,2 @@",
-        " three",
-        "-four",
-        "+4"
-      ].join("\n")
-    });
-    expect(pastEnd.message).toContain("at line 4 of 'notes.txt'. The file ends at line 3.");
-
-    const wrongStart = await refusal(harness, "workspace.apply_patch", {
-      patch: ["--- a/notes.txt", "+++ b/notes.txt", "@@ -9,1 +9,1 @@", "-x", "+y"].join("\n")
-    });
-    expect(wrongStart.message).toContain(
-      "starts at line 9 of 'notes.txt', and the file has 3 lines"
-    );
-    expect(wrongStart.message).toContain("rebuild the patch");
-    await expect(
-      harness.runTool("workspace.read_file", { path: "notes.txt" })
-    ).resolves.toMatchObject({ output: { contentPreview: "one\n\ttwo  \nthree\n" } });
+  it("starts an existing instance with stale release and stored agent references and logs the warning", async () => {
+    const config = createTestConfig();
+    config.modules = { assetManagement: { enabled: true } };
+    const first = await createTestInstance({ config, env: {}, tools: [], seedAssets: true });
+    try {
+      const storedConfig = unknownToJsonValue({
+        ...retiredAgent,
+        toolNames: ["workspace.apply_patch"]
+      });
+      if (!isJsonObject(storedConfig)) throw new Error("Expected agent config");
+      await applyAtCurrentRevisions(first.stores.configAssets, {
+        clientInstanceId: asClientInstanceId(config.clientInstance.id),
+        mutations: [
+          {
+            type: "upsert",
+            kind: "agent",
+            name: retiredAgent.name,
+            config: storedConfig
+          }
+        ]
+      });
+    } finally {
+      await first.close();
+    }
+    config.tools.push({ name: "workspace.apply_patch", enabled: true, config: {} });
+    const warn = vi.spyOn(createLogger(), "warn");
+    const instance = await createTestInstance({ config, env: {}, tools: [] });
+    try {
+      expect((await instance.call("ready.get")).statusCode).toBe(200);
+      const response = await instance.call("assets.get", {
+        params: { kind: "agent", name: retiredAgent.name }
+      });
+      expect(response.statusCode, response.body).toBe(200);
+      expect(response.json()).toMatchObject({ chatAvailable: true, unavailableTools: [] });
+      const messages = warn.mock.calls.flat();
+      expect(messages).toContain(warning("The release config"));
+      expect(messages).toContain(warning("Agent 'retired_patch_agent'"));
+    } finally {
+      await instance.close();
+      warn.mockRestore();
+    }
   });
 });

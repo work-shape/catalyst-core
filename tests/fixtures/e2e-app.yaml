@@ -167,8 +167,6 @@ tools:
   - name: show_view
     enabled: true
   # An agent writes a Page with the file tools and saves it.
-  - name: workspace.apply_patch
-    enabled: true
   - name: workspace.write_file
     enabled: true
   - name: workspace.open
