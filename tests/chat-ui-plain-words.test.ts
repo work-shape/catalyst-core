@@ -268,7 +268,9 @@ describe("what an audit row is about, in words (UXA-1b3)", () => {
     ]) {
       expect(text).toContain(words);
     }
-    for (const id of ["sales", "secret-skill", "demo.weather_forecast", "user_ada"]) {
+    // The correlation id stands folded under "Technische Details".
+    expect(text).toContain("Technische Details");
+    for (const id of ["sales", "secret-skill", "demo.weather_forecast", "user_ada", "corr_"]) {
       expect(text).not.toContain(id);
     }
   });
@@ -320,7 +322,7 @@ async function germanAuditText(auditActivities: AuditActivity[]): Promise<string
       )
     );
   });
-  for (const row of container.querySelectorAll<HTMLButtonElement>("button[aria-expanded]")) {
+  for (const row of container.querySelectorAll<HTMLButtonElement>("button[data-audit-activity]")) {
     await act(async () => row.click());
   }
   const text = container.textContent ?? "";

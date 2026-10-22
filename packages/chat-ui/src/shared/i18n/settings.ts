@@ -56,7 +56,8 @@ export const settings = defineTranslations({
     "settings.auditActorDelegated": "{delegate} (for {name})",
     "settings.auditActorService": "{name} · service",
     "settings.auditActorSystem": "System",
-    "settings.auditCorrelation": "correlation: {id}",
+    "settings.auditCorrelation": "Correlation ID: {id}",
+    "settings.auditTechnical": "Technical details",
     "settings.auditCountOne": "{count} recent activity",
     "settings.auditCountOther": "{count} recent activities",
     "settings.auditDescription":
@@ -305,6 +306,7 @@ export const settings = defineTranslations({
     "settings.auditActorService": "{name} · Dienst",
     "settings.auditActorSystem": "System",
     "settings.auditCorrelation": "Korrelations-ID: {id}",
+    "settings.auditTechnical": "Technische Details",
     "settings.auditCountOne": "{count} Aktivität",
     "settings.auditCountOther": "{count} Aktivitäten",
     "settings.auditDescription":

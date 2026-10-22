@@ -32,7 +32,7 @@ const settingsRegion = (page: Page) =>
 /** The audit page with its activities opened, newest first, until the probe's event shows. */
 async function openAudit(page: Page): Promise<void> {
   const settings = settingsRegion(page);
-  const rows = settings.locator("button[aria-expanded]");
+  const rows = settings.locator("button[data-audit-activity]");
   await expect(rows.first()).toBeVisible();
   const cell = settings.getByRole("cell", { name: `Skill: ${skillTitle}`, exact: true }).first();
   // The newest activities are this page's own reads and the probe's write.
@@ -59,6 +59,11 @@ test("the audit page says what an event is about by the asset's title, in German
       settings.getByRole("cell", { name: `Skill: ${skillTitle}`, exact: true }).first()
     ).toBeVisible();
     await expect(settings.getByText(skillName)).toHaveCount(0);
+    // The correlation id stands folded under "Technische Details".
+    await expect(settings.getByText(/Korrelations-ID/u)).toHaveCount(0);
+    await expect(
+      settings.getByRole("button", { name: "Technische Details" }).first()
+    ).toBeVisible();
 
     await page.setViewportSize({ width: 1280, height: 1300 });
     await shoot(page, "uxa-1b3-audit", () => openAudit(page));
