@@ -2,10 +2,13 @@ import { describe, expect, it } from "vitest";
 import { resolveInstanceModules } from "@work-shape/catalyst-client-assembly";
 import {
   createSafeConfigView,
+  getModelSelectionForAgent,
   parseClientInstanceConfig,
+  resolveModelBinding,
   type ClientInstanceConfig
 } from "@work-shape/catalyst-config-schema";
 import { MODEL_USAGE_TIER_BOUNDS, modelUsageTierFromRates } from "@work-shape/catalyst-core";
+import { agentModelSelection } from "./support/chat-ui";
 import { builtInModelCapabilities } from "./support/model-gateway";
 
 /** The efforts the adapters declare, as the config route reads them from the gateway. */
@@ -142,10 +145,9 @@ describe("user-selectable model config", () => {
         ...defaultChoice
       }
     ]);
-    // An agent on the provider default has no binding for its own model: no id, and no choice
-    // of effort.
+    // An agent on the provider default that lists a binding for that same model offers it once,
+    // as that binding.
     expect(safeConfig.agents[2]?.selectableModels).toEqual([
-      { model: "gpt-5.6-sol", region: "global", compactThresholdTokens: 270_000, ...noChoice },
       {
         bindingId: "sol",
         model: "gpt-5.6-sol",
@@ -154,6 +156,126 @@ describe("user-selectable model config", () => {
         ...defaultChoice
       }
     ]);
+  });
+
+  it("offers an agent on its provider's own model the binding for that model once, as its own", () => {
+    const config = parseClientInstanceConfig({
+      version: 1,
+      clientInstance: {
+        id: "own-binding-test",
+        displayName: "Own Binding Test",
+        environment: "development"
+      },
+      infrastructure: {
+        models: {
+          "azure-eu": {
+            provider: "openai-compatible",
+            region: "eu",
+            api: "responses",
+            model: "catalyst-gpt-6.1-sol"
+          },
+          other: { provider: "openai-compatible", region: "eu", model: "catalyst-gpt-6.1-sol" }
+        }
+      },
+      modelBindings: [
+        {
+          id: "primaryReasoning",
+          providerId: "azure-eu",
+          model: "catalyst-gpt-6.1-sol",
+          label: "GPT-6.1 Sol",
+          vendor: "openai",
+          reasoningEffort: "high"
+        },
+        // The same deployment name on another provider is another model.
+        { id: "elsewhere", providerId: "other", label: "Elsewhere" },
+        {
+          id: "terra",
+          providerId: "azure-eu",
+          model: "catalyst-gpt-5.6-terra",
+          label: "GPT-5.6 Terra",
+          vendor: "openai"
+        }
+      ]
+    });
+    const agent = (name: string, fields: Record<string, unknown>) => ({
+      name,
+      displayName: name,
+      instructions: "Help the user.",
+      modelProviderId: "azure-eu",
+      toolNames: [],
+      skillNames: [],
+      initialPrompts: [],
+      ...fields
+    });
+    const matchedAgent = agent("matched", {
+      userSelectableModelBindingIds: ["elsewhere", "terra", "primaryReasoning"]
+    });
+    const assets = {
+      version: 1 as const,
+      defaultAgentName: "matched",
+      agents: [
+        matchedAgent,
+        agent("unmatched", { userSelectableModelBindingIds: ["elsewhere", "terra"] }),
+        // An effort set for the agent's own model does not keep the raw entry.
+        agent("own_effort", {
+          reasoningEffort: "low",
+          userSelectableModelBindingIds: ["primaryReasoning"]
+        })
+      ],
+      skills: []
+    };
+    const view = createSafeConfigView(config, assets, resolveInstanceModules(config, []).snapshot, {
+      reasoningEffortsOfBinding: adapterEfforts(config)
+    });
+    const byName = (name: string) => view.agents.find((offered) => offered.name === name);
+    const raw = {
+      model: "catalyst-gpt-6.1-sol",
+      region: "eu",
+      ...noChoice
+    };
+    const elsewhere = {
+      bindingId: "elsewhere",
+      model: "catalyst-gpt-6.1-sol",
+      label: "Elsewhere",
+      region: "eu",
+      ...defaultChoice
+    };
+    const terra = {
+      bindingId: "terra",
+      model: "catalyst-gpt-5.6-terra",
+      label: "GPT-5.6 Terra",
+      vendor: "openai",
+      region: "eu",
+      ...defaultChoice
+    };
+    const primaryReasoning = {
+      bindingId: "primaryReasoning",
+      model: "catalyst-gpt-6.1-sol",
+      label: "GPT-6.1 Sol",
+      vendor: "openai",
+      region: "eu",
+      reasoningEffort: "high",
+      selectableReasoningEfforts: ["low", "medium", "high", "xhigh", "max"]
+    };
+
+    const matched = byName("matched");
+    expect(matched).not.toHaveProperty("defaultModelBindingId");
+    expect(matched?.selectableModels).toEqual([primaryReasoning, elsewhere, terra]);
+    // It is what a run without a pick uses, and a saved pick of it still finds it.
+    expect(agentModelSelection(matched, undefined).selectedModel).toEqual(primaryReasoning);
+    expect(agentModelSelection(matched, "primaryReasoning").selectedModel).toEqual(
+      primaryReasoning
+    );
+    // A run started from it names its binding, which runs the agent's own provider and model.
+    const runFrom = agentModelSelection(matched, undefined).selectedModel?.bindingId;
+    expect(runFrom).toBeDefined();
+    const own = getModelSelectionForAgent(config, matchedAgent);
+    const started = resolveModelBinding(config, runFrom ?? "");
+    expect([started.provider.id, started.model]).toEqual([own.provider.id, own.model]);
+
+    // Without a binding for the same provider and model the own model keeps its raw entry.
+    expect(byName("unmatched")?.selectableModels).toEqual([raw, elsewhere, terra]);
+    expect(byName("own_effort")?.selectableModels).toEqual([primaryReasoning]);
   });
 
   it("describes each offered model for the model picker", () => {

@@ -4,7 +4,7 @@ import { join } from "node:path";
 import type { Locator, Page } from "@playwright/test";
 import { z } from "zod";
 import { removeServicePrincipal } from "./connection-fixtures";
-import { requestWithOrigin } from "./request-with-origin";
+import { assetBaseRevision, assetRevision, requestWithOrigin } from "./request-with-origin";
 import { expect, test } from "./test";
 
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
@@ -113,6 +113,111 @@ test("in a short narrow window the model panel keeps its Back row and options in
   await options.last().scrollIntoViewIfNeeded();
   await expect.poll(() => uncoveredShare(options.last())).toBe(1);
   await expect.poll(() => uncoveredShare(back)).toBe(1);
+});
+
+// MODEL-OWN-BINDING: an agent on its provider's own model that also lists the binding for that
+// model offered the model twice, once raw and once as the binding. It offers it once, as the
+// binding, and a run from the composer names that binding and runs on it. The suite's instance
+// config, not a stubbed one: its `primary` binding is the `local` provider's own model.
+test("an agent on its provider's model offers the binding for that model once, as its own", async ({
+  page,
+  instanceAgentsChange: _instanceAgentsChange
+}) => {
+  test.setTimeout(60_000);
+  await page.goto("/");
+  await signIn(page, superadmin);
+  const name = `e2e_own_binding_${randomUUID().slice(0, 8)}`;
+  const displayName = `Own Binding ${name.slice(-8)}`;
+  const assetUrl = `${apiBaseUrl}/api/v1/assets/agent/${name}`;
+  const created = await requestWithOrigin(page, "put", assetUrl, {
+    data: {
+      expectedRevision: await assetBaseRevision(page, assetUrl),
+      config: {
+        name,
+        displayName,
+        modelProviderId: "local",
+        instructions: "You help.",
+        toolNames: [],
+        userSelectableModelBindingIds: ["primary"]
+      },
+      availableIn: "all"
+    }
+  });
+  expect(created.ok(), await created.text()).toBe(true);
+  try {
+    const config = z
+      .object({
+        agents: z.array(
+          z.object({
+            name: z.string(),
+            selectableModels: z.array(
+              z.object({ bindingId: z.string().optional(), model: z.string() })
+            )
+          })
+        )
+      })
+      .parse(await (await page.request.get(`${apiBaseUrl}/api/v1/instance/config`)).json());
+    expect(
+      config.agents
+        .find((agent) => agent.name === name)
+        ?.selectableModels.map(({ bindingId, model }) => ({ bindingId, model }))
+    ).toEqual([{ bindingId: "primary", model: "deterministic-local" }]);
+
+    await page.goto("/");
+    await expect(page).toHaveURL(/\/w\/[^/]+/u);
+    const agentButton = page.getByRole("button", { name: /^Select agent/u }).first();
+    await agentButton.click();
+    await page.getByRole("option", { name: new RegExp(displayName, "u") }).click();
+    await expect(agentButton).toHaveAccessibleName(`Select agent: ${displayName}`);
+    // One model and no effort to choose: the composer has no model control.
+    const composer = page.getByRole("textbox", { name: "Message" });
+    await expect(composer).toBeVisible();
+    await expect(page.getByRole("button", { name: "Select model" })).toHaveCount(0);
+
+    const started = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        new URL(response.url()).pathname === "/api/v1/conversations/runs"
+    );
+    await composer.fill(`Own binding ${name}`);
+    await page.keyboard.press("Enter");
+    const response = await started;
+    expect(
+      z
+        .object({ agentName: z.string(), modelBindingId: z.string().optional() })
+        .parse(response.request().postDataJSON())
+    ).toMatchObject({ agentName: name, modelBindingId: "primary" });
+    const { conversation } = z
+      .object({ conversation: z.object({ id: z.string() }) })
+      .parse(await response.json());
+    // The run on that binding ends with the deterministic model's answer.
+    await expect
+      .poll(
+        async () => {
+          const thread = await page.request.get(
+            `${apiBaseUrl}/api/v1/conversations/${encodeURIComponent(conversation.id)}/thread`
+          );
+          const snapshot = z
+            .object({
+              activeRun: z.unknown().optional(),
+              messages: z.array(z.unknown()),
+              modelSelection: z.object({ modelBindingId: z.string().optional() }).optional()
+            })
+            .parse(await thread.json());
+          return {
+            running: snapshot.activeRun !== undefined,
+            messages: snapshot.messages.length,
+            modelBindingId: snapshot.modelSelection?.modelBindingId
+          };
+        },
+        { timeout: 30_000 }
+      )
+      .toEqual({ running: false, messages: 2, modelBindingId: "primary" });
+  } finally {
+    await requestWithOrigin(page, "post", `${assetUrl}/delete`, {
+      data: { expectedRevision: await assetRevision(page, assetUrl) }
+    });
+  }
 });
 
 /**

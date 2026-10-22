@@ -249,29 +249,42 @@ function agentSelectableModels(context: ModelViewContext, agent: AgentConfig, wr
       writer
     )
   });
-  return [
-    offered(
+  const bindingView = (binding: ModelBindingConfig) => {
+    const selection = resolveModelBinding(config, binding.id);
+    return offered(
       modelView(context, {
-        provider: own.provider,
-        binding: own.binding,
-        model: own.model,
-        reasoningEffort: own.reasoningEffort
+        provider: selection.provider,
+        binding,
+        model: selection.model,
+        reasoningEffort:
+          defaultReasoningEffortForAgentBinding(agent, binding) ?? selection.reasoningEffort
       }),
-      agent.modelBindingId
-    ),
-    ...userSelectableModelBindingsForAgent(agent, config.modelBindings).map((binding) => {
-      const selection = resolveModelBinding(config, binding.id);
-      return offered(
-        modelView(context, {
-          provider: selection.provider,
-          binding,
-          model: selection.model,
-          reasoningEffort:
-            defaultReasoningEffortForAgentBinding(agent, binding) ?? selection.reasoningEffort
-        }),
-        binding.id
-      );
-    })
+      binding.id
+    );
+  };
+  const bindings = userSelectableModelBindingsForAgent(agent, config.modelBindings);
+  // An agent on its provider's own model that also lists a binding for that same model offers
+  // it once, as that binding: picking it runs exactly as picking the binding did.
+  const ownBinding =
+    agent.modelBindingId === undefined
+      ? bindings.find((binding) => {
+          const selection = resolveModelBinding(config, binding.id);
+          return selection.provider.id === own.provider.id && selection.model === own.model;
+        })
+      : undefined;
+  return [
+    ownBinding
+      ? bindingView(ownBinding)
+      : offered(
+          modelView(context, {
+            provider: own.provider,
+            binding: own.binding,
+            model: own.model,
+            reasoningEffort: own.reasoningEffort
+          }),
+          agent.modelBindingId
+        ),
+    ...bindings.filter((binding) => binding !== ownBinding).map(bindingView)
   ];
 }
 

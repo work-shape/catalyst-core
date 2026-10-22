@@ -1327,6 +1327,96 @@ describe("local agent runtime", () => {
     ]);
   });
 
+  it("runs the binding offered as the own model of an agent on its provider's model on that same model", async () => {
+    const clientInstanceId = asClientInstanceId("own-binding-client");
+    const context: RuntimeCallContext = {
+      clientInstanceId,
+      correlationId: "corr-own-binding",
+      user: {
+        id: "user-1",
+        externalUserId: "user-1",
+        displayLabel: "User",
+        roles: ["user"],
+        permissionRefs: [],
+        clientInstanceId,
+        authSource: "test"
+      }
+    };
+    const store = (await createTestInstance()).stores;
+    const conversationId = await createConversationWithMessages(store, {
+      clientInstanceId,
+      messages: []
+    });
+    const providerConfig: ModelProviderConfig = {
+      id: "azure-eu",
+      type: "deterministic",
+      model: "catalyst-gpt-6.1-sol"
+    };
+    const providerRequests: Array<Parameters<FakeModelProvider["complete"]>[0]> = [];
+    const modelProvider: FakeModelProvider = {
+      id: "azure-eu",
+      async complete(request) {
+        providerRequests.push(request);
+        return { text: "Done.", toolCalls: [], usage: noReportedUsage() };
+      }
+    };
+    const runtime = new LocalAgentRuntime(
+      withTestModelGateway({
+        assetSource: createStaticConfigAssetSource({
+          agents: [
+            {
+              name: "provider_agent",
+              displayName: "Provider Agent",
+              instructions: "Help.",
+              modelProviderId: "azure-eu",
+              userSelectableModelBindingIds: ["primaryReasoning"],
+              toolNames: [],
+              skillNames: [],
+              initialPrompts: []
+            }
+          ]
+        }),
+        modelProviders: [providerConfig],
+        modelBindings: [
+          {
+            id: "primaryReasoning",
+            providerId: "azure-eu",
+            model: "catalyst-gpt-6.1-sol",
+            label: "GPT-6.1 Sol"
+          }
+        ],
+        defaultModelProvider: providerConfig,
+        conversationHistory: store.conversations,
+        modelProvider,
+        toolRegistry: new ToolRegistry({ tools: [] }),
+        runTool: createUnusedToolRunner(),
+        usageGovernance: new ModelUsageGovernance({
+          store: store.usage,
+          budget: {},
+          safeguards: {}
+        })
+      })
+    );
+
+    // Without a pick, as before, and from the entry the picker now offers as its own model.
+    for (const modelBindingId of [undefined, "primaryReasoning"]) {
+      const run = await runtime.start(
+        { agentName: "provider_agent", modelBindingId, conversationId, message: { text: "Go." } },
+        context
+      );
+      for await (const event of runtime.observe(run.runId, context)) {
+        if (event.type === "message_completed") {
+          break;
+        }
+      }
+    }
+
+    expect(providerRequests.map((request) => [request.providerId, request.model])).toEqual([
+      ["azure-eu", "catalyst-gpt-6.1-sol"],
+      ["azure-eu", "catalyst-gpt-6.1-sol"]
+    ]);
+  });
+
   it("loads complete tool-call history by default before a follow-up turn", async () => {
     const clientInstanceId = asClientInstanceId("tool-history-client");
     const context: RuntimeCallContext = {
