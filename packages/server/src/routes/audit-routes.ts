@@ -3,6 +3,8 @@ import { projectAuditActivities } from "@work-shape/catalyst-core";
 import { recordGovernanceAccess } from "../access/governance-actions";
 import type { Route } from "../http/route";
 import type { ChatServerOptions } from "../types";
+import { auditSubjectLookups, withAuditSubjects } from "./audit-subjects";
+import { resolveRequestLocale } from "./request-context";
 
 // Raw events are fetched generously so an activity's evidence is rarely split at the edge of
 // the read, then projected down to a bounded set of activities.
@@ -27,7 +29,8 @@ export function registerAuditRoutes(route: Route, options: ChatServerOptions): v
   // Curated activity timeline for the admin UI: grouped, labelled, and filtered
   // to governance/workflow plus anything that failed or was denied. It shows the latest
   // activities only; paging activities needs a store query over correlation groups.
-  route(apiOperations["audit_activities.list"], async ({ user, context }) => {
+  // Each subject is said by its title where the reader may read it, else by its kind alone.
+  route(apiOperations["audit_activities.list"], async ({ user, access, context, request }) => {
     await recordGovernanceAccess({
       options,
       user,
@@ -38,8 +41,16 @@ export function registerAuditRoutes(route: Route, options: ChatServerOptions): v
       clientInstanceId: options.clientInstanceId,
       limit: AUDIT_EVENT_FETCH_LIMIT
     });
+    const activities = projectAuditActivities(events, {
+      view: "default",
+      limit: AUDIT_ACTIVITY_LIMIT
+    });
     return {
-      items: projectAuditActivities(events, { view: "default", limit: AUDIT_ACTIVITY_LIMIT })
+      items: await withAuditSubjects(
+        auditSubjectLookups(options, user),
+        { user, access, locale: resolveRequestLocale(options, request) },
+        activities
+      )
     };
   });
 }
