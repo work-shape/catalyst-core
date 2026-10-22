@@ -1,6 +1,6 @@
 {
   "measuredAt": "2026-10-22",
-  "source": "Release Check 39757198912, commit 89e4c4247; existing job logs, no new hosted run. Initial local landing at 6a4402a7d on 2026-10-22 (Node 26.6.0, shared heavy slot); locally measured additions name that source in their reasons.",
+  "source": "Release Check 39757198912, commit 89e4c4247; existing job logs, no new hosted run. Initial local landing at 6a4402a7d on 2026-10-22 (Node 26.6.0, shared heavy slot); locally measured additions name that source in their reasons. Agent-story subprocess cost: passing Node 22.23.4 targeted budget run at c0df4bc69 on 2026-10-22.",
   "notes": "Vitest identities use file > fullName (nested suites separated by >); file exceptions do not exempt tests. File durations cover tests and hooks, excluding module imports. Browser durations sum all reported attempts per spec in the selected run, including retries, excluding gaps between files. Entries were measured in the release or initial local run; failed assertions are not added as successful baseline measurements; removed test titles and .scale.test.ts files are omitted. Remove exceptions as the test-suite diet makes them unnecessary.",
   "vitestFiles": {
     "tests/agent-run-approvals.test.ts": {
@@ -256,6 +256,10 @@
     "tests/agent-runtime.test.ts > local agent runtime > waits out a rate limit with growing pauses and gives up after a minute of waiting": {
       "measuredMs": 7900,
       "reason": "Exercises real rate-limit backoff; replace the long wait with the existing fake clock."
+    },
+    "tests/agent-stories-runner.test.ts > agent story selection, ownership, cleanup, budget and state oracles": {
+      "measuredMs": 5518.185833000001,
+      "reason": "Runs the real node:test oracle suite and Playwright discovery subprocesses. Passed on Node 22.23.4 in the initial targeted budget run at c0df4bc69 on 2026-10-22; retained as the measured existing subprocess cost."
     },
     "tests/asset-repo-command.test.ts > committing a folder > refuses a folder with more files than the cap, and one with more directories than a walk takes": {
       "measuredMs": 17696,
