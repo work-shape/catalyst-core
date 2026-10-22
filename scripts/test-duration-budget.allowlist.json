@@ -1,6 +1,6 @@
 {
   "measuredAt": "2026-10-22",
-  "source": "Release Check 39757198912, commit 89e4c4247; existing job logs, no new hosted run. Initial local landing at 6a4402a7d on 2026-10-22 (Node 26.6.0, shared heavy slot); locally measured additions name that source in their reasons. Agent-story subprocess cost: passing Node 22.23.4 targeted budget run at c0df4bc69 on 2026-10-22.",
+  "source": "Release Check 39757198912, commit 89e4c4247; existing job logs, no new hosted run. Initial local landing at 6a4402a7d on 2026-10-22 (Node 26.6.0, shared heavy slot); locally measured additions name that source in their reasons. Agent-story subprocess cost: passing Node 22.23.4 targeted budget run at c0df4bc69 on 2026-10-22. Completed passing samples from the Node 22.23.4 local landing at d7fc470bf on 2026-10-22, canceled after discovering additional baseline offenders.",
   "notes": "Vitest identities use file > fullName (nested suites separated by >); file exceptions do not exempt tests. File durations cover tests and hooks, excluding module imports. Browser durations sum all reported attempts per spec in the selected run, including retries, excluding gaps between files. Entries were measured in the release or initial local run; failed assertions are not added as successful baseline measurements; removed test titles and .scale.test.ts files are omitted. Remove exceptions as the test-suite diet makes them unnecessary.",
   "vitestFiles": {
     "tests/agent-run-approvals.test.ts": {
@@ -51,6 +51,10 @@
       "measuredMs": 35338,
       "reason": "Existing Data Store coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
     },
+    "tests/data-store-record-publish.test.ts": {
+      "measuredMs": 24831,
+      "reason": "Existing Data Store record and publication integration coverage. Completed passing sample in the initial Node 22.23.4 local landing at d7fc470bf on 2026-10-22; retained as existing baseline cost."
+    },
     "tests/data-store-scopes.test.ts": {
       "measuredMs": 23998,
       "reason": "Existing Data Store coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
@@ -94,6 +98,10 @@
     "tests/knowledge-base-removal.test.ts": {
       "measuredMs": 26040,
       "reason": "Existing knowledge ingestion and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/knowledge-base-search.test.ts": {
+      "measuredMs": 23077,
+      "reason": "Seeded Knowledge Base documents and agent search across assignments, filters and rights. Completed passing sample in the initial Node 22.23.4 local landing at d7fc470bf on 2026-10-22; retained as existing baseline cost."
     },
     "tests/knowledge-base-sync.test.ts": {
       "measuredMs": 62459,
@@ -215,6 +223,10 @@
       "measuredMs": 61425,
       "reason": "Existing Workflow coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
     },
+    "tests/workflow-rights-grants.test.ts": {
+      "measuredMs": 23802,
+      "reason": "Real persisted Workflow grant, read and start authorization across member accounts. Completed passing sample in the initial Node 22.23.4 local landing at d7fc470bf on 2026-10-22; retained as existing baseline cost."
+    },
     "tests/workflow-run-children.test.ts": {
       "measuredMs": 23381,
       "reason": "Real child-run scheduling, timer wakeups and descendant cancellation."
@@ -222,6 +234,10 @@
     "tests/workflow-run-data-pruning.test.ts": {
       "measuredMs": 53506,
       "reason": "Existing Workflow coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/workflow-run-faults.test.ts": {
+      "measuredMs": 26403,
+      "reason": "Persisted Workflow execution and recovery across injected step and worker failures. Completed passing sample in the initial Node 22.23.4 local landing at d7fc470bf on 2026-10-22; retained as existing baseline cost."
     },
     "tests/workflow-run-keys.test.ts": {
       "measuredMs": 22143,
@@ -292,6 +308,10 @@
     "tests/client-assembly-knowledge-worker.test.ts > knowledge worker process isolation > does not claim ingestion in the API and serves HTTP and an agent run while all worker connections are held": {
       "measuredMs": 6688,
       "reason": "Real worker connection saturation alongside API and agent execution."
+    },
+    "tests/client-assembly-knowledge-worker.test.ts > knowledge worker process isolation > returns leased work on SIGTERM and resumes without duplicate documents or chunks": {
+      "measuredMs": 6562,
+      "reason": "Real ingestion-worker subprocess SIGTERM and resume recovery. Completed passing sample in the initial Node 22.23.4 local landing at d7fc470bf on 2026-10-22; retained as existing baseline cost."
     },
     "tests/conversation-follow-ups.test.ts > server follow-up queue on Postgres > streams 64 deltas through concurrent queue edits, withdrawal and completion without sequence gaps or deadlocks (repetition 1)": {
       "measuredMs": 5819,
@@ -408,6 +428,14 @@
     "tests/knowledge-base-removal.test.ts > removing documents from a Knowledge Base > purges past an object it cannot delete, ends failed with a code, and finishes on retry": {
       "measuredMs": 5507,
       "reason": "Existing knowledge ingestion and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/knowledge-base-search.test.ts > searching the documents of a Knowledge Base > through the agent tool > answers one ranked list naming each Knowledge Base, narrows to the named ones, refuses one not assigned, and skips one the person may not use": {
+      "measuredMs": 5077,
+      "reason": "Seeded Knowledge Base documents and agent search across assignments, filters and rights. Completed passing sample in the initial Node 22.23.4 local landing at d7fc470bf on 2026-10-22; retained as existing baseline cost."
+    },
+    "tests/knowledge-base-search.test.ts > searching the documents of a Knowledge Base > through the agent tool > is one tool over every Knowledge Base with documents; a third adds only to its description, one of tables adds knowledge.query": {
+      "measuredMs": 5339,
+      "reason": "Seeded Knowledge Base documents and agent search across assignments, filters and rights. Completed passing sample in the initial Node 22.23.4 local landing at d7fc470bf on 2026-10-22; retained as existing baseline cost."
     },
     "tests/knowledge-base-sync.test.ts > initial and full source import (KB 72, 73) > queues 250 ids once across listing 429 resumes and splits duplicate batches without orphan copies": {
       "measuredMs": 22760,
@@ -649,6 +677,10 @@
       "measuredMs": 8042,
       "reason": "Discovery over 501 published Workflows crosses the page bound."
     },
+    "tests/workflow-discovery-paging.test.ts > published Workflow discovery beyond the former 500 total > reaches all 501 published Workflows through bounded API cursor pages": {
+      "measuredMs": 5656,
+      "reason": "Seeds 501 published Workflows to prove bounded cursor traversal; existing volume coverage. Completed passing sample in the initial Node 22.23.4 local landing at d7fc470bf on 2026-10-22; retained as existing baseline cost."
+    },
     "tests/workflow-limits.test.ts > limits.concurrency of a Workflow > holds a Workflow to its 2 slots across its runs and children while another keeps its own, on two workers": {
       "measuredMs": 8542,
       "reason": "Real concurrent workers, deadlines and per-Workflow admission slots."
@@ -680,6 +712,10 @@
     "tests/workflow-publish-burst.test.ts > Workflows published at once beyond the platform's pool > publishes 32 Workflows with Data Store dataset contracts at once": {
       "measuredMs": 5078,
       "reason": "Real simultaneous publication across a seeded Workflow volume."
+    },
+    "tests/workflow-rights-grants.test.ts > a right on a Workflow given through grant administration > shows a member the one Workflow she was given to read, and starts it only with the use right": {
+      "measuredMs": 5428,
+      "reason": "Real persisted Workflow grant, read and start authorization across member accounts. Completed passing sample in the initial Node 22.23.4 local landing at d7fc470bf on 2026-10-22; retained as existing baseline cost."
     },
     "tests/workflow-run-children.test.ts > a deadline while every step waits > wakes from its timer and cancels descendants without a runnable step": {
       "measuredMs": 10277,
