@@ -1,15 +1,39 @@
 {
   "measuredAt": "2026-10-22",
-  "source": "Release Check 39757198912, commit 89e4c4247; existing job logs, no new hosted run.",
-  "notes": "Vitest identities use file > fullName (nested suites separated by >); file exceptions do not exempt tests. File durations cover tests and hooks, excluding module imports. Browser durations sum all reported attempts per spec in the selected run, including retries, excluding gaps between files. All entries below were measured in the source run; removed test titles and .scale.test.ts files are omitted. Remove exceptions as the test-suite diet makes them unnecessary.",
+  "source": "Release Check 39757198912, commit 89e4c4247; existing job logs, no new hosted run. Initial local landing at 6a4402a7d on 2026-10-22 (Node 26.6.0, shared heavy slot); locally measured additions name that source in their reasons.",
+  "notes": "Vitest identities use file > fullName (nested suites separated by >); file exceptions do not exempt tests. File durations cover tests and hooks, excluding module imports. Browser durations sum all reported attempts per spec in the selected run, including retries, excluding gaps between files. Entries were measured in the release or initial local run; failed assertions are not added as successful baseline measurements; removed test titles and .scale.test.ts files are omitted. Remove exceptions as the test-suite diet makes them unnecessary.",
   "vitestFiles": {
     "tests/agent-run-approvals.test.ts": {
       "measuredMs": 20999,
       "reason": "Persisted approval and agent execution integration across several cases."
     },
+    "tests/agent-run-jobs.test.ts": {
+      "measuredMs": 24473,
+      "reason": "Existing persisted instance, worker and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/agent-runtime.test.ts": {
+      "measuredMs": 26033,
+      "reason": "Existing persisted instance, worker and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/app-workflow-publish.test.ts": {
+      "measuredMs": 20369,
+      "reason": "Existing persisted instance, worker and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/asset-repo-command.test.ts": {
+      "measuredMs": 70930,
+      "reason": "Existing persisted instance, worker and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/chat-server-collaboration-workspaces.test.ts": {
+      "measuredMs": 30286,
+      "reason": "Existing persisted instance, worker and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
     "tests/chat-ui-workflow-run-steps.test.ts": {
       "measuredMs": 21847,
       "reason": "Real polling and retry intervals in run-step rendering; move these waits to a fake clock."
+    },
+    "tests/config-cli-pty.test.ts": {
+      "measuredMs": 21864,
+      "reason": "Existing persisted instance, worker and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
     },
     "tests/conversation-follow-ups.test.ts": {
       "measuredMs": 26397,
@@ -23,25 +47,81 @@
       "measuredMs": 23060,
       "reason": "Real streamed Data Store loads and contention coverage."
     },
+    "tests/data-store-record-projection.test.ts": {
+      "measuredMs": 35338,
+      "reason": "Existing Data Store coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/data-store-scopes.test.ts": {
+      "measuredMs": 23998,
+      "reason": "Existing Data Store coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
     "tests/data-store-worker-kill.test.ts": {
       "measuredMs": 22533,
       "reason": "Real process kill and idempotent Data Store insert recovery."
+    },
+    "tests/deletion-races.test.ts": {
+      "measuredMs": 23756,
+      "reason": "Existing persisted instance, worker and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
     },
     "tests/demo-sample-accounting-findings.test.ts": {
       "measuredMs": 24098,
       "reason": "Full sample accounting Workflow and findings integration."
     },
+    "tests/demo-sample-accounting.test.ts": {
+      "measuredMs": 43584,
+      "reason": "Existing persisted instance, worker and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/demo-seed-interrupted.test.ts": {
+      "measuredMs": 30711,
+      "reason": "Existing persisted instance, worker and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/demo-seed-own-config.test.ts": {
+      "measuredMs": 24352,
+      "reason": "Existing persisted instance, worker and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/demo-seed.test.ts": {
+      "measuredMs": 34747,
+      "reason": "Existing persisted instance, worker and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/job-worker-idle-process.test.ts": {
+      "measuredMs": 35914,
+      "reason": "Existing persisted instance, worker and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
     "tests/knowledge-base-release.test.ts": {
       "measuredMs": 22471,
       "reason": "Persisted knowledge release and ingestion lifecycle coverage."
+    },
+    "tests/knowledge-base-removal.test.ts": {
+      "measuredMs": 26040,
+      "reason": "Existing knowledge ingestion and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
     },
     "tests/knowledge-base-sync.test.ts": {
       "measuredMs": 62459,
       "reason": "Real knowledge sync, paged ingestion and SIGKILL recovery; volume cases are being moved to scale tests."
     },
+    "tests/knowledge-field-extraction.test.ts": {
+      "measuredMs": 47786,
+      "reason": "Existing knowledge ingestion and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/knowledge-source-operations.test.ts": {
+      "measuredMs": 26608,
+      "reason": "Existing knowledge ingestion and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/knowledge-source-upgrade.test.ts": {
+      "measuredMs": 30973,
+      "reason": "Existing knowledge ingestion and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
     "tests/knowledge-source-withdrawal.test.ts": {
       "measuredMs": 31969,
       "reason": "Real ingestion and source withdrawal across the persisted knowledge lifecycle."
+    },
+    "tests/mail-send-safe.test.ts": {
+      "measuredMs": 26239,
+      "reason": "Existing persisted instance, worker and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/mail-send-workflow.test.ts": {
+      "measuredMs": 23771,
+      "reason": "Existing persisted instance, worker and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
     },
     "tests/object-storage-contract.test.ts": {
       "measuredMs": 25071,
@@ -51,6 +131,18 @@
       "measuredMs": 40035,
       "reason": "Contract generation and scope-alternative permutations; narrow the permutations in the test-suite diet."
     },
+    "tests/operation-approval-asset-preview.test.ts": {
+      "measuredMs": 20367,
+      "reason": "Existing persisted instance, worker and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/platform-asset-tools-worker.test.ts": {
+      "measuredMs": 80177,
+      "reason": "Existing persisted instance, worker and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/platform-asset-tools.test.ts": {
+      "measuredMs": 34456,
+      "reason": "Existing persisted instance, worker and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
     "tests/platform-discovery-tools.test.ts": {
       "measuredMs": 103353,
       "reason": "Large seeded discovery worlds; reduce fixture volume in the test-suite diet."
@@ -59,9 +151,29 @@
       "measuredMs": 54585,
       "reason": "Runs real TypeScript, ESLint and Prettier against quality fixtures."
     },
+    "tests/release-cut.test.ts": {
+      "measuredMs": 43810,
+      "reason": "Existing release and source tooling coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/resolve-only-run.test.ts": {
+      "measuredMs": 30268,
+      "reason": "Existing release and source tooling coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/roles.test.ts": {
+      "measuredMs": 24384,
+      "reason": "Existing persisted instance, worker and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/verify-ws-own-1a.test.ts": {
+      "measuredMs": 20023,
+      "reason": "Existing persisted instance, worker and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
     "tests/workflow-agent-step.test.ts": {
       "measuredMs": 29220,
       "reason": "Agent execution and approval through real Workflow jobs."
+    },
+    "tests/workflow-assets.test.ts": {
+      "measuredMs": 42959,
+      "reason": "Existing Workflow coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
     },
     "tests/workflow-batch.test.ts": {
       "measuredMs": 38989,
@@ -71,23 +183,91 @@
       "measuredMs": 31219,
       "reason": "Real code-step execution and container-start recovery."
     },
+    "tests/workflow-continuation-runtime.test.ts": {
+      "measuredMs": 23433,
+      "reason": "Existing Workflow coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
     "tests/workflow-continue-as-new.test.ts": {
       "measuredMs": 55920,
       "reason": "Persisted checkpoint and continuation coverage; reduce the matrix in the test-suite diet."
+    },
+    "tests/workflow-discovery-paging.test.ts": {
+      "measuredMs": 24298,
+      "reason": "Existing Workflow coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/workflow-keyed-calls.test.ts": {
+      "measuredMs": 35975,
+      "reason": "Existing Workflow coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/workflow-limits.test.ts": {
+      "measuredMs": 30201,
+      "reason": "Existing Workflow coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/workflow-loop-concurrency.test.ts": {
+      "measuredMs": 21758,
+      "reason": "Existing Workflow coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/workflow-notify-step.test.ts": {
+      "measuredMs": 25735,
+      "reason": "Existing Workflow coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/workflow-paged-operation.test.ts": {
+      "measuredMs": 61425,
+      "reason": "Existing Workflow coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
     },
     "tests/workflow-run-children.test.ts": {
       "measuredMs": 23381,
       "reason": "Real child-run scheduling, timer wakeups and descendant cancellation."
     },
+    "tests/workflow-run-data-pruning.test.ts": {
+      "measuredMs": 53506,
+      "reason": "Existing Workflow coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/workflow-run-keys.test.ts": {
+      "measuredMs": 22143,
+      "reason": "Existing Workflow coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/workflow-sample-rest.test.ts": {
+      "measuredMs": 31078,
+      "reason": "Existing Workflow coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/workflow-test-runs.test.ts": {
+      "measuredMs": 28720,
+      "reason": "Existing Workflow coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
     "tests/workflow-worker-kill.test.ts": {
       "measuredMs": 52875,
       "reason": "Real worker processes, lease expiry, kill and restart recovery."
+    },
+    "tests/workspace-open-tool.test.ts": {
+      "measuredMs": 31359,
+      "reason": "Existing persisted instance, worker and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
     }
   },
   "vitestTests": {
+    "tests/agent-run-jobs.test.ts > agent runs as claimed jobs > fails the run of a killed worker as lost after the lease time, and the conversation takes the next message": {
+      "measuredMs": 11104,
+      "reason": "Existing persisted instance, worker and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/agent-run-jobs.test.ts > agent runs as claimed jobs > fails the run of a killed worker when no worker is left, by the job worker of the API": {
+      "measuredMs": 8068,
+      "reason": "Existing persisted instance, worker and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
     "tests/agent-runtime.test.ts > local agent runtime > waits out a rate limit with growing pauses and gives up after a minute of waiting": {
       "measuredMs": 7900,
       "reason": "Exercises real rate-limit backoff; replace the long wait with the existing fake clock."
+    },
+    "tests/asset-repo-command.test.ts > committing a folder > refuses a folder with more files than the cap, and one with more directories than a walk takes": {
+      "measuredMs": 17696,
+      "reason": "Existing persisted instance, worker and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/chat-server-collaboration-workspaces.test.ts > Conversation visibility > hides a private conversation from every non-author role on every conversation route": {
+      "measuredMs": 5603,
+      "reason": "Existing persisted instance, worker and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/chat-ui-right-verb-words.test.ts > the verbs of the rights screens > are core's words for a right, in both languages": {
+      "measuredMs": 5497,
+      "reason": "Existing UI rendering and polling coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
     },
     "tests/chat-ui-usage-budget.test.ts > Usage opens with the month's single answer (UXA-5) > a failure that is no refusal names nobody": {
       "measuredMs": 7023,
@@ -109,17 +289,93 @@
       "measuredMs": 6688,
       "reason": "Real worker connection saturation alongside API and agent execution."
     },
+    "tests/conversation-follow-ups.test.ts > server follow-up queue on Postgres > streams 64 deltas through concurrent queue edits, withdrawal and completion without sequence gaps or deadlocks (repetition 1)": {
+      "measuredMs": 5819,
+      "reason": "Existing persisted instance, worker and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/conversation-follow-ups.test.ts > server follow-up queue on Postgres > streams 64 deltas through concurrent queue edits, withdrawal and completion without sequence gaps or deadlocks (repetition 3)": {
+      "measuredMs": 5136,
+      "reason": "Existing persisted instance, worker and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/conversation-subject-visibility.test.ts > a conversation about a Workflow in a shared workspace > is its creator's alone, and stays so when it is moved": {
+      "measuredMs": 5817,
+      "reason": "Existing persisted instance, worker and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/data-scope-sql-shapes.test.ts > SQL shapes on a scoped table (SCOPE-1) > returns only the viewer's rows for every shape; all reads 103, nobody unassigned reads any": {
+      "measuredMs": 7304,
+      "reason": "Existing persisted instance, worker and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/data-store-chat.test.ts > row tools in the platform agent's real conversation path > pauses every write by default, resumes with frozen input, and a declined write changes nothing": {
+      "measuredMs": 7991,
+      "reason": "Existing Data Store coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
     "tests/data-store-load-timeouts.test.ts > timeouts after an unscoped replacement gets its table lock > keeps a later-chunk row wait as TIMEOUT": {
       "measuredMs": 7329,
       "reason": "Real row-lock timeout after streamed replacement has acquired its table lock."
+    },
+    "tests/data-store-loads.test.ts > a load into a Data Store > takes at most 100000 rows and 67108864 bytes in one call, whatever the reference says": {
+      "measuredMs": 6098,
+      "reason": "Existing Data Store coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/data-store-maintenance-paging.test.ts > Data Store maintenance beyond the former 2000-store cap > measures all 2001 stores across persisted continuations": {
+      "measuredMs": 10584,
+      "reason": "Existing Data Store coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/data-store-page-reads.test.ts > the reads of a Data Store's page > answers every row once for every kind of table and every page size, also where no key holds for all its rows": {
+      "measuredMs": 6804,
+      "reason": "Existing Data Store coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/data-store-roles.test.ts > the roles of a Data Store > opens no more connections to a store than the pool cap of release config, under 50 calls at once": {
+      "measuredMs": 5294,
+      "reason": "Existing Data Store coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
     },
     "tests/data-store-worker-kill.test.ts > a Workflow Run that inserts into a Data Store and whose worker process is killed > makes the insert again under its key after each kill, and the store holds each row once": {
       "measuredMs": 22520,
       "reason": "Real process kill and idempotent Data Store insert recovery."
     },
+    "tests/deletion-races.test.ts > a deletion against writes at the same moment, and cleanup that cannot go on > fails a pass whose cleanups report done and remove nothing": {
+      "measuredMs": 14833,
+      "reason": "Existing persisted instance, worker and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/deletion-races.test.ts > a deletion against writes at the same moment, and cleanup that cannot go on > finishes with execution workspaces off and more than one batch of their rows": {
+      "measuredMs": 6513,
+      "reason": "Existing persisted instance, worker and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/deletion-resumes.test.ts > a deletion that finishes by itself > ends dead after the last attempt, records it once and keeps the user closed": {
+      "measuredMs": 7873,
+      "reason": "Existing persisted instance, worker and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/demo-sample-accounting-books.test.ts > demo sample accounting books > gives each industry margins of its own: most clients profitable, some not, none absurd": {
+      "measuredMs": 6320,
+      "reason": "Existing persisted instance, worker and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/demo-sample-accounting-rest.test.ts > the accounting REST face > matches MCP for a small and a full 100,000-row ledger month, including wrong-date anomalies; every page stays under 1 MiB": {
+      "measuredMs": 10445,
+      "reason": "Existing persisted instance, worker and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/demo-sample-accounting.test.ts > demo sample accounting > advertises the four reading tools, and the Connection accepts exactly those for a Workflow": {
+      "measuredMs": 7546,
+      "reason": "Existing persisted instance, worker and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
     "tests/demo-sample-accounting.test.ts > demo sample accounting > opens every month of every client with the month's exact count": {
       "measuredMs": 7494,
       "reason": "Reads the full sample monthly accounting fixture."
+    },
+    "tests/demo-sample-accounting.test.ts > demo sample accounting > pages the largest client's 100,000 bookings at the maximum page size, each page under the Connection's bound and far inside its time": {
+      "measuredMs": 5737,
+      "reason": "Existing persisted instance, worker and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/event-registry.test.ts > event registry > registers every emitted platform audit name": {
+      "measuredMs": 7194,
+      "reason": "Existing persisted instance, worker and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/event-registry.test.ts > event registry > registers exactly the audit names emitted across platform and capabilities": {
+      "measuredMs": 7518,
+      "reason": "Existing persisted instance, worker and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/host-literals.test.ts > provider addresses and secrets in product source > writes the address of a real host only inside an adapter": {
+      "measuredMs": 18281,
+      "reason": "Existing persisted instance, worker and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
     },
     "tests/job-worker-idle-process.test.ts > an idle job worker in a process of its own > ends with code 0 when it is told to stop": {
       "measuredMs": 9510,
@@ -129,17 +385,81 @@
       "measuredMs": 5244,
       "reason": "Real subprocess lifetime, database reconnect and graceful shutdown."
     },
+    "tests/knowledge-base-concurrent-readers.test.ts > Knowledge Bases published at once on one Data Store > publishes 8 Knowledge Bases on one store at once": {
+      "measuredMs": 5751,
+      "reason": "Existing knowledge ingestion and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/knowledge-base-publish-burst.test.ts > Knowledge Bases published at once beyond the platform's pool > publishes 16 Knowledge Bases on one store at once": {
+      "measuredMs": 5197,
+      "reason": "Existing knowledge ingestion and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/knowledge-base-publish-burst.test.ts > Knowledge Bases published at once beyond the platform's pool > publishes 32 Knowledge Bases on one store at once": {
+      "measuredMs": 7411,
+      "reason": "Existing knowledge ingestion and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/knowledge-base-release.test.ts > synced originals are released after extraction (KB 76) > keeps original bytes and committed text when a worker is SIGKILLed before delete": {
+      "measuredMs": 5412,
+      "reason": "Existing knowledge ingestion and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/knowledge-base-removal.test.ts > removing documents from a Knowledge Base > purges past an object it cannot delete, ends failed with a code, and finishes on retry": {
+      "measuredMs": 5507,
+      "reason": "Existing knowledge ingestion and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/knowledge-base-sync.test.ts > initial and full source import (KB 72, 73) > queues 250 ids once across listing 429 resumes and splits duplicate batches without orphan copies": {
+      "measuredMs": 22760,
+      "reason": "Existing knowledge ingestion and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
     "tests/knowledge-base-sync.test.ts > initial and full source import (KB 72, 73) > resumes after SIGKILL with one platform connection and no duplicate items, documents, contents or chunks": {
       "measuredMs": 9093,
       "reason": "Real knowledge sync, paged ingestion and SIGKILL recovery; volume cases are being moved to scale tests."
+    },
+    "tests/knowledge-field-extraction.test.ts > PROC-2 extraction through the public Knowledge Base operation > check 83: retains and counts ungrounded evidence for review, pauses only fields at the KB budget, and resumes after a raise without retaining payloads": {
+      "measuredMs": 5427,
+      "reason": "Existing knowledge ingestion and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/knowledge-field-extraction.test.ts > PROC-2 extraction through the public Knowledge Base operation > uses the de instance content locale through extraction and records regardless of caller language": {
+      "measuredMs": 10824,
+      "reason": "Existing knowledge ingestion and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/knowledge-field-extraction.test.ts > PROC-2 extraction through the public Knowledge Base operation > uses the en instance content locale through extraction and records regardless of caller language": {
+      "measuredMs": 11137,
+      "reason": "Existing knowledge ingestion and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
     },
     "tests/knowledge-processing-scale.test.ts > Knowledge Base processing review at scale > keeps asset GET independent of content count and aggregates a changed draft in one statement": {
       "measuredMs": 6684,
       "reason": "Existing large ingestion fixture predates the .scale naming convention."
     },
+    "tests/knowledge-source-upgrade.test.ts > source items with unknown ancestry (parents = []) > search still finds pre-upgrade synced documents before their full pass": {
+      "measuredMs": 5235,
+      "reason": "Existing knowledge ingestion and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/knowledge-source-withdrawal.test.ts > source changes and withdrawal (SRC-3a, KB 78) > accepts mode changes over HTTP and applies deletes, edits and renames without refetching unchanged bytes": {
+      "measuredMs": 5951,
+      "reason": "Existing knowledge ingestion and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/knowledge-source-withdrawal.test.ts > source changes and withdrawal (SRC-3a, KB 78) > honours rejection even if an item fetch reduces the remaining withdrawal share": {
+      "measuredMs": 5005,
+      "reason": "Existing knowledge ingestion and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/knowledge-source-withdrawal.test.ts > source changes and withdrawal (SRC-3a, KB 78) > publishes narrowing and removal with immediate search exclusion, correct tombstones and grants; re-add starts a new initial run": {
+      "measuredMs": 5239,
+      "reason": "Existing knowledge ingestion and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/knowledge-source-withdrawal.test.ts > source changes and withdrawal (SRC-3a, KB 78) > reconciles more than one withdrawal page and queues bounded purge batches": {
+      "measuredMs": 16862,
+      "reason": "Existing knowledge ingestion and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
     "tests/mcp-connector-hardening.test.ts > the Connector type mcp against a server that holds on > the end of a session > does not wait for a server that never answers the end of the session": {
       "measuredMs": 6040,
       "reason": "Real unresponsive MCP session shutdown deadline."
+    },
+    "tests/object-storage-contract.test.ts > object storage contract: 'filesystem' > moves a 64 MB object in and out without holding it": {
+      "measuredMs": 6779,
+      "reason": "Existing persisted instance, worker and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/object-storage-contract.test.ts > object storage contract: 's3' > lists a prefix in pages, in key order, with sizes": {
+      "measuredMs": 9339,
+      "reason": "Existing persisted instance, worker and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
     },
     "tests/object-storage-contract.test.ts > object storage contract: 's3' > moves a 64 MB object in and out without holding it": {
       "measuredMs": 5399,
@@ -157,6 +477,22 @@
       "measuredMs": 5303,
       "reason": "Contract generation and scope-alternative permutations; narrow the permutations in the test-suite diet."
     },
+    "tests/package-example-names.test.ts > keeps customer and accounting vendor names out of reusable packages and docs": {
+      "measuredMs": 9892,
+      "reason": "Existing persisted instance, worker and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/pages-store.test.ts > the file sets of a Page > keeps at most 1000 revisions of a Page and 200 Pages of a conversation": {
+      "measuredMs": 9344,
+      "reason": "Existing persisted instance, worker and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/platform-asset-build-all.test.ts > one conversation that builds what an App needs > creates, saves and tests a Workflow draft beside its App, and changes no Workflow that existed before": {
+      "measuredMs": 5106,
+      "reason": "Existing persisted instance, worker and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/platform-asset-tools-step-files.test.ts > a conversation about a Workflow with a code step > says of a config what a save of its files is refused for, each issue with its path and code, and saves none of them": {
+      "measuredMs": 12528,
+      "reason": "Existing persisted instance, worker and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
     "tests/platform-asset-tools-worker.test.ts > reads and writes the conversation's asset as its owner through a separate agent-run worker process": {
       "measuredMs": 7253,
       "reason": "Separate agent-run worker process exercises asset reads and writes."
@@ -164,6 +500,14 @@
     "tests/platform-asset-tools-worker.test.ts > tests the subject and reads its run and steps through a separate agent-run worker": {
       "measuredMs": 11086,
       "reason": "Separate agent-run worker process exercises asset reads and writes."
+    },
+    "tests/platform-asset-tools.test.ts > a conversation about a Workflow > leaves an asset of the instance the agent opens for the person to go to, and a read moves nothing": {
+      "measuredMs": 7049,
+      "reason": "Existing persisted instance, worker and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/platform-asset-tools.test.ts > a conversation about a Workflow > lets the agent read the definition, be refused its first try, correct it and save a draft that changes nothing that runs": {
+      "measuredMs": 5087,
+      "reason": "Existing persisted instance, worker and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
     },
     "tests/platform-discovery-tools.test.ts > the tools that find what is on the platform > finds the Pages and files of every conversation of the workspace the user may read, from any chat, and nothing else": {
       "measuredMs": 6964,
@@ -173,9 +517,17 @@
       "measuredMs": 42762,
       "reason": "Large seeded discovery worlds; reduce fixture volume in the test-suite diet."
     },
+    "tests/platform-discovery-tools.test.ts > the tools that find what is on the platform > lists no kind of a module that is off, and refuses it as a kind that does not exist": {
+      "measuredMs": 5710,
+      "reason": "Existing persisted instance, worker and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
     "tests/platform-discovery-tools.test.ts > the tools that find what is on the platform > marks only this conversation's workspace as current, even without build rights here": {
       "measuredMs": 6330,
       "reason": "Large seeded discovery worlds; reduce fixture volume in the test-suite diet."
+    },
+    "tests/platform-discovery-tools.test.ts > the tools that find what is on the platform > orients from localized agents and published Apps available in this workspace": {
+      "measuredMs": 5146,
+      "reason": "Existing persisted instance, worker and lifecycle coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
     },
     "tests/platform-discovery-tools.test.ts > the tools that find what is on the platform > resolves notification people by literal name or email only within the caller's rights, with bounded matches": {
       "measuredMs": 38071,
@@ -193,6 +545,18 @@
       "measuredMs": 5260,
       "reason": "Runs real TypeScript, ESLint and Prettier against quality fixtures."
     },
+    "tests/quality-collector.test.ts > quality collector > checks every test group with shared ambient types and counts imported errors once": {
+      "measuredMs": 7076,
+      "reason": "Existing quality tooling with real compiler/linter processes coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/quality-collector.test.ts > quality collector > counts literal interface text per folder and other findings per package": {
+      "measuredMs": 9593,
+      "reason": "Existing quality tooling with real compiler/linter processes coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/quality-collector.test.ts > quality collector > fails undeclared workspace imports in client source, tools, package scripts and MDX": {
+      "measuredMs": 6726,
+      "reason": "Existing quality tooling with real compiler/linter processes coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
     "tests/quality-collector.test.ts > quality collector > ratchets repeated allowed-value lists across packages": {
       "measuredMs": 7789,
       "reason": "Runs real TypeScript, ESLint and Prettier against quality fixtures."
@@ -205,17 +569,61 @@
       "measuredMs": 6637,
       "reason": "Runs real TypeScript, ESLint and Prettier against quality fixtures."
     },
+    "tests/quality-collector.test.ts > quality collector > reports compiler errors and unused declarations in packages and tests": {
+      "measuredMs": 5151,
+      "reason": "Existing quality tooling with real compiler/linter processes coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
     "tests/quality-collector.test.ts > quality collector > reports unformatted files and formatting suppressions against the baseline": {
       "measuredMs": 6509,
       "reason": "Runs real TypeScript, ESLint and Prettier against quality fixtures."
+    },
+    "tests/quality-collector.test.ts > quality collector > returns every finding when a test group writes more than a pipe buffer": {
+      "measuredMs": 5245,
+      "reason": "Existing quality tooling with real compiler/linter processes coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/quality-scoped-collector.test.ts > retains selected lint findings and baseline counts across child processes": {
+      "measuredMs": 9231,
+      "reason": "Existing quality tooling with real compiler/linter processes coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/source-aliases.test.ts > names the alias repair command when sibling platform exports change": {
+      "measuredMs": 6864,
+      "reason": "Existing release and source tooling coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/source-names.test.ts > names and paths in product source > contains no operated customer names, including in documentation": {
+      "measuredMs": 11074,
+      "reason": "Existing release and source tooling coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/workflow-code-loops.test.ts > code steps inside dataset loops > each worker script reads only its own rows (batch=undefined)": {
+      "measuredMs": 8340,
+      "reason": "Existing Workflow coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
     },
     "tests/workflow-code-step.test.ts > a code step whose sandbox gives way > tries again where the container could not be started, and fails the step when no attempt could": {
       "measuredMs": 6910,
       "reason": "Real code-step execution and container-start recovery."
     },
+    "tests/workflow-code-step.test.ts > what a script leaves in the place of its result > leaves the worker able to run the next steps after five pipes": {
+      "measuredMs": 6493,
+      "reason": "Existing Workflow coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/workflow-code-step.test.ts > what a script starts in the local sandbox > does not hold the step where it left the script's process group and keeps its streams": {
+      "measuredMs": 5112,
+      "reason": "Existing Workflow coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
     "tests/workflow-continuation-scale.test.ts > check 112: processes a 50,000-row dataset at 20,000 step runs as one three-part Lauf, without skipped or repeated rows": {
       "measuredMs": 5815,
       "reason": "Existing large continuation fixture predates the .scale naming convention."
+    },
+    "tests/workflow-continue-as-new.test.ts > continue-as-new > checkpoints nested items once at outer concurrency 1 and budget 16": {
+      "measuredMs": 5313,
+      "reason": "Existing Workflow coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/workflow-continue-as-new.test.ts > continue-as-new > checkpoints nested items once at outer concurrency 1 and budget 7": {
+      "measuredMs": 11744,
+      "reason": "Existing Workflow coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/workflow-continue-as-new.test.ts > continue-as-new > checkpoints nested items once at outer concurrency 8 and budget 7": {
+      "measuredMs": 11821,
+      "reason": "Existing Workflow coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
     },
     "tests/workflow-continue-as-new.test.ts > continue-as-new > persists bounded histories across the real store with exactly one call per dataset row": {
       "measuredMs": 5825,
@@ -224,6 +632,10 @@
     "tests/workflow-continue-as-new.test.ts > reserves the inner tail, the rest of the outer item and the outer tail": {
       "measuredMs": 5697,
       "reason": "Persisted checkpoint and continuation coverage; reduce the matrix in the test-suite diet."
+    },
+    "tests/workflow-continue-as-new.test.ts > reserves the tail while admitting concurrent children of an oversized item": {
+      "measuredMs": 5774,
+      "reason": "Existing Workflow coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
     },
     "tests/workflow-dataset-consumers.test.ts > Workflow dataset consumers > loads the full streamed query once per step run and refuses foreign load references over HTTP": {
       "measuredMs": 9198,
@@ -241,9 +653,25 @@
       "measuredMs": 6354,
       "reason": "Real concurrent workers, deadlines and per-Workflow admission slots."
     },
+    "tests/workflow-loop-concurrency.test.ts > a loop that stops inside a loop that continues > starts no further part, runs nothing after the stopped loop, and goes on with the next client": {
+      "measuredMs": 8859,
+      "reason": "Existing Workflow coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
     "tests/workflow-notify-step.test.ts > Workflow notify steps and grouped failure notices > creates exactly one notice for fifty failed children even when the root failure job runs twice": {
       "measuredMs": 8725,
       "reason": "Fifty child failures and replayed notification jobs."
+    },
+    "tests/workflow-paged-operation.test.ts > resumes after a lost worker from the next complete page with every row once": {
+      "measuredMs": 8925,
+      "reason": "Existing Workflow coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/workflow-paged-operation.test.ts > stores 100,000 rows and a 1.3 MiB page without retaining rows on the step": {
+      "measuredMs": 9830,
+      "reason": "Existing Workflow coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/workflow-publish-burst.test.ts > Workflows published at once beyond the platform's pool > publishes 16 Workflows with Data Store dataset contracts at once": {
+      "measuredMs": 6184,
+      "reason": "Existing Workflow coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
     },
     "tests/workflow-publish-burst.test.ts > Workflows published at once beyond the platform's pool > publishes 32 Workflows with Data Store dataset contracts at once": {
       "measuredMs": 5078,
