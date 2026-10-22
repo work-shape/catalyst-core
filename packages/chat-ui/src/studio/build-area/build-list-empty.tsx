@@ -5,12 +5,13 @@ import { BuildWithAgentEmptyState } from "../build-with-agent-empty";
 import { isEditableKind } from "./build-asset-kind";
 import type { VisibleBuildKind } from "./build-model";
 
-/** The kinds an agent's first save creates, with the words of their New button and prompt. */
+/**
+ * The kinds without a page to write one by hand that an agent's first save creates, with the
+ * words of their New button and the sentence it starts the agent with.
+ */
 export const BUILT_WITH_AGENT: Readonly<
   Record<string, { label: TranslationKey; prompt: TranslationKey } | undefined>
 > = {
-  agent: { label: "configNewAgent", prompt: "configNewAgentPrompt" },
-  skill: { label: "configNewSkill", prompt: "configNewSkillPrompt" },
   data_store: { label: "dataStores.new", prompt: "dataStores.newPrompt" }
 };
 

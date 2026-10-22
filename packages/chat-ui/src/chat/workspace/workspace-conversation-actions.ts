@@ -190,14 +190,16 @@ export function createWorkspaceConversationActions({
   async function startConversationAbout(
     subject: { kind: string; name: string },
     prompt: string | undefined,
-    workspaceId: string | undefined = activeCollaborationWorkspaceId
+    workspaceId: string | undefined = activeCollaborationWorkspaceId,
+    options?: { fresh: boolean }
   ): Promise<void> {
     if (!workspaceId) {
       throw new Error("A conversation about an asset belongs to a workspace");
     }
     // The dock already holds a conversation about this asset: it opens again, also where the
-    // person closed it or it lies behind the page, and keeps what was said there.
-    const dockConversationId = dock.conversationId;
+    // person closed it or it lies behind the page, and keeps what was said there. The dock's
+    // "New chat" asks for a fresh one.
+    const dockConversationId = options?.fresh ? undefined : dock.conversationId;
     const reused = dockConversationToReuse({
       dockConversationId,
       dock:
@@ -242,18 +244,23 @@ export function createWorkspaceConversationActions({
   }
 
   /**
-   * A private conversation of the open workspace with `prompt` in its composer, where building
-   * goes on in a workspace whose members read its conversations. It opens in the dock where
-   * `inDock`, else where a conversation the server made opens. Answers its id.
+   * A private conversation of `workspaceId`, the open workspace unless named, with `prompt` in
+   * its composer, where building goes on in a workspace whose members read its conversations,
+   * or in the workspace Studio is set to. It opens in the dock where `inDock`, else where a
+   * conversation the server made opens. Answers its id.
    */
-  async function startPrivateConversationWith(prompt: string, inDock: boolean): Promise<string> {
-    if (!activeCollaborationWorkspaceId) {
+  async function startPrivateConversationWith(
+    prompt: string,
+    inDock: boolean,
+    workspaceId: string | undefined = activeCollaborationWorkspaceId
+  ): Promise<string> {
+    if (!workspaceId) {
       throw new Error("A private conversation belongs to a workspace");
     }
     const conversation = await createPrivateConversationWith({
       client,
       locale: activeLocale,
-      collaborationWorkspaceId: activeCollaborationWorkspaceId,
+      collaborationWorkspaceId: workspaceId,
       prompt,
       draftController
     });

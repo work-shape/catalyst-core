@@ -16,20 +16,22 @@ import type { ThemeModePreference } from "./theme";
 export interface SettingsAgentActions {
   /**
    * Opens the dock on this page with a new conversation with an agent that holds the platform's
-   * asset tools, `prompt` in its composer: a New button's way where such an agent is offered.
-   * Absent where none is: the New buttons keep their dialogs.
+   * asset tools, `prompt` in its composer: the brief of a kind without a hand editor, and the
+   * chat of a new asset's page. Absent where none is offered.
    */
   buildWithAgent?(prompt: string): void;
   /**
    * Opens the dock beside the open page with a conversation about one asset, with the agent
-   * that holds the platform's asset tools: "Edit with the agent" on an asset page. The
+   * that holds the platform's asset tools: the page head's "Chat" on an asset page. The
    * conversation belongs to `workspaceId`, the workspace that owns the asset, for the agent reads
    * the asset there alone; to the open workspace where none is named, for an asset of the
-   * instance. Absent where none is offered, and the entry is then absent too.
+   * instance. `fresh` starts a new one where the dock's is already about the asset. Absent where
+   * none is offered: "Chat" then opens the dock's last conversation.
    */
   editWithAgent?(
     subject: { kind: string; name: string },
-    workspaceId: string | undefined
+    workspaceId: string | undefined,
+    options?: { fresh: boolean }
   ): Promise<void>;
   /**
    * Opens the chat dock beside the open page with a new conversation and this text in its

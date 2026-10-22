@@ -16,6 +16,10 @@ import {
   SaveAsAppAction,
   type AppsHost
 } from "@work-shape/catalyst-chat-ui/apps";
+import {
+  DockPageChatProvider,
+  type DockPageChat
+} from "@work-shape/catalyst-chat-ui/dock-page-chat";
 import { WorkspaceApiClientProvider } from "@work-shape/catalyst-chat-ui/workspace-api-client";
 import { UiRoot, uiLabelsEn } from "@work-shape/catalyst-ui";
 import { appsContext as contextWith } from "./chat-ui-build-fixtures";
@@ -156,7 +160,11 @@ async function mount(
             createElement(
               TranslationProvider,
               { locale: "en", children: null },
-              createElement(UiRoot, { mode: "light", labels: uiLabelsEn }, node)
+              createElement(
+                UiRoot,
+                { mode: "light", labels: uiLabelsEn },
+                createElement(DockPageChatProvider, { value: (chat) => (pageChat = chat) }, node)
+              )
             )
           )
         )
@@ -165,6 +173,7 @@ async function mount(
   });
   unmounts.push(async () => {
     await act(async () => root.unmount());
+    pageChat = undefined;
     queryClient.clear();
     container.remove();
     vi.unstubAllGlobals();
@@ -209,19 +218,15 @@ async function menuItems(container: ParentNode, label: string): Promise<string[]
   return (await openMenu(container, label)).map((item) => item.textContent?.trim() ?? "");
 }
 
-/**
- * Presses "Edit with the agent" in the head of an App: in its row, or in its "…" menu where
- * the row has no room for it.
- */
-async function editWithTheAgent(container: HTMLElement): Promise<void> {
-  const label = t("apps.editWithAgent");
-  const control =
-    controlNamed(container, label) ??
-    (await openMenu(container, uiLabelsEn.moreActions)).find(
-      (item) => item.textContent?.trim() === label
-    );
-  expect(control).toBeDefined();
-  await act(async () => control?.click());
+/** The conversation the page on screen offers the page head's "Chat". */
+let pageChat: DockPageChat | undefined;
+
+/** Presses the page head's "Chat" on the page of an App: it starts the App's conversation. */
+async function chatOnThePage(): Promise<void> {
+  await vi.waitFor(() => expect(pageChat).toBeDefined(), { timeout: CONDITION_WAIT_MS });
+  await act(async () => {
+    await pageChat?.start({ fresh: false });
+  });
 }
 
 async function shows(container: HTMLElement, text: string): Promise<void> {
@@ -290,8 +295,8 @@ describe("one App", () => {
     await vi.waitFor(() => expect(controlNamed(view, t("apps.edit"))).toBeDefined(), {
       timeout: CONDITION_WAIT_MS
     });
-    await editWithTheAgent(view);
-    expect(editWithAgent).toHaveBeenLastCalledWith("fees");
+    await chatOnThePage();
+    expect(editWithAgent).toHaveBeenLastCalledWith("fees", { fresh: false });
 
     const draft = await mount(createElement(AppEdit, { app: "fees" }), context, instance);
     await vi.waitFor(() => expect(buttonNamed(draft, t("apps.publish"))?.disabled).toBe(false), {
@@ -300,8 +305,8 @@ describe("one App", () => {
     // The head of a writer's draft, which a reader who may not write it is not shown.
     expect(draft.textContent).toContain(t("apps.draftRevision", { number: 3 }));
     editWithAgent.mockClear();
-    await editWithTheAgent(draft);
-    expect(editWithAgent).toHaveBeenLastCalledWith("fees");
+    await chatOnThePage();
+    expect(editWithAgent).toHaveBeenLastCalledWith("fees", { fresh: false });
   });
 
   it("says nothing of the draft to such a reader before the instance answers", async () => {

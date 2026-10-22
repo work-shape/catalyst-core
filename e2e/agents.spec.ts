@@ -327,7 +327,7 @@ test("a saved agent name stays in the draft until it is published", async ({
   }
 });
 
-test("a builder who cancels a new agent stays on the Agents page", async ({
+test("New agent on the Agents page opens the empty page of a new agent in Studio", async ({
   page,
   instanceAgents: _instanceAgents
 }) => {
@@ -336,41 +336,24 @@ test("a builder who cancels a new agent stays on the Agents page", async ({
   await openAgents(page);
   const agentsUrl = page.url();
 
-  // The dialog opens on the page itself, and Cancel, Escape and the close button leave the
-  // reader where they were.
-  const newAgent = page.getByRole("button", { name: "New agent", exact: true });
-  const dialog = page.getByRole("dialog", { name: "New agent", exact: true });
-  await newAgent.click();
-  await expect(dialog).toBeVisible();
-  expect(page.url()).toBe(agentsUrl);
-  await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
-  await expect(dialog).toHaveCount(0);
-  expect(page.url()).toBe(agentsUrl);
-  await expect(card(page, DEFAULT_AGENT)).toBeVisible();
-  // The focus returns to the button that opened the dialog, whichever way it was left.
-  await expect(newAgent).toBeFocused();
-
-  await newAgent.click();
-  await expect(dialog).toBeVisible();
-  await page.keyboard.press("Escape");
-  await expect(dialog).toHaveCount(0);
-  expect(page.url()).toBe(agentsUrl);
-  await expect(newAgent).toBeFocused();
-
-  await newAgent.click();
-  await expect(dialog).toBeVisible();
-  await dialog.getByRole("button", { name: "Close", exact: true }).click();
-  await expect(dialog).toHaveCount(0);
-  expect(page.url()).toBe(agentsUrl);
-  await expect(newAgent).toBeFocused();
-
-  // Continue leads to Studio with the new agent's page, named as typed; nothing is stored
-  // before it is created there.
-  await newAgent.click();
-  await dialog.getByRole("textbox", { name: /^Display name/u }).fill("Not Yet Stored");
-  await dialog.getByRole("button", { name: "Continue", exact: true }).click();
+  // No dialog: Studio's page of a new agent, empty and unsaved.
+  await page.getByRole("button", { name: "New agent", exact: true }).click();
   await expect(page).toHaveURL(/\/build\/agents$/u);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByRole("heading", { level: 1, name: "New agent" })).toBeVisible();
+  const name = page.getByRole("textbox", { name: /^Display name/u }).first();
+  await expect(name).toHaveValue("");
+
+  // The name typed is the page's; nothing is stored before it is created.
+  await name.fill("Not Yet Stored");
   await expect(page.getByRole("heading", { level: 1, name: "Not Yet Stored" })).toBeVisible();
-  await expect(page.getByRole("textbox", { name: /^Display name/u })).toHaveValue("Not Yet Stored");
+  expect((await page.request.get(agentPath("not-yet-stored"))).status()).toBe(404);
+
+  // Leaving with a change asks first; discarding leads back.
+  await page.goBack();
+  const leave = page.getByRole("dialog", { name: "Leave without saving?" });
+  await expect(leave).toBeVisible();
+  await leave.getByRole("button", { name: "Discard changes", exact: true }).click();
+  await expect(page).toHaveURL(agentsUrl);
   expect((await page.request.get(agentPath("not-yet-stored"))).status()).toBe(404);
 });

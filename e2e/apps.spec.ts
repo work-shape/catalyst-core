@@ -425,7 +425,7 @@ test("a Page is saved as an App, published, opened by a second member and deep l
     grants.push(idSchema.parse(await readable.json()).id);
     await memberPage.reload();
     await expect(memberEdit).toContainText("Draft · version 2");
-    await memberEdit.getByRole("button", { name: "Edit with the agent", exact: true }).click();
+    await memberPage.getByTestId("dock-page-action").click();
     await expect(memberPage).toHaveURL(
       (url) => url.pathname === draftPathOf(appPath) && url.searchParams.has("chat")
     );

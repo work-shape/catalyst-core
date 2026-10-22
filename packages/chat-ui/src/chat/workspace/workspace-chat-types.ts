@@ -1,3 +1,5 @@
+import type { DockCreationScope, DockPageChat } from "../../shared/dock-page-chat";
+import type { CreationTarget } from "../dock/creation-target";
 import {
   type ApiClient,
   type ApiUser,
@@ -40,6 +42,7 @@ export interface WorkspaceChatModelInput {
 }
 
 export interface WorkspaceChatModel {
+  dockChat: DockChatModel;
   auth: WorkspaceAuthModel;
   config: WorkspaceConfigModel;
   route: WorkspaceRouteModel;
@@ -55,6 +58,18 @@ export interface WorkspaceChatModel {
   workflows: WorkflowsModel;
 }
 
+/** The one way into the dock from every page: the page head's "Chat" and the dock's "New chat". */
+interface DockChatModel {
+  /** Opens the dock: a running answer, the page's own conversation, the last one, or a new one. */
+  open(): void;
+  /** Starts a new conversation for the page in the dock. */
+  newChat(): void;
+  /** Where the page on screen offers its own conversation, such as about its asset. */
+  offerPageChat(chat: DockPageChat | undefined): void;
+  /** Where the page on screen builds: the owner Studio is set to. */
+  offerCreationScope(scope: DockCreationScope | undefined): void;
+}
+
 /** What the workspace knows about Workflows: whether the area is there, and the reader's rights. */
 interface WorkflowsModel {
   access: WorkflowsAccess;
@@ -68,7 +83,7 @@ interface WorkflowsModel {
    * Starts a conversation of the open workspace about this Workflow and opens it, with `prompt`
    * in its composer where one is given. Rejects where the instance refuses the conversation.
    */
-  editWithAgent(workflow: string, prompt?: string): Promise<void>;
+  editWithAgent(workflow: string, prompt?: string, options?: { fresh: boolean }): Promise<void>;
   /**
    * Opens the dock on the list with a new conversation with an agent that builds assets and
    * `prompt` in its composer: its first save creates the Workflow. Absent where no agent here
@@ -97,7 +112,7 @@ interface AppsModel {
    * Starts a conversation of the open workspace about this App and opens it, with the App's
    * draft beside it. Rejects where the instance refuses the conversation.
    */
-  editWithAgent(app: string): Promise<void>;
+  editWithAgent(app: string, options?: { fresh: boolean }): Promise<void>;
   /**
    * Opens the dock on the list with a new conversation with an agent that builds assets and
    * `prompt` in its composer: its first save creates the App. Absent where no agent here builds
@@ -252,6 +267,8 @@ export interface SelectedChatModel {
    * Workflows: a new conversation there is about building one.
    */
   dockKind: string | undefined;
+  /** Where a new asset of `dockKind` that the dock's agent creates will belong. */
+  dockTarget: CreationTarget | undefined;
   /** Goes to a route of the interface, such as the page of that asset. */
   openRoute(route: WorkspaceRoute): void;
   /** The assets the agent opened, and the way to their pages. */

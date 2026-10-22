@@ -244,16 +244,10 @@ describe("the owner Studio's Skills list opens on", () => {
         .find((button) => button.textContent === "New agent")
         ?.click()
     );
-    await until(() =>
-      expect(document.querySelector("dialog, [role=dialog]")?.textContent).toContain(
-        "Personal workspace"
-      )
-    );
-    expect(document.querySelector("dialog, [role=dialog]")?.textContent).not.toContain(
-      "Felix Pahlke"
-    );
+    const availability = () => document.querySelector("[data-new-asset-availability]");
+    await until(() => expect(availability()?.textContent).toContain("Personal workspace"));
+    expect(availability()?.textContent).not.toContain("Felix Pahlke");
     // Back on Skills, the list still shows the owner it opened on.
-    await act(async () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })));
     await page.go("skills");
     await until(() => expect(scopeButton()?.getAttribute("aria-label")).toBe("Scope: Instance"));
   });

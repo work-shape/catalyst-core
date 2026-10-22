@@ -54,6 +54,8 @@ async function mountChip() {
     show: vi.fn(),
     close: vi.fn(),
     forget: vi.fn(),
+    last: undefined,
+    forgetLast: vi.fn(),
     reopen: vi.fn(),
     showPage: vi.fn(),
     showChat: vi.fn(),

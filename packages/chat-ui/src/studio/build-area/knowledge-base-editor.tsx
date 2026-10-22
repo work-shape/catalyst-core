@@ -1,5 +1,5 @@
 import { Database } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { KNOWLEDGE_DOCUMENT_FORMATS } from "@work-shape/catalyst-core";
 import {
   Badge,
@@ -91,7 +91,11 @@ export function KnowledgeBaseEditor({
   const state = useAssetForm(initialForm);
   const { form, setForm, outcome } = state;
   const [saving, setSaving] = useState(false);
-  const { canWrite, asset } = frame;
+  const { canWrite, asset, onNewTitle } = frame;
+  // The page of a new Knowledge Base asks the instance about the id its name makes.
+  useEffect(() => {
+    onNewTitle?.(form.title);
+  }, [onNewTitle, form.title]);
   const update = (patch: Partial<KnowledgeBaseForm>) =>
     setForm((value) => ({ ...value, ...patch }));
   const availabilityEdit = useAvailabilityEdit(availability);
@@ -390,7 +394,7 @@ export function KnowledgeBaseEditor({
   return (
     <AssetEditorShell
       frame={frame}
-      title={form.title.trim() || form.name}
+      title={form.title.trim() || form.name || t("knowledge.new")}
       description={form.description.trim()}
       sections={sections}
       control={{

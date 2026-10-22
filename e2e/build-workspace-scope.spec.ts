@@ -32,7 +32,9 @@ test("an agent made in a workspace's Studio scope is the workspace's, listed wit
   expect(created.ok(), await created.text()).toBe(true);
   const workspaceId = idSchema.parse(await created.json()).id;
   const skillName = `scope_notes_${attempt}`;
-  const agentName = `scope_helper_${attempt}`;
+  // A new agent's id is made from its name on its page.
+  const agentTitle = `Scope helper ${attempt}`;
+  const agentName = `scope-helper-${attempt}`;
   try {
     const skill = await requestWithOrigin(
       page,
@@ -59,16 +61,18 @@ test("an agent made in a workspace's Studio scope is the workspace's, listed wit
     await expect(page.getByRole("button", { name: `Scope: ${workspaceName}` })).toBeVisible();
     await expect(page.getByText(`Nothing in ${workspaceName} yet.`)).toBeVisible();
 
-    // The new agent is saved into the workspace of the scope, and starts offered there.
+    // "New agent" opens the empty page of a new agent. It is saved into the workspace of the
+    // scope, and starts offered there.
     await page.getByRole("button", { name: "New agent", exact: true }).click();
-    const create = page.getByRole("dialog", { name: "New agent", exact: true });
-    await create.getByRole("textbox", { name: /^Display name/u }).fill("Scope helper");
-    await create.getByRole("button", { name: "Advanced", exact: true }).click();
-    await create.getByRole("textbox", { name: /^Address/u }).fill(agentName);
+    await expect(page.getByRole("heading", { name: "New agent", level: 1 })).toBeVisible();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
     await expect(
-      create.getByRole("combobox", { name: "Available in" }).locator("option:checked")
+      page.getByRole("combobox", { name: "Available in" }).locator("option:checked")
     ).toHaveText(workspaceName);
-    await create.getByRole("button", { name: "Continue", exact: true }).click();
+    await page
+      .getByRole("textbox", { name: /^Display name/u })
+      .first()
+      .fill(agentTitle);
     await page
       .locator("form")
       .getByRole("textbox", { name: /^Agent instructions/u })
@@ -133,12 +137,9 @@ test("Skills opening on the instance leaves Agents and New agent where Studio is
     await expect(page).toHaveURL((url) => url.pathname === "/build/agents");
     await expect(page.getByRole("button", { name: `Scope: ${workspaceName}` })).toBeVisible();
     await page.getByRole("button", { name: "New agent", exact: true }).click();
-    const create = page.getByRole("dialog", { name: "New agent", exact: true });
     await expect(
-      create.getByRole("combobox", { name: "Available in" }).locator("option:checked")
+      page.getByRole("combobox", { name: "Available in" }).locator("option:checked")
     ).toHaveText(workspaceName);
-    await create.getByRole("button", { name: "Cancel", exact: true }).click();
-    await expect(create).toBeHidden();
   } finally {
     await requestWithOrigin(page, "delete", `${apiBaseUrl}/api/v1/workspaces/${workspaceId}`);
   }

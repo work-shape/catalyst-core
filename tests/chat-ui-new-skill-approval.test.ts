@@ -6,8 +6,9 @@ import type { BuildAsset } from "@work-shape/catalyst-chat-ui/build-area";
 import { mountBuildPage, unmountBuildPages } from "./chat-ui-build-page-harness";
 
 // PR-382 M1: the page of a new skill said its create applied at once, though under an approval
-// policy the reader's create files a request. The page now asks the instance, as the create
-// dialog asks of the name, and says who decides before the create.
+// policy the reader's create files a request. The page now asks the instance about the id the
+// typed name makes, as the create dialog asked of the name, and says who decides before the
+// create.
 
 afterEach(async () => {
   await unmountBuildPages();
@@ -40,16 +41,25 @@ async function newSkillPage(saveApproval?: { approverNames: string[] }): Promise
     [...document.querySelectorAll("button")].find((found) => found.textContent?.trim() === text);
   await vi.waitFor(() => expect(button("New skill")).toBeDefined(), { timeout: 5000 });
   await act(async () => button("New skill")?.click());
-  const field = document.querySelector<HTMLInputElement>(
-    'input[data-name-with-address-field="name"], [data-name-with-address-field="name"] input'
+  // New opens the empty page of a new skill: the name typed there makes the id it asks about.
+  const field = await vi.waitFor(
+    () => {
+      const label = [...document.querySelectorAll("label")].find((found) =>
+        found.textContent?.startsWith("Title")
+      );
+      const id = label?.getAttribute("for");
+      const found = id ? document.getElementById(id) : null;
+      if (!(found instanceof HTMLInputElement)) throw new Error("no Title field yet");
+      return found;
+    },
+    { timeout: 5000 }
   );
   await act(async () => {
     const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
     set?.call(field, "Travel policy");
-    field?.dispatchEvent(new Event("input", { bubbles: true }));
+    field.dispatchEvent(new Event("input", { bubbles: true }));
   });
   await vi.waitFor(() => expect(asked).toContain("travel-policy"), { timeout: 5000 });
-  await act(async () => button("Continue")?.click());
   await vi.waitFor(() => expect(button("Create skill")).toBeDefined(), { timeout: 5000 });
   return page;
 }

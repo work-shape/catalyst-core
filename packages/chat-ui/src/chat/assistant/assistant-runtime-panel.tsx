@@ -100,6 +100,7 @@ function AssistantRuntimePane({
     selectedConversationWorkspaceId,
     docked,
     dockKind,
+    dockTarget,
     agentOpens,
     openRoute,
     messagesLoaded,
@@ -479,7 +480,8 @@ function AssistantRuntimePane({
                           ? undefined
                           : conversationSubject.title
                     },
-                dockKind
+                dockKind,
+                dockTarget
               )}
               retainedUntil={selectedConversationRetainedUntil}
               draftAttachments={draftAttachments}

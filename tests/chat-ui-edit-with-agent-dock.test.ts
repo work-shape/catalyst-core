@@ -1,109 +1,11 @@
-import { createElement, type ReactNode } from "react";
 import { describe, expect, it } from "vitest";
-import { createTranslationContext } from "@work-shape/catalyst-chat-ui";
-import { AppEditFrame, AppsHostProvider, type AppsHost } from "@work-shape/catalyst-chat-ui/apps";
-import { WorkflowPageView, toWorkflow } from "@work-shape/catalyst-chat-ui/workflows";
-import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 import { dockConversationToReuse } from "./support/chat-ui";
 
-// ACCEPT-1c C12: with the dock open beside an App's draft, "Edit with the agent" folded into
-// the head's "…" menu, as every secondary action does where the head is narrow, and pressing it
-// again made a second conversation. It now keeps its own place in the head, as its icon where
-// room is short, and opens the dock's conversation about the same asset again.
+// ACCEPT-1c C12: pressing "Edit with the agent" again made a second conversation. The page
+// head's "Chat", which took its place on every asset page, opens the dock's conversation about
+// the same asset again.
 
-const t = createTranslationContext("en").t;
-const noop = () => undefined;
-const render = (node: ReactNode) =>
-  renderToStaticMarkup(createElement(TranslationProvider, { locale: "en", children: node }));
-
-/**
- * The head's secondary actions are drawn a second time in an inert row that measures whether
- * they fit; those are the ones that fold into "…". The agent action must never be one of them.
- */
-function foldable(markup: string): string {
-  return /<div inert=""[^>]*>.*?<\/div>/su.exec(markup)?.[0] ?? "";
-}
-
-/** The kept slot of the agent action: its labelled button and its icon twin. */
-function keptSlot(markup: string): string {
-  return (
-    /<span data-head-agent-action=""[^>]*>.*?aria-label="[^"]*"[^>]*>.*?<\/button><\/span>/su.exec(
-      markup
-    )?.[0] ?? ""
-  );
-}
-
-describe("Edit with the agent stays in sight beside the dock", () => {
-  it("keeps its place in the head of an App's draft, never in the foldable actions", () => {
-    const host: AppsHost = {
-      enabled: true,
-      rights: { read: true, write: true, publish: true, delete: false },
-      workspace: { id: "cw_1", name: "Sales" },
-      showRoute: noop,
-      startChat: noop,
-      editWithAgent: () => Promise.resolve()
-    };
-    const markup = render(
-      createElement(AppsHostProvider, {
-        value: host,
-        children: createElement(AppEditFrame, {
-          app: "orders",
-          name: "Orders",
-          workspace: { id: "cw_1", name: "Sales" },
-          rights: { read: true, write: true, publish: true, delete: false },
-          draftRevision: 4,
-          publishedRevision: 3,
-          view: "preview",
-          detailsOpen: false,
-          children: null,
-          onViewChange: noop,
-          onDetailsOpenChange: noop,
-          onBack: noop,
-          onDiscard: noop
-        })
-      })
-    );
-    const label = t("apps.editWithAgent");
-    expect(keptSlot(markup)).toContain(`>${label}<`);
-    expect(keptSlot(markup)).toContain(`aria-label="${label}"`);
-    expect(foldable(markup)).not.toContain(label);
-    // Discard still folds, as before.
-    expect(foldable(markup)).toContain(t("apps.discard"));
-  });
-
-  it("keeps its place in the head of a Workflow", () => {
-    const workflow = toWorkflow({
-      name: "month-end",
-      config: {
-        id: "month-end",
-        name: "Month end",
-        runAs: "runner",
-        inputs: { type: "object" },
-        outputs: { type: "object" },
-        steps: [{ id: "start", type: "trigger", name: "Start", triggers: [{ kind: "manual" }] }]
-      },
-      publishedRevision: 1
-    });
-    const markup = render(
-      createElement(WorkflowPageView, {
-        workspaceId: "cw_1",
-        workflowId: "month-end",
-        read: { workflow, problem: undefined, retry: noop },
-        runsAvailable: true,
-        edit: { busy: false, error: undefined, start: noop, startWith: noop, dismissError: noop },
-        draft: undefined,
-        onOpenChild: noop,
-        onOpenRoute: noop,
-        onStart: noop
-      })
-    );
-    const label = t("workflows.edit.withAgent");
-    expect(keptSlot(markup)).toContain(`aria-label="${label}"`);
-    expect(foldable(markup)).not.toContain(label);
-  });
-});
-
-describe("pressing Edit with the agent again", () => {
+describe("pressing Chat on an asset's page again", () => {
   const subject = { kind: "app", name: "orders" };
   const base = {
     dockConversationId: "conv_1",

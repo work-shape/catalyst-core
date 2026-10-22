@@ -2,6 +2,11 @@ export {
   useUnreadableDockConversation,
   useWorkspaceDock
 } from "../../../packages/chat-ui/src/chat/workspace/use-workspace-dock";
+export {
+  readLastDockConversation,
+  storeLastDockConversation
+} from "../../../packages/chat-ui/src/chat/workspace/dock-last";
+export { workspaceShortcutLabel } from "../../../packages/chat-ui/src/chat/workspace/workspace-shortcuts";
 export { WorkspaceDraftsProvider } from "../../../packages/chat-ui/src/chat/workspace/workspace-drafts";
 export {
   chosenLocale,

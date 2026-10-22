@@ -1,24 +1,22 @@
 import { randomUUID } from "node:crypto";
 import type { Locator, Page } from "@playwright/test";
 import { shoot, shotsDir, signIn } from "./inbox-fixtures";
+import { assetRevision, requestWithOrigin } from "./request-with-origin";
 import { expect, test } from "./test";
 
-// UXA-2: a form that creates an asset asks for its name first. The address is made from the
-// name under "Advanced", follows it until somebody types one, and is checked while typing: a
-// taken or malformed address is named at the field and Continue waits. Fails without the
-// change: the id was a field of its own beside the name, and a taken id was only refused by
-// the first save on the asset's page.
+// UXA-2, as New opens a kind's page (studio-chat-entry): "New agent" and "New skill" open the
+// empty page of the new asset, with no dialog in front. Its id is made from the name typed
+// there, and an id that is taken is said while typing, before the first save. The name check
+// of the create dialog stays where a dialog still starts an asset, as a copy or a connection.
 
 /** Reads and writes every agent and skill of the instance. */
 const builder = { email: "e2e-superadmin@example.test", password: "e2e-superadmin-password" };
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
 
-/** The address of an agent of `tests/fixtures/e2e-assets`, typed by hand into a new one. */
-const TAKEN_ADDRESS = "application_assistant";
-
 const rail = (page: Page) => page.getByRole("navigation", { name: "Main navigation" });
 const address = (dialog: Locator) => dialog.locator('[data-name-with-address-field="address"]');
 const nameField = (dialog: Locator) => dialog.locator('[data-name-with-address-field="name"]');
+const nameRefused = (page: Page) => page.locator("[data-new-asset-name-refused]");
 
 async function openAgents(page: Page): Promise<void> {
   await expect(page).toHaveURL(/\/w\/[^/]+/u);
@@ -26,103 +24,88 @@ async function openAgents(page: Page): Promise<void> {
   await expect(page).toHaveURL(/\/w\/[^/]+\/agents$/u);
 }
 
-/** Opens the dialog from the Agents page, in either language. */
-async function openNewAgent(page: Page): Promise<Locator> {
-  await page.getByRole("button", { name: /^(New agent|Neuer Agent)$/u }).click();
-  const dialog = page.getByRole("dialog");
-  await expect(nameField(dialog)).toBeVisible();
-  return dialog;
-}
-
-async function openNewSkill(page: Page): Promise<Locator> {
+/** "New skill" on Studio's list: the empty page of a new skill. */
+async function openNewSkill(page: Page): Promise<void> {
   await page.goto("/build/skills");
   await page
     .getByRole("button", { name: /^(New skill|Neue Fähigkeit|Neuer Skill)$/u })
     .first()
     .click();
-  const dialog = page.getByRole("dialog");
-  await expect(nameField(dialog)).toBeVisible();
-  return dialog;
+  await expect(
+    page.getByRole("heading", { level: 1, name: /^(New skill|Neuer Skill)$/u })
+  ).toBeVisible();
 }
 
-test("a new agent's address follows its name, names a taken one while typing and keeps one typed by hand", async ({
+test("New agent opens its empty page, whose name makes the id and stores nothing yet", async ({
   page,
   instanceAgents: _instanceAgents
 }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await signIn(page, builder);
   await openAgents(page);
-  const dialog = await openNewAgent(page);
-  const fold = dialog.getByRole("button", { name: "Advanced", exact: true });
-  const proceed = dialog.getByRole("button", { name: "Continue", exact: true });
-  await expect(fold).toHaveAttribute("aria-expanded", "false");
+  await page.getByRole("button", { name: /^(New agent|Neuer Agent)$/u }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByRole("heading", { level: 1, name: "New agent" })).toBeVisible();
 
-  // A name that does not start with a letter makes an address that starts with the kind.
-  await nameField(dialog).fill("2026");
-  await fold.click();
-  await expect(address(dialog)).toHaveValue("agent-2026");
-
-  // The address follows the name, as lowercase words joined by '-'.
   const suffix = randomUUID().slice(0, 8);
-  await nameField(dialog).fill(`Travel Helper ${suffix}`);
-  await expect(address(dialog)).toHaveValue(`travel-helper-${suffix}`);
-  await expect(address(dialog)).toHaveAttribute("data-address-check", "free");
-  await expect(dialog.getByRole("alert")).toHaveCount(0);
-  await expect(proceed).toBeEnabled();
-
-  // A taken address is named at the field while typing, and Continue waits.
-  await address(dialog).fill(TAKEN_ADDRESS);
-  await expect(dialog.getByRole("alert")).toHaveText(
-    "This address is taken. Choose another name or address."
-  );
-  await expect(proceed).toBeDisabled();
-
-  // Typed by hand, the address stays when the name changes again.
-  const typed = `travel-${suffix}`;
-  await address(dialog).fill(typed);
-  await nameField(dialog).fill(`Travel Expenses ${suffix}`);
-  await expect(address(dialog)).toHaveValue(typed);
-
-  // The name check uses the agent schema too: path segments a browser drops are refused.
-  for (const invalid of [".", ".."]) {
-    await address(dialog).fill(invalid);
-    await expect(dialog.getByRole("alert")).toHaveText(/^This address does not work\./u);
-    await expect(proceed).toBeDisabled();
-  }
-  await address(dialog).fill(typed);
-
-  // What it should do goes onto the new agent's page with its name; nothing is stored yet.
-  await dialog
-    .getByRole("textbox", { name: /^What should it do\?/u })
+  await page
+    .getByRole("textbox", { name: /^Display name/u })
+    .first()
+    .fill(`Travel Expenses ${suffix}`);
+  await page
+    .getByRole("textbox", { name: /^Description/u })
+    .first()
     .fill("Answers questions about travel expenses.");
-  await expect(address(dialog)).toHaveAttribute("data-address-check", "free");
-  await proceed.click();
   await expect(
     page.getByRole("heading", { level: 1, name: `Travel Expenses ${suffix}` })
   ).toBeVisible();
-  await expect(page.getByRole("textbox", { name: /^Description/u })).toHaveValue(
-    "Answers questions about travel expenses."
-  );
-  expect((await page.request.get(`${apiBaseUrl}/api/v1/assets/agent/${typed}`)).status()).toBe(404);
+  await expect(nameRefused(page)).toHaveCount(0);
+  expect(
+    (await page.request.get(`${apiBaseUrl}/api/v1/assets/agent/travel-expenses-${suffix}`)).status()
+  ).toBe(404);
 });
 
-test("a skill's address that breaks the rule for names is named while typing and blocks Continue", async ({
-  page
-}) => {
+test("a new skill's name whose id is taken is said while typing", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await signIn(page, builder);
-  const dialog = await openNewSkill(page);
-  await nameField(dialog).fill("Expense guide");
-  await dialog.getByRole("button", { name: "Advanced", exact: true }).click();
-  await address(dialog).fill("-expense guide");
-  await expect(dialog.getByRole("alert")).toHaveText(/^This address does not work\./u);
-  await expect(dialog.getByRole("button", { name: "Continue", exact: true })).toBeDisabled();
-  await address(dialog).fill(`expense_guide_${randomUUID().slice(0, 8)}`);
-  await expect(dialog.getByRole("alert")).toHaveCount(0);
-  await expect(dialog.getByRole("button", { name: "Continue", exact: true })).toBeEnabled();
+  const suffix = randomUUID().slice(0, 8);
+  const taken = `expense-guide-${suffix}`;
+  const stored = await requestWithOrigin(
+    page,
+    "put",
+    `${apiBaseUrl}/api/v1/assets/skill/${taken}`,
+    {
+      data: {
+        expectedRevision: null,
+        config: {
+          name: taken,
+          title: `Expense guide ${suffix}`,
+          description: "How expenses are claimed.",
+          content: "# Expense guide"
+        }
+      }
+    }
+  );
+  expect(stored.ok(), await stored.text()).toBe(true);
+  try {
+    await openNewSkill(page);
+    const title = page.getByRole("textbox", { name: /^Title/u }).first();
+    await title.fill(`Expense guide ${suffix}`);
+    await expect(nameRefused(page)).toHaveText(`The id ${taken} is taken. Give it another name.`);
+    await title.fill(`Expense guide for travel ${suffix}`);
+    await expect(nameRefused(page)).toHaveCount(0);
+  } finally {
+    const url = `${apiBaseUrl}/api/v1/assets/skill/${taken}`;
+    await requestWithOrigin(page, "delete", url, {
+      data: { expectedRevision: await assetRevision(page, url) }
+    });
+  }
 });
 
-test("pictures of the three create forms", async ({ page, instanceAgents: _instanceAgents }) => {
+test("pictures of the new agent's page and the connection's create form", async ({
+  page,
+  instanceAgents: _instanceAgents
+}) => {
   test.skip(!shotsDir, "Takes pictures only for E2E_SHOTS_DIR");
   test.setTimeout(240_000);
   await page.setViewportSize({ width: 1280, height: 900 });
@@ -130,36 +113,16 @@ test("pictures of the three create forms", async ({ page, instanceAgents: _insta
   const widths = [1280, 390];
   await openAgents(page);
 
-  // The agent's form with a taken address: the fold opened by itself, with the reason.
+  // New agent: its empty page in Studio.
   await shoot(
     page,
-    "new-agent-taken",
+    "new-agent-page",
     async () => {
-      const dialog = await openNewAgent(page);
-      await nameField(dialog).fill("Application Assistant");
-      await dialog.getByRole("button", { name: "Advanced", exact: true }).click();
-      await address(dialog).fill(TAKEN_ADDRESS);
-      await expect(address(dialog)).toHaveAttribute("data-address-check", "refused");
-      // The chevron turns as the fold opens.
-      await expect(dialog.locator("[data-name-with-address-fold]")).toHaveAttribute(
-        "data-state",
-        "open"
-      );
-    },
-    widths
-  );
-  // The skill's form: the name first, the address made from it under "Advanced".
-  await shoot(
-    page,
-    "new-skill",
-    async () => {
-      const dialog = await openNewSkill(page);
-      await nameField(dialog).fill("Expense guide");
-      await dialog
-        .getByRole("button", { name: "Advanced", exact: true })
-        .or(dialog.getByRole("button", { name: "Erweitert", exact: true }))
-        .click();
-      await expect(address(dialog)).toHaveAttribute("data-address-check", "free");
+      await page.goto("/build/agents");
+      await page.getByRole("button", { name: /^(New agent|Neuer Agent)$/u }).click();
+      await expect(
+        page.getByRole("heading", { level: 1, name: /^(New agent|Neuer Agent)$/u })
+      ).toBeVisible();
     },
     widths
   );

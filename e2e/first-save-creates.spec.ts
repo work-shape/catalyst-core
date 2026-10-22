@@ -4,11 +4,13 @@ import { z } from "zod";
 import { sendToolCall } from "./page-surface-fixtures";
 import { requestWithOrigin } from "./request-with-origin";
 import { shootLocales } from "./surface-shots";
+import { newWithAgent } from "./new-with-agent";
 import { expect, test } from "./test";
 import { showWorkflowsUntil } from "./workflow-list-paging";
 
-// "New" opens the dock and creates nothing; the agent's first save creates the asset and takes
-// the person to its page (NAV-2, navigation checks 30 and 36, Platform Access check 44). The
+// "New workflow" opens the dock and creates nothing, and "Chat" on a new agent's empty page
+// opens it too; the agent's first save creates the asset and takes the person to its page
+// (NAV-2, navigation checks 30 and 36, Platform Access check 44). The
 // agent of the e2e instance that holds the platform tools is Application Assistant. Fails
 // without the change: "New workflow" did not exist, "New agent" opened its form, and a save
 // in a conversation about nothing was refused.
@@ -79,21 +81,20 @@ test("New workflow opens the dock, and the agent's first save creates the draft 
       await page.request.get(`${apiBaseUrl}/api/v1/assets/workflow/${id}?workspaceId=${personalId}`)
     ).status();
 
-  // "New workflow" opens the dock with a started sentence and creates nothing; leaving the
-  // list leaves it as it was.
+  // "New workflow" asks what it should do, then opens the dock with a started sentence and
+  // creates nothing; leaving the list leaves it as it was.
   await page.goto(listPath);
-  const newWorkflow = page.getByRole("button", { name: NEW_WORKFLOW }).first();
-  await newWorkflow.click();
+  await newWithAgent(page, NEW_WORKFLOW);
   await expect(composerOf(page)).toHaveValue("Build a new workflow that ");
   expect(new URL(page.url()).pathname).toBe(listPath);
   expect(await stored()).toBe(404);
   await shootLocales(page, "nav-2-new-workflow-dock", async () => {
-    await page.getByRole("button", { name: NEW_WORKFLOW }).first().click();
+    await newWithAgent(page, NEW_WORKFLOW);
     await expect(composerOf(page)).toHaveValue(/^(?:Build a new workflow|Bau einen neuen)/u);
   });
   await page.evaluate(() => window.localStorage.setItem("vivd-catalyst:locale", "en"));
   await page.goto(listPath);
-  await page.getByRole("button", { name: NEW_WORKFLOW }).first().click();
+  await newWithAgent(page, NEW_WORKFLOW);
 
   // The agent's first save creates the draft of the conversation's workspace (WS-OWN-1b), and
   // the person moves to it.
@@ -181,7 +182,7 @@ test("a Workflow draft the agent creates beside the subject moves nobody and off
 
   // The first save makes the subject and takes the person to it.
   await page.goto(`/w/${personalId}/workflows`);
-  await page.getByRole("button", { name: NEW_WORKFLOW }).first().click();
+  await newWithAgent(page, NEW_WORKFLOW);
   await sendToolCall(page, "platform.assets.put", {
     kind: "workflow",
     name: first,
@@ -260,9 +261,13 @@ test("New agent in a workspace's Studio waits for Allow before creating an agent
     .click();
   await page.getByRole("button", { name: /^Scope: / }).click();
   await page.getByRole("option", { name: workspaceName }).click();
+  // "New agent" opens the empty page of a new agent, and its "Chat" the agent that builds: the
+  // agent's first save creates it.
   await page.getByRole("button", { name: "New agent", exact: true }).click();
   await expect(page.getByRole("dialog", { name: "New agent", exact: true })).toHaveCount(0);
-  await expect(composerOf(page)).toHaveValue("Build a new agent that ");
+  await expect(page.getByRole("heading", { name: "New agent", level: 1 })).toBeVisible();
+  await page.getByTestId("dock-page-action").click();
+  await expect(composerOf(page)).toBeVisible();
 
   const input = {
     kind: "agent",

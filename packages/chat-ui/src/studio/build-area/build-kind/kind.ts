@@ -55,11 +55,6 @@ interface BuildKindBase {
   /** The row's badges, such as the default marker. */
   badges?(asset: BuildAssetRow, t: (key: TranslationKey) => string): ReactNode;
   /**
-   * The asset's page offers "Edit with the agent" in its head to a reader who may change the
-   * asset, where the instance offers an agent that builds assets.
-   */
-  editsWithAgent?: true;
-  /**
    * The publish dialog reads the saved draft's publish question again and lists its lines, as
    * who will find what through a synced source: the question the page loaded may be stale.
    */
@@ -135,8 +130,6 @@ export interface BuildAssetViewProps {
    * where it refused. Absent where the reader may not delete it.
    */
   remove?(): Promise<string | undefined>;
-  /** "Edit with the agent" for the end of the page head, where the frame offers it. */
-  agentAction?: ReactNode;
 }
 
 /**

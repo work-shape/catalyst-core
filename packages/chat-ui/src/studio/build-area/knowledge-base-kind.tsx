@@ -134,7 +134,6 @@ export function knowledgeBaseKindOn(useSource: () => KnowledgeBaseSource): Build
     emptyReadOnlyText: "knowledge.emptyReadOnly",
     missingText: "knowledge.missing",
     icon: "knowledge_base",
-    editsWithAgent: true,
     // A synced source names who finds what in it, with which account (SRC-2).
     asksBeforePublish: true,
     // One that keeps documents goes live on create, available nowhere, so files can be added at

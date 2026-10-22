@@ -253,9 +253,9 @@ test("a member who uses an App is shown the App and a builder its revision", asy
   await page.keyboard.press("Escape");
   await expect(page.getByRole("menu")).toBeHidden();
 
-  // "Edit with the agent" opens the App's draft page with a conversation about it in the dock.
+  // The page head's "Chat" opens the App's draft page with a conversation about it in the dock.
   const draftPath = `/w/${workspaceId}/app-drafts/${appId}`;
-  await head.getByRole("button", { name: "Edit with the agent", exact: true }).click();
+  await page.getByTestId("dock-page-action").click();
   await expect(page).toHaveURL((url) => url.pathname === draftPath && url.searchParams.has("chat"));
   // The dock's head says what the conversation is about.
   const subject = page.getByTestId("dock-head");

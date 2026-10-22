@@ -159,8 +159,10 @@ export function AssetEditorShell({
   const [language, setLanguage] = useState<AssetLanguage>(locale === "de" ? "de" : "en");
   const isNew = asset === undefined;
   usePageShown(page, "asset");
+  // A new asset always offers its Save, but only what the person changed is asked about when
+  // they leave: a new page left untouched is left without a question.
   const dirty = isNew || control.changes > 0;
-  const unsaved = canWrite && dirty;
+  const unsaved = canWrite && control.changes > 0;
 
   useEffect(() => {
     onUnsavedChange(unsaved);

@@ -19,6 +19,10 @@ import {
   type WorkflowsHost,
   type WorkflowsSource
 } from "@work-shape/catalyst-chat-ui/workflows";
+import {
+  DockPageChatProvider,
+  type DockPageChat
+} from "@work-shape/catalyst-chat-ui/dock-page-chat";
 import { WorkspaceApiClientProvider } from "@work-shape/catalyst-chat-ui/workspace-api-client";
 import { UiRoot, uiLabelsEn } from "@work-shape/catalyst-ui";
 import { workflowsContext } from "./chat-ui-build-fixtures";
@@ -177,6 +181,10 @@ afterEach(async () => {
   }
 });
 
+/** What each mounted page offers the page head's "Chat": its conversation with the agent. */
+const pageChats = new Map<HTMLElement, DockPageChat | undefined>();
+const offersChat = (container: HTMLElement) => pageChats.get(container) !== undefined;
+
 /** Mounts a Workflow screen as the shell does, with the rights it resolves for the open workspace. */
 async function mount(
   node: ReactNode,
@@ -214,7 +222,15 @@ async function mount(
               createElement(
                 TranslationProvider,
                 { locale: "en", children: null },
-                createElement(UiRoot, { mode: "light", labels: uiLabelsEn }, node)
+                createElement(
+                  UiRoot,
+                  { mode: "light", labels: uiLabelsEn },
+                  createElement(
+                    DockPageChatProvider,
+                    { value: (chat) => pageChats.set(container, chat) },
+                    node
+                  )
+                )
               )
             )
           )
@@ -226,6 +242,7 @@ async function mount(
     await act(async () => root.unmount());
     queryClient.clear();
     container.remove();
+    pageChats.delete(container);
     vi.unstubAllGlobals();
   });
   return container;
@@ -381,17 +398,15 @@ describe("the page of a Workflow, by what the reader may do to it", () => {
     });
     const source = createInstanceSource(client, "k");
     const granted = await mount(createElement(WorkflowPage, { workflow: "granted" }), source);
-    await waitForText(granted, t("workflows.edit.withAgent"));
-    expect(buttonTexts(granted)).toEqual(
-      expect.arrayContaining([t("workflows.edit.withAgent"), t("workflows.draft.discard")])
-    );
+    await waitForText(granted, t("workflows.draft.discard"));
+    expect(offersChat(granted)).toBe(true);
     expect(buttonTexts(granted)).not.toContain(t("workflows.draft.publish"));
     // Writing it reads none of its runs.
     expect(runsLinks(granted)).toEqual([]);
 
     const sibling = await mount(createElement(WorkflowPage, { workflow: "sibling" }), source);
     await waitForText(sibling, "Sibling");
-    expect(buttonTexts(sibling)).not.toContain(t("workflows.edit.withAgent"));
+    expect(offersChat(sibling)).toBe(false);
     expect(buttonTexts(sibling)).not.toContain(t("workflows.draft.discard"));
     expect(runsLinks(sibling)).toEqual([runsPath("sibling")]);
   });
@@ -412,11 +427,12 @@ describe("the page of a Workflow, by what the reader may do to it", () => {
     ]);
     const kept = await mount(createElement(WorkflowPage, { workflow: "kept" }), source, everything);
     await waitForText(kept, t("workflows.draft.publish"));
-    expect(buttonTexts(kept)).not.toContain(t("workflows.edit.withAgent"));
+    expect(offersChat(kept)).toBe(false);
     expect(buttonTexts(kept)).not.toContain(t("workflows.draft.discard"));
 
     const open = await mount(createElement(WorkflowPage, { workflow: "open" }), source, everything);
-    await waitForText(open, t("workflows.edit.withAgent"));
+    await waitForText(open, t("workflows.draft.discard"));
+    expect(offersChat(open)).toBe(true);
     expect(buttonTexts(open)).toEqual(
       expect.arrayContaining([t("workflows.draft.publish"), t("workflows.draft.discard")])
     );
@@ -538,6 +554,6 @@ describe("the page of a run, by the run's own Workflow", () => {
     );
     await waitForText(container, "Granted");
     expect(buttonTexts(container)).not.toContain(t("workflows.run.cancel"));
-    expect(buttonTexts(container)).not.toContain(t("workflows.edit.withAgent"));
+    expect(offersChat(container)).toBe(false);
   });
 });

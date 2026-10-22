@@ -23,6 +23,7 @@ import {
 import { formatUpdated } from "../build-area/build-model";
 import { formatDateTime } from "../../shared/locale-format";
 import { useTranslation } from "../../shared/i18n";
+import { BuildWithAgentDialog } from "../build-with-agent-dialog";
 import { BuildWithAgentEmptyState, type BuildWithAgentCopy } from "../build-with-agent-empty";
 import { RouteLink } from "../route-link";
 import { useStartRun } from "./start-run";
@@ -122,8 +123,9 @@ export function WorkflowsPageView({
   readsRuns?(workflow: WorkflowListItem): boolean;
   onOpenRoute: OpenRoute;
   /**
-   * "New workflow": the dock opens with a conversation whose first save creates the Workflow,
-   * this text in its composer. Absent where nobody here builds one with an agent.
+   * "New workflow" asks what the Workflow should do, then opens the dock with a conversation
+   * whose first save creates the Workflow, the answer in its composer. Absent where nobody here
+   * builds one with an agent.
    */
   onNew?(prompt: string): void;
   onStart(workflow: WorkflowListItem): void;
@@ -138,8 +140,9 @@ export function WorkflowsPageView({
   const shown = rows?.filter((workflow) => workflow.kind === kind);
   // A page may come back empty with more to read: the list is empty only once read to its end.
   const listedNone = rows?.length === 0 && !list.hasMore;
+  const [briefing, setBriefing] = useState(false);
   const newButton = onNew ? (
-    <Button onClick={() => onNew(t("workflows.newPrompt"))}>
+    <Button onClick={() => setBriefing(true)}>
       <Plus aria-hidden="true" />
       {t("workflows.new")}
     </Button>
@@ -221,6 +224,14 @@ export function WorkflowsPageView({
           </div>
         )}
       </Page>
+      {briefing && onNew ? (
+        <BuildWithAgentDialog
+          title={t("workflows.new")}
+          prompt={t("workflows.newPrompt")}
+          onBuild={onNew}
+          onClose={() => setBriefing(false)}
+        />
+      ) : null}
     </WorkflowsFrame>
   );
 }

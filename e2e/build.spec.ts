@@ -228,16 +228,15 @@ test("a workspace holder builds an agent in the workspace, is refused, meets a c
     await expect(page.getByText("Research Assistant")).toHaveCount(0);
     await expect(page.getByRole("navigation", { name: "Kinds in Studio" })).toHaveCount(0);
 
-    // A new agent's address is made from its name.
+    // "New agent" opens the empty page of a new agent; its address is made from its name.
     await page.getByRole("button", { name: "New agent", exact: true }).click();
-    const create = page.getByRole("dialog", { name: "New agent", exact: true });
-    await create.getByRole("textbox", { name: /^Display name/u }).fill("Team Helper");
-    await create.getByRole("button", { name: "Advanced", exact: true }).click();
-    await expect(create.getByRole("textbox", { name: /^Address/u })).toHaveValue("team-helper");
-    await expect(create.getByText("Made from the name. It cannot be changed later.")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "New agent", level: 1 })).toBeVisible();
     // Somebody who may not widen where it is offered gets no choice of it.
-    await expect(create.getByRole("combobox", { name: "Available in" })).toHaveCount(0);
-    await create.getByRole("button", { name: "Continue", exact: true }).click();
+    await expect(page.getByRole("combobox", { name: "Available in" })).toHaveCount(0);
+    await page
+      .getByRole("textbox", { name: /^Display name/u })
+      .first()
+      .fill("Team Helper");
     await expect(page.getByRole("heading", { name: "Team Helper", level: 1 })).toBeVisible();
     await instructions(page).fill("You help Kai.");
 

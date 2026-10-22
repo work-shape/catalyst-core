@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { workspaceRoutePath } from "../../shared/routes";
 import { isConversationGone } from "../conversation/conversation-gone";
 import { tryOnPage, type DockTab, type DockTry } from "../dock/dock-try";
+import { readLastDockConversation, storeLastDockConversation } from "./dock-last";
 import { addressDockConversation, dockMotion, type WorkspaceAddress } from "./dock-state";
 import {
   isChatWorkspaceRoute,
@@ -36,6 +37,11 @@ export interface WorkspaceDock {
   tryAgent: string | undefined;
   /** The dock is shown beside or over the page. */
   open: boolean;
+  /**
+   * The conversation "Chat" brings back: the one of a dock the person closed, else the one the
+   * dock held last in this browser, also before a reload.
+   */
+  last: string | undefined;
   /** Where the dock lies over the page: whether it is in front of it. */
   inFront: boolean;
   /**
@@ -49,7 +55,9 @@ export interface WorkspaceDock {
   close(): void;
   /** Closes the dock and forgets its conversation, as when that conversation is gone. */
   forget(): void;
-  /** Brings back the conversation of the dock the person closed. */
+  /** Forgets the conversation "Chat" would bring back, as one the person may no longer read. */
+  forgetLast(): void;
+  /** Brings back the conversation of the dock the person closed, or the one it held last. */
   reopen(): void;
   /** Where the dock lies over the page: puts the page in front, or the dock. */
   showPage(): void;
@@ -89,6 +97,20 @@ export function useWorkspaceDock({
     addressRef.current = { route, chat: addressChat };
   }, [addressChat, route]);
   const [memory, setMemory] = useState<DockMemory>(FRESH_DOCK);
+  // The conversation the dock held last, kept in the browser so "Chat" finds it after a reload.
+  const [kept, setKept] = useState<string | undefined>(
+    () => addressChat ?? readLastDockConversation()
+  );
+  // A conversation the address brings into the dock becomes the one kept; one forgotten while
+  // the address still names it stays forgotten.
+  const [seenChat, setSeenChat] = useState(addressChat);
+  if (seenChat !== addressChat) {
+    setSeenChat(addressChat);
+    if (addressChat !== undefined) setKept(addressChat);
+  }
+  useEffect(() => {
+    if (kept !== undefined) storeLastDockConversation(kept);
+  }, [kept]);
   const tryingRef = useRef<DockTry | undefined>(undefined);
   // The chat route takes its conversation whole; a dock after it starts afresh. A conversation
   // in the address is the dock's, so nothing closed or empty is kept beside it.
@@ -161,6 +183,8 @@ export function useWorkspaceDock({
   }, [go]);
 
   const forget = useCallback(() => {
+    setKept(undefined);
+    storeLastDockConversation(undefined);
     setMemory((current) => ({
       ...current,
       closed: undefined,
@@ -170,7 +194,16 @@ export function useWorkspaceDock({
     go(addressRef.current.route, undefined, { replace: true });
   }, [go]);
 
-  const closedConversation = memory.closed;
+  const forgetLast = useCallback(() => {
+    setKept(undefined);
+    storeLastDockConversation(undefined);
+    setMemory((current) =>
+      current.closed === undefined ? current : { ...current, closed: undefined }
+    );
+  }, []);
+
+  const closedInTab = memory.closed;
+  const closedConversation = closedInTab ?? kept;
   const reopen = useCallback(() => {
     setMemory((current) => ({ ...current, inFront: true }));
     if (closedConversation !== undefined) {
@@ -203,10 +236,10 @@ export function useWorkspaceDock({
       // Without a Build conversation the dock stays open, empty, for one to start.
       emptyOpen: current.emptyOpen || (buildChat === undefined && current.closed === undefined)
     }));
-    if (buildChat === undefined && closedConversation !== undefined) {
-      go(addressRef.current.route, closedConversation, { replace: true });
+    if (buildChat === undefined && closedInTab !== undefined) {
+      go(addressRef.current.route, closedInTab, { replace: true });
     }
-  }, [closedConversation, go]);
+  }, [closedInTab, go]);
 
   const trying = tryOnPage(memory.trying, page);
   useLayoutEffect(() => {
@@ -218,11 +251,13 @@ export function useWorkspaceDock({
       tab: trying ? "try" : "build",
       tryAgent: trying?.agent,
       open: trying !== undefined || addressChat !== undefined || memory.emptyOpen,
+      last: closedConversation,
       inFront: memory.inFront,
       openPage,
       show,
       close,
       forget,
+      forgetLast,
       reopen,
       showPage,
       showChat,
@@ -231,8 +266,10 @@ export function useWorkspaceDock({
     }),
     [
       addressChat,
+      closedConversation,
       close,
       forget,
+      forgetLast,
       memory,
       openPage,
       reopen,
@@ -269,7 +306,7 @@ export function useUnreadableDockConversation({
 }) {
   const unreadableId =
     docked && dock.open && isConversationGone(error) ? dock.conversationId : undefined;
-  const { show, showTry, tryAgent } = dock;
+  const { show, showTry, tryAgent, forgetLast } = dock;
   useEffect(() => {
     if (unreadableId === undefined) return;
     if (tryAgent !== undefined) {
@@ -278,6 +315,7 @@ export function useUnreadableDockConversation({
       return;
     }
     keepDraft(unreadableId);
+    forgetLast();
     show(undefined, { replace: true });
-  }, [keepDraft, show, showTry, tryAgent, unreadableId]);
+  }, [forgetLast, keepDraft, show, showTry, tryAgent, unreadableId]);
 }

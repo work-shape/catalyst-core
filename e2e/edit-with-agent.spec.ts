@@ -8,26 +8,38 @@ import { assetRevision, requestWithOrigin } from "./request-with-origin";
 import { expect, test } from "./test";
 import { apiOrigin, uiOrigin } from "./view-fixtures";
 
-// UXA-3a, navigation check 39, first half: "Edit with the agent" on an App draft or a Workflow
+// UXA-3a, navigation check 39, first half: the page head's "Chat" on an App draft or a Workflow
 // keeps the asset's page and opens the dock beside it. The dock's head names the agent with its
 // mark and "Working on:" the asset, its starters fit the kind, and the agent's first changing
 // call acts on that asset. At 390 px the dock lies in front of the page, and "Show page" brings
 // the page forward. Fails where the head names only the conversation, where the empty
-// conversation offers the agent's own starters, or where the page is left. ACCEPT-1c: the action
-// also stays in the head with the dock open, and pressing it again reopens the same conversation.
+// conversation offers the agent's own starters, or where the page is left. ACCEPT-1c: closing the
+// dock and pressing "Chat" again reopens the same conversation.
 
 /** Where the pictures of a run go. Without it the test takes none. */
 const shotsDir = process.env.E2E_SHOTS_DIR;
 const superadmin = { email: "e2e-superadmin@example.test", password: "e2e-superadmin-password" };
 const WIDE = { width: 1280, height: 800 };
 const PHONE = { width: 390, height: 844 };
-const EDIT = "Edit with the agent";
 
 const idSchema = z.object({ id: z.string() });
 const appSchema = z.looseObject({ draftRevision: z.number() });
 
 const chatColumn = (page: Page) => page.locator("[data-dock-chat]");
 const dockHead = (page: Page) => page.getByTestId("dock-head");
+/** "Chat" in the page head: the dock's way back, and on an asset's page its conversation. */
+const chatAction = (page: Page) => page.getByTestId("dock-page-action");
+
+/** Closes the dock and presses "Chat": the same conversation comes back. */
+async function closeAndChatAgain(page: Page): Promise<void> {
+  const conversation = new URL(page.url()).searchParams.get("chat");
+  await dockHead(page).getByRole("button", { name: "Close chat" }).click();
+  await expect(chatColumn(page)).toHaveAttribute("data-chat-mode", "closed");
+  await expect(chatAction(page)).toHaveText(/^Chat/u);
+  await chatAction(page).click();
+  await expect(chatColumn(page)).toHaveAttribute("data-chat-mode", "dock");
+  expect(new URL(page.url()).searchParams.get("chat")).toBe(conversation);
+}
 
 async function signIn(page: Page): Promise<void> {
   const signedIn = await page.request.post(`${apiOrigin}/api/auth/sign-in/email`, {
@@ -159,7 +171,7 @@ function draftHeading(page: Page, heading: string): Locator {
     .getByRole("heading", { name: heading });
 }
 
-test("Edit with the agent keeps the App's draft and opens the dock about it", async ({ page }) => {
+test("Chat keeps the App's draft and opens the dock about it", async ({ page }) => {
   test.setTimeout(shotsDir ? 300_000 : 120_000);
   await page.setViewportSize(WIDE);
   await signIn(page);
@@ -185,7 +197,7 @@ test("Edit with the agent keeps the App's draft and opens the dock about it", as
 
   await page.goto(draftPath);
   await expect(draftHeading(page, "Hourly rate")).toBeVisible();
-  await page.getByTestId("app-edit").getByRole("button", { name: EDIT, exact: true }).click();
+  await chatAction(page).click();
 
   // The page stays: the same address, now with the conversation in the dock beside the draft.
   await expect(page).toHaveURL((url) => url.pathname === draftPath && url.searchParams.has("chat"));
@@ -202,14 +214,8 @@ test("Edit with the agent keeps the App's draft and opens the dock about it", as
   expect(await startersInFirstRow(page)).toBe(1);
   // ACCEPT-1c C6: the start page speaks of the App, never with the configured agent's welcome.
   await expect(chatColumn(page)).not.toContainText("demo workflow");
-  // ACCEPT-1c C12: beside the open dock the head still shows the action, not only in "…", and
-  // pressing it again opens the same conversation rather than a second one.
-  const conversation = new URL(page.url()).searchParams.get("chat");
-  const again = page.getByTestId("app-edit").getByRole("button", { name: EDIT, exact: true });
-  await expect(again).toBeVisible();
-  await again.click();
-  await expect(chatColumn(page)).toHaveAttribute("data-chat-mode", "dock");
-  expect(new URL(page.url()).searchParams.get("chat")).toBe(conversation);
+  // ACCEPT-1c C12: "Chat" after a close opens the same conversation rather than a second one.
+  await closeAndChatAgain(page);
   await expect(chatColumn(page).getByPlaceholder("Message")).toBeFocused();
 
   const ready = async () => {
@@ -280,9 +286,7 @@ function workflowConfig(id: string, runAs: string, description: string, recipien
   };
 }
 
-test("Edit with the agent keeps the Workflow's page and opens the dock about it", async ({
-  page
-}) => {
+test("Chat keeps the Workflow's page and opens the dock about it", async ({ page }) => {
   test.setTimeout(shotsDir ? 300_000 : 120_000);
   await page.setViewportSize(WIDE);
   await signIn(page);
@@ -311,7 +315,7 @@ test("Edit with the agent keeps the Workflow's page and opens the dock about it"
   await page.goto(workflowPath);
   const workflowPage = page.getByTestId("workflow-page");
   await expect(workflowPage.getByRole("heading", { level: 1 })).toHaveText(NAME);
-  await workflowPage.getByRole("button", { name: EDIT, exact: true }).click();
+  await chatAction(page).click();
 
   await expect(page).toHaveURL(
     (url) => url.pathname === workflowPath && url.searchParams.has("chat")
@@ -325,12 +329,8 @@ test("Edit with the agent keeps the Workflow's page and opens the dock about it"
   await expect.poll(() => starterTitles(page)).toEqual(["Add a step", "Run a test"]);
   expect(await startersInFirstRow(page)).toBe(1);
   await expect(chatColumn(page)).not.toContainText("demo workflow");
-  // ACCEPT-1c C12: the action stays in the head beside the dock and opens the same conversation.
-  const conversation = new URL(page.url()).searchParams.get("chat");
-  const again = workflowPage.getByRole("button", { name: EDIT, exact: true });
-  await expect(again).toBeVisible();
-  await again.click();
-  expect(new URL(page.url()).searchParams.get("chat")).toBe(conversation);
+  // ACCEPT-1c C12: "Chat" after a close opens the same conversation.
+  await closeAndChatAgain(page);
 
   // C9: resolve the real signed-in recipient through the host, on the node and its detail,
   // in both languages. The rendering must not substitute the delivery channel for the person.

@@ -180,22 +180,18 @@ test.describe("uploading files from the computer into a Knowledge Base", () => {
     );
     try {
       await page.goto("/build/knowledge-bases");
+      // New opens the empty page; the name typed there makes the address it asks about.
       await page.getByRole("button", { name: "New knowledge base", exact: true }).first().click();
-      const dialog = page.getByRole("dialog");
       const checked = page.waitForResponse(
         (response) =>
           response.url().endsWith("/api/v1/assets/knowledge_base/check-name") &&
           (response.request().postData()?.includes("accept-nordlicht-wissen") ?? false)
       );
-      await dialog.locator('[data-name-with-address-field="name"]').fill("ACCEPT Nordlicht Wissen");
+      await page.getByRole("textbox", { name: /^Name/u }).first().fill("ACCEPT Nordlicht Wissen");
       const response = await checked;
       expect(response.ok()).toBe(true);
       expect(await response.json()).toMatchObject({ available: true });
-      await expect(dialog.getByRole("button", { name: "Advanced", exact: true })).toHaveAttribute(
-        "aria-expanded",
-        "false"
-      );
-      await dialog.getByRole("button", { name: "Continue", exact: true }).click();
+      await expect(page.locator("[data-new-asset-name-refused]")).toHaveCount(0);
       await expect(
         page.getByRole("heading", { name: "ACCEPT Nordlicht Wissen", level: 1 })
       ).toBeVisible();
@@ -231,9 +227,7 @@ test.describe("uploading files from the computer into a Knowledge Base", () => {
       await page.emulateMedia({ colorScheme: "light" });
       await page.goto("/build/knowledge-bases");
       await page.getByRole("button", { name: "Neue Wissensbasis", exact: true }).first().click();
-      const dialog = page.getByRole("dialog");
-      await dialog.locator('[data-name-with-address-field="name"]').fill(title);
-      await dialog.getByRole("button", { name: "Weiter", exact: true }).click();
+      await page.getByRole("textbox", { name: /^Name/u }).first().fill(title);
       await expect(page.getByRole("heading", { name: title, level: 1 })).toBeVisible();
       await expect(
         page.getByText("Ist sofort veröffentlicht und in keinem Arbeitsbereich verfügbar")

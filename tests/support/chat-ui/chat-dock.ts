@@ -22,3 +22,7 @@ export {
   TRY_DOCK_KIND,
   type ConversationStart
 } from "../../../packages/chat-ui/src/chat/dock/subject-starters";
+export {
+  creationTargetLine,
+  dockCreationTarget
+} from "../../../packages/chat-ui/src/chat/dock/creation-target";

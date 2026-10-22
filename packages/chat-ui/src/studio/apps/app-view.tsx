@@ -25,7 +25,6 @@ import {
   type AppRights
 } from "./app-model";
 import { AppPreview } from "./app-preview";
-import { HeadAgentAction } from "../head-agent-action";
 import { useAppEditWithAgent } from "./app-edit-with-agent";
 import { useAppsHost, type AppsWorkspace } from "./apps-host";
 
@@ -163,13 +162,12 @@ export function AppViewFrame({
   unassignedScopes?: readonly string[] | undefined;
 }) {
   const { t } = useTranslation();
-  const editWithAgent = useAppEditWithAgent(app, rights);
+  // The head's "Chat" talks about the App where its draft is what the builder sees.
+  const editWithAgent = useAppEditWithAgent(draftShown ? app : undefined, rights);
   const hasSources = dataSources !== undefined && dataSources.length > 0;
-  const agentAction = rights.write && draftShown ? editWithAgent.action : undefined;
   // What stays in the head beside where the data comes from: Edit is the builder's next step,
-  // and Edit with the agent stays beside it, as its icon where room is short. Copying the link
-  // is all a reader without the read right is offered: a menu of one item would hide it behind
-  // a second press.
+  // and the shell's "Chat" stands before it. Copying the link is all a reader without the read
+  // right is offered: a menu of one item would hide it behind a second press.
   const lead =
     rights.write && draftShown ? (
       <Button variant="outline" onClick={onEdit}>
@@ -208,10 +206,9 @@ export function AppViewFrame({
             ) : undefined
           }
           primaryAction={
-            hasSources || lead !== null || agentAction !== undefined ? (
+            hasSources || lead !== null ? (
               <span className="flex items-center gap-2">
                 {hasSources ? <AppDataSourcesButton lines={dataSources} /> : null}
-                {agentAction === undefined ? null : <HeadAgentAction action={agentAction} />}
                 {lead}
               </span>
             ) : undefined

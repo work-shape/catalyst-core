@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 
 /** The actions of the frame that have keys. */
-export type WorkspaceShortcut = "search" | "newChat";
+export type WorkspaceShortcut = "search" | "newChat" | "chat";
 
 interface ShortcutKeys {
   key: string;
@@ -12,7 +12,9 @@ interface ShortcutKeys {
 
 const SHORTCUT_KEYS: Record<WorkspaceShortcut, ShortcutKeys> = {
   search: { key: "k", shift: false, apple: "⌘K", other: "Ctrl+K" },
-  newChat: { key: "o", shift: true, apple: "⌘⇧O", other: "Ctrl+Shift+O" }
+  newChat: { key: "o", shift: true, apple: "⌘⇧O", other: "Ctrl+Shift+O" },
+  // Opens and closes the dock beside a page.
+  chat: { key: "j", shift: false, apple: "⌘J", other: "Ctrl+J" }
 };
 
 /** Apple keyboards have the command key; there Ctrl+K belongs to the text field. */
@@ -33,7 +35,7 @@ function shortcutOf(event: KeyboardEvent): WorkspaceShortcut | undefined {
   if (!modifier || event.altKey) {
     return undefined;
   }
-  const names: WorkspaceShortcut[] = ["search", "newChat"];
+  const names: WorkspaceShortcut[] = ["search", "newChat", "chat"];
   return names.find((name) => {
     const keys = SHORTCUT_KEYS[name];
     return event.key.toLowerCase() === keys.key && event.shiftKey === keys.shift;

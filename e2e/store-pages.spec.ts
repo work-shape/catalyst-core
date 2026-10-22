@@ -41,7 +41,7 @@ test.use({
           "instance, so the page asks those owners first, gets 404, and finds it in the team.",
         matches: requestAnswered(404),
         path: /^\/api\/v1\/assets\/data_store\/team-store-[0-9a-f]{8}$/u,
-        tests: ["Edit with the agent on a team's Data Store works in the team, from Personal"]
+        tests: ["Chat on a team's Data Store works in the team, from Personal"]
       }
     ]
   }
@@ -49,7 +49,7 @@ test.use({
 
 // STORE-PAGES. The page of a published Data Store whose draft adds a migration lists that
 // migration with its SQL and publishes it after a question; the store's state follows the
-// publish without a reload. "Edit with the agent" opens the dock beside the page with a
+// publish without a reload. The page head's "Chat" opens the dock beside the page with a
 // conversation about the store, and Delete in the head's menu asks with the store's name and
 // leaves for the list. The page of a Knowledge Base names the agents that search it and those
 // given knowledge_base.use, and opens its own conversation with the agent; its row on the list
@@ -70,7 +70,6 @@ const knowledgeApiUrl = `http://${host}:${knowledgeApiPort}`;
 const WIDE = { width: 1280, height: 900 };
 const PHONE = { width: 390, height: 844 };
 const SHORT_PHONE = { width: 390, height: 640 };
-const EDIT = "Edit with the agent";
 
 type Locale = "en" | "de";
 type Theme = "light" | "dark";
@@ -349,11 +348,10 @@ test("a Data Store's later draft is published, edited with the agent and deleted
     await expect(page.locator("[data-data-store-pending]")).toHaveCount(0, { timeout: 30_000 });
     await expect(page.locator("#status")).toContainText("0002_add_note", { timeout: 30_000 });
 
-    // "Edit with the agent" opens the dock beside the store's page, about the store. Wide, the
-    // action stands in the head.
+    // The page head's "Chat" opens the dock beside the store's page, about the store.
     await page.setViewportSize(WIDE);
     await view(page, path, title, "en", "light");
-    await page.getByRole("button", { name: EDIT, exact: true }).click();
+    await page.getByTestId("dock-page-action").click();
     await expect(page).toHaveURL((url) => url.pathname === path && url.searchParams.has("chat"));
     const dockHead = page.getByTestId("dock-head");
     await expect(dockHead).toHaveAttribute("data-subject-kind", "data_store");
@@ -443,13 +441,11 @@ test("a Data Store's later draft is published, edited with the agent and deleted
   }
 });
 
-// The agent reads a workspace's store from that workspace's conversations alone: "Edit with the
-// agent" on a team's store starts its conversation in the team, whichever workspace is open, and
+// The agent reads a workspace's store from that workspace's conversations alone: "Chat" on a
+// team's store starts its conversation in the team, whichever workspace is open, and
 // the agent reads the store there. Fails without the change: the conversation belonged to the
 // open Personal Workspace, and the agent's read was refused.
-test("Edit with the agent on a team's Data Store works in the team, from Personal", async ({
-  page
-}) => {
+test("Chat on a team's Data Store works in the team, from Personal", async ({ page }) => {
   test.setTimeout(120_000);
   await signIn(page, apiOrigin);
   const personal = await requestWithOrigin(page, "post", `${apiOrigin}/api/v1/workspaces/personal`);
@@ -476,7 +472,7 @@ test("Edit with the agent on a team's Data Store works in the team, from Persona
     await page.setViewportSize(WIDE);
     await page.goto(`/w/${personalId}`);
     await view(page, `/build/data-stores/${name}`, title, "en", "light");
-    await page.getByRole("button", { name: EDIT, exact: true }).click();
+    await page.getByTestId("dock-page-action").click();
     await expect(page).toHaveURL((url) => (url.searchParams.get("chat") ?? "") !== "");
     const conversationId = new URL(page.url()).searchParams.get("chat") ?? "";
     const thread = async () => {
@@ -728,10 +724,10 @@ test.describe("the page and the row of a Knowledge Base", () => {
       await expect(page.getByRole("heading", { name: title, level: 1 })).toBeInViewport();
       await noSidewaysScroll(page);
 
-      // "Edit with the agent" opens the dock beside its page, about the Knowledge Base.
+      // The page head's "Chat" opens the dock beside its page, about the Knowledge Base.
       await page.setViewportSize(WIDE);
       await view(page, path, title, "en", "light");
-      await page.getByRole("button", { name: EDIT, exact: true }).click();
+      await page.getByTestId("dock-page-action").click();
       await expect(page).toHaveURL((url) => url.pathname === path && url.searchParams.has("chat"));
       const dockHead = page.getByTestId("dock-head");
       await expect(dockHead).toHaveAttribute("data-subject-kind", "knowledge_base");

@@ -25,6 +25,7 @@ import {
 } from "@work-shape/catalyst-ui";
 import { formatDateTime } from "../../shared/locale-format";
 import { useTranslation } from "../../shared/i18n";
+import { useOfferDockCreationScope } from "../../shared/dock-page-chat";
 import { holdLeaveGuard } from "../../shared/leave-guard";
 import {
   isEditableKind,
@@ -41,7 +42,7 @@ import {
   ViewedAssetPage,
   type BuildAssetCopy
 } from "./build-asset-page";
-import { BuildCreateDialog } from "./build-create-dialog";
+import { BuildCreateDialog, emptyAssetStart } from "./build-create-dialog";
 import {
   clearBuildCreateDialogRequest,
   clearBuildStartRequest,
@@ -64,6 +65,7 @@ import {
 } from "../../shared/build-rights";
 import { scrollPageToTop } from "./build-scroll";
 import { BUILT_WITH_AGENT, BuildListEmpty } from "./build-list-empty";
+import { BuildWithAgentDialog } from "../build-with-agent-dialog";
 
 /** The commands the CLI entry names, in the order a person runs them. */
 const CLI_COMMANDS = ["catalyst config pull", "catalyst config diff", "catalyst config push"];
@@ -93,6 +95,24 @@ export function BuildFrame({
   const place = resolveBuildPlace(kinds, location);
   const placePath = place?.kind.entry.path;
   const corrected = place?.corrected ?? false;
+  // The chat builds where Studio is set: a conversation it starts here is made in that owner,
+  // and the empty dock names it.
+  const offeredScope = place === undefined ? undefined : source.scopeOf?.(place.kind.entry.kind);
+  useOfferDockCreationScope(
+    offeredScope === undefined || place === undefined
+      ? undefined
+      : offeredScope.kind === "workspace"
+        ? {
+            owner: "workspace",
+            workspaceId: offeredScope.workspaceId,
+            workspaceName: buildWorkspaceName(
+              source.rights,
+              offeredScope.workspaceId,
+              t("collaborationWorkspacePersonalName")
+            )
+          }
+        : { owner: "instance", mayCreate: place.kind.state.canCreate }
+  );
 
   const [listViews, setListViews] = useState<Record<string, ListView>>({});
   // A new asset has no address yet: it is written on the list's address and ends with it.
@@ -286,6 +306,12 @@ export function BuildFrame({
           mayChooseAll: source.rights.instanceWrite
         }
       : undefined;
+  // "New" of a kind with a page and no dialog of its own opens the page empty: its first save
+  // creates the asset, and makes it available where the reader works.
+  if (asking && isEditableKind(entry) && place.kind.state.canCreate && !entry.CreateDialog) {
+    setAsking(false);
+    setStart(emptyAssetStart(startsIn));
+  }
   const back = (
     <PageHeaderBack label={t("build.backToList", { kind: t(entry.label) })} onClick={openList}>
       {t(entry.label)}
@@ -301,7 +327,6 @@ export function BuildFrame({
         name={assetName}
         kinds={kinds.map((kind) => kind.entry)}
         canDelete={place.kind.state.canDelete}
-        editsWithAgent={entry.editsWithAgent === true}
         onDeleted={() => open({ kindPath: entry.path }, { replace: true })}
         page={{ ref: pageRef, above: loadError, shown: pageShown }}
         back={back}
@@ -321,6 +346,7 @@ export function BuildFrame({
             source={source}
             entry={entry}
             start={start}
+            startsIn={startsIn}
             page={page}
             back={back}
             onUnsavedChange={setUnsaved}
@@ -368,6 +394,8 @@ export function BuildFrame({
   }
 
   const view = listViews[entry.path] ?? firstListView;
+  const briefed =
+    !isEditableKind(entry) && place.kind.state.canCreate ? BUILT_WITH_AGENT[entry.kind] : undefined;
   return (
     <Page
       ref={pageRef}
@@ -422,16 +450,12 @@ export function BuildFrame({
             open({ kindPath: entry.path, name });
           }}
         />
-      ) : asking && isEditableKind(entry) && place.kind.state.canCreate ? (
-        <BuildCreateDialog
-          entry={entry}
-          startsIn={startsIn}
-          checkName={(name) => source.checkName(entry.kind, name)}
+      ) : asking && briefed && source.buildWithAgent ? (
+        <BuildWithAgentDialog
+          title={t(briefed.label)}
+          prompt={t(briefed.prompt)}
+          onBuild={source.buildWithAgent}
           onClose={() => setAsking(false)}
-          onStart={(chosen) => {
-            setAsking(false);
-            setStart(chosen);
-          }}
         />
       ) : null}
     </Page>
@@ -502,13 +526,14 @@ function BuildList({
   // A kind that only lists has no asset to start and no CLI entry, and a page only to show one.
   const editable = isEditableKind(entry) ? entry : undefined;
   const opens = opensAssets(entry);
-  // Where an agent builds assets, "New" of a kind it creates opens it in the dock: its first
-  // save creates the asset (NAV-2). Elsewhere a kind starts its asset in its dialog.
-  const withAgent = state.canCreate ? BUILT_WITH_AGENT[entry.kind] : undefined;
+  // "New" of a kind with a page opens that page empty, or the kind's own dialog. A kind without
+  // one asks what the new one should do and opens the agent with it: its first save creates
+  // the asset (NAV-2).
+  const withAgent = state.canCreate && !editable ? BUILT_WITH_AGENT[entry.kind] : undefined;
   const startWithAgent = withAgent ? source.buildWithAgent : undefined;
   const newButton =
     withAgent && startWithAgent ? (
-      <Button onClick={() => startWithAgent(t(withAgent.prompt))}>
+      <Button onClick={onNew}>
         <Plus aria-hidden="true" />
         {t(withAgent.label)}
       </Button>

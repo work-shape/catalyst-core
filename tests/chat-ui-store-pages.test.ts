@@ -28,6 +28,10 @@ import {
   type KnowledgeHoldersRead,
   type KnowledgeRead
 } from "@work-shape/catalyst-chat-ui/build-area";
+import {
+  DockPageChatProvider,
+  type DockPageChat
+} from "@work-shape/catalyst-chat-ui/dock-page-chat";
 import { SettingsPageProvider } from "@work-shape/catalyst-chat-ui/settings-page-context";
 import { assetPageRoute } from "@work-shape/catalyst-chat-ui/subject-run";
 import { UiRoot, uiLabelsEn } from "@work-shape/catalyst-ui";
@@ -266,7 +270,11 @@ async function mount(asset: BuildAsset, input: MountInput = {}): Promise<HTMLEle
                   href: (place) => `/build/${place.kindPath ?? ""}/${place.name ?? ""}`
                 }
               },
-              createElement(BuildFrame, { source })
+              createElement(
+                DockPageChatProvider,
+                { value: (chat) => pageChats.set(container, chat) },
+                createElement(BuildFrame, { source })
+              )
             )
           )
         )
@@ -276,15 +284,9 @@ async function mount(asset: BuildAsset, input: MountInput = {}): Promise<HTMLEle
   unmounts.push(() => {
     act(() => root.unmount());
     container.remove();
+    pageChats.delete(container);
   });
   return container;
-}
-
-/** The button or link whose whole text is `label`. */
-function controlNamed(container: ParentNode, label: string): HTMLElement | undefined {
-  return [...container.querySelectorAll<HTMLElement>("a, button")].find(
-    (control) => control.textContent?.trim() === label
-  );
 }
 
 /** Opens the head's "…" menu and answers its items. */
@@ -315,15 +317,22 @@ function confirmOfDialog(label: string): HTMLButtonElement | undefined {
   );
 }
 
-/** "Edit with the agent" in the head: in its row, or in its "…" menu where it folded. */
-async function editWithAgentControl(container: HTMLElement): Promise<HTMLElement | undefined> {
-  const label = "Edit with the agent";
-  const inRow = controlNamed(container, label);
-  if (inRow !== undefined) return inRow;
-  if (container.querySelector(`button[aria-label="${uiLabelsEn.moreActions}"]`) === null) {
-    return undefined;
-  }
-  return (await openMenu(container)).find((item) => item.textContent?.trim() === label);
+/** What each mounted page offers the page head's "Chat": its conversation with the agent. */
+const pageChats = new Map<HTMLElement, DockPageChat | undefined>();
+
+/**
+ * The page head's "Chat" as the page offers it, once the page shows its asset: pressing it
+ * starts the page's conversation. Nothing where the page offers none.
+ */
+async function editWithAgentControl(
+  container: HTMLElement
+): Promise<{ click(): Promise<boolean | void> } | undefined> {
+  await vi.waitFor(() => expect(container.querySelector("h1")).not.toBeNull(), {
+    timeout: CONDITION_WAIT_MS
+  });
+  await act(async () => undefined);
+  const chat = pageChats.get(container);
+  return chat && { click: () => chat.start({ fresh: false }) };
 }
 
 describe("publishing a Data Store's later draft", () => {
@@ -428,14 +437,16 @@ describe("deleting a Data Store", () => {
   });
 });
 
-describe("Edit with the agent on a store's page", () => {
+describe("Chat on a store's page", () => {
   it("starts a conversation about the Data Store with the reader who may change it", async () => {
     const editWithAgent = vi.fn(async () => undefined);
     const page = await mount(published, { editWithAgent });
     const control = await editWithAgentControl(page);
     expect(control).toBeDefined();
     await act(async () => control?.click());
-    expect(editWithAgent).toHaveBeenCalledWith({ kind: "data_store", name: "leads" }, "ws_1");
+    expect(editWithAgent).toHaveBeenCalledWith({ kind: "data_store", name: "leads" }, "ws_1", {
+      fresh: false
+    });
   });
 
   it("starts it in the workspace that owns the store, whichever workspace is open", async () => {
@@ -449,7 +460,9 @@ describe("Edit with the agent on a store's page", () => {
       ]
     });
     await act(async () => (await editWithAgentControl(page))?.click());
-    expect(editWithAgent).toHaveBeenCalledWith({ kind: "data_store", name: "leads" }, "ws_team");
+    expect(editWithAgent).toHaveBeenCalledWith({ kind: "data_store", name: "leads" }, "ws_team", {
+      fresh: false
+    });
   });
 
   it("is absent where the reader is no member of the workspace that owns the store", async () => {
@@ -471,7 +484,8 @@ describe("Edit with the agent on a store's page", () => {
     // The instance owns it: the conversation belongs to the open workspace.
     expect(editWithAgent).toHaveBeenCalledWith(
       { kind: "knowledge_base", name: "handbook-kb" },
-      undefined
+      undefined,
+      { fresh: false }
     );
   });
 
@@ -485,7 +499,8 @@ describe("Edit with the agent on a store's page", () => {
     await act(async () => (await editWithAgentControl(page))?.click());
     expect(editWithAgent).toHaveBeenCalledWith(
       { kind: "knowledge_base", name: "handbook-kb" },
-      "ws_team"
+      "ws_team",
+      { fresh: false }
     );
   });
 

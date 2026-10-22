@@ -32,9 +32,10 @@ export interface AppsHost {
   /**
    * Starts a conversation of the open workspace about this App and opens it: its agent reads
    * and saves the App's draft, which is shown beside it. Rejects where the instance refuses
-   * the conversation. Absent where no conversation can be started.
+   * the conversation. Absent where no conversation can be started. `fresh` starts a new one
+   * where the dock's is already about the App: the dock's "New chat".
    */
-  editWithAgent?(app: string): Promise<void>;
+  editWithAgent?(app: string, options?: { fresh: boolean }): Promise<void>;
   /**
    * Where the runs of calls are read, Instance > Operations, and where one run is, for a
    * reader who may open that place. Absent for everybody else: nothing links to a page its

@@ -1,5 +1,5 @@
 import type { AnimationEvent, CSSProperties, ReactNode } from "react";
-import { Maximize2, MessageSquare, PanelRight, X } from "lucide-react";
+import { Maximize2, MessageSquare, PanelRight, SquarePen, X } from "lucide-react";
 import {
   Badge,
   Button,
@@ -9,7 +9,10 @@ import {
   SurfaceHeader,
   Tabs,
   TabsList,
-  TabsTrigger
+  TabsTrigger,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger
 } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../../shared/i18n";
 import type { DockTab } from "./dock-try";
@@ -113,6 +116,7 @@ export function DockHead({
   over,
   onShowPage,
   onOpenFullChat,
+  onNewChat,
   onClose
 }: {
   title: string;
@@ -128,6 +132,8 @@ export function DockHead({
   onShowPage(): void;
   /** Absent while the dock holds no conversation. */
   onOpenFullChat?: () => void;
+  /** Starts a new conversation for the page; absent on Try, whose conversation is its own. */
+  onNewChat?: () => void;
   onClose(): void;
 }) {
   const { t } = useTranslation();
@@ -159,13 +165,18 @@ export function DockHead({
       data-testid="dock-head"
       data-subject-kind={subjectKind}
       actions={
-        preview || onOpenFullChat !== undefined ? (
+        preview || onOpenFullChat !== undefined || onNewChat !== undefined ? (
           <>
             {preview ? (
               <Badge tone="info" data-testid="dock-preview">
                 {t("dock.preview")}
               </Badge>
             ) : null}
+            {onNewChat === undefined ? null : (
+              <IconButton label={t("dock.newChat")} onClick={onNewChat}>
+                <SquarePen aria-hidden="true" />
+              </IconButton>
+            )}
             {onOpenFullChat === undefined ? null : (
               <IconButton label={t("dock.openFullChat")} onClick={onOpenFullChat}>
                 <Maximize2 aria-hidden="true" />
@@ -252,24 +263,27 @@ export function DockPage({
 }
 
 /**
- * The control a page head carries for the dock: "Chat" brings back a dock the person closed,
- * with a dot while its answer runs; "Show chat" brings the dock in front where it lies over
- * the page.
+ * The control every page head carries for the dock, first in its actions: "Chat" opens the dock,
+ * with a dot while its answer runs; "Show chat" brings the dock in front where it lies over the
+ * page. `shortcut` names the keys that do the same.
  */
 export function DockPageAction({
   kind,
   running,
+  shortcut,
   onClick
 }: {
-  kind: "reopen" | "show";
+  kind: "open" | "show";
   running: boolean;
+  shortcut?: string;
   onClick(): void;
 }) {
   const { t } = useTranslation();
-  return (
+  const label = kind === "open" ? t("dock.chat") : t("dock.showChat");
+  const button = (
     <Button variant="secondary" onClick={onClick} data-testid="dock-page-action">
       <MessageSquare aria-hidden="true" />
-      {kind === "reopen" ? t("dock.chat") : t("dock.showChat")}
+      {label}
       {running ? (
         <>
           <CountBadge dot aria-hidden="true" data-testid="dock-running-dot" />
@@ -277,5 +291,12 @@ export function DockPageAction({
         </>
       ) : null}
     </Button>
+  );
+  if (shortcut === undefined) return button;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{button}</TooltipTrigger>
+      <TooltipContent shortcut={shortcut}>{t("dock.chatHint")}</TooltipContent>
+    </Tooltip>
   );
 }

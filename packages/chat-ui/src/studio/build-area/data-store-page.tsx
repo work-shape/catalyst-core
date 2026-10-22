@@ -98,8 +98,7 @@ function PublishedDataStorePage({
   source,
   title,
   publish,
-  remove,
-  agentAction
+  remove
 }: BuildAssetViewProps & { source: DataStoreSource; title: string }) {
   const { t } = useTranslation();
   usePageShown(page, "asset");
@@ -280,7 +279,6 @@ function PublishedDataStorePage({
               </Badge>
             ) : undefined
           }
-          primaryAction={agentAction}
           menu={head.menu}
         />
       }

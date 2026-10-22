@@ -123,7 +123,6 @@ export const apps = defineTranslations({
     "apps.draftUnavailable": "The draft of this app is not available to you.",
     "apps.edit": "Edit",
     "apps.editNamed": "Edit {name}",
-    "apps.editWithAgent": "Edit with the agent",
     "apps.editWithAgentClose": "Close",
     "apps.editWithAgentFailed": "The conversation could not be started.",
     "apps.editWithAgentRefused": "This app is not available to you for editing with the agent.",
@@ -389,7 +388,6 @@ export const apps = defineTranslations({
     "apps.draftUnavailable": "Der Entwurf dieser App ist für dich nicht verfügbar.",
     "apps.edit": "Bearbeiten",
     "apps.editNamed": "{name} bearbeiten",
-    "apps.editWithAgent": "Mit dem Agenten bearbeiten",
     "apps.editWithAgentClose": "Schließen",
     "apps.editWithAgentFailed": "Die Unterhaltung konnte nicht gestartet werden.",
     "apps.editWithAgentRefused":

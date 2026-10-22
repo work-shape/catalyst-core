@@ -1,7 +1,6 @@
-import { Bot, Play } from "lucide-react";
+import { Play } from "lucide-react";
 import { Button, PageHeader, PageLead, TabsLink, TabsNav } from "@work-shape/catalyst-ui";
 import { CopyIdItem } from "../copy-id-item";
-import { HeadAgentAction } from "../head-agent-action";
 import { useTranslation } from "../../shared/i18n";
 import type { WorkflowEdit } from "./workflow-draft";
 import type { WorkflowView } from "./workflow-views";
@@ -9,7 +8,7 @@ import { BackLink, TitlePlaceholder, routeLink, type OpenRoute } from "./workflo
 
 /**
  * The head of a Workflow, on its canvas, the list of its runs and its Settings: the way back,
- * the name, "Edit with the agent", "Start now", "Copy ID" for whoever may change it, and the
+ * the name, "Start now", "Copy ID" for whoever may change it, and the
  * tabs Workflow, Runs and Settings. The tabs are addresses. Without runs on the instance, or
  * for a reader who may not read them, there is no Runs tab. The first paragraph under them
  * says what the Workflow does and whom every run acts as.
@@ -36,7 +35,8 @@ export function WorkflowHead({
   canStart: boolean;
   /** The reader may start the Workflow and the instance accepts no start of it now. */
   startOff?: boolean;
-  /** The conversation in which the agent changes the Workflow, for a reader who may write it. */
+  /** The conversation in which the agent changes the Workflow, for a reader who may write it:
+   * the page head's "Chat" starts it, and "Copy ID" stands only for such a reader. */
   edit?: Pick<WorkflowEdit, "busy" | "start">;
   onStart(): void;
   onOpenRoute: OpenRoute;
@@ -70,25 +70,11 @@ export function WorkflowHead({
         // names the area, and the Workflow's id is never shown.
         title={workflow?.name ?? <TitlePlaceholder>{t("workflows.title")}</TitlePlaceholder>}
         primaryAction={
-          edit !== undefined || canStart || startOff ? (
-            <span className="flex items-center gap-2">
-              {edit === undefined ? null : (
-                <HeadAgentAction
-                  action={{
-                    label: t("workflows.edit.withAgent"),
-                    icon: <Bot aria-hidden="true" />,
-                    loading: edit.busy,
-                    onSelect: edit.start
-                  }}
-                />
-              )}
-              {canStart || startOff ? (
-                <Button disabled={startOff} onClick={onStart}>
-                  <Play aria-hidden="true" />
-                  {t("workflows.startNow")}
-                </Button>
-              ) : null}
-            </span>
+          canStart || startOff ? (
+            <Button disabled={startOff} onClick={onStart}>
+              <Play aria-hidden="true" />
+              {t("workflows.startNow")}
+            </Button>
           ) : undefined
         }
         menu={edit === undefined ? undefined : <CopyIdItem id={workflowId} />}

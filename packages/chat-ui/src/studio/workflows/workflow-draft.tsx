@@ -3,6 +3,7 @@ import { ApiError } from "@work-shape/catalyst-api-client";
 import { Banner, Button, ConfirmDialog, InlineError } from "@work-shape/catalyst-ui";
 import type { DraftDecision } from "../build-area/build-data";
 import { instanceSentence, PendingApprovalError } from "../build-area/build-refusals";
+import { useOfferDockPageChat } from "../../shared/dock-page-chat";
 import { useTranslation } from "../../shared/i18n";
 import {
   narrativeHolds,
@@ -53,14 +54,19 @@ export function useEditWithAgent(
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const editWithAgent = host?.editWithAgent;
-  if (host === undefined || editWithAgent === undefined || !editOffered(host.rights, view)) {
+  const offered =
+    host !== undefined && editWithAgent !== undefined && editOffered(host.rights, view);
+  // The page head's "Chat" starts the conversation about the Workflow.
+  useOfferDockPageChat(offered ? (options) => begin(undefined, options) : undefined);
+  if (!offered) {
     return undefined;
   }
-  const start = (prompt?: string) => {
+  function begin(prompt: string | undefined, options?: { fresh: boolean }): Promise<void> {
+    if (editWithAgent === undefined) return Promise.resolve();
     setBusy(true);
     setError(undefined);
     // The conversation opens in the dock beside the Workflow's page; a refusal is said here.
-    editWithAgent(workflow, prompt)
+    return editWithAgent(workflow, prompt, options)
       .catch((failure: unknown) => {
         setError(
           // A Workflow the reader may not read and one that is gone are refused alike.
@@ -70,13 +76,17 @@ export function useEditWithAgent(
         );
       })
       .finally(() => setBusy(false));
-  };
+  }
   return {
     busy,
     error,
     // A button passes its click to what it calls: the click is no prompt.
-    start: () => start(),
-    startWith: start,
+    start: () => {
+      begin(undefined).catch(() => undefined);
+    },
+    startWith: (prompt) => {
+      begin(prompt).catch(() => undefined);
+    },
     dismissError: () => setError(undefined)
   };
 }

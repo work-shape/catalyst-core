@@ -75,7 +75,7 @@ export function buildingAgentNameFor(
 }
 
 /**
- * "Edit with the agent" on an asset page in Build: it chooses the agent that builds assets and
+ * The chat of an asset page in Build: it chooses the agent that builds assets and
  * starts a conversation about the asset with it. Nothing where no agent here builds assets (the
  * Build Agent's Module is off), so the entry is absent.
  */
@@ -84,16 +84,21 @@ export function editWithBuildingAgent(
   selectAgent: (name: string) => void,
   startAbout: (
     subject: { kind: string; name: string },
-    workspaceId: string | undefined
+    workspaceId: string | undefined,
+    options?: { fresh: boolean }
   ) => Promise<void>
 ):
-  | ((subject: { kind: string; name: string }, workspaceId: string | undefined) => Promise<void>)
+  | ((
+      subject: { kind: string; name: string },
+      workspaceId: string | undefined,
+      options?: { fresh: boolean }
+    ) => Promise<void>)
   | undefined {
   if (buildingAgentName === undefined) {
     return undefined;
   }
-  return (subject, workspaceId) => {
+  return (subject, workspaceId, options) => {
     selectAgent(buildingAgentName);
-    return startAbout(subject, workspaceId);
+    return startAbout(subject, workspaceId, options);
   };
 }

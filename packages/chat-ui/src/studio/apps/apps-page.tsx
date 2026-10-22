@@ -27,6 +27,7 @@ import { instanceSentence } from "../build-area/build-refusals";
 import { formatUpdated } from "../build-area/build-model";
 import { formatDateTime } from "../../shared/locale-format";
 import { useTranslation } from "../../shared/i18n";
+import { BuildWithAgentDialog } from "../build-with-agent-dialog";
 import { BuildWithAgentEmptyState, type BuildWithAgentCopy } from "../build-with-agent-empty";
 import { RouteLink } from "../route-link";
 import type { WorkspaceRoute } from "../../shared/workspace-route";
@@ -210,17 +211,19 @@ export function AppsPageView({
   /** Opens the agent with this text in its composer: offered to a reader who may build Apps. */
   onBuild(prompt: string): void;
   /**
-   * "New app": the dock opens with a conversation whose first save creates the App, this text
-   * in its composer. Absent where nobody here builds one with an agent.
+   * "New app" asks what the App should do, then opens the dock with a conversation whose first
+   * save creates the App, the answer in its composer. Absent where nobody here builds one with
+   * an agent.
    */
   onNew?(prompt: string): void;
 }) {
   const { locale, t } = useTranslation();
   const scrollRef = useRef<HTMLDivElement>(null);
   const rows = list.rows;
+  const [briefing, setBriefing] = useState(false);
   const newButton =
     onNew && rights.write ? (
-      <Button onClick={() => onNew(t("apps.promptStart"))}>
+      <Button onClick={() => setBriefing(true)}>
         <Plus aria-hidden="true" />
         {t("apps.new")}
       </Button>
@@ -304,6 +307,14 @@ export function AppsPageView({
           )}
         </Page>
       </div>
+      {briefing && onNew ? (
+        <BuildWithAgentDialog
+          title={t("apps.new")}
+          prompt={t("apps.promptStart")}
+          onBuild={onNew}
+          onClose={() => setBriefing(false)}
+        />
+      ) : null}
     </section>
   );
 }

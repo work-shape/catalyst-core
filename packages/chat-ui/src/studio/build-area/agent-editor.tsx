@@ -1,6 +1,7 @@
 import { Send, Star, Undo2 } from "lucide-react";
 import { useAgentTryAction } from "../../chat/dock/agent-try";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { assetAddressFromName } from "@work-shape/catalyst-core";
 import type { AgentDraft, ConfigAssetReferences } from "@work-shape/catalyst-api-client";
 import {
   Badge,
@@ -178,11 +179,15 @@ export function AgentEditor({
     (live ?? state.baseline).displayName[locale].trim() ||
     (live ?? state.baseline).displayName[locale === "de" ? "en" : "de"].trim() ||
     state.baseline.name;
-  // The name the page head shows: as the form holds it.
-  const title =
-    form.displayName[locale].trim() ||
-    form.displayName[locale === "de" ? "en" : "de"].trim() ||
-    form.name;
+  // The name the page head shows: as the form holds it, and "New agent" until it has one.
+  const named =
+    form.displayName[locale].trim() || form.displayName[locale === "de" ? "en" : "de"].trim();
+  const title = named || form.name || t("configNewAgent");
+  // The page of a new agent asks the instance about the id its name makes.
+  const { onNewTitle } = frame;
+  useEffect(() => {
+    onNewTitle?.(named);
+  }, [onNewTitle, named]);
   const showModels =
     canEditModel ||
     proposed.fields.includes("model") ||
@@ -255,8 +260,11 @@ export function AgentEditor({
   // starts is created from the dialog that offers to make it available, as a publish is.
   const submit = async (): Promise<BuildWriteOutcome> => {
     setSaving(true);
+    // A new agent on a page opened empty takes its id from its name.
     const config = editedAgentConfig(
-      form,
+      frame.asset === undefined && !form.name.trim()
+        ? { ...form, name: assetAddressFromName(named, "agent") }
+        : form,
       held?.config ?? frame.asset?.config,
       references?.enabledToolNames
     );

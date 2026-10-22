@@ -220,20 +220,10 @@ describe("the page of a Workflow with a draft", () => {
       locale
     );
 
-  it("offers the conversation with the agent beside the start, in both languages", () => {
-    const markup = page();
-    expect(markup).toContain(t("workflows.edit.withAgent"));
-    expect(markup).toContain(t("workflows.startNow"));
-    expect(markup.indexOf(t("workflows.edit.withAgent"))).toBeLessThan(
-      markup.indexOf(t("workflows.startNow"))
-    );
-    expect(page({}, "de")).toContain("Mit dem Agenten bearbeiten");
-  });
-
-  it("offers no conversation to a reader who may not write the Workflow", () => {
-    const markup = page({ offered: false });
-    expect(markup).not.toContain(t("workflows.edit.withAgent"));
-    expect(markup).toContain(t("workflows.startNow"));
+  it("leaves the conversation with the agent to the page head's Chat, beside the start", () => {
+    // "Edit with the agent" left the head: "Chat" on every page starts the conversation.
+    expect(page()).toContain(t("workflows.startNow"));
+    expect(page({ offered: false })).toContain(t("workflows.startNow"));
   });
 
   it("says in place that the instance made no conversation, as an alert", () => {

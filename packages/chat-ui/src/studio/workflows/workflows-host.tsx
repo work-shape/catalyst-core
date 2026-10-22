@@ -24,7 +24,7 @@ export interface WorkflowsHost {
    * Rejects where the instance refuses the conversation. Absent where no conversation can be
    * started, such as over samples.
    */
-  editWithAgent?(workflow: string, prompt?: string): Promise<void>;
+  editWithAgent?(workflow: string, prompt?: string, options?: { fresh: boolean }): Promise<void>;
   /**
    * "New workflow": opens the dock on the list with a new conversation with an agent that builds
    * assets and `prompt` in its composer; nothing is created until its first save. Absent where

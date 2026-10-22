@@ -43,7 +43,6 @@ import {
   appTitle,
   type AppRights
 } from "./app-model";
-import { HeadAgentAction } from "../head-agent-action";
 import { useAppEditWithAgent } from "./app-edit-with-agent";
 import { AppPreview, AppPreviewNotice } from "./app-preview";
 import { AskedPublishDialog, askToPublish, type PublishAsk } from "./app-publish-dialog";
@@ -528,9 +527,6 @@ export function AppEditFrame({
               known ? (
                 <span className="flex items-center gap-2">
                   {hasSources ? <AppDataSourcesButton lines={dataSources} /> : null}
-                  {editWithAgent.action === undefined ? null : (
-                    <HeadAgentAction action={editWithAgent.action} />
-                  )}
                   {/* A live App may be published again for another audience (SHARE-1): the
                     dialog then waits for a choice that differs from the live one. */}
                   <Button

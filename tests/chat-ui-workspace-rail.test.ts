@@ -371,6 +371,8 @@ describe("workspace rail conversation titles", () => {
       show: noop,
       close: noop,
       forget: noop,
+      last: undefined,
+      forgetLast: noop,
       reopen: noop,
       showPage: noop,
       showChat: noop,

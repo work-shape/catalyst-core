@@ -1,5 +1,5 @@
 import { Bot, Plus } from "lucide-react";
-import { useId, useState } from "react";
+import { useId } from "react";
 import {
   Avatar,
   Badge,
@@ -16,9 +16,8 @@ import {
   SkeletonList
 } from "@work-shape/catalyst-ui";
 import { AreaFrame, useAreaTitleFocus } from "../../shared/area-frame";
-import { agentKind } from "../build-area/agent-kind";
 import type { BuildAssetStart } from "../build-area/build-asset-kind";
-import { BuildCreateDialog, type BuildCreateStart } from "../build-area/build-create-dialog";
+import { emptyAssetStart, type BuildCreateStart } from "../build-area/build-create-dialog";
 import { useTranslation } from "../../shared/i18n";
 import { RouteLink } from "../route-link";
 import type { WorkspaceRoute } from "../../shared/workspace-route";
@@ -42,8 +41,8 @@ export interface AgentsPageProps {
   /** Present for a person who may open the agents in Studio: the way to a place there. */
   onOpenStudio?(route: WorkspaceRoute): void;
   /**
-   * Present for a person who may create an agent. Its dialog opens on this page, and only
-   * Continue leads to Studio, where the new agent is written.
+   * Present for a person who may create an agent: "New agent" opens the empty page of a new
+   * agent in Studio, where it is written. Its first save creates it.
    */
   newAgent?: AgentCreation & {
     /** Where the new agent starts available: the open workspace, as one made in Studio does. */
@@ -67,7 +66,6 @@ export function AgentsPage({
 }: AgentsPageProps) {
   const { t } = useTranslation();
   const areaRef = useAreaTitleFocus(true);
-  const [creating, setCreating] = useState(false);
 
   return (
     <AreaFrame ref={areaRef} label={t("agents.title")}>
@@ -77,7 +75,7 @@ export function AgentsPage({
           description={t("agents.description")}
           primaryAction={
             newAgent ? (
-              <Button onClick={() => setCreating(true)}>
+              <Button onClick={() => newAgent.onStart(emptyAssetStart(newAgent.startsIn))}>
                 <Plus aria-hidden="true" />
                 {t("configNewAgent")}
               </Button>
@@ -126,18 +124,6 @@ export function AgentsPage({
           </ul>
         )}
       </Page>
-      {newAgent && creating ? (
-        <BuildCreateDialog
-          entry={agentKind}
-          startsIn={newAgent.startsIn}
-          checkName={newAgent.checkName}
-          onClose={() => setCreating(false)}
-          onStart={(start) => {
-            setCreating(false);
-            newAgent.onStart(start);
-          }}
-        />
-      ) : null}
     </AreaFrame>
   );
 }

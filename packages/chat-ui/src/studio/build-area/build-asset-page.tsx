@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Copy, History, Lock, SearchX, Send, Trash2 } from "lucide-react";
-import { useCallback, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Badge,
   Banner,
@@ -16,6 +16,7 @@ import {
   PageHeader,
   SkeletonPage
 } from "@work-shape/catalyst-ui";
+import { ASSET_ADDRESS_MAX_LENGTH, assetAddressFromName } from "@work-shape/catalyst-core";
 import type {
   AssetContent,
   AssetFileEntry,
@@ -23,7 +24,9 @@ import type {
 } from "../../shared/api/asset-writes";
 import { opensHere } from "../apps/app-header";
 import { CopyIdItem } from "../copy-id-item";
+import { useOfferDockPageChat } from "../../shared/dock-page-chat";
 import { useTranslation, type TranslationKey } from "../../shared/i18n";
+import type { LocaleCode } from "@work-shape/catalyst-api-client";
 import { usePageShown } from "./asset-editor-shell";
 import type {
   BuildAsset,
@@ -34,8 +37,10 @@ import type {
   BuildPageSlot
 } from "./build-asset-kind";
 import type { BuildAssetRead, BuildAssetReload, BuildSource } from "./build-data";
+import { NewAssetAvailability, type BuildCreateStart } from "./build-create-dialog";
 import { BuildHistory } from "./build-history";
 import { assetConfigTitle, type VisibleBuildKind } from "./build-model";
+import { SKILL_ROOT_FILE_NAME } from "./skill-form-model";
 import { formatDateTime } from "../../shared/locale-format";
 import { useBuildEditWithAgent } from "./build-edit-with-agent";
 import {
@@ -46,6 +51,9 @@ import {
 import { readBuildRefusal, type BuildWriteOutcome } from "./build-refusals";
 import { AGENT_ASSET_KIND, buildWorkspaceName, type BuildRights } from "../../shared/build-rights";
 
+/** How long a page opened empty waits after the reader typed before it asks about the id. */
+const NEW_NAME_CHECK_DELAY_MS = 300;
+
 interface AssetPageProps {
   source: BuildSource;
   page: BuildPageSlot;
@@ -53,36 +61,97 @@ interface AssetPageProps {
   onUnsavedChange(unsaved: boolean): void;
 }
 
-/** The page of a new asset. It has no address until it is saved. */
+/**
+ * The page of a new asset. It has no address until it is saved. Opened by "New", it starts
+ * empty: its first save makes the id from the name. The page head's "Chat" opens the agent that
+ * builds, whose first save creates the asset and opens its page.
+ */
 export function NewAssetPage({
   entry,
-  start,
+  start: started,
+  startsIn,
   onCreated,
   ...page
 }: AssetPageProps & {
   entry: BuildAssetKind;
   start: BuildAssetStart;
+  /** Where a new asset of a kind that starts in its workspace becomes available. */
+  startsIn?: BuildCreateStart;
   onCreated(name: string): void;
 }) {
   const { source } = page;
+  const { t } = useTranslation();
+  // A page opened empty asks where the asset becomes available, as the create dialog asks.
+  const asksAvailability = started.name === "" && startsIn !== undefined;
+  const [everywhere, setEverywhere] = useState(false);
+  const start: BuildAssetStart = everywhere
+    ? { name: started.name, title: started.title, availableIn: "all" }
+    : started;
   const scope = source.scopeOf?.(entry.kind);
   const Editor = entry.Editor;
   const create = useCreate({ entry, start, source, onCreated });
+  useNewAssetChat(source.buildWithAgent);
   // Whether the reader's create waits for an approval, asked as the create dialog asks of the
-  // name: the save bar says so before the create, as it does on an existing asset's page.
+  // name: the save bar says so before the create, as it does on an existing asset's page. A
+  // page opened empty asks about the id the typed name makes, once the reader paused.
   const owner = scope?.kind === "workspace" ? scope.workspaceId : "";
+  const [typedTitle, setTypedTitle] = useState("");
+  const [typedName, setTypedName] = useState("");
+  useEffect(() => {
+    if (start.name) return;
+    const timer = window.setTimeout(
+      () => setTypedName(assetAddressFromName(typedTitle, entry.kind)),
+      NEW_NAME_CHECK_DELAY_MS
+    );
+    return () => window.clearTimeout(timer);
+  }, [start.name, typedTitle, entry.kind]);
+  const checkedName = start.name || typedName;
   const check = useQuery({
-    queryKey: ["asset-create-approval", entry.kind, owner, start.name],
-    queryFn: () => source.checkName(entry.kind, start.name),
+    queryKey: ["asset-create-approval", entry.kind, owner, checkedName],
+    queryFn: () => source.checkName(entry.kind, checkedName),
+    enabled: checkedName !== "",
     gcTime: 0,
     staleTime: Infinity,
     refetchOnWindowFocus: false,
     retry: false
   });
   const createApproval = check.data?.available ? check.data.saveApproval : undefined;
+  // On a page opened empty, an id the typed name makes that is taken or does not work is said
+  // while typing, as the create dialog said it at the address.
+  const nameRefused =
+    !start.name && check.data !== undefined && !check.data.available
+      ? check.data.reason === "name_taken"
+        ? t("build.nameTakenNew", { name: checkedName })
+        : t("build.addressInvalid", { max: ASSET_ADDRESS_MAX_LENGTH })
+      : undefined;
   return (
     <Editor
-      page={page.page}
+      page={
+        asksAvailability || nameRefused !== undefined
+          ? {
+              ...page.page,
+              above: (
+                <>
+                  {page.page.above}
+                  {nameRefused === undefined ? null : (
+                    <InlineError className="mb-4" data-new-asset-name-refused="">
+                      {nameRefused}
+                    </InlineError>
+                  )}
+                  {asksAvailability ? (
+                    <div className="mb-4 max-w-md" data-new-asset-availability="">
+                      <NewAssetAvailability
+                        startsIn={startsIn}
+                        everywhere={everywhere}
+                        onChange={setEverywhere}
+                      />
+                    </div>
+                  ) : null}
+                </>
+              )
+            }
+          : page.page
+      }
       back={page.back}
       actions={{}}
       notice={null}
@@ -93,6 +162,7 @@ export function NewAssetPage({
       instanceWrite={source.rights.instanceWrite}
       {...(scope?.kind === "workspace" ? { owner: scope.workspaceId } : {})}
       onUnsavedChange={page.onUnsavedChange}
+      {...(start.name ? {} : { onNewTitle: setTypedTitle })}
       save={(config, write) =>
         create(
           { config },
@@ -102,6 +172,41 @@ export function NewAssetPage({
       folder={{ read: async () => [], save: (files) => create({ files }) }}
     />
   );
+}
+
+/**
+ * The page head's "Chat" on a new asset's page: the agent that builds, in an empty conversation
+ * in the dock. Asked again, "Chat" brings back the dock's last conversation rather than another
+ * empty one; the dock's "New chat" starts another.
+ */
+function useNewAssetChat(build: ((prompt: string) => void) | undefined): void {
+  const started = useRef(false);
+  useOfferDockPageChat(
+    build === undefined
+      ? undefined
+      : ({ fresh }) => {
+          if (started.current && !fresh) return Promise.resolve(false);
+          started.current = true;
+          build("");
+          return Promise.resolve(true);
+        }
+  );
+}
+
+/**
+ * The id of a new asset saved from a page opened empty: the one its definition names, else one
+ * made from its name. Nothing where it has neither.
+ */
+function createdName(kind: string, content: AssetContent, locale: LocaleCode): string {
+  if ("files" in content) {
+    const manifest = content.files.find((file) => file.path === SKILL_ROOT_FILE_NAME);
+    const text = manifest !== undefined && "text" in manifest ? manifest.text : "";
+    return /^name:\s*["']?([a-z0-9-]+)/mu.exec(text)?.[1] ?? "";
+  }
+  const named = content.config.name;
+  if (typeof named === "string" && named.trim()) return named.trim();
+  const title = assetConfigTitle({ name: "", config: content.config }, locale);
+  return assetAddressFromName(title, kind);
 }
 
 /** Creates a new asset from its config or its folder, and opens its page. */
@@ -117,20 +222,27 @@ function useCreate({
   onCreated(name: string): void;
 }): (content: AssetContent, dependencyConsent?: DependencyConsent) => Promise<BuildWriteOutcome> {
   const { locale, t } = useTranslation();
-  return async (content, dependencyConsent) => {
+  return async (written, dependencyConsent) => {
+    // A page opened empty makes the id from the name the reader gave.
+    const name = start.name || createdName(entry.kind, written, locale);
+    if (name === "") {
+      return { ok: false, conflict: false, refusals: [{ message: t("build.nameMissing") }] };
+    }
+    const content: AssetContent =
+      "config" in written ? { config: { ...written.config, name } } : written;
     const create = (expectedRevision: number | null) =>
       source.writes.put({
         kind: entry.kind,
-        name: start.name,
+        name,
         ...content,
         expectedRevision,
         ...(start.availableIn ? { availableIn: start.availableIn } : {}),
         ...(dependencyConsent ? { dependencyConsent } : {})
       });
     try {
-      let written: { revision: number };
+      let stored: { revision: number };
       try {
-        written = await create(null);
+        stored = await create(null);
       } catch (error) {
         // The id is held by a deleted asset. The reader chose the id for a new asset and
         // holds no older text of it, so the asset is created again after that delete, which
@@ -139,7 +251,7 @@ function useCreate({
         if (met.ok || !met.conflict || !met.deleted || met.currentRevision === undefined) {
           throw error;
         }
-        written = await create(met.currentRevision);
+        stored = await create(met.currentRevision);
       }
       // A kind that goes live on create is published now, where the reader may. A publish that
       // fails or waits leaves the draft, which its page offers to publish.
@@ -153,11 +265,11 @@ function useCreate({
         })
       ) {
         await source.writes
-          .publish({ kind: entry.kind, name: start.name, revision: written.revision })
+          .publish({ kind: entry.kind, name, revision: stored.revision })
           .catch(() => undefined);
       }
-      onCreated(start.name);
-      return { ok: true, revision: written.revision };
+      onCreated(name);
+      return { ok: true, revision: stored.revision };
     } catch (error) {
       const outcome = readBuildRefusal(error, t, locale);
       // A create that meets a conflict found the id taken, or held by a deleted asset
@@ -168,9 +280,14 @@ function useCreate({
             conflict: false,
             refusals: [
               {
-                message: t(outcome.deleted ? "build.nameDeleted" : "build.nameTaken", {
-                  name: start.name
-                })
+                message: t(
+                  outcome.deleted
+                    ? "build.nameDeleted"
+                    : start.name
+                      ? "build.nameTaken"
+                      : "build.nameTakenNew",
+                  { name }
+                )
               }
             ]
           }
@@ -277,7 +394,6 @@ export function ViewedAssetPage({
   name,
   kinds,
   canDelete,
-  editsWithAgent,
   onDeleted
 }: Pick<AssetPageProps, "source" | "page" | "back"> & {
   kind: string;
@@ -286,8 +402,6 @@ export function ViewedAssetPage({
   kinds: readonly BuildKind[];
   /** The instance lets the kind's assets be deleted here. */
   canDelete: boolean;
-  /** The page offers "Edit with the agent" (`BuildKindBase.editsWithAgent`). */
-  editsWithAgent: boolean;
   /** The asset was deleted: the frame leaves its page. */
   onDeleted(): void;
 }) {
@@ -298,12 +412,8 @@ export function ViewedAssetPage({
   const asset = read.status === "ready" ? read.asset : undefined;
   const agentPlace = asset === undefined ? undefined : agentWorkspaceOf(source.rights, asset);
   const agent = useBuildEditWithAgent(
-    asset &&
-      agentPlace &&
-      editsWithAgent &&
-      editWithAgent &&
-      mayOnAsset(source.rights, "write", asset)
-      ? () => editWithAgent({ kind, name }, agentPlace.workspaceId)
+    asset && agentPlace && editWithAgent && mayOnAsset(source.rights, "write", asset)
+      ? (options) => editWithAgent({ kind, name }, agentPlace.workspaceId, options)
       : undefined
   );
   if (read.status === "ready") {
@@ -353,7 +463,6 @@ export function ViewedAssetPage({
           kinds={kinds}
           {...(publish === undefined ? {} : { publish })}
           {...(remove === undefined ? {} : { remove })}
-          {...(agent.action === undefined ? {} : { agentAction: agent.action })}
         />
         {agent.dialog}
       </>
@@ -493,8 +602,9 @@ function LoadedAssetPage({
   const { editWithAgent } = source;
   const agentPlace = agentWorkspaceOf(source.rights, stored);
   const agent = useBuildEditWithAgent(
-    entry.editsWithAgent && editWithAgent && agentPlace && canWrite
-      ? () => editWithAgent({ kind: entry.kind, name: stored.name }, agentPlace.workspaceId)
+    editWithAgent && agentPlace && canWrite
+      ? (options) =>
+          editWithAgent({ kind: entry.kind, name: stored.name }, agentPlace.workspaceId, options)
       : undefined
   );
   const Editor = entry.Editor;
@@ -652,7 +762,6 @@ function LoadedAssetPage({
         actions={{
           primaryAction: canPublish ? (
             <span className="flex items-center gap-2">
-              {agent.action}
               <Button
                 data-build-publish=""
                 disabled={unsaved}
@@ -666,8 +775,6 @@ function LoadedAssetPage({
                 {t("build.publish")}
               </Button>
             </span>
-          ) : agent.action !== undefined ? (
-            agent.action
           ) : shipped && state.canCreate ? (
             // A shipped asset is changed in a copy, the step its notice names: it stays in the
             // head where the other actions fold.
@@ -854,7 +961,7 @@ function LoadedAssetPage({
 }
 
 /**
- * Where "Edit with the agent" starts its conversation: in the workspace that owns the asset, as
+ * Where the page's chat starts its conversation: in the workspace that owns the asset, as
  * the agent reads a workspace's asset from that workspace's conversations alone, and in the open
  * workspace for an asset of the instance (`workspaceId` undefined). Undefined where the reader is
  * no member of the owner, so may start no conversation there, and the entry is absent.

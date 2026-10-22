@@ -217,15 +217,26 @@ async function type(field: HTMLInputElement | HTMLTextAreaElement, value: string
   });
 }
 
+/** The text field a label names on the page. */
+function fieldLabelled(text: string): HTMLInputElement | undefined {
+  const label = [...document.querySelectorAll("label")].find((found) =>
+    found.textContent?.startsWith(text)
+  );
+  const id = label?.getAttribute("for");
+  const field = id ? document.getElementById(id) : label?.querySelector("input");
+  return field instanceof HTMLInputElement ? field : undefined;
+}
+
 const openDialog = () => document.querySelector<HTMLDialogElement>("dialog[open]");
 const missingBanner = () => document.querySelector("[data-missing-dependencies]");
 
-/** New agent, named "Helper", Continue, its system prompt, then the page's Create agent. */
+/** New agent opens its empty page: named "Helper", its system prompt, then Create agent. */
 async function startAndCreate() {
   await click(button("New agent"));
-  const dialog = await vi.waitFor(() => required(openDialog()), { timeout: CONDITION_WAIT_MS });
-  await type(required(dialog.querySelector<HTMLInputElement>("input")), "Helper");
-  await click(button("Continue", dialog));
+  const name = await vi.waitFor(() => required(fieldLabelled("Display name")), {
+    timeout: CONDITION_WAIT_MS
+  });
+  await type(name, "Helper");
   const prompt = await vi.waitFor(
     () =>
       required(

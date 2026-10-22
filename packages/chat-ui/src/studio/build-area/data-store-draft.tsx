@@ -22,8 +22,7 @@ export function DataStoreDraftPage({
   title,
   description,
   publish,
-  remove,
-  agentAction
+  remove
 }: BuildAssetViewProps & { title: string; description: string | undefined }) {
   const { t } = useTranslation();
   const migrations = migrationsOf(asset.config);
@@ -51,7 +50,6 @@ export function DataStoreDraftPage({
               {t("dataStores.draftUnpublished")}
             </Badge>
           }
-          primaryAction={agentAction}
           menu={head.menu}
         />
       }

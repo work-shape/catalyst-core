@@ -113,7 +113,10 @@ function StandaloneChatRouteBridge({ options }: { options: StandaloneChatRouterO
   // A page with unsaved changes is asked before any navigation, the browser's Back included.
   const guarded = useSyncExternalStore(subscribeLeaveGuard, hasLeaveGuard, () => false);
   useBlocker({
-    shouldBlockFn: async () => !(await mayLeave()),
+    // Opening, closing or switching the dock changes only the search: the page stays, and so
+    // does what is typed on it. Only a move to another page asks.
+    shouldBlockFn: async ({ current, next }) =>
+      current.pathname !== next.pathname && !(await mayLeave()),
     enableBeforeUnload: false,
     disabled: !guarded
   });

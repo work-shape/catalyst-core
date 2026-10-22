@@ -7,7 +7,7 @@ import { assetRevision, requestWithOrigin } from "./request-with-origin";
 import { shootLocales, shootThemes } from "./surface-shots";
 import { expect, test, type PageErrorWatch } from "./test";
 
-// The page of a Workflow for the person who builds it: "Edit with the agent" opens a
+// The page of a Workflow for the person who builds it: the page head's "Chat" opens a
 // conversation about that Workflow, and a bar says when the draft is not what is published,
 // with the publish and the discard. A member who only reads the Workflow is offered neither.
 // The Workflow is one of this spec's own. Fails without the page half of "the agent edits a
@@ -26,7 +26,7 @@ const member = {
 };
 const WIDE = { width: 1440, height: 900 };
 const NAME = "Draft walk";
-const EDIT = "Edit with the agent";
+const chatAction = (page: Page) => page.getByTestId("dock-page-action");
 
 const idSchema = z.object({ id: z.string() });
 const workspaceListSchema = z.object({
@@ -161,7 +161,7 @@ test("the builder of a Workflow edits it with the agent and publishes or discard
     await expect(bar).toContainText("Draft · not published");
     await expect(bar).not.toContainText("Draft differs from published");
     await expect(bar.getByRole("button", { name: "Discard", exact: true })).toHaveCount(0);
-    await expect(workflowPage.getByRole("button", { name: EDIT, exact: true })).toBeVisible();
+    await expect(chatAction(page)).toBeVisible();
     await shootLocales(page, "nav-2-workflow-draft-page", async () => {
       await expect(bar).toHaveAttribute("data-workflow-draft", "unpublished");
     });
@@ -197,9 +197,9 @@ test("the builder of a Workflow edits it with the agent and publishes or discard
     );
     expect(granted.ok(), await granted.text()).toBe(true);
 
-    // "Edit with the agent" makes a conversation about this Workflow and opens it in the dock
+    // The page head's "Chat" makes a conversation about this Workflow and opens it in the dock
     // of the Workflow's page.
-    await workflowPage.getByRole("button", { name: EDIT, exact: true }).click();
+    await chatAction(page).click();
     await expect(page).toHaveURL(
       (url) => url.pathname === workflowPath && url.searchParams.has("chat")
     );
@@ -264,7 +264,6 @@ test("the builder of a Workflow edits it with the agent and publishes or discard
     const memberWorkflow = memberPage.getByTestId("workflow-page");
     await expect(memberWorkflow.getByRole("heading", { level: 1 })).toHaveText(NAME);
     await expect(memberWorkflow.getByTestId("workflow-canvas")).toBeVisible();
-    await expect(memberWorkflow.getByRole("button", { name: EDIT, exact: true })).toHaveCount(0);
     await expect(memberWorkflow.locator("[data-workflow-draft]")).toHaveCount(0);
     // The member is shown what is published, not the draft.
     await expect(memberWorkflow).toContainText("The first draft.");
@@ -286,9 +285,7 @@ test("the builder of a Workflow edits it with the agent and publishes or discard
     });
     await page.evaluate(() => window.localStorage.setItem("vivd-catalyst:locale", "de"));
     await page.reload();
-    await expect(
-      workflowPage.getByRole("button", { name: "Mit dem Agenten bearbeiten", exact: true })
-    ).toBeVisible();
+    await expect(chatAction(page)).toHaveText(/^Chat/u);
     await expect(bar).toContainText("Entwurf weicht von der veröffentlichten Version ab");
     await page.evaluate(() => window.localStorage.setItem("vivd-catalyst:locale", "en"));
 
@@ -336,10 +333,21 @@ test("the builder of a Workflow edits it with the agent and publishes or discard
     // Started from the Workflow's page, the conversation is about it: the agent's open leaves
     // the line that names it, and the person stays on the page.
     await page.goto(personalWorkflow);
-    await workflowPage.getByRole("button", { name: EDIT, exact: true }).click();
+    await chatAction(page).click();
+    // Chat may bring back the conversation about it from before; "New chat" starts another
+    // one about the same Workflow, with nothing said in it yet.
     await expect(page).toHaveURL(
       (url) => url.pathname === personalWorkflow && url.searchParams.has("chat")
     );
+    const chatBefore = new URL(page.url()).searchParams.get("chat");
+    await dockHead.getByRole("button", { name: "New chat", exact: true }).click();
+    await expect(page).toHaveURL(
+      (url) =>
+        url.pathname === personalWorkflow &&
+        url.searchParams.has("chat") &&
+        url.searchParams.get("chat") !== chatBefore
+    );
+    await expect(page.getByText(/^Tool work completed:/u)).toHaveCount(0);
     await sendToolCall(page, "platform.assets.open", { kind: "workflow", name: id });
     await expect(page.getByTestId("asset-opened-line").last()).toHaveText(`Opened ${NAME}`);
     await expect(dockHead).toHaveAttribute("data-subject-kind", "workflow");

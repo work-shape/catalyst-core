@@ -21,11 +21,12 @@ import type { SubjectAsset } from "./subject-run";
 const DEFINITION_TITLED: ReadonlySet<string> = new Set([
   AGENT_ASSET_KIND,
   DATA_STORE_ASSET_KIND,
-  KNOWLEDGE_BASE_ASSET_KIND
+  KNOWLEDGE_BASE_ASSET_KIND,
+  "skill"
 ]);
 
 /**
- * The saved state of an agent, a Data Store or a Knowledge Base, under the key of every asset
+ * The saved state of an agent, a Data Store, a Knowledge Base or a skill, under the key of every asset
  * read: each save of the asset of the conversation drops it, and what shows the asset shows it
  * as it is now. The asset is the instance's or, where its first save made it, the conversation
  * workspace's (WS-OWN-1a): the workspace's list says which, and the read asks there.
@@ -100,8 +101,9 @@ export function useSubjectTitle(
   if (kind === AGENT_ASSET_KIND && asset.data) {
     return agentTitle(agentConfigToForm(asset.data.config), locale, name);
   }
-  // A store's title, or its name until its definition arrived or where it is not read.
-  if ((kind === DATA_STORE_ASSET_KIND || kind === KNOWLEDGE_BASE_ASSET_KIND) && asset.data) {
+  // A store's or a skill's title, or its name until its definition arrived or where it is not
+  // read.
+  if (kind !== undefined && DEFINITION_TITLED.has(kind) && asset.data) {
     return assetConfigTitle(asset.data, locale);
   }
   return name;

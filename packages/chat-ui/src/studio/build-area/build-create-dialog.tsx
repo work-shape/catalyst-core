@@ -26,6 +26,23 @@ export interface BuildCreateStart {
 }
 
 /**
+ * What "New" starts a kind's page with: nothing written yet, available where the reader works.
+ * The page's first save makes the id from the name.
+ */
+export function emptyAssetStart(startsIn: BuildCreateStart | undefined): BuildAssetStart {
+  return {
+    name: "",
+    title: "",
+    ...(startsIn?.workspace
+      ? {
+          availableIn: { workspaceId: startsIn.workspace.id },
+          availableInName: startsIn.workspace.name
+        }
+      : {})
+  };
+}
+
+/**
  * Starts a new asset: its name, and under "Advanced" its address. The address follows the name
  * until the reader changes it, and is checked as it changes; Continue stops at a refused
  * address. A kind that starts in its workspace says where the asset will be available, and
@@ -124,7 +141,11 @@ export function BuildCreateDialog({
             </Field>
           ) : null}
           {startsIn ? (
-            <AvailableIn startsIn={startsIn} everywhere={everywhere} onChange={setEverywhere} />
+            <NewAssetAvailability
+              startsIn={startsIn}
+              everywhere={everywhere}
+              onChange={setEverywhere}
+            />
           ) : null}
         </NameWithAddress>
       </form>
@@ -132,8 +153,11 @@ export function BuildCreateDialog({
   );
 }
 
-/** Where the new asset will be available: a choice for whoever may widen it, a line otherwise. */
-function AvailableIn({
+/**
+ * Where the new asset will be available: a choice for whoever may widen it, a line otherwise.
+ * The create dialog asks it, and the page of a new asset opened empty.
+ */
+export function NewAssetAvailability({
   startsIn,
   everywhere,
   onChange

@@ -74,6 +74,11 @@ export interface BuildAssetEditorProps {
   /** Hears whether the page holds changes that are not saved: the frame asks before it is left. */
   onUnsavedChange(unsaved: boolean): void;
   /**
+   * A new asset's page opened empty hears the name as the reader types it: it asks the instance
+   * about the id it will make, as the create dialog asks. Absent on every other page.
+   */
+  onNewTitle?(title: string): void;
+  /**
    * Saves the definition against the revision the page loaded, or creates the asset. A save of
    * an existing agent names the draft revision the page read, or `null` where it read none: it
    * writes the agent's draft, answers the draft revision it wrote and leaves the live agent and

@@ -1,43 +1,32 @@
-import { Sparkles } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { ApiError } from "@work-shape/catalyst-api-client";
-import { Button, Dialog, type PageHeaderAction } from "@work-shape/catalyst-ui";
+import { Button, Dialog } from "@work-shape/catalyst-ui";
 import { instanceSentence } from "../build-area/build-refusals";
+import { useOfferDockPageChat } from "../../shared/dock-page-chat";
 import { useTranslation } from "../../shared/i18n";
 import type { AppRights } from "./app-model";
 import { useAppsHost } from "./apps-host";
 
 /**
- * "Edit with the agent" in the head of an App, for a reader who may write it by the `rights`
- * on that App (`appRightsOn`), not the workspace's: it makes a conversation about the App and
- * opens it in the dock beside the App's draft, which stays the page. A refusal is said in a
- * dialog, which the page draws outside its head, so the answer stays readable whatever the
- * head shows by the time it comes.
+ * The conversation the page head's "Chat" starts on an App's page, for a reader who may write
+ * it by the `rights` on that App (`appRightsOn`), not the workspace's: a conversation about the
+ * App in the dock beside its draft, which stays the page. Without `app` the page offers none. A
+ * refusal is said in a dialog, which the page draws outside its head, so the answer stays
+ * readable whatever the head shows by the time it comes.
  */
 export function useAppEditWithAgent(
   app: string | undefined,
   rights: Pick<AppRights, "write">
-): {
-  action: PageHeaderAction | undefined;
-  dialog: ReactNode;
-} {
+): { dialog: ReactNode } {
   const { t } = useTranslation();
   const host = useAppsHost();
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const editWithAgent = host?.editWithAgent;
-  if (app === undefined || host === undefined || editWithAgent === undefined || !rights.write) {
-    return { action: undefined, dialog: null };
-  }
-  return {
-    action: {
-      label: t("apps.editWithAgent"),
-      icon: <Sparkles aria-hidden="true" />,
-      loading: busy,
-      onSelect() {
-        setBusy(true);
-        editWithAgent(app)
-          .catch((failure: unknown) => {
+  useOfferDockPageChat(
+    app === undefined || editWithAgent === undefined || !rights.write
+      ? undefined
+      : (options) =>
+          editWithAgent(app, options).catch((failure: unknown) => {
             setError(
               // An App the reader may not read and one that is gone are refused alike.
               failure instanceof ApiError && (failure.status === 403 || failure.status === 404)
@@ -45,9 +34,8 @@ export function useAppEditWithAgent(
                 : (instanceSentence(failure) ?? t("apps.editWithAgentFailed"))
             );
           })
-          .finally(() => setBusy(false));
-      }
-    },
+  );
+  return {
     dialog: (
       <Dialog
         open={error !== undefined}

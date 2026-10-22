@@ -6,6 +6,9 @@ import {
   type StartConversationRunResponse
 } from "@work-shape/catalyst-api-client";
 import { acceptStartedRun, listedOpenThread } from "../dock/dock-try";
+import type { DockCreationScope, DockPageChat } from "../../shared/dock-page-chat";
+import { dockCreationTarget } from "../dock/creation-target";
+import { collaborationWorkspaceDisplayName } from "../../shared/collaboration-workspace/collaboration-workspace-name";
 import {
   createRunIdempotencyKey,
   sendProductConversationMessage
@@ -215,10 +218,12 @@ export function useWorkspaceChatModel({
     apiBaseUrl,
     authScope: WORKSPACE_AUTH_SCOPE,
     client,
+    // Beside a page the dock says where what its agent creates will belong, by the kind's owners.
     enabled:
       isAuthenticated &&
       (appsEnabled ||
-        (collaborationWorkspacesAvailable && instanceModules?.workflows?.enabled === true))
+        (collaborationWorkspacesAvailable &&
+          (docked || instanceModules?.workflows?.enabled === true)))
   });
   // Where the person builds without being a member: an App draft there opens. Known once the
   // instance's configuration said whether Apps are on, and where they are, once it said where.
@@ -490,11 +495,15 @@ export function useWorkspaceChatModel({
       : buildingAgentNameFor(config?.agents ?? [], activeAgentName);
   // The list page a New button opened the dock on, until the dock's first message is sent.
   const newStartedFrom = useRef<string | undefined>(undefined);
+  // Where the page on screen builds, as Studio offers it: the owner it is set to.
+  const [creationScope, offerCreationScope] = useState<DockCreationScope | undefined>();
+  const buildWorkspace = creationScope?.owner === "workspace" ? creationScope : undefined;
 
   /**
-   * "New" on a list (NAV-2): the dock opens on the page with a new conversation with an agent
-   * that builds assets and this text in its composer. Nothing is created: the agent's first save
-   * creates the asset and takes the person to its page.
+   * Building with the agent: the dock opens on the page with a new conversation with an agent
+   * that builds assets and this text in its composer, from a kind's brief, the empty list's offer
+   * or "Chat" on a new asset's page. Nothing is created: the agent's first save creates the asset
+   * and takes the person to its page.
    */
   function startBuilding(prompt: string) {
     if (buildingAgentName === undefined) {
@@ -502,9 +511,15 @@ export function useWorkspaceChatModel({
     }
     setSelectedAgentName(buildingAgentName);
     const startedFrom = workspaceRoutePath(route);
-    if (!ownConversations) {
+    // Studio set to another workspace than the open one builds there: the conversation is made
+    // in it, private, so what its first save creates belongs to that workspace.
+    const elsewhere =
+      buildWorkspace !== undefined && buildWorkspace.workspaceId !== activeCollaborationWorkspaceId
+        ? buildWorkspace.workspaceId
+        : undefined;
+    if (!ownConversations || elsewhere !== undefined) {
       // The members would read a new conversation here: the build starts in a private one.
-      startPrivateConversationWith(prompt, true)
+      startPrivateConversationWith(prompt, true, elsewhere)
         .then((conversationId) => agentOpens.startedFrom(conversationId, startedFrom))
         .catch(() =>
           setNotice(createTranslationContext(activeLocale).t("conversationPrivateStartFailed"))
@@ -524,8 +539,74 @@ export function useWorkspaceChatModel({
   const editWithAgent = editWithBuildingAgent(
     buildingAgentName,
     setSelectedAgentName,
-    (subject, workspaceId) => startConversationAbout(subject, undefined, workspaceId)
+    (subject, workspaceId, options) =>
+      startConversationAbout(subject, undefined, workspaceId, options)
   );
+  // The kind a new conversation in the dock builds, and where what it creates will belong: the
+  // workspace Studio is set to, else the open one.
+  const dockKind = docked ? dockKindOfRoute(route) : undefined;
+  const dockTarget =
+    dockKind === undefined || (openWorkspace === undefined && buildWorkspace === undefined)
+      ? undefined
+      : dockCreationTarget({
+          owners: platformContextQuery.data?.kinds.find((kind) => kind.kind === dockKind)?.owners,
+          workspaceName:
+            buildWorkspace?.workspaceName ??
+            (openWorkspace === undefined
+              ? undefined
+              : collaborationWorkspaceDisplayName(
+                  openWorkspace,
+                  meQuery.data?.displayLabel || meQuery.data?.email || undefined,
+                  createTranslationContext(activeLocale).t
+                ))
+        });
+  // What the page on screen offers the chat: a conversation about its asset, or one that builds
+  // a new one. The page head's "Chat" and the dock's "New chat" ask it first.
+  const [pageChat, offerPageChat] = useState<DockPageChat | undefined>();
+  /** An empty dock with the agent that builds, where one is offered, else the chosen agent. */
+  function openFreshDock() {
+    if (buildingAgentName !== undefined) {
+      startBuilding("");
+      return;
+    }
+    dock.show(undefined);
+    setNotice(undefined);
+    chrome.requestComposerFocus();
+  }
+  /**
+   * The page head's "Chat": a conversation whose answer still runs comes back first; then the
+   * page's own conversation, about its asset; then the dock's last one; else an empty dock.
+   */
+  function openChat() {
+    if (dock.open) return;
+    if (dock.conversationId !== undefined && selectedConversationRunning) {
+      dock.reopen();
+    } else if (pageChat !== undefined) {
+      pageChat
+        .start({ fresh: false })
+        .then((started) => {
+          if (started === false) openLastDock();
+        })
+        .catch(() => undefined);
+    } else {
+      openLastDock();
+    }
+  }
+  function openLastDock() {
+    if (dock.last !== undefined) {
+      dock.reopen();
+    } else {
+      openFreshDock();
+    }
+  }
+  /** The dock's "New chat": a new conversation for the page, never the one it holds. */
+  function newChat() {
+    if (pageChat !== undefined) {
+      pageChat.start({ fresh: true }).catch(() => undefined);
+    } else {
+      openFreshDock();
+    }
+  }
   const displayPanelOpen = Boolean(displayPanel.entry && displayPanel.open);
 
   // The shell forgets everything else of the person, as it starts a new session.
@@ -833,6 +914,12 @@ export function useWorkspaceChatModel({
   }
 
   return {
+    dockChat: {
+      open: openChat,
+      newChat,
+      offerPageChat,
+      offerCreationScope
+    },
     auth: {
       apiBaseUrl,
       user: meQuery.data,
@@ -964,16 +1051,21 @@ export function useWorkspaceChatModel({
       enabled: appsEnabled,
       rights: appRights,
       startChat: startNewConversationWith,
-      editWithAgent: (app) =>
-        startConversationAbout({ kind: APP_ASSET_KIND, name: app }, undefined),
+      editWithAgent: (app, options) =>
+        startConversationAbout({ kind: APP_ASSET_KIND, name: app }, undefined, undefined, options),
       ...(buildWithAgent !== undefined && appRights.write ? { startNew: buildWithAgent } : {})
     },
     workflows: {
       access: workflowsOpen,
       rights: workflowRights,
       ...(instanceTimeZone === undefined ? {} : { instanceTimeZone }),
-      editWithAgent: (workflow, prompt) =>
-        startConversationAbout({ kind: WORKFLOW_ASSET_KIND, name: workflow }, prompt),
+      editWithAgent: (workflow, prompt, options) =>
+        startConversationAbout(
+          { kind: WORKFLOW_ASSET_KIND, name: workflow },
+          prompt,
+          undefined,
+          options
+        ),
       // A new Workflow is made among the instance's own, the one owner the instance takes.
       ...(buildWithAgent !== undefined && workflowRights.instance.write
         ? { startNew: buildWithAgent }
@@ -1002,7 +1094,8 @@ export function useWorkspaceChatModel({
         !docked && selectedConversationId !== undefined && isConversationGone(threadQuery.error),
       startNewConversation,
       docked,
-      dockKind: docked ? dockKindOfRoute(route) : undefined,
+      dockKind,
+      dockTarget,
       agentOpens,
       // A page the conversation links to opens with the conversation in the dock beside it.
       openRoute: (target) =>

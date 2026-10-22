@@ -189,19 +189,21 @@ export interface BuildSource {
   chooseScope?(scope: BuildScope): void;
   /**
    * Opens the dock with a new conversation with an agent that builds assets, `prompt` in its
-   * composer: "New" of a kind it creates goes there instead of its dialog. Its first save makes
-   * the asset owned by the conversation's workspace, the open one: absent where no such agent is
-   * offered, and where the scope is another owner, whose New keeps its dialog (WS-OWN-1a).
+   * composer: the brief of a kind without a hand editor, the empty list's offer, and "Chat" on
+   * a new asset's page go there. Its first save makes the asset (WS-OWN-1a). Absent where no
+   * such agent is offered.
    */
   buildWithAgent?(prompt: string): void;
   /**
    * Opens the dock beside the asset's page with a conversation about it, with the agent that
-   * builds assets, in `workspaceId` (see the settings page's context). Absent where no such
+   * builds assets, in `workspaceId` (see the settings page's context): the page head's "Chat".
+   * `fresh` starts a new one where the dock's is already about the asset. Absent where no such
    * agent is offered.
    */
   editWithAgent?(
     subject: { kind: string; name: string },
-    workspaceId: string | undefined
+    workspaceId: string | undefined,
+    options?: { fresh: boolean }
   ): Promise<void>;
 }
 
@@ -340,11 +342,7 @@ export function useBuildSource(): BuildSource {
       setSkillsOpenedOn(undefined);
       storeLastBuildScope(buildScopeValue(next));
     },
-    ...(buildWithAgent !== undefined &&
-    scope.kind === "workspace" &&
-    scope.workspaceId === activeWorkspace?.id
-      ? { buildWithAgent }
-      : {}),
+    ...(buildWithAgent === undefined ? {} : { buildWithAgent }),
     ...(editWithAgent === undefined ? {} : { editWithAgent }),
     useList(kind, filter) {
       const text = filter.text.trim();

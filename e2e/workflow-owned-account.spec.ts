@@ -11,6 +11,7 @@ import {
 } from "./connection-fixtures";
 import { sendToolCall } from "./page-surface-fixtures";
 import { assetRevision, requestWithOrigin } from "./request-with-origin";
+import { newWithAgent } from "./new-with-agent";
 import { expect, test } from "./test";
 
 // LIVE-1: a Workflow the agent writes in a conversation names no `runAs`. Its first publish
@@ -115,7 +116,7 @@ test("a Workflow written in chat without runAs publishes with its own account an
 
     // The agent's first save, from a new conversation, creates the draft with no `runAs`.
     await page.goto(`/w/${personalId}/workflows`);
-    await page.getByRole("button", { name: NEW_WORKFLOW }).first().click();
+    await newWithAgent(page, NEW_WORKFLOW);
     await sendToolCall(page, "platform.assets.put", {
       kind: "workflow",
       name: id,

@@ -3223,13 +3223,12 @@ test("Studio opens on a list, and a list and an asset each have an address", asy
     .click();
   await expect(page).toHaveURL(/\/build\/skills$/u);
   await expect(page.getByRole("heading", { name: "Skills", level: 1 })).toBeVisible();
+  // New opens the empty page of a new skill, with no dialog in front; unchanged, it is left
+  // without a question.
   await page.getByRole("button", { name: "New skill", exact: true }).first().click();
-  const newSkill = page.getByRole("dialog", { name: "New skill", exact: true });
-  await newSkill.getByRole("textbox", { name: /^Title/u }).fill("Workflow review");
-  await newSkill.getByRole("button", { name: "Advanced", exact: true }).click();
-  await expect(newSkill.getByRole("textbox", { name: /^Address/u })).toHaveValue("workflow-review");
-  await newSkill.getByRole("button", { name: "Cancel", exact: true }).click();
-  await expect(newSkill).toBeHidden();
+  await expect(page.getByRole("heading", { name: "New skill", level: 1 })).toBeVisible();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page.getByRole("button", { name: "Back to Skills", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Skills", level: 1 })).toBeVisible();
 
   // Studio without a kind, and the old Config address, open the first useful section.
@@ -3494,15 +3493,8 @@ test("superadmin manages config assets with validation and conflict protection",
     await openList("Skills");
     // An empty list offers the one button twice: in its head and with its sentence.
     await page.getByRole("button", { name: "New skill", exact: true }).first().click();
-    // The dialog takes the name and makes the address from it, under "Advanced".
-    const newSkill = page.getByRole("dialog", { name: "New skill", exact: true });
-    await newSkill.getByRole("textbox", { name: /^Title/u }).fill("Config E2E skill");
-    await newSkill.getByRole("button", { name: "Advanced", exact: true }).click();
-    await expect(newSkill.getByRole("textbox", { name: /^Address/u })).toHaveValue(
-      "config-e2e-skill"
-    );
-    await newSkill.getByRole("button", { name: "Continue", exact: true }).click();
-    await expect(fieldControl("Title")).toHaveValue("Config E2E skill");
+    // The page of the new skill takes the name; its first save makes the address from it.
+    await fieldControl("Title").fill("Config E2E skill");
     await fieldControl("Description").fill("Verifies config asset editing");
     await fieldControl("Content").fill("# Verify config assets");
     await form().getByRole("button", { name: "Create skill", exact: true }).click();

@@ -30,6 +30,7 @@ import { findRunActivity, shouldShowRunActivity } from "./thread-activity";
 import { ToolSubjectsProvider } from "./tool-subjects";
 import { messageFeedbackSetup } from "../feedback/message-feedback";
 import { startGreeting, startStarters, type ConversationStart } from "../dock/subject-starters";
+import { creationTargetLine } from "../dock/creation-target";
 
 /** How long the composer takes to settle at the bottom after the first message. */
 const COMPOSER_SETTLE_MS = 220;
@@ -468,6 +469,11 @@ export function ThreadWelcomeHeading({
 }) {
   const { t } = useTranslation();
   const greeting = start === undefined ? undefined : startGreeting(start);
+  // Where a new asset will belong, said once under the greeting of a dock that builds one.
+  const targetLine =
+    start?.about === "new" && start.target !== undefined
+      ? creationTargetLine(start.kind, start.target, t)
+      : undefined;
   return (
     <div className="flex flex-[2] basis-0 flex-col items-center justify-end gap-3 pb-4 text-center">
       {showAgent && agents.length > 0 ? (
@@ -487,6 +493,11 @@ export function ThreadWelcomeHeading({
             ? (agent?.welcomeMessage ?? fallbackWelcomeMessage ?? t("genericWelcome"))
             : t(greeting.key, greeting.values)}
         </h2>
+        {targetLine === undefined ? null : (
+          <p className="text-sm leading-6 text-muted-foreground" data-dock-creation-target="">
+            {targetLine}
+          </p>
+        )}
         {greeting === undefined && agent?.welcomeSubtitle ? (
           <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
             {agent.welcomeSubtitle}

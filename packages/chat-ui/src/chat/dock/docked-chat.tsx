@@ -74,6 +74,7 @@ export function DockedChat({
   agent,
   agentTry,
   onOpenFullChat,
+  onNewChat,
   children
 }: {
   view: ChatDockView & { mode: ChatColumnMode };
@@ -86,6 +87,8 @@ export function DockedChat({
   agentTry?: AgentTryView;
   /** Absent while the dock holds no conversation. */
   onOpenFullChat?: () => void;
+  /** The dock's "New chat": a new conversation for the page. */
+  onNewChat?: () => void;
   children: ReactNode;
 }) {
   const { t } = useTranslation();
@@ -140,6 +143,7 @@ export function DockedChat({
             over={layout.over}
             onShowPage={dock.showPage}
             onOpenFullChat={onOpenFullChat}
+            onNewChat={onNewChat}
             onClose={dock.close}
           />
         )
@@ -169,28 +173,39 @@ function tryRunsText(runs: TryRuns, t: ReturnType<typeof useTranslation>["t"]): 
 }
 
 /**
- * The page beside the dock. Its head brings back a closed dock, or the dock that lies behind
- * the page in a narrow window.
+ * The page beside the dock. Its head opens the dock, or brings in front the dock that lies
+ * behind the page in a narrow window.
  */
 export function DockedPage({
   view,
   dock,
   running,
+  shortcut,
+  onChat,
   children
 }: {
   view: ChatDockView;
   dock: WorkspaceDock;
   /** The dock's conversation has an answer running. */
   running: boolean;
+  /** The keys that open the dock, for the tooltip of "Chat". */
+  shortcut?: string;
+  /** Opens the dock: the page head's "Chat", on every page. */
+  onChat(): void;
   children: ReactNode;
 }) {
   const behind = view.mode === "dock" && view.layout.over && !dock.inFront;
-  const action =
-    view.mode === "closed" ? (
-      <DockPageAction kind="reopen" running={running} onClick={dock.reopen} />
-    ) : behind ? (
-      <DockPageAction kind="show" running={running} onClick={dock.showChat} />
-    ) : null;
+  // "Chat" stands first in every page head while the dock is not shown; the open dock has Close.
+  const action = behind ? (
+    <DockPageAction kind="show" running={running} onClick={dock.showChat} />
+  ) : view.mode === "dock" ? null : (
+    <DockPageAction
+      kind="open"
+      running={running}
+      {...(shortcut === undefined ? {} : { shortcut })}
+      onClick={onChat}
+    />
+  );
   return (
     <PageHeaderShellAction action={action}>
       <DockPage

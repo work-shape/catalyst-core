@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { type Page } from "@playwright/test";
 import { z } from "zod";
 import { requestWithOrigin } from "./request-with-origin";
+import { newWithAgent } from "./new-with-agent";
 import { expect, test } from "./test";
 
 // ACCEPT-FIX-11 E3: a workspace whose members read its conversations builds nothing in them.
@@ -69,7 +70,7 @@ test("New workflow in a workspace with shared conversations builds in a private 
   const listPath = `/w/${workspaceId}/workflows`;
 
   await page.goto(listPath);
-  await page.getByRole("button", { name: NEW_WORKFLOW }).first().click();
+  await newWithAgent(page, NEW_WORKFLOW);
   await expect(composerOf(page)).toHaveValue(
     /^(?:Build a new workflow that |Bau einen neuen Workflow, der )$/u
   );

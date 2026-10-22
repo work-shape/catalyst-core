@@ -162,7 +162,6 @@ export function dataStoreKindOn(useSource: () => DataStoreSource): BuildListedKi
       ]
     },
     icon: "datastore",
-    editsWithAgent: true,
     view: { Page: DataStoreAssetPage, missingText: "dataStores.missing" },
     rowText: (asset) => asset.description,
     badges: (asset, t) => (

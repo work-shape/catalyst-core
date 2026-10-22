@@ -27,6 +27,7 @@ import {
 } from "@work-shape/catalyst-core";
 import type { TranslationKey } from "../../shared/i18n";
 import type { WorkspaceRoute } from "../../shared/routes";
+import type { CreationTarget } from "./creation-target";
 
 /** A first request about the asset a conversation is about. Choosing it fills the composer. */
 interface SubjectStarter {
@@ -188,11 +189,21 @@ const NEW_GREETINGS: Readonly<Record<string, TranslationKey>> = {
  */
 export type ConversationStart =
   | { about: "asset"; kind: string; title: string | undefined }
-  | { about: "new"; kind: string }
+  | { about: "new"; kind: string; target?: CreationTarget }
   | { about: "try" };
 
 /** The dock kind of the Try tab, whose empty conversation invites a first message. */
 export const TRY_DOCK_KIND = "try";
+
+/** The asset kinds of Studio's pages, by their segment in the address: `/build/<path>`. */
+const BUILD_PATH_KINDS: Readonly<Record<string, string>> = {
+  agents: "agent",
+  skills: "skill",
+  guardrails: "guardrail",
+  connections: "connection",
+  "data-stores": DATA_STORE_ASSET_KIND,
+  "knowledge-bases": KNOWLEDGE_BASE_ASSET_KIND
+};
 
 /** The kind of asset a page is about, where the dock beside it builds or changes one. */
 export function dockKindOfRoute(route: WorkspaceRoute): string | undefined {
@@ -211,7 +222,7 @@ export function dockKindOfRoute(route: WorkspaceRoute): string | undefined {
       return "agent";
     case "build-kind":
     case "build-asset":
-      return route.assetKind;
+      return BUILD_PATH_KINDS[route.assetKind] ?? route.assetKind;
     default:
       return undefined;
   }
@@ -220,13 +231,16 @@ export function dockKindOfRoute(route: WorkspaceRoute): string | undefined {
 /** The start of a conversation: its subject where it has one, else the kind beside the dock. */
 export function conversationStart(
   subject: { kind: string; title: string | undefined } | undefined,
-  dockKind: string | undefined
+  dockKind: string | undefined,
+  target?: CreationTarget
 ): ConversationStart | undefined {
   if (subject !== undefined) {
     return { about: "asset", kind: subject.kind, title: subject.title };
   }
   if (dockKind === TRY_DOCK_KIND) return { about: "try" };
-  return dockKind === undefined ? undefined : { about: "new", kind: dockKind };
+  return dockKind === undefined
+    ? undefined
+    : { about: "new", kind: dockKind, ...(target === undefined ? {} : { target }) };
 }
 
 /** The heading of the start page, as a key and its values. */

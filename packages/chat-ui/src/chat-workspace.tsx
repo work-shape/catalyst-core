@@ -83,7 +83,11 @@ import { type WorkspaceRoute, type WorkspaceRouteChangeOptions } from "./shared/
 import { useWorkspaceChatModel, WORKSPACE_AUTH_SCOPE } from "./chat/workspace/workspace-chat-model";
 import { WorkspaceProviders } from "./chat/workspace/workspace-providers";
 import { useRequestLocale } from "./shared/api/workspace-api-client";
-import { useWorkspaceShortcuts } from "./chat/workspace/workspace-shortcuts";
+import {
+  useWorkspaceShortcuts,
+  workspaceShortcutLabel
+} from "./chat/workspace/workspace-shortcuts";
+import { DockCreationScopeProvider, DockPageChatProvider } from "./shared/dock-page-chat";
 
 // The Workflow screens on sample data: a page for whoever may open the UI library, loaded
 // only when it is opened.
@@ -532,6 +536,16 @@ function ChatWorkspaceContent({
             setPaletteOpen(false);
             startNewChat();
           }}
+          // Beside a page the keys open the dock, and close it again; the chat route has none.
+          onChat={() => {
+            if (onChatRoute) return;
+            setPaletteOpen(false);
+            if (dock.open) {
+              dock.close();
+            } else {
+              model.dockChat.open();
+            }
+          }}
         />
         <SkipLink target={CONTENT_ID}>
           <SkipLinkLabel />
@@ -681,6 +695,7 @@ function ChatWorkspaceContent({
                                 ? undefined
                                 : () => openConversation(dockConversationId)
                             }
+                            onNewChat={model.dockChat.newChat}
                           >
                             <section className="relative h-full min-h-0 min-w-0">
                               <AttachmentContentProvider
@@ -764,103 +779,113 @@ function ChatWorkspaceContent({
                               view={dockView}
                               dock={dock}
                               running={chat.conversationRunning}
+                              shortcut={workspaceShortcutLabel("chat")}
+                              onChat={model.dockChat.open}
                             >
-                              <ControlPlaneRoutes
-                                controlPlane={model.controlPlane}
-                                agentsArea={
-                                  agentsRoute ? (
-                                    <AgentsPage
-                                      agents={model.config.config.agents}
-                                      defaultAgentName={model.config.config.defaultAgentName}
-                                      status={model.agents.status}
-                                      onRetry={model.agents.retry}
-                                      onStartChat={model.agents.startChat}
-                                      onOpenStudio={
-                                        model.controlPlane.canOpenAgentsInBuild
-                                          ? model.route.showRoute
-                                          : undefined
-                                      }
-                                      newAgent={
-                                        model.controlPlane.agentCreation
-                                          ? {
-                                              ...model.controlPlane.agentCreation,
-                                              startsIn: {
-                                                workspace:
-                                                  activeWorkspace?.kind === "shared"
-                                                    ? {
-                                                        id: activeWorkspace.id,
-                                                        name: activeWorkspace.name
-                                                      }
-                                                    : undefined,
-                                                mayChooseAll:
-                                                  model.controlPlane.agentCreation.mayChooseAll
-                                              },
-                                              onStart: (start) =>
-                                                startNewAgent(model.route.showRoute, start)
-                                            }
-                                          : undefined
-                                      }
-                                    />
-                                  ) : undefined
-                                }
-                                appsArea={
-                                  appsRoute ? (
-                                    // An App is told who looks at it and how the interface looks, as a Page is.
-                                    <PageHostProvider conversationId={undefined} {...pageHost}>
-                                      <AppsArea route={appsRoute} />
-                                    </PageHostProvider>
-                                  ) : undefined
-                                }
-                                workflowsArea={
-                                  workflowsRoute ? (
-                                    model.workflows.access === "open" ? (
-                                      <WorkflowsArea route={workflowsRoute} />
-                                    ) : (
-                                      <div className="h-full bg-background" />
-                                    )
-                                  ) : undefined
-                                }
-                                scheduledArea={
-                                  scheduledRoute ? (
-                                    <ScheduledPage
-                                      key={scheduledRoute.collaborationWorkspaceId}
-                                      workspaceId={scheduledRoute.collaborationWorkspaceId}
-                                      agents={model.config.config.agents}
-                                      defaultAgentName={model.config.config.defaultAgentName}
-                                      {...(model.controlPlane.canViewBuild
-                                        ? {
-                                            connectionsRoute: {
-                                              kind: "build-kind",
-                                              assetKind: CONNECTIONS_BUILD_PATH
-                                            }
+                              <DockPageChatProvider value={model.dockChat.offerPageChat}>
+                                <DockCreationScopeProvider
+                                  value={model.dockChat.offerCreationScope}
+                                >
+                                  <ControlPlaneRoutes
+                                    controlPlane={model.controlPlane}
+                                    agentsArea={
+                                      agentsRoute ? (
+                                        <AgentsPage
+                                          agents={model.config.config.agents}
+                                          defaultAgentName={model.config.config.defaultAgentName}
+                                          status={model.agents.status}
+                                          onRetry={model.agents.retry}
+                                          onStartChat={model.agents.startChat}
+                                          onOpenStudio={
+                                            model.controlPlane.canOpenAgentsInBuild
+                                              ? model.route.showRoute
+                                              : undefined
                                           }
-                                        : {})}
-                                      onOpenRoute={model.route.showRoute}
-                                    />
-                                  ) : undefined
-                                }
-                                inboxArea={
-                                  inboxRoute ? (
-                                    <InboxArea
-                                      itemId={
-                                        inboxRoute.kind === "inbox-item"
-                                          ? inboxRoute.itemId
-                                          : undefined
-                                      }
-                                      onOpenItem={(itemId) =>
-                                        model.route.showRoute({ kind: "inbox-item", itemId })
-                                      }
-                                      onCloseItem={() => model.route.showRoute({ kind: "inbox" })}
-                                      onBesideWidthChange={inboxSurface.reportBesideWidth}
-                                      onCoveringChange={inboxSurface.reportCovering}
-                                    />
-                                  ) : undefined
-                                }
-                              >
-                                {model.route.view === "not-found" ? (
-                                  <RouteNotFound onOpenChat={startNewChat} />
-                                ) : null}
-                              </ControlPlaneRoutes>
+                                          newAgent={
+                                            model.controlPlane.agentCreation
+                                              ? {
+                                                  ...model.controlPlane.agentCreation,
+                                                  startsIn: {
+                                                    workspace:
+                                                      activeWorkspace?.kind === "shared"
+                                                        ? {
+                                                            id: activeWorkspace.id,
+                                                            name: activeWorkspace.name
+                                                          }
+                                                        : undefined,
+                                                    mayChooseAll:
+                                                      model.controlPlane.agentCreation.mayChooseAll
+                                                  },
+                                                  onStart: (start) =>
+                                                    startNewAgent(model.route.showRoute, start)
+                                                }
+                                              : undefined
+                                          }
+                                        />
+                                      ) : undefined
+                                    }
+                                    appsArea={
+                                      appsRoute ? (
+                                        // An App is told who looks at it and how the interface looks, as a Page is.
+                                        <PageHostProvider conversationId={undefined} {...pageHost}>
+                                          <AppsArea route={appsRoute} />
+                                        </PageHostProvider>
+                                      ) : undefined
+                                    }
+                                    workflowsArea={
+                                      workflowsRoute ? (
+                                        model.workflows.access === "open" ? (
+                                          <WorkflowsArea route={workflowsRoute} />
+                                        ) : (
+                                          <div className="h-full bg-background" />
+                                        )
+                                      ) : undefined
+                                    }
+                                    scheduledArea={
+                                      scheduledRoute ? (
+                                        <ScheduledPage
+                                          key={scheduledRoute.collaborationWorkspaceId}
+                                          workspaceId={scheduledRoute.collaborationWorkspaceId}
+                                          agents={model.config.config.agents}
+                                          defaultAgentName={model.config.config.defaultAgentName}
+                                          {...(model.controlPlane.canViewBuild
+                                            ? {
+                                                connectionsRoute: {
+                                                  kind: "build-kind",
+                                                  assetKind: CONNECTIONS_BUILD_PATH
+                                                }
+                                              }
+                                            : {})}
+                                          onOpenRoute={model.route.showRoute}
+                                        />
+                                      ) : undefined
+                                    }
+                                    inboxArea={
+                                      inboxRoute ? (
+                                        <InboxArea
+                                          itemId={
+                                            inboxRoute.kind === "inbox-item"
+                                              ? inboxRoute.itemId
+                                              : undefined
+                                          }
+                                          onOpenItem={(itemId) =>
+                                            model.route.showRoute({ kind: "inbox-item", itemId })
+                                          }
+                                          onCloseItem={() =>
+                                            model.route.showRoute({ kind: "inbox" })
+                                          }
+                                          onBesideWidthChange={inboxSurface.reportBesideWidth}
+                                          onCoveringChange={inboxSurface.reportCovering}
+                                        />
+                                      ) : undefined
+                                    }
+                                  >
+                                    {model.route.view === "not-found" ? (
+                                      <RouteNotFound onOpenChat={startNewChat} />
+                                    ) : null}
+                                  </ControlPlaneRoutes>
+                                </DockCreationScopeProvider>
+                              </DockPageChatProvider>
                             </DockedPage>
                           </PageHostProvider>
                         )}
@@ -940,14 +965,16 @@ function SkipLinkLabel() {
 function WorkspaceShortcuts({
   paletteOpen,
   onTogglePalette,
-  onNewChat
+  onNewChat,
+  onChat
 }: {
   paletteOpen: boolean;
   onTogglePalette(): void;
   onNewChat(): void;
+  onChat(): void;
 }) {
   useWorkspaceShortcuts(
-    { search: onTogglePalette, newChat: onNewChat },
+    { search: onTogglePalette, newChat: onNewChat, chat: onChat },
     () => !paletteOpen && document.querySelector("dialog:modal") !== null
   );
   return null;

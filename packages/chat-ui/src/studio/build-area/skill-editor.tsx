@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { SKILL_SUMMARY_MAX_LENGTH } from "@work-shape/catalyst-core";
+import { SKILL_SUMMARY_MAX_LENGTH, assetAddressFromName } from "@work-shape/catalyst-core";
 import { Field, Input, Textarea } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../../shared/i18n";
 import { AssetEditorShell, useAssetForm, type AssetSection } from "./asset-editor-shell";
@@ -53,6 +53,11 @@ export function SkillEditor({
   const editable = frame.canWrite && instanceEditable;
   const { folder } = frame;
   const unread = form.files.some(isUnread);
+  // The page of a new skill asks the instance about the id its name makes.
+  const { onNewTitle } = frame;
+  useEffect(() => {
+    onNewTitle?.(form.title);
+  }, [onNewTitle, form.title]);
   // A file of the folder changes only once every file is read: a save then writes them all.
   const filesEditable = editable && folder !== undefined && !unread;
 
@@ -95,10 +100,15 @@ export function SkillEditor({
     setSaving(true);
     // A file beside SKILL.md changed: the whole folder is written. Otherwise the config is,
     // and the files beside it stay as they are.
+    // A new skill on a page opened empty takes its id from its name.
+    const written =
+      frame.asset === undefined && !form.name.trim()
+        ? { ...form, name: assetAddressFromName(form.title, "skill") }
+        : form;
     const { stored, ...answer } =
-      folder !== undefined && !unread && skillFolderChanged(form, state.baseline)
-        ? await folder.save(skillFormToFolder(form))
-        : { ...(await frame.save(skillFormToConfig(form))), stored: undefined };
+      folder !== undefined && !unread && skillFolderChanged(written, state.baseline)
+        ? await folder.save(skillFormToFolder(written))
+        : { ...(await frame.save(skillFormToConfig(written))), stored: undefined };
     setSaving(false);
     state.setOutcome(answer);
     if (answer.ok) {
@@ -251,7 +261,7 @@ export function SkillEditor({
   return (
     <AssetEditorShell
       frame={{ ...frame, canWrite: editable }}
-      title={form.title.trim() || form.name}
+      title={form.title.trim() || form.name || t("configNewSkill")}
       description={form.summary.trim()}
       badges={badges}
       sections={sections}

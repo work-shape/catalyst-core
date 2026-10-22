@@ -336,9 +336,9 @@ test("a write on one Workflow offers that one's draft, and no runs, start or sib
     await expect(area.getByRole("link", { name: "Runs", exact: true })).toHaveCount(0);
 
     await area.getByRole("link", { name: `Open ${granted.name}` }).click();
-    await expect(
-      memberPage.getByRole("button", { name: "Edit with the agent", exact: true })
-    ).toBeVisible();
+    // "Chat" talks about the Workflow once its record arrived.
+    await expect(memberPage.getByTestId("workflow-canvas")).toBeVisible();
+    await expect(memberPage.getByTestId("dock-page-action")).toBeVisible();
     const opened = memberPage.waitForResponse((response) => {
       const url = new URL(response.url());
       return (
@@ -347,7 +347,7 @@ test("a write on one Workflow offers that one's draft, and no runs, start or sib
         response.request().method() === "POST"
       );
     });
-    await memberPage.getByRole("button", { name: "Edit with the agent", exact: true }).click();
+    await memberPage.getByTestId("dock-page-action").click();
     const conversation = await opened;
     expect(conversation.ok()).toBe(true);
     expect(await conversation.json()).toMatchObject({
