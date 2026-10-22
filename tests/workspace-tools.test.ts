@@ -64,11 +64,6 @@ describe("workspace tools", () => {
     ]) {
       expect(modelFacingExec.split(usage)).toHaveLength(2);
     }
-    const applyPatchTool = harness.tools.find((tool) => tool.name === "workspace.apply_patch");
-    expect(applyPatchTool?.description).toContain("unified diff patch");
-    expect(applyPatchTool?.description).toContain("/workspace");
-    expect(applyPatchTool?.description).toContain("create, update, and delete");
-    expect(applyPatchTool?.description).toContain("binary files");
     const previewTool = harness.tools.find((tool) => tool.name === "workspace.preview_images");
     expect(previewTool?.description).toContain("/workspace/previews");
     const importTool = harness.tools.find((tool) => tool.name === "workspace.import_files");
@@ -92,13 +87,6 @@ describe("workspace tools", () => {
       previewTool?.inputSchema.safeParse({ artifactId: "file_1", path: "previews/a.png" }).success
     ).toBe(false);
     expect(previewTool?.inputSchema.safeParse({ path: "previews/a.png" }).success).toBe(true);
-    expect(applyPatchTool?.inputJsonSchema).toMatchObject({
-      properties: {
-        patch: {
-          description: expect.stringContaining("Unified diff patch")
-        }
-      }
-    });
     expect(importTool?.inputJsonSchema).toMatchObject({
       properties: {
         files: {
@@ -251,24 +239,6 @@ describe("workspace tools", () => {
       { path: "../secret.txt" },
       "validation_failed",
       /traverse/u
-    );
-    await expectToolFailure(
-      "workspace.apply_patch",
-      {
-        patch: ["--- a/../secret.txt", "+++ b/../secret.txt", "@@ -1 +1 @@", "-old", "+new"].join(
-          "\n"
-        )
-      },
-      "validation_failed",
-      /traverse/u
-    );
-    await expectToolFailure(
-      "workspace.apply_patch",
-      {
-        patch: ["--- /etc/passwd", "+++ /etc/passwd", "@@ -1 +1 @@", "-old", "+new"].join("\n")
-      },
-      "validation_failed",
-      /under \/workspace/u
     );
 
     const strictScript = await createWorkspaceHarness();
@@ -831,193 +801,7 @@ describe("workspace tools", () => {
     }
   });
 
-  it("applies create, update, and delete patches through workspace storage", async () => {
-    const tempRoot = await mkdtemp(join(tmpdir(), "workspace-apply-patch-"));
-    const harness = await createWorkspaceHarness({
-      execResultWaitMs: 5000,
-      execResultPollIntervalMs: 10
-    });
-    const runner = new LocalWorkspaceCommandRunner({
-      store: harness.store,
-      byteStore: harness.objectStore,
-      tempRootDirectory: tempRoot
-    });
-    const worker = createCommandWorker(harness.store, harness.clientInstanceId, { runner });
-    worker.start();
-
-    try {
-      const created = await harness.runTool("workspace.apply_patch", {
-        patch: [
-          "--- /dev/null",
-          "+++ b/scripts/build.py",
-          "@@ -0,0 +1,2 @@",
-          '+print("hello")',
-          "+VALUE = 1"
-        ].join("\n")
-      });
-      expect(created.status).toBe("success");
-      if (created.status !== "success") {
-        throw new Error("Expected apply_patch create to succeed");
-      }
-      expect(created.output).toMatchObject({
-        changedFiles: [
-          expect.objectContaining({
-            path: "scripts/build.py",
-            mimeType: "text/plain"
-          })
-        ],
-        deletedFiles: []
-      });
-      expect(JSON.stringify(created)).not.toContain("objectKey");
-
-      const updated = await harness.runTool("workspace.apply_patch", {
-        patch: [
-          "--- a/scripts/build.py",
-          "+++ b/scripts/build.py",
-          "@@ -1,2 +1,2 @@",
-          ' print("hello")',
-          "-VALUE = 1",
-          "+VALUE = 2"
-        ].join("\n")
-      });
-      expect(updated.status).toBe("success");
-
-      const execRead = await harness.runTool("workspace.exec", {
-        command: "cat scripts/build.py"
-      });
-      expect(execRead.status).toBe("success");
-      if (execRead.status !== "success") {
-        throw new Error("Expected exec to read patched file");
-      }
-      expect(execRead.output).toMatchObject({
-        status: "completed",
-        exitCode: 0,
-        stdoutPreview: 'print("hello")\nVALUE = 2\n'
-      });
-
-      const deleted = await harness.runTool("workspace.apply_patch", {
-        patch: [
-          "--- a/scripts/build.py",
-          "+++ /dev/null",
-          "@@ -1,2 +0,0 @@",
-          '-print("hello")',
-          "-VALUE = 2"
-        ].join("\n")
-      });
-      expect(deleted.status).toBe("success");
-      if (deleted.status !== "success") {
-        throw new Error("Expected apply_patch delete to succeed");
-      }
-      expect(deleted.output).toMatchObject({
-        changedFiles: [],
-        deletedFiles: [{ path: "scripts/build.py" }]
-      });
-
-      const listed = await harness.runTool("workspace.list_files", {});
-      expect(listed.status).toBe("success");
-      if (listed.status !== "success") {
-        throw new Error("Expected list_files to succeed");
-      }
-      expect(jsonObject(listed.output).files).toEqual([]);
-
-      const readDeleted = await harness.runTool("workspace.read_file", {
-        path: "scripts/build.py"
-      });
-      expect(readDeleted.status).toBe("failed");
-      if (readDeleted.status === "failed") {
-        expect(readDeleted.error.message).toMatch(/not found/u);
-      }
-
-      const execList = await harness.runTool("workspace.exec", {
-        command: "find . -type f | sort"
-      });
-      expect(execList.status).toBe("success");
-      if (execList.status !== "success") {
-        throw new Error("Expected exec to run after delete");
-      }
-      expect(execList.output).toMatchObject({
-        status: "completed",
-        exitCode: 0,
-        stdoutPreview: ""
-      });
-    } finally {
-      await worker.stop();
-      await rm(tempRoot, { recursive: true, force: true });
-    }
-  });
-
-  it("rejects apply_patch when target context is missing or binary", async () => {
-    const contextHarness = await createWorkspaceHarness();
-    await contextHarness.putWorkspaceFile({
-      path: "notes.txt",
-      objectKey: "workspace/notes.txt",
-      bytes: "one\ntwo\n",
-      mimeType: "text/plain"
-    });
-    const missingContext = await contextHarness.runTool("workspace.apply_patch", {
-      patch: [
-        "--- a/notes.txt",
-        "+++ b/notes.txt",
-        "@@ -1,2 +1,2 @@",
-        " one",
-        "-three",
-        "+four"
-      ].join("\n")
-    });
-    expect(missingContext.status).toBe("failed");
-    if (missingContext.status === "failed") {
-      expect(missingContext.error.message).toMatch(/context did not match/u);
-    }
-
-    const binaryHarness = await createWorkspaceHarness();
-    await binaryHarness.putWorkspaceFile({
-      path: "bin/blob.dat",
-      objectKey: "workspace/bin/blob.dat",
-      bytes: new Uint8Array([0, 1, 2, 3]),
-      mimeType: "application/octet-stream"
-    });
-    const binaryPatch = await binaryHarness.runTool("workspace.apply_patch", {
-      patch: ["--- a/bin/blob.dat", "+++ b/bin/blob.dat", "@@ -1 +1 @@", "-old", "+new"].join("\n")
-    });
-    expect(binaryPatch.status).toBe("failed");
-    if (binaryPatch.status === "failed") {
-      expect(binaryPatch.error.message).toMatch(/binary|MIME/u);
-    }
-  });
-
-  it("rejects partial file delete patches without mutating the workspace file", async () => {
-    const harness = await createWorkspaceHarness();
-    await harness.putWorkspaceFile({
-      path: "notes.txt",
-      objectKey: "workspace/partial-delete-notes.txt",
-      bytes: "delete-me\nkeep-me\n",
-      mimeType: "text/plain"
-    });
-
-    const partialDelete = await harness.runTool("workspace.apply_patch", {
-      patch: ["--- a/notes.txt", "+++ /dev/null", "@@ -1,1 +0,0 @@", "-delete-me"].join("\n")
-    });
-
-    expect(partialDelete.status).toBe("failed");
-    if (partialDelete.status === "failed") {
-      expect(partialDelete.error.message).toMatch(/remove the entire file/u);
-    }
-
-    const read = await harness.runTool("workspace.read_file", { path: "notes.txt" });
-    expect(read.status).toBe("success");
-    if (read.status !== "success") {
-      throw new Error("Expected partial delete rejection to leave file readable");
-    }
-    expect(jsonObject(read.output).contentPreview).toBe("delete-me\nkeep-me\n");
-  });
-
   it.each([
-    {
-      toolName: "workspace.apply_patch",
-      input: {
-        patch: ["--- /dev/null", "+++ b/notes/late.txt", "@@ -0,0 +1,1 @@", "+late"].join("\n")
-      }
-    },
     {
       toolName: "workspace.import_files",
       input: { files: [{ fileId: "file_source_csv", path: "inputs/source.csv" }] }
@@ -1046,43 +830,6 @@ describe("workspace tools", () => {
       expect(harness.objectStore.keys()).toEqual([]);
     }
   );
-
-  it("reports the object key to the telemetry when the bytes of a refused file cannot be removed", async () => {
-    const telemetryEvents: Parameters<WorkspaceCommandTelemetry["record"]>[0][] = [];
-    const harness = await createWorkspaceHarness({
-      telemetry: {
-        record(event) {
-          telemetryEvents.push(event);
-        }
-      }
-    });
-    harness.objectStore.afterPutWorkspaceFile = async () => {
-      await harness.store.conversations.deleteConversation({
-        clientInstanceId: harness.clientInstanceId,
-        conversationId: harness.conversation.id,
-        deletedAt: "2026-06-29T12:00:01.000Z"
-      });
-    };
-    harness.objectStore.delete = async () => {
-      throw new Error("object store is down");
-    };
-
-    const result = await harness.runTool("workspace.apply_patch", {
-      patch: ["--- /dev/null", "+++ b/notes/late.txt", "@@ -0,0 +1,1 @@", "+late"].join("\n")
-    });
-
-    expect(result).toMatchObject({ status: "failed" });
-    const [objectKey] = harness.objectStore.keys();
-    expect(objectKey).toContain(harness.conversation.id);
-    expect(telemetryEvents).toContainEqual(
-      expect.objectContaining({
-        type: "stored_file_removal_failed",
-        clientInstanceId: harness.clientInstanceId,
-        objectKey,
-        failedCount: 1
-      })
-    );
-  });
 
   it("imports uploaded managed files into workspace storage without leaking object keys", async () => {
     const sourceBytes = new TextEncoder().encode("name,total\nAda,42\n");

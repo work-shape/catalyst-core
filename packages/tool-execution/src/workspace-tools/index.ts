@@ -1,5 +1,4 @@
 import type { AnyToolDefinition } from "@work-shape/catalyst-tool-sdk";
-import { workspaceApplyPatchTool } from "./apply-patch";
 import type { WorkspaceCommandServiceOptions } from "./dependencies";
 import { workspaceEditFileTool } from "./edit-file";
 import { workspaceExecTool } from "./exec";
@@ -42,7 +41,6 @@ export function createWorkspaceToolDefinitions(
     workspaceReadFileTool(deps),
     workspaceWriteFileTool(deps),
     workspaceEditFileTool(deps),
-    workspaceApplyPatchTool(deps),
     workspacePromoteArtifactTool(deps),
     workspacePreviewImagesTool(deps)
   ];

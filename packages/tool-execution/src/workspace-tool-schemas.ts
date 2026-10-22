@@ -15,7 +15,6 @@ export interface WorkspaceCommandServiceLimits {
   maxWorkspaceBytes: number;
   maxReadFileBytes: number;
   maxReadPreviewBytes: number;
-  maxApplyPatchBytes: number;
   maxCommandLength: number;
   maxExpectedOutputs: number;
   maxPreviewImages: number;
@@ -34,7 +33,6 @@ export const DEFAULT_LIMITS: WorkspaceCommandServiceLimits = {
   maxReadFileBytes: 8 * 1024 * 1024,
   // Most bytes of file text in one workspace.read_file answer; the model's context pays for it.
   maxReadPreviewBytes: 16 * 1024,
-  maxApplyPatchBytes: 256 * 1024,
   maxCommandLength: 64 * 1024,
   maxExpectedOutputs: 32,
   maxPreviewImages: 12,
@@ -60,8 +58,6 @@ const workspaceExpectedOutputsDescription =
   'Optional postconditions for files that should exist in /workspace after the command. Use kind "directory" only when checking that a rendered/generated directory contains tracked files. Use this for created outputs or verification steps that depend on an existing artifact. Set promote only when the command itself should promote the output.';
 const workspaceImportPathDescription =
   "Optional workspace-relative destination path override. Usually omit this and use the returned importedFiles[].path exactly in workspace.exec.";
-const workspaceApplyPatchDescription =
-  "Unified diff patch for workspace text files. Use paths relative to /workspace, /workspace/path, or git-style a/path and b/path headers. Supports create, update, and delete; binary files and renames are rejected.";
 const workspacePromotePathDescription =
   "Workspace path to the final user-facing artifact. Prefer artifacts/ or /workspace/artifacts/ outputs.";
 const workspacePreviewArtifactDescription =
@@ -136,16 +132,6 @@ export const workspaceReadFileInputSchema = z
     path: workspacePathSchema,
     offset: z.number().int().min(1).describe(workspaceReadOffsetDescription).optional(),
     limit: z.number().int().min(1).describe(workspaceReadLimitDescription).optional()
-  })
-  .strict();
-
-export const workspaceApplyPatchInputSchema = z
-  .object({
-    patch: z
-      .string()
-      .min(1)
-      .max(DEFAULT_LIMITS.maxApplyPatchBytes)
-      .describe(workspaceApplyPatchDescription)
   })
   .strict();
 
@@ -294,16 +280,6 @@ export const workspaceReadFileOutputSchema = z.object({
   lineCut: z.boolean().optional(),
   // How to get the rest, in words. Present when `truncated` is true.
   hint: z.string().optional()
-});
-
-export const workspaceApplyPatchOutputSchema = z.object({
-  workspaceId: z.string(),
-  changedFiles: z.array(changedFileOutputSchema),
-  deletedFiles: z.array(
-    z.object({
-      path: z.string()
-    })
-  )
 });
 
 export const workspacePromoteArtifactOutputSchema = z.object({

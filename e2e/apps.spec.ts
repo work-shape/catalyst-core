@@ -7,7 +7,6 @@ import {
   overviewRoute,
   pageSource,
   pageSurface,
-  patchThatAdds,
   savePage,
   writePageFiles
 } from "./page-surface-fixtures";
@@ -173,7 +172,7 @@ test("a Page is saved as an App, published, opened by a second member and deep l
 
   // The Page is built in a conversation of the workspace.
   await page.goto(`/w/${workspaceId}`);
-  await writePageFiles(page, patchThatAdds(pageSource(PUBLISHED_HEADING)));
+  await writePageFiles(page, pageSource(PUBLISHED_HEADING));
   await savePage(page);
   const surface = pageSurface(page);
   await expect(surface).toBeVisible();

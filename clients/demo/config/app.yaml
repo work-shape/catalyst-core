@@ -443,8 +443,6 @@ tools:
     enabled: true
   - name: workspace.edit_file
     enabled: true
-  - name: workspace.apply_patch
-    enabled: true
   - name: workspace.exec
     enabled: true
   - name: workspace.preview_images

@@ -7,8 +7,6 @@ import type {
   workspaceWriteFileOutputSchema
 } from "../workspace-file-write-schemas";
 import type {
-  workspaceApplyPatchInputSchema,
-  workspaceApplyPatchOutputSchema,
   workspaceExecInputSchema,
   workspaceExecOutputSchema,
   workspaceImportFilesInputSchema,
@@ -22,7 +20,6 @@ import type {
   workspaceReadFileInputSchema,
   workspaceReadFileOutputSchema
 } from "../workspace-tool-schemas";
-import { applyWorkspacePatch } from "./apply-patch";
 import {
   resolveWorkspaceToolDependencies,
   type WorkspaceCommandServiceOptions,
@@ -85,13 +82,6 @@ export class WorkspaceCommandService {
     context: ToolExecutionContext
   ): Promise<ToolHandlerResult<z.infer<typeof workspaceEditFileOutputSchema>>> {
     return editWorkspaceFile(this.dependencies, input, context);
-  }
-
-  applyPatch(
-    input: z.infer<typeof workspaceApplyPatchInputSchema>,
-    context: ToolExecutionContext
-  ): Promise<ToolHandlerResult<z.infer<typeof workspaceApplyPatchOutputSchema>>> {
-    return applyWorkspacePatch(this.dependencies, input, context);
   }
 
   promoteArtifact(

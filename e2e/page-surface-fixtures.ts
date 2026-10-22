@@ -246,23 +246,6 @@ export const ownSurfacePageSource: Record<string, string> = {
 `
 };
 
-const linesOf = (text: string) => text.replace(/\n$/u, "").split("\n");
-
-/** A patch that writes new files into the Page's folder. */
-export function patchThatAdds(files: Record<string, string>): string {
-  return Object.entries(files)
-    .map(([path, text]) => {
-      const lines = linesOf(text);
-      return [
-        "--- /dev/null",
-        `+++ b/${pageFolder}/${path}`,
-        `@@ -0,0 +1,${lines.length} @@`,
-        ...lines.map((line) => `+${line}`)
-      ].join("\n");
-    })
-    .join("\n");
-}
-
 /** Signs the member in and opens the interface, in English or German. */
 export async function openChat(page: Page, locale: "en" | "de" = "en"): Promise<void> {
   const signedIn = await page.request.post(`${apiOrigin}/api/auth/sign-in/email`, {
@@ -295,8 +278,10 @@ export async function sendToolCall(page: Page, tool: string, input: unknown): Pr
 }
 
 /** Lets the agent write files of the Page. */
-export async function writePageFiles(page: Page, patch: string): Promise<void> {
-  await sendToolCall(page, "workspace.apply_patch", { patch });
+export async function writePageFiles(page: Page, files: Record<string, string>): Promise<void> {
+  for (const [path, content] of Object.entries(files)) {
+    await rewritePageFile(page, path, content);
+  }
 }
 
 /** Lets the agent give one file of the Page's folder another text. */

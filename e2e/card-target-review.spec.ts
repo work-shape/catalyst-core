@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 import { z } from "zod";
-import { pageSource, patchThatAdds, savePage, writePageFiles } from "./page-surface-fixtures";
+import { pageSource, savePage, writePageFiles } from "./page-surface-fixtures";
 import { requestWithOrigin } from "./request-with-origin";
 import { expect, test } from "./test";
 import { apiOrigin, uiOrigin } from "./view-fixtures";
@@ -42,7 +42,7 @@ test("the time on a card that opens as a whole stays the pointer's, and the card
 
   // A builder saves a Page as an App; its card opens the draft.
   await page.goto(`/w/${workspaceId}`);
-  await writePageFiles(page, patchThatAdds(pageSource("Card probe")));
+  await writePageFiles(page, pageSource("Card probe"));
   await savePage(page);
   await page.getByRole("button", { name: "Save as app" }).click();
   const saveDialog = page.getByRole("dialog");

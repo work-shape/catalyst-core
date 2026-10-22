@@ -10,7 +10,6 @@ import {
   overviewRoute,
   pageSource,
   pageSurface,
-  patchThatAdds,
   rewritePageFile,
   savePage,
   writePageFiles
@@ -174,7 +173,7 @@ test("a Page saved as an App updates the draft of that App, and nothing that is 
 
   // The Page is built in a conversation of the workspace. Its header offers Save as app.
   await page.goto(`/w/${workspaceId}`);
-  await writePageFiles(page, patchThatAdds(pageSource(FIRST_HEADING)));
+  await writePageFiles(page, pageSource(FIRST_HEADING));
   await savePage(page);
   await expectShownRevision(surface, 1);
   await expect(saveAsApp).toBeVisible();
@@ -393,13 +392,10 @@ test("a Page is put into an App that was saved before Apps remembered their Page
   const updateApp = surface.getByRole("button", { name: /^(?:Update app|App aktualisieren)$/u });
   const dialog = page.getByRole("dialog");
   await page.goto(`/w/${workspaceId}`);
-  await writePageFiles(
-    page,
-    patchThatAdds({
-      ...pageSource(FIRST_HEADING),
-      "app.yaml": `id: revenue\nname: ${previewName}\nkit: 1.0.0\n`
-    })
-  );
+  await writePageFiles(page, {
+    ...pageSource(FIRST_HEADING),
+    "app.yaml": `id: revenue\nname: ${previewName}\nkit: 1.0.0\n`
+  });
   await savePage(page);
   await rewritePageFile(page, "src/routes/index.tsx", overviewRoute("Offer sheet, wider"));
   await savePage(page);

@@ -1,14 +1,14 @@
 import type { AgentConfig } from "./schemas";
 
 /**
- * Tool names that were renamed, each with the name that replaced it. A release config or an
- * agent that names a former name still starts, with a warning that names the new one. The
- * tools are offered under their new names only, so a former name stands for nothing. A later
- * release refuses them (OPEN-2).
+ * Tool names that were renamed or retired, each with the name to use instead. A release config
+ * or agent that names a former name still starts, with a warning. A former name stands for
+ * nothing; this is not an alias. The renamed page tools are refused in a later release (OPEN-2).
  */
 const FORMER_TOOL_NAMES: ReadonlyMap<string, string> = new Map([
   ["page.save", "workspace.open"],
-  ["page.save_as_app", "app.save"]
+  ["page.save_as_app", "app.save"],
+  ["workspace.apply_patch", "workspace.edit_file"]
 ]);
 
 /** Whether `name` is a former tool name, which validation accepts and a run ignores. */
@@ -39,6 +39,9 @@ export function formerAgentToolWarnings(
 }
 
 function formerToolWarning(where: string, former: string, current: string): string {
+  if (former === "workspace.apply_patch") {
+    return `${where} names the retired tool '${former}'. Use '${current}' with exact text edits instead; the old patch input is unsupported and has no alias.`;
+  }
   return `${where} names the tool '${former}', which is now '${current}'. Rename it: a later release refuses '${former}'.`;
 }
 

@@ -5,7 +5,6 @@ import { z } from "zod";
 import {
   pageSource,
   pageSurface,
-  patchThatAdds,
   savePage,
   sendToolCall,
   writePageFiles
@@ -136,7 +135,7 @@ test("a member who uses an App is shown the App and a builder its revision", asy
 
   // The builder saves a Page as an App and publishes it.
   await page.goto(`/w/${workspaceId}`);
-  await writePageFiles(page, patchThatAdds(pageSource(HEADING)));
+  await writePageFiles(page, pageSource(HEADING));
   await savePage(page);
   const surface = pageSurface(page);
   await surface.getByRole("button", { name: "Save as app" }).click();
