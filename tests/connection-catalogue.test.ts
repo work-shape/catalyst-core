@@ -28,7 +28,7 @@ import { errorSchema } from "./support/access-instance";
 import { required } from "./support/assertions";
 import { createTestConfig } from "./support/fixtures";
 import { generateSecretStoreKey } from "./support/test-connector";
-import { createTestInstance, getTestExecution, type TestInstance } from "./support/test-instance";
+import { createTestInstance, type TestInstance } from "./support/test-instance";
 import { withTestSql } from "./support/test-sql";
 
 // The Connection Catalogue (CAT-1): what an entry may hold, what an instance checks at its
