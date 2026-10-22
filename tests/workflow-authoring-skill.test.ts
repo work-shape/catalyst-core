@@ -1,11 +1,10 @@
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
-import { WORKFLOW_STEP_TYPES } from "@work-shape/catalyst-core";
+import { WORKFLOW_EXECUTED_STEP_TYPES, WORKFLOW_STEP_TYPES } from "@work-shape/catalyst-core";
 import {
   WORKFLOW_AUTHORING_EXAMPLES,
   WORKFLOW_CODE_FILE_MAX_BYTES,
   WORKFLOW_CODE_LANGUAGES,
-  WORKFLOW_EXECUTED_STEP_TYPES,
   WORKFLOW_STEP_FILES_MAX_BYTES,
   checkChildContracts,
   childRulesRevisionWarnings,

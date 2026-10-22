@@ -11,8 +11,13 @@ import {
   effectiveEdits,
   findStep,
   rebaseStepEdits,
+  sameValue,
+  stepIdFrom,
+  stepIds,
   type EditConflict,
   type StepEdit,
+  type StepPlace,
+  type StructureEdit,
   type WorkflowFile,
   type WorkflowManifest,
   workflowFiles
@@ -112,6 +117,31 @@ export function editIssues(
   return { fields, other };
 }
 
+/**
+ * What the instance said against a move, in the reader's words where it is the scope rule: the
+ * step that would no longer see a result it reads, by name. Other sentences stay the instance's.
+ */
+export function moveRefusal(
+  issues: readonly WorkflowIssue[],
+  moved: WorkflowManifest,
+  step: string,
+  t: ReturnType<typeof useTranslation>["t"]
+): string {
+  const nameOf = (id: string) => {
+    const name = findStep(moved, id)?.name;
+    return typeof name === "string" && name !== "" ? name : id;
+  };
+  const sentences = issues.map((issue) => {
+    if (issue.code !== "reference_out_of_scope") return issue.message;
+    const reader = issuePlace(issue.path, moved)?.step;
+    if (reader === undefined) return issue.message;
+    return reader === step
+      ? t("workflows.move.outOfScopeOwn", { step: nameOf(step) })
+      : t("workflows.move.outOfScope", { reader: nameOf(reader), step: nameOf(step) });
+  });
+  return [...new Set(sentences)].join(" ");
+}
+
 /** The instance holds another revision than the one the save was made from: 412. */
 const isConflict = (error: unknown) => error instanceof ApiError && error.status === 412;
 
@@ -142,6 +172,22 @@ export interface WorkflowEditing {
   /** The steps with values that are not saved. */
   unsaved: ReadonlySet<string>;
   set(step: string, fields: Readonly<Record<string, unknown>>): void;
+  /**
+   * Puts a new step at a place, not saved (workflow-canvas 9.6): its id comes from the name its
+   * fields give and never changes. Gives the id; `fields` is made with it, as a script's file
+   * is named by it. Cancel takes the step away again.
+   */
+  add(
+    at: StepPlace,
+    fields: (id: string) => Readonly<Record<string, unknown>>,
+    name: string
+  ): string;
+  /**
+   * Deletes or moves a step and saves that at once, as one revision of the draft. Gives the
+   * instance's sentence where it refused, and nothing where it saved. Offered only while
+   * nothing else is unsaved.
+   */
+  commit(edit: StructureEdit): Promise<string | undefined>;
   /** Takes the agent's value of a field the agent changed meanwhile. */
   takeTheirs(step: string, field: string): void;
   /** Drops what is not saved of one step. */
@@ -403,6 +449,53 @@ export function useWorkflowEditing(input: {
     }
   };
 
+  const commit = async (edit: StructureEdit): Promise<string | undefined> => {
+    setSaving(true);
+    setError(undefined);
+    let from = base;
+    let moved: WorkflowManifest | undefined;
+    try {
+      // One save, and once more on the draft as it is after a revision conflict.
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          const config = configOf(from, [edit]);
+          moved = config.manifest;
+          if (sameValue(config.manifest, from.manifest)) return undefined;
+          const saved = config.manifest;
+          const { revision } = await writes.save(input.workflowId, config, from.revision);
+          const savedFrom = from;
+          setBase((current) =>
+            current !== undefined && current.revision >= revision
+              ? current
+              : { ...savedFrom, config, manifest: saved, revision }
+          );
+          return undefined;
+        } catch (failure) {
+          if (!isConflict(failure) || attempt > 0) throw failure;
+          const now = (await writes.reread(input.workspaceId, input.workflowId)).definition;
+          if (now === undefined) throw failure;
+          from = now;
+        }
+      }
+      return undefined;
+    } catch (failure) {
+      const refused = readRefusalDetails(failure).issues;
+      if (refused.length === 0) {
+        return instanceSentence(failure) ?? t("workflows.settings.saveFailed");
+      }
+      return edit.kind === "move" && moved !== undefined
+        ? moveRefusal(
+            refused.map((issue) => ({ ...issue, path: issue.path.map(String) })),
+            moved,
+            edit.step,
+            t
+          )
+        : refused.map((issue) => issue.message).join(" ");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const heldSteps = new Set([...holds].map((key) => key.slice(0, key.indexOf("\n"))));
 
   return {
@@ -420,10 +513,18 @@ export function useWorkflowEditing(input: {
       setEdits((before) => [...before, { kind: "set", step, fields }]);
       setError(undefined);
     },
+    add: (at, fields, name) => {
+      const taken = stepIds(manifest);
+      const id = stepIdFrom(name, taken);
+      setEdits((before) => [...before, { kind: "insert", step: id, at, fields: fields(id) }]);
+      setError(undefined);
+      return id;
+    },
+    commit,
     takeTheirs: (step, field) => {
       setEdits((before) =>
         before.flatMap((edit) => {
-          if (edit.step !== step || !(field in edit.fields)) return [edit];
+          if (edit.kind !== "set" || edit.step !== step || !(field in edit.fields)) return [edit];
           const { [field]: _taken, ...rest } = edit.fields;
           return Object.keys(rest).length === 0 ? [] : [{ ...edit, fields: rest }];
         })

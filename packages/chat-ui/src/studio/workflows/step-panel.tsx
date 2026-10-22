@@ -201,6 +201,7 @@ export function StepPanel({
   transcript,
   onOpenChild,
   settings,
+  actions,
   onClose
 }: {
   step: WorkflowStepView;
@@ -222,6 +223,8 @@ export function StepPanel({
   onOpenChild?(): void;
   /** The step's Settings and the bar that saves them, for a reader who may write it. */
   settings?: { content: ReactNode; footer: ReactNode; editing: boolean };
+  /** What can be done to the step, such as its "…" menu, for a reader who may write it. */
+  actions?: ReactNode;
   onClose(): void;
 }) {
   const { t } = useTranslation();
@@ -253,6 +256,7 @@ export function StepPanel({
           : undefined
       }
       tab={shown}
+      actions={actions}
       onTabChange={(value) =>
         onTabChange(value === "run" || value === "entries" || value === "settings" ? value : "what")
       }

@@ -7,14 +7,30 @@
 type StepFields = Readonly<Record<string, unknown>>;
 
 /**
- * One operation on a step. `set` gives fields their new value, and `undefined` takes a field
- * away. Adding, deleting and moving steps are WF-EDIT-4's.
+ * A place in the step lists of a manifest: after a step in its list, or first or last in the
+ * body of a loop or one path of a condition or a parallel block (`path` names the path).
  */
-export interface StepEdit {
-  kind: "set";
-  step: string;
-  fields: StepFields;
-}
+export type StepPlace =
+  { kind: "after"; step: string } | { kind: "first" | "last"; block: string; path?: string };
+
+/**
+ * One operation on a step. `set` gives fields their new value, and `undefined` takes a field
+ * away. `insert` puts a new step with this id and these fields (its `type` among them) at a
+ * place; `delete` takes a step away with what it holds; `move` takes it to another place with
+ * what it holds (workflow-canvas 9.6).
+ */
+export type StepEdit =
+  | { kind: "set"; step: string; fields: StepFields }
+  | { kind: "insert"; step: string; at: StepPlace; fields: StepFields }
+  | { kind: "delete"; step: string }
+  | { kind: "move"; step: string; at: StepPlace };
+
+/** An operation saved at once, on its own: deleting or moving a step. */
+export type StructureEdit = Extract<StepEdit, { kind: "delete" | "move" }>;
+
+/** The fields an operation writes: those of a `set` and those a new step starts with. */
+const writtenFields = (edit: StepEdit): StepFields | undefined =>
+  edit.kind === "set" || edit.kind === "insert" ? edit.fields : undefined;
 
 /**
  * The step a Workflow's own fields are named by in an edit, such as `outputs`, which the
@@ -85,9 +101,10 @@ export function applyFileEdits(
 ): WorkflowFile[] {
   const next = [...files];
   for (const edit of edits) {
-    if (!Object.hasOwn(edit.fields, SCRIPT_FIELD)) continue;
+    const fields = writtenFields(edit);
+    if (fields === undefined || !Object.hasOwn(fields, SCRIPT_FIELD)) continue;
     const path = scriptPath(findStep(manifest, edit.step));
-    const content = edit.fields[SCRIPT_FIELD];
+    const content = fields[SCRIPT_FIELD];
     if (path === undefined || typeof content !== "string") continue;
     const at = next.findIndex((file) => file.path === path);
     if (at === -1) next.push({ path, content });
@@ -192,9 +209,154 @@ function replaced(
   });
 }
 
+/** A step record's fields as an edit writes them: without the fixed ones and those of the form. */
+function written(
+  step: Record<string, unknown>,
+  fields: StepFields,
+  fixed: ReadonlySet<string>
+): Record<string, unknown> {
+  const changed: Record<string, unknown> = { ...step };
+  for (const [field, value] of Object.entries(fields)) {
+    if (fixed.has(field) || field.startsWith("$")) continue;
+    if (value === undefined) delete changed[field];
+    else changed[field] = value;
+  }
+  return changed;
+}
+
+/** A copy of a step list without the step of this id, at any depth, and the step taken. */
+function without(list: unknown, id: string): { list: unknown; taken?: Record<string, unknown> } {
+  if (!Array.isArray(list)) return { list };
+  let taken: Record<string, unknown> | undefined;
+  const at = list.findIndex((step) => isRecord(step) && step.id === id);
+  if (at !== -1) {
+    const found = list[at];
+    return {
+      list: list.filter((_, index) => index !== at),
+      ...(isRecord(found) ? { taken: found } : {})
+    };
+  }
+  const next = list.map((step) => {
+    if (!isRecord(step) || taken !== undefined) return step;
+    let changed = step;
+    for (const key of ["steps", "then", "else"] as const) {
+      if (taken !== undefined || !Array.isArray(step[key])) continue;
+      const inner = without(step[key], id);
+      if (inner.taken !== undefined) {
+        taken = inner.taken;
+        changed = { ...changed, [key]: inner.list };
+      }
+    }
+    if (taken === undefined && Array.isArray(step.branches)) {
+      changed = {
+        ...changed,
+        branches: step.branches.map((branch) => {
+          if (taken !== undefined || !isRecord(branch)) return branch;
+          const inner = without(branch.steps, id);
+          if (inner.taken === undefined) return branch;
+          taken = inner.taken;
+          return { ...branch, steps: inner.list };
+        })
+      };
+    }
+    return taken === undefined ? step : changed;
+  });
+  return { list: next, ...(taken === undefined ? {} : { taken }) };
+}
+
+/** The list of a block a place names: a loop's body, or the path of a condition or parallel. */
+function blockList(block: Record<string, unknown>, path: string | undefined): unknown {
+  if (path === undefined) return block.steps;
+  if (Array.isArray(block.branches)) {
+    const branch = block.branches.find((entry) => isRecord(entry) && entry.id === path);
+    return isRecord(branch) ? (branch.steps ?? []) : undefined;
+  }
+  return path === "then" || path === "else" ? (block[path] ?? []) : undefined;
+}
+
+/** The block with its list at `path` replaced. */
+function withBlockList(
+  block: Record<string, unknown>,
+  path: string | undefined,
+  list: unknown[]
+): Record<string, unknown> {
+  if (path === undefined) return { ...block, steps: list };
+  if (Array.isArray(block.branches)) {
+    return {
+      ...block,
+      branches: block.branches.map((branch) =>
+        isRecord(branch) && branch.id === path ? { ...branch, steps: list } : branch
+      )
+    };
+  }
+  return { ...block, [path]: list };
+}
+
+/** Whether the manifest holds the place: the step or the block it names, and the path. */
+function placeHeld(manifest: WorkflowManifest, at: StepPlace): boolean {
+  if (at.kind === "after") return findStep(manifest, at.step) !== undefined;
+  const block = findStep(manifest, at.block);
+  return block !== undefined && Array.isArray(blockList({ ...block }, at.path));
+}
+
+/** A copy of the step lists with a step put at a place. Nothing changes where it is not held. */
+function placed(manifest: WorkflowManifest, at: StepPlace, step: Record<string, unknown>) {
+  if (!placeHeld(manifest, at)) return manifest;
+  if (at.kind !== "after") {
+    return {
+      ...manifest,
+      steps: replaced(manifest.steps, at.block, (block) => {
+        const list = blockList(block, at.path);
+        const items = Array.isArray(list) ? list : [];
+        return withBlockList(
+          block,
+          at.path,
+          at.kind === "first" ? [step, ...items] : [...items, step]
+        );
+      })
+    };
+  }
+  const put = (list: unknown): unknown => {
+    if (!Array.isArray(list)) return list;
+    const index = list.findIndex((entry) => isRecord(entry) && entry.id === at.step);
+    if (index !== -1) return [...list.slice(0, index + 1), step, ...list.slice(index + 1)];
+    return list.map((entry) => {
+      if (!isRecord(entry)) return entry;
+      let next = entry;
+      for (const key of ["steps", "then", "else"] as const) {
+        if (Array.isArray(entry[key])) next = { ...next, [key]: put(entry[key]) };
+      }
+      if (Array.isArray(entry.branches)) {
+        next = {
+          ...next,
+          branches: entry.branches.map((branch) =>
+            isRecord(branch) ? { ...branch, steps: put(branch.steps) } : branch
+          )
+        };
+      }
+      return next;
+    });
+  };
+  return { ...manifest, steps: put(manifest.steps) };
+}
+
+/** The ids of a step and of every step it holds. */
+export function heldIds(step: Readonly<Record<string, unknown>>): string[] {
+  const ids = typeof step.id === "string" ? [step.id] : [];
+  for (const list of innerLists({ ...step })) {
+    for (const inner of list) if (isRecord(inner)) ids.push(...heldIds(inner));
+  }
+  return ids;
+}
+
+/** The step a place lies at or in: the one it follows, or the block it is in. */
+const placeAnchor = (at: StepPlace) => (at.kind === "after" ? at.step : at.block);
+
 /**
  * The manifest with the operations applied, in their order. An operation on a step the
- * manifest does not hold does nothing; `rebaseStepEdits` says which those are.
+ * manifest does not hold, or at a place it does not hold, does nothing; `rebaseStepEdits` says
+ * which those are. A step is never moved into itself, and a new step never takes an id that
+ * is there already.
  */
 export function applyStepEdits(
   manifest: WorkflowManifest,
@@ -203,27 +365,35 @@ export function applyStepEdits(
   let next: WorkflowManifest = manifest;
   for (const edit of edits) {
     if (edit.step === WORKFLOW_FIELDS) {
-      const changed: Record<string, unknown> = { ...next };
-      for (const [field, value] of Object.entries(edit.fields)) {
-        if (FIXED_WORKFLOW_FIELDS.has(field) || field.startsWith("$")) continue;
-        if (value === undefined) delete changed[field];
-        else changed[field] = value;
-      }
-      next = changed;
+      if (edit.kind === "set") next = written({ ...next }, edit.fields, FIXED_WORKFLOW_FIELDS);
       continue;
     }
-    next = {
-      ...next,
-      steps: replaced(next.steps, edit.step, (step) => {
-        const changed: Record<string, unknown> = { ...step };
-        for (const [field, value] of Object.entries(edit.fields)) {
-          if (FIXED_FIELDS.has(field) || field.startsWith("$")) continue;
-          if (value === undefined) delete changed[field];
-          else changed[field] = value;
-        }
-        return changed;
-      })
-    };
+    switch (edit.kind) {
+      case "set":
+        next = {
+          ...next,
+          steps: replaced(next.steps, edit.step, (step) => written(step, edit.fields, FIXED_FIELDS))
+        };
+        break;
+      case "insert": {
+        if (findStep(next, edit.step) !== undefined) break;
+        const step = written({}, edit.fields, new Set(["id"]));
+        next = placed(next, edit.at, { id: edit.step, ...step });
+        break;
+      }
+      case "delete":
+        next = { ...next, steps: without(next.steps, edit.step).list };
+        break;
+      case "move": {
+        const step = findStep(next, edit.step);
+        if (step === undefined || heldIds(step).includes(placeAnchor(edit.at))) break;
+        const taken = without(next.steps, edit.step);
+        const rest = { ...next, steps: taken.list };
+        if (taken.taken === undefined || !placeHeld(rest, edit.at)) break;
+        next = placed(rest, edit.at, taken.taken);
+        break;
+      }
+    }
   }
   return next;
 }
@@ -266,43 +436,81 @@ export function rebaseStepEdits(input: {
   const edits: StepEdit[] = [];
   const conflicts: EditConflict[] = [];
   const dropped: string[] = [];
+  const drop = (step: string) => {
+    if (!dropped.includes(step)) dropped.push(step);
+  };
+  // The operations are carried over in their order: a step added earlier is there for the
+  // operations after it.
+  let now = input.latest;
   for (const edit of input.edits) {
-    const now = findStep(input.latest, edit.step);
-    if (now === undefined) {
-      if (!dropped.includes(edit.step)) dropped.push(edit.step);
+    if (edit.kind === "insert" || edit.kind === "move") {
+      if (
+        !placeHeld(now, edit.at) ||
+        (edit.kind === "move" && findStep(now, edit.step) === undefined)
+      ) {
+        drop(edit.step);
+        continue;
+      }
+    } else if (findStep(now, edit.step) === undefined) {
+      drop(edit.step);
       continue;
     }
-    for (const field of Object.keys(edit.fields)) {
+    for (const field of Object.keys(edit.kind === "set" ? edit.fields : {})) {
       const before = stepValue(input.base, input.baseFiles ?? [], edit.step, field);
       const theirs = stepValue(input.latest, input.latestFiles ?? [], edit.step, field);
-      if (!sameValue(before, theirs) && !sameValue(edit.fields[field], theirs)) {
+      if (
+        edit.kind === "set" &&
+        !sameValue(before, theirs) &&
+        !sameValue(edit.fields[field], theirs)
+      ) {
         conflicts.push({ step: edit.step, field, theirs });
       }
     }
     edits.push(edit);
+    now = applyStepEdits(now, [edit]);
   }
   return { edits, conflicts, dropped };
 }
 
-/** The edits with the fields of one step taken together: the last value of a field stands. */
+/**
+ * The edits with the fields of one step taken together, where its first `set` stands: the
+ * last value of a field stands. Adding, deleting and moving keep their order.
+ */
 function mergedEdits(edits: readonly StepEdit[]): StepEdit[] {
-  const byStep = new Map<string, Record<string, unknown>>();
+  const merged: StepEdit[] = [];
+  const setOf = new Map<string, { kind: "set"; step: string; fields: Record<string, unknown> }>();
   for (const edit of edits) {
-    byStep.set(edit.step, { ...byStep.get(edit.step), ...edit.fields });
+    if (edit.kind !== "set") {
+      merged.push(edit);
+      // A step deleted, or added anew, takes no earlier field along.
+      if (edit.kind === "delete" || edit.kind === "insert") setOf.delete(edit.step);
+      continue;
+    }
+    const held = setOf.get(edit.step);
+    if (held !== undefined) {
+      Object.assign(held.fields, edit.fields);
+      continue;
+    }
+    const entry = { kind: "set" as const, step: edit.step, fields: { ...edit.fields } };
+    setOf.set(edit.step, entry);
+    merged.push(entry);
   }
-  return [...byStep].map(([step, fields]) => ({ kind: "set", step, fields }));
+  return merged;
 }
 
 /**
  * The edits less every field that already says what the manifest says: what a form holds
- * that is no change. An edit with no field left is left out.
+ * that is no change. A `set` with no field left is left out; adding, deleting and moving are
+ * always changes.
  */
 export function effectiveEdits(
   manifest: WorkflowManifest,
   edits: readonly StepEdit[],
   files: readonly WorkflowFile[] = []
 ): StepEdit[] {
+  const added = new Set(edits.flatMap((edit) => (edit.kind === "insert" ? [edit.step] : [])));
   return mergedEdits(edits).flatMap((edit) => {
+    if (edit.kind !== "set" || added.has(edit.step)) return [edit];
     const fields = Object.fromEntries(
       Object.entries(edit.fields).filter(
         ([field, value]) => !sameValue(stepValue(manifest, files, edit.step, field), value)
@@ -310,4 +518,81 @@ export function effectiveEdits(
     );
     return Object.keys(fields).length === 0 ? [] : [{ ...edit, fields }];
   });
+}
+
+/** Ascii letters for the letters a name may hold beyond them, as a step id takes them. */
+const SPELLED: Readonly<Record<string, string>> = { ä: "ae", ö: "oe", ü: "ue", ß: "ss" };
+
+/**
+ * The id of a new step, from its name (workflow-canvas 9.4, decision 7): lowercase letters,
+ * digits, `_` and `-`, starting with a letter, and not one of `taken`. It never changes, also
+ * when the step is renamed.
+ */
+export function stepIdFrom(name: string, taken: ReadonlySet<string>): string {
+  const spelled = name
+    .toLowerCase()
+    .replace(/[äöüß]/gu, (letter) => SPELLED[letter] ?? letter)
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/gu, "");
+  const words = spelled
+    .replace(/[^a-z0-9_-]+/gu, "_")
+    .replace(/_+/gu, "_")
+    .replace(/^[^a-z]+/u, "")
+    .replace(/[_-]+$/u, "")
+    .slice(0, 56);
+  const stem = words === "" ? "step" : words;
+  if (!taken.has(stem)) return stem;
+  for (let count = 2; ; count += 1) {
+    const id = `${stem}_${String(count)}`;
+    if (!taken.has(id)) return id;
+  }
+}
+
+/** Every step id of a manifest, at any depth. */
+export function stepIds(manifest: WorkflowManifest): Set<string> {
+  const ids = new Set<string>();
+  const steps = Array.isArray(manifest.steps) ? manifest.steps : [];
+  for (const step of steps) if (isRecord(step)) for (const id of heldIds(step)) ids.add(id);
+  return ids;
+}
+
+/** Whether a value of a step's fields names a step's result: `{ step, path }` at any depth. */
+function reads(value: unknown, ids: ReadonlySet<string>): boolean {
+  if (Array.isArray(value)) return value.some((item) => reads(item, ids));
+  if (!isRecord(value)) return false;
+  if (typeof value.step === "string" && typeof value.path === "string" && ids.has(value.step)) {
+    return true;
+  }
+  return Object.values(value).some((item) => reads(item, ids));
+}
+
+/**
+ * The steps that read the result of a step, or of a step it holds, and do not go with it: a
+ * step whose result another reads cannot be deleted (workflow-canvas 9.6).
+ */
+export function readersOf(
+  manifest: WorkflowManifest,
+  id: string
+): Readonly<Record<string, unknown>>[] {
+  const step = findStep(manifest, id);
+  if (step === undefined) return [];
+  const going = new Set(heldIds(step));
+  const found: Readonly<Record<string, unknown>>[] = [];
+  const walk = (list: unknown) => {
+    if (!Array.isArray(list)) return;
+    for (const entry of list) {
+      if (!isRecord(entry)) continue;
+      if (!going.has(String(entry.id))) {
+        const own = Object.fromEntries(
+          Object.entries(entry).filter(
+            ([key]) => !["steps", "branches", "then", "else"].includes(key)
+          )
+        );
+        if (reads(own, going)) found.push(entry);
+      }
+      for (const inner of innerLists(entry)) walk(inner);
+    }
+  };
+  walk(manifest.steps);
+  return found;
 }

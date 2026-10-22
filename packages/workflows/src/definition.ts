@@ -3,6 +3,7 @@ import {
   RUN_AGENT_TOOL_NAME,
   WORKFLOW_KINDS,
   WORKFLOW_DATASET_KEY,
+  WORKFLOW_EXECUTED_STEP_TYPES,
   WORKFLOW_START_KEY_INPUT,
   WORKFLOW_STEP_TYPES,
   readYamlData,
@@ -36,9 +37,6 @@ export { WORKFLOW_LIMIT_ABOVE_CEILING, type WorkflowDefinitionIssue } from "./de
 // `workflow.yaml` as a definition the engine runs: its shape, and what must hold between its
 // steps before a run is started from it. Nothing here reads a file or a store. Saving a
 // definition, publishing one and starting a run all ask `parseWorkflowManifest`.
-
-/** The step types this release executes. A definition that names another is not accepted. */
-export const WORKFLOW_EXECUTED_STEP_TYPES = WORKFLOW_STEP_TYPES;
 
 export type WorkflowDefinitionResult =
   { ok: true; manifest: WorkflowManifest } | { ok: false; issues: WorkflowDefinitionIssue[] };

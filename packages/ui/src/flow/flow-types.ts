@@ -1,3 +1,5 @@
+import type { ReactElement, ReactNode } from "react";
+
 /**
  * How far one part of a graph has come. `idle` is a part that is only described.
  * `doneWithFailures` is a repeated part that ended with some of its entries failed.
@@ -132,6 +134,11 @@ export interface FlowInsertPoints {
   shows?(place: FlowInsertPlace): boolean;
   /** Called by Escape while the canvas is in `move` mode. */
   onCancel?(): void;
+  /**
+   * In `add` mode: wraps the "+" of a place in what it opens, such as a `Picker` whose trigger
+   * it is, so the list stands by the point. The point still reports its press.
+   */
+  around?(place: FlowInsertPlace, point: ReactElement): ReactNode;
 }
 
 /** A graph as plain data. It carries no positions: the canvas lays it out. */

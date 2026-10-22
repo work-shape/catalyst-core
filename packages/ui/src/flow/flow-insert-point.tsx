@@ -1,5 +1,5 @@
 import { Plus } from "lucide-react";
-import type { ButtonHTMLAttributes } from "react";
+import type { ButtonHTMLAttributes, Ref } from "react";
 import { cn } from "../cn";
 import { useUiLabels } from "../ui-root";
 
@@ -16,6 +16,8 @@ export interface FlowInsertPointProps extends Omit<
   target?: boolean;
   /** Seen only while the pointer is over the canvas or the point has the focus. */
   reveal?: boolean;
+  /** For what the point opens, such as a `Picker` whose trigger it is. */
+  ref?: Ref<HTMLButtonElement>;
 }
 
 /** A place on an edge, an exit or a container's end where a part can be put or moved to. */
@@ -47,10 +49,10 @@ export function FlowInsertPoint({
         "nodrag nopan inline-flex size-7 shrink-0 items-center justify-center rounded-full border border-input-strong bg-background text-muted-foreground transition-[color,border-color,opacity] duration-(--duration-color) focus-visible:focus-ring enabled:hover:border-primary enabled:hover:text-primary disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none",
         target &&
           "w-auto gap-1.5 border-primary bg-linear-to-r from-primary-soft to-primary-soft px-2.5 text-caption font-medium whitespace-nowrap text-primary-soft-foreground",
-        // A pointer that cannot hover sees every point.
+        // A pointer that cannot hover sees every point; a point stays while what it opens is open.
         reveal &&
           !target &&
-          "opacity-0 group-hover/flow:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100",
+          "opacity-0 group-hover/flow:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100 data-[state=open]:opacity-100",
         className
       )}
     >

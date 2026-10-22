@@ -50,7 +50,7 @@ const STARTS = /^workflow\.([^.]+)\.start$/u;
  * An operation in words: its title and where it belongs. An operation that starts a Workflow
  * has no title of its own, so it is named by the Workflow it starts.
  */
-function operationWords(
+export function operationWords(
   operation: CallableOperationOption,
   t: Translate
 ): { label: string; source: string | undefined } {
@@ -95,7 +95,7 @@ function operationGroups(
 }
 
 /** The note under a list read in part, or that failed. */
-function noteOf(choices: StepChoices<unknown>, t: Translate): string | undefined {
+export function noteOf(choices: StepChoices<unknown>, t: Translate): string | undefined {
   if (choices.failed) return t("workflows.settings.operationsFailed");
   return choices.more ? t("workflows.settings.choicesMore") : undefined;
 }

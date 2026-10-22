@@ -433,6 +433,37 @@ describe("insert points on the canvas", () => {
     expect(cancelled).toBe(1);
   });
 
+  it("wraps each + in what it opens, and still reports the press", async () => {
+    const pressed: string[] = [];
+    await renderCanvas({
+      insertPoints: {
+        mode: "add",
+        label: (place) => `Add at ${place.kind}`,
+        onPress: (place) => pressed.push(place.kind),
+        shows: (place) => place.kind === "end",
+        around: (place, point) =>
+          createElement("span", { "data-around": place.kind === "end" ? place.groupId : "" }, point)
+      }
+    });
+    const point = find<HTMLButtonElement>('[data-around="loop"] [data-place="end:loop"]');
+    act(() => point.click());
+    expect(pressed).toEqual(["end"]);
+    expect(point.classList).toContain("data-[state=open]:opacity-100");
+  });
+
+  it("wraps no Move here target", async () => {
+    await renderCanvas({
+      insertPoints: {
+        mode: "move",
+        label: () => "here",
+        onPress: () => {},
+        around: (_place, point) => createElement("span", { "data-around": "" }, point)
+      }
+    });
+    expect(host?.querySelector("[data-target]")).not.toBeNull();
+    expect(host?.querySelector("[data-around]")).toBeNull();
+  });
+
   it("draws no point without insertPoints", async () => {
     await renderCanvas({});
     expect(host?.querySelector("[data-flow-id]")).not.toBeNull();
@@ -882,6 +913,22 @@ describe("ScheduleField", () => {
 });
 
 describe("SidePanel editing", () => {
+  it("shows its actions in the head, before the close button", () => {
+    render(
+      createElement(SidePanel, {
+        open: true,
+        title: "Load the clients",
+        onClose: () => {},
+        actions: createElement("button", { type: "button", "data-more": "" }, "More"),
+        children: "Fields"
+      })
+    );
+    const more = find("[data-more]");
+    const close = find(`[aria-label="${uiLabelsEn.close}"]`);
+    expect(more.compareDocumentPosition(close) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(find('[data-slot="side-panel-body"]').contains(more)).toBe(false);
+  });
+
   it("keeps the footer after the scroll body and closes on Escape", () => {
     let closed = false;
     render(

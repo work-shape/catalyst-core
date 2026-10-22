@@ -211,6 +211,7 @@ export { USER_STATUSES } from "@work-shape/catalyst-asset-schemas";
 export { WEB_SOURCE_PROVIDERS } from "@work-shape/catalyst-asset-schemas";
 export { WORKFLOW_DATASET_STATES } from "@work-shape/catalyst-asset-schemas";
 export { WORKFLOW_ENDED_STATUSES } from "@work-shape/catalyst-asset-schemas";
+export { WORKFLOW_EXECUTED_STEP_TYPES } from "@work-shape/catalyst-asset-schemas";
 export { WORKFLOW_RESERVED_STEP_TYPES } from "@work-shape/catalyst-asset-schemas";
 export { WORKFLOW_RUN_MODES } from "@work-shape/catalyst-asset-schemas";
 export { WORKFLOW_RUN_STATUSES } from "@work-shape/catalyst-asset-schemas";

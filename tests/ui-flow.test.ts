@@ -161,6 +161,12 @@ describe("FlowNode", () => {
     expect(node({ summary: "Fetches every client." })).not.toContain('data-slot="flow-compact"');
   });
 
+  it("leaves the change to the frame when compact, and names it to a screen reader", () => {
+    const compact = node({ compact: true, change: "unsaved" }).split('data-slot="flow-compact"')[1];
+    expect(classesOf(slot(compact ?? "", "flow-change"))).toEqual(["sr-only"]);
+    expect(classesOf(slot(node({ change: "unsaved" }), "flow-change"))).toContain("shrink-0");
+  });
+
   it("draws a second frame behind a node that holds a graph of its own", () => {
     expect(node({ stacked: true })).toContain('data-slot="flow-stack"');
     expect(node({})).not.toContain('data-slot="flow-stack"');

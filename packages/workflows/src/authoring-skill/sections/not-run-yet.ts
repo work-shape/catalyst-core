@@ -1,5 +1,4 @@
-import { WORKFLOW_STEP_TYPES } from "@work-shape/catalyst-core";
-import { WORKFLOW_EXECUTED_STEP_TYPES } from "../../definition";
+import { WORKFLOW_EXECUTED_STEP_TYPES, WORKFLOW_STEP_TYPES } from "@work-shape/catalyst-core";
 
 /** The step types the file form holds and this engine does not run. */
 export function workflowStepTypesNotRun(): string[] {

@@ -1,4 +1,4 @@
-import { WORKFLOW_EXECUTED_STEP_TYPES } from "../../definition";
+import { WORKFLOW_EXECUTED_STEP_TYPES } from "@work-shape/catalyst-core";
 import { STEP_REFERENCE } from "../../steps/reference";
 
 function stepReference(): string {

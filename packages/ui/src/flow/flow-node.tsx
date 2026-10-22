@@ -158,7 +158,12 @@ export function FlowHead({
       {change === undefined ? null : (
         <span
           data-slot="flow-change"
-          className="shrink-0 rounded-md bg-primary-soft px-1.5 py-0.5 text-caption font-medium text-primary-soft-foreground"
+          // Zoomed out, the frame alone shows the change: the tag would leave the title no room.
+          className={cn(
+            compact
+              ? "sr-only"
+              : "shrink-0 rounded-md bg-primary-soft px-1.5 py-0.5 text-caption font-medium text-primary-soft-foreground"
+          )}
         >
           {labels[flowChangeLabels[change]]}
         </span>

@@ -191,6 +191,10 @@ function folderRefusal(
 }
 
 /** The reason and the issues a refusal of the instance names in its details. */
+/** An issue's place as segments: the instance names it as segments or as one dotted path. */
+const pathOf = (path: unknown): unknown[] =>
+  Array.isArray(path) ? path : typeof path === "string" && path !== "" ? path.split(".") : [];
+
 export function readRefusalDetails(error: unknown): RefusalDetails {
   const details = field(field(field(error, "payload"), "error"), "details");
   const issues = field(details, "issues");
@@ -209,9 +213,7 @@ export function readRefusalDetails(error: unknown): RefusalDetails {
       const message = text(issue, "message");
       const path = field(issue, "path");
       const code = text(issue, "code");
-      return message
-        ? [{ message, path: Array.isArray(path) ? path : [], ...(code ? { code } : {}) }]
-        : [];
+      return message ? [{ message, path: pathOf(path), ...(code ? { code } : {}) }] : [];
     })
   };
 }

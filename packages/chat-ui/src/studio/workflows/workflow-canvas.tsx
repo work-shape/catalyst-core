@@ -1,7 +1,17 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { FlowCanvas, type FlowGraph } from "@work-shape/catalyst-ui";
+import {
+  Banner,
+  Button,
+  FlowCanvas,
+  type FlowGraph,
+  type FlowInsertPlace,
+  type FlowInsertPoints
+} from "@work-shape/catalyst-ui";
 import { useTranslation } from "../../shared/i18n";
 import { LoopEntries } from "./loop-entries";
+import { DeleteStepDialog, StepMenu, stepMovable } from "./step-actions";
+import { findStep, heldIds, type StepPlace, type WorkflowManifest } from "./step-edits";
+import { StepPalette } from "./step-palette";
 import {
   StepPanel,
   StepTranscript,
@@ -10,6 +20,7 @@ import {
   type StepPanelTab
 } from "./step-panel";
 import { StepSettings, StepSettingsBar } from "./step-settings";
+import type { Translate } from "./step-settings-parts";
 import type { LiveOnceControl } from "./test-run";
 import type { WorkflowEdit } from "./workflow-draft";
 import type { WorkflowEditing } from "./workflow-editing";
@@ -54,6 +65,70 @@ function useSameGraph<Graph extends FlowGraph>(graph: Graph): Graph {
   return held.graph;
 }
 
+/** Where a step goes when it is put at a place of the canvas (workflow-canvas 9.6). */
+export function stepPlaceOf(place: FlowInsertPlace): StepPlace {
+  switch (place.kind) {
+    case "edge":
+      return { kind: "after", step: place.source };
+    case "exit":
+      return { kind: "first", block: place.nodeId, path: place.exitId };
+    case "end":
+      return { kind: "last", block: place.groupId };
+  }
+}
+
+/** The step a place is named by: the step before it, the condition or the block. */
+const anchorOf = (place: FlowInsertPlace) =>
+  place.kind === "edge" ? place.source : place.kind === "exit" ? place.nodeId : place.groupId;
+
+/**
+ * The places of the canvas where a step can be added or a moving step put, for a draft edited
+ * by hand. A place is offered only where the draft holds what names it; the end of a parallel
+ * block is no place, as its paths have no end in common. While a step moves, no place beside
+ * it or inside it is offered.
+ */
+export function editPlaces(
+  graph: FlowGraph,
+  manifest: WorkflowManifest,
+  moving: string | undefined,
+  t: Translate
+): Pick<FlowInsertPoints, "shows"> & { words(place: FlowInsertPlace, adding: boolean): string } {
+  const held = new Set(
+    moving === undefined ? [] : heldIds(findStep(manifest, moving) ?? { id: moving })
+  );
+  const title = (id: string) =>
+    graph.nodes.find((node) => node.id === id)?.title ??
+    graph.groups?.find((group) => group.id === id)?.title ??
+    id;
+  return {
+    shows(place) {
+      const anchor = anchorOf(place);
+      if (findStep(manifest, anchor) === undefined || held.has(anchor)) return false;
+      if (place.kind === "edge" && place.target === moving) return false;
+      if (place.kind === "end") {
+        return graph.groups?.find((group) => group.id === place.groupId)?.kind !== "parallel";
+      }
+      return true;
+    },
+    words(place, adding) {
+      return place.kind === "edge"
+        ? t(adding ? "workflows.place.addAfter" : "workflows.place.after", {
+            name: title(place.source)
+          })
+        : place.kind === "exit"
+          ? t(adding ? "workflows.place.addOnExit" : "workflows.place.onExit", {
+              path:
+                graph.nodes
+                  .find((node) => node.id === place.nodeId)
+                  ?.exits?.find((exit) => exit.id === place.exitId)?.label ?? place.exitId
+            })
+          : t(adding ? "workflows.place.addAtEnd" : "workflows.place.atEnd", {
+              name: title(place.groupId)
+            });
+    }
+  };
+}
+
 /**
  * A Workflow on the canvas, read-only: its steps as nodes, a loop and a parallel block as
  * frames around their steps. With a run, every part says how far it is. A step opens the one
@@ -91,6 +166,11 @@ export function WorkflowCanvas({
   const [tab, setTab] = useState<StepPanelTab>("what");
   // Once the reader chose a step, or closed the panel, it no longer opens by itself.
   const chose = useRef(false);
+  // The step being moved, while the canvas offers the places it can go; the step whose delete
+  // is asked about; and why the instance refused the last move.
+  const [moving, setMoving] = useState<string>();
+  const [deleting, setDeleting] = useState<string>();
+  const [moveRefused, setMoveRefused] = useState<{ name: string; sentence: string }>();
 
   const steps = workflow === undefined ? undefined : (editing?.steps ?? workflow.steps);
   const placed = useMemo(() => placedSteps(steps ?? []), [steps]);
@@ -181,6 +261,56 @@ export function WorkflowCanvas({
     }
   }, [focus, placed]);
 
+  // Steps are added, moved and deleted on the draft, never on a run.
+  const editable = run === undefined ? editing : undefined;
+  const nameOf = (id: string) => {
+    const name = editable === undefined ? undefined : findStep(editable.manifest, id)?.name;
+    return typeof name === "string" && name !== "" ? name : id;
+  };
+  const places =
+    editable === undefined ? undefined : editPlaces(graph, editable.manifest, moving, t);
+  let insertPoints: FlowInsertPoints | undefined;
+  if (editable !== undefined && places !== undefined) {
+    insertPoints =
+      moving === undefined
+        ? {
+            mode: "add",
+            label: (place) => places.words(place, true),
+            shows: places.shows,
+            // The "+" opens the palette; the pick is what adds.
+            onPress: () => undefined,
+            around: (place, point) => (
+              <StepPalette
+                onPick={(step) => {
+                  const id = editable.add(stepPlaceOf(place), step.fields, step.name);
+                  chose.current = true;
+                  setSelectedId(id);
+                  setTab("settings");
+                }}
+              >
+                {point}
+              </StepPalette>
+            )
+          }
+        : {
+            mode: "move",
+            label: (place) => places.words(place, false),
+            shows: places.shows,
+            onCancel: () => setMoving(undefined),
+            onPress: (place) => {
+              const step = moving;
+              const name = nameOf(step);
+              setMoving(undefined);
+              editable
+                .commit({ kind: "move", step, at: stepPlaceOf(place) })
+                .then((sentence) => {
+                  if (sentence !== undefined) setMoveRefused({ name, sentence });
+                })
+                .catch(() => undefined);
+            }
+          };
+  }
+
   const selected = selectedId === undefined ? undefined : placed.get(selectedId);
   const part =
     selectedId === undefined
@@ -217,69 +347,124 @@ export function WorkflowCanvas({
       />
     );
 
+  const actions =
+    editable === undefined || selected === undefined || !stepMovable(editable, selected.step.id)
+      ? undefined
+      : (() => {
+          const id = selected.step.id;
+          return (
+            <StepMenu
+              editing={editable}
+              onMove={() => {
+                setMoveRefused(undefined);
+                setSelectedId(undefined);
+                setMoving(id);
+              }}
+              onDelete={() => setDeleting(id)}
+            />
+          );
+        })();
+
   return (
-    <FlowCanvas
-      data-testid="workflow-canvas"
-      graph={graph}
-      label={t("workflows.canvas.label", { name: workflow?.name ?? t("workflows.title") })}
-      emptyLabel={t("workflows.canvas.empty")}
-      loading={workflow === undefined || (run !== undefined && stepRuns === undefined)}
-      selectedId={selectedId}
-      onSelect={(id) => {
-        chose.current = true;
-        if (id === undefined) {
-          setSelectedId(undefined);
-        } else {
-          open(id);
+    <div className="relative size-full min-h-0 min-w-0">
+      <FlowCanvas
+        data-testid="workflow-canvas"
+        graph={graph}
+        label={t("workflows.canvas.label", { name: workflow?.name ?? t("workflows.title") })}
+        emptyLabel={t("workflows.canvas.empty")}
+        loading={workflow === undefined || (run !== undefined && stepRuns === undefined)}
+        selectedId={selectedId}
+        onSelect={(id) => {
+          chose.current = true;
+          if (id === undefined) {
+            setSelectedId(undefined);
+          } else {
+            open(id);
+          }
+        }}
+        onAction={(id) => {
+          const step = placed.get(id)?.step;
+          if (step === undefined) {
+            return;
+          }
+          chose.current = true;
+          if (step.kind === "workflow") {
+            onOpenChild(step, frame.get(id));
+          } else {
+            open(id, "entries");
+          }
+        }}
+        searchLabel={t("workflows.canvas.find")}
+        {...(insertPoints === undefined ? {} : { insertPoints })}
+        panel={
+          selected === undefined || part === undefined ? undefined : (
+            <StepPanel
+              step={selected.step}
+              account={run === undefined ? workflow?.runsAs : run.run.runsAs}
+              part={part}
+              run={selectedRun}
+              tab={tab}
+              onTabChange={setTab}
+              entries={entries}
+              transcript={transcript}
+              actions={actions}
+              onOpenChild={
+                selected.step.kind === "workflow"
+                  ? () => onOpenChild(selected.step, selectedRun?.stepRun)
+                  : undefined
+              }
+              {...(editing === undefined || !settingsOffered(selected.step.id)
+                ? {}
+                : {
+                    settings: {
+                      content: (
+                        <StepSettings stepId={selected.step.id} editing={editing} edit={edit} />
+                      ),
+                      footer: <StepSettingsBar stepId={selected.step.id} editing={editing} />,
+                      editing: editing.unsaved.size > 0
+                    }
+                  })}
+              onClose={() => {
+                chose.current = true;
+                setSelectedId(undefined);
+              }}
+            />
+          )
         }
-      }}
-      onAction={(id) => {
-        const step = placed.get(id)?.step;
-        if (step === undefined) {
-          return;
-        }
-        chose.current = true;
-        if (step.kind === "workflow") {
-          onOpenChild(step, frame.get(id));
-        } else {
-          open(id, "entries");
-        }
-      }}
-      searchLabel={t("workflows.canvas.find")}
-      panel={
-        selected === undefined || part === undefined ? undefined : (
-          <StepPanel
-            step={selected.step}
-            account={run === undefined ? workflow?.runsAs : run.run.runsAs}
-            part={part}
-            run={selectedRun}
-            tab={tab}
-            onTabChange={setTab}
-            entries={entries}
-            transcript={transcript}
-            onOpenChild={
-              selected.step.kind === "workflow"
-                ? () => onOpenChild(selected.step, selectedRun?.stepRun)
-                : undefined
-            }
-            {...(editing === undefined || !settingsOffered(selected.step.id)
-              ? {}
-              : {
-                  settings: {
-                    content: (
-                      <StepSettings stepId={selected.step.id} editing={editing} edit={edit} />
-                    ),
-                    footer: <StepSettingsBar stepId={selected.step.id} editing={editing} />,
-                    editing: editing.unsaved.size > 0
-                  }
-                })}
-            onClose={() => {
-              chose.current = true;
-              setSelectedId(undefined);
-            }}
-          />
-        )
-      }
-    />
+      />
+      {moving === undefined ? null : (
+        <Banner
+          className="absolute top-3 left-3 z-10 max-w-md shadow-sm"
+          data-move-hint=""
+          title={t("workflows.move.hint", { name: nameOf(moving) })}
+          action={
+            <Button type="button" size="sm" variant="outline" onClick={() => setMoving(undefined)}>
+              {t("workflows.move.cancel")}
+            </Button>
+          }
+        />
+      )}
+      {moveRefused === undefined ? null : (
+        <Banner
+          className="absolute top-3 left-3 z-10 max-w-md shadow-sm"
+          tone="danger"
+          title={t("workflows.move.refused", { name: moveRefused.name })}
+          onDismiss={() => setMoveRefused(undefined)}
+        >
+          {moveRefused.sentence}
+        </Banner>
+      )}
+      {editable === undefined || deleting === undefined ? null : (
+        <DeleteStepDialog
+          editing={editable}
+          stepId={deleting}
+          onClose={() => setDeleting(undefined)}
+          onDeleted={() => {
+            setDeleting(undefined);
+            setSelectedId(undefined);
+          }}
+        />
+      )}
+    </div>
   );
 }

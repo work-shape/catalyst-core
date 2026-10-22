@@ -1,4 +1,4 @@
-import type { WORKFLOW_EXECUTED_STEP_TYPES } from "../definition";
+import type { WORKFLOW_EXECUTED_STEP_TYPES } from "@work-shape/catalyst-core";
 import { agentReference } from "./agent.reference";
 import { codeReference } from "./code.reference";
 import { loopReference } from "./loop.reference";

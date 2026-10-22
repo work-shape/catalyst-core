@@ -121,7 +121,7 @@ function PlacePoint({ place, className }: { place: FlowInsertPlace; className?: 
   if (!insert || !(insert.shows?.(place) ?? true)) {
     return null;
   }
-  return (
+  const point = (
     <FlowInsertPoint
       data-place={flowPlaceKey(place)}
       className={className}
@@ -131,6 +131,7 @@ function PlacePoint({ place, className }: { place: FlowInsertPlace; className?: 
       onClick={() => insert.onPress(place)}
     />
   );
+  return insert.mode === "add" && insert.around !== undefined ? insert.around(place, point) : point;
 }
 
 /** An insert point on an edge or at a group's end: a part of its own, centred on its place. */

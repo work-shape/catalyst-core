@@ -50,6 +50,8 @@ export interface SidePanelProps extends Omit<HTMLAttributes<HTMLElement>, "title
   footer?: ReactNode;
   /** A form sheet uses 92% of its container height. */
   tall?: boolean;
+  /** Before the close button: what can be done to the object, such as its "…" menu. */
+  actions?: ReactNode;
 }
 
 const placements: Record<SidePanelMode, string> = {
@@ -84,6 +86,7 @@ export function SidePanel({
   children,
   footer,
   tall = false,
+  actions,
   className,
   onKeyDown,
   ...props
@@ -142,6 +145,7 @@ export function SidePanel({
             {title}
           </h2>
         </div>
+        {actions}
         <Button
           variant="ghost"
           size="icon"

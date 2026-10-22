@@ -877,6 +877,13 @@ export const WORKFLOW_STEP_TYPES = [
 ] as const;
 export type WorkflowStepType = (typeof WORKFLOW_STEP_TYPES)[number];
 
+/**
+ * The step types this release executes. The engine accepts no definition that names another,
+ * and the interface offers no other in its palette (workflow-canvas 9.6). A list of its own, so
+ * it can be narrower than `WORKFLOW_STEP_TYPES` while a known type is not run yet.
+ */
+export const WORKFLOW_EXECUTED_STEP_TYPES = [...WORKFLOW_STEP_TYPES] as const;
+
 export const WORKFLOW_RESERVED_STEP_TYPES = [
   /** Reserved in the contract: drawn, and run by no engine yet. */
   "condition",
