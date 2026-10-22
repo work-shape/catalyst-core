@@ -40,6 +40,7 @@ export async function checkFreshResolution(
     const demo = join(root, "clients/demo");
     for (const file of [
       "src",
+      "catalogue",
       "tools",
       "widgets",
       "sample-mcp",

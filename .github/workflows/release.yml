@@ -88,9 +88,11 @@ jobs:
           node scripts/release/notes.mjs "$VERSION" > "$RUNNER_TEMP/release-notes.md"
         env:
           VERSION: ${{ steps.release.outputs.version }}
-          # A private repository's hosted runner has about 7 GB; building packages one at a
-          # time keeps the type declaration builds inside it.
+          # A private repository's hosted runner has about 7 GB, which gives Node a heap of
+          # about 2 GB: too small for the client-assembly type declarations. One package at a
+          # time with a 6 GB heap keeps the build inside the runner.
           npm_config_workspace_concurrency: "1"
+          NODE_OPTIONS: --max-old-space-size=6144
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           repository: work-shape/catalyst
