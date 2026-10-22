@@ -14,6 +14,9 @@ import {
   CardTitle,
   Chip,
   cn,
+  Disclosure,
+  DisclosureContent,
+  DisclosureTrigger,
   EmptyState,
   PageHeader,
   SkeletonList,
@@ -116,6 +119,7 @@ function AuditActivityRow({ activity }: { activity: AuditActivity }) {
     <li className="py-2 first:pt-0 last:pb-0">
       <button
         type="button"
+        data-audit-activity=""
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
         className="flex w-full items-start gap-2.5 rounded-md px-1 py-1 text-left hover:bg-muted/40"
@@ -213,9 +217,15 @@ function AuditEvidence({ evidence }: { evidence: AuditEvent[] }) {
         </TableBody>
       </Table>
       {evidence[0] ? (
-        <p className="px-3 py-1.5 font-mono text-[11px] text-muted-foreground">
-          {t("settings.auditCorrelation", { id: evidence[0].correlationId })}
-        </p>
+        // The correlation id is for whoever traces the request, folded away like every id.
+        <Disclosure className="px-3 py-1">
+          <DisclosureTrigger className="text-xs">{t("settings.auditTechnical")}</DisclosureTrigger>
+          <DisclosureContent>
+            <p className="pb-1 font-mono text-[11px] text-muted-foreground">
+              {t("settings.auditCorrelation", { id: evidence[0].correlationId })}
+            </p>
+          </DisclosureContent>
+        </Disclosure>
       ) : null}
     </div>
   );
