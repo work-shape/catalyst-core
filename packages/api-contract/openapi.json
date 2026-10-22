@@ -38199,6 +38199,9 @@
           },
           "subject": {
             "$ref": "#/components/schemas/ConversationSubject"
+          },
+          "creationTarget": {
+            "$ref": "#/components/schemas/ConversationCreationTarget"
           }
         },
         "required": [
@@ -38214,6 +38217,10 @@
           "updatedAt",
           "retainedUntil"
         ]
+      },
+      "ConversationCreationTarget": {
+        "type": "string",
+        "const": "instance"
       },
       "ConversationFollowUp": {
         "type": "object",
@@ -38334,6 +38341,9 @@
           },
           "subject": {
             "$ref": "#/components/schemas/ConversationSubject"
+          },
+          "creationTarget": {
+            "$ref": "#/components/schemas/ConversationCreationTarget"
           },
           "latestMessageAt": {
             "$ref": "#/components/schemas/Timestamp"
@@ -39052,6 +39062,9 @@
           },
           "subject": {
             "$ref": "#/components/schemas/ConversationSubject"
+          },
+          "creationTarget": {
+            "$ref": "#/components/schemas/ConversationCreationTarget"
           }
         }
       },

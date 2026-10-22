@@ -1,3 +1,4 @@
+import { INSTANCE_TARGET_KINDS } from "../conversation";
 import { LEGACY_AUDIT, type PlatformEventDefinition } from "./definition";
 
 export const conversationEvents = {
@@ -20,6 +21,25 @@ export const conversationEvents = {
     ...LEGACY_AUDIT,
     name: "conversation.deleted",
     subject: "conversation"
+  },
+  // A first save in a conversation started under Studio's scope "Instance" was refused: the
+  // person may not create the kind for the instance (studio-chat-entry.md, section 4a). The
+  // subject is the conversation. The metadata names the kind only: no name, no config.
+  "conversation.instance_create_refused": {
+    name: "conversation.instance_create_refused",
+    subject: "conversation",
+    legacy: false,
+    audited: true,
+    phases: ["after"],
+    payload: {
+      type: "object",
+      additionalProperties: false,
+      required: ["kind"],
+      properties: {
+        kind: { type: "string", enum: [...INSTANCE_TARGET_KINDS] },
+        operationRunId: { type: "string" }
+      }
+    }
   },
   "conversation.moved": { ...LEGACY_AUDIT, name: "conversation.moved", subject: "conversation" },
   "conversation.renamed": {

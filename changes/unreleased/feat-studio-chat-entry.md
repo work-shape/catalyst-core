@@ -17,3 +17,4 @@ section: Changed
     - Leaving the page with unsaved changes asks first.
     - "Chat" on the new page opens the agent that builds the kind.
   - Kinds without a hand editor (Data Stores, Apps, Workflows) ask one short question, "What should it do?", and then "Build with the agent" opens the dock with the answer in its composer.
+- **Chat under Instance:** A chat started in Studio under the scope Instance creates agents, skills and guardrails that the instance owns, where the person may create them there. Otherwise the dock says "Du darfst hier keine Agenten der Instanz anlegen", and the save is refused with that reason: nothing is created, also not in a workspace. The target is set when the conversation is created, and the agent cannot change it. A refusal is audited as `conversation.instance_create_refused`, with the conversation and the kind only. Data Stores and Workflows keep their rule.

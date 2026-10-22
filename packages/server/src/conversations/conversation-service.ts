@@ -9,6 +9,7 @@ import {
   type CollaborationWorkspaceId,
   type ConversationListItem,
   type ConversationId,
+  type ConversationCreationTarget,
   type ConversationSubject,
   type ConversationVisibility,
   type JobControl,
@@ -56,6 +57,12 @@ export interface CreateConversationCommand {
   collaborationWorkspaceId?: CollaborationWorkspaceId;
   /** The asset the conversation is about. Its creator holds the read right on it. */
   subject?: ConversationSubject;
+  /**
+   * `instance` where the conversation is started under Studio's scope "Instance": its first
+   * saves create agents, skills and guardrails for the instance, where the person may. Set
+   * here only, and never changed (studio-chat-entry.md, section 4a).
+   */
+  creationTarget?: ConversationCreationTarget;
 }
 
 export interface MoveConversationCommand {
@@ -133,7 +140,8 @@ export class ConversationWorkflow {
         new Date(),
         this.options.config.retention.conversationDays
       ).toISOString(),
-      ...(command.subject ? { subject: command.subject } : {})
+      ...(command.subject ? { subject: command.subject } : {}),
+      ...(command.creationTarget ? { creationTarget: command.creationTarget } : {})
     });
 
     await this.options.auditRecorder.record({
@@ -146,7 +154,8 @@ export class ConversationWorkflow {
         retainedUntil: conversation.retainedUntil,
         ...(conversation.subject
           ? { subjectKind: conversation.subject.kind, subjectName: conversation.subject.name }
-          : {})
+          : {}),
+        ...(conversation.creationTarget ? { creationTarget: conversation.creationTarget } : {})
       }
     });
     return conversation;

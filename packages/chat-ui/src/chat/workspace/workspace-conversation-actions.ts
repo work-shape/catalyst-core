@@ -47,12 +47,15 @@ export async function createPrivateConversationWith(input: {
   collaborationWorkspaceId: string;
   prompt: string;
   draftController: Pick<ReturnType<typeof useWorkspaceDraftController>, "setDraft">;
+  /** `instance` where Studio is set to "Instance": its first saves create for the instance. */
+  creationTarget?: "instance";
 }): Promise<{ id: string; collaborationWorkspaceId: string }> {
   const conversation = await input.client.conversations.create({
     body: {
       locale: input.locale,
       collaborationWorkspaceId: input.collaborationWorkspaceId,
-      visibility: "private"
+      visibility: "private",
+      ...(input.creationTarget ? { creationTarget: input.creationTarget } : {})
     }
   });
   input.draftController.setDraft(
@@ -244,16 +247,18 @@ export function createWorkspaceConversationActions({
   }
 
   /**
-   * A private conversation of `workspaceId`, the open workspace unless named, with `prompt` in
-   * its composer, where building goes on in a workspace whose members read its conversations,
-   * or in the workspace Studio is set to. It opens in the dock where `inDock`, else where a
+   * A private conversation of `options.workspaceId`, the open workspace unless named, with
+   * `prompt` in its composer, where building goes on in a workspace whose members read its
+   * conversations, in the workspace Studio is set to, or with Studio set to "Instance", whose
+   * `creationTarget` the conversation keeps. It opens in the dock where `inDock`, else where a
    * conversation the server made opens. Answers its id.
    */
   async function startPrivateConversationWith(
     prompt: string,
     inDock: boolean,
-    workspaceId: string | undefined = activeCollaborationWorkspaceId
+    options: { workspaceId?: string; creationTarget?: "instance" } = {}
   ): Promise<string> {
+    const workspaceId = options.workspaceId ?? activeCollaborationWorkspaceId;
     if (!workspaceId) {
       throw new Error("A private conversation belongs to a workspace");
     }
@@ -261,6 +266,7 @@ export function createWorkspaceConversationActions({
       client,
       locale: activeLocale,
       collaborationWorkspaceId: workspaceId,
+      ...(options.creationTarget ? { creationTarget: options.creationTarget } : {}),
       prompt,
       draftController
     });

@@ -142,7 +142,8 @@ export function mapConversation(row: ConversationRow | undefined): Conversation 
     deletedAt: row.deletedAt?.toISOString(),
     ...(row.subjectKind === null || row.subjectName === null
       ? {}
-      : { subject: { kind: row.subjectKind, name: row.subjectName } })
+      : { subject: { kind: row.subjectKind, name: row.subjectName } }),
+    ...(row.creationTarget === null ? {} : { creationTarget: row.creationTarget })
   };
 }
 

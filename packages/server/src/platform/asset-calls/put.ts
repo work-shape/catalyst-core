@@ -7,8 +7,10 @@ import {
 import { assetWriteEvent } from "../../guardrails/asset-guardrail-events";
 import { authorizePlatformAssetPut } from "../platform-asset-preflight";
 import {
+  accessOf,
   createUnnamed,
   ownerOf,
+  requireInstanceCreate,
   requireOwnTranscript,
   subjectUnavailable
 } from "../../conversations/platform-asset-subject";
@@ -63,6 +65,16 @@ export function putCalls(
     const mismatch = input.config === undefined ? undefined : otherName(named, input.config);
     if (mismatch) return { saved: false, issues: [mismatch] };
     const call = await callOf(context);
+    // A conversation started under Studio's scope "Instance" creates for the instance only
+    // where the person may: else nothing is created, also not in its workspace.
+    await requireInstanceCreate(options, {
+      actor: call.actor,
+      access: call.access,
+      conversation,
+      kind,
+      name: named.name,
+      correlationId: context.correlationId
+    });
     const write = {
       ...named,
       ...ownerOf(kind, conversation),
@@ -126,6 +138,15 @@ export function putCalls(
       if (!target || options.configAssets.kinds.get(target.kind)?.lifecycle === "draft_published")
         return { allowed: true };
       await requireOwnTranscript(options, conversation);
+      // Asked of the person's own rights before the confirmation, as the save asks it again.
+      await requireInstanceCreate(options, {
+        actor: context.actor,
+        access: await accessOf(options, context.actor),
+        conversation,
+        kind: options.configAssets.kinds.require(target.kind),
+        name: target.name,
+        correlationId: context.correlationId
+      });
       return authorizePlatformAssetPut(options, workflow, target, input, context);
     },
 

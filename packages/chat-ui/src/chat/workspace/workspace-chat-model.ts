@@ -517,9 +517,16 @@ export function useWorkspaceChatModel({
       buildWorkspace !== undefined && buildWorkspace.workspaceId !== activeCollaborationWorkspaceId
         ? buildWorkspace.workspaceId
         : undefined;
-    if (!ownConversations || elsewhere !== undefined) {
+    // Studio set to "Instance": the conversation is made with that target, so its first save
+    // creates an agent, skill or guardrail for the instance, where the person may, and is
+    // refused where not (studio-chat-entry.md, section 4a). The target is set only here.
+    const forInstance = creationScope?.owner === "instance";
+    if (!ownConversations || elsewhere !== undefined || forInstance) {
       // The members would read a new conversation here: the build starts in a private one.
-      startPrivateConversationWith(prompt, true, elsewhere)
+      startPrivateConversationWith(prompt, true, {
+        ...(elsewhere === undefined ? {} : { workspaceId: elsewhere }),
+        ...(forInstance ? { creationTarget: "instance" as const } : {})
+      })
         .then((conversationId) => agentOpens.startedFrom(conversationId, startedFrom))
         .catch(() =>
           setNotice(createTranslationContext(activeLocale).t("conversationPrivateStartFailed"))
@@ -549,7 +556,11 @@ export function useWorkspaceChatModel({
     dockKind === undefined || (openWorkspace === undefined && buildWorkspace === undefined)
       ? undefined
       : dockCreationTarget({
+          kind: dockKind,
           owners: platformContextQuery.data?.kinds.find((kind) => kind.kind === dockKind)?.owners,
+          ...(creationScope?.owner === "instance"
+            ? { instance: { mayCreate: creationScope.mayCreate } }
+            : {}),
           workspaceName:
             buildWorkspace?.workspaceName ??
             (openWorkspace === undefined

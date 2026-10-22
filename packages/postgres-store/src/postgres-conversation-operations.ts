@@ -61,7 +61,10 @@ export async function createConversation(
       createdAt: now,
       updatedAt: now,
       retainedUntil: new Date(input.retainedUntil),
-      ...(input.subject ? { subjectKind: input.subject.kind, subjectName: input.subject.name } : {})
+      ...(input.subject
+        ? { subjectKind: input.subject.kind, subjectName: input.subject.name }
+        : {}),
+      ...(input.creationTarget ? { creationTarget: input.creationTarget } : {})
     })
     .returning();
   return mapConversation(row);

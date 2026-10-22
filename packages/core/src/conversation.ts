@@ -1,5 +1,6 @@
 import {
   CHAT_MESSAGE_ROLES,
+  CONFIG_ASSET_KINDS,
   CONVERSATION_KINDS,
   CONVERSATION_VISIBILITIES
 } from "@work-shape/catalyst-asset-schemas";
@@ -129,6 +130,19 @@ export interface ConversationOfferSource {
  */
 export const SUBJECT_TOOL_PREFIX = "platform.assets.";
 
+/**
+ * Where the assets a conversation's first saves create belong, where it is not the rule of
+ * WS-OWN-1a: `instance` for a conversation started under Studio's scope "Instance". Set only
+ * when the conversation is created, and never changed (studio-chat-entry.md, section 4a).
+ */
+export type ConversationCreationTarget = "instance";
+
+/**
+ * The kinds a conversation with the target `instance` creates for the instance. Every other
+ * kind, such as a Data Store or a Workflow, keeps the rule of its owners.
+ */
+export const INSTANCE_TARGET_KINDS: readonly string[] = [...CONFIG_ASSET_KINDS, "guardrail"];
+
 export interface Conversation {
   id: ConversationId;
   clientInstanceId: ClientInstanceId;
@@ -147,6 +161,8 @@ export interface Conversation {
   deletedAt?: ISODateString;
   /** The asset the conversation is about. Missing on a conversation about none. */
   subject?: ConversationSubject;
+  /** Where its first saves create an agent, skill or guardrail. Missing: the workspace's rule. */
+  creationTarget?: ConversationCreationTarget;
 }
 
 export interface ConversationListItem extends Conversation {
@@ -201,6 +217,7 @@ export interface CreateConversationInput {
   title: string;
   retainedUntil: ISODateString;
   subject?: ConversationSubject;
+  creationTarget?: ConversationCreationTarget;
 }
 
 export interface CreateMessageInput {

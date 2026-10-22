@@ -498,7 +498,8 @@ export class RunStartWorkflow {
         title: command.title ?? createConversationTitle(command.text),
         collaborationWorkspaceId: command.collaborationWorkspaceId,
         ...(command.subject ? { subject: command.subject } : {}),
-        ...(command.visibility ? { visibility: command.visibility } : {})
+        ...(command.visibility ? { visibility: command.visibility } : {}),
+        ...(command.creationTarget ? { creationTarget: command.creationTarget } : {})
       });
       const started = await this.startMessageRun(conversation.id, user, context, {
         ...command,

@@ -10,7 +10,8 @@ import { expect, test } from "./test";
 // head, next to the page's primary action. It opens the dock from anywhere: on a list an empty
 // dock with the agent that builds, which says where a new asset is created; after a close, and
 // after a reload with the dock closed, the same conversation; on an asset's page a conversation
-// about that asset. "New agent" opens the empty page of a new agent under every scope. Fails
+// about that asset. "New agent" opens the empty page of a new agent under every scope, and a
+// chat started under "Instance" creates for the instance (section 4a). Fails
 // without the change: Chat stood only after a close and was gone after a reload, and "New
 // agent" opened a dialog under Instance and the dock under a workspace.
 
@@ -168,9 +169,26 @@ test("New agent opens the empty page of a new agent under Instance and under a w
       if (scope === team) {
         await expect(page.locator("[data-new-asset-availability]")).toContainText(team);
       }
-      // "Chat" on the page opens the agent that builds the new agent.
+      // "Chat" on the page opens the agent that builds the new agent. Under "Instance" its
+      // conversation creates for the instance: the line says so, and the conversation keeps it.
       await chatAction(page).click();
       await expect(chatColumn(page)).toContainText("What should the new agent do?");
+      await expect(chatColumn(page).locator("[data-dock-creation-target]")).toHaveText(
+        scope === "Instance"
+          ? "New agents are created in the instance."
+          : `New agents are created in “${team}”.`
+      );
+      if (scope === "Instance") {
+        await expect.poll(() => conversationOf(page)).not.toBeNull();
+        const thread = await page.request.get(
+          `${apiBaseUrl}/api/v1/conversations/${conversationOf(page) ?? ""}/thread`
+        );
+        expect(
+          z
+            .object({ conversation: z.object({ creationTarget: z.string().optional() }) })
+            .parse(await thread.json()).conversation.creationTarget
+        ).toBe("instance");
+      }
       await dockHead(page).getByRole("button", { name: "Close chat" }).click();
       await page.getByRole("button", { name: "Back to Agents", exact: true }).click();
       await expect(page.getByRole("heading", { name: "Agents", level: 1 })).toBeVisible();

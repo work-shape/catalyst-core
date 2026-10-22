@@ -14,6 +14,7 @@ import {
 import type {
   ChatMessage,
   Conversation,
+  ConversationCreationTarget,
   ConversationKind,
   ModelProviderContinuationCheckpoint
 } from "@work-shape/catalyst-core";
@@ -48,10 +49,17 @@ export const conversations = pgTable(
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
     // The asset the conversation is about, by kind and name. Both null on every other one.
     subjectKind: text("subject_kind"),
-    subjectName: text("subject_name")
+    subjectName: text("subject_name"),
+    // Where the first saves create an agent, skill or guardrail: 'instance' for a conversation
+    // started under Studio's scope "Instance", else null. Set at insert only, never updated.
+    creationTarget: text("creation_target").$type<ConversationCreationTarget>()
   },
   (table) => [
     check("conversations_kind_check", sql`${table.kind} in ('chat', 'run_thread')`),
+    check(
+      "conversations_creation_target_check",
+      sql`${table.creationTarget} is null or ${table.creationTarget} = 'instance'`
+    ),
     check(
       "conversations_run_thread_check",
       sql`(${table.kind} = 'chat' and ${table.parentConversationId} is null and ${table.workflowRunId} is null and ${table.collaborationWorkspaceId} is not null and ${table.createdByUserId} is not null and ${table.createdByExternalUserId} is not null) or (${table.kind} = 'run_thread' and ((${table.parentConversationId} is not null and ${table.workflowRunId} is null and ${table.collaborationWorkspaceId} is not null and ${table.createdByUserId} is not null and ${table.createdByExternalUserId} is not null) or (${table.parentConversationId} is null and ${table.workflowRunId} is not null and ${table.collaborationWorkspaceId} is null and ${table.createdByUserId} is null and ${table.createdByExternalUserId} is null)))`

@@ -58,6 +58,7 @@
 {"name":"conversation.cleanup_failed","legacy":true,"audited":true,"phases":["after"]}
 {"name":"conversation.created","legacy":true,"audited":true,"phases":["after"]}
 {"name":"conversation.deleted","legacy":true,"audited":true,"phases":["after"]}
+{"name":"conversation.instance_create_refused","legacy":false,"audited":true,"phases":["after"]}
 {"name":"conversation.moved","legacy":true,"audited":true,"phases":["after"]}
 {"name":"conversation.renamed","legacy":true,"audited":true,"phases":["after"]}
 {"name":"conversation.retention_expiration_failed","legacy":true,"audited":true,"phases":["after"]}

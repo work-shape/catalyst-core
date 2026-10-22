@@ -117,47 +117,51 @@ export function createPutAssetTool(calls: PlatformAssetPutCalls): AnyToolDefinit
         PLATFORM_ASSET_TOOLS.open.name +
         " first, which makes it the one the conversation is about. To keep saving a draft this conversation created beside that asset, name its 'kind' and 'name' with 'expectedRevision'. Any other asset is refused: an asset that existed before changes only as the asset the conversation is about."
     ].join(" "),
-    inputSchema: z.object({
-      config: configSchema.optional(),
-      files: z
-        .array(
-          z.object({
-            path: z.string().min(1).describe("The path of the file within the asset."),
-            text: z.string().describe("The whole text of the file.")
-          })
-        )
-        .optional()
-        .describe(
-          "For a kind written as files, such as a Data Store: every file of the asset, the manifest among them. A file left out is deleted. Send it instead of 'config'."
-        ),
-      expectedDraftRevision: z
-        .number()
-        .int()
-        .positive()
-        .nullable()
-        .optional()
-        .describe(
-          "For an existing agent, the draftRevision read, null where none is pending. Separate from its live expectedRevision."
-        ),
-      expectedRevision: z
-        .number()
-        .int()
-        .min(1)
-        .optional()
-        .describe(
-          "The 'revision' the last read of the asset answered. Leave it out only for the save that creates an asset."
-        ),
-      kind: kindSchema
-        .optional()
-        .describe(
-          "For the save that creates an asset: its kind, one of workflow, data_store, agent or skill. With 'expectedRevision': the kind of a draft this conversation created, to save it beside the asset the conversation is about."
-        ),
-      name: nameSchema
-        .optional()
-        .describe(
-          "For the save that creates an asset: its name, which the config names too. With 'expectedRevision': the name of a draft this conversation created."
-        )
-    }),
+    inputSchema: z
+      .object({
+        config: configSchema.optional(),
+        files: z
+          .array(
+            z.object({
+              path: z.string().min(1).describe("The path of the file within the asset."),
+              text: z.string().describe("The whole text of the file.")
+            })
+          )
+          .optional()
+          .describe(
+            "For a kind written as files, such as a Data Store: every file of the asset, the manifest among them. A file left out is deleted. Send it instead of 'config'."
+          ),
+        expectedDraftRevision: z
+          .number()
+          .int()
+          .positive()
+          .nullable()
+          .optional()
+          .describe(
+            "For an existing agent, the draftRevision read, null where none is pending. Separate from its live expectedRevision."
+          ),
+        expectedRevision: z
+          .number()
+          .int()
+          .min(1)
+          .optional()
+          .describe(
+            "The 'revision' the last read of the asset answered. Leave it out only for the save that creates an asset."
+          ),
+        kind: kindSchema
+          .optional()
+          .describe(
+            "For the save that creates an asset: its kind, one of workflow, data_store, agent or skill. With 'expectedRevision': the kind of a draft this conversation created, to save it beside the asset the conversation is about."
+          ),
+        name: nameSchema
+          .optional()
+          .describe(
+            "For the save that creates an asset: its name, which the config names too. With 'expectedRevision': the name of a draft this conversation created."
+          )
+      })
+      // The owner of a new asset is the conversation's, never the call's: a call that names an
+      // owner, a workspace or a target is refused, not quietly read (studio-chat-entry.md, 4a).
+      .strict(),
     outputSchema: putOutputSchema,
     authorize: (input, context) => calls.authorizePut(input, context),
     // Draft saves need no confirmation by default. The call's policy floor below holds

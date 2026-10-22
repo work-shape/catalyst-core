@@ -40,6 +40,12 @@ export const conversationSubjectSchema = z.object({
   name: z.string().min(1).max(200)
 });
 
+/**
+ * Where a conversation's first saves create an agent, skill or guardrail: `instance` for one
+ * started under Studio's scope "Instance". Set when the conversation is created, never changed.
+ */
+export const conversationCreationTargetSchema = z.literal("instance");
+
 export const conversationSchema = z.object({
   id: z.string(),
   clientInstanceId: z.string(),
@@ -54,7 +60,9 @@ export const conversationSchema = z.object({
   retainedUntil: timestampSchema,
   deletedAt: timestampSchema.optional(),
   /** The asset the conversation is about. Missing on a conversation about none. */
-  subject: conversationSubjectSchema.optional()
+  subject: conversationSubjectSchema.optional(),
+  /** `instance`: its first saves create agents, skills and guardrails for the instance. */
+  creationTarget: conversationCreationTargetSchema.optional()
 });
 
 export const moveConversationRequestSchema = z.object({
@@ -415,7 +423,13 @@ export const createConversationRequestSchema = z.object({
    * The asset the conversation is about. The caller holds the read right on it; a subject the
    * caller may not read and one that does not exist are refused alike.
    */
-  subject: conversationSubjectSchema.optional()
+  subject: conversationSubjectSchema.optional(),
+  /**
+   * `instance` for a conversation started under Studio's scope "Instance": its first saves
+   * create agents, skills and guardrails for the instance, where the person may create them
+   * there, and are refused where not. Set only here; nothing changes it later.
+   */
+  creationTarget: conversationCreationTargetSchema.optional()
 });
 
 /**

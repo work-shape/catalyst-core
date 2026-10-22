@@ -204,6 +204,41 @@ describe("where the empty dock says a new asset is created", () => {
     expect(dockCreationTarget({ owners: ["workspace"], workspaceName: undefined })).toBeUndefined();
   });
 
+  it("names the instance under Studio's scope Instance, and says so where the person may not create there", () => {
+    const owners = ["workspace", "instance"];
+    const allowed = dockCreationTarget({
+      kind: "agent",
+      owners,
+      workspaceName: "Team Vertrieb",
+      instance: { mayCreate: true }
+    });
+    expect(allowed).toEqual({ owner: "instance" });
+    const refused = dockCreationTarget({
+      kind: "agent",
+      owners,
+      workspaceName: "Team Vertrieb",
+      instance: { mayCreate: false }
+    });
+    expect(refused).toEqual({ owner: "instance", refused: true });
+    if (allowed === undefined || refused === undefined) return;
+    expect(creationTargetLine("agent", allowed, de)).toBe("Neue Agenten entstehen in der Instanz.");
+    expect(creationTargetLine("agent", refused, de)).toBe(
+      "Du darfst hier keine Agenten der Instanz anlegen."
+    );
+    expect(creationTargetLine("skill", refused, en)).toBe(
+      "You may not create skills of the instance here."
+    );
+    // Data Stores and Workflows keep their rule under the scope Instance.
+    expect(
+      dockCreationTarget({
+        kind: "workflow",
+        owners,
+        workspaceName: "Team Vertrieb",
+        instance: { mayCreate: false }
+      })
+    ).toEqual({ owner: "workspace", workspaceName: "Team Vertrieb" });
+  });
+
   it("reads the kind from Studio's list address", () => {
     expect(dockKindOfRoute({ kind: "build-kind", assetKind: "agents" })).toBe("agent");
     expect(dockKindOfRoute({ kind: "build-kind", assetKind: "data-stores" })).toBe("data_store");
