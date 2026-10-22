@@ -26,8 +26,7 @@ import {
   type ClientInstanceId,
   type JsonObject,
   type OperationBeforeEvent,
-  type Permission,
-  type PlatformAction,
+  type ApprovalFurtherRight,
   type ApprovalTransactionStores,
   type RuntimeCallContext
 } from "@work-shape/catalyst-core";
@@ -281,7 +280,8 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
     // they reach it here.
     if (request.addresseeUserId === undefined) {
       access.require(handler.requiredPermission, resourceOfRequest(handler, request));
-      for (const permission of furtherPermissionsOf(handler, request)) access.require(permission);
+      for (const { permission, resource } of furtherPermissionsOf(handler, request))
+        access.require(permission, resource);
     } else if (command.decision === "request_changes") {
       throw new AppError("VALIDATION_FAILED", "A confirmation is allowed or denied");
     }
@@ -396,7 +396,8 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
     const request = await this.visibleRequest(user, access, requestId);
     const handler = this.handler(request.kind);
     access.require(handler.requiredPermission, resourceOfRequest(handler, request));
-    for (const permission of furtherPermissionsOf(handler, request)) access.require(permission);
+    for (const { permission, resource } of furtherPermissionsOf(handler, request))
+      access.require(permission, resource);
     const revert = handler.revert?.bind(handler);
     if (!revert)
       throw new AppError("CONFLICT", "This approval request kind does not support revert");
@@ -578,10 +579,7 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
       request.addresseeUserId !== undefined
         ? request.addresseeUserId === user.id
         : access.authorize(handler.requiredPermission, resourceOfRequest(handler, request))
-            .allowed &&
-          furtherPermissionsOf(handler, request).every(
-            (permission) => access.authorize(permission).allowed
-          );
+            .allowed && decidesFurther(handler, request, access);
     const preview = await handler.preview(handler.validate(request.payload), {
       ...this.handlerContext(request, context),
       viewer,
@@ -756,8 +754,23 @@ const NARROWER_SCOPES = GRANT_SCOPE_KINDS.filter((scope) => scope !== "instance"
 function furtherPermissionsOf(
   handler: ApprovalRequestHandler,
   request: ApprovalRequest
-): readonly (Permission | PlatformAction)[] {
+): readonly ApprovalFurtherRight[] {
   return handler.furtherPermissions?.(handler.validate(request.payload)) ?? [];
+}
+
+/** Whether `access` holds every further right; a request whose rights cannot be told, never. */
+function decidesFurther(
+  handler: ApprovalRequestHandler,
+  request: ApprovalRequest,
+  access: ActorAccess
+): boolean {
+  try {
+    return furtherPermissionsOf(handler, request).every(
+      ({ permission, resource }) => access.authorize(permission, resource).allowed
+    );
+  } catch {
+    return false;
+  }
 }
 
 export function resourceOfRequest(

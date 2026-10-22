@@ -535,6 +535,36 @@ describe("an App and the Workflows it starts, at the App's publish", () => {
             }
           }
         });
+        // A copy whose Workflows cannot be read, or name a kind whose publish is never held, is
+        // decided by nobody, the superadmin included: it never asks fewer rights.
+        const json = z.record(z.string(), z.json());
+        const { payload } = z.object({ payload: json }).parse(filed.json());
+        const subject = json.parse(payload.subject);
+        const members = z.array(json).parse(subject.publishedWith);
+        for (const unreadable of [
+          members.map(({ workspaceId: _owner, ...member }) => member),
+          members.map((member) => ({ ...member, kind: "agent" }))
+        ]) {
+          const copy = await t.stores.approvals.createApprovalRequest({
+            clientInstanceId,
+            kind: "app_publish",
+            summary: "Publish pages-h",
+            requestedBy: { id: t.kai.id, displayLabel: "Kai" },
+            payload: { ...payload, subject: { ...subject, publishedWith: unreadable } }
+          });
+          const read = await t.expectOk(t.root.id, "approval_requests.get", {
+            params: { requestId: copy.id }
+          });
+          expect(read.json()).toMatchObject({ canDecide: false });
+          const refused = await t.call(t.root.id, "approval_requests.decide", {
+            params: { requestId: copy.id },
+            payload: { decision: "approve" }
+          });
+          expectStatus(refused, 409);
+          expect(refusalSchema.parse(refused.json()).error.details).toEqual({
+            reason: "publish_subject_unreadable"
+          });
+        }
 
         expectStatus(
           await t.call(t.root.id, "approval_requests.decide", {
@@ -580,7 +610,7 @@ describe("an App and the Workflows it starts, at the App's publish", () => {
     expect(await publishedRevisionOf("app", "pages-p")).toBeUndefined();
   });
 
-  it("lets only one who may approve the App's and each Workflow's publish approve the joint item", async () => {
+  it("lets only one who may approve the App's publish and each Workflow's, on that Workflow, approve the joint item", async () => {
     await publishWorkflow("rights-child", await putWorkflow("rights-child", { type: "object" }));
     const child = await putWorkflow("rights-child", markedInputs("held_note"), 1);
     const parent = await putParent("rights-parent", "rights-child");
@@ -591,18 +621,22 @@ describe("an App and the Workflows it starts, at the App's publish", () => {
     ];
     const parentId = await t.assetId(WORKFLOW_ASSET_KIND, "rights-parent");
     const childId = await t.assetId(WORKFLOW_ASSET_KIND, "rights-child");
-    const instanceRight = async (holderId: string, action: string) =>
-      (
-        await t.stores.access.createGrant({
-          clientInstanceId,
-          holderKind: "user",
-          holderId,
-          action,
-          effect: "allow",
-          scopeKind: "instance",
-          grantedBy: t.admin.id
-        })
-      ).id;
+    const grants: string[] = [];
+    /** A right on the instance, or a deny of it on one asset. Answers the grant's id. */
+    const right = async (holderId: string, action: string, deniedOn?: string) => {
+      const { id } = await t.stores.access.createGrant({
+        clientInstanceId,
+        holderKind: "user",
+        holderId,
+        action,
+        ...(deniedOn === undefined
+          ? { effect: "allow" as const, scopeKind: "instance" as const }
+          : { effect: "deny" as const, scopeKind: "asset" as const, scopeId: deniedOn }),
+        grantedBy: t.admin.id
+      });
+      grants.push(id);
+      return id;
+    };
     const requestOf = async (userId: string, requestId: string) =>
       z
         .object({ canDecide: z.boolean() })
@@ -614,10 +648,19 @@ describe("an App and the Workflows it starts, at the App's publish", () => {
         params: { requestId },
         payload: { decision: "approve" }
       });
+    const refused = async (userId: string, requestId: string) => {
+      expect(await requestOf(userId, requestId)).toEqual(
+        expect.objectContaining({ canDecide: false })
+      );
+      expectStatus(await decide(userId, requestId), 403);
+      expect(await publishedRevisionOf(WORKFLOW_ASSET_KIND, "rights-child")).toBe(1);
+      expect(await publishedRevisionOf("app", "pages-j")).toBeUndefined();
+    };
 
-    // Kai and Lena each may approve an App's publish, not a Workflow's.
-    const grants = [await instanceRight(t.kai.id, "app.approve")];
-    grants.push(await instanceRight(t.lena.id, "app.approve"));
+    // Kai may approve every publish on the instance, but not the child's.
+    await right(t.kai.id, "app.approve");
+    await right(t.kai.id, "workflow.approve");
+    await right(t.kai.id, "workflow.approve", childId);
     try {
       await withRights(
         t.kai.id,
@@ -630,19 +673,20 @@ describe("an App and the Workflows it starts, at the App's publish", () => {
           ])
         ],
         async () => {
-          // Kai's own click approves the App's part only, so the guardrail holds the whole.
+          // Kai's own click does not cover the child, so the guardrail holds the whole.
           const response = await publishTogether(t.kai.id, "pages-j", named);
           expectStatus(response, 202);
           const { approvalRequestId } = heldSchema.parse(response.json());
 
-          expect(await requestOf(t.lena.id, approvalRequestId)).toEqual(
-            expect.objectContaining({ canDecide: false })
-          );
-          expectStatus(await decide(t.lena.id, approvalRequestId), 403);
-          expect(await publishedRevisionOf(WORKFLOW_ASSET_KIND, "rights-child")).toBe(1);
-          expect(await publishedRevisionOf("app", "pages-j")).toBeUndefined();
+          // Lena may approve an App's publish and no Workflow's.
+          await right(t.lena.id, "app.approve");
+          await refused(t.lena.id, approvalRequestId);
+          // Then a Workflow's on the instance, but not the child's.
+          await right(t.lena.id, "workflow.approve");
+          const denied = await right(t.lena.id, "workflow.approve", childId);
+          await refused(t.lena.id, approvalRequestId);
 
-          grants.push(await instanceRight(t.lena.id, "workflow.approve"));
+          await t.stores.access.deleteGrant({ clientInstanceId, grantId: denied });
           expect(await requestOf(t.lena.id, approvalRequestId)).toEqual(
             expect.objectContaining({ canDecide: true })
           );

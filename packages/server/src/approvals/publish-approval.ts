@@ -1,12 +1,14 @@
 import { appAudienceSchema } from "@work-shape/catalyst-api-contract";
 import type { AppAudience } from "@work-shape/catalyst-core";
 import {
+  AppError,
   WORKFLOW_ACTIONS,
   asCollaborationWorkspaceId,
   callerCanConfirm,
   WORKFLOW_ASSET_KIND,
   WORKFLOW_MANIFEST_FILE,
   isJsonObject,
+  type ApprovalFurtherRight,
   type AssetKindRegistry,
   type ConfigAssetRevisionRecord,
   type ConfigAssetStore,
@@ -65,13 +67,21 @@ const publishedAssetSchema = z.object({
   liveRevision: z.number().int().positive().nullable()
 });
 
+/**
+ * One asset published with another, and the workspace that owns it (null for the instance):
+ * who decides the request is asked its kind's `approve` right on it.
+ */
+const publishedMemberSchema = publishedAssetSchema.extend({
+  workspaceId: z.string().min(1).nullable()
+});
+
 /** What a held publish is about, frozen when it is filed: the asset and its two pointers then. */
 const publishSubjectSchema = publishedAssetSchema.extend({
   /**
    * The Workflows a publish of an App makes live with it (DP-3), children first. The request
    * holds the set as one item: it moves when any of them moves.
    */
-  publishedWith: z.array(publishedAssetSchema).optional(),
+  publishedWith: z.array(publishedMemberSchema).optional(),
   audience: appAudienceSchema.optional(),
   liveAudience: appAudienceSchema.optional(),
   liveAudienceUserId: z.string().optional(),
@@ -202,6 +212,37 @@ async function publishMoved(
   return undefined;
 }
 
+/**
+ * The rights a held publish asks of who decides it beside its own kind's: the `approve` right
+ * of each asset published with it, on that asset (DP-3). A subject that cannot be read, or a
+ * member of a kind whose publish is never held, throws: nobody decides such a request.
+ */
+export function publishMemberRights(subject: JsonObject): ApprovalFurtherRight[] {
+  const parsed = publishSubjectSchema.safeParse(subject);
+  if (!parsed.success) throw undecidable();
+  return (parsed.data.publishedWith ?? []).map((member) => {
+    const approval = PUBLISH_APPROVALS[member.kind];
+    if (!approval) throw undecidable();
+    return {
+      permission: approval.approve,
+      resource: {
+        kind: member.kind,
+        name: member.name,
+        assetId: member.assetId,
+        ...(member.workspaceId === null ? {} : { workspaceId: member.workspaceId })
+      }
+    };
+  });
+}
+
+const undecidable = () =>
+  new AppError(
+    "CONFLICT",
+    "This request does not say what it publishes, so nobody can decide it",
+    { reason: "publish_subject_unreadable" },
+    { exposeMessage: true }
+  );
+
 export interface PublishApprovalKindsOptions {
   workspaces?: Pick<PlatformStores["workspaces"], "getWorkspace">;
   clientInstanceId: ClientInstanceId;
@@ -223,15 +264,7 @@ export function publishApprovalKinds(options: PublishApprovalKindsOptions): Held
   return Object.values(PUBLISH_APPROVALS).map(({ kind, approve }) => ({
     kind,
     requiredPermission: approve,
-    furtherPermissions(subject) {
-      // Each Workflow published with an App is decided by someone who may approve its own publish.
-      const parsed = publishSubjectSchema.safeParse(subject);
-      if (!parsed.success) return [];
-      const further = (parsed.data.publishedWith ?? []).map(
-        (member) => PUBLISH_APPROVALS[member.kind]?.approve ?? approve
-      );
-      return [...new Set(further)].filter((right) => right !== approve);
-    },
+    furtherPermissions: publishMemberRights,
     async moved(subject, store) {
       const parsed = publishSubjectSchema.safeParse(subject);
       if (!parsed.success) return "The request names no revision it publishes.";

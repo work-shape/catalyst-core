@@ -169,8 +169,9 @@ export function approvedByCaller(
     policy.source === "guardrail" &&
     call.origin.kind === "user" &&
     call.draft === undefined &&
-    [approval.action, ...(approval.alsoActions ?? [])].every(
-      (action) => access.authorize(action).allowed
+    access.authorize(approval.action).allowed &&
+    (approval.alsoRequires ?? []).every(
+      ({ action, resource }) => access.authorize(action, resource).allowed
     )
   );
 }

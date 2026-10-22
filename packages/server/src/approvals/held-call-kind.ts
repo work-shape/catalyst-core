@@ -1,4 +1,5 @@
 import type {
+  ApprovalFurtherRight,
   ApprovalPreviewViewer,
   ConfigAssetStore,
   JsonObject,
@@ -14,10 +15,11 @@ export interface HeldCallApprovalKind {
   /** Who decides, and who is shown the request among those to decide. */
   requiredPermission: PlatformAction;
   /**
-   * Further rights the request of one held call asks of who decides it, read from its
-   * subject: a joint publish asks the `approve` right of each kind it makes live (DP-3).
+   * Further rights the request of one held call asks of who decides it, each on its own
+   * resource, read from its subject: a joint publish asks `workflow.approve` on each Workflow
+   * it makes live (DP-3). A subject it cannot read throws, and nobody decides the request.
    */
-  furtherPermissions?(subject: JsonObject): readonly PlatformAction[];
+  furtherPermissions?(subject: JsonObject): readonly ApprovalFurtherRight[];
   /**
    * Why the call can no longer be approved, though it still waits: what it is about moved
    * since. Read through the stores of the decision's transaction.

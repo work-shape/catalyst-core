@@ -18,6 +18,12 @@ import type { FeedbackStore } from "./feedback";
 
 export * from "./approval-request";
 
+/** One further right a request asks of who decides it, and the resource it is asked on. */
+export interface ApprovalFurtherRight {
+  permission: Permission | PlatformAction;
+  resource: AccessResource;
+}
+
 /**
  * The stores a decision reaches inside its own transaction: what a kind reads and writes
  * through them commits or rolls back with the decision. It names the stores a kind needs
@@ -103,11 +109,12 @@ export interface ApprovalRequestHandler<TPayload extends JsonObject = JsonObject
    */
   resourceOf?(payload: TPayload): AccessResource;
   /**
-   * Further rights one request asks of who decides it, beside `requiredPermission`: a joint
-   * publish asks the `approve` right of each kind it makes live (DP-3). Who lacks one of them
-   * may read the request and not decide it.
+   * Further rights one request asks of who decides it, beside `requiredPermission`, each on its
+   * own resource: a joint publish asks `workflow.approve` on each Workflow it makes live
+   * (DP-3). Who lacks one of them may read the request and not decide it. A payload whose
+   * rights cannot be told throws: the request is then decided by nobody.
    */
-  furtherPermissions?(payload: TPayload): readonly (Permission | PlatformAction)[];
+  furtherPermissions?(payload: TPayload): readonly ApprovalFurtherRight[];
   /**
    * The subjects of the requests one holder may review, where the right on the instance does
    * not cover every asset for them (they hold it on some assets only, or are denied it on

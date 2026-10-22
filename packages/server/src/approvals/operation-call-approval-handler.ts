@@ -139,9 +139,8 @@ export function createOperationCallApprovalHandler(
     furtherPermissions(payload) {
       const call = parsePayload(payload);
       const about = subjectKindOf(call);
-      return about?.furtherPermissions && call.subject
-        ? about.furtherPermissions(call.subject)
-        : [];
+      // A kind that asks further rights reads them from the subject; without one, it refuses.
+      return about?.furtherPermissions ? about.furtherPermissions(call.subject ?? {}) : [];
     },
     validate(payload) {
       return toJsonObject(parsePayload(payload));

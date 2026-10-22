@@ -1,6 +1,5 @@
 import {
   AppError,
-  WORKFLOW_ACTIONS,
   WORKFLOW_ASSET_KIND,
   type ActorAccess,
   type AuthenticatedIdentity,
@@ -19,6 +18,7 @@ import type { AssetWorkflowOptions } from "../types";
 import type { AppAudience } from "@work-shape/catalyst-core";
 import { APP_ASSET_KIND } from "./app-kind";
 import { assetTitle, workflowsPublishedWith } from "./app-closure";
+import { publishMemberRights } from "../approvals/publish-approval";
 
 // One Publish of an App makes the Workflow drafts it reaches live with it (DP-3): the call
 // names each Workflow with the revision the person reviewed, and the App's own publish and
@@ -77,7 +77,7 @@ export class AppPublishTogether {
     input: PublishTogetherInput,
     actor?: AuthenticatedIdentity
   ): Promise<OperationBeforeEvent[]> {
-    const members = await this.members(input).catch(() => []);
+    const members = await this.members(input);
     const theirs = await Promise.all(
       members.map((member) => publishEvents(this.options, addressOf(member), actor))
     );
@@ -90,7 +90,7 @@ export class AppPublishTogether {
    */
   async policyTargets(input: PublishTogetherInput): Promise<PolicyTarget[]> {
     const own = this.assets.policyTargets(input);
-    const members = await this.members(input).catch(() => []);
+    const members = await this.members(input);
     return [
       ...own,
       ...members.map((member) => this.assets.policyTargets(addressOf(member))).flat()
@@ -104,24 +104,27 @@ export class AppPublishTogether {
    */
   async approval(input: PublishTogetherInput): Promise<OperationApproval | undefined> {
     const own = await this.assets.publishApproval(input);
-    const members = await this.members(input).catch(() => []);
+    const members = await this.members(input);
     if (!own?.subject || members.length === 0) return own;
-    return {
-      ...own,
-      alsoActions: [WORKFLOW_ACTIONS.approve],
-      subject: {
-        ...own.subject,
-        publishedWith: members.map(({ name, revision, asset }) => ({
-          kind: WORKFLOW_ASSET_KIND,
-          name,
-          title: assetTitle(asset.config, asset.name),
-          assetId: asset.id,
-          revision,
-          draftRevision: asset.revision,
-          liveRevision: asset.publishedRevision ?? null
-        }))
-      }
+    const subject = {
+      ...own.subject,
+      publishedWith: members.map(({ name, revision, asset }) => ({
+        kind: WORKFLOW_ASSET_KIND,
+        name,
+        title: assetTitle(asset.config, asset.name),
+        assetId: asset.id,
+        workspaceId: asset.scope.kind === "workspace" ? asset.scope.workspaceId : null,
+        revision,
+        draftRevision: asset.revision,
+        liveRevision: asset.publishedRevision ?? null
+      }))
     };
+    // The caller's own click is asked the same rights as who decides the request.
+    const alsoRequires = publishMemberRights(subject).map(({ permission, resource }) => ({
+      action: permission,
+      resource
+    }));
+    return { ...own, alsoRequires, subject };
   }
 
   /**
