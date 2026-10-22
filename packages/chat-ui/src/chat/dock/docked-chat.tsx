@@ -202,6 +202,7 @@ export function DockedPage({
     <DockPageAction
       kind="open"
       running={running}
+      compact={view.layout.over}
       {...(shortcut === undefined ? {} : { shortcut })}
       onClick={onChat}
     />

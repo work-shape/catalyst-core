@@ -198,6 +198,19 @@ test("New agent opens the empty page of a new agent under Instance and under a w
   }
 });
 
+test("in a narrow window Chat is its icon alone, and still opens the dock", async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.setViewportSize({ width: 768, height: 900 });
+  await signIn(page);
+  await page.goto("/build/agents");
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+  // Its name stays "Chat"; the head keeps one row beside it.
+  await expect(chatAction(page)).toHaveAccessibleName("Chat");
+  await expect(chatAction(page)).toHaveText("");
+  await chatAction(page).click();
+  await expect(chatColumn(page)).toHaveAttribute("data-chat-mode", "dock");
+});
+
 test("pictures of Studio's chat entry", async ({ page }) => {
   test.skip(!shotsDir, "Takes pictures only for E2E_SHOTS_DIR");
   test.setTimeout(300_000);

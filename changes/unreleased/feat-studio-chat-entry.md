@@ -9,6 +9,7 @@ section: Changed
   - In Studio, a conversation that builds is started in the workspace Studio is set to, private where that is not the open workspace. An empty dock that builds says where a new asset will be created, for example "Neue Agenten entstehen in „Team Vertrieb“.".
   - An unchanged new page, and opening or closing the dock, no longer ask before leaving: only a move to another page with unsaved changes does.
   - The dock's head names a skill by its title.
+  - In a narrow window, where the dock lies over the page, "Chat" is its icon alone, still named "Chat". At 768 px a Connection's head with a long name puts its actions under the name.
   - The separate "Edit with agent" buttons in the heads of Data Stores, Apps and Workflows are gone. "Chat" replaces them.
 - **New:**
   - "New agent", "New skill" and "New knowledge base" open the kind's empty, unsaved edit page under every scope. The first Save creates the asset.

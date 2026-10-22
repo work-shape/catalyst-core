@@ -111,29 +111,64 @@ const BACK_GIVES_WAY = "has-[[data-slot=page-header-back]]:shrink-[1000000]";
 // content's.
 const NO_LEAST_WIDTH = "grid min-w-0 grid-cols-[minmax(0,max-content)]";
 
+type Follow = (nodes: readonly Element[], measure: () => void) => void;
+
 /**
- * Measures again a frame after any of `nodes` changed its size. The head's measures change its
- * layout: run inside the observer's callback, the head's two observers would see each other's
- * change in the same frame, which the browser reports as a ResizeObserver loop.
+ * Measures again a frame after any of the nodes it follows changed its size. The head's
+ * measures change its layout: run inside the observer's callback, the head's two observers
+ * would see each other's change in the same frame, which the browser reports as a
+ * ResizeObserver loop. One observer stands for the head's life and observes each node once:
+ * a new observation reports at once, and one made while the browser hands out sizes, as when
+ * the head renders again then, is reported as such a loop too.
  */
-function observeAFrameLater(
-  nodes: readonly Element[],
-  measure: () => void
-): { disconnect(): void } {
-  let frame = 0;
-  const observer = new ResizeObserver(() => {
-    window.cancelAnimationFrame(frame);
-    frame = window.requestAnimationFrame(measure);
-  });
-  for (const node of nodes) {
-    observer.observe(node);
-  }
-  return {
-    disconnect() {
-      window.cancelAnimationFrame(frame);
-      observer.disconnect();
+function useFollowAFrameLater(): Follow {
+  const state = useRef<{
+    observer: ResizeObserver;
+    observed: Set<Element>;
+    measure: () => void;
+    frame: number;
+  }>(undefined);
+  useLayoutEffect(
+    () => () => {
+      const current = state.current;
+      if (current) {
+        window.cancelAnimationFrame(current.frame);
+        current.observer.disconnect();
+        state.current = undefined;
+      }
+    },
+    []
+  );
+  const follow = useRef<Follow>((nodes, measure) => {
+    let current = state.current;
+    if (!current) {
+      const created = {
+        observed: new Set<Element>(),
+        measure,
+        frame: 0,
+        observer: new ResizeObserver(() => {
+          window.cancelAnimationFrame(created.frame);
+          created.frame = window.requestAnimationFrame(() => created.measure());
+        })
+      };
+      current = created;
+      state.current = created;
     }
-  };
+    current.measure = measure;
+    for (const node of current.observed) {
+      if (!nodes.includes(node)) {
+        current.observer.unobserve(node);
+        current.observed.delete(node);
+      }
+    }
+    for (const node of nodes) {
+      if (!current.observed.has(node)) {
+        current.observer.observe(node);
+        current.observed.add(node);
+      }
+    }
+  });
+  return follow.current;
 }
 
 /** Whether a detail head's name no longer stands whole on one line: it wrapped or was cut. */
@@ -153,13 +188,18 @@ function useBackTextGone(): [RefObject<HTMLDivElement | null>, boolean] {
   const was = useRef(false);
   // The text's width, known while it shows.
   const width = useRef(0);
+  const follow = useFollowAFrameLater();
   useLayoutEffect(() => {
     const node = row.current;
     const text = node?.querySelector<HTMLElement>("[data-slot=page-header-back-text]");
     const name = node?.querySelector<HTMLElement>("h1, h2");
     const slot = text?.parentElement;
-    if (!node || !text || !name || !slot || typeof ResizeObserver === "undefined") {
-      return undefined;
+    if (typeof ResizeObserver === "undefined") {
+      return;
+    }
+    if (!node || !text || !name || !slot) {
+      follow([], () => undefined);
+      return;
     }
     const measure = () => {
       if (!was.current) {
@@ -179,8 +219,7 @@ function useBackTextGone(): [RefObject<HTMLDivElement | null>, boolean] {
       setGone(next);
     };
     measure();
-    const observer = observeAFrameLater([node, name, slot], measure);
-    return () => observer.disconnect();
+    follow([node, name, slot], measure);
   });
   return [row, gone];
 }
@@ -213,13 +252,15 @@ function useActionsFolded(): {
   const menu = useRef<HTMLSpanElement>(null);
   const [folded, setFolded] = useState(false);
   const [crowded, setCrowded] = useState(false);
+  const follow = useFollowAFrameLater();
   useLayoutEffect(() => {
     const headNode = head.current;
     const row = unfolded.current;
     if (!headNode || typeof ResizeObserver === "undefined") {
       setFolded(false);
       setCrowded(false);
-      return undefined;
+      if (typeof ResizeObserver !== "undefined") follow([], () => undefined);
+      return;
     }
     const kept = [shell.current, primary.current, menu.current].filter((node) => node !== null);
     const measure = () => {
@@ -241,11 +282,7 @@ function useActionsFolded(): {
       setCrowded(keptWidth + nameReserve(headNode, style, true) > room + 0.5);
     };
     measure();
-    const observer = observeAFrameLater(
-      [headNode, ...(row === null ? [] : [row]), ...kept],
-      measure
-    );
-    return () => observer.disconnect();
+    follow([headNode, ...(row === null ? [] : [row]), ...kept], measure);
   });
   return { head, unfolded, shell, primary, menu, folded, crowded };
 }

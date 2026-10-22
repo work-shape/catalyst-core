@@ -276,10 +276,12 @@ headTest(
   "the head of every asset page is one row as high as the header, and the id is behind Copy ID",
   async ({ page, headAssets: { skill, app, workspaceId, connection } }) => {
     headTest.setTimeout(120_000);
-    const editors: { path: string; id?: string; wideOnly?: boolean }[] = [
+    const editors: { path: string; id?: string; wideOnly?: boolean; wrapsNarrow?: boolean }[] = [
       { path: "/build/agents/research_assistant", id: "research_assistant" },
       { path: `/build/skills/${skill}`, id: skill },
-      { path: `/build/connections/${connection.name}`, id: connection.name },
+      // At 768 px "Chat", "Copy to edit" and the menu leave the long name less than its least
+      // width: the actions go under the name, as in a narrow window (studio-chat-entry.md).
+      { path: `/build/connections/${connection.name}`, id: connection.name, wrapsNarrow: true },
       { path: `/w/${workspaceId}/apps/${app}` },
       // At 768 px the conversation of a draft covers the draft and its head.
       { path: `/w/${workspaceId}/app-drafts/${app}`, wideOnly: true }
@@ -301,7 +303,7 @@ headTest(
 
     for (const size of [WIDE, { width: 768, height: 900 }]) {
       await page.setViewportSize(size);
-      for (const { path, id, wideOnly } of editors) {
+      for (const { path, id, wideOnly, wrapsNarrow } of editors) {
         if (wideOnly && size !== WIDE) {
           continue;
         }
@@ -312,11 +314,13 @@ headTest(
         await expect(name, where).toBeVisible();
         const headBox = await box(head);
         expect(Math.round(headBox.y), where).toBe(0);
-        expect(Math.round(headBox.height), where).toBe(HEADER);
-        // One row: the name and every button of the head stand on its middle line.
-        expect(await middle(name), where).toBe(HEADER / 2);
-        for (const button of await head.getByRole("button").all()) {
-          expect(await middle(button), where).toBe(HEADER / 2);
+        if (!(wrapsNarrow && size !== WIDE)) {
+          expect(Math.round(headBox.height), where).toBe(HEADER);
+          // One row: the name and every button of the head stand on its middle line.
+          expect(await middle(name), where).toBe(HEADER / 2);
+          for (const button of await head.getByRole("button").all()) {
+            expect(await middle(button), where).toBe(HEADER / 2);
+          }
         }
         if (id !== undefined) {
           await expect(page.locator("[data-page]"), where).not.toContainText(id);

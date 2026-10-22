@@ -265,31 +265,49 @@ export function DockPage({
 /**
  * The control every page head carries for the dock, first in its actions: "Chat" opens the dock,
  * with a dot while its answer runs; "Show chat" brings the dock in front where it lies over the
- * page. `shortcut` names the keys that do the same.
+ * page. `shortcut` names the keys that do the same. In a narrow window, `compact`, "Chat" is its
+ * icon alone, so the head keeps its name and actions on one row.
  */
 export function DockPageAction({
   kind,
   running,
   shortcut,
+  compact = false,
   onClick
 }: {
   kind: "open" | "show";
   running: boolean;
   shortcut?: string;
+  compact?: boolean;
   onClick(): void;
 }) {
   const { t } = useTranslation();
   const label = kind === "open" ? t("dock.chat") : t("dock.showChat");
+  const dot = running ? (
+    <>
+      <CountBadge dot aria-hidden="true" data-testid="dock-running-dot" />
+      <span className="sr-only">{`, ${t("dock.answerRunning")}`}</span>
+    </>
+  ) : null;
+  if (compact && kind === "open") {
+    return (
+      <IconButton
+        label={label}
+        variant="outline"
+        onClick={onClick}
+        data-testid="dock-page-action"
+        {...(shortcut === undefined ? {} : { shortcut })}
+      >
+        <MessageSquare aria-hidden="true" />
+        {dot}
+      </IconButton>
+    );
+  }
   const button = (
     <Button variant="secondary" onClick={onClick} data-testid="dock-page-action">
       <MessageSquare aria-hidden="true" />
       {label}
-      {running ? (
-        <>
-          <CountBadge dot aria-hidden="true" data-testid="dock-running-dot" />
-          <span className="sr-only">{`, ${t("dock.answerRunning")}`}</span>
-        </>
-      ) : null}
+      {dot}
     </Button>
   );
   if (shortcut === undefined) return button;
