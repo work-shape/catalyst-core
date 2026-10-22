@@ -40,7 +40,10 @@ export function toolResultFromOperationResult(
           })
         : failed("not_allowed", denialText(result.reason, names));
     case "failed":
-      if (result.error.code === "TIMEOUT") return toolTimeoutFailure(names);
+      // The error envelope replaces an unexposed message with this fixed text. An exposed
+      // timeout message is the handler's answer and must reach the agent unchanged.
+      if (result.error.code === "TIMEOUT" && result.error.message === "Internal server error")
+        return toolTimeoutFailure(names);
       return result.error.code === "INTERNAL"
         ? internalFailure(names.correlationId)
         : // The message is all the model reads. A fixed reason stays in the run and in the

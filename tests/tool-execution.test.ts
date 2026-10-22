@@ -6,6 +6,8 @@ import {
   asClientInstanceId,
   asConversationId,
   asToolCallId,
+  createPlatformId,
+  toErrorEnvelope,
   type AuditEventInput,
   type AuditRecorder,
   type ToolExecutionContext,
@@ -15,6 +17,7 @@ import { createOperationRegistry } from "@work-shape/catalyst-core";
 import {
   OPERATION_INPUT_MAX_DEPTH,
   registerToolOperations,
+  toolResultFromOperationResult,
   ToolRegistry,
   type OperationApprovalRequests
 } from "@work-shape/catalyst-tool-execution";
@@ -73,6 +76,10 @@ const echo = defineTool({
     executed.push(input.text);
     seenRuns.push(toolContext.operationRun);
     if (input.text === "timeout") throw new AppError("TIMEOUT", "private provider details");
+    if (input.text === "timeout-exposed")
+      throw new AppError("TIMEOUT", "Query was cancelled: statement timeout", undefined, {
+        exposeMessage: true
+      });
     if (input.text === "never") return new Promise<never>(() => {});
     if (input.text === "throw") throw new Error("select * from secrets where token = 'abc'");
     if (input.text === "fail") return toolFailed("handler_failed", "The echo is out of order");
@@ -113,28 +120,78 @@ function setup(options: Partial<TestToolRunnerOptions> = {}) {
 }
 
 describe("an agent's tool call as an operation", () => {
-  it("says a tool did not answer for provider and executor timeouts without exposing provider details", async () => {
+  it("says a tool did not answer for a bare TIMEOUT without exposing provider details", async () => {
     for (const locale of ["en", "de"] as const) {
-      for (const text of ["timeout", "never"]) {
-        const { runTool, runs } = setup();
-        const result = await runTool(request("demo.echo", { text }), {
-          ...context(),
-          locale,
-          deadline: new Date(Date.now() + 100)
-        });
-        expect(result).toMatchObject({
-          status: "timed_out",
-          error: {
-            code: "timed_out",
-            message: expect.stringContaining(
-              locale === "de" ? "nicht rechtzeitig geantwortet" : "did not answer in time"
-            )
-          }
-        });
-        expect(JSON.stringify(result)).not.toContain("private provider details");
-        expect(runs).toMatchObject([{ status: "failed" }]);
-      }
+      const { runTool, runs } = setup();
+      const result = await runTool(request("demo.echo", { text: "timeout" }), {
+        ...context(),
+        locale
+      });
+      expect(result).toMatchObject({
+        status: "timed_out",
+        error: {
+          code: "timed_out",
+          message: expect.stringContaining(
+            locale === "de" ? "nicht rechtzeitig geantwortet" : "did not answer in time"
+          )
+        }
+      });
+      expect(JSON.stringify(result)).not.toContain("private provider details");
+      expect(runs).toMatchObject([{ status: "failed" }]);
     }
+  });
+
+  it.each(["timeout-exposed", "never"])(
+    "keeps the exposed TIMEOUT message for %s",
+    async (text) => {
+      const { runTool } = setup();
+      const result = await runTool(request("demo.echo", { text }), {
+        ...context(),
+        deadline: new Date(Date.now() + 100)
+      });
+      expect(result).toMatchObject({
+        status: "failed",
+        error: {
+          code: "handler_failed",
+          message:
+            text === "timeout-exposed"
+              ? "Query was cancelled: statement timeout"
+              : expect.stringContaining("'demo.echo' reached the limit runtime.deadline")
+        }
+      });
+    }
+  );
+
+  it.each([false, true])("projects an operation TIMEOUT with exposeMessage=%s", (exposeMessage) => {
+    const {
+      error: { code, message }
+    } = toErrorEnvelope(
+      new AppError("TIMEOUT", "Query was cancelled: statement timeout", undefined, {
+        exposeMessage
+      }),
+      "corr_test"
+    );
+    const result = toolResultFromOperationResult(
+      {
+        result: {
+          status: "failed",
+          runId: createPlatformId<"OperationRunId">("oprun"),
+          error: { code, message }
+        }
+      },
+      { toolName: "demo.echo", agentName: "test_agent", correlationId: "corr_test" }
+    );
+    expect(result).toMatchObject(
+      exposeMessage
+        ? {
+            status: "failed",
+            error: { code: "handler_failed", message: "Query was cancelled: statement timeout" }
+          }
+        : {
+            status: "timed_out",
+            error: { code: "timed_out", message: expect.stringContaining("did not answer in time") }
+          }
+    );
   });
   it("runs the tool, answers its result and records one run that the tool is told of", async () => {
     const { runTool, runs, auditEvents } = setup();

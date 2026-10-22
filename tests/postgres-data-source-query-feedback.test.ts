@@ -41,13 +41,10 @@ describe("data source query feedback on Postgres", () => {
     });
 
     const timeout = await runQuery(suite.databaseUrl, "select pg_sleep(2)", 100);
-    // TIMEOUT uses the shared tool result rather than the connector's database wording.
-    expect(timeout.result).toEqual({
-      status: "timed_out",
+    expect(timeout.result).toMatchObject({
       error: {
-        code: "timed_out",
-        message:
-          "The tool 'data.reporting.query' did not answer in time. Its outcome is not known; check before calling again."
+        code: "handler_failed",
+        message: "Query was cancelled: canceling statement due to statement timeout"
       }
     });
   });

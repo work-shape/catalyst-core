@@ -279,7 +279,7 @@ function thrownHandlerFailure(
   context: ToolExecutionContext,
   logger: Logger | undefined
 ): ToolHandlerFailureResult {
-  if (isAppError(error) && error.code === "TIMEOUT") {
+  if (isAppError(error) && error.code === "TIMEOUT" && !error.exposeMessage) {
     return toolTimeoutFailure({ toolName: request.toolName, locale: context.locale });
   }
   if (isAppError(error) && error.code !== "INTERNAL" && error.exposeMessage) {
