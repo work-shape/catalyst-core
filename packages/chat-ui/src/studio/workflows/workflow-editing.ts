@@ -159,7 +159,10 @@ export interface WorkflowEditing {
   workflowId: string;
   /** The draft with what is not saved: what the canvas draws and the form shows. */
   manifest: WorkflowManifest;
-  /** The saved draft, without what is not saved: a field it holds keeps its key. */
+  /**
+   * The saved draft, without what is not saved: a field it holds keeps its key. While a save
+   * is under way, the draft that save sends: a field it holds keeps its key from then on.
+   */
   saved: WorkflowManifest;
   /** The files of the draft with what is not saved: the scripts of code steps. */
   files: readonly WorkflowFile[];
@@ -259,6 +262,9 @@ export function useWorkflowEditing(input: {
   const [dropped, setDropped] = useState<string[]>([]);
   const [issues, setIssues] = useState<EditIssues>(NO_ISSUES);
   const [saving, setSaving] = useState(false);
+  // The manifest a save under way sends: a title changed before its answer must not rename a
+  // field the instance may already hold under its key.
+  const [sending, setSending] = useState<WorkflowManifest>();
   const [error, setError] = useState<string>();
   const [holds, setHolds] = useState<ReadonlySet<string>>(new Set());
   const [lacks, setLacks] = useState<ReadonlySet<string>>(new Set());
@@ -399,6 +405,7 @@ export function useWorkflowEditing(input: {
         try {
           const config = configOf(from, pending);
           const saved = config.manifest;
+          setSending(saved);
           const { revision } = await writes.save(input.workflowId, config, from.revision);
           // What was saved is the base at once: a change made before the draft is read again
           // is carried over from it, not from the revision before it.
@@ -470,6 +477,7 @@ export function useWorkflowEditing(input: {
         setError(instanceSentence(failure) ?? t("workflows.settings.saveFailed"));
       }
     } finally {
+      setSending(undefined);
       setSaving(false);
     }
   };
@@ -537,7 +545,7 @@ export function useWorkflowEditing(input: {
     workspaceId: input.workspaceId,
     workflowId: input.workflowId,
     manifest,
-    saved: base.manifest,
+    saved: sending ?? base.manifest,
     files,
     steps: drawn.steps,
     marks,

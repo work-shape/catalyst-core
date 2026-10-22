@@ -61,7 +61,9 @@ function manifestWith(triggers: readonly Record<string, unknown>[]) {
 
 function sourceOf(
   manifest: Record<string, unknown>,
-  saves: { config: Config; expected: number }[]
+  saves: { config: Config; expected: number }[],
+  /** Holds each save's answer back until it settles: the instance holds the save already. */
+  answer?: Promise<void>
 ): WorkflowsSource {
   let draft: { config: Config; revision: number } = {
     config: { name: WORKFLOW, manifest },
@@ -95,7 +97,7 @@ function sourceOf(
       save: (_workflow, config, expected) => {
         saves.push({ config, expected });
         draft = { config, revision: expected + 1 };
-        return Promise.resolve({ revision: expected + 1 });
+        return (answer ?? Promise.resolve()).then(() => ({ revision: expected + 1 }));
       }
     }
   };
@@ -282,6 +284,40 @@ describe("the Settings tab of a Workflow (WF-EDIT-5)", () => {
       properties: {
         month: { type: "string", title: "Billing month" },
         client_name: { type: "string", title: "Client name" }
+      },
+      required: ["month"],
+      additionalProperties: false
+    });
+  });
+
+  it("keeps the key of a field whose title changes while its save is under way", async () => {
+    const saves: { config: Config; expected: number }[] = [];
+    let answer = () => undefined as void;
+    const answered = new Promise<void>((resolve) => {
+      answer = resolve;
+    });
+    const container = await mount(sourceOf(manifestWith([{ kind: "manual" }]), saves, answered));
+    const inputs = required(container.querySelector("[data-workflow-inputs]"));
+    await act(async () => required(button(inputs, uiLabelsEn.addField)).click());
+    const added = required(inputs.querySelectorAll("[data-field-id]")[1]);
+    await type(input(added, uiLabelsEn.fieldTitle), "Billing month");
+    await settled(() => expect(save(container).disabled).toBe(false));
+    await act(async () => save(container).click());
+    await settled(() => expect(saves).toHaveLength(1));
+    // The instance holds billing_month before the page hears so: a new title keeps that key.
+    await type(input(added, uiLabelsEn.fieldTitle), "Month of the bookings");
+    const key = () => required(added.querySelector("[data-field-key]")).textContent;
+    expect(key()).toContain("billing_month");
+    await act(async () => answer());
+    await settled(() => expect(save(container).disabled).toBe(false));
+    expect(key()).toContain("billing_month");
+    await act(async () => save(container).click());
+    await settled(() => expect(saves).toHaveLength(2));
+    expect(manifestOf(saves[1]?.config).inputs).toEqual({
+      type: "object",
+      properties: {
+        month: { type: "string", title: "Month" },
+        billing_month: { type: "string", title: "Month of the bookings" }
       },
       required: ["month"],
       additionalProperties: false
