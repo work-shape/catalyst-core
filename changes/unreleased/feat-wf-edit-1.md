@@ -1,5 +1,0 @@
----
-section: Added
----
-
-- A step of a Workflow has a Settings tab for a person who may change the Workflow (WF-EDIT-1): its name and what it does, the list a loop runs over with how many entries run at once and what happens when one fails, a notice's recipients, channel, title, text and link, and the values a result returns, each a fixed value or a field of an earlier step's result. Each Save is one revision of the draft; the published revision stays until it is published. The instance checks the form when a field is left and on Save, and what it refuses stands under the field it names. A save after the agent saved meanwhile carries the change over without a question, keeps the person's value with the agent's under it and "Take it" where both changed the same field, and says the change was dropped where the agent deleted the step. On the canvas a step shows whether it is new, changed, removed or not saved against the published revision, and a changed field shows the published value under it. Steps of other kinds point to the agent.

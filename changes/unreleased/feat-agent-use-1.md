@@ -1,5 +1,0 @@
----
-section: Added
----
-
-- **Access:** The right `agent.use`, to converse with an agent, grantable on one agent, in a workspace or on the whole instance, to a person, a role or a group. Each agent says who uses it where it is available: everyone who may work there (the default, which every existing agent keeps) or only people and roles with the right (`agents.use.set`, decided like its availability). Both must allow: a right never opens an agent where it is not available, and a deny of `agent.use` keeps one person or role from an agent everyone else uses. The chat's agent picker, a message or start by agent name over the API, a queued follow-up, a scheduled prompt (when made, at its tick and before its run), and a subagent start all decide it; a refusal answers `FORBIDDEN` naming `agent.use` and is recorded as `agent.use_refused` with who, which agent, where and through which entry, never what was asked. `admin` and superadmins hold the right by default. In the New right dialog it is the agents' lowest level, "Verwenden" / "Use".
