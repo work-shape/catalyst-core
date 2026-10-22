@@ -25,7 +25,7 @@ function fixture(t) {
   write("tsconfig.base.json", {
     compilerOptions: { strict: true, paths: { hidden: ["packages/core/index.js"] }, baseUrl: "." }
   });
-  for (const dir of ["src", "tools", "widgets", "sample-mcp", "public"])
+  for (const dir of ["src", "catalogue", "tools", "widgets", "sample-mcp", "public"])
     write(`clients/demo/${dir}/example.ts`, "export {};\n");
   write("clients/demo/index.html", "<html></html>\n");
   write("clients/demo/vite.config.ts", "export default {};\n");
