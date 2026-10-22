@@ -535,9 +535,9 @@ exitTest.describe("WebRTC from a view", () => {
       // A positive packet is the completion condition of this known-open probe.
       await expect.poll(() => otherHost.packets).toBeGreaterThan(0);
 
-      // Everything above must work. Only the count below is expected to fail, and when it one
-      // day holds, a browser has closed WebRTC for such a frame: then this is an ordinary test,
-      // and views with private rows may run scripts again.
+      // Everything above must work. Only the count below is expected to fail. If a browser
+      // closes WebRTC for such a frame, the positive-packet poll above times out before this
+      // expected failure is registered; re-evaluate the probe and private-row script policy then.
       exitTest.fail(true, "Known and open: a script-enabled view can send WebRTC packets.");
       expect(otherHost.packets).toBe(0);
     }

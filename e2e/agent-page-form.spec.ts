@@ -85,8 +85,7 @@ async function shoot(
   open: () => Promise<Locator>
 ): Promise<void> {
   const shotsDir = process.env.E2E_SHOTS_DIR;
-  if (!shotsDir) return;
-  await mkdir(shotsDir, { recursive: true });
+  if (shotsDir) await mkdir(shotsDir, { recursive: true });
   const show = async (size: typeof WIDE, locale: string, theme: string) => {
     await page.evaluate(
       ([localeValue, themeValue]) => {
@@ -102,12 +101,14 @@ async function shoot(
     const size = width === 390 ? PHONE : WIDE;
     const target = await show(size, locale, theme);
     await target.scrollIntoViewIfNeeded();
-    const path = join(shotsDir, `uxa-4-${surface}-${size.width}-${locale}-${theme}.png`);
-    await page.screenshot({ path, animations: "disabled" });
-    await testInfo.attach(`uxa-4-${surface}-${size.width}-${locale}-${theme}`, {
-      path,
-      contentType: "image/png"
-    });
+    if (shotsDir) {
+      const path = join(shotsDir, `uxa-4-${surface}-${size.width}-${locale}-${theme}.png`);
+      await page.screenshot({ path, animations: "disabled" });
+      await testInfo.attach(`uxa-4-${surface}-${size.width}-${locale}-${theme}`, {
+        path,
+        contentType: "image/png"
+      });
+    }
   }
   await show(WIDE, "en", "light");
 }

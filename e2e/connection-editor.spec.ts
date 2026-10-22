@@ -539,6 +539,15 @@ for (const locale of LOCALES) {
       const main = page.getByRole("region", { name: "Studio" });
       // "Draft with Workshaper" opens the chat beside the page; the agent answers a card.
       await main.locator("[data-connection-draft]").getByRole("button").click();
+      await expect
+        .poll(() =>
+          page.evaluate(() =>
+            document.activeElement instanceof HTMLTextAreaElement
+              ? document.activeElement.value
+              : ""
+          )
+        )
+        .toContain(WORDS[locale].draft);
       await sendToolCall(page, "platform.connections.draft_tools", healthDraft(existing));
       const card = page.locator(
         `[data-testid="connection-draft-card"][data-connection="${existing}"]`
