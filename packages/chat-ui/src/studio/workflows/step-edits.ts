@@ -524,28 +524,41 @@ export function effectiveEdits(
 const SPELLED: Readonly<Record<string, string>> = { ä: "ae", ö: "oe", ü: "ue", ß: "ss" };
 
 /**
- * The id of a new step, from its name (workflow-canvas 9.4, decision 7): lowercase letters,
- * digits, `_` and `-`, starting with a letter, and not one of `taken`. It never changes, also
- * when the step is renamed.
+ * A key from a name, as a person wrote it: lowercase ascii letters, digits, `_` and, where
+ * `hyphen`, `-`, starting with a letter, at most 56 characters, `fallback` where the name
+ * gives none, and with `_2`, `_3` … where it is one of `taken`.
  */
-export function stepIdFrom(name: string, taken: ReadonlySet<string>): string {
+export function keyFrom(
+  name: string,
+  taken: ReadonlySet<string>,
+  { fallback, hyphen }: { fallback: string; hyphen: boolean }
+): string {
   const spelled = name
     .toLowerCase()
     .replace(/[äöüß]/gu, (letter) => SPELLED[letter] ?? letter)
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/gu, "");
   const words = spelled
-    .replace(/[^a-z0-9_-]+/gu, "_")
+    .replace(hyphen ? /[^a-z0-9_-]+/gu : /[^a-z0-9_]+/gu, "_")
     .replace(/_+/gu, "_")
     .replace(/^[^a-z]+/u, "")
     .replace(/[_-]+$/u, "")
     .slice(0, 56);
-  const stem = words === "" ? "step" : words;
+  const stem = words === "" ? fallback : words;
   if (!taken.has(stem)) return stem;
   for (let count = 2; ; count += 1) {
     const id = `${stem}_${String(count)}`;
     if (!taken.has(id)) return id;
   }
+}
+
+/**
+ * The id of a new step, from its name (workflow-canvas 9.4, decision 7): lowercase letters,
+ * digits, `_` and `-`, starting with a letter, and not one of `taken`. It never changes, also
+ * when the step is renamed.
+ */
+export function stepIdFrom(name: string, taken: ReadonlySet<string>): string {
+  return keyFrom(name, taken, { fallback: "step", hyphen: true });
 }
 
 /** Every step id of a manifest, at any depth. */

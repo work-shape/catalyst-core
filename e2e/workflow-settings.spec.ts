@@ -20,7 +20,12 @@ const idSchema = z.object({ id: z.string() });
 const assetSchema = z.object({
   revision: z.number(),
   publishedRevision: z.number().nullable().optional(),
-  config: z.object({ manifest: z.object({ steps: z.array(z.record(z.string(), z.unknown())) }) }),
+  config: z.object({
+    manifest: z.object({
+      inputs: z.unknown().optional(),
+      steps: z.array(z.record(z.string(), z.unknown()))
+    })
+  }),
   stepFacts: z
     .record(
       z.string(),
@@ -156,6 +161,26 @@ test("a Workflow's Settings set every weekday at 07:30 Berlin time, due after th
   // The page shows it as set: the field reads the published schedule back.
   await page.reload();
   await expect(schedule.getByLabel("At", { exact: true })).toHaveValue("07:30");
+
+  // WF-EDIT-5c: a start field is named by its title; its key comes from the title while the
+  // field is new, shows only as a detail, and stays once saved, as the steps read it by it.
+  const asks = form.locator("[data-workflow-inputs]");
+  await asks.getByRole("button", { name: "Add field", exact: true }).click();
+  const month = asks.locator("[data-field-id]").last();
+  await month.getByLabel("Title", { exact: true }).fill("Billing month");
+  await expect(month.locator("[data-field-key]")).toContainText("billing_month");
+  await settings.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(settings.getByRole("button", { name: "Save", exact: true })).toHaveCount(0);
+  await expect
+    .poll(async () => (await readAsset(page, id)).config.manifest.inputs)
+    .toEqual({
+      type: "object",
+      properties: { billing_month: { type: "string", title: "Billing month" } },
+      additionalProperties: false
+    });
+  await month.getByLabel("Title", { exact: true }).fill("Month of the bookings");
+  await expect(month.locator("[data-field-key]")).toContainText("billing_month");
+  await settings.getByRole("button", { name: "Cancel", exact: true }).click();
 
   // The canvas's trigger says the zone as the field does, never by its id.
   await page

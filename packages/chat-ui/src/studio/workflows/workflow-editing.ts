@@ -159,6 +159,8 @@ export interface WorkflowEditing {
   workflowId: string;
   /** The draft with what is not saved: what the canvas draws and the form shows. */
   manifest: WorkflowManifest;
+  /** The saved draft, without what is not saved: a field it holds keeps its key. */
+  saved: WorkflowManifest;
   /** The files of the draft with what is not saved: the scripts of code steps. */
   files: readonly WorkflowFile[];
   /** The steps the canvas draws: the edited draft's, with the removed ones put back. */
@@ -515,6 +517,7 @@ export function useWorkflowEditing(input: {
     workspaceId: input.workspaceId,
     workflowId: input.workflowId,
     manifest,
+    saved: base.manifest,
     files,
     steps: drawn.steps,
     marks,

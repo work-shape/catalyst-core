@@ -19,7 +19,10 @@ export interface FieldListKind {
 export interface FieldListItem {
   /** Stable identity while the name or position changes. */
   id: string;
+  /** The field's key. With `titled`, the caller derives it and the editor only shows it. */
   name: string;
+  /** What a person calls the field. With `titled`, the editor edits this and not the key. */
+  title?: string;
   kind: string;
   required: boolean;
   description?: string;
@@ -36,9 +39,19 @@ export interface FieldListEditorProps {
   error?: ReactNode;
   /** Errors keyed by stable item id, then by the field's property. */
   errors?: Readonly<
-    Record<string, { name?: string; kind?: string; description?: string; choices?: string }>
+    Record<
+      string,
+      { name?: string; title?: string; kind?: string; description?: string; choices?: string }
+    >
   >;
   readOnly?: boolean;
+  /**
+   * A person edits each field's title; its key (`name`) is the caller's to derive and shows
+   * only as a small technical detail under the title, followed by `keyHint`.
+   */
+  titled?: boolean;
+  /** What the key is for, after it, such as how later steps name the field. */
+  keyHint?: string;
 }
 
 /**
@@ -52,7 +65,9 @@ export function FieldListEditor({
   onChange,
   error,
   errors,
-  readOnly = false
+  readOnly = false,
+  titled = false,
+  keyHint
 }: FieldListEditorProps) {
   const labels = useUiLabels("FieldListEditor");
   const prefix = useId();
@@ -166,7 +181,8 @@ export function FieldListEditor({
       <div className="grid min-w-0 gap-3">
         {items.map((item, index) => {
           const kind = allowedKinds.find((candidate) => candidate.value === item.kind);
-          const name = item.name || `${labels.fieldName} ${index + 1}`;
+          const name =
+            (titled ? item.title : undefined) || item.name || `${labels.fieldName} ${index + 1}`;
           return (
             <fieldset
               key={item.id}
@@ -174,13 +190,34 @@ export function FieldListEditor({
               data-field-id={item.id}
             >
               <legend className="px-1 text-label">{name}</legend>
-              <Field label={labels.fieldName} error={errors?.[item.id]?.name}>
-                <Input
-                  value={item.name}
-                  readOnly={readOnly}
-                  onChange={(event) => update(item.id, { name: event.target.value })}
-                />
-              </Field>
+              {titled ? (
+                <Field
+                  label={labels.fieldTitle}
+                  error={errors?.[item.id]?.title ?? errors?.[item.id]?.name}
+                  hint={
+                    item.name === "" ? undefined : (
+                      <span data-field-key="">
+                        {labels.fieldKey}: <code className="font-mono">{item.name}</code>
+                        {keyHint === undefined ? null : ` · ${keyHint}`}
+                      </span>
+                    )
+                  }
+                >
+                  <Input
+                    value={item.title ?? ""}
+                    readOnly={readOnly}
+                    onChange={(event) => update(item.id, { title: event.target.value })}
+                  />
+                </Field>
+              ) : (
+                <Field label={labels.fieldName} error={errors?.[item.id]?.name}>
+                  <Input
+                    value={item.name}
+                    readOnly={readOnly}
+                    onChange={(event) => update(item.id, { name: event.target.value })}
+                  />
+                </Field>
+              )}
               <Field label={labels.fieldKind} error={errors?.[item.id]?.kind}>
                 <Select
                   value={item.kind}

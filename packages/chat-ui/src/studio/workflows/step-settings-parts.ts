@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { useTranslation } from "../../shared/i18n";
+import type { fieldListProblems } from "./schema-fields";
 import type { WorkflowEditing } from "./workflow-editing";
 
 // What the forms of the kinds of step in a step's Settings tab share (workflow-canvas 9.4).
@@ -36,4 +37,22 @@ export function fieldWords(t: Translate) {
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** What a list of fields says against each field that cannot be saved yet, by field id. */
+export function fieldListErrors(problems: ReturnType<typeof fieldListProblems>, t: Translate) {
+  return Object.fromEntries(
+    Object.entries(problems).map(([id, problem]) => [
+      id,
+      {
+        ...(problem.title === undefined
+          ? {}
+          : { title: t("workflows.settings.answerTitleMissing") }),
+        ...(problem.name === undefined ? {} : { name: t("workflows.settings.answerNameTaken") }),
+        ...(problem.choices === undefined
+          ? {}
+          : { choices: t("workflows.settings.answerChoicesMissing") })
+      }
+    ])
+  );
 }

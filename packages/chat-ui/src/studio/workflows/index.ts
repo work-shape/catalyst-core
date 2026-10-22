@@ -25,7 +25,7 @@ export {
   type WorkflowFile
 } from "./step-edits";
 export { editPlaces, stepPlaceOf } from "./workflow-canvas";
-export { fieldListProblems, fieldsSchema, schemaFields } from "./schema-fields";
+export { fieldListProblems, fieldsSchema, schemaFields, withKeys } from "./schema-fields";
 export { draftChanges, withRemovedSteps } from "./draft-changes";
 export { draftValueOf, earlierFields, mappingOf, pickedSchema, rowsOf } from "./mapping-rows";
 export { editIssues, issuePlace, moveRefusal, useWorkflowEditing } from "./workflow-editing";

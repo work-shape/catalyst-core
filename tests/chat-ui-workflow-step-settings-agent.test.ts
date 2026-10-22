@@ -231,12 +231,16 @@ describe("the Settings of an AI step and of a script (WF-EDIT-2)", () => {
     await type(control(container, t("workflows.settings.instructions")), "Write one line.");
     const answers = required(container.querySelector("[data-step-answers]"));
     await act(async () => button(answers, uiLabelsEn.addField).click());
-    // A field with no name holds the save back.
+    // A field with no title holds the save back.
     await settled(() =>
       expect(button(container, t("workflows.settings.save")).disabled).toBe(true)
     );
     const added = required(answers.querySelectorAll("[data-field-id]")[1]);
-    await type(control(added, uiLabelsEn.fieldName), "summary");
+    await type(control(added, uiLabelsEn.fieldTitle), "Short summary");
+    // Its key comes from the title, with the hint that later steps read the field by it.
+    const key = required(added.querySelector("[data-field-key]")).textContent;
+    expect(key).toContain("short_summary");
+    expect(key).toContain(t("workflows.settings.answerKeyHint"));
     await act(async () => required(added.querySelector<HTMLElement>('[role="switch"]')).click());
     await settled(() =>
       expect(button(container, t("workflows.settings.save")).disabled).toBe(false)
@@ -248,8 +252,11 @@ describe("the Settings of an AI step and of a script (WF-EDIT-2)", () => {
     expect(step?.instructions).toBe("Write one line.");
     expect(step?.outputSchema).toEqual({
       type: "object",
-      properties: { note: { type: "string", title: "Note" }, summary: { type: "string" } },
-      required: ["note", "summary"]
+      properties: {
+        note: { type: "string", title: "Note" },
+        short_summary: { type: "string", title: "Short summary" }
+      },
+      required: ["note", "short_summary"]
     });
     // The files of the draft are saved as they were.
     expect(saves[0]?.config.files).toEqual(initial.files);

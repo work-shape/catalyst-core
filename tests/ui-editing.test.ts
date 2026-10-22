@@ -792,6 +792,34 @@ describe("FieldListEditor", () => {
     input('[data-field-id="b"] select', "text");
     expect(find("output").textContent).not.toContain('"id":"c"');
   });
+  it("edits a field's title and shows its key as a detail, where titled", () => {
+    function Titled() {
+      const [value, setValue] = useState<readonly FieldListItem[]>([
+        { id: "a", name: "month", title: "Month", kind: "text", required: false }
+      ]);
+      return createElement(FieldListEditor, {
+        label: "Asks for",
+        value,
+        kinds,
+        onChange: setValue,
+        titled: true,
+        keyHint: "steps read it by this key"
+      });
+    }
+    render(createElement(Titled));
+    const field = find('[data-field-id="a"]');
+    expect(field.querySelector("legend")?.textContent).toBe("Month");
+    expect(find('[data-field-id="a"] [data-field-key]').textContent).toBe(
+      "Key: month · steps read it by this key"
+    );
+    input('[data-field-id="a"] input', "Billing month");
+    // The key is the caller's: the editor changes only the title.
+    expect(field.querySelector("legend")?.textContent).toBe("Billing month");
+    expect(find('[data-field-id="a"] [data-field-key]').textContent).toContain("month");
+    expect(Array.from(field.querySelectorAll("label")).map((label) => label.textContent)).toContain(
+      "Title"
+    );
+  });
 });
 
 function ScheduleHarness({

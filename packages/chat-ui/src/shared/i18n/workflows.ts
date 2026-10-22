@@ -217,8 +217,9 @@ export const workflows = defineTranslations({
     "workflows.settings.answerKindRecord": "Group of fields",
     "workflows.settings.answerKindRecords": "List of groups",
     "workflows.settings.answerKindText": "Text",
-    "workflows.settings.answerNameMissing": "Name the field.",
-    "workflows.settings.answerNameTaken": "Another field has this name.",
+    "workflows.settings.answerKeyHint": "later steps read the field by this key",
+    "workflows.settings.answerNameTaken": "Another field has this key.",
+    "workflows.settings.answerTitleMissing": "Give the field a title.",
     "workflows.settings.answers": "What it answers with",
     "workflows.settings.child": "Workflow it starts",
     "workflows.settings.childKey": "Run key",
@@ -516,6 +517,7 @@ export const workflows = defineTranslations({
     "workflows.workflowSettings.asksAgentOnly": "What it asks for is changed with the agent.",
     "workflows.workflowSettings.asksHint":
       "These fields are the start form, and the form of a test run.",
+    "workflows.workflowSettings.asksKeyHint": "the steps read the field by this key",
     "workflows.workflowSettings.byHand": "By hand",
     "workflows.workflowSettings.byParent": "By another workflow",
     "workflows.workflowSettings.byParentHint":
@@ -823,8 +825,9 @@ export const workflows = defineTranslations({
     "workflows.settings.answerKindRecord": "Gruppe von Feldern",
     "workflows.settings.answerKindRecords": "Liste von Gruppen",
     "workflows.settings.answerKindText": "Text",
-    "workflows.settings.answerNameMissing": "Gib dem Feld einen Namen.",
-    "workflows.settings.answerNameTaken": "Ein anderes Feld heißt schon so.",
+    "workflows.settings.answerKeyHint": "spätere Schritte lesen das Feld unter diesem Schlüssel",
+    "workflows.settings.answerNameTaken": "Ein anderes Feld hat schon diesen Schlüssel.",
+    "workflows.settings.answerTitleMissing": "Gib dem Feld einen Titel.",
     "workflows.settings.answers": "Womit er antwortet",
     "workflows.settings.child": "Workflow, den er startet",
     "workflows.settings.childKey": "Lauf-Schlüssel",
@@ -1132,6 +1135,7 @@ export const workflows = defineTranslations({
     "workflows.workflowSettings.asksAgentOnly": "Wonach er fragt, änderst du mit dem Agenten.",
     "workflows.workflowSettings.asksHint":
       "Diese Felder sind das Startformular und das Formular eines Testlaufs.",
+    "workflows.workflowSettings.asksKeyHint": "die Schritte lesen das Feld unter diesem Schlüssel",
     "workflows.workflowSettings.byHand": "Von Hand",
     "workflows.workflowSettings.byParent": "Durch einen anderen Workflow",
     "workflows.workflowSettings.byParentHint":

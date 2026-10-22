@@ -137,13 +137,14 @@ test("an AI step's and a script's Settings save what it gets, does and answers w
   const answers = panel.locator("[data-step-answers]");
   await answers.getByRole("button", { name: "Add field", exact: true }).click();
   const added = answers.locator("[data-field-id]").last();
-  await added.getByLabel("Name", { exact: true }).fill("summary");
+  await added.getByLabel("Title", { exact: true }).fill("Summary");
+  await expect(added.locator("[data-field-key]")).toContainText("summary");
   await added.getByRole("switch").click();
   // A group's fields offer no group: no answer field nests itself.
   await answers.getByRole("button", { name: "Add field", exact: true }).click();
   // The fields in their order, a group's own after it: note, summary, client and its field.
   const group = answers.locator("[data-field-id]").nth(2);
-  await group.getByLabel("Name", { exact: true }).fill("client");
+  await group.getByLabel("Title", { exact: true }).fill("Client");
   await group.getByLabel("Kind", { exact: true }).selectOption({ label: "Group of fields" });
   await group.getByRole("button", { name: "Add field", exact: true }).click();
   const inner = group.locator("[data-field-id]").first();
@@ -151,7 +152,7 @@ test("an AI step's and a script's Settings save what it gets, does and answers w
     "Group of fields",
     "List of groups"
   ]);
-  await inner.getByLabel("Name", { exact: true }).fill("name");
+  await inner.getByLabel("Title", { exact: true }).fill("Name");
 
   const inputs = panel.locator("[data-step-inputs]");
   await inputs.getByRole("button", { name: "Add a value", exact: true }).click();
@@ -170,11 +171,20 @@ test("an AI step's and a script's Settings save what it gets, does and answers w
     type: "object",
     properties: {
       note: { type: "string" },
-      summary: { type: "string" },
-      client: { type: "object", properties: { name: { type: "string" } } }
+      summary: { type: "string", title: "Summary" },
+      client: {
+        type: "object",
+        title: "Client",
+        properties: { name: { type: "string", title: "Name" } }
+      }
     },
     required: ["summary"]
   });
+  // Saved, the field keeps its key when its title changes: later steps read it by that key.
+  const saved = answers.locator("[data-field-id]").nth(1);
+  await saved.getByLabel("Title", { exact: true }).fill("One-line summary");
+  await expect(saved.locator("[data-field-key]")).toContainText("Key: summary ·");
+  await panel.getByRole("button", { name: "Cancel", exact: true }).click();
   expect(summary?.input).toEqual({ count: { ref: { step: "count", path: "n" } } });
   expect(summary?.inputSchema).toEqual({
     type: "object",

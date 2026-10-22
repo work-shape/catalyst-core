@@ -11,7 +11,8 @@ import {
   rebaseStepEdits,
   schemaFields,
   SCRIPT_FIELD,
-  stepValue
+  stepValue,
+  withKeys
 } from "@work-shape/catalyst-chat-ui/workflows";
 
 // What an AI step or a script answers with, as the Settings tab edits it (WF-EDIT-2): a list
@@ -94,14 +95,78 @@ describe("schemaFields and fieldsSchema", () => {
     expect(schemaFields({ type: "array", items: { type: "string" } })).toBeUndefined();
   });
 
-  it("name what holds the save back: a field with no name, a name twice, a choice with none", () => {
+  it("name what holds the save back: a field with no title, a key twice, a choice with none", () => {
     expect(
       fieldListProblems([
-        { id: "a", name: "", kind: "text", required: false },
-        { id: "b", name: "x", kind: "text", required: false },
-        { id: "c", name: "x", kind: "choice", required: false, choices: [" "] }
+        { id: "a", name: "", title: " ", kind: "text", required: false },
+        { id: "b", name: "x", title: "X", kind: "text", required: false },
+        { id: "c", name: "x", title: "Y", kind: "choice", required: false, choices: [" "] }
       ])
-    ).toEqual({ a: { name: "missing" }, c: { name: "taken", choices: "missing" } });
+    ).toEqual({ a: { title: "missing" }, c: { name: "taken", choices: "missing" } });
+  });
+});
+
+// A person names a field by its title; its key is what later steps and the start form read
+// (WF-EDIT-5c). Fails without WF-EDIT-5c: a field had only a name, which was its key.
+describe("the title and the key of a field", () => {
+  const saved = {
+    type: "object",
+    properties: {
+      month: { type: "string", title: "Month" },
+      client: { type: "object", properties: { name: { type: "string" } } }
+    }
+  };
+
+  it("reads a field's title, or its key where it has none", () => {
+    expect(schemaFields(saved)?.map((field) => [field.name, field.title])).toEqual([
+      ["month", "Month"],
+      ["client", "client"]
+    ]);
+  });
+
+  it("gives a new field a key from its title as a step id is made, and follows the title", () => {
+    const fresh = { id: "new", name: "", kind: "text", required: false };
+    expect(withKeys([{ ...fresh, title: "Monat" }], undefined)[0]?.name).toBe("monat");
+    expect(
+      withKeys([{ ...fresh, name: "monat", title: "Größe des Büros" }], undefined)[0]?.name
+    ).toBe("groesse_des_bueros");
+    expect(withKeys([{ ...fresh, title: "" }], undefined)[0]?.name).toBe("");
+    expect(withKeys([{ ...fresh, title: "2026" }], undefined)[0]?.name).toBe("field");
+  });
+
+  it("keeps the key of a saved field when its title changes, and makes a new key unique", () => {
+    const fields = schemaFields(saved) ?? [];
+    const renamed = fields.map((field) =>
+      field.name === "month" ? { ...field, title: "Billing month" } : field
+    );
+    const keyed = withKeys(
+      [...renamed, { id: "new", name: "", title: "Month", kind: "text", required: false }],
+      saved
+    );
+    expect(keyed.map((field) => field.name)).toEqual(["month", "client", "month_2"]);
+    expect(fieldsSchema(keyed, saved).properties).toEqual({
+      month: { type: "string", title: "Billing month" },
+      client: { type: "object", properties: { name: { type: "string" } } },
+      month_2: { type: "string", title: "Month" }
+    });
+  });
+
+  it("keeps the keys of a saved record's fields, and derives those of a new one", () => {
+    const [, client] = schemaFields(saved) ?? [];
+    if (client === undefined) throw new Error("no client field");
+    const keyed = withKeys(
+      [
+        {
+          ...client,
+          fields: [
+            ...(client.fields ?? []).map((field) => ({ ...field, title: "Full name" })),
+            { id: "since", name: "", title: "Client since", kind: "integer", required: false }
+          ]
+        }
+      ],
+      saved
+    );
+    expect(keyed[0]?.fields?.map((field) => field.name)).toEqual(["name", "client_since"]);
   });
 });
 

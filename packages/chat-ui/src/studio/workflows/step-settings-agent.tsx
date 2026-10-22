@@ -20,12 +20,19 @@ import {
   fieldListProblems,
   fieldsSchema,
   schemaFields,
+  withKeys,
   type AnswerFieldKind
 } from "./schema-fields";
-import { sameValue, WORKFLOW_FIELDS } from "./step-edits";
+import { findStep, sameValue, WORKFLOW_FIELDS } from "./step-edits";
 import { ToolsPicker } from "./operation-picker";
 import { useCallableOperations } from "./workflow-data";
-import { fieldWords, isRecord, type KindProps, type Translate } from "./step-settings-parts";
+import {
+  fieldListErrors,
+  fieldWords,
+  isRecord,
+  type KindProps,
+  type Translate
+} from "./step-settings-parts";
 
 // The Settings of an AI step (workflow-canvas 9.4, WF-EDIT-2): its instructions, what it gets
 // and what it answers with. What it gets writes the step's `inputSchema` from the kinds of the
@@ -87,25 +94,7 @@ function AnswerFields({
     );
   }
   const problems = fieldListProblems(items);
-  const errors = Object.fromEntries(
-    Object.entries(problems).map(([id, problem]) => [
-      id,
-      {
-        ...(problem.name === undefined
-          ? {}
-          : {
-              name: t(
-                problem.name === "missing"
-                  ? "workflows.settings.answerNameMissing"
-                  : "workflows.settings.answerNameTaken"
-              )
-            }),
-        ...(problem.choices === undefined
-          ? {}
-          : { choices: t("workflows.settings.answerChoicesMissing") })
-      }
-    ])
-  );
+  const errors = fieldListErrors(problems, t);
   return (
     <div className="grid gap-2" data-step-answers="">
       <FieldListEditor
@@ -114,9 +103,12 @@ function AnswerFields({
         kinds={answerKinds(t)}
         errors={errors}
         error={issue("outputSchema")}
-        onChange={(next: readonly FieldListItem[]) => {
+        titled
+        keyHint={t("workflows.settings.answerKeyHint")}
+        onChange={(changed: readonly FieldListItem[]) => {
+          const next = withKeys(changed, findStep(editing.saved, stepId)?.outputSchema);
           const written = fieldsSchema(next, schema);
-          setShown({ schema: written, items: [...next] });
+          setShown({ schema: written, items: next });
           editing.hold(stepId, "answers", Object.keys(fieldListProblems(next)).length > 0);
           if (!sameValue(written, schema)) set({ outputSchema: written });
         }}

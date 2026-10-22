@@ -12,6 +12,8 @@ export interface UiLabels {
   valuePicked: string;
   chooseValue: string;
   fieldName: string;
+  fieldTitle: string;
+  fieldKey: string;
   fieldKind: string;
   fieldDescription: string;
   addField: string;
@@ -126,6 +128,8 @@ export const uiLabelsEn: UiLabels = {
   valuePicked: "From a step",
   chooseValue: "Choose a value",
   fieldName: "Name",
+  fieldTitle: "Title",
+  fieldKey: "Key",
   fieldKind: "Kind",
   fieldDescription: "Description",
   addField: "Add field",
@@ -215,6 +219,8 @@ export const uiLabelsDe: UiLabels = {
   valuePicked: "Aus einem Schritt",
   chooseValue: "Wert auswählen",
   fieldName: "Name",
+  fieldTitle: "Titel",
+  fieldKey: "Schlüssel",
   fieldKind: "Art",
   fieldDescription: "Beschreibung",
   addField: "Feld hinzufügen",

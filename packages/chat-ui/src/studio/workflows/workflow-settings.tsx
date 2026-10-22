@@ -19,9 +19,10 @@ import {
 import { useTranslation, type TranslationContextValue } from "../../shared/i18n";
 import { cronSchedule, scheduleCron } from "./schedule-cron";
 import { scheduleInWords, withZone } from "./schedule-words";
-import { fieldListProblems, fieldsSchema, schemaFields } from "./schema-fields";
+import { fieldListProblems, fieldsSchema, schemaFields, withKeys } from "./schema-fields";
 import { useStartRun } from "./start-run";
 import { sameValue, WORKFLOW_FIELDS, type WorkflowManifest } from "./step-edits";
+import { fieldListErrors } from "./step-settings-parts";
 import { useRunsAvailable, useWorkflow, type WorkflowReadProblem } from "./workflow-data";
 import {
   useEditWithAgent,
@@ -551,25 +552,7 @@ function StartFields({
     );
   }
   const problems = fieldListProblems(shown.items);
-  const errors = Object.fromEntries(
-    Object.entries(problems).map(([id, problem]) => [
-      id,
-      {
-        ...(problem.name === undefined
-          ? {}
-          : {
-              name: t(
-                problem.name === "missing"
-                  ? "workflows.settings.answerNameMissing"
-                  : "workflows.settings.answerNameTaken"
-              )
-            }),
-        ...(problem.choices === undefined
-          ? {}
-          : { choices: t("workflows.settings.answerChoicesMissing") })
-      }
-    ])
-  );
+  const errors = fieldListErrors(problems, t);
   return (
     <section className="grid gap-2" data-workflow-inputs="">
       <FieldListEditor
@@ -578,9 +561,12 @@ function StartFields({
         kinds={inputKinds(t)}
         errors={errors}
         readOnly={editing === undefined}
-        onChange={(next: readonly FieldListItem[]) => {
+        titled
+        keyHint={t("workflows.workflowSettings.asksKeyHint")}
+        onChange={(changed: readonly FieldListItem[]) => {
+          const next = withKeys(changed, editing?.saved.inputs);
           const written = fieldsSchema(next, schema);
-          setShown({ schema: written, items: [...next] });
+          setShown({ schema: written, items: next });
           editing?.hold(WORKFLOW_FIELDS, "inputs", Object.keys(fieldListProblems(next)).length > 0);
           if (!sameValue(written, schema)) set({ inputs: written });
         }}

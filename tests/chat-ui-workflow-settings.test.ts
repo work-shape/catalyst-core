@@ -260,13 +260,22 @@ describe("the Settings tab of a Workflow (WF-EDIT-5)", () => {
     const inputs = required(container.querySelector("[data-workflow-inputs]"));
     await act(async () => required(button(inputs, uiLabelsEn.addField)).click());
     const added = required(inputs.querySelectorAll("[data-field-id]")[1]);
-    await type(input(added, uiLabelsEn.fieldName), "client");
+    // A person gives the title; the key comes from it and shows only as a detail.
+    await type(input(added, uiLabelsEn.fieldTitle), "Client name");
+    expect(required(added.querySelector("[data-field-key]")).textContent).toContain("client_name");
+    // A saved field keeps its key when its title changes: later steps read it by that key.
+    const month = required(inputs.querySelectorAll("[data-field-id]")[0]);
+    await type(input(month, uiLabelsEn.fieldTitle), "Billing month");
+    expect(required(month.querySelector("[data-field-key]")).textContent).toContain("month");
     await settled(() => expect(save(container).disabled).toBe(false));
     await act(async () => save(container).click());
     await settled(() => expect(saves).toHaveLength(1));
     expect(manifestOf(saves[0]?.config).inputs).toEqual({
       type: "object",
-      properties: { month: { type: "string", title: "Month" }, client: { type: "string" } },
+      properties: {
+        month: { type: "string", title: "Billing month" },
+        client_name: { type: "string", title: "Client name" }
+      },
       required: ["month"],
       additionalProperties: false
     });
