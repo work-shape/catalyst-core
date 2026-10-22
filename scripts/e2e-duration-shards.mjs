@@ -20,6 +20,8 @@ export function reportTests(report) {
 
 /**
  * Longest work first. Every collected test goes to exactly one shard, including new titles.
+ * Reserve at least half the average group count for each shard: stale long durations must
+ * not leave a shard with just one test. A serial journey counts as one indivisible group.
  * Inbox is the suite's one explicitly serial file: keep its shared journey on one database.
  * @param {Array<{key: string, file: string}>} tests
  * @param {Record<string, number>} durations
@@ -46,10 +48,25 @@ export function balanceTests(tests, durations, count) {
     groups.set(groupKey, group);
   }
   const shards = Array.from({ length: count }, () => ({ tests: [], durationMs: 0 }));
-  for (const group of [...groups.values()].sort(
+  const ordered = [...groups.values()].sort(
     (a, b) => b.durationMs - a.durationMs || a.key.localeCompare(b.key)
-  )) {
-    const lightest = shards.reduce((a, b) => (a.durationMs <= b.durationMs ? a : b));
+  );
+  const floor = Math.min(
+    Math.floor(groups.size / count),
+    Math.max(1, Math.floor(groups.size / count / 2))
+  );
+  const groupCounts = new Map(shards.map((shard) => [shard, 0]));
+  for (const [index, group] of ordered.entries()) {
+    const deficit = shards.reduce(
+      (sum, shard) => sum + Math.max(0, floor - groupCounts.get(shard)),
+      0
+    );
+    const candidates =
+      ordered.length - index <= deficit
+        ? shards.filter((shard) => groupCounts.get(shard) < floor)
+        : shards;
+    const lightest = candidates.reduce((a, b) => (a.durationMs <= b.durationMs ? a : b));
+    groupCounts.set(lightest, groupCounts.get(lightest) + 1);
     lightest.tests.push(...group.tests.sort());
     lightest.durationMs += group.durationMs;
   }

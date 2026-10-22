@@ -30,6 +30,29 @@ describe("duration-based browser shards", () => {
     expect(balanceTests([...tests].reverse(), durations, 2)).toEqual(shards);
   });
 
+  it("reserves a count floor when stale durations would strand nearly empty shards", () => {
+    const tests = Array.from({ length: 36 }, (_, index) => test(`test ${index}`));
+    const durations = Object.fromEntries(
+      tests.map((test, index) => [test.key, index < 2 ? 100_000 : 10])
+    );
+    const shards = balanceTests(tests, durations, 6);
+    expect(Math.min(...shards.map((shard) => shard.tests.length))).toBeGreaterThanOrEqual(3);
+    expect(shards.flatMap((shard) => shard.tests).sort()).toEqual(
+      tests.map((test) => test.key).sort()
+    );
+    expect(balanceTests([...tests].reverse(), durations, 6)).toEqual(shards);
+  });
+
+  it("fills every shard when there are only enough groups for one each", () => {
+    const tests = Array.from({ length: 6 }, (_, index) => test(`test ${index}`));
+    expect(balanceTests(tests, { measured: 10 }, 6).map((shard) => shard.tests.length)).toEqual([
+      1, 1, 1, 1, 1, 1
+    ]);
+    expect(
+      balanceTests(tests.slice(0, 2), { measured: 10 }, 6).flatMap((shard) => shard.tests)
+    ).toHaveLength(2);
+  });
+
   it("gives a new title the measured median and rejects duplicate identities", () => {
     const tests = [test("new")];
     expect(balanceTests(tests, { fast: 10, middle: 20, slow: 30 }, 1)[0]?.durationMs).toBe(20);

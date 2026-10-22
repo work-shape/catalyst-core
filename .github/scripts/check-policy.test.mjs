@@ -1,3 +1,4 @@
+import { parse } from "yaml";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
@@ -81,4 +82,76 @@ test("only dispatches on the same release branch cancel each other", () => {
     assert.notEqual(run.group, concurrency(event, runRef, 2).group);
     assert.notEqual(run.group, concurrency(event, runRef, 1, 2).group);
   }
+});
+
+const jobs = parse(workflow).jobs;
+
+test("browser Check runs six shards with matching labels and command", () => {
+  const browser = jobs["browser-shard"];
+  assert.deepEqual(browser.strategy.matrix.shard, [1, 2, 3, 4, 5, 6]);
+  assert.equal(browser.name, "browser ${{ matrix.shard }}/6");
+  const suite = browser.steps.find((step) => step.name === "Browser suite");
+  assert.ok(suite.run.includes('--duration-shard="$SHARD/6"'));
+  assert.ok(suite.run.includes("--retries=1"));
+});
+
+test("browser Check uses the locked Playwright image and the pinned Postgres service", () => {
+  const browser = jobs["browser-shard"];
+  const lock = parse(readFileSync(new URL("../../pnpm-lock.yaml", import.meta.url), "utf8"));
+  const version = lock.importers["."].devDependencies["@playwright/test"].version;
+  assert.equal(browser.container, `mcr.microsoft.com/playwright:v${version}-noble`);
+  assert.doesNotMatch(
+    JSON.stringify(browser.steps),
+    /playwright install|start-postgres|docker login/u
+  );
+  const pinned = readFileSync(
+    new URL("../../docker/postgres/pinned-image", import.meta.url),
+    "utf8"
+  )
+    .split("\n")
+    .find((line) => line.startsWith("ghcr.io/"));
+  const postgres = browser.services.postgres;
+  assert.equal(postgres.image, pinned);
+  assert.deepEqual(postgres.credentials, {
+    username: "${{ github.actor }}",
+    password: "${{ github.token }}"
+  });
+  assert.deepEqual(postgres.env, {
+    POSTGRES_USER: "agent_chat",
+    POSTGRES_PASSWORD: "agent_chat",
+    POSTGRES_DB: "agent_chat"
+  });
+  assert.ok(postgres.options.includes("pg_isready --host 127.0.0.1"));
+  const suite = browser.steps.find((step) => step.name === "Browser suite");
+  assert.equal(suite.env.E2E_EXTERNAL_POSTGRES, "1");
+  assert.equal(
+    suite.env.E2E_DATABASE_URL,
+    "postgres://agent_chat:agent_chat@postgres:5432/agent_chat"
+  );
+});
+
+test("release Check leaves scale tests to the nightly runner", () => {
+  assert.equal(jobs.tests.env.CATALYST_SCALE_TESTS, "0");
+});
+
+test("shared builds transfer across host and Playwright containers without zstd", () => {
+  const saved = jobs.build.steps.find((step) => step.name === "Save this run's build");
+  assert.ok(saved.uses.startsWith("actions/upload-artifact@"));
+  assert.equal(saved.with.path, "/tmp/check-build.tgz");
+  assert.equal(saved.with["if-no-files-found"], "error");
+  assert.equal(saved.with["compression-level"], 0);
+  assert.equal(saved.with.overwrite, true);
+  const setup = parse(
+    readFileSync(new URL("../actions/setup-check/action.yml", import.meta.url), "utf8")
+  );
+  const download = setup.runs.steps.find((step) =>
+    step.uses?.startsWith("actions/download-artifact@")
+  );
+  assert.equal(saved.with.name, "check-build-${{ github.run_id }}-${{ github.sha }}");
+  assert.equal(download.with.name, saved.with.name);
+  assert.equal(download.with.path, "/tmp");
+  assert.equal(download.if, "inputs.build == 'true'");
+  assert.ok(!setup.runs.steps.some((step) => step.uses?.startsWith("actions/cache/restore@")));
+  const policy = jobs.changes.steps.find((step) => step.name === "Check workflow policy");
+  assert.equal(policy.run, "node --test .github/scripts/check-policy.test.mjs");
 });

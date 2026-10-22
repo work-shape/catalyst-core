@@ -67,6 +67,8 @@ jobs:
       - uses: ./.github/actions/setup-check
         with:
           build: "false"
+      - name: Check workflow policy
+        run: node --test .github/scripts/check-policy.test.mjs
       - name: Changes
         run: pnpm check:changes
       - name: Format
@@ -91,10 +93,14 @@ jobs:
       - name: Archive build
         run: find packages clients -mindepth 2 -maxdepth 2 -type d -name dist -print0 | tar --null -T - -czf /tmp/check-build.tgz
       - name: Save this run's build
-        uses: actions/cache/save@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           path: /tmp/check-build.tgz
-          key: check-build-${{ github.run_id }}-${{ github.sha }}
+          name: check-build-${{ github.run_id }}-${{ github.sha }}
+          if-no-files-found: error
+          compression-level: 0
+          overwrite: true
+          retention-days: 1
   static:
     needs: [paths, build]
     if: needs.paths.outputs.code == 'true'
@@ -165,9 +171,8 @@ jobs:
         shard: [1, 2, 3, 4]
     env:
       POSTGRES_STORE_TEST_DATABASE_URL: postgresql://catalyst:local-check@localhost:5432/catalyst_test
-      # The scale tests (tests/**/*.scale.test.ts) run on a release dispatch and a release
-      # push. A PR's `ci` run leaves them out, as the lander's local gate does.
-      CATALYST_SCALE_TESTS: ${{ github.event_name != 'pull_request' && '1' || '0' }}
+      # Volume tests belong to the Mac mini nightly, not the release Check.
+      CATALYST_SCALE_TESTS: "0"
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -301,57 +306,50 @@ jobs:
           tests/workflow-code-step.test.ts
           -t "in the runner image|gives the workspace|through the job ends"
   browser-shard:
-    name: browser ${{ matrix.shard }}/18
+    name: browser ${{ matrix.shard }}/6
     needs: [paths, build]
     if: needs.paths.outputs.browser == 'true'
-    # Individual tests (except explicit serial groups) are spread across eighteen isolated
-    # databases. One worker per shard avoids extra concurrent mutations of shared accounts
-    # and fixed-port beforeAll servers, and splits the former 15-minute standalone file.
-    # Recent job-log durations balance the work. Eighteen shards leave room for setup,
-    # retries and the observed runner variation while retaining one worker per database.
-    # No shard sets
-    # matrix.runner any more; the expression stays as it was for the check-limit guard.
+    # Six isolated databases amortize setup; duration balancing keeps one worker per
+    # database so shared accounts and fixed-port beforeAll servers stay sequential.
+    # Keep the runner expression for the check-limit guard.
     runs-on: ${{ matrix.runner || 'blacksmith-2vcpu-ubuntu-2404' }}
     timeout-minutes: 15
+    # Must match @playwright/test in pnpm-lock.yaml (check-policy.test.mjs).
+    container: mcr.microsoft.com/playwright:v1.60.0-noble
+    services:
+      postgres:
+        image: ghcr.io/work-shape/catalyst-postgres@sha256:c1d18197f1cfea501a124361bb4eeb90cf999ad82ab2dea87e66f3ce20eb3e0d
+        credentials:
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+        env:
+          POSTGRES_USER: agent_chat
+          POSTGRES_PASSWORD: agent_chat
+          POSTGRES_DB: agent_chat
+        options: >-
+          --health-cmd "pg_isready --host 127.0.0.1 --username agent_chat --dbname agent_chat"
+          --health-interval 5s --health-timeout 5s --health-retries 24
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]
+        shard: [1, 2, 3, 4, 5, 6]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
-      - name: Sign in to the registry
-        env:
-          TOKEN: ${{ github.token }}
-        run: docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin <<<"$TOKEN"
-      # The suite's own database, with the names its runner expects on its default port. The
-      # runner would otherwise start the demo Compose's Postgres itself.
-      - name: Database
-        timeout-minutes: 5
-        run: .github/scripts/start-postgres.sh agent_chat agent_chat agent_chat 55433
       - uses: ./.github/actions/setup-check
-      - name: Installed Playwright version
-        id: playwright
-        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
-      # With the cache restored this downloads nothing and only installs the system libraries.
-      - name: Chromium and its system libraries
-        run: pnpm exec playwright install --with-deps --only-shell chromium
       # The shared build is restored above; the runner migrates and starts the API and the
       # interface itself. A test that fails is tried once more; one that fails twice fails the job.
       - name: Browser suite
         shell: bash
         env:
           E2E_EXTERNAL_POSTGRES: "1"
+          E2E_DATABASE_URL: postgres://agent_chat:agent_chat@postgres:5432/agent_chat
           E2E_SKIP_BUILD: "1"
           E2E_FULLY_PARALLEL: "1"
           SHARD: ${{ matrix.shard }}
           PLAYWRIGHT_JSON_OUTPUT_NAME: test-results/browser-durations.json
-        run: pnpm test:e2e --retries=1 --reporter=./e2e/ci-reporter.ts,json --workers=1 --duration-shard="$SHARD/18" 2>&1 | tee browser-run.log
+        run: pnpm test:e2e --retries=1 --reporter=./e2e/ci-reporter.ts,json --workers=1 --duration-shard="$SHARD/6" 2>&1 | tee browser-run.log
       - name: Keep measured durations and selected test list
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
