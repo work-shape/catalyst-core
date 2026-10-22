@@ -389,3 +389,9 @@ export { createPlatformAssetCalls } from "./platform/platform-asset-calls";
 export type { AssetWorkflowOptions } from "./types";
 
 export { createNoticeMailJobs } from "./notices/notice-mail";
+export {
+  auditSubjectLookups,
+  withAuditSubjects,
+  type AuditReader,
+  type AuditSubjectLookups
+} from "./routes/audit-subjects";

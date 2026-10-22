@@ -197,7 +197,7 @@ describe("plain words in the audit view (UXA-1b2)", () => {
       "Ein Fehler in der Instanz.",
       "Befehl ausgeführt",
       "Der Anmeldung fehlt eine Berechtigung, die der Aufruf brauchte.",
-      "Unterhaltung: conv_1",
+      "Unterhaltung",
       "Sonstige Aktivität",
       "Für diesen Grund gibt es keine Beschreibung."
     ]) {
@@ -214,11 +214,63 @@ describe("plain words in the audit view (UXA-1b2)", () => {
       "SOME_NEW_CODE",
       "a_new_reason",
       "conversation:",
+      "conv_1",
+      "thing_1",
       "future_kind"
     ]) {
       expect(text).not.toContain(code);
     }
     for (const rule of REFUSED) expect(text, rule.word).not.toMatch(rule.pattern);
+  });
+});
+
+// UXA-1b3: "Betrifft" says the title or name the server gave, else the kind alone, never the id
+// the row stores. Fails without UXA-1b3: the column showed the subject as stored.
+describe("what an audit row is about, in words (UXA-1b3)", () => {
+  it("says a title, a name or a kind, never an id or an operation's name", async () => {
+    const text = await germanAuditText([
+      activity({
+        correlationId: "corr_subjects",
+        type: "config_asset.published",
+        tier: "governance",
+        target: { kind: "user", id: "user_ada" },
+        evidence: [
+          event({
+            type: "config_asset.published",
+            metadata: { kind: "agent", name: "sales" },
+            about: { kind: "agent", title: "Vertriebsassistent" }
+          }),
+          event({
+            type: "config_asset.updated",
+            metadata: { kind: "skill", name: "secret-skill" },
+            about: { kind: "skill" }
+          }),
+          event({
+            type: "operation.completed",
+            subject: "demo.weather_forecast",
+            about: { kind: "operation", title: "Wettervorhersage" }
+          }),
+          event({
+            type: "role.updated",
+            subject: "admin",
+            about: { kind: "role", builtInRole: "admin" }
+          }),
+          event({ type: "user.updated", subject: "user_ada", about: { kind: "user" } })
+        ]
+      })
+    ]);
+    for (const words of [
+      "Agent: Vertriebsassistent",
+      "Skill",
+      "Aufruf: Wettervorhersage",
+      "Rolle: Admin",
+      "Person"
+    ]) {
+      expect(text).toContain(words);
+    }
+    for (const id of ["sales", "secret-skill", "demo.weather_forecast", "user_ada"]) {
+      expect(text).not.toContain(id);
+    }
   });
 });
 

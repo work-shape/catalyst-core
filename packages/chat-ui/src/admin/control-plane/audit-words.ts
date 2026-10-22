@@ -1,6 +1,11 @@
-import type { AuditActivityTarget, AuditEvent } from "@work-shape/catalyst-api-client";
+import type {
+  AuditActivityTarget,
+  AuditEvent,
+  AuditSubject
+} from "@work-shape/catalyst-api-client";
 import type { TranslationContextValue } from "../../shared/i18n";
 import { audit } from "../../shared/i18n/audit";
+import { roleLabel } from "./user-administration-model";
 
 // The audit log in the product's words (UXA-1b2): the server sends event types, a tool's
 // action, target kinds and reason codes, and the catalogs say them. One without words is said
@@ -46,9 +51,28 @@ export function auditEventReason(event: AuditEvent): string | undefined {
   return undefined;
 }
 
-/** What the activity is about: its kind in words, then its name; a kind without words is left out. */
-export function auditTargetText(target: AuditActivityTarget, t: Translate): string {
-  const name = target.label ?? target.id;
-  const key = keyFor(`audit.target.${target.kind}`);
-  return key ? `${t(key)}: ${name}` : name;
+/**
+ * What an activity or event is about (UXA-1b3): its kind in words, then the title or name the
+ * server gave where the reader may read it, else the kind alone. Never the subject's id; a kind
+ * without words and no title says nothing.
+ */
+export function auditSubjectText(
+  subject: AuditSubject | undefined,
+  t: Translate
+): string | undefined {
+  if (!subject) return undefined;
+  const key = keyFor(`audit.target.${subject.kind}`);
+  const kind = key ? t(key) : undefined;
+  const builtIn = subject.builtInRole ? roleLabel(subject.builtInRole) : undefined;
+  const title = builtIn ? t(builtIn) : subject.title;
+  if (!title) return kind;
+  return kind ? `${kind}: ${title}` : title;
+}
+
+/** What the activity is about: its target's kind and the label its reader may read. */
+export function auditTargetText(target: AuditActivityTarget, t: Translate): string | undefined {
+  return auditSubjectText(
+    target.label === undefined ? { kind: target.kind } : { kind: target.kind, title: target.label },
+    t
+  );
 }
