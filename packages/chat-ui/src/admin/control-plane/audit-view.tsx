@@ -35,6 +35,7 @@ import {
   auditEventReason,
   auditEventText,
   auditReasonText,
+  auditSubjectText,
   auditTargetText
 } from "./audit-words";
 
@@ -109,6 +110,7 @@ function AuditActivityRow({ activity }: { activity: AuditActivity }) {
   const { t, locale } = useTranslation();
   const [open, setOpen] = useState(false);
   const reason = activity.outcome === "success" ? undefined : activity.reason;
+  const target = activity.target ? auditTargetText(activity.target, t) : undefined;
 
   return (
     <li className="py-2 first:pt-0 last:pb-0">
@@ -143,9 +145,7 @@ function AuditActivityRow({ activity }: { activity: AuditActivity }) {
           <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
             <span className="whitespace-nowrap">{formatDateTime(activity.at, locale)}</span>
             <ActorChip actor={activity.actor} />
-            {activity.target ? (
-              <span className="break-all">{auditTargetText(activity.target, t)}</span>
-            ) : null}
+            {target ? <span className="break-words">{target}</span> : null}
             <span className="whitespace-nowrap">
               {t(
                 activity.eventCount === 1
@@ -202,8 +202,8 @@ function AuditEvidence({ evidence }: { evidence: AuditEvent[] }) {
                 </Badge>
               </TableCell>
               <TableCell className="text-muted-foreground">{evidenceActorText(event, t)}</TableCell>
-              <TableCell className="break-all text-muted-foreground">
-                {event.subject ?? "—"}
+              <TableCell className="break-words text-muted-foreground">
+                {auditSubjectText(event.about, t) ?? "—"}
               </TableCell>
               <TableCell className="break-words text-muted-foreground">
                 {evidenceReasonText(event, t) ?? "—"}

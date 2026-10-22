@@ -36574,6 +36574,9 @@
               "type": "string"
             },
             "additionalProperties": {}
+          },
+          "about": {
+            "$ref": "#/components/schemas/AuditSubject"
           }
         },
         "required": [
@@ -36583,6 +36586,23 @@
           "status",
           "correlationId",
           "createdAt"
+        ]
+      },
+      "AuditSubject": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "builtInRole": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind"
         ]
       },
       "AuthPrincipal": {

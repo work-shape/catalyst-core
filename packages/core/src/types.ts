@@ -19,6 +19,7 @@ export * from "./tool-execution";
 export * from "./agent-runtime";
 export * from "./audit";
 export * from "./audit-projection";
+export * from "./audit-subjects";
 export * from "./usage";
 export * from "./jobs";
 export * from "./job-handlers";
