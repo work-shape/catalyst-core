@@ -290,8 +290,14 @@ describe("the Settings of an operation step and of a child Workflow step (WF-EDI
     );
     await act(async () => rowOf("Load the bookings").click());
     await settled(() => expect(fields(container)).toEqual(["from", "limit"]));
-    // "From" is required and has no value yet.
+    // "From" is required and has no value yet: the first Save says so and saves nothing.
+    expect(container.textContent).not.toContain(t("workflows.settings.inputMissing"));
+    await act(async () => button(container, t("workflows.settings.save")).click());
+    await settled(() =>
+      expect(container.textContent).toContain(t("workflows.settings.inputMissing"))
+    );
     expect(button(container, t("workflows.settings.save")).disabled).toBe(true);
+    expect(saves).toHaveLength(0);
     const from = required(
       container.querySelector<HTMLInputElement>('[data-input-field="from"] input[type="text"]')
     );

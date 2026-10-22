@@ -83,6 +83,8 @@ async function addAiStep(page: Page, place: string, name: string, id: string): P
   const panel = page.locator(`[data-step-panel="${id}"]`);
   await expect(panel.locator(`[data-step-settings="${id}"]`)).toBeVisible();
   await expect(canvas.locator(`[data-flow-id="${id}"]`)).toBeVisible();
+  // A new step opens without a word against what it lacks yet.
+  await expect(panel).not.toContainText("Say what the step does.");
   await panel.getByRole("textbox", { name: "Instructions" }).fill("Check one address.");
   await panel.getByRole("textbox", { name: "Name" }).fill(name);
   await panel.getByRole("button", { name: "Save", exact: true }).click();
@@ -208,7 +210,10 @@ test(TITLE, async ({ page }) => {
   const blocked = page.getByRole("dialog", { name: "“Count the notes” cannot be deleted" });
   await expect(blocked).toContainText("“Result” reads its result. Change that step first.");
   await expect(blocked.getByRole("button", { name: "Delete", exact: true })).toHaveCount(0);
-  await blocked.getByRole("button", { name: "OK", exact: true }).click();
+  await expect(blocked.getByRole("button", { name: "OK", exact: true })).toBeFocused();
+  await blocked.getByRole("button", { name: "Go to “Result”", exact: true }).click();
+  await expect(blocked).toHaveCount(0);
+  await expect(page.locator('[data-step-settings="result"]')).toBeVisible();
 
   // A move after the loop that reads the step is refused by the server, and nothing is saved.
   await fromMenu(page, "names", "Move");
@@ -226,12 +231,23 @@ test(TITLE, async ({ page }) => {
   ).toBeVisible();
   expect((await readAsset(page, id)).revision).toBe(first + 2);
 
+  // The refusal is said until the next edit, not only until its X.
+  await canvas.locator('[data-flow-id="count"]').focus();
+  await page.keyboard.press("Enter");
+  const count = page.locator('[data-step-panel="count"]');
+  await count.getByRole("tab", { name: "Settings", exact: true }).click();
+  // The step's own name is the first; its answer fields have names too.
+  await count.getByRole("textbox", { name: "Name" }).first().fill("Count every note");
+  await count.getByRole("button", { name: "Save", exact: true }).click();
+  await expect.poll(async () => (await readAsset(page, id)).revision).toBe(first + 3);
+  await expect(page.getByText("“List the names” was not moved.")).toHaveCount(0);
+
   // The loop moves with its steps: after the notice, both steps of its body inside it.
   await fromMenu(page, "each", "Move");
   await canvas
     .getByRole("button", { name: "Move here, after “Tell the office”", exact: true })
     .click();
-  await expect.poll(async () => (await readAsset(page, id)).revision).toBe(first + 3);
+  await expect.poll(async () => (await readAsset(page, id)).revision).toBe(first + 4);
   steps = (await readAsset(page, id)).config.manifest.steps;
   expect(idsOf(steps)).toEqual(["start", "count", "ai_step", "names", "notice", "each", "result"]);
   expect(idsOf(stepOf(steps, "each")?.steps)).toEqual(["greet", "ai_step_2"]);

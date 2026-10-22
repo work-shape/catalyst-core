@@ -133,7 +133,8 @@ function Harness({ deleting }: { deleting: string | undefined }) {
     editing,
     stepId: deleting,
     onClose: () => undefined,
-    onDeleted: () => document.body.setAttribute("data-deleted", deleting)
+    onDeleted: () => document.body.setAttribute("data-deleted", deleting),
+    onOpenStep: (id: string) => document.body.setAttribute("data-opened", id)
   });
 }
 
@@ -142,6 +143,7 @@ afterEach(async () => {
   for (const unmount of unmounts.splice(0)) await unmount();
   editingNow = undefined;
   document.body.removeAttribute("data-deleted");
+  document.body.removeAttribute("data-opened");
 });
 
 async function mount(source: WorkflowsSource, deleting?: string): Promise<void> {
@@ -238,6 +240,10 @@ describe("deleting a step (WF-EDIT-4)", () => {
       t("workflows.delete.blockedTitle", { name: "Load the clients" })
     );
     expect(document.body.textContent).not.toContain(t("workflows.delete.confirm"));
+    // The answer has the focus, not the close button; the other button opens the reader.
+    expect(document.activeElement?.textContent).toBe(t("workflows.delete.close"));
+    await act(async () => button(t("workflows.delete.openReader", { name: "Result" })).click());
+    expect(document.body.getAttribute("data-opened")).toBe("result");
     expect(save.saved).toHaveLength(0);
   });
 });

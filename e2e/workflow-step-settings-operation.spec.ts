@@ -160,10 +160,15 @@ test("an operation step's Settings pick an action the person may call and write 
       .getByRole("listbox")
       .getByRole("option", { name: /^Load the bookings/u })
       .click();
-    // One row per field of the operation's input; the required one waits for a value.
+    // One row per field of the operation's input; the required one waits for a value, which
+    // the first Save asks for.
     await expect(panel.locator("[data-input-field]")).toHaveCount(fields.length);
     const text = panel.locator('[data-input-field="text"]').getByRole("textbox");
     await text.fill("");
+    await panel.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(panel.locator('[data-input-field="text"]')).toContainText(
+      "Give a value or pick one from a step."
+    );
     await expect(panel.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
     await text.fill("this month");
     await panel.getByRole("button", { name: "Save", exact: true }).click();

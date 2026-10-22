@@ -200,7 +200,7 @@ export function StepInputsAndAnswers(props: KindProps & { changeWithAgent: React
 /** The Settings of an AI step. */
 export function AgentSettings(props: KindProps & { changeWithAgent: ReactNode }) {
   const { t } = useTranslation();
-  const { step, issue, under, set, editing } = props;
+  const { step, issue, under, set, editing, missing, left } = props;
   const instructions = text(step.instructions);
   return (
     <>
@@ -210,16 +210,18 @@ export function AgentSettings(props: KindProps & { changeWithAgent: ReactNode })
           hint={t("workflows.settings.instructionsHint")}
           required
           error={
-            instructions.trim() === ""
-              ? t("workflows.settings.instructionsMissing")
-              : issue("instructions")
+            missing(
+              "instructions",
+              instructions.trim() === "",
+              t("workflows.settings.instructionsMissing")
+            ) ?? issue("instructions")
           }
         >
           <Textarea
             rows={8}
             value={instructions}
             onChange={(event) => set({ instructions: event.target.value })}
-            onBlur={editing.validate}
+            onBlur={left("instructions")}
           />
         </Field>
         {under("instructions")}

@@ -17,6 +17,13 @@ export interface KindProps {
   /** Under a field: the agent's value where it changed it meanwhile, and the published one. */
   under(field: string): ReactNode;
   set(fields: Record<string, unknown>): void;
+  /**
+   * The sentence for a field with no value, where the form says it yet: after the field was
+   * left or a Save was tried (`WorkflowEditing.saysMissing`).
+   */
+  missing(field: string, empty: boolean, sentence: string): string | undefined;
+  /** For a field's `onBlur`: the field was left, and the instance is asked what it refuses. */
+  left(field: string): () => void;
 }
 
 /** How the fields of earlier results are headed in a picker. */

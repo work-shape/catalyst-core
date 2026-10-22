@@ -83,6 +83,8 @@ function SchemaInputs({
   issue,
   under,
   set,
+  missing,
+  left,
   changeWithAgent
 }: KindProps & { schema: unknown; changeWithAgent: ReactNode }) {
   const { t } = useTranslation();
@@ -103,7 +105,7 @@ function SchemaInputs({
     );
   }
   const options = earlierFields(editing.manifest, stepId, editing.stepFacts, fieldWords(t));
-  const missing = missingInputs(schema, input);
+  const lacking = missingInputs(schema, input);
   return (
     <div className="grid gap-4" data-step-inputs="">
       <p className="text-label">{t("workflows.settings.gets")}</p>
@@ -130,9 +132,13 @@ function SchemaInputs({
                   : { hint: text(field.schema.description) })}
                 error={
                   issue(`input.${field.name}`) ??
-                  (missing.includes(field.name) ? t("workflows.settings.inputMissing") : undefined)
+                  missing(
+                    `input.${field.name}`,
+                    lacking.includes(field.name),
+                    t("workflows.settings.inputMissing")
+                  )
                 }
-                onBlur={editing.validate}
+                onBlur={left(`input.${field.name}`)}
                 onChange={(next) => {
                   const { [field.name]: _before, ...rest } = input;
                   // A field with no value is left out, so a required one holds the save; a pick
@@ -205,10 +211,10 @@ export function OperationSettings(props: KindProps & { changeWithAgent: ReactNod
           choices={choices}
           error={
             issue("operation") ??
-            (name === "" ? t("workflows.settings.operationMissing") : undefined)
+            props.missing("operation", name === "", t("workflows.settings.operationMissing"))
           }
           onPick={pick}
-          onBlur={editing.validate}
+          onBlur={props.left("operation")}
         />
         {listed?.description === undefined ? null : (
           <p className="text-caption text-muted-foreground">{listed.description}</p>
@@ -248,13 +254,14 @@ export function ChildWorkflowSettings(props: KindProps & { changeWithAgent: Reac
           current={editing.workflowId}
           choices={choices}
           error={
-            issue("workflow") ?? (id === "" ? t("workflows.settings.childMissing") : undefined)
+            issue("workflow") ??
+            props.missing("workflow", id === "", t("workflows.settings.childMissing"))
           }
           onPick={(child) => {
             if (child.id === id) return;
             set({ workflow: child.id, input: keptInput(step.input, child.inputs) });
           }}
-          onBlur={editing.validate}
+          onBlur={props.left("workflow")}
         />
         {under("workflow")}
       </div>

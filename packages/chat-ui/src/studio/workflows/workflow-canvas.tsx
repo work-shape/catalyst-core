@@ -167,10 +167,14 @@ export function WorkflowCanvas({
   // Once the reader chose a step, or closed the panel, it no longer opens by itself.
   const chose = useRef(false);
   // The step being moved, while the canvas offers the places it can go; the step whose delete
-  // is asked about; and why the instance refused the last move.
+  // is asked about; and why the instance refused the last move, said until the draft changes.
   const [moving, setMoving] = useState<string>();
   const [deleting, setDeleting] = useState<string>();
-  const [moveRefused, setMoveRefused] = useState<{ name: string; sentence: string }>();
+  const [moveRefused, setMoveRefused] = useState<{
+    name: string;
+    sentence: string;
+    on: WorkflowManifest;
+  }>();
 
   const steps = workflow === undefined ? undefined : (editing?.steps ?? workflow.steps);
   const placed = useMemo(() => placedSteps(steps ?? []), [steps]);
@@ -300,11 +304,12 @@ export function WorkflowCanvas({
             onPress: (place) => {
               const step = moving;
               const name = nameOf(step);
+              const on = editable.manifest;
               setMoving(undefined);
               editable
                 .commit({ kind: "move", step, at: stepPlaceOf(place) })
                 .then((sentence) => {
-                  if (sentence !== undefined) setMoveRefused({ name, sentence });
+                  if (sentence !== undefined) setMoveRefused({ name, sentence, on });
                 })
                 .catch(() => undefined);
             }
@@ -444,7 +449,7 @@ export function WorkflowCanvas({
           }
         />
       )}
-      {moveRefused === undefined ? null : (
+      {moveRefused === undefined || moveRefused.on !== editable?.manifest ? null : (
         <Banner
           className="absolute top-3 left-3 z-10 max-w-md shadow-sm"
           tone="danger"
@@ -462,6 +467,11 @@ export function WorkflowCanvas({
           onDeleted={() => {
             setDeleting(undefined);
             setSelectedId(undefined);
+          }}
+          onOpenStep={(id) => {
+            setDeleting(undefined);
+            chose.current = true;
+            open(id, "settings");
           }}
         />
       )}

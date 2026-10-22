@@ -255,14 +255,33 @@ describe("the Settings of an AI step and of a script (WF-EDIT-2)", () => {
     expect(saves[0]?.config.files).toEqual(initial.files);
   });
 
-  it("refuses to save an AI step without instructions", async () => {
+  it("refuses to save an AI step without instructions, and says so once the field is left", async () => {
     const container = await mount(sourceOf([]), "summary");
     await settled(() => control(container, t("workflows.settings.instructions")));
+    const instructions = control(container, t("workflows.settings.instructions"));
+    await type(instructions, "");
+    // Not while the field is being written in (WF-EDIT-4: a new step opens without a word).
+    expect(container.textContent).not.toContain(t("workflows.settings.instructionsMissing"));
+    await act(async () => {
+      instructions.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
+    });
+    await settled(() =>
+      expect(container.textContent).toContain(t("workflows.settings.instructionsMissing"))
+    );
+  });
+
+  it("says what an AI step lacks at the first Save, saves nothing and then waits", async () => {
+    const saves: { config: Config; expected: number }[] = [];
+    const container = await mount(sourceOf(saves), "summary");
+    await settled(() => control(container, t("workflows.settings.instructions")));
     await type(control(container, t("workflows.settings.instructions")), "");
+    expect(button(container, t("workflows.settings.save")).disabled).toBe(false);
+    await act(async () => button(container, t("workflows.settings.save")).click());
     await settled(() =>
       expect(container.textContent).toContain(t("workflows.settings.instructionsMissing"))
     );
     expect(button(container, t("workflows.settings.save")).disabled).toBe(true);
+    expect(saves).toHaveLength(0);
   });
 
   it("saves a changed script as the step's file and nothing else of the step", async () => {

@@ -20,6 +20,8 @@ export interface DialogProps {
   /** The actions, pinned under the scrolling body. */
   footer?: ReactNode;
   size?: DialogSize;
+  /** What takes the focus on opening, such as the footer's answer. Without it the close button. */
+  initialFocus?: RefObject<HTMLElement | null>;
   onClose(): void;
   children: ReactNode;
   className?: string;
@@ -197,6 +199,7 @@ export function Dialog({
   description,
   footer,
   size = "md",
+  initialFocus,
   onClose,
   children,
   className
@@ -210,6 +213,7 @@ export function Dialog({
       open={open}
       labelledBy={titleId}
       describedBy={description === undefined ? undefined : descriptionId}
+      {...(initialFocus === undefined ? {} : { initialFocus })}
       className={cn(dialogWidths[size], className)}
       onClose={onClose}
     >

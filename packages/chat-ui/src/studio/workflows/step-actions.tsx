@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Ellipsis } from "lucide-react";
 import {
   Banner,
@@ -71,32 +71,47 @@ export function DeleteStepDialog({
   editing,
   stepId,
   onClose,
-  onDeleted
+  onDeleted,
+  onOpenStep
 }: {
   editing: WorkflowEditing;
   stepId: string;
   onClose(): void;
   /** The step was deleted and saved. */
   onDeleted(): void;
+  /** Opens a step that reads the result, to change it first. */
+  onOpenStep(id: string): void;
 }) {
   const { t, locale } = useTranslation();
   const [refused, setRefused] = useState<string>();
+  const answer = useRef<HTMLButtonElement>(null);
   const step = findStep(editing.manifest, stepId);
   if (step === undefined) return null;
   const name = text(step.name) || stepId;
-  const readers = readersOf(editing.manifest, stepId).map(
-    (reader) => text(reader.name) || String(reader.id)
-  );
-  if (readers.length > 0) {
+  const reading = readersOf(editing.manifest, stepId);
+  const readers = reading.map((reader) => text(reader.name) || String(reader.id));
+  const first = reading[0];
+  if (first !== undefined) {
     return (
       <Dialog
         open
         size="sm"
         title={t("workflows.delete.blockedTitle", { name })}
+        initialFocus={answer}
         footer={
-          <Button type="button" variant="outline" onClick={onClose}>
-            {t("workflows.delete.close")}
-          </Button>
+          <>
+            <Button
+              type="button"
+              variant="outline"
+              data-open-reader={String(first.id)}
+              onClick={() => onOpenStep(String(first.id))}
+            >
+              {t("workflows.delete.openReader", { name: readers[0] ?? "" })}
+            </Button>
+            <Button ref={answer} type="button" onClick={onClose}>
+              {t("workflows.delete.close")}
+            </Button>
+          </>
         }
         onClose={onClose}
       >

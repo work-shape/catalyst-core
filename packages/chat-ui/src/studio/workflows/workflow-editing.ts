@@ -199,6 +199,15 @@ export interface WorkflowEditing {
   hold(step: string, key: string, held: boolean): void;
   /** The steps whose save is held back. */
   held: ReadonlySet<string>;
+  /**
+   * Whether the form says that a field of a step has no value yet: once the field was left, or
+   * once a Save of the step was tried. A new step opens without a word against what it lacks.
+   */
+  saysMissing(step: string, field: string): boolean;
+  /** The field was left: from now on the form says what it lacks. */
+  leave(step: string, field: string): void;
+  /** A Save of the step was tried while it lacks a value: the form says every one. */
+  trySave(step: string): void;
   /** Asks the instance what it would refuse now, as a field loses focus. */
   validate(): void;
   save(): Promise<void>;
@@ -243,6 +252,10 @@ export function useWorkflowEditing(input: {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>();
   const [holds, setHolds] = useState<ReadonlySet<string>>(new Set());
+  // `<step>\n<field>` for a field that was left, `<step>\n` once a Save of the step was tried.
+  const [said, setSaid] = useState<ReadonlySet<string>>(new Set());
+  const say = (entry: string) =>
+    setSaid((before) => (before.has(entry) ? before : new Set([...before, entry])));
   const asked = useRef(0);
 
   // A draft another writer saved becomes the base; what is not saved is carried over to it.
@@ -534,6 +547,7 @@ export function useWorkflowEditing(input: {
     cancel: (step) => {
       setEdits((before) => before.filter((edit) => edit.step !== step));
       setHolds((before) => new Set([...before].filter((key) => !key.startsWith(`${step}\n`))));
+      setSaid((before) => new Set([...before].filter((key) => !key.startsWith(`${step}\n`))));
       setConflicts((before) => before.filter((c) => c.step !== step));
       setIssues(NO_ISSUES);
       setError(undefined);
@@ -549,6 +563,9 @@ export function useWorkflowEditing(input: {
       });
     },
     held: heldSteps,
+    saysMissing: (step, field) => said.has(`${step}\n`) || said.has(`${step}\n${field}`),
+    leave: (step, field) => say(`${step}\n${field}`),
+    trySave: (step) => say(`${step}\n`),
     validate: () => {
       if (unsavedEdits.length === 0) return;
       asked.current += 1;

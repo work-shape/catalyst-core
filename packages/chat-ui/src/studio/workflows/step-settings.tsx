@@ -106,6 +106,12 @@ export function StepSettings({
   const changedFields = editing.changes.fields.get(stepId) ?? [];
   const issue = (field: string) => editing.issues.fields.get(`${stepId}:${field}`);
   const set = (fields: Record<string, unknown>) => editing.set(stepId, fields);
+  const missing = (field: string, empty: boolean, sentence: string) =>
+    empty && editing.saysMissing(stepId, field) ? sentence : undefined;
+  const left = (field: string) => () => {
+    editing.leave(stepId, field);
+    editing.validate();
+  };
 
   /** Under a field: the agent's value where it changed it meanwhile, and the published one. */
   const under = (field: string): ReactNode => {
@@ -168,12 +174,12 @@ export function StepSettings({
         <Field
           label={t("workflows.settings.name")}
           required
-          error={nameMissing ? t("workflows.settings.nameMissing") : issue("name")}
+          error={missing("name", nameMissing, t("workflows.settings.nameMissing")) ?? issue("name")}
         >
           <Input
             value={name}
             onChange={(event) => set({ name: event.target.value })}
-            onBlur={editing.validate}
+            onBlur={left("name")}
           />
         </Field>
         {under("name")}
@@ -199,6 +205,8 @@ export function StepSettings({
           issue={issue}
           under={under}
           set={set}
+          missing={missing}
+          left={left}
         />
       ) : step.type === "notify" ? (
         <NotifySettings
@@ -208,6 +216,8 @@ export function StepSettings({
           issue={issue}
           under={under}
           set={set}
+          missing={missing}
+          left={left}
           changeWithAgent={changeWithAgent}
         />
       ) : step.type === "agent" ? (
@@ -218,6 +228,8 @@ export function StepSettings({
           issue={issue}
           under={under}
           set={set}
+          missing={missing}
+          left={left}
           changeWithAgent={changeWithAgent}
         />
       ) : step.type === "code" ? (
@@ -228,6 +240,8 @@ export function StepSettings({
           issue={issue}
           under={under}
           set={set}
+          missing={missing}
+          left={left}
           changeWithAgent={changeWithAgent}
         />
       ) : step.type === "operation" ? (
@@ -238,6 +252,8 @@ export function StepSettings({
           issue={issue}
           under={under}
           set={set}
+          missing={missing}
+          left={left}
           changeWithAgent={changeWithAgent}
         />
       ) : step.type === "workflow" ? (
@@ -248,6 +264,8 @@ export function StepSettings({
           issue={issue}
           under={under}
           set={set}
+          missing={missing}
+          left={left}
           changeWithAgent={changeWithAgent}
         />
       ) : step.type === "output" ? (
@@ -297,8 +315,10 @@ export function StepSettingsBar({ stepId, editing }: { stepId: string; editing: 
   const step = findStep(editing.manifest, stepId);
   const operations = useCallableOperations(step?.type === "operation");
   const children = useChildWorkflows(editing.workspaceId, step?.type === "workflow");
+  // A value the form has not finished says so where it is: it holds the save at once.
+  const held = editing.held.has(stepId);
+  // A value missing is said at the first Save, or once its field was left.
   const incomplete =
-    editing.held.has(stepId) ||
     (step?.type === "operation" &&
       (text(step.operation) === "" ||
         missingInputs(
@@ -330,10 +350,15 @@ export function StepSettingsBar({ stepId, editing }: { stepId: string; editing: 
       dirty={editing.unsaved.size > 0}
       whenClean="hidden"
       saving={editing.saving}
-      disabled={incomplete}
+      // An unfinished step's first Save says what it lacks; after that Save waits for it.
+      disabled={held || (incomplete && editing.saysMissing(stepId, ""))}
       discardLabel={t("workflows.settings.cancel")}
       onDiscard={() => editing.cancel(stepId)}
       onSave={() => {
+        if (incomplete) {
+          editing.trySave(stepId);
+          return;
+        }
         // A save says what went wrong on the form itself.
         editing.save().catch(() => undefined);
       }}
