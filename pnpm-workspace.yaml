@@ -21,3 +21,5 @@ overrides:
   "@expressive-code/core@^0.44": 0.44.3
   # Univer 0.25 pins nanoid 5.1.11 exactly (GHSA-28wg-ghj8-5hjv); drop with the move to Univer 1.
   "@univerjs/core>nanoid": 5.1.16
+  # ExcelJS 4.4.0 has no fixed release; UUID 11 retains the CommonJS v4 API it uses.
+  "exceljs>uuid": 11.1.1
