@@ -135,6 +135,31 @@ describe("composer submission before its next render", () => {
     expect(submitted).toEqual(["The message just typed"]);
   });
 
+  it.each(["Enter", "submit"])(
+    "sends an open conversation's draft on %s when readiness advances before the next render",
+    async (via) => {
+      const { composer, thread } = mountComposer({ onSubmitMessage: undefined });
+      const input = required(container.querySelector("textarea"));
+      const form = required(container.querySelector("form"));
+      // The form rendered with an empty composer, so its captured send callback is disabled.
+      // The thread becomes sendable before React takes up the new state, as a load can do.
+      await act(async () => {
+        composer.setText("Send as soon as the conversation is ready");
+        if (via === "Enter") {
+          input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+        } else {
+          form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+        }
+      });
+      expect(
+        thread
+          .getState()
+          .messages.filter((message) => message.role === "user")
+          .map((message) => message.content)
+      ).toEqual([[{ type: "text", text: "Send as soon as the conversation is ready" }]]);
+    }
+  );
+
   it("submits the current text through the form", () => {
     const { composer, submitted } = mountComposer();
     const form = required(container.querySelector("form"));

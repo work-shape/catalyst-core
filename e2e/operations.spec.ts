@@ -81,10 +81,15 @@ test("the Operations page opens on changing calls and lists a read only when it 
   await expect(listed().first()).toBeVisible();
   await expect(allowedReads).toHaveCount(0);
   await expect(readsNote).toHaveText(READS_NOTE);
-  await page
-    .locator("[data-operation-run-filters]")
-    .getByRole("searchbox", { name: OPERATION_FILTER })
-    .fill("assets.get");
+  await Promise.all([
+    page.waitForResponse(
+      (response) => new URL(response.url()).searchParams.get("operation") === "assets.get"
+    ),
+    page
+      .locator("[data-operation-run-filters]")
+      .getByRole("searchbox", { name: OPERATION_FILTER })
+      .fill("assets.get")
+  ]);
   await expect(failedRow).toHaveAttribute("data-status", "failed");
   await expect(failedRow).toContainText("assets.get");
   await shoot(page, "operations-reads", async () => {
@@ -92,6 +97,11 @@ test("the Operations page opens on changing calls and lists a read only when it 
     await expect(failedRow).toBeVisible();
     await expect(readsNote).toHaveText(READS_NOTE);
   });
+
+  // The empty reads-only view has no operation-name filter. Leaving assets.get set makes
+  // its empty text depend on whether that filter's debounce has applied yet.
+  await page.getByRole("button", { name: "Clear filters" }).first().click();
+  await expect(effect).toHaveValue("changing");
 
   // An instance without a refused or failed read: the same sentence is the empty text, once.
   const noReads = /\/api\/v1\/operations\/runs\?.*effect=reading/u;
@@ -115,6 +125,10 @@ test("the Operations page opens on changing calls and lists a read only when it 
 
   await effect.selectOption({ index: 2 });
   await expect(effect).toHaveValue("");
+  await page
+    .locator("[data-operation-run-filters]")
+    .getByRole("searchbox", { name: OPERATION_FILTER })
+    .fill("assets.get");
   await expect(failedRow).toBeVisible();
   await expect(allowedReads).toHaveCount(0);
   await expect(readsNote).toHaveText(READS_NOTE);

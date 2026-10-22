@@ -213,20 +213,32 @@ test("folding a loop leaves it where it was, and the entries' filter stays above
   await page.setViewportSize({ width: 1440, height: 900 });
   const canvas = await openSample(page, "monthly-booking-check/runs/run-running");
   const loop = canvas.locator('[data-slot="flow-group"][data-flow-id="each_client"]');
-  const before = await boxOf(loop);
-  await loop.locator('[data-slot="flow-fold"]').click();
-  await expect(loop).toHaveAttribute("data-collapsed", "");
-  await expect
-    .poll(async () => {
-      const after = await boxOf(loop);
-      return Math.abs(after.left - before.left) < 1 && Math.abs(after.top - before.top) < 1;
+  // The opening fit can finish during click's actionability checks. Compare with the corner
+  // the reader actually pressed, before the fold handler changes the layout.
+  const press = await loop.evaluateHandle((element) => ({
+    corner: new Promise<{ left: number; top: number }>((resolve) => {
+      element.addEventListener(
+        "pointerdown",
+        () => {
+          const { left, top } = element.getBoundingClientRect();
+          resolve({ left, top });
+        },
+        { capture: true, once: true }
+      );
     })
-    .toBe(true);
+  }));
+  await loop.locator('[data-slot="flow-fold"]').click();
+  const before = await press.evaluate(({ corner }) => corner);
+  await press.dispose();
+  const cornerStayed = async () => {
+    const after = await boxOf(loop);
+    return Math.abs(after.left - before.left) < 1 && Math.abs(after.top - before.top) < 1;
+  };
+  await expect(loop).toHaveAttribute("data-collapsed", "");
+  await expect.poll(cornerStayed).toBe(true);
   await loop.locator('[data-slot="flow-fold"]').click();
   await expect(canvas.locator('[data-flow-id="bookings"]')).toBeVisible();
-  const again = await boxOf(loop);
-  expect(Math.abs(again.left - before.left)).toBeLessThan(1);
-  expect(Math.abs(again.top - before.top)).toBeLessThan(1);
+  await expect.poll(cornerStayed).toBe(true);
 
   await loop.getByRole("button", { name: "Show the 3 failed", exact: true }).click();
   const entries = canvas.locator("[data-loop-entries]");

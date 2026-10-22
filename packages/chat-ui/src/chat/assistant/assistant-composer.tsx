@@ -154,7 +154,15 @@ export function AssistantComposer({
         }
         return;
       }
-      if (onSubmitMessage?.(composerRuntime.getState().text)) {
+      if (!onSubmitMessage) {
+        // The form can still hold a disabled send callback from its previous render after
+        // the conversation becomes ready. Submit through the runtime as it stands now.
+        event.preventDefault();
+        event.stopPropagation();
+        if (composerRuntime.getState().canSend) composerRuntime.send();
+        return;
+      }
+      if (onSubmitMessage(composerRuntime.getState().text)) {
         event.preventDefault();
         event.stopPropagation();
       }
