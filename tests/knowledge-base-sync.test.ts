@@ -19,6 +19,79 @@ const KB = "sync-test";
 const SOURCE = "source";
 describe("initial and full source import (KB 72, 73)", () => {
   const { setup } = useKnowledgeSync();
+  it("queues 250 ids once across listing 429 resumes and splits duplicate batches without orphan copies", async () => {
+    let listCalls = 0;
+    let release = false;
+    let unblock = () => {};
+    const gate = new Promise<void>((resolve) => {
+      unblock = resolve;
+    });
+    const calls = new Map<string, number>();
+    const world = await setup((source) => ({
+      ...source,
+      list(input, ctx) {
+        if (++listCalls % 2 === 0)
+          throw new DocumentSourceError("rate_limited", "Wait", { retryAfterMs: 60000 });
+        return source.list(input, ctx);
+      },
+      async *fetch(input, ctx) {
+        if (!release)
+          throw new DocumentSourceError("rate_limited", "Wait", { retryAfterMs: 60000 });
+        calls.set(input.itemId, (calls.get(input.itemId) ?? 0) + 1);
+        await gate;
+        yield* source.fetch(input, ctx);
+      }
+    }));
+    for (let i = 0; i < 250; i++)
+      world.world.put({
+        folderId: "folder",
+        name: `${i}.txt`,
+        mime: "text/plain",
+        bytes: new TextEncoder().encode("shared text")
+      });
+    const run = await world.sync();
+    for (let page = 0; page < 3; page++) {
+      await world.platform`update platform_jobs set run_after=now() where kind='knowledge_base.sync' and status='queued'`;
+      await world.worker.runDue();
+    }
+    const queued =
+      await world.platform`select payload from platform_jobs where kind='knowledge_base.fetch' and status='queued'`;
+    expect(queued).toHaveLength(3);
+    const payloads = queued.map((row) => knowledgeFetchJob.payloadSchema.parse(row.payload));
+    expect(payloads.flatMap((payload) => payload.sourceItemIds)).toHaveLength(250);
+    const ids = payloads.flatMap((payload) => payload.sourceItemIds);
+    expect(new Set(ids).size).toBe(250);
+    expect(listCalls).toBe(5);
+    // Park the normal queue, then start two identical batches together. Hold their
+    // streams until both handlers reach fetch: the claim must let them fetch different
+    // items, and removing the claim predicate must produce duplicate calls.
+    await world.platform`update platform_jobs set run_after=now()+interval '1 day' where kind='knowledge_base.fetch' and status='queued'`;
+    const first = required(payloads[0]);
+    const payload = { ...first, sourceItemIds: first.sourceItemIds.slice(0, 4) };
+    for (let duplicate = 0; duplicate < 2; duplicate++)
+      await world.instance.stores.jobs.enqueue(knowledgeFetchJob, payload, { clientInstanceId });
+    release = true;
+    const racing = world.worker.runDue();
+    try {
+      await eventually(() =>
+        expect([...calls.values()].reduce((sum, n) => sum + n, 0)).toBeGreaterThanOrEqual(2)
+      );
+      expect(calls.size).toBe(2);
+    } finally {
+      unblock();
+      await racing;
+    }
+    await world.drain(run);
+    expect(calls.size).toBe(250);
+    expect([...calls.values()].every((n) => n === 1)).toBe(true);
+    expect(
+      await world.platform`select count(*)::int as n from managed_files where owner_id=${world.record.id}`
+    ).toEqual([{ n: 250 }]);
+    expect(await world.sql`select count(*)::int as n from catalyst_kb.documents`).toEqual([
+      { n: 250 }
+    ]);
+  });
+
   it("finishes an exhausted batch after every document insert fails and permits another sync", async () => {
     const world = await setup();
     for (let i = 0; i < 2; i++)
@@ -58,6 +131,18 @@ describe("initial and full source import (KB 72, 73)", () => {
     expect((await world.objects.list(`knowledge-bases/${world.record.id}/`)).objects).toHaveLength(
       0
     );
+    const status = await world.instance.api.call("knowledge_bases.sources", {
+      params: { knowledgeBase: KB }
+    });
+    expect(status.statusCode, status.body).toBe(200);
+    expect(status.json()).toMatchObject({
+      sources: [
+        {
+          items: { failed: 2 },
+          failures: [{ code: "knowledge_fetch_failed", count: 2 }]
+        }
+      ]
+    });
     await expect(world.sync("full")).resolves.toBeTypeOf("string");
   });
 
@@ -274,8 +359,11 @@ describe("initial and full source import (KB 72, 73)", () => {
     world.world.rename(a, "renamed.md");
     world.world.move(a, "other");
     fetches = 0;
+    expect(world.embed).toHaveBeenCalled();
+    world.embed.mockClear();
     await world.drain(await world.sync("full"));
     expect(fetches).toBe(0);
+    expect(world.embed).not.toHaveBeenCalled();
     expect(
       await world.sql`select id, content_sha256 from catalyst_kb.documents order by id`
     ).toEqual(rows);

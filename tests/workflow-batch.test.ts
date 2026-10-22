@@ -47,11 +47,10 @@ describe("Workflow batch operations (WF 114)", () => {
     });
   });
 
-  it.each([[1200, 500]])(
-    "runs %i rows in views of %i without copying them",
-    expectBatchViews,
-    300_000
-  );
+  it.each([
+    [1200, 500],
+    [5, 1]
+  ])("runs %i rows in views of %i without copying them", expectBatchViews, 300_000);
 
   it.each([0, -1, 1.5, "500"])("refuses malformed batch size %s", (batch) => {
     const value = manifest(500);
