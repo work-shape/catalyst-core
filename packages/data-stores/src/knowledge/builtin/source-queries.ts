@@ -93,6 +93,31 @@ export function createKnowledgeSources(runtime: DataStoreRuntime): KnowledgeSour
       sources: readonly { id: string; connection: string }[],
       signal: AbortSignal
     ) {
+      signal.throwIfAborted();
+      // The published definition already answers an empty list. Its owned store is made
+      // asynchronously after the first publish and is needed only for sync state and counts.
+      if (sources.length === 0) return { sources: [] };
+      const record = await runtime.stores.dataStores.getDataStore({
+        clientInstanceId: runtime.clientInstanceId,
+        id
+      });
+      // The database and its initial tables are made by separate jobs. Before either is
+      // ready there is no sync state yet. Existing stores awaiting an upgrade keep their
+      // counts; failed preparation still follows the store's normal error path.
+      if (
+        record?.ownerKnowledgeBaseId &&
+        !record.failure &&
+        (record.status === "provisioning" ||
+          (record.status === "ready" && record.migrations.length === 0))
+      )
+        return knowledgeSourcesOutputSchema.parse({
+          sources: sources.map((source) => ({
+            id: source.id,
+            connection: source.connection,
+            items: { discovered: 0, fetched: 0, indexed: 0, failed: 0, withdrawn: 0 },
+            failures: []
+          }))
+        });
       return store(id, signal).change(async (sql) => {
         const result = [];
         for (const source of sources) {

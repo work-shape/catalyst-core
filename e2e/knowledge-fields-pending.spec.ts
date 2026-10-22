@@ -188,13 +188,6 @@ test.describe("a document whose fields wait for the budget", () => {
         data: { revision: 1 }
       });
       expect(published.ok(), await published.text()).toBe(true);
-      // The page reads the sources of a published base, which answer 409 for a moment after the
-      // publish; a person does not open the page in that moment, and a fast page load did.
-      const sourcesUrl = `${knowledgeApiUrl}/api/v1/knowledge-bases/${name}/sources`;
-      await expect
-        .poll(async () => (await page.request.get(sourcesUrl)).status(), { timeout: 30_000 })
-        .toBe(200);
-
       // The interface talks to the API with the module on; its list of documents is planted.
       // A later route is asked first, so the planted list stands in front of the redirect.
       await page.route(`${apiBaseUrl}/**`, (route) =>
