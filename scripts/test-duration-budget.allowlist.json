@@ -1,6 +1,6 @@
 {
   "measuredAt": "2026-10-22",
-  "source": "Release Check 39757198912, commit 89e4c4247; existing job logs, no new hosted run. Initial local landing at 6a4402a7d on 2026-10-22 (Node 26.6.0, shared heavy slot); locally measured additions name that source in their reasons. Agent-story subprocess cost: passing Node 22.23.4 targeted budget run at c0df4bc69 on 2026-10-22. Completed passing samples from the Node 22.23.4 local landing at d7fc470bf on 2026-10-22, canceled after discovering additional baseline offenders. Complete Node 22.23.4 local baseline at e5d271de8 on 2026-10-22, two Vitest workers: 936 files and 10,812 tests passed; additional passing cost outliers from that run are included below.",
+  "source": "Release Check 39757198912, commit 89e4c4247; existing job logs, no new hosted run. Initial local landing at 6a4402a7d on 2026-10-22 (Node 26.6.0, shared heavy slot); locally measured additions name that source in their reasons. Agent-story subprocess cost: passing Node 22.23.4 targeted budget run at c0df4bc69 on 2026-10-22. Completed passing samples from the Node 22.23.4 local landing at d7fc470bf on 2026-10-22, canceled after discovering additional baseline offenders. Complete Node 22.23.4 local baseline at e5d271de8 on 2026-10-22, two Vitest workers: 936 files and 10,812 tests passed; additional passing cost outliers from that run are included below. Exclusive Node 22.23.4 five-worker baseline at 49dc0b40b on 2026-10-22: all 10,812 assertions passed; the opt-in Vitest discovery cost is included below.",
   "notes": "Vitest identities use file > fullName (nested suites separated by >); file exceptions do not exempt tests. File durations cover tests and hooks, excluding module imports. Browser durations sum all reported attempts per spec in the selected run, including retries, excluding gaps between files. Entries were measured in the release or initial local run; failed assertions are not added as successful baseline measurements; removed test titles and .scale.test.ts files are omitted. Remove exceptions as the test-suite diet makes them unnecessary.",
   "vitestFiles": {
     "tests/agent-run-approvals.test.ts": {
@@ -652,6 +652,10 @@
     "tests/source-names.test.ts > names and paths in product source > contains no operated customer names, including in documentation": {
       "measuredMs": 11074,
       "reason": "Existing release and source tooling coverage; initial local landing measured this cost on 2026-10-22 at 6a4402a7d. Retained while the test-suite diet reduces existing setup, waits and volume."
+    },
+    "tests/vitest-configs.test.ts > vitest.probes.config.ts discovers only its opt-in suite": {
+      "measuredMs": 5107,
+      "reason": "Starts a real pnpm/Vitest discovery subprocess that computes the root project graph even for the opt-in Workflow probes. Passed in the exclusive Node 22.23.4 five-worker baseline at 49dc0b40b on 2026-10-22."
     },
     "tests/workflow-code-loops.test.ts > code steps inside dataset loops > each worker script reads only its own rows (batch=undefined)": {
       "measuredMs": 8340,
