@@ -1,0 +1,10 @@
+# The person agent-use.spec.ts gives Use on its own agent. No other spec uses this person: a
+# spec that read E2E User would see the right while it stood.
+- email: e2e-agent-use@example.test
+  displayLabel: E2E Zz Agent Use
+  passwordEnvName: E2E_AGENT_USE_PASSWORD
+  developmentPassword: e2e-agent-use-password
+  roles:
+    - user
+  permissionRefs:
+    - demo-tools

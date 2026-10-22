@@ -9,7 +9,8 @@ import { assetBaseRevision, assetRevision, requestWithOrigin } from "./request-w
 // German, at 1280 wide, with the pictures of both.
 
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
-const normalUser = { email: "e2e-user@example.test", password: "e2e-user-password" };
+// A person of this spec's own (tests/fixtures/e2e-users/agent-use.yaml): no other spec reads them.
+const normalUser = { email: "e2e-agent-use@example.test", password: "e2e-agent-use-password" };
 const adminUser = { email: "e2e-admin@example.test", password: "e2e-admin-password" };
 const agentName = "use-helper";
 const assetPath = `${apiBaseUrl}/api/v1/assets/agent/${agentName}`;
@@ -89,7 +90,7 @@ test("an administrator limits an agent to holders of Use and gives the right", a
     await expect(page).toHaveURL(/\/settings\/instance\/access$/u);
     await page.getByRole("button", { name: "Neues Recht" }).click();
     const dialog = page.getByRole("dialog", { name: "Neues Recht" });
-    await pick(page, dialog.getByRole("button", { name: /^Person: / }), /E2E User/u);
+    await pick(page, dialog.getByRole("button", { name: /^Person: / }), /E2E Zz Agent Use/u);
     await dialog.getByRole("radio", { name: /^An einem Asset/u }).check();
     await dialog.getByRole("radio", { name: "Verwenden", exact: true }).check();
     await pick(page, dialog.getByRole("button", { name: /^Asset: / }), agentName);
@@ -107,7 +108,7 @@ test("an administrator limits an agent to holders of Use and gives the right", a
     await dialog.getByRole("button", { name: "Recht anlegen" }).click();
     await expect(dialog).toBeHidden();
     const row = page.getByTestId("grant-row").filter({ hasText: "Use Helper" });
-    await expect(row).toContainText("E2E User");
+    await expect(row).toContainText("E2E Zz Agent Use");
     await expect(row).toContainText("verwenden");
     await page.screenshot({
       path: join(shotsDir, "agent-use-granted-de-1280.png"),
