@@ -7,8 +7,8 @@ import { vi } from "vitest";
  * line ends, comments, templates and odd end tags is held by `e2e/view-runtime.spec.ts`.
  *
  * A view that runs no script is written anew from the parsed tree. This stand-in has no tree,
- * so the body of such a view is empty here; what is written from a real tree is held by
- * `e2e/view-exits.spec.ts`.
+ * so the body of such a view is empty here. `view-document-writer.test.ts` checks image
+ * filtering on a DOM tree; `e2e/view-exits.spec.ts` holds Chromium parsing, CSS and network checks.
  */
 export function stubViewHtmlParser(): void {
   vi.stubGlobal(

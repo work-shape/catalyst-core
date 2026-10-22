@@ -6,16 +6,14 @@ import type { Locator, Page, TestInfo } from "@playwright/test";
 import { assetBaseRevision, assetRevision, requestWithOrigin } from "./request-with-origin";
 import { expect, test } from "./test";
 
-// UXA-4, the agent page as one form: the model section says what reasoning effort changes and
-// why a default model cannot be changed, and an agent has one mark on the Agents page, in Studio
-// and in the dock. Each test writes an agent of its own and deletes it by name. E2E_SHOTS_DIR
+// UXA-4: an agent has one mark on the Agents page, in Studio and in the dock.
+// The model section is covered by tests/chat-ui-build-editors*.test.ts. This test writes an
+// agent of its own and deletes it by name. E2E_SHOTS_DIR
 // enables pictures in light English at 1280 and 390, plus German at 390.
 
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
 /** Reads and writes every agent of the instance, its models included. */
 const superadmin = { email: "e2e-superadmin@example.test", password: "e2e-superadmin-password" };
-/** Writes every agent of the instance; the admin role does not change an agent's models. */
-const admin = { email: "e2e-admin@example.test", password: "e2e-admin-password" };
 const WIDE = { width: 1280, height: 800 };
 const PHONE = { width: 390, height: 844 };
 
@@ -170,60 +168,6 @@ test("an agent has the same mark on the Agents page, in Studio and in the dock",
     await shoot(page, testInfo, "studio", openStudio);
     await shoot(page, testInfo, "dock", openDock);
   } finally {
-    await deleteAgent(page, name);
-  }
-});
-
-// Fails without the sentence: the section explained reasoning effort in terms of model bindings.
-// A locked default model names no source: the models on offer come from the agent and the
-// limits around it, not from "the instance" (COPY-1).
-test("the model section says what reasoning effort does and locks the models for a reader", async ({
-  page,
-  instanceAgentsChange: _instanceAgentsChange
-}, testInfo) => {
-  test.setTimeout(300_000);
-  const tag = randomUUID().slice(0, 8);
-  const name = `e2e_uxa4_model_${tag}`;
-  await page.setViewportSize(WIDE);
-  await signIn(page, superadmin);
-  await putAgent(page, name, `Model probe ${tag}`);
-  const effort = {
-    en: "Reasoning effort is how long the model thinks before it answers; more helps with hard questions but takes longer.",
-    de: "Der Denkaufwand bestimmt, wie lange das Modell vor der Antwort nachdenkt; mehr hilft bei schwierigen Fragen, dauert aber länger."
-  };
-  const openModel = async () => {
-    await page.goto(`/build/agents/${name}`);
-    const model = page.locator("section#model");
-    await expect(model.getByRole("combobox").first()).toBeVisible();
-    return model;
-  };
-  try {
-    // Who may change the models reads the sentence on effort and may change them.
-    const writable = await openModel();
-    await expect(writable).toContainText(effort.en);
-    await expect(writable.getByRole("combobox").first()).toBeEnabled();
-
-    // Who may change the agent and not its models reads the same sentence beside a locked model.
-    // Stop the old identity's page before replacing its session. Its pending workspace
-    // queries must not run with the next person's cookies.
-    await page.goto("about:blank");
-    await page.context().clearCookies();
-    await signIn(page, admin);
-    await openModel();
-    for (const locale of ["en", "de"] as const) {
-      await page.evaluate(
-        (value) => window.localStorage.setItem("vivd-catalyst:locale", value),
-        locale
-      );
-      const model = await openModel();
-      await expect(model).toContainText(effort[locale]);
-      await expect(model.getByRole("combobox").first()).toBeDisabled();
-    }
-    await shoot(page, testInfo, "model-section", openModel);
-  } finally {
-    await page.goto("about:blank");
-    await page.context().clearCookies();
-    await signIn(page, superadmin);
     await deleteAgent(page, name);
   }
 });

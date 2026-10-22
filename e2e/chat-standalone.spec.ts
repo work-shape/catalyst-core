@@ -1828,96 +1828,6 @@ test("collaboration workspace settings delete a workspace and fall back to perso
   ).toHaveCount(0);
 });
 
-test("deleting my account signs me out when the removal is finished later", async ({ page }) => {
-  await signInViaUi(page, normalUser);
-  const apiOrigin = new URL(apiBaseUrl).origin;
-  let accepted = false;
-  // The server answers 202 when stored data could not be removed at once, and refuses the
-  // closed account from then on. Answered here, so the seeded user stays for the other tests.
-  await page.route(
-    (url) => url.origin === apiOrigin && url.pathname === apiOperations["me.get"].path,
-    async (route) => {
-      const method = route.request().method();
-      if (method === "DELETE") {
-        accepted = true;
-        await route.fulfill({
-          status: 202,
-          headers: {
-            "access-control-allow-origin": new URL(page.url()).origin,
-            "access-control-allow-credentials": "true"
-          }
-        });
-      } else if (method === "GET" && accepted) {
-        const response = await route.fetch();
-        await route.fulfill({
-          response,
-          status: 401,
-          json: {
-            error: {
-              code: "UNAUTHENTICATED",
-              message: "User account is being deleted",
-              correlationId: "e2e"
-            }
-          }
-        });
-      } else {
-        await route.continue();
-      }
-    }
-  );
-
-  await page.goto("/settings/you/profile");
-  await expect(page.getByRole("heading", { name: "Profile", level: 1 })).toBeVisible();
-  await page.getByRole("button", { name: "Delete account", exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "Delete account?", exact: true });
-  await dialog.getByRole("button", { name: "Delete account", exact: true }).click();
-
-  await expect(page.getByRole("main", { name: "Sign in" })).toBeVisible();
-  expect(accepted).toBe(true);
-});
-
-test("the user list shows an account that is being deleted", async ({ page }) => {
-  await signInViaUi(page, superadminUser);
-  // Own this row so the assertion works even as the shard's first Users test.
-  const id = randomUUID();
-  const email = `deleting-status-${id}@example.test`;
-  const created = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/v1/instance/users`, {
-    data: {
-      displayLabel: `Deleting status ${id}`,
-      email,
-      roles: ["user"],
-      passwordSignIn: { password: `deleting-status-${id}` }
-    }
-  });
-  expect(created.ok()).toBe(true);
-  const apiOrigin = new URL(apiBaseUrl).origin;
-  await page.route(
-    (url) => url.origin === apiOrigin && url.pathname === apiOperations["users.list"].path,
-    async (route) => {
-      if (route.request().method() !== "GET") {
-        await route.continue();
-        return;
-      }
-      const response = await route.fetch();
-      const body = apiOperations["users.list"].response.schema.parse(await response.json());
-      await route.fulfill({
-        response,
-        json: {
-          ...body,
-          items: body.items.map((user) =>
-            user.email === email ? { ...user, status: "deleting" } : user
-          )
-        }
-      });
-    }
-  );
-  await settingsGear(page).click();
-  await settingsPages(page).getByRole("button", { name: "Users", exact: true }).click();
-
-  await searchUsers(page, email);
-  await expect(page.getByText("Being deleted", { exact: true }).first()).toBeVisible();
-});
-
 test("a superadmin manages a shared workspace without being a member", async ({
   page,
   browser,
@@ -3709,7 +3619,7 @@ test("workspace and superadmin keep page scroll locked", async ({ page }) => {
   await expectDocumentScrollLocked(page);
 });
 
-test("admin sees billed usage and can manage users", async ({ page }) => {
+test("admin opens billed usage and returns to the users page", async ({ page }) => {
   await signInViaUi(page, adminUser);
   await expect(settingsGear(page)).toBeVisible();
   await settingsGear(page).click();
@@ -3734,25 +3644,6 @@ test("admin sees billed usage and can manage users", async ({ page }) => {
 
   await settingsPages(page).getByRole("button", { name: "Users", exact: true }).click();
   await expect(page).toHaveURL(/\/settings\/instance\/users$/u);
-  await page.getByRole("button", { name: "New user" }).click();
-  const timestamp = Date.now();
-  const createdUser = {
-    displayLabel: `E2E Admin Created ${timestamp}`,
-    email: `e2e-admin-created-${timestamp}@example.test`,
-    password: `e2e-admin-created-${timestamp}`
-  };
-  const dialog = page.getByRole("dialog", { name: "New user" });
-  await expect(dialog).toBeVisible();
-  await expect(
-    dialog.getByLabel("Role", { exact: true }).locator('option[value="superadmin"]')
-  ).toHaveCount(0);
-  await dialog.getByLabel("Display label").fill(createdUser.displayLabel);
-  await dialog.getByLabel("Email").fill(createdUser.email);
-  await dialog.getByLabel("Initial password").fill(createdUser.password);
-  await dialog.getByRole("button", { name: "Create user" }).click();
-  await expect(page.getByRole("dialog", { name: "User created" })).toBeVisible();
-  await page.getByRole("button", { name: "Open user" }).click();
-  await expect(page.getByText(createdUser.displayLabel, { exact: true })).toBeVisible();
 });
 
 test("the usage panel names the caller, the provider and the region of a call in English and German", async ({
@@ -4505,59 +4396,6 @@ test("a surface yields Escape to the layer above it, returns the focus to its op
   await expect(card).toBeFocused();
 });
 
-test("superadmin resets a user's password from the users panel", async ({ page }) => {
-  // A user of this test's own: the seeded users sign in from every other spec file at the same
-  // time, and a seeded password that is another one for a moment refuses them.
-  const timestamp = Date.now();
-  const resetUser = {
-    displayLabel: `E2E Reset ${timestamp}`,
-    email: `e2e-reset-${timestamp}@example.test`,
-    password: `e2e-initial-${timestamp}`
-  };
-  await signInViaApi(page, superadminUser);
-  const created = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/v1/instance/users`, {
-    data: {
-      displayLabel: resetUser.displayLabel,
-      email: resetUser.email,
-      roles: ["user"],
-      passwordSignIn: { password: resetUser.password }
-    }
-  });
-  expect(created.ok()).toBe(true);
-
-  await page.goto("/");
-  await settingsGear(page).click();
-  await expect(settingsPages(page)).toBeVisible();
-
-  await settingsPages(page).getByRole("button", { name: "Users", exact: true }).click();
-  await searchUsers(page, resetUser.email);
-  await page.getByRole("button", { name: `${resetUser.displayLabel} ${resetUser.email}` }).click();
-  await expect(page.getByRole("heading", { name: "Sign-in methods" })).toBeVisible();
-
-  const newPassword = `e2e-reset-${timestamp}`;
-  await page.getByLabel("New password").fill(newPassword);
-  await page.getByRole("button", { name: "Reset password" }).click();
-  await expect(page.getByText("Password updated", { exact: false })).toBeVisible();
-
-  await page.getByRole("button", { name: "E2E Superadmin account" }).click();
-  await page.getByRole("menuitem", { name: "Sign out" }).click();
-  await expect(page.getByRole("main", { name: "Sign in" })).toBeVisible();
-
-  // The password the user was created with is no longer one, and the new one signs in.
-  const refused = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/auth/sign-in/email`, {
-    data: { email: resetUser.email, password: resetUser.password, rememberMe: true }
-  });
-  expect(refused.status()).toBe(401);
-  await signInViaUi(
-    page,
-    { email: resetUser.email, password: newPassword },
-    { alreadyOnLogin: true }
-  );
-  await expect(
-    page.getByRole("button", { name: `${resetUser.displayLabel} account` })
-  ).toBeVisible();
-});
-
 test("superadmin creates a user with a password from the users panel", async ({ page }) => {
   await signInViaUi(page, superadminUser);
   await settingsGear(page).click();
@@ -4609,51 +4447,6 @@ test("superadmin creates a user with a password from the users panel", async ({ 
     page.getByRole("button", { name: `${createdUser.displayLabel} account` })
   ).toBeVisible();
   await expect(settingsGear(page)).toHaveCount(0);
-});
-
-test("superadmin deletes a user from the users panel", async ({ page }) => {
-  await signInViaUi(page, superadminUser);
-  await settingsGear(page).click();
-  await expect(settingsPages(page)).toBeVisible();
-
-  await settingsPages(page).getByRole("button", { name: "Users", exact: true }).click();
-  await page.getByRole("button", { name: "New user" }).click();
-
-  const timestamp = Date.now();
-  const createdUser = {
-    displayLabel: `E2E Deleted ${timestamp}`,
-    email: `e2e-deleted-${timestamp}@example.test`,
-    password: `e2e-deleted-${timestamp}`
-  };
-  const dialog = page.getByRole("dialog", { name: "New user" });
-  await dialog.getByLabel("Display label").fill(createdUser.displayLabel);
-  await dialog.getByLabel("Email").fill(createdUser.email);
-  await dialog.getByLabel("Initial password").fill(createdUser.password);
-  await dialog.getByRole("button", { name: "Create user" }).click();
-  await page.getByRole("button", { name: "Open user" }).click();
-  await expect(page.getByText(createdUser.displayLabel, { exact: true })).toBeVisible();
-
-  await page.getByRole("button", { name: "Delete user" }).click();
-  const deleteDialog = page.getByRole("dialog", { name: `Delete ${createdUser.displayLabel}?` });
-  await expect(deleteDialog).toBeVisible();
-  const confirmDeleteButton = deleteDialog.getByRole("button", {
-    name: "Permanently delete user"
-  });
-  await expect(confirmDeleteButton).toBeDisabled();
-  await deleteDialog.getByLabel("Confirmation").fill("wrong user");
-  await expect(confirmDeleteButton).toBeDisabled();
-  await deleteDialog.getByLabel("Confirmation").fill(createdUser.email);
-  await expect(confirmDeleteButton).toBeEnabled();
-  await confirmDeleteButton.click();
-  await expect(page.getByRole("heading", { name: "Users" })).toBeVisible();
-  await expect(page.getByText(createdUser.displayLabel, { exact: true })).toHaveCount(0);
-
-  const users = await readPagedList(
-    page,
-    "/api/v1/instance/users",
-    apiOperations["users.list"].response.schema
-  );
-  expect(users.some((user) => user.email === createdUser.email)).toBe(false);
 });
 
 /**

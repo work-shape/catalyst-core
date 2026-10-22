@@ -1,3 +1,4 @@
+import { privateRowImages } from "../tests/fixtures/private-view-images";
 import type { Page } from "@playwright/test";
 import {
   SETTLE_MS,
@@ -312,7 +313,9 @@ exitTest.describe("a view with private rows is written from an allowlist", () =>
       // What a static view is made of stays.
       "<style>#kept{color:rgb(1, 2, 3)}</style>",
       '<table><tr><th scope="col">Status</th></tr><tr><td id="kept" colspan="1" style="font-weight:700">open</td></tr></table>',
-      '<img id="inline" alt="inline" width="1" height="1" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==">'
+      '<img id="inline" alt="inline" width="1" height="1" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==">',
+      // The writer test checks these attributes; Chromium still sees every input for its network checks.
+      privateRowImages(there).html
     ].join("");
 
     await openView(page, "private_hydrated_view", planted);
@@ -372,65 +375,6 @@ exitTest.describe("a view with private rows is written from an allowlist", () =>
       await expect(view.locator("#row-link")).toHaveText("Details");
       await expect(view.locator("#row-bold")).toHaveText("bold");
       await view.locator("#row-link").click({ modifiers: ["ControlOrMeta"] });
-
-      await page.waitForTimeout(SETTLE_MS);
-      expect(otherHost.requests).toEqual([]);
-      expect(otherHost.connections).toBe(0);
-    }
-  );
-
-  exitTest(
-    "it keeps an image only when it is a raster image held in its address",
-    async ({ page, otherHost }) => {
-      const there = otherHost.origin;
-      const png =
-        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
-      // An SVG image loads nothing while it is an image. Opened in a tab of its own it is a
-      // document, and this link in it works.
-      const svg = `<svg xmlns='http://www.w3.org/2000/svg'><a href='${there}/hit?row=secret'><text y='12'>Details</text></a></svg>`;
-      const refused = [
-        `data:image/svg+xml,${encodeURIComponent(svg)}`,
-        `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`,
-        `DATA:IMAGE/SVG+XML,${encodeURIComponent(svg)}`,
-        `  data:image/svg+xml,${encodeURIComponent(svg)}  `,
-        `\tdata:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`,
-        `data:image/png;x=,image/svg+xml,${encodeURIComponent(svg)}`,
-        `data:text/html,${encodeURIComponent(`<a href="${there}/hit?row=secret">Details</a>`)}`,
-        `data:,${encodeURIComponent(svg)}`,
-        "blob:null/3f0e2a52-7f2c-4a43-9d57-0c1f1f5a8b11",
-        `${there}/hit?img=1`
-      ];
-      const kept = [
-        `data:image/png;base64,${png}`,
-        `DATA:IMAGE/PNG;BASE64,${png}`,
-        ` data:image/png;base64,${png} `
-      ];
-      const image = (source: string, name: string) =>
-        `<img class="${name}" alt="${name}" width="1" height="1" src="${source.replaceAll("&", "&amp;").replaceAll('"', "&quot;")}">`;
-
-      await openView(
-        page,
-        "private_hydrated_view",
-        [
-          ...refused.map((source) => image(source, "refused")),
-          ...kept.map((source) => image(source, "kept"))
-        ].join("")
-      );
-      const composed = await composedDocument(page);
-      const view = viewFrame(page);
-
-      expect(composed).not.toContain(new URL(there).host);
-      expect(composed.toLowerCase()).not.toContain("svg");
-      expect(composed).not.toContain("blob:null");
-      expect(composed).not.toContain("text/html");
-      await expect(view.locator("img.refused")).toHaveCount(refused.length);
-      await expect(view.locator("img.refused[src]")).toHaveCount(0);
-      await expect(view.locator("img.kept")).toHaveCount(kept.length);
-      await expect(view.locator("img.kept[src]")).toHaveCount(kept.length);
-      await expect(view.locator("img.kept").first()).toHaveAttribute(
-        "src",
-        `data:image/png;base64,${png}`
-      );
 
       await page.waitForTimeout(SETTLE_MS);
       expect(otherHost.requests).toEqual([]);

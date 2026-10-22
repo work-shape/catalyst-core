@@ -131,6 +131,40 @@ function inputOf(markup: string, label: string): string {
 }
 
 describe("agent page", () => {
+  it.each([
+    [
+      "en",
+      "Reasoning effort is how long the model thinks before it answers; more helps with hard questions but takes longer."
+    ],
+    [
+      "de",
+      "Der Denkaufwand bestimmt, wie lange das Modell vor der Antwort nachdenkt; mehr hilft bei schwierigen Fragen, dauert aber länger."
+    ]
+  ] as const)(
+    "explains reasoning effort beside a writable or locked default model (%s)",
+    (locale, sentence) => {
+      for (const canManageAgentModels of [true, false]) {
+        const model = section(
+          agentPage({
+            locale,
+            canManageAgentModels,
+            config: { modelBindingId: "primary" },
+            references: {
+              modelBindingIds: ["primary"],
+              modelBindings: [{ id: "primary", model: "gpt-primary" }]
+            }
+          }),
+          "model"
+        );
+        expect(model).toContain(sentence);
+        const defaultSelect = /<select[^>]*>/u.exec(model)?.[0];
+        expect(defaultSelect).toBeDefined();
+        if (canManageAgentModels) expect(defaultSelect).not.toContain('disabled=""');
+        else expect(defaultSelect).toContain('disabled=""');
+      }
+    }
+  );
+
   it("shows configured runtime values while the agent is read-only", () => {
     const markup = agentPage({
       config: {
