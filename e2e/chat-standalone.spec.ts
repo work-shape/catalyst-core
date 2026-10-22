@@ -3765,7 +3765,7 @@ test("demo chat can run a configured tool widget", async ({ page }) => {
   await expect(page.getByText("Recent activity")).toBeVisible();
   // Tool runs are folded into their activity as evidence; expand the rows to reveal them.
   const adminRegion = page.getByRole("region", { name: "Settings" });
-  const activityRows = adminRegion.locator("button[aria-expanded]");
+  const activityRows = adminRegion.locator("button[data-audit-activity]");
   const rowCount = await activityRows.count();
   for (let index = 0; index < rowCount; index += 1) {
     await activityRows.nth(index).click();
