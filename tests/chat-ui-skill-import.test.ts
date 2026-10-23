@@ -24,7 +24,7 @@ async function zipOf(
   const zip = new JSZip();
   for (const [path, content] of Object.entries(files)) zip.file(path, content, options[path]);
   const bytes = await zip.generateAsync({
-    type: "uint8array",
+    type: "arraybuffer",
     compression: "DEFLATE",
     platform: "UNIX"
   });
