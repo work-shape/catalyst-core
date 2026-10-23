@@ -2,8 +2,6 @@ import type { AssistantRuntime } from "@assistant-ui/react";
 import { useChatRuntime, type UseChatRuntimeOptions } from "@assistant-ui/react-ai-sdk";
 import type { UIMessage } from "ai";
 
-type ThreadListState = ReturnType<AssistantRuntime["threads"]["getState"]>;
-
 const stabilized = new WeakSet<object>();
 
 /**
@@ -15,12 +13,14 @@ const stabilized = new WeakSet<object>();
  * such a tap beside our core 0.2 whatever chat-ui pins, so the state is made stable here: the
  * same object while none of its fields changed, as the upstream fix answers.
  */
-export function stabilizeThreadListState(runtime: AssistantRuntime): void {
+export function stabilizeThreadListState<State extends object>(runtime: {
+  threads: { getState: () => State };
+}): void {
   const threads = runtime.threads;
   if (stabilized.has(threads)) return;
   stabilized.add(threads);
   const read = threads.getState.bind(threads);
-  let last: ThreadListState | undefined;
+  let last: State | undefined;
   threads.getState = () => {
     const next = read();
     if (last !== undefined && sameFields(last, next)) return last;
@@ -29,7 +29,7 @@ export function stabilizeThreadListState(runtime: AssistantRuntime): void {
   };
 }
 
-function sameFields(left: ThreadListState, right: ThreadListState): boolean {
+function sameFields(left: object, right: object): boolean {
   const keys = Object.keys(right);
   return (
     keys.length === Object.keys(left).length &&
