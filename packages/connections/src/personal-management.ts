@@ -1,5 +1,6 @@
 import {
   AppError,
+  asUserId,
   CONNECTION_ASSET_KIND,
   endConnectionSignIn,
   type AuditActor,
@@ -87,16 +88,28 @@ export function createPersonalConnectionManagement(deps: ConnectionOperationSour
         clientInstanceId: deps.clientInstanceId,
         connectionAssetId: connection.assetId
       });
+      const own = bindings.filter(
+        (binding) => binding.userId !== undefined && binding.subject === `user:${binding.userId}`
+      );
+      // Only the name, as the list of users shows it: no email and nothing else of the person.
+      const labels = await Promise.all(
+        own.map(async (binding) => {
+          const user = await deps.stores.users.getUser({
+            clientInstanceId: deps.clientInstanceId,
+            userId: asUserId(binding.subject.slice(5))
+          });
+          return user?.displayLabel;
+        })
+      );
       return {
-        people: bindings
-          .filter(
-            (binding) =>
-              binding.userId !== undefined && binding.subject === `user:${binding.userId}`
-          )
-          .map((binding) => ({
+        people: own.map((binding, index) => {
+          const displayLabel = labels[index];
+          return {
             userId: binding.subject.slice(5),
+            ...(displayLabel === undefined ? {} : { displayLabel }),
             ...displayBinding(atCurrentOrigin(connection, binding))
-          }))
+          };
+        })
       };
     },
     async revokePerson(

@@ -377,7 +377,17 @@ export const personalConnectionsSchema = z.object({
   )
 });
 export const connectionPeopleSchema = z.object({
-  people: z.array(personalConnectionStateSchema.extend({ userId: z.string() }))
+  people: z.array(
+    personalConnectionStateSchema.extend({
+      userId: z.string(),
+      /**
+       * The person's name as the instance's list of users shows it, so who may change the
+       * Connection sees who connected without the right to list users. Absent for a person the
+       * instance no longer knows.
+       */
+      displayLabel: z.string().optional()
+    })
+  )
 });
 export type PersonalConnections = z.infer<typeof personalConnectionsSchema>;
 export type ConnectionPeople = z.infer<typeof connectionPeopleSchema>;
