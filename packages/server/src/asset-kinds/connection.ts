@@ -491,6 +491,21 @@ export function createConnectionAssetKind(options: ConnectionAssetKindOptions): 
         for (const row of rows) {
           await stores.access.deleteGrant({ clientInstanceId, grantId: row.id });
         }
+        if (rows.length > 0) {
+          await stores.audit.appendAuditEvent({
+            clientInstanceId,
+            type: "connection.access_reset",
+            status: "success",
+            actor: input.actor,
+            subject: input.name,
+            correlationId: input.correlationId,
+            metadata: {
+              connectionName: input.name,
+              connectionId: input.createdAgainId,
+              removedRows: rows.length
+            }
+          });
+        }
       }
       if (assetId === undefined || previous === undefined) return undefined;
       const next = connectionConfigSchema.safeParse(config);
