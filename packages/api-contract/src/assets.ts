@@ -561,6 +561,8 @@ export const setAssetAvailabilityRequestSchema = z.object({
 });
 
 export const validateAssetRequestSchema = z.object({
+  /** With files, config supplies the name; the whole folder supplies the definition. */
+  files: z.array(assetFileInputSchema).min(1).max(FILE_SET_MAX_FILES).optional(),
   /** Preview dependency use in these workspaces without creating the agent. */
   availability: agentAvailabilitySchema.optional(),
   config: assetDefinitionSchema,
