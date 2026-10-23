@@ -386,7 +386,6 @@ test.describe("an OAuth entry", () => {
             name: agent,
             displayName: `Catalogue probe ${tag}`,
             description: "Reads the sample customers.",
-            modelBindingId: "primary",
             instructions: "Help with the sample customers.",
             toolNames: []
           }
