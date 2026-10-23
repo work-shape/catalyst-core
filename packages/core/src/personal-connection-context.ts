@@ -4,7 +4,7 @@ import {
   isAuthenticatedServicePrincipal,
   type AuthenticatedIdentity
 } from "./identity";
-import type { ClientInstanceId, ConversationId } from "./ids";
+import type { AgentRunId, ClientInstanceId, ConversationId } from "./ids";
 import type { OperationOrigin } from "./operations";
 import type { PlatformStores } from "./platform-store";
 
@@ -21,16 +21,28 @@ export async function rootConversationOf(
   return thread;
 }
 
-/** Unknown roots (including Workflow agent threads) and failed reads are restricted. */
+/** Unknown roots and failed reads are restricted; a known Workflow run cannot read personal Connections. */
 export async function personalDataConversation(
-  stores: Parameters<typeof rootConversationOf>[0],
+  stores: Parameters<typeof rootConversationOf>[0] & {
+    agentRuns?: Pick<PlatformStores["agentRuns"], "getAgentRun">;
+  },
   clientInstanceId: ClientInstanceId,
-  conversationId: ConversationId
+  conversationId: ConversationId,
+  runId?: AgentRunId
 ): Promise<boolean> {
   try {
     const conversation = await rootConversationOf(stores, clientInstanceId, conversationId);
-    return (
-      !conversation || conversation.kind !== "chat" || conversation.personalDataAt !== undefined
+    if (conversation)
+      return conversation.kind !== "chat" || conversation.personalDataAt !== undefined;
+    // Workflow threads are deliberately absent from getConversation. Only matching, recorded
+    // run provenance may admit them; an existing conversation's mark always takes precedence.
+    const run = runId && (await stores.agentRuns?.getAgentRun({ clientInstanceId, runId }));
+    return !(
+      run &&
+      run.conversationId === conversationId &&
+      run.workflowStepRunId &&
+      run.authorization &&
+      run.authorization.personalConnectionsAllowed !== true
     );
   } catch {
     return true;
@@ -39,14 +51,19 @@ export async function personalDataConversation(
 
 /** Refuse unattended work that could carry personal data beyond its conversation. */
 export async function requireUnmarkedConversation(
-  stores: Parameters<typeof rootConversationOf>[0],
+  stores: Parameters<typeof personalDataConversation>[0],
   clientInstanceId: ClientInstanceId,
   origin: OperationOrigin
 ): Promise<void> {
   if (
     (origin.kind === "agent" || origin.kind === "app") &&
     origin.conversationId !== undefined &&
-    (await personalDataConversation(stores, clientInstanceId, origin.conversationId))
+    (await personalDataConversation(
+      stores,
+      clientInstanceId,
+      origin.conversationId,
+      origin.kind === "agent" ? origin.agentRunId : undefined
+    ))
   ) {
     throw new AppError(
       "FORBIDDEN",
