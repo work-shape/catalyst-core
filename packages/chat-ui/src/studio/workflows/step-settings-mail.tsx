@@ -29,7 +29,8 @@ import {
   previewValue,
   sampleText,
   valueAt,
-  type FieldRefResolver
+  type FieldRefResolver,
+  type MailRecipientField
 } from "./mail-step";
 import { earlierFields, fieldKey, fieldOfKey } from "./mapping-rows";
 import { mailFrom, useMailBrand } from "./step-mail";
@@ -44,7 +45,7 @@ import { useRecipientNames } from "./workflows-host";
 // recipients is either written out or the one field of an earlier result that holds it, since
 // the mapping has no form that joins the two.
 
-type RecipientsField = "to" | "cc" | "bcc";
+type RecipientsField = MailRecipientField;
 type TextField = "subject" | "body";
 type Sample = (option: string) => unknown;
 
