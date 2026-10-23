@@ -39,27 +39,36 @@ export function partModes(
   return { modes, initial };
 }
 
+/** One group a sign-in asks for: what the admin reads, and the provider's scopes behind it. */
+export type AskedGroup = Pick<
+  NonNullable<CataloguePartOffer["groups"]>[number],
+  "id" | "title" | "scopes"
+>;
+
 /**
- * The scopes a sign-in asks for once the named operations are enabled: the identity group's,
- * then those of each group with an enabled operation, in the part's order. As the instance
- * writes them.
+ * The groups a sign-in asks for once the named operations are enabled: identity, then each
+ * group with an enabled operation, in the part's order.
  */
-export function scopesFor(
+export function askedGroups(
   part: Pick<CataloguePartOffer, "groups" | "operations">,
   enabled: Iterable<string>
-): string[] {
+): AskedGroup[] {
   const names = new Set(enabled);
-  const groups = new Set([
+  const asked = new Set([
     IDENTITY_GROUP,
     ...part.operations.flatMap((operation) =>
       names.has(operation.name) && operation.group !== undefined ? [operation.group] : []
     )
   ]);
-  return [
-    ...new Set(
-      (part.groups ?? []).filter((group) => groups.has(group.id)).flatMap((group) => group.scopes)
-    )
-  ];
+  return (part.groups ?? []).filter((group) => asked.has(group.id));
+}
+
+/** The scopes of `askedGroups`, each once, as the instance writes them. */
+export function scopesFor(
+  part: Pick<CataloguePartOffer, "groups" | "operations">,
+  enabled: Iterable<string>
+): string[] {
+  return [...new Set(askedGroups(part, enabled).flatMap((group) => group.scopes))];
 }
 
 /** One group of the review: its operations, its scopes, and whether ticking it asks for more. */

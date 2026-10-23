@@ -331,5 +331,21 @@ describe("the install of an OAuth part", () => {
     expect(element("[data-catalogue-scopes]").getAttribute("data-catalogue-scopes")).toBe(
       "openid email mail.read mail.modify"
     );
+    // The admin reads the groups; the provider's scopes stay folded behind them.
+    expect(element("[data-catalogue-asks]").getAttribute("data-catalogue-asks")).toBe(
+      "Identity, Read, Organise"
+    );
+    expect(element("[data-catalogue-scopes] p").textContent).toBe(
+      "The sign-in asks for: Identity, Read, and Organise"
+    );
+    const folded = () =>
+      element("[data-catalogue-scope-list]").closest("[data-state]")?.getAttribute("data-state");
+    expect(folded()).toBe("closed");
+    await click("[data-catalogue-scopes-toggle]");
+    const listed = [...document.querySelectorAll("[data-catalogue-scope-list] code")].map(
+      (code) => code.textContent
+    );
+    expect(listed).toEqual(["openid", "email", "mail.read", "mail.modify"]);
+    expect(folded()).toBe("open");
   });
 });

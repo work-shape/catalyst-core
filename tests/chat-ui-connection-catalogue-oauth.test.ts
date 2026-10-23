@@ -9,6 +9,7 @@ import {
   partCandidates,
   partModes,
   reviewGroups,
+  askedGroups,
   scopesFor,
   signsIn,
   withPartScopes,
@@ -94,6 +95,12 @@ describe("the access a sign-in asks for", () => {
     ]);
     // An operation the part does not name widens nothing.
     expect(scopesFor(part, ["deleteEverything"])).toEqual(["openid", "email"]);
+    // The same, by group: what the review names in words.
+    expect(askedGroups(part, ["listLabels", "searchMessages"]).map((group) => group.id)).toEqual([
+      "identity",
+      "read",
+      "organise"
+    ]);
   });
 
   it("groups the review, ticks the recommended reading group, and flags a further one", () => {

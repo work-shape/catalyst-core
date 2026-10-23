@@ -23,10 +23,10 @@ export const connectionCatalogue = defineTranslations({
     "connectionCatalogue.redirectUri": "Register this redirect URI with the provider:",
     "connectionCatalogue.redirectUriMissing":
       "This instance has no public address yet, so it cannot name its redirect URI. Ask the team that runs it.",
-    "connectionCatalogue.groupScopes": "Access: {scopes}",
     "connectionCatalogue.widens": "Asks for more access at the next sign-in.",
     "connectionCatalogue.otherTools": "Other tools",
-    "connectionCatalogue.signInScopes": "The sign-in asks for: {scopes}",
+    "connectionCatalogue.signInAsks": "The sign-in asks for: {groups}",
+    "connectionCatalogue.providerScopes": "Permissions at the provider",
     "connectionCatalogue.personalText":
       "Each person connects their own account under Settings > You > Connections. Agents read with it only in that person's private chats.",
     "connectionCatalogue.ownOptional": "Optional: your own account, which only you use.",
@@ -59,10 +59,10 @@ export const connectionCatalogue = defineTranslations({
     "connectionCatalogue.redirectUri": "Trag diese Redirect-URI beim Anbieter ein:",
     "connectionCatalogue.redirectUriMissing":
       "Diese Instanz hat noch keine öffentliche Adresse und kann ihre Redirect-URI nicht nennen. Frag das Team, das sie betreibt.",
-    "connectionCatalogue.groupScopes": "Zugriff: {scopes}",
     "connectionCatalogue.widens": "Fragt bei der nächsten Anmeldung nach mehr Zugriff.",
     "connectionCatalogue.otherTools": "Weitere Tools",
-    "connectionCatalogue.signInScopes": "Die Anmeldung fragt nach: {scopes}",
+    "connectionCatalogue.signInAsks": "Die Anmeldung fragt nach: {groups}",
+    "connectionCatalogue.providerScopes": "Berechtigungen beim Anbieter",
     "connectionCatalogue.personalText":
       "Jede Person verbindet ihr eigenes Konto unter Einstellungen > Du > Verbindungen. Agenten lesen damit nur in den privaten Chats dieser Person.",
     "connectionCatalogue.ownOptional": "Optional: dein eigenes Konto, das nur du nutzt.",
