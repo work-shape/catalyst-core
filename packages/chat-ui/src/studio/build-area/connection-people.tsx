@@ -25,8 +25,6 @@ import {
   useInvalidatePersonalConnections,
   usePersonalConnectionsQuery
 } from "../../shared/api/personal-connections";
-import { useWorkspaceUsersQuery } from "../../shared/api/workspace-queries";
-import { canManageUsers } from "../../shared/governance";
 import { formatDate, formatDateTime } from "../../shared/locale-format";
 import { useSettingsPage } from "../../shared/settings-page-context";
 import { useTranslation, type TranslationKey } from "../../shared/i18n";
@@ -37,8 +35,12 @@ import {
   personalViewOf,
   type PersonalView
 } from "./connection-people-model";
-import { SignInPanel } from "./connection-sign-in-section";
-import { popupSignInBrowser, type SignInBrowser } from "./connection-sign-in";
+import {
+  SignInBody,
+  popupSignInBrowser,
+  useConnectionSignIn,
+  type SignInBrowser
+} from "./connection-sign-in";
 
 // Personal connections (CS-9a-UI): the person's own sign-in on a personal Connection, as You >
 // Connections and the Connection's page show it, and the People section where who may change
@@ -92,8 +94,9 @@ export function usePersonalSignInFacts(): (signIn: PersonalSignIn) => string | u
 
 /**
  * Connect, sign in again or disconnect the person's own account on one Connection: the buttons,
- * and below them the sign-in step while it runs, a problem, and the one question before
- * Disconnect. Connect opens the provider in a window of its own.
+ * and below them the wait for the provider, a problem, and the one question before Disconnect.
+ * One click on Connect opens the provider in a window of its own; its page shows the
+ * permissions asked for.
  */
 export function useOwnConnectionControls(
   connection: { name: string; title: string; state: PersonalSignIn["state"] },
@@ -102,12 +105,27 @@ export function useOwnConnectionControls(
   const { apiBaseUrl, authScope, client } = useSettingsPage();
   const { t } = useTranslation();
   const invalidate = useInvalidatePersonalConnections({ apiBaseUrl, authScope, client });
-  const [connecting, setConnecting] = useState(false);
   const [asking, setAsking] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
   const [notice, setNotice] = useState<{ tone: "error" | "info"; text: string }>();
   const actions = ownActions(connection);
   const { name } = connection;
+  const signIn = useConnectionSignIn(
+    {
+      connection: name,
+      start: () => client.connections.oauth_start({ params: { name } }),
+      readDetail: async () => ownSignInOf(await client.connections.mine(), name)
+    },
+    {
+      personal: true,
+      enabled: false,
+      browser,
+      onConnected: () => {
+        invalidate().catch(() => undefined);
+      }
+    }
+  );
+  const phase = signIn.state.phase;
 
   const disconnect = async () => {
     setDisconnecting(true);
@@ -126,56 +144,47 @@ export function useOwnConnectionControls(
     }
   };
 
-  const buttons = connecting ? null : (
-    <span className="flex flex-wrap items-center gap-2">
-      {actions.connect ? (
-        <Button
-          size="sm"
-          variant={actions.connect === "connect" ? "primary" : "outline"}
-          data-personal-connect={actions.connect}
-          onClick={() => {
-            setNotice(undefined);
-            setConnecting(true);
-          }}
-        >
-          {t(
-            actions.connect === "connect"
-              ? "personalConnections.connect"
-              : "personalConnections.reconnect"
-          )}
-        </Button>
-      ) : null}
-      {actions.disconnect ? (
-        <Button
-          size="sm"
-          variant="outline"
-          data-personal-disconnect=""
-          onClick={() => setAsking(true)}
-        >
-          {t("personalConnections.disconnect")}
-        </Button>
-      ) : null}
-    </span>
-  );
+  const buttons =
+    phase === "waiting" ? (
+      <Button size="sm" variant="outline" data-sign-in-cancel="" onClick={signIn.cancel}>
+        {t("connectionSignIn.cancel")}
+      </Button>
+    ) : (
+      <span className="flex flex-wrap items-center gap-2">
+        {actions.connect ? (
+          <Button
+            size="sm"
+            variant={actions.connect === "connect" ? "primary" : "outline"}
+            loading={signIn.busy}
+            data-personal-connect={actions.connect}
+            onClick={() => {
+              setNotice(undefined);
+              signIn.connect();
+            }}
+          >
+            {t(
+              actions.connect === "connect"
+                ? "personalConnections.connect"
+                : "personalConnections.reconnect"
+            )}
+          </Button>
+        ) : null}
+        {actions.disconnect ? (
+          <Button
+            size="sm"
+            variant="outline"
+            data-personal-disconnect=""
+            onClick={() => setAsking(true)}
+          >
+            {t("personalConnections.disconnect")}
+          </Button>
+        ) : null}
+      </span>
+    );
 
   const below = (
     <>
-      {connecting ? (
-        <SignInPanel
-          personal
-          browser={browser}
-          calls={{
-            connection: name,
-            start: () => client.connections.oauth_start({ params: { name } }),
-            readDetail: async () => ownSignInOf(await client.connections.mine(), name)
-          }}
-          onConnected={() => {
-            setConnecting(false);
-            invalidate().catch(() => undefined);
-          }}
-          onDone={() => setConnecting(false)}
-        />
-      ) : null}
+      {phase === "waiting" || phase === "failed" ? <SignInBody signIn={signIn} /> : null}
       {notice?.tone === "error" ? (
         <FormNotice tone="error" data-personal-notice="">
           {notice.text}
@@ -244,7 +253,7 @@ export function PersonalSignInSection({ name, title }: { name: string; title: st
  * Revoke. Revoking deletes the stored access; the grant at the provider stays.
  */
 export function ConnectionPeopleSection({ name, mayWrite }: { name: string; mayWrite: boolean }) {
-  const { apiBaseUrl, authScope, client, user } = useSettingsPage();
+  const { apiBaseUrl, authScope, client } = useSettingsPage();
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const facts = usePersonalSignInFacts();
@@ -253,12 +262,6 @@ export function ConnectionPeopleSection({ name, mayWrite }: { name: string; mayW
     queryKey: key,
     queryFn: ({ signal }) => client.connections.people({ params: { name }, signal }),
     retry: false
-  });
-  const users = useWorkspaceUsersQuery({
-    apiBaseUrl,
-    authScope,
-    client,
-    enabled: canManageUsers(user)
   });
   const [asking, setAsking] = useState<{ userId: string; name: string }>();
   const [revoking, setRevoking] = useState(false);
@@ -289,9 +292,6 @@ export function ConnectionPeopleSection({ name, mayWrite }: { name: string; mayW
       </InlineError>
     );
   }
-  const nameOf = (userId: string) =>
-    users.data?.find((candidate) => candidate.id === userId)?.displayLabel ??
-    t("personalConnections.unknownPerson");
   return (
     <div className="grid min-w-0 gap-3" data-connection-people="">
       {people.data.people.length === 0 ? (
@@ -299,7 +299,7 @@ export function ConnectionPeopleSection({ name, mayWrite }: { name: string; mayW
       ) : (
         <List aria-label={t("personalConnections.peopleTitle")}>
           {people.data.people.map((person) => {
-            const label = nameOf(person.userId);
+            const label = person.displayLabel ?? t("personalConnections.unknownPerson");
             const detail = [
               person.account ?? t("personalConnections.accountUnnamed"),
               facts(person)
