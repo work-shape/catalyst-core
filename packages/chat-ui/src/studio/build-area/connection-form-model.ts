@@ -1,6 +1,7 @@
 import {
   CONNECTOR_TOKEN_AUTH_METHODS,
   OPERATION_EFFECTS,
+  type ConnectionCredentialMode,
   type ConnectorTokenAuthMethod
 } from "@work-shape/catalyst-core";
 // The form of a Connection made on the instance, and what it writes. Pure: the page holds the
@@ -32,7 +33,7 @@ export type ConnectionFormAuthScheme = ConnectionAuthChoice | ConnectionOAuthCho
  * Whose account a Connection that signs a person in uses: one account for everyone (`shared`),
  * or each person's own (`user`). Fixed once the Connection is made.
  */
-export type ConnectionCredentialMode = "shared" | "user";
+export type { ConnectionCredentialMode };
 
 /**
  * Whether the form offers the choice of whose account: only where a person signs in with
