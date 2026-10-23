@@ -140,6 +140,41 @@ async function setup() {
   return { t, team, other, live, create, push, publish, listed, request, decide, inbox, asAdmin };
 }
 
+/**
+ * A push of the agent's draft that lands once, right after the publish's guardrails read the
+ * draft and before the publish runs: the race a publisher could make by hand.
+ */
+function sneakAfterCheck(
+  t: AccessInstance,
+  name: string,
+  expectedDraftRevision: number | null,
+  instructions: string
+) {
+  const drafts = t.stores.agentProposals;
+  const read = drafts.get.bind(drafts);
+  let sneaked = false;
+  drafts.get = async (input) => {
+    const found = await read(input);
+    if (sneaked || !new Error().stack?.includes("publishEvents")) return found;
+    sneaked = true;
+    const asset = await t.stores.configAssets.getConfigAsset({
+      clientInstanceId,
+      kind: "agent",
+      name
+    });
+    if (!asset || asset.id !== input.agentId) return found;
+    await drafts.save({
+      clientInstanceId,
+      agentId: asset.id,
+      baseRevision: asset.revision,
+      expectedDraftRevision,
+      config: { ...asset.config, instructions },
+      savedAt: new Date().toISOString()
+    });
+    return found;
+  };
+}
+
 async function join(t: AccessInstance, user: UserRecord, workspaceId: CollaborationWorkspaceId) {
   await t.stores.workspaces.addMembership({
     clientInstanceId,
@@ -344,6 +379,38 @@ describe("publishing an agent a workspace owns (WS-PUB-1b)", () => {
     await create(t.admin.id, "admin-made", team);
     expect(await live("admin-made")).toMatchObject({ revision: 1 });
     expect(await listed(t.lena.id, team)).toContain("admin-made");
+  });
+
+  it("refuses a publish whose draft its guardrails did not read, though a push lands before it runs", async () => {
+    const { t, team, live, create, push, publish, inbox } = await setup();
+    await create(t.kai.id, "raced", team);
+    await push(t.kai.id, "raced", { instructions: "Reviewed draft." });
+    // Kai names the draft revision his next push will make; it lands right after the check.
+    sneakAfterCheck(t, "raced", 1, "Unreviewed.");
+    const response = await publish(t.kai.id, "raced", 2);
+    expect(response.statusCode, response.body).toBe(412);
+    expect(await live("raced")).toMatchObject({ revision: 1, config: { instructions: "Help." } });
+    expect(await inbox(t.admin.id)).toEqual([]);
+  });
+
+  it("publishes the first version its guardrails read, never a draft written after the check", async () => {
+    const { t, team, live, publish, listed } = await setup();
+    for (const bundle of ["builder", "publisher"])
+      await t.grant(t.lena.id, bundle, { workspaceId: team });
+    const made = await t.call(t.lena.id, "assets.put", {
+      params: { kind: "agent", name: "first-raced" },
+      payload: { config: agent("first-raced"), expectedRevision: null, workspaceId: team }
+    });
+    expect(made.statusCode, made.body).toBe(200);
+    // The admin's own Publish of version 1 is checked as the first version; a draft 1 follows.
+    sneakAfterCheck(t, "first-raced", null, "Unreviewed.");
+    const response = await publish(t.admin.id, "first-raced", 1);
+    expect(response.statusCode, response.body).toBe(412);
+    expect(await live("first-raced")).toMatchObject({
+      revision: 1,
+      config: { instructions: "Help." }
+    });
+    expect(await listed(t.lena.id, team)).not.toContain("first-raced");
   });
 
   it("files no first version where a draft stands beside it, and none for an instance agent", async () => {
