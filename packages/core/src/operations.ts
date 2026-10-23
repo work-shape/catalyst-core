@@ -213,6 +213,8 @@ export type OperationResult<TOutput = unknown> =
       inputHash: string;
       /** The Inbox item the confirmation waits in, where it waits in its person's Inbox (OP-4b). */
       approvalRequestId?: string;
+      /** Its person may answer "Always allow" (OP-6): see `offersAlwaysAllow` of the run. */
+      alwaysAllow?: true;
     }
   | {
       status: "pending_approval";

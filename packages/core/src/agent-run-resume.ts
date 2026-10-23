@@ -37,6 +37,8 @@ export interface ToolDecisionWait {
   frozenInput: JsonValue;
   /** What the operation's own simulation answered, shown beside the input, such as a mail. */
   simulation?: JsonValue;
+  /** The person may answer "Always allow": see `offersAlwaysAllow` of the Operation Run. */
+  alwaysAllow?: true;
   expiresAt: ISODateString;
 }
 
@@ -56,6 +58,11 @@ export interface ToolDecisionRequested {
    * the mail as it would go out, rendered, with its sender and recipients. Shown, never run.
    */
   simulation?: JsonValue;
+  /**
+   * The card offers "Always allow": the admin permits it for the operation, and once the
+   * person sets it nothing else holds the call (OP-6).
+   */
+  alwaysAllow?: true;
   expiresAt: ISODateString;
 }
 

@@ -417,6 +417,19 @@ const policyConfigSchema = z
         changing: z.enum(POLICY_VALUES).default("confirm")
       })
       .strict()
+      .prefault({}),
+    /**
+     * Whether people may set "Always allow" for their own agents' calls (OP-6). A `reversible`
+     * change may be always allowed, `irreversible` and `outward` changes and changes without a
+     * class may not. `locked` takes it away from operations by name or by a pattern such as
+     * `connections.*`; a lock never gives it. The admin's lock lives here until the Policies
+     * screen (OP-2) holds it.
+     */
+    alwaysAllow: z
+      .object({
+        locked: z.array(z.string().trim().min(1)).default([])
+      })
+      .strict()
       .prefault({})
   })
   .strict()

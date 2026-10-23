@@ -136,6 +136,7 @@
 {"name":"user.identity_linked","legacy":true,"audited":true,"phases":["after"]}
 {"name":"user.identity_upserted","legacy":true,"audited":true,"phases":["after"]}
 {"name":"user.invitation_sent","legacy":true,"audited":true,"phases":["after"]}
+{"name":"user.operation_setting_changed","legacy":false,"audited":true,"phases":["after"]}
 {"name":"user.password_changed","legacy":true,"audited":true,"phases":["after"]}
 {"name":"user.password_reset","legacy":true,"audited":true,"phases":["after"]}
 {"name":"user.password_reset_requested","legacy":true,"audited":true,"phases":["after"]}

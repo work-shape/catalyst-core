@@ -5,6 +5,7 @@ import type {
   JsonValue,
   OperationBeforeEvent,
   OperationAuthorization,
+  OperationChangeClass,
   OperationAuthorizeContext,
   OperationEffect,
   PolicyValue,
@@ -29,6 +30,11 @@ export interface ToolDefinition<TInput = unknown, TOutput = unknown> extends Too
    * this effect; a changing call is what a policy can hold for an approval.
    */
   effect: OperationEffect;
+  /**
+   * How far a changing tool reaches. Only a `reversible` change may be set to "Always allow" by
+   * a person; one that declares none counts as `irreversible`.
+   */
+  changeClass?: OperationChangeClass;
   inputSchema: z.ZodType<TInput>;
   outputSchema?: z.ZodType<TOutput>;
   inputJsonSchema?: JsonObject;

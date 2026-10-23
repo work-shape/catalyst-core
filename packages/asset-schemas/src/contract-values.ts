@@ -564,6 +564,10 @@ export const WAITING_OPERATION_RUN_STATUSES = [
 ] as const satisfies readonly OperationRunStatus[];
 
 export const OPERATION_CONFIRMATION_DECISIONS = ["confirm", "decline"] as const;
+/** A person's own value for an operation (OP-6): Always allow, Ask me, Never. */
+export const PERSON_POLICY_SETTINGS = ["always_allow", "ask", "never"] as const;
+/** How far a changing operation reaches. One that declares none counts as `irreversible`. */
+export const OPERATION_CHANGE_CLASSES = ["reversible", "irreversible", "outward"] as const;
 export const TOOL_DECISION_MODES = ["confirm", "approval"] as const;
 export const TOOL_DECISION_OUTCOMES = ["confirmed", "declined", "expired", "cancelled"] as const;
 

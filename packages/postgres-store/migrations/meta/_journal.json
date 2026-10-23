@@ -1009,6 +1009,13 @@
       "when": 1792748362661,
       "tag": "0143_personal_connection_isolation",
       "breakpoints": true
+    },
+    {
+      "idx": 144,
+      "version": "7",
+      "when": 1792759309528,
+      "tag": "0144_user_operation_settings",
+      "breakpoints": true
     }
   ]
 }

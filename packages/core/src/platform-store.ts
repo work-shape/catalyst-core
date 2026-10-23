@@ -1,4 +1,5 @@
 import type { WorkflowNoticesStore } from "./workflow-notices";
+import type { UserOperationSettingStore } from "./user-operation-settings";
 import type { NoticeMailStore } from "./notice-mail";
 import type { ConversationFollowUpStore } from "./follow-up-store";
 import type { ScheduledStartsStore } from "./scheduled-starts";
@@ -84,6 +85,8 @@ export interface PlatformStores {
   audit: AuditEventStore;
   usage: ModelUsageEventStore;
   users: UserStore;
+  /** A person's own confirmation settings (OP-6). */
+  userOperationSettings: UserOperationSettingStore;
   workspaces: CollaborationWorkspaceStore;
   apiAccess: ApiAccessStore;
   personalApiKeys: PersonalApiKeyStore;

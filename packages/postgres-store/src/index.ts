@@ -60,6 +60,7 @@ import { createPostgresStructuredDataStore } from "./postgres-structured-data-op
 import { createPostgresJobsStore, notifyJobsEnqueued } from "./jobs/store";
 import { createPostgresOperationRunsStore } from "./postgres-operation-run-operations";
 import { createPostgresLiveOnceSwitchesStore } from "./postgres-live-once-switch-operations";
+import { createPostgresUserOperationSettingsStore } from "./postgres-user-operation-settings";
 import { createPostgresAgentProposalStore } from "./postgres-agent-proposal-operations";
 import { createPostgresAgentTryConversationStore } from "./postgres-agent-try-conversation-operations";
 import { createPostgresInfrastructureChecksStore } from "./postgres-infrastructure-check-operations";
@@ -142,6 +143,7 @@ function bindStores(
     audit: createPostgresAuditStore(db),
     usage: createPostgresUsageStore(db),
     users: createPostgresUsersStore(db),
+    userOperationSettings: createPostgresUserOperationSettingsStore(db),
     workspaces: createPostgresWorkspacesStore(db, {
       deleteWorkspace: (input) => deletePostgresWorkspace(db, input),
       getWorkspaceInDeletion: (input) => getPostgresWorkspaceInDeletion(db, input),

@@ -2,6 +2,10 @@ import {
   POLICY_VALUES,
   WORKFLOW_ASSET_KIND,
   callConfirmedByCaller,
+  getSubjectUserId,
+  isAuthenticatedServicePrincipal,
+  mayAlwaysAllow,
+  offersAlwaysAllow,
   type ActorAccess,
   type OperationApproval,
   type OperationCall,
@@ -10,6 +14,7 @@ import {
   strictestOutcome,
   type OperationDenial,
   type PolicyInput,
+  type PolicyPerson,
   type PolicyResolution,
   type PolicyValue
 } from "@work-shape/catalyst-core";
@@ -25,7 +30,9 @@ import type { RunContext, RunOperationDeps } from "./operation-execution";
 export interface OperationPolicyContext {
   definition: RunContext["definition"];
   run?: Pick<OperationRun, "decision">;
-  call: Pick<OperationCall, "input" | "origin" | "workspaceId" | "draft" | "workflowDeleted">;
+  /** A preview without a caller passes no `actor`: nobody's setting applies to it. */
+  call: Pick<OperationCall, "input" | "origin" | "workspaceId" | "draft" | "workflowDeleted"> &
+    Partial<Pick<OperationCall, "actor">>;
   resource: RunContext["resource"];
   deps: Pick<RunOperationDeps, "policy">;
   runtime: RunContext["runtime"];
@@ -49,6 +56,7 @@ async function policyInputOf(context: OperationPolicyContext): Promise<PolicyInp
   }
   const workerCall =
     call.origin.kind === "agent" && runtime.runFence?.runId === call.origin.agentRunId;
+  const person = await personOf(context);
   return {
     definition:
       callFloor === undefined
@@ -64,6 +72,7 @@ async function policyInputOf(context: OperationPolicyContext): Promise<PolicyInp
       : [{ workspaceId: call.workspaceId, assetKind: resource?.kind }],
     // A Workflow agent step's call is never confirmed by its caller: a published run has
     // nobody to ask, and its test run answers as that run will (CR-2).
+    ...(person ? { person } : {}),
     callerCanConfirm:
       (runtime.workflowAgent !== true && callConfirmedByCaller(call)) ||
       (isAgentPublish(context) && context.run?.decision?.mode === "confirmed"),
@@ -82,6 +91,33 @@ async function policyInputOf(context: OperationPolicyContext): Promise<PolicyInp
   };
 }
 
+/**
+ * The person a call acts for and what they set for its operation (OP-6): only an agent's call
+ * for a signed-in person, in chat or in their scheduled run, made with that person's own
+ * identity. A Workflow's call, an agent step of a Workflow and a service principal's call act
+ * for nobody who sets values, and a person's setting never reaches another person's call.
+ */
+async function personOf(context: OperationPolicyContext): Promise<PolicyPerson | undefined> {
+  const { call, definition, deps, runtime } = context;
+  if (
+    !call.actor ||
+    call.origin.kind !== "agent" ||
+    runtime.workflowAgent === true ||
+    isAuthenticatedServicePrincipal(call.actor) ||
+    !deps.policy.personSetting
+  ) {
+    return undefined;
+  }
+  const setting = await deps.policy.personSetting({
+    userId: getSubjectUserId(call.actor),
+    operation: definition.name
+  });
+  return {
+    ...(setting ? { setting } : {}),
+    mayAlwaysAllow: mayAlwaysAllow(definition, deps.policy.alwaysAllowLocked)
+  };
+}
+
 function stricterPolicy(left: PolicyValue, right: PolicyValue | undefined): PolicyValue {
   return right !== undefined && POLICY_VALUES.indexOf(right) > POLICY_VALUES.indexOf(left)
     ? right
@@ -96,7 +132,7 @@ function stricterPolicy(left: PolicyValue, right: PolicyValue | undefined): Poli
 export async function resolveGuardedPolicy(
   context: OperationPolicyContext
 ): Promise<
-  | { policy: PolicyResolution; approvalAskedBy?: GuardrailNamed }
+  | { policy: PolicyResolution; approvalAskedBy?: GuardrailNamed; offersAlwaysAllow?: true }
   | { denial: OperationDenial; policy: PolicyResolution }
 > {
   const { definition } = context;
@@ -110,7 +146,14 @@ export async function resolveGuardedPolicy(
   if (confirmsFirst(context, before, policy)) return { policy: before };
   if (policy.next !== "refuse") {
     const asking = policy.source === "guardrail" ? approvalAskedBy(answers) : undefined;
-    return { policy, ...(asking ? { approvalAskedBy: asking } : {}) };
+    // The card offers "Always allow" only where it would let this call run: the admin
+    // permits it and no floor, guardrail or approval would still hold the call.
+    const offers = offersAlwaysAllow({ ...policyInput, guardrailOutcome }, policy);
+    return {
+      policy,
+      ...(asking ? { approvalAskedBy: asking } : {}),
+      ...(offers ? { offersAlwaysAllow: true as const } : {})
+    };
   }
   return {
     policy,

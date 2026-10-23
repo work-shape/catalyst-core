@@ -271,7 +271,8 @@ async function finishOperationRun(
               inputRef: end.inputRef,
               expiresAt: new Date(end.expiresAt),
               // A confirmation that waits in its person's Inbox names its item.
-              ...(end.approvalRequestId ? { approvalRequestId: end.approvalRequestId } : {})
+              ...(end.approvalRequestId ? { approvalRequestId: end.approvalRequestId } : {}),
+              ...(end.offersAlwaysAllow ? { offersAlwaysAllow: true } : {})
             }
           : { finishedAt }),
       ...(end.status === "done"
@@ -592,6 +593,7 @@ export function mapOperationRun(row: OperationRunRow): OperationRun {
     effect: row.effect,
     actor: row.actor,
     ownerUserId: row.ownerUserId ?? undefined,
+    ...(row.offersAlwaysAllow ? { offersAlwaysAllow: true as const } : {}),
     workspaceId: row.collaborationWorkspaceId ?? undefined,
     origin: row.origin,
     target: row.target,

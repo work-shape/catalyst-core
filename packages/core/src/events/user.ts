@@ -25,6 +25,15 @@ export const userEvents = {
     name: "user.password_sign_in_created",
     subject: "user"
   },
+  // A person set, changed or removed their own confirmation setting for one operation (OP-6):
+  // the operation and the value, never what any call of it carried.
+  "user.operation_setting_changed": {
+    name: "user.operation_setting_changed",
+    subject: "user",
+    legacy: false,
+    audited: true,
+    phases: ["after"]
+  },
   "user.profile_updated": { ...LEGACY_AUDIT, name: "user.profile_updated", subject: "user" },
   "user.updated": { ...LEGACY_AUDIT, name: "user.updated", subject: "user" }
 } as const satisfies Record<string, PlatformEventDefinition>;
