@@ -217,6 +217,20 @@ describe("the tools the agent page is told of", () => {
           "platform.connections.offer_to_agent"
         ])
       );
+      const proposal = tools.find((tool) => tool.name === "platform.connections.propose");
+      expect(
+        proposal?.inputSchema.safeParse({ entry: { id: "mail", part: "tools" } }).success
+      ).toBe(true);
+      expect(
+        proposal?.inputSchema.safeParse({
+          entry: { id: "mail", part: "tools" },
+          clientSecret: "never-in-chat"
+        }).success
+      ).toBe(false);
+      expect(proposal?.description).toContain("do not web-search the provider");
+      expect(proposal?.description).toContain(
+        "Never ask a question in the same turn as an approval card"
+      );
       const untold = tools
         .filter((tool) => !tool.title?.en || !tool.title.de || !tool.group)
         .map((tool) => tool.name);

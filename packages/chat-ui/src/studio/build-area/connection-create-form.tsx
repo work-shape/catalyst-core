@@ -13,7 +13,7 @@ import {
 } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../../shared/i18n";
 import type { ConnectStep, ConnectStepState } from "./connection-connect";
-import type { ConnectionDraft } from "./connection-draft";
+import { connectionDraftForm, type ConnectionDraft } from "./connection-draft";
 import {
   ConnectionHeaderRows,
   ConnectionOAuthDetailFields,
@@ -23,7 +23,6 @@ import {
   CredentialModeField
 } from "./connection-form";
 import {
-  emptyConnectionForm,
   offersCredentialMode,
   type ConnectionCredentialMode,
   type ConnectionFormState,
@@ -349,23 +348,16 @@ export function ConnectionCreateForm({
 
 /** The fields of a new MCP server or REST API filled with the agent's draft or proposal. */
 export function draftedFields(draft: ConnectionDraft): CreateFields {
-  const { connectorType, name, title, baseUrl, headerNames, testPath, keyHeader } =
-    draft.connection;
+  const { name, title, keyHeader, authScheme, credentialMode } = draft.connection;
   return {
     title,
     description: "",
     ...(name === assetAddressFromName(title, CONNECTION_ASSET_KIND) ? {} : { typedId: name }),
-    form: {
-      ...emptyConnectionForm(),
-      connectorType: connectorType === "mcp" ? "mcp" : "http_api",
-      url: baseUrl,
-      headers: headerNames.map((header) => ({ name: header, value: "" })),
-      ...(testPath === undefined ? {} : { testPath }),
-      ...(keyHeader === undefined ? {} : { headerName: keyHeader })
-    },
+    form: connectionDraftForm(draft),
     key: "",
     sendAs: keyHeader === undefined ? "bearer" : "header",
-    auth: "key",
-    credentialMode: "shared"
+    auth: authScheme === "oauth" || authScheme === "oauth_client" ? authScheme : "key",
+    // A proposal of a personal Connection opens on "each person signs in".
+    credentialMode: credentialMode === "user" ? "user" : "shared"
   };
 }

@@ -15,6 +15,7 @@ import {
 import {
   CONNECTION_PROPOSE_TOOL_NAME,
   createConnectionProposeTool,
+  type ConnectionProposalCatalogueEntry,
   ToolRegistry
 } from "@work-shape/catalyst-tool-execution";
 
@@ -68,12 +69,12 @@ function proposal(overrides: Record<string, unknown> = {}): Record<string, unkno
 }
 
 /** Runs the tool as the runtime does: the input through its schema, the answer through its. */
-async function run(input: Record<string, unknown>) {
-  const parsed = tool.inputSchema.safeParse(input);
+async function run(input: Record<string, unknown>, selectedTool = tool) {
+  const parsed = selectedTool.inputSchema.safeParse(input);
   if (!parsed.success) return { status: "invalid" as const, issues: parsed.error.issues };
-  const result = await tool.execute(parsed.data, context());
-  if (result.status === "success" && tool.outputSchema) {
-    return { ...result, output: tool.outputSchema.parse(result.output) };
+  const result = await selectedTool.execute(parsed.data, context());
+  if (result.status === "success" && selectedTool.outputSchema) {
+    return { ...result, output: selectedTool.outputSchema.parse(result.output) };
   }
   return result;
 }
@@ -99,6 +100,8 @@ describe("the agent's proposal of a new Connection", () => {
     const result = await run(proposal({ keyHeader: "x-brain-key" }));
     if (result.status !== "success") throw new Error(`Expected a proposal, got ${result.status}`);
     expect(result.output).toEqual({
+      state: "needs_setup",
+      mayWrite: false,
       connection: {
         connectorType: "mcp",
         name: "brain",
@@ -141,6 +144,8 @@ describe("the agent's proposal of a new Connection", () => {
     const result = await run({ connectorType: "e2e_typed", connection: "typed", title: "Typed" });
     if (result.status !== "success") throw new Error(`Expected a proposal, got ${result.status}`);
     expect(result.output).toEqual({
+      state: "needs_setup",
+      mayWrite: false,
       connection: { connectorType: "e2e_typed", name: "typed", title: "Typed", headerNames: [] }
     });
     expect(
@@ -188,9 +193,9 @@ describe("the agent's proposal of a new Connection", () => {
     expect(await refusals(proposal({ connection: "Not An Id" }))).toContain("connection");
   });
 
-  it("has no field for a key: one the agent adds is no part of the answer", async () => {
+  it("refuses secret-like fields instead of silently stripping them", async () => {
     const result = await run(proposal({ apiKey: SECRET, secret: SECRET }));
-    expect(result.status).toBe("success");
+    expect(result.status).toBe("invalid");
     expect(JSON.stringify(result)).not.toContain(SECRET);
   });
 });
@@ -217,5 +222,235 @@ describe("where the propose tool is offered", () => {
 
   it("is no tool every agent may hold whatever the modules: an agent lists it by name", () => {
     expect(PLATFORM_TOOL_NAMES).not.toContain(CONNECTION_PROPOSE_TOOL_NAME);
+  });
+});
+
+const offeredEntry: ConnectionProposalCatalogueEntry = {
+  id: "mail",
+  title: "Mail",
+  category: "mail",
+  parts: [
+    {
+      part: "tools",
+      connectorType: "http_api",
+      name: "mail",
+      credentialModes: ["user"],
+      defaultCredentialMode: "user",
+      hosts: ["api.mail.example.test", "login.mail.example.test"]
+    }
+  ]
+};
+const oauth = {
+  authorizationUrl: "https://login.example.test/authorize",
+  tokenUrl: "https://login.example.test/token",
+  revocationUrl: "https://login.example.test/revoke",
+  clientId: "public-client",
+  scopes: ["mail.read"]
+};
+const readOperation = {
+  name: "list_messages",
+  description: "Read messages",
+  method: "GET",
+  path: "/messages",
+  effect: "reading"
+};
+function catalogueTool(
+  connection?: ConnectionProposalCatalogueEntry["parts"][number]["connection"],
+  mayWrite = true
+) {
+  return createConnectionProposeTool({
+    connectorTypes: createConnectorTypeRegistry([createHttpApiConnectorType()]),
+    catalogue: {
+      read: async () => [
+        {
+          ...offeredEntry,
+          parts: offeredEntry.parts.map((part) => ({
+            ...part,
+            ...(connection ? { connection } : {})
+          }))
+        }
+      ],
+      mayWrite: async () => mayWrite
+    }
+  });
+}
+
+describe("catalogue and complete custom proposals", () => {
+  it.each([
+    [undefined, "needs_setup", undefined],
+    [
+      { name: "my-mail", clientSecretSet: false, credentialMode: "user" },
+      "needs_setup",
+      "not_connected"
+    ],
+    [
+      { name: "my-mail", clientSecretSet: true, credentialMode: "user", bindingState: "connected" },
+      "ready",
+      "connected"
+    ],
+    [
+      {
+        name: "my-mail",
+        clientSecretSet: true,
+        credentialMode: "user",
+        bindingState: "not_connected"
+      },
+      "ready",
+      "not_connected"
+    ],
+    [
+      {
+        name: "my-mail",
+        clientSecretSet: true,
+        credentialMode: "user",
+        bindingState: "needs_reconnect"
+      },
+      "ready",
+      "needs_reconnect"
+    ]
+  ] as const)(
+    "round-trips an entry and setup state %#",
+    async (connection, state, bindingState) => {
+      const result = await run({ entry: { id: "mail", part: "tools" } }, catalogueTool(connection));
+      expect(result.status).toBe("success");
+      if (result.status !== "success") throw new Error("Expected proposal");
+      expect(result.output).toMatchObject({
+        entry: { id: "mail", part: "tools" },
+        state,
+        mayWrite: true,
+        connection: { name: connection?.name ?? "mail", credentialMode: "user" }
+      });
+      expect(result.output.bindingState).toBe(bindingState);
+      expect(result.auditSummary).toEqual({
+        action: CONNECTION_PROPOSE_TOOL_NAME,
+        subject: "mail",
+        metadata: { type: "entry" }
+      });
+    }
+  );
+  it("distinguishes a member who cannot set up a missing service and refuses unoffered parts", async () => {
+    expect(
+      await run({ entry: { id: "mail", part: "tools" } }, catalogueTool(undefined, false))
+    ).toMatchObject({ status: "success", output: { state: "needs_setup", mayWrite: false } });
+    for (const entry of [
+      { id: "unknown", part: "tools" },
+      { id: "mail", part: "source" }
+    ]) {
+      expect(await run({ entry }, catalogueTool())).toMatchObject({ status: "failed" });
+    }
+  });
+  it("validates an OAuth custom proposal in user mode with GET reads", async () => {
+    const result = await run(
+      proposal({
+        connectorType: "http_api",
+        authScheme: "oauth",
+        credentialMode: "user",
+        url: "https://api.example.test",
+        oauth,
+        operations: [readOperation]
+      })
+    );
+    expect(result).toMatchObject({
+      status: "success",
+      output: {
+        connection: { authScheme: "oauth", credentialMode: "user", oauth },
+        operations: [readOperation]
+      }
+    });
+    expect(
+      await run(
+        proposal({
+          connectorType: "http_api",
+          authScheme: "bearer",
+          credentialMode: "user",
+          url: "https://api.example.test"
+        })
+      )
+    ).toMatchObject({ status: "failed" });
+  });
+  it.each(["url", "tokenUrl", "authorizationUrl", "revocationUrl"])(
+    "refuses a custom %s host covered by an entry",
+    async (field) => {
+      const input = proposal({
+        connectorType: "http_api",
+        authScheme: "oauth",
+        url: "https://api.example.test",
+        oauth
+      });
+      if (field === "url") input.url = "https://api.mail.example.test/v1";
+      else input.oauth = { ...oauth, [field]: "https://login.mail.example.test/oauth" };
+      const result = await run(input, catalogueTool());
+      expect(result).toMatchObject({
+        status: "failed",
+        error: {
+          details: {
+            issues: expect.arrayContaining([
+              expect.objectContaining({
+                code: "entry_covers_host",
+                message: expect.stringContaining("'mail'")
+              })
+            ])
+          }
+        }
+      });
+    }
+  );
+  it.each(["tokenUrl", "authorizationUrl", "revocationUrl"])(
+    "refuses credentials, queries and fragments on %s",
+    async (field) => {
+      for (const address of [
+        "https://user:password@login.example.test",
+        "https://login.example.test?key=hidden",
+        "https://login.example.test#hidden"
+      ]) {
+        expect(
+          await run(
+            proposal({
+              connectorType: "http_api",
+              authScheme: "oauth",
+              oauth: { ...oauth, [field]: address }
+            })
+          )
+        ).toMatchObject({ status: "failed" });
+      }
+    }
+  );
+  it("refuses nested client secrets and CS-5c forbidden declarations", async () => {
+    expect(
+      await run(
+        proposal({
+          connectorType: "http_api",
+          authScheme: "oauth",
+          oauth: { ...oauth, clientSecret: SECRET }
+        })
+      )
+    ).toMatchObject({ status: "invalid" });
+    expect(
+      await run(
+        proposal({
+          connectorType: "http_api",
+          url: "https://api.example.test",
+          operations: [
+            { ...readOperation, query: { q: { schema: { type: "string" }, clientSecret: SECRET } } }
+          ]
+        })
+      )
+    ).toMatchObject({ status: "invalid" });
+    for (const operation of [
+      { ...readOperation, method: "POST" },
+      { ...readOperation, effect: "changing" },
+      { ...readOperation, query: { api_key: { schema: { type: "string" } } } },
+      { ...readOperation, query: { q: { schema: { type: "string", default: "hidden" } } } }
+    ]) {
+      expect(
+        await run(
+          proposal({
+            connectorType: "http_api",
+            url: "https://api.example.test",
+            operations: [operation]
+          })
+        )
+      ).toMatchObject({ status: "failed" });
+    }
   });
 });

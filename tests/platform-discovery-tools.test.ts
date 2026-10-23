@@ -18,6 +18,8 @@ import {
 import {
   createHttpApiConnectorType,
   createMcpConnectorType,
+  catalogueEntrySchema,
+  type CatalogueEntry,
   HTTP_API_CONNECTOR_TYPE
 } from "@work-shape/catalyst-connections";
 import { platformContextSchema } from "@work-shape/catalyst-api-contract";
@@ -30,7 +32,7 @@ import {
 } from "@work-shape/catalyst-tool-execution";
 import { drainRunEvents, injectStartConversationRun } from "./support/chat-server-run-harness";
 import { createTestConfig } from "./support/fixtures";
-import { createTestInstance, type TestInstance } from "./support/test-instance";
+import { createTestInstance, getTestExecution, type TestInstance } from "./support/test-instance";
 import { claimAttachmentsForStoredMessage } from "./support/test-store";
 
 // An agent that holds the platform's tools finds what is on the platform with them and reads the
@@ -117,7 +119,8 @@ describe("the tools that find what is on the platform", () => {
   async function fixture(
     workflows: boolean,
     pages = false,
-    toolNames: string[] = [...PLATFORM_TOOL_NAMES]
+    toolNames: string[] = [...PLATFORM_TOOL_NAMES],
+    catalogue: CatalogueEntry[] = []
   ) {
     const config = createTestConfig({
       toolNames,
@@ -143,9 +146,11 @@ describe("the tools that find what is on the platform", () => {
     });
     config.modules = {
       assetManagement: { enabled: true },
+      connections: { enabled: catalogue.length > 0 },
       workflows: { enabled: workflows },
       apps: { enabled: pages }
     };
+    config.catalogue = { entries: catalogue.slice(0, 1).map((entry) => entry.id) };
     if (pages) {
       // Pages keep their files in the object store, and what serves one is signed with a key
       // from the secret.
@@ -157,7 +162,10 @@ describe("the tools that find what is on the platform", () => {
       };
     }
     const env = pages ? { CHAT_SESSION_TOKEN_SECRET: "platform-discovery-test-".repeat(2) } : {};
-    const app = await createTestInstance({ config, env, tools: [] });
+    const app =
+      catalogue.length > 0
+        ? await createTestInstance({ execution: { config, env, tools: [], catalogue } })
+        : await createTestInstance({ config, env, tools: [] });
     open = app;
     /**
      * A conversation about nothing, of `as`, in its personal workspace or in `workspaceId`,
@@ -200,6 +208,88 @@ describe("the tools that find what is on the platform", () => {
     };
     return { app, conversationOf, clientInstanceId: asClientInstanceId(config.clientInstance.id) };
   }
+
+  it("offers only named catalogue summaries and round-trips their proposals through the assembled tools", async () => {
+    const entry = catalogueEntrySchema.parse({
+      id: "ledger",
+      version: 1,
+      service: "ledger",
+      title: { en: "Ledger", de: "Hauptbuch" },
+      description: "Never in context",
+      category: "accounting",
+      examplePrompts: ["Never in context"],
+      mark: { color: "#123456" },
+      tools: {
+        connectorType: "http_api",
+        name: "ledger",
+        description: "Never in context",
+        authScheme: "bearer",
+        settings: { baseUrl: "https://ledger.example.test" },
+        fields: [{ secret: true, label: "Key" }],
+        egress: [{ protocol: "https", host: "ledger.example.test", port: 443 }],
+        prerequisites: [{ text: "Never in context" }],
+        sharedAccountNote: "Shared",
+        operations: [
+          {
+            name: "list",
+            description: "Never in context",
+            method: "GET",
+            path: "/",
+            effect: "reading"
+          }
+        ]
+      }
+    });
+    const { app, clientInstanceId } = await fixture(
+      false,
+      false,
+      [...PLATFORM_TOOL_NAMES],
+      [entry, { ...entry, id: "hidden" }]
+    );
+    const registry = getTestExecution(app).localAgentRuntimeOptions.toolRegistry;
+    const toolContext: ToolExecutionContext = {
+      clientInstanceId,
+      correlationId: "catalogue-context-test",
+      user: {
+        id: OWNER,
+        externalUserId: OWNER,
+        displayLabel: "Owner",
+        roles: ["user", "admin", "superadmin"],
+        permissionRefs: [],
+        clientInstanceId,
+        authSource: "test"
+      }
+    };
+    const ask = async (name: string, input: Record<string, unknown> = {}) => {
+      const tool = registry.get(name);
+      if (!tool) throw new Error(`Expected assembled tool ${name}`);
+      const result = await tool.execute(tool.inputSchema.parse(input), toolContext);
+      if (result.status !== "success") throw new Error(`Expected successful ${name}`);
+      return tool.outputSchema?.parse(result.output) ?? result.output;
+    };
+    const context = await ask("platform.context");
+    expect(context).toMatchObject({
+      catalogue: {
+        entries: [
+          {
+            id: "ledger",
+            title: "Ledger",
+            category: "accounting",
+            parts: [{ part: "tools", credentialModes: ["shared"], defaultCredentialMode: "shared" }]
+          }
+        ]
+      }
+    });
+    expect(JSON.stringify(context)).not.toContain("Never in context");
+    expect(JSON.stringify(context)).not.toContain("hidden");
+    expect(
+      await ask("platform.connections.propose", { entry: { id: "ledger", part: "tools" } })
+    ).toMatchObject({
+      entry: { id: "ledger", part: "tools" },
+      state: "needs_setup",
+      mayWrite: true
+    });
+  });
 
   it("marks only this conversation's workspace as current, even without build rights here", async () => {
     const t = await fixture(false);
@@ -547,19 +637,16 @@ describe("the tools that find what is on the platform", () => {
       "connectorTypes"
     );
 
-    // The draft tool sends an OAuth API to its MCP server first, and otherwise to a REST API
-    // that signs in with OAuth, never to tools that cannot sign in.
+    // Offered entries come first; custom OAuth proposals carry their complete settings.
     const draft = createConnectionDraftTool({
       connectorTypes: registry,
       connectorType: HTTP_API_CONNECTOR_TYPE
     });
     expect(draft.name).toBe(CONNECTION_DRAFT_TOOL_NAME);
     expect(draft.description).toContain(
-      "For an API that needs the person to sign in with the provider (OAuth), use the provider's MCP server where one exists"
+      "If an entry fits, propose it with platform.connections.propose"
     );
-    expect(draft.description).toContain(
-      "draft only once the REST API Connection signs in with OAuth"
-    );
+    expect(draft.description).toContain("Otherwise propose the whole custom Connection");
     expect(draft.description).not.toContain("once OAuth for REST APIs is available");
     expect(draft.description).not.toMatch(/not supported yet/iu);
   });

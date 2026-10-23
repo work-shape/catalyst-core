@@ -1,3 +1,4 @@
+import { PLATFORM_ORIENTATION } from "../packages/client-assembly/src/platform-orientation";
 import { describe, expect, it } from "vitest";
 import {
   CATALYST_INTERNAL_AGENT_PROMPT,
@@ -140,4 +141,18 @@ describe("system instructions", () => {
     expect(content).toContain("This conversation is about one workflow, named 'intake'.");
     expect(content).not.toContain("platform.assets.open");
   });
+});
+
+it("guides complete Connection proposals through offered entries first", () => {
+  expect(PLATFORM_ORIENTATION).toContain("catalogue.entries and connectorTypes");
+  expect(PLATFORM_ORIENTATION).toContain("do not web-search the provider");
+  expect(PLATFORM_ORIENTATION).toContain(
+    "Never draft http_api tools against a host an offered entry covers"
+  );
+  expect(PLATFORM_ORIENTATION).toContain(
+    "Never ask a question in the same turn as an approval card"
+  );
+  expect(PLATFORM_ORIENTATION).toContain("For mail, calendar and personal files propose mode user");
+  expect(PLATFORM_ORIENTATION).toContain("Never say a service is unsupported");
+  expect(PLATFORM_ORIENTATION).not.toContain("use the provider's MCP server where one exists");
 });
