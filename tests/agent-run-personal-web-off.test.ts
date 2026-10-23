@@ -200,13 +200,14 @@ describe("CS-9c personal data switches web tools off", () => {
       input: {
         conversationId?: ConversationId;
         subagent?: boolean;
+        modelBindingId?: string;
         withoutReaders?: boolean;
         resume?: { runId: AgentRunId; inputMessageId: MessageId; resume: AgentRunResume };
         beforeRequest?: (step: number) => Promise<void>;
       } = {}
     ) {
       const requests: ModelCompletionRequest[] = [];
-      const provider = { id: "test", type: "deterministic", model: "test" };
+      const provider = { id: "test", type: "deterministic", model: "test", region: "eu" };
       const runtime = new LocalAgentRuntime(
         withTestModelGateway({
           assetSource: createStaticConfigAssetSource({
@@ -215,6 +216,8 @@ describe("CS-9c personal data switches web tools off", () => {
                 name: "test_agent",
                 displayName: "Test",
                 instructions: "Read and research.",
+                modelBindingId: "eu-default",
+                userSelectableModelBindingIds: ["outside"],
                 toolNames: allTools,
                 skillNames: [],
                 initialPrompts: []
@@ -222,7 +225,11 @@ describe("CS-9c personal data switches web tools off", () => {
             ]
           }),
           defaultModelProvider: provider,
-          modelProviders: [provider],
+          modelProviders: [provider, { ...provider, id: "outside", region: "us" }],
+          modelBindings: [
+            { id: "eu-default", providerId: "test", agentSelectable: true },
+            { id: "outside", providerId: "outside", agentSelectable: true }
+          ],
           conversationHistory: db.store.conversations,
           ...(input.withoutReaders
             ? {}
@@ -282,6 +289,7 @@ describe("CS-9c personal data switches web tools off", () => {
       const handle = await runtime.start(
         {
           agentName: "test_agent",
+          modelBindingId: input.modelBindingId,
           conversationId,
           inputMessageId,
           ...(input.resume
@@ -337,6 +345,17 @@ describe("CS-9c personal data switches web tools off", () => {
       }
     };
   }
+
+  it("hands tools the actual resolved route, including a user-selected model", async () => {
+    const f = await fixture();
+    await f.run([[call(PERSONAL)], []]);
+    expect(f.runTool.mock.calls[0]?.[1].modelRoutes).toEqual([{ id: "test", region: "eu" }]);
+    f.runTool.mockClear();
+    // Caller metadata must not override the runtime's selected route.
+    f.context.modelRoutes = [{ id: "test", region: "eu" }];
+    await f.run([[call(PERSONAL)], []], { modelBindingId: "outside" });
+    expect(f.runTool.mock.calls[0]?.[1].modelRoutes).toEqual([{ id: "outside", region: "us" }]);
+  });
 
   it("offers all three kinds initially, removes both web tools after a personal call, and inherits the mark in fresh runs and subagents", async () => {
     const f = await fixture();
@@ -457,7 +476,8 @@ describe("CS-9c personal data switches web tools off", () => {
     await f.mark();
     const resumed = await f.run([[]], { resume: paused.resume });
     expect(resumed.tools).toEqual([privateTools]);
-    const [decidedCall] = f.runDecidedTool.mock.calls[0] ?? [];
+    const [decidedCall, decidedContext] = f.runDecidedTool.mock.calls[0] ?? [];
+    expect(decidedContext?.modelRoutes).toEqual([{ id: "test", region: "eu" }]);
     expect(decidedCall?.refusal?.message).toBe(REFUSAL);
     expect(
       await db.store.operationRuns.get({

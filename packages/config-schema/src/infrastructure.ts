@@ -1,4 +1,5 @@
 import {
+  providerRegionSchema,
   localeCodes,
   MAIL_OUTBOUND_DEFAULT_LIMITS,
   MAIL_OUTBOUND_FOOTER_MAX_LENGTH,
@@ -29,6 +30,7 @@ const providerEntrySchema = z.looseObject(providerEntryFields);
 
 const modelEntrySchema = z.looseObject({
   ...providerEntryFields,
+  region: providerRegionSchema.optional(),
   model: z.string().min(1).optional(),
   api: z.enum(OPENAI_COMPATIBLE_APIS).optional(),
   reasoningEffort: z.enum(REASONING_EFFORTS).optional(),

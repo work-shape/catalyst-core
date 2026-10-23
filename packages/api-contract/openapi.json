@@ -40539,11 +40539,7 @@
             "type": "boolean"
           },
           "region": {
-            "type": "string",
-            "enum": [
-              "eu",
-              "global"
-            ]
+            "$ref": "#/components/schemas/ModelRegion"
           },
           "endpointHost": {
             "type": "string"
@@ -41061,10 +41057,8 @@
       },
       "ModelRegion": {
         "type": "string",
-        "enum": [
-          "eu",
-          "global"
-        ]
+        "minLength": 1,
+        "maxLength": 32
       },
       "ModelUsageAttributionGroup": {
         "type": "object",

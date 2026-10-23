@@ -1,4 +1,5 @@
 import {
+  providerRegionSchema as modelRegionSchema,
   PROVIDER_CHECK_ERROR_CLASSES,
   PROVIDER_PORTS,
   PROVIDER_REGIONS,
@@ -124,7 +125,7 @@ export interface ProviderDefinitionInput<
   /** Owned by the adapter. A field that takes a secret is `secretRef()`. */
   configSchema: Schema;
   /**
-   * True when data leaves the instance. The entry must then state a `region`. A function when
+   * True when data leaves the instance. Non-model entries must then state a `region`. A function when
    * it depends on the entry, such as an engine that is local unless an endpoint names a host.
    */
   external: boolean | ((config: z.output<Schema>) => boolean);
@@ -209,7 +210,7 @@ export function defineProvider<Port extends ProviderPort, Schema extends z.ZodOb
     }
     const config = parsed.data;
     const external = typeof input.external === "function" ? input.external(config) : input.external;
-    const region = readRegion(entry, { type: input.type, external });
+    const region = readRegion(entry, { port: input.port, type: input.type, external });
     return {
       config,
       validated: {
@@ -373,9 +374,19 @@ function describeUnresolvedSecret(error: SecretNotResolvedError): string {
 
 function readRegion(
   entry: ProviderEntry,
-  definition: { type: string; external: boolean }
+  definition: { port: ProviderPort; type: string; external: boolean }
 ): ProviderRegion | undefined {
   const raw: unknown = isRecord(entry.entry) ? entry.entry.region : undefined;
+  if (definition.port === "models") {
+    const region = modelRegionSchema.optional().safeParse(raw);
+    if (!region.success) {
+      throw infrastructureError(
+        `${entry.path}.region`,
+        "must be a non-empty string of at most 32 characters"
+      );
+    }
+    return region.data;
+  }
   if (!definition.external) {
     if (raw !== undefined) {
       throw infrastructureError(

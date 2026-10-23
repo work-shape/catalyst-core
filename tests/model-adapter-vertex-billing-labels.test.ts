@@ -11,7 +11,7 @@ import {
 } from "./support/model-adapter-recordings";
 import { silentTestLogger } from "./support/model-gateway";
 
-async function adapter(labels?: Record<string, string>) {
+async function adapter(labels?: Record<string, string>, region = "eu") {
   const factory = await createProvider<"models", ModelAdapterFactory>(
     modelProviderDefinitions,
     "models",
@@ -19,7 +19,7 @@ async function adapter(labels?: Record<string, string>) {
       path: "infrastructure.models.vertex",
       entry: {
         provider: "google-vertex",
-        region: "eu",
+        region,
         model: "recorded-gemini-model",
         projectId: "recorded-project",
         credentialSecret: "VERTEX_KEY",
@@ -31,7 +31,7 @@ async function adapter(labels?: Record<string, string>) {
   return factory({
     id: "vertex",
     type: "google-vertex",
-    region: "eu",
+    region,
     model: "recorded-gemini-model"
   });
 }
@@ -39,6 +39,10 @@ async function adapter(labels?: Record<string, string>) {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("Vertex billing attribution", () => {
+  it("refuses unsupported model region declarations before a model request", async () => {
+    await expect(adapter(undefined, "us")).rejects.toThrow(".region' must be 'eu' or 'global'");
+  });
+
   it.each([false, true])("sends operator labels for streaming=%s", async (streaming) => {
     const labels = { instance: "customer-demo", environment: "demo" };
     const recording = loadModelAdapterRecording(

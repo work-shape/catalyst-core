@@ -9,7 +9,7 @@ const MOVED_KEYS: { path: string[]; message: string }[] = [
   {
     path: ["modelProviders"],
     message:
-      "'modelProviders' moved to 'infrastructure.models', a map from each provider's name to its entry: 'id' becomes the map key, 'type' becomes 'provider', the two '...EnvName' fields become 'credentialSecret' and 'organizationSecret', and 'compliance.residency' becomes 'region'. 'region' is now required for a provider that sends data outside the instance"
+      "'modelProviders' moved to 'infrastructure.models', a map from each provider's name to its entry: 'id' becomes the map key, 'type' becomes 'provider', the two '...EnvName' fields become 'credentialSecret' and 'organizationSecret', and 'compliance.residency' becomes 'region'. Personal Connections require every model route to declare 'region: eu'"
   },
   {
     path: ["mail"],
