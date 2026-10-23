@@ -18,20 +18,15 @@ concurrency:
   group: pr-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 env:
-  # One job at a time per repository runner, so a fixed port per repository is enough.
-  CHECK_POSTGRES_NAME: pr-postgres-core
-  # 127.0.0.1, not localhost: Colima forwards a published port on IPv4 only, and a Data Store
-  # dials the first address localhost resolves to, which on macOS is ::1.
-  POSTGRES_STORE_TEST_DATABASE_URL: postgresql://catalyst:local-check@127.0.0.1:54329/catalyst_test
   CATALYST_SCALE_TESTS: "0"
-  # The Mini runs a platform and a capabilities check side by side: each takes 6 of its 10 cores.
-  CATALYST_TEST_WORKERS: "6"
 defaults:
   run:
     shell: bash
 jobs:
   check:
-    runs-on: [self-hosted, catalyst-mini]
+    # Every runner with this label takes PR checks, several on one machine side by side. A
+    # runner's own .env sets CATALYST_TEST_WORKERS to its share of the machine's cores.
+    runs-on: [self-hosted, catalyst-check]
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -74,10 +69,16 @@ jobs:
         timeout-minutes: 5
         env:
           TOKEN: ${{ github.token }}
+        # A database of this job's own, on a free port, so checks can run side by side.
+        # 127.0.0.1, not localhost: Colima forwards a published port on IPv4 only, and a Data
+        # Store dials the first address localhost resolves to, which on macOS is ::1.
         run: |
-          docker rm --force "$CHECK_POSTGRES_NAME" >/dev/null 2>&1 || true
+          name="pr-postgres-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          port=$(node -e 'const s = require("net").createServer().listen(0, "127.0.0.1", () => { console.log(s.address().port); s.close(); })')
+          echo "CHECK_POSTGRES_NAME=$name" >> "$GITHUB_ENV"
+          echo "POSTGRES_STORE_TEST_DATABASE_URL=postgresql://catalyst:local-check@127.0.0.1:$port/catalyst_test" >> "$GITHUB_ENV"
           docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin <<<"$TOKEN"
-          .github/scripts/start-postgres.sh catalyst local-check catalyst_test 54329
+          CHECK_POSTGRES_NAME="$name" .github/scripts/start-postgres.sh catalyst local-check catalyst_test "$port"
       - name: Unit and database tests
         run: pnpm exec vitest run
       - name: Upgrade from oldest supported release
@@ -86,7 +87,7 @@ jobs:
         run: pnpm test:deployment-kit
       - name: Database log of a failed run
         if: failure()
-        run: docker logs --tail 80 "$CHECK_POSTGRES_NAME" 2>&1 || true
+        run: '[ -z "$CHECK_POSTGRES_NAME" ] || docker logs --tail 80 "$CHECK_POSTGRES_NAME" 2>&1 || true'
       - name: Remove the database
         if: always()
-        run: docker rm --force "$CHECK_POSTGRES_NAME" >/dev/null 2>&1 || true
+        run: '[ -z "$CHECK_POSTGRES_NAME" ] || docker rm --force "$CHECK_POSTGRES_NAME" >/dev/null 2>&1 || true'
