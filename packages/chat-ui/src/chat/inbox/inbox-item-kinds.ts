@@ -1,5 +1,6 @@
 import {
   Bell,
+  Bot,
   BookOpen,
   MessageSquareText,
   FileText,
@@ -248,7 +249,7 @@ const operationCall: InboxItemKind = {
 };
 
 /**
- * A publish of an App or a Workflow that waits for an approver: a held call of `assets.publish`
+ * A publish of an App, a Workflow or a workspace's agent that waits for an approver: a held call of `assets.publish`
  * whose item shows what the version makes live. The approver cannot edit it, so there is no
  * request for changes.
  */
@@ -331,6 +332,7 @@ export const inboxItemKinds: readonly InboxItemKind[] = [
   operationCall,
   publishKind("app_publish", "inbox.kindAppPublish", LayoutGrid),
   publishKind("workflow_publish", "inbox.kindWorkflowPublish", Workflow),
+  publishKind("agent_publish", "inbox.kindAgentPublish", Bot),
   notice,
   feedbackReview
 ];
