@@ -89,6 +89,7 @@
       "@work-shape/catalyst-connections": ["packages/connections/src/index.ts"],
       "@work-shape/catalyst-core": ["packages/core/src/index.ts"],
       "@work-shape/catalyst-data-stores": ["packages/data-stores/src/index.ts"],
+      "@work-shape/catalyst-demo/result-shapers": ["clients/demo/src/result-shapers.ts"],
       "@work-shape/catalyst-demo/sample-mcp": ["clients/demo/sample-mcp/index.ts"],
       "@work-shape/catalyst-demo/seed": ["clients/demo/src/seed/index.ts"],
       "@work-shape/catalyst-mail": ["packages/mail/src/index.ts"],
