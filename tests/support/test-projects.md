@@ -42,7 +42,7 @@ explicitly in `vitest.projects.config.ts`:
 | `ui-table-fold.test.ts`                   | DOM prototype spies no longer find `clientWidth`.                                  |
 | `ui-tabs-scroll.test.ts`                  | DOM prototype spies no longer find `clientWidth`.                                  |
 
-The infrastructure file also stays isolated: its rootless provider-check tests install fake
+These Postgres files also stay isolated. For infrastructure, rootless provider-check tests install fake
 timers without creating an infrastructure root. The original per-test timer cleanup must run
 before Postgres reset. Applying it to every shared file would undo unrelated files' fake clocks.
 
@@ -50,6 +50,8 @@ before Postgres reset. Applying it to every shared file would undo unrelated fil
 | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `infrastructure.test.ts`         | Rootless fake-clock checks leave timers installed, so Postgres reset waits on a timer that cannot fire.                                                                                                       |
 | `chat-server-agent-runs.test.ts` | With unpaced streaming, the second send is accepted after the first run has already completed, and cancellation still observes the last token in the stream. Keeps real pacing for both unchanged assertions. |
+| `module-registry.test.ts`        | The UTC shared-worker run inherited `assetManagement.enabled: true` instead of the pristine `false`, failing both legacy-switch and config-operation assertions.                                              |
+| `skill-change-workflow.test.ts`  | The UTC shared-worker run inherited `administration.agentConfiguration.allowSkillEditing: true` instead of `false` in the approver/provenance test.                                                           |
 
 Files calling `openConnectionDraft` also stay isolated: SSR leaves its requested draft in a
 module singleton, because it cannot run the consuming React effect. The classifier follows
