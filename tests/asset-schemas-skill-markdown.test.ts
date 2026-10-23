@@ -50,7 +50,6 @@ describe("the name of a skill file that states none", () => {
 describe("the packages a browser bundle loads", () => {
   // chat-ui imports core and api-contract, and both import asset-schemas. A Node module in
   // any of them fails every page when the bundle loads it.
-  // Keep complete package paths visible to the affected-test selector.
   it.each(["packages/asset-schemas", "packages/core", "packages/api-contract"])(
     "%s imports no Node module",
     async (packagePath) => {
