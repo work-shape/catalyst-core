@@ -172,13 +172,13 @@ export function CatalogueInstall({
       case "review":
         return;
       case "sign-in":
-        setStage({ step: "sign-in", ...done });
+        setStage({ ...doneOf(done), step: "sign-in" });
         return;
       case "personal":
-        setStage({ step: "approved", personal: true, ...done });
+        setStage({ ...doneOf(done), step: "approved", personal: true });
         return;
       case "approved":
-        setStage({ step: "approved", personal: false, ...done });
+        setStage({ ...doneOf(done), step: "approved", personal: false });
         return;
       case "done":
         onCreated(done.name);
@@ -488,6 +488,16 @@ export function CatalogueInstall({
       )
     }));
   }
+}
+
+/** What a finished step hands on: never the step it came from. */
+function doneOf(done: Done): Done {
+  return {
+    name: done.name,
+    title: done.title,
+    gives: done.gives,
+    ...(done.count === undefined ? {} : { count: done.count })
+  };
 }
 
 /** "N tools approved", above the sign-in that follows. */
