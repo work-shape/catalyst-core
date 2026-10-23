@@ -43,6 +43,7 @@ export * from "./connection-approval-model";
 export { ConnectionApprovalList } from "./connection-approval";
 export { CatalogueInstall } from "./connection-catalogue-install";
 export * from "./connection-catalogue-model";
+export * from "./connection-catalogue-oauth";
 export { CatalogueServices } from "./connection-catalogue-services";
 export * from "./connection-connect";
 export { ConnectionCreateFlow } from "./connection-create-dialog";

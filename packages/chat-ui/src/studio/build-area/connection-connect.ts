@@ -69,6 +69,11 @@ export async function connectConnection(
     key: string;
     discovers: boolean;
     /**
+     * Left out or true, the test runs after the write. False for a Connection that signs in
+     * after the connect: before its sign-in no test can pass.
+     */
+    tests?: boolean;
+    /**
      * What the key is bound to, where more than the address's origin: a REST API's client
      * secret is bound to its authorization server too. Left out, the origin of `url`.
      */
@@ -108,6 +113,12 @@ export async function connectConnection(
       return { status: "secret_failed", memory, error };
     }
     memory = { ...memory, sent: { key: attempt.key, origin } };
+  }
+
+  if (attempt.tests === false) {
+    onStep("server", "done");
+    if (sends) onStep("key", "done");
+    return { status: "connected", memory };
   }
 
   let result: ConnectionTestResult;

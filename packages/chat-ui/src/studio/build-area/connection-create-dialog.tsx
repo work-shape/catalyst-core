@@ -622,6 +622,7 @@ export function ConnectionCreateFlow({
       <CatalogueInstall
         entry={stage.entry}
         source={source}
+        {...(browser ? { browser } : {})}
         checkName={checkName}
         put={put}
         onBack={() => setStage({ step: "pick" })}
