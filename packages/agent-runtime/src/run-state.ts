@@ -76,6 +76,7 @@ export class RunState {
   readonly runId: AgentRunId;
   readonly startedAt: ISODateString;
   private status: AgentRunStatus = "running";
+  private webAccessOff = false;
   private sequence: number;
   private resumeState: AgentRunResumeState | undefined;
   private closed = false;
@@ -94,6 +95,14 @@ export class RunState {
     this.startedAt = options.startedAt ?? new Date().toISOString();
     this.sequence = options.startSequence ?? 0;
     this.onEvent = options.onEvent;
+  }
+
+  disableWebAccess(): void {
+    this.webAccessOff = true;
+  }
+
+  isWebAccessOff(): boolean {
+    return this.webAccessOff;
   }
 
   getStatus(): AgentRunStatus {

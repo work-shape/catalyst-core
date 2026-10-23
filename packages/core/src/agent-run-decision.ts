@@ -5,7 +5,11 @@ import type { ClientInstanceId, OperationRunId } from "./ids";
 import type { JsonValue } from "./json";
 import type { OperationDenial } from "./operation-denial";
 import type { OperationRun, OperationRunDecision, OperationRunError } from "./operation-runs";
-import type { ToolExecutionRequest, ToolExecutionResult } from "./tool-execution";
+import type {
+  ToolExecutionError,
+  ToolExecutionRequest,
+  ToolExecutionResult
+} from "./tool-execution";
 
 // A person's decision on a call an Agent Run waits on, and how the decided call is carried
 // out (EW-2a). Apart from `agent-run-resume.ts`, which the run's own types use: these name
@@ -21,6 +25,8 @@ export type ToolDecisionRunner = (
     request: ToolExecutionRequest;
     operationRunId: OperationRunId;
     frozenInput: JsonValue;
+    /** A run restriction acquired while the call waited: settle it without executing. */
+    refusal?: ToolExecutionError;
   },
   context: RuntimeCallContext
 ) => Promise<ToolExecutionResult>;
