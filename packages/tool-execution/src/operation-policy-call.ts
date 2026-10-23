@@ -41,9 +41,9 @@ async function policyInputOf(context: OperationPolicyContext): Promise<PolicyInp
   let callFloor = await definition.policyFloorOf?.(call.origin, call.input);
   if (
     call.origin.kind === "agent" &&
-    definition.effect === "changing" &&
-    !definition.personalConnection &&
-    (await deps.policy.personalConversation?.(call.origin.conversationId))
+    (definition.name === "mail.send" ||
+      (definition.effect === "changing" && !definition.personalConnection)) &&
+    (await deps.policy.personalConversation?.(call.origin.conversationId, call.origin.agentRunId))
   ) {
     callFloor = stricterPolicy("confirm", callFloor);
   }

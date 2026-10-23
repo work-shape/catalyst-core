@@ -103,9 +103,27 @@ export function createOperationCalls(options: OperationCallsOptions): OperationC
       : {})
   };
   const policy: RunOperationDeps["policy"] = {
-    personalConversation: async (id) =>
-      (await rootConversationOf(options.stores, clientInstanceId, id))?.personalDataAt !==
-      undefined,
+    personalConversation: async (id, runId) => {
+      try {
+        const conversation = await rootConversationOf(options.stores, clientInstanceId, id);
+        if (conversation)
+          return conversation.kind !== "chat" || conversation.personalDataAt !== undefined;
+        // Workflow threads are deliberately absent from getConversation. A known Workflow
+        // run cannot read personal Connections, and marked chats cannot start its draft.
+        // Preserve simulated calls there; missing provenance and failed reads stay closed.
+        const run =
+          runId && (await options.stores.agentRuns.getAgentRun({ clientInstanceId, runId }));
+        return !(
+          run &&
+          run.conversationId === id &&
+          run.workflowStepRunId &&
+          run.authorization &&
+          run.authorization.personalConnectionsAllowed !== true
+        );
+      } catch {
+        return true;
+      }
+    },
     instanceDefaults: options.config.policy.defaults,
     centralSettings: () => options.operations?.centralPolicySettings?.() ?? []
   };

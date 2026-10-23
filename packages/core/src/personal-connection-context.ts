@@ -21,6 +21,42 @@ export async function rootConversationOf(
   return thread;
 }
 
+/** Unknown roots (including Workflow agent threads) and failed reads are restricted. */
+export async function personalDataConversation(
+  stores: Parameters<typeof rootConversationOf>[0],
+  clientInstanceId: ClientInstanceId,
+  conversationId: ConversationId
+): Promise<boolean> {
+  try {
+    const conversation = await rootConversationOf(stores, clientInstanceId, conversationId);
+    return (
+      !conversation || conversation.kind !== "chat" || conversation.personalDataAt !== undefined
+    );
+  } catch {
+    return true;
+  }
+}
+
+/** Refuse unattended work that could carry personal data beyond its conversation. */
+export async function requireUnmarkedConversation(
+  stores: Parameters<typeof rootConversationOf>[0],
+  clientInstanceId: ClientInstanceId,
+  origin: OperationOrigin
+): Promise<void> {
+  if (
+    (origin.kind === "agent" || origin.kind === "app") &&
+    origin.conversationId !== undefined &&
+    (await personalDataConversation(stores, clientInstanceId, origin.conversationId))
+  ) {
+    throw new AppError(
+      "FORBIDDEN",
+      "This action cannot start from a conversation containing personal data",
+      { reason: "personal_data_conversation" },
+      { exposeMessage: true }
+    );
+  }
+}
+
 export function personalConnectionContextError(reason: string): AppError {
   return new AppError(
     "FORBIDDEN",

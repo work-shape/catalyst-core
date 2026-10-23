@@ -1,14 +1,23 @@
 import { describe, expect, it, vi } from "vitest";
+import { randomUUID } from "node:crypto";
+import { runOperation } from "@work-shape/catalyst-tool-execution";
+import { identityOf } from "./support/connection-operations";
 import { z } from "zod";
 import { apiUserSchema, scheduledStartSchema } from "@work-shape/catalyst-api-contract";
-import { asAgentRunId, asUserId, isAuthenticatedServicePrincipal } from "@work-shape/catalyst-core";
+import {
+  asAgentRunId,
+  asToolCallId,
+  createPlatformId,
+  asUserId,
+  isAuthenticatedServicePrincipal
+} from "@work-shape/catalyst-core";
 import {
   clientInstanceId,
   SCOPES_HEADER,
   recordAuthAdapter,
   setupAccessInstance
 } from "./support/access-instance";
-import { createTestInstance, getTestJobs } from "./support/test-instance";
+import { createTestInstance, getTestJobs, getTestOperationCalls } from "./support/test-instance";
 import { withTestSql } from "./support/test-sql";
 import { createTestConfig } from "./support/fixtures";
 import { required, waitUntil } from "./support/assertions";
@@ -74,6 +83,71 @@ async function fireDue(t: { instance: Parameters<typeof getTestJobs>[0] }, id: s
 }
 
 describe("scheduled prompts API", () => {
+  it.each(["scheduled_starts.create", "scheduled_starts.update"])(
+    "refuses %s from a marked conversation before confirmation",
+    async (operation) => {
+      const { t, workspace } = await fixture();
+      const created = await t.expectOk(t.kai.id, "scheduled_starts.create", {
+        payload: { ...fields, collaborationWorkspaceId: workspace.id }
+      });
+      const id = scheduledStartSchema.parse(created.json()).id;
+      const chat = await t.stores.conversations.createConversation({
+        clientInstanceId,
+        collaborationWorkspaceId: workspace.id,
+        createdByUserId: t.kai.id,
+        createdByExternalUserId: t.kai.id,
+        visibility: "private",
+        title: "Scheduled privacy",
+        retainedUntil: "2099-01-01T00:00:00.000Z"
+      });
+      const calls = await getTestOperationCalls(t.instance);
+      const runId = asAgentRunId(randomUUID());
+      const input = {
+        ...fields,
+        ...(operation.endsWith("create")
+          ? { collaborationWorkspaceId: workspace.id }
+          : { scheduledStartId: id })
+      };
+      const invoke = () =>
+        runOperation(
+          {
+            operation,
+            effect: "changing",
+            input,
+            idempotencyKey: randomUUID(),
+            actor: identityOf(t.kai),
+            origin: {
+              kind: "agent",
+              agentRunId: runId,
+              conversationId: chat.id,
+              agentName: fields.agentName,
+              toolName: operation,
+              toolCallId: asToolCallId(randomUUID())
+            },
+            correlationId: randomUUID()
+          },
+          { ...calls.deps, agentToolNames: () => [operation] },
+          {
+            runFence: {
+              runId,
+              lease: { jobId: createPlatformId<"JobId">("job"), leaseToken: "lease" }
+            }
+          }
+        );
+      expect((await invoke()).result.status).toBe("pending_confirmation");
+      await t.stores.conversations.markPersonalData({
+        clientInstanceId,
+        conversationId: chat.id,
+        userId: t.kai.id,
+        at: new Date().toISOString()
+      });
+      expect((await invoke()).result).toMatchObject({
+        status: "failed",
+        error: { details: { reason: "personal_data_conversation" } }
+      });
+    }
+  );
+
   it("lets only the owner read and manage a saved start, including another instance admin", async () => {
     const { t, workspace } = await fixture();
     const start = scheduledStartSchema.parse(

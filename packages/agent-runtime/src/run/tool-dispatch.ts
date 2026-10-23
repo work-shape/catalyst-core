@@ -1,3 +1,4 @@
+import { WEB_FETCH_TOOL_NAME } from "@work-shape/catalyst-web-access";
 import { forbiddenPreviewTool, parseConnectionOperationName } from "@work-shape/catalyst-core";
 import type {
   AgentRunId,
@@ -124,7 +125,8 @@ export class ToolDispatch {
     input: StartAgentRunInput,
     context: RuntimeCallContext
   ): Promise<ToolExecutionError | undefined> {
-    return toolName === "web_fetch" && (await this.modelInput.webAccessOff(state, input, context))
+    return toolName === WEB_FETCH_TOOL_NAME &&
+      (await this.modelInput.webAccessOff(state, input, context))
       ? {
           code: "not_allowed",
           message:

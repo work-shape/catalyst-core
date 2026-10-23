@@ -237,6 +237,9 @@ importers:
       '@work-shape/catalyst-model-provider':
         specifier: workspace:*
         version: link:../model-provider
+      '@work-shape/catalyst-web-access':
+        specifier: workspace:*
+        version: link:../web-access
     devDependencies:
       '@types/node':
         specifier: ^24.13.1

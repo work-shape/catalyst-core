@@ -124,9 +124,10 @@ export type PolicyResolution = { source: PolicySource } & (
  * answer holds a secret takes an instance default of `approval` as `confirm`. A central setting
  * replaces the base, and of several that match the strictest wins. A call with several targets
  * takes the strictest of what each target resolves to. An operation's `policyFloor` then
- * tightens what came of it and never loosens it. A guardrail can only tighten. `confirm` and `approval` are values of changing operations: on a reading operation
- * they do not apply, wherever they come from, so a reading operation resolves to `allow` or
- * `deny`. A step of a run of a published Workflow revision runs a `confirm`: the publish was
+ * tightens what came of it and never loosens it. A guardrail can only tighten. Reading
+ * operations ignore waiting defaults and settings unless an explicit `confirm` or `approval`
+ * floor makes the call able to wait. A step of a run of a published Workflow revision runs
+ * a `confirm`: the publish was
  * its confirmation, until the Workflow is deleted: its run's `confirm` is then refused. Any other step of a Workflow Run has nobody to ask and acts for nobody who
  * could be asked later, so its `confirm` is an `approval`; so is a published run's `confirm`
  * that an operation's floor asks for, which no setting and no publish lowers. A surface that can neither confirm nor pause is
@@ -136,9 +137,13 @@ export type PolicyResolution = { source: PolicySource } & (
  */
 export function resolvePolicy(input: PolicyInput): PolicyResolution {
   const { definition } = input;
+  // Ordinary reads ignore waiting defaults/settings. An explicit floor is a boundary:
+  // an MCP read carrying private arguments must be able to wait just like a change.
+  const readingMayWait =
+    definition.policyFloor === "confirm" || definition.policyFloor === "approval";
   const applies = (value: PolicyValue | undefined): value is PolicyValue =>
     value !== undefined &&
-    (definition.effect === "changing" || value === "allow" || value === "deny");
+    (definition.effect === "changing" || readingMayWait || value === "allow" || value === "deny");
 
   let value: PolicyValue = input.instanceDefaults[definition.effect];
   let source: PolicySource = "instance_default";
