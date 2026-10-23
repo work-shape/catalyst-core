@@ -4,6 +4,9 @@ import {
   Button,
   CommandLine,
   Dialog,
+  Disclosure,
+  DisclosureContent,
+  DisclosureTrigger,
   RadioGroup,
   ServiceMark
 } from "@work-shape/catalyst-ui";
@@ -29,6 +32,7 @@ import {
   afterApprove,
   afterConnect,
   afterSignIn,
+  askedGroups,
   partModes,
   reviewGroups,
   scopesFor,
@@ -380,14 +384,7 @@ export function CatalogueInstall({
                     groups: approvalGroups(installed, stage.candidates, approval.choice.selected)
                   })}
             />
-            {installed.groups === undefined ? null : (
-              <p
-                className="text-caption text-muted-foreground"
-                data-catalogue-scopes={scopes.join(" ")}
-              >
-                {t("connectionCatalogue.signInScopes", { scopes: scopes.join(", ") })}
-              </p>
-            )}
+            {installed.groups === undefined ? null : signInAsks()}
             {refusals ? <ApprovalRefusals refusals={refusals.refusals} /> : null}
             <RefusalDetail detail={refusals?.detail} />
           </div>
@@ -540,21 +537,55 @@ export function CatalogueInstall({
           ? t("connectionCatalogue.otherTools")
           : offerText(group.title, locale),
       names: group.candidates.map((candidate) => candidate.name),
-      note: (
-        <>
-          {group.scopes.length > 0 ? (
-            <span className="text-caption break-words text-muted-foreground">
-              {t("connectionCatalogue.groupScopes", { scopes: group.scopes.join(", ") })}
-            </span>
-          ) : null}
-          {group.widens ? (
-            <span className="text-caption text-warning" data-catalogue-widens={group.id}>
-              {t("connectionCatalogue.widens")}
-            </span>
-          ) : null}
-        </>
-      )
+      ...(group.widens
+        ? {
+            note: (
+              <span className="text-caption text-warning" data-catalogue-widens={group.id}>
+                {t("connectionCatalogue.widens")}
+              </span>
+            )
+          }
+        : {})
     }));
+  }
+
+  /**
+   * What the sign-in asks for, in the entry's words; the provider's scopes behind each group
+   * fold away for whoever registers or checks them at the provider.
+   */
+  function signInAsks() {
+    const asked = askedGroups(installed, approval.choice.selected);
+    const titleOf = (group: (typeof asked)[number]) =>
+      group.title === undefined ? group.id : offerText(group.title, locale);
+    const titles = asked.map(titleOf);
+    return (
+      <div className="grid min-w-0 gap-1" data-catalogue-scopes={scopes.join(" ")}>
+        <p className="text-caption text-muted-foreground" data-catalogue-asks={titles.join(", ")}>
+          {t("connectionCatalogue.signInAsks", {
+            groups: new Intl.ListFormat(locale, { type: "conjunction" }).format(titles)
+          })}
+        </p>
+        <Disclosure>
+          <DisclosureTrigger className="text-caption" data-catalogue-scopes-toggle="">
+            {t("connectionCatalogue.providerScopes")}
+          </DisclosureTrigger>
+          <DisclosureContent keepMounted>
+            <ul className="grid min-w-0 gap-1 pt-1" data-catalogue-scope-list="">
+              {asked.map((group) => (
+                <li key={group.id} className="grid min-w-0 gap-0.5">
+                  <span className="text-caption text-muted-foreground">{titleOf(group)}</span>
+                  {group.scopes.map((scope) => (
+                    <code key={scope} className="font-mono text-code break-all">
+                      {scope}
+                    </code>
+                  ))}
+                </li>
+              ))}
+            </ul>
+          </DisclosureContent>
+        </Disclosure>
+      </div>
+    );
   }
 }
 

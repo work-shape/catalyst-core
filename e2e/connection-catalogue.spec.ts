@@ -349,6 +349,11 @@ test.describe("an OAuth entry", () => {
       "data-catalogue-scopes",
       "sample.identity sample.read"
     );
+    // In words; the provider's scopes fold away behind them.
+    await expect(review.locator("[data-catalogue-asks]")).toHaveAttribute(
+      "data-catalogue-asks",
+      "Identität, Kunden lesen"
+    );
     return review;
   }
 
