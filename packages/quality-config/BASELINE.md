@@ -1,6 +1,6 @@
 # Measured quality baseline
 
-Counts are exact by target, rule and package in each repository's `quality-baseline.json`. Literal interface text is scoped per folder. Zero counts are left out and fail on their first violation. Initially measured on platform `218cd58` and capabilities `d050a54` for CB-1a; counts below include CB-2 reductions.
+Counts are ceilings by target, rule and package in each repository's `quality-baseline.json`: a count above its entry fails, a count below it passes. Literal interface text is scoped per folder. Zero counts are left out and fail on their first violation. Initially measured on platform `218cd58` and capabilities `d050a54` for CB-1a; counts below include CB-2 reductions.
 
 | Target         | Rule                                               | Tool              | Platform | Capabilities | Owners                                                                                |
 | -------------- | -------------------------------------------------- | ----------------- | -------: | -----------: | ------------------------------------------------------------------------------------- |
@@ -49,6 +49,6 @@ CB-8a added the literal interface text rule with 144 findings, all in `packages/
 
 CB-3c replaced the inline Compose migration command with the client migration entry, which removed the two formatting findings in `clients/demo`.
 
-D4′ seeds `catalyst/retired-terms` on platform with 2,253 matching tokens in 21 package and root-folder scopes, owned by NS-RETIRE. The initial entries have one-time accepted raises for the new rule; later increases fail, and removals must lower the exact baseline. The rule is opt-in per repository and is enabled on platform only. No product identifier, route, schema, audit event or table is renamed or removed by the check.
+D4′ seeds `catalyst/retired-terms` on platform with 2,253 matching tokens in 21 package and root-folder scopes, owned by NS-RETIRE. The initial entries have one-time accepted raises for the new rule; later increases fail. The rule is opt-in per repository and is enabled on platform only. No product identifier, route, schema, audit event or table is renamed or removed by the check.
 
 D5 introduces `catalyst/duplicate-literal-list`, with its first measured entries owned by `D5-after-freeze`. They retain the inventory's seven disagreements and pre-existing duplicate lists outside its scope. Canonical definitions in asset-schemas do not report findings. The rule compares value sets without changing their order, and every remaining consumer copy is counted per package. The one-time accepted raises introduce the rule; subsequent copies fail.

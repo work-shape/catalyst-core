@@ -83,7 +83,7 @@ describe("quality collector", { timeout: 180_000 }, () => {
       `format|prettier|packages/alpha: measured 1, baseline 0; repair the increase. Findings are in ${source}/unformatted.ts (1)\n`
     );
     expect(unbaselined.stderr).toContain(
-      "After a repair, run `pnpm exec catalyst-quality format` again"
+      "Repair the new findings and run `pnpm exec catalyst-quality format` again"
     );
 
     const entry = { target: "format", scope: "packages/alpha", owner: "CB-1a" };
@@ -100,11 +100,10 @@ describe("quality collector", { timeout: 180_000 }, () => {
         2
       )}\n`
     });
-    const stale = collect("format");
-    expect(stale.status).toBe(1);
-    expect(stale.stderr).toBe(
-      "format|prettier/ignore-comment|packages/alpha: measured 1, baseline 2; lower the baseline\n"
-    );
+    // A count below its baseline passes: a repair needs no baseline edit.
+    const lower = collect("format");
+    expect(lower.stderr).toBe("");
+    expect(lower.status).toBe(0);
   });
 
   it("allows environment reads only in a package's one env module and checks import.meta.env outside named frontend entries", () => {

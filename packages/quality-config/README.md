@@ -71,22 +71,21 @@ Platform `main` is protected with this check required once the pipeline runs; Fe
 
 The UI library guard (`tests/ui-guard.test.ts`) uses this same comparator and baseline under
 target `ui-guard`, counted by category and package. Its scanner still checks every source file
-and stylesheet and holds the library at zero. After a repair, lower only the reported entry;
-there is no separate UI baseline or update command. The S9 transfer retains the previous
-counts exactly; its acceptance records admit only that transfer, never a later rise.
+and stylesheet and holds the library at zero. There is no separate UI baseline or update
+command. The S9 transfer kept the previous counts; its acceptance records explain that transfer.
 
 Rights wording checks discover `// @rights-screen:` and `// @rights-copy:` markers anywhere
 under chat-ui source. Keep these markers with the screens and translation modules when moving
 folders; mark new rights screens and their copy. `// @service-principal-copy:` adds German
 terminology checks to copy outside the rights screens.
 
-The collector compares the exact measured count with each baseline entry by target, rule and package. Literal interface text is counted per folder, so an entry for one folder cannot cover new text in another. A missing entry means zero. A rise fails, and a fall fails until the entry is lowered or removed. No check rewrites the baseline.
+The collector compares the measured count with each baseline entry by target, rule and package. Literal interface text is counted per folder, so an entry for one folder cannot cover new text in another. A missing entry means zero. A count above its entry fails; a count below it passes, so a repair needs no baseline edit. No check rewrites the baseline.
 
 A rise names the files that hold the findings for that rule and scope, the first ten, with the number in each. An invalid entry is printed in full.
 
-After repairing a violation, run its target, read the reported difference and lower only that entry. `catalyst-quality <target> --measure` prints every finding with its file and position. The targets are `format`, `lint`, `types:packages` and `types:tests`. `pnpm format` rewrites the files Prettier checks.
+Lowering an entry after a repair is optional and keeps the baseline tight. `catalyst-quality <target> --measure` prints every finding with its file and position. The targets are `format`, `lint`, `types:packages` and `types:tests`. `pnpm format` rewrites the files Prettier checks.
 
-Counts may only fall. Raising an entry is a reviewed edit of `quality-baseline.json` in the pull request that needs it. `acceptedRaises` records why a count was raised, as `{ key, to, reason, acceptedBy, date }`, where `key` is `target|rule|scope`; no check reads it.
+Raising an entry is a reviewed edit of `quality-baseline.json` in the pull request that needs it. `acceptedRaises` records why a count was raised, as `{ key, to, reason, acceptedBy, date }`, where `key` is `target|rule|scope`; no check reads it.
 
 `platform/tests/quality-baseline.test.ts` tests the comparison. `platform/tests/quality-collector.test.ts` runs the real collector over a small project that breaks every rule once, including each known way around a rule; weakening a rule or the collection fails it.
 

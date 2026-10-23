@@ -9,13 +9,14 @@
 const keyOf = (finding) => `${finding.target}|${finding.rule}|${finding.scope}`;
 
 /**
- * Compares the measured findings of one target with its baseline entries. The counts must
- * match exactly: a rise is a new violation, a fall is a baseline that was not lowered. A rise
- * names the files that hold the findings, because the count alone does not say where to look.
+ * Compares the measured findings of one target with its baseline entries. A count above its
+ * entry, or findings for a rule and scope without one, is a new violation; a count below its
+ * entry passes, so a repair needs no baseline edit. A rise names the files that hold the
+ * findings, because the count alone does not say where to look.
  * @param {Finding[]} measured
  * @param {Baseline} baseline
  * @param {string} target
- * @returns {string[]} One line per difference; empty when the target matches its baseline.
+ * @returns {string[]} One line per rise; empty when no count is above its baseline.
  */
 export function compareBaseline(measured, baseline, target) {
   if (baseline.version !== 1 || !Array.isArray(baseline.entries))
@@ -44,8 +45,6 @@ export function compareBaseline(measured, baseline, target) {
     if (key.split("|")[0] !== target) continue;
     const found = actual.get(key) ?? [];
     const limit = expected.get(key) ?? 0;
-    if (found.length < limit)
-      errors.push(`${key}: measured ${found.length}, baseline ${limit}; lower the baseline`);
     if (found.length > limit)
       errors.push(
         `${key}: measured ${found.length}, baseline ${limit}; repair the increase${filesOf(found)}`

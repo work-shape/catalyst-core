@@ -19,7 +19,7 @@ const target = process.argv[2] ?? "";
 const staleAliases =
   "Source aliases differ from local or sibling platform package exports; run `pnpm exec catalyst-quality aliases --write` in this repository.";
 const here = dirname(fileURLToPath(import.meta.url));
-// Whole package scopes keep baseline counts exact. Children inherit the same selection.
+// Whole package scopes keep baseline counts comparable. Children inherit the same selection.
 const scopeFlag = process.argv.find((argument) => argument.startsWith("--scope-file="));
 /** @type {string[] | undefined} */
 const scopes = scopeFlag ? JSON.parse(readFileSync(scopeFlag.slice(13), "utf8")) : undefined;
@@ -554,15 +554,12 @@ else if (!process.argv.includes("--write")) {
     },
     target
   );
-  console.log(
-    `${target}: ${findings.length} measured findings; ${errors.length} baseline differences`
-  );
+  console.log(`${target}: ${findings.length} measured findings; ${errors.length} above baseline`);
   if (errors.length) {
     console.error(errors.join("\n"));
-    if (errors.some((error) => error.includes("repair the increase")))
-      console.error(
-        `Counts may only fall. After a repair, run \`pnpm exec catalyst-quality ${target}\` again until it reports 0 baseline differences; add \`--measure\` to list every finding with its file and position.`
-      );
+    console.error(
+      `A count may not rise above its baseline. Repair the new findings and run \`pnpm exec catalyst-quality ${target}\` again; add \`--measure\` to list every finding with its file and position.`
+    );
     process.exitCode = 1;
   }
 }

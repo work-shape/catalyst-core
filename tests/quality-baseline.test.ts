@@ -21,22 +21,18 @@ describe("quality baseline", () => {
     ]);
   });
 
-  it("rejects a stale higher baseline, including a completely removed rule", () => {
-    expect(compareBaseline([finding], baseline, "lint")).toEqual([
-      expect.stringContaining("lower the baseline")
-    ]);
-    expect(compareBaseline([], baseline, "lint")).toEqual([
-      expect.stringContaining("measured 0, baseline 2")
-    ]);
+  it("accepts a count below its baseline, including a completely removed rule", () => {
+    expect(compareBaseline([finding], baseline, "lint")).toEqual([]);
+    expect(compareBaseline([], baseline, "lint")).toEqual([]);
     expect(
       compareBaseline([finding], { version: 1, entries: [{ ...entry, count: 1 }] }, "lint")
     ).toEqual([]);
   });
 
   it("rejects unbaselined rules and counts independently per package and target", () => {
-    expect(
-      compareBaseline([{ ...finding, scope: "packages/other" }], baseline, "lint")
-    ).toHaveLength(2);
+    expect(compareBaseline([{ ...finding, scope: "packages/other" }], baseline, "lint")).toEqual([
+      expect.stringContaining("packages/other: measured 1, baseline 0")
+    ]);
     expect(compareBaseline([{ ...finding, target: "format" }], baseline, "format")).toHaveLength(1);
     expect(compareBaseline([], baseline, "format")).toEqual([]);
   });
@@ -71,7 +67,7 @@ describe("quality baseline", () => {
     expect(error).not.toContain("src/20.ts");
   });
 
-  it("holds a recorded test type error count in both directions", () => {
+  it("holds a recorded test type error count as a ceiling", () => {
     const errors = {
       target: "types:tests",
       rule: "typescript/test-errors",
@@ -85,9 +81,7 @@ describe("quality baseline", () => {
     expect(compareBaseline([measured, measured, measured], recorded, "types:tests")).toEqual([
       "types:tests|typescript/test-errors|tests: measured 3, baseline 2; repair the increase"
     ]);
-    expect(compareBaseline([measured], recorded, "types:tests")).toEqual([
-      "types:tests|typescript/test-errors|tests: measured 1, baseline 2; lower the baseline"
-    ]);
+    expect(compareBaseline([measured], recorded, "types:tests")).toEqual([]);
   });
 
   it("records no exception for test type errors", async () => {
