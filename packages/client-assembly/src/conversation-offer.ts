@@ -8,6 +8,8 @@ import { HTTP_API_CONNECTOR_TYPE } from "@work-shape/catalyst-connections";
 import {
   RUN_AGENT_TOOL_NAME,
   DATA_STORE_ASSET_KIND,
+  getSubjectUserId,
+  isAuthenticatedServicePrincipal,
   dataStoreOperationName,
   resolvePolicy,
   type PolicyDefaults,
@@ -94,7 +96,11 @@ function appToolNames(hasTool: (toolName: string) => boolean): string[] {
 }
 
 interface ConversationOfferInput {
-  stores: { conversations: Pick<PlatformStores["conversations"], "getConversation"> };
+  stores: {
+    conversations: Pick<PlatformStores["conversations"], "getConversation">;
+    /** A person's own settings: a tool they set to Never is not offered to their runs (OP-6). */
+    userOperationSettings?: Pick<PlatformStores["userOperationSettings"], "list">;
+  };
   modules: ModuleSnapshot;
   /** Attached after module startup; the source drops draft and unavailable stores. */
   dataTools?: () => DataToolSource | undefined;
@@ -111,6 +117,28 @@ interface ConversationOfferInput {
    */
   toolRights?: Readonly<Record<string, { action: string; resource: AccessResource }>>;
   authorizer?: () => Authorizer | undefined;
+}
+
+/**
+ * The tools the person of the run set to Never (OP-6): their agents are not offered them. A
+ * call that arrives anyway is refused by the policy. A run without a person withholds nothing.
+ */
+async function neverToolNames(
+  input: ConversationOfferInput,
+  clientInstanceId: Parameters<ConversationOfferSource["offerOf"]>[0]["clientInstanceId"],
+  toolNames: readonly string[],
+  user: Parameters<ConversationOfferSource["offerOf"]>[0]["user"]
+): Promise<string[]> {
+  const settings = input.stores.userOperationSettings;
+  if (!user || !settings || toolNames.length === 0 || isAuthenticatedServicePrincipal(user)) {
+    return [];
+  }
+  const never = new Set(
+    (await settings.list({ clientInstanceId, userId: getSubjectUserId(user) }))
+      .filter((setting) => setting.value === "never")
+      .map((setting) => setting.operation)
+  );
+  return toolNames.filter((toolName) => never.has(toolName));
 }
 
 /** The listed tools of a right the person lacks. A run without a person withholds nothing. */
@@ -185,33 +213,42 @@ function createConversationOffer(input: ConversationOfferInput): ConversationOff
               canPause: true
             }).value !== "deny")
       );
-      const withheld = await withheldToolNames(
-        input,
-        agentToolNames,
-        user,
-        conversation.collaborationWorkspaceId
-      );
+      const toolNames = [
+        ...PLATFORM_TOOL_NAMES.filter((toolName) => agentToolNames.includes(toolName)),
+        ...(holds
+          ? [
+              ...WORKFLOW_TEST_TOOL_NAMES,
+              KNOWLEDGE_ADD_FILES_TOOL_NAME,
+              ...SCHEDULED_START_TOOL_NAMES
+            ]
+          : []),
+        ...(holds ? [CONNECTION_PROPOSE_TOOL_NAME] : []),
+        ...(holds || subject?.kind === "connection"
+          ? [CONNECTION_DRAFT_TOOL_NAME, CONNECTION_OFFER_TOOL_NAME]
+          : []),
+        ...appToolNames(input.hasTool),
+        ...(skillNames.length > 0 ? [READ_SKILL_TOOL] : [])
+      ]
+        .filter((toolName) => input.hasTool(toolName))
+        .concat(offeredRowTools.map((tool) => tool.name));
+      const withheld = [
+        ...(await withheldToolNames(
+          input,
+          agentToolNames,
+          user,
+          conversation.collaborationWorkspaceId
+        )),
+        ...(await neverToolNames(
+          input,
+          clientInstanceId,
+          [...new Set([...agentToolNames, ...toolNames])],
+          user
+        ))
+      ];
       return {
         ...(subject ? { subject } : {}),
         ...(withheld.length > 0 ? { withheldToolNames: withheld } : {}),
-        toolNames: [
-          ...PLATFORM_TOOL_NAMES.filter((toolName) => agentToolNames.includes(toolName)),
-          ...(holds
-            ? [
-                ...WORKFLOW_TEST_TOOL_NAMES,
-                KNOWLEDGE_ADD_FILES_TOOL_NAME,
-                ...SCHEDULED_START_TOOL_NAMES
-              ]
-            : []),
-          ...(holds ? [CONNECTION_PROPOSE_TOOL_NAME] : []),
-          ...(holds || subject?.kind === "connection"
-            ? [CONNECTION_DRAFT_TOOL_NAME, CONNECTION_OFFER_TOOL_NAME]
-            : []),
-          ...appToolNames(input.hasTool),
-          ...(skillNames.length > 0 ? [READ_SKILL_TOOL] : [])
-        ]
-          .filter((toolName) => input.hasTool(toolName))
-          .concat(offeredRowTools.map((tool) => tool.name)),
+        toolNames,
         skillNames,
         ...(holds ? { orientation: PLATFORM_ORIENTATION } : {})
       };

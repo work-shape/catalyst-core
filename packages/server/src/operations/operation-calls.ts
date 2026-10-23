@@ -106,7 +106,11 @@ export function createOperationCalls(options: OperationCallsOptions): OperationC
     personalConversation: (id, runId) =>
       personalDataConversation(options.stores, clientInstanceId, id, runId),
     instanceDefaults: options.config.policy.defaults,
-    centralSettings: () => options.operations?.centralPolicySettings?.() ?? []
+    centralSettings: () => options.operations?.centralPolicySettings?.() ?? [],
+    // Read for each call that acts for a person, so a value set a moment ago holds at once.
+    personSetting: ({ userId, operation }) =>
+      options.stores.userOperationSettings.get({ clientInstanceId, userId, operation }),
+    alwaysAllowLocked: options.config.policy.alwaysAllow.locked
   };
   // The sentence a publish question opens with, the same for a read and a held publish. It
   // dry-evaluates runtime admission without executing a step, calling a model or keeping hits.

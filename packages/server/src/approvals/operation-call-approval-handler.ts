@@ -199,8 +199,16 @@ export function createOperationCallApprovalHandler(
             })
           : undefined;
       const target = z.object({ title: z.string() }).safeParse(store?.publishedConfig);
+      // A confirmation that waits offers "Always allow" where its call did (OP-6).
+      const waitingRun =
+        call.mode === "confirmation" && context.status === "pending"
+          ? await runsOf(context).get({ clientInstanceId, id: call.runId })
+          : undefined;
+      const alwaysAllow =
+        waitingRun?.status === "pending_confirmation" && waitingRun.offersAlwaysAllow === true;
       return toJsonObject({
         ...previewOf(call),
+        ...(alwaysAllow ? { alwaysAllow: true } : {}),
         ...(target.success ? { targetTitle: target.data.title } : {}),
         ...(asset ? { asset: outdated ? { ...asset, isStale: true } : asset } : {}),
         ...(review ? { review } : {})
