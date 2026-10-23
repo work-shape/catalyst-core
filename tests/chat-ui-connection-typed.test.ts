@@ -125,6 +125,20 @@ describe("the definition of a Connection of a type with a form", () => {
     expect(outcome.status).toBe("connected");
     expect(calls).toEqual(["assets.put(null)", "connections.set_secret(null)", "connections.test"]);
     expect(steps).toEqual(["server:running", "server:done", "key:done"]);
+
+    // A part that signs in after the connect (OAuth) is written and given its client secret;
+    // no test runs, as none can pass before the sign-in.
+    calls.length = 0;
+    steps.length = 0;
+    const signsIn = await connectConnection(
+      api,
+      { config: {}, url: "", key: SECRET, discovers: false, tests: false },
+      {},
+      (step, state) => steps.push(`${step}:${state}`)
+    );
+    expect(signsIn.status).toBe("connected");
+    expect(calls).toEqual(["assets.put(null)", "connections.set_secret(null)"]);
+    expect(steps).toEqual(["server:running", "server:done", "key:done"]);
   });
 });
 
