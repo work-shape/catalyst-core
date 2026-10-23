@@ -51,6 +51,9 @@ export { ConnectionCreateForm, createsPersonal, type CreateFields } from "./conn
 export { TypedConnectionCreate } from "./connection-typed-create";
 export * from "./connection-typed-model";
 export {
+  connectionDraftEntry,
+  connectionDraftForm,
+  isConnectionProposal,
   openConnectionDraft,
   readConnectionDraft,
   readConnectionProposal,

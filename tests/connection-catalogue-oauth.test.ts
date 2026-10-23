@@ -13,7 +13,7 @@ import {
 import { createConnectorTypeRegistry, type JsonValue } from "@work-shape/catalyst-core";
 import { releaseConnectionsConfigSchema } from "@work-shape/catalyst-config-schema";
 import { createConnectionAssetKind } from "@work-shape/catalyst-server";
-import { sampleResultShapers } from "../clients/demo/src/result-shapers";
+import { sampleResultShapers } from "@work-shape/catalyst-demo/result-shapers";
 import { required } from "./support/assertions";
 
 const directory = new URL("../clients/demo/catalogue", import.meta.url);

@@ -1,8 +1,3 @@
-import {
-  connectionDraftForm,
-  connectionDraftEntry,
-  isConnectionProposal
-} from "../packages/chat-ui/src/studio/build-area/connection-draft";
 import type { CatalogueEntryOffer } from "@work-shape/catalyst-chat-ui/build-area";
 import { createElement } from "react";
 import { describe, expect, it } from "vitest";
@@ -10,7 +5,10 @@ import { createTranslationContext } from "./support/chat-ui/shared";
 import {
   ConnectionCreateFlow,
   ConnectionDraftCardView,
+  connectionDraftEntry,
+  connectionDraftForm,
   connectionReadyMessage,
+  isConnectionProposal,
   openConnectionDraft,
   readConnectionProposal,
   type ConnectionDraft,
