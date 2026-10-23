@@ -386,7 +386,7 @@ function InboxDecisionForm({
   const commentRef = useRef<HTMLTextAreaElement>(null);
   const [commentMissing, setCommentMissing] = useState(false);
 
-  function decide(decision: InboxDecision) {
+  function decide(decision: InboxDecision, alwaysAllow = false) {
     const trimmed = comment.trim();
     if (decision === "request_changes") {
       if (!trimmed) {
@@ -397,21 +397,34 @@ function InboxDecisionForm({
       actions.decide({ decision, comment: trimmed });
       return;
     }
+    if (decision === "approve") {
+      actions.decide({
+        decision,
+        ...(trimmed ? { comment: trimmed } : {}),
+        ...(alwaysAllow ? { alwaysAllow: true as const } : {})
+      });
+      return;
+    }
     actions.decide({ decision, ...(trimmed ? { comment: trimmed } : {}) });
   }
+  // Accepting stands apart at the row's end: the first of its buttons takes the space before.
+  const firstApproval = decisions.findIndex((entry) => entry.decision === "approve");
+  const offersAlwaysAllow = decisions.some((entry) => entry.alwaysAllow);
 
-  const button = (entry: (typeof decisions)[number]): ReactNode => {
+  const button = (entry: (typeof decisions)[number], index: number): ReactNode => {
     const approves = entry.decision === "approve";
+    const key = entry.alwaysAllow ? "always_allow" : entry.decision;
     const decisionButton = (
       <Button
-        key={entry.decision}
+        key={key}
         size="sm"
-        variant={approves ? "primary" : "outline"}
+        variant={approves && !entry.alwaysAllow ? "primary" : "outline"}
         // Accepting stands apart at the row's end, so it is never hit in passing.
-        className={approves ? "ml-auto" : undefined}
+        className={index === firstApproval ? "ml-auto" : undefined}
         disabled={actions.pending || (approves && approveHeld)}
         data-decision={entry.decision}
-        onClick={() => decide(entry.decision)}
+        {...(entry.alwaysAllow ? { "data-always-allow": "" } : {})}
+        onClick={() => decide(entry.decision, entry.alwaysAllow === true)}
       >
         {t(entry.label)}
       </Button>
@@ -445,6 +458,9 @@ function InboxDecisionForm({
         />
       </Field>
       <div className="flex flex-wrap items-center gap-2">{decisions.map(button)}</div>
+      {offersAlwaysAllow ? (
+        <p className="text-caption text-muted-foreground">{t("confirm.alwaysAllowHint")}</p>
+      ) : null}
     </div>
   );
 }

@@ -345,6 +345,40 @@ describe("the confirmation card", () => {
   });
 });
 
+describe("Always allow on the confirmation card (OP-6)", () => {
+  const offered: ToolDecision = { ...waiting, alwaysAllow: true };
+
+  it("is offered only where the call offers it, and says it covers scheduled runs", () => {
+    expect(text(renderView(waiting))).not.toContain("Always allow");
+    const shown = text(renderView(offered));
+    expect(shown).toContain("Allow Always allow Deny");
+    expect(shown).toContain("Always allow also lets your scheduled runs do this without asking.");
+    expect(text(renderView(offered, {}, "de"))).toContain("Erlauben Immer erlauben Ablehnen");
+  });
+
+  it("sends Always allow with the confirmation, and says that it no longer asks", () => {
+    const decided = text(
+      renderView(offered, { decided: { decision: "confirm", alwaysAllow: true } })
+    );
+    expect(decided).toContain("Allowed. From now on this runs without asking you.");
+    expect(decided).not.toContain("Always allow Deny");
+  });
+
+  it("says when Always allow is no longer permitted, and decided nothing", () => {
+    const refused = new ApiError(403, "Always allow is not available for this call", {
+      error: {
+        code: "FORBIDDEN",
+        message: "Always allow is not available for this call",
+        details: { reason: "always_allow_not_permitted" }
+      }
+    });
+    expect(toolDecisionFailure(refused)).toBe("always_allow_refused");
+    expect(text(renderView(offered, { failure: "always_allow_refused" }))).toContain(
+      "Always allow is no longer available for this action. Allow or deny it this once."
+    );
+  });
+});
+
 describe("a tool call whose run waits for a decision", () => {
   function renderCall(
     parts: AgentRunProjection["parts"],

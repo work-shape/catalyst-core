@@ -51,6 +51,21 @@ const confirmNote = defineTool({
   execute: (input) => toolSuccess({ recorded: input.text })
 });
 
+// The same, and reversible (OP-6): its confirmation offers "Always allow".
+const ALWAYS_ALLOWABLE_TOOL = "e2e.confirm_reversible";
+
+const confirmReversible = defineTool({
+  name: ALWAYS_ALLOWABLE_TOOL,
+  effect: "changing",
+  changeClass: "reversible",
+  permission: { mode: "allow" },
+  description:
+    "Records a note once the person allows it, or always allows it. A fixture of the browser suite.",
+  inputSchema: z.object({ text: z.string().min(1) }),
+  outputSchema: z.object({ recorded: z.string() }),
+  execute: (input) => toolSuccess({ recorded: input.text })
+});
+
 const connectorSettings = z.object({ url: z.string().url().startsWith("https://") }).strict();
 
 // A Connector type for the suite's Connections. It contacts nothing: `test` answers ready and
@@ -142,7 +157,7 @@ const generalSkills: ClientInstanceCapability = {
 const client = defineClientInstance({
   rootDir: new URL("..", import.meta.url),
   resultShapers: sampleResultShapers,
-  tools: [...demoTools, recordNote, confirmNote],
+  tools: [...demoTools, recordNote, confirmNote, confirmReversible],
   connectorTypes: [testConnector, folderSourceConnector],
   // The demo's entry, and one of the suite's own that its config does not offer.
   catalogue: [
@@ -159,6 +174,7 @@ const app = await client.listen({
     centralPolicySettings: async () => [
       { operation: HELD_TOOL, value: "approval" },
       { operation: CONFIRMED_TOOL, value: "confirm" },
+      { operation: ALWAYS_ALLOWABLE_TOOL, value: "confirm" },
       ...(await heldSkillSaves(running.app, HELD_WORKSPACE))
     ]
   }

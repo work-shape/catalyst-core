@@ -64,7 +64,8 @@ const FAILURE: Record<ToolDecisionFailure, TranslationKey> = {
   failed: "toolDecisionFailed",
   already_decided: "toolDecisionAlreadyDecided",
   expired: "toolDecisionExpired",
-  not_yours: "toolDecisionNotYours"
+  not_yours: "toolDecisionNotYours",
+  always_allow_refused: "confirm.alwaysAllowRefused"
 };
 
 /**
@@ -324,7 +325,7 @@ export function ToolDecisionCardView({
           data-testid="tool-decision-outcome"
           data-outcome={outcome}
         >
-          {t(OUTCOME[outcome].label)}
+          {answer.decided?.alwaysAllow ? t("confirm.alwaysAllowed") : t(OUTCOME[outcome].label)}
           {outcome === "declined" && outcomeReason ? (
             <span className="block text-caption text-muted-foreground wrap-anywhere">
               {t("operations.callOutcomeReason", { reason: outcomeReason })}
@@ -381,6 +382,25 @@ export function ToolDecisionCardView({
             >
               {t("toolDecisionAllow")}
             </Button>
+            {/* Offered only where it would let the next call run (OP-6). */}
+            {decision.alwaysAllow ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={answer.pending || (ask !== undefined && !ask.ready)}
+                data-testid="tool-decision-always-allow"
+                onClick={() =>
+                  answer.decide({
+                    decision: "confirm",
+                    alwaysAllow: true,
+                    ...(ask?.audience === undefined ? {} : { audience: ask.audience })
+                  })
+                }
+              >
+                {t("confirm.alwaysAllow")}
+              </Button>
+            ) : null}
             <Button type="submit" size="sm" variant="outline" disabled={answer.pending}>
               {t("toolDecisionDeny")}
             </Button>
@@ -403,6 +423,9 @@ export function ToolDecisionCardView({
               {t("toolDecisionExpires", { date: formatApprovalDate(decision.expiresAt, locale) })}
             </span>
           </div>
+          {decision.alwaysAllow ? (
+            <p className="text-caption text-muted-foreground">{t("confirm.alwaysAllowHint")}</p>
+          ) : null}
           {answer.failure ? (
             <p role="alert" className="text-caption text-destructive">
               {t(FAILURE[answer.failure])}

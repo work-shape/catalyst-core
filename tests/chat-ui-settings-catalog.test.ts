@@ -49,7 +49,7 @@ function resolve(
   });
 }
 
-const you = ["you/profile", "you/language-appearance", "you/security"];
+const you = ["you/profile", "you/language-appearance", "you/security", "you/confirmations"];
 const workspace = ["workspace/general", "workspace/members"];
 const instance = [
   "instance/users",
@@ -162,7 +162,8 @@ describe("Settings catalog", () => {
   it("leaves Security out where the password is kept elsewhere", () => {
     expect(pageIds(viewer({ authSource: "oidc" }))).toEqual([
       "you/profile",
-      "you/language-appearance"
+      "you/language-appearance",
+      "you/confirmations"
     ]);
   });
 

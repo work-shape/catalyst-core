@@ -33,9 +33,11 @@ export interface ToolDecisionInputRow {
  * Why an answer was not taken. `already_decided`: the call was decided otherwise first, in
  * another tab, and may have run. `expired`: the server says its time ran out before the
  * answer arrived, so nothing ran. `not_yours`: only the person the run acts for decides, and
- * the server answers anybody else that it knows no such call.
+ * the server answers anybody else that it knows no such call. `always_allow_refused`: the
+ * admin no longer permits "Always allow" for the call (OP-6); nothing was decided.
  */
-export type ToolDecisionFailure = "failed" | "already_decided" | "expired" | "not_yours";
+export type ToolDecisionFailure =
+  "failed" | "already_decided" | "expired" | "not_yours" | "always_allow_refused";
 
 /**
  * The failure of an answer the server refused. Only the server's own reason makes a conflict
@@ -48,6 +50,9 @@ export function toolDecisionFailure(error: unknown): ToolDecisionFailure | undef
       ? "expired"
       : "already_decided";
   }
+  if (error instanceof ApiError && conflictReason(error.payload) === ALWAYS_ALLOW_REFUSED) {
+    return "always_allow_refused";
+  }
   // The server answers a call of another person's run as one it does not know.
   if (
     error instanceof ApiError &&
@@ -57,6 +62,9 @@ export function toolDecisionFailure(error: unknown): ToolDecisionFailure | undef
   }
   return "failed";
 }
+
+/** The server's reason where "Always allow" is not, or no longer, permitted. */
+const ALWAYS_ALLOW_REFUSED = "always_allow_not_permitted";
 
 function conflictReason(payload: unknown): unknown {
   const error = isRecord(payload) ? payload.error : undefined;

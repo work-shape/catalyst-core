@@ -188,6 +188,8 @@ tools:
     enabled: true
   - name: e2e.confirm_note
     enabled: true
+  - name: e2e.confirm_reversible
+    enabled: true
 ui:
   clientName: E2E Customer
   title: Workshape Catalyst E2E
