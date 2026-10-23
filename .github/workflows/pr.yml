@@ -24,9 +24,8 @@ defaults:
     shell: bash
 jobs:
   check:
-    # Every runner with this label takes PR checks, several on one machine side by side. A job
-    # runs 4 test files at once, so two fit the Mini's 10 cores; a runner's own .env may set
-    # CATALYST_TEST_WORKERS to another share of its machine.
+    # Every runner with this label takes PR checks: one per machine, since a check uses all of
+    # its cores (two side by side on the Mini doubled every test's time and hit test deadlines).
     runs-on: [self-hosted, catalyst-check]
     timeout-minutes: 45
     steps:
@@ -70,14 +69,14 @@ jobs:
         timeout-minutes: 5
         env:
           TOKEN: ${{ github.token }}
-        # A database of this job's own, on a free port, so checks can run side by side.
+        # A database of this run's own, on a free port: a container a crashed run left behind
+        # never blocks the next one.
         # 127.0.0.1, not localhost: Colima forwards a published port on IPv4 only, and a Data
         # Store dials the first address localhost resolves to, which on macOS is ::1.
         run: |
           name="pr-postgres-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           port=$(node -e 'const s = require("net").createServer().listen(0, "127.0.0.1", () => { console.log(s.address().port); s.close(); })')
           echo "CHECK_POSTGRES_NAME=$name" >> "$GITHUB_ENV"
-          echo "CATALYST_TEST_WORKERS=${CATALYST_TEST_WORKERS:-4}" >> "$GITHUB_ENV"
           echo "POSTGRES_STORE_TEST_DATABASE_URL=postgresql://catalyst:local-check@127.0.0.1:$port/catalyst_test" >> "$GITHUB_ENV"
           docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin <<<"$TOKEN"
           CHECK_POSTGRES_NAME="$name" .github/scripts/start-postgres.sh catalyst local-check catalyst_test "$port"
