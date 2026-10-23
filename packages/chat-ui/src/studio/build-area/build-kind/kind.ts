@@ -3,7 +3,7 @@ import type { AvatarKind, GenericIconKey } from "@work-shape/catalyst-ui";
 import type { TranslationKey } from "../../../shared/i18n";
 import type { BuildWithAgentCopy } from "../../build-with-agent-empty";
 import type { BuildAsset, BuildAssetRow } from "./asset";
-import type { BuildCreateDialogProps } from "./create-dialog-props";
+import type { BuildCreateDialogProps, BuildImportDialogProps } from "./create-dialog-props";
 import type { BuildAssetEditorProps, BuildPageSlot } from "./editor-props";
 import type { BuildListLead, BuildListLeadFilter } from "./list-lead";
 
@@ -95,6 +95,11 @@ export interface BuildAssetKind extends BuildKindBase {
    * the frame's dialog.
    */
   CreateDialog?: ComponentType<BuildCreateDialogProps>;
+  /**
+   * The kind's dialog that imports an asset from files, such as a skill's folder or .zip, and
+   * the label of the list's action that opens it. Shown to whoever may create one of the kind.
+   */
+  importDialog?: { label: TranslationKey; Dialog: ComponentType<BuildImportDialogProps> };
   /**
    * A new asset is available in the shared workspace it is made in: the dialog that starts
    * it says where, and offers every workspace to whoever may change that.

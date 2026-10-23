@@ -229,8 +229,20 @@ export function withStoredHashes(
  * Every file has to be read first.
  */
 export function skillFormToFolder(form: SkillFormState): AssetFileWrite[] {
+  return [
+    { path: SKILL_ROOT_FILE_NAME, text: skillManifest(form) },
+    ...form.files.map((file): AssetFileWrite =>
+      file.text !== undefined
+        ? { path: file.path, text: file.text }
+        : { path: file.path, base64: file.base64 ?? "" }
+    )
+  ];
+}
+
+/** `SKILL.md` as a save of the form writes it, made from the form's fields. */
+export function skillManifest(form: SkillFormState): string {
   const summary = form.summary.trim();
-  const manifest = formatSkillMarkdown({
+  return formatSkillMarkdown({
     name: form.name.trim(),
     title: form.title.trim(),
     description: form.description.trim(),
@@ -243,14 +255,6 @@ export function skillFormToFolder(form: SkillFormState): AssetFileWrite[] {
       ...form.frontmatter
     }
   });
-  return [
-    { path: SKILL_ROOT_FILE_NAME, text: manifest },
-    ...form.files.map((file): AssetFileWrite =>
-      file.text !== undefined
-        ? { path: file.path, text: file.text }
-        : { path: file.path, base64: file.base64 ?? "" }
-    )
-  ];
 }
 
 /** Where a file lies: one of the three folders and its name in it, or the root. */

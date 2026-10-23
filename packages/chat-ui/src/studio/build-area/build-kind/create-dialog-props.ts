@@ -1,4 +1,5 @@
-import type { CheckName } from "../../../shared/api/asset-writes";
+import type { AssetFileWrite, CheckName } from "../../../shared/api/asset-writes";
+import type { BuildWriteOutcome } from "../build-refusals";
 
 /**
  * What the frame hands a kind's own dialog for a new asset, in place of the one that asks for
@@ -23,4 +24,20 @@ export interface BuildCreateDialogProps {
    * page is open, such as opening the chat beside it.
    */
   onCreated(name: string, then?: () => void): void;
+}
+
+/**
+ * What the frame hands a kind's dialog that imports an asset from files, beside New: the
+ * check of the name, the create of the asset with its whole folder, and the way to its page.
+ */
+export interface BuildImportDialogProps {
+  /** Asks the instance whether the asset could take the name, as it is typed. */
+  checkName: CheckName;
+  /** Creates the asset with its whole folder where Studio makes one, as a save of its page. */
+  create(input: { name: string; files: readonly AssetFileWrite[] }): Promise<BuildWriteOutcome>;
+  /** The name people read of the asset that holds `name`, read now. Undefined where it cannot be. */
+  titleOf(name: string): Promise<string | undefined>;
+  onClose(): void;
+  /** Closes the dialog and opens the page of the asset: the one it made, or one that exists. */
+  onOpen(name: string): void;
 }
