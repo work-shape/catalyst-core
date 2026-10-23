@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { connectionConfigSchema } from "@work-shape/catalyst-config-schema";
 import {
-  SHARED_CREDENTIAL_SUBJECT,
   StoreBackedAuditRecorder,
   endConnectionSignIn,
   type AuditActor,
@@ -17,6 +16,7 @@ import {
   type EgressChecker,
   type Logger
 } from "@work-shape/catalyst-core";
+import { bindingAuditSubject } from "../personal-bindings";
 import type { StoredConnection } from "../connection-reads";
 import { connectionOriginOf } from "../connector-context";
 import {
@@ -74,22 +74,52 @@ export function createSignInEnding(deps: SignInEndingDeps): ConnectionSignInEndi
     async end(stores, input) {
       const key = { clientInstanceId, connectionAssetId: input.connectionAssetId };
       const store = stores.connections;
-      const binding = await store.getConnectionBinding({
-        ...key,
-        subject: SHARED_CREDENTIAL_SUBJECT
-      });
-      let revocable: Revocable | undefined;
-      if (binding !== undefined && binding.state !== "revoked") {
-        // Best effort: what cannot be read is not revoked at the provider, and the sign-in
-        // ends on the instance all the same.
-        revocable = await readRevocable(input, binding, store).catch(() => undefined);
+      // Only owner Disconnect may open a personal token. Config/admin paths remove all
+      // personal token sets locally and record their end after the enclosing commit.
+      const bindings =
+        input.subject === undefined
+          ? await store.listConnectionBindings(key)
+          : [await store.getConnectionBinding({ ...key, subject: input.subject })].filter(
+              (binding): binding is ConnectionBindingRecord => binding !== undefined
+            );
+      const endings: ConnectionSignInEnded[] = [];
+      for (const binding of bindings) {
+        const personal = binding.subject.startsWith("user:");
+        const ownerDisconnect =
+          input.reason === "disconnect" &&
+          input.subject === binding.subject &&
+          personal &&
+          input.actor?.userId === binding.userId;
+        const localOnly = personal && !ownerDisconnect;
+        const revocable =
+          binding.state === "revoked" || localOnly
+            ? undefined
+            : await readRevocable(input, binding, store).catch(() => undefined);
+        const ended = await endConnectionSignIn(
+          store,
+          { ...key, subject: binding.subject },
+          {
+            reason: input.reason,
+            ...(input.actor?.userId === undefined ? {} : { changedBy: input.actor.userId })
+          }
+        );
+        if (ended !== undefined)
+          endings.push(endedSignIn(input, binding.subject, revocable, localOnly));
       }
-      const ended = await endConnectionSignIn(store, key, {
-        reason: input.reason,
-        ...(input.actor?.userId === undefined ? {} : { changedBy: input.actor.userId })
-      });
-      if (ended === undefined) return undefined;
-      return endedSignIn(input, revocable);
+      if (endings.length === 0) return undefined;
+      return {
+        async revokeAtProvider() {
+          const outcomes = await Promise.all(endings.map((ended) => ended.revokeAtProvider()));
+          return outcomes.includes("failed")
+            ? "failed"
+            : outcomes.includes("confirmed")
+              ? "confirmed"
+              : "not_offered";
+        },
+        discard() {
+          for (const ended of endings) ended.discard();
+        }
+      };
     }
   };
 
@@ -151,12 +181,15 @@ export function createSignInEnding(deps: SignInEndingDeps): ConnectionSignInEndi
 
   function endedSignIn(
     input: Parameters<ConnectionSignInEnding["end"]>[1],
-    read: Revocable | undefined
+    subject: string,
+    read: Revocable | undefined,
+    localOnly: boolean
   ): ConnectionSignInEnded {
     let revocable = read;
     let answered: Promise<ConnectionProviderRevocation> | undefined;
 
     async function ask(): Promise<ConnectionProviderRevocation> {
+      if (localOnly) return "not_offered";
       const held = revocable;
       revocable = undefined;
       if (held === undefined) return "failed";
@@ -200,7 +233,7 @@ export function createSignInEnding(deps: SignInEndingDeps): ConnectionSignInEndi
           metadata: {
             connectionName: input.connectionName,
             connectionRevision: input.connectionRevision,
-            subjectKind: SHARED_CREDENTIAL_SUBJECT,
+            ...bindingAuditSubject(subject),
             providerRevocation
           }
         });

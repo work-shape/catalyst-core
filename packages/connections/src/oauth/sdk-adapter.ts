@@ -121,6 +121,7 @@ function sdkClient(client: OAuthClient): OAuthClientInformationMixed {
 
 function tokenSetOf(tokens: OAuthTokens): OAuthTokenSet {
   return {
+    ...(typeof tokens.id_token === "string" ? { idToken: tokens.id_token } : {}),
     accessToken: tokens.access_token,
     tokenType: tokens.token_type,
     ...(tokens.expires_in === undefined ? {} : { expiresIn: tokens.expires_in }),

@@ -1,3 +1,4 @@
+import { createPersonalConnectionManagement } from "./personal-management";
 import type { Catalogue, CatalogueEntryView } from "./catalogue/catalogue";
 import {
   AppError,
@@ -159,9 +160,10 @@ export interface AgentToolListing {
   toolNames: readonly string[];
 }
 
-export interface ConnectionManagement extends ReturnType<
-  typeof createConnectionPersonContextManagement
-> {
+export interface ConnectionManagement
+  extends
+    ReturnType<typeof createConnectionPersonContextManagement>,
+    ReturnType<typeof createPersonalConnectionManagement> {
   /** What a right on the Connection is decided on. Nothing where no such Connection exists. */
   resource(name: string): Promise<OperationResource | undefined>;
   /** `agents` are the agents the caller may read: `usedBy` names no other. */
@@ -340,6 +342,7 @@ export function createConnectionManagement(
     connection: StoredConnection,
     origin: string | undefined
   ): Promise<ConnectionBindingView | undefined> {
+    if (connection.config.credentialMode === "user") return undefined;
     const binding = await deps.stores.connections.getConnectionBinding({
       clientInstanceId: deps.clientInstanceId,
       connectionAssetId: connection.assetId,
@@ -406,6 +409,7 @@ export function createConnectionManagement(
 
   return {
     ...createConnectionPersonContextManagement(deps),
+    ...createPersonalConnectionManagement(deps),
     async resource(name) {
       const connection = await readConnection(deps, name);
       return connection ? resourceOf(connection) : undefined;
@@ -470,6 +474,7 @@ export function createConnectionManagement(
         // The one way to a context: settings, then egress, then the credential.
         const context = await openConnectorContext({
           type,
+          ...(actor === undefined ? {} : { actor }),
           connection: {
             id: connection.assetId,
             revision: connection.revision,
@@ -604,6 +609,12 @@ export function createConnectionManagement(
           connectionRevision: connection.revision,
           config: connection.config,
           reason: "disconnect",
+          subject:
+            connection.config.credentialMode === "user"
+              ? audit.actor.userId === undefined
+                ? "user:"
+                : `user:${audit.actor.userId}`
+              : SHARED_CREDENTIAL_SUBJECT,
           actor: audit.actor,
           correlationId: audit.correlationId
         });

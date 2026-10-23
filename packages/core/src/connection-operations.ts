@@ -1,3 +1,4 @@
+import type { ConnectionCredentialMode } from "@work-shape/catalyst-asset-schemas";
 import { CONNECTION_OPERATION_STATUSES } from "@work-shape/catalyst-asset-schemas";
 import {
   CONNECTION_NAME_MAX_LENGTH,
@@ -85,7 +86,7 @@ export function exposureOfOrigin(origin: OperationOrigin): ConnectionExposure | 
  * The mode of a Connection's credential: `shared`, one credential for everyone who may use it,
  * or `user`, a personal connection on which each person acts with their own account (CS-9).
  */
-export type ConnectionCredentialMode = "shared" | "user";
+export type { ConnectionCredentialMode } from "@work-shape/catalyst-asset-schemas";
 
 /** The only exposure a personal connection accepts: its owner's token is used in an agent run. */
 const PERSONAL_CONNECTION_EXPOSURE: ConnectionExposure = "agent";

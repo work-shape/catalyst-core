@@ -655,6 +655,10 @@ export const CONNECTOR_TEST_STATUSES = [
 ] as const;
 export type ConnectorTestStatus = (typeof CONNECTOR_TEST_STATUSES)[number];
 
+/** Shared account, or the acting person's own account. */
+export const CONNECTION_CREDENTIAL_MODES = ["shared", "user"] as const;
+export type ConnectionCredentialMode = (typeof CONNECTION_CREDENTIAL_MODES)[number];
+
 /**
  * The state of a Connection's sign-in. `connected`: calls use it. `needs_reconnect`: the
  * outside system refused it and a new sign-in is needed. `revoked`: someone disconnected it,

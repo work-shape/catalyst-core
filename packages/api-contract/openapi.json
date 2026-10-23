@@ -5385,25 +5385,19 @@
     "/api/v1/connections/{name}/disconnect": {
       "post": {
         "operationId": "connections.disconnect",
-        "summary": "End the shared OAuth sign-in of one Connection. Its tokens are deleted, then the provider is asked to revoke the grant",
+        "summary": "End the OAuth sign-in of one Connection. Its tokens are deleted, then the provider is asked to revoke the grant",
         "tags": [
           "Connections"
         ],
         "security": [
           {
-            "sessionCookie": [
-              "config_assets:write"
-            ]
+            "sessionCookie": []
           },
           {
-            "sessionToken": [
-              "config_assets:write"
-            ]
+            "sessionToken": []
           },
           {
-            "accessToken": [
-              "config_assets:write"
-            ]
+            "accessToken": []
           }
         ],
         "parameters": [
@@ -5790,20 +5784,16 @@
     "/api/v1/connections/{name}/oauth/sign-ins/{signInId}": {
       "get": {
         "operationId": "connections.oauth_sign_in",
-        "summary": "Read whether a shared OAuth sign-in the caller started still waits for the browser to come back",
+        "summary": "Read whether an OAuth sign-in the caller started still waits for the browser to come back",
         "tags": [
           "Connections"
         ],
         "security": [
           {
-            "sessionCookie": [
-              "config_assets:read"
-            ]
+            "sessionCookie": []
           },
           {
-            "sessionToken": [
-              "config_assets:read"
-            ]
+            "sessionToken": []
           }
         ],
         "parameters": [
@@ -5881,20 +5871,16 @@
     "/api/v1/connections/{name}/oauth/start": {
       "post": {
         "operationId": "connections.oauth_start",
-        "summary": "Start the shared OAuth sign-in of one Connection. The answer is the address to open in the person's browser",
+        "summary": "Start the OAuth sign-in of one Connection. The answer is the address to open in the person's browser",
         "tags": [
           "Connections"
         ],
         "security": [
           {
-            "sessionCookie": [
-              "config_assets:write"
-            ]
+            "sessionCookie": []
           },
           {
-            "sessionToken": [
-              "config_assets:write"
-            ]
+            "sessionToken": []
           }
         ],
         "parameters": [
@@ -5979,6 +5965,258 @@
           },
           "409": {
             "$ref": "#/components/responses/ConflictOrIdempotencyKeyReusedOrOperationInProgressOrOutputNotRetained"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "changing",
+        "x-catalyst-rate-class": "write"
+      }
+    },
+    "/api/v1/connections/{name}/people": {
+      "get": {
+        "operationId": "connections.people",
+        "summary": "List personal sign-ins; requires Connection write access",
+        "tags": [
+          "Connections"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "config_assets:write"
+            ]
+          },
+          {
+            "sessionToken": [
+              "config_assets:write"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "people": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "state": {
+                            "type": "string",
+                            "enum": [
+                              "not_connected",
+                              "connected",
+                              "needs_reconnect",
+                              "revoked"
+                            ]
+                          },
+                          "account": {
+                            "type": "string"
+                          },
+                          "connectedAt": {
+                            "$ref": "#/components/schemas/Timestamp"
+                          },
+                          "lastUsedOn": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          },
+                          "userId": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "state",
+                          "userId"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "people"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlocked"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-rate-class": "read"
+      }
+    },
+    "/api/v1/connections/{name}/people/{userId}": {
+      "delete": {
+        "operationId": "connections.revoke_person",
+        "summary": "Revoke a personal sign-in locally without contacting the provider",
+        "tags": [
+          "Connections"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "config_assets:write"
+            ]
+          },
+          {
+            "sessionToken": [
+              "config_assets:write"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A key the caller chooses for one changing call, up to 255 characters. The same key with the same input answers what the first call answered instead of acting twice. A key belongs to its caller: another caller's same key is another call.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
+          },
+          {
+            "name": "Catalyst-Unattended",
+            "in": "header",
+            "description": "`1` on a call of an API credential when nobody watches its terminal, such as `catalyst <kind> publish --yes`. The call is then not its caller's own confirmation: a call that needs one waits in the caller's Inbox and answers `202` with its run, status `pending_confirmation`. It only ever makes a call stricter; a browser session's call ignores it.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "state": {
+                      "type": "string",
+                      "const": "revoked"
+                    }
+                  },
+                  "required": [
+                    "state"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "202": {
+            "description": "The call waits for somebody else to approve it. This is its Operation Run; read it again at `Location`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationRun"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Location": {
+                "$ref": "#/components/headers/Location"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlockedOrDeclined"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictOrIdempotencyKeyReusedOrOperationInProgressOrOperationExpiredOrOutputNotRetained"
           },
           "422": {
             "$ref": "#/components/responses/ValidationFailed"
@@ -24076,6 +24314,134 @@
         },
         "x-catalyst-effect": "changing",
         "x-catalyst-rate-class": "auth"
+      }
+    },
+    "/api/v1/me/connections": {
+      "get": {
+        "operationId": "connections.mine",
+        "summary": "List usable personal Connections with only the caller's binding",
+        "tags": [
+          "Connections"
+        ],
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "sessionToken": []
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "connections": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "state": {
+                            "type": "string",
+                            "enum": [
+                              "not_connected",
+                              "connected",
+                              "needs_reconnect",
+                              "revoked"
+                            ]
+                          },
+                          "account": {
+                            "type": "string"
+                          },
+                          "connectedAt": {
+                            "$ref": "#/components/schemas/Timestamp"
+                          },
+                          "lastUsedOn": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "service": {
+                            "type": "string"
+                          },
+                          "catalogue": {
+                            "type": "object",
+                            "properties": {
+                              "entry": {
+                                "type": "string"
+                              },
+                              "part": {
+                                "type": "string",
+                                "enum": [
+                                  "tools",
+                                  "source"
+                                ]
+                              },
+                              "version": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              }
+                            },
+                            "required": [
+                              "entry",
+                              "part",
+                              "version"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "state",
+                          "name",
+                          "title"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "connections"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlocked"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-rate-class": "read"
       }
     },
     "/api/v1/me/model-preference": {

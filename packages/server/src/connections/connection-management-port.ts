@@ -1,5 +1,7 @@
 import type {
   ConnectionDetail,
+  PersonalConnections,
+  ConnectionPeople,
   ConnectionPersonContext,
   ConnectionOAuthStart,
   ConnectionSecretState,
@@ -14,6 +16,7 @@ import type {
   AuditActor,
   AuditRecorder,
   ConnectionProviderRevocation,
+  ConnectionCredentialMode,
   OperationResource,
   PlatformStores
 } from "@work-shape/catalyst-core";
@@ -68,6 +71,17 @@ interface ConnectionDiscoveryAttempt {
  * `connections` is on. It answers no secret, no handle and no data of an outside system.
  */
 export interface ConnectionManagementPort {
+  credentialMode(name: string): Promise<ConnectionCredentialMode>;
+  myConnections(
+    userId: string,
+    usable: (resource: OperationResource) => boolean
+  ): Promise<PersonalConnections>;
+  connectionPeople(name: string): Promise<ConnectionPeople>;
+  revokePerson(
+    name: string,
+    userId: string,
+    audit: { actor: AuditActor; correlationId: string }
+  ): Promise<{ state: "revoked" }>;
   getPersonContext(
     name: string,
     subject: ConnectionPersonContextSubject
@@ -138,6 +152,7 @@ export interface ConnectionManagementPort {
     query: { state?: string; code?: string; error?: string; iss?: string };
     completer: { userId: string; firstPartySessionId: string | undefined } | undefined;
     mayWrite(resource: OperationResource): boolean;
+    mayUse?(resource: OperationResource): boolean;
     audit: ConnectionSignInAudit;
     signal?: AbortSignal;
   }): Promise<{ location: string; connectionName: string }>;
