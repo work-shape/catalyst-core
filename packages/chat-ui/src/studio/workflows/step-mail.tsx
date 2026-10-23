@@ -107,7 +107,7 @@ export function useMailBrand(): { name: string; mark?: ReactNode } | undefined {
 /** Who the mail is from, with the sender's icon. */
 export function mailFrom(mail: WorkflowMailView, translation: Translation) {
   return {
-    name: mail.senderName ?? mail.senderTitle ?? translation.t("workflows.mail.systemSender"),
+    name: mail.senderName ?? mail.senderTitle ?? translation.t("workflows.mail.systemSenderLabel"),
     ...(mail.senderAddress === undefined ? {} : { address: mail.senderAddress }),
     icon: <RegistryIcon name={mail.icon} fallback={MAIL_ICON_FALLBACK} />
   };
