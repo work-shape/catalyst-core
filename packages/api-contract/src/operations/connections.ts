@@ -308,6 +308,11 @@ export const connectorTypeOffersSchema = z.object({
               z.object({ text: localizedTextSchema, value: z.string().optional() })
             ),
             hosts: z.array(z.string()),
+            /**
+             * For an OAuth part: the instance's redirect URI for the part's fixed name, to
+             * register at the provider. Missing while release config sets no public address.
+             */
+            redirectUri: z.string().optional(),
             operations: z.array(
               z.object({
                 name: z.string(),

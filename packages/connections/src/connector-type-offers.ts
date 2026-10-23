@@ -28,20 +28,34 @@ export interface ConnectorTypeOfferView {
   fields: ConnectorFormFieldView[];
 }
 
+/** An entry as the dialog reads it: an OAuth part also names the redirect URI to register. */
+export type CatalogueEntryOfferView = Omit<CatalogueEntryView, "parts"> & {
+  parts: (CatalogueEntryView["parts"][number] & { redirectUri?: string })[];
+};
+
 /**
  * The types of the build that declare a form, by type id, and the catalogue's entries. A type
  * without a form, such as `mcp` and `http_api` with their own dialog, is not listed. The
- * dialog shows an entry's card in place of the card of a type the entry names.
+ * dialog shows an entry's card in place of the card of a type the entry names. An OAuth part
+ * names the instance's redirect URI for its fixed name, so its checklist shows the exact value
+ * the sign-in will send; nothing where the instance has no public address.
  */
 export function connectorTypeOffers(
   registry: ConnectorTypeRegistry,
-  catalogue?: Pick<Catalogue, "entries">
+  catalogue?: Pick<Catalogue, "entries">,
+  redirectUri?: (connectionName: string) => string | undefined
 ): {
   types: ConnectorTypeOfferView[];
-  entries: CatalogueEntryView[];
+  entries: CatalogueEntryOfferView[];
 } {
   return {
-    entries: [...(catalogue?.entries ?? [])],
+    entries: (catalogue?.entries ?? []).map((entry) => ({
+      ...entry,
+      parts: entry.parts.map((part) => {
+        const redirect = part.authScheme === "oauth" ? redirectUri?.(part.name) : undefined;
+        return redirect === undefined ? part : { ...part, redirectUri: redirect };
+      })
+    })),
     types: registry.types
       .flatMap((definition) => {
         const { form } = definition;
