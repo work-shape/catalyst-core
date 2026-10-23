@@ -1,5 +1,5 @@
 import { createPersonalConnectionManagement } from "./personal-management";
-import type { Catalogue, CatalogueEntryView } from "./catalogue/catalogue";
+import type { Catalogue } from "./catalogue/catalogue";
 import {
   AppError,
   CONNECTION_ASSET_KIND,
@@ -27,7 +27,11 @@ import {
   type OperationPaging,
   type SecretState
 } from "@work-shape/catalyst-core";
-import { connectorTypeOffers, type ConnectorTypeOfferView } from "./connector-type-offers";
+import {
+  connectorTypeOffers,
+  type CatalogueEntryOfferView,
+  type ConnectorTypeOfferView
+} from "./connector-type-offers";
 import {
   createConnectionPersonContextManagement,
   resolveConnectionPersonContext
@@ -186,7 +190,7 @@ export interface ConnectionManagement
    * The Connector types of the build that the New connection dialog offers with a form, and
    * the catalogue's entries.
    */
-  connectorTypes(): { types: ConnectorTypeOfferView[]; entries: CatalogueEntryView[] };
+  connectorTypes(): { types: ConnectorTypeOfferView[]; entries: CatalogueEntryOfferView[] };
   /**
    * Stores the shared secret of a Connection made on the instance, as the next version. The
    * value is written once and never read back. `expectedVersion` is the version the writer
@@ -640,7 +644,8 @@ export function createConnectionManagement(
         ? undefined
         : signInLandingUrl(deps.publicUrl, outcome, connectionName),
 
-    connectorTypes: () => connectorTypeOffers(deps.connectorTypes, deps.catalogue),
+    connectorTypes: () =>
+      connectorTypeOffers(deps.connectorTypes, deps.catalogue, (name) => signIn.redirectUri(name)),
 
     async listTools(readable) {
       const connections = (await readConnections(deps))
