@@ -7329,6 +7329,9 @@
                                     "type": "string"
                                   }
                                 },
+                                "redirectUri": {
+                                  "type": "string"
+                                },
                                 "operations": {
                                   "type": "array",
                                   "items": {

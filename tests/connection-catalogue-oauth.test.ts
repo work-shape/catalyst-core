@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { parse as parseYaml } from "yaml";
 import {
+  connectorTypeOffers,
   createCatalogue,
   createHttpApiConnectorType,
   expandCataloguePart,
@@ -142,6 +143,17 @@ describe("OAuth catalogue parts", () => {
         value.tools.credentialModes = ["shared"];
       })
     ).toThrow("default credential mode");
+  });
+
+  it("names the instance's redirect URI for an OAuth part's fixed name, and none without a public address", () => {
+    const callback = (name: string) =>
+      `https://chat.example.test/api/v1/connections/${name}/oauth/callback`;
+    const offered = connectorTypeOffers(registry(), catalogue(), callback);
+    expect(offered.entries[0]?.parts[0]?.redirectUri).toBe(
+      "https://chat.example.test/api/v1/connections/sample-oauth/oauth/callback"
+    );
+    const unnamed = connectorTypeOffers(registry(), catalogue(), () => undefined);
+    expect(unnamed.entries[0]?.parts[0]).not.toHaveProperty("redirectUri");
   });
 
   it("withholds a part whose shaper is unregistered, just as an unregistered type", () => {
