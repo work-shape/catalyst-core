@@ -1,4 +1,5 @@
 import { editingFormsEntries } from "./editing-forms";
+import { mailFormEntries } from "./mail";
 import { Search, Send } from "lucide-react";
 import { useState } from "react";
 import { Button } from "../actions/button";
@@ -243,6 +244,7 @@ export const formsGallery: GalleryGroup = {
   id: "forms",
   entries: [
     ...editingFormsEntries,
+    ...mailFormEntries,
     {
       name: "Input",
       components: ["Input"],

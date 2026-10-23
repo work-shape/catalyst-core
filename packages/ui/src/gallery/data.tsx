@@ -28,6 +28,7 @@ import { Samples, type GalleryGroup } from "./entry";
 import { EmptyState } from "../feedback/empty-state";
 import { Avatar } from "../status/avatar";
 import { chartGalleryEntry } from "./chart";
+import { mailPreviewEntry } from "./mail";
 import { levelMeterGalleryEntry } from "./level-meter";
 import { stepsGalleryEntry } from "./steps";
 import type { GalleryText } from "./text";
@@ -558,6 +559,7 @@ export const dataGallery: GalleryGroup = {
         </div>
       )
     },
+    mailPreviewEntry,
     {
       name: "CodeBlock",
       components: ["CodeBlock", "CodeFile", "CommandLine"],

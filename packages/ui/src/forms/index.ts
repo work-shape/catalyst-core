@@ -52,3 +52,18 @@ export {
   type ScheduleValue,
   type ScheduleWeekday
 } from "./schedule-field";
+export {
+  RecipientField,
+  type RecipientDirectoryEntry,
+  type RecipientFieldProps,
+  type RecipientItem,
+  type RecipientKind
+} from "./recipient-field";
+export {
+  TemplateText,
+  TemplateTextField,
+  normalizeTemplateParts,
+  type TemplatePart,
+  type TemplateTextFieldProps,
+  type TemplateTextProps
+} from "./template-text-field";

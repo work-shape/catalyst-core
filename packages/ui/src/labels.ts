@@ -109,6 +109,32 @@ export interface UiLabels {
   moreActions: string;
   /** The button of a `LoadError` that reads again what could not be loaded. */
   tryAgain: string;
+  /** The rows of a `MailPreview`. */
+  mailFrom: string;
+  mailTo: string;
+  mailCc: string;
+  mailBcc: string;
+  mailSubject: string;
+  /** Before the subject of a test mail, which went to the tester alone. */
+  mailTestPrefix: string;
+  /** Over the list of whom a test mail would have reached. */
+  mailTestIntended: string;
+  /** In a `MailPreview` that has no mail yet. */
+  mailEmpty: string;
+  /** What a `RecipientField` chip is, said to someone who does not see its icon. */
+  recipientPerson: string;
+  recipientWorkspace: string;
+  recipientAddress: string;
+  /** The button of a `RecipientField` that picks people and workspaces. */
+  recipientAdd: string;
+  recipientPeople: string;
+  recipientWorkspaces: string;
+  /** What the typing place of a `RecipientField` takes. */
+  recipientTypeAddress: string;
+  /** Under a `RecipientField` whose value from a step takes the field alone. */
+  recipientPickedAlone: string;
+  /** The button of a `TemplateTextField` and a `RecipientField` that puts in a value of a step. */
+  insertValue: string;
 }
 
 export const uiLabelsEn: UiLabels = {
@@ -200,7 +226,24 @@ export const uiLabelsEn: UiLabels = {
   onThisPage: "On this page",
   sectionHasError: "Has an error",
   moreActions: "More actions",
-  tryAgain: "Try again"
+  tryAgain: "Try again",
+  mailFrom: "From",
+  mailTo: "To",
+  mailCc: "Cc",
+  mailBcc: "Bcc",
+  mailSubject: "Subject",
+  mailTestPrefix: "[Test]",
+  mailTestIntended: "Would have gone to",
+  mailEmpty: "No mail to show yet.",
+  recipientPerson: "Person",
+  recipientWorkspace: "Workspace",
+  recipientAddress: "Address",
+  recipientAdd: "Add people",
+  recipientPeople: "People",
+  recipientWorkspaces: "Workspaces",
+  recipientTypeAddress: "Type an address",
+  recipientPickedAlone: "A value from a step takes this field alone.",
+  insertValue: "Insert a value"
 };
 
 export const uiLabelsDe: UiLabels = {
@@ -292,5 +335,22 @@ export const uiLabelsDe: UiLabels = {
   onThisPage: "Auf dieser Seite",
   sectionHasError: "Enthält einen Fehler",
   moreActions: "Weitere Aktionen",
-  tryAgain: "Erneut versuchen"
+  tryAgain: "Erneut versuchen",
+  mailFrom: "Von",
+  mailTo: "An",
+  mailCc: "Cc",
+  mailBcc: "Bcc",
+  mailSubject: "Betreff",
+  mailTestPrefix: "[Test]",
+  mailTestIntended: "Wäre gegangen an",
+  mailEmpty: "Noch keine E-Mail zum Anzeigen.",
+  recipientPerson: "Person",
+  recipientWorkspace: "Workspace",
+  recipientAddress: "Adresse",
+  recipientAdd: "Personen hinzufügen",
+  recipientPeople: "Personen",
+  recipientWorkspaces: "Workspaces",
+  recipientTypeAddress: "Adresse eingeben",
+  recipientPickedAlone: "Ein Wert aus einem Schritt steht allein in diesem Feld.",
+  insertValue: "Wert einfügen"
 };
