@@ -1,3 +1,4 @@
+import type { ResultShaper } from "@work-shape/catalyst-core";
 import type { CatalogueEntry } from "@work-shape/catalyst-connections";
 import { createLogger } from "./logger";
 import {
@@ -121,6 +122,8 @@ export interface CreateClientInstanceAppInput {
   connectorTypes?: ConnectorTypeDefinition[];
   /** The catalogue entries of this build; release config names the ones it offers. */
   catalogue?: readonly CatalogueEntry[];
+  /** Synchronous result transformations registered by this build. */
+  resultShapers?: Readonly<Record<string, ResultShaper>>;
   /** The capabilities of this build, the same ones every process of the instance is given. */
   capabilities: readonly ClientInstanceCapability[];
   structuredDataPublicationReviewer?: StructuredDataPublicationReviewer;
@@ -333,7 +336,8 @@ export async function createClientInstanceExecutionAssembly(
   const connections = await createInstanceConnections(
     connectionParts,
     input.connectorTypes,
-    input.catalogue
+    input.catalogue,
+    input.resultShapers
   );
   const moduleAssembly = await assembleModules({
     ...connectionParts,

@@ -19,6 +19,7 @@ export * from "./mcp/connector";
 export * from "./oauth";
 export * from "./operation-source";
 export * from "./release-seed";
+export * from "./result-shapers";
 export * from "./schema-check";
 export * from "./secret-store";
 export { retryAfterSeconds } from "./retry-after";

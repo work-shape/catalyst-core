@@ -11,6 +11,7 @@ import {
   createConnectionOperationSource,
   createConnectionToolSource,
   createCatalogue,
+  createResultShaperRegistry,
   createEgressChecker,
   createHttpApiConnectorType,
   createMcpConnectorType,
@@ -40,6 +41,7 @@ import {
   type OperationRegistry,
   type OperationSource,
   type PlatformStores,
+  type ResultShaper,
   type SecretResolver
 } from "@work-shape/catalyst-core";
 import {
@@ -143,10 +145,16 @@ export async function createInstanceConnections(
   /** The Connector types of this build. */
   connectorTypes: readonly ConnectorTypeDefinition[] = [],
   /** The catalogue entries of this build. */
-  catalogueEntries: readonly CatalogueEntry[] = []
+  catalogueEntries: readonly CatalogueEntry[] = [],
+  shapers: Readonly<Record<string, ResultShaper>> = {}
 ): Promise<InstanceConnections | undefined> {
   try {
-    return await buildInstanceConnections(input, connectorTypes, catalogueEntries);
+    return await buildInstanceConnections(
+      input,
+      connectorTypes,
+      catalogueEntries,
+      createResultShaperRegistry(shapers)
+    );
   } catch (error) {
     // A missing Secret Store key stops the start here, before anything else is built. The
     // store was opened for this start and nothing else holds it yet.
@@ -167,7 +175,8 @@ interface InstanceConnectionParts {
 async function buildInstanceConnections(
   input: InstanceConnectionParts,
   types: readonly ConnectorTypeDefinition[],
-  catalogueEntries: readonly CatalogueEntry[]
+  catalogueEntries: readonly CatalogueEntry[],
+  resultShapers: Readonly<Record<string, ResultShaper>>
 ): Promise<InstanceConnections | undefined> {
   const { config, clientInstanceId, secrets, stores, logger } = input;
   const configured = Object.keys(config.connections).length > 0;
@@ -182,7 +191,7 @@ async function buildInstanceConnections(
   }
   const connectorTypes = createConnectorTypeRegistry([
     createMcpConnectorType({ logger }),
-    createHttpApiConnectorType(),
+    createHttpApiConnectorType(resultShapers),
     ...types
   ]);
   // Every shipped entry is checked now, so a broken one stops the start; an entry that
@@ -190,6 +199,7 @@ async function buildInstanceConnections(
   const catalogue = createCatalogue({
     entries: catalogueEntries,
     named: config.catalogue.entries,
+    resultShapers,
     connectorTypes
   });
   const releaseConnections = expandReleaseConnections(config.connections, catalogue);

@@ -5,6 +5,7 @@ import {
   CONNECTION_BINDING_STATES,
   GRANT_HOLDER_KINDS,
   CONNECTION_EXPOSURES,
+  CONNECTION_CREDENTIAL_MODES,
   CONNECTION_HEALTH_STATES,
   CONNECTION_NAME_MAX_LENGTH,
   CONNECTION_NAME_PATTERN,
@@ -279,6 +280,17 @@ export const connectorTypeOffersSchema = z.object({
             title: localizedTextSchema.optional(),
             description: localizedTextSchema,
             authScheme: z.string(),
+            credentialModes: z.array(z.enum(CONNECTION_CREDENTIAL_MODES)).optional(),
+            defaultCredentialMode: z.enum(CONNECTION_CREDENTIAL_MODES).optional(),
+            groups: z
+              .array(
+                z.object({
+                  id: z.string(),
+                  title: localizedTextSchema,
+                  scopes: z.array(z.string())
+                })
+              )
+              .optional(),
             settings: z.record(z.string(), z.unknown()),
             fields: z.array(
               z.object({
@@ -297,6 +309,7 @@ export const connectorTypeOffersSchema = z.object({
             operations: z.array(
               z.object({
                 name: z.string(),
+                group: z.string().optional(),
                 title: z.string().optional(),
                 description: z.string().optional(),
                 effect: z.enum(OPERATION_EFFECTS),
