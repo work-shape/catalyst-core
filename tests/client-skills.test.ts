@@ -208,7 +208,9 @@ describe("client skills", () => {
       expect(root.output.workspaceNotice).toBe(
         "These files need a workspace that this agent does not have."
       );
-    expect(root.output).not.toHaveProperty("folder");
+    // Every command of a run with a workspace finds the whole folder there, read-only.
+    if (workspace) expect(root.output.folder).toBe(`/skills/${supportSkill.name}/`);
+    else expect(root.output).not.toHaveProperty("folder");
     const selected = await executeReadSkill(
       execution,
       request("allowed_agent", supportSkill.name, "assets/t.pdf")

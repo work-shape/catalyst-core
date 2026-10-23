@@ -28,6 +28,7 @@ Every command in a runner container, an agent's command and a Page build alike, 
 - `--network none`
 - a read-only root filesystem
 - writable `/workspace`, which is the home directory, and tmpfs for `/tmp` and `/var/tmp` owned by the same user
+- for an agent's command, the folder of each skill its run may read, read-only at `/skills/<name>/` ([Skill folders](/operate/execution-workspaces/#skill-folders)); nothing else of the host
 - CPU, memory, and pid limits
 - Docker's default seccomp profile
 - bounded wall-clock and idle timeouts

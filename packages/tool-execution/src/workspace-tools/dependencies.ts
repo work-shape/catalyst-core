@@ -12,6 +12,7 @@ import {
   createWorkspaceCommandClient,
   type WorkspaceCommandClient
 } from "../workspace-command-client";
+import type { WorkspaceSkillSource } from "../run-skills";
 import type { WorkspaceCommandTelemetry } from "../workspace-command-telemetry";
 import { DEFAULT_LIMITS, type WorkspaceCommandServiceLimits } from "../workspace-tool-schemas";
 import {
@@ -51,6 +52,11 @@ export interface WorkspaceCommandServiceOptions {
   fileStore?: ObjectStorage;
   sourceFileReader?: WorkspaceSourceFileReader;
   commandResults?: WorkspaceCommandResultSource;
+  /**
+   * The skills of an agent run, which its commands mount read-only at `/skills/<name>/`.
+   * Without it no command mounts a skill.
+   */
+  skills?: WorkspaceSkillSource;
   auditRecorder?: AuditRecorder;
   telemetry?: WorkspaceCommandTelemetry;
   limits?: Partial<WorkspaceCommandServiceLimits>;
@@ -68,6 +74,7 @@ export interface WorkspaceToolDependencies {
   readonly fileStore?: ObjectStorage;
   readonly sourceFileReader?: WorkspaceSourceFileReader;
   readonly commandResults?: WorkspaceCommandResultSource;
+  readonly skills?: WorkspaceSkillSource;
   readonly auditRecorder?: AuditRecorder;
   readonly telemetry?: WorkspaceCommandTelemetry;
   readonly limits: WorkspaceCommandServiceLimits;
@@ -94,6 +101,7 @@ export function resolveWorkspaceToolDependencies(
     objectStore: options.objectStore ?? options.fileStore,
     sourceFileReader: options.sourceFileReader,
     commandResults: options.commandResults,
+    skills: options.skills,
     auditRecorder: options.auditRecorder,
     telemetry: options.telemetry,
     limits: {

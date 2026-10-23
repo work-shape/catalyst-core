@@ -65,6 +65,9 @@ export const workspaceCommands = pgTable(
       .$type<WorkspaceCommand["expectedOutputs"]>()
       .notNull()
       .default([]),
+    // The skills the command mounts, fixed when it was queued: names, revisions and versions,
+    // never content. Null for a command without an agent run.
+    skillMounts: jsonb("skill_mounts").$type<NonNullable<WorkspaceCommand["skillMounts"]>>(),
     output: jsonb("output").$type<NonNullable<WorkspaceCommand["output"]>>(),
     error: jsonb("error").$type<NonNullable<WorkspaceCommand["error"]>>(),
     leaseOwner: text("lease_owner"),

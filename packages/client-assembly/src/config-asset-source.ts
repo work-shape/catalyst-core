@@ -25,6 +25,16 @@ export function createConfigAssetSource(input: {
 }): ConfigAssetSource {
   const warned = new Set<string>();
   const warnedFormer = new Set<string>();
+  const getSkillRevision: ConfigAssetSource["getSkillRevision"] = async (name) => {
+    const asset = await input.store.getConfigAsset({
+      clientInstanceId: input.clientInstanceId,
+      kind: "skill",
+      name
+    });
+    return asset?.status === "active"
+      ? { skill: skillConfigSchema.parse(asset.config), revision: asset.revision }
+      : undefined;
+  };
   return {
     async getSnapshot(): Promise<RuntimeAssetSnapshot> {
       // Read for every turn and tool call: the skills come without their resources, which the
@@ -78,12 +88,8 @@ export function createConfigAssetSource(input: {
       };
     },
     async getSkill(name) {
-      const asset = await input.store.getConfigAsset({
-        clientInstanceId: input.clientInstanceId,
-        kind: "skill",
-        name
-      });
-      return asset?.status === "active" ? skillConfigSchema.parse(asset.config) : undefined;
-    }
+      return (await getSkillRevision(name))?.skill;
+    },
+    getSkillRevision
   };
 }

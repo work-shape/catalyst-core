@@ -60,6 +60,7 @@ export async function enqueueWorkspaceCommand(
         status: "queued",
         limits: input.limits,
         expectedOutputs: input.expectedOutputs ?? [],
+        skillMounts: input.skillMounts?.length ? input.skillMounts : null,
         attempts: 0,
         queuedAt,
         updatedAt: queuedAt
