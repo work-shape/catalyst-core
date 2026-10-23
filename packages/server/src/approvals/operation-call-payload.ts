@@ -71,6 +71,8 @@ export const payloadSchema = z.object({
    * executed: the revision of a Page an App is written from, for instance.
    */
   heldInput: z.record(z.string(), z.unknown()).optional(),
+  /** Model routes supplied by the run when it held this call, never by the caller. */
+  modelRoutes: z.array(z.object({ id: z.string(), region: z.string().optional() })).optional(),
   /**
    * Where the value came from that made the call wait: a setting or a default of the instance,
    * or a guardrail. A request that was filed before this was kept names nothing.

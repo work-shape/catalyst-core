@@ -215,6 +215,112 @@ async function refused(
 }
 
 describe("personal Connection context isolation", () => {
+  it.each(["eu", "non-eu", "missing"] as const)(
+    "rechecks %s stored routes through the approval handler after the owner confirms",
+    async (storedRoutes) => {
+      const p = await prepare();
+      const calls = await world.calls();
+      const original = await calls.registry.resolve("connection.mailbox.who");
+      if (
+        !original ||
+        original.action !== null ||
+        !calls.deps.approvals ||
+        !calls.deps.approvedToolCall
+      )
+        throw new Error("No personal operation or filer");
+      const operation = `test.personal_held_${storedRoutes}`;
+      const authorize = vi.fn(original.authorize);
+      calls.registry.register({ ...original, name: operation, policyFloor: "confirm", authorize });
+      const modelRoutes = [{ id: "held-route", region: "eu" }];
+      const heldCall: OperationCall = {
+        operation,
+        effect: "reading",
+        input: { query: mail.query },
+        actor: a,
+        origin: { ...origin(p.run), toolName: operation },
+        correlationId: randomUUID()
+      };
+      const deps = calls.deps;
+      vi.spyOn(deps, "agentToolNames").mockReturnValue([operation]);
+      vi.spyOn(deps, "agentAvailable").mockResolvedValue(true);
+      const runFence = {
+        runId: p.run.id,
+        lease: { jobId: createPlatformId<"JobId">("job"), leaseToken: "lease" }
+      };
+      const held = await runOperation(heldCall, deps, {
+        modelRoutes,
+        runFence
+      });
+      expect(held.result.status).toBe("pending_confirmation");
+      if (!held.run.expiresAt) throw new Error("Held call has no expiry");
+      // Personal calls normally confirm in the conversation. Arrange a persisted request
+      // for that held call to exercise the approval handler's frozen-call execution path.
+      const filed = await calls.deps.approvals.request({
+        run: held.run,
+        call: heldCall,
+        resource: original.resource(heldCall.input),
+        runtime: { modelRoutes },
+        expiresAt: held.run.expiresAt,
+        policySource: "policy_floor",
+        confirmation: true
+      });
+      if (!filed) throw new Error("No held request");
+      const { approvalRequestId: requestId } = filed;
+      const stored = await world.worker.stores.approvals.getApprovalRequest({
+        clientInstanceId,
+        requestId
+      });
+      expect(stored?.payload.modelRoutes).toEqual(modelRoutes);
+      // Older or inconsistent held calls must fail closed, even on an EU worker.
+      await withTestSql(async (sql) => {
+        await sql`update operation_runs set approval_request_id = ${requestId} where id = ${held.run.id}`;
+        if (storedRoutes === "non-eu")
+          await sql`update approval_requests set payload = jsonb_set(payload, '{modelRoutes}',
+            ${sql.json([{ id: "held-route", region: "us" }])}::jsonb) where id = ${requestId}`;
+        if (storedRoutes === "missing")
+          await sql`update approval_requests set payload = payload - 'modelRoutes' where id = ${requestId}`;
+      });
+      const decided = await world.instance.call("approval_requests.decide", {
+        params: { requestId },
+        headers: { cookie: alice, origin: "http://localhost:5173" },
+        payload: { decision: "approve" }
+      });
+      expect(decided.statusCode, JSON.stringify(decided.json())).toBe(200);
+      const resolver = resolverSpy();
+      const end = await calls.deps.approvedToolCall(
+        { ...held.run, approvalRequestId: requestId },
+        // Live routes cannot replace the routes stored on the waiting call.
+        { runFence, modelRoutes: [{ id: "worker-route", region: "eu" }] }
+      );
+      if (storedRoutes === "eu") {
+        expect(end).toMatchObject({ execution: "done", run: { status: "done" } });
+        expect(resolver).toHaveBeenCalled();
+      } else {
+        expect(end).toMatchObject({
+          execution: "refused",
+          error: {
+            code: "FORBIDDEN",
+            message: "This instance cannot use personal Connections with its model setup."
+          }
+        });
+        await expect(authorize.mock.results.at(-1)?.value).rejects.toMatchObject({
+          details: { reason: "personal_connection_region" }
+        });
+        expect(resolver).not.toHaveBeenCalled();
+      }
+      const run = await deps.runs.get({ clientInstanceId, id: held.run.id });
+      expect(run?.decision).toMatchObject({ mode: "confirmed", by: a.id });
+      expect(run?.output).toBeUndefined();
+      expect(run?.inputRef).toBeUndefined();
+      const request = await world.worker.stores.approvals.getApprovalRequest({
+        clientInstanceId,
+        requestId
+      });
+      expect(request?.payload.inputRemoved).toBe(true);
+      expect(request?.payload.modelRoutes).toBeUndefined();
+    }
+  );
+
   it("admits all-EU routes and refuses non-EU fallbacks or missing regions before credentials", async () => {
     const p = await prepare();
     const eu = { id: "primary", region: "eu" };
