@@ -13,6 +13,7 @@ import type {
   WorkspaceCommandId
 } from "./ids";
 import type { JsonObject, JsonValue } from "./json";
+import type { WorkspaceCommandSkillMount } from "./skill-folders";
 import type { ISODateString } from "./time";
 import type { ToolExecutionContext } from "./tool-execution";
 
@@ -142,6 +143,11 @@ export interface WorkspaceCommand {
   status: WorkspaceCommandStatus;
   limits: WorkspaceCommandLimits;
   expectedOutputs: WorkspaceExpectedOutput[];
+  /**
+   * The skills the command mounts read-only at `/skills/<name>/`, fixed when it was queued.
+   * Missing for a command without an agent run, whose sandbox has no `/skills`.
+   */
+  skillMounts?: WorkspaceCommandSkillMount[];
   output?: WorkspaceCommandOutput;
   error?: WorkspaceCommandError;
   leaseOwner?: string;
@@ -195,6 +201,8 @@ export interface EnqueueWorkspaceCommandInput {
   cwd?: string;
   limits: WorkspaceCommandLimits;
   expectedOutputs?: WorkspaceExpectedOutput[];
+  /** The skills of the agent run, resolved by the caller when it queues the command. */
+  skillMounts?: WorkspaceCommandSkillMount[];
   queuedAt?: ISODateString;
 }
 

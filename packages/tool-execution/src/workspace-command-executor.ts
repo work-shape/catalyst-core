@@ -55,6 +55,12 @@ export interface SandboxDataDirectories {
   output: string;
 }
 
+/** The folder of one skill on the worker's disk, and the name it has below `/skills`. */
+export interface SandboxSkillFolder {
+  name: string;
+  directory: string;
+}
+
 export interface WorkspaceCommandProcessInput {
   command: SandboxCommand;
   /** In place of the sandbox's own CPU, memory and process limits. */
@@ -65,6 +71,12 @@ export interface WorkspaceCommandProcessInput {
    * own paths.
    */
   dataDirectories?: SandboxDataDirectories;
+  /**
+   * The folders of the skills of the command's agent run, each mounted read-only at
+   * `/skills/<name>/` by a sandbox that `mountsSkillFolders`. Only a workspace command of an
+   * agent run has any; a command the platform runs itself has none.
+   */
+  skillFolders?: readonly SandboxSkillFolder[];
   workspaceDirectory: string;
   workspaceCwd: string;
   cwd: string;
@@ -100,6 +112,12 @@ export interface WorkspaceCommandProcessExecutor {
    * process of its worker: the command then sees the worker's own paths.
    */
   readonly dataPaths?: SandboxDataDirectories;
+  /**
+   * Whether the sandbox mounts `skillFolders` read-only at `/skills/<name>/`. A sandbox without
+   * it runs commands as processes of its worker, which find copies of the folders beside the
+   * workspace instead, writable: for development only.
+   */
+  readonly mountsSkillFolders?: boolean;
   execute(input: WorkspaceCommandProcessInput): Promise<ProcessResult>;
   /**
    * Removes what commands left running whose id starts with `idPrefix` and that were started

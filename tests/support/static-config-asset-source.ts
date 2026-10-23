@@ -25,6 +25,10 @@ export function createStaticConfigAssetSource(input: {
     },
     async getSkill(name) {
       return input.skills?.find((skill) => skill.name === name);
+    },
+    async getSkillRevision(name) {
+      const skill = input.skills?.find((candidate) => candidate.name === name);
+      return skill ? { skill, revision: 1 } : undefined;
     }
   };
 }

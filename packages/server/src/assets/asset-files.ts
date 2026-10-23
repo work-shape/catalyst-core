@@ -344,11 +344,35 @@ export async function storeRevisionFiles(
  */
 export async function readRevisionFiles(
   options: FilesContext,
-  kind: WorkflowAssetKind,
+  kind: Pick<WorkflowAssetKind, "revisionFiles">,
   revision: { assetId: string; config: unknown; fileSetId?: FileSetId }
 ): Promise<{ files: AssetFileOutput[] }> {
+  const { files, contentTypes } = await readRevisionFolder(options, kind, revision);
+  return {
+    files: files.map((file) => ({
+      path: file.path,
+      contentType: contentTypes.get(file.path) ?? fileSetContentType(file.path),
+      sha256: sha256(file.bytes),
+      bytes: file.bytes.byteLength,
+      ...fileContent(file.bytes)
+    }))
+  };
+}
+
+/**
+ * The bytes of the folder of one revision, in the order of their paths, as `readRevisionFiles`
+ * answers them: what a workspace command mounts of a skill is what a read of it answers.
+ */
+export async function readRevisionFolder(
+  options: FilesContext,
+  kind: Pick<WorkflowAssetKind, "revisionFiles">,
+  revision: { assetId: string; config: unknown; fileSetId?: FileSetId }
+): Promise<{
+  files: { path: string; bytes: Uint8Array }[];
+  contentTypes: Map<string, string>;
+}> {
   const hook = kind.revisionFiles;
-  if (!hook) return { files: [] };
+  if (!hook) return { files: [], contentTypes: new Map() };
   const fileSet = revision.fileSetId
     ? await options.stores.pages.getAssetFileSet({
         clientInstanceId: options.clientInstanceId,
@@ -378,15 +402,10 @@ export async function readRevisionFiles(
       .map(async ({ path }) => ({ path, bytes: (await bytesOf(path)) ?? new Uint8Array() }))
   );
   return {
-    files: [...own, ...others]
-      .sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0))
-      .map((file) => ({
-        path: file.path,
-        contentType: stored.get(file.path)?.contentType ?? fileSetContentType(file.path),
-        sha256: sha256(file.bytes),
-        bytes: file.bytes.byteLength,
-        ...fileContent(file.bytes)
-      }))
+    files: [...own, ...others].sort((left, right) =>
+      left.path < right.path ? -1 : left.path > right.path ? 1 : 0
+    ),
+    contentTypes: new Map([...stored].map(([path, file]) => [path, file.contentType]))
   };
 }
 

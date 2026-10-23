@@ -538,6 +538,8 @@ export async function createClientInstanceExecutionAssembly(
         auditRecorder,
         telemetry: createConsoleWorkspaceCommandTelemetry(logger),
         limits: config.executionWorkspaces.command,
+        // The skills an agent run may read, which its commands mount read-only at /skills.
+        skills: { assetSource, conversationOffer },
         sourceFileReader: attachments
           ? {
               readSourceFile(readInput) {

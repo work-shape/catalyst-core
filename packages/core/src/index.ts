@@ -77,6 +77,7 @@ export { shortestCronGapMinutes } from "./schedule-cron";
 export * from "./scheduled-starts";
 export * from "./secrets";
 export * from "./shipped-agents";
+export * from "./skill-folders";
 export * from "./subagents";
 export * from "./time";
 export * from "./types";

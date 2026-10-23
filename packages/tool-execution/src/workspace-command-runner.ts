@@ -10,13 +10,21 @@ import {
   type WorkspaceCommandError,
   type WorkspaceCommandOutput,
   type WorkspaceCommandPromotedArtifact,
+  type SkillFolderReader,
   type WorkspaceFile
 } from "@work-shape/catalyst-core";
 import { randomUUID } from "node:crypto";
-import { readdir, rm, stat, utimes } from "node:fs/promises";
+import { lstat, mkdir, readdir, readFile, rm, stat, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { readToolExecutionEnv } from "./env";
+import {
+  removeTree,
+  SKILL_FOLDER_CACHE_DIRECTORY,
+  SkillFolderCache,
+  skillMountFailure,
+  type SkillFolderLease
+} from "./skill-folder-cache";
 import { promoteWorkspaceFile } from "./workspace-artifact-promotion";
 import {
   toWorkspaceCommandError,
@@ -26,6 +34,7 @@ import {
 import {
   LocalWorkspaceCommandProcessExecutor,
   type ProcessResult,
+  type SandboxSkillFolder,
   type WorkspaceCommandProcessExecutor
 } from "./workspace-command-executor";
 import {
@@ -61,8 +70,20 @@ export interface LocalWorkspaceCommandRunnerOptions {
   processExecutor?: WorkspaceCommandProcessExecutor;
   auditRecorder?: AuditRecorder;
   telemetry?: WorkspaceCommandTelemetry;
+  /**
+   * Reads the folders of the skills a command recorded. Without it a command that mounts a
+   * skill fails and runs nothing; one without skills runs as before.
+   */
+  skillFolders?: SkillFolderReader;
   now?: () => string;
 }
+
+/**
+ * Where a sandbox that runs commands as processes of its worker finds copies of the skill
+ * folders, beside the workspace: `<execution directory>/skills/<name>`. For development only:
+ * they are writable, and a command reaches them as `$WORKSPACE_DIR/../skills/<name>`.
+ */
+export const LOCAL_SKILL_FOLDERS_DIRECTORY = "skills";
 
 interface CommandExecutionResult {
   output?: WorkspaceCommandOutput;
@@ -97,6 +118,7 @@ export class LocalWorkspaceCommandRunner {
   private readonly telemetry?: WorkspaceCommandTelemetry;
   private readonly now: () => string;
   private readonly activeExecutionDirectories = new Set<string>();
+  private readonly skillFolderCache?: SkillFolderCache;
 
   constructor(options: LocalWorkspaceCommandRunnerOptions) {
     this.store = options.store;
@@ -111,6 +133,12 @@ export class LocalWorkspaceCommandRunner {
     this.auditRecorder = options.auditRecorder;
     this.telemetry = options.telemetry;
     this.now = options.now ?? (() => new Date().toISOString());
+    this.skillFolderCache = options.skillFolders
+      ? new SkillFolderCache({
+          rootDirectory: join(this.tempRootDirectory, SKILL_FOLDER_CACHE_DIRECTORY),
+          reader: options.skillFolders
+        })
+      : undefined;
   }
 
   async runClaimedCommand(
@@ -182,8 +210,13 @@ export class LocalWorkspaceCommandRunner {
     }
 
     const cutoffMs = (input.now ?? new Date()).getTime() - input.olderThanMs;
-    let removedCount = 0;
-    let failedCount = 0;
+    // Skill folders go with the same time unused as the workspaces.
+    const skills = (await this.skillFolderCache?.evictIdle(input)) ?? {
+      removedCount: 0,
+      failedCount: 0
+    };
+    let removedCount = skills.removedCount;
+    let failedCount = skills.failedCount;
     for (const entry of entries) {
       if (!entry.isDirectory() || !entry.name.startsWith("catalyst-workspace-")) {
         continue;
@@ -232,15 +265,22 @@ export class LocalWorkspaceCommandRunner {
     let changedFiles: WorkspaceCommandChangedFile[] = [];
     let promotedArtifacts: WorkspaceCommandPromotedArtifact[] = [];
     let cacheReusable = false;
+    let skillLease: SkillFolderLease | undefined;
     try {
       const workspace = await this.requireWorkspace(command);
       hydrated = await this.hydrateWorkspace(workspace, command);
       this.activeExecutionDirectories.add(hydrated.executionDirectory);
+      skillLease = await this.acquireSkillFolders(command);
+      const skillFolders = await this.placeSkillFolders(
+        skillLease?.folders ?? [],
+        hydrated.executionDirectory
+      );
       processResult = await this.runProcess(
         command,
         hydrated.workspaceDirectory,
         join(hydrated.executionDirectory, "tmp"),
-        options.signal
+        options.signal,
+        skillFolders
       );
       const scannedFiles = await this.scanWorkspaceFiles(hydrated.workspaceDirectory, command);
       const syncedFiles = await this.syncChangedFiles(
@@ -271,7 +311,12 @@ export class LocalWorkspaceCommandRunner {
         error: toWorkspaceCommandError(error)
       };
     } finally {
+      skillLease?.release();
       if (hydrated) {
+        // The copies of a sandbox without mounts are the command's alone.
+        await removeTree(join(hydrated.executionDirectory, LOCAL_SKILL_FOLDERS_DIRECTORY)).catch(
+          () => undefined
+        );
         this.activeExecutionDirectories.delete(hydrated.executionDirectory);
         if (this.reuseWorkspaceDirectories && cacheReusable) {
           const executionDirectory = hydrated.executionDirectory;
@@ -284,6 +329,34 @@ export class LocalWorkspaceCommandRunner {
         }
       }
     }
+  }
+
+  /** The folders of the skills the command recorded, checked or filled. None without any. */
+  private async acquireSkillFolders(
+    command: WorkspaceCommand
+  ): Promise<SkillFolderLease | undefined> {
+    const mounts = command.skillMounts ?? [];
+    const [first] = mounts;
+    if (!first) return undefined;
+    if (!this.skillFolderCache) throw skillMountFailure(first.name, "no_reader");
+    return this.skillFolderCache.acquire(command.clientInstanceId, mounts);
+  }
+
+  /**
+   * What the sandbox is handed: the folders to mount where it mounts them. A sandbox that runs
+   * commands as processes of its worker gets writable copies beside the workspace instead.
+   */
+  private async placeSkillFolders(
+    folders: readonly SandboxSkillFolder[],
+    executionDirectory: string
+  ): Promise<SandboxSkillFolder[]> {
+    if (folders.length === 0 || this.processExecutor.mountsSkillFolders) return [...folders];
+    const skillsDirectory = join(executionDirectory, LOCAL_SKILL_FOLDERS_DIRECTORY);
+    await removeTree(skillsDirectory);
+    for (const folder of folders) {
+      await copyFolder(folder.directory, join(skillsDirectory, folder.name));
+    }
+    return [];
   }
 
   private async requireWorkspace(command: WorkspaceCommand): Promise<ExecutionWorkspace> {
@@ -329,7 +402,8 @@ export class LocalWorkspaceCommandRunner {
     command: WorkspaceCommand,
     workspaceDirectory: string,
     tempDirectory: string,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    skillFolders: readonly SandboxSkillFolder[] = []
   ): Promise<ProcessResult> {
     const normalizedCwd = command.cwd
       ? normalizeWorkspaceDirectory(command.cwd, { maxPathLength: this.maxPathLength })
@@ -359,6 +433,7 @@ export class LocalWorkspaceCommandRunner {
       workspaceCwd: normalizedCwd.value,
       cwd: cwd.value,
       tempDirectory,
+      ...(skillFolders.length > 0 ? { skillFolders } : {}),
       env: {
         HOME: workspaceDirectory,
         PATH: readToolExecutionEnv().path,
@@ -534,6 +609,20 @@ export class LocalWorkspaceCommandRunner {
       );
     }
     return undefined;
+  }
+}
+
+/** Copies a folder of plain files and folders, writable, never following a link. */
+async function copyFolder(source: string, target: string): Promise<void> {
+  await mkdir(target, { recursive: true });
+  for (const entry of await readdir(source, { withFileTypes: true })) {
+    const from = join(source, entry.name);
+    const to = join(target, entry.name);
+    if (entry.isDirectory()) {
+      await copyFolder(from, to);
+    } else if (entry.isFile() && (await lstat(from)).isFile()) {
+      await writeFile(to, await readFile(from), { flag: "wx" });
+    }
   }
 }
 

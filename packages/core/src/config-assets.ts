@@ -123,6 +123,11 @@ export interface ConfigAssetSource {
   getSnapshot(): Promise<RuntimeAssetSnapshot>;
   /** One skill whole, with its resources, or nothing where none of the name is active. */
   getSkill(name: string): Promise<SkillConfig | undefined>;
+  /**
+   * One skill whole with the number of its active revision, read in one read, or nothing where
+   * none of the name is active. What a workspace command records of the skills it mounts.
+   */
+  getSkillRevision(name: string): Promise<{ skill: SkillConfig; revision: number } | undefined>;
 }
 
 export interface ConfigAssetRecord {

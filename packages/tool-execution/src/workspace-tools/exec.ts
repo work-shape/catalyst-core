@@ -13,6 +13,7 @@ import {
   isAppError
 } from "@work-shape/catalyst-core";
 import { defineTool, toolSuccess } from "@work-shape/catalyst-tool-sdk";
+import { runSkillMounts } from "../run-skills";
 import type { WorkspaceCommandHandle, WorkspaceCommandResult } from "../workspace-command-client";
 import {
   emitWorkspaceCommandTelemetry,
@@ -51,7 +52,7 @@ export function workspaceExecTool(deps: WorkspaceToolDependencies) {
     // Runs on the agent's own call. Without a mode the instance default for changes would apply.
     permission: { mode: "allow" },
     description:
-      "Run a bounded Bash command from /workspace in the conversation execution workspace. Each call starts in /workspace unless cwd is provided for that call; cwd, processes, and files outside /workspace do not persist. The standard project directories scripts, artifacts, previews, and tmp are available at the start of every command. Pass a complete shell command or multiline script. Files created or changed under /workspace persist across calls and stay internal until promoted. For multiline create-and-verify commands, put `set -e` on its own line before later commands so helpers do not run after a failed script. Run artifact helpers directly. Do not prefix helpers with `set -e`, and do not pass helper flags such as `--view`, `--spec`, `--out`, `--range`, `--page`, or `--sheet` to `cat`, `ls`, or `printf`.",
+      "Run a bounded Bash command from /workspace in the conversation execution workspace. Each call starts in /workspace unless cwd is provided for that call; cwd, processes, and files outside /workspace do not persist. The standard project directories scripts, artifacts, previews, and tmp are available at the start of every command. Pass a complete shell command or multiline script. Files created or changed under /workspace persist across calls and stay internal until promoted. For multiline create-and-verify commands, put `set -e` on its own line before later commands so helpers do not run after a failed script. The folders of this agent's skills are mounted read-only at /skills/<name>/; run a skill's scripts from there and write outputs under /workspace. Run artifact helpers directly. Do not prefix helpers with `set -e`, and do not pass helper flags such as `--view`, `--spec`, `--out`, `--range`, `--page`, or `--sheet` to `cat`, `ls`, or `printf`.",
     inputSchema: workspaceExecInputSchema,
     outputSchema: workspaceExecOutputSchema,
     inputJsonSchema: workspaceExecInputJsonSchema,
@@ -150,6 +151,8 @@ async function enqueueCommand(
     expectedOutputs: WorkspaceExpectedOutput[];
   }
 ): Promise<ValidationResult<WorkspaceCommandHandle>> {
+  // Fixed now: a skill saved while the command waits is mounted by the next command.
+  const skillMounts = deps.skills ? await runSkillMounts(deps.skills, context) : [];
   try {
     return {
       status: "success",
@@ -161,7 +164,8 @@ async function enqueueCommand(
         command: command.command,
         cwd: command.cwd,
         limits: command.limits,
-        expectedOutputs: command.expectedOutputs
+        expectedOutputs: command.expectedOutputs,
+        ...(skillMounts.length > 0 ? { skillMounts } : {})
       })
     };
   } catch (error) {

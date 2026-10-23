@@ -1,8 +1,9 @@
 import { z } from "zod";
-import type {
-  ConfigAssetSource,
-  ConversationOfferSource,
-  ToolExecutionContext
+import {
+  SKILL_MOUNT_ROOT,
+  type ConfigAssetSource,
+  type ConversationOfferSource,
+  type ToolExecutionContext
 } from "@work-shape/catalyst-core";
 import { runSkillNames } from "./run-skills";
 import { createSkillSourceVersion } from "./skill-source-version";
@@ -69,6 +70,7 @@ const readSkillOutputSchema = z.object({
       })
     )
     .optional(),
+  folder: z.string().optional(),
   workspaceNotice: z.string().optional(),
   sourceVersion: z.string(),
   saveApproval: z.object({ approverNames: z.array(z.string()) }).optional()
@@ -100,7 +102,7 @@ export function createReadSkillTool(options: ReadSkillToolOptions): AnyToolDefin
     icon: "skill",
     effect: "reading",
     description:
-      "Read the root instructions or one listed text resource for an available client skill. Read the root first, then load only relevant resources from its manifest. It reads only the skills of this agent and of this conversation. When the root read has saveApproval, a save of the skill by this person files a request and changes nothing until one of saveApproval.approverNames approves it; without it, a save this person may make applies immediately.",
+      "Read the root instructions or one listed text resource for an available client skill. Read the root first, then load only relevant resources from its manifest. Where the root read names a folder, every workspace command finds the skill's whole folder there, read-only. It reads only the skills of this agent and of this conversation. When the root read has saveApproval, a save of the skill by this person files a request and changes nothing until one of saveApproval.approverNames approves it; without it, a save this person may make applies immediately.",
     inputSchema: readSkillInputSchema,
     outputSchema: readSkillOutputSchema,
     async execute(input, context) {
@@ -191,8 +193,11 @@ export function createReadSkillTool(options: ReadSkillToolOptions): AnyToolDefin
         draft?.name === agentName
           ? draft
           : assets.agents.find((candidate) => candidate.name === agentName);
+      // Every command of this run mounts the whole folder of the skill read-only there.
+      const runsCommands = agent?.toolNames.includes("workspace.exec") === true;
+      const folder = runsCommands ? `${SKILL_MOUNT_ROOT}/${skill.name}/` : undefined;
       const workspaceNotice =
-        files.length && !agent?.toolNames.includes("workspace.exec")
+        files.length && !runsCommands
           ? "These files need a workspace that this agent does not have."
           : undefined;
       return toolSuccess(
@@ -203,6 +208,7 @@ export function createReadSkillTool(options: ReadSkillToolOptions): AnyToolDefin
           content: skill.content,
           ...(resources.length ? { resources } : {}),
           ...(files.length ? { files } : {}),
+          ...(folder ? { folder } : {}),
           ...(workspaceNotice ? { workspaceNotice } : {}),
           sourceVersion,
           ...(saveApproval ? { saveApproval } : {})
