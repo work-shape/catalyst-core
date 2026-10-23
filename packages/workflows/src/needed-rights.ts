@@ -6,6 +6,7 @@ import {
   DATA_STORE_OPERATION_RIGHTS,
   WORKFLOW_ACTIONS,
   WORKFLOW_ASSET_KIND,
+  workflowStartOperationName,
   type AssetScope,
   type ClientInstanceId,
   type ConfigAssetStore,
@@ -127,9 +128,10 @@ function operationRights(
     ...(resource.workspaceId === undefined ? {} : { workspaceId: resource.workspaceId })
   };
   if (operation.action !== null) return [{ action: operation.action, asset }];
-  // An operation with a check of its own: the two the product has that ask a right on what
-  // the definition names. Any other asks nothing here a grant could give.
+  // An operation with a check of its own can still require a grant on the named asset.
   if (resource.kind === CONNECTION_ASSET_KIND) return [{ action: CONNECTION_ACTIONS.use, asset }];
+  if (resource.kind === WORKFLOW_ASSET_KIND && name === workflowStartOperationName(resource.name))
+    return [{ action: WORKFLOW_ACTIONS.use, asset }];
   if (name.startsWith(DATA_STORE_OPERATION_PREFIX) && name.endsWith(".load")) {
     return [
       { action: DATA_STORE_OPERATION_RIGHTS.load, asset },

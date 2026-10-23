@@ -41,7 +41,7 @@ const operations = new Map<string, NeededRightOperation>([
   ["data_store.mandanten.query", named("data_store.read", "data_store", "mandanten")],
   ["data_store.mandanten.load", own("data_store", "mandanten")],
   ["knowledge_bases.handbook.search", named("knowledge_base.use", "knowledge_base", "handbook")],
-  ["workflow.notify.start", named("workflow.use", "workflow", "notify")],
+  ["workflow.notify.start", own("workflow", "notify")],
   ["subagent.ask", own("subagent", "ask")]
 ]);
 const step = (id: string, operation: string, input: WorkflowInputMapping = {}): WorkflowStep => ({

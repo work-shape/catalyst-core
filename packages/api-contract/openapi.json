@@ -39146,6 +39146,9 @@
       "ConversationThreadSnapshot": {
         "type": "object",
         "properties": {
+          "personalData": {
+            "type": "boolean"
+          },
           "followUps": {
             "type": "array",
             "items": {

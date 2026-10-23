@@ -198,6 +198,8 @@ export interface ConversationUserState {
 }
 
 export interface ConversationThreadSnapshot {
+  /** Effective root personal-data restriction; absent on older servers. */
+  personalData?: boolean;
   followUps?: import("./follow-ups").ConversationFollowUp[];
   conversation: Conversation;
   messages: ChatMessage[];

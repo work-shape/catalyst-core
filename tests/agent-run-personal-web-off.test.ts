@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { LocalAgentRuntime } from "@work-shape/catalyst-agent-runtime";
 import {
+  personalDataConversation,
   createOperationRegistry,
   createAuthorizer,
   createPlatformId,
@@ -225,7 +226,13 @@ describe("CS-9c personal data switches web tools off", () => {
           conversationHistory: db.store.conversations,
           ...(input.withoutReaders
             ? {}
-            : { personalData: { conversations: db.store.conversations, operations } }),
+            : {
+                personalData: {
+                  personalConversation: (id) =>
+                    personalDataConversation(db.store, f.scope.clientInstanceId, id),
+                  operations
+                }
+              }),
           toolRegistry: registry,
           dataTools: {
             describe: async () =>

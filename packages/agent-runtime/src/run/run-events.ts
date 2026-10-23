@@ -7,7 +7,6 @@ import {
   type AgentRunStatus,
   type Clock,
   type ConversationHistoryStore,
-  type ConversationStore,
   type OperationRegistry,
   type ConversationOfferSource,
   type DataToolSource,
@@ -78,7 +77,7 @@ export interface LocalAgentRuntimeOptions {
    * on every model request (including resumed and subagent runs).
    */
   personalData?: {
-    conversations: Pick<ConversationStore, "getConversation">;
+    personalConversation(conversationId: ConversationId, runId: AgentRunId): Promise<boolean>;
     operations: Pick<OperationRegistry, "resolve">;
   };
   agentSkillChangesEnabled?: boolean;

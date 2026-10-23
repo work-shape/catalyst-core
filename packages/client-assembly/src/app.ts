@@ -662,7 +662,11 @@ export async function createClientInstanceExecutionAssembly(
     // A run reads how its subagents ended at the end of the step that started them.
     subagents: store.childAgentRuns,
     webAccess: config.webAccess,
-    personalData: { conversations: store.conversations, operations: operationCalls.registry },
+    personalData: {
+      personalConversation: async (id, runId) =>
+        (await operationCalls.deps.policy.personalConversation?.(id, runId)) ?? true,
+      operations: operationCalls.registry
+    },
     agentSkillChangesEnabled: skillPolicy.enabled,
     maxSteps: config.runtime.maxSteps,
     repeatedToolCallLimit: config.runtime.repeatedToolCallLimit,
