@@ -19,7 +19,7 @@ import {
 } from "../support/config-cli";
 
 describe("config CLI command flows", () => {
-  it("round-trips complete skill packages and rejects unsupported local resources", async () => {
+  it("round-trips text packages and reads other skill files as bytes", async () => {
     const directory = await createTemporaryDirectory();
     await writeMinimalManifest(directory, "https://catalyst.test");
     const skillDirectory = resolve(directory, "skills", "review");
@@ -91,11 +91,14 @@ describe("config CLI command flows", () => {
     );
 
     await writeFile(resolve(skillDirectory, "references", "binary.pdf"), "%PDF", "utf8");
-    await expect(readWorkingCopy(directory, await readManifest(directory))).rejects.toMatchObject({
-      issues: expect.arrayContaining([
-        expect.objectContaining({ message: expect.stringContaining("Unsupported skill resource") })
-      ])
+    const withPdf = await readWorkingCopy(directory, await readManifest(directory));
+    expect(withPdf.skillFiles?.review).toContainEqual({
+      path: "references/binary.pdf",
+      text: "%PDF"
     });
+    expect(withPdf.skills[0]?.resources?.map((resource) => resource.path)).not.toContain(
+      "references/binary.pdf"
+    );
   });
 
   it("clears all extra skill frontmatter across remove, push and pull", async () => {
