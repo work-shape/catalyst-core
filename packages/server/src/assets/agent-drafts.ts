@@ -11,6 +11,7 @@ import {
   type OperationAuthorization
 } from "@work-shape/catalyst-core";
 import type { AssetWorkflowOptions } from "../types";
+import type { AgentPublishChecked } from "../approvals/agent-publish-review";
 import {
   agentDependencyAvailability,
   authorizeAgentDependencies
@@ -147,7 +148,8 @@ export class AgentDraftWorkflow {
         personalWorkspaces: boolean;
         collaborationWorkspaceIds: string[];
       } | null;
-    }
+    },
+    checked?: AgentPublishChecked
   ) {
     const target = await this.host.target(input);
     if (isAuthenticatedServicePrincipal(call.actor))
@@ -155,17 +157,19 @@ export class AgentDraftWorkflow {
     call.access.require("agent.publish", target.resource);
     const live = requireActive(target);
     const draft = await this.pending(live.id);
-    if (!draft) {
+    // What its guardrails read is what goes live: the draft revision, which names one content
+    // only, or the first version as it is stored. A call they were not asked about publishes
+    // what there is.
+    if (checked !== undefined && checked.revision !== input.revision) throw draftChanged();
+    if (checked?.firstVersion ?? !draft) {
       // A workspace's agent its approvers have not yet offered is published as it was made.
-      const offered = await this.host.publishFirstVersion(call, target, input.revision);
+      const offered = draft
+        ? undefined
+        : await this.host.publishFirstVersion(call, target, input.revision);
       if (offered) return { draftRevision: offered.revision, publishedRevision: offered.revision };
+      if (checked) throw draftChanged();
     }
-    if (draft?.revision !== input.revision)
-      throw new AppError(
-        "REVISION_CONFLICT",
-        "The agent draft changed. Read it again before publishing",
-        { reason: "draft_changed" }
-      );
+    if (draft?.revision !== input.revision) throw draftChanged();
     if (draft.baseRevision !== live.revision)
       throw new AppError("CONFLICT", "The live agent changed since the draft was written", {
         reason: "stale_base"
@@ -220,4 +224,12 @@ export class AgentDraftWorkflow {
       agentId
     });
   }
+}
+
+function draftChanged(): AppError {
+  return new AppError(
+    "REVISION_CONFLICT",
+    "The agent draft changed. Read it again before publishing",
+    { reason: "draft_changed" }
+  );
 }

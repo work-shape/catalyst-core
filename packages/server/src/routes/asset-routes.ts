@@ -6,6 +6,7 @@ import {
 } from "@work-shape/catalyst-core";
 import { ASSET_PUT_BODY_LIMIT_BYTES } from "../assets/asset-files";
 import {
+  agentPublishChecked,
   assetWriteEvent,
   revertWriteEvents,
   syncWriteEvents
@@ -137,7 +138,11 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
         : publishPolicyFloor(origin),
     execute: async (input, context) => {
       if (input.kind !== "agent") return together.publish(context, input);
-      const result = await workflow.agentDrafts.publish(context, input);
+      const result = await workflow.agentDrafts.publish(
+        context,
+        input,
+        agentPublishChecked(context.beforeEvents)
+      );
       await tries.settled(context, input, "published");
       return result;
     }

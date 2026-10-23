@@ -101,7 +101,8 @@ export async function publishFirstVersion(
       configAssets: { ...options.configAssets, store: stores.configAssets }
     };
     const called = transactionalAssetCall(call, options.clientInstanceId, stores.audit);
-    await offerInOwnWorkspace(within, called, target, offers);
+    // Version 1 as it was checked: a revision written meanwhile refuses the offering.
+    await offerInOwnWorkspace(within, called, target, offers, revision);
   });
   return { revision: asset.revision };
 }
@@ -114,7 +115,8 @@ async function offerInOwnWorkspace(
   within: AssetWorkflowOptions,
   call: AssetCall,
   target: AssetTarget,
-  workspaceId: string
+  workspaceId: string,
+  expectedRevision?: number
 ): Promise<void> {
   const { clientInstanceId } = within;
   const current = (
@@ -134,6 +136,7 @@ async function offerInOwnWorkspace(
     agentName: target.name,
     kind: "agent",
     ...(target.asset ? { expectedAssetId: target.asset.id } : {}),
+    ...(expectedRevision === undefined ? {} : { expectedRevision }),
     expectedAvailability: current ?? null,
     availability: {
       mode: "selected",
