@@ -25,6 +25,7 @@ import {
 import { clientInstanceId } from "./support/access-instance";
 import { publishedDefinitions, runSchema, type WorkflowFixture } from "./support/workflow-instance";
 import { makeJobsDue, readyWorkflows, stepRunsOf } from "./support/workflow-runs";
+import { readJobDiagnostics } from "./support/job-diagnostics";
 
 // The `code` step: one script of a Workflow's `steps/` folder, run on the step's input. The
 // engine stages the step and the command worker runs the script in the sandbox. Here the
@@ -675,7 +676,12 @@ async function cancelOnceWriting(
   // The trigger, and the code step, which the engine stages.
   await worker.runDue();
   await worker.runDue();
-  expect(await step(started.id)).toMatchObject({ status: "waiting" });
+  const diagnostics = await readJobDiagnostics({
+    clientInstanceIds: [clientInstanceId],
+    kinds: ["workflow_run.execute_step", "workflow_run.run_code"],
+    logs: t.workerLogs
+  });
+  expect(await step(started.id), JSON.stringify(diagnostics)).toMatchObject({ status: "waiting" });
   const job = worker.runDue();
   let running: string[] = [];
   for (let pass = 0; pass < 100 && running.length === 0; pass++) {

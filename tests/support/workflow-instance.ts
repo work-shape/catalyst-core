@@ -22,7 +22,6 @@ import type {
   JobControl,
   JobSchedule,
   JobWorker,
-  Logger,
   ModuleSnapshot,
   PlatformEventEmitter,
   PlatformStores,
@@ -44,20 +43,13 @@ import { createDiagnosedJobWorker as createJobWorker } from "./job-worker-diagno
 import { clientInstanceId, setupAccessInstance } from "./access-instance";
 import { fixtureOn, operationOf, type ConnectionOperationsFixture } from "./connection-operations";
 import { personalKeyServer } from "./personal-api-keys";
+import { recordJobErrors } from "./job-diagnostics";
 
 // The instance behind the tests of the Workflow engine: the instance of the Connection
 // tests with the module `workflows` on, the engine on its call path, and definitions read
 // from the fixture folders or from what a test publishes. The engine is built here as the
 // seam of the module builds it, with the definitions of the test in place of none: its port
 // goes to the server and its handlers to a job worker.
-
-const silent: Logger = {
-  debug() {},
-  info() {},
-  warn() {},
-  error() {},
-  child: () => silent
-};
 
 const here = dirname(fileURLToPath(import.meta.url));
 export const WORKFLOW_FIXTURES = resolve(here, "../fixtures/workflows");
@@ -216,6 +208,8 @@ export function hangingAt(
 export interface WorkflowFixture extends ConnectionOperationsFixture {
   /** What the instance has of Workflows. No job handler where the module is off. */
   workflows: InstanceWorkflows;
+  /** Worker warnings and errors, for a failing pass's diagnostics. */
+  workerLogs: unknown[];
   /**
    * The service principal the fixture Workflows run as. It holds no grant at first; a test
    * gives it what its Workflow calls through `allow`.
@@ -329,6 +323,7 @@ export async function workflowFixture(
   let workflows: InstanceWorkflows | undefined;
   let modules: ModuleSnapshot | undefined;
   const workers: JobWorker[] = [];
+  const workerLogs: unknown[] = [];
   const fromAssets = options.definitions === "assets";
   const given = options.definitions === "assets" ? undefined : options.definitions;
   // The kind asks the principals of the instance and their rights, whose stores exist once it
@@ -454,7 +449,7 @@ export async function workflowFixture(
       handlers: handlers ?? built.jobHandlers,
       ...(schedules ? { schedules } : {}),
       modules: served,
-      logger: silent
+      logger: recordJobErrors(workerLogs)
     });
     workers.push(created);
     return created;
@@ -468,6 +463,7 @@ export async function workflowFixture(
   return {
     ...t,
     workflows: built,
+    workerLogs,
     principal,
     capturedMail: () => capture.list(),
     worker,

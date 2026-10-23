@@ -180,7 +180,7 @@ export function useDataStoreWorld(prefix: string, options: { scope?: "test" | "s
         logger
       });
       opened.push(dataStores);
-      const worker = jobs.worker(stores, clientInstanceId, [...dataStores.jobHandlers]);
+      const worker = jobs.worker(stores, clientInstanceId, [...dataStores.jobHandlers], [], logger);
       return { clientInstanceId, dataStores, worker, logger, logged };
     };
     return { ...start(db.store), restart: start };

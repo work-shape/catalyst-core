@@ -8,6 +8,7 @@ import {
 import { clientInstanceId } from "./support/data-store-instance";
 import { useKnowledgeSync } from "./support/knowledge-sync";
 import { eventually, required } from "./support/assertions";
+import { readJobDiagnostics } from "./support/job-diagnostics";
 
 // KB 79: the Box staging test is deferred until CS-6 and Felix's developer account are available.
 const KB = "sync-test";
@@ -331,7 +332,15 @@ describe("source changes and withdrawal (SRC-3a, KB 78)", () => {
     const inbox = await world.instance.api.call("approval_requests.list", {
       query: { status: "pending" }
     });
-    const request = required(inbox.json<{ items: { id: string }[] }>().items[0]);
+    expect(inbox.statusCode, inbox.body).toBe(200);
+    const requests = inbox.json<{ items: { id: string }[] }>().items;
+    const diagnostics = await readJobDiagnostics({
+      clientInstanceIds: [clientInstanceId],
+      kinds: ["knowledge_base.sync"],
+      logs: world.logs
+    });
+    expect(requests, JSON.stringify(diagnostics)).toHaveLength(1);
+    const request = required(requests[0]);
     const me = await world.instance.api.call("me.get", {}, "reader");
     expect(me.statusCode, me.body).toBe(200);
     const reader = me.json<{ id: string }>().id;

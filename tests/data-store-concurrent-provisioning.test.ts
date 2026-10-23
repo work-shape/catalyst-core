@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { DATA_STORE_MANIFEST_FILE } from "@work-shape/catalyst-core";
 import { required } from "./support/assertions";
+import { readJobDiagnostics } from "./support/job-diagnostics";
 import { init, useDataStoreWorld, type StoreFile } from "./support/data-store-world";
 
 // Many Data Stores provisioned at once on one Postgres server: each makes its own database and
@@ -22,7 +23,11 @@ describe("Data Stores provisioned at once", () => {
         Array.from({ length: Math.ceil(count / 4) }, async (_, index) => {
           const world = await setup(`at_once_${count}_${index}`);
           const second = await setup(`at_once_${count}_${index}`);
-          return { world, workers: [world.worker, second.worker] };
+          return {
+            world,
+            workers: [world.worker, second.worker],
+            logs: [world.logged, second.logged]
+          };
         })
       );
       const published = await Promise.all(
@@ -38,12 +43,24 @@ describe("Data Stores provisioned at once", () => {
       );
 
       const records = await Promise.all(published.map(({ world, id }) => recordOf(world, id)));
+      const diagnostics = await readJobDiagnostics({
+        clientInstanceIds: instances.map(({ world }) => world.clientInstanceId),
+        kinds: ["data_store.provision"],
+        logs: instances.flatMap(({ logs }) => logs.flat())
+      });
+      const evidence = JSON.stringify(diagnostics);
       expect(
-        records.filter((record) => record.failure !== undefined).map((record) => record.failure)
+        records.filter((record) => record.failure !== undefined).map((record) => record.failure),
+        evidence
       ).toEqual([]);
-      expect(records.map((record) => record.status)).toEqual(
-        Array.from({ length: count }, () => "ready")
-      );
+      expect(
+        records.map((record) => record.status),
+        evidence
+      ).toEqual(Array.from({ length: count }, () => "ready"));
+      expect(
+        diagnostics.jobs.map(({ status, attempts }) => ({ status, attempts })),
+        evidence
+      ).toEqual(Array.from({ length: count }, () => ({ status: "succeeded", attempts: 1 })));
     });
   }
 });
