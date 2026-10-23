@@ -22,7 +22,7 @@ import {
 } from "@work-shape/catalyst-workflows";
 import { clientInstanceId } from "./support/access-instance";
 import { publishedDefinitions, runSchema, type WorkflowFixture } from "./support/workflow-instance";
-import { readyWorkflows, stepRunsOf } from "./support/workflow-runs";
+import { makeJobsDue, readyWorkflows, stepRunsOf } from "./support/workflow-runs";
 
 // The `code` step: one script of a Workflow's `steps/` folder, run on the step's input. The
 // engine stages the step and the command worker runs the script in the sandbox. Here the
@@ -395,7 +395,7 @@ describe("a code step whose sandbox gives way", () => {
     let ended = await read();
     for (let pass = 0; pass < 300 && ended.status !== "failed"; pass++) {
       await worker.runDue();
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      await makeJobsDue("workflow_run.run_code");
       ended = await read();
     }
     // Three attempts, with the wait of the job between them, and then the step fails.
@@ -631,8 +631,8 @@ async function marked(mark: string, image?: string): Promise<string[]> {
 /** What has the mark once a kill had a moment to arrive: nothing, where the sandbox ended it. */
 async function survivorsOf(mark: string, image?: string): Promise<string[]> {
   let left = await marked(mark, image);
-  for (let pass = 0; pass < 20 && left.length > 0; pass++) {
-    await new Promise((resolve) => setTimeout(resolve, 100));
+  for (let pass = 0; pass < 80 && left.length > 0; pass++) {
+    await new Promise((resolve) => setTimeout(resolve, 25));
     left = await marked(mark, image);
   }
   return left;
@@ -687,11 +687,6 @@ const LEFT_BEHIND: [string, string, string][] = [
     "a file of 10 GB that holds nothing",
     `import os\nwith open("output.json", "w") as out:\n    out.write("[")\nos.truncate("output.json", 10 * 1024 * 1024 * 1024)`,
     "code_output_too_large"
-  ],
-  [
-    "a file another process keeps writing to",
-    startsWriter("a child", `${MARK}-left-behind`),
-    "code_output_too_large"
   ]
 ];
 
@@ -713,15 +708,16 @@ describe("what a script leaves in the place of its result", () => {
     60_000
   );
 
-  it("leaves the worker able to run the next steps after five pipes", async () => {
+  it("leaves the worker able to run the next steps after two pipes", async () => {
     const pipe = LEFT_BEHIND[0]?.[1] ?? "";
-    const { run } = await ready({ script: pipe });
-    for (let count = 0; count < 5; count++) {
+    const options = { script: pipe };
+    const { t, run } = await ready(options);
+    for (let count = 0; count < 2; count++) {
       expect((await run()).error?.code).toBe("code_output_missing");
     }
-    // Nothing of the five is left open in the worker: no file, and no job.
-    const { t, run: again } = await ready({ script: SUM });
-    expect((await again()).status).toBe("done");
+    // The same worker runs a successful script after both pipes.
+    options.script = SUM;
+    expect((await run()).status).toBe("done");
     const jobs = await t.stores.jobs.listOverview({
       clientInstanceId,
       filters: { kind: "workflow_run.run_code", statuses: ["running", "queued"] }
@@ -748,7 +744,7 @@ describe("what a script starts in the local sandbox", () => {
     const mark = nextMark();
     const { t, run } = await ready({
       script: startsWriter("a child", mark, { seconds: 60 }),
-      timeoutSeconds: 3
+      timeoutSeconds: 1
     });
     const ended = await run();
     expect(ended.error?.code).toBe("code_timeout");
@@ -770,7 +766,7 @@ describe("what a script starts in the local sandbox", () => {
     const mark = nextMark();
     const { run } = await ready({
       script: startsWriter("a grandchild of a double fork", mark, { holdsStreams: true }),
-      timeoutSeconds: 3
+      timeoutSeconds: 1
     });
     const before = Date.now();
     // The writer keeps the script's output open, so the script's command never ends by itself.

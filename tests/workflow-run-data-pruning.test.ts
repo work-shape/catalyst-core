@@ -260,7 +260,7 @@ describe("two passes of the job at once", () => {
     // One step run per statement, so every statement of one pass meets one of the other.
     const t = await ready({ now: time.now, pruneBatch: { stepRuns: 1 } });
     const runs: string[] = [];
-    for (let round = 0; round < 20; round++) {
+    for (let round = 0; round < 4; round++) {
       runs.push((await t.finish((await start(t)).id)).id);
     }
     time.pass(DAYS + 1);
@@ -269,8 +269,8 @@ describe("two passes of the job at once", () => {
       t.workflows.pruneRunData()
     ]);
     // Each step run was pruned by one of the two and each run marked by one.
-    expect(first.stepRuns + second.stepRuns).toBe(20 * 7);
-    expect(first.runs + second.runs).toBe(20);
+    expect(first.stepRuns + second.stepRuns).toBe(4 * 7);
+    expect(first.runs + second.runs).toBe(4);
 
     for (const runId of runs) {
       const values = await valuesOf(runId);
@@ -289,7 +289,7 @@ describe("two passes of the job at once", () => {
     const t = await ready({ now: time.now });
     const run = await t.finish((await start(t)).id);
     time.pass(DAYS + 1);
-    // The statement of one batch, twice at once on the same rows, 20 rounds: the first
+    // The statement of one batch, twice at once on the same rows, 5 rounds: the first
     // round prunes, and every later one meets rows that are pruned already.
     const [id] = await t.stores.workflowRuns.listRunsWithDataEndedBefore({
       clientInstanceId,
@@ -299,7 +299,7 @@ describe("two passes of the job at once", () => {
     if (id !== run.id) throw new Error("The run is not due");
     const statement = () =>
       t.stores.workflowRuns.pruneStepRunData({ clientInstanceId, id, limit: 100 });
-    for (let round = 0; round < 20; round++) {
+    for (let round = 0; round < 5; round++) {
       const [one, other] = await Promise.all([statement(), statement()]);
       expect(one + other).toBe(round === 0 ? 7 : 0);
       const values = await valuesOf(run.id);

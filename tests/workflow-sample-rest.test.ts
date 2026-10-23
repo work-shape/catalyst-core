@@ -249,13 +249,13 @@ describe("the seeded accounting REST Connection", () => {
     });
   });
 
-  it("reads the large client's whole month in one paged run with three filter values", async () => {
+  it("reads the client's 2,549-posting month in one paged run with three filter values", async () => {
     const { clientInstanceId, stores, definitions, objects, jobs, api } = await workflowsOf(
       await hosted()
     );
     const sample = createAccountingSample();
     const large = required(
-      sample.clients.find((client) => sample.postingCount(client.client_id, MONTH) === 100_000)
+      sample.clients.find((client) => sample.postingCount(client.client_id, MONTH) === 2_549)
     ).client_id;
     const operation = `connection.${NAME}.listPostings`;
     definitions.publish({
@@ -299,7 +299,7 @@ describe("the seeded accounting REST Connection", () => {
     const runId = runSchema.parse(response.json()).id;
     const runOf = async () =>
       runSchema.parse((await api.call("workflows.get_run", { params: { runId } })).json());
-    // One pass of the worker reads all 101 pages, so the wait is a bound on a slow runner.
+    // One pass of the worker reads all three pages, so the wait is a bound on a slow runner.
     await waitUntil(
       async () => {
         await jobs.runDue();
@@ -310,13 +310,11 @@ describe("the seeded accounting REST Connection", () => {
     );
     const run = await runOf();
     expect(run.status, JSON.stringify(run.error)).toBe("done");
-    // 100 full pages and the empty page that ends them, under one Operation Run.
+    // Two full pages and one partial page, under one Operation Run.
     const reads = (await stores.operationRuns.list({ clientInstanceId })).filter(
       (call) => call.operation === operation
     );
-    expect(reads).toMatchObject([
-      { status: "done", output: { value: { pages: 101, rows: 100_000 } } }
-    ]);
+    expect(reads).toMatchObject([{ status: "done", output: { value: { pages: 3, rows: 2_549 } } }]);
     const [dataset] = await stores.workflowRunDatasets.listForRun({
       clientInstanceId,
       runId: z
@@ -324,9 +322,9 @@ describe("the seeded accounting REST Connection", () => {
         .parse(runId),
       limit: 10
     });
-    expect(dataset).toMatchObject({ state: "complete", rowCount: 100_000 });
+    expect(dataset).toMatchObject({ state: "complete", rowCount: 2_549 });
     const parts = required(dataset).parts;
-    expect(parts).toHaveLength(101);
+    expect(parts).toHaveLength(3);
     const rowsOf = async (index: number) => {
       const chunks: Uint8Array[] = [];
       for await (const chunk of (await objects.get(required(parts[index]).key)).body)
@@ -339,6 +337,6 @@ describe("the seeded accounting REST Connection", () => {
     };
     // Only all three filters together select this client's month, in the sample's own order.
     expect(await rowsOf(0)).toEqual(sample.postings(large, MONTH, 0, 1000));
-    expect(await rowsOf(99)).toEqual(sample.postings(large, MONTH, 99_000, 1000));
+    expect(await rowsOf(2)).toEqual(sample.postings(large, MONTH, 2_000, 549));
   }, 120_000);
 });

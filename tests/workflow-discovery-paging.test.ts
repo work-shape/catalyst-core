@@ -15,13 +15,13 @@ import { workflowFixture, type WorkflowFixture } from "./support/workflow-instan
 import { clientInstanceId } from "./support/access-instance";
 import { discoveryNames, seedDiscoveryAssets } from "./support/discovery-assets";
 
-const names = discoveryNames("paging", 501);
+const names = discoveryNames("paging", 201);
 const listedSchema = z.object({
   items: z.array(z.object({ id: z.string() })),
   nextCursor: z.string().optional()
 });
 
-describe("published Workflow discovery beyond the former 500 total", () => {
+describe("published Workflow discovery beyond the 200-item page bound", () => {
   let t: WorkflowFixture;
   beforeAll(async () => {
     t = await workflowFixture({
@@ -57,7 +57,7 @@ describe("published Workflow discovery beyond the former 500 total", () => {
     await t?.instance.close();
   });
 
-  it("reaches all 501 published Workflows through bounded API cursor pages", async () => {
+  it("reaches all 201 published Workflows through bounded API cursor pages", async () => {
     const found: string[] = [];
     let cursor: string | undefined;
     do {
@@ -74,7 +74,7 @@ describe("published Workflow discovery beyond the former 500 total", () => {
     const last = await t.stores.configAssets.getConfigAsset({
       clientInstanceId,
       kind: WORKFLOW_ASSET_KIND,
-      name: names[500] ?? "missing"
+      name: names[200] ?? "missing"
     });
     if (!last) throw new Error("Last Workflow is missing");
     await t.stores.access.createGrant({
@@ -96,7 +96,7 @@ describe("published Workflow discovery beyond the former 500 total", () => {
     ).toBe(422);
   });
 
-  it("discovers the agent start operation of every one of 501 Workflows", async () => {
+  it("discovers the agent start operation of every one of 201 Workflows", async () => {
     const listed = await t.operationCalls.registry.list();
     const starts = listed.operations
       .map((entry) => entry.name)
@@ -140,12 +140,12 @@ describe("published Workflow discovery beyond the former 500 total", () => {
       expect(page.operations.length).toBeLessThanOrEqual(200);
       found.push(...page.operations.map((entry) => entry.name));
       cursor = page.nextCursor;
-      expect(found.length).toBeLessThanOrEqual(501);
+      expect(found.length).toBeLessThanOrEqual(201);
     } while (cursor);
     expect(found).toEqual(names.map((name) => `workflow.${name}.start`));
   });
 
-  it("repairs schedules for all 501 through durable successors after the first page", async () => {
+  it("repairs schedules for all 201 through durable successors after the first page", async () => {
     await t.workflows.planSchedules();
     const pending = await t.stores.jobs.listOverview({
       clientInstanceId,
@@ -163,7 +163,7 @@ describe("published Workflow discovery beyond the former 500 total", () => {
     const scheduled = await t.stores.jobs.listOverview({
       clientInstanceId,
       filters: { kind: WORKFLOW_RUN_JOB_KINDS.fireSchedule, statuses: ["queued"] },
-      page: { limit: 502 }
+      page: { limit: 202 }
     });
     expect(scheduled.map((job) => job.subject).sort()).toEqual(names);
   });

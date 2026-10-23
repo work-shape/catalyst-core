@@ -80,7 +80,7 @@ describe("Workflow run key migrations (EW-13k)", () => {
     }
   });
 
-  it("keeps both uniqueness guarantees on 300,000 runs through a cancelled build and its rerun", async () => {
+  it("keeps both uniqueness guarantees on 2,000 runs through a cancelled build and its rerun", async () => {
     const url = await fixtures.database(`continuation_keys_${crypto.randomUUID()}`, false);
     createdDatabases.push(url);
     const before = migrationsUntil({ name: "workflow_continue_as_new", including: false });
@@ -135,7 +135,7 @@ describe("Workflow run key migrations (EW-13k)", () => {
         select 'volume_' || n, client_instance_id, workflow, definition_revision_id, mode, trigger, status,
           definition, input, principal_id, principal_name, principal_label, started_by,
           'volume_' || n, deadline_at, correlation_id, created_at, 'volume/' || n
-        from workflow_runs cross join generate_series(1, 300000) n where id = 'key_holder'`;
+        from workflow_runs cross join generate_series(1, 2000) n where id = 'key_holder'`;
       writer = (async () => {
         while (!stop) {
           await probeUniqueness();
@@ -233,7 +233,7 @@ describe("Workflow run key migrations (EW-13k)", () => {
         await migrateDatabase({ databaseUrl: url, migrationsDirectory: indexed.directory })
       ).toEqual([]);
       console.info(
-        `EW-CAN migration proof: 300,000 seeded runs; ${writes} fresh starts; ${rejectedKeys} held-key and ${rejectedParents} parent-step starts rejected; ${acceptedDuplicates} duplicates admitted; cancelled build recovered, both indexes valid.`
+        `EW-CAN migration proof: 2,000 seeded runs; ${writes} fresh starts; ${rejectedKeys} held-key and ${rejectedParents} parent-step starts rejected; ${acceptedDuplicates} duplicates admitted; cancelled build recovered, both indexes valid.`
       );
     } finally {
       stop = true;

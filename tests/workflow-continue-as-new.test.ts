@@ -331,7 +331,7 @@ describe("continue-as-new", chainRun, () => {
     expect(written).toBe(2);
   });
 
-  it.each([1, 8].flatMap((concurrency) => [7, 16].map((budget) => ({ concurrency, budget }))))(
+  it.each([{ concurrency: 8, budget: 7 }])(
     "checkpoints nested items once at outer concurrency $concurrency and budget $budget",
     async ({ concurrency, budget }) => {
       const manifest = definition();

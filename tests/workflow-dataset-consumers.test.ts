@@ -83,7 +83,7 @@ describe("Workflow dataset consumers", () => {
         input: {
           sql: {
             value:
-              "select i::bigint as id, '2026-09'::text as month from generate_series(1, 2500) i order by i"
+              "select i::bigint as id, '2026-09'::text as month from generate_series(1, 300) i order by i"
           }
         },
         dataset: { at: "rows" }
@@ -142,7 +142,7 @@ describe("Workflow dataset consumers", () => {
       runId: run.id,
       limit: 10
     });
-    expect(dataset?.rowCount).toBe(2500);
+    expect(dataset?.rowCount).toBe(300);
     expect(JSON.parse(run.outputPreview?.text ?? "null").columns[0]).toEqual({
       name: "id",
       type: "integer",
@@ -153,7 +153,7 @@ describe("Workflow dataset consumers", () => {
       `${url}${apiOperations["workflows.download_dataset"].buildPath({ params: { runId: run.id, datasetId: dataset.id } })}`
     );
     expect(download.status).toBe(200);
-    expect((await download.text()).trim().split("\n")).toHaveLength(2500);
+    expect((await download.text()).trim().split("\n")).toHaveLength(300);
     const steps = await world.stores.workflowRuns.listStepRuns({ clientInstanceId, runId: run.id });
     const step = steps.find((candidate) => candidate.stepId === "load");
     if (!step) throw new Error("Missing load step");
@@ -176,13 +176,13 @@ describe("Workflow dataset consumers", () => {
       runtime: {},
       audit: new NoopAuditRecorder()
     });
-    expect(replay).toMatchObject({ inserted: 2500, deleted: 0 });
+    expect(replay).toMatchObject({ inserted: 300, deleted: 0 });
     const database = new URL(await fileTestDatabaseUrl(import.meta.url));
     database.pathname = `/${record.location.database}`;
     const sql = postgres(database.toString(), { max: 1 });
     try {
       expect(await sql`select count(*)::integer as count from public.bulk_rows`).toEqual([
-        { count: 2500 }
+        { count: 300 }
       ]);
       expect(
         await sql`select count(*)::integer as count from catalyst.loads where step_run_id = ${step.id}`

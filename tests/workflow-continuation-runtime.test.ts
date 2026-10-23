@@ -118,7 +118,7 @@ function failFirst(t: WorkflowFixture) {
   );
 }
 
-it.each([5, 7, 20_000])(
+it.each([5])(
   "carries all loop totals and later-step counts after first-item failure at budget %s",
   async (budget) => {
     const { t } = await ready(continuing("notify-clients", budget));

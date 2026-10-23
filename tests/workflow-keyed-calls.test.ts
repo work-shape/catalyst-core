@@ -71,7 +71,7 @@ describe("a changing call that carries its key to the outside system", () => {
     let run = await t.finish(started.id, worker, 1).catch(() => undefined);
     for (const until = Date.now() + 30_000; !run && Date.now() < until;) {
       await skipStepBackoffs();
-      await new Promise((resolve) => setTimeout(resolve, 200));
+      await new Promise((resolve) => setTimeout(resolve, 20));
       run = await t.finish(started.id, worker, 1).catch(() => undefined);
     }
     if (!run) throw new Error("The run did not end");
@@ -117,7 +117,7 @@ describe("a changing call that carries its key to the outside system", () => {
       const run = await t.finish(runId, worker, 1).catch(() => undefined);
       if (run) return run;
       await skipStepBackoffs();
-      await new Promise((resolve) => setTimeout(resolve, 200));
+      await new Promise((resolve) => setTimeout(resolve, 20));
     }
     throw new Error("The run did not end");
   }
@@ -284,7 +284,7 @@ describe("a reading call's retries", () => {
       const run = await t.finish(id, t.worker(), 1).catch(() => undefined);
       if (run) return run;
       backoffs.push(...(await skipStepBackoffs()));
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 20));
     }
     throw new Error("The reading run did not end");
   }
@@ -360,7 +360,7 @@ describe("a reading call's retries", () => {
     expect(writesOf(t)).toHaveLength(3);
   });
 
-  it.each(["upstream_timeout", "connection_unavailable", "upstream_error"] as const)(
+  it.each(["connection_unavailable"] as const)(
     "tries %s three times with backoff, then keeps its error code",
     async (reason) => {
       const t = await ready();

@@ -179,17 +179,22 @@ export async function reach(t: WorkflowFixture, inCall: Promise<void>) {
  * a test does not sleep through the wait. Returns each wait it cut short, in milliseconds from
  * the start of the attempt before it. A wait that gives back its attempt, as after a 429, stays.
  */
-export const skipStepBackoffs = () => skipWaits(true);
+export const skipStepBackoffs = () =>
+  makeJobsDue("workflow_run.execute_step", { backoffsOnly: true });
 
 /** Makes each waiting step job due at once, a deferral among them; see `skipStepBackoffs`. */
-export const skipStepWaits = () => skipWaits(false);
+export const skipStepWaits = () => makeJobsDue("workflow_run.execute_step");
 
-async function skipWaits(backoffsOnly: boolean): Promise<number[]> {
+/** Makes queued jobs of one kind due on the database clock, returning the waits cut short. */
+export async function makeJobsDue(
+  kind: string,
+  { backoffsOnly = false }: { backoffsOnly?: boolean } = {}
+): Promise<number[]> {
   return withTestSql(async (sql) => {
     const rows = await sql<{ wait_ms: number }[]>`
       with waiting as (
-        select id, run_after - started_at as wait from platform_jobs
-        where kind = 'workflow_run.execute_step' and status = 'queued' and run_after > now()
+        select id, run_after - coalesce(started_at, created_at) as wait from platform_jobs
+        where kind = ${kind} and status = 'queued' and run_after > now()
           and (${!backoffsOnly} or error_code is not null)
         for update
       )

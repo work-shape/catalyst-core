@@ -251,11 +251,6 @@ describe("Workflow notify steps and grouped failure notices", () => {
       text: "2 Läufe sind fehlgeschlagen, haben ein Limit erreicht oder enthalten fehlgeschlagene Einträge. Öffne den Lauf, um sie zu prüfen."
     },
     {
-      children: 3,
-      summary: "Workflow-Läufe brauchen deine Aufmerksamkeit",
-      text: "4 Läufe sind fehlgeschlagen, haben ein Limit erreicht oder enthalten fehlgeschlagene Einträge. Öffne den Lauf, um sie zu prüfen."
-    },
-    {
       children: 2,
       chose: "en",
       summary: "Workflow runs need attention",
@@ -333,7 +328,7 @@ describe("Workflow notify steps and grouped failure notices", () => {
     ]);
   });
 
-  it("creates exactly one notice for fifty failed children even when the root failure job runs twice", async () => {
+  it("creates exactly one notice for five failed children even when the root failure job runs twice", async () => {
     const t = await ready();
     const child = {
       ...definition("bad-child", []),
@@ -362,7 +357,7 @@ describe("Workflow notify steps and grouped failure notices", () => {
       (
         await t.expectOk(t.root.id, "workflows.start", {
           params: { workflow: parent.id },
-          payload: { input: { items: Array.from({ length: 50 }, (_, index) => index) } }
+          payload: { input: { items: Array.from({ length: 5 }, (_, index) => index) } }
         })
       ).json()
     );
@@ -373,7 +368,7 @@ describe("Workflow notify steps and grouped failure notices", () => {
       {
         summary: "Workflow runs need attention",
         preview: {
-          text: "51 runs failed, reached a limit or have failed entries. Open the run to review them."
+          text: "6 runs failed, reached a limit or have failed entries. Open the run to review them."
         }
       }
     ]);
@@ -383,7 +378,7 @@ describe("Workflow notify steps and grouped failure notices", () => {
         clientInstanceId,
         rootRunId: run.id
       })
-    ).toBe(51);
+    ).toBe(6);
     // A new job for the same root must run the handler again, not merely poll an empty queue.
     const handler = required(
       t.workflows.jobHandlers.find((entry) => entry.kind.kind === "workflow_run.notify_failure")

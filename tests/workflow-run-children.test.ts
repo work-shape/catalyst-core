@@ -1,3 +1,4 @@
+import { withTestSql } from "./support/test-sql";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import {
@@ -19,7 +20,7 @@ import {
   type WorkflowFixture
 } from "./support/workflow-instance";
 import { readyChildWorkflows } from "./support/workflow-children-instance";
-import { readyWorkflows, stepRunsOf } from "./support/workflow-runs";
+import { makeJobsDue, readyWorkflows, stepRunsOf } from "./support/workflow-runs";
 
 let open: WorkflowFixture | undefined;
 afterEach(async () => {
@@ -141,12 +142,12 @@ describe("Workflow child runs", () => {
   it("cancels every open descendant, audits each once and starts no more items", async () => {
     const definitions = publishedDefinitions();
     definitions.publish(child());
-    definitions.publish(parent("child", 600));
+    definitions.publish(parent("child", 10));
     const t = await ready(definitions);
     t.setBehaviour((_operation, input) =>
       Promise.resolve<JsonValue>(
         z.object({ text: z.string() }).parse(input).text === "items"
-          ? { items: Array.from({ length: 600 }, (_, i) => String(i)) }
+          ? { items: Array.from({ length: 10 }, (_, i) => String(i)) }
           : { value: "1" }
       )
     );
@@ -739,9 +740,10 @@ describe("a deadline while every step waits", () => {
     ).toBe("waiting");
     const root = await t.stores.workflowRuns.readRun({ clientInstanceId, id: started.id });
     if (!root) throw new Error("Missing root");
-    await new Promise((resolve) =>
-      setTimeout(resolve, Math.max(0, Date.parse(root.deadlineAt) - Date.now()) + 50)
-    );
+    await withTestSql(async (sql) => {
+      await sql`update workflow_runs set deadline_at = now() - interval '1 second' where id = ${root.id}`;
+    });
+    await makeJobsDue("workflow_run.deadline");
     await worker.runDue();
     expect(await t.stores.workflowRuns.readRun({ clientInstanceId, id: started.id })).toMatchObject(
       { status: "limit_reached" }

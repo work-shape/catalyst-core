@@ -118,7 +118,7 @@ export async function prepared(
     Promise.resolve({
       clients: Array.from({ length: count }, (_, index) => ({
         index,
-        valid: ![1, 501, 999].includes(index)
+        valid: ![1, 11, 19].includes(index)
       }))
     })
   );
@@ -195,7 +195,7 @@ export async function prepared(
     execute: async () => ({
       clients: (async function* () {
         for (let index = 0; index < count; index++)
-          yield { index, valid: ![1, 501, 999].includes(index) };
+          yield { index, valid: ![1, 11, 19].includes(index) };
       })()
     })
   };

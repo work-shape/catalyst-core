@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import type { JsonValue } from "@work-shape/catalyst-core";
-import { workflowsConfigSchema } from "@work-shape/catalyst-config-schema";
 import { parseWorkflowManifest } from "@work-shape/catalyst-workflows";
 import {
   publishedDefinitions,
@@ -105,6 +104,7 @@ describe("a loop with concurrency above 1", () => {
       expect(run.status).toBe("done");
       expect(seen.most).toBe(stepSlots);
       const steps = await stepRunsOf(t, run.id);
+      expect(steps.filter((step) => step.key !== "each_client" && step.concurrency)).toEqual([]);
       expect(steps.find((step) => step.key === "each_client")?.concurrency).toEqual({
         asked: 8,
         ranWith: stepSlots
@@ -137,23 +137,6 @@ describe("a loop with concurrency above 1", () => {
       bodyCounts: { send: { total: 8, done: 8, failed: 0, running: 0 } }
     });
     expect(run.stepRunCount).toBe(12);
-  });
-
-  // Fails without the change: a run said nowhere that a process ran fewer items at once than
-  // its loop asked for.
-  it("says on the loop's step run that a process ran fewer items at once than the loop asked for", async () => {
-    const t = await ready({ concurrency: 8 });
-    const run = await t.finish((await start(t)).id);
-    const stepRuns = await stepRunsOf(t, run.id);
-    expect(stepRuns.find((stepRun) => stepRun.key === "each_client")?.concurrency).toEqual({
-      asked: 8,
-      ranWith: workflowsConfigSchema.parse({}).stepSlots
-    });
-    expect(workflowsConfigSchema.parse({}).stepSlots).toBeLessThan(8);
-    // No other step run says anything of it.
-    expect(
-      stepRuns.filter((stepRun) => stepRun.key !== "each_client" && stepRun.concurrency)
-    ).toEqual([]);
   });
 
   it("starts the items in the order of the list and keeps the count of those going", async () => {
@@ -287,7 +270,7 @@ describe("a loop that stops inside a loop that continues", () => {
               id: "each_part",
               name: "For each part",
               type: "loop",
-              items: { step: "clients", path: "clients" },
+              items: { step: "clients", path: "parts" },
               itemLabel: "id",
               ...inner,
               steps: [
@@ -331,7 +314,7 @@ describe("a loop that stops inside a loop that continues", () => {
     // machine's affair, not the engine's.
     let withIt = 0;
     t.setBehaviour(async (operation, input): Promise<JsonValue> => {
-      if (operation === "echo") return { clients: CLIENTS };
+      if (operation === "echo") return { clients: CLIENTS.slice(0, 3), parts: CLIENTS.slice(0, 4) };
       const text = JSON.stringify(input);
       if (!text.includes('"client":"client-0"') || !text.includes('"part":"')) {
         return { received: input };
@@ -364,8 +347,8 @@ describe("a loop that stops inside a loop that continues", () => {
     // and not the step after the parts.
     expect(ofFirst.sort()).toEqual(["client-0/client-0", "client-0/client-1", "client-0/client-2"]);
     expect(calls).not.toContain("after:client-0");
-    // Every other client ran whole: eight parts and the step after them, each once.
-    expect(calls).toHaveLength(3 + 7 * 9);
+    // Every other client ran whole: four parts and the step after them, each once.
+    expect(calls).toHaveLength(3 + 2 * 5);
     expect(new Set(calls).size).toBe(calls.length);
 
     const stepRuns = await stepRunsOf(t, run.id);
@@ -385,10 +368,10 @@ describe("a loop that stops inside a loop that continues", () => {
 
     // The outer loop counts that client as failed and the run ends done.
     expect(run.status).toBe("done");
-    expect(JSON.parse(run.outputPreview?.text ?? "null")).toEqual({ sent: 7, failed: 1 });
+    expect(JSON.parse(run.outputPreview?.text ?? "null")).toEqual({ sent: 2, failed: 1 });
     expect(stepRuns.find((stepRun) => stepRun.key === "each_client")?.loop).toEqual({
-      total: 8,
-      done: 7,
+      total: 3,
+      done: 2,
       failed: 1,
       running: 0
     });

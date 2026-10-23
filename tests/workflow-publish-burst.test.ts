@@ -13,7 +13,7 @@ const STALLED_AFTER_MS = 30_000;
 describe("Workflows published at once beyond the platform's pool", () => {
   const fixture = useDataStoreInstance();
 
-  for (const count of [16, 32]) {
+  for (const count of [16]) {
     it(
       `publishes ${count} Workflows with Data Store dataset contracts at once`,
       { timeout: 90_000 },

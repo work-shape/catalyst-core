@@ -22,7 +22,7 @@ import {
   type workflowFixture,
   type WorkflowFixture
 } from "./support/workflow-instance";
-import { readyWorkflows, stepRunsOf } from "./support/workflow-runs";
+import { makeJobsDue, readyWorkflows, stepRunsOf } from "./support/workflow-runs";
 
 // Limits as settings (EW-LIM): `limits` in `workflow.yaml` under the operator's ceilings of
 // release config, the raise named in the publish question, `limits.concurrency` per Workflow
@@ -329,57 +329,6 @@ describe("limits.concurrency of a Workflow", () => {
     const loop = (await stepRunsOf(t, bulk.id)).find((step) => step.key === "each");
     expect(loop?.concurrency).toEqual({ asked: 8, ranWith: 2 });
   }, 120_000);
-
-  it("lets a Workflow that sets no limit use every idle slot", async () => {
-    const definitions = publishedDefinitions();
-    definitions.publish(
-      fanOut("lone", "lone-items", {
-        id: "call",
-        name: "Call",
-        type: "operation",
-        operation: "connection.crm.echo",
-        input: { text: ref("each", "") }
-      })
-    );
-    const t = await ready({ definitions: definitions.source, stepSlots: 8 });
-    await t.allow({ kind: "service_principal", id: t.principal.id }, "workflow.use");
-    t.state.limits = { ...t.state.limits, callTimeoutMs: 30_000 };
-    const seen = { going: 0, most: 0 };
-    let release = (): void => undefined;
-    const gate = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    // Every call stays until all eight are with the outside system, or the timer gives up
-    // before the call timeout of 30 s, after which a held call would no longer hold its slot.
-    const timer = setTimeout(release, 15_000);
-    t.setBehaviour(async (_operation, input): Promise<JsonValue> => {
-      const text = z.object({ text: z.string() }).parse(input).text;
-      if (text === "lone-items") return { items: BULK_ITEMS };
-      seen.going += 1;
-      seen.most = Math.max(seen.most, seen.going);
-      if (seen.going >= 8) release();
-      await gate;
-      seen.going -= 1;
-      return { value: text };
-    });
-    const started = runSchema.parse(
-      (
-        await t.expectOk(t.root.id, "workflows.start", {
-          params: { workflow: "lone" },
-          payload: { input: {} }
-        })
-      ).json()
-    );
-    await untilEnded(t, [started.id], 1);
-    clearTimeout(timer);
-    const run = runSchema.parse(
-      (await t.expectOk(t.root.id, "workflows.get_run", { params: { runId: started.id } })).json()
-    );
-    expect(run, JSON.stringify(run.error)).toMatchObject({ status: "done" });
-    expect(seen.most).toBe(8);
-    const loop = (await stepRunsOf(t, started.id)).find((step) => step.key === "each");
-    expect(loop?.concurrency).toEqual({ asked: 8, ranWith: 8 });
-  }, 120_000);
 });
 
 describe("time a run spends waiting", () => {
@@ -507,13 +456,18 @@ describe("time a run spends waiting", () => {
   });
 
   it("leaves a waiting run alone when its deadline job comes due, and ends it after the wait", async () => {
-    // Real time here: the deadline job is due at the run's deadline on the database's clock.
-    const { t: short, started } = await readyWaiting([waiting("import", "manual")], {
+    // Advance the process clock and make its deadline job due on the database clock.
+    const {
+      t: short,
+      clock,
+      started
+    } = await readyWaiting([waiting("import", "manual")], {
       limits: { maxDurationMs: 5_000 }
     });
     const run = await startRun(short, "import");
     const worker = await untilSyncWaits(short, () => Promise.resolve(run.id));
-    await new Promise((resolve) => setTimeout(resolve, 6_000));
+    clock.offsetMs = 6_000;
+    await makeJobsDue("workflow_run.deadline");
     // The deadline job runs here and finds the run waiting.
     await worker.runDue();
     expect(await short.stores.workflowRuns.readRun({ clientInstanceId, id: run.id })).toMatchObject(

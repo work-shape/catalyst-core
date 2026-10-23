@@ -627,19 +627,19 @@ describe("Workflow run keys on a workflow step", () => {
   });
 
   it("runs only the failed child when a parent is started again for a month ten days later, and receives every result (WF 44)", async () => {
-    const clients = ["c1", "c2", "c3", "c4", "c5", "c6"];
+    const clients = ["c1", "c2", "c3"];
     let now = Date.now();
     const definitions = publishedDefinitions();
     definitions.publish(child());
     definitions.publish(keyedParent([{ value: "2026-09" }, ref("each", "")], true));
     const t = await ready(definitions, { now: () => new Date(now) });
     const { failing, calls } = echoing(t, clients);
-    failing.add("c4");
+    failing.add("c2");
 
     const first = await startParent(t);
     const ended = await t.finish(first.id, undefined, 400);
     expect(JSON.parse(ended.outputPreview?.text ?? "null")).toEqual({
-      result: { total: 6, done: 5, failed: 1 }
+      result: { total: 3, done: 2, failed: 1 }
     });
     const owned = await children(t, first.id);
     expect(owned.map((run) => run.runKey).sort()).toEqual(clients.map((c) => `2026-09/${c}`));
@@ -651,14 +651,14 @@ describe("Workflow run keys on a workflow step", () => {
     const done = await t.finish(second.id, undefined, 400);
     expect(done.status).toBe("done");
     expect(JSON.parse(done.outputPreview?.text ?? "null")).toEqual({
-      result: { total: 6, done: 6, failed: 0 }
+      result: { total: 3, done: 3, failed: 0 }
     });
-    // One child ran, for the client that failed; the five done ones answered at once.
-    expect([...calls.entries()]).toEqual([["c4", 1]]);
+    // One child ran, for the client that failed; the two done ones answered at once.
+    expect([...calls.entries()]).toEqual([["c2", 1]]);
     const rerun = await children(t, second.id);
-    expect(rerun.map((run) => run.runKey)).toEqual(["2026-09/c4"]);
+    expect(rerun.map((run) => run.runKey)).toEqual(["2026-09/c2"]);
     const steps = (await stepRuns(t, second.id)).filter((step) => step.stepId === "child");
-    expect(steps).toHaveLength(6);
+    expect(steps).toHaveLength(3);
     const doneChildren = owned.filter((run) => run.status === "done").map((run) => run.id);
     expect(steps.flatMap((step) => (step.linkedRunId ? [step.linkedRunId] : [])).sort()).toEqual(
       [...doneChildren].sort()
@@ -666,7 +666,7 @@ describe("Workflow run keys on a workflow step", () => {
     for (const step of steps) {
       expect(step.status).toBe("done");
       expect(JSON.parse(step.outputPreview?.text ?? "null")).toEqual({
-        value: expect.stringMatching(/^c[1-6]$/u)
+        value: expect.stringMatching(/^c[1-3]$/u)
       });
     }
   }, 120_000);

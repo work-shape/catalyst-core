@@ -13,7 +13,7 @@ import {
   workflowFixture,
   type WorkflowFixture
 } from "./support/workflow-instance";
-import { readyWorkflows } from "./support/workflow-runs";
+import { makeJobsDue, readyWorkflows } from "./support/workflow-runs";
 
 // The clocks of a schedule. The job of a due time is claimed on the database's clock and
 // handled by a process with a clock of its own, and the due times are read on the clock of
@@ -242,8 +242,8 @@ describe("a schedule whose process and database disagree on the time", () => {
     await due(t, dueAt);
     const worker = t.worker();
     for (let pass = 0; pass < 200 && (await jobs(t, "dead")) === 0; pass++) {
+      await makeJobsDue(workflowScheduleJobKind.kind);
       await worker.runDue();
-      await new Promise((resolve) => setTimeout(resolve, 100));
     }
     expect(await jobs(t, "dead")).toBe(1);
     expect(await scheduledFor(t)).toEqual([]);

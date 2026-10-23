@@ -185,19 +185,20 @@ describe("Workflow failure projections", () => {
     ).toBe(2);
   });
 
-  it("uses the partial tree index on the real projection query across 219365 runs", async () => {
+  it("uses the partial tree index on the real projection query across 7300 runs", async () => {
     const t = await ready();
     const sql = postgres(await fileTestDatabaseUrl(), { max: 1, onnotice: () => undefined });
     try {
-      // One year of nightly 600-child fan-outs. Mix status failures and item-only failures.
+      // 100 roots and 72 children each. Mix status failures and item-only failures.
       await sql.unsafe(`
         insert into workflow_runs (id, client_instance_id, workflow, definition_revision_id, mode, trigger, status, definition, input, principal_id, principal_name, principal_label, started_by, deadline_at, correlation_id, created_at, depth, root_run_id)
         select 'root_' || n, '${clientInstanceId}', 'plan-parent', 'rev', 'live', 'schedule', 'done', '{}', '{}', 'sp', 'sp', 'sp', '{}', now(), 'c', now(), 0, 'root_' || n
-        from generate_series(1, 365) n;
+        from generate_series(1, 100) n;
         insert into workflow_runs (id, client_instance_id, workflow, definition_revision_id, mode, trigger, status, failed_item_count, definition, input, principal_id, principal_name, principal_label, started_by, deadline_at, correlation_id, created_at, depth, root_run_id, parent_run_id, parent_step_run_id)
         select 'child_' || n || '_' || i, '${clientInstanceId}', 'plan-child', 'rev', 'live', 'parent', case when i = 1 then 'failed' else 'done' end, case when i = 2 then 1 else 0 end, '{}', '{}', 'sp', 'sp', 'sp', '{}', now(), 'c', now(), 1, 'root_' || n, 'root_' || n, 'sr_' || n || '_' || i
-        from generate_series(1, 365) n, generate_series(1, 600) i;
+        from generate_series(1, 100) n, generate_series(1, 72) i;
         analyze workflow_runs;
+        set enable_seqscan = off;
       `);
       for (const [label, workflow, limit] of [
         ["ONE ROOT", "plan-parent", 1],

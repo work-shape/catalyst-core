@@ -412,7 +412,7 @@ export async function writeProbeRecord(name: string, record: unknown): Promise<s
   return path;
 }
 
-/** Waits for a condition of the database or the API without asking twenty times a second. */
+/** Waits for a condition of the database or the API, checking every 25 ms. */
 export async function waitFor(
   condition: () => boolean | Promise<boolean>,
   description: string,
@@ -421,7 +421,7 @@ export async function waitFor(
   const deadline = Date.now() + timeoutMs;
   while (!(await condition())) {
     if (Date.now() > deadline) throw new Error(`Timed out waiting until ${description}`);
-    await new Promise<void>((resolve) => setTimeout(resolve, 250));
+    await new Promise<void>((resolve) => setTimeout(resolve, 25));
   }
 }
 

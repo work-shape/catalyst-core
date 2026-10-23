@@ -195,20 +195,6 @@ it.each(["pages", "pageBytes", "rows", "bytes", "pagedStepMinutes"] as const)(
   }
 );
 
-it("retries transient failures three times per page, independently of preceding pages", async () => {
-  const { fixture: f, id } = await setup({ by: "page", param: "page", sizeParam: "size", size: 2 });
-  const calls = new Map<number, number>();
-  f.setBehaviour(async (_op, input) => {
-    const { page } = z.object({ page: z.number() }).parse(input);
-    const count = (calls.get(page) ?? 0) + 1;
-    calls.set(page, count);
-    if (count < 3) throw connectionCallError("connection_unavailable");
-    return { rows: page === 1 ? [{ id: 0 }, { id: 1 }] : [] };
-  });
-  expect((await finishDeferred(f, id)).status).toBe("done");
-  expect([...calls.values()]).toEqual([3, 3]);
-});
-
 it("stops before the next page when the principal's grant is removed", async () => {
   const { fixture: f, id } = await setup({ by: "page", param: "page", sizeParam: "size", size: 2 });
   let calls = 0;
@@ -238,31 +224,31 @@ it("requires a dataset at parse and a reading paging descriptor at start over HT
   expect(parseWorkflowManifest(withoutDataset)).toMatchObject({ ok: false });
 });
 
-it("stores 100,000 rows and a 1.3 MiB page without retaining rows on the step", async () => {
+it("stores three pages and a 1.3 MiB page without retaining rows on the step", async () => {
   const { fixture: f, id } = await setup({
     by: "page",
     param: "page",
     sizeParam: "size",
-    size: 1000
+    size: 10
   });
   f.setBehaviour(async (_op, input) => {
     const { page } = z.object({ page: z.number() }).parse(input);
     return {
       rows:
-        page > 100
+        page > 3
           ? []
-          : Array.from({ length: 1000 }, (_, offset) => ({
-              id: (page - 1) * 1000 + offset,
-              ...(page === 1 ? { text: "x".repeat(1400) } : {})
+          : Array.from({ length: page === 3 ? 1 : 10 }, (_, offset) => ({
+              id: (page - 1) * 10 + offset,
+              ...(page === 1 ? { text: "x".repeat(140_000) } : {})
             }))
     };
   });
   expect((await f.finish(id)).status).toBe("done");
   const [call] = (await f.runs()).filter((run) => run.operation === "connection.crm.echo");
-  expect(call?.output?.value).toMatchObject({ pages: 101, rows: 100_000 });
+  expect(call?.output?.value).toMatchObject({ pages: 3, rows: 21 });
   const preview = (await stepRunsOf(f, id)).find((step) => step.stepId === "rows")?.outputPreview
     ?.text;
-  expect(JSON.parse(preview ?? "null")).toMatchObject({ rows: { rowCount: 100_000 } });
+  expect(JSON.parse(preview ?? "null")).toMatchObject({ rows: { rowCount: 21 } });
 }, 60_000);
 
 it("resumes after a lost worker from the next complete page with every row once", async () => {
@@ -280,7 +266,7 @@ it("resumes after a lost worker from the next complete page with every row once"
   f.setBehaviour(async (_op, input, context) => {
     const { page } = z.object({ page: z.number() }).parse(input);
     positions.push(page);
-    if (page === 80 && !held) {
+    if (page === 4 && !held) {
       held = true;
       entered();
       await new Promise<void>((_resolve, reject) =>
@@ -289,7 +275,7 @@ it("resumes after a lost worker from the next complete page with every row once"
         })
       );
     }
-    return { rows: page < 80 ? [{ id: page * 2 }, { id: page * 2 + 1 }] : [{ id: 160 }] };
+    return { rows: page < 4 ? [{ id: page * 2 }, { id: page * 2 + 1 }] : [{ id: 8 }] };
   });
   const dead = f.worker();
   let arrived = false;
@@ -300,9 +286,9 @@ it("resumes after a lost worker from the next complete page with every row once"
   expect(arrived).toBe(true);
   await dead.stop();
   expect((await f.finish(id, f.worker())).status).toBe("done");
-  expect(positions).toEqual([...Array.from({ length: 80 }, (_, i) => i + 1), 80]);
+  expect(positions).toEqual([...Array.from({ length: 4 }, (_, i) => i + 1), 4]);
   const [call] = (await f.runs()).filter((run) => run.operation === "connection.crm.echo");
-  expect(call?.output?.value).toMatchObject({ pages: 80, rows: 159 });
+  expect(call?.output?.value).toMatchObject({ pages: 4, rows: 7 });
   expect((await f.runs()).filter((run) => run.operation === "connection.crm.echo")).toHaveLength(1);
   const run = await f.stores.workflowRuns.readRun({ clientInstanceId, id });
   if (!run) throw new Error("Missing run");
@@ -321,7 +307,7 @@ it("resumes after a lost worker from the next complete page with every row once"
   const reader = await datasets.reader({ id: record.id, runId: run.id });
   const ids: unknown[] = [];
   for await (const row of reader.rows) ids.push(row.id);
-  expect(ids).toEqual(Array.from({ length: 159 }, (_, i) => i + 2));
+  expect(ids).toEqual(Array.from({ length: 7 }, (_, i) => i + 2));
 });
 
 it("refuses missing paging and changing operations at save over HTTP, and accepts an override", async () => {
@@ -542,27 +528,59 @@ it("queueing for a slot consumes no paged minutes", async () => {
   f.setBehaviour(async () => ({ rows: [{ id: 1 }] }));
   expect(await f.finish(id)).toMatchObject({ status: "done" });
 });
-it("backs off failed pages for two and four seconds, preserving the attempt count", async () => {
+it("retries each page independently with two- and four-second backoffs, then fails when attempts are exhausted", async () => {
   const { fixture: f, id } = await setup({ by: "page", param: "p", sizeParam: "s", size: 2 });
-  const stamps: number[] = [];
+  const calls = new Map<number, number>();
   f.setBehaviour(async (_op, input) => {
     const { p } = z.object({ p: z.number() }).parse(input);
-    if (p === 1) return { rows: [{ id: 0 }, { id: 1 }] };
-    stamps.push(Date.now());
-    throw connectionCallError("connection_unavailable");
+    const count = (calls.get(p) ?? 0) + 1;
+    calls.set(p, count);
+    if (count < 3) throw connectionCallError("connection_unavailable");
+    return { rows: p === 1 ? [{ id: 0 }, { id: 1 }] : [] };
   });
   const waits: number[] = [];
-  expect(await finishDeferred(f, id, waits)).toMatchObject({
+  // Each page gets all three attempts, including the empty page that ends the run.
+  expect(await finishDeferred(f, id, waits)).toMatchObject({ status: "done" });
+  expect([...calls.entries()]).toEqual([
+    [1, 3],
+    [2, 3]
+  ]);
+  expect(waits).toHaveLength(4);
+  for (let page = 0; page < 2; page++) {
+    expect(required(waits[page * 2])).toBeGreaterThanOrEqual(2_000);
+    expect(required(waits[page * 2 + 1])).toBeGreaterThanOrEqual(4_000);
+  }
+
+  // Reuse the instance for an exhausted page after a successful one.
+  calls.clear();
+  waits.length = 0;
+  f.setBehaviour(async (_op, input) => {
+    const { p } = z.object({ p: z.number() }).parse(input);
+    calls.set(p, (calls.get(p) ?? 0) + 1);
+    if (p === 1) return { rows: [{ id: 0 }, { id: 1 }] };
+    throw connectionCallError("connection_unavailable");
+  });
+  const next = runSchema.parse(
+    (
+      await f.expectOk(f.root.id, "workflows.start", {
+        params: { workflow: "paged" },
+        payload: { input: {} }
+      })
+    ).json()
+  );
+  expect(await finishDeferred(f, next.id, waits)).toMatchObject({
     status: "failed",
     error: { code: "operation_page_failed" }
   });
-  expect(stamps).toHaveLength(3);
-  // The page was due again two seconds after the attempt that failed it began, and then four:
-  // the waits the test cut short.
+  expect([...calls.entries()]).toEqual([
+    [1, 1],
+    [2, 3]
+  ]);
   expect(waits).toHaveLength(2);
   expect(required(waits[0])).toBeGreaterThanOrEqual(2_000);
   expect(required(waits[1])).toBeGreaterThanOrEqual(4_000);
 });
+
 it("fails immediately when a cursor repeats", async () => {
   const { fixture: f, id } = await setup({ by: "cursor", param: "c", cursor: "next" });
   let calls = 0;

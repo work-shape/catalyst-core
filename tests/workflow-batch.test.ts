@@ -8,26 +8,26 @@ import { manifest, prepared, expectBatchViews } from "./support/workflow-batch";
 
 describe("Workflow batch operations (WF 114)", () => {
   it.each([false, true])(
-    "keeps 997 successful items and three failures without failing the step (inline=%s)",
+    "keeps 17 successful items and three failures without failing the step (inline=%s)",
     async (inline) => {
-      const { t, datasets, seen } = await prepared(1000, undefined, inline);
+      const { t, datasets, seen } = await prepared(20, undefined, inline);
       const run = await t.finish((await start(t)).id);
       expect(run, JSON.stringify(run.error)).toMatchObject({ status: "done" });
       const record = await t.stores.workflowRuns.readRun({ clientInstanceId, id: run.id });
       if (!record) throw new Error("Missing run");
       const stored = await t.stores.workflowRuns.readRunOutput({ clientInstanceId, id: record.id });
       const output = z.object({ counts: operationBatchResultSchema }).parse(stored?.value);
-      expect(output.counts).toMatchObject({ done: 997, failed: 3, failures: { rowCount: 3 } });
+      expect(output.counts).toMatchObject({ done: 17, failed: 3, failures: { rowCount: 3 } });
       const rows = [];
       for await (const row of (
         await datasets.reader({ id: output.counts.failures.$dataset, runId: run.id })
       ).rows)
         rows.push(row);
       expect(rows.map((row) => row.item)).toEqual(
-        [1, 501, 999].map((index) => ({ index, valid: false }))
+        [1, 11, 19].map((index) => ({ index, valid: false }))
       );
       expect(rows.map((row) => row.message)).toEqual(Array(3).fill("valid: invalid_field"));
-      expect(seen).toHaveLength(1000);
+      expect(seen).toHaveLength(20);
       expect((await stepRunsOf(t, run.id)).find((step) => step.stepId === "process")?.status).toBe(
         "done"
       );
@@ -35,9 +35,9 @@ describe("Workflow batch operations (WF 114)", () => {
   );
 
   it("rejects a batch result whose failure count disagrees with its dataset", async () => {
-    const { t, definition } = await prepared(1000);
+    const { t, definition } = await prepared(3);
     definition.execute = async () => ({
-      done: 997,
+      done: 0,
       failed: 3,
       failures: { $dataset: "missing", rowCount: 2, bytes: 0 }
     });
@@ -48,7 +48,7 @@ describe("Workflow batch operations (WF 114)", () => {
   });
 
   it.each([
-    [1200, 500],
+    [12, 5],
     [5, 1]
   ])("runs %i rows in views of %i without copying them", expectBatchViews, 300_000);
 

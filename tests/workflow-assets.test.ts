@@ -164,36 +164,37 @@ describe("a Workflow stored as an asset", () => {
     expect(await published(t)).toBe(live);
   });
 
-  it.each([
-    ["process", [], { done: 0, failed: 0 }, false],
-    ["data", [], { done: 0, failed: 0 }, true],
-    ["data", [{ id: "one" }], { done: 0, failed: 0 }, true],
-    ["data", [{ id: "one" }], { done: 1, failed: 0 }, false],
-    ["data", [{ id: "one" }], { done: 0, failed: 1 }, false],
-    ["data", [{ id: "one" }], { received: "unknown" }, false],
-    ["data", [{ id: "one" }], { table: "rows", inserted: 0, skipped: 0 }, true],
-    ["data", [{ id: "one" }], { withdrawn: 0 }, true],
-    [
-      "data",
-      [{ id: "one" }],
-      {
-        accepted: 0,
-        done: 0,
-        failed: 0,
-        withdrawn: 0,
-        failures: { $dataset: "empty", rowCount: 0, bytes: 0 }
-      },
-      true
-    ],
-    ["data", [{ id: "one" }], { done: "0", failed: 0 }, false]
-  ] as const)(
-    "classifies a %s run with items %j and write outcome %j as empty=%s",
-    async (kind, clients, output, empty) => {
-      const t = await ready();
+  it("classifies process and data runs for all ten item and write outcomes", async () => {
+    const t = await ready();
+    let revision: number | null = null;
+    const cases = [
+      ["process", [], { done: 0, failed: 0 }, false],
+      ["data", [], { done: 0, failed: 0 }, true],
+      ["data", [{ id: "one" }], { done: 0, failed: 0 }, true],
+      ["data", [{ id: "one" }], { done: 1, failed: 0 }, false],
+      ["data", [{ id: "one" }], { done: 0, failed: 1 }, false],
+      ["data", [{ id: "one" }], { received: "unknown" }, false],
+      ["data", [{ id: "one" }], { table: "rows", inserted: 0, skipped: 0 }, true],
+      ["data", [{ id: "one" }], { withdrawn: 0 }, true],
+      [
+        "data",
+        [{ id: "one" }],
+        {
+          accepted: 0,
+          done: 0,
+          failed: 0,
+          withdrawn: 0,
+          failures: { $dataset: "empty", rowCount: 0, bytes: 0 }
+        },
+        true
+      ],
+      ["data", [{ id: "one" }], { done: "0", failed: 0 }, false]
+    ] as const;
+    for (const [kind, clients, output, empty] of cases) {
       t.setBehaviour((operation) =>
         Promise.resolve(operation === "echo" ? { clients: [...clients] } : output)
       );
-      const revision = await put(t, { ...notifyClients(), kind }, null);
+      revision = await put(t, { ...notifyClients(), kind }, revision);
       expect((await publish(t, revision)).statusCode).toBe(200);
       const started = await start(t);
       await t.finish(started.id);
@@ -204,9 +205,13 @@ describe("a Workflow stored as an asset", () => {
       const listed = await t.expectOk(t.root.id, "workflows.list_runs", {
         params: { workflow: WORKFLOW }
       });
-      expect(listed.json()).toMatchObject({ items: [{ id: started.id, empty }] });
+      expect(
+        listed
+          .json<{ items: { id: string; empty: boolean }[] }>()
+          .items.filter((run) => run.id === started.id)
+      ).toMatchObject([{ id: started.id, empty }]);
     }
-  );
+  });
 
   it("keeps a data run visible that ended done while every item's write failed", async () => {
     const t = await ready();
