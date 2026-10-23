@@ -521,9 +521,19 @@ async function endUnrecorded(
 }
 
 export function deniedEnd(
-  context: Pick<RunContext, "now">,
+  context: Pick<RunContext, "now"> & Partial<Pick<RunContext, "definition">>,
   denial: OperationDenial
 ): Extract<OperationRunEnd, { status: "denied" }> {
+  // A judge may quote personal input. Only the conversation's result keeps its reason;
+  // the denial and error saved on the Operation Run carry a generic message instead.
+  if (context.definition?.personalConnection && denial.kind === "guardrail") {
+    denial = {
+      kind: denial.kind,
+      guardrailId: denial.guardrailId,
+      ...(denial.guardrailTitle ? { guardrailTitle: denial.guardrailTitle } : {}),
+      message: "A guardrail blocked the call"
+    };
+  }
   const error = operationDenialError(denial);
   return {
     status: "denied",
