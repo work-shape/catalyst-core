@@ -1,4 +1,39 @@
-# Release validation and publication
+# Releases
+
+How core and capabilities are cut, validated and published, and the Postgres image the checks
+and instances run. The public mirror's own README is `public/README.md`; it ships with the mirror
+and says nothing about this repository's workflow.
+
+## Cutting a release
+
+From a clean release branch, run `pnpm release:cut 0.8.0 --root ../capabilities` to cut both
+repositories. `--root` is required: core and capabilities always cut together. Every root, package
+and reference-client manifest advances to that version, including private packages; dependencies
+stay `workspace:*`.
+Both repositories must share one current version. The command refuses SemVer build metadata,
+invalid versions, versions at or below any current package version, detached HEADs, and dirty
+trees (including staged and untracked files) in either repository before making changes.
+
+The cut uses `scripts/release/changelog.mjs` to turn each repository's Unreleased section and
+change files into `## <version> — <today>`, then deletes the folded files. Empty companion releases
+get a version section too. It refreshes OpenAPI and runs `release:check` before creating one
+`chore(release): cut <version>` commit per repository. A failed gate leaves the cut uncommitted
+for inspection; restore or commit it before retrying from a clean tree. Both cuts are staged and
+verified before either commit. If a commit fails, the error lists both repository SHAs and exact
+commands to finish the staged cut or undo both cuts; do not rerun `release:cut`. Run both
+repositories' `pnpm check` on scratch release branches to validate the cut. The command never tags,
+pushes or publishes; CI publication on a release tag is a separate step.
+
+`pnpm changelog` prints the next release's section as it will read, and
+`pnpm changelog --release <version> --date YYYY-MM-DD` folds change files alone. Entries in the
+Unreleased section of `CHANGELOG.md` are the ones written before change files existed.
+
+A release that offers the Connect a local agent command publishes the CLI of its version to npm
+before it names that version in `PUBLISHED_CLI_VERSION` and before the instance switches on
+`personalApiKeys`. The order is in `packages/docs/src/content/docs/configure/cli.md`, For
+maintainers.
+
+## Validation and publication
 
 The tag workflows use npm 11.21.1. Merging these workflows publishes nothing.
 `publish.mjs` packs with pnpm, checks each packed manifest, and publishes the tarball.
@@ -24,7 +59,7 @@ lockfile-only install. It never seeds the public tree with the closed dependency
 Public release helpers use a separate public metadata policy. The mirror removes bootstrap
 change files; release notes link public documentation instead of copying the private changelog.
 
-After installing core, run the real mirror proof through the workspace heavy lane:
+After installing core, run the real mirror proof:
 
 ```sh
 pnpm test:release:mirror
@@ -98,3 +133,38 @@ lock-free consumer. The fresh consumer gate checks the result
 Other exact pins stay in place.
 Unrelated UI helpers and tooling keep their existing ranges. Changes to these lines require
 a deliberate manifest/lock update and both the frozen-lock Check and fresh consumer gate.
+
+## The Postgres image
+
+The checks start the instance's own Postgres image (ADR-0023): `docker/postgres/Dockerfile`, the
+official image the live hosts ran plus pgvector, pinned by digest in `docker/postgres/pinned-image`.
+`.github/scripts/start-postgres.sh` and `pnpm check:local` read that file, and the demo Compose files
+repeat it. The workflow "Postgres image" checks the pinned image with
+`docker/postgres/check-image.sh`; when the Dockerfile changed, it builds the image, checks it,
+pushes it for amd64 and arm64 on a push to a branch of this repository and fails with the line to
+pin. Commit that line to `docker/postgres/pinned-image` and to the capabilities', the demo's and the deployments' files that
+name the digest.
+
+`work-shape/catalyst-postgres` is private and belongs to `work-shape/catalyst-core`.
+Before another repository consumes it, grant that repository **Read** under **Manage Actions
+access** in the [package settings](https://github.com/orgs/work-shape/packages/container/catalyst-postgres/settings).
+This applies to `catalyst-capabilities`, `deployment.catalyst` and
+`deployment.musterbau` when they switch to the pinned image. Keep core's existing
+publishing access. Repository transfers and image publication do not grant these other
+repositories access. Each consuming workflow also needs `packages: read` and must sign in
+with its own `GITHUB_TOKEN` before pulling (service containers use `credentials`). A successful
+registry login alone does not prove access to the package.
+
+If Actions reports `manifest unknown`, first inspect the exact pin with an authorized
+local Docker login: `docker manifest inspect "$(grep '^ghcr.io/' docker/postgres/pinned-image)"`.
+If the digest resolves locally, check the failing repository's Actions access and token
+permissions before rebuilding or changing the pin. A local pull uses the local credential;
+rerun the failing workflow to verify its repository token can pull too. Keep the package
+private; local Compose and checks that pull it require an authorized registry login as well.
+
+Capabilities CI currently starts stock Postgres 17.6 from public ECR. The deployments install
+versioned npm packages for their release checks and use stock Postgres in Compose. Granting
+package access does not switch those consumers to the pinned image.
+
+Images used as build inputs (`node`, `nginx`, `docker` in `docker/vivd-client.Dockerfile`) still
+come from Docker Hub, which by GitHub's account does not limit hosted runners.

@@ -1,5 +1,8 @@
 # Persistence fixtures
 
+How to run the tests and get a test Postgres: [`tests/README.md`](../README.md). This page holds
+the rules of the fixtures.
+
 Every persisted platform/capability test uses `createTestInstance()` or `usePostgresSuite()`.
 Both use one database per Vitest file, cloned from one lazily migrated template per run.
 Both Vitest configs use stack-ordered hooks so suite connections and held transactions close
@@ -52,33 +55,7 @@ run through `inject("postgresFixturePrefix")` drop the databases they created wi
 Keep object storage, mail, provider and clock fakes. The capability worker uses real persistence
 and an explicit object-storage fake. The deterministic model adapter is unchanged.
 
-With Postgres configured, run from the workspace root:
-
-```sh
-pnpm --dir platform exec vitest run tests/test-instance.test.ts
-pnpm --dir platform check
-pnpm --dir capabilities check
-for seed in 1091 1092 1093; do
-  pnpm --dir platform exec vitest run --sequence.shuffle.files --sequence.seed="$seed" --reporter=default --reporter=json --outputFile="/tmp/cb3b1-platform-$seed.json" || exit 1
-  pnpm --dir capabilities exec vitest run --sequence.shuffle.files --sequence.seed="$seed" --reporter=default --reporter=json --outputFile="/tmp/cb3b1-capabilities-$seed.json" || exit 1
-done
-```
-
-Inspect all six reports for zero skipped/pending tests. Native-tool/OS gates remain for external
-services/tooling; use the fully provisioned Linux runner (Poppler, Python/python-pptx and the
-artifact runtime tooling) for the full zero-skip acceptance runs.
-
-For missing-infrastructure verification (expected nonzero exit, failed tests and no skips):
-
-```sh
-env -u POSTGRES_STORE_TEST_DATABASE_URL pnpm --dir platform exec vitest run tests/test-instance.test.ts tests/postgres-conversation-store.test.ts tests/platform-stores.test.ts
-```
-
-For the existing local chat journey, run `pnpm --dir platform dev:demo` with its documented
-local configuration, open `http://127.0.0.1:5173`, send a chat and reload it. Docker and browser
-ports are required. The demo remains local.
-
-### Rows from chat: real model acceptance
+## Rows from chat: real model acceptance
 
 `POSTGRES_STORE_TEST_DATABASE_URL=<throwaway Postgres URL> pnpm exec vitest run --config vitest.records-live.config.ts tests/data-store-chat.live.ts`
 
@@ -86,4 +63,4 @@ This explicit opt-in suite runs the EN/DE platform-agent journeys with the authe
 Opus CLI as its model transport. It sends the platform's messages and offered schemas;
 the CLI's native tools are disabled. Catalyst executes and confirms the row tools against
 synthetic fixtures. It starts no stack and writes its conversation evidence beside the
-platform checkout. The ordinary hosted suite covers the deterministic confirmation path.
+platform checkout. The ordinary suite covers the deterministic confirmation path.
