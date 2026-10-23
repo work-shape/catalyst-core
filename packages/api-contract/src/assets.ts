@@ -6,6 +6,8 @@ import {
   ASSET_ACCESS_VERBS,
   ASSET_NAME_REFUSAL_REASONS,
   ASSET_SYNC_CHANGE_TYPES,
+  WORKFLOW_STEP_SOURCE_KINDS,
+  workflowMailSenderFactSchema,
   operationSourceSchema
 } from "@work-shape/catalyst-asset-schemas";
 import { z } from "zod";
@@ -211,9 +213,13 @@ export const publishNarrativeSchema = z.object({
 export const saveApprovalSchema = z.object({ approverNames: z.array(z.string()) });
 
 /** Facts resolved for the revision read, with unreadable sources reduced to their kind. */
-const workflowFactSourceSchema = operationSourceSchema;
+const workflowFactSourceSchema = operationSourceSchema.extend({
+  kind: z.enum(WORKFLOW_STEP_SOURCE_KINDS)
+});
 const workflowOperationFactSchema = z.object({
   source: workflowFactSourceSchema,
+  /** The system sender and recipient policy of a mail.send step, while outbound mail is on. */
+  mailSender: workflowMailSenderFactSchema.optional(),
   title: z.string().optional(),
   effect: z.enum(OPERATION_EFFECTS).optional(),
   description: z.string().optional(),
