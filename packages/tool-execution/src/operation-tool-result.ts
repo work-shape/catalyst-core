@@ -1,5 +1,7 @@
 import {
+  CONNECTION_SIGN_IN_NEEDS,
   INTERNAL_ERROR_MESSAGE,
+  type ConnectionSignInNeed,
   INTERRUPTED_RUN_ERROR,
   type ToolExecutionResult,
   type ToolHandlerFailureResult
@@ -80,7 +82,7 @@ export function privateConversationRecovery(
 
 const personalRefusalSchema = z.object({
   reason: z.enum(["connection_not_connected", "connection_needs_reconnect"]),
-  state: z.enum(["not_connected", "needs_reconnect"]),
+  state: z.enum(CONNECTION_SIGN_IN_NEEDS),
   connection: z.object({
     name: z.string().min(1),
     title: z.string(),
@@ -123,7 +125,7 @@ export function personalSignInFailure(
 
 function signInSentence(
   title: string,
-  state: "not_connected" | "needs_reconnect",
+  state: ConnectionSignInNeed,
   locale: ToolCallNames["locale"]
 ): string {
   if (locale === "de") {

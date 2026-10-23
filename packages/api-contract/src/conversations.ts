@@ -12,6 +12,7 @@ import {
   ARTIFACT_PREVIEW_IMAGE_MIME_TYPES,
   ATTACHMENT_CREATE_OUTCOMES,
   CHAT_MESSAGE_ROLES,
+  CONNECTION_SIGN_IN_NEEDS,
   CONVERSATION_ATTACHMENT_STATUSES,
   CONVERSATION_VISIBILITIES,
   DECIDED_APPROVAL_REQUEST_STATUSES,
@@ -659,7 +660,6 @@ export const activeRunSummarySchema = z.object({
   lastSequence: z.number().int().nonnegative()
 });
 
-/** On a `run_agent` call that started its subagent: the subagent, for its card. */
 /** The person's own sign-in a failed call of a personal Connection needs (CHAT-CONN-2b). */
 const toolConnectionSignInRequestSchema = z.object({
   connection: z.object({
@@ -668,10 +668,11 @@ const toolConnectionSignInRequestSchema = z.object({
     service: z.string().optional(),
     catalogue: z.object({ entry: z.string(), part: z.string() }).optional()
   }),
-  state: z.enum(["not_connected", "needs_reconnect"]),
+  state: z.enum(CONNECTION_SIGN_IN_NEEDS),
   agentName: z.string().optional()
 });
 
+/** On a `run_agent` call that started its subagent: the subagent, for its card. */
 const toolCallSubagentSchema = z.object({
   runId: z.string(),
   threadId: z.string(),
