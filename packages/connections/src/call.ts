@@ -1,3 +1,4 @@
+import { bindingAuditSubject, credentialSubject } from "./personal-bindings";
 import { resolveConnectionPersonContext } from "./person-context";
 import { retryAfterSecondsOf } from "./retry-after";
 import {
@@ -6,7 +7,7 @@ import {
   CONNECTION_CALL_REASONS,
   CONNECTION_TRANSIENT_CALL_REASONS,
   EGRESS_UNRESOLVED,
-  SHARED_CREDENTIAL_SUBJECT,
+  signInSecretSubject,
   connectionCallError,
   connectionCallFailure,
   connectionCallReasonOf,
@@ -264,6 +265,19 @@ function safeCallError(
         ...(scopes === undefined ? {} : { missingScopes: scopes })
       }
     );
+  }
+  if (
+    reason === "connection_needs_reconnect" &&
+    isAppError(error) &&
+    typeof error.details === "object" &&
+    error.details !== null &&
+    "cause" in error.details &&
+    (error.details.cause === "invalid_grant" || error.details.cause === "invalid_client")
+  ) {
+    return new AppError(CONNECTION_CALL_REASONS[reason], `${reason}: sign in again`, {
+      reason,
+      cause: error.details.cause
+    });
   }
   return connectionCallError(reason, undefined, retryAfterSecondsOf(error));
 }
@@ -574,6 +588,7 @@ function callable(
 /** What a sentence says of the Connection and the operation a call was authorized on. */
 interface Named {
   displayName?: string;
+  personal?: StoredConnection["config"];
   /** The call carried its idempotency key to the outside system. */
   keyed?: boolean;
   /** The effect of the operation, which decides whether a call that timed out is repeated. */
@@ -589,6 +604,32 @@ interface Named {
 function inSentence(error: unknown, named: Named): unknown {
   const reason = connectionCallReasonOf(error);
   if (reason === undefined || !isAppError(error)) return error;
+  if (
+    named.personal &&
+    (reason === "connection_not_connected" || reason === "connection_needs_reconnect")
+  ) {
+    const config = named.personal;
+    const scopes = missingScopesOf(error.details, undefined);
+    return new AppError(error.code, `${reason}: connect under Settings > You > Verbindungen`, {
+      reason,
+      connection: {
+        name: config.name,
+        title: config.displayName,
+        ...(config.service === undefined ? {} : { service: config.service }),
+        ...(config.catalogue === undefined ? {} : { catalogue: config.catalogue })
+      },
+      state: reason === "connection_needs_reconnect" ? "needs_reconnect" : "not_connected",
+      ...(typeof error.details === "object" &&
+      error.details !== null &&
+      "cause" in error.details &&
+      ["invalid_grant", "invalid_client", "insufficient_scope"].includes(
+        String(error.details.cause)
+      )
+        ? { stateReason: String(error.details.cause) }
+        : {}),
+      ...(scopes === undefined ? {} : { missingScopes: scopes })
+    });
+  }
   const details: unknown = error.details;
   const refused =
     typeof details === "object" && details !== null && "host" in details && "port" in details
@@ -699,7 +740,7 @@ async function heldSignInCheck(
     const binding = await deps.stores.connections.getConnectionBinding({
       clientInstanceId: deps.clientInstanceId,
       connectionAssetId: connection.assetId,
-      subject: SHARED_CREDENTIAL_SUBJECT
+      subject: credentialSubject(connection.config, context.actor)
     });
     if (binding !== undefined && Date.parse(binding.connectedAt) > Date.parse(run.createdAt)) {
       throw stale;
@@ -787,6 +828,7 @@ async function call(
     // refusal. A Connection that took the same name since is not the caller's to learn of.
     if (stored?.assetId === target.assetId && stored.revision === target.revision) {
       named.displayName = stored.config.displayName;
+      named.personal = stored.config.credentialMode === "user" ? stored.config : undefined;
       named.effect = stored.config.operations.find(
         (candidate) => candidate.name === target.operationName
       )?.effect;
@@ -819,6 +861,7 @@ async function call(
       // Egress first, then the credential: `openConnectorContext` keeps that order.
       const opening = openConnectorContext({
         type,
+        actor: context.actor,
         connection: {
           id: connection.assetId,
           revision: connection.revision,
@@ -885,7 +928,7 @@ async function call(
       const reason = deadline.signal.aborted ? "upstream_timeout" : connectionCallReasonOf(caught);
       let error = caught;
       if (reason === "connection_needs_reconnect" && lacksScope(caught)) {
-        error = await withoutGrantedScopes(deps, connection, caught);
+        error = await withoutGrantedScopes(deps, connection, context, caught);
         await recordMissingScope(connection, context, missingScopesOf(errorDetails(error), secret));
       } else {
         await recordFailedHealth(deps, connection, reason);
@@ -928,6 +971,7 @@ function errorDetails(error: unknown): unknown {
 async function withoutGrantedScopes(
   deps: ConnectionOperationSourceDeps,
   connection: StoredConnection,
+  context: ConnectionCallContext,
   error: unknown
 ): Promise<unknown> {
   if (!isAppError(error) || typeof error.details !== "object" || error.details === null) {
@@ -935,17 +979,35 @@ async function withoutGrantedScopes(
   }
   const details: Record<string, unknown> = { ...error.details };
   const named = details.missingScopes;
-  if (typeof named !== "string") return error;
   const binding = await deps.stores.connections
     .getConnectionBinding({
       clientInstanceId: deps.clientInstanceId,
       connectionAssetId: connection.assetId,
-      subject: SHARED_CREDENTIAL_SUBJECT
+      subject: credentialSubject(connection.config, context.actor)
     })
     .catch(() => undefined);
   if (binding === undefined) return error;
   const granted = new Set(binding.grantedScopes);
-  const missing = named.split(" ").filter((scope) => !granted.has(scope));
+  const missing =
+    typeof named === "string" ? named.split(" ").filter((scope) => !granted.has(scope)) : [];
+  if (connection.config.credentialMode === "user") {
+    await deps.stores.transaction(async (stores) => {
+      const changed = await stores.connections.changeConnectionBindingState({
+        clientInstanceId: deps.clientInstanceId,
+        connectionAssetId: connection.assetId,
+        subject: binding.subject,
+        expectedRowVersion: binding.rowVersion,
+        state: "needs_reconnect",
+        reason: "insufficient_scope"
+      });
+      if (changed !== undefined)
+        await stores.connections.deleteSecrets({
+          clientInstanceId: deps.clientInstanceId,
+          connectionAssetId: connection.assetId,
+          subject: signInSecretSubject(binding.subject)
+        });
+    });
+  }
   if (missing.length === 0) delete details.missingScopes;
   else details.missingScopes = missing.join(" ");
   return new AppError(error.code, error.message, details, {
@@ -972,8 +1034,10 @@ async function recordMissingScope(
       metadata: {
         connectionName: connection.config.name,
         connectionRevision: connection.revision,
-        subjectKind: SHARED_CREDENTIAL_SUBJECT,
-        ...(scopes === undefined ? {} : { missingScopes: scopes.split(" ") }),
+        ...bindingAuditSubject(credentialSubject(connection.config, context.actor)),
+        ...(scopes === undefined || connection.config.credentialMode === "user"
+          ? {}
+          : { missingScopes: scopes.split(" ") }),
         ...(context.runId === undefined ? {} : { operationRunId: context.runId })
       }
     })

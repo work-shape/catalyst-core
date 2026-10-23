@@ -3,6 +3,7 @@ import { findAdminContact } from "./postgres-admin-contact";
 import { keysetFilter } from "./paging";
 import {
   AppError,
+  endConnectionSignIn,
   asUserId,
   type AuditEvent,
   type AuditEventInput,
@@ -36,12 +37,15 @@ import {
   writeLegacyPermissionList
 } from "./legacy-permission-lists";
 import {
+  configAssets,
+  configAssetRevisions,
   permissionGrants,
   productUsers,
   userIdentities,
   scheduledStarts,
   scheduledStartRuns
 } from "./schema";
+import { createPostgresConnectionsStore } from "./postgres-connection-operations";
 import { withdrawQueuedJobs } from "./jobs/store";
 import { ensurePersonalWorkspaceInTransaction } from "./postgres-collaboration-workspace-operations";
 import { lockRights, lockRightsOfUsableUser } from "./rights-lock";
@@ -461,6 +465,7 @@ async function updateUser(db: PostgresConnection, input: UpdateUserInput): Promi
     // A deactivated person's scheduled starts pause at once, not at their next tick. Their
     // queued ticks go with `nextRunAt`: a later handover or Resume no longer knows their keys.
     if (updated && input.status === "disabled") {
+      await revokePersonalSignIns(tx, input);
       const activeStarts = and(
         eq(scheduledStarts.clientInstanceId, input.clientInstanceId),
         eq(scheduledStarts.ownerUserId, updated.id),
@@ -519,10 +524,52 @@ async function markUserDeletionRequested(
         )
       )
       .returning({ id: productUsers.id });
-    if (marked.length > 0) return true;
+    if (marked.length > 0) {
+      await revokePersonalSignIns(tx, input);
+      return true;
+    }
     await requireUserRecord(tx, input.clientInstanceId, input.userId);
     return false;
   });
+}
+
+/** Deactivation is atomic with local token deletion. This path has no Secret Store key. */
+async function revokePersonalSignIns(
+  db: PostgresConnection,
+  input: { clientInstanceId: ClientInstanceId; userId: string }
+) {
+  const store = createPostgresConnectionsStore(db);
+  const bindings = await store.listConnectionBindings(input);
+  for (const binding of bindings) {
+    if (binding.subject !== `user:${input.userId}`) continue;
+    const ended = await endConnectionSignIn(store, binding, { reason: "user_deactivated" });
+    if (!ended) continue;
+    const [asset] = await db
+      .select({ name: configAssets.name, revision: configAssetRevisions.revision })
+      .from(configAssets)
+      .innerJoin(configAssetRevisions, eq(configAssetRevisions.id, configAssets.activeRevisionId))
+      .where(
+        and(
+          eq(configAssets.clientInstanceId, input.clientInstanceId),
+          eq(configAssets.id, binding.connectionAssetId)
+        )
+      );
+    await appendPostgresAuditEvent(db, {
+      clientInstanceId: input.clientInstanceId,
+      type: "connection.binding_revoked",
+      status: "success",
+      subject: asset?.name,
+      reason: "user_deactivated",
+      correlationId: createPlatformId("corr"),
+      metadata: {
+        subjectKind: "user",
+        userId: input.userId,
+        ...(asset === undefined
+          ? {}
+          : { connectionName: asset.name, connectionRevision: asset.revision })
+      }
+    });
+  }
 }
 
 async function deleteUser(db: PostgresConnection, input: DeleteUserInput): Promise<UserRecord> {
@@ -535,6 +582,7 @@ async function deleteUser(db: PostgresConnection, input: DeleteUserInput): Promi
   // carried the id next.
   const rows = await db.transaction(async (tx) => {
     await lockRights(tx, input);
+    await revokePersonalSignIns(tx, input);
     await tx
       .delete(permissionGrants)
       .where(

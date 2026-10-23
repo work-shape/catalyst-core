@@ -419,17 +419,25 @@ export function createConnectionCredentialResolver(
         opened.fill(0);
       }
     },
-    async resolveSignIn({ connectionAssetId, origin }) {
+    async resolveSignIn({ connectionAssetId, origin, subject = SHARED_CREDENTIAL_SUBJECT }) {
       const binding = await store.getConnectionBinding({
         clientInstanceId,
         connectionAssetId,
-        subject: SHARED_CREDENTIAL_SUBJECT
+        subject
       });
       if (binding?.state === "needs_reconnect" && binding.origin === origin) {
         throw new AppError(
           "CONFLICT",
           `${CREDENTIAL_REFUSALS.needsReconnect}: the outside system refused the Connection's sign-in`,
-          { reason: CREDENTIAL_REFUSALS.needsReconnect }
+          {
+            reason: CREDENTIAL_REFUSALS.needsReconnect,
+            ...(subject.startsWith("user:")
+              ? {
+                  state: "needs_reconnect",
+                  ...(binding.stateReason === undefined ? {} : { cause: binding.stateReason })
+                }
+              : {})
+          }
         );
       }
       // A binding made for another origin is none for this one, even where the clean-up

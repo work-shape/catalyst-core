@@ -6,6 +6,7 @@ import {
   auditActorFromIdentity,
   connectionCallReasonOf,
   connectionOAuthError,
+  personalConnectionBrowserError,
   connectionOAuthReasonOf,
   isAppError,
   isAuthenticatedServicePrincipal,
@@ -91,6 +92,41 @@ export function registerConnectionRoutes(route: Route, options: ChatServerOption
     });
   }
 
+  async function authorizeSignIn(access: ActorAccess, name: string) {
+    return authorizeOn(
+      access,
+      (await required().credentialMode(name)) === "user"
+        ? CONNECTION_ACTIONS.use
+        : CONNECTION_ACTIONS.write,
+      name
+    );
+  }
+  route.operation(apiOperations["connections.mine"], {
+    authorize: () => ({ allowed: true }),
+    module: CONNECTIONS_MODULE,
+    execute: (_input, context) =>
+      required().myConnections(
+        context.actor.id,
+        (resource) => context.access.authorize(CONNECTION_ACTIONS.use, resource).allowed
+      )
+  });
+  route.operation(apiOperations["connections.people"], {
+    authorize: (input, { access }) => authorizeOn(access, CONNECTION_ACTIONS.write, input.name),
+    resource: connectionResource,
+    module: CONNECTIONS_MODULE,
+    execute: (input) => required().connectionPeople(input.name)
+  });
+  route.operation(apiOperations["connections.revoke_person"], {
+    authorize: (input, { access }) => authorizeOn(access, CONNECTION_ACTIONS.write, input.name),
+    resource: connectionResource,
+    module: CONNECTIONS_MODULE,
+    execute: (input, context) =>
+      required().revokePerson(input.name, input.userId, {
+        actor: auditActorFromIdentity(context.actor),
+        correlationId: context.correlationId
+      })
+  });
+
   route.operation(apiOperations["connections.person_context"], {
     authorize: (input, { access }) => authorizeOn(access, CONNECTION_ACTIONS.write, input.name),
     resource: connectionResource,
@@ -172,22 +208,30 @@ export function registerConnectionRoutes(route: Route, options: ChatServerOption
   });
 
   route.operation(apiOperations["connections.oauth_start"], {
-    authorize: (input, { access }) => authorizeOn(access, CONNECTION_ACTIONS.write, input.name),
+    authorize: (input, { access }) => authorizeSignIn(access, input.name),
     resource: connectionResource,
     // A start keeps a sign-in session that ends by itself, and registers a client where the
     // provider has none for the instance. Nothing is connected before the callback.
     changeClass: "reversible",
     module: CONNECTIONS_MODULE,
-    execute: (input, context) =>
-      required().oauthStart(input.name, {
-        starter: signInStarter(context.actor),
+    execute: async (input, context) => {
+      const starter = signInStarter(context.actor);
+      if (
+        (await required().credentialMode(input.name)) === "user" &&
+        starter.authSessionId.startsWith("key:")
+      ) {
+        throw personalConnectionBrowserError();
+      }
+      return required().oauthStart(input.name, {
+        starter,
         audit: signInAudit(context),
         signal: context.runtime.signal
-      })
+      });
+    }
   });
 
   route.operation(apiOperations["connections.oauth_sign_in"], {
-    authorize: (input, { access }) => authorizeOn(access, CONNECTION_ACTIONS.read, input.name),
+    authorize: (input, { access }) => authorizeSignIn(access, input.name),
     resource: connectionResource,
     module: CONNECTIONS_MODULE,
     execute: async (input, context) => ({
@@ -221,29 +265,36 @@ export function registerConnectionRoutes(route: Route, options: ChatServerOption
               userId: actor.id,
               firstPartySessionId: firstParty ? actor.sessionId : undefined
             },
+        mayUse: (resource) => context.access.authorize(CONNECTION_ACTIONS.use, resource).allowed,
         mayWrite: (resource) =>
           context.access.authorize(CONNECTION_ACTIONS.write, resource).allowed,
         audit: signInAudit(context),
         signal: context.runtime.signal
       });
       // What the outside system offers may depend on the account that signed in.
-      await requestDiscovery(completed.connectionName);
+      if ((await required().credentialMode(completed.connectionName)) === "shared")
+        await requestDiscovery(completed.connectionName);
       return { location: completed.location };
     },
     redirectOnError: (error) => connections?.oauthLandingUrl(...signInOutcomeOf(error))
   });
 
   route.operation(apiOperations["connections.disconnect"], {
-    authorize: (input, { access }) => authorizeOn(access, CONNECTION_ACTIONS.write, input.name),
+    authorize: (input, { access }) => authorizeSignIn(access, input.name),
     resource: connectionResource,
     // The tokens are deleted and the grant revoked at the provider: a new sign-in is the way
     // back, never a revert.
     module: CONNECTIONS_MODULE,
-    execute: (input, context) =>
-      required().disconnect(input.name, {
+    execute: async (input, context) => {
+      if ((await required().credentialMode(input.name)) === "user") {
+        const starter = signInStarter(context.actor);
+        if (starter.authSessionId.startsWith("key:")) throw personalConnectionBrowserError();
+      }
+      return required().disconnect(input.name, {
         actor: auditActorFromIdentity(context.actor),
         correlationId: context.correlationId
-      })
+      });
+    }
   });
 
   route.operation(apiOperations["connections.list_tools"], {

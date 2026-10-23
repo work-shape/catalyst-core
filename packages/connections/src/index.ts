@@ -13,6 +13,7 @@ export * from "./egress";
 export * from "./json-schema";
 export * from "./management";
 export * from "./person-context";
+export * from "./personal-management";
 export * from "./http-api/connector";
 export * from "./mcp/connector";
 export * from "./oauth";

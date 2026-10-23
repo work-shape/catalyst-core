@@ -8,6 +8,7 @@ import {
   connectionCallError,
   connectionCredentialOrigin,
   egressOriginOf,
+  type AuthenticatedIdentity,
   type ConnectionConfig,
   type ConnectionCredential,
   type ConnectionCredentialResolver,
@@ -20,6 +21,7 @@ import {
   type JsonValue
 } from "@work-shape/catalyst-core";
 import { isSameEgressOrigin } from "./egress";
+import { credentialSubject } from "./personal-bindings";
 import {
   createTokenCache,
   requestClientCredentialsToken,
@@ -218,6 +220,7 @@ function storedSecretHandle(config: ConnectionConfig): string {
 }
 
 export interface OpenConnectorContextInput {
+  actor?: AuthenticatedIdentity;
   type: ConnectorTypeDefinition;
   /** The Connection of the call: its asset id, its revision and the config of that revision. */
   connection: { id: string; revision: number; config: ConnectionConfig };
@@ -273,6 +276,7 @@ export async function openConnectorContext(
     const secret =
       config.authScheme === AUTH_SCHEME_OAUTH
         ? await credentials.resolveSignIn({
+            subject: credentialSubject(config, input.actor),
             connectionAssetId: connection.id,
             origin,
             ...(input.refused === undefined ? {} : { refused: input.refused }),

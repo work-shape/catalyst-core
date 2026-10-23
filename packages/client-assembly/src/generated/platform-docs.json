@@ -3605,7 +3605,21 @@
         "",
         "Person context is not available in Apps yet. App exposure (`bridge`) is refused while a Connection has person context enabled: remove App exposure before setting the header, or remove the header before enabling App exposure. Release config that sets both stops the instance at startup. Any call an App action makes of such a Connection is refused as `person_context_app_unavailable` before any request reaches the outside system, also when an agent calls the action as its tool. An agent's own call of the Connection still sends the mapped value.",
         "",
-        "This selects data at the source. It does not retract copied data or replace App data-isolation guards. Enable it for a real provider only after confirming that the shared key may send that header and that the source enforces the intended rights."
+        "This selects data at the source. It does not retract copied data or replace App data-isolation guards. Enable it for a real provider only after confirming that the shared key may send that header and that the source enforces the intended rights.",
+        "",
+        "## Personal OAuth bindings",
+        "",
+        "A runtime Connection can select `credentialMode: user` with `authScheme: oauth` on `http_api` or `mcp`. Its operations accept exposure `agent` only. The mode is fixed when the Connection is created; a change returns `credential_mode_fixed`. Release-config Connections remain `shared`.",
+        "",
+        "The Connection's own secret is the OAuth client secret. Each person with `connection.use` starts their own sign-in through `POST /api/v1/connections/:name/oauth/start` and completes it in the same first-party browser session. Neither endpoint takes a credential subject or another person's user id. `catalyst connection connect` refuses personal Connections with `personal_connect_in_browser`; the refusal directs the person to Settings > You > Verbindungen.",
+        "",
+        "`GET /api/v1/me/connections` returns the personal Connections the caller may use, each with only their own sign-in state. `GET /api/v1/connections/:name/people` requires `connection.write` and lists each binding's owner, state, account label, connection time and last-used day. `DELETE /api/v1/connections/:name/people/:userId` requires the same right and revokes that binding locally. These display responses carry no tokens or scope lists. An account label comes only from the token response's OpenID display claims; it never authorizes access.",
+        "",
+        "A call selects `user:<actor id>` and never falls back to a shared binding or a person-context mapping. An absent or revoked binding returns `connection_not_connected`; a refused grant returns `connection_needs_reconnect`. Both include Connection display metadata for the Connect card. Personal refresh happens only in the owner's call under that binding's lease; keep-alive refreshes shared bindings only.",
+        "",
+        "Owner Disconnect deletes the token set and asks the provider to revoke its grant. Administrative revoke, deactivation, Connection deletion and origin changes delete personal token sets without opening them or contacting the provider. The person's grant can remain at the provider until they remove it or it expires. Tokens remain encrypted in the instance's Secret Store until one of those ends or the binding needs reconnect. Setup sessions expire within 15 minutes and are single use. Binding audit events identify the owner and reason without account labels, tokens or consent text.",
+        "",
+        "The personal sign-in lifecycle is separate from the conversation isolation gate and Settings interface."
       ]
     },
     {
