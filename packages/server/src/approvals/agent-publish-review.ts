@@ -4,6 +4,7 @@ import {
   type AccessResource,
   type ActorAccess,
   type AgentProposalStore,
+  type ApprovalPreviewViewer,
   type ClientInstanceId,
   type ConfigAssetRecord,
   type ConfigAssetStore,
@@ -185,12 +186,14 @@ const REVIEWED_FIELDS = [
 /**
  * What the person who decides an agent's held publish reads: the draft revision and the live one
  * it replaces, the fields that differ, the tools and model bindings it adds, the skills it names
- * and the workspace it is offered in. A row of a list names it as it was filed and reads nothing.
+ * and the workspace it is offered in. The instructions only to a viewer who may read the agent.
+ * A row of a list names it as it was filed and reads nothing.
  */
 export async function agentPublishReview(
   options: AgentPublishReviewOptions,
   subject: AgentPublishSubject,
-  inList: boolean
+  inList: boolean,
+  viewer?: Pick<ApprovalPreviewViewer, "access">
 ): Promise<JsonObject> {
   const first = subject.draftRevision === null;
   // A first version has no live revision to compare with: it is reviewed alone.
@@ -253,17 +256,38 @@ export async function agentPublishReview(
             }
           }),
       offers,
-      ...(next ? agentDifference(first ? {} : live, next, first) : {})
+      ...(next ? agentDifference(first ? {} : live, next, first, readsAgent(subject, viewer)) : {})
     },
     ...(moved ? { stale: moved } : {})
   };
 }
 
 /**
+ * Whether who reads the review may read the agent's instructions: a holder of `agent.read` or
+ * `agent.write` on it. `agent.approve` alone decides the publish without reading them, and a
+ * review read for nobody in particular shows them to nobody.
+ */
+function readsAgent(
+  subject: AgentPublishSubject,
+  viewer: Pick<ApprovalPreviewViewer, "access"> | undefined
+): boolean {
+  if (!viewer) return false;
+  const resource = agentPublishResource(subject);
+  return ["agent.read", "agent.write"].some(
+    (action) => viewer.access.authorize(action, resource).allowed
+  );
+}
+
+/**
  * The fields of the draft that differ from the live definition, and what they add. A first
  * version is compared with nothing, so it names no fields, and its lists are all it has.
  */
-function agentDifference(live: JsonObject, next: JsonObject, first: boolean): JsonObject {
+function agentDifference(
+  live: JsonObject,
+  next: JsonObject,
+  first: boolean,
+  readable: boolean
+): JsonObject {
   const fields = REVIEWED_FIELDS.flatMap((field) => {
     const before = live[field];
     const after = next[field];
@@ -283,7 +307,10 @@ function agentDifference(live: JsonObject, next: JsonObject, first: boolean): Js
     toolsRemoved: liveTools.filter((tool) => !tools.includes(tool)),
     modelBindingsAdded: bindings.filter((binding) => !liveBindings.includes(binding)),
     skills: names(next.skillNames),
-    ...(instructions !== undefined && instructions !== liveInstructions
+    ...(instructions !== undefined && instructions !== liveInstructions && !readable
+      ? { instructionsWithheld: true }
+      : {}),
+    ...(instructions !== undefined && instructions !== liveInstructions && readable
       ? {
           instructions: {
             after: instructions,

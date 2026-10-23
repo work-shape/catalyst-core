@@ -328,7 +328,7 @@ function agentPublishApprovalKind(options: PublishApprovalKindsOptions): HeldCal
       const moved = await agentPublishMoved(clientInstanceId, parsed.data, store, options.drafts);
       return moved ? MOVED_SENTENCES[moved](parsed.data.name) : undefined;
     },
-    async review(subject, inList) {
+    async review(subject, inList, viewer) {
       const parsed = agentPublishSubjectSchema.safeParse(subject);
       if (!parsed.success) return undefined;
       return agentPublishReview(
@@ -339,7 +339,8 @@ function agentPublishApprovalKind(options: PublishApprovalKindsOptions): HeldCal
           ...(options.workspaces ? { workspaces: options.workspaces } : {})
         },
         parsed.data,
-        inList
+        inList,
+        viewer
       );
     },
     subjectKey(subject) {

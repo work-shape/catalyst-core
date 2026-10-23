@@ -160,6 +160,9 @@ export interface PublishReview {
   agent?: AgentPublishReview;
 }
 
+/** How a field of an agent's draft differs from its live definition. */
+type AgentFieldChange = Exclude<PublishChange["change"], "new">;
+
 /**
  * The review of an agent's held publish: the draft against the live definition, and where the
  * agent is offered. The lists are absent where the draft asked for is gone.
@@ -169,12 +172,14 @@ export interface AgentPublishReview {
   workspace?: { id: string; name?: string };
   /** Whether this publish, the agent's first, offers it in that workspace. */
   offers: boolean;
-  fields?: { field: string; change: "added" | "removed" | "changed" }[];
+  fields?: { field: string; change: AgentFieldChange }[];
   toolsAdded?: string[];
   toolsRemoved?: string[];
   modelBindingsAdded?: string[];
   skills?: string[];
   instructions?: { before?: string; after: string };
+  /** The instructions changed, but the reader may not read the agent, so they are not shown. */
+  instructionsWithheld?: boolean;
 }
 
 function parseAgentReview(value: unknown): AgentPublishReview | undefined {
@@ -187,8 +192,9 @@ function parseAgentReview(value: unknown): AgentPublishReview | undefined {
     ? value.fields.flatMap((entry) => {
         if (!isRecord(entry)) return [];
         const field = readText(entry.field);
-        const change = (["added", "removed", "changed"] as const).find(
-          (candidate) => candidate === entry.change
+        const change = changeKinds.find(
+          (candidate): candidate is AgentFieldChange =>
+            candidate !== "new" && candidate === entry.change
         );
         return field && change ? [{ field, change }] : [];
       })
@@ -208,7 +214,8 @@ function parseAgentReview(value: unknown): AgentPublishReview | undefined {
     offers: value.offers === true,
     ...(fields ? { fields } : {}),
     ...Object.fromEntries(Object.entries(lists).filter(([, list]) => list !== undefined)),
-    ...(after ? { instructions: { after, ...(before ? { before } : {}) } } : {})
+    ...(after ? { instructions: { after, ...(before ? { before } : {}) } } : {}),
+    ...(value.instructionsWithheld === true ? { instructionsWithheld: true } : {})
   };
 }
 
