@@ -62,10 +62,10 @@ export {
 export {
   ConnectionDraftCard,
   ConnectionDraftCardView,
-  ConnectionDraftHostProvider,
   connectionDraftHost,
   openConnectionDraftIn
 } from "./connection-draft-card";
+export { ConnectionDraftHostProvider } from "./connection-draft-host";
 export { ConnectionConnectCard, ConnectionConnectCardView } from "./connection-connect-card";
 export {
   connectCardOfProposal,

@@ -18,10 +18,8 @@ import {
   readConnectionDraft,
   readConnectionProposal
 } from "../../studio/build-area/connection-draft";
-import {
-  ConnectionDraftCard,
-  useConnectionDraftHost
-} from "../../studio/build-area/connection-draft-card";
+import { ConnectionDraftCard } from "../../studio/build-area/connection-draft-card";
+import { useConnectionDraftHost } from "../../studio/build-area/connection-draft-host";
 import { ConnectionConnectCard } from "../../studio/build-area/connection-connect-card";
 import { connectCardOfRefusal } from "../../studio/build-area/connection-connect-card-model";
 import {
