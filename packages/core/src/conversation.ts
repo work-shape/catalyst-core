@@ -153,6 +153,8 @@ export interface Conversation {
   createdByUserId: string;
   createdByExternalUserId: string;
   visibility: ConversationVisibility;
+  /** First personal call; permanent even when that call fails. */
+  personalDataAt?: ISODateString;
   title: string;
   status: ConversationStatus;
   createdAt: ISODateString;
@@ -305,6 +307,13 @@ export interface ConversationStore extends ConversationHistoryStore {
     clientInstanceId: ClientInstanceId;
     userId: string;
   }): Promise<Conversation[]>;
+  /** Locks and rechecks owner-only readership before marking. Never clears or replaces the mark. */
+  markPersonalData(input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+    userId: string;
+    at: ISODateString;
+  }): Promise<void>;
   moveConversation(input: MoveConversationInput): Promise<Conversation>;
   updateConversationTitle(input: UpdateConversationTitleInput): Promise<Conversation>;
   /**
@@ -381,6 +390,8 @@ export interface ConversationHistoryReader {
   listMessages(input: {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;
+    /** A transcript copy for other readers: atomically refuse personal data before reading. */
+    forSharing?: true;
   }): Promise<ChatMessage[]>;
   listRecentMessages(input: {
     clientInstanceId: ClientInstanceId;

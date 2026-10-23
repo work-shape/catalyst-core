@@ -5,6 +5,8 @@ export {
 } from "./postgres-conversation-lifecycle";
 import {
   AppError,
+  personalConnectionContextError,
+  personalConversationPrivateError,
   createApprovalDecisionMessage,
   createPlatformId,
   type AppendAssistantMessageInput,
@@ -26,7 +28,7 @@ import {
   type SetConversationSubjectInput,
   type UserId
 } from "@work-shape/catalyst-core";
-import { and, asc, desc, eq, gt, inArray, isNull, lt, ne, notExists, or } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNull, lt, ne, notExists, or, sql } from "drizzle-orm";
 import { type PostgresConnection, type PostgresTransaction } from "./postgres-database";
 import { mapConversation, mapMessage, type MessageRow } from "./rows";
 import {
@@ -156,6 +158,25 @@ async function moveConversation(
       ))
     ) {
       throw new AppError("CONFLICT", "Conversation workspace changed during the move");
+    }
+    const conversation = await getConversation(tx, input.clientInstanceId, input.conversationId);
+    const [destination] = await tx
+      .select()
+      .from(collaborationWorkspaces)
+      .where(
+        and(
+          eq(collaborationWorkspaces.clientInstanceId, input.clientInstanceId),
+          eq(collaborationWorkspaces.id, input.toCollaborationWorkspaceId)
+        )
+      );
+    if (
+      conversation?.personalDataAt &&
+      (!destination ||
+        (destination.kind === "personal"
+          ? destination.personalUserId !== conversation.createdByUserId
+          : input.visibility !== "private"))
+    ) {
+      throw personalConversationPrivateError();
     }
     return moveLockedConversation(tx, input);
   });
@@ -668,6 +689,53 @@ export function createPostgresConversationsStore(
     ): Promise<Conversation[]> {
       return listPrivateConversationsCreatedByUser(db, input);
     },
+    async markPersonalData(input): Promise<void> {
+      await db.transaction(async (tx) => {
+        if (!(await lockActiveConversation(tx, input.clientInstanceId, input.conversationId))) {
+          throw personalConnectionContextError("the conversation is no longer active");
+        }
+        const conversation = await getConversation(
+          tx,
+          input.clientInstanceId,
+          input.conversationId
+        );
+        const [workspace] = conversation
+          ? await tx
+              .select()
+              .from(collaborationWorkspaces)
+              .where(
+                and(
+                  eq(collaborationWorkspaces.clientInstanceId, input.clientInstanceId),
+                  eq(collaborationWorkspaces.id, conversation.collaborationWorkspaceId)
+                )
+              )
+          : [];
+        if (
+          !conversation ||
+          conversation.kind !== "chat" ||
+          conversation.createdByUserId !== input.userId ||
+          !workspace ||
+          (workspace.kind === "personal"
+            ? workspace.personalUserId !== input.userId
+            : conversation.visibility !== "private")
+        ) {
+          throw personalConnectionContextError(
+            "only the acting person may read the root conversation"
+          );
+        }
+        await tx
+          .update(conversations)
+          .set({
+            personalDataAt: sql`coalesce(${conversations.personalDataAt}, ${input.at}::timestamptz)`
+          })
+          .where(
+            and(
+              eq(conversations.clientInstanceId, input.clientInstanceId),
+              eq(conversations.id, input.conversationId)
+            )
+          );
+      });
+    },
     async moveConversation(
       input: Parameters<ConversationStore["moveConversation"]>[0]
     ): Promise<Conversation> {
@@ -702,11 +770,18 @@ export function createPostgresConversationsStore(
     async appendAssistantMessage(input: AppendAssistantMessageInput): Promise<ChatMessage> {
       return appendAssistantMessage(db, input);
     },
-    async listMessages(input: {
-      clientInstanceId: ClientInstanceId;
-      conversationId: ConversationId;
-    }): Promise<ChatMessage[]> {
-      return listMessages(db, input);
+    async listMessages(input): Promise<ChatMessage[]> {
+      if (!input.forSharing) return listMessages(db, input);
+      return db.transaction(async (tx) => {
+        // Sharing and the first personal call serialize on the root, as moves do.
+        const thread = await getConversation(tx, input.clientInstanceId, input.conversationId);
+        const rootId = thread?.parentConversationId ?? input.conversationId;
+        if (!(await lockActiveConversation(tx, input.clientInstanceId, rootId)))
+          throw new AppError("NOT_FOUND", "Conversation is not available");
+        const root = await getConversation(tx, input.clientInstanceId, rootId);
+        if (root?.personalDataAt) throw personalConversationPrivateError();
+        return listMessages(tx, input);
+      });
     },
     async listRecentMessages(input: {
       clientInstanceId: ClientInstanceId;

@@ -146,6 +146,7 @@ export const CONNECTION_CALL_REASONS = {
   person_context_app_unavailable: "FORBIDDEN",
   secret_unreadable: "CONFLICT",
   /** The Connection signs in at the outside system, and no sign-in is connected for it. */
+  personal_connection_context: "FORBIDDEN",
   connection_not_connected: "CONFLICT",
   /** The outside system refused the Connection's sign-in; someone has to sign in again. */
   connection_needs_reconnect: "CONFLICT",
@@ -213,6 +214,8 @@ const CONNECTION_CALL_MESSAGES: Record<ConnectionCallReason, string> = {
   person_context_unmapped: "the acting identity has no person context on this Connection",
   person_context_app_unavailable: "person context is not available in Apps yet",
   secret_unreadable: "the stored secret of the Connection cannot be read",
+  personal_connection_context:
+    "personal connections require an owner-authorized agent in an owner-only conversation",
   connection_not_connected: "nobody has signed in to the outside system for the Connection",
   connection_needs_reconnect: "the outside system refused the Connection's sign-in",
   operation_unknown: "the Connection has no such operation now",
@@ -310,6 +313,8 @@ const CONNECTION_CALL_SENTENCES: Record<
     `${c} sends the person context of whoever calls it, which is not available in Apps yet. Trying again will not help. An administrator can remove App exposure or the person context header under ${WHERE}.`,
   secret_unreadable: (c) =>
     `${c} cannot be used because its stored credential cannot be read. Trying again will not help. An administrator can see what to do under ${WHERE}.`,
+  personal_connection_context: () =>
+    "A personal connection needs an owner-authorized agent run in a conversation only that person can read.",
   connection_not_connected: (c) =>
     `${c} cannot be used because nobody has signed in to the outside system for it. Trying again will not help until an administrator signs in under ${WHERE}.`,
   connection_needs_reconnect: (c) =>

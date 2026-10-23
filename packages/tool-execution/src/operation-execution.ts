@@ -125,6 +125,8 @@ export interface RunOperationDeps {
     instanceDefaults: PolicyDefaults;
     /** The admin's settings. OP-2 supplies the table; nothing is set before. */
     centralSettings(): readonly CentralPolicySetting[] | Promise<readonly CentralPolicySetting[]>;
+    /** Includes a subagent's root conversation. Rechecked whenever policy is resolved. */
+    personalConversation?(id: ConversationId): Promise<boolean>;
   };
   /** Without it this process cannot hold a call for an approval and refuses one that needs it. */
   approvals?: OperationApprovalRequests;
@@ -652,11 +654,16 @@ export async function executeAdmitted(
       status: "done",
       finishedAt: now().toISOString(),
       // An answer that holds a secret is handed to the caller of this call and kept nowhere.
-      output: context.runtime.pageCounts
-        ? retainedOutput(context.runtime.pageCounts)
-        : definition.effect === "changing" && !definition.secret
-          ? retainedOutput(output)
-          : undefined,
+      ...(definition.personalConnection
+        ? { resultBytes: Buffer.byteLength(JSON.stringify(output) ?? "null", "utf8") }
+        : {}),
+      output: definition.personalConnection
+        ? undefined
+        : context.runtime.pageCounts
+          ? retainedOutput(context.runtime.pageCounts)
+          : definition.effect === "changing" && !definition.secret
+            ? retainedOutput(output)
+            : undefined,
       usage: tool?.usage,
       ...(decision
         ? {

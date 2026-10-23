@@ -315,7 +315,8 @@ export const connectionCatalogueLinkSchema = z
   })
   .strict();
 
-export const connectionConfigSchema: z.ZodType<ConnectionConfig, unknown> = z
+/** Stored rows still need the runtime context gate, even with obsolete exposures. */
+export const storedConnectionConfigSchema = z
   .object({
     name: connectionNameSchema,
     displayName: z.string().trim().min(1).max(120),
@@ -380,16 +381,6 @@ export const connectionConfigSchema: z.ZodType<ConnectionConfig, unknown> = z
           message: "An exposure is listed once"
         });
       }
-      for (const exposure of operation.exposure) {
-        const refusal = connectionExposureRefusal(connection.credentialMode, exposure);
-        if (refusal) {
-          context.addIssue({
-            code: "custom",
-            path: ["operations", index, "exposure"],
-            message: refusal
-          });
-        }
-      }
       // A policy only tightens. A reading operation runs or is denied; only a changing one
       // can wait for an approval.
       if (operation.policy === "approval" && operation.effect !== "changing") {
@@ -400,6 +391,22 @@ export const connectionConfigSchema: z.ZodType<ConnectionConfig, unknown> = z
         });
       }
       refuseReservedFields(operation, context, ["operations", index]);
+    }
+  });
+
+/** New definitions accept only the surfaces the credential mode can isolate. */
+export const connectionConfigSchema: z.ZodType<ConnectionConfig, unknown> =
+  storedConnectionConfigSchema.superRefine((connection, context) => {
+    for (const [index, operation] of connection.operations.entries()) {
+      for (const exposure of operation.exposure) {
+        const refusal = connectionExposureRefusal(connection.credentialMode, exposure);
+        if (refusal)
+          context.addIssue({
+            code: "custom",
+            path: ["operations", index, "exposure"],
+            message: refusal
+          });
+      }
     }
   });
 

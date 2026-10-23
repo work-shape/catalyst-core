@@ -38,7 +38,15 @@ export interface OperationPolicyContext {
 /** What the policy is resolved from for this call, before a guardrail answered. */
 async function policyInputOf(context: OperationPolicyContext): Promise<PolicyInput> {
   const { definition, call, resource, deps, runtime } = context;
-  const callFloor = await definition.policyFloorOf?.(call.origin, call.input);
+  let callFloor = await definition.policyFloorOf?.(call.origin, call.input);
+  if (
+    call.origin.kind === "agent" &&
+    definition.effect === "changing" &&
+    !definition.personalConnection &&
+    (await deps.policy.personalConversation?.(call.origin.conversationId))
+  ) {
+    callFloor = stricterPolicy("confirm", callFloor);
+  }
   const workerCall =
     call.origin.kind === "agent" && runtime.runFence?.runId === call.origin.agentRunId;
   return {

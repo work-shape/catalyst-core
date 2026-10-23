@@ -47,6 +47,7 @@ export const conversations = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
     retainedUntil: timestamp("retained_until", { withTimezone: true }).notNull(),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    personalDataAt: timestamp("personal_data_at", { withTimezone: true }),
     // The asset the conversation is about, by kind and name. Both null on every other one.
     subjectKind: text("subject_kind"),
     subjectName: text("subject_name"),

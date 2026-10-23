@@ -2,6 +2,7 @@ import type { AuditRecorder, StorePage } from "@work-shape/catalyst-core";
 import { auditActorFromUser } from "@work-shape/catalyst-core";
 import {
   AppError,
+  personalConversationPrivateError,
   JobLeaseLostError,
   type AuthenticatedUser,
   type Conversation,
@@ -295,6 +296,12 @@ export class ConversationWorkflow {
       );
     }
     const destination = await this.requireMemberWorkspace(user, command.collaborationWorkspaceId);
+    if (
+      conversation.personalDataAt &&
+      destination.kind !== "personal" &&
+      command.visibility === "workspace"
+    )
+      throw personalConversationPrivateError();
     if (conversation.collaborationWorkspaceId === command.collaborationWorkspaceId) {
       throw new AppError("VALIDATION_FAILED", "Conversation already belongs to this workspace");
     }
@@ -314,9 +321,18 @@ export class ConversationWorkflow {
       destination.kind === "personal"
         ? "workspace"
         : (command.visibility ??
-          (conversation.visibility === "private" || conversation.subject
+          (conversation.visibility === "private" ||
+          conversation.subject ||
+          conversation.personalDataAt
             ? "private"
             : destination.defaultConversationVisibility));
+    if (
+      conversation.personalDataAt &&
+      destination.kind !== "personal" &&
+      visibility !== "private"
+    ) {
+      throw personalConversationPrivateError();
+    }
     if (visibility === "private" && conversation.createdByUserId !== getSubjectUserId(user)) {
       throw new AppError(
         "VALIDATION_FAILED",

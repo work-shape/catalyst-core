@@ -1,4 +1,4 @@
-import { connectionConfigSchema } from "@work-shape/catalyst-config-schema";
+import { storedConnectionConfigSchema } from "@work-shape/catalyst-config-schema";
 import {
   CONNECTION_ASSET_KIND,
   type ClientInstanceId,
@@ -67,7 +67,7 @@ function storedConnection(
   state: ConnectionStateRecord | undefined
 ): StoredConnection | undefined {
   if (asset.status !== "active" || asset.scope.kind !== "instance") return undefined;
-  const parsed = connectionConfigSchema.safeParse(asset.config);
+  const parsed = storedConnectionConfigSchema.safeParse(asset.config);
   if (!parsed.success || parsed.data.name !== asset.name) return undefined;
   return {
     assetId: asset.id,

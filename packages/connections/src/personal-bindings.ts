@@ -1,5 +1,6 @@
 import {
   AppError,
+  getSubjectUserId,
   SHARED_CREDENTIAL_SUBJECT,
   isAuthenticatedServicePrincipal,
   type AuthenticatedIdentity,
@@ -22,7 +23,7 @@ export function credentialSubject(
       }
     );
   }
-  return `user:${actor.id}`;
+  return `user:${getSubjectUserId(actor)}`;
 }
 
 /** Account display is deliberately absent from governance records. */

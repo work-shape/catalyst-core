@@ -140,6 +140,7 @@ export function mapConversation(row: ConversationRow | undefined): Conversation 
     updatedAt: row.updatedAt.toISOString(),
     retainedUntil: row.retainedUntil.toISOString(),
     deletedAt: row.deletedAt?.toISOString(),
+    personalDataAt: row.personalDataAt?.toISOString(),
     ...(row.subjectKind === null || row.subjectName === null
       ? {}
       : { subject: { kind: row.subjectKind, name: row.subjectName } }),

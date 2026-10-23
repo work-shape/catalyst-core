@@ -21,6 +21,7 @@ import {
   type ConnectorOperationDescriptor,
   type ConnectorTypeDefinition,
   type JsonValue,
+  requirePersonalConnectionContext,
   type OperationExecutionContext
 } from "@work-shape/catalyst-core";
 import { connectionOperationStatus, describedByOutsideSystem } from "./catalog";
@@ -603,7 +604,8 @@ interface Named {
  */
 function inSentence(error: unknown, named: Named): unknown {
   const reason = connectionCallReasonOf(error);
-  if (reason === undefined || !isAppError(error)) return error;
+  if (reason === undefined || reason === "personal_connection_context" || !isAppError(error))
+    return error;
   if (
     named.personal &&
     (reason === "connection_not_connected" || reason === "connection_needs_reconnect")
@@ -839,6 +841,15 @@ async function call(
     return found;
   };
   const first = await read();
+  if (first.connection.config.credentialMode === "user") {
+    await requirePersonalConnectionContext({
+      ...deps,
+      actor: context.actor,
+      origin: context.origin,
+      byAppAction: context.byAppAction
+    });
+  }
+
   const heldSignIn = await heldSignInCheck(deps, first.connection, context);
   const jsonInput = toJsonInput(input);
   const limits = connectionCallLimits(first.type);
@@ -861,6 +872,24 @@ async function call(
       // Egress first, then the credential: `openConnectorContext` keeps that order.
       const opening = openConnectorContext({
         type,
+        ...(connection.config.credentialMode === "user"
+          ? {
+              personalCall: async () => {
+                const root = await requirePersonalConnectionContext({
+                  ...deps,
+                  actor: context.actor,
+                  origin: context.origin,
+                  byAppAction: context.byAppAction
+                });
+                await deps.stores.conversations.markPersonalData({
+                  clientInstanceId: deps.clientInstanceId,
+                  conversationId: root.id,
+                  userId: root.createdByUserId,
+                  at: new Date().toISOString()
+                });
+              }
+            }
+          : {}),
         actor: context.actor,
         connection: {
           id: connection.assetId,
