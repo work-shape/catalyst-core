@@ -20,6 +20,7 @@ import {
   loadClientInstanceConfigFromFile
 } from "@work-shape/catalyst-config-schema";
 import { loadCatalogueEntries } from "@work-shape/catalyst-connections";
+import { sampleResultShapers } from "@work-shape/catalyst-demo/result-shapers";
 import { type JobWorker, type Logger } from "@work-shape/catalyst-core";
 import { createFilesystemObjectStorage } from "@work-shape/catalyst-object-storage";
 import { createPostgresJobWorker } from "@work-shape/catalyst-postgres-store";
@@ -242,6 +243,8 @@ export function useSeededInstance(input: SeededInstanceInput): () => SeededInsta
       tools: [...demoTools, ...(input.tools ?? [])],
       // The demo's catalogue entries, which its config names.
       catalogue: loadCatalogueEntries(resolve("clients/demo/catalogue")),
+      // Its OAuth entry's part names a shaper the demo registers.
+      resultShapers: sampleResultShapers,
       // The demo's own server runs with these.
       operations: demoOperations(() => running.instance),
       seedAssets: false,
