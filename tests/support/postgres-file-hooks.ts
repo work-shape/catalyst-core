@@ -20,8 +20,9 @@ registerInfrastructureWorldHooks();
 registerConfigCliHooks();
 
 function streamWithoutPacing() {
-  if (vi.isMockFunction(DeterministicModelProvider.prototype.stream)) return;
-  vi.spyOn(DeterministicModelProvider.prototype, "stream").mockImplementation(async function* (
+  const stream = vi.spyOn(DeterministicModelProvider.prototype, "stream");
+  if (stream.getMockImplementation()) return;
+  stream.mockImplementation(async function* (
     this: DeterministicModelProvider,
     request: ModelCompletionRequest
   ) {

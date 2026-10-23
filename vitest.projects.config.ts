@@ -6,7 +6,6 @@ import ts from "typescript";
 // test support, including re-exports, so a new test cannot silently join the pure pool by
 // hiding its database access behind a helper. Type-only imports are erased by Vitest.
 export const toolingFiles = [
-  "tests/agent-stories-runner.test.ts",
   "tests/ci-check-results.test.ts",
   "tests/ci-image-retry.test.ts",
   "tests/config-cli-pty.test.ts",
