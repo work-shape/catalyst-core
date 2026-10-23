@@ -1,4 +1,4 @@
-import { forbiddenPreviewTool } from "@work-shape/catalyst-core";
+import { forbiddenPreviewTool, parseConnectionOperationName } from "@work-shape/catalyst-core";
 import type {
   AgentRunId,
   ChatMessage,
@@ -6,6 +6,7 @@ import type {
   StartAgentRunInput,
   StartedSubagent,
   ToolDecisionWait,
+  ToolExecutionError,
   ToolExecutionResult
 } from "@work-shape/catalyst-core";
 import type { ModelMessage, ModelToolCall } from "@work-shape/catalyst-model-provider";
@@ -67,9 +68,12 @@ export class ToolDispatch {
     const subagents: StartedSubagent[] = [];
     for (const toolCall of toolCalls) {
       if (context.signal?.aborted) return { kind: "stopped" };
-      const refusal = isRunAgentCall(toolCall.toolName)
-        ? stepLimitRefusal(startedInStep + subagents.length)
-        : undefined;
+      const webRefusal = await this.webFetchRefusal(toolCall.toolName, state, input, context);
+      const refusal =
+        webRefusal ??
+        (isRunAgentCall(toolCall.toolName)
+          ? stepLimitRefusal(startedInStep + subagents.length)
+          : undefined);
       const result = await executeToolCall({
         runId,
         startInput: input,
@@ -87,7 +91,10 @@ export class ToolDispatch {
           toolCall.input,
           toolCall.toolName
         ),
-        beforeDispatch: () => this.runEvents.beforeEffect("tool_dispatch", runId)
+        beforeDispatch: async () => {
+          await this.runEvents.beforeEffect("tool_dispatch", runId);
+          await this.beforePersonalCall(toolCall.toolName, state);
+        }
       });
       if (isCancellationRequested(state.getStatus())) {
         return { kind: "stopped" };
@@ -109,6 +116,31 @@ export class ToolDispatch {
       answeredToolCallIds.push(toolCall.toolCallId);
     }
     return { kind: "answered", subagents };
+  }
+
+  async webFetchRefusal(
+    toolName: string,
+    state: RunState,
+    input: StartAgentRunInput,
+    context: RuntimeCallContext
+  ): Promise<ToolExecutionError | undefined> {
+    return toolName === "web_fetch" && (await this.modelInput.webAccessOff(state, input, context))
+      ? {
+          code: "not_allowed",
+          message:
+            "Web access is off in this conversation because it holds data from a personal connection"
+        }
+      : undefined;
+  }
+
+  /** Set before dispatch, independent of validation, authorization or the call's outcome. */
+  async beforePersonalCall(toolName: string, state: RunState): Promise<void> {
+    if (
+      parseConnectionOperationName(toolName) &&
+      (await this.options.personalData?.operations.resolve(toolName))?.personalConnection
+    ) {
+      state.disableWebAccess();
+    }
   }
 
   /** Stores what a call came to and hands it to the model with the next request. */

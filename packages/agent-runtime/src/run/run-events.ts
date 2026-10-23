@@ -7,6 +7,8 @@ import {
   type AgentRunStatus,
   type Clock,
   type ConversationHistoryStore,
+  type ConversationStore,
+  type OperationRegistry,
   type ConversationOfferSource,
   type DataToolSource,
   type ModelBindingConfig,
@@ -70,6 +72,15 @@ export interface LocalAgentRuntimeOptions {
    */
   conversationOffer?: ConversationOfferSource;
   webAccess?: WebAccessConfig;
+  /**
+   * Required when web access is enabled. These host-only readers let the
+   * runtime switch web access off before a personal call, and inherit the root chat's mark
+   * on every model request (including resumed and subagent runs).
+   */
+  personalData?: {
+    conversations: Pick<ConversationStore, "getConversation">;
+    operations: Pick<OperationRegistry, "resolve">;
+  };
   agentSkillChangesEnabled?: boolean;
   historyMessageLimit?: number;
   maxSteps?: number;

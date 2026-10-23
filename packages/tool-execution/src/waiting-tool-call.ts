@@ -9,7 +9,11 @@ import { previewToolDeps } from "./agent-preview";
 import { isUseRightAction, type RunOperationDeps } from "./operation-execution";
 import { toolResultFromOperationResult } from "./tool-operation";
 import { failed } from "./tool-results";
-import { executeConfirmedOperation, type ApprovedOperationEnd } from "./waiting-operation";
+import {
+  executeConfirmedOperation,
+  refuseWaitingOperation,
+  type ApprovedOperationEnd
+} from "./waiting-operation";
 
 // The call an Agent Run paused on, once its person decided: executed once by its Operation
 // Run, or answered as declined, in the run's worker (EW-2a).
@@ -21,7 +25,7 @@ import { executeConfirmedOperation, type ApprovedOperationEnd } from "./waiting-
  * person's reason, expired, or refused as the person is now.
  */
 export function createDecidedToolCallRunner(baseDeps: RunOperationDeps): ToolDecisionRunner {
-  return async ({ request, operationRunId, frozenInput }, context) => {
+  return async ({ request, operationRunId, frozenInput, refusal }, context) => {
     // A Try turn's call is asked again against the draft's tools, as it was made.
     const callDeps = previewToolDeps(baseDeps, context);
     const run = await callDeps.runs.get({
@@ -30,6 +34,18 @@ export function createDecidedToolCallRunner(baseDeps: RunOperationDeps): ToolDec
     });
     if (!run || run.origin.kind !== "agent" || run.origin.agentRunId !== request.agentRunId) {
       return failed("handler_failed", "The call this run waited on no longer exists. Nothing ran.");
+    }
+    if (refusal) {
+      await refuseWaitingOperation(
+        run.id,
+        {
+          kind: "forbidden",
+          reason: "denied",
+          message: refusal.message
+        },
+        callDeps
+      );
+      return { status: "failed", error: refusal };
     }
     if (run.status === "denied" && run.decision?.mode === "declined") {
       // A message the person steered in declined it (FU-2): the message follows the result.

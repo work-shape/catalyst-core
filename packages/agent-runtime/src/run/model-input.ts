@@ -1,5 +1,6 @@
 import {
   AppError,
+  rootConversationOf,
   defaultReasoningEffortForAgentBinding,
   isModelBindingUserSelectableForAgent,
   reasoningEffortChoiceForBinding,
@@ -212,7 +213,24 @@ export class ModelInput {
     };
   }
 
-  callModel(
+  /** Re-read the permanent mark: a sibling subagent may have made the personal call. */
+  async webAccessOff(
+    state: RunState,
+    input: StartAgentRunInput,
+    context: RuntimeCallContext
+  ): Promise<boolean> {
+    if (!state.isWebAccessOff() && this.options.personalData) {
+      const conversation = await rootConversationOf(
+        this.options.personalData,
+        context.clientInstanceId,
+        input.conversationId
+      );
+      if (conversation?.personalDataAt) state.disableWebAccess();
+    }
+    return state.isWebAccessOff();
+  }
+
+  async callModel(
     runId: AgentRunId,
     input: StartAgentRunInput,
     context: RuntimeCallContext,
@@ -224,6 +242,11 @@ export class ModelInput {
     runEvents: RunEvents
   ) {
     const { capabilities } = modelSelection;
+    // Materialization stays fixed for the run. Only this privacy restriction can remove
+    // tools between requests; native search must never be offered with personal data.
+    const requestTools = (await this.webAccessOff(state, input, context))
+      ? tools.filter((tool) => tool.name !== "web_search" && tool.name !== "web_fetch")
+      : tools;
     const withinImageBudget = applyModelInputImageBudget(messages);
     if (withinImageBudget.omittedImageCount > 0) {
       this.options.logger?.warn(
@@ -249,7 +272,7 @@ export class ModelInput {
         {
           binding: modelSelection.binding,
           messages: withinImageBudget.messages,
-          tools,
+          tools: requestTools,
           ...(input.workflowAgent && capabilities.structuredOutput
             ? { output: { jsonSchema: input.workflowAgent.outputSchema } }
             : {}),

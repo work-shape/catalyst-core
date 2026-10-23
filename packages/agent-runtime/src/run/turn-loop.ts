@@ -122,7 +122,8 @@ export class TurnLoop {
     );
     const { capabilities } = modelSelection;
     // Read once for the run, not for each model call of it: what the agent is offered stays
-    // the same while it works. Whether a tool may still be called is asked again by each call,
+    // the same while it works, except web tools removed after a personal call. Whether a
+    // tool may still be called is asked again by each call,
     // and a data tool that was not offered here is refused for the whole run.
     const dataTools = await describeAgentDataTools(
       agent,
@@ -277,6 +278,11 @@ export class TurnLoop {
       userMessage: setup.userMessage
     });
     const repeatedToolCalls = new Map(Object.entries(resume.repeatedToolCalls));
+    // The existing repeat counters survive a pause and include every attempted call of the
+    // run, even before a compaction. Rebuild the in-memory restriction without new stored data.
+    for (const key of repeatedToolCalls.keys()) {
+      await this.toolDispatch.beforePersonalCall(key.slice(0, key.indexOf(":")), state);
+    }
     const finished = await finishPausedStep({
       runId,
       startInput: input,
