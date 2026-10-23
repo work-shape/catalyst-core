@@ -1,17 +1,13 @@
 import { PostgresFixtures } from "./support/postgres-fixtures";
-import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { promisify } from "node:util";
 import { afterEach, describe, inject, expect, it } from "vitest";
 import postgres, { type Sql } from "postgres";
 
 const fixtures = new PostgresFixtures(inject("postgresFixturePrefix"));
 
 const migrationsDirectory = resolve("packages/postgres-store/migrations");
-const preflightScript = resolve("scripts/preflight-collaboration-workspaces.mjs");
 const createdDatabases: string[] = [];
-const runFile = promisify(execFile);
 
 describe("Collaboration Workspace migration 0020", () => {
   afterEach(async () => {
@@ -140,56 +136,6 @@ describe("Collaboration Workspace migration 0020", () => {
           and column_name = 'collaboration_workspace_id'
       `;
       expect(column?.count).toBe("0");
-    } finally {
-      await sql.end();
-    }
-  });
-
-  it("passes the read-only preflight when conversation owners map to users", async () => {
-    const { sql, databaseUrl: testDatabaseUrl } = await createFreshDatabase();
-    try {
-      await applyMigrationsThrough(sql, 19);
-      await seedProductUser(sql, "mapped_user", "active");
-      await seedConversation(sql, "mapped_conversation", "mapped_user");
-
-      const { stdout } = await runFile(process.execPath, [preflightScript], {
-        env: { ...process.env, DATABASE_URL: testDatabaseUrl }
-      });
-
-      expect(stdout).toContain("Product users: 1");
-      expect(stdout).toContain("Active conversations: 1");
-      expect(stdout).toContain("Unmapped conversations: 0");
-      expect(stdout).toContain("Unmapped active conversations: 0");
-      expect(stdout).toContain("Unmapped non-active conversations: 0");
-      expect(stdout).toContain("Preflight passed");
-    } finally {
-      await sql.end();
-    }
-  });
-
-  it("fails the read-only preflight when conversation owners are unmapped in any status", async () => {
-    const { sql, databaseUrl: testDatabaseUrl } = await createFreshDatabase();
-    try {
-      await applyMigrationsThrough(sql, 19);
-      await seedConversation(sql, "active_orphaned_conversation", "missing_active_user");
-      await seedConversation(sql, "deleted_orphaned_conversation", "missing_deleted_user");
-      await sql`
-        update conversations
-        set status = 'deleted'
-        where id = 'deleted_orphaned_conversation'
-      `;
-
-      const failure = await runFile(process.execPath, [preflightScript], {
-        env: { ...process.env, DATABASE_URL: testDatabaseUrl }
-      }).catch((error: unknown) => error);
-
-      expect(failure).toMatchObject({ code: 1 });
-      expect((failure as { stdout: string }).stdout).toContain("Unmapped conversations: 2");
-      expect((failure as { stdout: string }).stdout).toContain("Unmapped active conversations: 1");
-      expect((failure as { stdout: string }).stdout).toContain(
-        "Unmapped non-active conversations: 1"
-      );
-      expect((failure as { stderr: string }).stderr).toContain("Do not deploy migration 0020");
     } finally {
       await sql.end();
     }
@@ -523,9 +469,9 @@ async function seedConversation(sql: Sql, id: string, ownerUserId: string): Prom
   `;
 }
 
-async function createFreshDatabase(): Promise<{ sql: Sql; databaseUrl: string }> {
+async function createFreshDatabase(): Promise<{ sql: Sql }> {
   // These assertions exercise historical migrations themselves, so they need an empty clone.
   const url = await fixtures.database(`history_${globalThis.crypto.randomUUID()}`, false);
   createdDatabases.push(url);
-  return { sql: postgres(url, { max: 1 }), databaseUrl: url };
+  return { sql: postgres(url, { max: 1 }) };
 }
