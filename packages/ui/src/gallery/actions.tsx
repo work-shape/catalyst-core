@@ -1,6 +1,7 @@
 import { Ellipsis, Plus, Settings, Upload } from "lucide-react";
 import { useState } from "react";
 import { Button, type ButtonSize, type ButtonVariant } from "../actions/button";
+import { FileDropZone } from "../actions/file-drop-zone";
 import { FilePicker } from "../actions/file-picker";
 import { IconButton, type IconButtonSize } from "../actions/icon-button";
 import { RunLiveOnce, type RunLiveOnceState } from "../actions/run-live-once";
@@ -52,6 +53,30 @@ function FilePickerSample({ text }: { text: GalleryText }) {
       <span className="text-body text-muted-foreground">
         {names.length > 0 ? names.join(", ") : text.noFileChosen}
       </span>
+    </Samples>
+  );
+}
+
+/** A zone a folder or files are dropped on, with the dialog for whoever does not drag. */
+function FileDropZoneSample({ text }: { text: GalleryText }) {
+  const [names, setNames] = useState<readonly string[]>([]);
+  const take = (files: readonly File[]) => setNames(files.map((file) => file.name));
+  return (
+    <Samples>
+      <FileDropZone className="w-full" onDrop={(data) => take([...data.files])}>
+        <span>{text.dropFiles}</span>
+        <FilePicker directory onFiles={take}>
+          {(choose) => (
+            <Button variant="outline" size="sm" onClick={choose}>
+              <Upload aria-hidden="true" />
+              {text.chooseFolder}
+            </Button>
+          )}
+        </FilePicker>
+        <span className="text-caption">
+          {names.length > 0 ? names.join(", ") : text.noFileChosen}
+        </span>
+      </FileDropZone>
     </Samples>
   );
 }
@@ -144,6 +169,11 @@ export const actionsGallery: GalleryGroup = {
       name: "FilePicker",
       components: ["FilePicker"],
       render: (text) => <FilePickerSample text={text} />
+    },
+    {
+      name: "FileDropZone",
+      components: ["FileDropZone"],
+      render: (text) => <FileDropZoneSample text={text} />
     },
     {
       name: "TextLink",
