@@ -31,6 +31,7 @@ const kinds = [
       read: "agent.read",
       write: "agent.write",
       publish: "agent.publish",
+      approve: "agent.approve",
       delete: "agent.delete"
     }
   },

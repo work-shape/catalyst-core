@@ -181,7 +181,20 @@ export async function publishEvents(
     });
     if (draft?.revision !== input.revision) return [];
     const write = assetWriteEvent({ kind: "agent", name: input.name, config: draft.config });
-    return [write, { ...write, name: "agent.before_publish" }];
+    // The publish names its agent and the workspace that owns it: the shipped publish guardrail
+    // holds the publish of a workspace's agent and not the instance's own (WS-PUB-1b).
+    return [
+      write,
+      {
+        ...write,
+        name: "agent.before_publish",
+        subject: {
+          ...write.subject,
+          id: asset.id,
+          ...(asset.scope.kind === "workspace" ? { workspaceId: asset.scope.workspaceId } : {})
+        }
+      }
+    ];
   }
   const name = PUBLISH_EVENTS[input.kind];
   if (name === undefined) {

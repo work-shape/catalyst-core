@@ -61,6 +61,8 @@ export function createAgentAssetKind(options: AgentAssetKindOptions): WorkflowAs
         read: "agent.read",
         write: "agent.write",
         publish: "agent.publish",
+        // Decides the held publish of an agent a workspace owns (WS-PUB-1b).
+        approve: "agent.approve",
         delete: "agent.delete"
       },
       // The instance owns it, or the workspace it was made in (WS-OWN-1a).

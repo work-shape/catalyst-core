@@ -688,7 +688,7 @@ describe("what the dialogs send", () => {
     for (const kind of ["agent", "skill"] as const) {
       expect(grantVerbs(kind)).toEqual(
         kind === "agent"
-          ? ["read", "use", "write", "publish", "delete"]
+          ? ["read", "use", "write", "publish", "approve", "delete"]
           : ["read", "write", "delete"]
       );
       expect(grantScopeKinds(kind)).toEqual(["workspace", "asset"]);
