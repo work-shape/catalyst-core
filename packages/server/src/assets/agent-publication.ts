@@ -10,7 +10,7 @@ import { transactionalAssetCall, type AssetCall } from "./asset-access";
 import type { AssetTarget } from "./asset-target";
 import { makeAgentDependenciesAvailable } from "./agent-dependency-availability";
 import { authorizeInteractiveWrite } from "./asset-write-rules";
-import { offersOnPublish } from "../approvals/agent-publish-review";
+import { firstOffering, firstVersionOffering } from "../approvals/agent-publish-review";
 
 /**
  * Publish, explicit dependency availability and the first publish's offering share one lock,
@@ -36,7 +36,7 @@ export async function publishAgentDraft(
     );
     return write(within, called);
   };
-  const offers = await firstOffering(options, target);
+  const offers = await firstOffering(options, target.asset);
   if (!consent.makeDependenciesAvailable && offers === undefined) return publish(options, call);
   const { expectedAvailability } = consent;
   if (consent.makeDependenciesAvailable && expectedAvailability === undefined)
@@ -80,27 +80,30 @@ export async function publishAgentDraft(
 }
 
 /**
- * The shared workspace a publish of this agent offers it in: the one that owns it, where the
- * publish is its first and it is offered nowhere. Nothing for an instance's own agent, a later
- * publish or one owned by a Personal Workspace, which no availability names alone.
+ * The publish of a first version without a draft (access check 11): an agent made in a shared
+ * workspace by someone who may not approve its publish starts offered nowhere, and its first
+ * publish offers version 1 as it is stored in that workspace. Nothing where the publish is not
+ * that one.
  */
-async function firstOffering(
+export async function publishFirstVersion(
   options: AssetWorkflowOptions,
-  target: AssetTarget
-): Promise<string | undefined> {
+  call: AssetCall,
+  target: AssetTarget,
+  revision: number
+): Promise<{ revision: number } | undefined> {
   const { asset } = target;
-  if (!asset || asset.status !== "active") return undefined;
-  const availability = await options.configAssets.store.listAgentAvailability({
-    clientInstanceId: options.clientInstanceId,
-    agentName: asset.name
+  const offers = await firstVersionOffering(options, asset, revision);
+  if (!asset || offers === undefined) return undefined;
+  await options.stores.transaction(async (stores) => {
+    const within = {
+      ...options,
+      stores,
+      configAssets: { ...options.configAssets, store: stores.configAssets }
+    };
+    const called = transactionalAssetCall(call, options.clientInstanceId, stores.audit);
+    await offerInOwnWorkspace(within, called, target, offers);
   });
-  const workspaceId = offersOnPublish(asset, availability.get(asset.name));
-  if (workspaceId === undefined) return undefined;
-  const workspace = await options.stores.workspaces.getWorkspace(
-    options.clientInstanceId,
-    asCollaborationWorkspaceId(workspaceId)
-  );
-  return workspace?.kind === "shared" ? workspaceId : undefined;
+  return { revision: asset.revision };
 }
 
 /**

@@ -13,6 +13,7 @@ import type { AssetAddress } from "../asset-target";
 import { liveRevision } from "../asset-live-revision";
 import { appPublishReview } from "../../apps/app-publish-reach";
 import { publishApproval, publishFromAPerson } from "../../approvals/publish-approval";
+import { firstVersionOffering } from "../../approvals/agent-publish-review";
 import type { AssetVerbScope } from "./scope";
 
 /**
@@ -72,5 +73,10 @@ export async function assetPublishApproval(
     asset && revision?.config
       ? appPublishReview(asset, target.kind, revision.config, input.audience).publishWidens
       : undefined;
-  return publishApproval(target, input.revision, input.audience, undefined, widens);
+  // An agent made in a workspace by someone who may not approve its publish is published as
+  // it was made, without a draft (access check 11).
+  const firstVersion =
+    target.kind.kind === "agent" &&
+    (await firstVersionOffering(scope.options, asset, input.revision)) !== undefined;
+  return publishApproval(target, input.revision, input.audience, undefined, widens, firstVersion);
 }

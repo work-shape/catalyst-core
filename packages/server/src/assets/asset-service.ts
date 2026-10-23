@@ -7,7 +7,7 @@ import type {
   PolicyTarget
 } from "@work-shape/catalyst-core";
 import type { AssetUpsert } from "./asset-upsert";
-import { publishAgentDraft } from "./agent-publication";
+import { publishAgentDraft, publishFirstVersion } from "./agent-publication";
 import { AgentDraftWorkflow } from "./agent-drafts";
 import { AssetDraftWorkflow } from "./asset-draft-service";
 import { readDefinitionName, type WorkflowAssetKind } from "../asset-kinds/shared";
@@ -72,7 +72,9 @@ export class AssetWorkflow {
               releaseDraft: draft.author.release,
               audit: "config_asset.updated"
             })
-        )
+        ),
+      publishFirstVersion: (call, target, revision) =>
+        publishFirstVersion(options, call, target, revision)
     });
     this.reads = new AssetReadWorkflow(options, {
       target: (address) => this.target(address),
