@@ -55,16 +55,6 @@ jobs:
         run: pnpm format:check
       - name: Build
         run: pnpm build
-      - name: Lint
-        run: pnpm lint
-      - name: Package types
-        run: pnpm typecheck:packages
-      - name: Test types
-        run: pnpm typecheck:tests
-      - name: OpenAPI and contract
-        run: pnpm check:openapi && pnpm check:contract
-      - name: Migrations
-        run: pnpm check:migrations
       - name: Database
         timeout-minutes: 5
         env:
@@ -80,6 +70,18 @@ jobs:
           echo "POSTGRES_STORE_TEST_DATABASE_URL=postgresql://catalyst:local-check@127.0.0.1:$port/catalyst_test" >> "$GITHUB_ENV"
           docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin <<<"$TOKEN"
           CHECK_POSTGRES_NAME="$name" .github/scripts/start-postgres.sh catalyst local-check catalyst_test "$port"
+      - name: Lint
+        run: pnpm lint
+      - name: Tooling tests
+        run: pnpm test:tooling
+      - name: Package types
+        run: pnpm typecheck:packages
+      - name: Test types
+        run: pnpm typecheck:tests
+      - name: OpenAPI and contract
+        run: pnpm check:openapi && pnpm check:contract
+      - name: Migrations
+        run: pnpm check:migrations
       - name: Unit and database tests
         run: pnpm exec vitest run
       - name: Upgrade from oldest supported release

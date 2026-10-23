@@ -10,7 +10,7 @@ import {
   workersForConnections
 } from "./scripts/test-postgres-capacity.mjs";
 
-import { testProjects } from "./vitest.projects.config";
+import { testProjects, toolingFiles } from "./vitest.projects.config";
 
 const rootDir = dirname(fileURLToPath(import.meta.url));
 
@@ -45,7 +45,7 @@ async function testWorkers(): Promise<number> {
 }
 
 const maxWorkers = await testWorkers();
-const { pure, isolated } = testProjects(rootDir);
+const { pure, postgres: postgresFiles, isolated } = testProjects(rootDir);
 
 export default defineConfig({
   resolve: {
@@ -54,6 +54,7 @@ export default defineConfig({
   test: {
     // See scripts/test-postgres-capacity.mjs for the arithmetic.
     maxWorkers,
+    globalSetup: ["tests/support/postgres-global-setup.ts"],
     reporters: ["default", "./scripts/vitest-budget-reporter.ts"],
     // Close suite connections/held transactions before the file fixture is reset or dropped.
     sequence: { hooks: "stack", sequencer: DurationSequencer },
@@ -75,18 +76,32 @@ export default defineConfig({
       {
         extends: true,
         test: {
+          name: "postgres",
+          pool: "forks",
+          isolate: false,
+          include: postgresFiles,
+          provide: { sharedPostgresHooks: true },
+          sequence: { setupFiles: "list" },
+          setupFiles: ["tests/support/pure-file-cleanup.ts", "tests/support/postgres-file-hooks.ts"]
+        }
+      },
+      {
+        extends: true,
+        test: {
           name: "isolated",
+          pool: "forks",
           isolate: true,
-          include: isolated,
-          globalSetup: ["tests/support/postgres-global-setup.ts"]
+          include: isolated
         }
       }
     ],
     // Scale tests prove properties at customer volume. They require an explicit opt-in;
     // ordinary tests and the lander's gate leave them out.
-    exclude:
-      process.env.CATALYST_SCALE_TESTS === "1"
-        ? configDefaults.exclude
-        : [...configDefaults.exclude, "tests/**/*.scale.test.ts"]
+    exclude: [
+      ...configDefaults.exclude,
+      ...toolingFiles,
+      "tests/workflow-worker-kill.test.ts",
+      ...(process.env.CATALYST_SCALE_TESTS === "1" ? [] : ["tests/**/*.scale.test.ts"])
+    ]
   }
 });

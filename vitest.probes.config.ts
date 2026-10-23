@@ -1,4 +1,4 @@
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 import base from "./vitest.config";
 
 // The probes of the Workflow engine (packages/workflows/scripts/probes.mjs): a loop over 10,000
@@ -9,6 +9,7 @@ export default defineConfig({
   test: {
     ...base.test,
     projects: undefined,
+    exclude: configDefaults.exclude,
     globalSetup: ["tests/support/postgres-global-setup.ts"],
     include: ["tests/probes/**/*.probe.ts", "tests/workflow-worker-kill.test.ts"],
     // One at a time: each starts server processes and measures them.

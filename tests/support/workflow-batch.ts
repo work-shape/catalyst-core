@@ -1,4 +1,4 @@
-import { afterEach, expect } from "vitest";
+import { inject, afterEach, expect } from "vitest";
 import { z } from "zod";
 import {
   operationBatchResultSchema,
@@ -15,10 +15,15 @@ import { publishedDefinitions, type WorkflowFixture } from "./workflow-instance"
 import { notifyClients, readyWorkflows, start } from "./workflow-runs";
 
 let open: WorkflowFixture | undefined;
-afterEach(async () => {
-  await open?.instance.close();
-  open = undefined;
-});
+export function registerWorkflowBatchHooks() {
+  afterEach(async () => {
+    await open?.instance.close();
+    open = undefined;
+  });
+}
+
+if (!inject("sharedPostgresHooks")) registerWorkflowBatchHooks();
+
 const BATCH = "fixture_batch.process";
 const ROWS = "fixture_batch.rows";
 const rowSchema: JsonObject = {

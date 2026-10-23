@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, vi } from "vitest";
+import { inject, afterEach, vi } from "vitest";
 import { z } from "zod";
 import { infrastructureSchema } from "@work-shape/catalyst-api-contract";
 import { InfrastructureWorkflow, type InfrastructureEntry } from "@work-shape/catalyst-server";
@@ -96,11 +96,16 @@ export function recordingLogger(): { logger: Logger; lines: unknown[] } {
 
 const roots: string[] = [];
 
-afterEach(async () => {
-  vi.useRealTimers();
-  vi.unstubAllGlobals();
-  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
-});
+export function registerInfrastructureWorldHooks() {
+  afterEach(async () => {
+    if (inject("sharedPostgresHooks") && roots.length === 0) return;
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
+  });
+}
+
+if (!inject("sharedPostgresHooks")) registerInfrastructureWorldHooks();
 
 /** An API on a full `infrastructure` section, with every provider's secrets in a fake resolver. */
 export async function createServer(

@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterAll, afterEach, expect } from "vitest";
+import { inject, afterAll, afterEach, expect } from "vitest";
 import { z } from "zod";
 import {
   asAgentRunId,
@@ -24,14 +24,20 @@ import { deferred, required, waitUntil } from "./assertions";
 import { injectStartConversationRun } from "./chat-server-run-harness";
 
 const objectRoots: string[] = [];
-afterAll(async () => {
-  await Promise.all(objectRoots.map((root) => rm(root, { recursive: true, force: true })));
-});
-
 const releaseOnCleanup: Array<() => void> = [];
-afterEach(() => {
-  for (const release of releaseOnCleanup.splice(0)) release();
-});
+export function registerFollowUpHooks() {
+  afterAll(async () => {
+    await Promise.all(
+      objectRoots.splice(0).map((root) => rm(root, { recursive: true, force: true }))
+    );
+  });
+
+  afterEach(() => {
+    for (const release of releaseOnCleanup.splice(0)) release();
+  });
+}
+
+if (!inject("sharedPostgresHooks")) registerFollowUpHooks();
 
 /** One gate per actual model turn, so dispatch cannot finish a second turn in the assertions. */
 export async function followUpFixture(

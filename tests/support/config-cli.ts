@@ -10,7 +10,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { afterEach } from "vitest";
+import { inject, afterEach } from "vitest";
 import { z } from "zod";
 import {
   ApiKeyAccessTokenExchange,
@@ -62,14 +62,26 @@ const servers: TestInstance[] = [];
 
 export const temporaryDirectories: string[] = [];
 
-afterEach(async () => {
-  await Promise.all(servers.splice(0).map((server) => server.close()));
-  await Promise.all(
-    temporaryDirectories
-      .splice(0)
-      .map((directory) => rm(directory, { recursive: true, force: true }))
-  );
-});
+const httpServers: Server[] = [];
+export function registerConfigCliHooks() {
+  afterEach(async () => {
+    await Promise.all(servers.splice(0).map((server) => server.close()));
+    await Promise.all(
+      temporaryDirectories
+        .splice(0)
+        .map((directory) => rm(directory, { recursive: true, force: true }))
+    );
+  });
+  afterEach(async () => {
+    await Promise.all(
+      httpServers
+        .splice(0)
+        .map((server) => new Promise((done) => server.close(() => done(undefined))))
+    );
+  });
+}
+
+if (!inject("sharedPostgresHooks")) registerConfigCliHooks();
 
 /** A working copy bound to one workspace, with one agent. */
 export async function kaiWorkingCopy(
@@ -93,16 +105,6 @@ export async function kaiWorkingCopy(
 export const shownAnswerSchema = z
   .object({ kind: z.string(), revision: z.number(), config: z.record(z.string(), z.unknown()) })
   .loose();
-
-const httpServers: Server[] = [];
-
-afterEach(async () => {
-  await Promise.all(
-    httpServers
-      .splice(0)
-      .map((server) => new Promise((done) => server.close(() => done(undefined))))
-  );
-});
 
 /** A real HTTP server on this machine, so that a redirect is one the runtime would follow. */
 export async function listen(

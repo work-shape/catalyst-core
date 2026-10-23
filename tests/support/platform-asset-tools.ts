@@ -10,7 +10,7 @@ import type { ChildProcess } from "node:child_process";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, expect } from "vitest";
+import { inject, afterEach, expect } from "vitest";
 import { z } from "zod";
 import { drainRunEvents, injectStartConversationRun } from "./chat-server-run-harness";
 import { waitUntil } from "./assertions";
@@ -23,12 +23,16 @@ import { createTestInstance, type TestInstance } from "./test-instance";
 const processes: ChildProcess[] = [];
 const directories: string[] = [];
 // Stop child workers before test-instance closes the API and resets the file database.
-afterEach(async () => {
-  for (const child of processes.splice(0)) await killTestProcess(child);
-  for (const directory of directories.splice(0)) {
-    await rm(directory, { recursive: true, force: true });
-  }
-});
+export function registerPlatformAssetToolsHooks() {
+  afterEach(async () => {
+    for (const child of processes.splice(0)) await killTestProcess(child);
+    for (const directory of directories.splice(0)) {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+}
+
+if (!inject("sharedPostgresHooks")) registerPlatformAssetToolsHooks();
 
 export const WORKFLOW = "month-end";
 const OWNER = "owner";

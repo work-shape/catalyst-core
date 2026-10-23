@@ -38,14 +38,6 @@ jobs:
           node-version: 22
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
-      - name: Format, lint and types
-        run: pnpm format:check && pnpm lint && pnpm typecheck
-      - name: OpenAPI, contract and migrations
-        run: pnpm check:openapi && pnpm check:contract && pnpm check:migrations
-      - name: Documentation site
-        run: pnpm --filter @work-shape/catalyst-docs check:site
-      - name: Release tooling
-        run: node --test 'scripts/release/*.test.mjs' && pnpm release:check --skip-build
       - name: Database
         timeout-minutes: 5
         env:
@@ -54,8 +46,20 @@ jobs:
           docker rm --force "$CHECK_POSTGRES_NAME" >/dev/null 2>&1 || true
           docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin <<<"$TOKEN"
           .github/scripts/start-postgres.sh catalyst local-check catalyst_test 54330
+      - name: Format, lint and types
+        run: pnpm format:check && pnpm lint && pnpm typecheck
+      - name: Tooling tests
+        run: pnpm test:tooling
+      - name: OpenAPI, contract and migrations
+        run: pnpm check:openapi && pnpm check:contract && pnpm check:migrations
+      - name: Documentation site
+        run: pnpm --filter @work-shape/catalyst-docs check:site
+      - name: Release tooling
+        run: node --test 'scripts/release/*.test.mjs' && pnpm release:check --skip-build
       - name: Unit, database and scale tests
         run: pnpm exec vitest run
+      - name: Workflow probes
+        run: pnpm exec vitest run --config vitest.probes.config.ts
       - name: Deployment kit tests
         run: pnpm test:deployment-kit
       - name: Upgrade and compatibility

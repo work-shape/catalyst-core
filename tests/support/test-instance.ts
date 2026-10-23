@@ -1,5 +1,5 @@
 import { createClientInstanceExecutionAssembly } from "../../packages/client-assembly/src/app";
-import { afterAll, afterEach, beforeEach } from "vitest";
+import { inject, afterAll, afterEach, beforeEach } from "vitest";
 import {
   createClientInstanceApp,
   createInstanceWorkflows,
@@ -127,34 +127,42 @@ const instances = new Set<TestInstance>();
 let retained = new Set<TestInstance>();
 let preserveSuiteState = false;
 let testActive = false;
-beforeEach(() => {
-  testActive = true;
-  retained = new Set(instances);
-});
-afterAll(async () => {
-  const results = await Promise.allSettled([...instances].map((instance) => instance.close()));
-  await closeFileTestDatabase();
-  const failed = results.filter((result) => result.status === "rejected");
-  if (failed.length)
-    throw new AggregateError(
-      failed.map((result) => result.reason),
-      "Test instance cleanup failed"
-    );
-});
-afterEach(async () => {
+export function registerTestInstanceHooks() {
+  preserveSuiteState = false;
   testActive = false;
-  const closing = [...instances]
-    .filter((instance) => !retained.has(instance))
-    .map((instance) => instance.close());
-  const results = await Promise.allSettled(closing);
-  if (!preserveSuiteState) await resetFileTestDatabase();
-  const failures = results.filter((result) => result.status === "rejected");
-  if (failures.length)
-    throw new AggregateError(
-      failures.map((result) => result.reason),
-      "Test instance cleanup failed"
-    );
-});
+  retained.clear();
+  instances.clear();
+  beforeEach(() => {
+    testActive = true;
+    retained = new Set(instances);
+  });
+  afterAll(async () => {
+    const results = await Promise.allSettled([...instances].map((instance) => instance.close()));
+    await closeFileTestDatabase();
+    const failed = results.filter((result) => result.status === "rejected");
+    if (failed.length)
+      throw new AggregateError(
+        failed.map((result) => result.reason),
+        "Test instance cleanup failed"
+      );
+  });
+  afterEach(async () => {
+    testActive = false;
+    const closing = [...instances]
+      .filter((instance) => !retained.has(instance))
+      .map((instance) => instance.close());
+    const results = await Promise.allSettled(closing);
+    if (!preserveSuiteState) await resetFileTestDatabase();
+    const failures = results.filter((result) => result.status === "rejected");
+    if (failures.length)
+      throw new AggregateError(
+        failures.map((result) => result.reason),
+        "Test instance cleanup failed"
+      );
+  });
+}
+
+if (!inject("sharedPostgresHooks")) registerTestInstanceHooks();
 
 export function createTestInstance(input: { execution: TestExecutionInput }): Promise<TestInstance>;
 export function createTestInstance(): Promise<TestInstance<TestStore>>;

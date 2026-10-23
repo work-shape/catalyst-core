@@ -5,6 +5,7 @@ import { PostgresFixtures } from "./postgres-fixtures";
 declare module "vitest" {
   export interface ProvidedContext {
     postgresFixturePrefix: string;
+    sharedPostgresHooks: boolean;
   }
 }
 
@@ -49,9 +50,20 @@ export async function resetFileTestDatabase(): Promise<void> {
       const tables = await sql<
         { tablename: string }[]
       >`select tablename from pg_tables where schemaname = 'public'`;
-      if (tables.length)
+      if (!tables.length) continue;
+      // Catalog estimates can be stale, especially immediately after inserts/deletes. Probe
+      // actual rows in one round trip; EXISTS stops at the first visible row of each table.
+      const populated = await sql.unsafe<{ tablename: string }[]>(
+        tables
+          .map(
+            ({ tablename }) =>
+              `select '${tablename.replaceAll("'", "''")}' as tablename where exists (select 1 from public."${tablename.replaceAll('"', '""')}")`
+          )
+          .join(" union all ")
+      );
+      if (populated.length)
         await sql.unsafe(
-          `truncate ${tables.map(({ tablename }) => `"${tablename.replaceAll('"', '""')}"`).join(", ")} restart identity cascade`
+          `truncate ${populated.map(({ tablename }) => `public."${tablename.replaceAll('"', '""')}"`).join(", ")} restart identity cascade`
         );
     } finally {
       await sql.end();

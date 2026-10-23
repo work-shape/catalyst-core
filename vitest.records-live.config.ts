@@ -1,4 +1,4 @@
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 import base from "./vitest.config";
 
 // Explicit opt-in. Spread replaces include; mergeConfig concatenates the default test list.
@@ -7,6 +7,7 @@ export default defineConfig({
   test: {
     ...base.test,
     projects: undefined,
+    exclude: configDefaults.exclude,
     globalSetup: ["tests/support/postgres-global-setup.ts"],
     include: ["tests/data-store-chat.live.ts"],
     testTimeout: 600_000,

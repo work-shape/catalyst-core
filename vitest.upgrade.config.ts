@@ -1,4 +1,4 @@
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 import base from "./vitest.config";
 
 // pnpm test:upgrade: a database of the oldest supported release, migrated to this commit. It reads
@@ -8,6 +8,7 @@ export default defineConfig({
   test: {
     ...base.test,
     projects: undefined,
+    exclude: configDefaults.exclude,
     globalSetup: ["tests/support/postgres-global-setup.ts"],
     include: ["tests/upgrade/**/*.upgrade.ts"]
   }

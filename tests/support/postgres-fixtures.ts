@@ -44,6 +44,7 @@ function causeWithoutCredentials(error: unknown): Error {
 export class PostgresFixtures {
   readonly prefix: string;
   private readonly ownsRun: boolean;
+  private preparing: Promise<void> | undefined;
   private readonly migrationsDirectory = testMigrationsDirectory();
   constructor(joinedPrefix?: string) {
     const prefix = joinedPrefix ?? `catalyst_test_${randomUUID().replaceAll("-", "")}`;
@@ -63,35 +64,47 @@ export class PostgresFixtures {
     return url.toString();
   }
 
-  async database(file: string, migrated = true): Promise<string> {
-    const name = `${this.prefix}_${createHash("sha256").update(file).digest("hex").slice(0, 12)}`;
+  /** The run owner prepares the template before workers start; private lifecycle probes may
+   * prepare their own template lazily. Joined workers only clone the ready template. */
+  prepare(): Promise<void> {
+    if (!this.ownsRun) throw new Error("Only the test run owner prepares its template");
+    return (this.preparing ??= this.createTemplate().catch((error: unknown) => {
+      throw new Error(
+        "Postgres test template setup failed. Check POSTGRES_STORE_TEST_DATABASE_URL, CREATEDB permission, and CATALYST_TEST_MIGRATIONS_DIRECTORY.",
+        { cause: causeWithoutCredentials(error) }
+      );
+    }));
+  }
+
+  private async createTemplate(): Promise<void> {
     const template = `${this.prefix}_template`;
     const admin = this.admin();
     try {
-      // The lock serializes lazy template creation and clones across workers in this run.
-      await admin`select pg_advisory_lock(hashtextextended(${this.prefix}, 0))`;
-      const [exists] = await admin`select datname from pg_database where datname = ${name}`;
-      if (!exists) {
-        if (migrated) {
-          const [ready] = await admin`select datname from pg_database where datname = ${template}`;
-          if (!ready) {
-            await admin.unsafe(`create database "${template}" template template0`);
-            try {
-              // The same entry an operator runs, so the template is what a deployment gets.
-              await migrateDatabase({
-                databaseUrl: this.url(template),
-                migrationsDirectory: this.migrationsDirectory
-              });
-            } catch (error) {
-              await admin.unsafe(`drop database "${template}" with (force)`);
-              throw error;
-            }
-          }
-        }
-        await admin.unsafe(
-          `create database "${name}" template "${migrated ? template : "template0"}"`
-        );
+      await admin.unsafe(`create database "${template}" template template0`);
+      try {
+        await migrateDatabase({
+          databaseUrl: this.url(template),
+          migrationsDirectory: this.migrationsDirectory
+        });
+      } catch (error) {
+        await admin.unsafe(`drop database "${template}" with (force)`);
+        throw error;
       }
+    } finally {
+      await admin.end({ timeout: 5 });
+    }
+  }
+
+  async database(file: string, migrated = true): Promise<string> {
+    const name = `${this.prefix}_${createHash("sha256").update(file).digest("hex").slice(0, 12)}`;
+    const admin = this.admin();
+    try {
+      if (migrated && this.ownsRun) await this.prepare();
+      const [exists] = await admin`select datname from pg_database where datname = ${name}`;
+      if (!exists)
+        await admin.unsafe(
+          `create database "${name}" template "${migrated ? `${this.prefix}_template` : "template0"}"`
+        );
       return this.url(name);
     } catch (error) {
       throw new Error(
