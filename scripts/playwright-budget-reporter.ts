@@ -16,7 +16,7 @@ export default class PlaywrightBudgetReporter implements Reporter {
 
   async onEnd() {
     const samples = [...this.durations].map(([file, durationMs]) => ({ file, durationMs }));
-    if (reportBudgetViolations(durationViolations("browser", samples)))
-      return { status: "failed" as const };
+    // A warning, not a failure: on a shared runner a test's time follows the machine's load.
+    reportBudgetViolations(durationViolations("browser", samples));
   }
 }

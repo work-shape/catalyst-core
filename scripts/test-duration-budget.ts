@@ -45,7 +45,7 @@ export function durationViolations(
 export function reportBudgetViolations(violations: string[]): boolean {
   if (!violations.length) return false;
   console.error(
-    `TEST TIME BUDGET exceeded:\n${violations.map((line) => `  ${line}`).join("\n")}\n` +
+    `TEST TIME BUDGET exceeded (a warning; the run does not fail):\n${violations.map((line) => `  ${line}`).join("\n")}\n` +
       `Reduce the cost or add the exact identity to ${allowlistPath} with measuredMs and a reason.`
   );
   return true;

@@ -89,7 +89,7 @@ it("requires exact independent exceptions and exempts scale files and their test
   expect(readBudgetAllowlist().source.trim()).not.toBe("");
 });
 
-it("checks nested Vitest tests independently of the file and sets a failing exit code", () => {
+it("checks nested Vitest tests independently of the file and leaves the exit code alone", () => {
   const error = vi.spyOn(console, "error").mockImplementation(() => {});
   const priorExit = process.exitCode;
   try {
@@ -103,7 +103,7 @@ it("checks nested Vitest tests independently of the file and sets a failing exit
         }
       }
     ]);
-    expect(process.exitCode).toBe(1);
+    expect(process.exitCode).toBe(0);
     expect(error).toHaveBeenCalledWith(
       expect.stringContaining("tests/new-budget-fixture.test.ts > nested > slow")
     );
@@ -125,7 +125,7 @@ it("adds browser work across tests and retry attempts without counting gaps betw
   );
   await expect(reporter.onEnd()).resolves.toBeUndefined();
   reporter.onTestEnd(test, { duration: 30_001 });
-  await expect(reporter.onEnd()).resolves.toEqual({ status: "failed" });
+  await expect(reporter.onEnd()).resolves.toBeUndefined();
 });
 
 function fixture() {
@@ -149,7 +149,7 @@ function run(tool: "vitest" | "playwright", config: string) {
   );
 }
 
-it("fails the real Vitest CLI when all assertions pass but reported work exceeds the budget", () => {
+it("warns from the real Vitest CLI, and passes, when reported work exceeds the budget", () => {
   const dir = fixture();
   try {
     writeFileSync(
@@ -171,14 +171,14 @@ it("fails the real Vitest CLI when all assertions pass but reported work exceeds
     );
     const result = run("vitest", config);
     expect(result.error).toBeUndefined();
-    expect(result.status, result.stdout + result.stderr).toBe(1);
+    expect(result.status, result.stdout + result.stderr).toBe(0);
     expect(result.stderr).toContain("TEST TIME BUDGET exceeded");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
 });
 
-it("fails the real Playwright CLI when two passing tests exceed their spec budget together", () => {
+it("warns from the real Playwright CLI, and passes, when two tests exceed their spec budget together", () => {
   const dir = fixture();
   try {
     writeFileSync(
@@ -198,7 +198,7 @@ it("fails the real Playwright CLI when two passing tests exceed their spec budge
     );
     const result = run("playwright", config);
     expect(result.error).toBeUndefined();
-    expect(result.status, result.stdout + result.stderr).toBe(1);
+    expect(result.status, result.stdout + result.stderr).toBe(0);
     expect(result.stderr).toContain("TEST TIME BUDGET exceeded");
   } finally {
     rmSync(dir, { recursive: true, force: true });

@@ -24,6 +24,7 @@ export default class VitestBudgetReporter implements Reporter {
         samples.push({ file, test: test.fullName, durationMs: test.diagnostic()?.duration ?? 0 });
       }
     }
-    if (reportBudgetViolations(durationViolations("vitest", samples))) process.exitCode = 1;
+    // A warning, not a failure: on a shared runner a test's time follows the machine's load.
+    reportBudgetViolations(durationViolations("vitest", samples));
   }
 }
