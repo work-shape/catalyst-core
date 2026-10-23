@@ -375,6 +375,13 @@ describe("personal Connection context isolation", () => {
       p.root.id
     );
     expect(marked?.personalDataAt).toBeDefined();
+    const snapshot = await world.instance.call(
+      "conversations.thread.get",
+      { params: { conversationId: p.root.id } },
+      { headers: { cookie: alice } }
+    );
+    expect(snapshot.statusCode).toBe(200);
+    expect(snapshot.json()).toMatchObject({ personalData: true });
     const dest = await conversation(a, "private");
     const move = (visibility: "private" | "workspace") =>
       world.instance.call(
@@ -538,38 +545,74 @@ describe("personal Connection context isolation", () => {
     ).toBe("denied");
   });
 
-  it("stores new views as static after the mark and preserves earlier views", async () => {
-    const p = await prepare();
-    const calls = await world.calls();
-    registerToolOperations(calls.registry, [createShowViewTool()], {
-      clientInstanceId,
-      personalConversation: calls.deps.policy.personalConversation
-    });
-    const input = {
-      html: "<p>private text</p><script>window.leak = true</script>",
-      mode: "inline"
-    };
-    const before = await call(p, { operation: "show_view", input });
-    expect(before.result).toMatchObject({ status: "done", display: { kind: "html.rendered" } });
-    await call(p);
-    const after = await call(p, { operation: "show_view", input });
-    expect(after.result).toMatchObject({
-      status: "done",
-      display: { kind: "private_hydrated_view" }
-    });
-    // The already returned display is not reclassified when the conversation is marked.
-    expect(before.result).toMatchObject({ display: { kind: "html.rendered" } });
-    const reads = vi
-      .spyOn(world.worker.stores.conversations, "getConversation")
-      .mockRejectedValue(new Error("unreadable mark"));
-    try {
-      expect((await call(p, { operation: "show_view", input })).result).toMatchObject({
+  it.each(["show_view", "test.custom_view"])(
+    "stores %s HTML displays as static after the mark",
+    async (name) => {
+      const p = await prepare();
+      const calls = await world.calls();
+      registerToolOperations(calls.registry, [{ ...createShowViewTool(), name }], {
+        clientInstanceId,
+        personalConversation: calls.deps.policy.personalConversation
+      });
+      const input = {
+        html: "<p>private text</p><script>window.leak = true</script>",
+        mode: "inline"
+      };
+      const before = await call(p, { operation: name, input });
+      expect(before.result).toMatchObject({ status: "done", display: { kind: "html.rendered" } });
+      await call(p);
+      const after = await call(p, { operation: name, input });
+      expect(after.result).toMatchObject({
         status: "done",
         display: { kind: "private_hydrated_view" }
       });
-    } finally {
-      reads.mockRestore();
+      expect(before.result).toMatchObject({ display: { kind: "html.rendered" } });
+      const reads = vi.spyOn(world.worker.stores.conversations, "getConversation");
+      for (const root of ["unreadable", "missing", "non-chat"] as const) {
+        if (root === "unreadable") reads.mockRejectedValue(new Error("unreadable mark"));
+        else
+          reads.mockResolvedValue(
+            root === "missing" ? undefined : { ...p.root, kind: "run_thread" }
+          );
+        expect((await call(p, { operation: name, input })).result).toMatchObject({
+          status: "done",
+          display: { kind: "private_hydrated_view" }
+        });
+      }
     }
+  );
+
+  it("preserves other display kinds in a marked conversation", async () => {
+    const p = await prepare();
+    await call(p);
+    const calls = await world.calls();
+    registerToolOperations(
+      calls.registry,
+      [
+        {
+          ...createShowViewTool(),
+          name: "test.other_display",
+          outputSchema: z.unknown(),
+          execute: async () => ({
+            status: "success" as const,
+            output: {},
+            display: {
+              kind: "test.custom",
+              version: 1,
+              mode: "inline" as const,
+              data: { value: "kept" }
+            }
+          })
+        }
+      ],
+      { clientInstanceId, personalConversation: calls.deps.policy.personalConversation }
+    );
+    expect(
+      (await call(p, { operation: "test.other_display", input: { html: "<p>x</p>" } })).result
+    ).toMatchObject({
+      status: "done",
+      display: { kind: "test.custom", data: { value: "kept" } }
+    });
   });
 
   it("holds mail.send at confirm despite an admin allow, leaving unmarked calls unchanged", async () => {

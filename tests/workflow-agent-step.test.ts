@@ -153,7 +153,7 @@ async function fixture(
         }
       ]
     },
-    tools: [],
+    tools: options.webTools ? [{ name: "web_fetch", enabled: true }] : [],
     toolNames: []
   });
   if (options.webTools)
@@ -365,7 +365,7 @@ async function fixture(
 }
 
 describe("Workflow Child Agent Runs (CR-2)", () => {
-  it("closes web tools for a real Workflow child whose conversation row cannot be resolved", async () => {
+  it("keeps web tools for a published Workflow child without a conversation row", async () => {
     const f = await fixture("valid", false, "user-1", { webTools: true });
     const step = await f.ended("done");
     const child = required(
@@ -380,8 +380,8 @@ describe("Workflow Child Agent Runs (CR-2)", () => {
     ).toBeUndefined();
     expect(f.requests.length).toBeGreaterThan(0);
     for (const request of f.requests) {
-      expect(request.tools.map((tool) => tool.name)).not.toContain("web_search");
-      expect(request.tools.map((tool) => tool.name)).not.toContain("web_fetch");
+      expect(request.tools.map((tool) => tool.name)).toContain("web_search");
+      expect(request.tools.map((tool) => tool.name)).toContain("web_fetch");
     }
   });
 

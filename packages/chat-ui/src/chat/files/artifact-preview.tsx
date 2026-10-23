@@ -181,6 +181,8 @@ function BlobArtifactPreview({
           blob={state.blob}
           filename={artifactDisplayFilename(artifact)}
           html={isHtmlFile(artifact)}
+          client={client}
+          conversationId={conversationId}
         />
       ) : null}
     </ArtifactPreviewFrame>
@@ -207,21 +209,46 @@ type TextFileView = "preview" | "source";
 
 /**
  * A stored text file in the code view every stored file is read in. An HTML file opens as the
- * page it is, in the frame and under the policy of a generated view (view-document.ts): no
- * origin, so nothing of the app's cookies or storage, and no network. A switch shows its text.
+ * page it is, using the static renderer until the server confirms an unmarked root chat.
+ * A switch shows its text.
  */
 function TextArtifactPreview({
   blob,
   filename,
-  html
+  html,
+  client,
+  conversationId
 }: {
+  client: ApiClient;
+  conversationId: string;
   blob: Blob;
   filename: string;
   html: boolean;
 }) {
   const { t } = useTranslation();
   const text = useBlobText(blob);
-  const [view, setView] = useState<TextFileView>("preview");
+  const [privacy, setPrivacy] = useState<{
+    conversationId: string;
+    blob: Blob;
+    client: ApiClient;
+    personalData?: boolean;
+  }>();
+  useEffect(() => {
+    if (!html) return;
+    let cancelled = false;
+    void client.conversations.thread.get({ params: { conversationId } }).then(
+      (thread) => {
+        if (!cancelled)
+          setPrivacy({ conversationId, blob, client, personalData: thread.personalData });
+      },
+      () => {
+        if (!cancelled) setPrivacy({ conversationId, blob, client });
+      }
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [client, conversationId, html, blob]);
 
   if (text === undefined) {
     return (
@@ -234,6 +261,33 @@ function TextArtifactPreview({
   if (!html) {
     return <StoredFileView className="h-full" path={filename} text={text} />;
   }
+  return (
+    <HtmlFilePreview
+      text={text}
+      filename={filename}
+      personalData={
+        privacy?.conversationId === conversationId &&
+        privacy.blob === blob &&
+        privacy.client === client
+          ? privacy.personalData
+          : undefined
+      }
+    />
+  );
+}
+
+/** Unknown marks use the same script-free renderer as personal-data views. */
+function HtmlFilePreview({
+  text,
+  filename,
+  personalData
+}: {
+  text: string;
+  filename: string;
+  personalData?: boolean;
+}) {
+  const { t } = useTranslation();
+  const [view, setView] = useState<TextFileView>("preview");
   const choice = (
     <SegmentedControl
       size="sm"
@@ -257,7 +311,12 @@ function TextArtifactPreview({
         </span>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <RenderedHtmlDisplay html={text} kind="html.file" mode="side_panel" title={filename} />
+        <RenderedHtmlDisplay
+          html={text}
+          kind={personalData === false ? "html.file" : "private_hydrated_view"}
+          mode="side_panel"
+          title={filename}
+        />
       </div>
     </div>
   );

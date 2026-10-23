@@ -4,6 +4,7 @@ import {
   auditActorFromUser,
   getSubjectUserId,
   projectAgentRun,
+  personalDataConversation,
   readAssistantFinalMetadata,
   withoutAssistantProviderContinuation,
   withoutAgentPreviewConfig,
@@ -90,6 +91,7 @@ export class RunObservationWorkflow {
       );
 
       return {
+        personalData: await personalDataConversation(stores, clientInstanceId, conversationId),
         conversation,
         followUps: await stores.followUps.listPending({ clientInstanceId, conversationId }),
         messages: messages.map(toPublicChatMessage),

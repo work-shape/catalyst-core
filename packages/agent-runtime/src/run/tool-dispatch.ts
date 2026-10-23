@@ -69,7 +69,7 @@ export class ToolDispatch {
     const subagents: StartedSubagent[] = [];
     for (const toolCall of toolCalls) {
       if (context.signal?.aborted) return { kind: "stopped" };
-      const webRefusal = await this.webFetchRefusal(toolCall.toolName, state, input, context);
+      const webRefusal = await this.webFetchRefusal(runId, toolCall.toolName, state, input);
       const refusal =
         webRefusal ??
         (isRunAgentCall(toolCall.toolName)
@@ -120,13 +120,13 @@ export class ToolDispatch {
   }
 
   async webFetchRefusal(
+    runId: AgentRunId,
     toolName: string,
     state: RunState,
-    input: StartAgentRunInput,
-    context: RuntimeCallContext
+    input: StartAgentRunInput
   ): Promise<ToolExecutionError | undefined> {
     return toolName === WEB_FETCH_TOOL_NAME &&
-      (await this.modelInput.webAccessOff(state, input, context))
+      (await this.modelInput.webAccessOff(runId, state, input))
       ? {
           code: "not_allowed",
           message:

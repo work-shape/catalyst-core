@@ -109,8 +109,8 @@ export function createOperationCalls(options: OperationCallsOptions): OperationC
         if (conversation)
           return conversation.kind !== "chat" || conversation.personalDataAt !== undefined;
         // Workflow threads are deliberately absent from getConversation. A known Workflow
-        // run cannot read personal Connections, and marked chats cannot start its draft.
-        // Preserve simulated calls there; missing provenance and failed reads stay closed.
+        // run cannot read personal Connections, and marked chats cannot start a Workflow.
+        // Preserve web access and simulated calls; missing provenance and failed reads stay closed.
         const run =
           runId && (await options.stores.agentRuns.getAgentRun({ clientInstanceId, runId }));
         return !(

@@ -147,10 +147,10 @@ export async function finishPausedStep(input: {
     const toolCall = toModelToolCall(call);
     await input.toolDispatch.beforePersonalCall(call.toolName, state);
     const refusal = await input.toolDispatch.webFetchRefusal(
+      input.runId,
       call.toolName,
       state,
-      input.startInput,
-      context
+      input.startInput
     );
     const result = await input.runDecidedTool(
       {

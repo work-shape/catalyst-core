@@ -1,15 +1,17 @@
 import postgres from "postgres";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import {
   WORKFLOW_ASSET_KIND,
+  createPlatformId,
+  type OperationExecutionContext,
   asAgentRunId,
   asConversationId,
   asToolCallId,
   type UserRecord
 } from "@work-shape/catalyst-core";
 import { clientInstanceId, errorSchema } from "./support/access-instance";
-import { operationOf } from "./support/connection-operations";
+import { identityOf, operationOf } from "./support/connection-operations";
 import { fileTestDatabaseUrl } from "./support/test-database";
 import { withTestSql } from "./support/test-sql";
 import { runSchema, type WorkflowFixture } from "./support/workflow-instance";
@@ -282,6 +284,80 @@ describe("a test run of a Workflow draft", () => {
     );
     expect(t.executed.filter((call) => call.operation === "write")).toEqual([]);
   });
+
+  it.each(["agent", "app"] as const)(
+    "refuses published Workflow starts from a marked %s conversation at authorization and execution",
+    async (kind) => {
+      const t = await ready();
+      await t.expectOk(t.root.id, "assets.publish", { params: address, payload: { revision: 1 } });
+      await t.allow({ kind: "user", id: t.kai.id }, "workflow.use");
+      const created = await t.expectOk(t.kai.id, "conversations.create", {
+        payload: { title: "Private Workflow input" }
+      });
+      const conversationId = asConversationId(
+        z.object({ id: z.string() }).parse(created.json()).id
+      );
+      const operation = `workflow.${WORKFLOW}.start`;
+      const binding = await t.operationCalls.registry.resolve(operation);
+      if (!binding || binding.action !== null) throw new Error("Workflow start check missing");
+      const actor = identityOf(t.kai);
+      const context: OperationExecutionContext = {
+        actor,
+        origin:
+          kind === "agent"
+            ? {
+                kind: "agent",
+                agentName: "builder",
+                agentRunId: asAgentRunId("run"),
+                conversationId,
+                toolCallId: asToolCallId("start"),
+                toolName: operation
+              }
+            : {
+                kind: "app",
+                appRevisionId: "published",
+                actionName: "start",
+                pageSessionId: "session",
+                conversationId
+              },
+        runId: createPlatformId<"OperationRunId">("oprun"),
+        correlationId: "start-check",
+        runtime: {},
+        access: await t.operationCalls.deps.authorizer.forActor(actor),
+        audit: t.operationCalls.deps.audit
+      };
+      const authorize = () =>
+        binding.authorize({ note: NOTE }, { ...context, resource: undefined });
+      expect(await authorize()).toEqual({ allowed: true });
+      await t.stores.conversations.markPersonalData({
+        clientInstanceId,
+        conversationId,
+        userId: t.kai.id,
+        at: "2026-10-23T10:00:00.000Z"
+      });
+      for (const invoke of [authorize, () => binding.execute({ note: NOTE }, context)]) {
+        await expect(invoke()).rejects.toMatchObject({
+          details: { reason: "personal_data_conversation" }
+        });
+      }
+      const reads = vi.spyOn(t.stores.conversations, "getConversation");
+      try {
+        reads.mockResolvedValue(undefined);
+        await expect(authorize()).rejects.toMatchObject({
+          details: { reason: "personal_data_conversation" }
+        });
+        reads.mockRejectedValue(new Error("unreadable root"));
+        await expect(binding.execute({ note: NOTE }, context)).rejects.toMatchObject({
+          details: { reason: "personal_data_conversation" }
+        });
+      } finally {
+        reads.mockRestore();
+      }
+      expect(
+        await t.stores.workflowRuns.listRuns({ clientInstanceId, workflow: WORKFLOW })
+      ).toEqual([]);
+    }
+  );
 
   it("keeps an agent preview's Workflow test target from consuming Run live once", async () => {
     const t = await ready();

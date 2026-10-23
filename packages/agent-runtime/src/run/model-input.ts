@@ -1,7 +1,6 @@
 import { WEB_FETCH_TOOL_NAME } from "@work-shape/catalyst-web-access";
 import {
   AppError,
-  personalDataConversation,
   defaultReasoningEffortForAgentBinding,
   isModelBindingUserSelectableForAgent,
   reasoningEffortChoiceForBinding,
@@ -217,15 +216,14 @@ export class ModelInput {
 
   /** Re-read the permanent mark: a sibling subagent may have made the personal call. */
   async webAccessOff(
+    runId: AgentRunId,
     state: RunState,
-    input: StartAgentRunInput,
-    context: RuntimeCallContext
+    input: StartAgentRunInput
   ): Promise<boolean> {
     if (!state.isWebAccessOff() && this.options.personalData) {
-      const restricted = await personalDataConversation(
-        this.options.personalData,
-        context.clientInstanceId,
-        input.conversationId
+      const restricted = await this.options.personalData.personalConversation(
+        input.conversationId,
+        runId
       );
       if (restricted) state.disableWebAccess();
     }
@@ -246,7 +244,7 @@ export class ModelInput {
     const { capabilities } = modelSelection;
     // Materialization stays fixed for the run. Only this privacy restriction can remove
     // tools between requests; native search must never be offered with personal data.
-    const requestTools = (await this.webAccessOff(state, input, context))
+    const requestTools = (await this.webAccessOff(runId, state, input))
       ? tools.filter(
           (tool) => tool.name !== WEB_SEARCH_MODEL_TOOL_NAME && tool.name !== WEB_FETCH_TOOL_NAME
         )
