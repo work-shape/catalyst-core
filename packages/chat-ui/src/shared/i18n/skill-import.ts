@@ -20,6 +20,8 @@ export const skillImport = defineTranslations({
     "skillImport.nameInvalid":
       "An address starts with a letter or a digit and holds only letters, digits, '.', '_' and '-'.",
     "skillImport.nameTaken": "A skill with the address {name} exists already.",
+    "skillImport.nameTakenOther":
+      "A skill with the address {name} exists already. Choose another address.",
     "skillImport.noChanges": "The folder holds the same files as the skill.",
     "skillImport.noSkill": "This folder is no skill: it has no SKILL.md at its top.",
     "skillImport.reading": "Reading the files…",
@@ -52,6 +54,8 @@ export const skillImport = defineTranslations({
     "skillImport.nameInvalid":
       "Eine Adresse beginnt mit einem Buchstaben oder einer Ziffer und enthält nur Buchstaben, Ziffern, „.“, „_“ und „-“.",
     "skillImport.nameTaken": "Es gibt schon einen Skill mit der Adresse {name}.",
+    "skillImport.nameTakenOther":
+      "Es gibt schon einen Skill mit der Adresse {name}. Wähle eine andere Adresse.",
     "skillImport.noChanges": "Der Ordner enthält dieselben Dateien wie der Skill.",
     "skillImport.noSkill": "Dieser Ordner ist kein Skill: Er hat oben kein SKILL.md.",
     "skillImport.reading": "Die Dateien werden gelesen…",

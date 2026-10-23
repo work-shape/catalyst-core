@@ -183,7 +183,11 @@ function SkillImportFiles({ files }: { files: SkillImport["files"] }) {
         {root.map((file) => row(file, file.path, false))}
         {folders.map((folder) => (
           <Fragment key={folder}>
-            <ListRow size="compact" leading={<Folder aria-hidden="true" />} title={`${folder}/`} />
+            <ListRow
+              size="compact"
+              leading={<Folder aria-hidden="true" className="size-4" />}
+              title={`${folder}/`}
+            />
             {sorted
               .filter((file) => file.path.startsWith(`${folder}/`))
               .map((file) => row(file, file.path.slice(folder.length + 1), true))}
@@ -212,12 +216,13 @@ function OutcomeNotice({ outcome }: { outcome: BuildWriteOutcome | undefined }) 
 /**
  * "Import skill": a folder or a .zip is read here, shown with its name, title, description and
  * files, and created as a new skill where Studio makes one. An address that is taken offers to
- * replace the files of the skill that holds it instead, on that skill's page.
+ * replace the files of the skill that holds it instead, on that skill's page, where the reader
+ * may change that skill; otherwise it asks for another address.
  */
 export function SkillImportDialog({
   checkName,
   create,
-  titleOf,
+  existing,
   onClose,
   onOpen
 }: BuildImportDialogProps) {
@@ -227,7 +232,7 @@ export function SkillImportDialog({
   const [name, setName] = useState("");
   const [creating, setCreating] = useState(false);
   const [outcome, setOutcome] = useState<BuildWriteOutcome>();
-  const [taken, setTaken] = useState<{ name: string; title: string }>();
+  const [taken, setTaken] = useState<{ name: string; title: string; writable: boolean }>();
   useEffect(() => {
     setName(skill?.form.name ?? "");
     setOutcome(undefined);
@@ -239,8 +244,12 @@ export function SkillImportDialog({
       ? async (asked) => {
           const answer = await checkName(asked);
           if (!answer.available && answer.reason === "name_taken") {
-            const title = (await titleOf(asked).catch(() => undefined)) ?? asked;
-            setTaken({ name: asked, title });
+            const held = await existing(asked).catch(() => undefined);
+            setTaken({
+              name: asked,
+              title: held?.title ?? asked,
+              writable: held?.writable ?? false
+            });
           }
           return answer;
         }
@@ -249,7 +258,14 @@ export function SkillImportDialog({
   );
   const isTaken = check.state === "refused" && taken?.name === id;
   const nameError = !valid && id !== "" ? t("skillImport.nameInvalid") : undefined;
-  const checkError = check.state === "refused" && !isTaken ? check.reason : undefined;
+  const checkError =
+    check.state !== "refused"
+      ? undefined
+      : !isTaken
+        ? check.reason
+        : taken?.writable
+          ? undefined
+          : t("skillImport.nameTakenOther", { name: id });
 
   const submit = async () => {
     if (!skill || !valid) return;
@@ -274,7 +290,7 @@ export function SkillImportDialog({
           <Button variant="outline" onClick={onClose}>
             {t("cancel")}
           </Button>
-          {skill && isTaken && taken ? (
+          {skill && isTaken && taken?.writable ? (
             <Button
               data-skill-import-replace=""
               onClick={() => {
@@ -314,7 +330,7 @@ export function SkillImportDialog({
           >
             <Input value={name} onChange={(event) => setName(event.target.value)} />
           </Field>
-          {isTaken ? (
+          {isTaken && taken?.writable ? (
             <Banner tone="warning" data-skill-import-taken="">
               {t("skillImport.nameTaken", { name: id })}
             </Banner>
