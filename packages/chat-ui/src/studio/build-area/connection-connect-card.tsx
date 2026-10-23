@@ -11,7 +11,7 @@ import {
   type ConnectCardState
 } from "./connection-connect-card-model";
 import type { ConnectionDraft, ConnectionDraftOpening } from "./connection-draft";
-import { useConnectionDraftHost, type ConnectionDraftHost } from "./connection-draft-card";
+import { useConnectionDraftHost, type ConnectionDraftHost } from "./connection-draft-host";
 import { ownSignInOf, personalViewOf } from "./connection-people-model";
 import {
   SignInBody,

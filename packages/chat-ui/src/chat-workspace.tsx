@@ -30,10 +30,8 @@ import {
   WorkflowsHostWithRecipients,
   type WorkflowsHost
 } from "./studio/workflows/workflows-host";
-import {
-  ConnectionDraftHostProvider,
-  connectionDraftHost
-} from "./studio/build-area/connection-draft-card";
+import { connectionDraftHost } from "./studio/build-area/connection-draft-card";
+import { ConnectionDraftHostProvider } from "./studio/build-area/connection-draft-host";
 import {
   ConnectionGiveCardHostProvider,
   type ConnectionGiveCardHost
