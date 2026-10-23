@@ -6,6 +6,7 @@ export * from "./held-rights";
 export * from "./rights-lock";
 export * from "./legacy-permission-lists";
 export * from "./user";
+export * from "./user-operation-settings";
 export * from "./api-access";
 export * from "./personal-api-keys";
 export * from "./artifact-preview-pages";

@@ -1,4 +1,5 @@
 import type { z } from "zod";
+import type { OPERATION_CHANGE_CLASSES } from "@work-shape/catalyst-asset-schemas";
 import type { ConfigAssetStore } from "./config-assets";
 import type { ConnectionsStore } from "./connections";
 import type { OperationDenial } from "./operation-denial";
@@ -45,7 +46,7 @@ export interface OperationAsyncCompletion {
 }
 
 /** How far a changing operation reaches. One that declares none counts as `irreversible`. */
-export type OperationChangeClass = "reversible" | "irreversible" | "outward";
+export type OperationChangeClass = (typeof OPERATION_CHANGE_CLASSES)[number];
 
 /**
  * What a call touches, taken from its validated input. It is what the rights are checked on

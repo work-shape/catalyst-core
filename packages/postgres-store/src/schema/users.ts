@@ -1,5 +1,7 @@
+import { sql } from "drizzle-orm";
 import {
   boolean,
+  check,
   index,
   jsonb,
   pgTable,
@@ -11,6 +13,7 @@ import {
 import type {
   FollowUpMode,
   LocaleCode,
+  PersonPolicySetting,
   UserModelPreference,
   UserRecord,
   UserStatus
@@ -70,5 +73,29 @@ export const userIdentities = pgTable(
       columns: [table.clientInstanceId, table.authSource, table.externalUserId]
     }),
     index("user_identities_user_idx").on(table.clientInstanceId, table.userId)
+  ]
+);
+
+/**
+ * A person's own confirmation setting for one operation (OP-6): Always allow, Ask me or Never.
+ * No row is the policy as the admin set it. The rows go with the person's account.
+ */
+export const userOperationSettings = pgTable(
+  "user_operation_settings",
+  {
+    clientInstanceId: text("client_instance_id").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => productUsers.id, { onDelete: "cascade" }),
+    operation: text("operation").notNull(),
+    value: text("value").$type<PersonPolicySetting>().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull()
+  },
+  (table) => [
+    primaryKey({ columns: [table.clientInstanceId, table.userId, table.operation] }),
+    check(
+      "user_operation_settings_value_check",
+      sql`${table.value} in ('always_allow', 'ask', 'never')`
+    )
   ]
 );

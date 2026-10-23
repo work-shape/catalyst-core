@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  boolean,
   check,
   index,
   integer,
@@ -60,6 +61,8 @@ export const operationRuns = pgTable(
     output: jsonb("output").$type<{ value: JsonValue }>(),
     resultRef: text("result_ref"),
     resultBytes: integer("result_bytes"),
+    // A waiting confirmation offered its person "Always allow" (OP-6). Null everywhere else.
+    offersAlwaysAllow: boolean("offers_always_allow"),
     // A code and a safe message, and for a refused run what refused it. Never provider text.
     error: jsonb("error").$type<OperationRunError & { denial?: OperationDenial }>(),
     usage: jsonb("usage").$type<OperationRunUsage>(),

@@ -528,6 +528,7 @@ async function admit(context: RunContext, surface: OperationAuthorization): Prom
     return { ending: await denyRun(context, guarded.denial) };
   }
   const { policy, approvalAskedBy } = guarded;
+  const offers = "offersAlwaysAllow" in guarded && guarded.offersAlwaysAllow === true;
   // A call of a test run resolves `confirm` as its tester's own call when their start was the
   // confirmation. A run of the published revision runs a `confirm` too, as its publish was the
   // confirmation, except where the operation's floor asks for one: there it asks for an approval.
@@ -581,8 +582,8 @@ async function admit(context: RunContext, surface: OperationAuthorization): Prom
     return {
       ending:
         policy.deliver === "inbox"
-          ? await holdInInbox(context, policy)
-          : await holdForConfirmation(context)
+          ? await holdInInbox(context, policy, offers)
+          : await holdForConfirmation(context, offers)
     };
   }
   if (policy.next === "await_approval") {
@@ -668,7 +669,11 @@ async function admit(context: RunContext, surface: OperationAuthorization): Prom
  * input, and the call is executed once its person confirmed. Only the run's worker gets here
  * (`canPause`). A call whose answer holds a secret, or a draft's call sent live, cannot wait.
  */
-async function holdForConfirmation(context: RunContext): Promise<OperationEnding> {
+async function holdForConfirmation(
+  context: RunContext,
+  /** Its person may answer "Always allow" (OP-6). */
+  offersAlwaysAllow: boolean
+): Promise<OperationEnding> {
   const { run, definition, call, now } = context;
   // A read that records only its refusals has no run that could wait.
   if (definition.secret || call.draft || context.unrecorded || call.origin.kind !== "agent") {
@@ -688,7 +693,8 @@ async function holdForConfirmation(context: RunContext): Promise<OperationEnding
     status: "pending_confirmation",
     finishedAt: now().toISOString(),
     ...(definition.personalConnection ? {} : { inputRef: `agent_run:${call.origin.agentRunId}` }),
-    expiresAt
+    expiresAt,
+    ...(offersAlwaysAllow ? { offersAlwaysAllow: true as const } : {})
   });
   return {
     result: {
@@ -698,7 +704,8 @@ async function holdForConfirmation(context: RunContext): Promise<OperationEnding
       expiresAt,
       preview: call.input,
       ...(simulation === undefined ? {} : { simulation }),
-      inputHash: run.inputHash
+      inputHash: run.inputHash,
+      ...(offersAlwaysAllow ? { alwaysAllow: true as const } : {})
     },
     run: pending
   };
@@ -712,7 +719,9 @@ async function holdForConfirmation(context: RunContext): Promise<OperationEnding
  */
 async function holdInInbox(
   context: RunContext,
-  policy: PolicyResolution
+  policy: PolicyResolution,
+  /** Its person may answer "Always allow" (OP-6). */
+  offersAlwaysAllow: boolean
 ): Promise<OperationEnding> {
   const { run, definition, call, deps, now } = context;
   const refused: OperationDenial = { kind: "policy", operation: definition.name };
@@ -750,7 +759,8 @@ async function holdInInbox(
     finishedAt: now().toISOString(),
     approvalRequestId,
     inputRef: `approval_request:${approvalRequestId}`,
-    expiresAt
+    expiresAt,
+    ...(offersAlwaysAllow ? { offersAlwaysAllow: true as const } : {})
   });
   return {
     result: {
@@ -760,7 +770,8 @@ async function holdInInbox(
       expiresAt,
       preview: call.input,
       inputHash: run.inputHash,
-      approvalRequestId
+      approvalRequestId,
+      ...(offersAlwaysAllow ? { alwaysAllow: true as const } : {})
     },
     waitingInput: call.input,
     run: pending

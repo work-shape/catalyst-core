@@ -1,3 +1,7 @@
+import type {
+  OPERATION_CHANGE_CLASSES,
+  PERSON_POLICY_SETTINGS
+} from "@work-shape/catalyst-asset-schemas";
 import type { PlatformEventOutcome } from "./events";
 import type { OperationRunDecisionReason } from "./operation-runs";
 import {
@@ -31,8 +35,46 @@ export interface PolicyTarget {
   assetKind?: string;
 }
 
-/** A person's own value for an operation. OP-6 supplies it; nothing reads it before. */
-export type PersonPolicySetting = "always_allow" | "ask" | "never";
+/**
+ * A person's own value for an operation (OP-6): Always allow, Ask me or Never. It applies to
+ * the calls that act for that person: their agents' calls, in chat and in their scheduled runs.
+ */
+export type PersonPolicySetting = (typeof PERSON_POLICY_SETTINGS)[number];
+
+type OperationChangeClass = (typeof OPERATION_CHANGE_CLASSES)[number];
+
+/**
+ * Whether people may always allow a change of each class where no admin locked the operation.
+ * A change that declares no class counts as `irreversible`.
+ */
+export const ALWAYS_ALLOW_BY_CLASS: Readonly<Record<OperationChangeClass, boolean>> = {
+  reversible: true,
+  irreversible: false,
+  outward: false
+};
+
+/**
+ * Whether people may set "Always allow" for an operation: only a change, only where its class
+ * allows it, and only where no lock of the admin names it, by its name or by a pattern such as
+ * `connections.*`. The strictest of what matches wins, so a lock only ever takes it away.
+ */
+export function mayAlwaysAllow(
+  definition: { name: string; effect: OperationEffect; changeClass?: OperationChangeClass },
+  locked: readonly string[] = []
+): boolean {
+  return (
+    definition.effect === "changing" &&
+    ALWAYS_ALLOW_BY_CLASS[definition.changeClass ?? "irreversible"] &&
+    !locked.some((pattern) => namesOperation(pattern, definition.name))
+  );
+}
+
+/** What the person a call acts for set for its operation, and what the admin permits them. */
+export interface PolicyPerson {
+  setting?: PersonPolicySetting;
+  /** `mayAlwaysAllow` for the operation: without it "Always allow" changes nothing. */
+  mayAlwaysAllow: boolean;
+}
 
 export interface PolicyInput {
   definition: {
@@ -56,7 +98,12 @@ export interface PolicyInput {
    * it, and the strictest of them is the call's: a setting never loosens another target.
    */
   targets?: readonly PolicyTarget[];
-  personSetting?: PersonPolicySetting;
+  /**
+   * The person the call acts for, where it acts for one who sets their own values: an agent's
+   * call for its person, in chat or in their scheduled run. Never a Workflow's call, and never
+   * another person's setting.
+   */
+  person?: PolicyPerson;
   /** What the guardrails of the before-event answered, once they ran. */
   guardrailOutcome?: PlatformEventOutcome;
   /** Whether the call is its caller's own confirmation: `callerCanConfirm(origin)`. */
@@ -86,6 +133,8 @@ export type PolicySource =
   /** The operation's `policyFloor`: what it declares, or what an operation it stands for asks. */
   | "policy_floor"
   | "central_setting"
+  /** The person's own Never, Ask me or Always allow. */
+  | "person_setting"
   | "guardrail"
   | "surface_cannot_pause"
   /** A `confirm` the publish of a Workflow approved, whose Workflow was deleted since. */
@@ -179,6 +228,20 @@ export function resolvePolicy(input: PolicyInput): PolicyResolution {
   ({ value, source } = perTarget.reduce((left, right) =>
     stricter(left.value, right.value) === left.value ? left : right
   ));
+  // The person's own setting comes after what the admin and the operation say and before the
+  // floors: it raises any value and lowers only `confirm`, and only where the admin permits.
+  const person = input.person;
+  if (person?.setting === "never" && value !== "deny") {
+    value = "deny";
+    source = "person_setting";
+  } else if (person?.setting === "ask" && value === "allow") {
+    // A read the person wants to be asked about waits too, for their agents' calls.
+    value = "confirm";
+    source = "person_setting";
+  } else if (person?.setting === "always_allow" && person.mayAlwaysAllow && value === "confirm") {
+    value = "allow";
+    source = "person_setting";
+  }
   if (applies(definition.policyFloor) && stricter(value, definition.policyFloor) !== value) {
     // No setting loosens it, and it is named as itself: an approver reads that no setting of
     // the instance made the call wait.
@@ -274,10 +337,27 @@ function stricter(left: PolicyValue, right: PolicyValue): PolicyValue {
   return POLICY_VALUES.indexOf(left) >= POLICY_VALUES.indexOf(right) ? left : right;
 }
 
+/**
+ * Whether "Always allow" would let this call run without asking: it waits for its person's
+ * confirmation now, the admin permits it, and with the person's "Always allow" nothing else
+ * (a floor, a guardrail, an `approval`) would still hold it. The card offers it only then.
+ */
+export function offersAlwaysAllow(input: PolicyInput, resolution: PolicyResolution): boolean {
+  if (resolution.next !== "await_confirmation" || !input.person?.mayAlwaysAllow) return false;
+  return (
+    resolvePolicy({ ...input, person: { ...input.person, setting: "always_allow" } }).next === "run"
+  );
+}
+
+/** Whether a setting's operation, a name or a pattern such as `connections.*`, names one. */
+function namesOperation(pattern: string, operation: string): boolean {
+  return pattern.endsWith(".*")
+    ? operation.startsWith(pattern.slice(0, -1))
+    : pattern === operation;
+}
+
 function matches(setting: CentralPolicySetting, operation: string, target: PolicyTarget): boolean {
-  const named = setting.operation.endsWith(".*")
-    ? operation.startsWith(setting.operation.slice(0, -1))
-    : setting.operation === operation;
+  const named = namesOperation(setting.operation, operation);
   return (
     named &&
     (setting.workspaceId === undefined || setting.workspaceId === target.workspaceId) &&
