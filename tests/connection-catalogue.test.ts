@@ -813,6 +813,24 @@ describe("an install on an assembled instance", () => {
     // The same row, with no access row of the earlier Connection left on it.
     expect(recreated.id).toBe(asset.id);
     expect(await rowsOn()).toEqual([]);
+    // The lifted rows are a governance event: which Connection, who, how many; nothing more.
+    const events = await instance.stores.audit.listAuditEvents({
+      clientInstanceId,
+      type: "connection.access_reset"
+    });
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      status: "success",
+      subject: name,
+      metadata: { connectionName: name, connectionId: asset.id, removedRows: 1 }
+    });
+    // The admin who installed, by their product id.
+    expect(events[0]?.actor.userId).toMatch(/^usr_/u);
+    expect(Object.keys(events[0]?.metadata ?? {}).sort()).toEqual([
+      "connectionId",
+      "connectionName",
+      "removedRows"
+    ]);
   });
 
   it("offers the named entry, stores the link, enables nothing and grants nothing", async () => {

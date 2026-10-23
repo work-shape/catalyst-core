@@ -69,6 +69,27 @@ export const connectionEvents = {
       }
     }
   },
+  // A catalogue install made a deleted Connection again and lifted the access rows its delete
+  // kept, so it starts with the access of a first install. The metadata counts the rows; it
+  // names no holder, action or effect.
+  "connection.access_reset": {
+    name: "connection.access_reset",
+    subject: "connection",
+    legacy: false,
+    audited: true,
+    phases: ["after"],
+    payload: {
+      type: "object",
+      additionalProperties: false,
+      required: ["connectionName", "connectionId", "removedRows"],
+      properties: {
+        connectionName: { type: "string" },
+        connectionId: { type: "string" },
+        removedRows: { type: "integer" },
+        operationRunId: { type: "string" }
+      }
+    }
+  },
   "connection.person_context_set": {
     name: "connection.person_context_set",
     subject: "connection",
