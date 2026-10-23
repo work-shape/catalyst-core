@@ -1,5 +1,6 @@
 import type { z } from "zod";
 import {
+  isJsonObject,
   type ClientInstanceId,
   type JsonObject,
   type ToolExecutionContext,
@@ -14,6 +15,7 @@ import {
 } from "@work-shape/catalyst-core";
 import { defineTool, toolSuccess } from "@work-shape/catalyst-tool-sdk";
 import { runSkillMounts } from "../run-skills";
+import { SKILL_MOUNT_FAILED_CODE } from "../skill-folder-cache";
 import type { WorkspaceCommandHandle, WorkspaceCommandResult } from "../workspace-command-client";
 import {
   emitWorkspaceCommandTelemetry,
@@ -102,6 +104,10 @@ export async function execWorkspaceCommand(
   if (resultCommand.status === "failed") {
     return resultCommand.result;
   }
+  const skillMountFailure = skillMountFailureResult(resultCommand.value);
+  if (skillMountFailure) {
+    return skillMountFailure;
+  }
   const expectedOutputs = normalized.value.expectedOutputs;
   if (resultCommand.value.output) {
     const existingWorkspacePaths =
@@ -177,6 +183,30 @@ async function enqueueCommand(
     }
     throw error;
   }
+}
+
+/**
+ * What the agent is told of a command that did not run because a skill's folder could not be
+ * made ready: the skill's name and what it can do, never the worker's cause or a path.
+ */
+function skillMountFailureResult(
+  command: WorkspaceCommand
+): ToolHandlerResult<z.infer<typeof workspaceExecOutputSchema>> | undefined {
+  if (command.status !== "failed" || command.error?.code !== SKILL_MOUNT_FAILED_CODE) {
+    return undefined;
+  }
+  const details = command.error.details;
+  const skill = isJsonObject(details) ? details.skill : undefined;
+  const name = typeof skill === "string" ? skill : undefined;
+  return failed(
+    "handler_failed",
+    `The skill ${name ? `'${name}' ` : ""}could not be made available for this command, so it did not run; try again or continue without it.`,
+    {
+      commandId: command.id,
+      reason: "skill_mount_failed",
+      ...(name ? { skill: name } : {})
+    }
+  );
 }
 
 function commandResultToToolResult(
