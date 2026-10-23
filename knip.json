@@ -66,13 +66,7 @@
       "vite": false
     },
     "packages/quality-config": {
-      "entry": [
-        "check.mjs",
-        "baseline-guard.mjs",
-        "limit-guard.mjs",
-        "eslint.config.mjs",
-        "baseline.mjs"
-      ],
+      "entry": ["check.mjs", "eslint.config.mjs", "baseline.mjs"],
       "project": ["*.mjs"],
       "vite": false
     },

@@ -27,9 +27,9 @@ export default defineConfig({
   // Hosted shards have separate databases and one worker each. Split large files between
   // them without introducing concurrent tests inside one instance; serial groups stay whole.
   fullyParallel: process.env.E2E_FULLY_PARALLEL === "1",
-  timeout: 30_000, // check-limit
+  timeout: 30_000,
   expect: {
-    timeout: 10_000 // check-limit
+    timeout: 10_000
   },
   use: {
     baseURL: e2eUiUrl,
@@ -57,7 +57,7 @@ export default defineConfig({
             `${shellEnv(createApiServerEnv())} node clients/demo/dist/e2e-server.js; }`,
           url: `${e2eApiUrl}/health`,
           reuseExistingServer: false,
-          timeout: 60_000 // check-limit
+          timeout: 60_000
         },
         {
           command: `${shellEnv({
@@ -66,7 +66,7 @@ export default defineConfig({
           })} ./node_modules/.bin/vite --host ${e2eHost} --port ${e2eUiPort}`,
           url: e2eUiUrl,
           reuseExistingServer: false,
-          timeout: 30_000 // check-limit
+          timeout: 30_000
         }
       ]
 });

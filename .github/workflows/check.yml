@@ -1,14 +1,5 @@
-# Hosted Check runs for releases only (Blacksmith budget: $100/month; Felix, 2026-10-22).
-# - release/** branch pushes run in full. A v* tag runs nothing: it points at a commit the
-#   release branch's Check already proved. Main has no hosted run: the full suite
-#   runs every night on the Mac mini (scripts/lane/nightly) and before each release.
-# - Manual dispatch is allowed only on refs/heads/release/**.
-#   Other refs fail before checkout; the release procedure dispatches release/<version>.
-# - PR events and labels never start hosted checks.
-# - A push to main runs nothing: the lander pushes only a batch that passed the full gate
-#   locally (scripts/lane/land.sh). The Mini's nightly full run catches drift.
-# Keep `check` as the stable aggregate: selected failures/cancellations fail it;
-# intentionally skipped jobs pass. `browser` remains for existing check consumers.
+# Hosted Check on Blacksmith, for releases only: release/** pushes and release dispatches.
+# Pull requests are checked by pr.yml on the Mac mini; the full suite runs in nightly.yml.
 name: Check
 on:
   workflow_dispatch:
@@ -23,13 +14,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ (github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/heads/release/') && format('dispatch-{0}', github.ref)) || format('{0}-{1}-{2}', github.ref, github.run_id, github.run_attempt) }}
   cancel-in-progress: ${{ github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/heads/release/') }}
 jobs:
-  paths:
+  policy:
     runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 3
-    outputs:
-      code: ${{ steps.select.outputs.code }}
-      browser: ${{ steps.select.outputs.browser }}
-      images: ${{ steps.select.outputs.images }}
     steps:
       - name: Enforce hosted Check policy
         if: github.event_name == 'workflow_dispatch'
@@ -42,21 +29,8 @@ jobs:
               exit 1
               ;;
           esac
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-        with:
-          persist-credentials: false
-          fetch-depth: 0
-      - name: Verify Check scripts
-        run: node --test .github/scripts/*.test.mjs
-      - name: Select affected jobs
-        id: select
-        env:
-          EVENT: ${{ github.event_name }}
-          BASE: ${{ github.event.pull_request.base.sha }}
-          HEAD: ${{ github.event.pull_request.head.sha }}
-        run: node .github/scripts/check-paths.mjs
   changes:
-    needs: paths
+    needs: policy
     runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 3
     steps:
@@ -74,8 +48,7 @@ jobs:
       - name: Format
         run: pnpm format:check
   build:
-    needs: paths
-    if: needs.paths.outputs.code == 'true'
+    needs: policy
     runs-on: blacksmith-8vcpu-ubuntu-2404
     timeout-minutes: 8
     steps:
@@ -102,8 +75,7 @@ jobs:
           overwrite: true
           retention-days: 1
   static:
-    needs: [paths, build]
-    if: needs.paths.outputs.code == 'true'
+    needs: build
     runs-on: blacksmith-8vcpu-ubuntu-2404
     timeout-minutes: 14
     steps:
@@ -112,20 +84,6 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
       - uses: ./.github/actions/setup-check
-      - name: Baseline counts may only fall
-        if: github.event_name == 'pull_request'
-        env:
-          BASE: ${{ github.event.pull_request.base.sha }}
-          HEAD: ${{ github.event.pull_request.head.sha }}
-        run: node packages/quality-config/baseline-guard.mjs "$BASE" "$HEAD"
-      # Dispatches have no PR title: every branch commit must be chore(limits).
-      - name: Check limits move only in a chore(limits) pull request
-        if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main')
-        env:
-          BASE: ${{ github.event.pull_request.base.sha || 'origin/main' }}
-          HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
-          PR_TITLE: ${{ github.event.pull_request.title }}
-        run: node packages/quality-config/limit-guard.mjs "$BASE" "$HEAD" "$PR_TITLE"
       - name: Lint
         run: pnpm lint
       - name: Package types
@@ -139,9 +97,7 @@ jobs:
       - name: Migrations
         run: pnpm check:migrations
   docs:
-    needs: [paths, build]
-    # Docs-only skips build; a failed code build must still fail the aggregate.
-    if: ${{ !cancelled() && needs.paths.result == 'success' && (needs.build.result == 'success' || needs.build.result == 'skipped') }}
+    needs: build
     runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 6
     steps:
@@ -150,19 +106,13 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
       - uses: ./.github/actions/setup-check
-        with:
-          build: ${{ needs.paths.outputs.code }}
-      - name: Build docs and their dependencies
-        if: needs.paths.outputs.code != 'true'
-        run: pnpm --filter "@work-shape/catalyst-docs..." build
       - name: Documentation types
         run: pnpm typecheck:docs
       - name: Documentation links, assets and search
         run: pnpm --filter @work-shape/catalyst-docs check:site
   tests:
     name: tests ${{ matrix.shard }}/4
-    needs: [paths, build]
-    if: needs.paths.outputs.code == 'true'
+    needs: build
     runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 14
     strategy:
@@ -189,21 +139,12 @@ jobs:
       - name: Unit and database tests
         env:
           SHARD: ${{ matrix.shard }}
-        run: pnpm exec vitest run --shard="$SHARD/4" --reporter=default --reporter=json --reporter=./scripts/vitest-budget-reporter.ts --outputFile=test-results/vitest-durations.json
-      - name: Keep Vitest durations and selected files
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        continue-on-error: true
-        with:
-          name: vitest-durations-${{ matrix.shard }}
-          path: test-results/vitest-durations.json
-          retention-days: 3
+        run: pnpm exec vitest run --shard="$SHARD/4" --reporter=default --reporter=./scripts/vitest-budget-reporter.ts
       - name: Deployment kit tests (once)
         if: matrix.shard == 1
         run: pnpm test:deployment-kit
   upgrade:
-    needs: [paths, build]
-    if: needs.paths.outputs.code == 'true'
+    needs: build
     runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 9
     env:
@@ -226,8 +167,7 @@ jobs:
       - name: Released database tests against this schema
         run: pnpm test:compatibility
   release:
-    needs: [paths, build]
-    if: needs.paths.outputs.code == 'true'
+    needs: build
     runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 5
     steps:
@@ -252,8 +192,7 @@ jobs:
   # is not root runs commands as itself. Under sudo the worker is root, as in a deployment: it
   # gives the workspace to the runner's fixed user and commands run as that user.
   images:
-    needs: paths
-    if: needs.paths.outputs.images == 'true'
+    needs: policy
     runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 20
     env:
@@ -276,8 +215,8 @@ jobs:
         with:
           # Every image of the job is a target of this one Dockerfile.
           cache-key: vivd-client.Dockerfile
-      - name: Images (retry registry failures only)
-        run: bash .github/scripts/check-images-with-retry.sh
+      - name: Images
+        run: bash scripts/check-image-build.sh
       - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
@@ -307,12 +246,10 @@ jobs:
           -t "in the runner image|gives the workspace|through the job ends"
   browser-shard:
     name: browser ${{ matrix.shard }}/6
-    needs: [paths, build]
-    if: needs.paths.outputs.browser == 'true'
-    # Six isolated databases amortize setup; duration balancing keeps one worker per
-    # database so shared accounts and fixed-port beforeAll servers stay sequential.
-    # Keep the runner expression for the check-limit guard.
-    runs-on: ${{ matrix.runner || 'blacksmith-2vcpu-ubuntu-2404' }}
+    needs: build
+    # Six isolated databases amortize setup; one worker per database keeps shared accounts
+    # and fixed-port beforeAll servers sequential.
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 15
     # Must match @playwright/test in pnpm-lock.yaml (check-policy.test.mjs).
     container: mcr.microsoft.com/playwright:v1.60.0-noble
@@ -348,18 +285,7 @@ jobs:
           E2E_SKIP_BUILD: "1"
           E2E_FULLY_PARALLEL: "1"
           SHARD: ${{ matrix.shard }}
-          PLAYWRIGHT_JSON_OUTPUT_NAME: test-results/browser-durations.json
-        run: pnpm test:e2e --retries=1 --reporter=./e2e/ci-reporter.ts,json,./scripts/playwright-budget-reporter.ts --workers=1 --duration-shard="$SHARD/6" 2>&1 | tee browser-run.log
-      - name: Keep measured durations and selected test list
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        continue-on-error: true
-        with:
-          name: browser-durations-${{ matrix.shard }}
-          path: |
-            test-results/browser-durations.json
-            .tmp/e2e/shard-${{ matrix.shard }}.txt
-          retention-days: 3
+        run: pnpm test:e2e --retries=1 --reporter=./e2e/ci-reporter.ts,./scripts/playwright-budget-reporter.ts --workers=1 --shard="$SHARD/6" 2>&1 | tee browser-run.log
       # A spec that keeps screenshots for review writes them as `evidence-<name>.png` in its
       # output folder; this one step uploads all of them.
       - name: Keep screenshot evidence
@@ -380,30 +306,24 @@ jobs:
             test-results/
             browser-run.log
           retention-days: 7
+  # `browser` remains for existing check consumers; `check` is the stable aggregate.
   browser:
-    needs: [paths, browser-shard]
-    if: ${{ always() && needs.paths.result == 'success' }}
-    runs-on: blacksmith-2vcpu-ubuntu-2404
-    timeout-minutes: 2
-    steps:
-      - name: Every selected shard passed
-        env:
-          SELECTED: ${{ needs.paths.outputs.browser }}
-          SHARDS: ${{ needs.browser-shard.result }}
-        run: |
-          if [ "$SELECTED" = true ]; then test "$SHARDS" = success
-          else test "$SHARDS" = skipped; fi
-  # Validate the shard result directly, in parallel with the legacy browser aggregate.
-  # Both aggregates enforce the same selected/skipped contract; neither runs tests.
-  check:
-    needs: [paths, changes, build, static, docs, tests, upgrade, release, images, browser-shard]
+    needs: browser-shard
     if: ${{ always() }}
     runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 2
     steps:
-      - name: Every selected check passed
+      - name: Every browser shard passed
+        env:
+          SHARDS: ${{ needs.browser-shard.result }}
+        run: test "$SHARDS" = success
+  check:
+    needs: [policy, changes, build, static, docs, tests, upgrade, release, images, browser-shard]
+    if: ${{ always() }}
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    timeout-minutes: 2
+    steps:
+      - name: Every check passed
         env:
           RESULTS: ${{ toJSON(needs) }}
-        run: |
-          echo "$RESULTS" | jq -e 'all(.[]; .result == "success" or .result == "skipped")'
-          echo "$RESULTS" | jq -e '.paths.result == "success" and .changes.result == "success" and .docs.result == "success" and (if .paths.outputs.browser == "true" then .["browser-shard"].result == "success" else .["browser-shard"].result == "skipped" end)'
+        run: echo "$RESULTS" | jq -e 'all(.[]; .result == "success")'

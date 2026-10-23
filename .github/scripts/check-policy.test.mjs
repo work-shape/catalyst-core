@@ -1,5 +1,4 @@
 import { parse } from "yaml";
-import { balanceTests } from "../../scripts/e2e-duration-shards.mjs";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
@@ -7,6 +6,7 @@ import { test } from "node:test";
 import { runInNewContext } from "node:vm";
 
 const workflow = readFileSync(new URL("../workflows/check.yml", import.meta.url), "utf8");
+const jobs = parse(workflow).jobs;
 
 test("hosted Check triggers only on release pushes or a release dispatch", () => {
   const triggers = workflow.match(/^on:\n([\s\S]*?)^permissions:/mu)?.[1];
@@ -14,13 +14,14 @@ test("hosted Check triggers only on release pushes or a release dispatch", () =>
   assert.doesNotMatch(workflow, /github\.event\.label/u);
 });
 
-test("the first job rejects disallowed dispatches before checkout within one minute", () => {
-  assert.match(workflow, /^jobs:\n  paths:\n/mu);
-  const firstStep = workflow.match(/    steps:\n([\s\S]*?)      - uses:/u)?.[1];
-  assert.match(firstStep, /^      - name: Enforce hosted Check policy\n/u);
-  assert.match(firstStep, /^        if: github.event_name == 'workflow_dispatch'$/mu);
-  assert.match(firstStep, /^        timeout-minutes: 1$/mu);
-  const script = firstStep.split("        run: |\n")[1].replace(/^ {10}/gmu, "");
+test("the first job rejects disallowed dispatches without a checkout within one minute", () => {
+  assert.match(workflow, /^jobs:\n  policy:\n/mu);
+  const [firstStep, ...rest] = jobs.policy.steps;
+  assert.deepEqual(rest, []);
+  assert.equal(firstStep.name, "Enforce hosted Check policy");
+  assert.equal(firstStep.if, "github.event_name == 'workflow_dispatch'");
+  assert.equal(firstStep["timeout-minutes"], 1);
+  const script = firstStep.run;
   for (const [ref, allowed] of [
     ["refs/heads/release/0.8.0", true],
     ["refs/heads/release/0.8.0/rc.1", true],
@@ -85,14 +86,12 @@ test("only dispatches on the same release branch cancel each other", () => {
   }
 });
 
-const jobs = parse(workflow).jobs;
-
 test("browser Check runs six shards with matching labels and command", () => {
   const browser = jobs["browser-shard"];
   assert.deepEqual(browser.strategy.matrix.shard, [1, 2, 3, 4, 5, 6]);
   assert.equal(browser.name, "browser ${{ matrix.shard }}/6");
   const suite = browser.steps.find((step) => step.name === "Browser suite");
-  assert.ok(suite.run.includes('--duration-shard="$SHARD/6"'));
+  assert.ok(suite.run.includes('--shard="$SHARD/6"'));
   assert.ok(suite.run.includes("--retries=1"));
 });
 
@@ -157,17 +156,18 @@ test("shared builds transfer across host and Playwright containers without zstd"
   assert.equal(policy.run, "node --test .github/scripts/check-policy.test.mjs");
 });
 
-test("no release browser shard is planned above ten minutes of measured work", () => {
-  const { tests: durations } = JSON.parse(
-    readFileSync(new URL("../../e2e/durations.json", import.meta.url), "utf8")
+test("every job runs on every release run, after the dispatch policy", () => {
+  for (const [name, job] of Object.entries(jobs)) {
+    if (name === "policy") continue;
+    assert.ok(job.needs, `${name} needs another job`);
+    if (name !== "browser" && name !== "check") assert.equal(job.if, undefined, name);
+  }
+  assert.deepEqual(
+    [...jobs.check.needs].sort(),
+    Object.keys(jobs)
+      .filter((name) => name !== "check" && name !== "browser")
+      .sort()
   );
-  const tests = Object.keys(durations).map((key) => ({ key, file: key.split(" › ")[1] }));
-  const shards = balanceTests(tests, durations, jobs["browser-shard"].strategy.matrix.shard.length);
-  for (const [index, shard] of shards.entries())
-    assert.ok(
-      shard.durationMs <= 600_000,
-      `browser shard ${index + 1}: ${shard.durationMs} ms exceeds 10 minutes`
-    );
 });
 
 test("release reporter overrides retain both test time budgets", () => {

@@ -3,7 +3,6 @@ import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import postgres from "postgres";
 import { configDefaults, defineConfig } from "vitest/config";
-import DurationSequencer from "./scripts/vitest-duration-sequencer";
 import {
   connectionsForWorkers,
   defaultTestWorkers,
@@ -57,9 +56,9 @@ export default defineConfig({
     globalSetup: ["tests/support/postgres-global-setup.ts"],
     reporters: ["default", "./scripts/vitest-budget-reporter.ts"],
     // Close suite connections/held transactions before the file fixture is reset or dropped.
-    sequence: { hooks: "stack", sequencer: DurationSequencer },
-    hookTimeout: 60000, // check-limit
-    testTimeout: 30000, // check-limit
+    sequence: { hooks: "stack" },
+    hookTimeout: 60000,
+    testTimeout: 30000,
     projects: [
       {
         extends: true,
@@ -96,7 +95,7 @@ export default defineConfig({
       }
     ],
     // Scale tests prove properties at customer volume. They require an explicit opt-in;
-    // ordinary tests and the lander's gate leave them out.
+    // ordinary runs and the PR check leave them out.
     exclude: [
       ...configDefaults.exclude,
       ...toolingFiles,

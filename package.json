@@ -45,7 +45,6 @@
     "typecheck:tests": "catalyst-quality types:tests",
     "typecheck:docs": "pnpm --filter @work-shape/catalyst-docs typecheck",
     "kit:release": "pnpm --filter @work-shape/catalyst-app-kit release",
-    "check:affected": "node scripts/check-affected.mjs",
     "release:guard": "node scripts/release/guard.mjs",
     "release:publish": "node scripts/release/publish.mjs",
     "test:release": "node --test scripts/release/release.test.mjs",

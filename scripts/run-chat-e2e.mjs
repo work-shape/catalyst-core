@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { execFile, spawn } from "node:child_process";
+import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
@@ -7,9 +7,7 @@ import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { promisify } from "node:util";
 import { composeE2eConfig } from "./e2e-config.mjs";
-import { balanceTests, reportTests } from "./e2e-duration-shards.mjs";
 import {
   TEST_POSTGRES_DATA_DIRECTORY,
   testPostgresServerArguments
@@ -156,14 +154,6 @@ function parseArgs(args) {
       passthrough = true;
       continue;
     }
-    if (arg.startsWith("--duration-shard=")) {
-      const match = /^--duration-shard=(\d+)\/(\d+)$/u.exec(arg);
-      if (!match || Number(match[1]) < 1 || Number(match[1]) > Number(match[2])) {
-        throw new Error("Expected --duration-shard=N/TOTAL with 1 <= N <= TOTAL");
-      }
-      options.durationShard = { index: Number(match[1]), count: Number(match[2]) };
-      continue;
-    }
     if (arg === "--state") {
       options.mode = "state";
       continue;
@@ -199,7 +189,7 @@ Environment:
   E2E_UI_PORT           UI port, default 5273
   E2E_POSTGRES_PORT     Postgres host port, default 55433
   E2E_COMPOSE_PROJECT   Docker Compose project name, default agent-chat-e2e
-  CATALYST_WORKTREE     Label the Postgres container and volume for lane/tidy;
+  CATALYST_WORKTREE     Label the Postgres container and volume for cleanup;
                         inferred from the repository's .worktrees/<name> path otherwise
   E2E_EXTERNAL_POSTGRES=1  Use the empty Postgres already listening on E2E_POSTGRES_PORT
                         (user, password and database agent_chat); start no container
@@ -450,42 +440,6 @@ async function runPlaywright() {
     args.push("--grep", defaultStateGrep);
   }
   args.push(...options.playwrightArgs);
-
-  const env = {
-    ...process.env,
-    E2E_USE_EXTERNAL_SERVERS: "1",
-    E2E_API_URL: e2eApiUrl,
-    E2E_UI_URL: e2eUiUrl
-  };
-  if (options.durationShard) {
-    if (args.some((arg) => arg.startsWith("--shard") || arg.startsWith("--test-list"))) {
-      throw new Error("Duration shards cannot be combined with --shard or --test-list");
-    }
-    const { stdout } = await promisify(execFile)(
-      localBin("playwright"),
-      [...args, "--list", "--reporter=json"],
-      {
-        cwd: repoRoot,
-        // The collection report belongs on stdout, never in the execution report artifact.
-        env: { ...env, PLAYWRIGHT_JSON_OUTPUT_NAME: "", PLAYWRIGHT_JSON_OUTPUT_FILE: "" },
-        maxBuffer: 16 * 1024 * 1024
-      }
-    );
-    const collected = reportTests(JSON.parse(stdout));
-    const durations = JSON.parse(await readFile(resolve(repoRoot, "e2e/durations.json"), "utf8"));
-    const shards = balanceTests(collected, durations.tests, options.durationShard.count);
-    const selected = shards[options.durationShard.index - 1];
-    if (!selected.tests.length) throw new Error("The duration shard selected no tests");
-    const listPath = resolve(repoRoot, `.tmp/e2e/shard-${options.durationShard.index}.txt`);
-    await writeFile(listPath, `${selected.tests.join("\n")}\n`);
-    console.log(
-      `[e2e] duration shard ${options.durationShard.index}/${shards.length}: ${selected.tests.length}/${collected.length} tests, predicted ${(selected.durationMs / 1000).toFixed(1)} s`
-    );
-    console.log(
-      `[e2e] all shard predictions (s): ${shards.map((shard) => (shard.durationMs / 1000).toFixed(1)).join(", ")}`
-    );
-    args.push(`--test-list=${listPath}`);
-  }
 
   await run(localBin("playwright"), args, {
     cwd: repoRoot,

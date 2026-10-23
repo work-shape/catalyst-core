@@ -22,20 +22,20 @@ const CONSUMER_SET = [
 ];
 // Installed next to them for its bin only; it has no module entry to import.
 const DEPLOYMENT_KIT = "deployment-kit";
-const MAX_TARBALL_BYTES = 300_000; // check-limit
+const MAX_TARBALL_BYTES = 300_000;
 const MAX_TARBALL_BYTES_BY_DIR = {
   // Standalone helper bundles and shipped skills.
-  "artifact-helpers": 6_500_000, // check-limit
+  "artifact-helpers": 6_500_000,
   // Compiled components, stylesheet and Vite helpers.
-  "chat-ui": 800_000, // check-limit
+  "chat-ui": 800_000,
   // Built documentation site.
-  docs: 2_000_000, // check-limit
+  docs: 2_000_000,
   // Migrations and their snapshot history.
-  "postgres-store": 850_000, // check-limit
+  "postgres-store": 850_000,
   // Pinned view runtime and released App Kit versions.
-  server: 2_700_000, // check-limit
+  server: 2_700_000,
   // Source and compiled components for Tailwind scanning.
-  ui: 500_000 // check-limit
+  ui: 500_000
 };
 const FORBIDDEN_FILES = [
   [/\.map$/u, "source map"],
