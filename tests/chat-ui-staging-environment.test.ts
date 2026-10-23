@@ -33,17 +33,13 @@ describe("staging environment banner", () => {
 
 describe("environment document title", () => {
   it("prefixes staging titles with the user-facing test label", () => {
-    expect(createEnvironmentDocumentTitle("Musterfinanz", "staging")).toBe(
-      "(Test) Musterfinanz"
-    );
+    expect(createEnvironmentDocumentTitle("Musterfinanz", "staging")).toBe("(Test) Musterfinanz");
   });
 
   it.each(["development", "production", undefined])(
     "leaves titles unchanged in %s",
     (environment) => {
-      expect(createEnvironmentDocumentTitle("Musterfinanz", environment)).toBe(
-        "Musterfinanz"
-      );
+      expect(createEnvironmentDocumentTitle("Musterfinanz", environment)).toBe("Musterfinanz");
     }
   );
 });

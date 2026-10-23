@@ -21,7 +21,7 @@ import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harn
 const restConfig = {
   name: "exampledata",
   connectorType: "http_api",
-  settings: { baseUrl: "https://api.exampledata.com" },
+  settings: { baseUrl: "https://api.exampledata.test" },
   operations: [
     {
       name: "listFiscalYears",

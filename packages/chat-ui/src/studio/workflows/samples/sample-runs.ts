@@ -36,7 +36,7 @@ interface SampleLoop {
 const CLIENTS = [
   "Aurich & Sohn GmbH",
   "Bäckerei Thomsen",
-  "Clausen Immobilien KG",
+  "Clausen Liegenschaften KG",
   "Dreyer Logistik GmbH",
   "Elbwerk Studios",
   "Friesen Bau AG",

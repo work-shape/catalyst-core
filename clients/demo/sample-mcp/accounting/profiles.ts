@@ -452,7 +452,7 @@ export const PROFILES = {
     inputVatShare: 0.05
   },
   propertyManagement: {
-    trades: ["Grundbesitz", "Immobilienverwaltung", "Wohnbau", "Liegenschaften"],
+    trades: ["Grundbesitz", "Grundverwaltung", "Wohnbau", "Liegenschaften"],
     premises: "Büro",
     sizes: ["micro", "small"],
     invoices: {

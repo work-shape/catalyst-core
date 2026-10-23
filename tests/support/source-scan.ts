@@ -1,11 +1,10 @@
 import ts from "typescript";
+import { deniedNames } from "./name-hashes";
 import { readdir, readFile } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
 
 const SOURCE_FILE = /\.(?:ts|tsx|mts|js|mjs)$/u;
 const PRODUCT_TEXT_FILE = /\.(?:ts|tsx|mts|js|mjs|md|mdx|yaml|yml|json|py|sh)$/u;
-// Split customer names so the guard can scan its own test without an exemption.
-const CUSTOMER_NAMES = ["muster" + "bau", "muster" + "finanz", "example" + "tax"];
 /** A quoted name that starts with `demo.`, unless it is a file name such as a config file. */
 const DEMO_TOOL_NAME = /["'`]demo\.(?!(?:ya?ml|json|md|ts|tsx|js|mjs|sh)\b)[A-Za-z0-9_]+/gu;
 /** The deployment kit keeps its source outside `src`, partly in files without an extension. */
@@ -93,7 +92,7 @@ export interface SourceScan {
 /**
  * Reads the product source of a repository: `src` and `tools` of every package and client.
  * Name and personal-path guards also read package scripts and documentation, client widgets,
- * the deployment kit and the name guard itself. Customer names are assembled from parts, not exempted.
+ * the deployment kit and the name guard itself. Customer vocabulary is compared through one-way hashes.
  * A provider's address belongs in its adapter and a secret is read by the resolver, so both
  * are searched for everywhere else.
  */
@@ -163,9 +162,7 @@ export async function scanProductSource(repositoryRoot: string): Promise<SourceS
   for (const file of [...nameFiles].sort()) {
     const path = relative(repositoryRoot, file).replaceAll("\\", "/");
     const text = await readFile(file, "utf8");
-    for (const name of CUSTOMER_NAMES) {
-      if (text.toLowerCase().includes(name)) scan.customerNames.push(`${path} ${name}`);
-    }
+    for (const name of deniedNames(text)) scan.customerNames.push(`${path} ${name}`);
     if (!path.startsWith("clients/demo/")) {
       for (const match of text.matchAll(DEMO_TOOL_NAME)) {
         scan.demoToolNames.push(`${path} ${match[0]}`);

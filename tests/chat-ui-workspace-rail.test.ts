@@ -240,7 +240,7 @@ describe("workspace rail branding", () => {
   it("uses the client's name and initial when no logo is configured", () => {
     const markup = renderRail();
 
-    expect(markup).toContain(">FI</span>");
+    expect(markup).toContain(">MU</span>");
     expect(markup).toContain(">Musterfinanz</span>");
     expect(markup).not.toContain("Workshape Catalyst");
   });

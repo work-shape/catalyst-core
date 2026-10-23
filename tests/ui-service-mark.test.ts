@@ -34,7 +34,7 @@ describe("ServiceMark", () => {
   });
 
   it("takes the first letter or digit of the name", () => {
-    expect(serviceInitial("  exampledata")).toBe("K");
+    expect(serviceInitial("  exampledata")).toBe("E");
     expect(serviceInitial("ödland")).toBe("Ö");
     expect(serviceInitial("(1&1)")).toBe("1");
     expect(serviceInitial("—")).toBe("");

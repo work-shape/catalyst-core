@@ -9,7 +9,7 @@ describe("names and paths in product source", () => {
 
   it("scans scripts, docs, the deployment kit and its own test while allowing the demo client", async () => {
     const root = await mkdtemp(join(tmpdir(), "source-names-"));
-    const customerNames = ["muster" + "bau", "example" + "tax", "muster" + "finanz"];
+    const customerNames = ["DA" + "TEV", "da" + "tev", "Da" + "tev"];
     const demoTool = '"' + "demo" + '.example"';
     const home = ["", "Users", "example", "file"].join("/");
     const windowsHome = ["C:", "Users", "example", "file"].join("\\");

@@ -72,7 +72,7 @@ function draft(overrides: Record<string, unknown> = {}): Record<string, unknown>
   return {
     connection: "exampledata",
     title: "Exampledata",
-    baseUrl: "https://api.exampledata.com",
+    baseUrl: "https://api.exampledata.test",
     headerNames: ["x-client-instance-id"],
     operations: [listClients, fiscalYears],
     ...overrides
@@ -134,7 +134,7 @@ describe("the agent's draft of REST API tools", () => {
       connection: {
         name: "exampledata",
         title: "Exampledata",
-        baseUrl: "https://api.exampledata.com",
+        baseUrl: "https://api.exampledata.test",
         headerNames: ["x-client-instance-id"]
       },
       operations: [
@@ -176,12 +176,12 @@ describe("the agent's draft of REST API tools", () => {
     expect(JSON.stringify(result)).not.toContain(SECRET);
 
     // An address with a user and password is refused, and the refusal does not repeat it.
-    const withUser = await run(draft({ baseUrl: `https://user:${SECRET}@api.exampledata.com` }));
+    const withUser = await run(draft({ baseUrl: `https://user:${SECRET}@api.exampledata.test` }));
     expect(withUser.status).toBe("failed");
     expect(JSON.stringify(withUser)).not.toContain(SECRET);
 
     // A key as a query value of the address is refused the same way.
-    const withQuery = await run(draft({ baseUrl: `https://api.exampledata.com/?key=${SECRET}` }));
+    const withQuery = await run(draft({ baseUrl: `https://api.exampledata.test/?key=${SECRET}` }));
     expect(withQuery.status).toBe("failed");
     expect(JSON.stringify(withQuery)).not.toContain(SECRET);
   });

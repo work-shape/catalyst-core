@@ -38,7 +38,7 @@ const createDefaults = {
   mayDelete: () => true
 };
 
-const target = { protocol: "https" as const, host: "api.exampledata.com", port: 443 };
+const target = { protocol: "https" as const, host: "api.exampledata.test", port: 443 };
 
 /** The refusal of a save as the server sends it (`server/src/asset-kinds/connection.ts`). */
 const SERVER_SENTENCE = `egress_denied: the address ${target.host}:${target.port} is not on this instance's egress list. ${egressSettingFor(target)}`;
@@ -104,7 +104,11 @@ async function connectRefused(
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   const read = readConnectionDraft({
     output: {
-      connection: { name: "exampledata", title: "Exampledata", baseUrl: "https://api.exampledata.com" },
+      connection: {
+        name: "exampledata",
+        title: "Exampledata",
+        baseUrl: "https://api.exampledata.test"
+      },
       operations: [{ name: "list_clients", method: "GET", path: "/clients" }]
     }
   });
@@ -177,7 +181,7 @@ async function connectRefused(
 /** What the address field of the dialog is described with: its error. */
 function addressError(container: HTMLElement): string {
   const address = container.querySelector<HTMLInputElement>(
-    'input[value="https://api.exampledata.com"]'
+    'input[value="https://api.exampledata.test"]'
   );
   return (address?.getAttribute("aria-describedby") ?? "")
     .split(" ")
@@ -206,7 +210,7 @@ describe("A refused new Connection", () => {
       const page = await connectRefused(egressRefusal(), roles);
       await vi.waitFor(() => expect(addressError(page)).toContain("Netzwerkregel dieser Instanz"));
       expect(addressError(page)).toBe(
-        "Eine Netzwerkregel dieser Instanz sperrt dieses Ziel. Damit es erlaubt wird, schick dem Team, das diese Instanz betreibt, den Host api.exampledata.com."
+        "Eine Netzwerkregel dieser Instanz sperrt dieses Ziel. Damit es erlaubt wird, schick dem Team, das diese Instanz betreibt, den Host api.exampledata.test."
       );
       // ACCEPT-FIX-7 C9: told once, in German, with no English sentence under Technical details.
       expect(page.textContent).not.toContain("egress");
@@ -281,7 +285,7 @@ describe("A refused save on the Connection page", () => {
     const address = page.querySelector<HTMLInputElement>("[data-connection-settings-form] input");
     await act(async () => {
       const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
-      set?.call(address, "https://api.exampledata.com");
+      set?.call(address, "https://api.exampledata.test");
       address?.dispatchEvent(new Event("input", { bubbles: true }));
     });
     const form = page.querySelector<HTMLFormElement>("[data-connection-settings-form]");

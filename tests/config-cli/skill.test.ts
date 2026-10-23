@@ -1,3 +1,4 @@
+import { deniedNames } from "../support/name-hashes";
 import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -43,7 +44,8 @@ describe("the Catalyst skill the CLI ships", () => {
   it("is generic: no instance address, no key and no customer wording", async () => {
     const skill = await renderCatalystSkill();
     expect(skill).toMatch(/^---\nname: catalyst\ndescription: /u);
+    expect(deniedNames(skill)).toEqual([]);
     expect(skill).not.toMatch(/https?:\/\//u);
-    expect(skill).not.toMatch(/cat\.apic_|immobilien|finanzierung|vivd|\bkai-/iu);
+    expect(skill).not.toMatch(/cat\.apic_|finanzierung|vivd|\bkai-/iu);
   });
 });

@@ -60,11 +60,9 @@ describe("agent workspace file e2e", () => {
         filename: "status-deck.txt",
         mimeType: "text/plain",
         bytes: new TextEncoder().encode(
-          [
-            "MUSTERBAU",
-            "KI-Agentenplattform",
-            "Status update: workspace file reading works."
-          ].join("\n")
+          ["MUSTERBAU", "KI-Agentenplattform", "Status update: workspace file reading works."].join(
+            "\n"
+          )
         )
       };
       const byteStore = createFilesystemObjectStorage(join(rootDirectory, "objects"));
@@ -224,9 +222,7 @@ describe("agent workspace file e2e", () => {
 
       expect(sawImportOutput).toBe(true);
       expect(sawExecStdout).toBe(true);
-      expect(completedMessages.at(-1)).toBe(
-        "I can read the uploaded file. Title: MUSTERBAU."
-      );
+      expect(completedMessages.at(-1)).toBe("I can read the uploaded file. Title: MUSTERBAU.");
     } finally {
       await rm(rootDirectory, { recursive: true, force: true });
     }

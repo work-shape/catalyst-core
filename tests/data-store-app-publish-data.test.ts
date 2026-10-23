@@ -192,7 +192,12 @@ describe("the stored data an App's publish would show", () => {
       name: "findings",
       title: "Findings",
       fillers: [
-        { kind: "workflow", name: "nachtimport", title: "Nachtimport", connections: ["Exampledata"] }
+        {
+          kind: "workflow",
+          name: "nachtimport",
+          title: "Nachtimport",
+          connections: ["Exampledata"]
+        }
       ],
       rows: {
         estimate: expect.any(Number),

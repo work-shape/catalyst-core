@@ -31,7 +31,7 @@ const answer = {
     connection: {
       name: "exampledata",
       title: "Exampledata",
-      baseUrl: "https://api.exampledata.com",
+      baseUrl: "https://api.exampledata.test",
       headerNames: ["x-client-instance-id", 7],
       testPath: "/monitoring/health",
       headers: { "x-client-instance-id": SECRET },
@@ -69,7 +69,7 @@ describe("the draft the card reads", () => {
       connectorType: "http_api",
       name: "exampledata",
       title: "Exampledata",
-      baseUrl: "https://api.exampledata.com",
+      baseUrl: "https://api.exampledata.test",
       headerNames: ["x-client-instance-id"],
       testPath: "/monitoring/health"
     });
@@ -407,7 +407,7 @@ describe("the New connection dialog opened from a card", () => {
     const { markup, writes } = await renderDraftDialog(draft());
     expect(markup).toContain('data-connection-create-form="http_api"');
     expect(markup).toContain('value="Exampledata"');
-    expect(markup).toContain('value="https://api.exampledata.com"');
+    expect(markup).toContain('value="https://api.exampledata.test"');
     expect(markup).toContain('value="x-client-instance-id"');
     // The test reads the drafted path, so a Verbinden that passes proves the key.
     expect(markup).toContain('value="/monitoring/health"');

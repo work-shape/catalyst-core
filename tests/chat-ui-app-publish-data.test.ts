@@ -37,7 +37,12 @@ const sources: AppDataSources = {
       name: "kunden",
       title: "Kunden",
       fillers: [
-        { kind: "workflow", name: "nachtimport", title: "Nachtimport", connections: ["Exampledata"] }
+        {
+          kind: "workflow",
+          name: "nachtimport",
+          title: "Nachtimport",
+          connections: ["Exampledata"]
+        }
       ],
       actions: ["list", "by_month"],
       rows: { estimate: 312, tables: 1, measuredAt: "2026-10-18T03:00:00Z" }
