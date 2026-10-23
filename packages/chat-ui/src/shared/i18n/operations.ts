@@ -121,6 +121,8 @@ export const operations = defineTranslations({
     "operations.publishAgentInstructions": "Instructions of the draft",
     "operations.publishAgentInstructionsFirst": "Instructions",
     "operations.publishAgentInstructionsLive": "Live instructions",
+    "operations.publishAgentInstructionsWithheld":
+      "You may not read this agent, so its instructions are not shown.",
     "operations.agentField.displayName": "Name",
     "operations.agentField.description": "Description",
     "operations.agentField.instructions": "Instructions",
@@ -392,6 +394,8 @@ export const operations = defineTranslations({
     "operations.publishAgentInstructions": "Anweisungen des Entwurfs",
     "operations.publishAgentInstructionsFirst": "Anweisungen",
     "operations.publishAgentInstructionsLive": "Veröffentlichte Anweisungen",
+    "operations.publishAgentInstructionsWithheld":
+      "Du darfst diesen Agenten nicht lesen. Deshalb werden seine Anweisungen nicht gezeigt.",
     "operations.agentField.displayName": "Name",
     "operations.agentField.description": "Beschreibung",
     "operations.agentField.instructions": "Anweisungen",

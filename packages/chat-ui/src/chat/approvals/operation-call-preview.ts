@@ -175,6 +175,8 @@ export interface AgentPublishReview {
   modelBindingsAdded?: string[];
   skills?: string[];
   instructions?: { before?: string; after: string };
+  /** The instructions changed, but the reader may not read the agent, so they are not shown. */
+  instructionsWithheld?: boolean;
 }
 
 function parseAgentReview(value: unknown): AgentPublishReview | undefined {
@@ -208,7 +210,8 @@ function parseAgentReview(value: unknown): AgentPublishReview | undefined {
     offers: value.offers === true,
     ...(fields ? { fields } : {}),
     ...Object.fromEntries(Object.entries(lists).filter(([, list]) => list !== undefined)),
-    ...(after ? { instructions: { after, ...(before ? { before } : {}) } } : {})
+    ...(after ? { instructions: { after, ...(before ? { before } : {}) } } : {}),
+    ...(value.instructionsWithheld === true ? { instructionsWithheld: true } : {})
   };
 }
 

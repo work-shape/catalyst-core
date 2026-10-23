@@ -423,6 +423,27 @@ describe("publishing an agent a workspace owns (WS-PUB-1b)", () => {
     expect(await listed(t.lena.id, team)).not.toContain("admin-placed");
   });
 
+  it("shows an approver who may not read the agent no instructions, only that they are withheld", async () => {
+    const { t, team, create, push, publish, request } = await setup();
+    await t.grant(t.lena.id, "agent.approve", { workspaceId: team });
+    await t.grant(t.lena.id, "agent.read", { workspaceId: team }, "deny");
+    await create(t.kai.id, "secret-helper", team);
+    await push(t.kai.id, "secret-helper", { instructions: "Secret draft." });
+    const held = heldSchema.parse((await publish(t.kai.id, "secret-helper", 1)).json());
+
+    const withheld = await request(t.lena.id, held.approvalRequestId);
+    expect(withheld).toMatchObject({ canDecide: true });
+    expect(withheld.preview.review).toMatchObject({ agent: { instructionsWithheld: true } });
+    expect(withheld.preview.review?.agent).not.toHaveProperty("instructions");
+    expect(JSON.stringify(withheld)).not.toContain("Secret draft.");
+    expect(JSON.stringify(withheld)).not.toContain("Help.");
+
+    // An approver who may read the agent reads both.
+    expect((await request(t.admin.id, held.approvalRequestId)).preview.review).toMatchObject({
+      agent: { instructions: { after: "Secret draft.", before: "Help." } }
+    });
+  });
+
   it("refuses a publish whose draft its guardrails did not read, though a push lands before it runs", async () => {
     const { t, team, live, create, push, publish, inbox } = await setup();
     await create(t.kai.id, "raced", team);
