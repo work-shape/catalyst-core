@@ -1,0 +1,10 @@
+# The person of the personal connections spec, who connects their own account and has it
+# revoked by the administrator. No other spec uses this person: their sign-in is theirs alone.
+- email: e2e-personal-connections@example.test
+  displayLabel: E2E Zz Personal Connections
+  passwordEnvName: E2E_PERSONAL_CONNECTIONS_PASSWORD
+  developmentPassword: e2e-personal-connections-password
+  roles:
+    - user
+  permissionRefs:
+    - demo-tools
