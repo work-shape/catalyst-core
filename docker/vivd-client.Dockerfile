@@ -151,7 +151,10 @@ RUN --mount=type=cache,id=vivd-apt-lists,target=/var/lib/apt/lists,sharing=locke
 
 COPY --from=page-build-command /opt/catalyst-page-build /opt/catalyst-page-build
 COPY --from=page-build-command /opt/catalyst-asset-repo /opt/catalyst-asset-repo
-RUN chmod +x /opt/catalyst-page-build/dist/cli.js /opt/catalyst-asset-repo/dist/cli.js \
+# pnpm deploy preserves source modes, including an owner-only checkout from umask 077.
+# These command trees contain shipped code and must be readable by the runner user.
+RUN chmod -R a+rX /opt/catalyst-page-build /opt/catalyst-asset-repo \
+  && chmod +x /opt/catalyst-page-build/dist/cli.js /opt/catalyst-asset-repo/dist/cli.js \
   && ln -s /opt/catalyst-page-build/dist/cli.js /usr/local/bin/catalyst-page-build \
   && ln -s /opt/catalyst-asset-repo/dist/cli.js /usr/local/bin/catalyst-asset-repo \
   && catalyst-page-build --version \
