@@ -33612,6 +33612,58 @@
                   "type": "string",
                   "const": "subject_conversation_shared"
                 },
+                "connect": {
+                  "type": "object",
+                  "properties": {
+                    "connection": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "service": {
+                          "type": "string"
+                        },
+                        "catalogue": {
+                          "type": "object",
+                          "properties": {
+                            "entry": {
+                              "type": "string"
+                            },
+                            "part": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "entry",
+                            "part"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "title"
+                      ]
+                    },
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "not_connected",
+                        "needs_reconnect"
+                      ]
+                    },
+                    "agentName": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "connection",
+                    "state"
+                  ]
+                },
                 "decision": {
                   "type": "object",
                   "properties": {
@@ -33782,6 +33834,58 @@
               "errorReason": {
                 "type": "string",
                 "const": "subject_conversation_shared"
+              },
+              "connect": {
+                "type": "object",
+                "properties": {
+                  "connection": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "title": {
+                        "type": "string"
+                      },
+                      "service": {
+                        "type": "string"
+                      },
+                      "catalogue": {
+                        "type": "object",
+                        "properties": {
+                          "entry": {
+                            "type": "string"
+                          },
+                          "part": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "entry",
+                          "part"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "title"
+                    ]
+                  },
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "not_connected",
+                      "needs_reconnect"
+                    ]
+                  },
+                  "agentName": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "connection",
+                  "state"
+                ]
               },
               "decision": {
                 "type": "object",
