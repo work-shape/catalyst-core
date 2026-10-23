@@ -214,6 +214,100 @@ function typeInto(selector: string, value: string) {
   });
 }
 
+/** A person's own sign-in: one button, no step. */
+function OneClickHarness({
+  calls,
+  browser,
+  onConnected
+}: {
+  calls: SignInCalls;
+  browser: SignInBrowser;
+  onConnected(detail: ConnectionDetail): void;
+}) {
+  const signIn = useConnectionSignIn(calls, {
+    onConnected,
+    browser,
+    personal: true,
+    enabled: false
+  });
+  return createElement(
+    "section",
+    null,
+    createElement("button", { type: "button", "data-connect": "", onClick: signIn.connect }),
+    createElement(SignInBody, { signIn })
+  );
+}
+
+describe("a person's own sign-in", () => {
+  it("opens the provider in the click, with no step, and goes on once signed in", async () => {
+    const run = testCalls();
+    const tabs = testBrowser();
+    const connected = vi.fn();
+    mount(
+      createElement(OneClickHarness, {
+        calls: run.calls,
+        browser: tabs.browser,
+        onConnected: connected
+      }),
+      "de"
+    );
+    await settle();
+    // Nothing starts before the click.
+    expect(run.log).toEqual([]);
+    expect(tabs.opened).toEqual([]);
+
+    await click("[data-connect]");
+    // The provider's page shows the permissions; the window goes there at once.
+    expect(run.log).toEqual(["connections.get", "connections.oauth_start", "connections.get"]);
+    expect(tabs.opened).toEqual([{ urls: [`https://${HOST}/authorize?attempt=1`], closed: false }]);
+    expect(host.querySelector('[data-sign-in-step="ready"]')).toBeNull();
+    expect(element("[data-sign-in-step]").getAttribute("data-sign-in-step")).toBe("waiting");
+
+    run.signIn();
+    tabs.tick();
+    await settle();
+    expect(connected).toHaveBeenCalledTimes(1);
+  });
+
+  it("closes the window and says why where the start is refused", async () => {
+    const run = testCalls({
+      starts: [
+        () => {
+          throw refusal("forbidden");
+        }
+      ]
+    });
+    const tabs = testBrowser();
+    mount(
+      createElement(OneClickHarness, {
+        calls: run.calls,
+        browser: tabs.browser,
+        onConnected: vi.fn()
+      }),
+      "en"
+    );
+    await click("[data-connect]");
+    expect(tabs.opened).toEqual([{ urls: [], closed: true }]);
+    expect(element("[data-sign-in-error]").getAttribute("data-sign-in-error")).toBe("forbidden");
+  });
+
+  it("asks to allow pop-ups where the browser opened no window", async () => {
+    const run = testCalls();
+    const tabs = testBrowser({ blocked: true });
+    mount(
+      createElement(OneClickHarness, {
+        calls: run.calls,
+        browser: tabs.browser,
+        onConnected: vi.fn()
+      }),
+      "en"
+    );
+    await click("[data-connect]");
+    expect(element("[data-sign-in-error]").getAttribute("data-sign-in-error")).toBe("tab_blocked");
+    expect(run.log).toEqual([]);
+  });
+});
+
 describe("the sign-in step", () => {
   it("names the host and the permissions, writes an unticked one, opens the page and goes on once signed in", async () => {
     const run = testCalls();
