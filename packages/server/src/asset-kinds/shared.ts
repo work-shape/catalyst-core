@@ -287,6 +287,11 @@ export interface WorkflowAssetKind extends RegisteredAssetKind<ConfigAssetKind> 
     name: string;
     /** The asset written, where it existed before the write. */
     assetId: string | undefined;
+    /**
+     * The asset a put creates again after its delete, under the same id. A revert that
+     * restores a deleted asset names none: it brings back what was deleted.
+     */
+    createdAgainId?: string;
     /** The config before the write and its revision, where the asset was active. */
     previous: unknown;
     previousRevision: number | undefined;

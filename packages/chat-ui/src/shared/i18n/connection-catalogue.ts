@@ -34,7 +34,10 @@ export const connectionCatalogue = defineTranslations({
     "connectionCatalogue.ownConnected": "Your account is connected.",
     "connectionCatalogue.ownNeedsUse":
       "To connect your own account, you need the right to use this connection.",
-    "connectionCatalogue.ownAccessLink": "Give it under use rights"
+    "connectionCatalogue.ownAccessLink": "Give it under use rights",
+    "connectionCatalogue.scopesFromReview": "They follow from the tools you just approved.",
+    "connectionCatalogue.recreates":
+      "A deleted connection had this address. This installs it anew, with none of its earlier access."
   },
   de: {
     "connectionCatalogue.services": "Dienste",
@@ -67,6 +70,10 @@ export const connectionCatalogue = defineTranslations({
     "connectionCatalogue.ownConnected": "Dein Konto ist verbunden.",
     "connectionCatalogue.ownNeedsUse":
       "Um dein eigenes Konto zu verbinden, brauchst du das Recht, diese Verbindung zu nutzen.",
-    "connectionCatalogue.ownAccessLink": "Unter Nutzungsrechten vergeben"
+    "connectionCatalogue.ownAccessLink": "Unter Nutzungsrechten vergeben",
+    "connectionCatalogue.scopesFromReview":
+      "Sie ergeben sich aus den Tools, die du gerade freigegeben hast.",
+    "connectionCatalogue.recreates":
+      "Eine gelöschte Verbindung hatte diese Adresse. Diese Einrichtung legt sie neu an, ohne ihre früheren Rechte."
   }
 });

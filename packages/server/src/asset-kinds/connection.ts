@@ -473,8 +473,25 @@ export function createConnectionAssetKind(options: ConnectionAssetKindOptions): 
     // ends in the write's transaction: the binding is revoked and its tokens are deleted with
     // the revision, so no call after the commit uses them, and a revert restores none. The
     // provider is asked to revoke the grant once the write committed.
+    //
+    // A catalogue install at the address of a deleted Connection is a first install: the
+    // denies its delete kept are lifted with the write, so it starts with the access a first
+    // install gets (its allows went with the delete). A revert restores and keeps them.
     async withinWrite(input) {
       const { clientInstanceId, assetId, previous, config, stores } = input;
+      if (
+        input.createdAgainId !== undefined &&
+        readDefinitionField(config, "catalogue") !== undefined
+      ) {
+        const rows = await stores.access.listGrants({
+          clientInstanceId,
+          scopeKind: "asset",
+          scopeId: input.createdAgainId
+        });
+        for (const row of rows) {
+          await stores.access.deleteGrant({ clientInstanceId, grantId: row.id });
+        }
+      }
       if (assetId === undefined || previous === undefined) return undefined;
       const next = connectionConfigSchema.safeParse(config);
       const nextType = next.success

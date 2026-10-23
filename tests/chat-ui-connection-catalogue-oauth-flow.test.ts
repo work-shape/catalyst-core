@@ -66,6 +66,8 @@ function testBrowser() {
 function testSource() {
   const log: string[] = [];
   const puts: Record<string, unknown>[] = [];
+  /** The revision each write named. */
+  const bases: (number | null)[] = [];
   const state: { shared?: boolean; own?: boolean } = {};
   const binding: ConnectionDetail["binding"] = {
     state: "connected",
@@ -104,12 +106,16 @@ function testSource() {
       };
     }
   };
-  const put = async (input: { config: Record<string, unknown> }) => {
+  const put = async (input: {
+    config: Record<string, unknown>;
+    expectedRevision: number | null;
+  }) => {
     log.push("assets.put");
     puts.push(input.config);
+    bases.push(input.expectedRevision);
     return { revision: puts.length };
   };
-  return { source, put, puts, log, state };
+  return { source, put, puts, bases, log, state };
 }
 
 function mount(
@@ -213,6 +219,10 @@ describe("the install of an OAuth part", () => {
     await settle();
     expect(element("[data-sign-in-step]").getAttribute("data-sign-in-step")).toBe("ready");
     expect(run.log.filter((call) => call === "connections.oauth_start")).toHaveLength(1);
+    // The access was decided by the review just made, not at the instance's setup.
+    expect(element("[data-sign-in-scopes]").textContent).toContain(
+      "They follow from the tools you just approved."
+    );
     await click("[data-sign-in-open]");
     expect(tabs.opened).toEqual([["https://login.example.test/authorize?attempt=1"]]);
 
@@ -277,6 +287,20 @@ describe("the install of an OAuth part", () => {
     // The Connection's page opens, then its use rights.
     expect(created).toHaveBeenCalledWith("mailbox", expect.any(Function));
     expect(run.log).not.toContain("connections.oauth_start");
+  });
+
+  it("installs anew at the address of a deleted connection, writing over its delete", async () => {
+    const run = testSource();
+    const tabs = testBrowser();
+    run.source.deletedRevision = async (name) => (name === "mailbox" ? 7 : undefined);
+    mount(mailbox, run, tabs.browser);
+    await settle();
+    expect(element("[data-catalogue-recreates]").textContent).toContain(
+      "A deleted connection had this address"
+    );
+    await connectAndApprove(run);
+    // The first write names the delete; the approval names the revision it made.
+    expect(run.bases).toEqual([7, 1]);
   });
 
   it("flags a further group when one of its tools is ticked, and asks for its access", async () => {
