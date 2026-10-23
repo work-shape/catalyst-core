@@ -55,6 +55,7 @@ import {
   type PlatformEventEmitter,
   type PlatformEventName,
   type PlatformEventPhase,
+  type PersonPolicySetting,
   type PolicyDefaults,
   type PolicySource,
   type ToolExecutionResult
@@ -128,6 +129,16 @@ export interface RunOperationDeps {
     centralSettings(): readonly CentralPolicySetting[] | Promise<readonly CentralPolicySetting[]>;
     /** Includes a subagent's root conversation. Rechecked whenever policy is resolved. */
     personalConversation?(id: ConversationId, runId?: AgentRunId): Promise<boolean>;
+    /**
+     * A person's own setting for an operation (OP-6), read for each call that acts for them.
+     * Without it no person's setting applies.
+     */
+    personSetting?(input: {
+      userId: string;
+      operation: string;
+    }): Promise<PersonPolicySetting | undefined>;
+    /** Operations, by name or pattern, the admin locked against "Always allow" (OP-6). */
+    alwaysAllowLocked?: readonly string[];
   };
   /** Without it this process cannot hold a call for an approval and refuses one that needs it. */
   approvals?: OperationApprovalRequests;

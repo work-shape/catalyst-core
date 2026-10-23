@@ -139,6 +139,7 @@ export function toolOperation(
   const requiredPermissionRefs = tool.permission?.requiredPermissionRefs ?? [];
   return {
     ...toolOperationPolicy(tool),
+    ...(tool.effect === "changing" && tool.changeClass ? { changeClass: tool.changeClass } : {}),
     // Every call of a tool is recorded, a reading one too: the run holds the tool's usage and
     // is the trace of what the agent did.
     ...(tool.effect === "reading" ? { recordsEveryCall: true } : {}),
@@ -512,6 +513,9 @@ export function createToolOperationRunner(
           ),
           ...(result.status === "pending_confirmation" && result.simulation !== undefined
             ? { simulation: unknownToJsonValue(result.simulation) }
+            : {}),
+          ...(result.status === "pending_confirmation" && result.alwaysAllow
+            ? { alwaysAllow: true as const }
             : {}),
           expiresAt: result.expiresAt
         };

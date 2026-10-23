@@ -109,6 +109,11 @@ export interface OperationRun {
   actor: OperationRunActor;
   /** Whose private content the run holds, where it holds any. */
   ownerUserId?: string;
+  /**
+   * Its person's confirmation offered "Always allow": the admin permits it, and nothing else
+   * would hold the call once the person sets it (OP-6). Only a run that waits for it says so.
+   */
+  offersAlwaysAllow?: true;
   workspaceId?: CollaborationWorkspaceId;
   origin: OperationOrigin;
   /** Where the call went. */
@@ -197,6 +202,8 @@ export type OperationRunEnd = { finishedAt: ISODateString } & (
        * in a conversation (OP-4b).
        */
       approvalRequestId?: string;
+      /** See `offersAlwaysAllow` of the run. */
+      offersAlwaysAllow?: true;
     }
 );
 
