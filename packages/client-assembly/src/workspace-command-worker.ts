@@ -16,7 +16,12 @@ import {
   createWorkspaceCommandJobs,
   LocalWorkspaceCommandRunner
 } from "@work-shape/catalyst-tool-execution";
-import { assetRepoCommitJob, assetRepoSweepJob, pageBundleJob } from "@work-shape/catalyst-server";
+import {
+  assetRepoCommitJob,
+  assetRepoSweepJob,
+  createSkillFolderReader,
+  pageBundleJob
+} from "@work-shape/catalyst-server";
 import { readClientInstanceEnv, type ClientInstanceEnv } from "./env";
 import {
   createInstanceInfrastructure,
@@ -116,11 +121,12 @@ export async function createClientInstanceWorkspaceCommandWorker(
     logger,
     secrets: input.secrets,
     // With the `apps` module on this worker also stores the Pages it builds.
-    // So do the code steps of Workflows, which read and write datasets there.
+    // So do the code steps of Workflows, which read and write datasets there. The files of
+    // the skills its commands mount are read there too.
     uses: [
       WORKSPACE_STORE_PATH,
       SANDBOX_PATH,
-      ...(buildsPages || (runsCodeSteps && hasFilesStore) ? [FILES_STORE_PATH] : [])
+      ...(buildsPages || hasFilesStore ? [FILES_STORE_PATH] : [])
     ]
   });
   const store = await createPlatformStore({
@@ -136,6 +142,12 @@ export async function createClientInstanceWorkspaceCommandWorker(
   });
   const telemetry = createConsoleWorkspaceCommandTelemetry(logger);
   const processExecutor = await createSandbox(config, infrastructure);
+  // The folders of the skills a command recorded, read from this instance alone.
+  const skillFolders = createSkillFolderReader({
+    clientInstanceId,
+    stores: store,
+    ...(hasFilesStore ? { files: await createFilesStore(config, infrastructure.context) } : {})
+  });
   const runner = new LocalWorkspaceCommandRunner({
     store,
     byteStore,
@@ -143,7 +155,8 @@ export async function createClientInstanceWorkspaceCommandWorker(
     reuseWorkspaceDirectories: config.executionWorkspaces.cleanup.hydratedWorkspaceIdleTtlMs > 0,
     processExecutor,
     auditRecorder,
-    telemetry
+    telemetry,
+    skillFolders
   });
   const workerId = env.WORKSPACE_COMMAND_WORKER_ID;
   const commandJobs = createWorkspaceCommandJobs({

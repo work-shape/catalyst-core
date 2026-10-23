@@ -333,6 +333,7 @@ export function mapWorkspaceCommand(row: WorkspaceCommandRow | undefined): Works
     status: row.status,
     limits: row.limits,
     expectedOutputs: row.expectedOutputs,
+    ...(row.skillMounts?.length ? { skillMounts: row.skillMounts } : {}),
     output: row.output ?? undefined,
     error: row.error ?? undefined,
     leaseOwner: row.leaseOwner ?? undefined,

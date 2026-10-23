@@ -120,14 +120,17 @@ export function createSkillAssetKind(options: {
       ...skillSecretWarnings(files ?? skillFilesOfConfig(definition))
     ],
     // A skill is a folder: `SKILL.md`, its text resources, and whatever else it carries.
-    revisionFiles: {
-      manifestFile: SKILL_MANIFEST_FILE,
-      read: readSkillFiles,
-      manifestOf: skillFileSetManifest,
-      indexed: (config, fileSet) => withSkillFileIndex(config, skillFileIndex(fileSet)),
-      carried: withCarriedSkillParts,
-      filesOfConfig: skillFilesOfConfig,
-      matchesConfig: storedFileMatchesConfig
-    }
+    revisionFiles: SKILL_REVISION_FILES
   };
 }
+
+/** How a revision of a skill holds its folder: text in the config, other files beside it. */
+export const SKILL_REVISION_FILES: NonNullable<WorkflowAssetKind["revisionFiles"]> = {
+  manifestFile: SKILL_MANIFEST_FILE,
+  read: readSkillFiles,
+  manifestOf: skillFileSetManifest,
+  indexed: (config, fileSet) => withSkillFileIndex(config, skillFileIndex(fileSet)),
+  carried: withCarriedSkillParts,
+  filesOfConfig: skillFilesOfConfig,
+  matchesConfig: storedFileMatchesConfig
+};

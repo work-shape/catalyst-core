@@ -784,7 +784,8 @@ async function createFixture() {
           async getSnapshot() {
             return { version: 0, agents: [], skills: [] };
           },
-          getSkill: async () => undefined
+          getSkill: async () => undefined,
+          getSkillRevision: async () => undefined
         },
         validationRefs: {
           modelProviderIds: ["local"],

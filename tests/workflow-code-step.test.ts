@@ -9,10 +9,12 @@ import { afterAll, afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import type { JsonValue } from "@work-shape/catalyst-core";
 import {
+  createDockerRunInvocation,
   DockerWorkspaceCommandProcessExecutor,
   LocalWorkspaceCommandProcessExecutor,
   type ProcessResult,
-  type WorkspaceCommandProcessExecutor
+  type WorkspaceCommandProcessExecutor,
+  type WorkspaceCommandProcessInput
 } from "@work-shape/catalyst-tool-execution";
 import {
   WORKFLOW_CODE_STEP_EFFECT,
@@ -229,6 +231,30 @@ describe("a Workflow with a code step", () => {
     ]);
     expect(audit).not.toContain("adding");
     expect(audit).not.toContain("numbers");
+  });
+
+  it("hands its sandbox no skill folder: a container of a code step has no /skills", async () => {
+    const local = new LocalWorkspaceCommandProcessExecutor();
+    const handed: WorkspaceCommandProcessInput[] = [];
+    // A sandbox that would mount skill folders, as the container one does.
+    const sandbox: WorkspaceCommandProcessExecutor = {
+      mountsSkillFolders: true,
+      execute(input) {
+        handed.push(input);
+        return local.execute(input);
+      }
+    };
+    const { run } = await ready({ script: SUM, sandbox });
+    expect((await run()).status).toBe("done");
+    const [input] = handed;
+    if (!handed.length || !input) throw new Error("The code step handed no command to its sandbox");
+    expect(handed).toHaveLength(1);
+    expect(input.skillFolders).toBeUndefined();
+    const { args } = createDockerRunInvocation(input, {
+      image: "runner:test",
+      runnerUser: { uid: 10001, gid: 10001, receivesWorkspace: false }
+    });
+    expect(args.filter((arg) => arg.includes("/skills"))).toEqual([]);
   });
 
   it("takes a result the script prints where it writes no file, and its error stream as the log", async () => {
