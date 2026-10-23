@@ -48,7 +48,7 @@ export interface ConnectionDraftHost {
    * Sends `text` as the person's message to the conversation on screen, queued behind a run that
    * goes (CHAT-CONN-1): the Connect card's word that the service is connected.
    */
-  tell?(text: string): Promise<void>;
+  tell?(text: string, agentName?: string): Promise<void>;
   open?(draft: ConnectionDraft): Promise<ConnectionDraftOpening>;
   /**
    * The Connection of an id as the instance holds it, or nothing where there is none: the card
@@ -158,7 +158,13 @@ export function connectionDraftHost(input: {
     client: input.client,
     ownsConversation: input.ownsConversation ?? false,
     connectionOf,
-    ...(from && tellConversation ? { tell: (text: string) => tellConversation(from, text) } : {})
+    ...(from && tellConversation
+      ? {
+          // The agent a card names, that of the refused call, before the one on screen.
+          tell: (text: string, agentName?: string) =>
+            tellConversation(agentName === undefined ? from : { ...from, agentName }, text)
+        }
+      : {})
   };
   if (input.mayWriteConnections) {
     host.open = (draft) =>

@@ -46,7 +46,7 @@ import { failed } from "./tool-results";
 import {
   internalFailure,
   toolTimeoutFailure,
-  personalSignInRequest,
+  personalSignInFailure,
   privateConversationRecovery,
   toolResultFromOperationResult
 } from "./operation-tool-result";
@@ -294,11 +294,18 @@ function thrownHandlerFailure(
   if (isAppError(error) && error.code === "TIMEOUT" && !error.exposeMessage) {
     return toolTimeoutFailure({ toolName: request.toolName, locale: context.locale });
   }
+  // A call of a personal Connection the person has not signed in to keeps its own code.
+  const signIn = isAppError(error)
+    ? personalSignInFailure(error.details, {
+        agentName: request.agentName,
+        ...(context.locale === undefined ? {} : { locale: context.locale })
+      })
+    : undefined;
+  if (signIn) return signIn;
   if (isAppError(error) && error.code !== "INTERNAL" && error.exposeMessage) {
     return {
       ...failed("handler_failed", toErrorEnvelope(error, context.correlationId).error.message),
-      ...privateConversationRecovery(error.details),
-      ...personalSignInRequest(error.details)
+      ...privateConversationRecovery(error.details)
     };
   }
   logger?.error(toolFailureLogRecord(error, request, context), "Tool handler failed");

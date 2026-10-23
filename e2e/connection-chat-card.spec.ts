@@ -175,15 +175,6 @@ async function removeAsset(page: Page, url: string): Promise<void> {
   expect(removed.ok(), `Delete during cleanup: ${removed.status()}`).toBe(true);
 }
 
-async function pickAgent(page: Page, displayName: string): Promise<void> {
-  const chip = page.getByRole("button", { name: /^Agent auswählen: /u }).first();
-  if ((await chip.getAttribute("title")) !== displayName) {
-    await chip.click();
-    await page.getByRole("option", { name: displayName }).click();
-  }
-  await expect(chip).toHaveAttribute("title", displayName);
-}
-
 /** A new conversation with the agent, from its card on the Agents page. */
 async function chatWith(page: Page, name: string): Promise<void> {
   await page.goto("/");
@@ -277,18 +268,21 @@ test("de: a refused call of a personal Connection shows Connect by itself, and t
     const card = page.locator(`[data-connect-card][data-connection="${ENTRY}"]`);
     await expect(card).toHaveAttribute("data-connect-card", "connect");
     await expect(card).toContainText(`${TITLE} verbinden`);
+    // The agent read the refusal's own code, and that the person connects from this card.
+    await expect(page.getByText(/"code": "connection_not_connected"/u)).toBeVisible();
+    await expect(page.getByText(/Karte zum Verbinden|Connect card in this chat/u)).toBeVisible();
     await expect(card.locator('[data-connect-card-connect="connect"]')).toHaveText("Verbinden");
     await expect(card).not.toContainText("@");
     await expect(page.locator("[data-connection-draft-open]")).toHaveCount(0);
     await shoot(page, "connect", card);
-    // A reload for the pictures forgets the conversation's agent; the person's word goes to it.
-    if (shotsDir) await pickAgent(page, `Karten-Probe ${agent.slice(-8)}`);
 
+    // The pictures' reloads forgot the agent on screen; the card names the one it answers.
     // Connect opens the provider in a window of its own; it signs in and closes.
     const opened = page.waitForEvent("popup");
     await card.locator('[data-connect-card-connect="connect"]').click();
     await (await opened).waitForEvent("close", { timeout: 30_000 });
     await expect(card).toHaveAttribute("data-connect-card", "connected");
+    await expect(card.locator("[data-connect-card-line]")).toHaveText(/^Verbunden/u);
 
     // The person's word is sent as theirs, and the agent's next step reads the customers.
     await expect(page.getByText(`${TITLE} ist verbunden.`, { exact: true }).first()).toBeVisible();
