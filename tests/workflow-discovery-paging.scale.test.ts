@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { createPlatformAssetTools } from "@work-shape/catalyst-tool-execution";
 import { createPlatformAssetCalls } from "@work-shape/catalyst-server";
 import { testServerOptions } from "./support/test-instance";
@@ -13,7 +13,14 @@ import {
 } from "@work-shape/catalyst-core";
 import { workflowFixture, type WorkflowFixture } from "./support/workflow-instance";
 import { clientInstanceId } from "./support/access-instance";
-import { discoveryNames, seedDiscoveryAssets } from "./support/discovery-assets";
+import {
+  captureOperationListings,
+  discoveryNames,
+  seedDiscoveryAssets
+} from "./support/discovery-assets";
+import { required } from "./support/assertions";
+
+afterEach(() => vi.restoreAllMocks());
 
 const names = discoveryNames("paging", 501);
 const listedSchema = z.object({
@@ -97,11 +104,9 @@ describe("published Workflow discovery beyond the former 500 total", () => {
   });
 
   it("discovers the agent start operation of every one of 501 Workflows", async () => {
-    const listed = await t.operationCalls.registry.list();
-    const starts = listed.operations
-      .map((entry) => entry.name)
-      .filter((name) => name.startsWith("workflow.paging-"));
-    expect(starts.sort()).toEqual(names.map((name) => `workflow.${name}.start`));
+    // Keep the unfiltered registry assertion too: the tool may hide an unexpected operation
+    // at authorization. Observe its real call without another complete walk of the source.
+    const listings = captureOperationListings(t.operationCalls.registry);
     const options = testServerOptions(t.instance);
     if (!options) throw new Error("The instance has no server options");
     const tool = createPlatformAssetTools(createPlatformAssetCalls(options)).find(
@@ -143,6 +148,10 @@ describe("published Workflow discovery beyond the former 500 total", () => {
       expect(found.length).toBeLessThanOrEqual(501);
     } while (cursor);
     expect(found).toEqual(names.map((name) => `workflow.${name}.start`));
+    const starts = required(listings[0])
+      .operations.map((entry) => entry.name)
+      .filter((name) => name.startsWith("workflow.paging-"));
+    expect(starts.sort()).toEqual(names.map((name) => `workflow.${name}.start`));
   });
 
   it("repairs schedules for all 501 through durable successors after the first page", async () => {
