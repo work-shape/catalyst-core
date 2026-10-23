@@ -554,6 +554,9 @@ async function runFrozenCall(
     };
   }
   const payload = parsed.data;
+  // Reauthorize and execute under the routes of the held call. Execution-time context cannot
+  // supply a replacement for missing stored routes: personal calls then fail closed.
+  const heldRuntime = { ...runtime, modelRoutes: payload.modelRoutes };
   const run = await deps.runs.get({ clientInstanceId, id: payload.runId });
   if (!run) {
     return { execution: "refused", error: GONE };
@@ -578,7 +581,7 @@ async function runFrozenCall(
     const confirmedOptions = {
       requestId: request.id,
       ...(signal ? { signal } : {}),
-      ...(runtime ? { runtime } : {})
+      runtime: heldRuntime
     };
     return run.origin.kind === "agent"
       ? executeConfirmedOperation(waiting, deps, confirmedOptions)
@@ -593,7 +596,7 @@ async function runFrozenCall(
       ...(decision.comment ? { comment: decision.comment } : {})
     },
     deps,
-    { signal, runtime }
+    { signal, runtime: heldRuntime }
   );
 }
 
