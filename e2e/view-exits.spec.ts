@@ -1,8 +1,8 @@
 import { privateRowImages } from "../tests/fixtures/private-view-images";
 import type { Page } from "@playwright/test";
 import {
-  SETTLE_MS,
   exitTest,
+  startOtherHost,
   expectRefused,
   linkClicks,
   refusedByShell,
@@ -30,7 +30,9 @@ import { pageHeldTests } from "./page-held";
 import { expect } from "./test";
 import {
   apiOrigin,
-  rewriteStoredDisplay,
+  browserTurn,
+  storeView,
+  storeViews,
   showView,
   signIn,
   uiOrigin,
@@ -44,6 +46,49 @@ exitTest.use({
   allowedPageErrors: {
     errors: [
       {
+        name: "batched-page-navigation",
+        reason:
+          "Each navigation probe retains an isolated inner Page and its own terminal browser refusal.",
+        matches: new RegExp(
+          pageNavigationExits
+            .flatMap((exit) => (exit.refusal ? [exit.refusal.source] : []))
+            .join("|"),
+          "u"
+        ),
+        tests: ["a Page refuses every frame and ancestor navigation"]
+      },
+
+      {
+        name: "batched-scriptless-views",
+        reason:
+          "Playwright inspects the private-row documents, whose sandbox explicitly forbids scripts.",
+        matches:
+          /^Blocked script execution in 'about:srcdoc' because the document's frame is sandboxed and the 'allow-scripts' permission is not set\.$/u,
+        tests: [
+          "private rows retain every allowlist restriction",
+          "a view strips both tab-opening links (private_hydrated_view)"
+        ]
+      },
+
+      {
+        name: "batched-page-resource-exits",
+        reason:
+          "The two shared Pages attempt every resource fixture and count each browser refusal before asserting network silence.",
+        matches: new RegExp(
+          [
+            ...pageLoadExits.flatMap((exit) => (exit.refusal ? [exit.refusal.source] : [])),
+            refusedByShell.source,
+            /^Fetch API cannot load \S+ Refused to connect because it violates the document's Content Security Policy\.$/u
+              .source
+          ].join("|"),
+          "u"
+        ),
+        tests: [
+          "a Page refuses every resource exit in markup and scripts",
+          "a Page refuses every resource exit in stylesheet files"
+        ]
+      },
+      {
         name: "planted-view-exit",
         reason:
           "Chromium's own log line for a frame it did not let move to another address. These tests " +
@@ -51,6 +96,7 @@ exitTest.use({
         matches:
           /^Framing '[^']*' violates the following Content Security Policy directive: "frame-src 'none'"\. The request has been blocked\.\s*$/u,
         tests: [
+          "a view refuses every frame navigation",
           "a view cannot leave its frame through location.href",
           "a view cannot leave its frame through location.assign",
           "a view cannot leave its frame through location.replace",
@@ -69,13 +115,7 @@ exitTest.use({
           "holds no such file.",
         matches: requestAnswered(404),
         path: /^\/app-content\//u,
-        tests: [
-          pageExitTitle(
-            pageLoadExits.find((exit) => exit.name === "a base address") ?? {
-              name: "a base address"
-            }
-          )
-        ]
+        tests: ["a Page refuses every resource exit in markup and scripts"]
       },
       {
         name: "page-that-replaced-the-built-in-methods",
@@ -84,9 +124,7 @@ exitTest.use({
           "built-in methods of its document on purpose, and the recorder of a trace, which the " +
           "runner puts into the same document, reads the page with them on every step.",
         matches: /^Cannot read properties of undefined \(reading '0'\)$/u,
-        tests: tabOpeningClicks.map((click) =>
-          pageLinkTitle({ name: REPLACED_BUILT_INS_LINK }, click)
-        )
+        tests: [pageLinkTitle({ name: REPLACED_BUILT_INS_LINK }, "both tab-opening clicks")]
       },
       {
         name: "page-address-in-a-tab",
@@ -117,10 +155,7 @@ type ViewKind = "html.rendered" | "private_hydrated_view";
 /** Stores a view of the kind and opens the conversation that shows it. */
 async function openView(page: Page, kind: ViewKind, html: string): Promise<void> {
   const headers = await signIn(page, uiOrigin);
-  const conversation = await showView(page.request, headers, `<h2>${viewTitle}</h2>${html}`);
-  if (kind === "private_hydrated_view") {
-    await rewriteStoredDisplay(conversation.id, { kind });
-  }
+  const conversation = await storeView(page.request, headers, `<h2>${viewTitle}</h2>${html}`, kind);
   await page.goto(`${uiOrigin}/c/${encodeURIComponent(conversation.id)}`);
 }
 
@@ -174,99 +209,107 @@ const frameExits: Exit[] = [
 async function expectClickReachesNothing(
   page: Page,
   kind: ViewKind,
-  click: LinkClick,
+  clicks: readonly LinkClick[],
   otherHost: OtherHost
 ): Promise<void> {
-  const opened: string[] = [];
-  page.context().on("page", (popup) => opened.push(popup.url()));
-  page.on("download", (download) => opened.push(download.url()));
-  const address = `${otherHost.origin}/hit?click=${encodeURIComponent(click.name)}&rows=secret`;
-
-  await openView(page, kind, `<a id="go" ${click.attributes ?? ""} href="${address}">Open</a>`);
+  const opened = watchOpened(page);
+  const address = `${otherHost.origin}/hit?rows=secret`;
+  await openView(
+    page,
+    kind,
+    clicks
+      .map(
+        (click, index) => `<a id="go-${index}" ${click.attributes ?? ""} href="${address}">Open</a>`
+      )
+      .join("")
+  );
   await expect(page.getByText("Loading view…")).toHaveCount(0);
-  const link = viewFrame(page).locator("#go");
-  // The link is there to be clicked, as text. Its address is gone.
-  await expect(link).toHaveText("Open");
-  await expect(link).not.toHaveAttribute("href");
-  await link.click(click.options);
-
-  await page.waitForTimeout(SETTLE_MS);
+  for (const [index, click] of clicks.entries()) {
+    await exitTest.step(click.name, async () => {
+      const link = viewFrame(page).locator(`#go-${index}`);
+      await expect(link).toHaveText("Open");
+      await expect(link).not.toHaveAttribute("href");
+      await link.click(click.options);
+    });
+  }
+  await otherHost.observeQuiet();
   expect(opened).toEqual([]);
   expect(otherHost.requests).toEqual([]);
   expect(otherHost.connections).toBe(0);
 }
 
-exitTest.describe("a view cannot move its frame to another host", () => {
-  exitTest.setTimeout(60_000);
+exitTest("the other host counts what does reach it", async ({ page, otherHost }) => {
+  await page.goto(`${apiOrigin}/health`);
+  await page.setContent(`<iframe src="${otherHost.origin}/hit?exit=control"></iframe>`);
+  await expect.poll(() => otherHost.requests).toEqual(["GET /hit?exit=control"]);
+  expect(otherHost.connections).toBeGreaterThan(0);
+});
 
-  exitTest("the other host counts what does reach it", async ({ page, otherHost }) => {
-    // The same browser, the same host, and a frame nothing holds back.
-    await page.goto(`${apiOrigin}/health`);
-    await page.setContent(`<iframe src="${otherHost.origin}/hit?exit=control"></iframe>`);
-
-    await expect.poll(() => otherHost.requests).toEqual(["GET /hit?exit=control"]);
-    expect(otherHost.connections).toBeGreaterThan(0);
+exitTest("a view refuses every frame navigation", async ({ page, refusals }) => {
+  const hosts: OtherHost[] = [];
+  const instanceAddress = `${apiOrigin}/health?from=view`;
+  const asked: string[] = [];
+  page.on("request", (request) => {
+    if (request.url() === instanceAddress) asked.push(request.url());
   });
-
-  for (const exit of frameExits) {
-    exitTest(
-      `a view cannot leave its frame through ${exit.name}`,
-      async ({ page, otherHost, refusals }) => {
-        const address = `${otherHost.origin}/hit?exit=${encodeURIComponent(exit.name)}&rows=secret`;
-
-        await openView(page, "html.rendered", exit.html(address));
-
-        await expectRefused(page, otherHost, refusals, refusedByShell);
-      }
-    );
-  }
-
-  exitTest(
-    "a view cannot move its frame to an address of the instance either",
-    async ({ page, otherHost, refusals }) => {
-      const address = `${apiOrigin}/health?from=view`;
-      const asked: string[] = [];
-      page.on("request", (request) => {
-        if (request.url() === address) {
-          asked.push(request.url());
-        }
+  try {
+    const inputs: { html: string; kind: "html.rendered"; title: string }[] = [];
+    for (const exit of frameExits) {
+      const host = await startOtherHost();
+      hosts.push(host);
+      inputs.push({
+        html: exit.html(`${host.origin}/hit?rows=secret`),
+        kind: "html.rendered",
+        title: `Navigation: ${exit.name}`
       });
-
-      await openView(
-        page,
-        "html.rendered",
-        `<script>location.href=${JSON.stringify(address)}</script>`
-      );
-
-      // `frame-src 'none'` names no address at all: a view can navigate nowhere.
-      await expectRefused(page, otherHost, refusals, refusedByShell);
-      expect(asked).toEqual([]);
     }
-  );
-});
-
-exitTest.describe("a link in a view has no address", () => {
-  exitTest.setTimeout(60_000);
-
-  // Individual keys and ordinary clicks are mapped in app-content.test.ts. Keep
-  // the browser's click and auxclick paths; the modified click also covers download markup.
-  for (const click of linkClicks
-    .filter((click) => tabOpeningClicks.includes(click.name))
-    .map((click) =>
-      click.options?.button === "middle" ? click : { ...click, attributes: "download" }
-    )) {
-    exitTest(`a view reaches no other host through ${click.name}`, async ({ page, otherHost }) => {
-      await expectClickReachesNothing(page, "html.rendered", click, otherHost);
+    inputs.push({
+      html: `<script>location.href=${JSON.stringify(instanceAddress)}</script>`,
+      kind: "html.rendered",
+      title: "Navigation: instance address"
     });
-
-    exitTest(
-      `a view with private rows reaches no other host through ${click.name}`,
-      async ({ page, otherHost }) => {
-        await expectClickReachesNothing(page, "private_hydrated_view", click, otherHost);
+    const headers = await signIn(page, uiOrigin);
+    const conversation = await storeViews(page.request, headers, inputs);
+    await page.goto(`${uiOrigin}/c/${conversation.id}`);
+    for (const [index, exit] of frameExits.entries()) {
+      const host = hosts[index];
+      if (!host) throw new Error("A navigation probe needs its counting host");
+      await exitTest.step(`a view cannot leave its frame through ${exit.name}`, async () => {
+        await expect
+          .poll(() =>
+            refusals.filter((line) => refusedByShell.test(line) && line.includes(host.origin))
+          )
+          .toHaveLength(1);
+        expect(host.requests).toEqual([]);
+        expect(host.connections).toBe(0);
+      });
+    }
+    await exitTest.step(
+      "a view cannot move its frame to an address of the instance either",
+      async () => {
+        await expect
+          .poll(() =>
+            refusals.filter((line) => refusedByShell.test(line) && line.includes(apiOrigin))
+          )
+          .toHaveLength(1);
+        expect(asked).toEqual([]);
       }
     );
+  } finally {
+    await Promise.all(hosts.map((host) => host.close()));
   }
 });
+
+for (const kind of ["html.rendered", "private_hydrated_view"] as const) {
+  exitTest(`a view strips both tab-opening links (${kind})`, async ({ page, otherHost }) => {
+    const clicks = linkClicks
+      .filter((click) => tabOpeningClicks.includes(click.name))
+      .map((click) =>
+        click.options?.button === "middle" ? click : { ...click, attributes: "download" }
+      );
+    await expectClickReachesNothing(page, kind, clicks, otherHost);
+  });
+}
 
 // A view that holds private rows runs no script and needs none to send rows away: they are
 // written into its HTML on the server. Its body is therefore written anew from an allowlist
@@ -279,10 +322,18 @@ async function composedDocument(page: Page): Promise<string> {
   return (await frame.locator("iframe").getAttribute("srcdoc")) ?? "";
 }
 
+const privateCases: {
+  title: string;
+  run(fixtures: { page: Page; otherHost: OtherHost }): Promise<void>;
+}[] = [];
+function privateCase(title: string, run: (typeof privateCases)[number]["run"]): void {
+  privateCases.push({ title, run });
+}
+
 exitTest.describe("a view with private rows is written from an allowlist", () => {
   exitTest.setTimeout(60_000);
 
-  exitTest("it keeps nothing that names a host", async ({ page, otherHost }) => {
+  privateCase("it keeps nothing that names a host", async ({ page, otherHost }) => {
     const there = otherHost.origin;
     const host = new URL(there).host;
     const planted = [
@@ -351,12 +402,12 @@ exitTest.describe("a view with private rows is written from an allowlist", () =>
     await expect(view.locator("#inline")).toHaveAttribute("src", /^data:image\/gif/u);
     await expect(view.locator("body")).not.toHaveAttribute("data-ran");
 
-    await page.waitForTimeout(SETTLE_MS);
+    await browserTurn(page);
     expect(otherHost.requests).toEqual([]);
     expect(otherHost.connections).toBe(0);
   });
 
-  exitTest(
+  privateCase(
     "it shows row text that is markup as it stands on the allowlist, or not at all",
     async ({ page, otherHost }) => {
       const there = otherHost.origin;
@@ -376,7 +427,7 @@ exitTest.describe("a view with private rows is written from an allowlist", () =>
       await expect(view.locator("#row-bold")).toHaveText("bold");
       await view.locator("#row-link").click({ modifiers: ["ControlOrMeta"] });
 
-      await page.waitForTimeout(SETTLE_MS);
+      await browserTurn(page);
       expect(otherHost.requests).toEqual([]);
       expect(otherHost.connections).toBe(0);
     }
@@ -384,7 +435,7 @@ exitTest.describe("a view with private rows is written from an allowlist", () =>
 
   // The writer runs here on the tree Chromium's parser makes, not on a stub. These are the
   // places where what a parser reads and what it reads again from its own output differ.
-  exitTest(
+  privateCase(
     "it writes nothing that reads differently the second time",
     async ({ page, otherHost }) => {
       const there = otherHost.origin;
@@ -434,11 +485,22 @@ exitTest.describe("a view with private rows is written from an allowlist", () =>
       await expect(view.locator("#kept")).toHaveText("kept");
       await expect(view.locator("#kept")).toHaveCSS("color", "rgb(1, 2, 3)");
 
-      await page.waitForTimeout(SETTLE_MS);
+      await browserTurn(page);
       expect(otherHost.requests).toEqual([]);
       expect(otherHost.connections).toBe(0);
     }
   );
+});
+
+exitTest("private rows retain every allowlist restriction", async ({ page, otherHost }) => {
+  await Promise.all(
+    privateCases.map(async (probe) => {
+      const viewPage = await page.context().newPage();
+      await exitTest.step(probe.title, () => probe.run({ page: viewPage, otherHost }));
+    })
+  );
+  // Every private-row document stays alive throughout the same observation window.
+  await otherHost.observeQuiet();
 });
 
 // WebRTC is not HTTP: a script names a server and the browser sends it UDP packets. No content
@@ -487,7 +549,7 @@ exitTest.describe("WebRTC from a view", () => {
     }
   );
 
-  exitTest(
+  privateCase(
     "show_view in a marked conversation stores a static view and sends no WebRTC packet",
     async ({ page, otherHost }) => {
       const headers = await signIn(page, uiOrigin);
@@ -505,12 +567,16 @@ exitTest.describe("WebRTC from a view", () => {
       await page.goto(`${uiOrigin}/c/${encodeURIComponent(conversation.id)}`);
       await expect(viewFrame(page).getByRole("heading", { name: viewTitle })).toBeVisible();
       await expect(viewFrame(page).locator("script")).toHaveCount(0);
-      await page.waitForTimeout(SETTLE_MS);
+      await expect(viewFrame(page).owner()).toHaveAttribute(
+        "sandbox",
+        /^(?!.*\ballow-scripts\b).*$/u
+      );
+      await browserTurn(page);
       expect(otherHost.packets).toBe(0);
     }
   );
 
-  exitTest("a view with private rows sends no WebRTC packet", async ({ page, otherHost }) => {
+  privateCase("a view with private rows sends no WebRTC packet", async ({ page, otherHost }) => {
     await openView(page, "private_hydrated_view", webRtcScript(otherHost.stunServer));
     await expect(viewFrame(page).getByRole("heading", { name: viewTitle })).toBeVisible();
     await expect(page.getByText("Loading view…")).toHaveCount(0);
@@ -553,7 +619,7 @@ async function expectPageExitRefused(
     await expectRefused(page, otherHost, refusals, exit.refusal);
   } else {
     await expectPageRan(page);
-    await page.waitForTimeout(SETTLE_MS);
+    await browserTurn(page);
   }
   if (exit.shows) {
     await expect(view.locator("body")).toHaveAttribute(exit.shows.attribute, exit.shows.value);
@@ -586,7 +652,127 @@ exitTest.describe("a Page cannot reach another host or the page that holds it", 
     }
   );
 
-  for (const exit of [...pageNavigationExits, ...pageLoadExits]) {
+  exitTest("a Page refuses every frame and ancestor navigation", async ({ page, otherHost }) => {
+    // Three independent holders keep each inner guard realm isolated while their file loads
+    // overlap. Every probe still has its own terminal browser refusal and silence assertions.
+    const holders = [page, await page.context().newPage(), await page.context().newPage()];
+    await Promise.all(
+      holders.map(async (holder, index) => {
+        const refusals: string[] = [];
+        holder.on("console", (message) => {
+          if (message.type() === "error") refusals.push(message.text());
+        });
+        for (const exit of pageNavigationExits.filter(
+          (_, probeIndex) => probeIndex % holders.length === index
+        )) {
+          refusals.length = 0;
+          await exitTest.step(pageExitTitle(exit), () =>
+            expectPageExitRefused(holder, exit, otherHost, refusals)
+          );
+        }
+      })
+    );
+  });
+
+  // Independent scopes keep every attempt alive in two Pages: one for inline markup and
+  // scripts, one for stylesheet files. Navigations and hostile built-ins keep isolated frames.
+  for (const [group, exits] of [
+    [
+      "markup and scripts",
+      pageLoadExits.filter((exit) => !exit.files && !exit.name.startsWith("a ping of a link"))
+    ],
+    ["stylesheet files", pageLoadExits.filter((exit) => exit.files)]
+  ] as const) {
+    exitTest(
+      `a Page refuses every resource exit in ${group}`,
+      async ({ page, otherHost, refusals }) => {
+        const opened = watchOpened(page);
+        const fixtures = exits.map((exit, index) => {
+          const prefix = `probe-${index}`;
+          const there = `${otherHost.origin}/${prefix}`;
+          const scope = (value: string) =>
+            value
+              .replaceAll("#page-title", `#${prefix}`)
+              .replaceAll("data-worker", `data-${prefix}-worker`)
+              .replaceAll("data-import", `data-${prefix}-import`);
+          return { exit, prefix, there, scope };
+        });
+        const view = await openPage(page, {
+          html: fixtures
+            .map(
+              ({ exit, prefix, there, scope }) =>
+                `<section><h2 id="${prefix}">Probe</h2>${scope(exit.html?.(there) ?? "")}</section>`
+            )
+            .join("\n"),
+          script: fixtures
+            .map(
+              ({ exit, prefix, there, scope }) =>
+                `(() => { document.body.setAttribute("data-${prefix}", "tried"); ${scope(exit.script?.(there) ?? "")} })();`
+            )
+            .join("\n"),
+          files: {
+            "assets/worker.js": 'postMessage("started");',
+            "assets/style.css": fixtures
+              .map(({ exit, there, scope }) => scope(exit.files?.(there)["assets/style.css"] ?? ""))
+              .join("\n")
+          }
+        });
+        await expectPageRan(page);
+        for (const { exit, prefix, scope } of fixtures) {
+          await exitTest.step(pageExitTitle(exit), async () => {
+            await expect(view.locator("body")).toHaveAttribute(`data-${prefix}`, "tried");
+            if (exit.act) await view.locator(scope(exit.act.target))[exit.act.how]();
+            if (exit.shows)
+              await expect(view.locator("body")).toHaveAttribute(
+                scope(exit.shows.attribute),
+                exit.shows.value
+              );
+          });
+        }
+        // Match each URL-bearing refusal to its own probe, so one attempt cannot stand in
+        // for a missing sibling. Inline-script and blob/data-worker diagnostics omit URLs;
+        // those retain separate completion markers and an exact count per refusal pattern.
+        const addressless = new Map<string, { refusal: RegExp; count: number }>();
+        for (const { exit, prefix } of fixtures) {
+          if (!exit.refusal) continue;
+          if (
+            /^(?:an inline script|an import map|speculation rules|a worker from)/u.test(exit.name)
+          ) {
+            const previous = addressless.get(exit.refusal.source);
+            addressless.set(exit.refusal.source, {
+              refusal: exit.refusal,
+              count: (previous?.count ?? 0) + 1
+            });
+          } else {
+            await expect
+              .poll(
+                () =>
+                  refusals.filter(
+                    (text) => exit.refusal?.test(text) && text.includes(`/${prefix}/`)
+                  ).length,
+                exit.name
+              )
+              .toBeGreaterThan(0);
+          }
+        }
+        for (const { refusal, count } of addressless.values()) {
+          await expect
+            .poll(() => refusals.filter((text) => refusal.test(text)), refusal.source)
+            .toHaveLength(count);
+        }
+        if (group === "markup and scripts") await otherHost.observeQuiet();
+        await expect(view.locator("iframe, object, embed")).toHaveCount(0);
+        expect(opened).toEqual([]);
+        expectOnInterface(page);
+        expect(otherHost.requests).toEqual([]);
+        expect(otherHost.connections).toBe(0);
+      }
+    );
+  }
+
+  // The detached ping link also navigates its own frame. It needs its own Page so its
+  // refusal cannot discard the shared document before the other resource probes run.
+  for (const exit of pageLoadExits.filter((exit) => exit.name.startsWith("a ping of a link"))) {
     exitTest(pageExitTitle(exit), async ({ page, otherHost, refusals }) => {
       await expectPageExitRefused(page, exit, otherHost, refusals);
     });
@@ -609,64 +795,56 @@ exitTest.describe("a Page cannot reach another host or the page that holds it", 
     expect(asked).toEqual([]);
   });
 
-  // Ordinary link fixtures coexist without changing each other's document or built-ins.
-  // A shared Page lets the full observation window run after the last click, with every
-  // earlier link still alive. Guard-bypass fixtures keep their own Page and observation.
   const groups = [
     pageLinks.filter((link) => !link.bypass),
     ...pageLinks.filter((link) => link.bypass).map((link) => [link])
   ];
+  const clicks = linkClicks.filter(
+    (click) => click.attributes === undefined && tabOpeningClicks.includes(click.name)
+  );
   for (const links of groups) {
-    const clicks = linkClicks.filter(
-      (click) => click.attributes === undefined && tabOpeningClicks.includes(click.name)
-    );
-    for (const click of clicks) {
-      const titleLink =
-        links.length === 1 ? links[0] : { name: "the seven stripped link variants", target: "" };
-      if (!titleLink) throw new Error("A link group must not be empty");
-      exitTest(pageLinkTitle(titleLink, click.name), async ({ page, otherHost }) => {
-        const opened = watchOpened(page);
-        const address = `${otherHost.origin}/hit?click=${encodeURIComponent(click.name)}&rows=secret`;
-        const scripts = links.map((link) => link.script?.(address) ?? "");
-        const view = await openPage(page, {
-          html: links.map((link) => link.html?.(address) ?? "").join(""),
-          script:
-            links.length === 1
-              ? scripts[0]
-              : scripts.map((body) => `(() => {${body}})();`).join("\n")
-        });
-        const expectNothingLeft = () => {
-          expect(opened).toEqual([]);
-          expectOnInterface(page);
-          expect(otherHost.requests).toEqual([]);
-          expect(otherHost.connections).toBe(0);
-        };
+    const titleLink =
+      links.length === 1 ? links[0] : { name: "the seven stripped link variants", target: "" };
+    if (!titleLink) throw new Error("A link group must not be empty");
+    exitTest(pageLinkTitle(titleLink, "both tab-opening clicks"), async ({ page, otherHost }) => {
+      const opened = watchOpened(page);
+      const address = `${otherHost.origin}/hit?rows=secret`;
+      const scripts = links.map((link) => link.script?.(address) ?? "");
+      const view = await openPage(page, {
+        html: links.map((link) => link.html?.(address) ?? "").join(""),
+        script:
+          links.length === 1 ? scripts[0] : scripts.map((body) => `(() => {${body}})();`).join("\n")
+      });
+      for (const click of clicks) {
         for (const link of links) {
-          await exitTest.step(link.name, async () => {
+          await exitTest.step(`${click.name}: ${link.name}`, async () => {
             await expectPageRan(page);
             const target = view.locator(link.target);
             await expect(target).toBeVisible();
             if (!link.hidden) {
               await expect(target).toHaveText("Open");
-              await expect(target).not.toHaveAttribute("href");
-              await expect(target).not.toHaveAttribute("xlink:href");
-              await expect(target).not.toHaveAttribute("ping");
+              for (const attribute of ["href", "xlink:href", "ping"])
+                await expect(target).not.toHaveAttribute(attribute);
             }
-            if (link.shows) {
+            if (link.shows)
               await expect(view.locator("body")).toHaveAttribute(
                 link.shows.attribute,
                 link.shows.value
               );
-            }
             await target.click(click.options);
-            expectNothingLeft();
+            expect(opened).toEqual([]);
+            expectOnInterface(page);
+            expect(otherHost.requests).toEqual([]);
+            expect(otherHost.connections).toBe(0);
           });
         }
-        // Every clicked element remains in the document throughout this full window.
-        await page.waitForTimeout(SETTLE_MS);
-        expectNothingLeft();
-      });
-    }
+      }
+      await otherHost.observeQuiet();
+      expect(opened).toEqual([]);
+      expectOnInterface(page);
+      expect(otherHost.requests).toEqual([]);
+      expect(otherHost.connections).toBe(0);
+    });
   }
 });
 
@@ -735,12 +913,15 @@ exitTest.describe("a Page is held where the interface put it", () => {
     // Page's guard does not run in it. So a Page has none, however often it adds one.
     const view = await openPage(page, {
       html: `<iframe srcdoc="${nested}"></iframe><p id="after">after</p>`,
-      script: `const add = () => { const frame = document.createElement("iframe"); frame.srcdoc = ${JSON.stringify(nested)}; document.body.appendChild(frame); const host = document.createElement("div"); document.body.appendChild(host); const inShadow = document.createElement("iframe"); inShadow.srcdoc = ${JSON.stringify(nested)}; host.attachShadow({ mode: "closed" }).appendChild(inShadow); }; add(); setInterval(add, 5);`,
+      script: `let attempts = 0; const add = () => { document.body.setAttribute("data-frame-attempts", String(++attempts)); const frame = document.createElement("iframe"); frame.srcdoc = ${JSON.stringify(nested)}; document.body.appendChild(frame); const host = document.createElement("div"); document.body.appendChild(host); const inShadow = document.createElement("iframe"); inShadow.srcdoc = ${JSON.stringify(nested)}; host.attachShadow({ mode: "closed" }).appendChild(inShadow); }; add(); setInterval(add, 5);`,
       files: { "assets/inner.js": `fetch(${JSON.stringify(inner)});` }
     });
     await expectPageRan(page);
     await expect(view.locator("#after")).toHaveText("after");
-    await page.waitForTimeout(SETTLE_MS);
+    await expect
+      .poll(async () => Number(await view.locator("body").getAttribute("data-frame-attempts")))
+      .toBeGreaterThanOrEqual(3);
+    await browserTurn(page);
 
     await expect(view.locator("iframe, frame, object, embed")).toHaveCount(0);
     expect(asked).toEqual([]);

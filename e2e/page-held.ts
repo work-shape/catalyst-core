@@ -1,5 +1,5 @@
 import type { Page } from "@playwright/test";
-import { SETTLE_MS, type OtherHost } from "./exit-fixtures";
+import { type OtherHost } from "./exit-fixtures";
 import { pageTestTitles } from "./page-exits";
 import {
   expectOnInterface,
@@ -11,7 +11,15 @@ import {
   watchOpened
 } from "./page-fixtures";
 import { expect } from "./test";
-import { apiOrigin, showView, signIn, uiOrigin, viewFrame, viewTitle } from "./view-fixtures";
+import {
+  browserTurn,
+  apiOrigin,
+  storeView,
+  signIn,
+  uiOrigin,
+  viewFrame,
+  viewTitle
+} from "./view-fixtures";
 
 // The Page tests of `view-exits.spec.ts` that are no entry of a list: what holds when the guard
 // does not run, what a Page takes from a frame of its own, and what it can do to the page that
@@ -76,7 +84,7 @@ export const pageHeldTests: readonly PageHeldTest[] = [
       await expect
         .poll(() => refusals.filter((line) => line.startsWith("Executing inline script violates")))
         .toHaveLength(1);
-      await page.waitForTimeout(SETTLE_MS);
+      await browserTurn(page);
       // The Page is written by the guard and by nothing else: its frame stays empty, and none
       // of its files was asked for.
       await expect(view.locator("head")).toHaveCount(1);
@@ -118,7 +126,7 @@ export const pageHeldTests: readonly PageHeldTest[] = [
       await expect(view.locator("#go")).not.toHaveAttribute("href");
       await view.locator("#go").click({ modifiers: ["ControlOrMeta"] });
 
-      await page.waitForTimeout(SETTLE_MS);
+      await otherHost.observeQuiet();
       expect(reserved).toEqual([]);
       expect(opened).toEqual([]);
       expect(otherHost.requests).toEqual([]);
@@ -186,7 +194,7 @@ export const pageHeldTests: readonly PageHeldTest[] = [
         "data-tried",
         "SecurityError,SecurityError,SecurityError,SecurityError"
       );
-      await page.waitForTimeout(SETTLE_MS);
+      await browserTurn(page);
       const state = () => page.evaluate(() => ({ name: window.name, entries: history.length }));
       const before = { address: page.url(), ...(await state()) };
       expect(before.name).toBe("");
@@ -195,7 +203,7 @@ export const pageHeldTests: readonly PageHeldTest[] = [
       // The Page's own history is the one thing it may call. It moves no page but its own.
       await view.locator("#back").click();
       await expect(view.locator("body")).toHaveAttribute("data-went", "true");
-      await page.waitForTimeout(SETTLE_MS);
+      await browserTurn(page);
 
       expectOnInterface(page);
       expect({ address: page.url(), ...(await state()) }).toEqual(before);
@@ -215,10 +223,11 @@ export const pageHeldTests: readonly PageHeldTest[] = [
         .map((name) => `vivd-catalyst:${name}`)
         .concat(["vivd-catalyst:display-height", "vivd-catalyst:display-blocked"]);
       const headers = await signIn(page, uiOrigin);
-      const conversation = await showView(
+      const conversation = await storeView(
         page.request,
         headers,
-        `<h2>${viewTitle}</h2><p>rows</p>`
+        `<h2>${viewTitle}</h2><p>rows</p>`,
+        "html.rendered"
       );
       await page.goto(`${uiOrigin}/c/${encodeURIComponent(conversation.id)}`);
       const viewHolder = page.locator(`iframe[title="${viewTitle}"]`).first();
@@ -264,7 +273,7 @@ export const pageHeldTests: readonly PageHeldTest[] = [
       expect(await arrived).toEqual(
         types.map((type) => ({ type, origin: "null", fromOwnFrame: false }))
       );
-      await page.waitForTimeout(SETTLE_MS);
+      await browserTurn(page);
       expect(await height()).toBe(before);
       await expect(page.getByText("Part of this view could not load.")).toHaveCount(0);
       await expect(page.getByText("Loading view…")).toHaveCount(0);

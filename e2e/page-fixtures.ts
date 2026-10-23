@@ -111,6 +111,12 @@ export async function storePage(
   return { url: `${apiOrigin}${url}`, conversationId, pageId, fileSetId };
 }
 
+// A real, minimal document on the UI server supplies the holder's origin and local network
+// address space. A fulfilled synthetic document has no address space in Chromium, while the
+// full chat application is unnecessary for these containment probes.
+const holderFile = `page-holder-${randomUUID()}.html`;
+let holderReady: Promise<void> | undefined;
+
 /**
  * Signs the member in, stores the Page and shows it in a frame on the interface's origin. The
  * frame has no sandbox attribute and no policy of its own: whatever holds the Page in is what
@@ -124,7 +130,18 @@ export async function openPage(
 ): Promise<FrameLocator> {
   const headers = await signIn(page, uiOrigin);
   const stored = await storePage(page, headers, input);
-  await page.goto(`${uiOrigin}/`);
+  holderReady ??= writeFile(
+    resolve(".tmp/e2e/ui", holderFile),
+    "<!doctype html><title>Page holder</title>"
+  );
+  await holderReady;
+  const holder = `${uiOrigin}/${holderFile}`;
+  if (page.url() !== holder) await page.goto(holder);
+  else
+    await page
+      .locator(`iframe[title="${pageFrameTitle}"]`)
+      .evaluateAll((frames) => frames.forEach((frame) => frame.remove()));
+  await expect(page).toHaveTitle("Page holder");
   return framePage(page, `${stored.url}${path}`);
 }
 

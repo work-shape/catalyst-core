@@ -24,11 +24,12 @@ export interface OtherHost {
   stunServer: string;
   /** UDP packets that arrived there. */
   packets: number;
+  observeQuiet(): Promise<void>;
   close(): Promise<void>;
 }
 
 /** A second host: another name and another port than the instance, on this machine. */
-async function startOtherHost(): Promise<OtherHost> {
+export async function startOtherHost(): Promise<OtherHost> {
   const server = createServer((request, response) => {
     host.requests.push(`${request.method ?? ""} ${request.url ?? ""}`);
     response.writeHead(200, { "content-type": "text/html" });
@@ -53,6 +54,28 @@ async function startOtherHost(): Promise<OtherHost> {
     connections: 0,
     stunServer: `stun:127.0.0.1:${udp.address().port}`,
     packets: 0,
+    async observeQuiet() {
+      expect({
+        requests: host.requests,
+        connections: host.connections,
+        packets: host.packets
+      }).toEqual({ requests: [], connections: 0, packets: 0 });
+      let cleanup = () => {};
+      await new Promise<void>((done, fail) => {
+        const activity = () =>
+          fail(new Error("The sandbox reached the other host during its observation window"));
+        const timer = setTimeout(done, SETTLE_MS);
+        server.on("connection", activity);
+        server.on("request", activity);
+        udp.on("message", activity);
+        cleanup = () => {
+          clearTimeout(timer);
+          server.off("connection", activity);
+          server.off("request", activity);
+          udp.off("message", activity);
+        };
+      }).finally(() => cleanup());
+    },
     async close() {
       server.closeAllConnections();
       await new Promise((done) => server.close(done));
