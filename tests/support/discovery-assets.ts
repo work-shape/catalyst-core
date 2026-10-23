@@ -1,4 +1,10 @@
-import type { AssetScope, ConfigAssetStore, JsonObject } from "@work-shape/catalyst-core";
+import type {
+  AssetScope,
+  ConfigAssetStore,
+  JsonObject,
+  OperationRegistry
+} from "@work-shape/catalyst-core";
+import { vi } from "vitest";
 import { clientInstanceId } from "./access-instance";
 import { withTestSql } from "./test-sql";
 
@@ -37,3 +43,15 @@ export async function seedDiscoveryAssets(
 
 export const discoveryNames = (prefix: string, count: number) =>
   Array.from({ length: count }, (_, index) => `${prefix}-${String(index).padStart(4, "0")}`);
+
+/** Observe the real registry results without adding another complete discovery walk. */
+export function captureOperationListings(registry: OperationRegistry) {
+  const list = registry.list.bind(registry);
+  const listings: Awaited<ReturnType<OperationRegistry["list"]>>[] = [];
+  vi.spyOn(registry, "list").mockImplementation(async (scope) => {
+    const result = await list(scope);
+    listings.push(result);
+    return result;
+  });
+  return listings;
+}
