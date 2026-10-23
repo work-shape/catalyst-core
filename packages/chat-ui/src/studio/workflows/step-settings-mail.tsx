@@ -237,7 +237,7 @@ export function MailSettings({
     typeof replyTo === "string" ? replyTo : isRecord(replyTo) ? text(replyTo.address) : "";
   const replyUser = isRecord(replyTo) && typeof replyTo.user === "string";
   const locale = text(literal("locale"));
-  const senderTitle = mail.senderTitle ?? t("workflows.mail.systemSender");
+  const senderTitle = mail.senderTitle ?? t("workflows.mail.systemSenderLabel");
 
   return (
     <div className="grid min-w-0 gap-5" data-mail-settings="">
