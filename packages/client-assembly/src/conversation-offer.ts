@@ -4,7 +4,8 @@ import {
 } from "@work-shape/catalyst-tool-execution";
 import { describeAgentDataTools } from "@work-shape/catalyst-agent-runtime";
 import { createPlatformAssetCalls, type AssetWorkflowOptions } from "@work-shape/catalyst-server";
-import { HTTP_API_CONNECTOR_TYPE } from "@work-shape/catalyst-connections";
+import { connectionProposalCatalogue } from "./connection-proposal-catalogue";
+import { HTTP_API_CONNECTOR_TYPE, type Catalogue } from "@work-shape/catalyst-connections";
 import {
   RUN_AGENT_TOOL_NAME,
   DATA_STORE_ASSET_KIND,
@@ -246,16 +247,25 @@ export async function conversationToolNames(
 export function createPlatformTools(
   input: Pick<
     ConversationOfferInput,
-    "stores" | "modules" | "dataTools" | "dataToolDescribeTimeoutMs" | "policy" | "toolRights"
+    "modules" | "dataTools" | "dataToolDescribeTimeoutMs" | "policy" | "toolRights"
   > & {
+    stores: PlatformStores;
     /**
      * The Connections of the instance, where the module `connections` is on: the agent's draft
      * of a REST API's tools is checked against their Connector types.
      */
-    connections?: { connectorTypes: ConnectorTypeRegistry } | undefined;
+    connections?: { connectorTypes: ConnectorTypeRegistry; catalogue?: Catalogue } | undefined;
   }
 ) {
   const attached: { tools?: ToolRegistry; authorizer?: Authorizer } = {};
+  const catalogue = input.connections?.catalogue
+    ? connectionProposalCatalogue({
+        catalogue: input.connections.catalogue,
+        connectorTypes: input.connections.connectorTypes,
+        stores: input.stores,
+        authorizer: () => attached.authorizer
+      })
+    : undefined;
   const platformAssets: PlatformAssetBinding = createPlatformAssetBinding();
   return {
     /**
@@ -272,7 +282,8 @@ export function createPlatformTools(
       platformAssets.calls.skillSaveApproval(context, name),
     tools: [
       ...createPlatformDiscoveryTools(platformAssets.calls, {
-        connectorTypes: input.connections?.connectorTypes
+        connectorTypes: input.connections?.connectorTypes,
+        catalogue
       }),
       ...createPlatformAssetTools(platformAssets.calls),
       ...createWorkflowTestTools(),
@@ -284,7 +295,10 @@ export function createPlatformTools(
       ...createAppTryTools(),
       ...(input.connections
         ? [
-            createConnectionProposeTool({ connectorTypes: input.connections.connectorTypes }),
+            createConnectionProposeTool({
+              connectorTypes: input.connections.connectorTypes,
+              ...(catalogue ? { catalogue } : {})
+            }),
             createConnectionDraftTool({
               connectorTypes: input.connections.connectorTypes,
               connectorType: HTTP_API_CONNECTOR_TYPE

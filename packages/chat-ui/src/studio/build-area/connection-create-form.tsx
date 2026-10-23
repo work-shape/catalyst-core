@@ -13,7 +13,7 @@ import {
 } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../../shared/i18n";
 import type { ConnectStep, ConnectStepState } from "./connection-connect";
-import type { ConnectionDraft } from "./connection-draft";
+import { connectionDraftForm, type ConnectionDraft } from "./connection-draft";
 import {
   ConnectionHeaderRows,
   ConnectionOAuthDetailFields,
@@ -21,11 +21,7 @@ import {
   ConnectionPersonContextHeaderField,
   ConnectionTestPathField
 } from "./connection-form";
-import {
-  emptyConnectionForm,
-  type ConnectionFormState,
-  type ConnectionOAuthChoice
-} from "./connection-form-model";
+import type { ConnectionFormState, ConnectionOAuthChoice } from "./connection-form-model";
 import { RefusalDetail } from "./refusal-notice";
 
 // The second step of the New connection dialog: the name, what the Connection is for, the
@@ -318,22 +314,14 @@ export function ConnectionCreateForm({
 
 /** The fields of a new MCP server or REST API filled with the agent's draft or proposal. */
 export function draftedFields(draft: ConnectionDraft): CreateFields {
-  const { connectorType, name, title, baseUrl, headerNames, testPath, keyHeader } =
-    draft.connection;
+  const { name, title, keyHeader, authScheme } = draft.connection;
   return {
     title,
     description: "",
     ...(name === assetAddressFromName(title, CONNECTION_ASSET_KIND) ? {} : { typedId: name }),
-    form: {
-      ...emptyConnectionForm(),
-      connectorType: connectorType === "mcp" ? "mcp" : "http_api",
-      url: baseUrl,
-      headers: headerNames.map((header) => ({ name: header, value: "" })),
-      ...(testPath === undefined ? {} : { testPath }),
-      ...(keyHeader === undefined ? {} : { headerName: keyHeader })
-    },
+    form: connectionDraftForm(draft),
     key: "",
     sendAs: keyHeader === undefined ? "bearer" : "header",
-    auth: "key"
+    auth: authScheme === "oauth" || authScheme === "oauth_client" ? authScheme : "key"
   };
 }

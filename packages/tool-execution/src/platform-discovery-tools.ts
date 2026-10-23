@@ -1,8 +1,13 @@
+import type { ConnectionProposalCatalogue } from "./connection-propose-tool";
 import { z } from "zod";
 import {
   FOUND_FILE_KINDS,
+  CATALOGUE_PARTS,
+  CONNECTION_CREDENTIAL_MODES,
   COLLABORATION_WORKSPACE_KINDS,
   type CollaborationWorkspaceKind,
+  type CataloguePart,
+  type ConnectionCredentialMode,
   type ConnectorTypeRegistry,
   type FoundFile,
   type ToolExecutionContext
@@ -84,6 +89,19 @@ export interface PlatformContextRead {
    * system, instead of researching what the platform answers.
    */
   connectorTypes?: PlatformConnectorTypeRead[];
+  catalogue?: {
+    entries: {
+      id: string;
+      title: string;
+      category: string;
+      parts: {
+        part: CataloguePart;
+        credentialModes: ConnectionCredentialMode[];
+        defaultCredentialMode: ConnectionCredentialMode;
+        connection?: { name: string; clientSecretSet: boolean };
+      }[];
+    }[];
+  };
 }
 
 /** One kind of Connection this instance can make. */
@@ -149,7 +167,26 @@ const searchText = (max: number) =>
     .max(max)
     .regex(/^[^\u0000]*$/u, "must not contain a NUL character");
 
+const catalogueContextSchema = z.object({
+  entries: z.array(
+    z.object({
+      id: z.string(),
+      title: z.string(),
+      category: z.string(),
+      parts: z.array(
+        z.object({
+          part: z.enum(CATALOGUE_PARTS),
+          credentialModes: z.array(z.enum(CONNECTION_CREDENTIAL_MODES)),
+          defaultCredentialMode: z.enum(CONNECTION_CREDENTIAL_MODES),
+          connection: z.object({ name: z.string(), clientSecretSet: z.boolean() }).optional()
+        })
+      )
+    })
+  )
+});
+
 const contextOutputSchema = z.object({
+  catalogue: catalogueContextSchema.optional(),
   helpContact: z.object({ displayLabel: z.string() }).optional(),
   availableHere: z
     .object({
@@ -247,6 +284,7 @@ export function createPlatformDiscoveryTools(
   options: {
     /** The Connector types of the instance, where the module `connections` is on. */
     connectorTypes?: ConnectorTypeRegistry | undefined;
+    catalogue?: ConnectionProposalCatalogue | undefined;
   } = {}
 ): AnyToolDefinition[] {
   const { context, listAssets, listFiles } = PLATFORM_DISCOVERY_TOOLS;
@@ -265,7 +303,7 @@ export function createPlatformDiscoveryTools(
         "Read what this instance can do and what the user may do on it: the modules that are on, the kinds of asset that exist (agent, skill, workflow, app, data_store, knowledge_base, connection, as far as they are on), and the user's rights.",
         "'actions' are rights on instance-owned assets of a kind, such as 'workflow.read', 'workflow.write' (save drafts) or 'workflow.publish'. 'assetActions' are read rights on some assets of a kind only. 'workspaces' names visible workspaces and the rights on their assets; current: true marks this conversation's workspace. Before refusing a create or change, check the actions of the workspace that owns it. A workspace skill.write allows creating a skill there even when actions has no skill.write; rights on another workspace do not apply here. A kind with createApproval, such as skill, is created here only once one of createApproval.approverNames approves this user's request; without it a create asks the user to confirm the exact call.",
         "Call it before you say whether something can be built here or whether the user may change it. availableHere lists the published agents and Apps offered in this conversation's workspace. Use their titles, never internal names. An asset found through platform.assets.list may be editable but unavailable to use here; never offer it as an available agent or App.",
-        "connectorTypes lists the kinds of Connection this instance can make and how each signs in to the outside system: none, bearer or header (a key the person enters), oauth (the person signs in with the provider) or oauth_client (the instance signs in as an app registered with the provider). Before you plan to connect a system, read them here instead of researching the provider's documentation: a type with a service connects that system ready-made, mcp connects the provider's MCP server, and http_api connects a REST API that needs no sign-in, a key, or OAuth through an app the person registered with the provider.",
+        "catalogue.entries lists only offered services: id, title, category, parts, credential modes and whether an installed Connection has its client secret set. If an entry fits, propose it without web-searching the provider; never draft http_api tools for its hosts. connectorTypes lists the kinds of Connection this instance can make and how each signs in to the outside system: none, bearer or header (a key the person enters), oauth (the person signs in with the provider) or oauth_client (the instance signs in as an app registered with the provider). Before you plan to connect a system, read them here instead of researching the provider's documentation: a type with a service connects that system ready-made, mcp connects the provider's MCP server, and http_api connects a REST API that needs no sign-in, a key, or OAuth through an app the person registered with the provider.",
         "Leave runAs out of a new Workflow; publishing creates its own account. Use a name from workflowPrincipals only when the person asks for an existing shared account; never guess one or use integration or release accounts. Schedules use instance.timeZone; if timeZoneDefaulted, say that UTC is the instance default. Store the intended IANA timeZone on each schedule trigger; never shift the wall clock into UTC yourself. caller identifies the person you act for: use caller.id to notify 'me', without asking them for an id. Give person to resolve a recipient by name or email within this user's directory rights. An empty result means no known match; ask for a clearer name, never an internal id. If several match, ask which person by name/email."
       ].join(" "),
       inputSchema: z.object({
@@ -277,6 +315,30 @@ export function createPlatformDiscoveryTools(
       async execute(input, toolContext) {
         const read: PlatformContextRead = {
           ...(await calls.readContext(toolContext, input)),
+          ...(options.catalogue
+            ? {
+                catalogue: {
+                  entries: (await options.catalogue.read(toolContext)).map((entry) => ({
+                    id: entry.id,
+                    title: entry.title,
+                    category: entry.category,
+                    parts: entry.parts.map((part) => ({
+                      part: part.part,
+                      credentialModes: part.credentialModes,
+                      defaultCredentialMode: part.defaultCredentialMode,
+                      ...(part.connection
+                        ? {
+                            connection: {
+                              name: part.connection.name,
+                              clientSecretSet: part.connection.clientSecretSet
+                            }
+                          }
+                        : {})
+                    }))
+                  }))
+                }
+              }
+            : {}),
           ...(options.connectorTypes
             ? { connectorTypes: connectorTypesRead(options.connectorTypes) }
             : {})

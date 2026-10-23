@@ -667,6 +667,16 @@ export type ConnectionCredentialMode = (typeof CONNECTION_CREDENTIAL_MODES)[numb
 export const CONNECTION_BINDING_STATES = ["connected", "needs_reconnect", "revoked"] as const;
 export type ConnectionBindingState = (typeof CONNECTION_BINDING_STATES)[number];
 
+/** What a chat Connection proposal's card needs to start setup or sign-in. */
+export const CONNECTION_PROPOSAL_STATES = ["ready", "needs_setup"] as const;
+export type ConnectionProposalState = (typeof CONNECTION_PROPOSAL_STATES)[number];
+export const CONNECTION_PROPOSAL_BINDING_STATES = [
+  "connected",
+  "needs_reconnect",
+  "not_connected"
+] as const;
+export type ConnectionProposalBindingState = (typeof CONNECTION_PROPOSAL_BINDING_STATES)[number];
+
 /**
  * How a Connection that signs in with OAuth has its client: registered by the platform
  * (Dynamic Client Registration) or issued by the provider and named in the settings.

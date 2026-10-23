@@ -124,7 +124,7 @@ interface DraftIssue {
   code?: string;
 }
 
-const parameterSchema = z.object({
+export const connectionDraftParameterSchema = z.object({
   schema: z
     .record(z.string(), z.unknown())
     .describe(
@@ -139,7 +139,7 @@ const parameterSchema = z.object({
     )
 });
 
-const operationSchema = z.object({
+export const connectionDraftOperationSchema = z.object({
   name: z
     .string()
     .min(1)
@@ -162,11 +162,11 @@ const operationSchema = z.object({
       "The path relative to the base address, from '/', with each path parameter as {name}, such as '/clients/{clientId}/fiscal-years'. No query: a query value is a declared parameter."
     ),
   pathParams: z
-    .record(z.string(), parameterSchema)
+    .record(z.string(), connectionDraftParameterSchema)
     .optional()
     .describe("Every {name} of the path, by name."),
   query: z
-    .record(z.string(), parameterSchema)
+    .record(z.string(), connectionDraftParameterSchema)
     .optional()
     .describe("The query parameters, by name."),
   effect: z
@@ -204,7 +204,7 @@ const inputSchema = z.object({
       "A GET path, relative to baseUrl and without query, that answers 2xx only with a valid key, such as '/health' or '/me'. The Connection's test reads it, so the test proves the key; without one the test only reaches the address. Leave it out when you know no such path."
     ),
   operations: z
-    .array(operationSchema)
+    .array(connectionDraftOperationSchema)
     .min(1)
     .max(CONNECTION_MAX_ACCEPTED_OPERATIONS)
     .describe("The operations to propose, each one GET request that only reads.")
@@ -284,7 +284,7 @@ function draftedOperation({
  * shape, then the type's settings and declarations. A header is checked by its name with an
  * empty value: the draft never carries one. Answers the checked draft, or every issue.
  */
-function checkConnectionDraft(
+export function checkConnectionDraft(
   input: { connectorTypes: ConnectorTypeRegistry; connectorType: string; ownerPrincipalId: string },
   draft: DraftInput
 ): { ok: true; draft: ConnectionToolsDraft } | { ok: false; issues: DraftIssue[] } {
@@ -382,7 +382,7 @@ export function createConnectionDraftTool(input: {
     effect: "reading",
     description: [
       "Propose the tools of a REST API Connection for a person to approve. Use it when the person asks you to draft the tools of a REST API, such as from the API's OpenAPI description, which you may read with web_fetch.",
-      "Draft for an API that answers with no sign-in, with a key the person enters, or with OAuth through an app the person registered with the provider: the Connection signs in with nothing else. platform.context lists under connectorTypes the kinds of Connection this instance can make; read it first, since a type for that system or the provider's MCP server may be the way. For an API that needs the person to sign in with the provider (OAuth), use the provider's MCP server where one exists, since it needs no registered app; otherwise draft only once the REST API Connection signs in with OAuth, which the person sets up in its dialog with the provider's addresses and their app's client.",
+      "Draft for an API that answers with no sign-in, with a key the person enters, or with OAuth through an app the person registered with the provider: the Connection signs in with nothing else. Read catalogue.entries and connectorTypes in platform.context first. If an entry fits, propose it with platform.connections.propose and do not web-search the provider or draft http_api tools against a host the entry covers. Otherwise propose the whole custom Connection, including OAuth endpoints and client id where needed, with platform.connections.propose.",
       "Write each operation as one GET request that only reads: its name, a description an agent can act on, the path with its parameters and the query parameters, each with a JSON Schema.",
       "Name a testPath when the API has a read path that answers only with a valid key, such as a health or 'me' path: the Connection's test reads it, so the test proves the key.",
       "The tool checks the operations as a save of the Connection would, and answers either every issue, which you fix before you call it again, or the draft, which the person sees as a card in this conversation. From the card they open the Connection's approval list and approve the tools; nothing is saved before that, and you never save a Connection.",

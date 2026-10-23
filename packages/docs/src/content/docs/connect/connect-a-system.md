@@ -140,3 +140,13 @@ and sends `$top` to the server. Path parameters cannot use `sendAs`, and two que
 cannot use the same wire name. Shapers run in the server process on data already received,
 keep nothing, and add no processor or region. Returned data follows the Connection's
 existing retention and model-region rules.
+
+## Propose a Connection in chat
+
+The agent reads `catalogue.entries` in `platform.context` before proposing a Connection. This lists only offered entry ids, titles, categories, parts and credential modes, and whether an installed Connection has its client secret set. It includes no example prompts, operation descriptions or setup checklists.
+
+If an entry fits, `platform.connections.propose` takes only `entry: { id, part }`. Its result tells the card whether setup is needed, whether the viewer may write Connections and, for a personal Connection, the viewer's own binding state. The dialog opens Dienste at that entry's part.
+
+Otherwise the proposal fills the custom Connection's address, auth scheme, OAuth endpoints and scopes, public client id, credential mode and GET read declarations. Mail, calendar and personal files use `user` mode. Custom addresses covered by an offered entry are refused with `entry_covers_host`, naming the entry.
+
+Proposals call no provider and save nothing. Keys and client secrets are entered only by the person in the dialog; secret fields and addresses containing credentials, queries or fragments are refused. Audit records name only an entry or Connection id and its type. Never ask a question in the same turn as an approval card.
