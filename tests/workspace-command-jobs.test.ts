@@ -665,11 +665,18 @@ describe("a workspace command no worker takes", () => {
       );
       const queuedAt = Date.now();
 
-      const result = await advanceFakeClockUntilSettled(client.await(handle, {}), 250);
+      const waiting = client
+        .await(handle, {})
+        .then((result) => ({ result, settledAt: Date.now() }));
+      // A bound on fake time must not depend on how long real database round trips take.
+      // Let the client follow each step, then settle database work with millisecond steps.
+      await passInSteps(JOB_UNCLAIMED_MS + JOB_WORKER_CHECK_INTERVAL_MS, handle);
+      const { result, settledAt } = await settleOnFakeClock(waiting);
 
       expect(result).toMatchObject({ status: "no_worker", command: { status: "cancelled" } });
-      expect(Date.now() - queuedAt).toBeGreaterThanOrEqual(JOB_UNCLAIMED_MS);
-      expect(Date.now() - queuedAt).toBeLessThan(2 * JOB_UNCLAIMED_MS);
+      // Record the actual answer time: advancing the driver must not hide an early answer.
+      expect(settledAt - queuedAt).toBeGreaterThanOrEqual(JOB_UNCLAIMED_MS);
+      expect(settledAt - queuedAt).toBeLessThan(2 * JOB_UNCLAIMED_MS);
       vi.useRealTimers();
       left.complete(successResult());
       await pass.catch(() => undefined);
