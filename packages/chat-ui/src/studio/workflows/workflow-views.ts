@@ -81,6 +81,55 @@ export type WorkflowStepSource =
   /** The entry of the loop the step runs in. */
   | { from: "loop_entry"; itemName?: string };
 
+/** A field of an earlier result a step takes, in the words of the screens. */
+export interface WorkflowFieldRefView {
+  /** The step id and the dotted path of the reference, as the definition holds them. */
+  step: string;
+  path: string;
+  /** Whose field it is: an earlier step's, the run's start, or the loop's entry. */
+  from: WorkflowStepSource;
+  /** The field's name in words. */
+  field: string;
+}
+
+/** One part of a text a step joins: written text, or a field of an earlier result. */
+export type WorkflowTextPartView = string | { ref: WorkflowFieldRefView };
+
+/** One recipient of a Send email step as its definition names it. */
+export type WorkflowMailRecipientView =
+  | { kind: "user"; id: string }
+  | { kind: "workspace"; id: string }
+  | { kind: "address"; address: string }
+  /** The list or address a field of an earlier result gives when the step runs. */
+  | { kind: "picked"; ref: WorkflowFieldRefView };
+
+/**
+ * The mail a Send email step sends (an operation step on `mail.send`, MAIL-3a): what its input
+ * holds, and whom it sends as from the instance's step facts. A field in a form the screens do
+ * not read is absent.
+ */
+export interface WorkflowMailView {
+  /** The sender the step names: `system` until a Connection sender exists. */
+  sender: string;
+  /** The sender's name and address, and the icon key it shows, where the instance says them. */
+  senderTitle?: string;
+  senderAddress?: string;
+  icon?: string;
+  /** The domains outside the instance it may send to; empty for people of the instance only. */
+  recipientDomains?: readonly string[];
+  to?: readonly WorkflowMailRecipientView[];
+  cc?: readonly WorkflowMailRecipientView[];
+  bcc?: readonly WorkflowMailRecipientView[];
+  /** Fields of the input in a form the screens do not read. */
+  unshown?: readonly string[];
+  subject?: readonly WorkflowTextPartView[];
+  body?: readonly WorkflowTextPartView[];
+  senderName?: string;
+  replyTo?: string;
+  replyToUser?: string;
+  locale?: string;
+}
+
 /** One step of a Workflow as its definition describes it. */
 export interface WorkflowStepView {
   id: string;
@@ -120,6 +169,8 @@ export interface WorkflowStepView {
   to?: { users: readonly string[]; workspaces: readonly string[] };
   /** The steps whose results the step is given. */
   sources: readonly WorkflowStepSource[];
+  /** On a step that sends an e-mail: the mail. */
+  mail?: WorkflowMailView;
 }
 
 /** One Workflow with what it does. */
@@ -469,6 +520,11 @@ export interface WorkflowStepRunView {
     };
   };
   failure?: WorkflowFailure;
+  /**
+   * What the step got, after its references were resolved: given only to a reader who may read
+   * the run's data.
+   */
+  input?: WorkflowOutputPreview;
   output?: WorkflowOutputPreview;
   /** The datasets the step wrote, where the instance names them. */
   datasets?: readonly WorkflowDatasetView[];

@@ -25,7 +25,7 @@ const text = (value: unknown): string | undefined =>
 /** The key of a field among the options of a picker. A step id holds no `#`. */
 export const fieldKey = (field: { step: string; path: string }) => `${field.step}#${field.path}`;
 
-function fieldOfKey(key: string): { step: string; path: string } | undefined {
+export function fieldOfKey(key: string): { step: string; path: string } | undefined {
   const at = key.indexOf("#");
   return at <= 0 ? undefined : { step: key.slice(0, at), path: key.slice(at + 1) };
 }

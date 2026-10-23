@@ -66,7 +66,7 @@ import { uiLabelsFor } from "./shared/ui-labels";
 import { MarkdownLinkPolicyProvider } from "./chat/markdown/markdown-text";
 import { ViewPolicyProvider } from "./chat/views/view-policy";
 import { agentChipDisplayFor } from "./chat/workspace/agent-selector";
-import { ClientBrandingHeader } from "./chat/workspace/client-branding";
+import { ClientBrandingHeader, mailBrandFrom } from "./chat/workspace/client-branding";
 import { ConversationPalette } from "./chat/workspace/conversation-palette";
 import { RouteNotFound } from "./chat/workspace/route-not-found";
 import { UserMenu } from "./chat/workspace/user-menu";
@@ -486,7 +486,8 @@ function ChatWorkspaceContent({
             : undefined,
           showRoute: model.route.showRoute,
           editWithAgent: model.workflows.editWithAgent,
-          ...(model.workflows.startNew ? { startNew: model.workflows.startNew } : {})
+          ...(model.workflows.startNew ? { startNew: model.workflows.startNew } : {}),
+          brand: mailBrandFrom(model.config.config)
         }
       : undefined;
   const connectionDraft = connectionDraftHost({
