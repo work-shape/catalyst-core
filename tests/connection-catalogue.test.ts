@@ -825,7 +825,7 @@ describe("an install on an assembled instance", () => {
       metadata: { connectionName: name, connectionId: asset.id, removedRows: 1 }
     });
     // The admin who installed, by their product id.
-    expect(events[0]?.actor.userId).toMatch(/^usr_/u);
+    expect(events[0]?.actor?.userId).toMatch(/^usr_/u);
     expect(Object.keys(events[0]?.metadata ?? {}).sort()).toEqual([
       "connectionId",
       "connectionName",
