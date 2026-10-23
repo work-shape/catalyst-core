@@ -163,13 +163,26 @@ export async function setAgentAvailability(
         throw availabilityConflict(input.agentName, "availability_changed", input.kind);
       }
       // A compare of an unchanged setting holds the lock without rewriting rows or version.
-      if (availabilitiesEqual(current, input.availability))
+      // An explicit save still decides where the agent is offered: no approval offers it
+      // again, unless the caller keeps the mark, as a publish's own compare does.
+      if (availabilitiesEqual(current, input.availability)) {
+        if (!input.keepAwaitingFirstPublish)
+          await tx
+            .update(configAssetAvailability)
+            .set({ awaitingFirstPublish: false })
+            .where(
+              and(
+                eq(configAssetAvailability.assetId, asset.id),
+                eq(configAssetAvailability.awaitingFirstPublish, true)
+              )
+            );
         return {
           ...input.availability,
           collaborationWorkspaceIds: [
             ...new Set(input.availability.collaborationWorkspaceIds)
           ].sort()
         };
+      }
     }
     if (
       (input.kind ?? "agent") === "agent" &&

@@ -812,9 +812,15 @@ export interface ConfigAssetStore {
     expectedAvailability?: AgentAvailability | null;
     /**
      * Given, the store throws `CONFLICT` unless the agent still awaits its first publish. Every
-     * write of an availability clears that mark; a compare of an unchanged one keeps it.
+     * save of an availability clears that mark, an unchanged one too, so an admin's explicit
+     * "nowhere" wins over a later approval.
      */
     expectAwaitingFirstPublish?: true;
+    /**
+     * Keeps the mark where the compare finds the availability unchanged: a publish's own check
+     * of what its publisher reviewed is no decision about where the agent is offered.
+     */
+    keepAwaitingFirstPublish?: true;
   }): Promise<AgentAvailability>;
   /** The names of the active agents only holders of `agent.use` may use (AGENT-USE-1). */
   listAgentUseLimits(input: {
