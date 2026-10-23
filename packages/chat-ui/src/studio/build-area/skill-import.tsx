@@ -1,4 +1,4 @@
-import { FileArchive, FileText, Folder, FolderOpen } from "lucide-react";
+import { FileArchive, Folder, FolderOpen } from "lucide-react";
 import { Fragment, useEffect, useState } from "react";
 import type { LocaleCode } from "@work-shape/catalyst-api-client";
 import { SKILL_NAME_PATTERN } from "@work-shape/catalyst-core";
@@ -17,6 +17,8 @@ import {
   ListRow,
   Spinner
 } from "@work-shape/catalyst-ui";
+import { resolveFileType } from "../../chat/files/file-type";
+import { FileTypeIcon } from "../../chat/files/file-type-icon";
 import { useTranslation, type TranslationContextValue } from "../../shared/i18n";
 import type { BuildImportDialogProps } from "./build-asset-kind";
 import { folderRefusal, waitingNotice, type BuildWriteOutcome } from "./build-refusals";
@@ -164,7 +166,7 @@ function SkillImportFiles({ files }: { files: SkillImport["files"] }) {
       size="compact"
       className={nested ? "pl-6" : undefined}
       data-skill-import-file={file.path}
-      leading={<FileText aria-hidden="true" />}
+      leading={<FileTypeIcon type={resolveFileType({ filename: file.path })} className="size-4" />}
       title={name}
       time={formatFileBytes(file.bytes, locale)}
     />
@@ -350,7 +352,9 @@ function DiffGroup({
             key={row.path}
             size="compact"
             data-skill-replace-file={row.path}
-            leading={<FileText aria-hidden="true" />}
+            leading={
+              <FileTypeIcon type={resolveFileType({ filename: row.path })} className="size-4" />
+            }
             title={row.path}
             time={row.size}
           />
