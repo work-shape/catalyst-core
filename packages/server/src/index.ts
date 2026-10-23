@@ -332,6 +332,7 @@ export type { AgentAssetKindOptions } from "./asset-kinds/agent";
 export { createSkillAssetKind } from "./asset-kinds/skill";
 export { seedShippedAgents } from "./config-assets/shipped-agent-seed";
 export { seedShippedSkills } from "./config-assets/shipped-skill-seed";
+export { createSkillFolderReader } from "./config-assets/skill-folder-reader";
 export {
   APP_ACTIONS,
   APP_ASSET_KIND,

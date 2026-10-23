@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { lchown, readdir } from "node:fs/promises";
-import { join } from "node:path";
+import { isAbsolute, join } from "node:path";
+import { isMountableSkillName, SKILL_MOUNT_ROOT } from "@work-shape/catalyst-core";
 import {
   DEFAULT_WORKSPACE_COMMAND_SHELL,
   DEFAULT_WORKSPACE_COMMAND_PATH,
@@ -8,6 +9,7 @@ import {
   SANDBOX_SOURCE_DIRECTORY,
   runSpawnedProcess,
   type ProcessResult,
+  type SandboxSkillFolder,
   type WorkspaceCommandProcessExecutor,
   type WorkspaceCommandProcessInput
 } from "./workspace-command-executor";
@@ -129,6 +131,7 @@ export interface DockerRunInvocation {
 
 export class DockerWorkspaceCommandProcessExecutor implements WorkspaceCommandProcessExecutor {
   readonly dataPaths = SANDBOX_DATA_DIRECTORIES;
+  readonly mountsSkillFolders = true;
   private readonly options: Required<
     Pick<
       DockerWorkspaceCommandProcessExecutorOptions,
@@ -322,6 +325,9 @@ export function createDockerRunInvocation(
           "--tmpfs",
           `/workspace:rw,nosuid,nodev,size=${String(scratch)},uid=${user.uid},gid=${user.gid}`
         ]),
+    // The folder of each skill of the command's agent run, read-only, on either path. The
+    // change scan reads `/workspace` alone, so nothing here becomes a workspace file.
+    ...skillFolderMounts(input.skillFolders ?? []),
     // Only a command with limits of its own is handed data directories: what its worker wrote
     // for it, read-only, and one directory on the worker's disk that it writes. The worker
     // bounds what is written there and reads it back without following a link.
@@ -472,6 +478,32 @@ export function parseDockerContainerListing(output: string): DockerContainerList
         : Number.NaN;
       return { name, ...(Number.isNaN(createdAtMs) ? {} : { createdAtMs }) };
     });
+}
+
+/**
+ * One read-only bind per skill at `/skills/<name>`. A name is one segment of the skill name
+ * rule and a source an absolute path that the option list of `--mount` reads as one value, so
+ * neither can name another target or add an option. Anything else is refused, not mounted.
+ */
+function skillFolderMounts(folders: readonly SandboxSkillFolder[]): string[] {
+  const names = new Set<string>();
+  const args: string[] = [];
+  for (const folder of folders) {
+    if (!isMountableSkillName(folder.name) || names.has(folder.name)) {
+      throw new Error(`The skill folder '${folder.name}' cannot be mounted.`);
+    }
+    if (!isAbsolute(folder.directory) || /[,"'\u0000-\u001f\u007f]/u.test(folder.directory)) {
+      throw new Error(
+        `The folder of the skill '${folder.name}' has a path that cannot be mounted.`
+      );
+    }
+    names.add(folder.name);
+    args.push(
+      "--mount",
+      `type=bind,source=${folder.directory},target=${SKILL_MOUNT_ROOT}/${folder.name},readonly`
+    );
+  }
+  return args;
 }
 
 function assertNotRoot(user: RunnerUser): void {

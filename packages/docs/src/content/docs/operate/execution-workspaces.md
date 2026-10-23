@@ -53,6 +53,16 @@ Empty directories remain available while that warm local copy is reused. The dur
 
 The same periodic cleanup removes expired or orphaned directories with the `catalyst-workspace-` prefix. The durable source of truth is object storage plus the workspace manifest, not hydrated directories or runner containers.
 
+## Skill folders
+
+A command of an agent run mounts the folder of each skill the run may read at `/skills/<name>/`, one read-only bind each (`--mount type=bind,source=<folder>,target=/skills/<name>,readonly`). The command keeps `--network none` and every other limit. The skills are fixed when the command is queued, as the column `skill_mounts` of `workspace_commands` records them: name, revision and version, never content.
+
+The worker reads each folder from the instance's database and `files` store, the same read as `assets.get files=true`, and keeps it below `WORKSPACE_COMMAND_TEMP_ROOT` in `catalyst-skill-folders/`, one folder per instance and skill revision, never inside a workspace. A folder is filled in a temporary folder, every file checked against its hash, files `0444` and folders `0555`, and renamed into place whole. Before each use the worker checks it again against the hashes it recorded; a folder that changed on the disk is filled again, never mounted. The worker only copies the bytes: it never runs, imports or parses a skill's file. The same periodic cleanup removes the folders no command used for `executionWorkspaces.cleanup.hydratedWorkspaceIdleTtlMs`. Skill bytes stay in the instance: in its object storage and, while cached, on its worker's disk.
+
+A folder that cannot be read or does not match its hashes fails the command with `WORKSPACE_SKILL_MOUNT_FAILED`, the reason `skill_mount_failed` and the skill's name, and nothing runs. The command scan reads `/workspace` alone, so nothing below `/skills` becomes a workspace file or an artifact. A Workflow's code step mounts no skill.
+
+The `local` sandbox, for development only, has no mounts: it copies the folders to `<execution directory>/skills/<name>`, beside the workspace (`$WORKSPACE_DIR/../skills/<name>`), and does not keep them read-only.
+
 ## Promoted Artifacts
 
 Users should only receive promoted artifacts. Internal workspace files and logs are visible to agent tools for debugging and follow-up commands, but they are not projected as user-downloadable artifacts until `workspace.promote_artifact` or an expected promoted output creates a managed artifact.

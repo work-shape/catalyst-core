@@ -5,7 +5,8 @@ import {
   createPlatformId,
   type AgentRun,
   type Conversation,
-  type CreateConversationInput
+  type CreateConversationInput,
+  type PlatformStores
 } from "@work-shape/catalyst-core";
 import type { PostgresStores } from "@work-shape/catalyst-postgres-store";
 import { fileTestDatabaseUrl } from "./test-database";
@@ -14,7 +15,8 @@ type TestConversationInput = Omit<
   CreateConversationInput,
   "collaborationWorkspaceId" | "visibility"
 >;
-export interface TestStore extends PostgresStores {
+/** What a test adds to stores: a stored conversation, and a stored run in it. */
+export interface TestStoreHelpers {
   createConversationForTesting(input: TestConversationInput): Promise<Conversation>;
   /**
    * A stored run behind a stored user message, for rows that refer to a run. A conversation
@@ -22,6 +24,7 @@ export interface TestStore extends PostgresStores {
    */
   createAgentRunForTesting(conversation: Conversation): Promise<AgentRun>;
 }
+export interface TestStore extends PostgresStores, TestStoreHelpers {}
 
 /**
  * The row of a user, where a test needs one to exist: a usage event keeps what leads back to
@@ -50,7 +53,9 @@ export async function ensureTestUser(
 }
 
 /** Arrange the synthetic identity through real constraints, then use the named stores. */
-export function addTestStoreHelpers(stores: PostgresStores): TestStore {
+export function addTestStoreHelpers(stores: PostgresStores): TestStore;
+export function addTestStoreHelpers<S extends PlatformStores>(stores: S): S & TestStoreHelpers;
+export function addTestStoreHelpers<S extends PlatformStores>(stores: S): S & TestStoreHelpers {
   return {
     ...stores,
     async createConversationForTesting(input) {
