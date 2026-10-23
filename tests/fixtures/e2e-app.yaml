@@ -112,10 +112,18 @@ modules:
 # connector type contacts nothing: the entry is what lets a test of a Connection answer ready.
 # The second is replaced by the runner with free loopback ports for the sample MCP servers
 # that connection-editor starts, so an orphaned child cannot monopolize the next test's port.
+# The third is the sample OAuth server at the address the demo's `sample-oauth` entry fixes.
 egress:
   allow:
     - { protocol: https, host: 127.0.0.1, port: 8443, network: private, cidrs: [127.0.0.0/8] }
     - { protocol: http, host: 127.0.0.1, port: 4219, network: private, cidrs: [127.0.0.0/8] }
+    - {
+        protocol: http,
+        host: localhost,
+        port: 8787,
+        network: private,
+        cidrs: [127.0.0.0/8, "::1/128"]
+      }
 # The demo's sample entry is offered; the suite's own `sample-files` is not, so it shows greyed.
 catalogue:
   entries: [sample-accounting, sample-oauth]
