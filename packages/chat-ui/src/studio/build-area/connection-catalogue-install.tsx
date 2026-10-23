@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Banner,
   Button,
@@ -187,12 +187,20 @@ export function CatalogueInstall({
     };
   }, [personalStep, name, source]);
   const preparing = stage.step === "prepare";
+  // The calls change with every render; the question follows the address alone.
+  const asks = useRef({ checkName, deletedRevision: source.deletedRevision });
+  asks.current = { checkName, deletedRevision: source.deletedRevision };
   useEffect(() => {
-    const ask = source.deletedRevision;
-    if (!preparing || fixedName === undefined || ask === undefined) return;
+    const { checkName: check, deletedRevision } = asks.current;
+    if (!preparing || fixedName === undefined || deletedRevision === undefined) return;
     let current = true;
+    // A free address was never stored: only a taken one may be a deleted Connection's.
     // Unanswered, the install creates the name; the instance refuses a deleted one then.
-    ask(fixedName)
+    const taken = check
+      ? check(fixedName).then((found) => !found.available)
+      : Promise.resolve(true);
+    taken
+      .then((held) => (held ? deletedRevision(fixedName) : undefined))
       .then((revision) => {
         if (current && revision !== undefined) setRecreates({ name: fixedName, revision });
       })
@@ -200,7 +208,7 @@ export function CatalogueInstall({
     return () => {
       current = false;
     };
-  }, [preparing, fixedName, source]);
+  }, [preparing, fixedName]);
   if (part === undefined) return null;
   // The part, for the steps below: it stays the one chosen.
   const installed = part;

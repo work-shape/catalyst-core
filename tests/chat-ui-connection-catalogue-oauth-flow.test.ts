@@ -68,7 +68,8 @@ function testSource() {
   const puts: Record<string, unknown>[] = [];
   /** The revision each write named. */
   const bases: (number | null)[] = [];
-  const state: { shared?: boolean; own?: boolean } = {};
+  /** `taken`: the instance names the address taken, as it does a deleted Connection's. */
+  const state: { shared?: boolean; own?: boolean; taken?: boolean } = {};
   const binding: ConnectionDetail["binding"] = {
     state: "connected",
     scopes: ["openid"],
@@ -136,7 +137,10 @@ function mount(
             entry,
             source: run.source,
             browser,
-            checkName: async () => ({ available: true as const }),
+            checkName: async () =>
+              run.state.taken
+                ? { available: false as const, reason: "name_taken" as const, message: "taken" }
+                : { available: true as const },
             put: run.put,
             onClose: () => undefined,
             onCreated: created,
@@ -207,9 +211,14 @@ describe("the install of an OAuth part", () => {
       ...mailbox,
       parts: [{ ...part, defaultCredentialMode: "shared" as const }]
     };
+    // A free address was never stored: nobody asks for a delete.
+    const deletedRevision = vi.fn(async () => undefined);
+    run.source.deletedRevision = deletedRevision;
     const created = mount(shared, run, tabs.browser);
     await settle();
     expect(document.querySelector("[data-catalogue-shared-note]")).not.toBeNull();
+    expect(deletedRevision).not.toHaveBeenCalled();
+    expect(document.querySelector("[data-catalogue-recreates]")).toBeNull();
 
     const approved = await connectAndApprove(run);
     expect(approved).not.toHaveProperty("credentialMode");
@@ -292,6 +301,7 @@ describe("the install of an OAuth part", () => {
   it("installs anew at the address of a deleted connection, writing over its delete", async () => {
     const run = testSource();
     const tabs = testBrowser();
+    run.state.taken = true;
     run.source.deletedRevision = async (name) => (name === "mailbox" ? 7 : undefined);
     mount(mailbox, run, tabs.browser);
     await settle();
