@@ -327,6 +327,28 @@ describe("environment secret provider", () => {
 });
 
 describe("provider registry", () => {
+  it("validates optional short model regions without resolving a credential", () => {
+    const registry = new ProviderRegistry(modelProviderDefinitions);
+    for (const region of [undefined, "eu", "us"]) {
+      expect(
+        registry.validate("models", {
+          path: "infrastructure.models.main",
+          entry: { provider: "openai-compatible", model: "m", region }
+        }).region
+      ).toBe(region);
+    }
+    for (const region of ["", " ", "x".repeat(33), 1]) {
+      expect(() =>
+        registry.validate("models", {
+          path: "infrastructure.models.main",
+          entry: { provider: "openai-compatible", model: "m", region }
+        })
+      ).toThrow(
+        "'infrastructure.models.main.region' must be a non-empty string of at most 32 characters"
+      );
+    }
+  });
+
   const vault = defineProvider({
     port: "objectStorage",
     type: "vault",

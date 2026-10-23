@@ -121,11 +121,11 @@ export const PROVIDER_PORTS = ["models", "mail", "objectStorage", "sandbox", "se
 export type ProviderPort = (typeof PROVIDER_PORTS)[number];
 
 /**
- * Where a provider processes the data an instance sends it. Product-owned and closed: a vendor's
- * own region name is a separate field of its adapter, such as `bucketRegion`.
+ * Where a provider processes the data an instance sends it. Only `eu` admits personal
+ * Connections; other short strings describe routes outside that boundary.
  */
 export const PROVIDER_REGIONS = ["eu", "global"] as const;
-export type ProviderRegion = (typeof PROVIDER_REGIONS)[number];
+export type ProviderRegion = string;
 
 /**
  * Why a check failed. Product-owned and closed: it is all of a failure that reaches a log, the

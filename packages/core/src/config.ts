@@ -36,7 +36,7 @@ export interface ModelProviderConfig {
   /** The registered provider type. Only its adapter knows what the type means. */
   type: string;
   model: string;
-  /** Present when the provider sends data outside the instance. */
+  /** Operator-declared processing region; only `eu` admits personal Connections. */
   region?: ProviderRegion;
   api?: OpenAiCompatibleModelProviderApiConfig;
   reasoningEffort?: ReasoningEffortConfig;

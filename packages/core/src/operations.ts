@@ -136,6 +136,7 @@ export interface OperationUpload {
  */
 export type OperationCallRuntime = Pick<
   RuntimeCallContext,
+  | "modelRoutes"
   | "locale"
   | "deadline"
   | "signal"

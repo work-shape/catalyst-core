@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { resolveInstanceModules } from "@work-shape/catalyst-client-assembly";
 import {
   createSafeConfigView,
+  getModelProviderConfigs,
   parseClientInstanceConfig
 } from "@work-shape/catalyst-config-schema";
 import {
@@ -206,22 +207,25 @@ describe("infrastructure section", () => {
     );
   });
 
-  it("stops startup on an external entry without a region and on a region where none belongs", async () => {
-    const error = await startupFailure(
-      { models: { main: { provider: "openai-compatible", model: "m", credentialSecret: "KEY" } } },
-      { KEY: SECRET_VALUE }
-    );
-    expect(error.message).toBe(
-      "'infrastructure.models.main.region' is required and must be one of eu, global: the 'openai-compatible' provider sends data outside the instance"
-    );
-    expectNoSecretValue(error);
-
-    const internal = await startupFailure({
-      models: { local: { provider: "deterministic", region: "eu" } }
-    });
-    expect(internal.message).toBe(
-      "'infrastructure.models.local.region' must be absent: the 'deterministic' provider keeps data inside the instance"
-    );
+  it("accepts optional short model regions and retains them in the product config", () => {
+    for (const region of [undefined, "eu", "us", "ap-southeast-2"]) {
+      const parsed = parseClientInstanceConfig(
+        config({
+          models: { main: { provider: "openai-compatible", model: "m", region } }
+        })
+      );
+      expect(parsed.infrastructure.models.main?.region).toBe(region);
+      expect(getModelProviderConfigs(parsed)[0]?.region).toBe(region);
+    }
+    for (const region of ["", " ", "x".repeat(33), 3]) {
+      expect(() =>
+        parseClientInstanceConfig(
+          config({
+            models: { main: { provider: "openai-compatible", model: "m", region } }
+          })
+        )
+      ).toThrow();
+    }
   });
 
   it("stops on a config without a model entry", () => {
@@ -562,7 +566,9 @@ describe("keys that moved into the infrastructure section", () => {
     const regionRequired =
       "'region' is now required for a provider that sends data outside the instance";
 
-    expect(message({ modelProviders: [] })).toContain(regionRequired);
+    expect(message({ modelProviders: [] })).toContain(
+      "Personal Connections require every model route to declare 'region: eu'"
+    );
     const mail = message({ mail: { enabled: true } });
     expect(mail).toContain("Drop 'enabled: true'");
     expect(mail).toContain(regionRequired);

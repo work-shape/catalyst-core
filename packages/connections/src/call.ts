@@ -604,7 +604,12 @@ interface Named {
  */
 function inSentence(error: unknown, named: Named): unknown {
   const reason = connectionCallReasonOf(error);
-  if (reason === undefined || reason === "personal_connection_context" || !isAppError(error))
+  if (
+    reason === undefined ||
+    reason === "personal_connection_context" ||
+    reason === "personal_connection_region" ||
+    !isAppError(error)
+  )
     return error;
   if (
     named.personal &&
@@ -844,6 +849,7 @@ async function call(
   if (first.connection.config.credentialMode === "user") {
     await requirePersonalConnectionContext({
       ...deps,
+      modelRoutes: context.runtime.modelRoutes,
       actor: context.actor,
       origin: context.origin,
       byAppAction: context.byAppAction
@@ -877,6 +883,7 @@ async function call(
               personalCall: async () => {
                 const root = await requirePersonalConnectionContext({
                   ...deps,
+                  modelRoutes: context.runtime.modelRoutes,
                   actor: context.actor,
                   origin: context.origin,
                   byAppAction: context.byAppAction

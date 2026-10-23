@@ -12,7 +12,7 @@ Agents and client skills are separate versioned configuration assets. The Cataly
 Release config should cover:
 
 - tool enablement and tool parameters
-- model providers and approved model bindings
+- model providers, their processing region (`infrastructure.models.<name>.region`), and approved model bindings
 - which optional features run, as [modules](/configure/modules/)
 - capability settings
 - interactive agent-configuration policy
@@ -963,12 +963,20 @@ infrastructure:
   `sandbox`.
 - `provider` picks the adapter. An unknown provider, an unknown setting or a missing setting
   stops startup, and the message names the field.
-- `region` is `eu` or `global` and says where the provider processes the data it is sent. A
-  provider that sends data outside the instance (`openai-compatible`, `google-vertex`, `aws-bedrock`,
-  `mailjet`, `s3`) must state it. A provider that keeps data inside the instance (`deterministic`, `capture`,
-  `filesystem`, `docker`, `local`) must not. A `docker` sandbox with an `endpoint` runs on
-  another host and must state it too. A vendor's own region name is a separate setting,
-  such as `bucketRegion`.
+- `infrastructure.models.<name>.region` optionally declares where a model provider processes
+  data: `eu`, or another non-empty string of at most 32 characters, such as `global` or `us`.
+  A personal Connection (`credentialMode: user`) is refused with `personal_connection_region`
+  unless every model route the run can use, including fallbacks, declares exactly `eu`.
+  An unset region is refused too, before credentials are resolved; this refusal offers no
+  Connect card. The check uses the run's resolved model, including a model picked by the user
+  or used in Preview or a subagent. The runtime currently uses one route and has no configured
+  cross-provider fallbacks. Set `region: eu` only for an agreed EU processing route.
+- For other provider ports, `region` is `eu` or `global`. An external provider (`mailjet`, `s3`)
+  must state it; a local provider (`capture`, `filesystem`, `docker`, `local`) must not.
+  A `docker` sandbox with an `endpoint` runs on another host and must state it too.
+  A vendor's own region name is a separate setting, such as `bucketRegion`.
+  Model adapters may constrain their supported regions further: `google-vertex` takes `eu`
+  or `global`, and `aws-bedrock` requires `eu`.
 - A setting whose name ends in `Secret` holds the name of a secret, never its value. The
   `environment` secret provider reads the variable of that name and, when it is not set, the
   file named by the variable `<NAME>_FILE`, which is how a mounted Docker or Kubernetes secret

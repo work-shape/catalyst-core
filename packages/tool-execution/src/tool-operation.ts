@@ -469,6 +469,7 @@ export function createToolOperationRunner(
         }),
         deps,
         {
+          modelRoutes: context.modelRoutes,
           locale: context.locale,
           deadline: context.deadline,
           signal: context.signal,
