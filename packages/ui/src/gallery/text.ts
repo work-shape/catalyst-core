@@ -61,6 +61,8 @@ export interface GalleryText
   addItem: string;
   chooseFiles: string;
   noFileChosen: string;
+  dropFiles: string;
+  chooseFolder: string;
   moreActions: string;
   name: string;
   namePlaceholder: string;
@@ -305,6 +307,8 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     addItem: "Add",
     chooseFiles: "Choose files",
     noFileChosen: "No file chosen",
+    dropFiles: "Drop a folder or files here",
+    chooseFolder: "Choose folder",
     moreActions: "More actions",
     name: "Name",
     namePlaceholder: "Support assistant",
@@ -582,6 +586,8 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     addItem: "Hinzufügen",
     chooseFiles: "Dateien auswählen",
     noFileChosen: "Keine Datei ausgewählt",
+    dropFiles: "Ordner oder Dateien hier ablegen",
+    chooseFolder: "Ordner auswählen",
     moreActions: "Weitere Aktionen",
     name: "Name",
     namePlaceholder: "Support-Assistent",
