@@ -25,7 +25,9 @@ export { CONNECTION_DRAFT_TOOL_NAME, createConnectionDraftTool } from "./connect
 export { CONNECTION_OFFER_TOOL_NAME, createConnectionOfferTool } from "./connection-offer-tool";
 export {
   CONNECTION_PROPOSE_TOOL_NAME,
-  createConnectionProposeTool
+  createConnectionProposeTool,
+  type ConnectionProposalCatalogue,
+  type ConnectionProposalCatalogueEntry
 } from "./connection-propose-tool";
 export {
   PLATFORM_ASSET_TOOLS,

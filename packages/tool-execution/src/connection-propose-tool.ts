@@ -1,22 +1,32 @@
 import { connectionConfigSchema } from "@work-shape/catalyst-config-schema";
 import {
+  CATALOGUE_PARTS,
+  CONNECTION_CREDENTIAL_MODES,
+  CONNECTOR_TOKEN_AUTH_METHODS,
+  CONNECTION_PROPOSAL_STATES,
+  CONNECTION_PROPOSAL_BINDING_STATES,
+  type CataloguePart,
+  type ConnectionCredentialMode,
+  type ConnectionProposalBindingState,
   CONNECTION_NAME_MAX_LENGTH,
+  CONNECTION_MAX_ACCEPTED_OPERATIONS,
   findConnectorTypeIssues,
   type AssetValidationIssue,
   type ConnectorTypeRegistry,
+  type ToolExecutionContext,
   type JsonObject
 } from "@work-shape/catalyst-core";
 import { defineTool, toolSuccess, type AnyToolDefinition } from "@work-shape/catalyst-tool-sdk";
 import { z } from "zod";
-import { CONNECTION_DRAFT_TOOL_NAME } from "./connection-draft-tool";
+import {
+  checkConnectionDraft,
+  connectionDraftOperationSchema,
+  connectionDraftParameterSchema,
+  CONNECTION_DRAFT_TOOL_NAME
+} from "./connection-draft-tool";
 import { CONNECTION_OFFER_TOOL_NAME } from "./connection-offer-tool";
 
-// The agent's proposal of a new Connection (CHAT-CONN-1): the type, the id, the name in words
-// and the address, as a card in the conversation. The tab that sent the message the run answers
-// opens the New connection dialog with it, the conversation docked beside it, and the card opens
-// the dialog again. The person enters the key or signs in there, presses Connect and approves the
-// tools; that is the save. The tool reads nothing of the instance, reaches no host and holds no
-// key: the proposal has no field for one, and an address that could carry one is refused.
+// Read-only proposals: instance configuration and setup state only. No provider calls or writes.
 
 export const CONNECTION_PROPOSE_TOOL_NAME = "platform.connections.propose";
 
@@ -30,7 +40,26 @@ const PROPOSAL_HEADERS_MAX = 16;
 /** A header name as HTTP spells it. */
 const HEADER_NAME = /^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,128}$/u;
 
-const inputSchema = z.object({
+// Legacy draft_tools strips unknown members; a whole proposal refuses them at every field boundary.
+const proposalOperationSchema = connectionDraftOperationSchema.strict().extend({
+  pathParams: z.record(z.string(), connectionDraftParameterSchema.strict()).optional(),
+  query: z.record(z.string(), connectionDraftParameterSchema.strict()).optional()
+});
+
+const customInputSchema = z.strictObject({
+  authScheme: z.enum(["none", "bearer", "header", "oauth", "oauth_client"]).optional(),
+  credentialMode: z.enum(CONNECTION_CREDENTIAL_MODES).optional(),
+  oauth: z
+    .strictObject({
+      authorizationUrl: z.string().optional(),
+      tokenUrl: z.string(),
+      revocationUrl: z.string().optional(),
+      clientId: z.string(),
+      scopes: z.array(z.string()).optional(),
+      tokenAuthMethod: z.enum(CONNECTOR_TOKEN_AUTH_METHODS).optional()
+    })
+    .optional(),
+  operations: z.array(proposalOperationSchema).max(CONNECTION_MAX_ACCEPTED_OPERATIONS).optional(),
   connectorType: z
     .string()
     .min(1)
@@ -72,8 +101,45 @@ const inputSchema = z.object({
     )
 });
 
+const entrySchema = z.strictObject({ id: z.string().min(1), part: z.enum(CATALOGUE_PARTS) });
+const inputSchema = z.union([z.strictObject({ entry: entrySchema }), customInputSchema]);
+
+/** Minimal, read-only catalogue projection supplied by the instance. Hosts stay internal. */
+export interface ConnectionProposalCatalogueEntry {
+  id: string;
+  title: string;
+  category: string;
+  parts: {
+    part: CataloguePart;
+    connectorType: string;
+    name: string;
+    credentialModes: ConnectionCredentialMode[];
+    defaultCredentialMode: ConnectionCredentialMode;
+    hosts: string[];
+    connection?: {
+      name: string;
+      clientSecretSet: boolean;
+      credentialMode: ConnectionCredentialMode;
+      bindingState?: ConnectionProposalBindingState;
+    };
+  }[];
+}
+
+export interface ConnectionProposalCatalogue {
+  read(context: ToolExecutionContext): Promise<ConnectionProposalCatalogueEntry[]>;
+  mayWrite(context: ToolExecutionContext): Promise<boolean>;
+}
+
 const outputSchema = z.object({
+  entry: entrySchema.optional(),
+  state: z.enum(CONNECTION_PROPOSAL_STATES).optional(),
+  mayWrite: z.boolean().optional(),
+  bindingState: z.enum(CONNECTION_PROPOSAL_BINDING_STATES).optional(),
+  operations: z.array(proposalOperationSchema).optional(),
   connection: z.object({
+    authScheme: customInputSchema.shape.authScheme,
+    credentialMode: customInputSchema.shape.credentialMode,
+    oauth: customInputSchema.shape.oauth,
     connectorType: z.string(),
     name: z.string(),
     title: z.string(),
@@ -84,7 +150,7 @@ const outputSchema = z.object({
   })
 });
 
-type ProposalInput = z.infer<typeof inputSchema>;
+type ProposalInput = z.infer<typeof customInputSchema>;
 type Proposal = z.infer<typeof outputSchema>;
 
 interface ProposalIssue {
@@ -100,6 +166,7 @@ function inputPathOf(path: readonly PropertyKey[]): string {
     if (second === "headers") return "headerNames";
     if (second === "testPath") return "testPath";
     if (second === "headerName") return "keyHeader";
+    if (second === "oauth") return path.slice(1).map(String).join(".");
     return "url";
   }
   if (first === "name") return "connection";
@@ -119,27 +186,27 @@ function proposalIssue(issue: AssetValidationIssue): ProposalIssue {
  * An address that could carry a credential, or one no dialog connects: not https, with a user
  * name or password, a query or a fragment.
  */
-function addressIssues(url: string): ProposalIssue[] {
+function addressIssues(url: string, path = "url"): ProposalIssue[] {
   let parsed: URL;
   try {
     parsed = new URL(url);
   } catch {
-    return [{ path: "url", message: "The address is no URL" }];
+    return [{ path, message: "The address is no URL" }];
   }
   const issues: ProposalIssue[] = [];
   if (parsed.protocol !== "https:") {
-    issues.push({ path: "url", message: "The address starts with https://" });
+    issues.push({ path, message: "The address starts with https://" });
   }
   if (parsed.username !== "" || parsed.password !== "") {
     issues.push({
-      path: "url",
+      path,
       message: "The address carries no user name or password: the person enters the key",
       code: "credential_in_url"
     });
   }
   if (parsed.search !== "" || parsed.hash !== "") {
     issues.push({
-      path: "url",
+      path,
       message:
         "The address carries no query or fragment, which can hold a key: the person enters the key in the dialog",
       code: "credential_in_url"
@@ -155,6 +222,7 @@ function addressSettings(input: ProposalInput, url: string): Record<string, unkn
   const headerNames = input.headerNames ?? [];
   return {
     baseUrl: url,
+    ...(input.oauth === undefined ? {} : { oauth: input.oauth }),
     ...(input.testPath === undefined ? {} : { testPath: input.testPath }),
     ...(headerNames.length === 0
       ? {}
@@ -171,7 +239,8 @@ function addressSettings(input: ProposalInput, url: string): Record<string, unkn
 function checkProposal(
   connectorTypes: ConnectorTypeRegistry,
   ownerPrincipalId: string,
-  input: ProposalInput
+  input: ProposalInput,
+  entries: ConnectionProposalCatalogueEntry[]
 ): { ok: true; proposal: Proposal } | { ok: false; issues: ProposalIssue[] } {
   const type = connectorTypes.get(input.connectorType);
   if (type === undefined) {
@@ -191,7 +260,16 @@ function checkProposal(
     issues.push({ path: "url", message: "Name the address to connect" });
   }
   if (!takesAddress) {
-    for (const field of ["url", "keyHeader", "headerNames", "testPath"] as const) {
+    for (const field of [
+      "url",
+      "keyHeader",
+      "headerNames",
+      "testPath",
+      "oauth",
+      "authScheme",
+      "credentialMode",
+      "operations"
+    ] as const) {
       if (input[field] !== undefined) {
         issues.push({
           path: field,
@@ -201,7 +279,7 @@ function checkProposal(
     }
   }
   if (input.connectorType !== HTTP_API) {
-    for (const field of ["headerNames", "testPath"] as const) {
+    for (const field of ["headerNames", "testPath", "oauth", "operations"] as const) {
       if (takesAddress && input[field] !== undefined) {
         issues.push({ path: field, message: "Only a REST API ('http_api') takes this" });
       }
@@ -211,13 +289,64 @@ function checkProposal(
     issues.push({ path: "keyHeader", message: "The header name is no HTTP header name" });
   }
   if (input.url !== undefined && takesAddress) issues.push(...addressIssues(input.url));
+  for (const [path, url] of Object.entries({
+    url: input.url,
+    "oauth.tokenUrl": input.oauth?.tokenUrl,
+    "oauth.authorizationUrl": input.oauth?.authorizationUrl,
+    "oauth.revocationUrl": input.oauth?.revocationUrl
+  })) {
+    if (url === undefined) continue;
+    if (path !== "url") issues.push(...addressIssues(url, path));
+    let host: string;
+    try {
+      host = new URL(url).hostname.toLowerCase();
+    } catch {
+      continue;
+    }
+    const covered = entries.find((entry) =>
+      entry.parts.some((part) =>
+        part.hosts.some((target) => {
+          try {
+            return new URL(`https://${target}`).hostname.toLowerCase() === host;
+          } catch {
+            return false;
+          }
+        })
+      )
+    );
+    if (covered)
+      issues.push({
+        path,
+        code: "entry_covers_host",
+        message: `Catalogue entry '${covered.id}' covers this host. Propose that entry instead.`
+      });
+  }
+  if (
+    input.operations !== undefined &&
+    input.connectorType === HTTP_API &&
+    input.url !== undefined
+  ) {
+    const draft = checkConnectionDraft(
+      { connectorTypes, connectorType: HTTP_API, ownerPrincipalId },
+      {
+        connection: input.connection,
+        title: input.title,
+        baseUrl: input.url,
+        headerNames: input.headerNames,
+        testPath: input.testPath,
+        operations: input.operations
+      }
+    );
+    if (!draft.ok) issues.push(...draft.issues);
+  }
   const candidate = {
     name: input.connection,
     displayName: input.title,
     connectorType: input.connectorType,
     ownerPrincipalId,
     settings: takesAddress && input.url !== undefined ? addressSettings(input, input.url) : {},
-    authScheme: input.keyHeader === undefined ? "none" : "header",
+    authScheme: input.authScheme ?? (input.keyHeader === undefined ? "none" : "header"),
+    credentialMode: input.credentialMode ?? "shared",
     operations: [],
     origin: "runtime"
   };
@@ -235,7 +364,11 @@ function checkProposal(
   return {
     ok: true,
     proposal: {
+      ...(input.operations === undefined ? {} : { operations: input.operations }),
       connection: {
+        ...(input.authScheme === undefined ? {} : { authScheme: input.authScheme }),
+        ...(input.credentialMode === undefined ? {} : { credentialMode: input.credentialMode }),
+        ...(input.oauth === undefined ? {} : { oauth: input.oauth }),
         connectorType: input.connectorType,
         name: input.connection,
         title: input.title,
@@ -251,6 +384,7 @@ function checkProposal(
 /** The tool an agent proposes a new Connection with. Offered where the module `connections` is on. */
 export function createConnectionProposeTool(input: {
   connectorTypes: ConnectorTypeRegistry;
+  catalogue?: ConnectionProposalCatalogue;
 }): AnyToolDefinition {
   return defineTool({
     name: CONNECTION_PROPOSE_TOOL_NAME,
@@ -263,20 +397,59 @@ export function createConnectionProposeTool(input: {
     icon: "connection",
     effect: "reading",
     description: [
-      "Propose a new Connection when the person wants data from an outside system that no Connection of the instance reaches yet: a remote MCP server ('mcp'), a REST API ('http_api') or another Connector type of the instance.",
-      "Name the type, an id, a name in words and, for 'mcp' or 'http_api', the address. The tool checks them and answers the proposal, which shows as a card; the person's screen then opens the New connection dialog filled with it, with this conversation beside it. Nothing is saved before the person presses Connect there.",
+      "Propose a Connection when the person wants to connect an outside system: a remote MCP server ('mcp'), a REST API ('http_api') or another Connector type of the instance.",
+      "Read catalogue.entries in platform.context first. If an entry fits, pass only entry: { id, part }; do not web-search the provider or draft tools against its hosts. Otherwise name the type, an id, a name in words and, for 'mcp' or 'http_api', the address, authScheme, credentialMode, OAuth endpoints, scopes and public clientId, and GET read operations. The tool checks them and answers the proposal, which shows as a card; the person's screen then opens the New connection dialog filled with it, with this conversation beside it. Nothing is saved before the person presses Connect there.",
       "Never ask for a key, token or password, and never put one into the proposal or the address: the person enters the key, or signs in, in the dialog. Say in one sentence that they enter the key or sign in there and press Connect.",
-      "When they have connected, a message from them says so and which tools they approved. Then go on: for a REST API draft its tools with " +
+      "When they have connected, a message from them says so and which tools they approved. Then go on: for a REST API draft any reads not already included with " +
         CONNECTION_DRAFT_TOOL_NAME +
         "; offer approved tools to an agent with " +
         CONNECTION_OFFER_TOOL_NAME +
         " where you hold it; then build what they asked for.",
-      "An issue in the answer is fixed before you call the tool again; no card shows until the proposal passes."
+      "For mail, calendar and personal files propose credentialMode user. Never ask a question in the same turn as an approval card. Never say a service is unsupported: build the custom path and name the one step you cannot do. An issue in the answer is fixed before you call the tool again; no card shows until the proposal passes."
     ].join(" "),
     inputSchema,
     outputSchema,
-    execute(proposal, context) {
-      const checked = checkProposal(input.connectorTypes, context.user.id, proposal);
+    async execute(proposal, context) {
+      const entries = (await input.catalogue?.read(context)) ?? [];
+      const mayWrite = (await input.catalogue?.mayWrite(context)) ?? false;
+      if ("entry" in proposal) {
+        const entry = entries.find((entry) => entry.id === proposal.entry.id);
+        const part = entry?.parts.find((part) => part.part === proposal.entry.part);
+        const auditSummary = {
+          action: CONNECTION_PROPOSE_TOOL_NAME,
+          subject: proposal.entry.id,
+          metadata: { type: "entry" }
+        };
+        if (!entry || !part)
+          return {
+            status: "failed",
+            error: {
+              code: "validation_failed",
+              message: "This instance does not offer that catalogue entry and part"
+            },
+            auditSummary
+          };
+        const existing = part.connection;
+        return toolSuccess<Proposal>(
+          {
+            entry: proposal.entry,
+            state: existing?.clientSecretSet ? "ready" : "needs_setup",
+            mayWrite,
+            ...(existing?.credentialMode === "user"
+              ? { bindingState: existing.bindingState ?? "not_connected" }
+              : {}),
+            connection: {
+              connectorType: part.connectorType,
+              name: existing?.name ?? part.name,
+              title: entry.title,
+              credentialMode: existing?.credentialMode ?? part.defaultCredentialMode,
+              headerNames: []
+            }
+          },
+          { auditSummary }
+        );
+      }
+      const checked = checkProposal(input.connectorTypes, context.user.id, proposal, entries);
       // The id and the type only: the address is no part of an audit record.
       const auditSummary = {
         action: CONNECTION_PROPOSE_TOOL_NAME,
@@ -294,10 +467,13 @@ export function createConnectionProposeTool(input: {
               .join("; ")}`,
             details
           },
-          auditSummary: { ...auditSummary, metadata: { ...auditSummary.metadata, refused: true } }
+          auditSummary
         };
       }
-      return toolSuccess(checked.proposal, { auditSummary });
+      return toolSuccess<Proposal>(
+        { ...checked.proposal, state: "needs_setup", mayWrite },
+        { auditSummary }
+      );
     }
   });
 }

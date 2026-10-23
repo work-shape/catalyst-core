@@ -1,3 +1,9 @@
+import {
+  connectionDraftForm,
+  connectionDraftEntry,
+  isConnectionProposal
+} from "../packages/chat-ui/src/studio/build-area/connection-draft";
+import type { CatalogueEntryOffer } from "@work-shape/catalyst-chat-ui/build-area";
 import { createElement } from "react";
 import { describe, expect, it } from "vitest";
 import { createTranslationContext } from "./support/chat-ui/shared";
@@ -215,5 +221,118 @@ describe("the message the person's tab sends once the Connection is ready", () =
     expect(message).toContain("tool_19, …");
     expect(message).not.toContain("tool_20");
     expect(message).not.toContain("example.test");
+  });
+});
+
+describe("complete proposal dialog models", () => {
+  it("maps OAuth, personal mode and GET declarations without carrying secret fields", () => {
+    const draft = readConnectionProposal({
+      output: {
+        connection: {
+          connectorType: "http_api",
+          name: "mail",
+          title: "Mail",
+          url: "https://api.example.test",
+          authScheme: "oauth",
+          credentialMode: "user",
+          headerNames: [],
+          oauth: {
+            authorizationUrl: "https://login.example.test/authorize",
+            tokenUrl: "https://login.example.test/token",
+            revocationUrl: "https://login.example.test/revoke",
+            clientId: "public-client",
+            scopes: ["mail.read", "openid"],
+            clientSecret: SECRET
+          }
+        },
+        operations: [
+          {
+            name: "list",
+            method: "GET",
+            path: "/messages",
+            effect: "reading",
+            description: "Reads messages"
+          }
+        ]
+      }
+    });
+    if (!draft) throw new Error("Expected proposal");
+    expect(draft.connection.credentialMode).toBe("user");
+    expect(isConnectionProposal(draft)).toBe(true);
+    expect(draft.operations).toHaveLength(1);
+    expect(connectionDraftForm(draft)).toMatchObject({
+      authScheme: "oauth",
+      url: "https://api.example.test",
+      oauth: {
+        clientId: "public-client",
+        scopes: "mail.read openid",
+        tokenUrl: "https://login.example.test/token",
+        authorizationUrl: "https://login.example.test/authorize",
+        revocationUrl: "https://login.example.test/revoke"
+      }
+    });
+    expect(JSON.stringify(draft)).not.toContain(SECRET);
+  });
+  it("carries an entry's card state and opens Dienste at the requested part without looking up a default Connection id", async () => {
+    const draft = readConnectionProposal({
+      output: {
+        entry: { id: "files", part: "source" },
+        state: "needs_setup",
+        mayWrite: false,
+        bindingState: "not_connected",
+        connection: { connectorType: "http_api", name: "files", title: "Files", headerNames: [] }
+      }
+    });
+    if (!draft) throw new Error("Expected entry proposal");
+    expect(draft).toMatchObject({
+      entry: { id: "files", part: "source" },
+      state: "needs_setup",
+      mayWrite: false,
+      bindingState: "not_connected"
+    });
+    const part = {
+      part: "tools" as const,
+      connectorType: "http_api",
+      name: "files",
+      description: "Files",
+      authScheme: "none",
+      credentialModes: ["shared" as const],
+      defaultCredentialMode: "shared" as const,
+      settings: {},
+      fields: [],
+      prerequisites: [],
+      hosts: [],
+      operations: [],
+      sharedAccountNote: "Shared",
+      documentSource: false
+    };
+    const entry: CatalogueEntryOffer = {
+      id: "files",
+      version: 1,
+      service: "files",
+      title: "Files",
+      description: "Files",
+      category: "files",
+      examplePrompts: [],
+      mark: {},
+      offered: true,
+      parts: [part, { ...part, part: "source" }]
+    };
+    expect(connectionDraftEntry(draft, [entry])?.parts[0]?.part).toBe("source");
+    expect(entry.parts[0]?.part).toBe("tools");
+    expect(connectionDraftEntry(draft, [{ ...entry, offered: false }])).toBeUndefined();
+    let opened = false;
+    expect(
+      await openConnectionDraft(draft, {
+        connectorTypeOf: async () => {
+          throw new Error("An entry needs no custom Connection lookup");
+        },
+        showConnection: () => undefined,
+        requestCreateDialog: () => {
+          opened = true;
+        }
+      })
+    ).toBe("opened");
+    expect(opened).toBe(true);
   });
 });
