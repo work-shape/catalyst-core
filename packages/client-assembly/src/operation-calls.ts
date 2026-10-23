@@ -12,6 +12,8 @@ import {
   AGENTS_RUN_OPERATION,
   RUN_AGENT_TOOL_NAME,
   createAuthorizer,
+  resolveOptionalSecret,
+  type SecretResolver,
   knowledgeOperationNamesOf,
   type ApprovalRequestHandlerRegistry,
   type AuditRecorder,
@@ -31,6 +33,7 @@ import type { ModelGateway } from "@work-shape/catalyst-model-provider";
 import { conversationToolNames } from "./conversation-offer";
 import {
   createBoundedDataToolSource,
+  derivePersonalInputHashKey,
   createDecidedToolCallRunner,
   createToolOperationRunner,
   registerToolOperations,
@@ -39,6 +42,7 @@ import {
 
 export interface InstanceOperationCallsInput {
   clientInstanceId: ClientInstanceId;
+  personalInputHashKey?: Uint8Array;
   config: ClientInstanceConfig;
   logger: Logger;
   modules: ModuleSnapshot;
@@ -84,6 +88,7 @@ export function createInstanceOperationCalls(
   });
   const operationCalls = createOperationCalls({
     clientInstanceId,
+    personalInputHashKey: input.personalInputHashKey,
     stores: store,
     auditRecorder,
     authorizer,
@@ -196,4 +201,16 @@ export function createInstanceAgentTools(
     ),
     runDecidedTool: createDecidedToolCallRunner(operationCalls.deps)
   };
+}
+
+/** Derive from the existing Secret Store key shared by API and agent workers. */
+export async function personalInputHashKeyOf(
+  secrets: SecretResolver,
+  keys: ClientInstanceConfig["secretStore"]["keys"],
+  clientInstanceId: ClientInstanceId
+): Promise<Uint8Array | undefined> {
+  const first = keys[0];
+  if (!first) return undefined;
+  const encoded = await resolveOptionalSecret(secrets, first.ref);
+  return encoded ? derivePersonalInputHashKey(encoded.trim(), clientInstanceId) : undefined;
 }

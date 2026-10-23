@@ -109,6 +109,8 @@ export function isUseRightAction(action: string | undefined): action is UseRight
 export interface RunOperationDeps {
   clientInstanceId: ClientInstanceId;
   registry: OperationRegistry;
+  /** Derived from the instance's existing Secret Store key; required for personal input HMACs. */
+  personalInputHashKey?: Uint8Array;
   /** One active administrator the person can ask after a refused call. */
   instanceAdminName?(): Promise<string | undefined>;
   /** Resolves a declared resource to its retained asset identity and owner before authorization. */
@@ -342,6 +344,7 @@ export function createRunContext(
             correlationId: call.correlationId,
             subject: about ?? subject,
             phase,
+            ...(definition.personalConnection ? { personalConnection: true as const } : {}),
             // What a before-event's guardrails read and narrow by, as its caller handed it.
             ...asked,
             runtime: { deadline: input.runtime.deadline, signal: input.runtime.signal },

@@ -115,6 +115,8 @@ export interface GuardrailCallContext {
    * `require_approval` answers as a `block`, and its hit is kept as one.
    */
   cannotWait?: boolean;
+  /** Personal Connection checks keep governance hits without any reason text. */
+  personalConnection?: true;
 }
 
 /** What `approval_request.before_create` hands its guardrails. */
@@ -201,7 +203,7 @@ export class GuardrailRunner {
                   guardrailName: answer.guardrailName,
                   event: input.event,
                   outcome,
-                  message: answer.reason,
+                  message: context.personalConnection ? "" : answer.reason,
                   subjectKind: input.subject.kind,
                   ...(input.subject.id ? { subjectId: input.subject.id } : {}),
                   ...(input.subject.name ? { subjectName: input.subject.name } : {}),

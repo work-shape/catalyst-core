@@ -325,6 +325,7 @@ describe("operation contracts", () => {
           reason?:
             | "approval_unavailable"
             | "approval_stale"
+            | "personal_connection_approval"
             | "workflow_deleted"
             | "confirmation_required"
             | "confirmation_unattended";

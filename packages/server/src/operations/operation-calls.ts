@@ -52,6 +52,7 @@ export type OperationCallsOptions = Pick<
     Pick<ApprovalRequestWorkflowOptions, "guardrails">;
   /** Runs the guardrails at every before-event of a call. Without it nothing is checked. */
   guardrails?: GuardrailRunner;
+  personalInputHashKey?: Uint8Array;
   /**
    * The asset kinds of the instance: incomplete resources of declared rights are resolved
    * against them, and a held `assets.put` is shown as the asset it saves.
@@ -173,6 +174,7 @@ export function createOperationCalls(options: OperationCallsOptions): OperationC
     : undefined;
   const deps: RunOperationDeps = {
     clientInstanceId,
+    personalInputHashKey: options.personalInputHashKey,
     instanceAdminName: () => options.stores.users.getInstanceAdminName({ clientInstanceId }),
     // What every call resolves its operation through, when it is made and when it is executed
     // after an approval. A call of a Connection operation that came from a frame of an App is

@@ -108,6 +108,12 @@ export async function resolveGuardedPolicy(
   const guardrailOutcome = strictestOutcome(answers.map((answer) => answer.outcome));
   const policy = resolvePolicy({ ...policyInput, guardrailOutcome });
   if (confirmsFirst(context, before, policy)) return { policy: before };
+  if (definition.personalConnection && policy.next === "await_approval") {
+    return {
+      policy,
+      denial: { kind: "policy", operation: definition.name, reason: "personal_connection_approval" }
+    };
+  }
   if (policy.next !== "refuse") {
     const asking = policy.source === "guardrail" ? approvalAskedBy(answers) : undefined;
     return { policy, ...(asking ? { approvalAskedBy: asking } : {}) };

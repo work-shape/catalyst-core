@@ -39,11 +39,14 @@ export type OperationDenial =
        * Workflow whose `confirm` its publish approved, and the Workflow was deleted since.
        * `confirmation_required`: the call needs a person's confirmation or approval and a
        * subagent made it, which never waits for a decision (CR-1); its parent makes it instead.
+       * `personal_connection_approval`: a personal Connection call needs an approval, which
+       * would retain its input outside the owner's conversation.
        * Without a reason the policy refuses the call itself.
        */
       reason?:
         | "approval_unavailable"
         | "approval_stale"
+        | "personal_connection_approval"
         | "workflow_deleted"
         | "confirmation_required"
         | "confirmation_unattended";
@@ -81,6 +84,13 @@ export function operationDenialError(denial: OperationDenial): AppError {
         ...(denial.boundBy ? { boundBy: denial.boundBy } : {})
       });
     case "policy":
+      if (denial.reason === "personal_connection_approval") {
+        return new AppError(
+          "POLICY_DENIED",
+          `The policy requires another person's approval of '${denial.operation}'. Personal Connection calls can only ask their owner for confirmation in the conversation; they cannot be held for approval. Nothing ran.`,
+          { operation: denial.operation, reason: denial.reason }
+        );
+      }
       if (denial.reason === "approval_stale") {
         return new AppError("POLICY_DENIED", approvalStaleMessage(denial.operation), {
           operation: denial.operation,

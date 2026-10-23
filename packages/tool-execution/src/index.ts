@@ -84,6 +84,7 @@ export type {
 } from "./operation-execution";
 export * from "./tool-operation";
 export * from "./waiting-operation";
+export { derivePersonalInputHashKey } from "./input-hash";
 export * from "./waiting-tool-call";
 
 export {

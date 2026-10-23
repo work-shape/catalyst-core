@@ -62,7 +62,11 @@ import {
 } from "./assembly-validation";
 import { createInstanceModels } from "./capability-models";
 import { createConfigAssetSource } from "./config-asset-source";
-import { createInstanceAgentTools, createInstanceOperationCalls } from "./operation-calls";
+import {
+  createInstanceAgentTools,
+  createInstanceOperationCalls,
+  personalInputHashKeyOf
+} from "./operation-calls";
 import { createClientInstanceAuth } from "./auth";
 import { createInstanceConnections, withConnections } from "./connections";
 import { createInstanceAssetKinds } from "./instance-asset-kinds";
@@ -506,6 +510,11 @@ export async function createClientInstanceExecutionAssembly(
   const { conversationOffer } = platformTools;
   const { authorizer, operationCalls, approvalRequestCreator } = createInstanceOperationCalls({
     clientInstanceId,
+    personalInputHashKey: await personalInputHashKeyOf(
+      secrets,
+      config.secretStore.keys,
+      clientInstanceId
+    ),
     conversationOffer,
     config,
     logger,

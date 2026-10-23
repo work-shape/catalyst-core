@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHmac, createHash, randomUUID } from "node:crypto";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import {
@@ -10,18 +10,35 @@ import {
   asUserId,
   asToolCallId,
   createUserPrincipal,
+  canonicalJson,
+  unknownToJsonValue,
+  dispatchConversationFollowUpJob,
+  StoreBackedAuditRecorder,
+  operationDenialError,
   type AgentRun,
+  type AgentRunResumeState,
   type AuthenticatedUser,
   type Conversation,
   type OperationCall,
   type OperationCallRuntime,
   type OperationOrigin
 } from "@work-shape/catalyst-core";
-import { runOperation } from "@work-shape/catalyst-tool-execution";
+import {
+  runOperation,
+  executeConfirmedOperation,
+  type RunOperationDeps
+} from "@work-shape/catalyst-tool-execution";
 import { createOAuthWorld, landingOf, type OAuthWorld } from "./support/oauth-sign-in-world";
 import { createPersonalOAuthProvider } from "./support/personal-oauth-provider";
-import { getTestExecution, getTestJobs } from "./support/test-instance";
+import {
+  getTestAgentRunJobs,
+  getTestExecution,
+  getTestJobs,
+  getTestConfig
+} from "./support/test-instance";
 import { applyAtCurrentRevisions } from "./support/asset-revisions";
+import { GuardrailRunner, createAuditingEventEmitter } from "@work-shape/catalyst-server";
+import { createScriptedInstanceModelGateway } from "./support/model-gateway";
 import { withTestSql } from "./support/test-sql";
 
 // Real OAuth, encrypted bindings, persisted run provenance, and a fake API that records requests.
@@ -39,7 +56,10 @@ let alice: string, bob: string, a: AuthenticatedUser, b: AuthenticatedUser;
 
 beforeAll(async () => {
   fake = await createPersonalOAuthProvider();
-  world = await createOAuthWorld({ extraPort: Number(new URL(fake.base).port) });
+  world = await createOAuthWorld({
+    extraPort: Number(new URL(fake.base).port),
+    workerWithoutAuthSecrets: true
+  });
   alice = await world.signIn("alice");
   bob = await world.signIn("bob");
   a = await world.identityOf(alice);
@@ -161,7 +181,8 @@ function origin(run: AgentRun): Extract<OperationOrigin, { kind: "agent" }> {
 async function call(
   prepared: Awaited<ReturnType<typeof prepare>>,
   patch: Partial<OperationCall> = {},
-  runtime: OperationCallRuntime = {}
+  runtime: OperationCallRuntime = {},
+  depsPatch: Partial<RunOperationDeps> = {}
 ) {
   const calls = await world.calls();
   const operation = patch.operation ?? "connection.mailbox.who";
@@ -177,7 +198,8 @@ async function call(
     },
     {
       ...calls.deps,
-      agentToolNames: () => [operation]
+      agentToolNames: () => [operation],
+      ...depsPatch
     },
     runtime
   );
@@ -628,6 +650,280 @@ describe("personal Connection context isolation", () => {
     expect(inbox.result.status).toBe("denied");
     expect(inbox.run.inputRef).toBeUndefined();
     expect(inbox.run.approvalRequestId).toBeUndefined();
+  });
+
+  it("dispatches a signed-in owner's queued follow-up with personal access", async () => {
+    await applyAtCurrentRevisions(world.instance.stores.configAssets, {
+      clientInstanceId,
+      mutations: [
+        {
+          type: "upsert",
+          kind: "agent",
+          name: "personal-fixture",
+          config: {
+            name: "personal-fixture",
+            displayName: "Personal fixture",
+            instructions: "Read mail",
+            modelProviderId: "local",
+            toolNames: ["connection.mailbox.who"]
+          }
+        }
+      ]
+    });
+    const p = await prepare(a, undefined, false);
+    const queued = await world.instance.call(
+      "conversations.runs.start",
+      {
+        params: { conversationId: p.root.id },
+        payload: {
+          followUp: "queue",
+          idempotencyKey: randomUUID(),
+          message: { text: "Read my mail next" }
+        }
+      },
+      { headers: { cookie: alice, origin: "http://localhost:5173" } }
+    );
+    expect(queued.statusCode, queued.body).toBe(200);
+    const followUpId = z.object({ followUp: z.object({ id: z.string() }) }).parse(queued.json())
+      .followUp.id;
+    const scope = { clientInstanceId, conversationId: p.root.id };
+    expect(
+      await world.worker.stores.followUps.getAuthorization({ ...scope, followUpId })
+    ).toMatchObject({ subjectUserId: a.id, personalConnectionsAllowed: true });
+    await world.worker.stores.agentRuns.updateAgentRunStatus({
+      clientInstanceId,
+      runId: p.run.id,
+      status: "completed",
+      updatedAt: new Date().toISOString()
+    });
+    await world.worker.stores.jobs.enqueue(
+      dispatchConversationFollowUpJob,
+      { conversationId: p.root.id, afterRunId: p.run.id },
+      { clientInstanceId, subject: p.root.id, correlationId: randomUUID() }
+    );
+    await getTestJobs(world.instance).runDue();
+    const item = await world.worker.stores.followUps.get({ ...scope, followUpId });
+    expect(item?.status).toBe("dispatched");
+    const run =
+      item?.dispatchedRunId &&
+      (await world.worker.stores.agentRuns.getAgentRun({
+        clientInstanceId,
+        runId: asAgentRunId(item.dispatchedRunId)
+      }));
+    if (!run) throw new Error("No dispatched run");
+    expect(run.authorization?.personalConnectionsAllowed).toBe(true);
+    expect((await call({ ...p, run })).result).toMatchObject({ status: "done", output: mail });
+    expect(fake.headers.at(-1)).toBe(`Bearer ${fake.lastAccess.get("A")}`);
+  });
+
+  it("confirms an inherited personal approval inline, then executes without retaining input or output", async () => {
+    // This test drives the resumed worker itself, so the API worker must not race it.
+    await getTestAgentRunJobs(world.instance).stop();
+    const p = await prepare();
+    const calls = await world.calls();
+    const source = await calls.deps.registry.resolve("connection.mailbox.who");
+    if (!source) throw new Error("No personal operation");
+    const operation = "test.personal_confirmed";
+    calls.registry.register({
+      ...source,
+      name: operation,
+      effect: "changing",
+      recordsEveryCall: undefined,
+      defaultPolicy: undefined
+    });
+    const policy = {
+      ...calls.deps.policy,
+      instanceDefaults: { reading: "allow", changing: "approval" } as const
+    };
+    const from = { ...origin(p.run), toolName: operation };
+    const patch = {
+      operation,
+      origin: from,
+      effect: "changing" as const,
+      idempotencyKey: randomUUID()
+    };
+    const runtime = {
+      runFence: {
+        runId: p.run.id,
+        lease: { jobId: createPlatformId<"JobId">("job"), leaseToken: "lease" }
+      }
+    };
+    const count = fake.headers.length;
+    const held = await call(p, patch, runtime, { policy });
+    expect(held.result.status).toBe("pending_confirmation");
+    expect(held.run.inputRef).toBeUndefined();
+    expect(fake.headers).toHaveLength(count);
+    const key = calls.deps.personalInputHashKey;
+    if (!key) throw new Error("No instance input hash key");
+    const canonical = canonicalJson(unknownToJsonValue({ query: mail.query }));
+    expect(held.run.inputHash).toBe(createHmac("sha256", key).update(canonical).digest("hex"));
+    expect(held.run.inputHash).not.toBe(createHash("sha256").update(canonical).digest("hex"));
+    // Arrange the worker's pause, then record the owner's decision through the real route.
+    const resumeState: AgentRunResumeState = {
+      version: 1,
+      step: 0,
+      stepMessageId: p.run.inputMessageId,
+      modelInputFrom: { kind: "input" },
+      toolCalls: [
+        { toolCallId: from.toolCallId, toolName: operation, input: { query: mail.query } }
+      ],
+      doneToolCallIds: [],
+      waiting: [
+        {
+          toolCallId: from.toolCallId,
+          operationRunId: held.run.id,
+          frozenInput: { query: mail.query }
+        }
+      ],
+      repeatedToolCalls: {},
+      compacted: false
+    };
+    await withTestSql(
+      (sql) =>
+        sql`update agent_runs set status = 'waiting_for_decision', resume_state = ${JSON.stringify(resumeState)}::jsonb where id = ${p.run.id}`
+    );
+    const decision = await world.instance.call(
+      "operations.decide",
+      {
+        params: { runId: held.run.id },
+        payload: { decision: "confirm" }
+      },
+      { headers: { cookie: alice, origin: "http://localhost:5173" } }
+    );
+    expect(decision.statusCode, decision.body).toBe(200);
+    expect(decision.json()).toMatchObject({ run: { decision: { mode: "confirmed" } } });
+    const waiting = {
+      runId: held.run.id,
+      call: {
+        ...patch,
+        actor: a,
+        input: { query: mail.query },
+        correlationId: randomUUID()
+      }
+    };
+    const deps = { ...calls.deps, policy, agentToolNames: () => [operation] };
+    const done = await executeConfirmedOperation(waiting, deps, { runtime });
+    expect(done.execution).toBe("done");
+    expect(done.outcome?.result).toMatchObject({ status: "done", output: mail });
+    expect(fake.headers).toHaveLength(count + 1);
+    expect(fake.headers.at(-1)).toBe(`Bearer ${fake.lastAccess.get("A")}`);
+    const row = await calls.deps.runs.get({ clientInstanceId, id: held.run.id });
+    expect(row).toMatchObject({
+      status: "done",
+      decision: { mode: "confirmed" },
+      resultBytes: Buffer.byteLength(JSON.stringify(mail))
+    });
+    expect(row?.inputRef).toBeUndefined();
+    expect(row?.output).toBeUndefined();
+    const replay = await executeConfirmedOperation(waiting, deps, { runtime });
+    expect(replay.execution).toBe("done");
+    expect(fake.headers).toHaveLength(count + 1);
+    expect(replay.run?.output).toBeUndefined();
+  });
+
+  it.each(["setting", "guardrail", "declared_default", "floor"] as const)(
+    "explains a personal approval required by a %s without freezing input",
+    async (source) => {
+      const p = await prepare();
+      const calls = await world.calls();
+      const base = await calls.deps.registry.resolve("connection.mailbox.who");
+      if (!base) throw new Error("No personal operation");
+      const operation = `test.personal_approval_${source}`;
+      calls.registry.register({
+        ...base,
+        name: operation,
+        effect: "changing",
+        recordsEveryCall: undefined,
+        defaultPolicy: source === "declared_default" ? "approval" : "allow",
+        ...(source === "floor" ? { policyFloor: "approval" as const } : {})
+      });
+      const approval = vi.fn();
+      const patch: Partial<RunOperationDeps> = {
+        approvals: { request: approval },
+        policy: {
+          ...calls.deps.policy,
+          centralSettings: () => (source === "setting" ? [{ operation, value: "approval" }] : [])
+        },
+        ...(source === "guardrail"
+          ? { events: { emit: async () => ({ outcome: "require_approval", guardrails: [] }) } }
+          : {})
+      };
+      const count = fake.headers.length;
+      const answer = await call(
+        p,
+        { operation, effect: "changing", idempotencyKey: randomUUID() },
+        {},
+        patch
+      );
+      expect(answer.result).toMatchObject({
+        status: "denied",
+        reason: { reason: "personal_connection_approval" }
+      });
+      if (answer.result.status !== "denied") throw new Error("Not denied");
+      expect(operationDenialError(answer.result.reason)).toMatchObject({
+        message: expect.stringContaining("Personal Connection calls can only ask their owner"),
+        details: { reason: "personal_connection_approval" }
+      });
+      expect(approval).not.toHaveBeenCalled();
+      expect(fake.headers).toHaveLength(count);
+      expect(answer.run.inputRef).toBeUndefined();
+      expect(answer.run.approvalRequestId).toBeUndefined();
+    }
+  );
+
+  it("records a personal guardrail hit without a judge's quoted input", async () => {
+    const p = await prepare();
+    const config = getTestConfig(world.worker);
+    const guardrailName = "personal_reason_privacy";
+    const reason = `The query is ${mail.query}`;
+    const runner = new GuardrailRunner({
+      clientInstanceId,
+      config: {
+        ...config,
+        guardrails: {
+          [guardrailName]: {
+            on: "operation.before_call",
+            outcome: "warn",
+            check: {
+              kind: "model_judge",
+              modelBindingId: "agentDefault",
+              instruction: "Check input"
+            }
+          }
+        }
+      },
+      hits: world.worker.stores.guardrails,
+      modelGateway: createScriptedInstanceModelGateway({
+        config,
+        modelProvider: {
+          complete: async () => ({
+            text: JSON.stringify({ violates: true, reason }),
+            toolCalls: [],
+            usage: {
+              inputTokens: 1,
+              outputTokens: 1,
+              totalTokens: 2,
+              source: "provider_reported",
+              webSearchCallCount: 0
+            }
+          })
+        }
+      })
+    });
+    const events = createAuditingEventEmitter(
+      new StoreBackedAuditRecorder({
+        clientInstanceId,
+        store: world.worker.stores.audit
+      }),
+      runner
+    );
+    expect((await call(p, {}, {}, { events })).result.status).toBe("done");
+    const hits = await withTestSql(
+      (sql) => sql`select * from guardrail_hits where guardrail_name = ${guardrailName}`
+    );
+    expect(hits).toHaveLength(1);
+    expect(hits[0]).toMatchObject({ outcome: "warn", subject_kind: "operation", message: "" });
+    expect(JSON.stringify(hits)).not.toContain(mail.query);
   });
 
   it("allows an owner-authorized scheduled run while its owner is signed out", async () => {

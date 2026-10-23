@@ -51,7 +51,7 @@ import {
   operationWorkspace
 } from "./operation-policy-call";
 import { recordedResult } from "./operation-recorded-result";
-import { hashInput } from "./input-hash";
+import { hashInput, requirePersonalInputHashKey } from "./input-hash";
 import { z } from "zod";
 
 /**
@@ -173,7 +173,12 @@ export async function runOperation(
   };
   // The hash is kept and shown with the run, so it is never taken over a secret of the input.
   const withoutSecrets = definition.inputWithoutSecrets?.(input);
-  const inputHash = hashInput(withoutSecrets === undefined ? input : withoutSecrets);
+  const inputHash = hashInput(
+    withoutSecrets === undefined ? input : withoutSecrets,
+    definition.personalConnection
+      ? requirePersonalInputHashKey(deps.personalInputHashKey)
+      : undefined
+  );
   if (withoutSecrets !== undefined && !definition.secret) {
     // This call's input holds a secret. A held call would keep it, so the call is one that
     // never waits and keeps no answer, like an operation whose answer is the secret.
@@ -593,11 +598,10 @@ async function admit(context: RunContext, surface: OperationAuthorization): Prom
         decision: { mode: "approved", reason: "approved_by_caller" }
       };
     }
-    // Personal calls never freeze their input in an approval outside the conversation.
-    // A held call is executed later, when nobody is there to be shown the secret once. An
-    // approval the instance default alone asks for never gets here: the policy takes it as a
-    // confirmation. So this refuses what a setting for the operation or a guardrail asked.
-    if (definition.secret || definition.personalConnection) {
+    // A secret answer cannot wait to be shown once. Only an inherited instance approval
+    // becomes confirmation; explicit defaults, floors, settings and guardrails still hold.
+    // Personal Connection approvals were refused by resolveGuardedPolicy with their reason.
+    if (definition.secret) {
       return { ending: await denyRun(context, { kind: "policy", operation: definition.name }) };
     }
     const unavailable: OperationDenial = {

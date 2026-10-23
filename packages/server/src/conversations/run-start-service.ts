@@ -277,6 +277,14 @@ export class RunStartWorkflow {
           : [];
         if (command.dispatchFollowUpId && turn[0]?.id !== command.dispatchFollowUpId)
           throw new AppError("CONFLICT", "Follow-up turn changed before dispatch");
+        // A queued message carries its send-time proof; the dispatch job has no live session.
+        const followUpAuthorization = command.dispatchFollowUpId
+          ? await stores.followUps.getAuthorization({
+              clientInstanceId: this.options.clientInstanceId,
+              conversationId,
+              followUpId: command.dispatchFollowUpId
+            })
+          : undefined;
         const acceptedMessages = command.dispatchFollowUpId
           ? await Promise.all(
               turn.map(async (item, index) => {
@@ -345,10 +353,15 @@ export class RunStartWorkflow {
             reasoningEffort: command.reasoningEffort,
             locale: context.locale,
             authorization: {
-              personalConnectionsAllowed:
-                user.authenticationMethod === "session-cookie" &&
-                user.sessionId !== undefined &&
-                user.delegatedActor === undefined,
+              personalConnectionsAllowed: command.dispatchFollowUpId
+                ? followUpAuthorization?.personalConnectionsAllowed === true &&
+                  followUpAuthorization.subjectUserId === getSubjectUserId(user) &&
+                  followUpAuthorization.principal.clientInstanceId ===
+                    this.options.clientInstanceId &&
+                  followUpAuthorization.delegatedActor === undefined
+                : user.authenticationMethod === "session-cookie" &&
+                  user.sessionId !== undefined &&
+                  user.delegatedActor === undefined,
               principal: context.principal ?? getAuthPrincipal(user),
               subjectUserId: context.subjectUserId ?? getSubjectUserId(user),
               delegatedActor: context.delegatedActor ?? user.delegatedActor,

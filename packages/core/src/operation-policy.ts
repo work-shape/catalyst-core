@@ -41,6 +41,8 @@ export interface PolicyInput {
     defaultPolicy?: PolicyValue;
     /** The answer holds a secret that is shown once, so the call cannot wait for an approval. */
     secret?: true;
+    /** A personal Connection call can wait only for its owner's inline confirmation. */
+    personalConnection?: true;
     /**
      * A value the call is never looser than, whatever a central setting says. An operation
      * that stands for another one, as a named action of an App stands for the operation of a
@@ -104,7 +106,8 @@ export type PolicyResolution = { source: PolicySource } & (
       decisionMode: "direct";
       /**
        * Why nobody was asked, where the caller's own call is not why: the instance default
-       * asked for an approval, which a secret answer cannot wait for; or the call is a step of
+       * asked for an approval, which a secret answer or personal Connection cannot wait for;
+       * or the call is a step of
        * a published Workflow, whose publish was its confirmation.
        */
       decisionReason?: OperationRunDecisionReason;
@@ -121,7 +124,7 @@ export type PolicyResolution = { source: PolicySource } & (
 /**
  * The one function that says what the policy asks of a call. The base is the operation's
  * declared default or, without one, the instance default of its effect. An operation whose
- * answer holds a secret takes an instance default of `approval` as `confirm`. A central setting
+ * answer holds a secret, or which uses a personal Connection, takes an instance default of `approval` as `confirm`. A central setting
  * replaces the base, and of several that match the strictest wins. A call with several targets
  * takes the strictest of what each target resolves to. An operation's `policyFloor` then
  * tightens what came of it and never loosens it. A guardrail can only tighten. `confirm` and `approval` are values of changing operations: on a reading operation
@@ -147,11 +150,10 @@ export function resolvePolicy(input: PolicyInput): PolicyResolution {
     // An instance default that names a waiting value for reads leaves them allowed.
     value = "allow";
   }
-  if (definition.secret && value === "approval") {
-    // An instance that sends every change to an approval did not mean this operation, and a
-    // call whose answer is a secret cannot wait: it would make the operation impossible. So
-    // the inherited value falls back to the caller's own confirmation. A setting that matches
-    // the operation or a guardrail still asks for an approval, and the call is then refused.
+  if ((definition.secret || definition.personalConnection) && value === "approval") {
+    // A secret answer cannot wait for an approval, and a personal Connection call can ask
+    // only its owner inline. The inherited value becomes the caller's own confirmation.
+    // A declared default, floor, central setting or guardrail can still require approval.
     value = "confirm";
     inheritedApproval = true;
   }

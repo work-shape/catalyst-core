@@ -115,6 +115,8 @@ export interface PlatformEventContext extends Pick<
    * nobody can give.
    */
   cannotWait?: true;
+  /** Personal Connection checks keep governance hits without any reason text. */
+  personalConnection?: true;
 }
 
 export type PlatformEventOutcome = (typeof GUARDRAIL_OUTCOMES)[number];

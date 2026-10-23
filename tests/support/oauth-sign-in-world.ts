@@ -177,7 +177,9 @@ function cookieOf(response: Response): string {
     .join("; ");
 }
 
-export async function createOAuthWorld(options: { extraPort?: number } = {}): Promise<OAuthWorld> {
+export async function createOAuthWorld(
+  options: { extraPort?: number; workerWithoutAuthSecrets?: boolean } = {}
+): Promise<OAuthWorld> {
   const secrets: string[] = [];
   const provider: OAuthWorld["provider"] = {};
   const clientSecret = generateTestSecret();
@@ -323,7 +325,14 @@ export async function createOAuthWorld(options: { extraPort?: number } = {}): Pr
   const instance = await createTestInstance({ ...assembly, seedAssets: false });
   const api = await listenTestInstance(instance);
   /** A worker process on the same rows: the calls of operations run there, as a Workflow's do. */
-  const worker = await createTestInstance({ execution: assembly });
+  const workerEnv: Partial<typeof assembly.env> = { ...assembly.env };
+  if (options.workerWithoutAuthSecrets) {
+    delete workerEnv.BETTER_AUTH_SECRET;
+    delete workerEnv.CHAT_SESSION_TOKEN_SECRET;
+    delete workerEnv.CHAT_SERVER_CREDENTIAL;
+    delete workerEnv.SERVICE_ACCESS_TOKEN_SECRET;
+  }
+  const worker = await createTestInstance({ execution: { ...assembly, env: workerEnv } });
   async function callPath() {
     return getTestExecution(worker).operationCalls;
   }

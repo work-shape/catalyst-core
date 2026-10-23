@@ -192,7 +192,7 @@ export interface GuardrailHit {
   guardrailName: string;
   event: GuardrailEvent;
   outcome: GuardrailHitOutcome;
-  /** The guardrail's reason. Empty where the check could not run and the guardrail warns. */
+  /** The reason; empty for personal Connection checks and unevaluated warnings. */
   message: string;
   /** What was checked: the asset kind, `operation`, or the kind of an approval request. */
   subjectKind: string;

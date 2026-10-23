@@ -28,7 +28,7 @@ import {
   type RunOperationDeps
 } from "./operation-execution";
 import { approvedByCaller, resolveGuardedPolicy } from "./operation-policy-call";
-import { hashInput } from "./input-hash";
+import { hashInput, requirePersonalInputHashKey } from "./input-hash";
 import { OperationNotBegunError } from "./operation-call";
 
 /** The frozen call of a run that waits for an approval, as its approval request keeps it. */
@@ -423,7 +423,14 @@ async function admitAgain(
   // The input was validated when the call was made and is not read through the schema again:
   // a schema that changes what it reads would refuse its own output. The hash says that what
   // is executed is what was asked for.
-  if (hashInput(waiting.call.input) !== run.inputHash) {
+  if (
+    hashInput(
+      waiting.call.input,
+      definition.personalConnection
+        ? requirePersonalInputHashKey(deps.personalInputHashKey)
+        : undefined
+    ) !== run.inputHash
+  ) {
     const error = {
       code: "VALIDATION_FAILED",
       message: "The input of this call is no longer valid"
