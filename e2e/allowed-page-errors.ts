@@ -110,7 +110,8 @@ const allowedPageErrors: readonly AllowedPageError[] = [
       "a view with private rows reaches no other host through a middle click on a link",
       "it keeps nothing that names a host",
       "it shows row text that is markup as it stands on the allowlist, or not at all",
-      "a view with private rows sends no WebRTC packet"
+      "a view with private rows sends no WebRTC packet",
+      "the gallery shows MailPreview, RecipientField and TemplateTextField light, dark and at 390"
     ]
   },
   {
