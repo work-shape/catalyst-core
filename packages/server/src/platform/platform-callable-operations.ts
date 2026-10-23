@@ -2,6 +2,7 @@ import {
   CONNECTION_OPERATION_PREFIX,
   DATA_STORE_OPERATION_PREFIX,
   KNOWLEDGE_OPERATION_PREFIX,
+  MAIL_SEND_OPERATION,
   WORKFLOW_OPERATION_PREFIX,
   unknownToJsonValue,
   type CallableOperationsPage,
@@ -42,9 +43,21 @@ const CALLABLE_PREFIXES: Readonly<Record<PlatformOperationsAudience, readonly st
   app: [CONNECTION_OPERATION_PREFIX]
 };
 
+/**
+ * The operations a step names by their exact name: `mail.send`, offered in the palette as "Send
+ * an e-mail" where the instance has it and the person may send as a sender (workflow-canvas 9.6).
+ */
+const CALLABLE_NAMES: Readonly<Record<PlatformOperationsAudience, readonly string[]>> = {
+  workflow: [MAIL_SEND_OPERATION],
+  app: []
+};
+
 /** Whether the audience names an operation of this name at all. */
 function callableByAudience(name: string, audience: PlatformOperationsAudience): boolean {
-  return CALLABLE_PREFIXES[audience].some((prefix) => name.startsWith(prefix));
+  return (
+    CALLABLE_NAMES[audience].includes(name) ||
+    CALLABLE_PREFIXES[audience].some((prefix) => name.startsWith(prefix))
+  );
 }
 
 /**
