@@ -82,7 +82,7 @@ export type WorkflowStepSource =
   | { from: "loop_entry"; itemName?: string };
 
 /** A field of an earlier result a step takes, in the words of the screens. */
-export interface WorkflowFieldRefView {
+interface WorkflowFieldRefView {
   /** The step id and the dotted path of the reference, as the definition holds them. */
   step: string;
   path: string;

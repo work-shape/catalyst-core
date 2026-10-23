@@ -20,6 +20,9 @@ import type {
 // transport is read or named.
 
 export const MAIL_OPERATION = MAIL_SEND_OPERATION;
+
+/** The fields of a mail that name its recipients. */
+export type MailRecipientField = "to" | "cc" | "bcc";
 export const MAIL_SYSTEM_SENDER = MAIL_SENDER_SYSTEM;
 /** The icon of the system sender where the assembly registers none under `system-mail`. */
 export const MAIL_ICON_FALLBACK = "mail";
@@ -133,7 +136,7 @@ export function mailViewOf(
   const body = mailTextOf(given.body, resolve);
   const senderName = text(literal("senderName"));
   const locale = text(literal("locale"));
-  const recipients = (field: "to" | "cc" | "bcc") => mailRecipientsOf(given[field], resolve);
+  const recipients = (field: MailRecipientField) => mailRecipientsOf(given[field], resolve);
   const to = recipients("to");
   const cc = recipients("cc");
   const bcc = recipients("bcc");
@@ -202,12 +205,12 @@ export function recipientWords(
 }
 
 /** All recipients of the mail, in the order To, Cc, Bcc. */
-export function allRecipients(mail: WorkflowMailView): WorkflowMailRecipientView[] {
+function allRecipients(mail: WorkflowMailView): WorkflowMailRecipientView[] {
   return [...(mail.to ?? []), ...(mail.cc ?? []), ...(mail.bcc ?? [])];
 }
 
 /** A text of parts on one line, each field of a result in brackets: "Check result [Month]". */
-export function partsInWords(parts: readonly WorkflowTextPartView[] | undefined): string {
+function partsInWords(parts: readonly WorkflowTextPartView[] | undefined): string {
   return (parts ?? [])
     .map((part) => (typeof part === "string" ? part : `[${part.ref.field}]`))
     .join("")
