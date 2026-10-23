@@ -1,11 +1,22 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { parseClientInstanceConfig } from "@work-shape/catalyst-config-schema";
+import { randomUUID } from "node:crypto";
+import {
+  asAgentRunId,
+  asClientInstanceId,
+  asToolCallId,
+  createPlatformId,
+  type AuthenticatedUser,
+  type CentralPolicySetting
+} from "@work-shape/catalyst-core";
+import { appActionDefinition } from "../packages/server/src/apps/action-source";
+import { runOperation } from "@work-shape/catalyst-tool-execution";
 import { required } from "./support/assertions";
 import { auditEvents, runJobs, statuses, storedState } from "./support/connection-discovery-world";
 import { createTestConfig } from "./support/fixtures";
 import { startMcpTestServer, tool, type McpTestServer } from "./support/mcp-test-server";
 import { generateSecretStoreKey, generateTestSecret } from "./support/test-connector";
-import { createTestInstance } from "./support/test-instance";
+import { createTestInstance, getTestExecution } from "./support/test-instance";
 
 // The discovery job with the platform's own `mcp` Connector type and a server that speaks
 // the protocol: the type's `discover` is what the job calls, and what the server lists is
@@ -18,7 +29,7 @@ describe("the discovery of an MCP Connection", () => {
     await Promise.all(servers.splice(0).map((server) => server.close()));
   });
 
-  it("stores what the server lists once its job ran, and reaches no server before", async () => {
+  it("discovers MCP reads and confirms calls from marked conversations", async () => {
     const key = generateTestSecret();
     const server = await startMcpTestServer({
       requireHeader: { name: "authorization", value: `Bearer ${key}` },
@@ -67,9 +78,10 @@ describe("the discovery of an MCP Connection", () => {
         ]
       }
     });
+    const env = { CATALYST_SECRET_STORE_KEY: generateSecretStoreKey(), OUTSIDE_MCP_KEY: key };
     const instance = await createTestInstance({
       config,
-      env: { CATALYST_SECRET_STORE_KEY: generateSecretStoreKey(), OUTSIDE_MCP_KEY: key },
+      env,
       tools: []
     });
     try {
@@ -102,6 +114,141 @@ describe("the discovery of an MCP Connection", () => {
           metadata: { connectionName: "outside", operationCount: 2, leftOutCount: 0 }
         }
       ]);
+
+      // A genuine MCP-discovered reading operation still sends arguments to its host.
+      const clientInstanceId = asClientInstanceId(config.clientInstance.id);
+      const me = await instance.call("me.get");
+      const actor: AuthenticatedUser = {
+        id: me.json<{ id: string }>().id,
+        externalUserId: "user-1",
+        displayLabel: "User",
+        roles: ["superadmin"],
+        permissionRefs: [],
+        authSource: "test",
+        clientInstanceId
+      };
+      const workspace = await instance.stores.workspaces.ensurePersonalWorkspace({
+        clientInstanceId,
+        userId: actor.id
+      });
+      const chat = await instance.stores.conversations.createConversation({
+        clientInstanceId,
+        collaborationWorkspaceId: workspace.id,
+        createdByUserId: actor.id,
+        createdByExternalUserId: actor.externalUserId,
+        visibility: "private",
+        title: "MCP privacy",
+        retainedUntil: "2099-01-01T00:00:00.000Z"
+      });
+      const worker = await createTestInstance({
+        execution: {
+          config,
+          env,
+          tools: []
+        }
+      });
+      const calls = getTestExecution(worker).operationCalls;
+      const operation = "connection.outside.revenue_by_month";
+      let settings: CentralPolicySetting[] = [{ operation, value: "allow" }];
+      const runId = asAgentRunId("mcp-personal-data-check");
+      const call = () =>
+        runOperation(
+          {
+            operation,
+            effect: "reading",
+            input: { month: "private-canary" },
+            actor,
+            origin: {
+              kind: "agent",
+              agentName: "test_agent",
+              agentRunId: runId,
+              conversationId: chat.id,
+              toolCallId: asToolCallId(randomUUID()),
+              toolName: operation
+            },
+            correlationId: randomUUID()
+          },
+          {
+            ...calls.deps,
+            agentToolNames: () => [operation],
+            policy: { ...calls.deps.policy, centralSettings: () => settings }
+          },
+          {
+            runFence: {
+              runId,
+              lease: { jobId: createPlatformId<"JobId">("job"), leaseToken: "lease" }
+            }
+          }
+        );
+      const action = await appActionDefinition(
+        { ...calls.deps, modules: getTestExecution(worker).modules },
+        {
+          resource: { kind: "app", id: "privacy" },
+          dataStores: [],
+          published: true,
+          operationName: () => "app.privacy.load",
+          authorize: () => ({ allowed: true })
+        },
+        {
+          kind: "connection",
+          name: "load",
+          file: "actions/load.action.yaml",
+          description: "Read",
+          effect: "reading",
+          connection: "outside",
+          operation: "revenue_by_month",
+          input: {
+            schema: { type: "object", properties: { month: { type: "string" } } },
+            mapping: { month: "{{month}}" }
+          }
+        }
+      );
+      const actionOrigin = {
+        kind: "agent" as const,
+        agentName: "test_agent",
+        agentRunId: runId,
+        conversationId: chat.id,
+        toolCallId: asToolCallId("action"),
+        toolName: "app.privacy.load"
+      };
+      expect(
+        await action.definition.policyFloorOf?.(actionOrigin, { month: "private-canary" })
+      ).toBeUndefined();
+      expect((await call()).result.status).toBe("done");
+      const before = server.rpc("tools/call").length;
+      expect(before).toBe(1);
+      await instance.stores.conversations.markPersonalData({
+        clientInstanceId,
+        conversationId: chat.id,
+        userId: actor.id,
+        at: new Date().toISOString()
+      });
+      expect(
+        await worker.stores.conversations.getConversation(clientInstanceId, chat.id)
+      ).toMatchObject({ personalDataAt: expect.any(String) });
+      const resolved = required(await calls.registry.resolve(operation));
+      expect(resolved.policyFloorOf).toBeTypeOf("function");
+      expect(
+        await resolved.policyFloorOf?.(
+          {
+            kind: "agent",
+            agentName: "test_agent",
+            agentRunId: runId,
+            conversationId: chat.id,
+            toolCallId: asToolCallId("check"),
+            toolName: operation
+          },
+          {}
+        )
+      ).toBe("confirm");
+      expect(
+        await action.definition.policyFloorOf?.(actionOrigin, { month: "private-canary" })
+      ).toBe("confirm");
+      expect((await call()).result.status).toBe("pending_confirmation");
+      settings = [{ operation, value: "deny" }];
+      expect((await call()).result.status).toBe("denied");
+      expect(server.rpc("tools/call")).toHaveLength(before);
+      await worker.close();
     } finally {
       await instance.close();
     }

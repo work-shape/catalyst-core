@@ -1,6 +1,7 @@
 import { apiOperations } from "@work-shape/catalyst-api-contract";
 import {
   AppError,
+  requireUnmarkedConversation,
   isAuthenticatedServicePrincipal,
   getAuthScopes,
   type OperationExecutionContext,
@@ -39,10 +40,14 @@ export function registerScheduledStartRoutes(route: Route, options: ChatServerOp
     recordsEveryCall: true,
     execute: (input, context) => workflow.list(context, input, pageOf(context.paging))
   });
+  const requireUnmarked = (context: Pick<OperationExecutionContext, "origin">) =>
+    requireUnmarkedConversation(options.stores, options.clientInstanceId, context.origin);
+
   route.operation(apiOperations["scheduled_starts.create"], {
     authorize: async (input, context) => {
       const permission = authorize(input, context);
       if (!permission.allowed || isAuthenticatedServicePrincipal(context.actor)) return permission;
+      await requireUnmarked(context);
       nextScheduledPrompt(
         input.cron,
         input.timeZone ?? options.config.clientInstance.timeZone ?? "UTC",
@@ -57,12 +62,16 @@ export function registerScheduledStartRoutes(route: Route, options: ChatServerOp
     },
     changeClass: "reversible",
     policyFloorOf: floor,
-    execute: (input, context) => workflow.create(context, input)
+    execute: async (input, context) => {
+      await requireUnmarked(context);
+      return workflow.create(context, input);
+    }
   });
   route.operation(apiOperations["scheduled_starts.update"], {
     authorize: async (input, context) => {
       const permission = authorize(input, context);
       if (!permission.allowed || isAuthenticatedServicePrincipal(context.actor)) return permission;
+      await requireUnmarked(context);
       const current = await workflow.requireOwn(
         options.stores,
         input.scheduledStartId,
@@ -78,7 +87,10 @@ export function registerScheduledStartRoutes(route: Route, options: ChatServerOp
     },
     changeClass: "reversible",
     policyFloorOf: floor,
-    execute: (input, context) => workflow.update(context, input.scheduledStartId, input)
+    execute: async (input, context) => {
+      await requireUnmarked(context);
+      return workflow.update(context, input.scheduledStartId, input);
+    }
   });
   route.operation(apiOperations["scheduled_starts.set_state"], {
     authorize,

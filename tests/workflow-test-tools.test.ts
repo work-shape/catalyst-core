@@ -141,6 +141,48 @@ describe("the agent projections of Workflow testing", () => {
     expect((await registry.list()).operations).toEqual([]);
   });
 
+  it.each(["agent", "app"] as const)(
+    "refuses draft runs from a marked %s conversation, including dispatch rechecks",
+    async (kind) => {
+      const f = await fixture();
+      const context = {
+        ...f.context,
+        origin:
+          kind === "agent"
+            ? f.context.origin
+            : {
+                kind: "app" as const,
+                appRevisionId: "draft",
+                actionName: "start",
+                pageSessionId: "session",
+                conversationId: conversation.id
+              }
+      };
+      f.getConversation.mockResolvedValue({
+        ...conversation,
+        personalDataAt: "2026-10-23T10:00:00.000Z"
+      });
+      const input = { workflow: "subject-workflow", input: {} };
+      for (const invoke of [
+        () => f.binding.authorize?.(input, context),
+        () => f.binding.execute(input, context)
+      ]) {
+        await expect(invoke()).rejects.toMatchObject({
+          details: { reason: "personal_data_conversation" }
+        });
+      }
+      expect(f.test).not.toHaveBeenCalled();
+      f.getConversation.mockResolvedValue(undefined);
+      await expect(f.binding.execute(input, context)).rejects.toMatchObject({
+        details: { reason: "personal_data_conversation" }
+      });
+      f.getConversation.mockRejectedValue(new Error("mark unreadable"));
+      await expect(f.binding.execute(input, context)).rejects.toMatchObject({
+        details: { reason: "personal_data_conversation" }
+      });
+    }
+  );
+
   it("registers the same validated operations in a worker without HTTP", async () => {
     const { stores, workflows } = await fixture();
     const registry = createOperationRegistry();
@@ -221,7 +263,10 @@ describe("the agent projections of Workflow testing", () => {
       getConversation.mockResolvedValue(current);
       await expect(
         binding.execute({ workflow: "subject-workflow", input: {} }, context)
-      ).rejects.toMatchObject({ code: "FORBIDDEN", details: { reason: "workflow_not_subject" } });
+      ).rejects.toMatchObject({
+        code: "FORBIDDEN",
+        details: { reason: current ? "workflow_not_subject" : "personal_data_conversation" }
+      });
       expect(test).not.toHaveBeenCalled();
     }
   );

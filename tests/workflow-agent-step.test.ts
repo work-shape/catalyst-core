@@ -55,6 +55,7 @@ type Mode =
 interface FixtureOptions {
   /** Exercises EW-TEXT through the input of a Child Agent Run. */
   composedInput?: boolean;
+  webTools?: boolean;
   /** The Workflow's account may use the connection; a test of the bound withholds it. */
   principalUses?: boolean;
   /** The Workflow runs as its own account: its definition names no `runAs`. */
@@ -116,7 +117,12 @@ async function fixture(
     configSchema: z.object({}),
     create(): ModelAdapterFactory {
       return () => ({
-        capabilities: () => ({ ...DETERMINISTIC_CAPABILITIES, streaming: false, structuredOutput }),
+        capabilities: () => ({
+          ...DETERMINISTIC_CAPABILITIES,
+          streaming: false,
+          structuredOutput,
+          ...(options.webTools ? { nativeTools: ["web_search" as const] } : {})
+        }),
         complete: async (request) => answer(request),
         async *stream(request) {
           yield { type: "completed", completion: answer(request) };
@@ -150,6 +156,13 @@ async function fixture(
     tools: [],
     toolNames: []
   });
+  if (options.webTools)
+    config.webAccess = {
+      ...config.webAccess,
+      enabled: true,
+      search: { ...config.webAccess.search, enabled: true },
+      fetch: { ...config.webAccess.fetch, enabled: true }
+    };
   config.modules = {
     ...config.modules,
     workflows: { enabled: true },
@@ -254,7 +267,7 @@ async function fixture(
     runAs: "workflow-runner",
     inputs: { type: "object", properties: { text: { type: "string" } } },
     outputs: outputSchema,
-    tools: [toolName],
+    tools: options.webTools ? [toolName, "web_search", "web_fetch"] : [toolName],
     steps: [
       { id: "start", name: "Start", type: "trigger", triggers: [{ kind: "manual" }] },
       {
@@ -352,6 +365,26 @@ async function fixture(
 }
 
 describe("Workflow Child Agent Runs (CR-2)", () => {
+  it("closes web tools for a real Workflow child whose conversation row cannot be resolved", async () => {
+    const f = await fixture("valid", false, "user-1", { webTools: true });
+    const step = await f.ended("done");
+    const child = required(
+      await f.app.stores.childAgentRuns.readWorkflowAgentRun({
+        clientInstanceId: f.clientInstanceId,
+        stepRunId: step.id
+      })
+    );
+    expect(child.workflowStepRunId).toBe(step.id);
+    expect(
+      await f.app.stores.conversations.getConversation(f.clientInstanceId, child.conversationId)
+    ).toBeUndefined();
+    expect(f.requests.length).toBeGreaterThan(0);
+    for (const request of f.requests) {
+      expect(request.tools.map((tool) => tool.name)).not.toContain("web_search");
+      expect(request.tools.map((tool) => tool.name)).not.toContain("web_fetch");
+    }
+  });
+
   it.each(["user-1", "reader"])(
     "owns a draft test as %s and never makes a live changing call",
     async (tester) => {

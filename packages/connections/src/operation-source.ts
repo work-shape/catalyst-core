@@ -6,6 +6,7 @@ import {
   exposureOfOrigin,
   parseConnectionOperationName,
   requirePersonalConnectionContext,
+  personalDataConversation,
   type ConnectionOperationConfig,
   type ConnectorOperationDescriptor,
   type DataToolDescriptor,
@@ -193,6 +194,20 @@ function definitionOf(
       ? { repeatsUnderKey: true as const }
       : {}),
     ...(connection.config.credentialMode === "user" ? { personalConnection: true as const } : {}),
+    // An MCP read still sends its arguments to an outside host; readOnlyHint is no boundary.
+    ...(connection.config.connectorType === "mcp" && connection.config.credentialMode !== "user"
+      ? {
+          policyFloorOf: async (origin: OperationOrigin) =>
+            origin.kind === "agent" &&
+            (await personalDataConversation(
+              deps.stores,
+              deps.clientInstanceId,
+              origin.conversationId
+            ))
+              ? ("confirm" as const)
+              : undefined
+        }
+      : {}),
     action: null,
     authorize: (_input, context) => authorizeCall(deps, connection, operation, context),
     scope: null,

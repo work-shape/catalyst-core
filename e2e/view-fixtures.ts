@@ -40,19 +40,40 @@ function showViewMessage(html: string): string {
 export async function showView(
   request: APIRequestContext,
   headers: Record<string, string>,
-  html: string
+  html: string,
+  personalData = false
 ): Promise<{ id: string; title: string; collaborationWorkspaceId: string }> {
   const title = `View ${randomUUID()}`;
-  const started = await request.post(`${apiOrigin}/api/v1/conversations/runs`, {
-    headers,
-    data: {
-      idempotencyKey: randomUUID(),
-      conversation: { title },
-      message: {
-        text: showViewMessage(html)
+  let markedId: string | undefined;
+  if (personalData) {
+    const created = await request.post(`${apiOrigin}/api/v1/conversations`, {
+      headers,
+      data: { title }
+    });
+    expect(created.ok()).toBe(true);
+    markedId = z.object({ id: z.string() }).parse(await created.json()).id;
+    const sql = postgres(databaseUrl, { max: 1 });
+    try {
+      await sql`update conversations set personal_data_at = now() where id = ${markedId}`;
+    } finally {
+      await sql.end();
+    }
+  }
+  const started = await request.post(
+    markedId
+      ? `${apiOrigin}/api/v1/conversations/${encodeURIComponent(markedId)}/runs`
+      : `${apiOrigin}/api/v1/conversations/runs`,
+    {
+      headers,
+      data: {
+        idempotencyKey: randomUUID(),
+        ...(markedId ? {} : { conversation: { title } }),
+        message: {
+          text: showViewMessage(html)
+        }
       }
     }
-  });
+  );
   expect(started.ok()).toBe(true);
   const { conversation } = z
     .object({

@@ -408,6 +408,23 @@ describe("CS-9c personal data switches web tools off", () => {
     });
     expect(result.tools).toEqual([allTools, privateTools]);
   });
+  it.each(["missing", "unreadable"])(
+    "closes web access when the root mark is %s",
+    async (failure) => {
+      const f = await fixture();
+      const read = vi.spyOn(db.store.conversations, "getConversation");
+      if (failure === "missing") read.mockResolvedValue(undefined);
+      else read.mockRejectedValue(new Error("mark unreadable"));
+      try {
+        const result = await f.run([[call("web_fetch")], []]);
+        expect(result.tools).toEqual([privateTools, privateTools]);
+        expect(f.fetch).not.toHaveBeenCalled();
+      } finally {
+        read.mockRestore();
+      }
+    }
+  );
+
   it("requires privacy readers before enabling web access on a custom host", async () => {
     const f = await fixture();
     await expect(f.run([[]], { withoutReaders: true })).rejects.toThrow(

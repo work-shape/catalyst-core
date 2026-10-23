@@ -23,6 +23,7 @@ import {
   toErrorEnvelope,
   type AccessDecision,
   type ActorAccess,
+  type AgentRunId,
   type AuditRecorder,
   type Authorizer,
   type CentralPolicySetting,
@@ -126,7 +127,7 @@ export interface RunOperationDeps {
     /** The admin's settings. OP-2 supplies the table; nothing is set before. */
     centralSettings(): readonly CentralPolicySetting[] | Promise<readonly CentralPolicySetting[]>;
     /** Includes a subagent's root conversation. Rechecked whenever policy is resolved. */
-    personalConversation?(id: ConversationId): Promise<boolean>;
+    personalConversation?(id: ConversationId, runId?: AgentRunId): Promise<boolean>;
   };
   /** Without it this process cannot hold a call for an approval and refuses one that needs it. */
   approvals?: OperationApprovalRequests;

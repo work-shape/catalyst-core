@@ -111,7 +111,8 @@ const allowedPageErrors: readonly AllowedPageError[] = [
       "it keeps nothing that names a host",
       "it shows row text that is markup as it stands on the allowlist, or not at all",
       "a view with private rows sends no WebRTC packet",
-      "the gallery shows MailPreview, RecipientField and TemplateTextField light, dark and at 390"
+      "the gallery shows MailPreview, RecipientField and TemplateTextField light, dark and at 390",
+      "show_view in a marked conversation stores a static view and sends no WebRTC packet"
     ]
   },
   {

@@ -81,8 +81,34 @@ describe("resolvePolicy: where the value comes from", () => {
         centralSettings: [{ operation: "items.create", value: "deny" }]
       })
     ).toEqual({ value: "deny", next: "refuse", source: "central_setting" });
-    // A floor a read cannot carry does not apply to a read. A refusal does.
-    expect(resolve({ definition: { ...reading, policyFloor: "approval" } }).value).toBe("allow");
+    // An explicit floor can make a reading call wait; ordinary reading settings still cannot.
+    expect(resolve({ definition: { ...reading, policyFloor: "approval" } })).toMatchObject({
+      value: "approval",
+      next: "await_approval",
+      source: "policy_floor"
+    });
+    expect(
+      resolve({
+        definition: { ...reading, policyFloor: "confirm" },
+        callerCanConfirm: false,
+        canPause: true,
+        centralSettings: [{ operation: "items.list", value: "allow" }]
+      })
+    ).toMatchObject({
+      value: "confirm",
+      next: "await_confirmation",
+      source: "policy_floor"
+    });
+    expect(
+      resolve({
+        definition: { ...reading, policyFloor: "confirm" },
+        centralSettings: [{ operation: "items.list", value: "approval" }]
+      })
+    ).toMatchObject({
+      value: "approval",
+      next: "await_approval",
+      source: "central_setting"
+    });
     expect(resolve({ definition: { ...reading, policyFloor: "deny" } })).toMatchObject({
       value: "deny",
       next: "refuse"
