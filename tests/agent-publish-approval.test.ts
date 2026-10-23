@@ -444,6 +444,42 @@ describe("publishing an agent a workspace owns (WS-PUB-1b)", () => {
     });
   });
 
+  it("publishes on approval only what was approved: no draft pushed after a first version's approval", async () => {
+    const { t, team, live, create, push, publish, listed } = await setup();
+    await create(t.kai.id, "aba", team);
+    const held = heldSchema.parse((await publish(t.kai.id, "aba", 1)).json());
+    // The admin approves version 1; before the held call runs, Kai pushes draft 1.
+    const approved = await t.call(t.admin.id, "approval_requests.decide", {
+      params: { requestId: held.approvalRequestId },
+      payload: { decision: "approve" }
+    });
+    expect(approved.statusCode, approved.body).toBe(200);
+    await push(t.kai.id, "aba", { instructions: "Unreviewed." });
+    await getTestJobs(t.instance).runDue();
+    expect(await live("aba")).toMatchObject({ revision: 1, config: { instructions: "Help." } });
+    expect(await listed(t.lena.id, team)).not.toContain("aba");
+  });
+
+  it("publishes on approval only what was approved: no first version once the approved draft is discarded", async () => {
+    const { t, team, live, create, push, publish, listed } = await setup();
+    await create(t.kai.id, "bab", team);
+    await push(t.kai.id, "bab", { instructions: "Approved draft." });
+    const held = heldSchema.parse((await publish(t.kai.id, "bab", 1)).json());
+    const approved = await t.call(t.admin.id, "approval_requests.decide", {
+      params: { requestId: held.approvalRequestId },
+      payload: { decision: "approve" }
+    });
+    expect(approved.statusCode, approved.body).toBe(200);
+    const discarded = await t.call(t.kai.id, "agents.draft.discard", {
+      params: { name: "bab" },
+      payload: { expectedRevision: 1, workspaceId: team }
+    });
+    expect(discarded.statusCode, discarded.body).toBe(200);
+    await getTestJobs(t.instance).runDue();
+    expect(await live("bab")).toMatchObject({ revision: 1, config: { instructions: "Help." } });
+    expect(await listed(t.lena.id, team)).not.toContain("bab");
+  });
+
   it("refuses a publish whose draft its guardrails did not read, though a push lands before it runs", async () => {
     const { t, team, live, create, push, publish, inbox } = await setup();
     await create(t.kai.id, "raced", team);

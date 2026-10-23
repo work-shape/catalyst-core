@@ -6,6 +6,7 @@ import {
 } from "@work-shape/catalyst-core";
 import { ASSET_PUT_BODY_LIMIT_BYTES } from "../assets/asset-files";
 import {
+  AGENT_PUBLISH_HELD_KEY,
   agentPublishChecked,
   assetWriteEvent,
   revertWriteEvents,
@@ -123,6 +124,8 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
     policyTargets: (input) => together.policyTargets(input),
     changeClass: "reversible",
     beforeEvents: (input, _origin, actor) => together.events(input, actor),
+    // A held agent publish keeps whether it was approved as the first version or a draft.
+    heldInputKeys: [AGENT_PUBLISH_HELD_KEY],
     // A publish a guardrail holds waits for the holders of the kind's `approve` right.
     approval: (input) => together.approval(input),
     // An instance-owned agent's publish is made live without a terminal; a workspace's agent
@@ -140,7 +143,7 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
       const result = await workflow.agentDrafts.publish(
         context,
         input,
-        agentPublishChecked(context.beforeEvents)
+        agentPublishChecked(context.beforeEvents, input)
       );
       await tries.settled(context, input, "published");
       return result;

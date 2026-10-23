@@ -161,7 +161,14 @@ export class AgentDraftWorkflow {
     // only, or the first version as it is stored. A call they were not asked about publishes
     // what there is.
     if (checked !== undefined && checked.revision !== input.revision) throw draftChanged();
-    if (checked?.firstVersion ?? !draft) {
+    const firstVersion = checked?.firstVersion ?? !draft;
+    // A held publish runs only as what it was approved as.
+    if (
+      checked?.approvedFirstVersion !== undefined &&
+      checked.approvedFirstVersion !== firstVersion
+    )
+      throw draftChanged();
+    if (firstVersion) {
       // A workspace's agent its approvers have not yet offered is published as it was made.
       const offered = draft
         ? undefined
