@@ -35,8 +35,11 @@ export interface BuildImportDialogProps {
   checkName: CheckName;
   /** Creates the asset with its whole folder where Studio makes one, as a save of its page. */
   create(input: { name: string; files: readonly AssetFileWrite[] }): Promise<BuildWriteOutcome>;
-  /** The name people read of the asset that holds `name`, read now. Undefined where it cannot be. */
-  titleOf(name: string): Promise<string | undefined>;
+  /**
+   * The asset that holds `name`, read now: the name people read of it, and whether the reader
+   * may change it here. Undefined where it cannot be read.
+   */
+  existing(name: string): Promise<{ title: string; writable: boolean } | undefined>;
   onClose(): void;
   /** Closes the dialog and opens the page of the asset: the one it made, or one that exists. */
   onOpen(name: string): void;

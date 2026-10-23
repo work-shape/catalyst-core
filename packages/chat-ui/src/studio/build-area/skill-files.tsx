@@ -86,7 +86,7 @@ export function SkillFileList({
       <ListRow
         size="compact"
         data-skill-file={SKILL_ROOT_FILE_NAME}
-        leading={<FileText aria-hidden="true" />}
+        leading={<FileText aria-hidden="true" className="size-4" />}
         title={SKILL_ROOT_FILE_NAME}
         selected={selected === "root"}
         onClick={() => onSelect("root")}
@@ -101,7 +101,7 @@ export function SkillFileList({
             <ListRow
               size="compact"
               data-skill-folder={folder}
-              leading={<Folder aria-hidden="true" />}
+              leading={<Folder aria-hidden="true" className="size-4" />}
               title={`${folder}/`}
               actionsVisible
               actions={

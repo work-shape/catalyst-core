@@ -1,5 +1,5 @@
 import JSZip from "jszip";
-import { parseSkillMarkdown } from "@work-shape/catalyst-core";
+import { SKILL_NAME_PATTERN, parseSkillMarkdown } from "@work-shape/catalyst-core";
 import {
   SKILL_ROOT_FILE_NAME,
   skillFileBlob,
@@ -185,8 +185,12 @@ function skillForm(
     return { invalid: error instanceof Error ? error.message : String(error) };
   }
   const record = isRecord(parsed) ? parsed : {};
+  // Without a name in the frontmatter the parser derives one from the folder's; a folder name
+  // that is an address already is kept as written (pdf-tools stays pdf-tools).
+  const named = /^name\s*:/mu.test(/^---\r?\n([\s\S]*?)\r?\n---/u.exec(manifest)?.[1] ?? "");
+  const folder = source.split("/").pop() ?? "";
   return {
-    name: stringOf(record, "name") ?? "",
+    name: !named && SKILL_NAME_PATTERN.test(folder) ? folder : (stringOf(record, "name") ?? ""),
     title: stringOf(record, "title") ?? "",
     description: stringOf(record, "description") ?? "",
     summary: stringOf(record, "summary") ?? "",

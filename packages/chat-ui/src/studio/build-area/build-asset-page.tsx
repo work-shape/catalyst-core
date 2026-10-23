@@ -985,7 +985,7 @@ type AssetChange = Exclude<NonNullable<BuildAsset["allowed"]>[number], "read">;
  * on this asset with every grant and deny there is, those on the asset itself included. An
  * instance from before AD-4 says nothing, and the rights Studio resolved decide.
  */
-function mayOnAsset(rights: BuildRights, verb: AssetChange, asset: BuildAsset): boolean {
+export function mayOnAsset(rights: BuildRights, verb: AssetChange, asset: BuildAsset): boolean {
   if (asset.allowed !== undefined) return asset.allowed.includes(verb);
   return rights.may(verb, {
     kind: asset.kind,
