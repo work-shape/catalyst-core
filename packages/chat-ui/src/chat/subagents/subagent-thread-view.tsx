@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, type ReactNode } from "react";
 import { AssistantRuntimeProvider, ThreadPrimitive } from "@assistant-ui/react";
-import { useChatRuntime } from "@assistant-ui/react-ai-sdk";
 import { useQueryClient } from "@tanstack/react-query";
 import type { ChatTransport, UIMessage, UIMessageChunk } from "ai";
 import { ArrowLeft } from "lucide-react";
@@ -14,6 +13,7 @@ import { apiErrorStatus } from "../../shared/workspace-utils";
 import { ToolDecisionsProvider } from "../approvals/tool-decision-context";
 import { ThreadMessage } from "../assistant/assistant-message";
 import { AssistantToolRegistry } from "../assistant/assistant-tool-registry";
+import { useCatalystChatRuntime } from "../assistant/chat-runtime";
 import {
   createMessageSnapshotKey,
   toAiSdkMessageRepository,
@@ -150,7 +150,7 @@ function ReadOnlyThread({
     [activeRun, completedRunProjections, messages]
   );
   const transport = useMemo(() => new ReadOnlyTransport(), []);
-  const runtime = useChatRuntime({ messages: uiMessages, transport, isSendDisabled: true });
+  const runtime = useCatalystChatRuntime({ messages: uiMessages, transport, isSendDisabled: true });
   useEffect(() => {
     runtime.thread.importExternalState(toAiSdkMessageRepository(uiMessages));
   }, [runtime, syncKey, uiMessages]);
