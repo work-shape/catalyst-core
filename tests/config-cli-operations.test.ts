@@ -263,7 +263,9 @@ describe("catalog CLI commands", () => {
     expect(result.err).toContain("https://provider.test/authorize?state=s");
     expect(result.err).toContain("was not completed before it expired");
     expect(opened).toEqual(["https://provider.test/authorize?state=s"]);
+    // The detail is read first: a personal Connection is connected in the browser only.
     expect(requests).toEqual([
+      "GET /api/v1/connections/outside",
       "POST /api/v1/connections/outside/oauth/start",
       "GET /api/v1/connections/outside",
       "GET /api/v1/connections/outside",
