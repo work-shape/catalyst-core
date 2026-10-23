@@ -1,4 +1,5 @@
 import type { ConnectionPeople, PersonalConnections } from "@work-shape/catalyst-api-client";
+import type { ConnectionProposalBindingState } from "@work-shape/catalyst-core";
 import type { SignInRead } from "./connection-sign-in-model";
 
 // Personal connections (CS-9a-UI), without React: how a person's own sign-in reads, what the
@@ -10,7 +11,7 @@ type PersonalSignIn =
   PersonalConnections["connections"][number] | ConnectionPeople["people"][number];
 
 /** How a sign-in reads: a revoked one is as good as none, and is connected again the same way. */
-export type PersonalView = "connected" | "needs_reconnect" | "not_connected";
+export type PersonalView = ConnectionProposalBindingState;
 
 export function personalViewOf(signIn: Pick<PersonalSignIn, "state">): PersonalView {
   return signIn.state === "connected" || signIn.state === "needs_reconnect"
