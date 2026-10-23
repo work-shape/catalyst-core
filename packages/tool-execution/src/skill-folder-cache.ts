@@ -235,10 +235,13 @@ export class SkillFolderCache {
   }
 }
 
+/** The error code of a command whose skill folder could not be made ready. */
+export const SKILL_MOUNT_FAILED_CODE = "WORKSPACE_SKILL_MOUNT_FAILED";
+
 /** The failure of a command whose skill folder could not be made ready. Nothing ran. */
 export function skillMountFailure(name: string, cause: string): WorkspaceRunnerFailure {
   return new WorkspaceRunnerFailure(
-    "WORKSPACE_SKILL_MOUNT_FAILED",
+    SKILL_MOUNT_FAILED_CODE,
     `The folder of the skill '${name}' could not be made ready for the command. Nothing ran.`,
     "runner_error",
     { reason: "skill_mount_failed", skill: name, cause }
