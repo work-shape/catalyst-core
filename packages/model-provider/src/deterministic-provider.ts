@@ -63,7 +63,8 @@ export class DeterministicModelProvider {
       };
     }
 
-    const toolCall = parseToolCommand(content, request.tools);
+    const toolCall =
+      parseToolCommand(content, request.tools) ?? retryAfterSignIn(request, lastUserIndex);
 
     if (toolCall) {
       return {
@@ -166,6 +167,32 @@ function parseToolCommand(content: string, tools: ModelTool[]): ModelToolCall | 
     toolName,
     ...parseToolInput(json || "{}")
   };
+}
+
+/** What a call of a personal Connection is refused with while the person has not signed in. */
+const SIGN_IN_REFUSALS = /connection_not_connected|connection_needs_reconnect/u;
+
+/**
+ * The person's message after a call that was refused for their missing sign-in, such as the
+ * Connect card's "Gmail ist verbunden": the call of the turn before, made again, as an agent
+ * carries on once the person connected (CHAT-CONN-2b).
+ */
+function retryAfterSignIn(
+  request: ModelCompletionRequest,
+  lastUserIndex: number
+): ModelToolCall | undefined {
+  const earlier = request.messages.slice(0, lastUserIndex);
+  const commandIndex = earlier.findLastIndex((message) => message.role === "user");
+  if (commandIndex < 0) return undefined;
+  const refused = earlier
+    .slice(commandIndex + 1)
+    .some(
+      (message) =>
+        message.role === "tool" && SIGN_IN_REFUSALS.test(modelContentText(message.content))
+    );
+  if (!refused) return undefined;
+  const command = modelContentText(earlier[commandIndex]?.content ?? "").trim();
+  return parseToolCommand(command, request.tools);
 }
 
 function chunkText(text: string): string[] {

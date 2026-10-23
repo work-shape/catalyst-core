@@ -282,7 +282,13 @@ function toToolCallUiPart(
       : toolCall.state === "output_error"
         ? {
             errorText: toolCall.errorText ?? "Tool call failed",
-            ...(toolCall.output !== undefined ? { output: toolCall.output } : {})
+            // A call of a personal Connection the person has not signed in to: its Connect card
+            // reads what to connect from the output.
+            ...(toolCall.connect
+              ? { output: { status: "failed", connect: toolCall.connect } }
+              : toolCall.output !== undefined
+                ? { output: toolCall.output }
+                : {})
           }
         : toolCall.state === "output_available"
           ? { output: toolCall.output }

@@ -119,9 +119,26 @@ export interface ToolHandlerSuccessResult<TOutput = unknown> {
   auditSummary?: AuditSafeSummary;
 }
 
+/**
+ * The person's own sign-in a call of a personal Connection is missing (CS-9a): what the chat's
+ * Connect card shows in place of the refusal (CHAT-CONN-2b). Names the Connection, never an
+ * account or a token.
+ */
+export interface ToolConnectionSignInRequest {
+  connection: {
+    name: string;
+    title: string;
+    service?: string;
+    catalogue?: { entry: string; part: string };
+  };
+  state: "not_connected" | "needs_reconnect";
+}
+
 export interface ToolHandlerFailureResult {
   /** Host-only recovery; omitted from the error text sent to the model. */
   recovery?: "private_conversation";
+  /** Host-only: the person's own sign-in the call needs, for the chat's Connect card. */
+  connect?: ToolConnectionSignInRequest;
   status: "failed" | "cancelled" | "timed_out";
   error: ToolExecutionError;
   auditSummary?: AuditSafeSummary;

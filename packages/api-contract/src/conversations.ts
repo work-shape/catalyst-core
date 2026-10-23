@@ -660,6 +660,17 @@ export const activeRunSummarySchema = z.object({
 });
 
 /** On a `run_agent` call that started its subagent: the subagent, for its card. */
+/** The person's own sign-in a failed call of a personal Connection needs (CHAT-CONN-2b). */
+const toolConnectionSignInRequestSchema = z.object({
+  connection: z.object({
+    name: z.string(),
+    title: z.string(),
+    service: z.string().optional(),
+    catalogue: z.object({ entry: z.string(), part: z.string() }).optional()
+  }),
+  state: z.enum(["not_connected", "needs_reconnect"])
+});
+
 const toolCallSubagentSchema = z.object({
   runId: z.string(),
   threadId: z.string(),
@@ -708,6 +719,7 @@ export const agentRunProjectionPartSchema = z.discriminatedUnion("type", [
     output: z.unknown().optional(),
     errorText: z.string().optional(),
     errorReason: z.literal("subject_conversation_shared").optional(),
+    connect: toolConnectionSignInRequestSchema.optional(),
     decision: toolCallDecisionSchema.optional(),
     subagent: toolCallSubagentSchema.optional()
   })
@@ -744,6 +756,7 @@ export const agentRunProjectionSchema = z.object({
       output: z.unknown().optional(),
       errorText: z.string().optional(),
       errorReason: z.literal("subject_conversation_shared").optional(),
+      connect: toolConnectionSignInRequestSchema.optional(),
       decision: toolCallDecisionSchema.optional(),
       subagent: toolCallSubagentSchema.optional()
     })
