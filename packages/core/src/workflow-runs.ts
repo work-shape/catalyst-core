@@ -305,6 +305,11 @@ export type WorkflowStepRunView = WorkflowStepRun &
     inputPreview?: WorkflowOutputPreview;
     agent?: import("./child-agent-runs").WorkflowAgentRunData;
     outputPreview?: WorkflowOutputPreview;
+    /**
+     * Internal projection policy, never serialized by the API: the step sends mail
+     * (`mail.send`), so a preview of the mail it would send is the run's data.
+     */
+    sendsMail?: boolean;
     datasets?: Pick<WorkflowRunDataset, "id" | "rowSchema" | "rowCount" | "bytes" | "state">[];
     /** On the step run of a loop step alone. */
     loop?: WorkflowLoopCounts;

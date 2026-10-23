@@ -422,9 +422,14 @@ function registerWorkflowRoutes(
         context.access,
         stepRuns.map((step) => {
           const { outputPreview, log, ...summary } = toStepRunResource(step, mayReadData);
-          return !run.hasAgentSteps || mayReadData
-            ? { ...summary, ...(outputPreview ? { outputPreview } : {}), ...(log ? { log } : {}) }
-            : summary;
+          if (run.hasAgentSteps && !mayReadData) return summary;
+          // The mail a simulated or test send would send, subject and body, is the run's data.
+          const mailPreview = step.sendsMail === true && step.target !== "live";
+          return {
+            ...summary,
+            ...(outputPreview && (mayReadData || !mailPreview) ? { outputPreview } : {}),
+            ...(log ? { log } : {})
+          };
         })
       );
     }
@@ -483,7 +488,7 @@ function toRunResource(run: WorkflowRunView, includeData = true) {
  * only for a caller who may read the run's data (`workflow.read_run_data`).
  */
 function toStepRunResource(stepRun: WorkflowStepRunView, runData: boolean) {
-  const { clientInstanceId: _instance, inputPreview, ...resource } = stepRun;
+  const { clientInstanceId: _instance, inputPreview, sendsMail: _sendsMail, ...resource } = stepRun;
   return runData && inputPreview ? { ...resource, inputPreview } : resource;
 }
 

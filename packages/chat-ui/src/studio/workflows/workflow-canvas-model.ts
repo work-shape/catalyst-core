@@ -283,7 +283,9 @@ export function mailFooter(
 ): string | undefined {
   if (stepRun.target === "dry_run") return t("workflows.mail.simulated");
   const answer = mailAnswerOf(stepRun.output);
-  if (answer?.kind !== "sent") return undefined;
+  // A test send's answer is the run's data: without it, that it went out as a test is known.
+  if (answer?.kind !== "sent")
+    return stepRun.target === "test" ? t("workflows.mail.sentTest") : undefined;
   const at = answer.sentAt ?? stepRun.finishedAt;
   const time =
     at === undefined
