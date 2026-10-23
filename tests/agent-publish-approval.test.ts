@@ -480,6 +480,23 @@ describe("publishing an agent a workspace owns (WS-PUB-1b)", () => {
     expect(await listed(t.lena.id, team)).not.toContain("bab");
   });
 
+  it("lets an admin's explicit save of where the agent is offered win, though nothing changed", async () => {
+    const { t, team, create, push, publish, listed, request, decide } = await setup();
+    await create(t.kai.id, "kept-nowhere", team);
+    const nowhere = { mode: "selected", personalWorkspaces: false, collaborationWorkspaceIds: [] };
+    await t.expectOk(t.admin.id, "assets.set_availability", {
+      params: { kind: "agent", name: "kept-nowhere" },
+      payload: { ...nowhere, expectedAvailability: nowhere }
+    });
+    await push(t.kai.id, "kept-nowhere", { instructions: "Draft." });
+    const held = heldSchema.parse((await publish(t.kai.id, "kept-nowhere", 1)).json());
+    expect((await request(t.admin.id, held.approvalRequestId)).preview.review).toMatchObject({
+      agent: { offers: false }
+    });
+    expect((await decide(t.admin.id, held.approvalRequestId)).statusCode).toBe(200);
+    expect(await listed(t.lena.id, team)).not.toContain("kept-nowhere");
+  });
+
   it("refuses a publish whose draft its guardrails did not read, though a push lands before it runs", async () => {
     const { t, team, live, create, push, publish, inbox } = await setup();
     await create(t.kai.id, "raced", team);
