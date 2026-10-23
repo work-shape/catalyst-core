@@ -248,7 +248,9 @@ function JobSummaryTable({
                 </Button>
               </TableCell>
               <TableCell className="text-right tabular-nums">{count(row.queued)}</TableCell>
-              <TableCell className="text-right tabular-nums">{count(row.running)}</TableCell>
+              <TableCell className="text-right tabular-nums">
+                {count(row.running, "info")}
+              </TableCell>
               <TableCell className="text-right tabular-nums">
                 {count(row.failed, "warning")}
               </TableCell>

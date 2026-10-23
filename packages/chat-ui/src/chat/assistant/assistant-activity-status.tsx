@@ -48,8 +48,9 @@ export function AssistantActivityStatus({
       role="status"
       aria-live="polite"
     >
-      <Spinner size="sm" />
-      <span className="text-xs tabular-nums opacity-70" data-testid="run-activity-elapsed">
+      {/* Blue says the agent is working, as the running mark in the rail does. */}
+      <Spinner size="sm" className="text-info" />
+      <span className="text-xs text-info tabular-nums" data-testid="run-activity-elapsed">
         {formatElapsedSeconds(elapsedSeconds)}
       </span>
       <span className="text-xs opacity-50" aria-hidden="true">

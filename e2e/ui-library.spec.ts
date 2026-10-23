@@ -7,7 +7,7 @@ const normalUser = { email: "e2e-user@example.test", password: "e2e-user-passwor
 const adminUser = { email: "e2e-admin@example.test", password: "e2e-admin-password" };
 
 // The default theme's raised surface: in dark the fill carries the lift, so it differs from the page.
-const darkPopover = "color-mix(in srgb, #efebe4 6%, #181614)";
+const darkPopover = "color-mix(in srgb, #edebe8 6%, #171615)";
 
 test("the UI library gallery opens for an administrator and for nobody else", async ({
   page,

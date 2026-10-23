@@ -260,9 +260,10 @@ export function ConversationButton({
           >
             <span className="flex min-w-0 items-center gap-1.5">
               {running ? (
+                // Blue: the conversation works on its own. Orange (unread) is what waits for you.
                 <Spinner
                   size="sm"
-                  className="shrink-0 text-primary"
+                  className="shrink-0 text-info"
                   data-testid="conversation-running-indicator"
                   role="img"
                   aria-hidden={false}

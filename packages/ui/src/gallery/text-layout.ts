@@ -189,6 +189,7 @@ export interface LayoutGalleryText {
   codeConfigName: string;
   codeOutputName: string;
   countPrimary: string;
+  countInfo: string;
   countMuted: string;
   countDot: string;
 }
@@ -385,6 +386,7 @@ export const layoutGalleryText: Record<"en" | "de", LayoutGalleryText> = {
     codeConfigName: "agents/support.yaml",
     codeOutputName: "Output of the step",
     countPrimary: "Needs you",
+    countInfo: "Runs on its own",
     countMuted: "Plain count",
     countDot: "Dot"
   },
@@ -580,6 +582,7 @@ export const layoutGalleryText: Record<"en" | "de", LayoutGalleryText> = {
     codeConfigName: "agents/support.yaml",
     codeOutputName: "Ausgabe des Schritts",
     countPrimary: "Braucht dich",
+    countInfo: "Läuft von selbst",
     countMuted: "Einfache Anzahl",
     countDot: "Punkt"
   }
