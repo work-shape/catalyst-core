@@ -30,7 +30,14 @@ const mySchema = z.object({
 });
 const peopleSchema = z.object({
   people: z.array(
-    z.object({ userId: z.string(), state: z.string(), account: z.string().optional() })
+    z
+      .object({
+        userId: z.string(),
+        displayLabel: z.string().optional(),
+        state: z.string(),
+        account: z.string().optional()
+      })
+      .passthrough()
   )
 });
 let world: OAuthWorld;
@@ -194,12 +201,15 @@ describe("personal OAuth sign-in lifecycle", () => {
     });
     const people = await api("connections.people", alice, { name: "personal" });
     expect(people.status).toBe(200);
-    expect(peopleSchema.parse(people.body).people).toEqual(
+    const listed = peopleSchema.parse(people.body).people;
+    // Each person by the name the list of users shows, and nothing else of them.
+    expect(listed).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ userId: aId, account: "Account A" }),
-        expect.objectContaining({ userId: bId, account: "Account B" })
+        expect.objectContaining({ userId: aId, displayLabel: "Alice", account: "Account A" }),
+        expect.objectContaining({ userId: bId, displayLabel: "Bob", account: "Account B" })
       ])
     );
+    for (const person of listed) expect(person).not.toHaveProperty("email");
   });
 
   it("does not fall back to shared or person-context rows, and supplies the chat card refusal", async () => {
