@@ -72,6 +72,9 @@ async function headAction(page: Page, name: RegExp): Promise<void> {
   }
   await page.getByRole("button", { name: /^(More actions|Weitere Aktionen)$/u }).click();
   await page.getByRole("menuitem", { name }).click();
+  // The menu has gone once the dialog it opened is up; the dialog hides the page from the
+  // roles, so the menu is looked for by its attribute.
+  await expect(page.locator('[role="menu"]')).toHaveCount(0);
 }
 
 /** Opens "Replace from folder" and hands it the folder. */

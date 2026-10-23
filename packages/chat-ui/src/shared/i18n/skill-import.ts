@@ -20,6 +20,8 @@ export const skillImport = defineTranslations({
     "skillImport.nameInvalid":
       "An address starts with a letter or a digit and holds only letters, digits, '.', '_' and '-'.",
     "skillImport.nameTaken": "A skill with the address {name} exists already.",
+    "skillImport.nameTakenOther":
+      "A skill with the address {name} exists already. Choose another address.",
     "skillImport.noChanges": "The folder holds the same files as the skill.",
     "skillImport.noSkill": "This folder is no skill: it has no SKILL.md at its top.",
     "skillImport.reading": "Reading the files…",
@@ -27,7 +29,7 @@ export const skillImport = defineTranslations({
     "skillImport.replace": "Replace the files of {title}",
     "skillImport.replaceAction": "Replace from folder",
     "skillImport.replaceDescription":
-      "Every file of the skill becomes the folder's. The skill keeps its address, and a save writes a new revision.",
+      "Every file of the skill becomes the folder's. The skill keeps its address, and a save writes a new version.",
     "skillImport.sizeChange": "{before} → {after}",
     "skillImport.unchanged": "{count} files stay as they are.",
     "skillImport.unsaved": "Changes on this page that are not saved are replaced as well."
@@ -52,6 +54,8 @@ export const skillImport = defineTranslations({
     "skillImport.nameInvalid":
       "Eine Adresse beginnt mit einem Buchstaben oder einer Ziffer und enthält nur Buchstaben, Ziffern, „.“, „_“ und „-“.",
     "skillImport.nameTaken": "Es gibt schon einen Skill mit der Adresse {name}.",
+    "skillImport.nameTakenOther":
+      "Es gibt schon einen Skill mit der Adresse {name}. Wähle eine andere Adresse.",
     "skillImport.noChanges": "Der Ordner enthält dieselben Dateien wie der Skill.",
     "skillImport.noSkill": "Dieser Ordner ist kein Skill: Er hat oben kein SKILL.md.",
     "skillImport.reading": "Die Dateien werden gelesen…",
@@ -59,7 +63,7 @@ export const skillImport = defineTranslations({
     "skillImport.replace": "Dateien von {title} ersetzen",
     "skillImport.replaceAction": "Aus Ordner ersetzen",
     "skillImport.replaceDescription":
-      "Jede Datei des Skills wird die des Ordners. Der Skill behält seine Adresse, und Speichern schreibt eine neue Revision.",
+      "Jede Datei des Skills wird die des Ordners. Der Skill behält seine Adresse, und Speichern schreibt eine neue Version.",
     "skillImport.sizeChange": "{before} → {after}",
     "skillImport.unchanged": "{count} Dateien bleiben, wie sie sind.",
     "skillImport.unsaved":

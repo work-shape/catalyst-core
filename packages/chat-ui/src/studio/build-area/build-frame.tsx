@@ -40,6 +40,7 @@ import {
   ExistingAssetPage,
   NewAssetPage,
   ViewedAssetPage,
+  mayOnAsset,
   type BuildAssetCopy
 } from "./build-asset-page";
 import { BuildCreateDialog, emptyAssetStart } from "./build-create-dialog";
@@ -460,7 +461,17 @@ export function BuildFrame({
                 : outcome;
             }
           }}
-          titleOf={async (name) => source.titleOf?.(entry.kind, name)}
+          existing={async (name) => {
+            const asset = await source.peek?.(entry.kind, name);
+            if (asset === undefined) return undefined;
+            const shipped = entry.shippedTitle?.(asset);
+            const { title } = asset.config;
+            return {
+              title: shipped ?? (typeof title === "string" && title.trim() ? title : asset.name),
+              // A shipped asset is changed by a release alone.
+              writable: shipped === undefined && mayOnAsset(source.rights, "write", asset)
+            };
+          }}
           onClose={() => setImporting(false)}
           onOpen={(name) => {
             setImporting(false);

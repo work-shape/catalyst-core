@@ -173,8 +173,8 @@ export interface BuildSource {
   exists(kind: string, name: string): Promise<boolean | undefined>;
   /** Whether a new asset of the kind could take the name, where Studio would make it. */
   checkName(kind: string, name: string): Promise<NameCheckAnswer>;
-  /** The name people read of an asset, read now. Undefined where it has none or cannot be read. */
-  titleOf?(kind: string, name: string): Promise<string | undefined>;
+  /** One asset as the instance holds it now, outside its page. Undefined where it cannot be read. */
+  peek?(kind: string, name: string): Promise<BuildAsset | undefined>;
   /**
    * What publishing the asset's saved `revision` raises, in the reader's language, read now.
    * Absent where the source asks nothing before a publish.
@@ -531,9 +531,9 @@ export function useBuildSource(): BuildSource {
         (error: unknown) => (apiErrorCode(error) === "NOT_FOUND" ? false : undefined)
       ),
     checkName: (kind, name) => writes.checkName({ kind, name, ...inScope(kind) }),
-    titleOf: (kind, name) =>
+    peek: (kind, name) =>
       client.assets.get({ params: { kind, name }, query: inScope(kind) }).then(
-        (asset) => (typeof asset.config.title === "string" ? asset.config.title : undefined),
+        (asset) => asset,
         () => undefined
       ),
     publishQuestion: async (kind, name, revision) =>
