@@ -22,6 +22,8 @@ env:
   CHECK_POSTGRES_NAME: pr-postgres-core
   POSTGRES_STORE_TEST_DATABASE_URL: postgresql://catalyst:local-check@localhost:54329/catalyst_test
   CATALYST_SCALE_TESTS: "0"
+  # The Mini runs a platform and a capabilities check side by side: each takes 6 of its 10 cores.
+  CATALYST_TEST_WORKERS: "6"
 defaults:
   run:
     shell: bash
