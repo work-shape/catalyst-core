@@ -28,6 +28,7 @@ import type { AssetFileInput } from "../assets/asset-files";
 import { readFileSetFile } from "../pages/page-file-sets";
 import { readDefinitionName } from "../asset-kinds/shared";
 import { scopeOf } from "../assets/asset-target";
+import { firstVersionOffering } from "../approvals/agent-publish-review";
 import type { AssetWorkflowOptions } from "../types";
 
 // The before-events of the asset operations: `asset.before_write` for each asset a call saves
@@ -179,8 +180,15 @@ export async function publishEvents(
       clientInstanceId: options.clientInstanceId,
       agentId: asset.id
     });
-    if (draft?.revision !== input.revision) return [];
-    const write = assetWriteEvent({ kind: "agent", name: input.name, config: draft.config });
+    // A first version without a draft is published as it is stored (access check 11).
+    const config =
+      draft?.revision === input.revision
+        ? draft.config
+        : !draft && (await firstVersionOffering(options, asset, input.revision)) !== undefined
+          ? (asset.config ?? {})
+          : undefined;
+    if (config === undefined) return [];
+    const write = assetWriteEvent({ kind: "agent", name: input.name, config });
     // The publish names its agent and the workspace that owns it: the shipped publish guardrail
     // holds the publish of a workspace's agent and not the instance's own (WS-PUB-1b).
     return [

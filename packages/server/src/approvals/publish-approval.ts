@@ -115,7 +115,9 @@ export function publishApproval(
   revision: number,
   audience?: AppAudience,
   audiencePersonName?: string,
-  publishWidens?: boolean
+  publishWidens?: boolean,
+  /** An agent's publish of version 1 as it is stored, without a draft (access check 11). */
+  firstVersion?: boolean
 ): OperationApproval | undefined {
   const { asset } = target;
   if (target.kind.kind === "agent") {
@@ -125,7 +127,8 @@ export function publishApproval(
     const subject = agentPublishSubject(
       asset,
       titleOf(target.kind, asset) ?? target.name,
-      revision
+      revision,
+      firstVersion
     );
     // The caller's own click approves it only where they hold the right on this agent too.
     return {

@@ -115,8 +115,9 @@ describe("the owner of an agent or a skill", () => {
         workspaceId: team
       });
     }
-    // Today's rule: offered in the shared workspace it was made in, and nowhere else.
-    expect(await offeredIn(t, "team-helper", team)).toBe(true);
+    // Kai holds no agent.approve in it, so the agent starts offered nowhere until its first
+    // publish is approved (WS-PUB-1b, access check 11).
+    expect(await offeredIn(t, "team-helper", team)).toBe(false);
     expect(await offeredIn(t, "team-helper", other)).toBe(false);
 
     // A right in the workspace is no right on the instance, nor in another workspace.
@@ -330,9 +331,10 @@ describe("the instance default and a workspace's agent", () => {
       });
     expect((await putOfferedIn(t.kai.id, "kai-helper", other)).statusCode).toBe(403);
     expect(await ownerOf(t, "agent", "kai-helper")).toBeUndefined();
-    // Its own workspace, named or not, is the builder's to offer it in.
+    // Its own workspace, named or not, waits for its first publish where the builder holds no
+    // agent.approve (WS-PUB-1b, access check 11): the agent is made and offered nowhere.
     expect((await putOfferedIn(t.kai.id, "kai-helper", team)).statusCode).toBe(200);
-    expect(await offeredIn(t, "kai-helper", team)).toBe(true);
+    expect(await offeredIn(t, "kai-helper", team)).toBe(false);
 
     expect((await putOfferedIn(t.admin.id, "admin-helper", other)).statusCode).toBe(200);
     expect(await offeredIn(t, "admin-helper", other)).toBe(true);

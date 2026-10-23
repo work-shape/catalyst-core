@@ -28,9 +28,10 @@ export const agentPublishSubjectSchema = z.object({
   name: z.string().min(1),
   title: z.string().min(1),
   assetId: z.string().min(1),
-  /** The draft revision the publish makes live. */
+  /** The draft revision the publish makes live, or the first version it offers. */
   revision: z.number().int().positive(),
-  draftRevision: z.number().int().positive(),
+  /** Null for the publish of a first version that has no draft: version 1 as it is stored. */
+  draftRevision: z.number().int().positive().nullable(),
   /** The live revision the draft was written on and the publish replaces. */
   liveRevision: z.number().int().positive(),
   /** The workspace that owns the agent; null for the instance's own. */
@@ -53,7 +54,8 @@ export function agentPublishResource(subject: AgentPublishSubject): AccessResour
 export function agentPublishSubject(
   asset: ConfigAssetRecord,
   title: string,
-  revision: number
+  revision: number,
+  firstVersion = false
 ): AgentPublishSubject {
   return {
     kind: "agent",
@@ -61,7 +63,7 @@ export function agentPublishSubject(
     title,
     assetId: asset.id,
     revision,
-    draftRevision: revision,
+    draftRevision: firstVersion ? null : revision,
     liveRevision: asset.revision,
     workspaceId: asset.scope.kind === "workspace" ? asset.scope.workspaceId : null
   };
@@ -85,6 +87,8 @@ export async function agentPublishMoved(
   if (!asset || asset.id !== subject.assetId || asset.status !== "active") return "gone";
   if (asset.revision !== subject.liveRevision) return "live_moved";
   const draft = await drafts.get({ clientInstanceId, agentId: asset.id });
+  // A first version is offered as it is stored only while no draft stands beside it.
+  if (subject.draftRevision === null) return draft ? "draft_moved" : undefined;
   if (draft?.revision !== subject.draftRevision) return "draft_moved";
   return undefined;
 }
@@ -95,7 +99,7 @@ export async function agentPublishMoved(
  * and is offered nowhere. A later publish never widens or restores where it is offered: that
  * stays an instance admin's step.
  */
-export function offersOnPublish(
+function offersOnPublish(
   asset: Pick<ConfigAssetRecord, "scope" | "revision">,
   availability:
     | { mode: string; personalWorkspaces: boolean; collaborationWorkspaceIds: readonly string[] }
@@ -108,6 +112,59 @@ export function offersOnPublish(
       !availability.personalWorkspaces &&
       availability.collaborationWorkspaceIds.length === 0);
   return nowhere ? asset.scope.workspaceId : undefined;
+}
+
+type OfferingOptions = {
+  clientInstanceId: ClientInstanceId;
+  configAssets: { store: Pick<ConfigAssetStore, "listAgentAvailability"> };
+  stores: {
+    workspaces: Pick<PlatformStores["workspaces"], "getWorkspace">;
+    agentProposals: Pick<AgentProposalStore, "get">;
+  };
+};
+
+/**
+ * The shared workspace a publish of this agent offers it in: the one that owns it, where the
+ * publish is its first and it is offered nowhere. Nothing for an instance's own agent, a later
+ * publish or one owned by a Personal Workspace, which no availability names alone.
+ */
+export async function firstOffering(
+  options: Omit<OfferingOptions, "stores"> & {
+    stores: Pick<OfferingOptions["stores"], "workspaces">;
+  },
+  asset: Pick<ConfigAssetRecord, "name" | "status" | "scope" | "revision"> | undefined
+): Promise<string | undefined> {
+  if (!asset || asset.status !== "active") return undefined;
+  const availability = await options.configAssets.store.listAgentAvailability({
+    clientInstanceId: options.clientInstanceId,
+    agentName: asset.name
+  });
+  const workspaceId = offersOnPublish(asset, availability.get(asset.name));
+  if (workspaceId === undefined) return undefined;
+  const workspace = await options.stores.workspaces.getWorkspace(
+    options.clientInstanceId,
+    asCollaborationWorkspaceId(workspaceId)
+  );
+  return workspace?.kind === "shared" ? workspaceId : undefined;
+}
+
+/**
+ * The workspace a publish of version 1 without a draft offers the agent in (access check 11):
+ * an agent its workspace's approvers have not yet offered, published as it was made. Nothing
+ * where the call names another revision, where a draft stands beside it, or where it is no
+ * first publish.
+ */
+export async function firstVersionOffering(
+  options: OfferingOptions,
+  asset: Pick<ConfigAssetRecord, "id" | "name" | "status" | "scope" | "revision"> | undefined,
+  revision: number
+): Promise<string | undefined> {
+  if (!asset || revision !== asset.revision) return undefined;
+  const draft = await options.stores.agentProposals.get({
+    clientInstanceId: options.clientInstanceId,
+    agentId: asset.id
+  });
+  return draft ? undefined : firstOffering(options, asset);
 }
 
 export interface AgentPublishReviewOptions {
@@ -146,12 +203,14 @@ export async function agentPublishReview(
   subject: AgentPublishSubject,
   inList: boolean
 ): Promise<JsonObject> {
+  const first = subject.draftRevision === null;
+  // A first version has no live revision to compare with: it is reviewed alone.
   const head = {
     kind: subject.kind,
     name: subject.name,
     title: subject.title,
     revision: subject.revision,
-    liveRevision: subject.liveRevision
+    ...(first ? {} : { liveRevision: subject.liveRevision })
   };
   if (inList) return head;
   const { clientInstanceId } = options;
@@ -166,8 +225,15 @@ export async function agentPublishReview(
       ? await options.drafts.get({ clientInstanceId, agentId: asset.id })
       : undefined;
   const live = configOf(asset?.config);
-  // The draft as it was asked for, where it is still that one; otherwise nothing of it.
-  const next = draft?.revision === subject.draftRevision ? configOf(draft.config) : undefined;
+  // The draft as it was asked for, or the first version as it is stored, where it is still
+  // that one; otherwise nothing of it.
+  const next = first
+    ? moved
+      ? undefined
+      : live
+    : draft?.revision === subject.draftRevision
+      ? configOf(draft.config)
+      : undefined;
   const workspace =
     subject.workspaceId !== null && options.workspaces
       ? await options.workspaces.getWorkspace(
@@ -199,14 +265,17 @@ export async function agentPublishReview(
             }
           }),
       offers: offers !== undefined,
-      ...(next ? agentDifference(live, next) : {})
+      ...(next ? agentDifference(first ? {} : live, next, first) : {})
     },
     ...(moved ? { stale: moved } : {})
   };
 }
 
-/** The fields of the draft that differ from the live definition, and what they add. */
-function agentDifference(live: JsonObject, next: JsonObject): JsonObject {
+/**
+ * The fields of the draft that differ from the live definition, and what they add. A first
+ * version is compared with nothing, so it names no fields, and its lists are all it has.
+ */
+function agentDifference(live: JsonObject, next: JsonObject, first: boolean): JsonObject {
   const fields = REVIEWED_FIELDS.flatMap((field) => {
     const before = live[field];
     const after = next[field];
@@ -221,7 +290,7 @@ function agentDifference(live: JsonObject, next: JsonObject): JsonObject {
   const instructions = typeof next.instructions === "string" ? next.instructions : undefined;
   const liveInstructions = typeof live.instructions === "string" ? live.instructions : undefined;
   return {
-    fields,
+    ...(first ? {} : { fields }),
     toolsAdded: tools.filter((tool) => !liveTools.includes(tool)),
     toolsRemoved: liveTools.filter((tool) => !tools.includes(tool)),
     modelBindingsAdded: bindings.filter((binding) => !liveBindings.includes(binding)),

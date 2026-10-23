@@ -38,6 +38,12 @@ interface DraftHost {
     makeDependenciesAvailable?: boolean,
     expectedAvailability?: AgentAvailability | null
   ): Promise<{ revision: number }>;
+  /** Offers a first version without a draft in its workspace; nothing where that is not it. */
+  publishFirstVersion(
+    call: AssetCall,
+    target: AssetTarget,
+    revision: number
+  ): Promise<{ revision: number } | undefined>;
 }
 
 /** Reads and decisions of the one draft per agent. Writes use the ordinary asset validator. */
@@ -149,6 +155,11 @@ export class AgentDraftWorkflow {
     call.access.require("agent.publish", target.resource);
     const live = requireActive(target);
     const draft = await this.pending(live.id);
+    if (!draft) {
+      // A workspace's agent its approvers have not yet offered is published as it was made.
+      const offered = await this.host.publishFirstVersion(call, target, input.revision);
+      if (offered) return { draftRevision: offered.revision, publishedRevision: offered.revision };
+    }
     if (draft?.revision !== input.revision)
       throw new AppError(
         "REVISION_CONFLICT",
