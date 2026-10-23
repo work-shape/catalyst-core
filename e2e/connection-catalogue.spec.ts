@@ -3,9 +3,15 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { once } from "node:events";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import type { Page, Request } from "@playwright/test";
+import type { BrowserContext, Locator, Page, Request } from "@playwright/test";
+import { z } from "zod";
 import { availableSamplePort } from "./sample-port.mjs";
-import { assetRevision, readAsset, requestWithOrigin } from "./request-with-origin";
+import {
+  assetBaseRevision,
+  assetRevision,
+  readAsset,
+  requestWithOrigin
+} from "./request-with-origin";
 import { expect, test } from "./test";
 
 // The Connection Catalogue in New connection (CAT-1): "Dienste" with the demo's sample entry,
@@ -212,3 +218,275 @@ for (const [locale, theme] of [
     }
   });
 }
+
+// The demo's OAuth entry (CAT-OAUTH-UI), `sample-oauth`, against the sample's REST provider. Its
+// endpoints are fixed in the entry at localhost:8787, so the sample server answers there, with
+// the client it issued for the part's fixed name. The UI and the API answer on two origins and
+// `instance.publicUrl` is the UI's: the route plays the provider's page and hands the callback
+// on to the API, as connection-sign-in.spec.ts does. Both tests make the Connection under the
+// part's fixed name, one after the other.
+const OAUTH_ENTRY = "sample-oauth";
+const OAUTH_BASE = "http://localhost:8787";
+const OAUTH_CLIENT_ID = "e2e-catalogue-client";
+const OAUTH_CLIENT_SECRET = randomBytes(24).toString("base64url");
+const callbackPath = `/api/v1/connections/${OAUTH_ENTRY}/oauth/callback`;
+const bindingSchema = z.object({ binding: z.object({ state: z.string() }).optional() });
+const agentPath = (name: string) => `${apiBaseUrl}/api/v1/assets/agent/${name}`;
+
+test.describe("an OAuth entry", () => {
+  test.describe.configure({ mode: "serial" });
+  let oauthServer: ChildProcess | undefined;
+
+  test.beforeEach(async ({ baseURL }) => {
+    oauthServer = spawn(process.execPath, ["clients/demo/dist/sample-mcp-server.js"], {
+      env: {
+        ...process.env,
+        DEMO_SAMPLE_MCP_KEY: randomBytes(24).toString("base64url"),
+        HOST: "localhost",
+        PORT: "8787",
+        SAMPLE_OAUTH_ISSUER_BASE: OAUTH_BASE,
+        SAMPLE_OAUTH_REST_CLIENT_ID: OAUTH_CLIENT_ID,
+        SAMPLE_OAUTH_REST_CLIENT_SECRET: OAUTH_CLIENT_SECRET,
+        SAMPLE_OAUTH_REST_REDIRECT_URI: `${baseURL}${callbackPath}`
+      },
+      stdio: "ignore"
+    });
+    await expect
+      .poll(
+        async () => {
+          try {
+            return (await fetch(`${OAUTH_BASE}/healthz`)).status;
+          } catch {
+            return 0;
+          }
+        },
+        { timeout: 15_000 }
+      )
+      .toBe(200);
+  });
+
+  test.afterEach(async ({ page }) => {
+    await removeConnection(page, OAUTH_ENTRY);
+    const server = oauthServer;
+    oauthServer = undefined;
+    if (server && server.exitCode === null && server.signalCode === null) {
+      const exited = once(server, "exit");
+      server.kill("SIGTERM");
+      await exited;
+    }
+  });
+
+  /** Plays the provider's page; each authorize request it saw is kept. */
+  async function routeProvider(context: BrowserContext): Promise<URL[]> {
+    const asked: URL[] = [];
+    await context.route(`${OAUTH_BASE}/oauth-rest/authorize**`, async (route) => {
+      asked.push(new URL(route.request().url()));
+      const answer = await route.fetch({ maxRedirects: 0 });
+      const back = new URL(answer.headers().location ?? "");
+      expect(back.pathname).toBe(callbackPath);
+      const landed = await context.request.get(`${apiBaseUrl}${back.pathname}${back.search}`, {
+        maxRedirects: 0
+      });
+      expect(landed.status()).toBe(303);
+      await route.fulfill({ status: 303, headers: { location: landed.headers().location ?? "" } });
+    });
+    return asked;
+  }
+
+  /** New connection, Dienste, the OAuth entry: its first step, with whose account to choose. */
+  async function openEntry(page: Page, theme: Theme) {
+    const signedIn = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/auth/sign-in/email`, {
+      data: { ...admin, rememberMe: true }
+    });
+    expect(signedIn.ok()).toBe(true);
+    await page.addInitScript((chosen) => {
+      window.localStorage.setItem("vivd-catalyst:locale", "de");
+      window.localStorage.setItem("vivd-catalyst:theme", chosen);
+    }, theme);
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto("/build/connections");
+    const main = page.getByRole("region", { name: "Studio" });
+    await main.getByRole("button", { name: WORDS.de.newConnection }).first().click();
+    const dialog = page.getByRole("dialog").first();
+    await dialog.locator(`[data-catalogue-entry="${OAUTH_ENTRY}"]`).getByRole("button").click();
+    await expect(dialog.locator(`[data-catalogue-intro="${OAUTH_ENTRY}"]`)).toBeVisible();
+    return dialog;
+  }
+
+  /** The client id and secret, then Verbinden: saved and its secret set, nothing tested. */
+  async function connect(page: Page, dialog: Locator, writes: string[]) {
+    const field = (name: string) => dialog.locator(`[data-connection-field="${name}"]`);
+    await field("oauth.clientId").fill(OAUTH_CLIENT_ID);
+    await expect(field("secret")).toHaveAttribute("type", "password");
+    await field("secret").fill(OAUTH_CLIENT_SECRET);
+    await dialog.locator("[data-connection-connect]").click();
+    const review = page.locator("[data-catalogue-review]");
+    await expect(review).toBeVisible({ timeout: 30_000 });
+    expect(writes).toEqual([
+      "PUT /api/v1/assets/connection/:name",
+      "PUT /api/v1/connections/:name/secret"
+    ]);
+    // The recommended reading tool is ticked, under its group; the sign-in asks for its access.
+    await expect(
+      review
+        .locator('[data-approval-group="read"] li[data-approval-tool="listCustomers"]')
+        .getByRole("checkbox")
+    ).toBeChecked();
+    await expect(review.locator("[data-catalogue-scopes]")).toHaveAttribute(
+      "data-catalogue-scopes",
+      "sample.identity sample.read"
+    );
+    return review;
+  }
+
+  function recordWrites(page: Page): string[] {
+    const writes: string[] = [];
+    page.on("request", (request: Request) => {
+      const path = new URL(request.url()).pathname;
+      if (request.method() !== "GET" && path.includes(`/connection/${OAUTH_ENTRY}`)) {
+        writes.push(`${request.method()} ${path.replace(OAUTH_ENTRY, ":name")}`);
+      }
+      if (request.method() !== "GET" && path.includes(`/connections/${OAUTH_ENTRY}/`)) {
+        writes.push(`${request.method()} ${path.replace(OAUTH_ENTRY, ":name")}`);
+      }
+    });
+    return writes;
+  }
+
+  test("de light: installed for each person's own account, approved, and given to an agent", async ({
+    page,
+    baseURL,
+    releaseConnections: _releaseConnections,
+    // The test stores an agent; the turn on the agents holds the one on the Namespaces.
+    instanceAgentsChange: _instanceAgentsChange
+  }) => {
+    test.setTimeout(150_000);
+    const tag = randomUUID().slice(0, 8);
+    const agent = `e2e_catalogue_oauth_${tag}`;
+    const writes = recordWrites(page);
+    const dialog = await openEntry(page, "light");
+    try {
+      const stored = await requestWithOrigin(page, "put", agentPath(agent), {
+        data: {
+          expectedRevision: await assetBaseRevision(page, agentPath(agent)),
+          availableIn: "all",
+          config: {
+            name: agent,
+            displayName: `Catalogue probe ${tag}`,
+            description: "Reads the sample customers.",
+            modelBindingId: "primary",
+            instructions: "Help with the sample customers.",
+            toolNames: []
+          }
+        }
+      });
+      expect(stored.ok(), await stored.text()).toBe(true);
+
+      // Whose account: the entry's default, each person's own; no sentence on a shared one.
+      await expect(dialog.locator('[data-connection-field="credentialMode"]')).toHaveAttribute(
+        "data-credential-mode",
+        "user"
+      );
+      await expect(dialog.locator("[data-catalogue-shared-note]")).toHaveCount(0);
+      // The redirect URI to register: the instance's own, for the part's fixed name.
+      await expect(dialog.locator("[data-catalogue-redirect-uri]")).toHaveAttribute(
+        "data-catalogue-redirect-uri",
+        `${baseURL}${callbackPath}`
+      );
+      await shoot(page, "de", "light", "oauth-install");
+
+      const review = await connect(page, dialog, writes);
+      await shoot(page, "de", "light", "oauth-review");
+      await page.getByRole("dialog").first().locator("[data-connection-approve]").click();
+
+      // Each person connects their own; the admin may connect theirs now.
+      const done = page.getByRole("dialog").first();
+      await expect(done.locator("[data-catalogue-personal]")).toBeVisible();
+      await expect(done.locator("[data-catalogue-connect-own]")).toBeVisible();
+      await expect(review).toHaveCount(0);
+      await shoot(page, "de", "light", "oauth-personal");
+      const approved = await readAsset(
+        page,
+        `${apiBaseUrl}/api/v1/assets/connection/${OAUTH_ENTRY}`
+      );
+      expect(approved?.config).toMatchObject({
+        credentialMode: "user",
+        catalogue: { entry: OAUTH_ENTRY, part: "tools", version: 1 },
+        settings: {
+          oauth: { clientId: OAUTH_CLIENT_ID, scopes: ["sample.identity", "sample.read"] }
+        }
+      });
+      expect(approved?.config.operations).toEqual([
+        expect.objectContaining({ name: "listCustomers", enabled: true, exposure: ["agent"] })
+      ]);
+      expect(JSON.stringify(approved)).not.toContain(OAUTH_CLIENT_SECRET);
+
+      // "Einem Agenten geben": the agent gets the approved tool.
+      await done.locator("[data-connection-give]").click();
+      await done.locator(`[data-connection-give-agent="${agent}"]`).click();
+      await done.locator("[data-connection-give-next]").click();
+      await done.locator("[data-connection-give-confirm]").click();
+      await expect(done.locator('[data-connection-give-outcome="published"]')).toBeVisible();
+      const given = await readAsset(page, agentPath(agent));
+      expect(given?.config.toolNames).toEqual([`connection.${OAUTH_ENTRY}.listCustomers`]);
+      await done.locator("[data-connection-give-done]").click();
+      await expect(page).toHaveURL(new RegExp(`/build/connections/${OAUTH_ENTRY}$`, "u"));
+    } finally {
+      const found = await page.request.get(agentPath(agent));
+      if (found.ok()) {
+        await requestWithOrigin(page, "post", `${agentPath(agent)}/delete`, {
+          data: { expectedRevision: await assetRevision(page, agentPath(agent)) }
+        });
+      }
+    }
+  });
+
+  test("de dark: installed for one shared account, which signs in with exactly the approved access", async ({
+    page,
+    baseURL,
+    releaseConnections: _releaseConnections
+  }) => {
+    test.setTimeout(150_000);
+    const asked = await routeProvider(page.context());
+    const writes = recordWrites(page);
+    const dialog = await openEntry(page, "dark");
+
+    // Shared: the sentence on whose account everyone reads stands before the secret.
+    await dialog.locator('[data-connection-field="credentialMode"]').getByText("Geteilt").click();
+    await expect(dialog.locator('[data-connection-field="credentialMode"]')).toHaveAttribute(
+      "data-credential-mode",
+      "shared"
+    );
+    await expect(dialog.locator("[data-catalogue-shared-note]")).toBeVisible();
+    const checklistUri = await dialog
+      .locator("[data-catalogue-redirect-uri]")
+      .getAttribute("data-catalogue-redirect-uri");
+    expect(checklistUri).toBe(`${baseURL}${callbackPath}`);
+    await shoot(page, "de", "dark", "oauth-shared-install");
+
+    await connect(page, dialog, writes);
+    await page.getByRole("dialog").first().locator("[data-connection-approve]").click();
+
+    // The sign-in step: the provider's page in a tab of its own, with the approved access.
+    const step = page.getByRole("dialog").first();
+    await expect(step.locator('[data-sign-in-step="ready"]')).toBeVisible();
+    await shoot(page, "de", "dark", "oauth-shared-sign-in");
+    const tab = page.waitForEvent("popup");
+    await step.locator("[data-sign-in-open]").click();
+    await (await tab).waitForEvent("close");
+
+    // The redirect URI the sign-in sent is the one the checklist named.
+    expect(asked).toHaveLength(1);
+    expect(asked[0]?.searchParams.get("redirect_uri")).toBe(checklistUri);
+    expect(asked[0]?.searchParams.get("client_id")).toBe(OAUTH_CLIENT_ID);
+    expect(asked[0]?.searchParams.get("scope")).toBe("sample.identity sample.read");
+
+    // Signed in, the tools may be given to an agent.
+    await expect(step.locator("[data-connection-approved]")).toBeVisible({ timeout: 30_000 });
+    const detail = await page.request.get(`${apiBaseUrl}/api/v1/connections/${OAUTH_ENTRY}`);
+    expect(detail.ok()).toBe(true);
+    expect(bindingSchema.parse(await detail.json()).binding?.state).toBe("connected");
+    expect(await page.content()).not.toContain(OAUTH_CLIENT_SECRET);
+    await shoot(page, "de", "dark", "oauth-shared-signed-in");
+  });
+});
