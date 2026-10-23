@@ -46,6 +46,7 @@
 {"name":"config_asset.shipped_skill_unlisted","legacy":true,"audited":true,"phases":["after"]}
 {"name":"config_asset.updated","legacy":true,"audited":true,"phases":["after"]}
 {"name":"config_asset.use_set","legacy":false,"audited":true,"phases":["after"]}
+{"name":"connection.access_reset","legacy":false,"audited":true,"phases":["after"]}
 {"name":"connection.binding_connected","legacy":false,"audited":true,"phases":["after"]}
 {"name":"connection.binding_needs_reconnect","legacy":false,"audited":true,"phases":["after"]}
 {"name":"connection.binding_revoked","legacy":false,"audited":true,"phases":["after"]}

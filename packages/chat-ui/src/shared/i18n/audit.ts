@@ -68,6 +68,7 @@ export const audit = defineTranslations({
     "audit.event.connection.oauth_client_registered":
       "Registered a sign-in client for a Connection",
     "audit.event.connection.oauth_refused": "Refused a sign-in for a Connection",
+    "audit.event.connection.access_reset": "Lifted the earlier access of a reinstalled Connection",
     "audit.event.connection.person_context_set": "Changed what a Connection tells about the person",
     "audit.event.conversation.cleanup_completed": "Finished removing conversation data",
     "audit.event.conversation.cleanup_failed": "Removing conversation data failed",
@@ -326,6 +327,8 @@ export const audit = defineTranslations({
     "audit.event.connection.oauth_client_registered":
       "Anmelde-Client für eine Verbindung registriert",
     "audit.event.connection.oauth_refused": "Anmeldung für eine Verbindung abgelehnt",
+    "audit.event.connection.access_reset":
+      "Frühere Rechte einer neu eingerichteten Verbindung aufgehoben",
     "audit.event.connection.person_context_set":
       "Geändert, was eine Verbindung über die Person mitgibt",
     "audit.event.conversation.cleanup_completed": "Daten einer Unterhaltung entfernt",
