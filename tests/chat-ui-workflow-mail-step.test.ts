@@ -242,7 +242,9 @@ describe("the panel of a Send email step (MAIL-3a, check 141)", () => {
         sender: "Example office"
       })
     );
-    expect(html).toContain("&lt;office@example.test&gt;");
+    expect(html).toContain(
+      'title="office@example.test" data-mail-from-address="">office@example.test<'
+    );
     expect(html).toContain('data-mail-recipient="picked"');
     expect(html).toContain('data-template-option="load#findings"');
     expect(html).toContain(t("workflows.mail.maySendTo", { domains: "example.test" }));
