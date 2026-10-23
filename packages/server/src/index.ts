@@ -3,7 +3,12 @@ import { registerScheduledStartRoutes } from "./routes/scheduled-start-routes";
 export { SKILL_MAX_BYTES } from "./asset-kinds/skill-files";
 import type { HttpRuntime, Logger } from "@work-shape/catalyst-core";
 import { registerApprovalRequestRoutes } from "./routes/approval-request-routes";
-import { createAuthorizer, normalizeAllowedOrigins } from "@work-shape/catalyst-core";
+import {
+  AppError,
+  alwaysAllowLockIssues,
+  createAuthorizer,
+  normalizeAllowedOrigins
+} from "@work-shape/catalyst-core";
 import cors from "@fastify/cors";
 import multipart from "@fastify/multipart";
 import Fastify, { LogController, type FastifyInstance } from "fastify";
@@ -297,6 +302,12 @@ export async function createChatServer(
   registerWorkflowUnpublishRoute(route, options);
   for (const register of extensions.routes ?? []) register(route);
   registerApiReferenceRoutes(route, options);
+  // Every operation of the release is registered now: a lock of Always allow names one of them.
+  const lockIssues = alwaysAllowLockIssues(
+    options.config.policy.alwaysAllow.locked,
+    operationCalls.registry
+  );
+  if (lockIssues.length > 0) throw new AppError("VALIDATION_FAILED", lockIssues.join("\n"));
 
   const runtime = createHttpRuntime(app);
   rememberFramework(runtime, { app, route });

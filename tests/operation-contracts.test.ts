@@ -357,6 +357,7 @@ describe("operation contracts", () => {
           simulation?: unknown;
           inputHash: string;
           approvalRequestId?: string;
+          alwaysAllow?: true;
         }
       | {
           status: "pending_approval";

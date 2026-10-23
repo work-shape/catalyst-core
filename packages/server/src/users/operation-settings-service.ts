@@ -7,6 +7,7 @@ import {
   resolvePolicy,
   type AuditRecorder,
   type AuthenticatedIdentity,
+  type AuthenticatedUser,
   type ClientInstanceId,
   type OperationDefinition,
   type OperationRegistry,
@@ -48,10 +49,23 @@ interface OperationSettingView {
   updatedAt?: string;
 }
 
-/** The person a setting belongs to: a signed-in person, never a service principal. */
+/**
+ * Whether the caller is a person in their own first-party session: never a service principal,
+ * a delegated actor or a key (a personal API key, an embedding host's token). As with personal
+ * Connections, only such a caller reads or sets their confirmations.
+ */
+export function isFirstPartyPerson(actor: AuthenticatedIdentity): actor is AuthenticatedUser {
+  return (
+    !isAuthenticatedServicePrincipal(actor) &&
+    actor.delegatedActor === undefined &&
+    actor.keyScopes === undefined
+  );
+}
+
+/** The person a setting belongs to: a signed-in person in their own session. */
 function settingOwner(actor: AuthenticatedIdentity): string {
-  if (isAuthenticatedServicePrincipal(actor)) {
-    throw new AppError("FORBIDDEN", "Only a person sets their own confirmations");
+  if (!isFirstPartyPerson(actor)) {
+    throw new AppError("FORBIDDEN", "Only you read and set your confirmations, in the interface");
   }
   return getSubjectUserId(actor);
 }

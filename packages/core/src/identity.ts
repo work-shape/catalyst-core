@@ -231,6 +231,13 @@ export interface RuntimeCallContext {
    * (EW-8). A confirmation it asks for waits in that person's Inbox (OP-4b).
    */
   unattended?: true;
+  /**
+   * Set while an Agent Run's worker makes the call for a run its owner started in their own
+   * first-party session, or for a scheduled start or subagent of such a run: what the run
+   * recorded as `personalConnectionsAllowed`. The worker's actor no longer shows whether a key
+   * started the run, so a person's Always allow reaches a worker's call only with this (OP-6).
+   */
+  firstPartyRun?: true;
 }
 
 export function createUserPrincipal(user: AuthenticatedUser): AuthPrincipal {
