@@ -90,15 +90,20 @@ describe("reading a skill from a folder or a .zip", () => {
     );
   });
 
-  // The name is made from the folder as the platform makes one: lower case, `_` for `-`.
+  // A folder name that is an address is kept as written; another is made into one as the
+  // platform makes one: lower case, `_` for a space.
   it("names a skill whose SKILL.md names none after its folder, else after its archive", async () => {
     const inFolder = await readSkillImport("download", [
       entry("pdf-tools/SKILL.md", UNNAMED),
       entry("pdf-tools/references/r.md", "# R\n")
     ]);
-    expect(inFolder.ok && inFolder.skill.form.name).toBe("pdf_tools");
+    expect(inFolder.ok && inFolder.skill.form.name).toBe("pdf-tools");
     const atTop = await readSkillImport("Report Maker", [entry("SKILL.md", UNNAMED)]);
     expect(atTop.ok && atTop.skill.form.name).toBe("report_maker");
+    const named = await readSkillImport("pdf-tools", [
+      entry("SKILL.md", "---\nname: pdf_kit\ndescription: Reads PDFs.\n---\nRead.\n")
+    ]);
+    expect(named.ok && named.skill.form.name).toBe("pdf_kit");
   });
 
   it("says a folder without SKILL.md at its top is no skill", async () => {
