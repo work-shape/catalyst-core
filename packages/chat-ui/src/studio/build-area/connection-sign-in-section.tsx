@@ -147,7 +147,7 @@ export function ConnectionSignInSection({
           <p className="text-body text-muted-foreground">{t("connectionSignIn.memberText")}</p>
         )
       ) : signingIn ? (
-        <PageSignIn
+        <SignInPanel
           calls={{
             connection: asset.name,
             start: () => source.oauthStart(asset.name),
@@ -181,15 +181,21 @@ export function ConnectionSignInSection({
   );
 }
 
-/** The sign-in as the page runs it, under the section's facts. */
-function PageSignIn({
+/**
+ * The sign-in as a page runs it, under the facts it shows: the Connection page's section, and
+ * a row of You > Connections, where the person connects their own account.
+ */
+export function SignInPanel({
   calls,
   browser,
+  personal,
   onConnected,
   onDone
 }: {
   calls: SignInCalls;
   browser: SignInBrowser | undefined;
+  /** The person connects their own account. */
+  personal?: boolean;
   onConnected(): void;
   /** Closes the sign-in without one. */
   onDone(): void;
@@ -197,6 +203,7 @@ function PageSignIn({
   const { t } = useTranslation();
   const signIn = useConnectionSignIn(calls, {
     onConnected,
+    ...(personal ? { personal } : {}),
     ...(browser ? { browser } : {})
   });
   const waiting = signIn.state.phase === "waiting";

@@ -14,6 +14,7 @@ import type {
 import { ApiKeysPage } from "./pages/api-keys";
 import { ConnectLocalAgentPage } from "./pages/connect-local-agent";
 import { LanguageAppearancePage } from "./pages/language-appearance";
+import { PersonalConnectionsPage } from "./pages/personal-connections";
 import { ProfilePage } from "./pages/profile";
 import { SecurityPage } from "./pages/security";
 import { WorkspaceGeneralPage } from "./pages/workspace-general";
@@ -64,6 +65,14 @@ const settingsPages: readonly SettingsPageDefinition[] = [
     width: "narrow",
     visible: (viewer) => canChangePassword(viewer.user),
     component: SecurityPage
+  },
+  {
+    id: "connections",
+    group: "you",
+    labelKey: "settings.personalConnections",
+    width: "narrow",
+    visible: (viewer) => viewer.modules?.connections?.enabled === true,
+    component: PersonalConnectionsPage
   },
   {
     id: "api-keys",

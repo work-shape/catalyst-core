@@ -11,6 +11,7 @@ import {
   CONNECTION_OAUTH_CHOICES,
   isOAuthChoice,
   sendsSecret,
+  type ConnectionCredentialMode,
   type ConnectionFormAuthScheme,
   type ConnectionFormState,
   type ConnectionHeaderRow,
@@ -316,6 +317,46 @@ export function ConnectionAuthFields({
         <ConnectionSecretField value={secret.value} onChange={secret.onChange} />
       ) : null}
     </>
+  );
+}
+
+/**
+ * Whose account the Connection uses: Shared, one account for everyone, or Personal, each
+ * person's own. Chosen when the Connection is made; afterwards it shows locked, with why.
+ */
+export function CredentialModeField({
+  value,
+  onChange,
+  disabled
+}: {
+  value: ConnectionCredentialMode;
+  /** Absent once the Connection is made: the choice is fixed. */
+  onChange?(value: ConnectionCredentialMode): void;
+  disabled?: boolean;
+}) {
+  const { t } = useTranslation();
+  return (
+    <div data-connection-field="credentialMode" data-credential-mode={value}>
+      <RadioGroup<ConnectionCredentialMode>
+        label={t("personalConnections.whoseAccount")}
+        value={value}
+        disabled={disabled || onChange === undefined}
+        {...(onChange ? { onValueChange: onChange } : {})}
+        {...(onChange ? {} : { hint: t("personalConnections.modeLocked") })}
+        options={[
+          {
+            value: "shared",
+            label: t("personalConnections.modeShared"),
+            description: t("personalConnections.modeSharedText")
+          },
+          {
+            value: "user",
+            label: t("personalConnections.modePersonal"),
+            description: t("personalConnections.modePersonalText")
+          }
+        ]}
+      />
+    </div>
   );
 }
 

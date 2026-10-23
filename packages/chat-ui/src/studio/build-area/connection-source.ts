@@ -33,6 +33,8 @@ import type { AvailabilityChoice } from "./asset-availability-fields";
 import { connectionGiveSource } from "./connection-give";
 import type { ConnectionGiveHost } from "./connection-give-step";
 import type { ConnectorTypeOffer } from "./connection-typed-model";
+import { ownSignInOf } from "./connection-people-model";
+import type { SignInRead } from "./connection-sign-in-model";
 
 /** The action that lets a person test a Connection. */
 const CONNECTION_WRITE_ACTION = "connection.write";
@@ -145,6 +147,11 @@ export interface ConnectionSource {
   useCatalogueEntries?(): readonly CatalogueEntryOffer[] | undefined;
   /** Reads the Connection's state now, beside the hook, as the New connection dialog waits. */
   readDetail(name: string): Promise<ConnectionDetail>;
+  /**
+   * Reads the reader's own sign-in on a personal Connection now, as the New connection dialog
+   * waits for it. Absent where the place makes no personal Connection.
+   */
+  readOwnSignIn?(name: string): Promise<SignInRead>;
   /** Tests the Connection. Throws `PendingApprovalError` when somebody approves the test first. */
   test(name: string): Promise<ConnectionTestResult>;
   /**
@@ -345,6 +352,7 @@ export function useConnectionSource(): ConnectionSource {
       await queryClient.invalidateQueries({ queryKey: detailKey(name) });
     },
     readDetail: (name) => calls.get({ params: { name } }),
+    readOwnSignIn: async (name) => ownSignInOf(await calls.mine(), name),
     useConnectorTypes() {
       const query = useConnectorTypeOffers();
       return query.isError ? [] : query.data?.types;
