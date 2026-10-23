@@ -275,10 +275,21 @@ const partSchema = z
       )
         issue("An OAuth part asks for oauth.clientId and one client secret", ["fields"]);
       for (const field of part.fields ?? []) {
-        if (field.setting?.startsWith("oauth") && field.setting !== "oauth.clientId")
-          issue("OAuth fields fill only oauth.clientId; the secret uses the secret field", [
-            "fields"
-          ]);
+        if (
+          field.setting?.startsWith("oauth") &&
+          field.setting !== "oauth.clientId" &&
+          !(
+            field.setting.startsWith("oauth.pathParams.") &&
+            Object.hasOwn(
+              part.oauth?.pathParams ?? {},
+              field.setting.slice("oauth.pathParams.".length)
+            )
+          )
+        )
+          issue(
+            "OAuth fields fill only oauth.clientId or declared endpoint path parameters; the secret uses the secret field",
+            ["fields"]
+          );
       }
       for (const [key, value] of Object.entries(part.oauth ?? {})) {
         if (

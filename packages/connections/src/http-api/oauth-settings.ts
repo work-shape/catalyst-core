@@ -85,11 +85,31 @@ const oauthProviderSchema = z
           .regex(HEADER_VALUE_PATTERN, { message: "must be printable text on one line" })
       )
       .optional(),
+    /** Named segments in endpoint paths; never a host or a query parameter. */
+    pathParams: z
+      .record(
+        z.string().regex(/^[A-Za-z][A-Za-z0-9_]*$/u),
+        z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,252}$/u)
+      )
+      .optional(),
     tokenAuthMethod: z.enum(CONNECTOR_TOKEN_AUTH_METHODS).optional(),
     issuer: oauthAddressSchema.optional()
   })
   .strict()
   .superRefine((oauth, context) => {
+    for (const field of ["authorizationUrl", "tokenUrl", "revocationUrl", "issuer"] as const) {
+      const address = oauth[field];
+      if (address === undefined) continue;
+      try {
+        resolveOAuthPath(address, oauth.pathParams ?? {});
+      } catch {
+        context.addIssue({
+          code: "custom",
+          path: [field],
+          message: "Endpoint placeholders must be bound path segments"
+        });
+      }
+    }
     const params = Object.keys(oauth.authorizationParams ?? {});
     if (params.length > OAUTH_EXTRA_PARAMS_MAX) {
       context.addIssue({
@@ -123,3 +143,21 @@ export const oauthSettingsSchema = oauthProviderSchema.safeExtend({
 export const oauthEntrySchema = oauthProviderSchema.safeExtend({
   authorizationUrl: oauthAddressSchema
 });
+
+/** Fill only path segments. The origin and query always remain the declared ones. */
+export function resolveOAuthPath(
+  address: string,
+  params: Readonly<Record<string, string>>
+): string {
+  const url = new URL(address);
+  if (/[{}]|%7[bd]/iu.test(url.origin + url.search + url.hash))
+    throw new Error("Invalid placeholder");
+  const resolved = address.replace(/\{([A-Za-z][A-Za-z0-9_]*)\}/gu, (_match, name: string) => {
+    const value = Object.hasOwn(params, name) ? params[name] : undefined;
+    if (value === undefined || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,252}$/u.test(value))
+      throw new Error("Unbound path segment");
+    return encodeURIComponent(value);
+  });
+  if (/[{}]|%7[bd]/iu.test(resolved)) throw new Error("Invalid placeholder");
+  return resolved;
+}

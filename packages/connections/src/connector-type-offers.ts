@@ -52,8 +52,20 @@ export function connectorTypeOffers(
     entries: (catalogue?.entries ?? []).map((entry) => ({
       ...entry,
       parts: entry.parts.map((part) => {
-        const redirect = part.authScheme === "oauth" ? redirectUri?.(part.name) : undefined;
-        return redirect === undefined ? part : { ...part, redirectUri: redirect };
+        const redirect = redirectUri?.(part.name);
+        // A checklist line valued `{redirectUri}` shows the address the sign-in will send.
+        const prerequisites = part.prerequisites.map((line) =>
+          line.value !== "{redirectUri}"
+            ? line
+            : { text: line.text, ...(redirect === undefined ? {} : { value: redirect }) }
+        );
+        return {
+          ...part,
+          prerequisites,
+          ...(part.authScheme === "oauth" && redirect !== undefined
+            ? { redirectUri: redirect }
+            : {})
+        };
       })
     })),
     types: registry.types
