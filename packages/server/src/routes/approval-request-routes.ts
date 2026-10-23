@@ -4,7 +4,6 @@ import {
   AppError,
   asUserId,
   getSubjectUserId,
-  isAuthenticatedServicePrincipal,
   type AuthenticatedUser
 } from "@work-shape/catalyst-core";
 import { visibleApproverNames } from "../approvals/visible-approvers";
@@ -14,6 +13,7 @@ import { requirePathParam } from "./request-context";
 import type { ResolvedChatServerOptions } from "../types";
 import {
   alwaysAllowRefusal,
+  isFirstPartyPerson,
   recordOperationSettingChanged,
   setOwnOperationSetting
 } from "../users/operation-settings-service";
@@ -78,7 +78,7 @@ export function registerApprovalRequestRoutes(
     if (decision !== "approve") {
       throw new AppError("VALIDATION_FAILED", "Always allow comes only with allowing the call");
     }
-    if (isAuthenticatedServicePrincipal(user) || user.delegatedActor !== undefined) {
+    if (!isFirstPartyPerson(user)) {
       throw refused();
     }
     const request = await options.approvalRequests?.store.getApprovalRequest({

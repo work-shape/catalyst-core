@@ -216,6 +216,9 @@ export const unusedPlatformStores: PlatformStores = {
   get close() {
     return unsupported();
   },
+  get userOperationSettings() {
+    return unsupported();
+  },
   get readiness() {
     return unsupported();
   }
@@ -274,7 +277,8 @@ export const unusedOperationRegistry: OperationRegistry = {
   addSource: unsupported,
   resolve: unsupported,
   resolveMany: unsupported,
-  list: unsupported
+  list: unsupported,
+  releaseNames: unsupported
 };
 export const unusedRunOperationDeps: RunOperationDeps = {
   resolveResource: unsupported,

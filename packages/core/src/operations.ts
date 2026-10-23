@@ -145,6 +145,7 @@ export type OperationCallRuntime = Pick<
   | "unattended"
   | "workflowAgent"
   | "agentPreview"
+  | "firstPartyRun"
 > & {
   /**
    * Set where the surface could not read the caller's input at all. The call then ends as an

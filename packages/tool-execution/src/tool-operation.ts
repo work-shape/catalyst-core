@@ -487,6 +487,7 @@ export function createToolOperationRunner(
           ...(context.subagent ? { subagent: true } : {}),
           ...(context.workflowAgent ? { workflowAgent: true } : {}),
           ...(context.unattended ? { unattended: true } : {}),
+          ...(context.firstPartyRun ? { firstPartyRun: true } : {}),
           ...(context.agentPreview ? { agentPreview: context.agentPreview } : {}),
           unreadableInput: options.unreadableInput
         }

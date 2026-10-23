@@ -409,6 +409,13 @@ export const rateLimitsConfigSchema = z
  * release and no setting of an admin. A reading operation runs or is refused; a changing one
  * may also ask its caller to confirm or another person to approve.
  */
+/**
+ * An operation's name, `me.operation_settings.set`, or every operation under a prefix,
+ * `connection.crm.*`. A bare `*` or a part cut off, `connection.cr*`, names no operation.
+ */
+const ALWAYS_ALLOW_LOCK_PATTERN =
+  /^[A-Za-z][A-Za-z0-9_-]*(?:\.[A-Za-z0-9_][A-Za-z0-9_-]*)*(?:\.\*)?$/u;
+
 const policyConfigSchema = z
   .object({
     defaults: z
@@ -422,12 +429,19 @@ const policyConfigSchema = z
      * Whether people may set "Always allow" for their own agents' calls (OP-6). A `reversible`
      * change may be always allowed, `irreversible` and `outward` changes and changes without a
      * class may not. `locked` takes it away from operations by name or by a pattern such as
-     * `connections.*`; a lock never gives it. The admin's lock lives here until the Policies
+     * `connection.crm.*`; a lock never gives it. The admin's lock lives here until the Policies
      * screen (OP-2) holds it.
      */
     alwaysAllow: z
       .object({
-        locked: z.array(z.string().trim().min(1)).default([])
+        locked: z
+          .array(
+            z.string().trim().regex(ALWAYS_ALLOW_LOCK_PATTERN, {
+              message:
+                "Name an operation exactly, or every operation under a prefix such as 'connection.crm.*'; '*' and 'name*' are no names"
+            })
+          )
+          .default([])
       })
       .strict()
       .prefault({})

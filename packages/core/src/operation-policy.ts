@@ -16,7 +16,7 @@ export type PolicyDefaults = Record<OperationEffect, PolicyValue>;
 
 /**
  * An admin's value for one operation or for every operation under a name prefix
- * (`connections.*`). It may be narrowed to a workspace and an asset kind, and then
+ * (`connection.crm.*`). It may be narrowed to a workspace and an asset kind, and then
  * applies only to a call one of whose targets carries the same.
  */
 export interface CentralPolicySetting {
@@ -56,7 +56,7 @@ export const ALWAYS_ALLOW_BY_CLASS: Readonly<Record<OperationChangeClass, boolea
 /**
  * Whether people may set "Always allow" for an operation: only a change, only where its class
  * allows it, and only where no lock of the admin names it, by its name or by a pattern such as
- * `connections.*`. The strictest of what matches wins, so a lock only ever takes it away.
+ * `connection.crm.*`. The strictest of what matches wins, so a lock only ever takes it away.
  */
 export function mayAlwaysAllow(
   definition: { name: string; effect: OperationEffect; changeClass?: OperationChangeClass },
@@ -349,7 +349,7 @@ export function offersAlwaysAllow(input: PolicyInput, resolution: PolicyResoluti
   );
 }
 
-/** Whether a setting's operation, a name or a pattern such as `connections.*`, names one. */
+/** Whether a setting's operation, a name or a pattern such as `connection.crm.*`, names one. */
 function namesOperation(pattern: string, operation: string): boolean {
   return pattern.endsWith(".*")
     ? operation.startsWith(pattern.slice(0, -1))

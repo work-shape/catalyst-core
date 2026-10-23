@@ -93,6 +93,7 @@ export async function createServer(input: ServerInput = {}) {
       config: {
         ...config,
         policy: {
+          ...config.policy,
           defaults: {
             ...config.policy.defaults,
             reading: input.readingDefault ?? "allow",
