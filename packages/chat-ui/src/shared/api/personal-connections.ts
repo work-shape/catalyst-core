@@ -13,7 +13,7 @@ interface PersonalConnectionsInput {
   client: ApiClient;
 }
 
-export function personalConnectionsKey(apiBaseUrl: string, authScope: string) {
+function personalConnectionsKey(apiBaseUrl: string, authScope: string) {
   return ["personal-connections", apiBaseUrl, authScope] as const;
 }
 
