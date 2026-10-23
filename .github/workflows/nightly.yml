@@ -51,8 +51,11 @@ jobs:
           docker rm --force "$CHECK_POSTGRES_NAME" >/dev/null 2>&1 || true
           docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin <<<"$TOKEN"
           .github/scripts/start-postgres.sh catalyst local-check catalyst_test 54330
+      # A launchd job starts with a limit of 256 open files: see pr.yml.
       - name: Unit, database and scale tests
-        run: pnpm exec vitest run
+        run: |
+          ulimit -n 65536 || ulimit -n "$(ulimit -Hn)"
+          pnpm exec vitest run
       - name: Deployment kit tests
         run: pnpm test:deployment-kit
       - name: Upgrade and compatibility
@@ -89,7 +92,9 @@ jobs:
         env:
           E2E_EXTERNAL_POSTGRES: "1"
           E2E_SKIP_BUILD: "1"
-        run: pnpm test:e2e --retries=1 --workers=1 2>&1 | tee browser-run.log
+        run: |
+          ulimit -n 65536 || ulimit -n "$(ulimit -Hn)"
+          pnpm test:e2e --retries=1 --workers=1 2>&1 | tee browser-run.log
       - name: Keep traces and the server log of a failed run
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

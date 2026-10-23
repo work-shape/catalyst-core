@@ -46,6 +46,7 @@ jobs:
           uname -mrs
           sysctl -n hw.ncpu hw.memsize
           uptime
+          echo "open files: soft $(ulimit -n), hard $(ulimit -Hn), kern.maxfilesperproc $(sysctl -n kern.maxfilesperproc)"
           docker info --format 'docker {{.ServerVersion}}: {{.NCPU}} CPUs, {{.MemTotal}} bytes, {{.ContainersRunning}} containers running'
       - name: Install
         run: pnpm install --frozen-lockfile
@@ -73,8 +74,12 @@ jobs:
           docker rm --force "$CHECK_POSTGRES_NAME" >/dev/null 2>&1 || true
           docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin <<<"$TOKEN"
           .github/scripts/start-postgres.sh catalyst local-check catalyst_test 54329
+      # A launchd job starts with a limit of 256 open files, too few for the test files'
+      # database connections side by side.
       - name: Unit and database tests
-        run: pnpm exec vitest run
+        run: |
+          ulimit -n 65536 || ulimit -n "$(ulimit -Hn)"
+          pnpm exec vitest run
       - name: Upgrade from oldest supported release
         run: pnpm test:upgrade
       - name: Deployment kit tests
