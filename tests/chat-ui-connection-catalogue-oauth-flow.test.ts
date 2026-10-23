@@ -259,6 +259,26 @@ describe("the install of an OAuth part", () => {
     expect(created).toHaveBeenCalledWith("mailbox");
   });
 
+  it("personal, without the use right: says so and leads to the use rights, no connect", async () => {
+    const run = testSource();
+    run.source.mayConnectOwn = async () => false;
+    const created = mount(mailbox, run, testBrowser().browser);
+    await settle();
+    typeInto('[data-connection-field="oauth.clientId"]', "client-1");
+    typeInto('[data-connection-field="secret"]', CLIENT_SECRET);
+    await click("[data-connection-connect]");
+    await click("[data-connection-approve]");
+
+    expect(document.querySelector("[data-catalogue-connect-own]")).toBeNull();
+    expect(element("[data-catalogue-own-needs-use]").textContent).toContain(
+      "you need the right to use this connection"
+    );
+    await click("[data-catalogue-own-access]");
+    // The Connection's page opens, then its use rights.
+    expect(created).toHaveBeenCalledWith("mailbox", expect.any(Function));
+    expect(run.log).not.toContain("connections.oauth_start");
+  });
+
   it("flags a further group when one of its tools is ticked, and asks for its access", async () => {
     const run = testSource();
     mount(mailbox, run, testBrowser().browser);
