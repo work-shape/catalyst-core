@@ -176,7 +176,8 @@ function inputSchemaOf(operation: ConnectionOperationConfig): JsonObject {
     add(name, parameter, true);
   }
   for (const [name, parameter] of Object.entries(operation.query ?? {})) {
-    add(name, parameter, parameter.required === true);
+    // A const query is fixed by the declaration and never filled by a caller.
+    if (parameter.schema.const === undefined) add(name, parameter, parameter.required === true);
   }
   return {
     type: "object",

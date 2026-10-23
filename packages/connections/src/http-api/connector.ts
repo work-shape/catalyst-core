@@ -1,4 +1,4 @@
-import { oauthSettingsSchema } from "./oauth-settings";
+import { oauthSettingsSchema, resolveOAuthPath } from "./oauth-settings";
 import { createResultShaperRegistry, shapeResult } from "../result-shapers";
 import type { ResultShaper } from "@work-shape/catalyst-core";
 import { retryAfterSeconds } from "../retry-after";
@@ -216,15 +216,18 @@ type HttpApiSettings = z.infer<typeof settingsSchema>;
 function oauthEndpointsOf(settings: HttpApiSettings): ConnectorOAuthEndpoints | undefined {
   const { oauth } = settings;
   if (oauth === undefined) return undefined;
+  const endpoint = (address: string) => resolveOAuthPath(address, oauth.pathParams ?? {});
   return {
-    ...(oauth.authorizationUrl === undefined ? {} : { authorizationUrl: oauth.authorizationUrl }),
-    tokenUrl: oauth.tokenUrl,
-    ...(oauth.revocationUrl === undefined ? {} : { revocationUrl: oauth.revocationUrl }),
+    ...(oauth.authorizationUrl === undefined
+      ? {}
+      : { authorizationUrl: endpoint(oauth.authorizationUrl) }),
+    tokenUrl: endpoint(oauth.tokenUrl),
+    ...(oauth.revocationUrl === undefined ? {} : { revocationUrl: endpoint(oauth.revocationUrl) }),
     clientId: oauth.clientId,
     scopes: [...new Set(oauth.scopes ?? [])],
     authorizationParams: oauth.authorizationParams ?? {},
     tokenAuthMethod: oauth.tokenAuthMethod ?? "client_secret_post",
-    ...(oauth.issuer === undefined ? {} : { issuer: oauth.issuer })
+    ...(oauth.issuer === undefined ? {} : { issuer: endpoint(oauth.issuer) })
   };
 }
 
@@ -400,7 +403,10 @@ function callAddress(baseUrl: string, operation: ConnectionOperationConfig, inpu
   const pathParams = operation.pathParams ?? {};
   const queryParams = operation.query ?? {};
   for (const name of Object.keys(values)) {
-    if (!Object.hasOwn(pathParams, name) && !Object.hasOwn(queryParams, name)) {
+    if (
+      (!Object.hasOwn(pathParams, name) && !Object.hasOwn(queryParams, name)) ||
+      queryParams[name]?.schema.const !== undefined
+    ) {
       throw connectionCallError("input_invalid");
     }
   }
@@ -411,7 +417,8 @@ function callAddress(baseUrl: string, operation: ConnectionOperationConfig, inpu
   }
   const query = new URLSearchParams();
   for (const name of Object.keys(queryParams)) {
-    const value = values[name];
+    const value =
+      queryParams[name]?.schema.const ?? values[name] ?? queryParams[name]?.schema.default;
     const wireName = queryParams[name]?.sendAs ?? name;
     if (value === undefined || value === null) continue;
     if (queryParams[name]?.schema.type === "array") {

@@ -1,8 +1,9 @@
 import type { Catalogue, CatalogueEntryView } from "./catalogue/catalogue";
-import type {
-  ConnectorTypeRegistry,
-  JsonObject,
-  LocalizedStringConfig
+import {
+  connectionOAuthCallbackPath,
+  type ConnectorTypeRegistry,
+  type JsonObject,
+  type LocalizedStringConfig
 } from "@work-shape/catalyst-core";
 
 /** One field of a type's form as the New connection dialog reads it. */
@@ -35,13 +36,29 @@ export interface ConnectorTypeOfferView {
  */
 export function connectorTypeOffers(
   registry: ConnectorTypeRegistry,
-  catalogue?: Pick<Catalogue, "entries">
+  catalogue?: Pick<Catalogue, "entries">,
+  publicUrl?: string
 ): {
   types: ConnectorTypeOfferView[];
   entries: CatalogueEntryView[];
 } {
   return {
-    entries: [...(catalogue?.entries ?? [])],
+    entries: (catalogue?.entries ?? []).map((entry) => ({
+      ...entry,
+      parts: entry.parts.map((part) => ({
+        ...part,
+        prerequisites: part.prerequisites.map((line) =>
+          line.value !== "{redirectUri}"
+            ? line
+            : {
+                text: line.text,
+                ...(publicUrl === undefined
+                  ? {}
+                  : { value: new URL(connectionOAuthCallbackPath(part.name), publicUrl).href })
+              }
+        )
+      }))
+    })),
     types: registry.types
       .flatMap((definition) => {
         const { form } = definition;

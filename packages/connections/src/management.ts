@@ -638,7 +638,7 @@ export function createConnectionManagement(
         ? undefined
         : signInLandingUrl(deps.publicUrl, outcome, connectionName),
 
-    connectorTypes: () => connectorTypeOffers(deps.connectorTypes, deps.catalogue),
+    connectorTypes: () => connectorTypeOffers(deps.connectorTypes, deps.catalogue, deps.publicUrl),
 
     async listTools(readable) {
       const connections = (await readConnections(deps))
