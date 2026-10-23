@@ -208,6 +208,8 @@ export interface OperationCallPreview {
    * their Inbox (OP-4b). Without it, the call waits for another person's approval.
    */
   confirmation?: true;
+  /** The confirmation offers "Always allow": allowing can also stop it asking again (OP-6). */
+  alwaysAllow?: true;
 }
 
 /**
@@ -252,6 +254,9 @@ export function parseOperationCallPreview(preview: unknown): OperationCallPrevie
     heldByRule: standingRules.includes(readText(preview.heldBy) ?? ""),
     heldByFloor: preview.heldBy === "policy_floor",
     ...(preview.mode === "confirmation" ? { confirmation: true as const } : {}),
+    ...(preview.mode === "confirmation" && preview.alwaysAllow === true
+      ? { alwaysAllow: true as const }
+      : {}),
     ...(targetTitle ? { targetTitle } : {}),
     ...(asset ? { asset } : {}),
     ...(review ? { review } : {}),

@@ -12,6 +12,7 @@ toolNames:
   - propose_skill_change
   - e2e.record_note
   - e2e.confirm_note
+  - e2e.confirm_reversible
   - workspace.apply_patch
   - workspace.write_file
   - workspace.open

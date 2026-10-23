@@ -12,6 +12,7 @@ import type {
   SettingsViewer
 } from "../../shared/page-definition";
 import { ApiKeysPage } from "./pages/api-keys";
+import { ConfirmationsPage } from "./pages/confirmations";
 import { ConnectLocalAgentPage } from "./pages/connect-local-agent";
 import { LanguageAppearancePage } from "./pages/language-appearance";
 import { ProfilePage } from "./pages/profile";
@@ -64,6 +65,14 @@ const settingsPages: readonly SettingsPageDefinition[] = [
     width: "narrow",
     visible: (viewer) => canChangePassword(viewer.user),
     component: SecurityPage
+  },
+  {
+    id: "confirmations",
+    group: "you",
+    labelKey: "settings.confirmations",
+    width: "narrow",
+    visible: everyone,
+    component: ConfirmationsPage
   },
   {
     id: "api-keys",

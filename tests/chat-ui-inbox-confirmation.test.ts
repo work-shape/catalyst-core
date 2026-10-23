@@ -400,7 +400,11 @@ const itemPath = apiOperations["approval_requests.get"].buildPath({
 const decidePath = apiOperations["approval_requests.decide"].buildPath({
   params: { requestId: "apr_c1" }
 });
-const decideBody = z.object({ decision: z.string(), comment: z.string().optional() });
+const decideBody = z.object({
+  decision: z.string(),
+  comment: z.string().optional(),
+  alwaysAllow: z.literal(true).optional()
+});
 
 /** An instance that answers the item's reads and decisions as a test says. */
 function instance(initial: ApprovalRequestView | "not_found") {
@@ -532,6 +536,23 @@ describe("deciding a confirmation in the Inbox", () => {
     );
     expect(server.decisions).toEqual([{ decision: "approve" }]);
     expect(container.querySelector("[data-decision]")).toBeNull();
+  });
+
+  it("offers Always allow where the call does, and sends it with Allow (OP-6)", async () => {
+    const plain = await mountItem(instance(confirmation()).fetchImpl);
+    await waitFor(() => expect(plain.querySelector('[data-decision="approve"]')).not.toBeNull());
+    expect(plain.querySelector("[data-always-allow]")).toBeNull();
+    await unmount?.();
+
+    const server = instance(confirmation({ preview: { ...agentCall, alwaysAllow: true } }));
+    const container = await mountItem(server.fetchImpl);
+    await waitFor(() => expect(container.querySelector("[data-always-allow]")).not.toBeNull());
+    expect(container.textContent).toContain("Immer erlauben gilt auch für deine geplanten");
+    const always = container.querySelector<HTMLButtonElement>("[data-always-allow]");
+    expect(always?.textContent).toBe("Immer erlauben");
+    await act(async () => always?.click());
+    await waitFor(() => expect(server.decisions).toHaveLength(1));
+    expect(server.decisions).toEqual([{ decision: "approve", alwaysAllow: true }]);
   });
 
   it("denies with one click and no reason, and passes a reason that was given", async () => {

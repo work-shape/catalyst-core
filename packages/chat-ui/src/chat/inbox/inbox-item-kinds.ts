@@ -42,6 +42,8 @@ export type InboxDecision = "approve" | "reject" | "request_changes";
 export type InboxDecisionEntries = readonly {
   decision: InboxDecision;
   label: TranslationKey;
+  /** Allowing also sets "Always allow" for the call's operation (OP-6). */
+  alwaysAllow?: true;
 }[];
 
 /**
@@ -178,9 +180,18 @@ const staleDecisions: InboxDecisionEntries = [
   { decision: "reject", label: "operations.callDecline" }
 ];
 
+/** A confirmation whose call offers it adds "Always allow" before Allow (OP-6). */
+const alwaysAllowDecisions: InboxDecisionEntries = [
+  { decision: "reject", label: "operations.confirmDeny" },
+  { decision: "approve", label: "confirm.alwaysAllow", alwaysAllow: true },
+  { decision: "approve", label: "operations.confirmAllow" }
+];
+
 function operationCallDecisions(item: ApprovalRequestView): InboxDecisionEntries {
-  if (parseOperationCallPreview(item.preview)?.asset?.isStale) return staleDecisions;
-  return isInboxConfirmation(item) ? confirmationDecisions : approvalDecisions;
+  const call = parseOperationCallPreview(item.preview);
+  if (call?.asset?.isStale) return staleDecisions;
+  if (!isInboxConfirmation(item)) return approvalDecisions;
+  return call?.alwaysAllow ? alwaysAllowDecisions : confirmationDecisions;
 }
 
 /**

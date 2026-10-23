@@ -127,6 +127,9 @@ export const workspaceQueryKeys = {
     ["superadmin-users", apiBaseUrl, authScope] as const,
   servicePrincipals: (apiBaseUrl: string, authScope: string) =>
     ["service-principals", apiBaseUrl, authScope] as const,
+  /** The signed-in person's own confirmation settings (OP-6). */
+  ownOperationSettings: (apiBaseUrl: string, authScope: string) =>
+    ["own-operation-settings", apiBaseUrl, authScope] as const,
   /** The signed-in person's own API keys. */
   ownApiKeys: (apiBaseUrl: string, authScope: string) =>
     ["own-api-keys", apiBaseUrl, authScope] as const,
