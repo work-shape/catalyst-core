@@ -15,7 +15,23 @@ export const connectionCatalogue = defineTranslations({
     "connectionCatalogue.hosts": "Reaches {hosts}.",
     "connectionCatalogue.reviewIntro":
       "{title} recommends the ticked reading tools. None is enabled until you approve.",
-    "connectionCatalogue.connected": "{name} is connected."
+    "connectionCatalogue.connected": "{name} is connected.",
+    "connectionCatalogue.saved":
+      "{name} is saved. The shared account signs in once you approve its tools.",
+    "connectionCatalogue.savedPersonal":
+      "{name} is saved. Each person signs in with their own account once you approve its tools.",
+    "connectionCatalogue.redirectUri": "Register this redirect URI with the provider:",
+    "connectionCatalogue.redirectUriMissing":
+      "This instance has no public address yet, so it cannot name its redirect URI. Ask the team that runs it.",
+    "connectionCatalogue.groupScopes": "Access: {scopes}",
+    "connectionCatalogue.widens": "Asks for more access at the next sign-in.",
+    "connectionCatalogue.otherTools": "Other tools",
+    "connectionCatalogue.signInScopes": "The sign-in asks for: {scopes}",
+    "connectionCatalogue.personalText":
+      "Each person connects their own account under Settings > You > Connections. Agents read with it only in that person's private chats.",
+    "connectionCatalogue.ownOptional": "Optional: your own account, which only you use.",
+    "connectionCatalogue.connectOwn": "Connect your account now",
+    "connectionCatalogue.ownConnected": "Your account is connected."
   },
   de: {
     "connectionCatalogue.services": "Dienste",
@@ -29,6 +45,22 @@ export const connectionCatalogue = defineTranslations({
     "connectionCatalogue.hosts": "Erreicht {hosts}.",
     "connectionCatalogue.reviewIntro":
       "{title} empfiehlt die angehakten Lese-Tools. Freigegeben ist keines, bis du bestätigst.",
-    "connectionCatalogue.connected": "{name} ist verbunden."
+    "connectionCatalogue.connected": "{name} ist verbunden.",
+    "connectionCatalogue.saved":
+      "{name} ist gespeichert. Das gemeinsame Konto meldest du an, sobald du die Tools freigegeben hast.",
+    "connectionCatalogue.savedPersonal":
+      "{name} ist gespeichert. Jede Person meldet sich mit ihrem eigenen Konto an, sobald du die Tools freigegeben hast.",
+    "connectionCatalogue.redirectUri": "Trag diese Redirect-URI beim Anbieter ein:",
+    "connectionCatalogue.redirectUriMissing":
+      "Diese Instanz hat noch keine öffentliche Adresse und kann ihre Redirect-URI nicht nennen. Frag das Team, das sie betreibt.",
+    "connectionCatalogue.groupScopes": "Zugriff: {scopes}",
+    "connectionCatalogue.widens": "Fragt bei der nächsten Anmeldung nach mehr Zugriff.",
+    "connectionCatalogue.otherTools": "Weitere Tools",
+    "connectionCatalogue.signInScopes": "Die Anmeldung fragt nach: {scopes}",
+    "connectionCatalogue.personalText":
+      "Jede Person verbindet ihr eigenes Konto unter Einstellungen > Du > Verbindungen. Agenten lesen damit nur in den privaten Chats dieser Person.",
+    "connectionCatalogue.ownOptional": "Optional: dein eigenes Konto, das nur du nutzt.",
+    "connectionCatalogue.connectOwn": "Jetzt mit deinem Konto verbinden",
+    "connectionCatalogue.ownConnected": "Dein Konto ist verbunden."
   }
 });

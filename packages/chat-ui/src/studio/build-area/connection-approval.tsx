@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useId, useState, type ReactNode } from "react";
 import {
   Badge,
   Button,
@@ -35,6 +35,14 @@ const SURFACE_LABELS: Record<ApprovalSurface, TranslationKey> = {
 };
 
 type Effect = ApprovalCandidate["effect"];
+
+/** A group of rows: its title, a line under it, and the names of its tools. */
+export interface ApprovalGroup {
+  id: string;
+  title: ReactNode;
+  note?: ReactNode;
+  names: readonly string[];
+}
 
 /** What the person chose in the list: the tools, the surfaces and the effect of a tool. */
 export interface ApprovalChoice {
@@ -79,6 +87,7 @@ export function ConnectionApprovalList({
   onEffectsChange,
   declared = false,
   source,
+  groups,
   disabled = false
 }: {
   candidates: readonly ApprovalCandidate[];
@@ -94,6 +103,11 @@ export function ConnectionApprovalList({
   declared?: boolean;
   /** The YAML the declarations were pasted as, for "Show as YAML". */
   source?: string;
+  /**
+   * The rows in groups, each under its title with a line of its own, such as a catalogue
+   * part's scope groups. Left out, one list.
+   */
+  groups?: readonly ApprovalGroup[];
   disabled?: boolean;
 }) {
   const { t } = useTranslation();
@@ -108,6 +122,93 @@ export function ConnectionApprovalList({
     else next.delete(item);
     return next;
   };
+  const row = (candidate: ApprovalCandidate) => (
+    <li
+      key={candidate.name}
+      data-approval-tool={candidate.name}
+      className="flex min-w-0 items-start gap-3 border-b py-2.5 last:border-b-0"
+    >
+      <div className="min-w-0 flex-1">
+        <Checkbox
+          checked={selected.has(candidate.name) && !outsideReadingCut(candidate)}
+          disabled={disabled || outsideReadingCut(candidate)}
+          label={candidate.title}
+          description={
+            candidate.request ? (
+              <>
+                <code className="block font-mono text-code break-all">
+                  {candidate.request.method} {candidate.request.path}
+                </code>
+                {candidate.description ? (
+                  // The agent that carries the tool reads it, and a draft's author may
+                  // be an agent: whoever approves it sees it. A long one folds.
+                  <FoldedText className="mt-0.5" data-approval-description="">
+                    {candidate.description}
+                  </FoldedText>
+                ) : null}
+                {parameterEnums(candidate.declaration).map((entry) => (
+                  <span
+                    key={`${entry.location}.${entry.name}.${entry.path}`}
+                    className="mt-2 grid min-w-0 gap-0.5"
+                    data-approval-parameter={`${entry.location}.${entry.name}`}
+                  >
+                    <span className="text-caption text-muted-foreground">
+                      {t(
+                        entry.location === "pathParams"
+                          ? "connectionCreate.pathParameter"
+                          : "connectionCreate.queryParameter",
+                        { name: entry.name }
+                      )}
+                      {entry.path ? ` · ${entry.path}` : ""}
+                    </span>
+                    <span className="text-caption">{t("connectionCreate.allowedValues")}</span>
+                    <FoldedText data-approval-enum={entry.path}>{entry.values}</FoldedText>
+                  </span>
+                ))}
+              </>
+            ) : candidate.description ? (
+              // Whole: the model of an agent that carries the tool reads all of it, so
+              // whoever approves it does too. A long one scrolls.
+              <span className="block max-h-24 overflow-y-auto break-words whitespace-pre-line">
+                {candidate.description}
+              </span>
+            ) : undefined
+          }
+          onCheckedChange={(on) => onSelectedChange(toggle(selected, candidate.name, on))}
+        />
+      </div>
+      {onEffectsChange && candidate.request === undefined ? (
+        <Select
+          size="sm"
+          className="w-28 shrink-0"
+          value={candidate.effect}
+          disabled={disabled}
+          aria-label={t("connectionCreate.effectOf", { name: candidate.title })}
+          data-approval-effect={candidate.name}
+          onChange={(event) => {
+            const next = new Map(effects);
+            next.set(candidate.name, event.target.value === "reading" ? "reading" : "changing");
+            onEffectsChange(next);
+          }}
+        >
+          <option value="reading">{t("connectionCreate.reads")}</option>
+          <option value="changing">{t("connectionCreate.changes")}</option>
+        </Select>
+      ) : (
+        <Badge
+          tone={
+            candidate.effect === "changing" || outsideReadingCut(candidate) ? "warning" : "neutral"
+          }
+        >
+          {t(
+            candidate.effect === "changing" || outsideReadingCut(candidate)
+              ? "connectionCreate.changes"
+              : "connectionCreate.reads"
+          )}
+        </Badge>
+      )}
+    </li>
+  );
   const changing = rows.some((candidate) => candidate.effect === "changing");
   const outsideCut = rows.filter(outsideReadingCut).length;
   return (
@@ -168,102 +269,32 @@ export function ConnectionApprovalList({
             />
           </div>
         ) : null}
-        <List aria-label={t("connectionCreate.toolsLabel")} className="px-3">
-          {rows.map((candidate) => (
-            <li
-              key={candidate.name}
-              data-approval-tool={candidate.name}
-              className="flex min-w-0 items-start gap-3 border-b py-2.5 last:border-b-0"
+        {groups === undefined ? (
+          <List aria-label={t("connectionCreate.toolsLabel")} className="px-3">
+            {rows.map(row)}
+          </List>
+        ) : (
+          groups.map((group) => (
+            <div
+              key={group.id}
+              className="grid min-w-0 border-b last:border-b-0"
+              data-approval-group={group.id}
             >
-              <div className="min-w-0 flex-1">
-                <Checkbox
-                  checked={selected.has(candidate.name) && !outsideReadingCut(candidate)}
-                  disabled={disabled || outsideReadingCut(candidate)}
-                  label={candidate.title}
-                  description={
-                    candidate.request ? (
-                      <>
-                        <code className="block font-mono text-code break-all">
-                          {candidate.request.method} {candidate.request.path}
-                        </code>
-                        {candidate.description ? (
-                          // The agent that carries the tool reads it, and a draft's author may
-                          // be an agent: whoever approves it sees it. A long one folds.
-                          <FoldedText className="mt-0.5" data-approval-description="">
-                            {candidate.description}
-                          </FoldedText>
-                        ) : null}
-                        {parameterEnums(candidate.declaration).map((entry) => (
-                          <span
-                            key={`${entry.location}.${entry.name}.${entry.path}`}
-                            className="mt-2 grid min-w-0 gap-0.5"
-                            data-approval-parameter={`${entry.location}.${entry.name}`}
-                          >
-                            <span className="text-caption text-muted-foreground">
-                              {t(
-                                entry.location === "pathParams"
-                                  ? "connectionCreate.pathParameter"
-                                  : "connectionCreate.queryParameter",
-                                { name: entry.name }
-                              )}
-                              {entry.path ? ` · ${entry.path}` : ""}
-                            </span>
-                            <span className="text-caption">
-                              {t("connectionCreate.allowedValues")}
-                            </span>
-                            <FoldedText data-approval-enum={entry.path}>{entry.values}</FoldedText>
-                          </span>
-                        ))}
-                      </>
-                    ) : candidate.description ? (
-                      // Whole: the model of an agent that carries the tool reads all of it, so
-                      // whoever approves it does too. A long one scrolls.
-                      <span className="block max-h-24 overflow-y-auto break-words whitespace-pre-line">
-                        {candidate.description}
-                      </span>
-                    ) : undefined
-                  }
-                  onCheckedChange={(on) => onSelectedChange(toggle(selected, candidate.name, on))}
-                />
+              <div className="grid min-w-0 gap-0.5 px-3 pt-2.5">
+                <span className="text-label">{group.title}</span>
+                {group.note}
               </div>
-              {onEffectsChange && candidate.request === undefined ? (
-                <Select
-                  size="sm"
-                  className="w-28 shrink-0"
-                  value={candidate.effect}
-                  disabled={disabled}
-                  aria-label={t("connectionCreate.effectOf", { name: candidate.title })}
-                  data-approval-effect={candidate.name}
-                  onChange={(event) => {
-                    const next = new Map(effects);
-                    next.set(
-                      candidate.name,
-                      event.target.value === "reading" ? "reading" : "changing"
-                    );
-                    onEffectsChange(next);
-                  }}
-                >
-                  <option value="reading">{t("connectionCreate.reads")}</option>
-                  <option value="changing">{t("connectionCreate.changes")}</option>
-                </Select>
-              ) : (
-                <Badge
-                  tone={
-                    candidate.effect === "changing" || outsideReadingCut(candidate)
-                      ? "warning"
-                      : "neutral"
-                  }
-                >
-                  {t(
-                    candidate.effect === "changing" || outsideReadingCut(candidate)
-                      ? "connectionCreate.changes"
-                      : "connectionCreate.reads"
-                  )}
-                </Badge>
-              )}
-            </li>
-          ))}
-        </List>
+              <List
+                aria-label={
+                  typeof group.title === "string" ? group.title : t("connectionCreate.toolsLabel")
+                }
+                className="px-3"
+              >
+                {rows.filter((candidate) => group.names.includes(candidate.name)).map(row)}
+              </List>
+            </div>
+          ))
+        )}
       </div>
       {declared ? (
         <p className="text-caption text-muted-foreground" data-approval-reads-only="">

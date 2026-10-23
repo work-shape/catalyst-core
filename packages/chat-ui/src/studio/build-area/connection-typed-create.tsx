@@ -25,6 +25,7 @@ import {
   type ConnectStepState
 } from "./connection-connect";
 import type { CataloguePartName } from "./connection-catalogue-model";
+import type { ConnectionCredentialMode } from "./connection-form-model";
 import { connectionWriteErrors } from "./connection-refusals";
 import type { ConnectionSource } from "./connection-source";
 import {
@@ -52,6 +53,18 @@ export interface TypedInstall {
   intro?: ReactNode;
   /** Before the secret field: whose account it is and who reads what it reads. */
   note: ReactNode;
+  /** Whose account the Connection reads with. Left out, shared. */
+  credentialMode?: ConnectionCredentialMode;
+  /**
+   * The part signs in after the connect (OAuth): Verbinden saves and sets the client secret,
+   * and runs no test, which cannot pass before the sign-in.
+   */
+  signsIn?: boolean;
+  /**
+   * The id is the part's fixed name: the redirect URI registered at the provider names it,
+   * so it shows and cannot be changed.
+   */
+  addressFixed?: boolean;
 }
 
 /** What a connected Connection is, for a flow that goes on after the connect. */
@@ -92,10 +105,12 @@ export function TypedConnectionCreate({
   const service = offerText(offer.title, locale);
   const [title, setTitle] = useState(initial?.title ?? "");
   const [typedId, setTypedId] = useState<string | undefined>(() =>
-    initial === undefined ||
-    initial.name === assetAddressFromName(initial.title, CONNECTION_ASSET_KIND)
-      ? undefined
-      : initial.name
+    install?.addressFixed && initial !== undefined
+      ? initial.name
+      : initial === undefined ||
+          initial.name === assetAddressFromName(initial.title, CONNECTION_ASSET_KIND)
+        ? undefined
+        : initial.name
   );
   const [description, setDescription] = useState("");
   const [values, setValues] = useState<TypedValues>(() => ({ ...defaults }));
@@ -119,7 +134,8 @@ export function TypedConnectionCreate({
     const key = typedSecret(offer, values);
     const config = {
       ...typedConnectionConfig(offer, { name, title: title.trim(), description }, values),
-      ...(install === undefined ? {} : { catalogue: install.link })
+      ...(install === undefined ? {} : { catalogue: install.link }),
+      ...(install?.credentialMode === "user" ? { credentialMode: "user" as const } : {})
     };
     setBusy(true);
     setErrors({});
@@ -138,7 +154,7 @@ export function TypedConnectionCreate({
         now: () => Date.now()
       },
       // The type's host is its own: a changed field never moves the secret elsewhere.
-      { config, url: "", key, discovers: false },
+      { config, url: "", key, discovers: false, tests: install?.signsIn !== true },
       memory.current,
       (step, state) =>
         setSteps((current) =>
@@ -289,6 +305,7 @@ export function TypedConnectionCreate({
             addressHint={t("connectionCreate.idHint")}
             advancedLabel={t("connectionCreate.details")}
             disabled={busy || created}
+            addressFixed={install?.addressFixed === true}
           >
             <Field
               label={t("connectionPage.descriptionField")}

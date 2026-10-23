@@ -42,6 +42,11 @@ export interface NameWithAddressProps {
   advancedOpen?: boolean;
   disabled?: boolean;
   autoFocus?: boolean;
+  /**
+   * The address is fixed, such as one an outside service was given already: it shows and does
+   * not follow the name, and cannot be typed over.
+   */
+  addressFixed?: boolean;
 }
 
 /**
@@ -62,7 +67,8 @@ export function NameWithAddress({
   advanced,
   advancedOpen = false,
   disabled = false,
-  autoFocus = false
+  autoFocus = false,
+  addressFixed = false
 }: NameWithAddressProps) {
   const refused = check.state === "refused";
   const wantsOpen = refused || advancedOpen;
@@ -104,6 +110,7 @@ export function NameWithAddress({
                 autoComplete="off"
                 value={addressOf(value, derive)}
                 disabled={disabled}
+                readOnly={addressFixed}
                 data-name-with-address-field="address"
                 data-address-check={check.state}
                 onChange={(event) => onChange({ ...value, typedAddress: event.target.value })}
