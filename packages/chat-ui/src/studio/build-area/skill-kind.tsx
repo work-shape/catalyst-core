@@ -4,6 +4,7 @@ import { useSettingsPage } from "../../shared/settings-page-context";
 import { skillConfigToForm, startedSkillForm } from "./skill-form-model";
 import type { BuildAsset, BuildAssetEditorProps, BuildAssetKind } from "./build-asset-kind";
 import { SkillEditor } from "./skill-editor";
+import { SkillImportDialog } from "./skill-import";
 import { skillFacts } from "./skill-facts";
 
 /** The title of a skill that ships with the platform, read from its definition. */
@@ -36,6 +37,7 @@ export const skillKind: BuildAssetKind = {
       <Badge data-skill-origin="release">{t("build.platform")}</Badge>
     ) : null,
   shippedTitle: shippedSkillTitle,
+  importDialog: { label: "skillImport.action", Dialog: SkillImportDialog },
   Editor: SkillAssetEditor
 };
 

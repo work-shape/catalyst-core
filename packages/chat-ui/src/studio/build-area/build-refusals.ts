@@ -149,8 +149,8 @@ function number(value: unknown, key: string): number | undefined {
  * What a refusal of a folder says in the reader's language, with the path of the file it
  * names: the instance holds the limits and the rules, and says which one a write broke.
  */
-function folderRefusal(
-  details: RefusalDetails,
+export function folderRefusal(
+  details: Pick<RefusalDetails, "reason" | "path" | "folder" | "limit" | "actual">,
   t: Translate,
   locale: LocaleCode
 ): string | undefined {
