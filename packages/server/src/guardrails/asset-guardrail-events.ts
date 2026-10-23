@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { appPublishReview } from "../apps/app-publish-reach";
 import {
+  AppError,
   getSubjectUserId,
   isAuthenticatedServicePrincipal,
   type AuthenticatedIdentity,
@@ -28,7 +29,7 @@ import type { AssetFileInput } from "../assets/asset-files";
 import { readFileSetFile } from "../pages/page-file-sets";
 import { readDefinitionName } from "../asset-kinds/shared";
 import { scopeOf } from "../assets/asset-target";
-import { firstVersionOffering } from "../approvals/agent-publish-review";
+import { firstVersionOffering, type AgentPublishChecked } from "../approvals/agent-publish-review";
 import type { AssetWorkflowOptions } from "../types";
 
 // The before-events of the asset operations: `asset.before_write` for each asset a call saves
@@ -152,6 +153,18 @@ export function syncWriteEvents(input: {
   );
 }
 
+const checkedAgentPublishes = new WeakMap<OperationBeforeEvent, AgentPublishChecked>();
+
+/**
+ * What the guardrails of an agent's publish read, from the events they were last asked: the
+ * publish makes exactly that live, or nothing.
+ */
+export function agentPublishChecked(
+  events: readonly OperationBeforeEvent[] | undefined
+): AgentPublishChecked | undefined {
+  return events?.flatMap((event) => checkedAgentPublishes.get(event) ?? []).at(0);
+}
+
 /** The publish event of each kind that has one. */
 const PUBLISH_EVENTS: Readonly<Record<string, OperationBeforeEvent["name"]>> = {
   app: "app.before_publish",
@@ -175,34 +188,42 @@ export async function publishEvents(
       kind: "agent",
       name: input.name
     });
-    if (!asset || !assetScopesEqual(asset.scope, scopeOf(input.workspaceId))) return [];
+    if (
+      !asset ||
+      asset.status !== "active" ||
+      !assetScopesEqual(asset.scope, scopeOf(input.workspaceId))
+    )
+      throw new AppError("NOT_FOUND", `Config agent '${input.name}' was not found`);
     const draft = await options.stores.agentProposals.get({
       clientInstanceId: options.clientInstanceId,
       agentId: asset.id
     });
     // A first version without a draft is published as it is stored (access check 11).
-    const config =
-      draft?.revision === input.revision
-        ? draft.config
-        : !draft && (await firstVersionOffering(options, asset, input.revision)) !== undefined
-          ? (asset.config ?? {})
-          : undefined;
-    if (config === undefined) return [];
+    const firstVersion =
+      !draft && (await firstVersionOffering(options, asset, input.revision)) !== undefined;
+    // A publish of a revision its guardrails cannot read is refused here, never let through
+    // unchecked: the draft could reach that revision before the publish runs.
+    if (!firstVersion && draft?.revision !== input.revision)
+      throw new AppError(
+        "REVISION_CONFLICT",
+        "The agent draft changed. Read it again before publishing",
+        { reason: "draft_changed" }
+      );
+    const config = firstVersion ? (asset.config ?? {}) : (draft?.config ?? {});
     const write = assetWriteEvent({ kind: "agent", name: input.name, config });
     // The publish names its agent and the workspace that owns it: the shipped publish guardrail
     // holds the publish of a workspace's agent and not the instance's own (WS-PUB-1b).
-    return [
-      write,
-      {
-        ...write,
-        name: "agent.before_publish",
-        subject: {
-          ...write.subject,
-          id: asset.id,
-          ...(asset.scope.kind === "workspace" ? { workspaceId: asset.scope.workspaceId } : {})
-        }
+    const publish: OperationBeforeEvent = {
+      ...write,
+      name: "agent.before_publish",
+      subject: {
+        ...write.subject,
+        id: asset.id,
+        ...(asset.scope.kind === "workspace" ? { workspaceId: asset.scope.workspaceId } : {})
       }
-    ];
+    };
+    checkedAgentPublishes.set(publish, { revision: input.revision, firstVersion });
+    return [write, publish];
   }
   const name = PUBLISH_EVENTS[input.kind];
   if (name === undefined) {

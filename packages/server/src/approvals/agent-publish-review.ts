@@ -69,6 +69,12 @@ export function agentPublishSubject(
   };
 }
 
+/** What an agent's publish was checked as: a draft revision, or the first version as stored. */
+export interface AgentPublishChecked {
+  revision: number;
+  firstVersion: boolean;
+}
+
 /** Why a held publish can no longer be approved, an App's, a Workflow's or an agent's. */
 export type PublishMoved = "gone" | "draft_moved" | "live_moved";
 
