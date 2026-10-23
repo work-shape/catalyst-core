@@ -12,9 +12,12 @@ import { pagedOperation, resolvedPaging } from "./paged-operation";
 import { operationDatasetCapture } from "./operation-dataset";
 import { codeOutputDatasetSchema } from "./code-datasets";
 import { childStepOutcome } from "./child-runs";
+import { childDefinition } from "./child-definition";
+import { workflowResource } from "./workflow-resource";
 import { compileJsonSchema } from "@work-shape/catalyst-connections";
 import {
   WORKFLOW_DATASET_KEY,
+  WORKFLOW_ACTIONS,
   WORKFLOW_START_KEY_INPUT,
   isAppError,
   operationDenialError,
@@ -127,7 +130,7 @@ export interface StepExecutorOptions {
   stores: PlatformStores;
   operationCalls: WorkflowOperationCalls;
   /** Where a step of a published run reads whether its Workflow is still published. */
-  definitions: Pick<WorkflowDefinitionSource, "read">;
+  definitions: Pick<WorkflowDefinitionSource, "read" | "draft">;
   limits: WorkflowLimitContext;
   datasets?: WorkflowDatasets;
   now(): Date;
@@ -352,7 +355,25 @@ export function createStepExecutor(options: StepExecutorOptions) {
           if (stepRun.status === "waiting" && ended) return ended;
           const input = await resolveInput(scope, step.input, textSchemasOf(attempt));
           withinStepData(input, "The child input");
-          const child = await definitions.read(step.workflow);
+          const caller = await callerOf(run, stepRun, attempt.definition);
+          const asset = await stores.configAssets.getConfigAsset({
+            clientInstanceId,
+            kind: "workflow",
+            name: step.workflow
+          });
+          const child = await childDefinition({
+            definitions,
+            published: await definitions.read(step.workflow),
+            mode: run.mode,
+            actor: caller.actor,
+            resource: workflowResource(step.workflow, asset),
+            mayWrite: async (actor, resource) =>
+              (
+                await operationCalls.deps.authorizer.forActor(actor, {
+                  workspaceId: resource.workspaceId ?? null
+                })
+              ).authorize(WORKFLOW_ACTIONS.write, resource).allowed
+          });
           if (child && options.datasets)
             await checkDatasetValues(
               input,
@@ -369,7 +390,6 @@ export function createStepExecutor(options: StepExecutorOptions) {
             input[WORKFLOW_START_KEY_INPUT] = await resolveRunKey(scope, step.key);
           }
           await recordStepInput(stores.workflowRuns, scope, input);
-          const caller = await callerOf(run, stepRun, attempt.definition);
           const { operationRunId, call } = await callStepOperation({
             calls: operationCalls,
             run,

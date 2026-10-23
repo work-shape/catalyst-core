@@ -24,6 +24,7 @@ import type { PreparedStart } from "./run-start";
 import type { RunOrigin } from "./scheduled-start";
 import { assertRunLinkIsAcyclic } from "./child-run-links";
 import { workflowResource } from "./workflow-resource";
+import { childDefinition } from "./child-definition";
 
 /** A start must record its durable run promptly; overdue Operation Runs can be recovered. */
 const WORKFLOW_START_OPERATION_TIMEOUT_MS = 30_000;
@@ -101,11 +102,15 @@ export function createWorkflowStartSource(options: {
      * draft where the person testing may write the child (DP-4). A draft never runs live.
      */
     const childRevision = async (parentRunId: string, actor: AuthenticatedIdentity) => {
-      if (!definitions.draft || !options.mayWrite) return published;
       const parent = await stores.workflowRuns.readRun({ clientInstanceId, id: parentRunId });
-      if (parent?.mode !== "test") return published;
-      if (!(await options.mayWrite(actor, workflowResource(workflow, asset)))) return published;
-      return (await definitions.draft(workflow)) ?? published;
+      return childDefinition({
+        definitions,
+        published,
+        mode: parent?.mode,
+        actor,
+        resource: workflowResource(workflow, asset),
+        mayWrite: options.mayWrite
+      });
     };
     return {
       name,
