@@ -15,6 +15,7 @@ import {
   type WorkflowStepRunStatus
 } from "@work-shape/catalyst-core";
 import type { AssetVerb } from "../../shared/build-rights";
+import { isMailStep, mailViewOf } from "./mail-step";
 import { NO_START_FORM, nameFromId, startFormOf, type StartForm } from "./start-form";
 import type {
   WorkflowBranchView,
@@ -168,6 +169,8 @@ export interface WorkflowStepRunResource
   /** On the step run of a condition that has decided. Contract need C3. */
   taken?: string;
   error?: ErrorResource;
+  /** What the step got: only for a reader who may read the run's data. */
+  inputPreview?: WorkflowOutputPreview;
   outputPreview?: WorkflowOutputPreview;
   datasets?: readonly WorkflowDatasetResource[];
 }
@@ -346,6 +349,9 @@ export function toWorkflowStepRun(stepRun: WorkflowStepRunResource): WorkflowSte
     ...(childRunId === undefined ? {} : { childRunId }),
     ...times(stepRun),
     ...toFailure(stepRun.error),
+    ...(stepRun.inputPreview === undefined
+      ? {}
+      : { input: { text: stepRun.inputPreview.text, truncated: stepRun.inputPreview.truncated } }),
     ...toOutput(stepRun.outputPreview),
     ...toDatasets(stepRun.datasets)
   };
@@ -551,6 +557,60 @@ interface StepNames {
   triggerId: string | undefined;
   /** The loops around the step, by id, with what each calls its entries. */
   loops: ReadonlyMap<string, string | undefined>;
+  /** What each step returns, as a schema, where the definition or the instance says it. */
+  results?: ReadonlyMap<string, unknown>;
+}
+
+/** The title a schema gives the field at a dotted path, where it gives one. */
+function fieldTitle(schema: unknown, path: string): string | undefined {
+  let current = schema;
+  for (const part of path === "" ? [] : path.split(".")) {
+    const properties = isRecord(current) ? current.properties : undefined;
+    current = isRecord(properties) ? properties[part] : undefined;
+  }
+  return isRecord(current) ? text(current.title) : undefined;
+}
+
+/** What each step of the list returns, as a schema: the trigger returns the run's input. */
+function stepResults(
+  manifest: Readonly<Record<string, unknown>>,
+  facts: WorkflowStepFacts | undefined
+): Map<string, unknown> {
+  const results = new Map<string, unknown>();
+  const walk = (value: unknown) => {
+    for (const raw of records(value)) {
+      const id = text(raw.id);
+      if (id === undefined) continue;
+      results.set(
+        id,
+        raw.type === "trigger"
+          ? { type: "object", properties: { input: manifest.inputs } }
+          : (raw.outputSchema ?? facts?.[id]?.outputSchema)
+      );
+      walk(raw.steps);
+      walk(raw.then);
+      walk(raw.else);
+      for (const branch of records(raw.branches)) walk(branch.steps);
+    }
+  };
+  walk(manifest.steps);
+  return results;
+}
+
+/** Where a field of an earlier result comes from, and the field in words. */
+function fieldRef(
+  ref: { step: string; path: string },
+  known: StepNames
+): { from: WorkflowStepSource; field: string } {
+  const field =
+    fieldTitle(known.results?.get(ref.step), ref.path) ??
+    (ref.path.split(".").at(-1) || (known.names.get(ref.step) ?? nameFromId(ref.step)));
+  if (ref.step === known.triggerId) return { from: { from: "run_input" }, field };
+  if (known.loops.has(ref.step)) {
+    const itemName = known.loops.get(ref.step);
+    return { from: { from: "loop_entry", ...(itemName === undefined ? {} : { itemName }) }, field };
+  }
+  return { from: { from: "step", name: known.names.get(ref.step) ?? nameFromId(ref.step) }, field };
 }
 
 function stepSources(input: unknown, known: StepNames): WorkflowStepSource[] {
@@ -667,7 +727,10 @@ function readSteps(value: unknown, known: StepNames): WorkflowStepView[] {
             }
           }
         : {}),
-      sources: stepSources(raw.input, known)
+      sources: stepSources(raw.input, known),
+      ...(isMailStep(raw)
+        ? { mail: mailViewOf(raw.input, fact, (ref) => fieldRef(ref, known)) }
+        : {})
     });
   }
   return steps;
@@ -703,7 +766,8 @@ export function workflowSteps(
     names: stepNames(manifest.steps),
     tools: ids(manifest.tools),
     triggerId,
-    loops: new Map()
+    loops: new Map(),
+    results: stepResults(manifest, facts)
   });
 }
 

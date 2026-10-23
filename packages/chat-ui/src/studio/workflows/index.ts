@@ -85,3 +85,17 @@ export { WorkflowsPage, WorkflowsPageView } from "./workflows-page";
 // The address of the area and its row in the rail, which the same tests hold.
 export { areaOfRoute, workspaceRouteFromPath, workspaceRoutePath } from "../../shared/routes";
 export { railSections, shownRailSections } from "../../chat/workspace/rail-sections";
+export {
+  addressOutside,
+  mailAnswerOf,
+  mailRunOf,
+  mailSentence,
+  mailSummary,
+  mailViewOf,
+  readCutJson,
+  sampleMarkdown,
+  sampleText
+} from "./mail-step";
+export { mailFooter } from "./workflow-canvas-model";
+export { recipientsInput, sampleOf, textInput, textParts } from "./step-settings-mail";
+export { templateOf } from "./step-mail";

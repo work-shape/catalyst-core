@@ -38,6 +38,8 @@ import { fieldWords, isRecord, type KindProps } from "./step-settings-parts";
 import { AgentSettings } from "./step-settings-agent";
 import { CodeSettings } from "./step-settings-code";
 import { ChildWorkflowSettings, missingInputs, OperationSettings } from "./step-settings-operation";
+import { MailSettings } from "./step-settings-mail";
+import { MAIL_OPERATION } from "./mail-step";
 import { useCallableOperations, useChildWorkflows } from "./workflow-data";
 import { routeLink } from "./workflows-frame";
 import { useRecipientNames, useWorkflowsHost } from "./workflows-host";
@@ -244,6 +246,18 @@ export function StepSettings({
           left={left}
           changeWithAgent={changeWithAgent}
         />
+      ) : step.type === "operation" && step.operation === MAIL_OPERATION ? (
+        <MailSettings
+          step={step}
+          stepId={stepId}
+          editing={editing}
+          issue={issue}
+          under={under}
+          set={set}
+          missing={missing}
+          left={left}
+          changeWithAgent={changeWithAgent}
+        />
       ) : step.type === "operation" ? (
         <OperationSettings
           step={step}
@@ -320,6 +334,7 @@ export function StepSettingsBar({ stepId, editing }: { stepId: string; editing: 
   // A value missing is said at the first Save, or once its field was left.
   const incomplete =
     editing.lacking.has(stepId) ||
+    (step?.type === "operation" && step.operation === MAIL_OPERATION && mailLacks(step.input)) ||
     (step?.type === "operation" &&
       (text(step.operation) === "" ||
         missingInputs(
@@ -365,6 +380,12 @@ export function StepSettingsBar({ stepId, editing }: { stepId: string; editing: 
       }}
     />
   );
+}
+
+/** A Send email step without a recipient, a subject or a text: its Save waits for them. */
+function mailLacks(input: unknown): boolean {
+  const given = isRecord(input) ? input : {};
+  return ["to", "subject", "body"].some((field) => given[field] === undefined);
 }
 
 /** A value of the input to be picked from a step whose field is not chosen yet. */

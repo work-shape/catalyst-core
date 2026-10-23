@@ -2,6 +2,7 @@ import { useState, type ReactElement } from "react";
 import { WORKFLOW_EXECUTED_STEP_TYPES } from "@work-shape/catalyst-core";
 import { Picker, type PickerOption, type PickerOptionGroup } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../../shared/i18n";
+import { MAIL_OPERATION, MAIL_SYSTEM_SENDER } from "./mail-step";
 import { noteOf, operationWords } from "./operation-picker";
 import { fieldsSchema } from "./schema-fields";
 import { SCRIPT_FIELD } from "./step-edits";
@@ -28,7 +29,7 @@ type Offered = Exclude<(typeof WORKFLOW_EXECUTED_STEP_TYPES)[number], "trigger" 
 
 const OPERATION = "operation:";
 /** The operation that sends an e-mail: offered under People, where the person may send. */
-const MAIL = "mail.send";
+const MAIL = MAIL_OPERATION;
 
 /** What the palette calls an operation, and so the new step. */
 const operationName = (operation: CallableOperationOption, t: Translate) =>
@@ -160,7 +161,13 @@ export function newStepOf(
     const name = operationName(operation, t);
     return {
       name,
-      fields: () => ({ type: "operation", name, operation: operation.name, input: {} })
+      fields: () => ({
+        type: "operation",
+        name,
+        operation: operation.name,
+        // A new mail goes out as the instance's own sender, the only one until MAIL-M365S.
+        input: operation.name === MAIL ? { sender: { value: MAIL_SYSTEM_SENDER } } : {}
+      })
     };
   }
   return plainEntries(t)[value];

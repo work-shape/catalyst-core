@@ -33,6 +33,8 @@ export interface WorkflowsHost {
   startNew?(prompt: string): void;
   /** The names of the people and workspaces a Notify step may name, as far as the reader may read them. */
   recipients?: RecipientNames;
+  /** The instance's name and logo, which frame the e-mails a Workflow sends. */
+  brand?: { name: string; logoUrl?: string; logoUrlDark?: string };
 }
 
 const WorkflowsHostContext = createContext<WorkflowsHost | undefined>(undefined);

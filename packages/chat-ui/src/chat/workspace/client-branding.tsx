@@ -19,6 +19,20 @@ export function clientBrandingFrom(config: SafeConfig) {
 
 export type ClientBranding = ReturnType<typeof clientBrandingFrom>;
 
+/** The instance's name and logo as the frame of an e-mail a Workflow sends shows them. */
+export function mailBrandFrom(config: SafeConfig): {
+  name: string;
+  logoUrl?: string;
+  logoUrlDark?: string;
+} {
+  const branding = clientBrandingFrom(config);
+  return {
+    name: branding.clientLabel,
+    ...(branding.logoUrl ? { logoUrl: branding.logoUrl } : {}),
+    ...(branding.logoUrlDark ? { logoUrlDark: branding.logoUrlDark } : {})
+  };
+}
+
 /** Light/dark logo pair. Only rendered once `branding.logoUrl` is configured. */
 export function ClientBrandingLogo({
   branding,

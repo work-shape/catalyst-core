@@ -28,6 +28,7 @@ import { FailureBanner } from "./failure-banner";
 import { recipientsLine } from "./recipient-names";
 import type { LiveOnceControl } from "./test-run";
 import { StepDatasets } from "./step-datasets";
+import { MailStepDescription, MailStepRun } from "./step-mail";
 import { simulatedCall, stepDatasets, stepOutputRows } from "./step-output";
 import { countsLine } from "./workflow-canvas-model";
 import { useStepTranscript } from "./workflow-data";
@@ -268,7 +269,11 @@ export function StepPanel({
       {shown === "settings" && settings !== undefined ? (
         settings.content
       ) : shown === "what" ? (
-        <StepDescription step={step} summary={part.summary} onOpenChild={onOpenChild} />
+        step.mail === undefined ? (
+          <StepDescription step={step} summary={part.summary} onOpenChild={onOpenChild} />
+        ) : (
+          <MailStepDescription stepId={step.id} mail={step.mail} draft={settings !== undefined} />
+        )
       ) : shown === "run" && run !== undefined ? (
         <StepRunDetails
           step={step}
@@ -515,7 +520,9 @@ function StepRunDetails({
       ) : null}
       {stepRun.publishedWouldAsk === "approval" ? <PublishedAsksApproval /> : null}
       {run.liveOnce === undefined ? null : <LiveOnce control={run.liveOnce} />}
-      {stepRun.target === "dry_run" ? (
+      {step.mail !== undefined ? (
+        <MailStepRun mail={step.mail} stepRun={stepRun} />
+      ) : stepRun.target === "dry_run" ? (
         <SimulatedOutput output={stepRun.output} />
       ) : stepRun.output ? (
         <OutputPreview

@@ -9,6 +9,7 @@ import type {
 import { formatElapsed, formatMoment } from "../../shared/locale-format";
 import type { TranslationContextValue } from "../../shared/i18n";
 import { NO_RECIPIENT_NAMES, recipientsLine, type RecipientNames } from "./recipient-names";
+import { MAIL_ICON_FALLBACK, mailAnswerOf, mailSummary } from "./mail-step";
 import { triggerInWords } from "./schedule-words";
 import {
   failureHappened,
@@ -147,11 +148,13 @@ export function countsLine(
 }
 
 /** The words above a step's title: its type as a reader would say it. */
-function stepEyebrow(step: Pick<WorkflowStepView, "kind" | "effect">, t: Translate) {
+function stepEyebrow(step: Pick<WorkflowStepView, "kind" | "effect" | "mail">, t: Translate) {
   switch (step.kind) {
     case "trigger":
       return t("workflows.step.trigger");
     case "operation":
+      // workflow-canvas 3, Send email: "E-Mail senden" / "Sends an e-mail".
+      if (step.mail !== undefined) return t("workflows.mail.eyebrow");
       return step.effect === "reading"
         ? t("workflows.step.reading")
         : step.effect === "changing"
@@ -207,6 +210,14 @@ function stepIcon(step: WorkflowStepView): Pick<FlowGraphNode, "icon" | "iconFal
     case "trigger":
       return { icon: step.starts?.onSchedule === true ? "schedule" : "manual" };
     case "operation":
+      // The sender's icon: the instance's `system-mail` mark where the assembly registers one,
+      // else the generic mail icon. The transport has none.
+      if (step.mail !== undefined) {
+        return {
+          ...(step.mail.icon === undefined ? {} : { icon: step.mail.icon }),
+          iconFallback: MAIL_ICON_FALLBACK
+        };
+      }
       // C8: the `service` of the step's Connection names its icon in the client's registry.
       return {
         ...(step.service === undefined ? {} : { icon: step.service }),
@@ -245,6 +256,11 @@ function stepSummary(
       ? t("workflows.canvas.orByHand")
       : undefined;
   }
+  if (step.mail !== undefined) {
+    // workflow-canvas 3, Send email: the first recipient, how many more, and the subject.
+    const line = mailSummary(step.mail, recipients, { t, locale });
+    if (line !== undefined) return line;
+  }
   if (step.description !== undefined) {
     return step.description;
   }
@@ -255,6 +271,35 @@ function stepSummary(
   }
   const fallback = stepFallbackSentence(step);
   return fallback === undefined ? undefined : t(fallback);
+}
+
+/**
+ * The footer of a Send email step that ended well: "Sent to 3 at 07:42", "Sent to you as a test
+ * at 07:42", or "Simulated" in a test run. Nothing where the output says neither.
+ */
+export function mailFooter(
+  stepRun: Pick<WorkflowStepRunView, "output" | "target" | "finishedAt">,
+  { t, locale }: CanvasText
+): string | undefined {
+  if (stepRun.target === "dry_run") return t("workflows.mail.simulated");
+  const answer = mailAnswerOf(stepRun.output);
+  if (answer?.kind !== "sent") return undefined;
+  const at = answer.sentAt ?? stepRun.finishedAt;
+  const time =
+    at === undefined
+      ? undefined
+      : new Intl.DateTimeFormat(locale, { hour: "2-digit", minute: "2-digit" }).format(
+          new Date(at)
+        );
+  if (answer.test) {
+    return time === undefined
+      ? t("workflows.mail.sentTest")
+      : t("workflows.mail.sentTestAt", { time });
+  }
+  const count = answer.count.toLocaleString(locale);
+  return time === undefined
+    ? t("workflows.mail.sentTo", { count })
+    : t("workflows.mail.sentToAt", { count, time });
 }
 
 /** The drawing of a Workflow: a graph of the canvas that always names its groups. */
@@ -372,13 +417,19 @@ export function workflowGraph(
         footer: formatMoment(stepRun.startedAt ?? run.run.startedAt ?? run.run.createdAt, locale)
       };
     }
+    const mailed =
+      step.mail !== undefined && stepRun.status === "done" && stepRun.failure === undefined
+        ? mailFooter(stepRun, text)
+        : undefined;
     return {
       status,
       // C5: the sentence of the failure's reason, until the contract carries one per step.
       ...(stepRun.failure === undefined
         ? stepRun.status === "cancelled"
           ? { footer: t("workflows.run.cancelled") }
-          : {}
+          : mailed === undefined
+            ? {}
+            : { footer: mailed }
         : {
             footer: failureHappened(stepRun.failure, t, {
               account: run.run.runsAs,
@@ -523,14 +574,25 @@ export function workflowGraph(
       ...base(step, place),
       kind: step.kind === "workflow" ? "subflow" : "step",
       ...described,
-      ...(step.source === undefined
-        ? {}
-        : {
-            chip: {
-              label: step.source,
-              icon: step.service ?? sourceIcon(step)
+      ...(step.mail !== undefined
+        ? (step.mail.senderName ?? step.mail.senderTitle) === undefined
+          ? {}
+          : {
+              // The sender by the name the mail goes out with, never the transport.
+              chip: {
+                label: step.mail.senderName ?? step.mail.senderTitle ?? "",
+                ...(step.mail.icon === undefined ? {} : { icon: step.mail.icon }),
+                iconFallback: MAIL_ICON_FALLBACK
+              }
             }
-          }),
+        : step.source === undefined
+          ? {}
+          : {
+              chip: {
+                label: step.source,
+                icon: step.service ?? sourceIcon(step)
+              }
+            }),
       ...(step.kind === "workflow" ? { action: { label: t("workflows.canvas.open") } } : {}),
       ...state
     });
