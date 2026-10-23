@@ -558,6 +558,7 @@ export const agentRuntimeEventSchema = z.discriminatedUnion("type", [
     targetTitle: z.string().optional(),
     inputPreview: z.unknown(),
     simulation: z.unknown().optional(),
+    alwaysAllow: z.literal(true).optional(),
     expiresAt: timestampSchema
   }),
   z.object({
@@ -689,6 +690,8 @@ const toolCallDecisionSchema = z.object({
   inputPreview: z.unknown(),
   /** What the operation's own simulation answered, such as the mail `mail.send` would send. */
   simulation: z.unknown().optional(),
+  /** The person may answer "Always allow": the admin permits it and nothing else holds the call. */
+  alwaysAllow: z.literal(true).optional(),
   expiresAt: timestampSchema
 });
 

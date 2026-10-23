@@ -11,6 +11,12 @@ import {
 import type { Route } from "../http/route";
 import { toOperationRunResource } from "../operations/operation-run-resource";
 import type { ResolvedChatServerOptions } from "../types";
+import {
+  alwaysAllowRefusal,
+  recordOperationSettingChanged,
+  setOwnOperationSetting
+} from "../users/operation-settings-service";
+import { operationSettingsDeps } from "./operation-setting-routes";
 
 /**
  * A person's decision on a call their own Agent Run waits on (EW-2a). The decision is itself
@@ -23,6 +29,28 @@ export function registerOperationDecisionRoutes(
   options: ResolvedChatServerOptions
 ): void {
   const { clientInstanceId, stores } = options;
+  const settings = operationSettingsDeps(options);
+
+  /**
+   * "Always allow" with a confirmation (OP-6): only on a call whose card offered it, and only
+   * while the admin still permits it. Checked before the decision, so a refusal decides nothing.
+   */
+  const checkAlwaysAllow = async (runId: string): Promise<string> => {
+    const call = await stores.operationRuns.get({ clientInstanceId, id: runId });
+    const definition = call
+      ? await settings.registry.resolve(call.operation).catch(() => undefined)
+      : undefined;
+    if (!call || call.status !== "pending_confirmation" || !call.offersAlwaysAllow || !definition) {
+      throw new AppError("FORBIDDEN", "Always allow is not available for this call", {
+        reason: "always_allow_not_permitted"
+      });
+    }
+    const refusal = await alwaysAllowRefusal(settings, definition);
+    if (refusal) {
+      throw new AppError("FORBIDDEN", refusal, { reason: "always_allow_not_permitted" });
+    }
+    return call.operation;
+  };
 
   /** The run the call waits in, where the caller is the person it works for. */
   const authorizeDecider = async (
@@ -51,10 +79,19 @@ export function registerOperationDecisionRoutes(
     changeClass: "irreversible",
     authorize: ({ runId }, { actor }) => authorizeDecider(runId, actor),
     resource: ({ runId }) => ({ kind: "operation_run", id: runId }),
-    async execute({ runId, decision, reason, audience }, { actor }) {
+    async execute({ runId, decision, reason, audience, alwaysAllow }, context) {
+      const { actor } = context;
       if (isAuthenticatedServicePrincipal(actor)) {
         throw new AppError("FORBIDDEN", "Only a person decides the calls of their own run");
       }
+      if (alwaysAllow && decision !== "confirm") {
+        throw new AppError("VALIDATION_FAILED", "Always allow comes only with allowing the call");
+      }
+      // Only the person's own click sets it: never a delegated or other caller.
+      if (alwaysAllow && (actor.delegatedActor !== undefined || context.origin.kind !== "user")) {
+        throw new AppError("FORBIDDEN", "Only you set Always allow, in the interface");
+      }
+      const alwaysAllowed = alwaysAllow ? await checkAlwaysAllow(runId) : undefined;
       const at = new Date().toISOString();
       const comment = reason === undefined ? {} : { comment: reason };
       const mode = decision === "confirm" ? "confirmed" : "declined";
@@ -70,6 +107,21 @@ export function registerOperationDecisionRoutes(
           ? { declined: { error: { code: error.code, message: error.message }, denial } }
           : {})
       });
+      if (alwaysAllowed) {
+        const { changed } = await setOwnOperationSetting(settings, {
+          actor,
+          operation: alwaysAllowed,
+          value: "always_allow"
+        });
+        if (changed) {
+          await recordOperationSettingChanged(context.audit, {
+            actor,
+            correlationId: context.correlationId,
+            operation: alwaysAllowed,
+            value: "always_allow"
+          });
+        }
+      }
       return {
         run: toOperationRunResource(decided.operationRun),
         agentRun: {

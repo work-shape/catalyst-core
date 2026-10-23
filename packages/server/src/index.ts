@@ -31,6 +31,7 @@ import { registerAuditRoutes } from "./routes/audit-routes";
 import { registerOperationRunRoutes } from "./routes/operation-run-routes";
 import { registerOperationCallableRoutes } from "./routes/operation-callable-routes";
 import { registerOperationDecisionRoutes } from "./routes/operation-decision-routes";
+import { registerOperationSettingRoutes } from "./routes/operation-setting-routes";
 import { registerJobRoutes } from "./routes/job-routes";
 import { registerInfrastructureRoutes } from "./routes/infrastructure-routes";
 import { registerApiAccessAdministrationRoutes } from "./routes/api-access-administration-routes";
@@ -283,6 +284,7 @@ export async function createChatServer(
   registerOperationRunRoutes(route, options);
   registerOperationCallableRoutes(route, options);
   registerOperationDecisionRoutes(route, options);
+  registerOperationSettingRoutes(route, options);
   registerJobRoutes(route, options);
   registerInfrastructureRoutes(route, options);
   registerApiAccessAdministrationRoutes(route, options);
