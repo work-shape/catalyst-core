@@ -37,6 +37,7 @@ import {
 } from "./connection-connect";
 import {
   ConnectionCreateForm,
+  createsPersonal,
   draftedFields,
   type CreateFieldErrors,
   type CreateFields
@@ -177,7 +178,8 @@ export function ConnectionCreateFlow({
           form: emptyConnectionForm(),
           key: "",
           sendAs: "bearer",
-          auth: "key"
+          auth: "key",
+          credentialMode: "shared"
         }
   );
   // A drafted id, key header, header names or test path show under "Technical details", open
@@ -210,6 +212,8 @@ export function ConnectionCreateFlow({
   const rest = fields.form.connectorType === "http_api";
   /** A REST API's OAuth choice, or nothing where the Connection sends a key. */
   const oauthChoice = rest && fields.auth !== "key" ? fields.auth : undefined;
+  /** Each person signs in with their own account: the sign-in waits on the person's own. */
+  const personal = createsPersonal(fields);
 
   /** One write of the definition over the revision the dialog wrote last. Answers the new one. */
   const rewrite = async (config: Record<string, unknown>) => {
@@ -224,13 +228,15 @@ export function ConnectionCreateFlow({
     {
       connection: name,
       start: () => source.oauthStart(name),
-      readDetail: () => source.readDetail(name),
+      readDetail: () =>
+        personal && source.readOwnSignIn ? source.readOwnSignIn(name) : source.readDetail(name),
       writeOAuth: (oauth) => rewrite(withOAuthSettings(written.current, oauth)),
       setSecret: (value, expectedVersion, expectedRevision) =>
         source.setSecret(name, value, expectedVersion, expectedRevision)
     },
     {
       enabled: stage.step === "sign-in",
+      personal,
       onConnected: () => {
         if (rest) {
           // A REST API names no tools: after the sign-in its tools are added or drafted.
@@ -267,12 +273,21 @@ export function ConnectionCreateFlow({
     (oauthChoice !== "oauth_client" || fields.key !== "");
 
   const connect = async () => {
-    const key = fields.key;
+    // A personal MCP server takes no key: each person signs in.
+    const key = personal && !rest ? "" : fields.key;
     const form: ConnectionFormState = {
       ...fields.form,
       authScheme: oauthChoice ?? (key === "" ? "none" : fields.sendAs)
     };
-    const config = newConnectionConfig({ name, title, description: fields.description }, form);
+    const config = newConnectionConfig(
+      {
+        name,
+        title,
+        description: fields.description,
+        ...(personal ? { credentialMode: "user" as const } : {})
+      },
+      form
+    );
     written.current = config;
     setBusy(true);
     setErrors({});
@@ -427,6 +442,8 @@ export function ConnectionCreateFlow({
     setStage({ step: "signed-in" });
     // The test writes the health; what it answers changes nothing here.
     await source.test(name).catch(() => undefined);
+    // A personal sign-in starts no discovery by itself: the dialog asks for one.
+    if (personal) await source.discover(name).catch(() => undefined);
     const since = Date.now();
     for (;;) {
       const detail = await source.readDetail(name).catch(() => undefined);

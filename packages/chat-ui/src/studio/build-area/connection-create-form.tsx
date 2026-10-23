@@ -19,10 +19,13 @@ import {
   ConnectionOAuthDetailFields,
   ConnectionOAuthFields,
   ConnectionPersonContextHeaderField,
-  ConnectionTestPathField
+  ConnectionTestPathField,
+  CredentialModeField
 } from "./connection-form";
 import {
   emptyConnectionForm,
+  offersCredentialMode,
+  type ConnectionCredentialMode,
   type ConnectionFormState,
   type ConnectionOAuthChoice
 } from "./connection-form-model";
@@ -52,6 +55,22 @@ export interface CreateFields {
   sendAs: "bearer" | "header";
   /** For a REST API: a key, or an OAuth choice whose client secret is `key`. */
   auth: CreateAuth;
+  /**
+   * Whose account a Connection that signs a person in uses. Read only where the form offers the
+   * choice (`offersCredentialMode`).
+   */
+  credentialMode: ConnectionCredentialMode;
+}
+
+/** Whether the fields make a personal Connection: chosen, where the form offers the choice. */
+export function createsPersonal(fields: CreateFields): boolean {
+  return (
+    fields.credentialMode === "user" &&
+    offersCredentialMode(
+      fields.form.connectorType,
+      fields.form.connectorType === "http_api" ? fields.auth : "key"
+    )
+  );
 }
 
 /** Where a field says what is wrong with it. */
@@ -93,6 +112,9 @@ export function ConnectionCreateForm({
   const rest = fields.form.connectorType === "http_api";
   const auth: CreateAuth = rest ? fields.auth : "key";
   const oauth = auth !== "key";
+  const offersMode = offersCredentialMode(fields.form.connectorType, auth);
+  // A personal MCP server signs each person in: it takes no key.
+  const takesKey = rest || !createsPersonal(fields);
   const form = (next: Partial<ConnectionFormState>) =>
     onChange({ ...fields, form: { ...fields.form, ...next } });
   const detailsShown =
@@ -245,6 +267,13 @@ export function ConnectionCreateForm({
             </Select>
           </Field>
         ) : null}
+        {offersMode ? (
+          <CredentialModeField
+            value={fields.credentialMode}
+            disabled={busy}
+            onChange={(credentialMode) => onChange({ ...fields, credentialMode })}
+          />
+        ) : null}
         {oauth ? (
           <ConnectionOAuthFields
             oauth={fields.form.oauth}
@@ -254,30 +283,32 @@ export function ConnectionCreateForm({
             onChange={(next) => form({ oauth: next })}
           />
         ) : null}
-        <Field
-          label={t(oauth ? "connectionCreate.oauthClientSecret" : "connectionCreate.key")}
-          {...(auth === "oauth_client" ? { required: true } : { optional: true })}
-          hint={t(
-            auth === "oauth_client"
-              ? "connectionCreate.oauthClientSecretRequired"
-              : oauth
-                ? "connectionCreate.oauthClientSecretHint"
-                : rest
-                  ? "connectionCreate.keyHint"
-                  : "connectionCreate.keyHintMcp"
-          )}
-          error={errors.key}
-        >
-          <Input
-            type="password"
-            autoComplete="new-password"
-            spellCheck={false}
-            value={fields.key}
-            disabled={busy}
-            data-connection-field="secret"
-            onChange={(event) => onChange({ ...fields, key: event.target.value })}
-          />
-        </Field>
+        {takesKey ? (
+          <Field
+            label={t(oauth ? "connectionCreate.oauthClientSecret" : "connectionCreate.key")}
+            {...(auth === "oauth_client" ? { required: true } : { optional: true })}
+            hint={t(
+              auth === "oauth_client"
+                ? "connectionCreate.oauthClientSecretRequired"
+                : oauth
+                  ? "connectionCreate.oauthClientSecretHint"
+                  : rest
+                    ? "connectionCreate.keyHint"
+                    : "connectionCreate.keyHintMcp"
+            )}
+            error={errors.key}
+          >
+            <Input
+              type="password"
+              autoComplete="new-password"
+              spellCheck={false}
+              value={fields.key}
+              disabled={busy}
+              data-connection-field="secret"
+              onChange={(event) => onChange({ ...fields, key: event.target.value })}
+            />
+          </Field>
+        ) : null}
       </NameWithAddress>
       {steps.length > 0 ? (
         <Steps label={t("connectionCreate.steps")} data-connection-steps="">
@@ -334,6 +365,7 @@ export function draftedFields(draft: ConnectionDraft): CreateFields {
     },
     key: "",
     sendAs: keyHeader === undefined ? "bearer" : "header",
-    auth: "key"
+    auth: "key",
+    credentialMode: "shared"
   };
 }

@@ -218,6 +218,8 @@ export const connectionToolsSchema = z.object({
       service: z.string().optional(),
       /** The Connector type. The interface shows the icon of its category without a `service`. */
       connectorType: z.string().optional(),
+      /** Each person uses their own account: its tools run only in that person's private chats. */
+      personal: z.literal(true).optional(),
       tools: z.array(connectionToolSchema)
     })
   )
@@ -388,7 +390,17 @@ export const personalConnectionsSchema = z.object({
   )
 });
 export const connectionPeopleSchema = z.object({
-  people: z.array(personalConnectionStateSchema.extend({ userId: z.string() }))
+  people: z.array(
+    personalConnectionStateSchema.extend({
+      userId: z.string(),
+      /**
+       * The person's name as the instance's list of users shows it, so who may change the
+       * Connection sees who connected without the right to list users. Absent for a person the
+       * instance no longer knows.
+       */
+      displayLabel: z.string().optional()
+    })
+  )
 });
 export type PersonalConnections = z.infer<typeof personalConnectionsSchema>;
 export type ConnectionPeople = z.infer<typeof connectionPeopleSchema>;

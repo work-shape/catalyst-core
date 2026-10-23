@@ -46,7 +46,7 @@ export * from "./connection-catalogue-model";
 export { CatalogueServices } from "./connection-catalogue-services";
 export * from "./connection-connect";
 export { ConnectionCreateFlow } from "./connection-create-dialog";
-export { ConnectionCreateForm, type CreateFields } from "./connection-create-form";
+export { ConnectionCreateForm, createsPersonal, type CreateFields } from "./connection-create-form";
 export { TypedConnectionCreate } from "./connection-typed-create";
 export * from "./connection-typed-model";
 export {
@@ -87,6 +87,7 @@ export {
 } from "./connection-operation-details";
 export * from "./connection-operation-schema";
 export * from "./connection-sign-in-model";
+export * from "./connection-people-model";
 export {
   SignInActions,
   SignInBody,

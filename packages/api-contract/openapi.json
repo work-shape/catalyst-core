@@ -4888,6 +4888,10 @@
                           "connectorType": {
                             "type": "string"
                           },
+                          "personal": {
+                            "type": "boolean",
+                            "const": true
+                          },
                           "tools": {
                             "type": "array",
                             "items": {
@@ -6044,6 +6048,9 @@
                             "type": "string"
                           },
                           "userId": {
+                            "type": "string"
+                          },
+                          "displayLabel": {
                             "type": "string"
                           }
                         },

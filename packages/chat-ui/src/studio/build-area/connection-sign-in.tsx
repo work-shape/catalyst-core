@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { ConnectionDetail, ConnectionOAuthStart } from "@work-shape/catalyst-api-client";
+import type { ConnectionOAuthStart } from "@work-shape/catalyst-api-client";
 import {
   Banner,
   Button,
@@ -21,7 +21,8 @@ import {
   waitForSignIn,
   type SignInError,
   type SignInFailure,
-  type SignInLanding
+  type SignInLanding,
+  type SignInRead
 } from "./connection-sign-in-model";
 
 // The step that signs a Connection in at its provider (CS-4b4), in the New connection dialog
@@ -35,7 +36,8 @@ export interface SignInCalls {
   connection: string;
   /** `connections.oauth_start`. */
   start(): Promise<ConnectionOAuthStart>;
-  readDetail(): Promise<ConnectionDetail>;
+  /** The Connection's detail, or for a personal sign-in the person's own sign-in. */
+  readDetail(): Promise<SignInRead>;
   /**
    * Writes `settings.oauth` of the definition and answers the revision it wrote. Absent where
    * the definition is not changed here, as for a Connection of the release config: the
@@ -68,20 +70,23 @@ export interface SignInBrowser {
   now(): number;
 }
 
+/** Opens an empty window: a tab, or with `features` a small window of its own. */
+function openWindow(features?: string): SignInTab | undefined {
+  const opened = window.open("about:blank", "_blank", features);
+  if (!opened) return undefined;
+  return {
+    go(url) {
+      // The provider's page gets no hold of this window.
+      opened.opener = null;
+      opened.location.replace(url);
+    },
+    close: () => opened.close()
+  };
+}
+
 /** The browser the product runs in. */
 const windowSignInBrowser: SignInBrowser = {
-  openTab() {
-    const tab = window.open("about:blank", "_blank");
-    if (!tab) return undefined;
-    return {
-      go(url) {
-        // The provider's page gets no hold of this window.
-        tab.opener = null;
-        tab.location.replace(url);
-      },
-      close: () => tab.close()
-    };
-  },
+  openTab: () => openWindow(),
   listen(onLanding) {
     if (typeof BroadcastChannel === "undefined") return () => undefined;
     const channel = new BroadcastChannel(SIGN_IN_CHANNEL);
@@ -106,9 +111,20 @@ const windowSignInBrowser: SignInBrowser = {
   now: () => Date.now()
 };
 
+/**
+ * The browser of a person's own sign-in: the provider's page in a small window beside the page,
+ * or in a new tab where the browser opens no such window. Never in a frame.
+ */
+export const popupSignInBrowser: SignInBrowser = {
+  ...windowSignInBrowser,
+  openTab: () => openWindow("popup,width=520,height=720") ?? openWindow()
+};
+
 /** Where the step stands. */
 export type SignInPhase =
   | { phase: "starting" }
+  /** A one-click sign-in that was cancelled: nothing runs. */
+  | { phase: "idle" }
   /** The start was refused before anything could be shown. */
   | { phase: "failed"; error: SignInError }
   /** The provider registers no client: the person enters the one it issued. */
@@ -116,7 +132,7 @@ export type SignInPhase =
   /** The provider's host and the permissions, and the button that opens its page. */
   | { phase: "ready"; start: ConnectionOAuthStart; error?: SignInError; opening: boolean }
   | { phase: "waiting"; start: ConnectionOAuthStart }
-  | { phase: "connected"; detail: ConnectionDetail };
+  | { phase: "connected"; detail: SignInRead };
 
 export interface ConnectionSignIn {
   state: SignInPhase;
@@ -127,6 +143,10 @@ export interface ConnectionSignIn {
   choosesScopes: boolean;
   /** The client may be entered here. */
   entersClient: boolean;
+  /** The person connects their own account, which nobody else uses. */
+  personal: boolean;
+  /** A sign-in started here is starting or waiting for the provider. */
+  busy: boolean;
   /**
    * The redirect URI of a client the provider issued, to copy into its app: the instance names
    * it once the Connection is saved. Nothing for a client registered by DCR.
@@ -137,6 +157,12 @@ export interface ConnectionSignIn {
   setClient(client: { id: string; secret: string }): void;
   /** Opens the provider's page. Called in the click, so the browser opens its tab. */
   open(): void;
+  /**
+   * Signs in with one click, without the step: opens the window in the click, starts the
+   * sign-in and sends the window to the provider, whose own page shows the permissions. For a
+   * person's own account, where there is nothing to choose before.
+   */
+  connect(): void;
   cancel(): void;
   retry(): void;
   saveClient(): void;
@@ -146,8 +172,10 @@ export interface ConnectionSignIn {
 export function useConnectionSignIn(
   calls: SignInCalls,
   options: {
-    onConnected(detail: ConnectionDetail): void;
+    onConnected(detail: SignInRead): void;
     browser?: SignInBrowser;
+    /** The person connects their own account: the step says so instead of the shared sentence. */
+    personal?: boolean;
     /** Off, nothing starts: for a dialog that shows the step later. */
     enabled?: boolean;
   }
@@ -163,7 +191,7 @@ export function useConnectionSignIn(
   const latest = useRef({ calls, onConnected: options.onConnected });
   latest.current = { calls, onConnected: options.onConnected };
   /** What the Connection was before this sign-in: a later sign-in is told apart from it. */
-  const before = useRef<ConnectionDetail | undefined>(undefined);
+  const before = useRef<SignInRead | undefined>(undefined);
   /** The start shown is spent: the next open starts again. */
   const spent = useRef(false);
   const waiting = useRef<AbortController | undefined>(undefined);
@@ -230,6 +258,33 @@ export function useConnectionSignIn(
     }
     spent.current = true;
     tab.go(opened.authorizationUrl);
+    await waitOn(opened, (error) =>
+      setState({ phase: "ready", start: opened, opening: false, ...(error ? { error } : {}) })
+    );
+  }
+
+  /** Signs in in one click: the window is open, the step is skipped. */
+  async function connectNow(tab: SignInTab) {
+    const { calls: current } = latest.current;
+    let start: ConnectionOAuthStart;
+    try {
+      before.current = await current.readDetail().catch(() => undefined);
+      start = await current.start();
+    } catch (error) {
+      tab.close();
+      setState({ phase: "failed", error: signInErrorOf(error) });
+      return;
+    }
+    spent.current = true;
+    tab.go(start.authorizationUrl);
+    await waitOn(start, (error) =>
+      setState(error ? { phase: "failed", error } : { phase: "idle" })
+    );
+  }
+
+  /** Waits for the sign-in the provider's page was opened for; `back` hears a miss. */
+  async function waitOn(opened: ConnectionOAuthStart, back: (error?: SignInError) => void) {
+    const { calls: current } = latest.current;
     const controller = new AbortController();
     waiting.current = controller;
     setState({ phase: "waiting", start: opened });
@@ -254,10 +309,10 @@ export function useConnectionSignIn(
         latest.current.onConnected(outcome.detail);
         return;
       case "failed":
-        setState({ phase: "ready", start: opened, opening: false, error: outcome.error });
+        back(outcome.error);
         return;
       case "cancelled":
-        setState({ phase: "ready", start: opened, opening: false });
+        back();
         return;
     }
   }
@@ -270,7 +325,7 @@ export function useConnectionSignIn(
     try {
       const revision = await current.writeOAuth({ clientId: id });
       if (client.secret !== "" && current.setSecret) {
-        const version = (await current.readDetail()).secret.version;
+        const version = (await current.readDetail()).secret?.version;
         // For the client just written: a write of the addresses since refuses the secret.
         await current.setSecret(client.secret, version ?? null, revision);
       }
@@ -282,12 +337,16 @@ export function useConnectionSignIn(
     await begin();
   }
 
+  // "starting" before anything began is the rest state of a step that is not shown yet.
+  const busy = state.phase === "waiting" || (begun.current && state.phase === "starting");
   return {
     state,
+    busy,
     offered,
     ticked,
     choosesScopes: calls.writeOAuth !== undefined,
     entersClient: calls.writeOAuth !== undefined,
+    personal: options.personal ?? false,
     ...(redirectUri === undefined ? {} : { redirectUri }),
     client,
     setTicked(scope, on) {
@@ -309,6 +368,17 @@ export function useConnectionSignIn(
       }
       setState({ phase: "ready", start, opening: true });
       run(openStarted(start, tab));
+    },
+    connect() {
+      if (busy) return;
+      const tab = browser.openTab();
+      if (!tab) {
+        setState({ phase: "failed", error: { failure: "tab_blocked" } });
+        return;
+      }
+      begun.current = true;
+      setState({ phase: "starting" });
+      run(connectNow(tab));
     },
     cancel: () => waiting.current?.abort(),
     retry: () => run(begin()),
@@ -368,6 +438,8 @@ export function SignInBody({ signIn }: { signIn: ConnectionSignIn }) {
   const failureText = useSignInFailureText();
   const { state } = signIn;
   switch (state.phase) {
+    case "idle":
+      return null;
     case "starting":
       return (
         <p
@@ -453,9 +525,15 @@ export function SignInBody({ signIn }: { signIn: ConnectionSignIn }) {
     case "ready":
       return (
         <div className="grid min-w-0 gap-4" data-sign-in-step="ready">
-          <Banner layout="line" data-sign-in-shared="">
-            {t("connectionSignIn.shared")}
-          </Banner>
+          {signIn.personal ? (
+            <Banner layout="line" data-sign-in-personal="">
+              {t("personalConnections.signInText")}
+            </Banner>
+          ) : (
+            <Banner layout="line" data-sign-in-shared="">
+              {t("connectionSignIn.shared")}
+            </Banner>
+          )}
           {signIn.redirectUri ? (
             <KeyValueList>
               <KeyValue label={t("connectionSignIn.redirectUri")} copyValue={signIn.redirectUri}>
@@ -531,6 +609,7 @@ export function SignInActions({ signIn }: { signIn: ConnectionSignIn }) {
   const { t } = useTranslation();
   const { state } = signIn;
   switch (state.phase) {
+    case "idle":
     case "starting":
     case "connected":
       return null;
