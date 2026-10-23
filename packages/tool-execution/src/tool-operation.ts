@@ -46,6 +46,7 @@ import { failed } from "./tool-results";
 import {
   internalFailure,
   toolTimeoutFailure,
+  personalSignInRequest,
   privateConversationRecovery,
   toolResultFromOperationResult
 } from "./operation-tool-result";
@@ -296,7 +297,8 @@ function thrownHandlerFailure(
   if (isAppError(error) && error.code !== "INTERNAL" && error.exposeMessage) {
     return {
       ...failed("handler_failed", toErrorEnvelope(error, context.correlationId).error.message),
-      ...privateConversationRecovery(error.details)
+      ...privateConversationRecovery(error.details),
+      ...personalSignInRequest(error.details)
     };
   }
   logger?.error(toolFailureLogRecord(error, request, context), "Tool handler failed");
