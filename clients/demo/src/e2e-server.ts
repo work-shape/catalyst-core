@@ -1,3 +1,4 @@
+import { sampleResultShapers } from "./result-shapers";
 import {
   defineClientInstance,
   loadCatalogueEntries,
@@ -140,6 +141,7 @@ const generalSkills: ClientInstanceCapability = {
 
 const client = defineClientInstance({
   rootDir: new URL("..", import.meta.url),
+  resultShapers: sampleResultShapers,
   tools: [...demoTools, recordNote, confirmNote],
   connectorTypes: [testConnector, folderSourceConnector],
   // The demo's entry, and one of the suite's own that its config does not offer.

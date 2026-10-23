@@ -10,7 +10,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 //
 // Beside them, under `/oauth-rest`, a server as a plain REST API's provider runs one (the
 // `http_api` sign-in of CONN-OAUTH-1): no metadata the client reads, a pre-registered client
-// with a secret, a `resource` refused as Microsoft's v2 endpoints refuse it, no `iss` in the
+// with a secret, a `resource` refused by this provider, no `iss` in the
 // answer, the client credentials grant beside the authorization code, and one JSON endpoint,
 // `GET /oauth-rest/api/customers`, that takes its bearer tokens.
 //
@@ -339,7 +339,7 @@ export function createSampleOAuth(options: SampleOAuthOptions, log?: SampleOAuth
         redirectUri,
         challenge,
         resource: grantResourceOf(mode),
-        scope: SAMPLE_OAUTH_SCOPE,
+        scope: mode === "rest" ? (query.get("scope") ?? SAMPLE_OAUTH_SCOPE) : SAMPLE_OAUTH_SCOPE,
         expiresAt: Date.now() + CODE_TTL_MS
       });
       back.searchParams.set("code", code);
@@ -375,7 +375,7 @@ export function createSampleOAuth(options: SampleOAuthOptions, log?: SampleOAuth
     const client = authenticateClient(request, form);
     const presented = form.get("client_secret");
     if (presented !== null && presented.length > 0) options.onSecret?.(presented);
-    // The REST provider refuses an RFC 8707 resource, as Microsoft's v2 endpoints do.
+    // The REST provider refuses an RFC 8707 resource, as this provider requires.
     if (mode === "rest" ? form.has("resource") : form.get("resource") !== resourceOf(mode)) {
       throw new OAuthError(400, "invalid_target");
     }

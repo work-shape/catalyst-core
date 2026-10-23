@@ -109,3 +109,34 @@ A call selects `user:<actor id>` and never falls back to a shared binding or a p
 Owner Disconnect deletes the token set and asks the provider to revoke its grant. Administrative revoke, deactivation, Connection deletion and origin changes delete personal token sets without opening them or contacting the provider. The person's grant can remain at the provider until they remove it or it expires. Tokens remain encrypted in the instance's Secret Store until one of those ends or the binding needs reconnect. Setup sessions expire within 15 minutes and are single use. Binding audit events identify the owner and reason without account labels, tokens or consent text.
 
 The personal sign-in lifecycle is separate from the conversation isolation gate and Settings interface.
+
+## Catalogue OAuth parts and result shapers
+
+A catalogue tools part may declare `authScheme: oauth`, the provider endpoints under `oauth`,
+`credentialModes: [user, shared]`, and `defaultCredentialMode`. Its fields fill
+`oauth.clientId` and the one client secret, which is stored through `connections.set_secret`.
+An entry never contains that secret. A source part always uses shared credentials.
+Every OAuth endpoint and issuer must appear on the part's own `egress` list.
+
+A part can declare `groups` with `id`, localized `title`, and `scopes`. When groups are
+present, every operation names one and an `identity` group is required. Installation and
+later operation edits derive `settings.oauth.scopes` from identity plus all groups with an
+enabled operation. Enabling a further group keeps the current sign-in; the next sign-in
+requests the wider set. A provider's insufficient-scope refusal asks the person to sign in
+again. Release `fromEntry` expansion also derives scopes and remains shared; personal parts
+are installed at runtime.
+
+An assembly registers synchronous `resultShapers` on `defineClientInstance`. Each named
+function receives only the parsed JSON answer and returns JSON, with no context, network
+access supplied by the connector, or retained state. An HTTP operation's optional `shaper`
+names one of those functions. An unknown name is refused at save, and a catalogue part
+requiring an unregistered name is unavailable. The connector shapes the response before
+size, secret-echo, and output-schema checks. A throwing shaper returns `output_invalid`;
+operations without a shaper retain the normal response shape.
+
+A declared query parameter may use `sendAs` for its wire name, including a leading `$`.
+For example, `top: { schema: { type: integer }, sendAs: $top }` exposes `top` to the model
+and sends `$top` to the server. Path parameters cannot use `sendAs`, and two query parameters
+cannot use the same wire name. Shapers run in the server process on data already received,
+keep nothing, and add no processor or region. Returned data follows the Connection's
+existing retention and model-region rules.

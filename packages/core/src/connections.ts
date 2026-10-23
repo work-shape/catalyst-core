@@ -135,6 +135,8 @@ export interface DeclaredOperationParameter {
   schema: JsonObject;
   description?: string;
   required?: boolean;
+  /** Query wire name; callers continue to use the declared parameter name. */
+  sendAs?: string;
 }
 
 /** Why `scope` on an operation declaration is refused before SCOPE-2 (SCOPE-0). */
@@ -157,6 +159,8 @@ export interface ConnectionOperationDeclaration {
   path?: string;
   pathParams?: Record<string, DeclaredOperationParameter>;
   query?: Record<string, DeclaredOperationParameter>;
+  /** A synchronous function registered by the release. */
+  shaper?: string;
 }
 
 /** The members of `ConnectionOperationDeclaration`, which only a declaring type reads. */
@@ -166,7 +170,8 @@ export const CONNECTION_DECLARATION_FIELDS = [
   "method",
   "path",
   "pathParams",
-  "query"
+  "query",
+  "shaper"
 ] as const satisfies readonly (keyof ConnectionOperationDeclaration)[];
 
 export interface ConnectionOperationConfig extends ConnectionOperationDeclaration {

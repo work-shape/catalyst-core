@@ -1,3 +1,4 @@
+import type { ResultShaper } from "@work-shape/catalyst-core";
 import type { CatalogueEntry } from "@work-shape/catalyst-connections";
 import { createLogger } from "./logger";
 import {
@@ -28,6 +29,8 @@ export interface CreateClientInstanceAgentRunWorkerInput {
   connectorTypes?: ConnectorTypeDefinition[];
   /** The catalogue entries of this build: their hosts join the egress list where offered. */
   catalogue?: readonly CatalogueEntry[];
+  /** Synchronous result transformations registered by this build. */
+  resultShapers?: Readonly<Record<string, ResultShaper>>;
   /** The capabilities of this build, the same ones the API process is given. */
   capabilities: readonly ClientInstanceCapability[];
   structuredDataPublicationReviewer?: StructuredDataPublicationReviewer;

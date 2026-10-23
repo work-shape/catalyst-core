@@ -1,0 +1,60 @@
+id: sample-oauth
+version: 1
+service: sample-oauth
+title: { en: Sample OAuth, de: OAuth-Beispiel }
+description:
+  en: Read invented customers after signing in to the sample server.
+  de: Nach der Anmeldung am Beispielserver erfundene Kunden lesen.
+category: other
+examplePrompts:
+  - { en: List the sample customers., de: Zeig die Beispielkunden. }
+mark: { color: "#325676" }
+tools:
+  connectorType: http_api
+  name: sample-oauth
+  description: { en: Read sample customers., de: Beispielkunden lesen. }
+  authScheme: oauth
+  credentialModes: [user, shared]
+  defaultCredentialMode: user
+  oauth:
+    authorizationUrl: http://localhost:8787/oauth-rest/authorize
+    tokenUrl: http://localhost:8787/oauth-rest/token
+    revocationUrl: http://localhost:8787/oauth-rest/revoke
+    tokenAuthMethod: client_secret_post
+  settings:
+    baseUrl: http://localhost:8787/oauth-rest/api
+    testPath: /customers
+  fields:
+    - setting: oauth.clientId
+      label: { en: Client ID, de: Client-ID }
+    - secret: true
+      label: { en: Client secret, de: Client-Secret }
+  egress:
+    - protocol: http
+      host: localhost
+      port: 8787
+      network: private
+      cidrs: [127.0.0.0/8, "::1/128"]
+  groups:
+    - id: identity
+      title: { en: Identity, de: Identität }
+      scopes: [sample.identity]
+    - id: read
+      title: { en: Read customers, de: Kunden lesen }
+      scopes: [sample.read]
+  operations:
+    - name: listCustomers
+      description: Read the invented customers from the sample server.
+      effect: reading
+      recommended: true
+      group: read
+      shaper: sample.customers
+      method: GET
+      path: /customers
+      query:
+        top:
+          schema: { type: integer, minimum: 1, maximum: 10 }
+          sendAs: $top
+  sharedAccountNote:
+    en: Everyone allowed to use this Connection reads the same sample account in shared mode.
+    de: Im gemeinsamen Modus lesen alle Berechtigten dasselbe Beispielkonto.

@@ -56,6 +56,7 @@ export interface ConnectionAssetKindOptions {
    */
   catalogue?: {
     linkIssue(link: ConnectionCatalogueLink, connectorType: string): string | undefined;
+    prepareConnection?(config: Record<string, unknown>): Record<string, unknown>;
   };
 }
 
@@ -412,19 +413,23 @@ export function createConnectionAssetKind(options: ConnectionAssetKindOptions): 
     hasWorkspaceAvailability: true,
     prepareInteractiveUpsert: ({ current, next, principalId }) => {
       assertCatalogueLink(options, current, next);
-      return withServerFields(current, next, principalId);
+      const config = withServerFields(current, next, principalId);
+      return options.catalogue?.prepareConnection?.(config) ?? config;
     },
     // An earlier revision may name a handle the Connection no longer has: its secret is stored
     // under the one the Connection holds now, and a call resolves the handle of the revision.
     // A revision of release config stays one, and the write refuses it.
-    prepareRevert: ({ current, restored, principalId }) =>
-      readDefinitionField(restored, "origin") === "release"
-        ? restored
-        : withServerFields(
-            current ?? { ownerPrincipalId: readDefinitionField(restored, "ownerPrincipalId") },
-            restored,
-            principalId
-          ),
+    prepareRevert: ({ current, restored, principalId }) => {
+      const config =
+        readDefinitionField(restored, "origin") === "release"
+          ? restored
+          : withServerFields(
+              current ?? { ownerPrincipalId: readDefinitionField(restored, "ownerPrincipalId") },
+              restored,
+              principalId
+            );
+      return options.catalogue?.prepareConnection?.(config) ?? config;
+    },
     missingUpsertRight: () => undefined,
     // Asked before the definition is read: a seeded Connection answers `read_only_origin`
     // also where this build ships no Connector type for what the caller sent.
