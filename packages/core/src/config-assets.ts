@@ -52,18 +52,26 @@ export interface AgentAvailability {
 export type InitialAgentAvailability =
   | "all"
   | "hidden"
+  /**
+   * Hidden, and marked as awaiting its first publish: a workspace's agent whose maker may not
+   * approve its publish. Only the approval of that publish offers it in its workspace (WS-PUB-1b).
+   */
+  | "hidden_until_first_publish"
   | { collaborationWorkspaceId: CollaborationWorkspaceId }
   | "selected_when_replacing_selected";
 
 export function resolveInitialAgentAvailability(
   initial: InitialAgentAvailability | undefined,
   deletesSelectedAgent: boolean
-): Pick<AgentAvailability, "mode" | "collaborationWorkspaceIds"> {
+): Pick<AgentAvailability, "mode" | "collaborationWorkspaceIds"> & {
+  awaitingFirstPublish?: true;
+} {
   const hidden = { mode: "selected" as const, collaborationWorkspaceIds: [] };
   if (initial === undefined || initial === "all") {
     return { mode: "all", collaborationWorkspaceIds: [] };
   }
   if (initial === "hidden") return hidden;
+  if (initial === "hidden_until_first_publish") return { ...hidden, awaitingFirstPublish: true };
   if (initial === "selected_when_replacing_selected") {
     return deletesSelectedAgent ? hidden : { mode: "all", collaborationWorkspaceIds: [] };
   }
@@ -773,6 +781,14 @@ export interface ConfigAssetStore {
     kind?: string;
   }): Promise<Map<string, AgentAvailability>>;
   /**
+   * Whether the active agent of this name still awaits its first publish: it was made hidden
+   * until then, and nothing has written its availability since (WS-PUB-1b).
+   */
+  agentAwaitsFirstPublish(input: {
+    clientInstanceId: ClientInstanceId;
+    agentName: string;
+  }): Promise<boolean>;
+  /**
    * Rejects hiding the instance default agent, which must stay `all`. Moves the version of the
    * asset set in the same transaction, as every other change of what a run sees of it does.
    */
@@ -789,6 +805,11 @@ export interface ConfigAssetStore {
      */
     expectedAssetId?: string;
     expectedAvailability?: AgentAvailability | null;
+    /**
+     * Given, the store throws `CONFLICT` unless the agent still awaits its first publish. Every
+     * write of an availability clears that mark; a compare of an unchanged one keeps it.
+     */
+    expectAwaitingFirstPublish?: true;
   }): Promise<AgentAvailability>;
   /** The names of the active agents only holders of `agent.use` may use (AGENT-USE-1). */
   listAgentUseLimits(input: {

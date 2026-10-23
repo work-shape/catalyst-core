@@ -708,6 +708,7 @@ export function createPostgresConfigAssetsStore(
     | "listConfigAssetsFromPage"
     | "listConfigAssetPage"
     | "listAgentAvailability"
+    | "agentAwaitsFirstPublish"
     | "setAgentAvailability"
     | "listAgentUseLimits"
     | "setAgentUse"
@@ -778,6 +779,7 @@ export function createPostgresConfigAssetsStore(
     ): ReturnType<ConfigAssetStore["listAgentAvailability"]> {
       return deps.listAgentAvailability(input);
     },
+    agentAwaitsFirstPublish: (input) => deps.agentAwaitsFirstPublish(input),
     async setAgentAvailability(
       input: Parameters<ConfigAssetStore["setAgentAvailability"]>[0]
     ): ReturnType<ConfigAssetStore["setAgentAvailability"]> {

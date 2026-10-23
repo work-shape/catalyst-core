@@ -381,6 +381,48 @@ describe("publishing an agent a workspace owns (WS-PUB-1b)", () => {
     expect(await listed(t.lena.id, team)).toContain("admin-made");
   });
 
+  it("offers on approval only an agent the creation rule hid, never one an admin or its maker kept hidden", async () => {
+    const { t, team, other, create, push, publish, listed, request, decide } = await setup();
+    await t.grant(t.lena.id, "agent.approve", { workspaceId: team });
+    const approve = async (name: string) => {
+      await push(t.kai.id, name, { instructions: `${name} draft.` });
+      const held = heldSchema.parse((await publish(t.kai.id, name, 1)).json());
+      expect((await request(t.lena.id, held.approvalRequestId)).preview.review).toMatchObject({
+        agent: { offers: false }
+      });
+      const approved = await decide(t.lena.id, held.approvalRequestId);
+      expect(approved.statusCode, approved.body).toBe(200);
+    };
+    const hide = async (name: string, collaborationWorkspaceIds: string[] = []) =>
+      t.expectOk(t.admin.id, "assets.set_availability", {
+        params: { kind: "agent", name },
+        payload: { mode: "selected", collaborationWorkspaceIds }
+      });
+
+    // Made by an approver and offered in the workspace, then hidden by an instance admin.
+    await create(t.admin.id, "admin-hid", team);
+    expect(await listed(t.lena.id, team)).toContain("admin-hid");
+    await hide("admin-hid");
+    await approve("admin-hid");
+    expect(await listed(t.lena.id, team)).not.toContain("admin-hid");
+
+    // Made by an approver who is no member of the workspace: hidden, but by no rule of WS-PUB-1b.
+    for (const action of ["builder", "publisher", "agent.approve"])
+      await t.grant(t.kai.id, action, { workspaceId: other });
+    await t.grant(t.lena.id, "agent.approve", { workspaceId: other });
+    await create(t.kai.id, "kept-hidden", other);
+    expect(await listed(t.lena.id, other)).not.toContain("kept-hidden");
+    await approve("kept-hidden");
+    expect(await listed(t.lena.id, other)).not.toContain("kept-hidden");
+
+    // Hidden by the creation rule, then placed by an admin: the admin's choice stands.
+    await create(t.kai.id, "admin-placed", team);
+    await hide("admin-placed", [other]);
+    await hide("admin-placed");
+    await approve("admin-placed");
+    expect(await listed(t.lena.id, team)).not.toContain("admin-placed");
+  });
+
   it("refuses a publish whose draft its guardrails did not read, though a push lands before it runs", async () => {
     const { t, team, live, create, push, publish, inbox } = await setup();
     await create(t.kai.id, "raced", team);

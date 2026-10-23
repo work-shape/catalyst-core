@@ -3,6 +3,7 @@ import { createPostgresWorkflowNoticesStore } from "./postgres-workflow-notices"
 import { createPostgresNoticeMailStore } from "./postgres-notice-mail";
 import {
   listAgentAvailability as listPostgresAgentAvailability,
+  agentAwaitsFirstPublish as postgresAgentAwaitsFirstPublish,
   setAgentAvailability as setPostgresAgentAvailability
 } from "./postgres-agent-availability";
 import {
@@ -159,6 +160,7 @@ function bindStores(
         listConfigAssetsFromPage: (input) => listPostgresConfigAssetsFromPage(db, input),
         listConfigAssetPage: (input) => listPostgresConfigAssetPage(db, input),
         listAgentAvailability: (input) => listPostgresAgentAvailability(db, input),
+        agentAwaitsFirstPublish: (input) => postgresAgentAwaitsFirstPublish(db, input),
         setAgentAvailability: (input) => setPostgresAgentAvailability(db, input),
         listAgentUseLimits: (input) => listPostgresAgentUseLimits(db, input),
         setAgentUse: (input) => setPostgresAgentUse(db, input)
