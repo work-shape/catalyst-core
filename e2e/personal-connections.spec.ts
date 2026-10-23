@@ -194,14 +194,9 @@ test("de: a person connects their own account, the admin sees and revokes it, an
     await expect(card.locator("[data-personal-state]")).toHaveText("Nicht verbunden");
     await shoot(personPage, "you-not-connected", card);
 
-    // Connect shows the step with the provider, then opens it in a window of its own.
-    await card.locator('[data-personal-connect="connect"]').click();
-    const step = card.locator('[data-sign-in-step="ready"]');
-    await expect(step).toBeVisible();
-    await expect(step.locator("[data-sign-in-personal]")).toBeVisible();
-    await shoot(personPage, "you-step", step);
+    // One click on Connect opens the provider in a window of its own; it signs in and closes.
     const opened = personPage.waitForEvent("popup");
-    await step.locator("[data-sign-in-open]").click();
+    await card.locator('[data-personal-connect="connect"]').click();
     const popup = await opened;
     await popup.waitForEvent("close");
     await expect(card.locator("[data-personal-state]")).toHaveText(/^Verbunden/u);
