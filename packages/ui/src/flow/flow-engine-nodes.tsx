@@ -215,7 +215,11 @@ function StepNode({ id, data }: NodeProps<StepRfNode>) {
       chip={
         item.chip === undefined ? undefined : (
           <>
-            <RegistryIcon name={item.chip.icon} family="service" />
+            <RegistryIcon
+              name={item.chip.icon}
+              fallback={item.chip.iconFallback}
+              family="service"
+            />
             <span className="truncate">{item.chip.label}</span>
           </>
         )

@@ -20,6 +20,8 @@ export interface FlowChip {
   label: string;
   /** A key of the icon registry. */
   icon?: string;
+  /** The key shown where nothing is registered under `icon`, before the generic service icon. */
+  iconFallback?: string;
 }
 
 /** One way out of a node that has several, each with a connector of its own. */

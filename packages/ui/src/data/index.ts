@@ -48,3 +48,9 @@ export {
   type TableHeadProps,
   type TableProps
 } from "./table";
+export {
+  MailPreview,
+  type MailPreviewProps,
+  type MailPreviewRecipient,
+  type MailPreviewState
+} from "./mail-preview";
