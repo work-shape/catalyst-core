@@ -104,7 +104,7 @@ export function registerApprovalRequestRoutes(
       throw refused();
     }
     const refusal = await alwaysAllowRefusal(settings, definition);
-    if (refusal) throw refused(refusal);
+    if (refusal) throw refused(refusal.message);
     return call.operation;
   };
 

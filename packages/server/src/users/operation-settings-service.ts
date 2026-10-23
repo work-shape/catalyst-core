@@ -44,6 +44,7 @@ interface OperationSettingView {
   changeClass?: NonNullable<OperationDefinition["changeClass"]>;
   value?: PersonPolicySetting;
   mayAlwaysAllow: boolean;
+  alwaysAllowLocked?: true;
   updatedAt?: string;
 }
 
@@ -55,17 +56,34 @@ function settingOwner(actor: AuthenticatedIdentity): string {
   return getSubjectUserId(actor);
 }
 
+/** Why "Always allow" cannot be set for an operation; `locked` where an admin's lock names it. */
+interface AlwaysAllowRefusal {
+  message: string;
+  locked: boolean;
+}
+
 /**
  * Why "Always allow" cannot be set for an operation, or nothing where it can: the admin does
- * not permit it (its class, or a lock), or the policy holds the operation at `approval` or
- * `deny`, which a person's setting never lowers.
+ * not permit it (its class, or a lock), the policy holds the operation at `approval` or
+ * `deny`, which a person's setting never lowers, or the operation's own floor asks every time.
  */
 export async function alwaysAllowRefusal(
   deps: Pick<OperationSettingsDeps, "policy">,
   definition: OperationDefinition
-): Promise<string | undefined> {
+): Promise<AlwaysAllowRefusal | undefined> {
+  if (!mayAlwaysAllow(definition)) {
+    return {
+      message:
+        "This action changes too much to run without asking; Always allow is not available for it.",
+      locked: false
+    };
+  }
   if (!mayAlwaysAllow(definition, deps.policy.alwaysAllowLocked)) {
-    return "Your administrator decides whether this action asks you first; Always allow is not available for it.";
+    return {
+      message:
+        "Your administrator decides whether this action asks you first; Always allow is not available for it.",
+      locked: true
+    };
   }
   // The value the admin and the operation ask for, before any person's setting or floor.
   const resolved = resolvePolicy({
@@ -77,17 +95,27 @@ export async function alwaysAllowRefusal(
     canPause: true
   });
   if (resolved.value === "approval" || resolved.value === "deny") {
-    return "This action needs an approval or is switched off; Always allow cannot change that.";
+    return {
+      message: "This action needs an approval or is switched off; Always allow cannot change that.",
+      locked: false
+    };
+  }
+  // An operation's own floor asks every time, whatever the person sets.
+  if (resolved.source === "policy_floor") {
+    return {
+      message: "This action always asks first; Always allow cannot change that.",
+      locked: false
+    };
   }
   return undefined;
 }
 
-function viewOf(
+async function viewOf(
   deps: Pick<OperationSettingsDeps, "policy">,
   operation: string,
   definition: OperationDefinition | undefined,
   setting?: { value: PersonPolicySetting; updatedAt: string }
-): OperationSettingView | undefined {
+): Promise<OperationSettingView | undefined> {
   if (!definition) {
     // A setting whose operation is gone stays listed, so the person can remove it.
     return setting
@@ -100,6 +128,8 @@ function viewOf(
         }
       : undefined;
   }
+  const refusal =
+    definition.effect === "changing" ? await alwaysAllowRefusal(deps, definition) : undefined;
   return {
     operation,
     ...(definition.title ? { title: definition.title } : {}),
@@ -108,7 +138,8 @@ function viewOf(
       ? { changeClass: definition.changeClass }
       : {}),
     ...(setting ? { value: setting.value, updatedAt: setting.updatedAt } : {}),
-    mayAlwaysAllow: mayAlwaysAllow(definition, deps.policy.alwaysAllowLocked)
+    ...(refusal?.locked ? { alwaysAllowLocked: true as const } : {}),
+    mayAlwaysAllow: refusal === undefined
   };
 }
 
@@ -174,7 +205,7 @@ export async function setOwnOperationSetting(
   if (input.value === "always_allow" && definition) {
     const refusal = await alwaysAllowRefusal(deps, definition);
     if (refusal) {
-      throw new AppError("FORBIDDEN", refusal, { reason: "always_allow_not_permitted" });
+      throw new AppError("FORBIDDEN", refusal.message, { reason: "always_allow_not_permitted" });
     }
   }
   const at = (deps.now?.() ?? new Date()).toISOString();
@@ -185,12 +216,12 @@ export async function setOwnOperationSetting(
     value: input.value,
     at
   });
-  const view = viewOf(
+  const view = (await viewOf(
     deps,
     input.operation,
     definition,
     input.value === null ? undefined : { value: input.value, updatedAt: at }
-  ) ?? {
+  )) ?? {
     operation: input.operation,
     effect: "changing" as const,
     mayAlwaysAllow: false
