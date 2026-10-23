@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Banner,
   Button,
@@ -67,6 +67,9 @@ import { RefusalDetail } from "./refusal-notice";
 // exactly that access, or for a personal part the admin may connect their own account and
 // each person connects theirs under Settings. The order is the model's (`afterConnect`).
 
+/** The section of the Connection's page that names who may use it. */
+const ACCESS_SECTION = "access";
+
 /** The exposure that lets agents call an approved operation. */
 const AGENT_SURFACE = "agent";
 
@@ -112,6 +115,8 @@ export function CatalogueInstall({
   const [busy, setBusy] = useState(false);
   const [refusals, setRefusals] = useState<ApprovalRefused>();
   const [ownConnected, setOwnConnected] = useState(false);
+  /** The installer holds `connection.use`: undefined until the instance answered. */
+  const [mayConnectOwn, setMayConnectOwn] = useState<boolean>();
   const approval = useApprovalChoice([]);
   const part = entry.parts.find((candidate) => candidate.part === partName);
   const title = offerText(entry.title, locale);
@@ -160,6 +165,23 @@ export function CatalogueInstall({
       onConnected: () => setOwnConnected(true)
     }
   );
+  const personalStep = stage.step === "approved" && stage.personal;
+  useEffect(() => {
+    if (!personalStep || name === "") return;
+    const ask = source.mayConnectOwn;
+    if (ask === undefined) {
+      setMayConnectOwn(true);
+      return;
+    }
+    let current = true;
+    // Unanswered, the button stays: the instance decides at the connect.
+    ask(name)
+      .then((may) => current && setMayConnectOwn(may))
+      .catch(() => current && setMayConnectOwn(true));
+    return () => {
+      current = false;
+    };
+  }, [personalStep, name, source]);
   if (part === undefined) return null;
   // The part, for the steps below: it stays the one chosen.
   const installed = part;
@@ -432,7 +454,24 @@ export function CatalogueInstall({
           <Banner layout="line" tone="success" data-catalogue-own-connected="">
             {t("connectionCatalogue.ownConnected")}
           </Banner>
-        ) : (
+        ) : mayConnectOwn === false ? (
+          // Installing grants nobody the use right, the installer neither.
+          <p className="text-body text-muted-foreground" data-catalogue-own-needs-use="">
+            {t("connectionCatalogue.ownNeedsUse")}{" "}
+            <Button
+              variant="link"
+              size="sm"
+              data-catalogue-own-access=""
+              onClick={() =>
+                onCreated(name, () =>
+                  document.getElementById(ACCESS_SECTION)?.scrollIntoView({ block: "start" })
+                )
+              }
+            >
+              {t("connectionCatalogue.ownAccessLink")}
+            </Button>
+          </p>
+        ) : mayConnectOwn === undefined ? null : (
           <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
             <span className="min-w-0 text-body text-muted-foreground">
               {t("connectionCatalogue.ownOptional")}

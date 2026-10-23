@@ -152,6 +152,11 @@ export interface ConnectionSource {
    * waits for it. Absent where the place makes no personal Connection.
    */
   readOwnSignIn?(name: string): Promise<SignInRead>;
+  /**
+   * Whether the reader may connect their own account to the personal Connection: they hold
+   * `connection.use` on it. Absent, the instance decides at the connect alone.
+   */
+  mayConnectOwn?(name: string): Promise<boolean>;
   /** Tests the Connection. Throws `PendingApprovalError` when somebody approves the test first. */
   test(name: string): Promise<ConnectionTestResult>;
   /**
@@ -353,6 +358,9 @@ export function useConnectionSource(): ConnectionSource {
     },
     readDetail: (name) => calls.get({ params: { name } }),
     readOwnSignIn: async (name) => ownSignInOf(await calls.mine(), name),
+    // The reader's own list names only the personal Connections they may use.
+    mayConnectOwn: async (name) =>
+      (await calls.mine()).connections.some((connection) => connection.name === name),
     useConnectorTypes() {
       const query = useConnectorTypeOffers();
       return query.isError ? [] : query.data?.types;
