@@ -95,6 +95,9 @@ export async function applyAssetWrite(
           clientInstanceId: scope.options.clientInstanceId,
           name: target.name,
           assetId: target.asset?.status === "active" ? target.asset.id : undefined,
+          ...(target.asset?.status === "deleted" && write.config !== undefined && !restores(batch)
+            ? { createdAgainId: target.asset.id }
+            : {}),
           previousRevision: target.asset?.status === "active" ? target.asset.revision : undefined,
           ...write,
           actor,
@@ -149,4 +152,11 @@ export function writeAssetConfig(
       requireTellableChange(scope, call, target, stored, written),
     apply: (batch, applied) => applyAssetWrite(scope, call, target, batch, applied)
   });
+}
+
+/** The batch restores an earlier revision: a revert, not a put. */
+function restores(batch: MutationBatch): boolean {
+  return batch.mutations.some(
+    (mutation) => mutation.type === "upsert" && mutation.operation === "revert"
+  );
 }

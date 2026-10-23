@@ -117,8 +117,11 @@ export function CatalogueInstall({
   const [ownConnected, setOwnConnected] = useState(false);
   /** The installer holds `connection.use`: undefined until the instance answered. */
   const [mayConnectOwn, setMayConnectOwn] = useState<boolean>();
+  /** The delete of a Connection that had the part's fixed address, once the instance answered. */
+  const [recreates, setRecreates] = useState<{ name: string; revision: number }>();
   const approval = useApprovalChoice([]);
   const part = entry.parts.find((candidate) => candidate.part === partName);
+  const fixedName = part !== undefined && signsIn(part) ? part.name : undefined;
   const title = offerText(entry.title, locale);
   const given = stage.step === "approved" || stage.step === "give" ? stage : undefined;
   const after = stage.step === "prepare" || stage.step === "review" ? undefined : stage;
@@ -141,6 +144,7 @@ export function CatalogueInstall({
     },
     {
       enabled: stage.step === "sign-in",
+      fixedScopesNote: t("connectionCatalogue.scopesFromReview"),
       onConnected: () => {
         if (stage.step !== "sign-in") return;
         // The test writes the health; what it answers changes nothing here.
@@ -182,6 +186,21 @@ export function CatalogueInstall({
       current = false;
     };
   }, [personalStep, name, source]);
+  const preparing = stage.step === "prepare";
+  useEffect(() => {
+    const ask = source.deletedRevision;
+    if (!preparing || fixedName === undefined || ask === undefined) return;
+    let current = true;
+    // Unanswered, the install creates the name; the instance refuses a deleted one then.
+    ask(fixedName)
+      .then((revision) => {
+        if (current && revision !== undefined) setRecreates({ name: fixedName, revision });
+      })
+      .catch(() => undefined);
+    return () => {
+      current = false;
+    };
+  }, [preparing, fixedName, source]);
   if (part === undefined) return null;
   // The part, for the steps below: it stays the one chosen.
   const installed = part;
@@ -272,6 +291,7 @@ export function CatalogueInstall({
               mode={mode}
               onPartChange={choosePart}
               onModeChange={setMode}
+              recreates={recreates?.name === part.name}
             />
           ),
           // Whose account everyone reads: only where it is one account for everyone.
@@ -281,7 +301,8 @@ export function CatalogueInstall({
                 {offerText(part.sharedAccountNote, locale)}
               </Banner>
             ) : null,
-          ...(oauth ? { credentialMode: mode, signsIn: true, addressFixed: true } : {})
+          ...(oauth ? { credentialMode: mode, signsIn: true, addressFixed: true } : {}),
+          ...(oauth && recreates?.name === part.name ? { recreates: recreates.revision } : {})
         }}
         onConnected={(connected) => {
           const next = afterConnect({ part, mode });
@@ -558,13 +579,16 @@ function CatalogueIntro({
   part,
   mode,
   onPartChange,
-  onModeChange
+  onModeChange,
+  recreates
 }: {
   entry: CatalogueEntryOffer;
   part: CataloguePartOffer;
   mode: ConnectionCredentialMode;
   onPartChange(part: CataloguePartName): void;
   onModeChange(mode: ConnectionCredentialMode): void;
+  /** A deleted Connection had the part's fixed address: the install starts it anew. */
+  recreates: boolean;
 }) {
   const { locale, t } = useTranslation();
   const title = offerText(entry.title, locale);
@@ -656,6 +680,11 @@ function CatalogueIntro({
             ) : null}
           </ol>
         </div>
+      ) : null}
+      {recreates ? (
+        <Banner layout="line" data-catalogue-recreates="">
+          {t("connectionCatalogue.recreates")}
+        </Banner>
       ) : null}
     </div>
   );

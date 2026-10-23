@@ -726,6 +726,95 @@ describe("an install on an assembled instance", () => {
     expect((await read()).json()).toMatchObject({ revision });
   });
 
+  it("installs an entry anew at the address of a deleted Connection, with none of its access", async () => {
+    const instance = await start();
+    const clientInstanceId = asClientInstanceId("demo-local");
+    const name = "sample-accounting";
+    const definition = {
+      name,
+      displayName: "Beispielbuchhaltung",
+      service: "sample-accounting",
+      catalogue: { entry: "sample-accounting", part: "tools", version: 1 },
+      connectorType: "http_api",
+      settings: { baseUrl: "http://sample-mcp:8787/rest" },
+      authScheme: "bearer",
+      operations: [],
+      enabled: true
+    };
+    const put = (expectedRevision: number | null) =>
+      instance.call("assets.put", {
+        params: { kind: "connection", name },
+        payload: { config: definition, expectedRevision }
+      });
+    const revisionSchema = z.object({ revision: z.number() });
+    const first = await put(null);
+    expect(first.statusCode, first.body).toBe(200);
+    const asset = required(
+      await instance.stores.configAssets.getConfigAsset({
+        clientInstanceId,
+        kind: "connection",
+        name
+      })
+    );
+    const person = await instance.stores.users.createUser({
+      clientInstanceId,
+      displayLabel: "Someone",
+      roles: ["user"],
+      permissions: []
+    });
+    const rowsOn = () =>
+      instance.stores.access.listGrants({
+        clientInstanceId,
+        scopeKind: "asset",
+        scopeId: asset.id
+      });
+    for (const [action, effect] of [
+      ["connection.use", "allow"],
+      ["connection.read", "deny"]
+    ] as const) {
+      await instance.stores.access.createGrant({
+        clientInstanceId,
+        holderKind: "user",
+        holderId: person.id,
+        action,
+        effect,
+        scopeKind: "asset",
+        scopeId: asset.id,
+        grantedBy: person.id
+      });
+    }
+    const deleted = await instance.call("assets.delete", {
+      params: { kind: "connection", name },
+      payload: { expectedRevision: revisionSchema.parse(first.json()).revision }
+    });
+    expect(deleted.statusCode, deleted.body).toBe(200);
+    // The delete takes the allow and keeps the deny on the retained revisions.
+    expect((await rowsOn()).map((row) => row.effect)).toEqual(["deny"]);
+
+    // A fresh create is refused; the install names the delete's revision.
+    expect((await put(null)).statusCode).toBe(412);
+    const history = await instance.call("assets.revisions.list", {
+      params: { kind: "connection", name },
+      query: { limit: "1" }
+    });
+    const [latest] = z
+      .object({ items: z.array(z.object({ revision: z.number(), operation: z.string() })) })
+      .parse(history.json()).items;
+    expect(latest?.operation).toBe("delete");
+    const again = await put(required(latest).revision);
+    expect(again.statusCode, again.body).toBe(200);
+    const recreated = required(
+      await instance.stores.configAssets.getConfigAsset({
+        clientInstanceId,
+        kind: "connection",
+        name
+      })
+    );
+    // The same row, with no access row of the earlier Connection left on it.
+    expect(recreated.id).toBe(asset.id);
+    expect(await rowsOn()).toEqual([]);
+  });
+
   it("offers the named entry, stores the link, enables nothing and grants nothing", async () => {
     const instance = await start();
     const offers = await instance.call("connections.connector_types");
