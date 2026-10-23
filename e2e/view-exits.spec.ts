@@ -487,6 +487,29 @@ exitTest.describe("WebRTC from a view", () => {
     }
   );
 
+  exitTest(
+    "show_view in a marked conversation stores a static view and sends no WebRTC packet",
+    async ({ page, otherHost }) => {
+      const headers = await signIn(page, uiOrigin);
+      const conversation = await showView(
+        page.request,
+        headers,
+        `<h2>${viewTitle}</h2>${webRtcScript(otherHost.stunServer)}`,
+        true
+      );
+      const thread = await page.request.get(
+        `${apiOrigin}/api/v1/conversations/${encodeURIComponent(conversation.id)}/thread`,
+        { headers }
+      );
+      expect(await thread.text()).toContain('"kind":"private_hydrated_view"');
+      await page.goto(`${uiOrigin}/c/${encodeURIComponent(conversation.id)}`);
+      await expect(viewFrame(page).getByRole("heading", { name: viewTitle })).toBeVisible();
+      await expect(viewFrame(page).locator("script")).toHaveCount(0);
+      await page.waitForTimeout(SETTLE_MS);
+      expect(otherHost.packets).toBe(0);
+    }
+  );
+
   exitTest("a view with private rows sends no WebRTC packet", async ({ page, otherHost }) => {
     await openView(page, "private_hydrated_view", webRtcScript(otherHost.stunServer));
     await expect(viewFrame(page).getByRole("heading", { name: viewTitle })).toBeVisible();

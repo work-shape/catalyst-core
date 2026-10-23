@@ -1,6 +1,7 @@
+import { WEB_FETCH_TOOL_NAME } from "@work-shape/catalyst-web-access";
 import {
   AppError,
-  rootConversationOf,
+  personalDataConversation,
   defaultReasoningEffortForAgentBinding,
   isModelBindingUserSelectableForAgent,
   reasoningEffortChoiceForBinding,
@@ -15,12 +16,13 @@ import {
   type SkillConfig,
   type StartAgentRunInput
 } from "@work-shape/catalyst-core";
-import type {
-  ModelBindingRef,
-  ModelCapabilities,
-  ModelCompletion,
-  ModelMessage,
-  ModelTool
+import {
+  WEB_SEARCH_MODEL_TOOL_NAME,
+  type ModelBindingRef,
+  type ModelCapabilities,
+  type ModelCompletion,
+  type ModelMessage,
+  type ModelTool
 } from "@work-shape/catalyst-model-provider";
 import {
   dropCurrentSubmittedMessage,
@@ -220,12 +222,12 @@ export class ModelInput {
     context: RuntimeCallContext
   ): Promise<boolean> {
     if (!state.isWebAccessOff() && this.options.personalData) {
-      const conversation = await rootConversationOf(
+      const restricted = await personalDataConversation(
         this.options.personalData,
         context.clientInstanceId,
         input.conversationId
       );
-      if (conversation?.personalDataAt) state.disableWebAccess();
+      if (restricted) state.disableWebAccess();
     }
     return state.isWebAccessOff();
   }
@@ -245,7 +247,9 @@ export class ModelInput {
     // Materialization stays fixed for the run. Only this privacy restriction can remove
     // tools between requests; native search must never be offered with personal data.
     const requestTools = (await this.webAccessOff(state, input, context))
-      ? tools.filter((tool) => tool.name !== "web_search" && tool.name !== "web_fetch")
+      ? tools.filter(
+          (tool) => tool.name !== WEB_SEARCH_MODEL_TOOL_NAME && tool.name !== WEB_FETCH_TOOL_NAME
+        )
       : tools;
     const withinImageBudget = applyModelInputImageBudget(messages);
     if (withinImageBudget.omittedImageCount > 0) {

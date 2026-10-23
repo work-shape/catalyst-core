@@ -15,9 +15,14 @@ import {
   type Conversation,
   type OperationCall,
   type OperationCallRuntime,
-  type OperationOrigin
+  type OperationOrigin,
+  type CentralPolicySetting
 } from "@work-shape/catalyst-core";
-import { runOperation } from "@work-shape/catalyst-tool-execution";
+import {
+  createShowViewTool,
+  registerToolOperations,
+  runOperation
+} from "@work-shape/catalyst-tool-execution";
 import { createOAuthWorld, landingOf, type OAuthWorld } from "./support/oauth-sign-in-world";
 import { createPersonalOAuthProvider } from "./support/personal-oauth-provider";
 import { getTestExecution, getTestJobs } from "./support/test-instance";
@@ -531,6 +536,100 @@ describe("personal Connection context isolation", () => {
         )
       ).result.status
     ).toBe("denied");
+  });
+
+  it("stores new views as static after the mark and preserves earlier views", async () => {
+    const p = await prepare();
+    const calls = await world.calls();
+    registerToolOperations(calls.registry, [createShowViewTool()], {
+      clientInstanceId,
+      personalConversation: calls.deps.policy.personalConversation
+    });
+    const input = {
+      html: "<p>private text</p><script>window.leak = true</script>",
+      mode: "inline"
+    };
+    const before = await call(p, { operation: "show_view", input });
+    expect(before.result).toMatchObject({ status: "done", display: { kind: "html.rendered" } });
+    await call(p);
+    const after = await call(p, { operation: "show_view", input });
+    expect(after.result).toMatchObject({
+      status: "done",
+      display: { kind: "private_hydrated_view" }
+    });
+    // The already returned display is not reclassified when the conversation is marked.
+    expect(before.result).toMatchObject({ display: { kind: "html.rendered" } });
+    const reads = vi
+      .spyOn(world.worker.stores.conversations, "getConversation")
+      .mockRejectedValue(new Error("unreadable mark"));
+    try {
+      expect((await call(p, { operation: "show_view", input })).result).toMatchObject({
+        status: "done",
+        display: { kind: "private_hydrated_view" }
+      });
+    } finally {
+      reads.mockRestore();
+    }
+  });
+
+  it("holds mail.send at confirm despite an admin allow, leaving unmarked calls unchanged", async () => {
+    const p = await prepare();
+    const calls = await world.calls();
+    // Exercise the policy independently of the instance's disabled system sender.
+    const execute = vi.fn(async () => ({ sent: true }));
+    const definition = {
+      name: "mail.send",
+      effect: "changing" as const,
+      defaultPolicy: "allow" as const,
+      action: null,
+      authorize: () => ({ allowed: true as const }),
+      scope: null,
+      auth: "principal" as const,
+      inputSchema: z.unknown(),
+      outputSchema: z.unknown(),
+      resource: () => undefined,
+      timeoutMs: 1000,
+      execute
+    };
+    const deps = {
+      ...calls.deps,
+      registry: {
+        ...calls.registry,
+        resolve: async (name: string) =>
+          name === "mail.send" ? definition : calls.registry.resolve(name)
+      },
+      agentToolNames: () => ["mail.send"],
+      policy: {
+        ...calls.deps.policy,
+        centralSettings: (): CentralPolicySetting[] => [{ operation: "mail.send", value: "allow" }]
+      }
+    };
+    const send = () =>
+      runOperation(
+        {
+          operation: "mail.send",
+          effect: "changing",
+          input: {},
+          actor: a,
+          origin: { ...origin(p.run), toolName: "mail.send" },
+          correlationId: randomUUID(),
+          idempotencyKey: randomUUID()
+        },
+        deps,
+        {
+          runFence: {
+            runId: p.run.id,
+            lease: { jobId: createPlatformId<"JobId">("job"), leaseToken: "lease" }
+          }
+        }
+      );
+    expect((await send()).result.status).toBe("done");
+    execute.mockClear();
+    await call(p);
+    expect((await send()).result.status).toBe("pending_confirmation");
+    expect(execute).not.toHaveBeenCalled();
+    deps.policy.centralSettings = () => [{ operation: "mail.send", value: "deny" as const }];
+    expect((await send()).result.status).toBe("denied");
   });
 
   it("keeps no input reference or output in personal Operation Runs, with no mail in audit", async () => {

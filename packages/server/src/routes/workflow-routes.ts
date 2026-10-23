@@ -1,6 +1,7 @@
 import { apiOperations } from "@work-shape/catalyst-api-contract";
 import {
   AppError,
+  requireUnmarkedConversation,
   WORKFLOW_ACTIONS,
   WORKFLOW_ASSET_KIND,
   isAuthenticatedServicePrincipal,
@@ -196,6 +197,7 @@ function registerWorkflowRoutes(
    * any wait.
    */
   async function requireTestSubject(workflow: string, origin: OperationOrigin): Promise<void> {
+    await requireUnmarkedConversation(subjects.stores, subjects.clientInstanceId, origin);
     if (origin.kind !== "agent") return;
     const conversation = await subjects.stores.conversations.getConversation(
       subjects.clientInstanceId,

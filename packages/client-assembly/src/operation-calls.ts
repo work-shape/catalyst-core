@@ -183,6 +183,7 @@ export function createInstanceAgentTools(
   const describeTimeoutMs = runtime.dataToolDescribeTimeoutMs;
   registerToolOperations(operationCalls.registry, tools.list(), {
     clientInstanceId: toolOptions.clientInstanceId,
+    personalConversation: operationCalls.deps.policy.personalConversation,
     logger: toolOptions.logger
   });
   return {

@@ -192,6 +192,12 @@ export async function appActionDefinition(
     // A read of a customer's system or of a customer's rows is recorded, every time.
     ...(action.effect === "reading" ? { recordsEveryCall: true as const } : {}),
     ...(floor === undefined || floor === "allow" ? {} : { policyFloor: floor }),
+    ...(target?.policyFloorOf
+      ? {
+          policyFloorOf: (origin, input) =>
+            target.policyFloorOf?.(origin, binding.inputOf(parameters.parse(input)))
+        }
+      : {}),
     action: null,
     async authorize(_input, context) {
       // A module that is off refuses its operations before the caller's rights are known.

@@ -19,6 +19,7 @@ import {
   toolRequestFromOperationCall,
   unknownToJsonValue,
   type ClientInstanceId,
+  type ConversationId,
   type DataToolDescriptor,
   type DataToolSource,
   type JsonObject,
@@ -69,6 +70,8 @@ export const TOOL_OPERATION_TIMEOUT_MS = 60 * 60 * 1000;
 export const OPERATION_CALL_APPROVAL_KIND = "operation_call";
 
 export interface ToolOperationOptions {
+  /** Server-side privacy decision, re-read when a view is made. Missing readers close scripts. */
+  personalConversation?(id: ConversationId): Promise<boolean>;
   clientInstanceId: ClientInstanceId;
   /** Receives the full error of a handler whose failure the model only sees as a reference. */
   logger?: Logger;
@@ -171,7 +174,14 @@ export function toolOperation(
     async execute(input, context) {
       const { request, toolContext } = toolCallOf(tool, input, context, options);
       try {
+        const staticView =
+          tool.name === "show_view" &&
+          ((await options.personalConversation?.(request.conversationId)) ?? true);
         const result = await tool.execute(input, toolContext);
+        // Store the decision with this display. Earlier views retain their original kind.
+        if (staticView && result.status === "success" && result.display) {
+          result.display = { ...result.display, kind: "private_hydrated_view" };
+        }
         const validated =
           result.status === "success" && tool.outputSchema
             ? { ...result, output: tool.outputSchema.parse(result.output) }
