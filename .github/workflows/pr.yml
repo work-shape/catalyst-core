@@ -1,0 +1,79 @@
+# The check every pull request runs before it merges, on our own Mac mini runner.
+# It never runs on a Blacksmith runner: those bill per minute and are for releases only.
+# The full browser suite, images, compatibility and scale tests run in nightly.yml instead.
+name: PR
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths-ignore:
+      - "packages/docs/**"
+      - "docs/**"
+      - "*.md"
+  workflow_dispatch:
+permissions:
+  contents: read
+  packages: read
+# Only the newest push of a pull request needs a result.
+concurrency:
+  group: pr-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+env:
+  # One job at a time per repository runner, so a fixed port per repository is enough.
+  CHECK_POSTGRES_NAME: pr-postgres-core
+  POSTGRES_STORE_TEST_DATABASE_URL: postgresql://catalyst:local-check@localhost:54329/catalyst_test
+  CATALYST_SCALE_TESTS: "0"
+jobs:
+  check:
+    runs-on: [self-hosted, catalyst-mini]
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+      # No action cache: the pnpm store stays on the runner's disk between runs.
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+      - name: Runner
+        run: |
+          uname -mrs
+          sysctl -n hw.ncpu hw.memsize
+          uptime
+          docker version --format 'docker {{.Server.Version}}'
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Changes
+        run: pnpm check:changes
+      - name: Format
+        run: pnpm format:check
+      - name: Build
+        run: pnpm build
+      - name: Lint
+        run: pnpm lint
+      - name: Package types
+        run: pnpm typecheck:packages
+      - name: Test types
+        run: pnpm typecheck:tests
+      - name: OpenAPI and contract
+        run: pnpm check:openapi && pnpm check:contract
+      - name: Migrations
+        run: pnpm check:migrations
+      - name: Database
+        timeout-minutes: 5
+        env:
+          TOKEN: ${{ github.token }}
+        run: |
+          docker rm --force "$CHECK_POSTGRES_NAME" >/dev/null 2>&1 || true
+          docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin <<<"$TOKEN"
+          .github/scripts/start-postgres.sh catalyst local-check catalyst_test 54329
+      - name: Unit and database tests
+        run: pnpm exec vitest run
+      - name: Upgrade from oldest supported release
+        run: pnpm test:upgrade
+      - name: Deployment kit tests
+        run: pnpm test:deployment-kit
+      - name: Remove the database
+        if: always()
+        run: docker rm --force "$CHECK_POSTGRES_NAME" >/dev/null 2>&1 || true
