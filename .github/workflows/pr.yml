@@ -74,11 +74,11 @@ jobs:
           docker rm --force "$CHECK_POSTGRES_NAME" >/dev/null 2>&1 || true
           docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin <<<"$TOKEN"
           .github/scripts/start-postgres.sh catalyst local-check catalyst_test 54329
-      # A launchd job starts with a limit of 256 open files, too few for the test files'
+      # A launchd job starts with a soft limit of 256 open files, too few for the test files'
       # database connections side by side.
       - name: Unit and database tests
         run: |
-          ulimit -n 65536 || ulimit -n "$(ulimit -Hn)"
+          ulimit -n "$(sysctl -n kern.maxfilesperproc)"
           pnpm exec vitest run
       - name: Upgrade from oldest supported release
         run: pnpm test:upgrade
