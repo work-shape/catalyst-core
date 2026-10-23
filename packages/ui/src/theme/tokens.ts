@@ -22,20 +22,20 @@ export interface ThemeInputsByMode {
 /** The base theme of an instance that sets no colours. A test holds it equal to the config schema defaults. */
 export const DEFAULT_THEME_INPUTS: ThemeInputsByMode = {
   light: {
-    surfaceColor: "#fcfbf9",
-    backgroundColor: "#f5f3f0",
-    textColor: "#1e1c1a",
-    mutedTextColor: "#625f5a",
-    borderColor: "#e4e1db",
+    surfaceColor: "#fdfdfc",
+    backgroundColor: "#f6f6f4",
+    textColor: "#1c1c1b",
+    mutedTextColor: "#5e5e5b",
+    borderColor: "#e4e4e1",
     accentColor: "#b5573a",
     accentStrongColor: "#8c3f26"
   },
   dark: {
-    surfaceColor: "#171615",
-    backgroundColor: "#131211",
-    textColor: "#edebe8",
-    mutedTextColor: "#b0ada8",
-    borderColor: "#32302e",
+    surfaceColor: "#1b1c1f",
+    backgroundColor: "#151619",
+    textColor: "#ececeb",
+    mutedTextColor: "#a9abaf",
+    borderColor: "#2f3135",
     accentColor: "#d98c6c",
     accentStrongColor: "#e8ab90"
   }

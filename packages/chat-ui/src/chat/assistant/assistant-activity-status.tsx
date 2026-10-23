@@ -43,14 +43,14 @@ export function AssistantActivityStatus({
 
   return (
     <div
-      className="flex max-w-3xl items-center gap-2 py-1 text-sm text-muted-foreground"
+      className="flex max-w-3xl items-center gap-2 py-1 text-sm text-info"
       data-testid="run-activity-status"
       role="status"
       aria-live="polite"
     >
-      {/* Blue says the agent is working, as the running mark in the rail does. */}
-      <Spinner size="sm" className="text-info" />
-      <span className="text-xs text-info tabular-nums" data-testid="run-activity-elapsed">
+      {/* The row is blue: the agent is working, as the running mark in the rail says. */}
+      <Spinner size="sm" />
+      <span className="text-xs tabular-nums" data-testid="run-activity-elapsed">
         {formatElapsedSeconds(elapsedSeconds)}
       </span>
       <span className="text-xs opacity-50" aria-hidden="true">
