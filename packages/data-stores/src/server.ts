@@ -97,7 +97,10 @@ export function createDataStoreServer(input: {
     },
     // The server is the one the platform's own rows are on. Its address is resolved here and
     // checked against no egress list: it is the platform's database, not an outside system.
-    pinAddress: async (host) => ({ allowed: true, address: (await lookup(host)).address })
+    pinAddress: async (host) => ({
+      allowed: true,
+      addresses: (await lookup(host, { all: true })).map(({ address }) => address)
+    })
   });
   const readerOf = (knowledgeBaseId: string) =>
     `catalyst_kb_${createHash("sha256")

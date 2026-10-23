@@ -19,11 +19,15 @@ export interface PostgresLocation {
   schemas: readonly string[];
 }
 
-export type PinnedPostgresAddress = { allowed: true; address: string } | { allowed: false };
+export type PinnedPostgresAddress =
+  | { allowed: true; address: string }
+  | { allowed: true; addresses: readonly string[] }
+  | { allowed: false };
 
 /**
  * The address check of the platform's egress rules. It is asked before every socket and
- * answers with the one IP address to dial, or refuses the target.
+ * answers with checked IP addresses to try in order, or refuses the target. Every address
+ * must pass the check before any is dialled. A single address remains a supported answer.
  */
 export type PinPostgresAddress = (host: string, port: number) => Promise<PinnedPostgresAddress>;
 
@@ -72,9 +76,7 @@ export async function openPostgresSocket(
   route: PostgresSocketRoute,
   signal: AbortSignal
 ): Promise<net.Socket> {
-  const address = await pinnedAddress(route, signal);
-  const plan = planPostgresSocket(route.location, address);
-  const { socket, leaveSocket } = await connect(plan.socket, signal);
+  const { plan, socket, leaveSocket } = await connectPinned(route, signal);
   if (plan.tls === undefined) return socket;
   let secured: tls.TLSSocket;
   try {
@@ -113,10 +115,10 @@ function destroyOnAbort(socket: net.Socket, signal: AbortSignal): () => void {
   return leave;
 }
 
-async function pinnedAddress(
+async function pinnedAddresses(
   { location, pinAddress }: PostgresSocketRoute,
   signal: AbortSignal
-): Promise<string> {
+): Promise<string[]> {
   let pinned: PinnedPostgresAddress;
   try {
     pinned = await untilAborted(pinAddress(location.host, location.port), signal);
@@ -124,10 +126,29 @@ async function pinnedAddress(
     throw new PostgresExecutorError("unavailable");
   }
   // A name here would be resolved a second time by the socket, past the check.
-  if (!pinned.allowed || net.isIP(pinned.address) === 0) {
+  if (!pinned.allowed) {
     throw new PostgresExecutorError("network_denied");
   }
-  return pinned.address;
+  const addresses = "addresses" in pinned ? [...pinned.addresses] : [pinned.address];
+  if (addresses.length === 0 || addresses.some((address) => net.isIP(address) === 0)) {
+    throw new PostgresExecutorError("network_denied");
+  }
+  return addresses;
+}
+
+/** Resolve once per socket, trying only that checked snapshot until TCP connects. */
+async function connectPinned(route: PostgresSocketRoute, signal: AbortSignal) {
+  const addresses = await pinnedAddresses(route, signal);
+  for (const address of addresses) {
+    if (signal.aborted) break;
+    const plan = planPostgresSocket(route.location, address);
+    try {
+      return { plan, ...(await connect(plan.socket, signal)) };
+    } catch {
+      // A refused or unreachable address may have a reachable sibling on the other stack.
+    }
+  }
+  throw new PostgresExecutorError("unavailable");
 }
 
 /** The address check is the platform's, and it may hang. The abort ends the wait for it. */

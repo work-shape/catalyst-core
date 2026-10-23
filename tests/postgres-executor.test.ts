@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { createServer } from "node:net";
+import net, { createServer } from "node:net";
 import { setTimeout as delay } from "node:timers/promises";
 import { inspect } from "node:util";
 import { afterAll, describe, expect, it, vi } from "vitest";
@@ -74,6 +74,42 @@ describe("Postgres executor on a customer's database", () => {
   });
 
   afterAll(() => executor?.close());
+
+  it("reuses the connected address across queries without resolving again", async () => {
+    const pinAddress = vi.fn(() =>
+      Promise.resolve({ allowed: true as const, addresses: ["::1", customer.address] })
+    );
+    const executor = createPostgresExecutor({
+      secrets: { getSecret: (name) => Promise.resolve(passwords.get(name)) },
+      pinAddress
+    });
+    try {
+      const query = { ...asReader(), sql: "select pg_backend_pid() as pid" };
+      const first = await executor.query(query);
+      expect((await executor.query(query)).rows).toEqual(first.rows);
+      expect(pinAddress).toHaveBeenCalledExactlyOnceWith(host, customer.port);
+    } finally {
+      await executor.close();
+    }
+  });
+
+  it.each([{ addresses: [] }, { addresses: ["127.0.0.1", "unresolved.example"] }])(
+    "refuses the entire invalid address list $addresses before dialing",
+    async ({ addresses }) => {
+      const dial = vi.spyOn(net, "connect");
+      const executor = createPostgresExecutor({
+        secrets: { getSecret: () => Promise.resolve(undefined) },
+        pinAddress: () => Promise.resolve({ allowed: true, addresses })
+      });
+      try {
+        await expect(executor.ping(asReader())).rejects.toMatchObject({ kind: "network_denied" });
+        expect(dial).not.toHaveBeenCalled();
+      } finally {
+        dial.mockRestore();
+        await executor.close();
+      }
+    }
+  );
 
   describe("results", () => {
     it("streams past the inline row and byte caps without retaining the result", async () => {
