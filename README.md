@@ -66,7 +66,7 @@ test Postgres for single files, and how to run the browser suite.
    `packages/postgres-store/migration-policy.json`. Migrations run as a deploy step; the API and
    the workers never migrate.
 4. Push and open a pull request.
-5. When the check on the Mac mini runner is green, merge with rebase:
+5. When the PR check is green, merge with rebase:
    `gh pr merge --rebase --delete-branch`. On a conflict, rebase onto `main` and push again.
 
 ## Code rules
@@ -81,3 +81,11 @@ test Postgres for single files, and how to run the browser suite.
 [`scripts/release/README.md`](scripts/release/README.md) covers cutting a release
 (`pnpm release:cut`), validation and publication, the public mirror, and the pinned Postgres
 image. The public mirror ships its own README from `scripts/release/public/README.md`.
+
+## Licence
+
+The source is published under the [PolyForm Strict License 1.0.0](LICENSE): you may read and
+run it for noncommercial purposes, but not change, redistribute or use it commercially. Clients
+run Catalyst under a separate commercial agreement with Workshape. The SDK packages
+(`api-client`, `api-contract`, `asset-schemas`, `config-cli`) are MIT, each with its own
+`LICENSE`.

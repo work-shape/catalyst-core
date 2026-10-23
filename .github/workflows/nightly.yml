@@ -1,4 +1,4 @@
-# Everything once a night on main, on our own Mac mini runner: the pull request check plus
+# Everything once a night on main, on GitHub-hosted runners: the pull request check plus
 # the suites' time limit, the scale tests, compatibility, release tooling, docs, images and the full browser suite.
 # A red night is fixed or reverted first thing the next morning.
 name: Nightly
@@ -20,20 +20,19 @@ defaults:
     shell: bash
 jobs:
   full:
-    runs-on: [self-hosted, catalyst-mini]
-    timeout-minutes: 90
+    runs-on: ubuntu-latest
+    # The timed unit suite alone may take 60 minutes on 4 cores; leave room for the other suites.
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
           fetch-depth: 0
       - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
-        with:
-          # Each runner on the Mini has its own copy: a shared one breaks when two jobs start together.
-          dest: ${{ runner.tool_cache }}/setup-pnpm
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
+          cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - name: Database
@@ -74,7 +73,7 @@ jobs:
         if: always()
         run: docker rm --force "$CHECK_POSTGRES_NAME" >/dev/null 2>&1 || true
   browser:
-    runs-on: [self-hosted, catalyst-mini]
+    runs-on: ubuntu-latest
     timeout-minutes: 120
     env:
       CHECK_POSTGRES_NAME: nightly-postgres-browser
@@ -83,16 +82,14 @@ jobs:
         with:
           persist-credentials: false
       - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
-        with:
-          # Each runner on the Mini has its own copy: a shared one breaks when two jobs start together.
-          dest: ${{ runner.tool_cache }}/setup-pnpm
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
+          cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - name: Chromium
-        run: pnpm exec playwright install --only-shell chromium
+        run: pnpm exec playwright install --with-deps --only-shell chromium
       - name: Database
         timeout-minutes: 5
         env:
@@ -124,8 +121,8 @@ jobs:
   images:
     needs: [full, browser]
     if: ${{ !cancelled() }}
-    runs-on: [self-hosted, catalyst-mini]
-    timeout-minutes: 40
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
