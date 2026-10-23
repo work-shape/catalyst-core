@@ -247,25 +247,30 @@ export async function conversationToolNames(
 export function createPlatformTools(
   input: Pick<
     ConversationOfferInput,
-    "modules" | "dataTools" | "dataToolDescribeTimeoutMs" | "policy" | "toolRights"
+    "stores" | "modules" | "dataTools" | "dataToolDescribeTimeoutMs" | "policy" | "toolRights"
   > & {
-    stores: PlatformStores;
     /**
      * The Connections of the instance, where the module `connections` is on: the agent's draft
      * of a REST API's tools is checked against their Connector types.
      */
     connections?: { connectorTypes: ConnectorTypeRegistry; catalogue?: Catalogue } | undefined;
+    /**
+     * The process's stores, from which the agent's proposal of a catalogue entry reads the
+     * instance's Connections and the person's sign-in. Without them it proposes no entry.
+     */
+    catalogueStores?: PlatformStores;
   }
 ) {
   const attached: { tools?: ToolRegistry; authorizer?: Authorizer } = {};
-  const catalogue = input.connections?.catalogue
-    ? connectionProposalCatalogue({
-        catalogue: input.connections.catalogue,
-        connectorTypes: input.connections.connectorTypes,
-        stores: input.stores,
-        authorizer: () => attached.authorizer
-      })
-    : undefined;
+  const catalogue =
+    input.connections?.catalogue && input.catalogueStores
+      ? connectionProposalCatalogue({
+          catalogue: input.connections.catalogue,
+          connectorTypes: input.connections.connectorTypes,
+          stores: input.catalogueStores,
+          authorizer: () => attached.authorizer
+        })
+      : undefined;
   const platformAssets: PlatformAssetBinding = createPlatformAssetBinding();
   return {
     /**

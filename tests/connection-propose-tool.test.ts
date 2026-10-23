@@ -320,7 +320,7 @@ describe("catalogue and complete custom proposals", () => {
         mayWrite: true,
         connection: { name: connection?.name ?? "mail", credentialMode: "user" }
       });
-      expect(result.output.bindingState).toBe(bindingState);
+      expect(Reflect.get(Object(result.output), "bindingState")).toBe(bindingState);
       expect(result.auditSummary).toEqual({
         action: CONNECTION_PROPOSE_TOOL_NAME,
         subject: "mail",
