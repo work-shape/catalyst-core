@@ -183,6 +183,7 @@
     "me.get": "own",
     "me.model_preference.get": "own",
     "me.model_preference.set": "own",
+    "me.operation_settings.list": "own",
     "me.password.change": "own",
     "me.update": "own",
     "openapi.get": "own",
