@@ -352,9 +352,14 @@ export class LocalWorkspaceCommandRunner {
   ): Promise<SandboxSkillFolder[]> {
     if (folders.length === 0 || this.processExecutor.mountsSkillFolders) return [...folders];
     const skillsDirectory = join(executionDirectory, LOCAL_SKILL_FOLDERS_DIRECTORY);
-    await removeTree(skillsDirectory);
+    await removeTree(skillsDirectory).catch(() => undefined);
     for (const folder of folders) {
-      await copyFolder(folder.directory, join(skillsDirectory, folder.name));
+      try {
+        await copyFolder(folder.directory, join(skillsDirectory, folder.name));
+      } catch {
+        // The command is told the skill's name and never a path of the worker.
+        throw skillMountFailure(folder.name, "not_copied");
+      }
     }
     return [];
   }

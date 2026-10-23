@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import * as fs from "node:fs/promises";
 import {
   chmod,
   lstat,
@@ -12,7 +13,7 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   asAgentRunId,
   asClientInstanceId,
@@ -40,6 +41,11 @@ import { createStaticConfigAssetSource } from "./support/static-config-asset-sou
 // another instance or another revision; a path that would leave the folder is refused; what
 // changed on the disk is filled again, never mounted.
 
+vi.mock("node:fs/promises", async (original) => {
+  const actual = await original<typeof import("node:fs/promises")>();
+  return { ...actual, lstat: vi.fn(actual.lstat) };
+});
+
 const instance = asClientInstanceId("instance-a");
 const sha256 = (bytes: Uint8Array | string) => createHash("sha256").update(bytes).digest("hex");
 const file = (path: string, text: string): SkillFolderFile => {
@@ -64,6 +70,9 @@ const mount = (overrides: Partial<WorkspaceCommandSkillMount> = {}) => ({
 
 const roots: string[] = [];
 afterEach(async () => {
+  vi.mocked(fs.lstat).mockImplementation(
+    (await vi.importActual<typeof fs>("node:fs/promises")).lstat
+  );
   for (const root of roots.splice(0)) {
     // The cache leaves read-only folders: opened again before they are removed.
     await chmodTree(root);
@@ -314,6 +323,60 @@ describe("the skill folder cache of a command worker", () => {
       failedCount: 0
     });
     expect(await filesBelow(root)).toEqual([]);
+  });
+
+  it("never removes an entry a command acquires while an eviction is deciding on it", async () => {
+    const { cache } = await cacheWith(() => FOLDER);
+    const filled = await cache.acquire(instance, [mount()]);
+    filled.release();
+    const folder = filled.folders[0]?.directory ?? "";
+    const entry = dirname(folder);
+    const expected = await tree(folder);
+    const hourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    await utimes(entry, hourAgo, hourAgo);
+    // The eviction is held in its look at the entry's age, after it saw the entry unused.
+    const actual = await vi.importActual<typeof fs>("node:fs/promises");
+    let reached: () => void = () => undefined;
+    const atAge = new Promise<void>((resolve) => (reached = resolve));
+    let open: () => void = () => undefined;
+    const opened = new Promise<void>((resolve) => (open = resolve));
+    vi.mocked(fs.lstat).mockImplementation(async (path, options) => {
+      const info = await actual.lstat(path, options);
+      if (path === entry) {
+        vi.mocked(fs.lstat).mockImplementation(actual.lstat);
+        reached();
+        await opened;
+      }
+      return info;
+    });
+    const eviction = cache.evictIdle({ olderThanMs: 30 * 60 * 1000 });
+    await atAge;
+    // A command acquires the entry while the eviction waits, and the eviction then goes on.
+    const lease = await cache.acquire(instance, [mount()]);
+    open();
+    await eviction;
+
+    expect(await tree(lease.folders[0]?.directory ?? "")).toEqual(expected);
+    lease.release();
+  });
+
+  it("fails with the skill's name and no path where the worker's disk refuses the folder", async () => {
+    const parent = await mkdtemp(join(tmpdir(), "skill-mount-cache-"));
+    roots.push(parent);
+    // The cache's root is below a file: every write of the worker fails.
+    const blocked = join(parent, "not-a-folder");
+    await writeFile(blocked, "");
+    const cache = new SkillFolderCache({
+      rootDirectory: join(blocked, "cache"),
+      reader: { read: () => Promise.resolve(FOLDER) }
+    });
+    const failure = await cache.acquire(instance, [mount()]).catch((error: unknown) => error);
+    expect(failure).toMatchObject({
+      code: "WORKSPACE_SKILL_MOUNT_FAILED",
+      details: { reason: "skill_mount_failed", skill: "form" }
+    });
+    expect(JSON.stringify(failure)).not.toContain(parent);
+    expect(failure instanceof Error ? failure.message : "").not.toContain(parent);
   });
 });
 
