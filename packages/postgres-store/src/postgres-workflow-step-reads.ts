@@ -20,6 +20,14 @@ import { workflowRuns, workflowStepRuns } from "./schema/workflowRuns";
 
 type Input<Method extends keyof WorkflowRunsStore> = Parameters<WorkflowRunsStore[Method]>[0];
 
+/**
+ * Whether the step of a step run is a `mail.send` step of its run's pinned definition, at any
+ * depth, read in the database as `hasAgentSteps` is. A literal value shaped like such a step
+ * makes it stricter.
+ */
+const sendsMail = () =>
+  sql<boolean>`exists (select 1 from ${workflowRuns} as mail_run where mail_run.client_instance_id = ${workflowStepRuns.clientInstanceId} and mail_run.id = ${workflowStepRuns.runId} and jsonb_path_exists(coalesce(mail_run.definition, '{}'::jsonb), 'lax $.steps.** ? (@.id == $id && @.operation == "mail.send")', jsonb_build_object('id', ${workflowStepRuns.stepId})))`;
+
 export async function listWorkflowStepRuns(
   db: PostgresConnection,
   input: Input<"listStepRuns">
@@ -32,7 +40,8 @@ export async function listWorkflowStepRuns(
       loopInputPreview,
       storedInputPreview,
       log: workflowStepRuns.log,
-      childRunId: workflowRuns.id
+      childRunId: workflowRuns.id,
+      sendsMail: sendsMail()
     })
     .from(workflowStepRuns)
     .leftJoin(
@@ -77,6 +86,7 @@ export async function listWorkflowStepRuns(
           : {}),
       ...(row.childRunId === null ? {} : { childRunId: row.childRunId }),
       ...(row.log === null ? {} : { log: row.log }),
+      ...(row.sendsMail === true ? { sendsMail: true } : {}),
       ...(loop ? { loop } : {}),
       ...(bodyCounts ? { bodyCounts } : {})
     };

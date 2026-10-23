@@ -436,4 +436,39 @@ describe("a test run of a mail.send step", () => {
       { type: "mail.refused", metadata: { reason: "recipient_not_allowed", target: "dry_run" } }
     ]);
   });
+
+  it("shows the simulated mail only to a reader of the run's data", async () => {
+    const t = await ready({ mail: { recipientDomains: ["kanzlei.de"] } });
+    await grantSystem(t);
+    await save(t, mailFlow("draft", basic(ref("email"))));
+    const started = runSchema.parse(
+      (
+        await t.expectOk(t.root.id, "workflows.test", {
+          params: { workflow: "draft" },
+          payload: { input: { email: "anna@kanzlei.de" } }
+        })
+      ).json()
+    );
+    await t.finish(started.id);
+    const simulated = required(
+      (await stepRunsOf(t, started.id)).find((item) => item.stepId === "mail")
+    );
+    expect(simulated.outputPreview?.text).toContain("Monthly check");
+    // Kai reads the Workflow but not its runs' data: the step, never the mail.
+    await t.allow({ kind: "user", id: t.kai.id }, "workflow.read");
+    const response = await t.expectOk(t.kai.id, "workflows.list_step_runs", {
+      params: { runId: started.id },
+      query: {}
+    });
+    const step = z
+      .object({ items: z.array(z.record(z.string(), z.unknown())) })
+      .parse(response.json())
+      .items.find((item) => item.stepId === "mail");
+    expect(step).toMatchObject({ status: "done", target: "dry_run" });
+    expect(step).not.toHaveProperty("outputPreview");
+    expect(step).not.toHaveProperty("inputPreview");
+    expect(step).not.toHaveProperty("sendsMail");
+    expect(response.body).not.toContain("Monthly check");
+    expect(response.body).not.toContain("<html");
+  });
 });
