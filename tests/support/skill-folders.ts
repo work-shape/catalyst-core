@@ -71,6 +71,8 @@ type Address = { kind: string; name: string };
 export function useSkillWorlds(): {
   /** An instance with or without a store of files, and with or without changes by an agent. */
   start(files?: boolean, agentSkillChanges?: boolean): Promise<SkillWorld>;
+  /** Only the API, for CLI tests that never execute an agent tool. */
+  startApi(files?: boolean): Promise<TestInstance>;
 } {
   const roots: string[] = [];
   const started: TestInstance[] = [];
@@ -80,42 +82,49 @@ export function useSkillWorlds(): {
     await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
   });
 
-  return {
-    async start(files = true, agentSkillChanges = false) {
-      const root = await mkdtemp(join(tmpdir(), "skill-folders-test-"));
-      roots.push(root);
-      const base = createTestConfig({
-        tools: [
-          { name: "read_skill", enabled: true },
-          ...(agentSkillChanges ? [{ name: "propose_skill_change", enabled: true }] : [])
-        ]
-      });
-      const config = parseClientInstanceConfig({
-        ...base,
-        modules: { assetManagement: { enabled: true } },
-        administration: {
-          agentConfiguration: {
-            enabled: true,
-            allowSkillEditing: true,
-            ...(agentSkillChanges
-              ? { agentSkillChanges: { enabled: true, allowSkillCreation: false } }
-              : {})
-          }
-        },
-        ...(files
-          ? {
-              infrastructure: {
-                ...base.infrastructure,
-                objectStorage: {
-                  ...base.infrastructure.objectStorage,
-                  files: { provider: "filesystem", root }
-                }
+  const assemble = async (files: boolean, agentSkillChanges: boolean) => {
+    const root = await mkdtemp(join(tmpdir(), "skill-folders-test-"));
+    roots.push(root);
+    const base = createTestConfig({
+      tools: [
+        { name: "read_skill", enabled: true },
+        ...(agentSkillChanges ? [{ name: "propose_skill_change", enabled: true }] : [])
+      ]
+    });
+    const config = parseClientInstanceConfig({
+      ...base,
+      modules: { assetManagement: { enabled: true } },
+      administration: {
+        agentConfiguration: {
+          enabled: true,
+          allowSkillEditing: true,
+          ...(agentSkillChanges
+            ? { agentSkillChanges: { enabled: true, allowSkillCreation: false } }
+            : {})
+        }
+      },
+      ...(files
+        ? {
+            infrastructure: {
+              ...base.infrastructure,
+              objectStorage: {
+                ...base.infrastructure.objectStorage,
+                files: { provider: "filesystem", root }
               }
             }
-          : {})
-      });
-      const api = await createTestInstance({ config, env: {}, tools: [] });
-      started.push(api);
+          }
+        : {})
+    });
+    const api = await createTestInstance({ config, env: {}, tools: [] });
+    started.push(api);
+    return { api, config };
+  };
+  return {
+    async startApi(files = true) {
+      return (await assemble(files, false)).api;
+    },
+    async start(files = true, agentSkillChanges = false) {
+      const { api, config } = await assemble(files, agentSkillChanges);
       const calls = await createTestInstance({ execution: { config, env: {}, tools: [] } });
       started.push(calls);
       return { api, execution: getTestExecution(calls) };

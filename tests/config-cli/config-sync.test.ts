@@ -73,6 +73,20 @@ describe("config CLI against an instance", () => {
   const workingCopy = async (directory: string) =>
     readWorkingCopy(directory, await readManifest(directory));
 
+  /**
+   * A working copy without the bytes of each SKILL.md: a pull writes where the skill came from
+   * into its front matter as comments, which no parse, hash or push reads.
+   */
+  const withoutSkillManifests = (bundle: Awaited<ReturnType<typeof workingCopy>>) => ({
+    ...bundle,
+    skillFiles: Object.fromEntries(
+      Object.entries(bundle.skillFiles ?? {}).map(([name, files]) => [
+        name,
+        files.filter((file) => file.path !== "SKILL.md")
+      ])
+    )
+  });
+
   const syncRuns = async (fixture: Awaited<ReturnType<typeof createFixture>>) =>
     (await fixture.store.operationRuns.list({ clientInstanceId: fixture.clientInstanceId })).filter(
       (run) => run.operation === "assets.sync"
@@ -110,7 +124,7 @@ describe("config CLI against an instance", () => {
     await writeMinimalManifest(other, "https://catalyst.test");
     expect(await runConfigCommand("pull", { ...options, cwd: other })).toBe(0);
     const pulled = await workingCopy(other);
-    expect(pulled).toEqual(local);
+    expect(withoutSkillManifests(pulled)).toEqual(withoutSkillManifests(local));
     expect(canonicalBundleFiles(pulled)).toEqual(canonicalBundleFiles(local));
 
     // The pushing one has nothing to pull, to show or to push again.

@@ -46036,6 +46036,14 @@
       "ValidateAssetRequest": {
         "type": "object",
         "properties": {
+          "files": {
+            "minItems": 1,
+            "maxItems": 500,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AssetFileInput"
+            }
+          },
           "availability": {
             "$ref": "#/components/schemas/AgentAvailability"
           },

@@ -329,16 +329,36 @@ describe("config schema round trips", () => {
         expect(canonicalizeSkillConfig(without)).not.toEqual(canonicalizeSkillConfig(skill));
     }
   });
-  it("ignores server-carried skill fields after a fresh pull and never sends them as edits", async () => {
+  it("pulls indexed skill files and keeps server-carried fields out of text edits", async () => {
+    const bytes = Buffer.from([0]);
+    const sha256 = createHash("sha256").update(bytes).digest("hex");
     const indexed = {
       ...skill,
-      files: [
-        { path: "assets/icon.png", sha256: "a".repeat(64), bytes: 1, mediaType: "image/png" }
-      ],
+      files: [{ path: "assets/icon.png", sha256, bytes: 1, mediaType: "image/png" }],
       origin: "release" as const,
       icon: "book"
     };
-    const f = await fixture([remote("skill", indexed)]);
+    const folderAsset = remote("skill", indexed);
+    folderAsset.files = [
+      { path: "SKILL.md", text: serializeSkillMarkdown(skill), contentType: "text/markdown" },
+      ...(skill.resources ?? []).map((resource) => ({
+        path: resource.path,
+        text: resource.content,
+        contentType: resource.mediaType
+      })),
+      { path: "assets/icon.png", base64: bytes.toString("base64"), contentType: "image/png" }
+    ].map((file) => {
+      const data =
+        file.base64 !== undefined
+          ? Buffer.from(file.base64, "base64")
+          : Buffer.from(file.text ?? "");
+      return {
+        ...file,
+        sha256: createHash("sha256").update(data).digest("hex"),
+        bytes: data.length
+      };
+    });
+    const f = await fixture([folderAsset]);
     await f.pull();
     const unchanged = await f.run(["config", "push"]);
     expect(unchanged.out).toContain("No local changes to push.");
