@@ -6,6 +6,7 @@ import {
   type ClientInstanceConfig
 } from "@work-shape/catalyst-config-schema";
 import { ASSET_OWNER_KINDS, AppError, defineAssetKind } from "@work-shape/catalyst-core";
+import { skillSecretWarnings } from "./skill-secret-warnings";
 import { z } from "zod";
 import { readDefinitionField, readDefinitionName, type WorkflowAssetKind } from "./shared";
 import {
@@ -112,10 +113,12 @@ export function createSkillAssetKind(options: {
     assertInteractiveUpsertAllowed: assertEditingAllowed,
     assertInteractiveDeleteAllowed: assertEditingAllowed,
     // A name or a description outside the public skill convention is said and not refused.
-    writeWarnings: (definition) =>
-      skillPortabilityIssues(
+    writeWarnings: (definition, files) => [
+      ...skillPortabilityIssues(
         z.object({ name: z.unknown(), description: z.unknown() }).parse(definition)
       ),
+      ...skillSecretWarnings(files ?? skillFilesOfConfig(definition))
+    ],
     // A skill is a folder: `SKILL.md`, its text resources, and whatever else it carries.
     revisionFiles: {
       manifestFile: SKILL_MANIFEST_FILE,

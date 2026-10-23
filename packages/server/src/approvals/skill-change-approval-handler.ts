@@ -24,8 +24,10 @@ import {
   type AuthenticatedUser,
   type ConfigAssetMutation,
   type ConfigAssetRevisionRecord,
+  type SkillConfig,
   type JsonObject
 } from "@work-shape/catalyst-core";
+import { createSkillSourceVersion } from "@work-shape/catalyst-tool-execution";
 import { z } from "zod";
 import {
   applyValidatedConfigAssetMutations,
@@ -54,7 +56,7 @@ const payloadSchema = z
     agentName: z.string().min(1),
     skillName: skillNameSchema,
     operations: skillChangeOperationsSchema,
-    // Informational proposal-time hash; applicability is checked against the current skill.
+    // Proposal-time version: text changes may rebase, but changes of workspace files may not.
     baseSourceVersion: z
       .string()
       .regex(/^sha256:[a-f0-9]{64}$/u)
@@ -141,6 +143,7 @@ export function createSkillChangeApprovalHandler(
         return true;
       }
       const skill = await options.configAssets.source.getSkill(data.skillName);
+      if (await workspaceFilesChanged(skill, data.baseSourceVersion)) return true;
       try {
         applySkillChange(skill, data.operations);
         return false;
@@ -225,6 +228,11 @@ export function createSkillChangeApprovalHandler(
         skillName: data.skillName,
         operations: data.operations
       });
+      if (await workspaceFilesChanged(snapshot.skill, data.baseSourceVersion)) {
+        throw new AppError("CONFLICT", "The skill's workspace files changed after the proposal", {
+          reason: "stale_base"
+        });
+      }
       const skill = applySkillChange(snapshot.skill, data.operations);
       const mutations: ConfigAssetMutation[] = [
         {
@@ -343,6 +351,26 @@ export function createSkillChangeApprovalHandler(
       return revisionResult(data.skillName, reverted);
     }
   };
+
+  /** Text operations may rebase; the workspace files the proposing agent saw must stay the same. */
+  async function workspaceFilesChanged(
+    skill: SkillConfig | undefined,
+    baseSourceVersion: string | null
+  ): Promise<boolean> {
+    if (!skill || !baseSourceVersion || createSkillSourceVersion(skill) === baseSourceVersion)
+      return false;
+    const history = await listSkillRevisions(skill.name);
+    const base = history
+      .map((revision) => skillConfigSchema.safeParse(revision.config))
+      .find((read) => read.success && createSkillSourceVersion(read.data) === baseSourceVersion);
+    const index = (files: SkillConfig["files"]) =>
+      JSON.stringify(
+        [...(files ?? [])]
+          .sort((left, right) => left.path.localeCompare(right.path))
+          .map(({ path, sha256 }) => ({ path, sha256 }))
+      );
+    return index(base?.success ? base.data.files : []) !== index(skill.files);
+  }
 
   async function listSkillRevisions(skillName: string): Promise<ConfigAssetRevisionRecord[]> {
     return store.listConfigAssetRevisions({

@@ -67,6 +67,8 @@ export interface AssetWorkflowHost {
       pageLink?: () => Promise<boolean>;
       /** The files of the write as its event names them: path, hash and size, no content. */
       auditFiles?: readonly { path: string; sha256: string; bytes: number }[];
+      /** Files of this folder write, used only for the kind's warnings. Never audited. */
+      warningFiles?: readonly { path: string; bytes: Uint8Array }[];
     }
   ): Promise<{ version: number; revision: number; warnings: AssetWarning[] }>;
   authorizeEditing(call: AssetCall, surface: "put"): Promise<void>;
@@ -185,6 +187,7 @@ export class AssetDraftWorkflow {
         expectedRevision,
         audit: "config_asset.updated",
         auditFiles: entries,
+        warningFiles: files,
         ...(fileSet ? { fileSet: { assetId, fileSetId: fileSet.id } } : {})
       });
       return { ...written, ...(fileSet ? { fileSetId: fileSet.id } : {}), files: entries };

@@ -210,6 +210,91 @@ describe("a skill as a folder of files", () => {
     });
   });
 
+  it("saves secret-like text with location-only warnings in folder and config writes", async () => {
+    const world = await start();
+    const key = "-----BEGIN RSA PRIVATE KEY-----";
+    const script = `# helper\n# example\n${key}\n`;
+    const written = await put(world, {
+      files: [
+        { path: "SKILL.md", text: SKILL_MD },
+        { path: "scripts/x.py", text: script },
+        { path: "assets/example.bin", base64: Buffer.from(`\0${key}`).toString("base64") }
+      ],
+      expectedRevision: null
+    });
+    expect(written.statusCode, written.body).toBe(200);
+    const warnings = z
+      .object({ warnings: z.array(z.object({ code: z.string(), message: z.string() })) })
+      .parse(written.json()).warnings;
+    expect(warnings).toEqual([
+      { code: "skill_file_secret_like", message: "Possible secret in 'scripts/x.py' at line 3." }
+    ]);
+    expect(JSON.stringify(warnings)).not.toContain(key);
+    expect((await get(world)).revision).toBe(1);
+    const configWrite = await put(world, {
+      config: {
+        name: "form-filler",
+        title: "Form filler",
+        description: "Use for forms.",
+        content: "Instructions.",
+        resources: [
+          { path: "references/key.md", mediaType: "text/markdown", content: `first\n${key}` }
+        ]
+      },
+      expectedRevision: 1
+    });
+    expect(configWrite.statusCode, configWrite.body).toBe(200);
+    expect(configWrite.json()).toMatchObject({
+      warnings: [
+        {
+          code: "skill_file_secret_like",
+          message: "Possible secret in 'references/key.md' at line 2."
+        }
+      ]
+    });
+    const created = await world.api.call("workspaces.create", {
+      payload: { name: "Secret warnings" }
+    });
+    expect(created.statusCode, created.body).toBe(200);
+    const workspaceId = z.object({ id: z.string() }).parse(created.json()).id;
+    const synced = await world.api.call("assets.sync", {
+      payload: {
+        workspaceId,
+        items: [
+          {
+            type: "put",
+            kind: "skill",
+            expectedRevision: null,
+            config: {
+              name: "synced-secret",
+              title: "Form filler",
+              description: "Use for forms.",
+              content: "Instructions.",
+              resources: [
+                { path: "references/key.md", mediaType: "text/markdown", content: `first\n${key}` }
+              ]
+            }
+          }
+        ]
+      }
+    });
+    expect(synced.statusCode, synced.body).toBe(200);
+    expect(synced.json()).toMatchObject({
+      warnings: [
+        {
+          code: "skill_file_secret_like",
+          message: "Possible secret in 'references/key.md' at line 2."
+        }
+      ]
+    });
+    const events = await world.api.stores.audit.listAuditEvents({
+      clientInstanceId,
+      type: "config_asset.updated",
+      limit: 10
+    });
+    expect(JSON.stringify(events)).not.toContain(key);
+  });
+
   it("keeps a skill that is written as its config what it was, and leaves the other files of a folder to a write of the config", async () => {
     const world = await start();
     const config = {
@@ -548,11 +633,7 @@ Thirty days a year.
       handlers: world.execution.approvalRequestHandlers,
       auditRecorder: new StoreBackedAuditRecorder({ clientInstanceId, store: stores.audit })
     });
-    const stored = required(
-      (await world.execution.assetSource.getSnapshot()).skills.find(
-        ({ name }) => name === "form-filler"
-      )
-    );
+    const stored = required(await world.execution.assetSource.getSkill("form-filler"));
     const operations: SkillChangeOperation[] = [
       { type: "replace_text", target: "root", oldText: "Run", newText: "Always run" }
     ];

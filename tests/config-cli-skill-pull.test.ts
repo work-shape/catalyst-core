@@ -192,7 +192,7 @@ describe("catalyst skill pull (ADISC-2 check 71)", () => {
       for (const [path, bytes] of Object.entries(content)) {
         const target = join(f.cwd, "copy", path);
         expect(await fs.readFile(target)).toEqual(bytes);
-        expect((await fs.stat(target)).mode & 0o777).toBe(0o644);
+        expect((await fs.stat(target)).mode & 0o777).toBe(0o644 & ~process.umask());
       }
       expect(JSON.parse(await fs.readFile(join(f.cwd, "copy", stateFile), "utf8"))).toEqual({
         instance,
@@ -275,7 +275,7 @@ describe("catalyst skill pull (ADISC-2 check 71)", () => {
     expect(await f.pull("new/nested/copy")).toMatchObject({ code: 1 });
     expect(await tree(f.cwd)).toEqual({
       "new/": "directory",
-      "new/mine": `420:${Buffer.from("concurrent addition").toString("base64")}`
+      "new/mine": `${0o666 & ~process.umask()}:${Buffer.from("concurrent addition").toString("base64")}`
     });
   });
 

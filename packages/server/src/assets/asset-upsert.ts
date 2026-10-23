@@ -72,6 +72,8 @@ export type AssetUpsert = {
   pageLink?: () => Promise<boolean>;
   /** The files of the write as its event names them: path, hash and size, no content. */
   auditFiles?: readonly { path: string; sha256: string; bytes: number }[];
+  /** Files of this folder write, used only for the kind's warnings. Never audited. */
+  warningFiles?: readonly { path: string; bytes: Uint8Array }[];
 };
 
 /** Validate one config write, then save either an agent draft or an asset revision. */
@@ -250,6 +252,10 @@ export async function upsertAsset(
   return {
     version: result.version,
     revision,
-    warnings: [...warnings, ...toolWarnings, ...(kind.writeWarnings?.(next) ?? [])]
+    warnings: [
+      ...warnings,
+      ...toolWarnings,
+      ...(kind.writeWarnings?.(next, write.warningFiles) ?? [])
+    ]
   };
 }

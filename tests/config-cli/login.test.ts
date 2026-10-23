@@ -1,6 +1,6 @@
 import { createTestFetch } from "../support/test-instance";
 import { testOperations } from "../support/operations";
-import { readFile, stat, writeFile } from "node:fs/promises";
+import { chmod, readFile, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { runCli } from "@work-shape/catalyst-cli";
@@ -123,6 +123,8 @@ describe("catalyst login", () => {
       JSON.stringify({ version: 1, instances: {} }),
       { mode: 0o644 }
     );
+    // Creation modes are masked by umask; this fixture must actually be readable by others.
+    await chmod(join(configHome, "credentials.json"), 0o644);
     const errors: string[] = [];
     expect(
       await runCli(["config", "list"], {

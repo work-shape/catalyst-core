@@ -1,3 +1,5 @@
+import { createSkillSourceVersion } from "@work-shape/catalyst-tool-execution";
+import { createSkillChangePreview } from "@work-shape/catalyst-config-schema";
 import { asUserId } from "@work-shape/catalyst-core";
 import { builtInModelCapabilities } from "./support/model-gateway";
 import { accessOf } from "./support/access";
@@ -263,6 +265,45 @@ describe("skill change approval workflow", () => {
     expect(await f.approve(second.id)).toMatchObject({ status: "superseded" });
     expect(await f.revisions("new_skill")).toHaveLength(1);
   });
+
+  it.each(["replace", "remove", "add"])(
+    "supersedes a pending text proposal after workspace files %s",
+    async (change) => {
+      const f = await fixture();
+      const entry = {
+        path: "assets/t.pdf",
+        sha256: "a".repeat(64),
+        bytes: 40,
+        mediaType: "application/pdf"
+      };
+      const before = { ...skill, files: change === "add" ? [] : [entry] };
+      await applyAtCurrentRevisions(f.store.configAssets, {
+        clientInstanceId,
+        mutations: [{ type: "upsert", kind: "skill", name: skill.name, config: json(before) }]
+      });
+      const request = await f.workflow.createRequest(requester, context, {
+        kind: "skill_change",
+        summary: "Verify facts.",
+        payload: json({
+          agentName: f.agent.name,
+          skillName: skill.name,
+          operations,
+          baseSourceVersion: createSkillSourceVersion(before),
+          preview: createSkillChangePreview(before, operations)
+        })
+      });
+      const after = {
+        ...before,
+        files: change === "remove" ? [] : [{ ...entry, sha256: "b".repeat(64) }]
+      };
+      await applyAtCurrentRevisions(f.store.configAssets, {
+        clientInstanceId,
+        mutations: [{ type: "upsert", kind: "skill", name: skill.name, config: json(after) }]
+      });
+      expect(await f.approve(request.id)).toMatchObject({ status: "superseded" });
+      expect(await f.revisions()).toHaveLength(3);
+    }
+  );
 
   it("supersedes a stale proposal and keeps its original preview readable", async () => {
     const f = await fixture();

@@ -74,6 +74,10 @@ awk '
   { print }
 ' "$platform_root/pnpm-lock.yaml" > "$workspace/pnpm-lock.yaml"
 
+# A runner or checkout may use umask 077. Image commands must remain readable by the
+# unprivileged runner even when the source files copied into the build are owner-only.
+chmod -R go-rwx "$workspace"
+
 build() {
   local target="$1"
   # A second argument keeps the image under that tag in the local engine.
