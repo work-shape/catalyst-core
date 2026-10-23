@@ -2,7 +2,9 @@ export {
   CONNECTION_CREDENTIAL_MODES,
   CONNECTION_PROPOSAL_STATES,
   CONNECTION_PROPOSAL_BINDING_STATES,
+  CONNECTION_SIGN_IN_NEEDS,
   type ConnectionProposalState,
+  type ConnectionSignInNeed,
   type ConnectionProposalBindingState,
   type ConnectionCredentialMode
 } from "@work-shape/catalyst-asset-schemas";

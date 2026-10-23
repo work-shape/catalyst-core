@@ -677,6 +677,10 @@ export const CONNECTION_PROPOSAL_BINDING_STATES = [
 ] as const;
 export type ConnectionProposalBindingState = (typeof CONNECTION_PROPOSAL_BINDING_STATES)[number];
 
+/** What a refused call of a personal Connection needs of its person: a first or a new sign-in. */
+export const CONNECTION_SIGN_IN_NEEDS = ["not_connected", "needs_reconnect"] as const;
+export type ConnectionSignInNeed = (typeof CONNECTION_SIGN_IN_NEEDS)[number];
+
 /**
  * How a Connection that signs in with OAuth has its client: registered by the platform
  * (Dynamic Client Registration) or issued by the provider and named in the settings.

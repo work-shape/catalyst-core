@@ -1,4 +1,4 @@
-import { TOOL_GROUPS } from "@work-shape/catalyst-asset-schemas";
+import { TOOL_GROUPS, type ConnectionSignInNeed } from "@work-shape/catalyst-asset-schemas";
 import type { AuditSafeSummary, ManagedArtifactRef, ToolDisplayOutput } from "./files";
 import type { OperationBeforeEvent } from "./guardrail-events";
 import type { RuntimeCallContext } from "./identity";
@@ -135,7 +135,7 @@ export interface ToolConnectionSignInRequest {
     service?: string;
     catalogue?: { entry: string; part: string };
   };
-  state: "not_connected" | "needs_reconnect";
+  state: ConnectionSignInNeed;
   /** The agent whose call was refused: the person's word that they connected goes to it. */
   agentName?: string;
 }
