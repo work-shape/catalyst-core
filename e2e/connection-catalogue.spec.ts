@@ -250,6 +250,13 @@ test.describe("an OAuth entry", () => {
   let oauthServer: ChildProcess | undefined;
 
   test.beforeEach(async ({ baseURL }) => {
+    // The entry fixes the address, so a server another run left there would answer for this
+    // one with another client: say so instead of a sign-in that goes nowhere.
+    const foreign = await fetch(`${OAUTH_BASE}/healthz`).then(
+      (answer) => answer.ok,
+      () => false
+    );
+    expect(foreign, `${OAUTH_BASE} already answers: another run's sample server`).toBe(false);
     oauthServer = spawn(process.execPath, ["clients/demo/dist/sample-mcp-server.js"], {
       env: {
         ...process.env,
@@ -264,9 +271,12 @@ test.describe("an OAuth entry", () => {
       },
       stdio: "ignore"
     });
+    const started = oauthServer;
     await expect
       .poll(
         async () => {
+          // A server that could not take the address has ended: no wait for a health check.
+          if (started.exitCode !== null) return started.exitCode;
           try {
             return (await fetch(`${OAUTH_BASE}/healthz`)).status;
           } catch {
