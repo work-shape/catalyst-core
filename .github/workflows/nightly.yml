@@ -1,0 +1,120 @@
+# Everything once a night on main, on our own Mac mini runner: the pull request check plus
+# the scale tests, compatibility, release tooling, docs, images and the full browser suite.
+# A red night is fixed or reverted first thing the next morning.
+name: Nightly
+on:
+  schedule:
+    - cron: "0 1 * * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+  packages: read
+concurrency:
+  group: nightly
+  cancel-in-progress: false
+env:
+  CHECK_POSTGRES_NAME: nightly-postgres-core
+  POSTGRES_STORE_TEST_DATABASE_URL: postgresql://catalyst:local-check@localhost:54330/catalyst_test
+defaults:
+  run:
+    shell: bash
+jobs:
+  full:
+    runs-on: [self-hosted, catalyst-mini]
+    timeout-minutes: 90
+    env:
+      CATALYST_SCALE_TESTS: "1"
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Format, lint and types
+        run: pnpm format:check && pnpm lint && pnpm typecheck
+      - name: OpenAPI, contract and migrations
+        run: pnpm check:openapi && pnpm check:contract && pnpm check:migrations
+      - name: Documentation site
+        run: pnpm --filter @work-shape/catalyst-docs check:site
+      - name: Release tooling
+        run: node --test 'scripts/release/*.test.mjs' && pnpm release:check --skip-build
+      - name: Database
+        timeout-minutes: 5
+        env:
+          TOKEN: ${{ github.token }}
+        run: |
+          docker rm --force "$CHECK_POSTGRES_NAME" >/dev/null 2>&1 || true
+          docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin <<<"$TOKEN"
+          .github/scripts/start-postgres.sh catalyst local-check catalyst_test 54330
+      - name: Unit, database and scale tests
+        run: pnpm exec vitest run
+      - name: Deployment kit tests
+        run: pnpm test:deployment-kit
+      - name: Upgrade and compatibility
+        run: pnpm test:upgrade && pnpm test:compatibility
+      - name: Remove the database
+        if: always()
+        run: docker rm --force "$CHECK_POSTGRES_NAME" >/dev/null 2>&1 || true
+  browser:
+    runs-on: [self-hosted, catalyst-mini]
+    timeout-minutes: 120
+    env:
+      CHECK_POSTGRES_NAME: nightly-postgres-browser
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Chromium
+        run: pnpm exec playwright install --only-shell chromium
+      - name: Database
+        timeout-minutes: 5
+        env:
+          TOKEN: ${{ github.token }}
+        run: |
+          docker rm --force "$CHECK_POSTGRES_NAME" >/dev/null 2>&1 || true
+          docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin <<<"$TOKEN"
+          .github/scripts/start-postgres.sh agent_chat agent_chat agent_chat 55433
+      - name: Browser suite
+        env:
+          E2E_EXTERNAL_POSTGRES: "1"
+          E2E_SKIP_BUILD: "1"
+        run: pnpm test:e2e --retries=1 --workers=1 2>&1 | tee browser-run.log
+      - name: Keep traces and the server log of a failed run
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        continue-on-error: true
+        with:
+          name: browser-run
+          path: |
+            test-results/
+            browser-run.log
+          retention-days: 7
+      - name: Remove the database
+        if: always()
+        run: docker rm --force "$CHECK_POSTGRES_NAME" >/dev/null 2>&1 || true
+  images:
+    needs: [full, browser]
+    if: ${{ !cancelled() }}
+    runs-on: [self-hosted, catalyst-mini]
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - name: Sign in to the registry
+        env:
+          TOKEN: ${{ github.token }}
+        run: docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin <<<"$TOKEN"
+      - name: Images
+        run: bash scripts/check-image-build.sh

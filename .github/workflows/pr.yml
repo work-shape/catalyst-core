@@ -22,6 +22,9 @@ env:
   CHECK_POSTGRES_NAME: pr-postgres-core
   POSTGRES_STORE_TEST_DATABASE_URL: postgresql://catalyst:local-check@localhost:54329/catalyst_test
   CATALYST_SCALE_TESTS: "0"
+defaults:
+  run:
+    shell: bash
 jobs:
   check:
     runs-on: [self-hosted, catalyst-mini]
@@ -41,7 +44,7 @@ jobs:
           uname -mrs
           sysctl -n hw.ncpu hw.memsize
           uptime
-          docker version --format 'docker {{.Server.Version}}'
+          docker info --format 'docker {{.ServerVersion}}: {{.NCPU}} CPUs, {{.MemTotal}} bytes, {{.ContainersRunning}} containers running'
       - name: Install
         run: pnpm install --frozen-lockfile
       - name: Changes
@@ -74,6 +77,9 @@ jobs:
         run: pnpm test:upgrade
       - name: Deployment kit tests
         run: pnpm test:deployment-kit
+      - name: Database log of a failed run
+        if: failure()
+        run: docker logs --tail 80 "$CHECK_POSTGRES_NAME" 2>&1 || true
       - name: Remove the database
         if: always()
         run: docker rm --force "$CHECK_POSTGRES_NAME" >/dev/null 2>&1 || true
