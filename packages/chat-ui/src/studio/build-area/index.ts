@@ -247,4 +247,5 @@ export {
 } from "../../shared/build-route";
 export { SkillEditor } from "./skill-editor";
 export * from "./skill-form-model";
+export * from "./skill-import-model";
 export { skillFacts } from "./skill-facts";

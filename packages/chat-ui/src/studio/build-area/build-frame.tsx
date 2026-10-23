@@ -1,4 +1,4 @@
-import { Plus, Search, SearchX, Terminal } from "lucide-react";
+import { FolderInput, Plus, Search, SearchX, Terminal } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import {
   Avatar,
@@ -63,6 +63,7 @@ import {
   buildWorkspaceName,
   type BuildScope
 } from "../../shared/build-rights";
+import { readBuildRefusal } from "./build-refusals";
 import { scrollPageToTop } from "./build-scroll";
 import { BUILT_WITH_AGENT, BuildListEmpty } from "./build-list-empty";
 import { BuildWithAgentDialog } from "../build-with-agent-dialog";
@@ -89,7 +90,7 @@ export function BuildFrame({
   /** The shared workspace the reader works in: a new agent starts available there. */
   workspace?: { id: string; name: string };
 }) {
-  const { t } = useTranslation();
+  const { locale, t } = useTranslation();
   const { location, open, href } = useBuildNavigation();
   const kinds = visibleBuildKinds(useBuildAssetKinds(), source.kinds);
   const place = resolveBuildPlace(kinds, location);
@@ -118,6 +119,8 @@ export function BuildFrame({
   // A new asset has no address yet: it is written on the list's address and ends with it.
   const locationKey = `${location.kindPath ?? ""}/${location.name ?? ""}`;
   const [asking, setAsking] = useState(false);
+  /** The kind's import dialog is open over its list. */
+  const [importing, setImporting] = useState(false);
   // A page outside Studio may have started an asset in its own dialog: the list it leads to
   // opens the new asset's page.
   const [start, setStart] = useState<BuildAssetStart | undefined>(() =>
@@ -130,6 +133,7 @@ export function BuildFrame({
   if (seenLocationKey !== locationKey) {
     setSeenLocationKey(locationKey);
     setAsking(false);
+    setImporting(false);
     setCopying(undefined);
     setStart(undefined);
   }
@@ -430,7 +434,32 @@ export function BuildFrame({
         hrefOf={(asset) => href({ kindPath: entry.path, name: asset.name })}
         onOpen={(asset) => open({ kindPath: entry.path, name: asset.name })}
         onNew={() => setAsking(true)}
+        onImport={() => setImporting(true)}
       />
+      {importing && isEditableKind(entry) && place.kind.state.canCreate && entry.importDialog ? (
+        <entry.importDialog.Dialog
+          checkName={(name) => source.checkName(entry.kind, name)}
+          create={async ({ name, files }) => {
+            try {
+              const stored = await source.writes.put({
+                kind: entry.kind,
+                name,
+                files,
+                expectedRevision: null
+              });
+              return { ok: true, revision: stored.revision };
+            } catch (error) {
+              return readBuildRefusal(error, t, locale);
+            }
+          }}
+          titleOf={async (name) => source.titleOf?.(entry.kind, name)}
+          onClose={() => setImporting(false)}
+          onOpen={(name) => {
+            setImporting(false);
+            open({ kindPath: entry.path, name });
+          }}
+        />
+      ) : null}
       {asking && isEditableKind(entry) && place.kind.state.canCreate && entry.CreateDialog ? (
         <entry.CreateDialog
           checkName={(name) => source.checkName(entry.kind, name)}
@@ -498,7 +527,8 @@ function BuildList({
   onViewChange,
   hrefOf,
   onOpen,
-  onNew
+  onNew,
+  onImport
 }: {
   source: BuildSource;
   kind: VisibleBuildKind;
@@ -509,6 +539,8 @@ function BuildList({
   hrefOf(asset: BuildAssetRow): string;
   onOpen(asset: BuildAssetRow): void;
   onNew(): void;
+  /** Opens the kind's import dialog. */
+  onImport(): void;
 }) {
   const { locale, t } = useTranslation();
   const { entry, state } = kind;
@@ -711,6 +743,17 @@ function BuildList({
         title={t(entry.label)}
         description={entry.description ? t(entry.description) : undefined}
         primaryAction={headNew}
+        secondaryActions={
+          editable?.importDialog && state.canCreate
+            ? [
+                {
+                  label: t(editable.importDialog.label),
+                  icon: <FolderInput aria-hidden="true" />,
+                  onSelect: onImport
+                }
+              ]
+            : undefined
+        }
         menu={
           editable && !editable.withoutCli ? (
             <DropdownMenuItem

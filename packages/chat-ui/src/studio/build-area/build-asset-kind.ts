@@ -3,7 +3,10 @@
 // frame change different files.
 
 export type { BuildAsset, BuildAssetRow, BuildHeadActions } from "./build-kind/asset";
-export type { BuildCreateDialogProps } from "./build-kind/create-dialog-props";
+export type {
+  BuildCreateDialogProps,
+  BuildImportDialogProps
+} from "./build-kind/create-dialog-props";
 export type {
   BuildAssetEditorProps,
   BuildAssetStart,
