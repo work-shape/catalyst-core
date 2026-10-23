@@ -26,6 +26,7 @@ const apiBaseUrl = process.env.E2E_API_URL ?? `http://${host}:4210`;
 const admin = { email: "e2e-admin@example.test", password: "e2e-admin-password" };
 /** Set to a directory to keep pictures of each step. */
 const shotsDir = process.env.E2E_SHOTS_DIR;
+const OAUTH_WIDTHS = [1280, 390] as const;
 
 type Locale = "en" | "de";
 type Theme = "light" | "dark";
@@ -78,13 +79,24 @@ test.afterEach(async () => {
   }
 });
 
-async function shoot(page: Page, locale: Locale, theme: Theme, name: string): Promise<void> {
+/** One picture per width; the page returns to the desktop width afterwards. */
+async function shoot(
+  page: Page,
+  locale: Locale,
+  theme: Theme,
+  name: string,
+  widths: readonly number[] = [1280]
+): Promise<void> {
   if (!shotsDir) return;
   await mkdir(shotsDir, { recursive: true });
-  await page.screenshot({
-    path: join(shotsDir, `connection-catalogue-${name}-1280-${locale}-${theme}.png`),
-    animations: "disabled"
-  });
+  for (const width of widths) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.screenshot({
+      path: join(shotsDir, `connection-catalogue-${name}-${width}-${locale}-${theme}.png`),
+      animations: "disabled"
+    });
+  }
+  if (widths.at(-1) !== 1280) await page.setViewportSize({ width: 1280, height: 900 });
 }
 
 async function removeConnection(page: Page, id: string): Promise<void> {
@@ -393,10 +405,10 @@ test.describe("an OAuth entry", () => {
         "data-catalogue-redirect-uri",
         `${baseURL}${callbackPath}`
       );
-      await shoot(page, "de", "light", "oauth-install");
+      await shoot(page, "de", "light", "oauth-install", OAUTH_WIDTHS);
 
       const review = await connect(page, dialog, writes);
-      await shoot(page, "de", "light", "oauth-review");
+      await shoot(page, "de", "light", "oauth-review", OAUTH_WIDTHS);
       await page.getByRole("dialog").first().locator("[data-connection-approve]").click();
 
       // Each person connects their own; the admin may connect theirs now.
@@ -404,7 +416,7 @@ test.describe("an OAuth entry", () => {
       await expect(done.locator("[data-catalogue-personal]")).toBeVisible();
       await expect(done.locator("[data-catalogue-connect-own]")).toBeVisible();
       await expect(review).toHaveCount(0);
-      await shoot(page, "de", "light", "oauth-personal");
+      await shoot(page, "de", "light", "oauth-personal", OAUTH_WIDTHS);
       const approved = await readAsset(
         page,
         `${apiBaseUrl}/api/v1/assets/connection/${OAUTH_ENTRY}`
@@ -462,7 +474,7 @@ test.describe("an OAuth entry", () => {
       .locator("[data-catalogue-redirect-uri]")
       .getAttribute("data-catalogue-redirect-uri");
     expect(checklistUri).toBe(`${baseURL}${callbackPath}`);
-    await shoot(page, "de", "dark", "oauth-shared-install");
+    await shoot(page, "de", "dark", "oauth-shared-install", OAUTH_WIDTHS);
 
     await connect(page, dialog, writes);
     await page.getByRole("dialog").first().locator("[data-connection-approve]").click();
@@ -470,7 +482,7 @@ test.describe("an OAuth entry", () => {
     // The sign-in step: the provider's page in a tab of its own, with the approved access.
     const step = page.getByRole("dialog").first();
     await expect(step.locator('[data-sign-in-step="ready"]')).toBeVisible();
-    await shoot(page, "de", "dark", "oauth-shared-sign-in");
+    await shoot(page, "de", "dark", "oauth-shared-sign-in", OAUTH_WIDTHS);
     const tab = page.waitForEvent("popup");
     await step.locator("[data-sign-in-open]").click();
     await (await tab).waitForEvent("close");
@@ -487,6 +499,6 @@ test.describe("an OAuth entry", () => {
     expect(detail.ok()).toBe(true);
     expect(bindingSchema.parse(await detail.json()).binding?.state).toBe("connected");
     expect(await page.content()).not.toContain(OAUTH_CLIENT_SECRET);
-    await shoot(page, "de", "dark", "oauth-shared-signed-in");
+    await shoot(page, "de", "dark", "oauth-shared-signed-in", OAUTH_WIDTHS);
   });
 });
