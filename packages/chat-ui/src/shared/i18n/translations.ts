@@ -50,6 +50,7 @@ import { scheduled } from "./scheduled";
 import { settings } from "./settings";
 import { signIn } from "./sign-in";
 import { skillFiles } from "./skill-files";
+import { skillImport } from "./skill-import";
 import { subagents } from "./subagents";
 import { tools } from "./tools";
 import { workflowDraft } from "./workflow-draft";
@@ -114,6 +115,7 @@ export const translations = combineTranslations(common)
   .and(settings)
   .and(signIn)
   .and(skillFiles)
+  .and(skillImport)
   .and(subagents)
   .and(tools)
   .and(workflowRights)

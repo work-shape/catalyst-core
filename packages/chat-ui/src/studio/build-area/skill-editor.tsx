@@ -1,3 +1,4 @@
+import { FolderInput } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { SKILL_SUMMARY_MAX_LENGTH, assetAddressFromName } from "@work-shape/catalyst-core";
 import { Field, Input, Textarea } from "@work-shape/catalyst-ui";
@@ -8,6 +9,12 @@ import { countChangedFields } from "./asset-form-model";
 import type { BuildAssetEditorProps } from "./build-asset-kind";
 import { refusalsOf } from "./build-refusals";
 import { SkillFileList, SkillFilePane, type SkillFileSelection } from "./skill-files";
+import { SkillReplaceDialog } from "./skill-import";
+import {
+  clearSkillReplaceRequest,
+  requestedSkillReplace,
+  type SkillImport
+} from "./skill-import-model";
 import {
   freeSkillFilePath,
   isUnread,
@@ -52,6 +59,13 @@ export function SkillEditor({
   const [readAttempt, setReadAttempt] = useState(0);
   const editable = frame.canWrite && instanceEditable;
   const { folder } = frame;
+  // "Replace from folder" is open, with the folder an import handed over where it found the
+  // skill's address taken.
+  const [replacing, setReplacing] = useState<{ initial?: SkillImport } | undefined>(() => {
+    const initial = requestedSkillReplace(frame.asset?.name);
+    return initial && editable && folder !== undefined ? { initial } : undefined;
+  });
+  useEffect(clearSkillReplaceRequest, []);
   const unread = form.files.some(isUnread);
   // The page of a new skill asks the instance about the id its name makes.
   const { onNewTitle } = frame;
@@ -96,8 +110,19 @@ export function SkillEditor({
       })
     }));
 
-  const submit = async () => {
+  /** Writes the whole folder, or the config alone, where the files beside it stay. */
+  const write = async (written: SkillFormState, wholeFolder: boolean) => {
     setSaving(true);
+    const { stored, ...answer } =
+      folder !== undefined && wholeFolder
+        ? await folder.save(skillFormToFolder(written))
+        : { ...(await frame.save(skillFormToConfig(written))), stored: undefined };
+    setSaving(false);
+    state.setOutcome(answer);
+    return { answer, stored };
+  };
+
+  const submit = async () => {
     // A file beside SKILL.md changed: the whole folder is written. Otherwise the config is,
     // and the files beside it stay as they are.
     // A new skill on a page opened empty takes its id from its name.
@@ -105,18 +130,28 @@ export function SkillEditor({
       frame.asset === undefined && !form.name.trim()
         ? { ...form, name: assetAddressFromName(form.title, "skill") }
         : form;
-    const { stored, ...answer } =
-      folder !== undefined && !unread && skillFolderChanged(written, state.baseline)
-        ? await folder.save(skillFormToFolder(written))
-        : { ...(await frame.save(skillFormToConfig(written))), stored: undefined };
-    setSaving(false);
-    state.setOutcome(answer);
+    const { answer, stored } = await write(
+      written,
+      !unread && skillFolderChanged(written, state.baseline)
+    );
     if (answer.ok) {
       state.markSaved();
       // A save of the folder answers the hash of every file it stored.
       if (stored) amend((value) => withStoredHashes(value, stored));
     }
     return answer;
+  };
+
+  /**
+   * Replaces the whole folder with one read from a folder or a .zip, through the page's save:
+   * the page shows the new folder, and a refused or waiting save leaves it as changes.
+   */
+  const replaceWith = async (replaced: SkillFormState) => {
+    setReplacing(undefined);
+    setSelected("root");
+    setForm(replaced);
+    const { answer, stored } = await write(replaced, true);
+    if (answer.ok) amend(() => (stored ? withStoredHashes(replaced, stored) : replaced));
   };
 
   const takeFiles = async (target: UploadTarget, chosen: readonly File[]) => {
@@ -258,12 +293,23 @@ export function SkillEditor({
     }
   ];
 
-  return (
+  const shell = (
     <AssetEditorShell
       frame={{ ...frame, canWrite: editable }}
       title={form.title.trim() || form.name || t("configNewSkill")}
       description={form.summary.trim()}
       badges={badges}
+      headActions={
+        editable && folder !== undefined && frame.asset !== undefined
+          ? [
+              {
+                label: t("skillImport.replaceAction"),
+                icon: <FolderInput aria-hidden="true" />,
+                onSelect: () => setReplacing({})
+              }
+            ]
+          : undefined
+      }
       sections={sections}
       control={{
         changes: countChangedFields(form, state.baseline),
@@ -277,5 +323,22 @@ export function SkillEditor({
       saving={saving}
       saveLabel={frame.asset ? t("configSaveChanges") : t("configCreateSkill")}
     />
+  );
+  return (
+    <>
+      {shell}
+      {replacing ? (
+        <SkillReplaceDialog
+          title={form.title.trim() || form.name}
+          current={state.baseline}
+          unsaved={countChangedFields(form, state.baseline) > 0}
+          initial={replacing.initial}
+          onClose={() => setReplacing(undefined)}
+          onSave={(replaced) => {
+            replaceWith(replaced).catch(() => undefined);
+          }}
+        />
+      ) : null}
+    </>
   );
 }
