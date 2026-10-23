@@ -2,7 +2,8 @@ import { ToolDecisionsProvider } from "../approvals/tool-decision-context";
 import { conversationStart } from "../dock/subject-starters";
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { AssistantRuntimeProvider, useComposer, useComposerRuntime } from "@assistant-ui/react";
-import { useChatRuntime, type UseChatRuntimeOptions } from "@assistant-ui/react-ai-sdk";
+import type { UseChatRuntimeOptions } from "@assistant-ui/react-ai-sdk";
+import { useCatalystChatRuntime } from "./chat-runtime";
 import type { UIMessage } from "ai";
 import type { SelectedChatModel } from "../workspace/workspace-chat-model";
 import type { LocaleCode } from "@work-shape/catalyst-core";
@@ -366,7 +367,7 @@ function AssistantRuntimePane({
     ]
   );
 
-  const runtime = useChatRuntime({
+  const runtime = useCatalystChatRuntime({
     messages: initialMessages,
     transport,
     isSendDisabled: runtimeSendBlocked || !selectedConversationId,
@@ -633,7 +634,7 @@ function RuntimeMessagesBridge({
   messages,
   syncKey
 }: {
-  runtime: ReturnType<typeof useChatRuntime>;
+  runtime: ReturnType<typeof useCatalystChatRuntime>;
   messages: UIMessage[];
   syncKey: string;
 }) {
