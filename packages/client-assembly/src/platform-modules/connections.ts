@@ -14,6 +14,9 @@ import {
 export const connectionsModule = defineModule({
   name: "connections",
   operations: [
+    "connections.mine",
+    "connections.people",
+    "connections.revoke_person",
     "connections.get",
     "connections.test",
     "connections.set_secret",

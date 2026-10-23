@@ -388,7 +388,8 @@ export const connectionOperations = {
     summary: "List usable personal Connections with only the caller's binding",
     tag: "Connections",
     auth: "user",
-    scope: null,
+    // The caller's own sign-in states, as the other reads of `/me`.
+    scope: "me:read",
     requires: [],
     effect: "reading",
     response: json(personalConnectionsSchema),
@@ -535,7 +536,9 @@ export const connectionOperations = {
     tag: "Connections",
     // A person: the callback must prove that the person who started signs in.
     auth: "user",
-    scope: null,
+    // A key never starts a personal sign-in (refused in the route); a shared one stays a
+    // change of the Connection's config, so a key needs `config_assets:write` for it.
+    scope: "config_assets:write",
     requires: [],
     effect: "changing",
     // The address holds the sign-in's state. The run keeps no answer.
@@ -552,7 +555,7 @@ export const connectionOperations = {
       "Read whether an OAuth sign-in the caller started still waits for the browser to come back",
     tag: "Connections",
     auth: "user",
-    scope: null,
+    scope: "config_assets:read",
     requires: [],
     effect: "reading",
     response: json(connectionOAuthSignInSchema),
@@ -589,7 +592,8 @@ export const connectionOperations = {
       "End the OAuth sign-in of one Connection. Its tokens are deleted, then the provider is asked to revoke the grant",
     tag: "Connections",
     auth: "principal",
-    scope: null,
+    // A key never ends a personal sign-in (refused in the route).
+    scope: "config_assets:write",
     requires: [],
     effect: "changing",
     response: json(connectionDisconnectSchema),
