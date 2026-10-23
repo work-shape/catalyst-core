@@ -10,7 +10,7 @@ import type { PlatformStores } from "./platform-store";
 
 /** A subagent inherits its root chat's readers and permanent personal-data mark. */
 export async function rootConversationOf(
-  stores: Pick<PlatformStores, "conversations">,
+  stores: { conversations: Pick<PlatformStores["conversations"], "getConversation"> },
   clientInstanceId: ClientInstanceId,
   conversationId: ConversationId
 ) {

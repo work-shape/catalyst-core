@@ -39,6 +39,9 @@ export class LocalAgentRuntime implements AgentRuntime {
   private readonly runAbortControllers = new Map<AgentRunId, AbortController>();
 
   constructor(options: LocalAgentRuntimeOptions) {
+    if (options.webAccess?.enabled && !options.personalData) {
+      throw new AppError("VALIDATION_FAILED", "Web access requires personal-data readers");
+    }
     if (
       !options.modelProviderContinuationStore &&
       options.modelProviders.some(

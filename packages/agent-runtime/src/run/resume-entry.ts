@@ -145,6 +145,13 @@ export async function finishPausedStep(input: {
     }
     if (context.signal?.aborted) return { kind: "stopped", answeredToolCallIds: answeredNow };
     const toolCall = toModelToolCall(call);
+    await input.toolDispatch.beforePersonalCall(call.toolName, state);
+    const refusal = await input.toolDispatch.webFetchRefusal(
+      call.toolName,
+      state,
+      input.startInput,
+      context
+    );
     const result = await input.runDecidedTool(
       {
         request: {
@@ -156,7 +163,8 @@ export async function finishPausedStep(input: {
           input: call.input
         },
         operationRunId: waited.operationRunId,
-        frozenInput: waited.frozenInput
+        frozenInput: waited.frozenInput,
+        ...(refusal ? { refusal } : {})
       },
       context
     );
