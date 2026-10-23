@@ -93,14 +93,12 @@
         "src/migrate.ts",
         "src/*worker*.ts",
         "src/sample-mcp-server.ts",
-        "scripts/agent-stories-seed.mjs",
         "sample-mcp/index.ts",
         "*.config.{ts,js,mjs}"
       ],
       "project": [
         "src/**/*.{ts,tsx,mts,cts}",
         "sample-mcp/**/*.ts",
-        "scripts/agent-stories-seed.mjs",
         "widgets/**/*.{ts,tsx,mts,cts}",
         "tools/**/*.{ts,mts,cts}",
         "*.config.{ts,js,mjs}"
@@ -117,7 +115,6 @@
         "tests/**/*.{test,live}.ts",
         "tests/probes/**/*.probe.ts",
         "e2e/**/*.ts",
-        "agent-stories/**/*.mjs",
         "scripts/**/*.mjs",
         "*.config.ts",
         "eslint.config.mjs"
@@ -125,7 +122,6 @@
       "project": [
         "tests/**/*.{ts,mts,cts}",
         "e2e/**/*.{ts,mts,cts}",
-        "agent-stories/**/*.mjs",
         "scripts/**/*.mjs",
         "*.config.ts",
         "eslint.config.mjs"
