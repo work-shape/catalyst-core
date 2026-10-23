@@ -157,6 +157,12 @@ export interface ConnectionSource {
    * `connection.use` on it. Absent, the instance decides at the connect alone.
    */
   mayConnectOwn?(name: string): Promise<boolean>;
+  /**
+   * The revision of the delete where a deleted Connection had `name`: a catalogue install
+   * writes over it and starts the Connection anew. Nothing where the name was never stored,
+   * is in use, or its history is not the reader's to see.
+   */
+  deletedRevision?(name: string): Promise<number | undefined>;
   /** Tests the Connection. Throws `PendingApprovalError` when somebody approves the test first. */
   test(name: string): Promise<ConnectionTestResult>;
   /**
@@ -361,6 +367,20 @@ export function useConnectionSource(): ConnectionSource {
     // The reader's own list names only the personal Connections they may use.
     mayConnectOwn: async (name) =>
       (await calls.mine()).connections.some((connection) => connection.name === name),
+    async deletedRevision(name) {
+      try {
+        const page = await client.assets.revisions.list({
+          params: { kind: "connection", name },
+          query: { limit: 1 }
+        });
+        const [latest] = page.items;
+        return latest?.operation === "delete" ? latest.revision : undefined;
+      } catch (error) {
+        // A name never stored has no history; the install then creates it.
+        if (apiErrorCode(error) === "NOT_FOUND") return undefined;
+        throw error;
+      }
+    },
     useConnectorTypes() {
       const query = useConnectorTypeOffers();
       return query.isError ? [] : query.data?.types;

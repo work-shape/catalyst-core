@@ -141,6 +141,8 @@ export interface ConnectionSignIn {
   ticked: ReadonlySet<string>;
   /** The permissions may be changed here. */
   choosesScopes: boolean;
+  /** Where permissions that may not be changed here were decided, where not at the instance's setup. */
+  fixedScopesNote?: string;
   /** The client may be entered here. */
   entersClient: boolean;
   /** The person connects their own account, which nobody else uses. */
@@ -178,6 +180,8 @@ export function useConnectionSignIn(
     personal?: boolean;
     /** Off, nothing starts: for a dialog that shows the step later. */
     enabled?: boolean;
+    /** Where the permissions were decided, for a step that cannot change them. */
+    fixedScopesNote?: string;
   }
 ): ConnectionSignIn {
   const enabled = options.enabled ?? true;
@@ -345,6 +349,7 @@ export function useConnectionSignIn(
     offered,
     ticked,
     choosesScopes: calls.writeOAuth !== undefined,
+    ...(options.fixedScopesNote === undefined ? {} : { fixedScopesNote: options.fixedScopesNote }),
     entersClient: calls.writeOAuth !== undefined,
     personal: options.personal ?? false,
     ...(redirectUri === undefined ? {} : { redirectUri }),
@@ -588,7 +593,9 @@ function SignInScopes({ signIn, disabled }: { signIn: ConnectionSignIn; disabled
     >
       <p className="text-caption text-muted-foreground">
         {t("connectionSignIn.scopes")} ·{" "}
-        {t(signIn.choosesScopes ? "connectionSignIn.scopesHint" : "connectionSignIn.scopesFixed")}
+        {signIn.choosesScopes
+          ? t("connectionSignIn.scopesHint")
+          : (signIn.fixedScopesNote ?? t("connectionSignIn.scopesFixed"))}
       </p>
       {signIn.offered.map((scope) => (
         <Checkbox

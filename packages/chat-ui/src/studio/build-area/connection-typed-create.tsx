@@ -65,6 +65,11 @@ export interface TypedInstall {
    * so it shows and cannot be changed.
    */
   addressFixed?: boolean;
+  /**
+   * The revision of the delete where a deleted Connection had the fixed address: the first
+   * write names it and installs the Connection anew. The address then counts as free.
+   */
+  recreates?: number;
 }
 
 /** What a connected Connection is, for a flow that goes on after the connect. */
@@ -122,7 +127,11 @@ export function TypedConnectionCreate({
 
   const name = (typedId ?? assetAddressFromName(title, CONNECTION_ASSET_KIND)).trim();
   const created = memory.current.revision !== undefined;
-  const check = useAddressCheck(created ? undefined : checkName, name);
+  // The address a deleted Connection had reads as taken; the install writes over its delete.
+  const check = useAddressCheck(
+    created || install?.recreates !== undefined ? undefined : checkName,
+    name
+  );
   const complete =
     title.trim() !== "" &&
     name !== "" &&
@@ -144,7 +153,13 @@ export function TypedConnectionCreate({
     const outcome = await connectConnection(
       {
         put: async (definition, expectedRevision) =>
-          (await put({ name, config: definition, expectedRevision })).revision,
+          (
+            await put({
+              name,
+              config: definition,
+              expectedRevision: expectedRevision ?? install?.recreates ?? null
+            })
+          ).revision,
         setSecret: (value, expectedVersion, expectedRevision) =>
           source.setSecret(name, value, expectedVersion, expectedRevision),
         readDetail: () => source.readDetail(name),
