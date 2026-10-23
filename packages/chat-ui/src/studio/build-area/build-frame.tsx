@@ -449,7 +449,15 @@ export function BuildFrame({
               });
               return { ok: true, revision: stored.revision };
             } catch (error) {
-              return readBuildRefusal(error, t, locale);
+              const outcome = readBuildRefusal(error, t, locale);
+              // A create that meets a conflict found the address taken in the meantime.
+              return !outcome.ok && outcome.conflict
+                ? {
+                    ok: false,
+                    conflict: false,
+                    refusals: [{ message: t("build.addressTaken") }]
+                  }
+                : outcome;
             }
           }}
           titleOf={async (name) => source.titleOf?.(entry.kind, name)}
