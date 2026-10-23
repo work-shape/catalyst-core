@@ -122,3 +122,12 @@ export interface ConnectionOAuthClientState {
   origin: string;
   redirectUri: string;
 }
+
+/** Terminal/API-key refusal; this is not an OAuth browser callback outcome. */
+export function personalConnectionBrowserError(): AppError {
+  return new AppError(
+    "FORBIDDEN",
+    "personal_connect_in_browser: connect your personal account under Settings > You > Verbindungen",
+    { reason: "personal_connect_in_browser" }
+  );
+}

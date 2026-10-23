@@ -1,3 +1,4 @@
+import { bindingAuditSubject } from "../personal-bindings";
 import {
   CREDENTIAL_REFUSALS,
   SHARED_CREDENTIAL_SUBJECT,
@@ -215,6 +216,11 @@ export async function clientForSignIn(
     metadata: {
       connectionName: connection.config.name,
       connectionRevision: connection.revision,
+      ...bindingAuditSubject(
+        connection.config.credentialMode === "user" && input.audit.actor.userId
+          ? `user:${input.audit.actor.userId}`
+          : SHARED_CREDENTIAL_SUBJECT
+      ),
       issuerHost: new URL(server.issuer).host,
       method: "dcr"
     }

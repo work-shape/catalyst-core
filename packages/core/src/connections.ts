@@ -1,4 +1,8 @@
 export {
+  CONNECTION_CREDENTIAL_MODES,
+  type ConnectionCredentialMode
+} from "@work-shape/catalyst-asset-schemas";
+export {
   PUBLISHED_DATA_CONSUMER_KINDS,
   type PublishedDataConsumerKind
 } from "@work-shape/catalyst-asset-schemas";
@@ -18,6 +22,7 @@ import {
   type CatalogueCategory,
   type CataloguePart,
   type ConnectionExposure,
+  type ConnectionCredentialMode,
   type ConnectionHealth
 } from "@work-shape/catalyst-asset-schemas";
 import type { AssetKindSchema, AssetValidationIssue } from "./asset-kinds";
@@ -224,8 +229,8 @@ export interface ConnectionConfig {
   /** Settings of the Connector type. A credential in them is refused. */
   settings: JsonObject;
   authScheme: string;
-  /** One credential for everyone who may use the Connection. */
-  credentialMode: "shared";
+  /** Shared account, or each acting person’s own OAuth binding. */
+  credentialMode: ConnectionCredentialMode;
   secretHandle?: ConnectionSecretHandle;
   operations: ConnectionOperationConfig[];
   /** Shared limits of list, changes and fetch across every sync of this instance. */
@@ -484,6 +489,8 @@ export interface ConnectionCredentialResolver {
    * never falls back to the Connection's own secret.
    */
   resolveSignIn(input: {
+    /** Selected internally from the acting person; never an API parameter. */
+    subject?: string;
     connectionAssetId: string;
     origin: string;
     /**

@@ -297,6 +297,17 @@ function withServerFields(
   next: Record<string, unknown>,
   principalId: string | undefined
 ): Record<string, unknown> {
+  const mode =
+    current === undefined
+      ? undefined
+      : (readDefinitionField(current, "credentialMode") ?? "shared");
+  if (mode !== undefined && next.credentialMode !== undefined && next.credentialMode !== mode) {
+    throw new AppError(
+      "CONFLICT",
+      "credential_mode_fixed: create a new Connection to change its credential mode",
+      { reason: "credential_mode_fixed" }
+    );
+  }
   // A handle the caller sent names nothing of this Connection's.
   const rest = Object.fromEntries(Object.entries(next).filter(([key]) => key !== "secretHandle"));
   const storedOwner = readDefinitionField(current, "ownerPrincipalId");
@@ -306,7 +317,8 @@ function withServerFields(
   return {
     ...rest,
     ...(owner === undefined ? {} : { ownerPrincipalId: owner }),
-    credentialMode: "shared",
+    credentialMode:
+      next.credentialMode ?? readDefinitionField(current, "credentialMode") ?? "shared",
     origin: "runtime",
     ...(authenticates
       ? {
@@ -478,6 +490,12 @@ export function createConnectionAssetKind(options: ConnectionAssetKindOptions): 
       if (reason !== undefined) {
         const ending = options.signInEnding;
         if (ending === undefined) {
+          for (const binding of await stores.connections.listConnectionBindings({
+            clientInstanceId,
+            connectionAssetId: assetId
+          })) {
+            await endConnectionSignIn(stores.connections, binding, { reason });
+          }
           await endConnectionSignIn(
             stores.connections,
             { clientInstanceId, connectionAssetId: assetId },

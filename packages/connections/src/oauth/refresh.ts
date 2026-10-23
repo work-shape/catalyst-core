@@ -22,6 +22,7 @@ import { readConnections, type StoredConnection } from "../connection-reads";
 import { connectionOriginOf } from "../connector-context";
 import { createSecretStore, openSignInTokenSet, type SecretKeyring } from "../secret-store";
 import { scopesOf } from "./checks";
+import { bindingAuditSubject } from "../personal-bindings";
 import { clientOfSession } from "./client-registration";
 import { createOAuthFetch } from "./fetch";
 import { OAuthPortError, type OAuthPort } from "./port";
@@ -63,6 +64,7 @@ const SYSTEM_ACTOR: AuditActor = { displayLabel: "System", roles: [] };
 /** A sign-in the outside system refused, as the instance is told of it. */
 export interface SignInRefusal {
   connection: StoredConnection;
+  subject?: string;
   reason: Exclude<ConnectionBindingRefusal, "insufficient_scope">;
 }
 
@@ -91,6 +93,7 @@ export interface SignInTokens {
   /** As `ConnectionCredentialResolver.resolveSignIn`, refreshed where due. */
   accessToken(input: {
     connectionAssetId: string;
+    subject?: string;
     origin: string;
     refused?: string;
     signal?: AbortSignal;
@@ -121,11 +124,15 @@ function notConnected(): AppError {
   );
 }
 
-function needsReconnect(): AppError {
+function needsReconnect(cause?: string): AppError {
   return new AppError(
     "CONFLICT",
     `${CREDENTIAL_REFUSALS.needsReconnect}: the outside system refused the Connection's sign-in`,
-    { reason: CREDENTIAL_REFUSALS.needsReconnect }
+    {
+      reason: CREDENTIAL_REFUSALS.needsReconnect,
+      state: "needs_reconnect",
+      ...(cause === undefined ? {} : { cause })
+    }
   );
 }
 
@@ -135,7 +142,8 @@ function needsReconnect(): AppError {
  * meanwhile is gone.
  */
 function refusalOf(binding: ConnectionBindingRecord | undefined, origin: string): AppError {
-  if (binding?.origin === origin && binding.state === "needs_reconnect") return needsReconnect();
+  if (binding?.origin === origin && binding.state === "needs_reconnect")
+    return needsReconnect(binding.stateReason);
   if (binding?.origin === origin && binding.stateReason === "deleted") {
     return connectionCallError("connection_unavailable");
   }
@@ -211,22 +219,23 @@ export function createSignInTokens(deps: SignInTokensDeps): SignInTokens {
   /** The day each binding's use was last noted by this process. */
   const noted = new Map<string, string>();
 
-  const keyOf = (connectionAssetId: string): ConnectionBindingKey => ({
+  const keyOf = (connectionAssetId: string, subject: string): ConnectionBindingKey => ({
     clientInstanceId,
     connectionAssetId,
-    subject: SHARED_CREDENTIAL_SUBJECT
+    subject
   });
   const secrets = (store = stores.connections) => ({ clientInstanceId, keyring, store });
 
   /** Notes the use of a binding once a day per process. A failure changes nothing of the call. */
-  async function noteUse(connectionAssetId: string): Promise<void> {
+  async function noteUse(connectionAssetId: string, subject: string): Promise<void> {
+    const id = JSON.stringify([connectionAssetId, subject]);
     const today = now().toISOString().slice(0, 10);
-    if (noted.get(connectionAssetId) === today) return;
-    noted.set(connectionAssetId, today);
+    if (noted.get(id) === today) return;
+    noted.set(id, today);
     try {
-      await stores.connections.noteConnectionBindingUse(keyOf(connectionAssetId));
+      await stores.connections.noteConnectionBindingUse(keyOf(connectionAssetId, subject));
     } catch {
-      noted.delete(connectionAssetId);
+      noted.delete(id);
       deps.logger.warn(
         { module: "connections" },
         "The use of a Connection's sign-in was not noted"
@@ -254,10 +263,10 @@ export function createSignInTokens(deps: SignInTokensDeps): SignInTokens {
         metadata: {
           connectionName: connection.config.name,
           connectionRevision: connection.revision,
-          subjectKind: SHARED_CREDENTIAL_SUBJECT
+          ...bindingAuditSubject(refusal.subject ?? SHARED_CREDENTIAL_SUBJECT)
         }
       });
-      await deps.onRefused?.(refusal);
+      if (!refusal.subject?.startsWith("user:")) await deps.onRefused?.(refusal);
     } catch {
       deps.logger.warn(
         { module: "connections", connection: connection.config.name, reason },
@@ -276,7 +285,7 @@ export function createSignInTokens(deps: SignInTokensDeps): SignInTokens {
   ): Promise<void> {
     const changed = await stores.transaction(async (tx) => {
       const moved = await tx.connections.changeConnectionBindingState({
-        ...keyOf(binding.connectionAssetId),
+        ...keyOf(binding.connectionAssetId, binding.subject),
         expectedRowVersion: binding.rowVersion,
         state: "needs_reconnect",
         reason
@@ -285,13 +294,13 @@ export function createSignInTokens(deps: SignInTokensDeps): SignInTokens {
       await tx.connections.deleteSecrets({
         clientInstanceId,
         connectionAssetId: binding.connectionAssetId,
-        subject: signInSecretSubject(SHARED_CREDENTIAL_SUBJECT)
+        subject: signInSecretSubject(binding.subject)
       });
       return true;
     });
     if (!changed) return;
     const connection = await connectionOf(binding.connectionAssetId);
-    if (connection) await told({ connection, reason });
+    if (connection) await told({ connection, reason, subject: binding.subject });
   }
 
   /**
@@ -316,7 +325,7 @@ export function createSignInTokens(deps: SignInTokensDeps): SignInTokens {
     ) {
       if (stillValid(tokenSet, now().getTime())) return tokenSet.accessToken;
       await refuse(leased, "invalid_grant");
-      throw needsReconnect();
+      throw needsReconnect("invalid_grant");
     }
     const settings = connection.type.settingsSchema.safeParse(connection.config.settings);
     if (!settings.success) throw connectionCallError("connection_not_configured");
@@ -367,13 +376,13 @@ export function createSignInTokens(deps: SignInTokensDeps): SignInTokens {
         (error.failure === "invalid_grant" || error.failure === "invalid_client")
       ) {
         await refuse(leased, error.failure);
-        throw needsReconnect();
+        throw needsReconnect(error.failure);
       }
       // The settings now name another authorization server at the same origins (another
       // token path or issuer): the sign-in was made at the old one, and only a new one helps.
       if (connectionOAuthReasonOf(error) === "oauth_connection_changed") {
         await refuse(leased, "invalid_client");
-        throw needsReconnect();
+        throw needsReconnect("invalid_client");
       }
       // Anything else may pass: the token that is still valid is used, else the call fails
       // as an outage of the outside system, and the next call tries again.
@@ -393,6 +402,17 @@ export function createSignInTokens(deps: SignInTokensDeps): SignInTokens {
     });
     const stored = await stores
       .transaction(async (tx) => {
+        const held = await tx.connections.getConnectionBinding({
+          ...keyOf(leased.connectionAssetId, leased.subject),
+          lock: "update"
+        });
+        if (
+          held?.rowVersion !== leased.rowVersion ||
+          held.state !== "connected" ||
+          held.leaseOwner !== owner
+        ) {
+          throw new AppError("CONFLICT", "The binding changed");
+        }
         const secret = await createSecretStore(secrets(tx.connections)).put({
           binding: {
             connectionAssetId: leased.connectionAssetId,
@@ -405,7 +425,7 @@ export function createSignInTokens(deps: SignInTokensDeps): SignInTokens {
           origin
         });
         const refreshed = await tx.connections.refreshConnectionBinding({
-          ...keyOf(leased.connectionAssetId),
+          ...keyOf(leased.connectionAssetId, leased.subject),
           owner,
           expectedRowVersion: leased.rowVersion,
           secretVersion: secret.version,
@@ -426,7 +446,7 @@ export function createSignInTokens(deps: SignInTokensDeps): SignInTokens {
       // The discarded refresh's token is never answered: it may be the grant of the account
       // a reconnect replaced. The call acts through what is stored now, or not at all.
       const current = await stores.connections.getConnectionBinding(
-        keyOf(leased.connectionAssetId)
+        keyOf(leased.connectionAssetId, leased.subject)
       );
       if (current === undefined || !usable(current, origin)) throw refusalOf(current, origin);
       const currentSet = await openSignInTokenSet(secrets(), { ...current, origin });
@@ -446,7 +466,7 @@ export function createSignInTokens(deps: SignInTokensDeps): SignInTokens {
     refused: string | undefined,
     signal: AbortSignal | undefined
   ): Promise<string> {
-    const key = keyOf(seen.connectionAssetId);
+    const key = keyOf(seen.connectionAssetId, seen.subject);
     const deadline = Date.now() + waitMs;
     for (;;) {
       const leased = await stores.connections.takeConnectionBindingLease({
@@ -488,7 +508,7 @@ export function createSignInTokens(deps: SignInTokensDeps): SignInTokens {
     origin: string,
     refused: string | undefined
   ): Promise<string> {
-    const id = seen.connectionAssetId;
+    const id = JSON.stringify([seen.connectionAssetId, seen.subject]);
     const under = running.get(id);
     if (under) return under;
     // The refresh runs to its end whoever stops waiting for it: another call may need it.
@@ -498,11 +518,19 @@ export function createSignInTokens(deps: SignInTokensDeps): SignInTokens {
   }
 
   return {
-    async accessToken({ connectionAssetId, origin, refused, signal }) {
-      const binding = await stores.connections.getConnectionBinding(keyOf(connectionAssetId));
+    async accessToken({
+      connectionAssetId,
+      subject = SHARED_CREDENTIAL_SUBJECT,
+      origin,
+      refused,
+      signal
+    }) {
+      const binding = await stores.connections.getConnectionBinding(
+        keyOf(connectionAssetId, subject)
+      );
       if (!usable(binding, origin) || binding === undefined) throw refusalOf(binding, origin);
       const tokenSet = await openSignInTokenSet(secrets(), { ...binding, origin });
-      await noteUse(connectionAssetId);
+      await noteUse(connectionAssetId, subject);
       // A token another call refreshed since this one was refused is the newer one.
       if (refused !== undefined && refused !== tokenSet.accessToken) return tokenSet.accessToken;
       if (!due(tokenSet, now().getTime(), refused)) return tokenSet.accessToken;
@@ -522,6 +550,12 @@ export function createSignInTokens(deps: SignInTokensDeps): SignInTokens {
       for (const binding of idle) {
         if (signal.aborted) break;
         try {
+          const connection = await connectionOf(binding.connectionAssetId);
+          if (
+            binding.subject !== SHARED_CREDENTIAL_SUBJECT ||
+            connection?.config.credentialMode !== "shared"
+          )
+            continue;
           const tokenSet = await openSignInTokenSet(secrets(), binding);
           // Refused as if a call had been: the refresh runs whatever the expiry says.
           await sharedRefresh(binding, binding.origin, tokenSet.accessToken);

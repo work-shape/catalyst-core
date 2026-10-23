@@ -7,6 +7,7 @@ import {
 import {
   CATALOGUE_PARTS,
   CONNECTION_EXPOSURES,
+  CONNECTION_CREDENTIAL_MODES,
   CONNECTION_MAX_ACCEPTED_OPERATIONS,
   CONNECTION_NAME_MAX_LENGTH,
   CONNECTION_NAME_PATTERN,
@@ -326,7 +327,7 @@ export const connectionConfigSchema: z.ZodType<ConnectionConfig, unknown> = z
     ownerPrincipalId: z.string().min(1),
     settings: settingsSchema.default({}),
     authScheme: z.string().min(1).max(64),
-    credentialMode: z.literal("shared").default("shared"),
+    credentialMode: z.enum(CONNECTION_CREDENTIAL_MODES).default("shared"),
     secretHandle: z
       .string()
       .regex(CONNECTION_SECRET_HANDLE_PATTERN, {
@@ -345,6 +346,16 @@ export const connectionConfigSchema: z.ZodType<ConnectionConfig, unknown> = z
   })
   .strict()
   .superRefine((connection, context) => {
+    if (
+      connection.credentialMode === "user" &&
+      (connection.authScheme !== "oauth" || !["http_api", "mcp"].includes(connection.connectorType))
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["credentialMode"],
+        message: "personal_oauth_required: personal Connections require OAuth on http_api or mcp"
+      });
+    }
     for (const { path, finding } of findCredentialsInSettings(connection.settings)) {
       context.addIssue({
         code: "custom",
