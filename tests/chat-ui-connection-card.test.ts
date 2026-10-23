@@ -153,8 +153,14 @@ describe("the Connect card in place of a refused call", () => {
     const result = toolResultFromOperationResult({ result: refusal }, names);
     expect(result).toMatchObject({
       status: "failed",
+      // The agent reads the refusal's own code and that the person connects from the card.
+      error: {
+        code: "connection_not_connected",
+        message: expect.stringContaining("Karte zum Verbinden") as unknown
+      },
       connect: {
         state: "not_connected",
+        agentName: "assistant",
         connection: {
           name: "gmail",
           title: "Gmail",
@@ -163,9 +169,32 @@ describe("the Connect card in place of a refused call", () => {
         }
       }
     });
-    expect(JSON.stringify(result.status === "success" ? {} : result.connect)).not.toMatch(
-      new RegExp(`${ACCOUNT}|${TOKEN}`, "u")
+    expect(JSON.stringify(result)).not.toMatch(new RegExp(`${ACCOUNT}|${TOKEN}|Settings`, "u"));
+  });
+
+  it("tells the agent of a refused sign-in to wait for the person, in English too", () => {
+    const ended = {
+      ...refusal,
+      error: {
+        ...refusal.error,
+        details: { ...refusal.error.details, reason: "connection_needs_reconnect" }
+      }
+    };
+    const result = toolResultFromOperationResult(
+      {
+        result: {
+          ...ended,
+          error: { ...ended.error, details: { ...ended.error.details, state: "needs_reconnect" } }
+        }
+      },
+      { ...names, locale: "en" }
     );
+    expect(result.status === "success" ? undefined : result.error).toEqual({
+      code: "connection_needs_reconnect",
+      message:
+        "The person's sign-in to Gmail has ended. They see a card in this chat to sign in again. Wait until they say Gmail is connected; do not repeat this error.",
+      details: undefined
+    });
   });
 
   it("carries nothing for any other refusal", () => {
@@ -181,7 +210,11 @@ describe("the Connect card in place of a refused call", () => {
     ["not_connected", "connect"],
     ["needs_reconnect", "reconnect"]
   ] as const)("shows %s as %s, live and after the thread is read again", (state, expected) => {
-    const connect = { connection: { name: "gmail", title: "Gmail" }, state };
+    const connect = {
+      connection: { name: "gmail", title: "Gmail" },
+      state,
+      agentName: "assistant"
+    };
     // Live: the run's projection keeps it on the failed call.
     const projection = agentRunProjectionSchema.parse(
       projectAgentRun(run(), [
@@ -220,7 +253,8 @@ describe("the Connect card in place of a refused call", () => {
       name: "gmail",
       title: "Gmail",
       personal: true,
-      state: expected
+      state: expected,
+      agentName: "assistant"
     });
   });
 
@@ -303,6 +337,11 @@ describe("the Connect card as the person's own sign-in stands now", () => {
     expect(withOwnSignIn(card, undefined).state).toBe("connect");
   });
 
+  it("asks a viewer who may not use the Connection to ask the administration", () => {
+    expect(withOwnSignIn(card, "unusable")).toMatchObject({ state: "ask_admin", unusable: true });
+    expect(withOwnSignIn({ ...card, state: "connected" }, "unusable").state).toBe("ask_admin");
+  });
+
   it("leaves a card that is not about the person's own sign-in", () => {
     expect(withOwnSignIn({ ...card, state: "ask_admin" }, "connected").state).toBe("ask_admin");
     expect(withOwnSignIn({ ...card, personal: false, state: "setup" }, "connected").state).toBe(
@@ -359,9 +398,29 @@ describe("the Connect card's words", () => {
     expect(render("ask_admin", "en")).toContain("ask your administration");
   });
 
-  it("names the account only once connected", () => {
+  it("names the service once connected, and the account only then", () => {
     expect(render("connect", "de")).not.toContain("@");
-    expect(render("connected", "de", ACCOUNT)).toContain(`Verbunden als ${ACCOUNT}`);
+    const connected = render("connected", "de", ACCOUNT);
+    expect(connected).toContain(`>Gmail</p>`);
+    expect(connected).toContain(`Verbunden als ${ACCOUNT}`);
+    expect(render("connected", "de")).toContain(">Verbunden</p>");
+  });
+
+  it("tells a viewer who may not use it why they ask the administration", () => {
+    const markup = renderToStaticMarkup(
+      createElement(
+        TranslationProvider,
+        { children: null, locale: "de" },
+        createElement(ConnectionConnectCardView, {
+          title: "Gmail",
+          name: "gmail",
+          state: "ask_admin",
+          unusable: true
+        })
+      )
+    );
+    expect(markup).toContain("Du darfst Gmail hier noch nicht nutzen; frag deine Administration.");
+    expect(markup).not.toContain("<button");
   });
 });
 

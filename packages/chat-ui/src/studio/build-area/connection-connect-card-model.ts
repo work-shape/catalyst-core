@@ -16,7 +16,7 @@ export type ConnectCardState =
   | "connected"
   /** Not set up, and the viewer may set it up: "Einrichten". */
   | "setup"
-  /** Not set up, and the viewer may not: ask the administration. */
+  /** Not set up, or not usable by the viewer, who may not change that: ask the administration. */
   | "ask_admin";
 
 export interface ConnectCard {
@@ -26,10 +26,17 @@ export interface ConnectCard {
   state: ConnectCardState;
   /** Connect signs the person's own account in; a shared Connection is connected for everyone. */
   personal: boolean;
+  /** The agent whose call was refused: the person's word that they connected goes to it. */
+  agentName?: string;
+  /** Set up, but the viewer may not use it: what they ask the administration for differs. */
+  unusable?: boolean;
 }
 
-/** The person's own sign-in as `connections.mine` answers it. */
-export type OwnSignInState = "connected" | "needs_reconnect" | "not_connected";
+/**
+ * The person's own sign-in as `connections.mine` answers it, or `unusable` where the list,
+ * which holds only the personal Connections the person may use, does not hold it.
+ */
+export type OwnSignInState = "connected" | "needs_reconnect" | "not_connected" | "unusable";
 
 /**
  * The card of a proposal: one that names a catalogue entry or signs in with OAuth. Any other
@@ -76,7 +83,8 @@ export function connectCardOfRefusal(result: unknown): ConnectCard | undefined {
     name: request.connection.name,
     title: request.connection.title,
     personal: true,
-    state: request.state === "needs_reconnect" ? "reconnect" : "connect"
+    state: request.state === "needs_reconnect" ? "reconnect" : "connect",
+    ...(request.agentName === undefined ? {} : { agentName: request.agentName })
   };
 }
 
@@ -86,22 +94,27 @@ function readSignInRequest(value: unknown): ToolConnectionSignInRequest | undefi
   const name = textOf(connection?.name);
   if (name === undefined) return undefined;
   if (request?.state !== "not_connected" && request?.state !== "needs_reconnect") return undefined;
+  const agentName = textOf(request.agentName);
   return {
     connection: { name, title: textOf(connection?.title) ?? name },
-    state: request.state
+    state: request.state,
+    ...(agentName === undefined ? {} : { agentName })
   };
 }
 
 /**
  * The card as the person's own sign-in stands now, once it is read: a card from earlier in the
  * conversation says Connected after the person connected, and Sign in again where the provider
- * refused the sign-in since. A card that is not about the person's own sign-in stays as it is.
+ * refused the sign-in since. A viewer who may not use the Connection is told to ask the
+ * administration, never offered a Connect that is refused. A card that is not about the
+ * person's own sign-in stays as it is.
  */
 export function withOwnSignIn(card: ConnectCard, own: OwnSignInState | undefined): ConnectCard {
   if (!card.personal || own === undefined) return card;
   if (card.state !== "connect" && card.state !== "reconnect" && card.state !== "connected") {
     return card;
   }
+  if (own === "unusable") return { ...card, state: "ask_admin", unusable: true };
   return {
     ...card,
     state: own === "connected" ? "connected" : own === "needs_reconnect" ? "reconnect" : "connect"

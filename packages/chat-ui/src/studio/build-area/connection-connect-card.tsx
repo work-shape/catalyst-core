@@ -78,17 +78,24 @@ function HostedConnectCard({
       onConnected: () => {
         invalidate().catch(() => undefined);
         // The person's word, sent as theirs: the agent carries on with the Connection.
-        host.tell?.(t("connectionCreate.connectCardTold", { title })).catch(() => undefined);
+        host
+          .tell?.(t("connectionCreate.connectCardTold", { title }), card.agentName)
+          .catch(() => undefined);
       }
     }
   );
-  const shown = withOwnSignIn(card, own ? personalViewOf(own) : undefined);
+  // The list holds only the personal Connections the person may use.
+  const shown = withOwnSignIn(
+    card,
+    own ? personalViewOf(own) : mine.data && card.personal ? "unusable" : undefined
+  );
   const { open } = host;
   return (
     <ConnectionConnectCardView
       title={title}
       name={name}
       state={signIn.state.phase === "connected" ? "connected" : shown.state}
+      unusable={shown.unusable === true}
       {...(own?.state === "connected" && own.account ? { account: own.account } : {})}
       signIn={signIn}
       {...(draft && open ? { onSetup: () => open(draft) } : {})}
@@ -96,10 +103,9 @@ function HostedConnectCard({
   );
 }
 
-const LINES: Record<ConnectCardState, TranslationKey> = {
+const LINES: Record<Exclude<ConnectCardState, "connected">, TranslationKey> = {
   connect: "connectionCreate.connectCardConnectText",
   reconnect: "connectionCreate.connectCardReconnectText",
-  connected: "connectionCreate.connectCardConnectedText",
   setup: "connectionCreate.connectCardSetupText",
   ask_admin: "connectionCreate.connectCardAskAdmin"
 };
@@ -111,11 +117,14 @@ export function ConnectionConnectCardView({
   state,
   account,
   signIn,
-  onSetup
+  onSetup,
+  unusable = false
 }: {
   title: string;
   name: string;
   state: ConnectCardState;
+  /** Set up, but the viewer may not use it. */
+  unusable?: boolean;
   /** The account, once connected; never before. */
   account?: string;
   signIn?: ConnectionSignIn;
@@ -124,12 +133,23 @@ export function ConnectionConnectCardView({
   const { t } = useTranslation();
   const [opening, setOpening] = useState(false);
   const [setupFailed, setSetupFailed] = useState(false);
-  const heading = t(
-    state === "reconnect"
-      ? "connectionCreate.connectCardReconnectTitle"
-      : "connectionCreate.proposalCardTitle",
-    { title }
-  );
+  const heading =
+    state === "connected"
+      ? title
+      : t(
+          state === "reconnect"
+            ? "connectionCreate.connectCardReconnectTitle"
+            : "connectionCreate.proposalCardTitle",
+          { title }
+        );
+  const line =
+    state === "connected"
+      ? account
+        ? t("personalConnections.stateConnected", { account })
+        : t("personalConnections.stateConnectedUnnamed")
+      : state === "ask_admin" && unusable
+        ? t("connectionCreate.connectCardAskAdminUse", { title })
+        : t(LINES[state], { title });
   const phase = signIn?.state.phase;
   const setup = () => {
     if (!onSetup) return;
@@ -175,9 +195,7 @@ export function ConnectionConnectCardView({
         <div className="grid min-w-0 flex-1 basis-48 gap-0.5">
           <p className="text-label text-foreground wrap-anywhere">{heading}</p>
           <p className="text-caption text-muted-foreground" data-connect-card-line="">
-            {state === "connected" && account
-              ? t("personalConnections.stateConnected", { account })
-              : t(LINES[state], { title })}
+            {line}
           </p>
         </div>
         {button}
