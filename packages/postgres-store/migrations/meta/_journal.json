@@ -1016,6 +1016,13 @@
       "when": 1792762643736,
       "tag": "0144_workspace_command_skill_mounts",
       "breakpoints": true
+    },
+    {
+      "idx": 145,
+      "version": "7",
+      "when": 1792788705257,
+      "tag": "0145_agent_awaiting_first_publish",
+      "breakpoints": true
     }
   ]
 }

@@ -99,30 +99,9 @@ export async function agentPublishMoved(
   return undefined;
 }
 
-/**
- * Whether a publish of this agent is its first and offers it in the workspace that owns it: a
- * workspace's agent that was never published (its live revision is the one its creation wrote)
- * and is offered nowhere. A later publish never widens or restores where it is offered: that
- * stays an instance admin's step.
- */
-function offersOnPublish(
-  asset: Pick<ConfigAssetRecord, "scope" | "revision">,
-  availability:
-    | { mode: string; personalWorkspaces: boolean; collaborationWorkspaceIds: readonly string[] }
-    | undefined
-): string | undefined {
-  if (asset.scope.kind !== "workspace" || asset.revision !== 1) return undefined;
-  const nowhere =
-    availability === undefined ||
-    (availability.mode === "selected" &&
-      !availability.personalWorkspaces &&
-      availability.collaborationWorkspaceIds.length === 0);
-  return nowhere ? asset.scope.workspaceId : undefined;
-}
-
 type OfferingOptions = {
   clientInstanceId: ClientInstanceId;
-  configAssets: { store: Pick<ConfigAssetStore, "listAgentAvailability"> };
+  configAssets: { store: Pick<ConfigAssetStore, "agentAwaitsFirstPublish"> };
   stores: {
     workspaces: Pick<PlatformStores["workspaces"], "getWorkspace">;
     agentProposals: Pick<AgentProposalStore, "get">;
@@ -131,22 +110,26 @@ type OfferingOptions = {
 
 /**
  * The shared workspace a publish of this agent offers it in: the one that owns it, where the
- * publish is its first and it is offered nowhere. Nothing for an instance's own agent, a later
- * publish or one owned by a Personal Workspace, which no availability names alone.
+ * agent was made hidden until its first publish and nobody has set where it is offered since.
+ * Nothing for an instance's own agent, one an admin or its maker placed, or one owned by a
+ * Personal Workspace, which no availability names alone. A publish never widens or restores
+ * where an agent is offered otherwise: that stays an instance admin's step.
  */
 export async function firstOffering(
   options: Omit<OfferingOptions, "stores"> & {
     stores: Pick<OfferingOptions["stores"], "workspaces">;
   },
-  asset: Pick<ConfigAssetRecord, "name" | "status" | "scope" | "revision"> | undefined
+  asset: Pick<ConfigAssetRecord, "name" | "status" | "scope"> | undefined
 ): Promise<string | undefined> {
-  if (!asset || asset.status !== "active") return undefined;
-  const availability = await options.configAssets.store.listAgentAvailability({
-    clientInstanceId: options.clientInstanceId,
-    agentName: asset.name
-  });
-  const workspaceId = offersOnPublish(asset, availability.get(asset.name));
-  if (workspaceId === undefined) return undefined;
+  if (!asset || asset.status !== "active" || asset.scope.kind !== "workspace") return undefined;
+  const { workspaceId } = asset.scope;
+  if (
+    !(await options.configAssets.store.agentAwaitsFirstPublish({
+      clientInstanceId: options.clientInstanceId,
+      agentName: asset.name
+    }))
+  )
+    return undefined;
   const workspace = await options.stores.workspaces.getWorkspace(
     options.clientInstanceId,
     asCollaborationWorkspaceId(workspaceId)
@@ -175,7 +158,7 @@ export async function firstVersionOffering(
 
 export interface AgentPublishReviewOptions {
   clientInstanceId: ClientInstanceId;
-  store: Pick<ConfigAssetStore, "getConfigAsset" | "listAgentAvailability">;
+  store: Pick<ConfigAssetStore, "getConfigAsset" | "agentAwaitsFirstPublish">;
   drafts: Pick<AgentProposalStore, "get">;
   workspaces?: Pick<PlatformStores["workspaces"], "getWorkspace">;
 }
@@ -247,13 +230,12 @@ export async function agentPublishReview(
           asCollaborationWorkspaceId(subject.workspaceId)
         )
       : undefined;
-  const availability =
-    asset && !moved
-      ? (
-          await options.store.listAgentAvailability({ clientInstanceId, agentName: asset.name })
-        ).get(asset.name)
-      : undefined;
-  const offers = asset && !moved ? offersOnPublish(asset, availability) : undefined;
+  const offers =
+    asset !== undefined &&
+    !moved &&
+    asset.scope.kind === "workspace" &&
+    workspace?.kind === "shared" &&
+    (await options.store.agentAwaitsFirstPublish({ clientInstanceId, agentName: asset.name }));
   return {
     ...head,
     // The lists every publish review carries; an agent has no files, hosts or stores of its own.
@@ -270,7 +252,7 @@ export async function agentPublishReview(
               ...(workspace ? { name: workspace.name } : {})
             }
           }),
-      offers: offers !== undefined,
+      offers,
       ...(next ? agentDifference(first ? {} : live, next, first) : {})
     },
     ...(moved ? { stale: moved } : {})

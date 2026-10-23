@@ -11,7 +11,9 @@ import { configAssetAvailability, configAssets, configAssetWorkspaceAvailability
 // Where the agents a mutation batch creates or revives start, decided and written inside the
 // batch's transaction.
 
-type InitialAvailability = Pick<AgentAvailability, "mode" | "collaborationWorkspaceIds">;
+type InitialAvailability = Pick<AgentAvailability, "mode" | "collaborationWorkspaceIds"> & {
+  awaitingFirstPublish?: true;
+};
 
 /**
  * The availability the batch's new agents start with. The release rule asks whether the batch
@@ -67,6 +69,7 @@ export async function insertInitialAgentAvailability(
       clientInstanceId: input.clientInstanceId,
       mode: availability.mode,
       personalWorkspaces: false,
+      awaitingFirstPublish: availability.awaitingFirstPublish === true,
       updatedAt: input.now
     }))
   );

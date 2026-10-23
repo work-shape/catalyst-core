@@ -258,6 +258,7 @@ export const unusedConfigAssetStore: ConfigAssetStore = {
   sweepAssetRepoSaves: unsupported,
   getAssetCheckout: unsupported,
   listAgentAvailability: unsupported,
+  agentAwaitsFirstPublish: unsupported,
   setAgentAvailability: unsupported,
   listAgentUseLimits: unsupported,
   setAgentUse: unsupported

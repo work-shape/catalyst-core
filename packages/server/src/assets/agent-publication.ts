@@ -108,8 +108,8 @@ export async function publishFirstVersion(
 }
 
 /**
- * Offers the agent in its own workspace, under the lock of its publish, where it is still
- * offered nowhere: an availability somebody set meanwhile stays as they set it.
+ * Offers the agent in its own workspace, under the lock of its publish, where it still awaits
+ * its first publish: an availability somebody set meanwhile stays as they set it.
  */
 async function offerInOwnWorkspace(
   within: AssetWorkflowOptions,
@@ -125,12 +125,14 @@ async function offerInOwnWorkspace(
       agentName: target.name
     })
   ).get(target.name);
-  const nowhere =
-    current === undefined ||
-    (current.mode === "selected" &&
-      !current.personalWorkspaces &&
-      current.collaborationWorkspaceIds.length === 0);
-  if (!nowhere) return;
+  // Only while it awaits its first publish; the store compares that again under its lock.
+  if (
+    !(await within.configAssets.store.agentAwaitsFirstPublish({
+      clientInstanceId,
+      agentName: target.name
+    }))
+  )
+    return;
   const availability = await within.configAssets.store.setAgentAvailability({
     clientInstanceId,
     agentName: target.name,
@@ -138,6 +140,7 @@ async function offerInOwnWorkspace(
     ...(target.asset ? { expectedAssetId: target.asset.id } : {}),
     ...(expectedRevision === undefined ? {} : { expectedRevision }),
     expectedAvailability: current ?? null,
+    expectAwaitingFirstPublish: true,
     availability: {
       mode: "selected",
       personalWorkspaces: false,
