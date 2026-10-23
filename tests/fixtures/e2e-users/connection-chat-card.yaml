@@ -1,0 +1,10 @@
+# The member of the Connect card spec, who holds no connection.write and is told to ask the
+# administration. No other spec uses this person.
+- email: e2e-connection-chat-card@example.test
+  displayLabel: E2E Zz Connection Chat Card
+  passwordEnvName: E2E_CONNECTION_CHAT_CARD_PASSWORD
+  developmentPassword: e2e-connection-chat-card-password
+  roles:
+    - user
+  permissionRefs:
+    - demo-tools

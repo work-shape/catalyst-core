@@ -4,6 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import { buildRouteOfLocation } from "../../shared/build-route";
 import { showOwnerInStudio } from "../../shared/build-rights";
 import { CONNECTIONS_BUILD_PATH } from "../../studio/build-area/connection-tools";
+import { connectCardOfProposal } from "../../studio/build-area/connection-connect-card-model";
 import { workspaceRoutePath, type WorkspaceRoute } from "../../shared/routes";
 import type { WorkspaceDock } from "../workspace/use-workspace-dock";
 import {
@@ -186,7 +187,7 @@ export function useAgentOpens(input: {
         part.toolName === CONNECTION_PROPOSE_TOOL_NAME && part.state === "output_available"
           ? readConnectionProposal(part.output)
           : undefined;
-      if (proposal === undefined) continue;
+      if (proposal === undefined || signsInFromCard(proposal)) continue;
       const key = `proposal:${part.toolCallId ?? `${runId}:${index}`}`;
       if (handledOpens.current.has(key)) continue;
       handledOpens.current.add(key);
@@ -271,4 +272,13 @@ export function useAgentOpens(input: {
  */
 function showOwnerOf(page: WorkspaceRoute, owner: string | undefined): void {
   if (page.kind === "build-asset") showOwnerInStudio(owner);
+}
+
+/**
+ * A proposal of a Connection that is set up already: its card's Connect signs the person in,
+ * in the click, and no dialog opens (CHAT-CONN-2b).
+ */
+function signsInFromCard(proposal: ConnectionDraft): boolean {
+  const card = connectCardOfProposal(proposal, true);
+  return card !== undefined && card.state !== "setup" && card.state !== "ask_admin";
 }

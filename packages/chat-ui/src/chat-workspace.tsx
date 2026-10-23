@@ -496,6 +496,10 @@ function ChatWorkspaceContent({
     mayWriteConnections: model.controlPlane.mayWriteConnections,
     // The dialog or page opens with the conversation of the card docked beside it.
     showRoute: chat.openRoute,
+    ownsConversation:
+      chat.selectedConversationOwnerId !== undefined &&
+      chat.selectedConversationOwnerId === model.auth.user.id,
+    tellConversation: chat.tellConversation,
     ...(chat.selectedConversationId === undefined
       ? {}
       : {

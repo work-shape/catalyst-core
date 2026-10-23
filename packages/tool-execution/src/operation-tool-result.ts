@@ -56,7 +56,8 @@ export function toolResultFromOperationResult(
                 ? `${INTERRUPTED_RUN_ERROR.message}. Its outcome is not known; check before calling again.`
                 : result.error.message
             ),
-            ...privateConversationRecovery(result.error.details)
+            ...privateConversationRecovery(result.error.details),
+            ...personalSignInRequest(result.error.details)
           };
     case "expired":
     case "pending_confirmation":
@@ -73,6 +74,41 @@ export function privateConversationRecovery(
 ): Pick<ToolHandlerFailureResult, "recovery"> {
   const parsed = z.object({ reason: z.literal("subject_conversation_shared") }).safeParse(details);
   return parsed.success ? { recovery: "private_conversation" } : {};
+}
+
+const personalRefusalSchema = z.object({
+  reason: z.enum(["connection_not_connected", "connection_needs_reconnect"]),
+  state: z.enum(["not_connected", "needs_reconnect"]),
+  connection: z.object({
+    name: z.string().min(1),
+    title: z.string(),
+    service: z.string().optional(),
+    catalogue: z.object({ entry: z.string(), part: z.string() }).optional()
+  })
+});
+
+/**
+ * The person's own sign-in a call of a personal Connection is missing (CS-9a), for the host's
+ * Connect card in place of the refusal. Only the Connection's name, title, service and catalogue
+ * link pass; the refusal names no account and no token.
+ */
+export function personalSignInRequest(details: unknown): Pick<ToolHandlerFailureResult, "connect"> {
+  const parsed = personalRefusalSchema.safeParse(details);
+  if (!parsed.success) return {};
+  const { connection, state } = parsed.data;
+  return {
+    connect: {
+      connection: {
+        name: connection.name,
+        title: connection.title || connection.name,
+        ...(connection.service === undefined ? {} : { service: connection.service }),
+        ...(connection.catalogue === undefined
+          ? {}
+          : { catalogue: { entry: connection.catalogue.entry, part: connection.catalogue.part } })
+      },
+      state
+    }
+  };
 }
 
 export function internalFailure(correlationId: string): ToolHandlerFailureResult {

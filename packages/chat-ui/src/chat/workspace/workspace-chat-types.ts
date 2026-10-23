@@ -253,6 +253,13 @@ export interface SelectedChatModel {
   selectedConversationWorkspaceId: string | undefined;
   /** The open conversation's title, once its thread has loaded. */
   selectedConversationTitle: string | undefined;
+  /** Who started the selected conversation; unknown until its thread is read. */
+  selectedConversationOwnerId: string | undefined;
+  /**
+   * Sends `text` as the person's message to a conversation, queued behind a run that goes
+   * (CHAT-CONN-1): a Connect card's word that the service is connected.
+   */
+  tellConversation(to: { conversationId: string; agentName?: string }, text: string): Promise<void>;
   /**
    * The chat route names a conversation the instance refused to read: deleted, expired, in a
    * workspace the person does not reach, or never made. The dock never reports one.

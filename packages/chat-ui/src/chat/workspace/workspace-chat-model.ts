@@ -1100,6 +1100,8 @@ export function useWorkspaceChatModel({
         ? selectedThread?.conversation.collaborationWorkspaceId
         : undefined,
       selectedConversationTitle: selectedThread?.conversation.title,
+      selectedConversationOwnerId: selectedThread?.conversation.createdByUserId,
+      tellConversation,
       // On its own route a conversation that is gone says so; the dock opens empty instead.
       conversationGone:
         !docked && selectedConversationId !== undefined && isConversationGone(threadQuery.error),

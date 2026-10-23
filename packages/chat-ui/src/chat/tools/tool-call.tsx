@@ -18,7 +18,12 @@ import {
   readConnectionDraft,
   readConnectionProposal
 } from "../../studio/build-area/connection-draft";
-import { ConnectionDraftCard } from "../../studio/build-area/connection-draft-card";
+import {
+  ConnectionDraftCard,
+  useConnectionDraftHost
+} from "../../studio/build-area/connection-draft-card";
+import { ConnectionConnectCard } from "../../studio/build-area/connection-connect-card";
+import { connectCardOfRefusal } from "../../studio/build-area/connection-connect-card-model";
 import {
   CONNECTION_OFFER_TOOL_NAME,
   ConnectionGiveCard,
@@ -96,6 +101,7 @@ export function ToolCallPart({
   const displayWidget = useToolDisplayWidget();
   const state = toolUiState({ isError, result, status, toolName });
   const decision = useToolDecision(toolCallId);
+  const connectionHost = useConnectionDraftHost();
   const display = readToolDisplayPayloadFromToolResult(result);
   // Platform-owned and resolved before the client widget registry: the card
   // decides a change to the instance, so a client assembly must not replace it.
@@ -188,6 +194,16 @@ export function ToolCallPart({
   const opened = standingAssetOpen({ toolName, toolCallId, result, isError });
   if (opened) {
     return <AssetOpenedLine open={opened} />;
+  }
+
+  // A call of a personal Connection the person has not signed in to: the Connect card stands in
+  // place of the refusal, for the person whose conversation it is (CHAT-CONN-2b).
+  const connectRefusal =
+    state === "failed" && connectionHost?.ownsConversation
+      ? connectCardOfRefusal(result)
+      : undefined;
+  if (connectRefusal) {
+    return <ConnectionConnectCard card={connectRefusal} refused />;
   }
 
   // The agent's draft of REST API tools: a card whose button opens the approval list. Its

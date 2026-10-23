@@ -16,6 +16,8 @@ import {
   type ConnectionDraftOpening
 } from "./connection-draft";
 import { CONNECTIONS_BUILD_PATH } from "./connection-tools";
+import { ConnectionConnectCard } from "./connection-connect-card";
+import { connectCardOfProposal } from "./connection-connect-card-model";
 
 // The card of the agent's draft of the tools of a REST API (CS-5c), in the conversation: what
 // the tools are for and their names. Its button opens the Connection's approval list with the
@@ -35,6 +37,18 @@ interface ExistingConnection {
 export interface ConnectionDraftHost {
   apiBaseUrl: string;
   authScope: string;
+  /** The person's own sign-in of the Connect card (CHAT-CONN-2b) runs with it. */
+  client: ApiClient;
+  /**
+   * The viewer started the conversation on screen. Only they see the Connect card a refused
+   * call carries: a sign-in is the person's own.
+   */
+  ownsConversation: boolean;
+  /**
+   * Sends `text` as the person's message to the conversation on screen, queued behind a run that
+   * goes (CHAT-CONN-1): the Connect card's word that the service is connected.
+   */
+  tell?(text: string): Promise<void>;
   open?(draft: ConnectionDraft): Promise<ConnectionDraftOpening>;
   /**
    * The Connection of an id as the instance holds it, or nothing where there is none: the card
@@ -47,6 +61,11 @@ export interface ConnectionDraftHost {
 const API_TITLE = /(?:^|[\s-])api$/iu;
 
 const ConnectionDraftHostContext = createContext<ConnectionDraftHost | undefined>(undefined);
+
+/** The workspace's host of the cards of drafts and proposals, where there is one. */
+export function useConnectionDraftHost(): ConnectionDraftHost | undefined {
+  return useContext(ConnectionDraftHostContext);
+}
 
 export function ConnectionDraftHostProvider({
   value,
@@ -123,12 +142,23 @@ export function connectionDraftHost(input: {
   showRoute(route: WorkspaceRoute): void;
   /** The conversation on screen and its agent: what a proposal's dialog tells when connected. */
   from?: { conversationId: string; agentName?: string };
+  /** The viewer started the conversation on screen. */
+  ownsConversation?: boolean;
+  /** Sends the person's message to a conversation, queued behind a run that goes. */
+  tellConversation?: (
+    to: { conversationId: string; agentName?: string },
+    text: string
+  ) => Promise<void>;
 }): ConnectionDraftHost {
   const connectionOf = connectionReader(input.client, input.mayWriteConnections);
+  const { from, tellConversation } = input;
   const host: ConnectionDraftHost = {
     apiBaseUrl: input.apiBaseUrl,
     authScope: input.authScope,
-    connectionOf
+    client: input.client,
+    ownsConversation: input.ownsConversation ?? false,
+    connectionOf,
+    ...(from && tellConversation ? { tell: (text: string) => tellConversation(from, text) } : {})
   };
   if (input.mayWriteConnections) {
     host.open = (draft) =>
@@ -144,6 +174,19 @@ export function connectionDraftHost(input: {
 /** The card of one draft in the thread. */
 export function ConnectionDraftCard({ draft }: { draft: ConnectionDraft }) {
   const host = useContext(ConnectionDraftHostContext);
+  // A catalogue entry or an OAuth Connection: the Connect card, in the state the proposal says.
+  const connect = host ? connectCardOfProposal(draft, host.open !== undefined) : undefined;
+  if (connect) return <ConnectionConnectCard card={connect} draft={draft} />;
+  return <ConnectionDraftTargetCard draft={draft} host={host} />;
+}
+
+function ConnectionDraftTargetCard({
+  draft,
+  host
+}: {
+  draft: ConnectionDraft;
+  host: ConnectionDraftHost | undefined;
+}) {
   const { name } = draft.connection;
   const queryClient = useQueryClient();
   const assetsKey = workspaceQueryKeys.assets(host?.apiBaseUrl ?? "", host?.authScope ?? "");
