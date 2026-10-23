@@ -1,5 +1,5 @@
-# The check every pull request runs before it merges, on our own Mac mini runner.
-# It never runs on a Blacksmith runner: those bill per minute and are for releases only.
+# The check every pull request runs before it merges, on GitHub-hosted runners (free for a public
+# repository). It never runs on a Blacksmith runner: those bill per minute and are for releases.
 # The full browser suite, images, compatibility and scale tests run in nightly.yml instead.
 name: PR
 on:
@@ -23,28 +23,24 @@ defaults:
   run:
     shell: bash
 jobs:
-  check:
-    # Every runner with this label takes PR checks: one per machine, since a check uses all of
-    # its cores (two side by side on the Mini doubled every test's time and hit test deadlines).
-    runs-on: [self-hosted, catalyst-check]
-    timeout-minutes: 45
+  static:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
           fetch-depth: 0
       - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
-        with:
-          # Each runner on the Mini has its own copy: a shared one breaks when two jobs start together.
-          dest: ${{ runner.tool_cache }}/setup-pnpm
-      # No action cache: the pnpm store stays on the runner's disk between runs.
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
+          cache: pnpm
       - name: Runner
         run: |
           uname -mrs
-          sysctl -n hw.ncpu hw.memsize
+          nproc
+          free --bytes
           uptime
           docker info --format 'docker {{.ServerVersion}}: {{.NCPU}} CPUs, {{.MemTotal}} bytes, {{.ContainersRunning}} containers running'
       - name: Install
@@ -55,25 +51,8 @@ jobs:
         run: pnpm format:check
       - name: Build
         run: pnpm build
-      - name: Database
-        timeout-minutes: 5
-        env:
-          TOKEN: ${{ github.token }}
-        # A database of this run's own, on a free port: a container a crashed run left behind
-        # never blocks the next one.
-        # 127.0.0.1, not localhost: Colima forwards a published port on IPv4 only, and a Data
-        # Store dials the first address localhost resolves to, which on macOS is ::1.
-        run: |
-          name="pr-postgres-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
-          port=$(node -e 'const s = require("net").createServer().listen(0, "127.0.0.1", () => { console.log(s.address().port); s.close(); })')
-          echo "CHECK_POSTGRES_NAME=$name" >> "$GITHUB_ENV"
-          echo "POSTGRES_STORE_TEST_DATABASE_URL=postgresql://catalyst:local-check@127.0.0.1:$port/catalyst_test" >> "$GITHUB_ENV"
-          docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin <<<"$TOKEN"
-          CHECK_POSTGRES_NAME="$name" .github/scripts/start-postgres.sh catalyst local-check catalyst_test "$port"
       - name: Lint
         run: pnpm lint
-      - name: Tooling tests
-        run: pnpm test:tooling
       - name: Package types
         run: pnpm typecheck:packages
       - name: Test types
@@ -82,8 +61,19 @@ jobs:
         run: pnpm check:openapi && pnpm check:contract
       - name: Migrations
         run: pnpm check:migrations
-      - name: Unit and database tests
-        run: pnpm exec vitest run
+      - name: Database
+        timeout-minutes: 5
+        env:
+          TOKEN: ${{ github.token }}
+        run: |
+          name="pr-postgres-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          port=$(node -e 'const s = require("net").createServer().listen(0, "127.0.0.1", () => { console.log(s.address().port); s.close(); })')
+          echo "CHECK_POSTGRES_NAME=$name" >> "$GITHUB_ENV"
+          echo "POSTGRES_STORE_TEST_DATABASE_URL=postgresql://catalyst:local-check@127.0.0.1:$port/catalyst_test" >> "$GITHUB_ENV"
+          docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin <<<"$TOKEN"
+          CHECK_POSTGRES_NAME="$name" .github/scripts/start-postgres.sh catalyst local-check catalyst_test "$port"
+      - name: Tooling tests
+        run: pnpm test:tooling
       - name: Upgrade from oldest supported release
         run: pnpm test:upgrade
       - name: Deployment kit tests
@@ -94,3 +84,66 @@ jobs:
       - name: Remove the database
         if: always()
         run: '[ -z "$CHECK_POSTGRES_NAME" ] || docker rm --force "$CHECK_POSTGRES_NAME" >/dev/null 2>&1 || true'
+
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      # Every shard reports, so one red run shows all of its failures.
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
+    name: tests (${{ matrix.shard }}/8)
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Runner
+        run: |
+          uname -mrs
+          nproc
+          free --bytes
+          uptime
+          docker info --format 'docker {{.ServerVersion}}: {{.NCPU}} CPUs, {{.MemTotal}} bytes, {{.ContainersRunning}} containers running'
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Build
+        run: pnpm build
+      - name: Database
+        timeout-minutes: 5
+        env:
+          TOKEN: ${{ github.token }}
+        run: |
+          name="pr-postgres-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          port=$(node -e 'const s = require("net").createServer().listen(0, "127.0.0.1", () => { console.log(s.address().port); s.close(); })')
+          echo "CHECK_POSTGRES_NAME=$name" >> "$GITHUB_ENV"
+          echo "POSTGRES_STORE_TEST_DATABASE_URL=postgresql://catalyst:local-check@127.0.0.1:$port/catalyst_test" >> "$GITHUB_ENV"
+          docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin <<<"$TOKEN"
+          CHECK_POSTGRES_NAME="$name" .github/scripts/start-postgres.sh catalyst local-check catalyst_test "$port"
+      - name: Unit and database tests
+        run: pnpm exec vitest run --shard=${{ matrix.shard }}/8
+      - name: Database log of a failed run
+        if: failure()
+        run: '[ -z "$CHECK_POSTGRES_NAME" ] || docker logs --tail 80 "$CHECK_POSTGRES_NAME" 2>&1 || true'
+      - name: Remove the database
+        if: always()
+        run: '[ -z "$CHECK_POSTGRES_NAME" ] || docker rm --force "$CHECK_POSTGRES_NAME" >/dev/null 2>&1 || true'
+
+  # The one name branch protection requires: green only when every job above is.
+  check:
+    if: always()
+    needs: [static, tests]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Every check passed
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          echo "$RESULTS" | jq -e 'to_entries | all(.value.result == "success")' >/dev/null \
+            || { echo "$RESULTS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'; exit 1; }
