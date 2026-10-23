@@ -13,6 +13,7 @@ import {
   type AgentRunId,
   type ConversationId,
   type PlatformStores,
+  type SkillFolderReader,
   type JsonObject,
   type ToolExecutionContext
 } from "@work-shape/catalyst-core";
@@ -212,6 +213,8 @@ async function harness(
     agentName?: string;
     /** Queue only: the commands run when `runQueued` is called. */
     queueOnly?: boolean;
+    /** The worker's read of skill folders, in place of the instance's. */
+    skillFolders?: SkillFolderReader;
   }
 ) {
   const root = await mkdtemp(join(tmpdir(), "skill-mount-test-"));
@@ -232,11 +235,13 @@ async function harness(
     tempRootDirectory: commandsDirectory,
     reuseWorkspaceDirectories: true,
     processExecutor: options.executor,
-    skillFolders: createSkillFolderReader({
-      clientInstanceId,
-      stores,
-      ...(world.execution.pages ? { files: world.execution.pages.objects } : {})
-    })
+    skillFolders:
+      options.skillFolders ??
+      createSkillFolderReader({
+        clientInstanceId,
+        stores,
+        ...(world.execution.pages ? { files: world.execution.pages.objects } : {})
+      })
   });
   const assetSource = createStoredConfigAssetSource({
     store: stores.configAssets,
@@ -468,6 +473,34 @@ describe("the folders of an agent's skills in its workspace commands", () => {
       code: "WORKSPACE_SKILL_MOUNT_FAILED",
       details: { reason: "skill_mount_failed", skill: "form" }
     });
+    expect(started).toEqual([]);
+  });
+
+  it("tells the agent in one sentence that a skill could not be made available, with no path of the worker", async () => {
+    const { world, stores } = await startWorld(start);
+    const started: Started[] = [];
+    const h = await harness(world, stores, {
+      executor: new DockerWorkspaceCommandProcessExecutor({
+        image: "runner:test",
+        commandClient: recordingDocker(started)
+      }),
+      skillFolders: {
+        read: () => Promise.reject(new Error("EACCES: /var/lib/catalyst/objects/skills/form"))
+      }
+    });
+
+    const result = await h.service.exec({ command: "ls /skills" }, h.context);
+
+    expect(result).toMatchObject({
+      status: "failed",
+      error: {
+        code: "handler_failed",
+        message:
+          "The skill 'form' could not be made available for this command, so it did not run; try again or continue without it.",
+        details: { reason: "skill_mount_failed", skill: "form" }
+      }
+    });
+    expect(JSON.stringify(result)).not.toMatch(/\/var\/lib|EACCES|skill-mount-test-/u);
     expect(started).toEqual([]);
   });
 
