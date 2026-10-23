@@ -125,6 +125,7 @@ export function createOperationCalls(options: OperationCallsOptions): OperationC
     clientInstanceId,
     ...(options.configAssets ? { kinds: options.configAssets.kinds } : {}),
     store: options.stores.configAssets,
+    drafts: options.stores.agentProposals,
     files: options.stores.pages,
     workspaces: options.stores.workspaces,
     narrator: publishNarrator,

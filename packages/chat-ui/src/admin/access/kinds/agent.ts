@@ -7,5 +7,8 @@ export const agentKind: GrantKindEntry<"agent"> = {
     scopeAsset: "access.scopeAgent",
     object: "access.objectAgent"
   },
-  sentences: { "agent.use": "access.actionUseAgentDescription" }
+  sentences: {
+    "agent.use": "access.actionUseAgentDescription",
+    "agent.approve": "access.actionApproveAgentDescription"
+  }
 };

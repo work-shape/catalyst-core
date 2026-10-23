@@ -1,4 +1,6 @@
 import type {
+  AccessResource,
+  ActorAccess,
   ApprovalFurtherRight,
   ApprovalPreviewViewer,
   ConfigAssetStore,
@@ -20,6 +22,17 @@ export interface HeldCallApprovalKind {
    * it makes live (DP-3). A subject it cannot read throws, and nobody decides the request.
    */
   furtherPermissions?(subject: JsonObject): readonly ApprovalFurtherRight[];
+  /**
+   * The asset `requiredPermission` is asked on, read from the subject: an agent's held publish
+   * is decided by a holder of `agent.approve` on that agent. Left out, it is asked of the
+   * instance. A subject it cannot read throws, and nobody decides the request.
+   */
+  resourceOf?(subject: JsonObject): AccessResource;
+  /**
+   * The subjects of the requests a holder of `requiredPermission` on some assets only may
+   * review, as `subject` holds them. Only with `resourceOf`.
+   */
+  reviewableSubjects?(access: ActorAccess): Promise<readonly JsonObject[]>;
   /**
    * Why the call can no longer be approved, though it still waits: what it is about moved
    * since. Read through the stores of the decision's transaction.

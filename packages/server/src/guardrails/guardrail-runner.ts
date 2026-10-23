@@ -262,7 +262,7 @@ export class GuardrailRunner {
               applies(guardrail.filter, input.match)
           )
           .map((asset) => this.boundOf(asset));
-    const shipped = aboutGuardrails ? [] : await this.shippedGuardrails(input.event);
+    const shipped = aboutGuardrails ? [] : await this.shippedGuardrails(input.event, input.subject);
     return [...floor, ...assets, ...shipped];
   }
 
@@ -337,10 +337,20 @@ export class GuardrailRunner {
     };
   }
 
-  /** The shipped guardrails bound to the event that nobody switched off. */
-  private async shippedGuardrails(event: GuardrailEvent): Promise<Bound[]> {
+  /**
+   * The shipped guardrails bound to the event that nobody switched off. One bound to an event
+   * for a workspace's assets only answers where the subject names the workspace that owns it.
+   */
+  private async shippedGuardrails(
+    event: GuardrailEvent,
+    subject: GuardrailSubject
+  ): Promise<Bound[]> {
     const { shipped } = this.options;
-    const bound = SHIPPED_GUARDRAILS.filter((guardrail) => guardrail.on.includes(event));
+    const bound = SHIPPED_GUARDRAILS.filter(
+      (guardrail) =>
+        guardrail.on.includes(event) &&
+        (subject.workspaceId !== undefined || !guardrail.workspaceOwnedOnly?.includes(event))
+    );
     if (!shipped || bound.length === 0) return [];
     const switches = await shipped.listShippedGuardrailSwitches({
       clientInstanceId: this.options.clientInstanceId

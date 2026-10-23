@@ -54,13 +54,14 @@ const GRANT_VERB_RANK: Record<GrantVerb, number> = {
   execute: 3,
   write: 4,
   publish: 5,
-  delete: 6,
-  read_run_data: 7,
-  records: 8,
-  builder: 9,
-  publisher: 10,
-  review: 11,
-  edit_built_in: 12
+  approve: 6,
+  delete: 7,
+  read_run_data: 8,
+  records: 9,
+  builder: 10,
+  publisher: 11,
+  review: 12,
+  edit_built_in: 13
 };
 
 function isGrantKind(kind: string): kind is GrantKind {
