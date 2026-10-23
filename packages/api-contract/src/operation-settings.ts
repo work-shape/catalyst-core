@@ -21,10 +21,12 @@ export const operationSettingSchema = z.object({
   /** The person's value. Absent: the policy as the admin set it. */
   value: personPolicySettingSchema.optional(),
   /**
-   * Whether the person may set "Always allow": a change whose class allows it and that no admin
-   * locked. Where not, the admin decides whether the call asks.
+   * Whether the person may set "Always allow": a `reversible` change that no admin locked, that
+   * the policy does not hold at `approval` or `deny` and whose own floor does not ask.
    */
   mayAlwaysAllow: z.boolean(),
+  /** An admin's lock names the operation: the admin decides whether the call asks. */
+  alwaysAllowLocked: z.literal(true).optional(),
   updatedAt: timestampSchema.optional()
 });
 

@@ -47,7 +47,7 @@ export function registerOperationDecisionRoutes(
     }
     const refusal = await alwaysAllowRefusal(settings, definition);
     if (refusal) {
-      throw new AppError("FORBIDDEN", refusal, { reason: "always_allow_not_permitted" });
+      throw new AppError("FORBIDDEN", refusal.message, { reason: "always_allow_not_permitted" });
     }
     return call.operation;
   };

@@ -41,11 +41,12 @@ const insert = tool("demo.insert", { changeClass: "reversible" });
 const remove = tool("demo.remove", {});
 const locked = tool("demo.locked", { changeClass: "reversible" });
 const floored = tool("demo.floored", { changeClass: "reversible", policyFloor: () => "confirm" });
-const tools = [insert, remove, locked, floored];
+const approved = tool("demo.approved", { changeClass: "reversible" });
+const tools = [insert, remove, locked, floored, approved];
 const model = createToolCallingModel();
 const confirmAll: CentralPolicySetting[] = tools.map((entry) => ({
   operation: entry.name,
-  value: "confirm"
+  value: entry === approved ? "approval" : "confirm"
 }));
 
 function person(id: string) {
@@ -231,11 +232,13 @@ describe("Always allow from a confirmation card (OP-6)", () => {
     // Irreversible and locked operations refuse it in Settings too; nothing is stored.
     expect((await f.set("demo.remove", "always_allow")).statusCode).toBe(403);
     expect((await f.set("demo.locked", "always_allow")).statusCode).toBe(403);
+    // An operation at approval never takes it either.
+    expect((await f.set("demo.approved", "always_allow")).statusCode).toBe(403);
     expect(await f.stored()).toEqual([]);
     expect((await f.settings()).filter((item) => item.operation.startsWith("demo."))).toMatchObject(
       [
         { operation: "demo.floored", mayAlwaysAllow: true },
-        { operation: "demo.locked", mayAlwaysAllow: false },
+        { operation: "demo.locked", mayAlwaysAllow: false, alwaysAllowLocked: true },
         { operation: "demo.remove", mayAlwaysAllow: false }
       ]
     );
