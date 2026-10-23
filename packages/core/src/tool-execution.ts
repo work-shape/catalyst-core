@@ -101,7 +101,11 @@ export type ToolExecutionErrorCode =
   /** `run_agent` names an agent the run may not start as a subagent. */
   | "agent_not_available"
   /** `run_agent` beyond the subagents one step or one run may start. */
-  | "subagent_limit";
+  | "subagent_limit"
+  /** A call of a personal Connection the person has not signed in to (CS-9a, CHAT-CONN-2b). */
+  | "connection_not_connected"
+  /** A call of a personal Connection whose sign-in the outside system refused. */
+  | "connection_needs_reconnect";
 
 export interface ToolExecutionError {
   code: ToolExecutionErrorCode;
@@ -132,6 +136,8 @@ export interface ToolConnectionSignInRequest {
     catalogue?: { entry: string; part: string };
   };
   state: "not_connected" | "needs_reconnect";
+  /** The agent whose call was refused: the person's word that they connected goes to it. */
+  agentName?: string;
 }
 
 export interface ToolHandlerFailureResult {

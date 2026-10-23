@@ -668,7 +668,8 @@ const toolConnectionSignInRequestSchema = z.object({
     service: z.string().optional(),
     catalogue: z.object({ entry: z.string(), part: z.string() }).optional()
   }),
-  state: z.enum(["not_connected", "needs_reconnect"])
+  state: z.enum(["not_connected", "needs_reconnect"]),
+  agentName: z.string().optional()
 });
 
 const toolCallSubagentSchema = z.object({
