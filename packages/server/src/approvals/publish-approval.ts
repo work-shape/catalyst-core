@@ -284,7 +284,10 @@ export interface PublishApprovalKindsOptions {
   kinds?: AssetKindRegistry<WorkflowAssetKind>;
   store: Pick<
     ConfigAssetStore,
-    "getConfigAsset" | "getConfigAssetRevision" | "listAgentAvailability" | "listActiveConfigAssets"
+    | "getConfigAsset"
+    | "getConfigAssetRevision"
+    | "agentAwaitsFirstPublish"
+    | "listActiveConfigAssets"
   >;
   /** The agents' drafts, which a held agent publish names. */
   drafts: Pick<AgentProposalStore, "get">;

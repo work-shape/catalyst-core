@@ -128,6 +128,10 @@ export const configAssetAvailability = pgTable(
     clientInstanceId: text("client_instance_id").notNull(),
     mode: text("mode").$type<AgentAvailability["mode"]>().notNull(),
     personalWorkspaces: boolean("personal_workspaces").notNull().default(false),
+    // A workspace's agent made by someone who may not approve its publish starts offered
+    // nowhere with this set; the approval of its first publish offers it in its workspace.
+    // Every later write of the availability clears it (WS-PUB-1b).
+    awaitingFirstPublish: boolean("awaiting_first_publish").notNull().default(false),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull()
   },
   (table) => [

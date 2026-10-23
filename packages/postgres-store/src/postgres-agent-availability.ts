@@ -71,6 +71,26 @@ export async function listAgentAvailability(
   );
 }
 
+export async function agentAwaitsFirstPublish(
+  db: PostgresConnection,
+  input: Parameters<ConfigAssetStore["agentAwaitsFirstPublish"]>[0]
+): Promise<boolean> {
+  const [row] = await db
+    .select({ awaiting: configAssetAvailability.awaitingFirstPublish })
+    .from(configAssetAvailability)
+    .innerJoin(configAssets, eq(configAssets.id, configAssetAvailability.assetId))
+    .where(
+      and(
+        eq(configAssets.clientInstanceId, input.clientInstanceId),
+        eq(configAssets.kind, "agent"),
+        eq(configAssets.status, "active"),
+        eq(configAssets.name, input.agentName)
+      )
+    )
+    .limit(1);
+  return row?.awaiting === true;
+}
+
 export async function setAgentAvailability(
   db: PostgresConnection,
   input: Parameters<ConfigAssetStore["setAgentAvailability"]>[0]
@@ -110,6 +130,15 @@ export async function setAgentAvailability(
     }
     if (input.expectedAssetId !== undefined && input.expectedAssetId !== asset.id) {
       throw availabilityConflict(input.agentName, "asset_replaced", input.kind);
+    }
+    if (input.expectAwaitingFirstPublish) {
+      const [marked] = await tx
+        .select({ awaiting: configAssetAvailability.awaitingFirstPublish })
+        .from(configAssetAvailability)
+        .where(eq(configAssetAvailability.assetId, asset.id))
+        .limit(1);
+      if (marked?.awaiting !== true)
+        throw availabilityConflict(input.agentName, "availability_changed", input.kind);
     }
     if (input.expectedAvailability !== undefined) {
       // Every change of an availability holds the lock above, so what is read here stands.
@@ -163,6 +192,7 @@ export async function setAgentAvailability(
         clientInstanceId: input.clientInstanceId,
         mode: input.availability.mode,
         personalWorkspaces: input.availability.personalWorkspaces,
+        awaitingFirstPublish: false,
         updatedAt: now
       })
       .onConflictDoUpdate({
@@ -170,6 +200,8 @@ export async function setAgentAvailability(
         set: {
           mode: input.availability.mode,
           personalWorkspaces: input.availability.personalWorkspaces,
+          // Whoever sets where it is offered decides it: no approval offers it again.
+          awaitingFirstPublish: false,
           updatedAt: now
         }
       });

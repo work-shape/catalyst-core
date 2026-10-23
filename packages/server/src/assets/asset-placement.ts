@@ -352,7 +352,7 @@ export async function initialAgentPlacement(
     // nowhere, whoever made it and however: its first publish, once approved, offers it in its
     // workspace (WS-PUB-1b, access check 11).
     return {
-      initialAgentAvailability: "hidden",
+      initialAgentAvailability: "hidden_until_first_publish",
       warnings: [
         {
           code: "agent_hidden",
