@@ -77,6 +77,15 @@ function chipNode(document: Document, option: string, label: string): HTMLSpanEl
   return chip;
 }
 
+/** Whether nothing but empty text follows a node in its parent. */
+function endsLine(child: Node): boolean {
+  for (let next = child.nextSibling; next !== null; next = next.nextSibling) {
+    if (next.nodeType !== Node.TEXT_NODE) return false;
+    if ((next.textContent ?? "").replaceAll(CARET_KEEPER, "") !== "") return false;
+  }
+  return true;
+}
+
 /** The parts the editor holds: its text, its chips, and its line breaks. */
 function readParts(node: HTMLElement): TemplatePart[] {
   const parts: TemplatePart[] = [];
@@ -89,8 +98,9 @@ function readParts(node: HTMLElement): TemplatePart[] {
         if (option !== undefined) {
           parts.push({ option });
         } else if (child.tagName === "BR") {
-          // The break a browser leaves in an emptied editor is no line of the text.
-          if (!(parent === node && node.childNodes.length === 1)) parts.push("\n");
+          // The break a browser keeps at the end of a line, so the line shows, is no line of
+          // the text: "a<br>" is "a", "a<br><br>" is "a" and a new line, an emptied editor "".
+          if (!endsLine(child)) parts.push("\n");
         } else {
           // A block a browser made for a new line.
           if (index > 0) parts.push("\n");

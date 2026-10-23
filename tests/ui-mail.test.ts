@@ -75,6 +75,26 @@ describe("TemplateTextField", () => {
     expect(seen.at(-1)).toEqual(["Hello ", { option: "load#emails" }, " done"]);
   });
 
+  it("reads the break a browser keeps at the end of a line as no line", async () => {
+    const seen: TemplatePart[][] = [];
+    const node = await mount(createElement(Sample, { initial: ["Hi"], seen }));
+    const editor = node.querySelector<HTMLElement>("[data-template-editor]");
+    if (!editor) throw new Error("no editor");
+    const chip = editor.ownerDocument.createElement("span");
+    chip.dataset.templateOption = "load#emails";
+    chip.textContent = "Addresses";
+    await act(async () => {
+      editor.append(document.createElement("br"), chip, document.createElement("br"));
+      editor.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(seen.at(-1)).toEqual(["Hi\n", { option: "load#emails" }]);
+    await act(async () => {
+      editor.append(document.createElement("br"));
+      editor.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(seen.at(-1)).toEqual(["Hi\n", { option: "load#emails" }, "\n"]);
+  });
+
   it("shows the text read-only with its chips", async () => {
     const node = await mount(
       createElement(TemplateText, {
