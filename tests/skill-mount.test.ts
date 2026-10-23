@@ -1,8 +1,9 @@
+import * as fs from "node:fs/promises";
 import { mkdtemp, readFile, readdir, rm, chmod, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import postgres from "postgres";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import {
   asAgentRunId,
@@ -46,6 +47,11 @@ import { inlineCommandResults, runQueuedCommands } from "./support/workspace-com
 // database and its `files` store, with a Docker client that records what it is asked to start,
 // with the local sandbox, and, where a runner image is named, with Docker itself:
 //   CATALYST_RUNNER_IMAGE=<image> pnpm exec vitest run tests/skill-mount.test.ts
+
+vi.mock("node:fs/promises", async (original) => {
+  const actual = await original<typeof import("node:fs/promises")>();
+  return { ...actual, mkdir: vi.fn(actual.mkdir) };
+});
 
 const SKILL_MD = `---
 name: form
@@ -189,6 +195,9 @@ async function readTree(directory: string): Promise<Record<string, string>> {
 
 const roots: string[] = [];
 afterEach(async () => {
+  vi.mocked(fs.mkdir).mockImplementation(
+    (await vi.importActual<typeof fs>("node:fs/promises")).mkdir
+  );
   await Promise.all(
     roots.splice(0).map(async (root) => {
       await openTree(root);
@@ -502,6 +511,99 @@ describe("the folders of an agent's skills in its workspace commands", () => {
     });
     expect(JSON.stringify(result)).not.toMatch(/\/var\/lib|EACCES|skill-mount-test-/u);
     expect(started).toEqual([]);
+  });
+
+  it("fails with the skill's name and no path where the local sandbox cannot copy the folder", async () => {
+    const { world, stores } = await startWorld(start);
+    const h = await harness(world, stores, {
+      executor: new LocalWorkspaceCommandProcessExecutor()
+    });
+    // The worker's disk refuses the folder of the command's copy of the skill.
+    const actual = await vi.importActual<typeof fs>("node:fs/promises");
+    vi.mocked(fs.mkdir).mockImplementation((path, options) =>
+      String(path).endsWith(join("skills", "form"))
+        ? Promise.reject(
+            Object.assign(new Error(`EACCES: permission denied, mkdir '${String(path)}'`), {
+              code: "EACCES"
+            })
+          )
+        : actual.mkdir(path, options)
+    );
+
+    const result = await h.service.exec({ command: "true" }, h.context);
+
+    expect(result).toMatchObject({
+      status: "failed",
+      error: { details: { reason: "skill_mount_failed", skill: "form" } }
+    });
+    const failed = await h.command(
+      z
+        .object({ commandId: z.string() })
+        .parse(result.status === "failed" ? result.error.details : {}).commandId
+    );
+    expect(failed?.error).toMatchObject({
+      code: "WORKSPACE_SKILL_MOUNT_FAILED",
+      details: { reason: "skill_mount_failed", skill: "form", cause: "not_copied" }
+    });
+    expect(JSON.stringify([result, failed?.error])).not.toContain(h.commandsDirectory);
+  });
+
+  it("refuses a folder whose stored file is missing or is not the one the revision records", async () => {
+    const { world, stores } = await startWorld(start);
+    const objects = world.execution.pages?.objects;
+    if (!objects) throw new Error("The world has no files store");
+    const reader = createSkillFolderReader({ clientInstanceId, stores, files: objects });
+    const assetSource = createStoredConfigAssetSource({
+      store: stores.configAssets,
+      clientInstanceId
+    });
+    const live = await assetSource.getSkillRevision("form");
+    if (!live) throw new Error("The skill form is not stored");
+    const read = () => reader.read({ clientInstanceId, name: "form", revision: live.revision });
+    expect((await read()).map((file) => file.path)).toEqual([
+      "SKILL.md",
+      "assets/template.pdf",
+      "scripts/fill_form.py"
+    ]);
+
+    // The revision records other bytes for one file than its file set holds.
+    const sql = postgres(await fileTestDatabaseUrl(), { max: 1 });
+    try {
+      const recorded = (live.skill.files ?? []).map((entry) => ({ ...entry }));
+      const setFiles = (files: typeof recorded) =>
+        sql`update config_asset_revisions set config = jsonb_set(config, '{files}', ${sql.json(files)})
+          where client_instance_id = ${clientInstanceId} and revision = ${live.revision}
+          and config->>'name' = 'form'`;
+      expect(recorded.map((entry) => entry.path)).toEqual([
+        "assets/template.pdf",
+        "scripts/fill_form.py"
+      ]);
+      await setFiles(
+        recorded.map((entry) =>
+          entry.path === "assets/template.pdf" ? { ...entry, sha256: "0".repeat(64) } : entry
+        )
+      );
+      await expect(read()).rejects.toMatchObject({ details: { reason: "skill_file_mismatch" } });
+      // The revision does not name a file its file set holds.
+      await setFiles(recorded.filter((entry) => entry.path !== "assets/template.pdf"));
+      await expect(read()).rejects.toMatchObject({ details: { reason: "skill_file_mismatch" } });
+      await setFiles(recorded);
+      expect(await read()).toHaveLength(3);
+    } finally {
+      await sql.end();
+    }
+
+    // A file of the file set is gone from storage: refused, never an empty file.
+    const keys: string[] = [];
+    for (let cursor: string | undefined, first = true; first || cursor; first = false) {
+      const page = await objects.list("", cursor);
+      keys.push(...page.objects.map((object) => object.key));
+      cursor = page.cursor;
+    }
+    const template = keys.filter((key) => key.endsWith("/assets/template.pdf"));
+    expect(template.length).toBeGreaterThan(0);
+    for (const key of template) await objects.delete(key);
+    await expect(read()).rejects.toThrow();
   });
 
   it("mounts nothing for a command whose call names no agent", async () => {

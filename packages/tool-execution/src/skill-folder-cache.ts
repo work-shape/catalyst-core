@@ -79,6 +79,8 @@ export class SkillFolderCache {
   private readonly rootDirectory: string;
   private readonly reader: SkillFolderReader;
   private readonly inUse = new Map<string, number>();
+  /** The entries an eviction is removing: a command that acquires one waits, then refills it. */
+  private readonly evicting = new Map<string, Promise<void>>();
 
   constructor(options: { rootDirectory: string; reader: SkillFolderReader }) {
     this.rootDirectory = options.rootDirectory;
@@ -111,7 +113,14 @@ export class SkillFolderCache {
         const entry = this.entryDirectory(clientInstanceId, mount);
         this.hold(entry);
         held.push(entry);
-        await this.ensure(clientInstanceId, mount, entry);
+        await this.evicting.get(entry);
+        try {
+          await this.ensure(clientInstanceId, mount, entry);
+        } catch (error) {
+          // Whatever failed, the command is told the skill's name and never a path.
+          if (error instanceof WorkspaceRunnerFailure) throw error;
+          throw skillMountFailure(mount.name, "not_ready");
+        }
         folders.push({ name: mount.name, directory: join(entry, FOLDER) });
       }
       return { folders, release };
@@ -140,7 +149,19 @@ export class SkillFolderCache {
         try {
           const info = await lstat(entry);
           if (info.mtimeMs > cutoffMs) continue;
-          await removeTree(entry);
+          // Checked again after the wait: a command that acquired the entry meanwhile keeps it.
+          // From here a command that acquires it waits for the removal and fills it again.
+          if (this.inUse.has(entry)) continue;
+          const removal = this.discard(entry);
+          this.evicting.set(
+            entry,
+            removal.catch(() => undefined)
+          );
+          try {
+            await removal;
+          } finally {
+            this.evicting.delete(entry);
+          }
           removedCount += 1;
         } catch {
           failedCount += 1;
