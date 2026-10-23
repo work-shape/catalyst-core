@@ -1,0 +1,10 @@
+# The Builder and Publisher of a workspace in the agent publish spec, who is no member of it and
+# holds no agent.approve. No other spec uses this person.
+- email: e2e-agent-publisher@example.test
+  displayLabel: E2E Zz Agent Publisher
+  passwordEnvName: E2E_AGENT_PUBLISHER_PASSWORD
+  developmentPassword: e2e-agent-publisher-password
+  roles:
+    - user
+  permissionRefs:
+    - demo-tools
