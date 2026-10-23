@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 
 const qualityConfig = fileURLToPath(new URL("../packages/quality-config", import.meta.url));
@@ -58,15 +58,24 @@ try {
 `;
 
 const messages = z.array(z.array(z.object({ ruleId: z.string().nullable() })));
-function findings(rule: string, fixtures: { file: string; source: string; typed?: boolean }[]) {
+type Fixture = { file: string; source: string; typed?: boolean };
+const probes: (Fixture & { rule: string })[] = [];
+let results: (string | null)[][] = [];
+// Register fixture batches while the suite is collected, then lint all of them once.
+function findings(rule: string, fixtures: Fixture[]): () => (string | null)[][] {
+  const offset = probes.length;
+  probes.push(...fixtures.map((fixture) => ({ ...fixture, rule })));
+  return () => results.slice(offset, offset + fixtures.length);
+}
+beforeAll(() => {
   const result = spawnSync(process.execPath, ["--input-type=module", "-e", probe], {
     cwd: qualityConfig,
-    input: JSON.stringify(fixtures.map((fixture) => ({ ...fixture, rule }))),
+    input: JSON.stringify(probes),
     encoding: "utf8"
   });
   expect(result.status, result.stderr).toBe(0);
-  return messages.parse(JSON.parse(result.stdout)).map((rows) => rows.map((row) => row.ruleId));
-}
+  results = messages.parse(JSON.parse(result.stdout)).map((rows) => rows.map((row) => row.ruleId));
+});
 
 const workspace = (file: string, source: string) => ({
   file: `../tool-execution/src/${file}`,
@@ -74,7 +83,7 @@ const workspace = (file: string, source: string) => ({
 });
 
 describe("asset boundary lint fixtures", () => {
-  it("rejects ids, names and code in an asset header, regardless of line breaks", () => {
+  {
     const rule = "catalyst/asset-head-description";
     const fixture = (source: string) => ({ file: "../chat-ui/src/feature/page.tsx", source });
     const invalid = [
@@ -89,18 +98,20 @@ describe("asset boundary lint fixtures", () => {
     const headers = ["PageHeader", "AppHeader"].flatMap((tag) =>
       invalid.map((value) => fixture(`<${tag} description={\n${value}\n} />`))
     );
-    expect(headers.length).toBeGreaterThan(10);
-    expect(findings(rule, headers)).toEqual(headers.map(() => [rule]));
-    expect(
-      findings(rule, [
-        fixture("<AppHeader description={asset.description} />"),
-        fixture("<PageHeader description={t.description} />"),
-        { file: "../ui/src/page.tsx", source: "<PageHeader description={id} />" }
-      ])
-    ).toEqual([[], [], []]);
-  });
+    const invalidHeaders = findings(rule, headers);
+    const validHeaders = findings(rule, [
+      fixture("<AppHeader description={asset.description} />"),
+      fixture("<PageHeader description={t.description} />"),
+      { file: "../ui/src/page.tsx", source: "<PageHeader description={id} />" }
+    ]);
+    it("rejects ids, names and code in an asset header, regardless of line breaks", () => {
+      expect(headers.length).toBeGreaterThan(10);
+      expect(invalidHeaders()).toEqual(headers.map(() => [rule]));
+      expect(validHeaders()).toEqual([[], [], []]);
+    });
+  }
 
-  it("rejects identity interpolations in header templates while allowing descriptions", () => {
+  {
     const rule = "catalyst/asset-head-description";
     const invalid = [
       "`${asset.id}`",
@@ -118,32 +129,37 @@ describe("asset boundary lint fixtures", () => {
         }))
       );
     const headers = fixtures(invalid);
-    expect(findings(rule, headers)).toEqual(headers.map(() => [rule]));
     const descriptions = fixtures([
       "`${asset.description}`",
       "`Purpose: ${description}`",
       "`Helpful text`"
     ]);
-    expect(findings(rule, descriptions)).toEqual(descriptions.map(() => []));
-  });
+    const identityTemplates = findings(rule, headers);
+    const descriptionTemplates = findings(rule, descriptions);
+    it("rejects identity interpolations in header templates while allowing descriptions", () => {
+      expect(identityTemplates()).toEqual(headers.map(() => [rule]));
+      expect(descriptionTemplates()).toEqual(descriptions.map(() => []));
+    });
+  }
 
-  it("rejects a planted route registration outside the catalog helper", () => {
+  {
     const rule = "catalyst/route-registration";
     const declaration =
       "interface FastifyInstance { get(path: string, handler: () => void): void; } declare const app: FastifyInstance;";
-    expect(
-      findings(rule, [
-        {
-          file: "../server/src/routes/config-routes.ts",
-          typed: true,
-          source: declaration + 'app.get("/private", () => {});'
-        },
-        { file: "../server/src/routes/config-routes.ts", typed: true, source: declaration }
-      ])
-    ).toEqual([[rule], []]);
-  });
+    const routeRegistrations = findings(rule, [
+      {
+        file: "../server/src/routes/config-routes.ts",
+        typed: true,
+        source: declaration + 'app.get("/private", () => {});'
+      },
+      { file: "../server/src/routes/config-routes.ts", typed: true, source: declaration }
+    ]);
+    it("rejects a planted route registration outside the catalog helper", () => {
+      expect(routeRegistrations()).toEqual([[rule], []]);
+    });
+  }
 
-  it("rejects ECharts imports outside the engine", () => {
+  {
     const rule = "catalyst/chart-engine-import";
     const sources = [
       'import { init } from "echarts/core";',
@@ -152,18 +168,20 @@ describe("asset boundary lint fixtures", () => {
       'export { init } from "echarts/core";',
       'export * from "echarts/core";'
     ];
-    expect(
-      findings(
-        rule,
-        sources.map((source) => ({ file: "../ui/src/data/other.ts", source }))
-      )
-    ).toEqual(sources.map(() => [rule]));
-    expect(
-      findings(rule, [{ file: "../ui/src/data/chart-engine.ts", source: sources[0] ?? "" }])
-    ).toEqual([[]]);
-  });
+    const outsideChartImports = findings(
+      rule,
+      sources.map((source) => ({ file: "../ui/src/data/other.ts", source }))
+    );
+    const chartEngineImports = findings(rule, [
+      { file: "../ui/src/data/chart-engine.ts", source: sources[0] ?? "" }
+    ]);
+    it("rejects ECharts imports outside the engine", () => {
+      expect(outsideChartImports()).toEqual(sources.map(() => [rule]));
+      expect(chartEngineImports()).toEqual([[]]);
+    });
+  }
 
-  it("rejects workspace conversation reads, aliases and destructures, including workspace.open", () => {
+  {
     const rule = "catalyst/workspace-handle-boundary";
     const sources = [
       "context.toolRequest.conversationId",
@@ -180,33 +198,34 @@ describe("asset boundary lint fixtures", () => {
       "context.toolRequest[key]",
       'const key = "toolRequest"; context[key].conversationId'
     ];
-    expect(
-      findings(
-        rule,
-        sources.map((source) => workspace("workspace-tools/read.ts", source))
-      )
-    ).toEqual(sources.map(() => [rule]));
-    expect(findings(rule, [workspace("workspace-open-tool.ts", sources[0] ?? "")])).toEqual([
-      [rule]
+    const workspaceReads = findings(
+      rule,
+      sources.map((source) => workspace("workspace-tools/read.ts", source))
+    );
+    const workspaceOpenReads = findings(rule, [
+      workspace("workspace-open-tool.ts", sources[0] ?? "")
     ]);
-    expect(
-      findings(rule, [
-        workspace(
-          "workspace-tools/workspace-handle-resolver.ts",
-          "const conversationId =\n context.toolRequest ?. conversationId;"
-        ),
-        workspace(
-          "workspace-tools/exec.ts",
-          "({ agentRunId: context.toolRequest?.agentRunId, toolCallId: context.toolRequest?.toolCallId })"
-        ),
-        workspace("workspace-preview-images.ts", "if (!context.toolRequest) {}"),
-        workspace(
-          "workspace-tools/workspace-handle-resolver.ts",
-          "const request = context.toolRequest;"
-        ),
-        workspace("workspace-tools/exec.ts", "context.toolRequest.conversationId"),
-        workspace("workspace-preview-images.ts", "context.toolRequest.conversationId")
-      ])
-    ).toEqual([[], [], [], [rule], [rule], [rule]]);
-  });
+    const allowedWorkspaceReads = findings(rule, [
+      workspace(
+        "workspace-tools/workspace-handle-resolver.ts",
+        "const conversationId =\n context.toolRequest ?. conversationId;"
+      ),
+      workspace(
+        "workspace-tools/exec.ts",
+        "({ agentRunId: context.toolRequest?.agentRunId, toolCallId: context.toolRequest?.toolCallId })"
+      ),
+      workspace("workspace-preview-images.ts", "if (!context.toolRequest) {}"),
+      workspace(
+        "workspace-tools/workspace-handle-resolver.ts",
+        "const request = context.toolRequest;"
+      ),
+      workspace("workspace-tools/exec.ts", "context.toolRequest.conversationId"),
+      workspace("workspace-preview-images.ts", "context.toolRequest.conversationId")
+    ]);
+    it("rejects workspace conversation reads, aliases and destructures, including workspace.open", () => {
+      expect(workspaceReads()).toEqual(sources.map(() => [rule]));
+      expect(workspaceOpenReads()).toEqual([[rule]]);
+      expect(allowedWorkspaceReads()).toEqual([[], [], [], [rule], [rule], [rule]]);
+    });
+  }
 });

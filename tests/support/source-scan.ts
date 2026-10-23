@@ -1,6 +1,6 @@
 import ts from "typescript";
 import { readdir, readFile } from "node:fs/promises";
-import { join, relative } from "node:path";
+import { join, relative, resolve } from "node:path";
 
 const SOURCE_FILE = /\.(?:ts|tsx|mts|js|mjs)$/u;
 const PRODUCT_TEXT_FILE = /\.(?:ts|tsx|mts|js|mjs|md|mdx|yaml|yml|json|py|sh)$/u;
@@ -185,3 +185,6 @@ export async function scanProductSource(repositoryRoot: string): Promise<SourceS
   }
   return scan;
 }
+
+/** The immutable checkout is scanned once; mutable fixture roots use scanProductSource. */
+export const productSourceScan = scanProductSource(resolve(import.meta.dirname, "../.."));

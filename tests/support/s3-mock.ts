@@ -1,3 +1,4 @@
+import { waitUntil } from "./assertions";
 import { spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 
@@ -53,18 +54,23 @@ export async function startS3Mock(): Promise<S3Mock> {
     throw new Error(`Docker did not publish a port for ${name}.`);
   }
   const endpoint = `http://127.0.0.1:${port}`;
-  const deadline = Date.now() + START_TIMEOUT_MS;
-  for (;;) {
-    try {
-      // Any answer means the store listens; it lists its buckets here.
-      await fetch(endpoint, { signal: AbortSignal.timeout(2000) });
-      return { endpoint, stop };
-    } catch {
-      if (Date.now() > deadline) {
-        stop();
-        throw new Error(`${S3_MOCK_IMAGE} in ${name} did not answer in time.`);
-      }
-      await new Promise((resolve) => setTimeout(resolve, 250));
-    }
+  try {
+    await waitUntil(
+      async () => {
+        try {
+          // Any answer means the store listens; it lists its buckets here.
+          await fetch(endpoint, { signal: AbortSignal.timeout(2000) });
+          return true;
+        } catch {
+          return false;
+        }
+      },
+      `${S3_MOCK_IMAGE} in ${name} answers`,
+      START_TIMEOUT_MS
+    );
+    return { endpoint, stop };
+  } catch (error) {
+    stop();
+    throw error;
   }
 }

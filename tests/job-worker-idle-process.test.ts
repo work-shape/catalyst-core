@@ -1,16 +1,16 @@
 import type { ChildProcess } from "node:child_process";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { fileURLToPath } from "node:url";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { waitUntil } from "./support/assertions";
 import { createTestConfig } from "./support/fixtures";
 import { databaseUrlFor } from "./support/postgres-concurrency-harness";
 import { usePostgresSuite } from "./support/postgres-suite";
-import { killTestProcess, startTestProcess } from "./support/test-process";
+import { bundleTestProcess, killTestProcess, startTestProcess } from "./support/test-process";
 
-// Bounds on a hang, never pauses. The process is started through the TypeScript loader, which
-// takes most of the first one on a loaded machine.
+// Bounds on a hang, never pauses. Each worker starts from a bundle built once for the file.
 const STARTED_WITHIN_MS = 90_000;
 const RECONNECTED_WITHIN_MS = 60_000;
 const STOPPED_WITHIN_MS = 60_000;
@@ -19,6 +19,32 @@ describe("an idle job worker in a process of its own", () => {
   const db = usePostgresSuite("idle_worker");
   const processes: ChildProcess[] = [];
   const directories: string[] = [];
+  let bundleDirectory: string;
+  let idleWorker: URL;
+  let instanceWorker: URL;
+  beforeAll(async () => {
+    bundleDirectory = await mkdtemp(join(tmpdir(), "catalyst-idle-worker-bundles-"));
+    const processesDirectory = join(bundleDirectory, "processes");
+    await mkdir(processesDirectory);
+    // Bundling relocates import.meta.url. Keep the committed migration directory at
+    // the relative address that the stores read when they verify the database.
+    await symlink(
+      fileURLToPath(new URL("../packages/postgres-store/migrations", import.meta.url)),
+      join(bundleDirectory, "migrations"),
+      "dir"
+    );
+    idleWorker = await bundleTestProcess(
+      new URL("./support/idle-job-worker-process.ts", import.meta.url),
+      processesDirectory
+    );
+    instanceWorker = await bundleTestProcess(
+      new URL("./support/instance-process.ts", import.meta.url),
+      processesDirectory
+    );
+  });
+  afterAll(async () => {
+    await rm(bundleDirectory, { recursive: true, force: true });
+  });
 
   afterEach(async () => {
     for (const child of processes.splice(0)) await killTestProcess(child);
@@ -51,18 +77,15 @@ describe("an idle job worker in a process of its own", () => {
       const applicationName = `${db.first}_process`;
       const url = new URL(databaseUrlFor(db.databaseUrl, applicationName));
       // Seconds. The driver's own choice is 30 to 60 minutes.
-      url.searchParams.set("max_lifetime", "4");
-      const child = startTestProcess(
-        new URL("./support/idle-job-worker-process.ts", import.meta.url),
-        {
-          env: {
-            ...process.env,
-            IDLE_WORKER_TEST_DATABASE_URL: url.toString(),
-            IDLE_WORKER_TEST_CLIENT_INSTANCE_ID: db.clientInstance("idle")
-          },
-          stdio: ["ignore", "ignore", "inherit"]
-        }
-      );
+      url.searchParams.set("max_lifetime", "1");
+      const child = startTestProcess(idleWorker, {
+        env: {
+          ...process.env,
+          IDLE_WORKER_TEST_DATABASE_URL: url.toString(),
+          IDLE_WORKER_TEST_CLIENT_INSTANCE_ID: db.clientInstance("idle")
+        },
+        stdio: ["ignore", "ignore", "inherit"]
+      });
       processes.push(child);
       const state = ending(child);
 
@@ -109,7 +132,7 @@ describe("an idle job worker in a process of its own", () => {
       );
       const applicationName = `${db.first}_stopped`;
       // The worker of an instance, assembled as its entry point assembles it.
-      const child = startTestProcess(new URL("./support/instance-process.ts", import.meta.url), {
+      const child = startTestProcess(instanceWorker, {
         args: ["artifact-preview-worker", "without-capability"],
         env: {
           PATH: process.env.PATH,

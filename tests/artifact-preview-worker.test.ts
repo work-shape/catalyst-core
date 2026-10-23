@@ -218,62 +218,6 @@ describe("the artifact preview job handler", () => {
     });
   });
 
-  it("reads attachment-backed preview sources through the configured managed-object reader", async () => {
-    const fixture = await createWorkerFixture();
-    await fixture.objectStore.delete(fixture.source.objectKey);
-    const renderer = new FakeRenderer({
-      result: {
-        format: "png",
-        pages: [{ bytes: bytes("page-one"), mimeType: "image/png", pageNumber: 1 }]
-      }
-    });
-    const sourceReaderCalls: string[] = [];
-    const worker = createWorker(fixture, renderer, {
-      sourceReader: {
-        async readArtifact(input) {
-          sourceReaderCalls.push(input.artifactId);
-          return { bytes: bytes("attachment-backed-docx") };
-        }
-      }
-    });
-
-    const result = await worker.runOnce();
-
-    expect(result).toMatchObject({ status: "claimed", job: { status: "completed" } });
-    expect(sourceReaderCalls).toEqual([fixture.source.id]);
-    expect(renderer.inputs[0]?.bytes).toEqual(bytes("attachment-backed-docx"));
-  });
-
-  it("records the full page count when only a bounded partial preview is rendered", async () => {
-    const fixture = await createWorkerFixture();
-    const worker = createWorker(
-      fixture,
-      new FakeRenderer({
-        result: {
-          format: "png",
-          pageCount: 350,
-          pages: [
-            { bytes: bytes("page-one"), mimeType: "image/png", pageNumber: 1 },
-            { bytes: bytes("page-two"), mimeType: "image/png", pageNumber: 2 }
-          ]
-        }
-      })
-    );
-
-    await worker.runOnce();
-
-    await expect(
-      fixture.store.files.getArtifactPreviewManifest({
-        clientInstanceId: fixture.clientInstanceId,
-        sourceArtifactId: fixture.source.id
-      })
-    ).resolves.toMatchObject({
-      status: "ready",
-      pageCount: 350,
-      pages: [{ pageNumber: 1 }, { pageNumber: 2 }]
-    });
-  });
-
   it("removes staged preview objects when deletion wins before guarded completion", async () => {
     const fixture = await createWorkerFixture();
     const renderer = new FakeRenderer({

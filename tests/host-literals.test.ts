@@ -1,11 +1,11 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { scanProductSource } from "./support/source-scan";
+import { productSourceScan, scanProductSource } from "./support/source-scan";
 
 describe("provider addresses and secrets in product source", () => {
-  const scanned = scanProductSource(resolve(import.meta.dirname, ".."));
+  const scanned = productSourceScan;
 
   it("writes the address of a real host only inside an adapter", async () => {
     expect((await scanned).hostLiterals).toEqual([]);

@@ -3,7 +3,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createApiClient } from "@work-shape/catalyst-api-client";
 import { apiOperations } from "@work-shape/catalyst-api-contract";
 import { createTranslationContext, TranslationProvider } from "./support/chat-ui/shared";
@@ -101,10 +101,16 @@ const unused = () => Promise.reject(new Error("Not read by the page of a run."))
 const unreadable = () => Promise.reject(new Error("unreadable"));
 
 const unmounts: (() => Promise<void>)[] = [];
+beforeEach(() => {
+  vi.useFakeTimers({
+    toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval", "Date"]
+  });
+});
 afterEach(async () => {
   for (const unmount of unmounts.splice(0)) {
     await unmount();
   }
+  vi.useRealTimers();
 });
 
 type RunView = typeof doneRun;
@@ -153,7 +159,9 @@ async function mountRunPage(
       getRun
     }
   };
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false, retryDelay: 0 } }
+  });
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
@@ -217,7 +225,9 @@ async function mountRunPage(
 async function until(check: () => void): Promise<void> {
   await vi.waitFor(
     async () => {
-      await act(async () => undefined);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2_000);
+      });
       check();
     },
     { timeout: CONDITION_WAIT_MS }

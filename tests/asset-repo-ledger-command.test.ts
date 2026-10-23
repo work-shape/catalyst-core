@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   ASSET_REPO_OUTPUT_DIRECTORY,
   ASSET_REPO_REPOSITORY_DIRECTORY
@@ -35,6 +35,8 @@ describe("the ledger of an asset's repository, with the command and an object st
   afterAll(async () => {
     await rm(scratch, { recursive: true, force: true });
   });
+
+  afterEach(() => vi.useRealTimers());
 
   const source = { "app.yaml": "id: rates\n", "src/rates.ts": "export const rate = 1;\n" };
 
@@ -127,11 +129,13 @@ describe("the ledger of an asset's repository, with the command and an object st
     expect(before.result).toMatchObject({ status: "materialised", commits: 1 });
 
     // The second attempt is made later. It reads the time of the first from the ledger.
-    await new Promise((resolve) => setTimeout(resolve, 1100));
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(Date.now() + 2_000));
     const repeated = await attempt(run, edited);
     expect(repeated.commit).toBe(stopped.commit);
     expect(repeated.objectKey).toBe(stopped.objectKey);
     // Another run of the same save is another commit, as it has a time of its own.
+    vi.setSystemTime(new Date(Date.now() + 2_000));
     const abandoned = await attempt(runId(), edited);
     expect(abandoned.commit).not.toBe(stopped.commit);
 

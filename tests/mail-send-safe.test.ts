@@ -198,7 +198,16 @@ describe("outbound.limits (check 136)", () => {
     );
     // Two worker processes take the items' steps at once.
     const workers = [t.worker(), t.worker()];
-    for (let pass = 0; pass < 30; pass++) await Promise.all(workers.map((w) => w.runDue()));
+    for (let pass = 0; pass < 30; pass++) {
+      await Promise.all(workers.map((w) => w.runDue()));
+      const due = await withTestSql(
+        (sql) => sql`
+        select 1 from platform_jobs
+        where client_instance_id = ${clientInstanceId}
+          and status = 'queued' and run_after <= now() limit 1`
+      );
+      if (due.length === 0) break;
+    }
     return { t, runId: started.id, workers };
   }
 

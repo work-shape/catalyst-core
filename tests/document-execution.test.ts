@@ -13,6 +13,8 @@ import {
   runNativeProcess
 } from "@work-shape/catalyst-tool-execution/native-document";
 
+import { waitUntil } from "./support/assertions";
+
 const tempDirectories: string[] = [];
 
 afterEach(async () => {
@@ -156,8 +158,8 @@ if (args.includes("--outdir")) {
     const ready = join(directory, "parent-ready");
     const childScript = [
       "const { spawn } = require('node:child_process');",
-      `spawn(process.execPath, ['-e', ${JSON.stringify(`setTimeout(() => require('node:fs').writeFileSync(${JSON.stringify(marker)}, 'done'), 250)`)}], { stdio: 'ignore' });`,
-      `require('node:fs').writeFileSync(${JSON.stringify(ready)}, 'ready');`,
+      `const grandchild = spawn(process.execPath, ['-e', ${JSON.stringify(`setTimeout(() => require('node:fs').writeFileSync(${JSON.stringify(marker)}, 'done'), 250)`)}], { stdio: 'ignore' });`,
+      `require('node:fs').writeFileSync(${JSON.stringify(ready)}, String(grandchild.pid));`,
       "setInterval(() => undefined, 1000);"
     ].join("\n");
     const controller = new AbortController();
@@ -171,7 +173,17 @@ if (args.includes("--outdir")) {
     await waitForFile(ready);
     controller.abort();
     await expect(running).rejects.toMatchObject({ reason: "aborted" });
-    await new Promise((resolve) => setTimeout(resolve, 350));
+    const grandchildPid = Number(await readFile(ready, "utf8"));
+    expect(grandchildPid).toBeGreaterThan(0);
+    await waitUntil(() => {
+      try {
+        process.kill(grandchildPid, 0);
+        return false;
+      } catch (error) {
+        if (!(error instanceof Error) || !("code" in error) || error.code !== "ESRCH") throw error;
+        return true;
+      }
+    }, "the aborted grandchild has ended");
     await expect(access(marker)).rejects.toBeDefined();
   });
 

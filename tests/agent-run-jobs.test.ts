@@ -522,16 +522,29 @@ describe("agent runs as claimed jobs", () => {
     expect(await fixture.run(run)).toMatchObject({ status: "completed" });
   });
 
-  it("fails the run of a killed worker when no worker is left, by the job worker of the API", async () => {
-    const fixture = await createFixture("killed_no_worker");
+  it("fails a run with an abandoned lease when no worker is left, by the job worker of the API", async () => {
+    const fixture = await createFixture("abandoned_no_worker");
     const run = await fixture.accept();
-    const child = startWorkerProcess(fixture);
-    await waitUntil(
-      async () => (await fixture.events(run)).length === 1,
-      "the worker process stored a piece of the reply",
-      60_000
-    );
-    await killTestProcess(child);
+    // The SIGKILL case above proves a process crash. Here the API must recover an
+    // abandoned lease even when there is no agent worker to claim another run.
+    await db.sql`
+      update platform_jobs set status = 'running', attempts = 1,
+        lease_token = 'abandoned', lease_owner = 'gone-worker',
+        lease_expires_at = now() + interval '1 minute'
+      where subject = ${run.id}`;
+    await db.sql`update agent_runs set status = 'running', lease_token = 'abandoned', started_at = now() where id = ${run.id}`;
+    await db.store.agentRuns.appendClaimedRunObservation({
+      clientInstanceId: fixture.clientInstanceId,
+      runId: run.id,
+      lease: leaseOf(required((await fixture.jobs())[0])),
+      event: {
+        type: "message_delta",
+        runId: run.id,
+        sequence: 1,
+        createdAt: new Date().toISOString(),
+        delta: "Half of a re"
+      }
+    });
     // No worker comes back. The only job worker left is the one of a process that executes
     // no runs.
     const api = fixture.upkeepWorker();

@@ -726,33 +726,37 @@ describe("agent approval pause (operations checks 4, 5 and 6)", () => {
     await f.app.close();
   });
 
-  it.each([undefined, "Not this one."])(
-    "check 5: rejection resumes with a denied tool result and optional reason %s",
-    async (comment) => {
-      const f = await fixture();
-      const said = await f.say();
-      expect(
-        (await f.decide(required(said.call.approvalRequestId), "reject", "approver", comment))
-          .statusCode
-      ).toBe(200);
-      await f.until(said.runId, "completed");
-      expect(f.executed).toEqual([]);
-      expect(await f.calls(said.runId)).toMatchObject([
-        {
-          id: said.call.id,
-          status: "denied",
-          decision: { mode: "declined", ...(comment ? { comment } : {}) }
-        }
-      ]);
-      const tool = (await f.messages(said.conversationId)).find(
-        (message) => message.role === "tool"
-      );
-      expect(tool?.text).not.toContain("not_allowed");
-      expect(tool?.text).toContain(comment ?? "The user declined this call. Nothing ran.");
-      expect((await f.messages(said.conversationId)).at(-1)?.text).toContain(comment ?? "declined");
+  it("check 5: rejection resumes with a denied tool result, with and without a reason", async () => {
+    const f = await fixture();
+    try {
+      for (const comment of [undefined, "Not this one."]) {
+        const said = await f.say();
+        expect(
+          (await f.decide(required(said.call.approvalRequestId), "reject", "approver", comment))
+            .statusCode
+        ).toBe(200);
+        await f.until(said.runId, "completed");
+        expect(f.executed).toEqual([]);
+        expect(await f.calls(said.runId)).toMatchObject([
+          {
+            id: said.call.id,
+            status: "denied",
+            decision: { mode: "declined", ...(comment ? { comment } : {}) }
+          }
+        ]);
+        const tool = (await f.messages(said.conversationId)).find(
+          (message) => message.role === "tool"
+        );
+        expect(tool?.text).not.toContain("not_allowed");
+        expect(tool?.text).toContain(comment ?? "The user declined this call. Nothing ran.");
+        expect((await f.messages(said.conversationId)).at(-1)?.text).toContain(
+          comment ?? "declined"
+        );
+      }
+    } finally {
       await f.app.close();
     }
-  );
+  });
 
   it("check 6: seven days expires the approval and resumes with expired without execution", async () => {
     const f = await fixture();

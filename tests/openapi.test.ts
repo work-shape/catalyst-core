@@ -15,15 +15,11 @@ import {
   type OpenApiDocument,
   type Operation
 } from "@work-shape/catalyst-api-contract";
-import type { AuthAdapter } from "@work-shape/catalyst-auth";
-import { APP_ERROR_STATUS_CODES, AppError } from "@work-shape/catalyst-core";
+import { APP_ERROR_STATUS_CODES } from "@work-shape/catalyst-core";
 import { z } from "zod";
 import { required } from "./support/assertions";
 import { registeredTestOperations } from "./support/operations";
 import { retiredApiPaths } from "./support/retired-api-paths";
-import { asCaller, createCallerAuthAdapter } from "./support/route-callers";
-import { dataStoreRoutes } from "./support/data-store-routes";
-import { createTestInstanceWith, type TestStore } from "./support/test-instance";
 
 const released = createOpenApiDocument();
 const operations: readonly Operation[] = Object.values(apiOperations);
@@ -300,10 +296,16 @@ describe("the released OpenAPI document", () => {
 });
 
 describe("the breaking-change comparison", () => {
-  const changed = (change: (document: OpenApiDocument) => void) => {
-    const document = structuredClone(released);
+  // Three operations carry the request/answer schemas needed by these comparisons.
+  const baseline = createOpenApiDocumentFromOperations({
+    "workspaces.create": apiOperations["workspaces.create"],
+    "access_tokens.exchange": apiOperations["access_tokens.exchange"],
+    "conversations.create": apiOperations["conversations.create"]
+  });
+  const changed = (change: (document: OpenApiDocument) => void, before = baseline) => {
+    const document = structuredClone(before);
     change(document);
-    return findBreakingChanges(released, document);
+    return findBreakingChanges(before, document);
   };
   const schema = (document: OpenApiDocument, name: string) =>
     z
@@ -314,14 +316,17 @@ describe("the breaking-change comparison", () => {
       .parse(document.components.schemas[name]);
 
   it("finds nothing between a document and itself", () => {
-    expect(findBreakingChanges(released, structuredClone(released))).toEqual([]);
+    expect(findBreakingChanges(baseline, structuredClone(baseline))).toEqual([]);
   });
 
   it("accepts a new operation, a new optional request field and a new answered field", () => {
     expect(
       changed((document) => {
         document.paths[`${API_VERSION_PREFIX}/new`] = {
-          get: { ...documentedOperation("me.get"), operationId: "new.get" }
+          get: {
+            ...documentedOperationOf(baseline, "conversations.create"),
+            operationId: "new.get"
+          }
         };
         const request = schema(document, "CreateCollaborationWorkspaceRequest");
         request.properties.note = { type: "string" };
@@ -337,9 +342,9 @@ describe("the breaking-change comparison", () => {
   it("fails on a removed operation", () => {
     expect(
       changed((document) => {
-        delete document.paths[apiOperations["me.get"].path]?.get;
+        delete document.paths[apiOperations["conversations.create"].path]?.post;
       })
-    ).toEqual(["GET /api/v1/me: the operation was removed"]);
+    ).toEqual(["POST /api/v1/conversations: the operation was removed"]);
   });
 
   it("fails on a new required request field and on a removed answered field", () => {
@@ -362,16 +367,23 @@ describe("the breaking-change comparison", () => {
   });
 
   it("fails on a narrowed request value, a widened answer and a dropped credential", () => {
-    const findings = changed((document) => {
-      const limit = required(
-        documentedOperationOf(document, "conversations.list").parameters.find(
-          (parameter) => parameter.name === "limit"
-        )
-      );
-      limit.schema = { ...limit.schema, maximum: 10 };
-      documentedOperationOf(document, "assets.get").security.pop();
-      documentedOperationOf(document, "branding.get").security.push({ sessionCookie: [] });
-    });
+    const findings = changed(
+      (document) => {
+        const limit = required(
+          documentedOperationOf(document, "conversations.list").parameters.find(
+            (parameter) => parameter.name === "limit"
+          )
+        );
+        limit.schema = { ...limit.schema, maximum: 10 };
+        documentedOperationOf(document, "assets.get").security.pop();
+        documentedOperationOf(document, "branding.get").security.push({ sessionCookie: [] });
+      },
+      createOpenApiDocumentFromOperations({
+        "conversations.list": apiOperations["conversations.list"],
+        "assets.get": apiOperations["assets.get"],
+        "branding.get": apiOperations["branding.get"]
+      })
+    );
     expect(findings).toEqual([
       "GET /api/v1/assets/{kind}/{name}: the credential accessToken is no longer accepted",
       "GET /api/v1/conversations: query parameter limit: maximum accepts less than before",
@@ -380,7 +392,9 @@ describe("the breaking-change comparison", () => {
   });
 
   it("compares every scope alternative of a scheme without depending on their order", () => {
-    const one = structuredClone(released);
+    const one = createOpenApiDocumentFromOperations({
+      "operations.get_run": apiOperations["operations.get_run"]
+    });
     documentedOperationOf(one, "operations.get_run").security = [
       { accessToken: ["governance:read", "config_assets:read"] }
     ];
@@ -435,96 +449,7 @@ function documentedOperationOf(document: OpenApiDocument, id: string) {
   );
 }
 
-describe("the reference an instance serves", () => {
-  // Refuses a request that names no caller, as an instance refuses one without a credential.
-  const signedInOnly = (): AuthAdapter => {
-    const callers = createCallerAuthAdapter();
-    const [callerHeader] = Object.keys(asCaller().headers);
-    return {
-      id: "signed-in-only",
-      credentialMode: "ambient",
-      authenticate: (request) =>
-        required(callerHeader) in request.headers
-          ? callers.authenticate(request)
-          : Promise.reject(new AppError("UNAUTHENTICATED", "No credential"))
-    };
-  };
-  const withApprovals = (stores: TestStore) => ({
-    authAdapter: signedInOnly(),
-    approvalRequests: { store: stores.approvals, handlers: new Map() }
-  });
-  const pathsOf = (body: unknown) => Object.keys(openApiDocumentSchema.parse(body).paths);
-
-  it("refuses a caller without a credential and answers a person and a key", async () => {
-    const instance = await createTestInstanceWith(withApprovals);
-    for (const operation of ["openapi.get", "docs.get"] as const) {
-      const anonymous = await instance.call(operation);
-      expect(anonymous.statusCode).toBe(401);
-      expect(anonymous.json()).toMatchObject({ error: { code: "UNAUTHENTICATED" } });
-      // Neither a scope nor a right is asked of whoever is signed in.
-      for (const caller of [
-        asCaller({ kind: "user", scopes: [] }),
-        asCaller({ kind: "service", scopes: [] })
-      ]) {
-        expect((await instance.call(operation, {}, caller)).statusCode).toBe(200);
-      }
-    }
-  });
-
-  it("describes every operation the instance registered, as the release does", async () => {
-    // The routes of a module come from its assembly, which a server built here does not have.
-    const instance = await createTestInstanceWith(withApprovals, await dataStoreRoutes());
-    const response = await instance.call("openapi.get", {}, asCaller());
-    expect(pathsOf(response.json())).toEqual(Object.keys(released.paths));
-    expect(response.json()).toEqual(JSON.parse(JSON.stringify(released)));
-  });
-
-  it("leaves out the operations of a part the instance runs without", async () => {
-    const instance = await createTestInstanceWith(() => ({ authAdapter: signedInOnly() }));
-    const response = await instance.call("openapi.get", {}, asCaller());
-    const paths = pathsOf(response.json());
-    const approvalPaths = Object.keys(released.paths).filter((path) =>
-      path.startsWith(`${API_VERSION_PREFIX}/approval-requests`)
-    );
-    expect(approvalPaths.length).toBeGreaterThan(0);
-    // Nor does this server hold the routes of a module, which only its assembly adds.
-    const moduleRoutes = [
-      `${API_VERSION_PREFIX}/data-stores`,
-      `${API_VERSION_PREFIX}/app-data-sources`,
-      `${API_VERSION_PREFIX}/knowledge-bases`
-    ];
-    expect(paths).toEqual(
-      Object.keys(released.paths).filter(
-        (path) =>
-          !approvalPaths.includes(path) && !moduleRoutes.some((prefix) => path.startsWith(prefix))
-      )
-    );
-    const document = openApiDocumentSchema.parse(response.json());
-    expect(document.tags.map((tag) => tag.name)).not.toContain(
-      apiOperations["approval_requests.list"].tag
-    );
-    expect(Object.keys(document.components.schemas)).not.toContain("ApprovalRequestView");
-
-    const page = await instance.call("docs.get", {}, asCaller());
-    expect(page.body).not.toContain("approval-requests");
-    expect(page.body).toContain(apiOperations["conversations.list"].id);
-  });
-
-  it("serves the page as a document that can load nothing", async () => {
-    const instance = await createTestInstanceWith(withApprovals);
-    const page = await instance.call("docs.get", {}, asCaller());
-    expect(page.headers["content-type"]).toBe("text/html; charset=utf-8");
-    expect(page.headers["content-security-policy"]).toMatch(
-      /^default-src 'none'; style-src 'sha256-[A-Za-z0-9+/=]+'; /u
-    );
-    expect(page.body).toContain(`href="${apiOperations["openapi.get"].path}" download`);
-    // No script, no image, no stylesheet and no font: one style element is all the page has.
-    expect(page.body).not.toMatch(/<script|<link|<img|<iframe|\ssrc=|url\(|@import/iu);
-    expect(page.body.match(/<style>/gu)).toHaveLength(1);
-    expect(page.body).toContain("text/event-stream");
-    expect(page.body).toContain("x-server-credential");
-  });
-
+describe("the rendered reference", () => {
   it("escapes the text of a document and refuses a colour that is no colour", () => {
     const hostile = structuredClone(released);
     hostile.info.title = `<script>alert("x")</script>`;

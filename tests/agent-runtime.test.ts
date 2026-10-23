@@ -2357,7 +2357,7 @@ describe("local agent runtime", () => {
 
   it("waits out a rate limit with growing pauses and gives up after a minute of waiting", async () => {
     const f = await rateLimitFixture("provider-rate-limit-retry");
-    const stepMs = 50;
+    const stepMs = 500;
     // The largest jitter: each wait is its base plus 20 percent.
     const random = vi.spyOn(Math, "random").mockReturnValue(1);
     useFakeClockBesidePostgres();
@@ -2404,7 +2404,7 @@ describe("local agent runtime", () => {
 
   it("clears the rate limit wait when the run is cancelled during it", async () => {
     const f = await rateLimitFixture("provider-rate-limit-cancel");
-    const stepMs = 50;
+    const stepMs = 250;
     useFakeClockBesidePostgres();
     try {
       f.rateLimitedAnswers = 99;
@@ -2466,7 +2466,7 @@ describe("local agent runtime", () => {
 
   it("starts no attempt and no wait that would pass the run's deadline", async () => {
     const f = await rateLimitFixture("provider-retry-deadline");
-    const stepMs = 50;
+    const stepMs = 250;
     const random = vi.spyOn(Math, "random").mockReturnValue(0.5);
     useFakeClockBesidePostgres();
     try {

@@ -1,4 +1,5 @@
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { waitUntil } from "./support/assertions";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import {
   CONNECTION_ACTIONS,
@@ -450,13 +451,27 @@ describe("a shared OAuth sign-in over its life", () => {
     });
     expect(leased).toBeDefined();
     const started = Date.now();
-    const call = world.call("waiting", "list_customers", alice);
-    await new Promise((resolve) => setTimeout(resolve, 300));
-    expect(await world.deleteConnection("waiting", alice)).toBe(200);
-    const outcome = await call;
-    expect(failureOf(outcome)).toContain("connection_unavailable");
-    // Well before the wait for the lease ran out, which answers connection_busy.
-    expect(Date.now() - started).toBeLessThan(4_000);
+    const bindings = world.worker.stores.connections;
+    const takeLease = bindings.takeConnectionBindingLease.bind(bindings);
+    let waitingForLease = false;
+    const observed = vi
+      .spyOn(bindings, "takeConnectionBindingLease")
+      .mockImplementation(async (input) => {
+        const result = await takeLease(input);
+        if (input.connectionAssetId === asset.id && result === undefined) waitingForLease = true;
+        return result;
+      });
+    try {
+      const call = world.call("waiting", "list_customers", alice);
+      await waitUntil(() => waitingForLease, "the call waits for the other process's lease");
+      expect(await world.deleteConnection("waiting", alice)).toBe(200);
+      const outcome = await call;
+      expect(failureOf(outcome)).toContain("connection_unavailable");
+      // Well before the wait for the lease ran out, which answers connection_busy.
+      expect(Date.now() - started).toBeLessThan(4_000);
+    } finally {
+      observed.mockRestore();
+    }
   });
 
   it("fails a held call as stale where the Connection was signed in again after it was made", async () => {

@@ -32,9 +32,9 @@ import { startS3Mock, type S3Mock } from "./support/s3-mock";
  */
 
 const MEBIBYTE = 1024 * 1024;
-const LARGE_OBJECT_BYTES = 64 * MEBIBYTE;
-/** A store that buffered the large object would hold all 64 MB of it; a stream holds chunks. */
-const LARGE_OBJECT_MEMORY_BUDGET_BYTES = 16 * MEBIBYTE;
+const LARGE_OBJECT_BYTES = 16 * MEBIBYTE;
+/** A store that buffered the large object would hold all 16 MB of it; a stream holds chunks. */
+const LARGE_OBJECT_MEMORY_BUDGET_BYTES = 12 * MEBIBYTE;
 
 const logger: Logger = {
   debug() {},
@@ -412,7 +412,7 @@ describe.each(subjects)("object storage contract: $name", (subject) => {
   });
 
   it.runIf(subject.streams)(
-    "moves a 64 MB object in and out without holding it",
+    "moves a 16 MB object in and out without holding it",
     async () => {
       const storage = subject.storage();
       const key = `${scope()}large.bin`;

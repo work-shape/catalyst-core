@@ -31,8 +31,8 @@ vi.mock("postgres", async (importOriginal) => {
 });
 
 describe("server follow-up queue on Postgres", () => {
-  // Repeat with fresh instances to exercise both queue/worker scheduling orders.
-  it.each([1, 2, 3, 4, 5, 6])(
+  // One race proof here; five further scheduling repetitions run in the scale suite.
+  it.each([1])(
     "streams 64 deltas through concurrent queue edits, withdrawal and completion without sequence gaps or deadlocks (repetition %i)",
     async () => {
       const f = await fixture(false, { streaming: true });

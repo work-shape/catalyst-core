@@ -2,10 +2,10 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { scanProductSource } from "./support/source-scan";
+import { productSourceScan, scanProductSource } from "./support/source-scan";
 
 describe("names and paths in product source", () => {
-  const scanned = scanProductSource(resolve(import.meta.dirname, ".."));
+  const scanned = productSourceScan;
 
   it("scans scripts, docs, the deployment kit and its own test while allowing the demo client", async () => {
     const root = await mkdtemp(join(tmpdir(), "source-names-"));

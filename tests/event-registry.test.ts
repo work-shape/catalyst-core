@@ -260,7 +260,15 @@ describe("event registry", () => {
   );
   const hasCapabilities = existsSync(capabilityPackages);
 
+  const sourcesByRoot = new Map<string, string[]>();
   function packageSources(root: string): string[] {
+    const cached = sourcesByRoot.get(root);
+    if (cached) return cached;
+    const sources = readPackageSources(root);
+    sourcesByRoot.set(root, sources);
+    return sources;
+  }
+  function readPackageSources(root: string): string[] {
     return readdirSync(root, { withFileTypes: true }).flatMap((entry) => {
       const src = resolve(root, entry.name, "src");
       if (!entry.isDirectory() || !existsSync(src)) return [];

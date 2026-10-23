@@ -1,3 +1,5 @@
+import { withTestSql } from "./support/test-sql";
+import { waitUntil } from "./support/assertions";
 import { beforeAllWithPostgres as beforeAll } from "./support/postgres-hooks";
 import { afterAll, describe, expect, it } from "vitest";
 import {
@@ -221,7 +223,17 @@ describe("one batch of the asset store", () => {
       .then(() => {
         secondDone = true;
       });
-    await new Promise((resolve) => setTimeout(resolve, 300));
+    await withTestSql((sql) =>
+      waitUntil(
+        async () =>
+          (
+            await sql`select pid from pg_stat_activity
+              where datname = current_database() and wait_event_type = 'Lock'
+                and query ilike '%config_asset%'`
+          ).length > 0,
+        "the concurrent asset write waits on the held lock"
+      )
+    );
     expect(secondDone).toBe(false);
     expect(seen).toEqual(["one", "two"]);
     release();

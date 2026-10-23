@@ -1,7 +1,8 @@
+import { withTestSql } from "./support/test-sql";
 import { describe, expect, it } from "vitest";
 import { fingerprintOperation } from "@work-shape/catalyst-connections";
 import { connectionCallError } from "@work-shape/catalyst-core";
-import { required } from "./support/assertions";
+import { required, waitUntil } from "./support/assertions";
 import { drainRunEvents, injectStartConversationRun } from "./support/chat-server-run-harness";
 import {
   auditEvents,
@@ -423,7 +424,17 @@ describe("a Connection that changes while it is discovered", () => {
             .then(() => {
               edited = true;
             });
-          await new Promise((resolve) => setTimeout(resolve, 500));
+          await withTestSql((sql) =>
+            waitUntil(
+              async () =>
+                (
+                  await sql`select pid from pg_stat_activity
+              where datname = current_database() and wait_event_type = 'Lock'
+                and query ilike '%config_asset%'`
+                ).length > 0,
+              "the concurrent asset write waits on the held lock"
+            )
+          );
           editedBeforeCommit = edited;
           return result;
         })

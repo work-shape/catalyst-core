@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   assetRepoSweepJob,
   createAssetRepoCommitClient,
@@ -67,6 +67,7 @@ describe("the commit of a save of an asset's repository as a job", () => {
     command = `'${process.execPath}' '${await assetRepoCommandFromSource()}'`;
   });
   afterEach(async () => {
+    vi.useRealTimers();
     await Promise.all(workers.splice(0).map((worker) => worker.stop()));
   });
   afterAll(async () => {
@@ -319,7 +320,8 @@ describe("the commit of a save of an asset's repository as a job", () => {
     ).toBeUndefined();
 
     // A second later the same run tries again and builds the commit of the time of its row.
-    await new Promise((resolve) => setTimeout(resolve, 1100));
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(Date.now() + 2_000));
     const again = await save(request, operationRunId);
     const result = committed(again.result);
     expect(result.bundle.objectKey).toBe(left?.object_key);

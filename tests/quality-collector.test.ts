@@ -44,6 +44,10 @@ function collect(...args: string[]) {
 function measure(target: string, place: "file" | "scope" = "file") {
   const result = collect(target, "--measure");
   expect(result.stderr).toBe("");
+  return measuredFindings(result, place);
+}
+
+function measuredFindings(result: ReturnType<typeof collect>, place: "file" | "scope") {
   const findings: unknown = JSON.parse(result.stdout);
   if (!Array.isArray(findings)) throw new Error("The collector did not print a list");
   return findings.map((finding) => `${finding.rule} ${finding[place]}`).sort();
@@ -156,17 +160,23 @@ describe("quality collector", { timeout: 180_000 }, () => {
     }
   });
 
-  let lintFindings: string[] | undefined;
-  function fixtureFindings(): string[] {
-    if (lintFindings) return lintFindings;
+  let lintResult: ReturnType<typeof collect> | undefined;
+  function fixtureResult(): ReturnType<typeof collect> {
+    if (lintResult) return lintResult;
     try {
       write(extraLintFiles);
-      lintFindings = measure("lint");
-      return lintFindings;
+      lintResult = collect("lint", "--measure");
+      expect(lintResult.status, lintResult.stderr).toBe(0);
+      expect(lintResult.stderr).toBe("");
+      return lintResult;
     } finally {
       for (const file of Object.keys(extraLintFiles))
         rmSync(join(directory, file), { force: true });
     }
+  }
+
+  function fixtureFindings(place: "file" | "scope" = "file"): string[] {
+    return measuredFindings(fixtureResult(), place);
   }
 
   it("gives every catalyst lint rule a negative fixture", () => {
@@ -232,7 +242,7 @@ describe("quality collector", { timeout: 180_000 }, () => {
   });
 
   it("counts literal interface text per folder and other findings per package", () => {
-    const scopes = measure("lint", "scope");
+    const scopes = fixtureFindings("scope");
     expect(scopes.filter((scope) => scope.startsWith("catalyst/literal-text "))).toEqual(
       Array.from({ length: 15 }, () => `catalyst/literal-text ${source}/screens`)
     );
