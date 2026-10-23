@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     "./sample-mcp": "./sample-mcp/index.ts",
+    "./result-shapers": "./src/result-shapers.ts",
     "./seed": "./src/seed/index.ts"
   },
   "scripts": {

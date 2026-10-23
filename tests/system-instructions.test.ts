@@ -1,4 +1,4 @@
-import { PLATFORM_ORIENTATION } from "../packages/client-assembly/src/platform-orientation";
+import { PLATFORM_ORIENTATION } from "@work-shape/catalyst-client-assembly";
 import { describe, expect, it } from "vitest";
 import {
   CATALYST_INTERNAL_AGENT_PROMPT,

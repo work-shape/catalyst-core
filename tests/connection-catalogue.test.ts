@@ -1,4 +1,4 @@
-import { sampleResultShapers } from "../clients/demo/src/result-shapers";
+import { sampleResultShapers } from "@work-shape/catalyst-demo/result-shapers";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
