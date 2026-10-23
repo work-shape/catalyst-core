@@ -9,12 +9,16 @@ import {
   type ConnectorTypeDefinition,
   type ConnectorTypeRegistry,
   type JsonObject,
+  type ConnectionCredentialMode,
+  type ResultShaper,
   type LocalizedStringConfig
 } from "@work-shape/catalyst-core";
+import { createResultShaperRegistry } from "../result-shapers";
 import type { EgressAllowEntry } from "../egress";
 import {
   entryParts,
   partSettings,
+  scopesForOperations,
   type CatalogueEntry,
   type CatalogueEntryOperation,
   type CatalogueEntryPart
@@ -40,6 +44,7 @@ export interface CatalogueFieldView {
 /** An operation a tools part proposes, as the review step lists it. Nothing in it is enabled. */
 export interface CatalogueOperationView {
   name: string;
+  group?: string;
   title?: string;
   description?: string;
   effect: CatalogueEntryOperation["effect"];
@@ -57,6 +62,9 @@ export interface CataloguePartView {
   title?: LocalizedStringConfig;
   description: LocalizedStringConfig;
   authScheme: string;
+  credentialModes: ConnectionCredentialMode[];
+  defaultCredentialMode: ConnectionCredentialMode;
+  groups?: CatalogueEntryPart["groups"];
   /** Fixed settings, beside what the fields fill in. */
   settings: JsonObject;
   fields: CatalogueFieldView[];
@@ -94,6 +102,8 @@ export interface Catalogue {
    * Connection's `catalogue`: the entry must be offered and its part of the Connection's type.
    */
   linkIssue(link: ConnectionCatalogueLink, connectorType: string): string | undefined;
+  /** Apply consent scopes whenever a linked Connection's enabled operations change. */
+  prepareConnection(config: Record<string, unknown>): Record<string, unknown>;
 }
 
 /** The part's fields, auth scheme and fixed settings: its own, or its Connector type's form. */
@@ -165,7 +175,7 @@ function setAt(target: JsonObject, path: readonly string[], value: string): void
 }
 
 function operationView(operation: CatalogueEntryOperation): CatalogueOperationView {
-  const { name, title, description, effect, recommended, policy, ...request } = operation;
+  const { name, group, title, description, effect, recommended, policy, ...request } = operation;
   const declaration: JsonObject = {
     ...(title === undefined ? {} : { title }),
     ...(description === undefined ? {} : { description }),
@@ -176,6 +186,7 @@ function operationView(operation: CatalogueEntryOperation): CatalogueOperationVi
   };
   return {
     name,
+    ...(group === undefined ? {} : { group }),
     ...(title === undefined ? {} : { title }),
     ...(description === undefined ? {} : { description }),
     effect,
@@ -205,11 +216,16 @@ function checkPart(
       setAt(settings, field.setting.split("."), field.default);
     }
   }
+  const clientIdField = resolved.fields.find((field) => field.setting === "oauth.clientId");
+  if (definition.oauth !== undefined && clientIdField?.default === undefined)
+    setAt(settings, ["oauth", "clientId"], "catalogue-validation-client");
   const filled = new Set(
     resolved.fields.flatMap((field) =>
       field.setting === undefined || field.default !== undefined
         ? []
-        : [field.setting.split(".")[0]]
+        : field.setting === "oauth.clientId"
+          ? []
+          : [field.setting.split(".")[0]]
     )
   );
   const operations = definition.operations.map((operation) => {
@@ -292,7 +308,9 @@ export function createCatalogue(input: {
   entries: readonly CatalogueEntry[];
   named: readonly string[];
   connectorTypes: ConnectorTypeRegistry;
+  resultShapers?: Readonly<Record<string, ResultShaper>>;
 }): Catalogue {
+  const resultShapers = createResultShaperRegistry(input.resultShapers);
   const byId = new Map<string, CatalogueEntry>();
   for (const entry of input.entries) {
     if (byId.has(entry.id)) refuse(entry, "the release ships it more than once");
@@ -315,7 +333,14 @@ export function createCatalogue(input: {
     for (const { part, definition } of entryParts(entry)) {
       const type = input.connectorTypes.get(definition.connectorType);
       // A part of a type this build does not register is not offered.
-      if (type === undefined) continue;
+      if (
+        type === undefined ||
+        definition.operations.some(
+          (operation) =>
+            operation.shaper !== undefined && !Object.hasOwn(resultShapers, operation.shaper)
+        )
+      )
+        continue;
       const resolved = resolvePart(entry, part, definition, type);
       checkPart(entry, part, definition, type, resolved, input.connectorTypes);
       parts.push({
@@ -325,6 +350,9 @@ export function createCatalogue(input: {
         ...(definition.title === undefined ? {} : { title: definition.title }),
         description: definition.description,
         authScheme: resolved.authScheme,
+        credentialModes: [...definition.credentialModes],
+        defaultCredentialMode: definition.defaultCredentialMode,
+        ...(definition.groups === undefined ? {} : { groups: structuredClone(definition.groups) }),
         settings: resolved.settings,
         fields: resolved.fields,
         prerequisites: definition.prerequisites.map((line) => ({
@@ -365,6 +393,30 @@ export function createCatalogue(input: {
   return Object.freeze({
     entries,
     egress: Object.freeze(egress),
+    prepareConnection(config: Record<string, unknown>): Record<string, unknown> {
+      const parsed = connectionConfigSchema.safeParse(config);
+      if (!parsed.success) return config;
+      const connection = parsed.data;
+      const link = connection.catalogue;
+      if (link === undefined || connection.authScheme !== "oauth") return config;
+      const entry = entries.find(
+        (candidate) => candidate.id === link.entry && candidate.version === link.version
+      );
+      const part = entry?.parts.find(
+        (candidate) =>
+          candidate.part === link.part && candidate.connectorType === connection.connectorType
+      );
+      if (part?.groups === undefined) return config;
+      if (!part.credentialModes.includes(connection.credentialMode))
+        throw new AppError(
+          "VALIDATION_FAILED",
+          "The catalogue part does not allow this credential mode"
+        );
+      return {
+        ...config,
+        settings: settingsWithScopes(part, connection.settings, connection.operations)
+      };
+    },
     linkIssue(link: ConnectionCatalogueLink, connectorType: string): string | undefined {
       const entry = entries.find((candidate) => candidate.id === link.entry);
       if (entry === undefined || !entry.offered) {
@@ -383,4 +435,16 @@ export function createCatalogue(input: {
       return undefined;
     }
   });
+}
+
+/** Scopes come from the entry, never from an installer or an operation's exposure. */
+export function settingsWithScopes(
+  part: Pick<CataloguePartView, "groups" | "operations">,
+  settings: JsonObject,
+  operations: readonly { name: string; enabled?: boolean }[]
+): JsonObject {
+  if (part.groups === undefined) return settings;
+  const oauth = settings.oauth;
+  if (typeof oauth !== "object" || oauth === null || Array.isArray(oauth)) return settings;
+  return { ...settings, oauth: { ...oauth, scopes: scopesForOperations(part, operations) } };
 }

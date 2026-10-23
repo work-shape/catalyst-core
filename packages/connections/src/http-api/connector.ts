@@ -1,8 +1,10 @@
+import { oauthSettingsSchema } from "./oauth-settings";
+import { createResultShaperRegistry, shapeResult } from "../result-shapers";
+import type { ResultShaper } from "@work-shape/catalyst-core";
 import { retryAfterSeconds } from "../retry-after";
 import type { IncomingMessage } from "node:http";
 import {
   CONNECTION_CREDENTIAL_WORDS,
-  CONNECTOR_TOKEN_AUTH_METHODS,
   CONNECTION_REFUSALS,
   connectionCallError,
   connectionCallReasonOf,
@@ -130,119 +132,6 @@ const testPathSchema = z
 const headerNameSchema = z.string().regex(HEADER_NAME_PATTERN, {
   message: "must be a header name of letters, digits and hyphens"
 });
-
-/** Whether a host is the machine itself, where plain `http` is a local server under test. */
-function isLoopbackHost(hostname: string): boolean {
-  const host = hostname.toLowerCase();
-  return (
-    host === "localhost" ||
-    host.endsWith(".localhost") ||
-    host === "[::1]" ||
-    /^127(?:\.\d{1,3}){3}$/u.test(host)
-  );
-}
-
-/**
- * An address of the authorization server: `https`, or plain `http` on the machine itself for
- * local development and tests, without user name, password or fragment. The browser carries a
- * state and a code to it, the instance a client secret and a refresh token.
- */
-const oauthAddressSchema = z
-  .string()
-  .max(HTTP_API_URL_MAX_CHARS)
-  .refine((value) => {
-    let url: URL;
-    try {
-      url = new URL(value);
-    } catch {
-      return false;
-    }
-    return (
-      (url.protocol === "https:" || (url.protocol === "http:" && isLoopbackHost(url.hostname))) &&
-      url.hostname !== "" &&
-      url.username === "" &&
-      url.password === "" &&
-      url.hash === ""
-    );
-  }, "must be an https address without user name, password or fragment");
-
-/**
- * The parameters of the authorization request the protocol sets itself, the client secret,
- * which never travels through a browser, and those that would replace or redirect the request
- * the sign-in signs: a request object (`request`, `request_uri`, RFC 9101) and the way the
- * answer comes back (`response_mode`). An extra parameter may name none of them.
- */
-const OAUTH_PROTOCOL_PARAMS: ReadonlySet<string> = new Set([
-  "response_type",
-  "response_mode",
-  "client_id",
-  "client_secret",
-  "redirect_uri",
-  "scope",
-  "state",
-  "code_challenge",
-  "code_challenge_method",
-  "resource",
-  "request",
-  "request_uri"
-]);
-/** How many fixed extra parameters a sign-in sends. */
-const OAUTH_EXTRA_PARAMS_MAX = 8;
-/** A scope as RFC 6749 3.3 writes one: printable, no space, quote or backslash. */
-const SCOPE_PATTERN = /^[\x21\x23-\x5B\x5D-\x7E]{1,256}$/u;
-
-/**
- * The authorization server an `http_api` Connection names itself (CONN-OAUTH-1). Read by the
- * auth schemes `oauth` (a person signs in) and `oauth_client` (the client credentials grant).
- */
-const oauthSettingsSchema = z
-  .object({
-    authorizationUrl: oauthAddressSchema.optional(),
-    tokenUrl: oauthAddressSchema,
-    revocationUrl: oauthAddressSchema.optional(),
-    clientId: z
-      .string()
-      .min(1)
-      .max(512)
-      .regex(HEADER_VALUE_PATTERN, { message: "must be printable text on one line" }),
-    scopes: z
-      .array(z.string().regex(SCOPE_PATTERN, { message: "must be one scope without spaces" }))
-      .max(64)
-      .optional(),
-    authorizationParams: z
-      .record(
-        z.string().regex(/^[A-Za-z0-9_.-]{1,64}$/u, {
-          message: "must be a parameter name of letters, digits, '_', '.' and '-'"
-        }),
-        z
-          .string()
-          .max(FIXED_HEADER_VALUE_MAX_CHARS)
-          .regex(HEADER_VALUE_PATTERN, { message: "must be printable text on one line" })
-      )
-      .optional(),
-    tokenAuthMethod: z.enum(CONNECTOR_TOKEN_AUTH_METHODS).optional(),
-    issuer: oauthAddressSchema.optional()
-  })
-  .strict()
-  .superRefine((oauth, context) => {
-    const params = Object.keys(oauth.authorizationParams ?? {});
-    if (params.length > OAUTH_EXTRA_PARAMS_MAX) {
-      context.addIssue({
-        code: "custom",
-        path: ["authorizationParams"],
-        message: `A sign-in sends at most ${OAUTH_EXTRA_PARAMS_MAX} extra parameters`
-      });
-    }
-    for (const name of params) {
-      if (OAUTH_PROTOCOL_PARAMS.has(name.toLowerCase())) {
-        context.addIssue({
-          code: "custom",
-          path: ["authorizationParams", name],
-          message: `The parameter '${name}' is set by the sign-in itself`
-        });
-      }
-    }
-  });
 
 const settingsSchema = z
   .object({
@@ -467,7 +356,11 @@ async function bodyOf(
 }
 
 /** The answer as a result: a JSON object as it is, a JSON list as `{ items }`. */
-function resultOf(body: Buffer): JsonObject {
+function resultOf(
+  body: Buffer,
+  shaper: string | undefined,
+  registry: Readonly<Record<string, ResultShaper>>
+): JsonValue {
   let parsed: unknown;
   try {
     parsed = JSON.parse(body.toString("utf8"));
@@ -475,6 +368,7 @@ function resultOf(body: Buffer): JsonObject {
     throw connectionCallError("output_invalid", "the answer is not JSON");
   }
   const value = unknownToJsonValue(parsed);
+  if (shaper !== undefined) return shapeResult(registry, shaper, value);
   if (Array.isArray(value)) return { items: value };
   if (isJsonObject(value)) return value;
   throw connectionCallError("output_invalid", "the answer is neither a JSON object nor a list");
@@ -518,6 +412,7 @@ function callAddress(baseUrl: string, operation: ConnectionOperationConfig, inpu
   const query = new URLSearchParams();
   for (const name of Object.keys(queryParams)) {
     const value = values[name];
+    const wireName = queryParams[name]?.sendAs ?? name;
     if (value === undefined || value === null) continue;
     if (queryParams[name]?.schema.type === "array") {
       if (!Array.isArray(value)) throw connectionCallError("input_invalid");
@@ -529,12 +424,12 @@ function callAddress(baseUrl: string, operation: ConnectionOperationConfig, inpu
         ) {
           throw connectionCallError("input_invalid");
         }
-        query.append(name, String(item));
+        query.append(wireName, String(item));
       }
       continue;
     }
     if (typeof value === "object") throw connectionCallError("input_invalid");
-    query.append(name, String(value));
+    query.append(wireName, String(value));
   }
   return addressOf(baseUrl, path, query);
 }
@@ -573,7 +468,10 @@ function testStatusOf(error: unknown): ConnectorTestStatus {
  * The Connector type `http_api` of one process. Building it opens no connection: the first
  * request leaves with the first test or call.
  */
-export function createHttpApiConnectorType(): ConnectorTypeDefinition {
+export function createHttpApiConnectorType(
+  shapers: Readonly<Record<string, ResultShaper>> = {}
+): ConnectorTypeDefinition {
+  const resultShapers = createResultShaperRegistry(shapers);
   return {
     type: HTTP_API_CONNECTOR_TYPE,
     description: "A REST interface over HTTPS, read by declared GET requests.",
@@ -600,7 +498,17 @@ export function createHttpApiConnectorType(): ConnectorTypeDefinition {
       resultMaxBytes: HTTP_API_RESULT_MAX_BYTES,
       maxParallelCalls: HTTP_API_MAX_PARALLEL_CALLS
     },
-    declared: httpApiDeclaredOperations,
+    declared: {
+      ...httpApiDeclaredOperations,
+      issues(operation) {
+        return [
+          ...httpApiDeclaredOperations.issues(operation),
+          ...(operation.shaper !== undefined && !Object.hasOwn(resultShapers, operation.shaper)
+            ? [{ message: `Unknown result shaper '${operation.shaper}'`, path: ["shaper"] }]
+            : [])
+        ];
+      }
+    },
 
     // A test asks the test path, else the base address, and keeps nothing of the answer. On
     // the base address any answer but a refusal says the system is there: a base address
@@ -648,7 +556,11 @@ export function createHttpApiConnectorType(): ConnectorTypeDefinition {
           retryAfterSeconds(response.headers["retry-after"])
         );
       }
-      const result = resultOf(await bodyOf(response, HTTP_API_RESULT_MAX_BYTES, context.signal));
+      const result = resultOf(
+        await bodyOf(response, HTTP_API_RESULT_MAX_BYTES, context.signal),
+        operation.shaper,
+        resultShapers
+      );
       if (holdsCredential(result, context.credentialFor(context.target))) {
         throw connectionCallError("output_rejected");
       }
