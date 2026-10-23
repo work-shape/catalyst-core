@@ -217,6 +217,10 @@ export async function createOAuthWorld(options: { extraPort?: number } = {}): Pr
   const base = createTestConfig({ developmentAuth: { enabled: false } });
   const config = parseClientInstanceConfig({
     ...base,
+    infrastructure: {
+      ...base.infrastructure,
+      models: { local: { provider: "deterministic", region: "eu" } }
+    },
     auth: {
       standalone: {
         enabled: true,
@@ -453,7 +457,8 @@ export async function createOAuthWorld(options: { extraPort?: number } = {}): Pr
               // This fixture supplies the agent's accepted tool; lifecycle tests have no agent asset.
               agentToolNames: async () => [`connection.${connectionName}.${operation}`]
             }
-          : calls.deps
+          : calls.deps,
+        { modelRoutes: [{ id: "local", region: "eu" }] }
       );
     },
     async disconnect(name, cookie) {

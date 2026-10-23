@@ -83,7 +83,7 @@ export async function executeApprovedOperation(
   deps: RunOperationDeps,
   options: {
     signal?: AbortSignal;
-    runtime?: Pick<OperationCallRuntime, "locale" | "runFence">;
+    runtime?: Pick<OperationCallRuntime, "locale" | "runFence" | "modelRoutes">;
   } = {}
 ): Promise<ApprovedOperationEnd> {
   options.signal?.throwIfAborted();
@@ -114,7 +114,10 @@ export async function executeApprovedOperation(
 export async function executeConfirmedOperation(
   waiting: WaitingOperationCall,
   deps: RunOperationDeps,
-  options: { signal?: AbortSignal; runtime?: Pick<OperationCallRuntime, "locale" | "runFence"> }
+  options: {
+    signal?: AbortSignal;
+    runtime?: Pick<OperationCallRuntime, "locale" | "runFence" | "modelRoutes">;
+  }
 ): Promise<ApprovedOperationEnd> {
   options.signal?.throwIfAborted();
   const run = await deps.runs.get({ clientInstanceId: deps.clientInstanceId, id: waiting.runId });
@@ -166,7 +169,7 @@ export async function executeInboxConfirmedOperation(
     /** The confirmation being executed; the run may already name a newer approval. */
     requestId: string;
     signal?: AbortSignal;
-    runtime?: Pick<OperationCallRuntime, "locale" | "runFence">;
+    runtime?: Pick<OperationCallRuntime, "locale" | "runFence" | "modelRoutes">;
   }
 ): Promise<ApprovedOperationEnd> {
   options.signal?.throwIfAborted();
@@ -352,7 +355,7 @@ async function admitAgain(
   waiting: WaitingOperationCall,
   deps: RunOperationDeps,
   decision: OperationRunDecision,
-  runtime: Pick<OperationCallRuntime, "locale" | "runFence"> = {}
+  runtime: Pick<OperationCallRuntime, "locale" | "runFence" | "modelRoutes"> = {}
 ): Promise<{ context: RunContext; policy: PolicyResolution } | { end: ApprovedOperationEnd }> {
   const now = deps.now ?? (() => new Date());
   /** Ends the waiting run. Without a run to answer, the run did not wait any more. */
@@ -541,7 +544,7 @@ async function waitingContext(
   run: OperationRun,
   waiting: WaitingOperationCall,
   deps: RunOperationDeps,
-  runtime: Pick<OperationCallRuntime, "locale" | "runFence">
+  runtime: Pick<OperationCallRuntime, "locale" | "runFence" | "modelRoutes">
 ): Promise<RunContext | { actorGone: true; definition: OperationDefinition }> {
   const { actor } = waiting.call;
   const definition = await deps.registry.resolve(run.operation);

@@ -31,8 +31,8 @@ export const googleVertexModelProvider = defineProvider({
       config.credentialSecret
     );
     const build: ModelAdapterFactory = (entry) => {
-      if (!entry.region) {
-        throw new AppError("VALIDATION_FAILED", `'${entryPath}.region' is required`);
+      if (entry.region !== "eu" && entry.region !== "global") {
+        throw new AppError("VALIDATION_FAILED", `'${entryPath}.region' must be 'eu' or 'global'`);
       }
       const provider = new GoogleVertexProvider({
         id: entry.id,

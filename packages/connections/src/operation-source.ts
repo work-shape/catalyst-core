@@ -105,6 +105,7 @@ async function authorizeCall(
   if (connection.config.credentialMode === "user") {
     await requirePersonalConnectionContext({
       ...deps,
+      modelRoutes: context.modelRoutes,
       actor: context.actor,
       origin: context.origin
     });

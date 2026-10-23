@@ -133,7 +133,7 @@ export async function runOperation(
           const resolved =
             current.action === null ? { resource: declared } : await deps.resolveResource(declared);
           const right = await authorizeRights(
-            { definition: current, call: pageCall, ...resolved },
+            { definition: current, call: pageCall, ...resolved, runtime },
             await rightsOf(pageCall, deps)
           );
           if (!right.allowed) throw operationDenialError({ kind: "forbidden", ...right });
@@ -201,7 +201,7 @@ export async function runOperation(
       surface.allowed &&
       (
         await authorizeRights(
-          { definition, call: frozen, ...resolved },
+          { definition, call: frozen, ...resolved, runtime },
           await rightsOf(frozen, deps)
         )
       ).allowed
@@ -255,7 +255,7 @@ export async function runOperation(
         throw new AppError("CONFLICT", "The paged operation cannot resume this call");
       if (held.status === "done") {
         const right = await authorizeRights(
-          { definition, call: frozen, ...resolved },
+          { definition, call: frozen, ...resolved, runtime },
           await rightsOf(frozen, deps)
         );
         if (!surface.allowed || !right.allowed)

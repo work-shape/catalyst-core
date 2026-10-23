@@ -404,7 +404,7 @@ export async function authorizeOrigin(
 
 /** Asks the actor's right: the one the operation names, or the operation's own check. */
 export async function authorizeActor(
-  context: Pick<RunContext, "definition" | "call" | "resource" | "resourceNotFound">,
+  context: Pick<RunContext, "definition" | "call" | "resource" | "resourceNotFound" | "runtime">,
   access: ActorAccess
 ): Promise<OperationAuthorization> {
   const { definition, call, resource } = context;
@@ -415,6 +415,7 @@ export async function authorizeActor(
     return decision;
   }
   return definition.authorize(call.input, {
+    modelRoutes: context.runtime.modelRoutes,
     actor: call.actor,
     origin: call.origin,
     workspaceId: call.workspaceId,

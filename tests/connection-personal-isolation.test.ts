@@ -184,7 +184,7 @@ async function call(
       ...calls.deps,
       agentToolNames: () => [operation]
     },
-    runtime
+    { modelRoutes: [{ id: "local", region: "eu" }], ...runtime }
   );
 }
 function resolverSpy() {
@@ -215,6 +215,64 @@ async function refused(
 }
 
 describe("personal Connection context isolation", () => {
+  it("admits all-EU routes and refuses non-EU fallbacks or missing regions before credentials", async () => {
+    const p = await prepare();
+    const eu = { id: "primary", region: "eu" };
+    const spy = resolverSpy();
+    const before = fake.headers.length;
+    const routes: OperationCallRuntime["modelRoutes"][] = [
+      [eu, { id: "fallback", region: "us" }],
+      [eu, { id: "fallback" }],
+      [{ id: "unset" }],
+      [],
+      undefined
+    ];
+    for (const modelRoutes of routes) {
+      const answer = await call(p, {}, { modelRoutes });
+      expect(answer.result).toMatchObject({
+        status: "failed",
+        error: {
+          code: "FORBIDDEN",
+          message: "This instance cannot use personal Connections with its model setup.",
+          details: { reason: "personal_connection_region" }
+        }
+      });
+      // Connect cards require connection/state metadata; a region refusal carries neither.
+      if (answer.result.status === "failed") {
+        expect(answer.result.error.details).toEqual({ reason: "personal_connection_region" });
+      }
+    }
+    expect(spy).not.toHaveBeenCalled();
+    expect(fake.headers).toHaveLength(before);
+    expect(
+      (await call(p, {}, { modelRoutes: [eu, { id: "fallback", region: "eu" }] })).result
+    ).toMatchObject({ status: "done", output: mail });
+    expect(spy).toHaveBeenCalled();
+  });
+
+  it("rechecks regions in direct execution before resolving credentials", async () => {
+    const p = await prepare();
+    const calls = await world.calls();
+    const definition = await calls.deps.registry.resolve("connection.mailbox.who");
+    if (!definition) throw new Error("No operation");
+    const spy = resolverSpy();
+    await expect(
+      definition.execute(
+        { query: mail.query },
+        {
+          runId: createPlatformId<"OperationRunId">("oprun"),
+          actor: a,
+          origin: origin(p.run),
+          correlationId: randomUUID(),
+          runtime: { modelRoutes: [{ id: "global", region: "global" }] },
+          access: await calls.deps.authorizer.forActor(a),
+          audit: calls.deps.audit
+        }
+      )
+    ).rejects.toMatchObject({ details: { reason: "personal_connection_region" } });
+    expect(spy).not.toHaveBeenCalled();
+  });
+
   it("refuses every non-agent surface before resolving a token", async () => {
     const p = await prepare();
     const origins: OperationOrigin[] = [

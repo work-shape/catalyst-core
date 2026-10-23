@@ -1,3 +1,4 @@
+import type { ModelProviderConfig } from "./config";
 import type { AgentPreview } from "./agent-preview";
 import {
   AUTH_PRINCIPAL_KINDS,
@@ -196,6 +197,8 @@ export interface OperationDraftContext {
 }
 
 export interface RuntimeCallContext {
+  /** Resolved by the agent runtime, including every fallback. Never read from a request. */
+  modelRoutes?: readonly Pick<ModelProviderConfig, "id" | "region">[];
   /** Only internal preview execution sets this; never read from an HTTP request. */
   agentPreview?: AgentPreview;
   user: AuthenticatedUser;

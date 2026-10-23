@@ -80,6 +80,7 @@ export function createDecidedToolCallRunner(baseDeps: RunOperationDeps): ToolDec
       ...(run.origin.toolRevisionId ? { toolRevisionId: run.origin.toolRevisionId } : {})
     });
     const runtime = {
+      modelRoutes: context.modelRoutes,
       locale: context.locale,
       runFence: context.runFence,
       ...(context.workflowAgent ? { workflowAgent: true as const } : {}),
@@ -91,6 +92,7 @@ export function createDecidedToolCallRunner(baseDeps: RunOperationDeps): ToolDec
         : await executeConfirmedOperation({ runId: run.id, call }, callDeps, {
             ...(context.signal ? { signal: context.signal } : {}),
             runtime: {
+              modelRoutes: context.modelRoutes,
               ...(context.locale ? { locale: context.locale } : {}),
               ...(context.runFence ? { runFence: context.runFence } : {})
             }

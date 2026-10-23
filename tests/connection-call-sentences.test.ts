@@ -56,7 +56,9 @@ const NEXT_STEP = /[Tt]r(?:y|ying) again|Asking for less may work/u;
 
 describe("the sentence of a reason", () => {
   it("exists for every reason the call path can end with", () => {
-    expect([...REASONS].sort()).toEqual(Object.keys(CONNECTION_CALL_REASONS).sort());
+    expect(
+      [...REASONS, "personal_connection_context", "personal_connection_region"].sort()
+    ).toEqual(Object.keys(CONNECTION_CALL_REASONS).sort());
   });
 
   it.each(REASONS)("%s names the Connection and says whether to try again", (reason) => {

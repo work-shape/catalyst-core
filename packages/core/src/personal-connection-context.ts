@@ -1,3 +1,4 @@
+import { connectionCallFailure } from "./connection-operations";
 import { AppError } from "./errors";
 import {
   getSubjectUserId,
@@ -5,7 +6,7 @@ import {
   type AuthenticatedIdentity
 } from "./identity";
 import type { AgentRunId, ClientInstanceId, ConversationId } from "./ids";
-import type { OperationOrigin } from "./operations";
+import type { OperationCallRuntime, OperationOrigin } from "./operations";
 import type { PlatformStores } from "./platform-store";
 
 /** A subagent inherits its root chat's readers and permanent personal-data mark. */
@@ -92,6 +93,7 @@ export async function requirePersonalConnectionContext(input: {
   actor: AuthenticatedIdentity | undefined;
   origin: OperationOrigin | undefined;
   byAppAction?: boolean;
+  modelRoutes?: OperationCallRuntime["modelRoutes"];
 }) {
   const { actor, origin, stores, clientInstanceId } = input;
   if (!origin || origin.kind !== "agent" || origin.boundBy || input.byAppAction) {
@@ -151,6 +153,9 @@ export async function requirePersonalConnectionContext(input: {
       : conversation.visibility !== "private")
   ) {
     throw personalConnectionContextError("only its creator may read the conversation");
+  }
+  if (!input.modelRoutes?.length || input.modelRoutes.some((route) => route.region !== "eu")) {
+    throw connectionCallFailure("personal_connection_region", undefined);
   }
   return conversation;
 }

@@ -63,6 +63,12 @@ export class TurnLoop {
   ): Promise<void> {
     if (input.preview) context = { ...context, agentPreview: input.preview };
     const setup = await this.prepareRun(runId, input, context);
+    context = {
+      ...context,
+      modelRoutes: [
+        { id: setup.modelSelection.provider.id, region: setup.modelSelection.provider.region }
+      ]
+    };
     const entry = input.resume
       ? await this.resumeEntry(state, runId, input, context, setup, input.resume.state)
       : await this.startEntry(runId, input, context, setup);

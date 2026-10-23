@@ -135,6 +135,7 @@ export type OperationAuthorization =
 
 /** What an operation's own check of the caller's right knows about the call. */
 export interface OperationAuthorizeContext {
+  modelRoutes?: OperationCallRuntime["modelRoutes"];
   actor: AuthenticatedIdentity;
   origin: OperationOrigin;
   workspaceId?: CollaborationWorkspaceId;

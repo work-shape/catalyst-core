@@ -147,6 +147,7 @@ export const CONNECTION_CALL_REASONS = {
   secret_unreadable: "CONFLICT",
   /** The Connection signs in at the outside system, and no sign-in is connected for it. */
   personal_connection_context: "FORBIDDEN",
+  personal_connection_region: "FORBIDDEN",
   connection_not_connected: "CONFLICT",
   /** The outside system refused the Connection's sign-in; someone has to sign in again. */
   connection_needs_reconnect: "CONFLICT",
@@ -216,6 +217,7 @@ const CONNECTION_CALL_MESSAGES: Record<ConnectionCallReason, string> = {
   secret_unreadable: "the stored secret of the Connection cannot be read",
   personal_connection_context:
     "personal connections require an owner-authorized agent in an owner-only conversation",
+  personal_connection_region: "personal connections require EU-only model routes",
   connection_not_connected: "nobody has signed in to the outside system for the Connection",
   connection_needs_reconnect: "the outside system refused the Connection's sign-in",
   operation_unknown: "the Connection has no such operation now",
@@ -315,6 +317,8 @@ const CONNECTION_CALL_SENTENCES: Record<
     `${c} cannot be used because its stored credential cannot be read. Trying again will not help. An administrator can see what to do under ${WHERE}.`,
   personal_connection_context: () =>
     "A personal connection needs an owner-authorized agent run in a conversation only that person can read.",
+  personal_connection_region: () =>
+    "This instance cannot use personal Connections with its model setup.",
   connection_not_connected: (c) =>
     `${c} cannot be used because nobody has signed in to the outside system for it. Trying again will not help until an administrator signs in under ${WHERE}.`,
   connection_needs_reconnect: (c) =>

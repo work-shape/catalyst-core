@@ -1,4 +1,4 @@
-import { AppError, type ProviderRegion } from "@work-shape/catalyst-core";
+import { AppError, PROVIDER_REGIONS } from "@work-shape/catalyst-core";
 import type { GoogleAccessTokenSource } from "./google-vertex-auth";
 import {
   isVertexAnswerMissing,
@@ -28,7 +28,10 @@ import type {
  * multi-region with its own host, so a call of an `eu` entry is neither sent to nor processed
  * at another one.
  */
-const GOOGLE_VERTEX_ROUTES: Record<ProviderRegion, { location: string; endpoint: string }> = {
+const GOOGLE_VERTEX_ROUTES: Record<
+  (typeof PROVIDER_REGIONS)[number],
+  { location: string; endpoint: string }
+> = {
   eu: { location: "eu", endpoint: "https://aiplatform.eu.rep.googleapis.com" },
   global: { location: "global", endpoint: "https://aiplatform.googleapis.com" }
 };
@@ -58,7 +61,7 @@ export interface GoogleVertexProviderOptions {
   /** The entry's id, for diagnostics. */
   id: string;
   projectId: string;
-  region: ProviderRegion;
+  region: (typeof PROVIDER_REGIONS)[number];
   tokens: GoogleAccessTokenSource;
   labels?: Readonly<Record<string, string>>;
 }
