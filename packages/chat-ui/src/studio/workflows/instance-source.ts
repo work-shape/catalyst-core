@@ -462,7 +462,18 @@ export function createInstanceSource(client: WorkflowsClient, key: string): Work
             : listedOf(summary),
           asset
         ),
-        definition
+        definition,
+        ...(asset.workflowCallers === undefined
+          ? {}
+          : {
+              callers: asset.workflowCallers.map((caller) => ({
+                id: caller.name,
+                title: caller.title.trim() || caller.name,
+                ...(caller.scope.kind === "workspace"
+                  ? { workspaceId: caller.scope.workspaceId }
+                  : {})
+              }))
+            })
       };
     },
     runs: runsSource(client),

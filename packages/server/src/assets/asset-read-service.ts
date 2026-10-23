@@ -1,4 +1,5 @@
 import { workflowStepFacts } from "../workflows/workflow-step-facts";
+import { workflowCallers } from "../workflows/workflow-callers";
 import { agentDependencyAvailability } from "./agent-dependency-availability";
 import { appAudienceReview } from "../apps/app-audience";
 import type { AppAudience } from "@work-shape/catalyst-core";
@@ -390,6 +391,9 @@ export class AssetReadWorkflow {
       ...content,
       ...(runsAs === undefined ? {} : { runsAs }),
       ...(stepFacts === undefined ? {} : { stepFacts }),
+      ...(target.kind.kind === "workflow"
+        ? { workflowCallers: await workflowCallers(this.options, asset.name, call.access) }
+        : {}),
       ...(publication ? { publication } : {}),
       ...(publishQuestion?.length ? { publishQuestion } : {}),
       ...(publishNarrative ? { publishNarrative } : {}),

@@ -6,6 +6,7 @@ import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createTranslationContext, TranslationProvider } from "./support/chat-ui/shared";
 import {
+  createInstanceSource,
   toWorkflow,
   useWorkflow,
   useWorkflowEditing,
@@ -18,6 +19,7 @@ import {
 import { WorkspaceApiClientProvider } from "@work-shape/catalyst-chat-ui/workspace-api-client";
 import { UiRoot, uiLabelsEn } from "@work-shape/catalyst-ui";
 import { CONDITION_WAIT_MS, required } from "./support/assertions";
+import { recordedApiClient } from "./support/recorded-api-client";
 
 // The Settings tab of a Workflow (WF-EDIT-5, Events check 128): "Every weekday at 07:30,
 // Berlin time" writes the trigger's cron and zone; a schedule the field cannot read is saved
@@ -29,6 +31,7 @@ const { t } = createTranslationContext("en");
 const WORKFLOW = "bookings";
 
 type Config = Readonly<Record<string, unknown>>;
+type OpenRoute = Parameters<typeof WorkflowSettingsForm>[0]["onOpenRoute"];
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -103,7 +106,7 @@ function sourceOf(
   };
 }
 
-function Harness({ mayWrite }: { mayWrite: boolean }) {
+function Harness({ mayWrite, onOpenRoute }: { mayWrite: boolean; onOpenRoute: OpenRoute }) {
   const read = useWorkflow("cw_1", WORKFLOW);
   const editing = useWorkflowEditing({
     workspaceId: "cw_1",
@@ -116,7 +119,7 @@ function Harness({ mayWrite }: { mayWrite: boolean }) {
     workspaceId: "cw_1",
     workflow: read.workflow,
     ...(editing === undefined ? {} : { editing }),
-    onOpenRoute: () => undefined
+    onOpenRoute
   });
 }
 
@@ -125,7 +128,14 @@ afterEach(async () => {
   for (const unmount of unmounts.splice(0)) await unmount();
 });
 
-async function mount(source: WorkflowsSource, mayWrite = true): Promise<HTMLElement> {
+async function mount(
+  source: WorkflowsSource,
+  mayWrite = true,
+  {
+    locale = "en",
+    onOpenRoute = () => undefined
+  }: { locale?: "en" | "de"; onOpenRoute?: OpenRoute } = {}
+): Promise<HTMLElement> {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const container = document.createElement("div");
@@ -154,11 +164,11 @@ async function mount(source: WorkflowsSource, mayWrite = true): Promise<HTMLElem
               { value: host, children: null },
               createElement(
                 TranslationProvider,
-                { locale: "en", children: null },
+                { locale, children: null },
                 createElement(
                   UiRoot,
                   { mode: "light", labels: uiLabelsEn },
-                  createElement(Harness, { mayWrite })
+                  createElement(Harness, { mayWrite, onOpenRoute })
                 )
               )
             )
@@ -341,5 +351,69 @@ describe("the Settings tab of a Workflow (WF-EDIT-5)", () => {
       labelled(container, t("workflows.workflowSettings.onSchedule")).hasAttribute("disabled")
     ).toBe(true);
     expect(button(container, t("workflows.settings.save"))).toBeUndefined();
+  });
+});
+
+// WF-EDIT-5b: the "By another workflow" switch names the Workflows whose steps call this one,
+// as the instance's read of the asset names them, each a link to it in the workspace that owns
+// it. Fails without WF-EDIT-5b: the Settings named no caller.
+describe("the Workflows that call a Workflow (WF-EDIT-5b)", () => {
+  const callerSource = () =>
+    createInstanceSource(
+      recordedApiClient(({ operation }) =>
+        operation === "assets.get"
+          ? {
+              id: "asset_1",
+              kind: "workflow",
+              name: WORKFLOW,
+              scope: { kind: "instance" },
+              revision: 2,
+              publishedRevision: 2,
+              updatedAt: "2026-10-23T00:00:00.000Z",
+              config: { name: WORKFLOW, manifest: manifestWith([{ kind: "parent" }]) },
+              workflowCallers: [
+                { name: "month-end", title: "Month end", scope: { kind: "instance" } },
+                {
+                  name: "tax-return",
+                  title: "Tax return",
+                  scope: { kind: "workspace", workspaceId: "cw_2" }
+                }
+              ]
+            }
+          : { items: [] }
+      ).client,
+      "workflow-callers"
+    );
+
+  it("links each caller in its owner's workspace, the instance's own in the open one", async () => {
+    const opened: unknown[] = [];
+    const container = await mount(callerSource(), false, {
+      onOpenRoute: (route) => opened.push(route)
+    });
+    const callers = required(container.querySelector("[data-workflow-callers]"));
+    expect(callers.textContent).toBe(
+      `${t("workflows.workflowSettings.calledBy")} Month end, Tax return`
+    );
+    const links = [...callers.querySelectorAll("a")];
+    expect(links.map((link) => link.getAttribute("href"))).toEqual([
+      "/w/cw_1/workflows/month-end",
+      "/w/cw_2/workflows/tax-return"
+    ]);
+    await act(async () => required(links[1]).click());
+    expect(opened).toEqual([
+      { kind: "workflow", collaborationWorkspaceId: "cw_2", workflow: "tax-return" }
+    ]);
+  });
+
+  it("says it in German", async () => {
+    const container = await mount(callerSource(), false, { locale: "de" });
+    expect(required(container.querySelector("[data-workflow-callers]")).textContent).toBe(
+      "Aufgerufen von Month end, Tax return"
+    );
+  });
+
+  it("names no caller where the instance names none", async () => {
+    const container = await mount(sourceOf(manifestWith([{ kind: "parent" }]), []));
+    expect(container.querySelector("[data-workflow-callers]")).toBeNull();
   });
 });

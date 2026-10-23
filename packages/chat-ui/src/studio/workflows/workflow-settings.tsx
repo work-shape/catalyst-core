@@ -12,6 +12,7 @@ import {
   ScheduleField,
   Switch,
   Textarea,
+  TextLink,
   type FieldListItem,
   type FieldListKind,
   type ScheduleValue
@@ -34,7 +35,7 @@ import {
 import { useWorkflowEditing, type WorkflowEditing } from "./workflow-editing";
 import { WorkflowHead } from "./workflow-head";
 import { editOffered, runsReadable, startOffered } from "./workflow-model";
-import type { WorkflowView } from "./workflow-views";
+import type { WorkflowCallerView, WorkflowView } from "./workflow-views";
 import { WorkflowsFrame, routeLink, type OpenRoute } from "./workflows-frame";
 import { useWorkflowsHost } from "./workflows-host";
 
@@ -430,6 +431,11 @@ export function WorkflowSettingsForm({
           t("workflows.workflowSettings.byParent"),
           t("workflows.workflowSettings.byParentHint")
         )}
+        <WorkflowCallers
+          workspaceId={workspaceId}
+          callers={workflow.callers}
+          onOpenRoute={onOpenRoute}
+        />
       </section>
 
       <StartFields
@@ -485,6 +491,43 @@ export function WorkflowSettingsForm({
         <WorkflowSettingsBar editing={editing} triggerId={triggerId} incomplete={onCount === 0} />
       )}
     </div>
+  );
+}
+
+/** The Workflows whose steps call this one, each a link to it in the workspace that owns it. */
+function WorkflowCallers({
+  workspaceId,
+  callers,
+  onOpenRoute
+}: {
+  workspaceId: string;
+  callers: readonly WorkflowCallerView[] | undefined;
+  onOpenRoute: OpenRoute;
+}) {
+  const { t } = useTranslation();
+  if (callers === undefined || callers.length === 0) return null;
+  return (
+    <p className="text-caption text-muted-foreground" data-workflow-callers="">
+      {t("workflows.workflowSettings.calledBy")}{" "}
+      {callers.map((caller, index) => (
+        <span key={`${caller.workspaceId ?? ""}/${caller.id}`}>
+          {index === 0 ? null : ", "}
+          <TextLink
+            {...routeLink(
+              {
+                kind: "workflow",
+                // The instance's own opens in the workspace open now, as every link to it does.
+                collaborationWorkspaceId: caller.workspaceId ?? workspaceId,
+                workflow: caller.id
+              },
+              onOpenRoute
+            )}
+          >
+            {caller.title}
+          </TextLink>
+        </span>
+      ))}
+    </p>
   );
 }
 

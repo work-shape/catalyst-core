@@ -243,6 +243,13 @@ export const assetSchema = z.object({
   /** The active account's display label for the Workflow revision returned by this read. */
   runsAs: z.string().optional(),
   stepFacts: z.record(z.string(), workflowStepFactSchema).optional(),
+  /**
+   * Workflows with a step that calls this Workflow, once each, from their published revision
+   * or a draft the reader may see. Absent on other asset kinds. No unreadable caller is named.
+   */
+  workflowCallers: z
+    .array(z.object({ name: z.string(), title: z.string(), scope: assetScopeSchema }))
+    .optional(),
   /** Unrecorded draft review lines naming its audience and shared source accounts. */
   publishQuestion: z.array(z.string()).optional(),
   /**

@@ -521,6 +521,7 @@ export const workflows = defineTranslations({
     "workflows.workflowSettings.byParent": "By another workflow",
     "workflows.workflowSettings.byParentHint":
       "A step of another workflow starts it and waits for its result.",
+    "workflows.workflowSettings.calledBy": "Called by",
     "workflows.workflowSettings.description": "What it does",
     "workflows.workflowSettings.limitConcurrency": "Up to {count} steps at the same time",
     "workflows.workflowSettings.limitDataset": "Datasets up to {size} MB",
@@ -1138,6 +1139,7 @@ export const workflows = defineTranslations({
     "workflows.workflowSettings.byParent": "Durch einen anderen Workflow",
     "workflows.workflowSettings.byParentHint":
       "Ein Schritt eines anderen Workflows startet ihn und wartet auf sein Ergebnis.",
+    "workflows.workflowSettings.calledBy": "Aufgerufen von",
     "workflows.workflowSettings.description": "Was er tut",
     "workflows.workflowSettings.limitConcurrency": "Bis zu {count} Schritte gleichzeitig",
     "workflows.workflowSettings.limitDataset": "Datensätze bis {size} MB",

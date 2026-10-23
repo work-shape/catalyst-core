@@ -35980,6 +35980,28 @@
               "$ref": "#/components/schemas/WorkflowStepFact"
             }
           },
+          "workflowCallers": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "scope": {
+                  "$ref": "#/components/schemas/AssetScope"
+                }
+              },
+              "required": [
+                "name",
+                "title",
+                "scope"
+              ]
+            }
+          },
           "publishQuestion": {
             "type": "array",
             "items": {

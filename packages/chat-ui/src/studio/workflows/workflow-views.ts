@@ -162,6 +162,21 @@ export interface WorkflowView {
    * where the source holds no drafts, such as samples.
    */
   definition?: WorkflowDefinitionView;
+  /**
+   * The Workflows whose steps call this one, in a draft or published revision the reader may
+   * read, as the instance names them. Absent where the source does not say.
+   */
+  callers?: readonly WorkflowCallerView[];
+}
+
+/** A Workflow one of whose steps calls another. */
+export interface WorkflowCallerView {
+  /** Its name, which addresses it. */
+  id: string;
+  /** What it is called. */
+  title: string;
+  /** The workspace that owns it. Absent for the instance's own. */
+  workspaceId?: string;
 }
 
 /**

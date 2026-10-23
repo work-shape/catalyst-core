@@ -194,3 +194,178 @@ test("a Workflow's Settings set every weekday at 07:30 Berlin time, due after th
   await expect(trigger).toContainText("(Berlin time)");
   await expect(trigger).not.toContainText(ZONE);
 });
+
+// WF-EDIT-5b: the "By another workflow" switch names the Workflows whose steps call this one,
+// a draft's call included, each a link that opens the caller in the workspace that owns it; the
+// instance's own opens in the workspace open now. Fails without WF-EDIT-5b: no caller was named.
+test("a Workflow's Settings name the Workflows that call it, each a link to it", async ({
+  page
+}) => {
+  test.setTimeout(120_000);
+  const suffix = randomUUID().slice(0, 8);
+  const child = `settings-child-${suffix}`;
+  const fromInstance = `settings-caller-${suffix}`;
+  const fromWorkspace = `settings-ws-caller-${suffix}`;
+  const runAs = `${child}-runner`;
+  await page.setViewportSize(WIDE);
+  await signIn(page);
+  page.setDefaultTimeout(30_000);
+
+  const principal = await requestWithOrigin(
+    page,
+    "post",
+    `${apiBaseUrl}/api/v1/instance/service-principals`,
+    { data: { name: runAs, displayLabel: runAs, description: "Runs the Workflows of a spec." } }
+  );
+  expect(principal.ok(), await principal.text()).toBe(true);
+  const workspace = async (name: string) => {
+    const created = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/v1/workspaces`, {
+      data: { name }
+    });
+    expect(created.ok(), await created.text()).toBe(true);
+    return idSchema.parse(await created.json()).id;
+  };
+  const open = await workspace(`Settings callers ${suffix}`);
+  const owner = await workspace(`Settings caller owner ${suffix}`);
+  const result = { id: "result", name: "Result", type: "output", input: { done: { value: 1 } } };
+  const outputs = {
+    type: "object",
+    properties: { done: { type: "integer" } },
+    required: ["done"]
+  };
+  const store = async (id: string, name: string, steps: unknown[], workspaceId?: string) => {
+    const stored = await requestWithOrigin(page, "put", assetUrlOf(id), {
+      data: {
+        expectedRevision: null,
+        ...(workspaceId === undefined ? {} : { workspaceId }),
+        config: {
+          name: id,
+          manifest: {
+            id,
+            name,
+            runAs,
+            inputs: { type: "object", additionalProperties: false },
+            outputs,
+            steps
+          }
+        }
+      }
+    });
+    expect(stored.ok(), await stored.text()).toBe(true);
+  };
+  const calling = () => [
+    { id: "start", name: "Start", type: "trigger", triggers: [{ kind: "manual" }] },
+    { id: "call", name: "Call", type: "workflow", workflow: child, input: {} },
+    result
+  ];
+
+  // The child starts by another workflow; one caller of the instance and one of a workspace
+  // call it from their drafts.
+  await store(child, "Child bookings", [
+    { id: "start", name: "Start", type: "trigger", triggers: [{ kind: "parent" }] },
+    result
+  ]);
+  const published = await requestWithOrigin(page, "post", `${assetUrlOf(child)}/publish`, {
+    data: { revision: await assetRevision(page, assetUrlOf(child)) }
+  });
+  expect(published.ok(), await published.text()).toBe(true);
+  await store(fromInstance, "Instance month end", calling());
+  await store(fromWorkspace, "Workspace month end", calling(), owner);
+
+  await page.goto(`/w/${open}/workflows/${child}/settings`);
+  const form = page.getByTestId("workflow-settings-page").locator("[data-workflow-settings]");
+  await expect(form.getByRole("switch", { name: "By another workflow" })).toBeChecked();
+  const callers = form.locator("[data-workflow-callers]");
+  await expect(callers).toContainText("Called by");
+  await expect(callers.getByRole("link", { name: "Instance month end" })).toHaveAttribute(
+    "href",
+    `/w/${open}/workflows/${fromInstance}`
+  );
+  const workspaceCaller = callers.getByRole("link", { name: "Workspace month end" });
+  await expect(workspaceCaller).toHaveAttribute("href", `/w/${owner}/workflows/${fromWorkspace}`);
+
+  // The link opens the caller in the workspace that owns it.
+  await workspaceCaller.click();
+  await expect(page).toHaveURL(new RegExp(`/w/${owner}/workflows/${fromWorkspace}$`, "u"));
+  await expect(page.getByTestId("workflow-page")).toContainText("Workspace month end");
+
+  // In German.
+  await page.evaluate(() => window.localStorage.setItem("vivd-catalyst:locale", "de"));
+  await page.goto(`/w/${open}/workflows/${child}/settings`);
+  await expect(form.getByRole("switch", { name: "Durch einen anderen Workflow" })).toBeChecked();
+  await expect(callers).toContainText("Aufgerufen von");
+  await expect(callers.getByRole("link", { name: "Instance month end" })).toHaveAttribute(
+    "href",
+    `/w/${open}/workflows/${fromInstance}`
+  );
+
+  // In a short window and at phone width, light and dark, in both languages: the callers are
+  // reached by scrolling to the end, and stay named after switching to the canvas and back.
+  const views = [
+    { locale: "en", theme: "light", size: { width: 1440, height: 480 } },
+    { locale: "en", theme: "dark", size: { width: 390, height: 844 } },
+    { locale: "de", theme: "dark", size: { width: 1440, height: 480 } },
+    { locale: "de", theme: "light", size: { width: 390, height: 844 } }
+  ] as const;
+  for (const view of views) {
+    const words =
+      view.locale === "en"
+        ? { tabs: "Views of the workflow", settings: "Settings", calledBy: "Called by" }
+        : {
+            tabs: "Ansichten des Workflows",
+            settings: "Einstellungen",
+            calledBy: "Aufgerufen von"
+          };
+    await page.setViewportSize(view.size);
+    await page.emulateMedia({ colorScheme: view.theme });
+    await page.evaluate(({ locale, theme }) => {
+      window.localStorage.setItem("vivd-catalyst:locale", locale);
+      window.localStorage.setItem("vivd-catalyst:theme", theme);
+    }, view);
+    await page.goto(`/w/${open}/workflows/${child}/settings`);
+    await expect
+      .poll(() =>
+        page
+          .locator("main")
+          .first()
+          .evaluate((element) => element.classList.contains("dark"))
+      )
+      .toBe(view.theme === "dark");
+    await expect(callers).toContainText(words.calledBy);
+
+    // Scroll to the end of the Settings the way a reader does, then back up to the callers,
+    // which follow the parent switch above the start fields.
+    await form.hover();
+    await page.mouse.wheel(0, 10_000);
+    await expect(form.locator("[data-workflow-facts]")).toBeInViewport();
+    await expect(async () => {
+      await page.mouse.wheel(0, -200);
+      await expect(callers).toBeInViewport({ ratio: 1, timeout: 500 });
+    }).toPass();
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= document.documentElement.clientWidth
+      )
+    ).toBe(true);
+
+    const tabs = page.getByRole("navigation", { name: words.tabs });
+    for (let round = 0; round < 2; round += 1) {
+      await tabs.getByRole("link", { name: "Workflow", exact: true }).click();
+      await expect(page).toHaveURL(new RegExp(`/w/${open}/workflows/${child}$`, "u"));
+      await tabs.getByRole("link", { name: words.settings, exact: true }).click();
+      await expect(page).toHaveURL(new RegExp(`/workflows/${child}/settings$`, "u"));
+      await expect(callers.getByRole("link")).toHaveCount(2);
+    }
+    // Still both, a second on: no later read drops them.
+    await page.waitForTimeout(1_000);
+    await expect(callers).toContainText(words.calledBy);
+    await expect(callers.getByRole("link", { name: "Instance month end" })).toHaveAttribute(
+      "href",
+      `/w/${open}/workflows/${fromInstance}`
+    );
+    await expect(callers.getByRole("link", { name: "Workspace month end" })).toHaveAttribute(
+      "href",
+      `/w/${owner}/workflows/${fromWorkspace}`
+    );
+  }
+});
