@@ -37,6 +37,9 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
       - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+        with:
+          # Each runner on the Mini has its own copy: a shared one breaks when two jobs start together.
+          dest: ${{ runner.tool_cache }}/setup-pnpm
       # No action cache: the pnpm store stays on the runner's disk between runs.
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
