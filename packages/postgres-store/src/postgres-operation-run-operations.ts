@@ -277,6 +277,7 @@ async function finishOperationRun(
       ...(end.status === "done"
         ? {
             output: end.output,
+            resultBytes: end.resultBytes,
             resultRef: end.resultRef,
             // A run that was approved keeps the decision it was taken with.
             ...(end.decision ? { decision: end.decision } : {}),
@@ -604,6 +605,7 @@ export function mapOperationRun(row: OperationRunRow): OperationRun {
     approvalRequestId: row.approvalRequestId ?? undefined,
     output: row.output ?? undefined,
     resultRef: row.resultRef ?? undefined,
+    resultBytes: row.resultBytes ?? undefined,
     error: row.error
       ? {
           code: row.error.code,

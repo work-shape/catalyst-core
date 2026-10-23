@@ -103,8 +103,11 @@ export function guardAppOrigin(
   deps: AppOriginGuardDeps
 ): OperationRegistry {
   const guarded = (definition: OperationDefinition): OperationDefinition =>
-    // A Connection operation decides its right itself, so its own rule is what is wrapped.
-    definition.action === null && definition.name.startsWith(CONNECTION_OPERATION_PREFIX)
+    // Personal operations refuse every App context in their own owner gate. Other
+    // Connection operations decide their right themselves, so that rule is wrapped.
+    definition.action === null &&
+    !definition.personalConnection &&
+    definition.name.startsWith(CONNECTION_OPERATION_PREFIX)
       ? {
           ...definition,
           async authorize(input, context) {

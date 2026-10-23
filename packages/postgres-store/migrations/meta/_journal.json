@@ -1002,6 +1002,13 @@
       "when": 1792658967480,
       "tag": "0142_conversation_creation_target",
       "breakpoints": true
+    },
+    {
+      "idx": 143,
+      "version": "7",
+      "when": 1792748362661,
+      "tag": "0143_personal_connection_isolation",
+      "breakpoints": true
     }
   ]
 }

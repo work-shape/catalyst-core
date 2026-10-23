@@ -239,6 +239,8 @@ interface OperationDefinitionBase<Input, Output> {
    * may not carry it.
    */
   recordsEveryCall?: true;
+  /** Personal connection calls retain metadata only, including while waiting. */
+  personalConnection?: true;
   /**
    * The operation can hand its rows over through a cursor, so a Workflow step that names
    * `dataset` reads its whole result into a dataset instead of ending at a row cap, and it is

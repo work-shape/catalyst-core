@@ -503,7 +503,8 @@ export function createConnectionManagement(
         // Only the reason is read. The text of the error is the type's or the outside system's.
         reason = connectionCallReasonOf(error);
         // A missing actor mapping says nothing about the shared Connection's health.
-        if (reason === "person_context_unmapped") throw connectionCallError(reason);
+        if (reason === "person_context_unmapped" || reason === "personal_connection_context")
+          throw connectionCallError(reason);
         status = testStatusOf(reason);
       } finally {
         clearTimeout(timer);

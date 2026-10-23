@@ -127,6 +127,8 @@ export interface OperationRun {
   /** Present while the run retains what the call answered. */
   output?: { value: JsonValue };
   resultRef?: string;
+  /** UTF-8 JSON result size, without retaining its contents. */
+  resultBytes?: number;
   error?: OperationRunError;
   /** Why a `denied` run was refused. */
   denial?: OperationDenial;
@@ -172,6 +174,7 @@ export type NewOperationRun = Pick<
 export type OperationRunEnd = { finishedAt: ISODateString } & (
   | {
       status: "done";
+      resultBytes?: number;
       output?: { value: JsonValue };
       resultRef?: string;
       decision?: OperationRunDecision;
@@ -187,7 +190,7 @@ export type OperationRunEnd = { finishedAt: ISODateString } & (
     }
   | {
       status: "pending_confirmation";
-      inputRef: string;
+      inputRef?: string;
       expiresAt: ISODateString;
       /**
        * The Inbox item the confirmation waits in, where it waits in its person's Inbox and not

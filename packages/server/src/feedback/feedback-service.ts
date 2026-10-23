@@ -6,6 +6,8 @@ import type {
 } from "@work-shape/catalyst-api-contract";
 import {
   AppError,
+  personalConversationPrivateError,
+  rootConversationOf,
   FEEDBACK_REVIEW_ACTION,
   FEEDBACK_REVIEW_KIND,
   GRANT_SCOPE_KINDS,
@@ -195,7 +197,10 @@ export class FeedbackWorkflow {
     }
     const messages = await stores.conversations.listMessages({
       clientInstanceId: this.clientInstanceId,
-      conversationId: conversation.id
+      conversationId: conversation.id,
+      ...(input.includeExchange && this.options.config.feedback.exchangeSnapshot
+        ? { forSharing: true as const }
+        : {})
     });
     const answer = messages.find(
       (message) =>
@@ -277,6 +282,16 @@ export class FeedbackWorkflow {
     if (record.state !== "new") throw handledAlready();
     let exchange: FeedbackExchange | null = null;
     if (input.includeExchange) {
+      if (
+        (
+          await rootConversationOf(
+            this.options.stores,
+            this.clientInstanceId,
+            asConversationId(conversationId)
+          )
+        )?.personalDataAt
+      )
+        throw personalConversationPrivateError();
       // A copy once made is kept as it was; one left out is made from the conversation now.
       exchange = record.exchange ?? (await this.copyExchange(record));
     }
@@ -503,7 +518,8 @@ export class FeedbackWorkflow {
     });
     const messages = await stores.conversations.listMessages({
       clientInstanceId: this.clientInstanceId,
-      conversationId: asConversationId(record.conversationId)
+      conversationId: asConversationId(record.conversationId),
+      forSharing: true
     });
     const answer = messages.find((message) => message.id === record.messageId);
     if (!answer) return null;
