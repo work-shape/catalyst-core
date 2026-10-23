@@ -156,6 +156,31 @@ describe("OAuth catalogue parts", () => {
     expect(unnamed.entries[0]?.parts[0]).not.toHaveProperty("redirectUri");
   });
 
+  it("fills a checklist line valued {redirectUri} with that same address, and leaves it empty without one", () => {
+    const withLine = {
+      entries: catalogue().entries.map((entry) => ({
+        ...entry,
+        parts: entry.parts.map((each) => ({
+          ...each,
+          prerequisites: [{ text: "Redirect URI", value: "{redirectUri}" }]
+        }))
+      }))
+    };
+    const callback = (name: string) =>
+      `https://chat.example.test/api/v1/connections/${name}/oauth/callback`;
+    expect(
+      connectorTypeOffers(registry(), withLine, callback).entries[0]?.parts[0]?.prerequisites
+    ).toEqual([
+      {
+        text: "Redirect URI",
+        value: "https://chat.example.test/api/v1/connections/sample-oauth/oauth/callback"
+      }
+    ]);
+    expect(
+      connectorTypeOffers(registry(), withLine, () => undefined).entries[0]?.parts[0]?.prerequisites
+    ).toEqual([{ text: "Redirect URI" }]);
+  });
+
   it("withholds a part whose shaper is unregistered, just as an unregistered type", () => {
     const options = { entries: [sample()], connectorTypes: registry() };
     expect(createCatalogue({ ...options, named: [] }).entries[0]?.parts).toEqual([]);
