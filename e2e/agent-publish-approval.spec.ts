@@ -7,10 +7,11 @@ import { requestWithOrigin } from "./request-with-origin";
 import { expect, test } from "./test";
 
 // WS-PUB-1b, access checks 11 and 37 (browser half): a Builder and Publisher of a workspace who
-// is no member of it and holds no agent.approve publishes the workspace's agent. Nothing goes
-// live; the publish waits in an instance admin's Inbox as "Agent to publish" with the draft
-// against live and the workspace it will be offered in. The admin approves it there, and the
-// draft is live and offered in that workspace.
+// is no member of it and holds no agent.approve makes the workspace's agent, which starts offered
+// nowhere. Its first publish, without a draft, waits in an instance admin's Inbox as "Agent to
+// publish" with version 1 alone and the workspace it will be offered in; approved, it is
+// offered there. A later draft's publish waits too, reviewed against the live version, and its
+// approval makes the draft live.
 
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
 const superadmin = { email: "e2e-superadmin@example.test", password: "e2e-superadmin-password" };
@@ -37,8 +38,41 @@ async function signIn(page: Page, user: { email: string; password: string }): Pr
   expect(signedIn.ok(), await signedIn.text()).toBe(true);
 }
 
+/** The publisher's publish of one revision, which waits for an approver. */
+async function publishAndWait(
+  page: Page,
+  url: string,
+  workspaceId: string,
+  revision: number
+): Promise<void> {
+  const published = await requestWithOrigin(page, "post", url, {
+    data: { workspaceId, revision }
+  });
+  expect(published.status(), await published.text()).toBe(202);
+  heldSchema.parse(await published.json());
+}
+
+/** The admin opens the agent's waiting publish in the Inbox and answers its review. */
+async function openItem(page: Page, displayName: string) {
+  await page.goto("/inbox");
+  const inbox = page.getByRole("region", { name: "Inbox", exact: true });
+  const row = inbox.getByTestId("inbox-row").filter({ hasText: displayName });
+  await expect(row).toContainText("Agent to publish");
+  await row.getByRole("button").click();
+  const review = page.getByTestId("publish-review");
+  await expect(review.getByTestId("operation-call-headline")).toHaveText(
+    `E2E Zz Agent Publisher wants to publish a new version of the agent “${displayName}”.`
+  );
+  return review;
+}
+
+async function approve(page: Page): Promise<void> {
+  await page.locator('button[data-decision="approve"]').click();
+  await expect(page.getByTestId("inbox-item")).toContainText("Decision by E2E Superadmin");
+}
+
 /** The review at 1280 in light and dark and at 390 in light, where `E2E_SHOTS_DIR` names a folder. */
-async function shoot(page: Page, ready: () => Promise<void>): Promise<void> {
+async function shoot(page: Page, name: string, ready: () => Promise<void>): Promise<void> {
   if (!shotsDir) return;
   await mkdir(shotsDir, { recursive: true });
   for (const [theme, width] of [
@@ -53,7 +87,7 @@ async function shoot(page: Page, ready: () => Promise<void>): Promise<void> {
     await page.reload();
     await ready();
     await page.screenshot({
-      path: join(shotsDir, `ws-pub-1b-inbox-${theme}-${width}.png`),
+      path: join(shotsDir, `ws-pub-1b-${name}-${theme}-${width}.png`),
       fullPage: width < 600
     });
   }
@@ -124,8 +158,8 @@ test("a workspace agent's publish waits in the Inbox and goes live once an admin
       grants.push(idSchema.parse(await granted.json()).id);
     }
 
-    // The publisher makes the agent in the workspace and pushes a draft over it: it starts
-    // hidden, so nobody of the workspace is offered it.
+    // The publisher makes the agent in the workspace. Without agent.approve there it starts
+    // offered nowhere, so nobody of the workspace is offered it (access check 11).
     const config = (instructions: string) => ({
       name,
       displayName,
@@ -136,6 +170,30 @@ test("a workspace agent's publish waits in the Inbox and goes live once an admin
       data: { workspaceId, expectedRevision: null, config: config("Check every offer.") }
     });
     expect(made.ok(), await made.text()).toBe(true);
+    expect(await offered()).not.toContain(name);
+
+    // Its first publish needs no draft and waits for an approver, who reviews version 1 alone.
+    await publishAndWait(publisherPage, `${agentUrl}/publish`, workspaceId, 1);
+    expect(await live()).toMatchObject({ revision: 1 });
+    expect(await offered()).not.toContain(name);
+    const first = await openItem(page, displayName);
+    await expect(first.locator('[data-field="version"]')).toHaveText(/First version/u);
+    await expect(first.getByTestId("publish-review-workspace")).toHaveText(workspaceName);
+    await expect(first.getByTestId("publish-review-offers")).toHaveText(
+      `Approving also offers the agent to everyone in ${workspaceName}.`
+    );
+    await expect(first.getByTestId("publish-review-instructions")).toContainText(
+      "Check every offer."
+    );
+    await expect(first.locator('[data-field="instructions-live"]')).toHaveCount(0);
+    await shoot(page, "first", () =>
+      expect(first.getByTestId("publish-review-offers")).toBeVisible()
+    );
+    await approve(page);
+    await expect.poll(offered, { timeout: 30_000 }).toContain(name);
+    expect(await live()).toMatchObject({ revision: 1 });
+
+    // A push writes a draft over it; its publish waits too, reviewed against the live version.
     const pushed = await requestWithOrigin(publisherPage, "put", agentUrl, {
       data: {
         workspaceId,
@@ -145,50 +203,29 @@ test("a workspace agent's publish waits in the Inbox and goes live once an admin
       }
     });
     expect(pushed.ok(), await pushed.text()).toBe(true);
-    expect(await offered()).not.toContain(name);
-
-    // Their publish waits: the live revision and the workspace's agents stay as they were.
-    const published = await requestWithOrigin(publisherPage, "post", `${agentUrl}/publish`, {
-      data: { workspaceId, revision: 1 }
-    });
-    expect(published.status(), await published.text()).toBe(202);
-    heldSchema.parse(await published.json());
+    await publishAndWait(publisherPage, `${agentUrl}/publish`, workspaceId, 1);
     expect(await live()).toMatchObject({
       revision: 1,
       config: { instructions: "Check every offer." }
     });
-    expect(await offered()).not.toContain(name);
-
-    // The admin finds it in the Inbox with the draft against live and the workspace.
-    await page.goto("/inbox");
-    const inbox = page.getByRole("region", { name: "Inbox", exact: true });
-    const row = inbox.getByTestId("inbox-row").filter({ hasText: displayName });
-    await expect(row).toContainText("Agent to publish");
-    await row.getByRole("button").click();
-    const review = page.getByTestId("publish-review");
-    await expect(review.getByTestId("operation-call-headline")).toHaveText(
-      `E2E Zz Agent Publisher wants to publish a new version of the agent “${displayName}”.`
+    const update = await openItem(page, displayName);
+    await expect(update.locator('[data-field="version"]')).toHaveText(/Draft based on version 1/u);
+    await expect(update.getByTestId("publish-review-offers")).toHaveText(
+      "Where the agent is offered stays as it is."
     );
-    await expect(review.locator('[data-field="version"]')).toHaveText(
-      /Draft version 1, in place of version 1/u
-    );
-    await expect(review.getByTestId("publish-review-workspace")).toHaveText(workspaceName);
-    await expect(review.getByTestId("publish-review-offers")).toHaveText(
-      `Approving also offers the agent to everyone in ${workspaceName}.`
-    );
-    await expect(review.locator('[data-agent-field="instructions"]')).toContainText("Changed");
-    await expect(review.getByTestId("publish-review-instructions")).toContainText(
+    await expect(update.locator('[data-agent-field="instructions"]')).toContainText("Changed");
+    await expect(update.getByTestId("publish-review-instructions")).toContainText(
       "name the missing price"
     );
-    await shoot(page, () => expect(review.getByTestId("publish-review-offers")).toBeVisible());
-
-    await page.locator('button[data-decision="approve"]').click();
-    await expect(page.getByTestId("inbox-item")).toContainText("Decision by E2E Superadmin");
+    await shoot(page, "update", () =>
+      expect(update.getByTestId("publish-review-offers")).toBeVisible()
+    );
+    await approve(page);
     await expect.poll(async () => (await live()).revision, { timeout: 30_000 }).toBe(2);
     expect((await live()).config.instructions).toBe(
       "Check every offer and name the missing price."
     );
-    await expect.poll(offered).toContain(name);
+    expect(await offered()).toContain(name);
   } finally {
     for (const grant of grants) {
       await requestWithOrigin(
