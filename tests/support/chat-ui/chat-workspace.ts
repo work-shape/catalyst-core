@@ -64,3 +64,4 @@ export { workspaceSendBlock } from "../../../packages/chat-ui/src/chat/workspace
 export { WorkspaceUiStateProvider } from "../../../packages/chat-ui/src/chat/workspace/workspace-ui-state";
 export { ClosedWorkspaceLinkBanner } from "../../../packages/chat-ui/src/chat/workspace/workspace-chrome";
 export { attachedFilesTitle } from "../../../packages/chat-ui/src/chat/workspace/workspace-conversation-actions";
+export { useConversationListRefresh } from "../../../packages/chat-ui/src/chat/workspace/use-conversation-list-refresh";

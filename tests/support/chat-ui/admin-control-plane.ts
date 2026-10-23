@@ -45,3 +45,4 @@ export {
 } from "../../../packages/chat-ui/src/admin/control-plane/user-administration-model";
 export { UserPermissionOverview } from "../../../packages/chat-ui/src/admin/control-plane/user-permission-overview";
 export { UserPermissionsCard } from "../../../packages/chat-ui/src/admin/control-plane/user-permissions-card";
+export { useControlPlaneModel } from "../../../packages/chat-ui/src/admin/control-plane/control-plane-model";

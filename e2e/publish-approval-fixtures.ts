@@ -2,7 +2,8 @@ import type { Browser, Page } from "@playwright/test";
 import postgres from "postgres";
 import { z } from "zod";
 import { chooseWorkspaceAudience } from "./app-audience";
-import { apiBaseUrl, shoot, signIn } from "./inbox-fixtures";
+import { apiBaseUrl, signIn } from "./inbox-fixtures";
+import { shootSurface as shoot } from "./surface-shots";
 import { requestWithOrigin } from "./request-with-origin";
 import { expect, type PageErrorWatch } from "./test";
 

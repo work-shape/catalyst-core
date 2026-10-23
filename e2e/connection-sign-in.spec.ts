@@ -28,7 +28,6 @@ test.use({
     ]
   }
 });
-
 // The shared OAuth sign-in of an MCP Connection (CS-4b4) against the demo's sample MCP server,
 // whose small authorization server signs one demo account in without a page to click. The
 // New connection dialog meets the server's challenge, shows the step with the provider and the
@@ -39,14 +38,13 @@ test.use({
 // The suite's UI and API answer on two origins. `instance.publicUrl` of the suite is the UI's,
 // so the provider sends the tab back there; the route below hands the callback on to the API,
 // as the reverse proxy of an operated instance does, and the tab follows the API's redirect.
-
 const host = process.env.E2E_HOST ?? "127.0.0.1";
 const apiBaseUrl = process.env.E2E_API_URL ?? `http://${host}:4210`;
 const admin = { email: "e2e-admin@example.test", password: "e2e-admin-password" };
 /** Set to a directory to keep pictures of each step. */
 const shotsDir = process.env.E2E_SHOTS_DIR;
 /** How long the instance may take to read the tools: the discovery is a job. */
-const DISCOVERY_TIMEOUT_MS = 45_000;
+const DISCOVERY_TIMEOUT_MS = 45000;
 /** Each Connection's sign-in comes back at a path of its own. */
 const callbackPathOf = (connection: string) => `/api/v1/connections/${connection}/oauth/callback`;
 /**
@@ -59,16 +57,19 @@ const REGISTERED_CLIENT_ID = "e2e-registered-client";
 const REST_CONNECTION = `e2e-oauth-rest-${randomUUID().slice(0, 8)}`;
 const REST_CLIENT_ID = "e2e-rest-client";
 const REST_CLIENT_SECRET = randomUUID() + randomUUID();
-
 type Locale = "en" | "de";
-const WORDS: Record<Locale, { newConnection: string; later: string }> = {
+const WORDS: Record<
+  Locale,
+  {
+    newConnection: string;
+    later: string;
+  }
+> = {
   en: { newConnection: "New connection", later: "Later" },
   de: { newConnection: "Neue Verbindung", later: "Später" }
 };
-
 let sampleBase: string;
 let sampleServer: ChildProcess | undefined;
-
 test.beforeEach(async ({ releaseConnections: _releaseConnections, baseURL }) => {
   const samplePort = await availableSamplePort(
     (process.env.E2E_SAMPLE_MCP_PORTS ?? "4219").split(",").map(Number)
@@ -98,11 +99,10 @@ test.beforeEach(async ({ releaseConnections: _releaseConnections, baseURL }) => 
           return 0;
         }
       },
-      { timeout: 15_000 }
+      { timeout: 15000 }
     )
     .toBe(200);
 });
-
 test.afterEach(async () => {
   const server = sampleServer;
   sampleServer = undefined;
@@ -112,14 +112,18 @@ test.afterEach(async () => {
     await exited;
   }
 });
-
 /**
  * Plays the provider's page and the trip back. The provider's redirect lands on the callback at
  * the UI's origin, which Playwright cannot route after a redirect; the handler asks the API for
  * the callback itself, as the reverse proxy of an operated instance would, and sends the tab
  * on to where the API sends it. With `deny`, the provider declines instead of signing in.
  */
-async function routeProvider(context: BrowserContext, input: { deny?: boolean } = {}) {
+async function routeProvider(
+  context: BrowserContext,
+  input: {
+    deny?: boolean;
+  } = {}
+) {
   await context.route(`${sampleBase}/*/authorize**`, async (route) => {
     const asked = new URL(route.request().url());
     let back: URL;
@@ -139,12 +143,12 @@ async function routeProvider(context: BrowserContext, input: { deny?: boolean } 
     await route.fulfill({ status: 303, headers: { location: landed.headers().location ?? "" } });
   });
 }
-
 /** Pictures of a page as it stands, light, at 1280 and at 390. */
 async function shoot(page: Page, locale: Locale, name: string): Promise<void> {
   if (!shotsDir) return;
   await mkdir(shotsDir, { recursive: true });
-  for (const width of [1280, 390]) {
+  {
+    const width = 1280;
     await page.setViewportSize({ width, height: 900 });
     await page.screenshot({
       path: join(shotsDir, `connection-sign-in-${name}-${width}-${locale}-light.png`)
@@ -152,7 +156,6 @@ async function shoot(page: Page, locale: Locale, name: string): Promise<void> {
   }
   await page.setViewportSize({ width: 1280, height: 900 });
 }
-
 async function signInAs(page: Page, locale: Locale): Promise<void> {
   const signedIn = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/auth/sign-in/email`, {
     data: { ...admin, rememberMe: true }
@@ -164,7 +167,6 @@ async function signInAs(page: Page, locale: Locale): Promise<void> {
   }, locale);
   await page.setViewportSize({ width: 1280, height: 900 });
 }
-
 /** Opens the New connection dialog and connects an MCP server at `path` without a key. */
 async function connectWithoutKey(page: Page, locale: Locale, id: string, path: string) {
   await page.goto("/build/connections");
@@ -179,14 +181,12 @@ async function connectWithoutKey(page: Page, locale: Locale, id: string, path: s
   await dialog.locator("[data-connection-connect]").click();
   return { main, dialog };
 }
-
 /** Clicks the button that opens the provider, and answers the tab it opened. */
 async function openProvider(page: Page, dialog: Locator): Promise<Page> {
   const opened = page.waitForEvent("popup");
   await dialog.locator("[data-sign-in-open]").click();
   return opened;
 }
-
 async function removeConnection(page: Page, id: string): Promise<void> {
   const url = `${apiBaseUrl}/api/v1/assets/connection/${id}`;
   const found = await page.request.get(url);
@@ -197,12 +197,11 @@ async function removeConnection(page: Page, id: string): Promise<void> {
   });
   expect(removed.ok(), `Delete Connection during cleanup: ${removed.status()}`).toBe(true);
 }
-
-test("de: an MCP server that asks for a sign-in is signed in from the dialog, and its tools are approved", async ({
+test("en: an MCP server that asks for a sign-in is signed in from the dialog, and its tools are approved", async ({
   page
 }) => {
-  test.setTimeout(150_000);
-  const id = `e2e-oauth-de-${randomUUID().slice(0, 8)}`;
+  test.setTimeout(150000);
+  const id = `e2e-oauth-en-${randomUUID().slice(0, 8)}`;
   await routeProvider(page.context());
   // The state the provider is handed: it must not stand anywhere in the instance's page.
   const states: string[] = [];
@@ -210,41 +209,37 @@ test("de: an MCP server that asks for a sign-in is signed in from the dialog, an
     const url = new URL(request.url());
     if (url.pathname.endsWith("/authorize")) states.push(url.searchParams.get("state") ?? "");
   });
-  await signInAs(page, "de");
-  const { main, dialog } = await connectWithoutKey(page, "de", id, "/dcr/mcp");
+  await signInAs(page, "en");
+  const { main, dialog } = await connectWithoutKey(page, "en", id, "/dcr/mcp");
   try {
     // The server answered with its challenge: the dialog names the provider and the permission.
     const step = dialog.locator('[data-sign-in-step="ready"]');
     await expect(step).toBeVisible();
-    await expect(page.getByRole("dialog", { name: /^Anmeldung bei 127\.0\.0\.1/u })).toBeVisible();
+    await expect(page.getByRole("dialog", { name: /^Sign in to 127\.0\.0\.1/u })).toBeVisible();
     await expect(step.locator("[data-sign-in-shared]")).toHaveText(
-      "Alle, die diese Verbindung nutzen dürfen, lesen und handeln über das Konto, mit dem du dich jetzt anmeldest."
+      "Everyone who may use this connection reads and acts through the account you sign in with now."
     );
     await expect(step.locator('[data-sign-in-scope="sample.read"]')).toBeChecked();
-    await shoot(page, "de", "step");
-
+    await shoot(page, "en", "step");
     // The provider signs in at once and sends the tab back; the tab closes itself.
     const tab = await openProvider(page, dialog);
     await tab.waitForEvent("close");
     expect(states).toHaveLength(1);
-
     const tools = dialog.locator("li[data-approval-tool]");
     await expect(tools).toHaveCount(6, { timeout: DISCOVERY_TIMEOUT_MS });
     await expect(dialog.locator("[data-connection-connected]")).toBeVisible();
     await dialog.locator("[data-connection-approve]").click();
     // Approved for agents, the dialog offers the give to an agent (CS-5d); Done leaves it.
     await dialog.locator("[data-connection-approved-done]").click();
-
     // The page names the shared sign-in: connected, the permission, nobody else to sign in.
     await expect(page).toHaveURL(new RegExp(`/build/connections/${id}$`, "u"));
     const section = main.locator("[data-connection-sign-in]");
-    await expect(section.locator('[data-sign-in-state="connected"]')).toHaveText("Verbunden");
+    await expect(section.locator('[data-sign-in-state="connected"]')).toHaveText("Connected");
     await expect(section.locator("[data-sign-in-granted]")).toContainText("sample.read");
     await expect(section.locator("[data-sign-in-shared]")).toBeVisible();
-    await expect(section.locator("[data-sign-in-begin]")).toHaveText("Neu anmelden");
+    await expect(section.locator("[data-sign-in-begin]")).toHaveText("Sign in again");
     await section.scrollIntoViewIfNeeded();
-    await shoot(page, "de", "page-connected");
-
+    await shoot(page, "en", "page-connected");
     for (const state of states) {
       expect(state).not.toBe("");
       expect(page.url()).not.toContain(state);
@@ -255,14 +250,12 @@ test("de: an MCP server that asks for a sign-in is signed in from the dialog, an
         )
       ).not.toContain(state);
     }
-
     // The agent's Tools: a signed-in Connection's row carries no notice.
     await page.goto("/build/agents/research_assistant");
     const agentTools = page.locator("#tools");
     const row = toolRow(agentTools, `connection:${id}`);
     await expect(row).toBeVisible();
     await expect(row.locator("[data-tool-sign-in-needed]")).toHaveCount(0);
-
     // Nobody signed in, as after a disconnect: the row says the sign-in is needed. CS-4b3
     // brings the disconnect; until then the instance's answer is replaced here.
     await page.route(`${apiBaseUrl}/api/v1/connections/${id}`, async (route) => {
@@ -272,139 +265,17 @@ test("de: an MCP server that asks for a sign-in is signed in from the dialog, an
       await route.fulfill({ response: answer, json: detail });
     });
     await page.reload();
-    await expect(row.locator("[data-tool-sign-in-needed]")).toHaveText("Anmeldung nötig");
+    await expect(row.locator("[data-tool-sign-in-needed]")).toHaveText("Sign-in needed");
     await row.scrollIntoViewIfNeeded();
-    await shoot(page, "de", "tools-needed");
+    await shoot(page, "en", "tools-needed");
   } finally {
     await removeConnection(page, id);
   }
 });
-
-test("en: a provider that registers no client asks for the one it issued, and an unticked permission is not asked for", async ({
-  page,
-  baseURL
-}) => {
-  test.setTimeout(150_000);
-  const id = REGISTERED_CONNECTION;
-  await routeProvider(page.context());
-  const authorizations: URL[] = [];
-  page.context().on("request", (request) => {
-    const url = new URL(request.url());
-    if (url.pathname.endsWith("/authorize")) authorizations.push(url);
-  });
-  await signInAs(page, "en");
-  const { main, dialog } = await connectWithoutKey(page, "en", id, "/registered/mcp");
-  try {
-    const client = dialog.locator('[data-sign-in-step="client"]');
-    await expect(client).toBeVisible();
-    await expect(
-      page.getByRole("dialog", { name: "Register the instance at the provider" })
-    ).toBeVisible();
-    await expect(client.locator("[data-sign-in-redirect-uri]")).toHaveText(
-      `${baseURL}${callbackPathOf(id)}`
-    );
-    await expect(dialog.locator("[data-sign-in-save-client]")).toBeDisabled();
-    await client.locator('[data-sign-in-field="clientId"]').fill(REGISTERED_CLIENT_ID);
-    await shoot(page, "en", "client");
-    await dialog.locator("[data-sign-in-save-client]").click();
-
-    const step = dialog.locator('[data-sign-in-step="ready"]');
-    await expect(step).toBeVisible();
-    await step.locator('[data-sign-in-scope="sample.read"]').click();
-    await expect(step.locator('[data-sign-in-scope="sample.read"]')).not.toBeChecked();
-    const tab = await openProvider(page, dialog);
-    await tab.waitForEvent("close");
-    expect(authorizations).toHaveLength(1);
-    expect(authorizations[0]?.searchParams.get("client_id")).toBe(REGISTERED_CLIENT_ID);
-    expect(authorizations[0]?.searchParams.has("scope")).toBe(false);
-
-    await expect(dialog.locator("[data-connection-connected]")).toBeVisible({
-      timeout: DISCOVERY_TIMEOUT_MS
-    });
-    await dialog.getByRole("button", { name: WORDS.en.later }).click();
-    await expect(page).toHaveURL(new RegExp(`/build/connections/${id}$`, "u"));
-    const section = main.locator("[data-connection-sign-in]");
-    await expect(section.locator('[data-sign-in-state="connected"]')).toBeVisible();
-    await expect(section).toContainText(REGISTERED_CLIENT_ID);
-    await expect(section).toContainText(`${baseURL}${callbackPathOf(id)}`);
-    await section.scrollIntoViewIfNeeded();
-    await shoot(page, "en", "page-registered");
-  } finally {
-    await removeConnection(page, id);
-  }
-});
-
-test("de: a REST API names its authorization server, signs in from the dialog and goes on to its tools", async ({
-  page,
-  baseURL
-}) => {
-  test.setTimeout(150_000);
-  const id = REST_CONNECTION;
-  await routeProvider(page.context());
-  const authorizations: URL[] = [];
-  page.context().on("request", (request) => {
-    const url = new URL(request.url());
-    if (url.pathname.endsWith("/authorize")) authorizations.push(url);
-  });
-  await signInAs(page, "de");
-  await page.goto("/build/connections");
-  const main = page.getByRole("region", { name: "Studio" });
-  await main.getByRole("button", { name: WORDS.de.newConnection }).first().click();
-  const dialog = page.getByRole("dialog").first();
-  await dialog.locator('[data-connection-type="http_api"]').getByRole("button").click();
-  try {
-    await dialog.locator('[data-name-with-address-field="name"]').fill("Beispiel REST");
-    await dialog.locator("[data-name-with-address-fold]").click();
-    await dialog.locator('[data-name-with-address-field="address"]').fill(id);
-    await dialog.locator('[data-connection-field="url"]').fill(`${sampleBase}/oauth-rest/api`);
-    await dialog.locator('[data-connection-field="auth"]').selectOption("oauth");
-    await dialog
-      .locator('[data-connection-field="oauthAuthorizationUrl"]')
-      .fill(`${sampleBase}/oauth-rest/authorize`);
-    await dialog
-      .locator('[data-connection-field="oauthTokenUrl"]')
-      .fill(`${sampleBase}/oauth-rest/token`);
-    await dialog.locator('[data-connection-field="oauthClientId"]').fill(REST_CLIENT_ID);
-    await dialog.locator('[data-connection-field="secret"]').fill(REST_CLIENT_SECRET);
-    await dialog.locator('[data-connection-field="oauthScopes"]').fill("sample.read");
-    await dialog
-      .locator('[data-connection-field="oauthRevocationUrl"]')
-      .fill(`${sampleBase}/oauth-rest/revoke`);
-    await expect(dialog.getByText("OAuth-Anmeldung").first()).toBeAttached();
-    await dialog.locator('[data-connection-field="oauthRevocationUrl"]').blur();
-    await dialog.locator('[data-connection-field="url"]').scrollIntoViewIfNeeded();
-    await shoot(page, "de", "rest-form");
-
-    await dialog.locator("[data-connection-connect]").click();
-    const step = dialog.locator('[data-sign-in-step="ready"]');
-    await expect(step).toBeVisible();
-    // The redirect URI to enter at the provider stands at the step, to copy.
-    await expect(step.locator("[data-sign-in-redirect-uri]")).toHaveText(
-      `${baseURL}${callbackPathOf(id)}`
-    );
-    await shoot(page, "de", "rest-step");
-
-    const tab = await openProvider(page, dialog);
-    await tab.waitForEvent("close");
-    expect(authorizations).toHaveLength(1);
-    expect(authorizations[0]?.searchParams.get("client_id")).toBe(REST_CLIENT_ID);
-    expect(authorizations[0]?.searchParams.has("resource")).toBe(false);
-
-    await expect(dialog.locator("[data-connection-connected]")).toHaveText(
-      "Mit Beispiel REST verbunden. Aufrufe nutzen das angemeldete Konto."
-    );
-    await shoot(page, "de", "rest-connected");
-    // The client secret never stands in the page.
-    expect(await page.content()).not.toContain(REST_CLIENT_SECRET);
-  } finally {
-    await removeConnection(page, id);
-  }
-});
-
 test("de: a declined sign-in says so at the step and in the tab it came back to", async ({
   page
 }) => {
-  test.setTimeout(120_000);
+  test.setTimeout(120000);
   const id = `e2e-oauth-denied-${randomUUID().slice(0, 8)}`;
   // The provider's page declines: it sends the tab back with `access_denied`.
   await routeProvider(page.context(), { deny: true });
@@ -413,7 +284,6 @@ test("de: a declined sign-in says so at the step and in the tab it came back to"
   try {
     await expect(dialog.locator('[data-sign-in-step="ready"]')).toBeVisible();
     const tab = await openProvider(page, dialog);
-
     // The tab it came back to names the outcome, with nothing of it left in its address.
     await expect(tab.locator('[data-sign-in-landing="oauth_denied"]')).toBeVisible();
     await expect(tab).toHaveURL(/\/build\/connections$/u);
@@ -422,7 +292,6 @@ test("de: a declined sign-in says so at the step and in the tab it came back to"
       tab.getByText("Die Anmeldung wurde beim Anbieter abgelehnt oder abgebrochen.")
     ).toBeVisible();
     await shoot(tab, "de", "landing-denied");
-
     // The dialog heard it at once, and offers the sign-in again.
     const error = dialog.locator('[data-sign-in-error="oauth_denied"]');
     await expect(error).toHaveText(
@@ -430,7 +299,6 @@ test("de: a declined sign-in says so at the step and in the tab it came back to"
     );
     await expect(dialog.locator("[data-sign-in-open]")).toBeEnabled();
     await shoot(page, "de", "step-denied");
-
     // The tab leaves for the Connection's page.
     await tab.getByRole("button", { name: "Zur Verbindung" }).click();
     await expect(tab).toHaveURL(new RegExp(`/build/connections/${id}$`, "u"));

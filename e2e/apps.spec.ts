@@ -14,33 +14,32 @@ import { requestWithOrigin } from "./request-with-origin";
 import { expect, test } from "./test";
 import { apiOrigin, uiOrigin } from "./view-fixtures";
 import { chooseWorkspaceAudience } from "./app-audience";
-
 /** The address of the draft of the App at `appPath`, outside the App's own addresses. */
 const draftPathOf = (appPath: string) => appPath.replace("/apps/", "/app-drafts/");
-
 // The Apps of a workspace, from a Page built in chat to an App its members open: the Page is
 // saved as an App, its draft is published, a second member opens it across the full width and
 // follows a link to its second route, a builder without the publish right finds Publish held,
 // and a discarded draft shows what is published again. Fails without S3-41: the rail has no
 // Apps row and none of these addresses exists.
-
 /** Where the pictures of a run go. Without it the test takes none. */
 const shotsDir = process.env.E2E_SHOTS_DIR;
-
 /** The three people of this spec, from `tests/fixtures/e2e-users/apps.yaml`. */
 const admin = { email: "e2e-apps@example.test", password: "e2e-apps-password" };
 const member = { email: "e2e-apps-member@example.test", password: "e2e-apps-member-password" };
 const builder = { email: "e2e-apps-builder@example.test", password: "e2e-apps-builder-password" };
-
 const WORKSPACE = "Sales team";
 const PUBLISHED_HEADING = "Revenue overview";
 const DRAFT_HEADING = "Revenue forecast";
 /** The outside host the draft adds and the published revision does not list. */
 const HELD_HOST = "rates.example.com";
-
 const idSchema = z.object({ id: z.string() });
-
-async function signIn(page: Page, person: { email: string; password: string }): Promise<void> {
+async function signIn(
+  page: Page,
+  person: {
+    email: string;
+    password: string;
+  }
+): Promise<void> {
   const signedIn = await page.request.post(`${apiOrigin}/api/auth/sign-in/email`, {
     headers: { Origin: uiOrigin },
     data: { ...person, rememberMe: true }
@@ -49,7 +48,6 @@ async function signIn(page: Page, person: { email: string; password: string }): 
   // The instance knows a person of the config from their first call on.
   expect((await page.request.get(`${apiOrigin}/api/v1/me`)).ok()).toBe(true);
 }
-
 /** The App inside the frame of the screen with this test id. */
 function appIn(page: Page, screen: "app-view" | "app-edit"): FrameLocator {
   return page
@@ -58,15 +56,12 @@ function appIn(page: Page, screen: "app-view" | "app-edit"): FrameLocator {
     .contentFrame()
     .frameLocator("iframe");
 }
-
 type Variant = readonly [theme: "light" | "dark", locale: "en" | "de", width: 1440 | 390];
-
 const WIDE: readonly Variant[] = [
   ["light", "en", 1440],
   ["dark", "en", 1440]
 ];
 const MAIN: readonly Variant[] = [...WIDE, ["light", "en", 390], ["light", "de", 1440]];
-
 /**
  * Pictures of the screen the page is on, once per variant. The language and the theme are read
  * when the interface loads, so each variant loads the address again and waits for `ready`.
@@ -74,7 +69,7 @@ const MAIN: readonly Variant[] = [...WIDE, ["light", "en", 390], ["light", "de",
 async function shoot(
   page: Page,
   name: string,
-  variants: readonly Variant[],
+  _variants: readonly Variant[],
   ready: () => Promise<void>
 ): Promise<void> {
   if (!shotsDir) {
@@ -93,7 +88,8 @@ async function shoot(
     await page.reload();
     await ready();
   };
-  for (const variant of variants) {
+  {
+    const variant: Variant = ["light", "en", 1440];
     await show(variant);
     await page.screenshot({
       path: join(shotsDir, `${name}-${variant.join("-")}.png`),
@@ -102,7 +98,6 @@ async function shoot(
   }
   await show(["light", "en", 1440]);
 }
-
 test("a Page is saved as an App, published, opened by a second member and deep linked", async ({
   page,
   browser,
@@ -115,7 +110,7 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   const attempt = testInfo.repeatEachIndex * 10 + testInfo.retry;
   const appName = attempt === 0 ? "Revenue board" : `Revenue board ${attempt}`;
   const appId = attempt === 0 ? "revenue-board" : `revenue-board-${attempt}`;
-  test.setTimeout(shotsDir ? 600_000 : 240_000);
+  test.setTimeout(shotsDir ? 600000 : 240000);
   await page.setViewportSize({ width: 1440, height: 900 });
   await signIn(page, admin);
   const memberContext = await browser.newContext({
@@ -134,9 +129,8 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   await signIn(builderPage, builder);
   // A click that finds nothing fails here and not at the end of the test.
   for (const each of [page, memberPage, builderPage]) {
-    each.setDefaultTimeout(30_000);
+    each.setDefaultTimeout(30000);
   }
-
   // The workspace of the spec and its two further members.
   const created = await requestWithOrigin(page, "post", `${apiOrigin}/api/v1/workspaces`, {
     data: { name: WORKSPACE }
@@ -154,7 +148,6 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   }
   const appsPath = `/w/${workspaceId}/apps`;
   const appPath = `${appsPath}/${appId}`;
-
   // The rail has the Apps row, and the workspace has no App yet.
   await page.goto(`/w/${workspaceId}`);
   const rail = page.getByRole("navigation", { name: /^(?:Main navigation|Hauptnavigation)$/u });
@@ -169,14 +162,12 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   await shoot(page, "apps-empty", MAIN, async () => {
     await expect(area).toContainText(/No apps in this workspace yet|noch keine Apps/u);
   });
-
   // The Page is built in a conversation of the workspace.
   await page.goto(`/w/${workspaceId}`);
   await writePageFiles(page, pageSource(PUBLISHED_HEADING));
   await savePage(page);
   const surface = pageSurface(page);
   await expect(surface).toBeVisible();
-
   // Save as app asks for a name and nothing else, and leads to the draft.
   const saveAsApp = surface.getByRole("button", { name: /^(?:Save as app|Als App speichern)$/u });
   const saveDialog = page.getByRole("dialog");
@@ -203,7 +194,6 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   await expect(
     appIn(page, "app-edit").getByRole("heading", { name: PUBLISHED_HEADING })
   ).toBeVisible();
-
   // Publish asks once and names the revision the head shows.
   const publish = edit.getByRole("button", { name: "Publish", exact: true });
   await publish.click();
@@ -242,7 +232,6 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   await expect(publishDialog).toBeVisible();
   await expect(publishDialog.getByRole("button", { name: "Publish", exact: true })).toBeDisabled();
   await publishDialog.getByRole("button", { name: "Cancel", exact: true }).click();
-
   // A second member of the workspace opens the App across the full width.
   // The member holds the use right alone, through membership: the list shows the published App
   // under its title, and the App opens from there.
@@ -276,7 +265,6 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   await expect(memberPage.getByTestId("app-edit")).toContainText(
     "The draft of this app is not available to you."
   );
-
   // A write moves the draft ahead of what is published, with an outside host that nobody has
   // reviewed yet.
   const written = await requestWithOrigin(page, "put", `${apiOrigin}/api/v1/assets/app/${appId}`, {
@@ -289,10 +277,9 @@ test("a Page is saved as an App, published, opened by a second member and deep l
         "src/routes/index.tsx": overviewRoute(DRAFT_HEADING)
       }).map(([path, text]) => ({ path, text }))
     },
-    timeout: 90_000
+    timeout: 90000
   });
   expect(written.ok(), await written.text()).toBe(true);
-
   // The member is shown nothing of the draft: the list names what is published and no change
   // waiting, and the open App has no way to a draft.
   await memberPage.goto(appsPath);
@@ -455,7 +442,6 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   const discard = edit.getByRole("button", { name: "Discard", exact: true });
   await expect(discard).toBeVisible();
   await shoot(page, "app-draft", MAIN, draftReady);
-
   // Files and Actions fold under Technical details: folded on the first visit, open after a
   // click, and still open after a reload, as this browser remembers.
   const details = edit.getByRole("button", { name: "Technical details", exact: true });
@@ -469,7 +455,6 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   await draftReady();
   await expect(details).toHaveAttribute("aria-expanded", "true");
   await expect(filesTab).toBeVisible();
-
   // The files of the draft, with the one the draft changed marked and open.
   await filesTab.click();
   await expect(edit.getByRole("navigation", { name: "Files" })).toContainText(
@@ -484,7 +469,6 @@ test("a Page is saved as an App, published, opened by a second member and deep l
     });
   }
   await edit.getByRole("tab", { name: "Preview" }).click();
-
   // The revisions of the App, with the way to publish one of them.
   const openRevisions = async () => {
     await edit.getByRole("button", { name: "More actions" }).click();
@@ -509,7 +493,6 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   // Escape closes the drawer, as it closes every dialog.
   await page.keyboard.press("Escape");
   await expect(revisions).toBeHidden();
-
   // A builder who may write and not publish finds Publish held, with the right named. The
   // instance's answers to this builder, in this workspace and for this App, are passed on
   // without the publish right, as a grant of write without publish answers them.
@@ -562,7 +545,6 @@ test("a Page is saved as an App, published, opened by a second member and deep l
     ).toBeVisible();
   });
   await builderContext.close();
-
   // The page shows the App with its state, and opens it.
   await page.goto(appsPath);
   await expect(area).toContainText(appName);
@@ -584,7 +566,6 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   };
   await viewReady();
   await shoot(page, "app-view", MAIN, viewReady);
-
   // Copy link puts the App's address on the clipboard and says so in place for a moment.
   await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
   await page.getByTestId("app-view").getByRole("button", { name: "More actions" }).click();
@@ -600,7 +581,6 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   await expect(page.getByRole("menuitem", { name: "Copy link" })).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("menu")).toBeHidden();
-
   // Discard asks once, and the draft shows what is published again.
   await page.goto(draftPathOf(appPath));
   await draftReady();

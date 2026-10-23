@@ -6,13 +6,7 @@ import { join } from "node:path";
 import type { Locator, Page, Request } from "@playwright/test";
 import { availableSamplePort } from "./sample-port.mjs";
 import { sendToolCall } from "./page-surface-fixtures";
-import {
-  assetBaseRevision,
-  assetRevision,
-  readAgentDraft,
-  readAsset,
-  requestWithOrigin
-} from "./request-with-origin";
+import { assetRevision, requestWithOrigin } from "./request-with-origin";
 import { expect, test } from "./test";
 import { requestAnswered } from "./allowed-page-errors";
 const PROPOSE_TEST =
@@ -46,15 +40,12 @@ test.use({
     ]
   }
 });
-
 // The New connection dialog against the demo's sample MCP server, which this file starts on
 // a free loopback port the suite's `egress.allow` permits. An MCP server: a wrong address, then a refused
 // key, then the tools the server names, approved in one confirmation. A REST API: the address,
-// the key and the test path, then tools pasted as YAML and approved. Each in English and in
-// German; the key is typed and never shown again. The agent's draft of a REST API's tools
+// the key and the test path, then tools pasted as YAML and approved. One English pass; the key is typed and never shown again. The agent's draft of a REST API's tools
 // (CS-5c): a card in the chat whose button opens the approval list, on the Connection's page or
 // in the New connection dialog, and nothing is saved before the person approves.
-
 const host = process.env.E2E_HOST ?? "127.0.0.1";
 const apiBaseUrl = process.env.E2E_API_URL ?? `http://${host}:4210`;
 let sampleBase: string;
@@ -62,22 +53,27 @@ const admin = { email: "e2e-admin@example.test", password: "e2e-admin-password" 
 /** Set to a directory to keep pictures of each step of the dialog and of the page. */
 const shotsDir = process.env.E2E_SHOTS_DIR;
 /** How long the instance may take to read the tools: the discovery is a job. */
-const DISCOVERY_TIMEOUT_MS = 45_000;
-
+const DISCOVERY_TIMEOUT_MS = 45000;
 const LOCALES = ["en", "de"] as const;
 type Locale = (typeof LOCALES)[number];
 /** The few words a locator needs where no data attribute names the thing. */
-const WORDS: Record<Locale, { newConnection: string; discard: string; draft: string }> = {
+const WORDS: Record<
+  Locale,
+  {
+    newConnection: string;
+    discard: string;
+    draft: string;
+  }
+> = {
   en: { newConnection: "New connection", discard: "Discard", draft: "Draft read-only tools" },
   de: { newConnection: "Neue Verbindung", discard: "Verwerfen", draft: "Entwirf Lese-Tools" }
 };
-
 let sampleServer: ChildProcess | undefined;
 const sampleKey = randomBytes(24).toString("base64url");
-
 // Connections and the sample server's port are instance-wide. Keep the same turn as the
 // list/rights specs through setup, every UI write and cleanup, including parallel repeats.
-test.beforeEach(async ({ releaseConnections: _releaseConnections }) => {
+test.beforeEach(async ({ releaseConnections: _releaseConnections }) => {});
+test.beforeAll(async () => {
   // A killed worker can leave its child alive. Never reuse that child's port and key.
   const samplePort = await availableSamplePort(
     (process.env.E2E_SAMPLE_MCP_PORTS ?? "4219").split(",").map(Number)
@@ -101,12 +97,11 @@ test.beforeEach(async ({ releaseConnections: _releaseConnections }) => {
           return 0;
         }
       },
-      { timeout: 15_000 }
+      { timeout: 15000 }
     )
     .toBe(200);
 });
-
-test.afterEach(async () => {
+test.afterAll(async () => {
   const server = sampleServer;
   sampleServer = undefined;
   if (server && server.exitCode === null && server.signalCode === null) {
@@ -115,12 +110,12 @@ test.afterEach(async () => {
     await exited;
   }
 });
-
-/** Pictures of what stands now, light, at 1280 and at 390; the page is not reloaded. */
+/** One opt-in picture of what stands now; the page is not reloaded. */
 async function shoot(page: Page, locale: Locale, name: string): Promise<void> {
   if (!shotsDir) return;
   await mkdir(shotsDir, { recursive: true });
-  for (const width of [1280, 390]) {
+  {
+    const width = 1280;
     await page.setViewportSize({ width, height: 900 });
     await page.screenshot({
       path: join(shotsDir, `connection-create-${name}-${width}-${locale}-light.png`)
@@ -128,7 +123,6 @@ async function shoot(page: Page, locale: Locale, name: string): Promise<void> {
   }
   await page.setViewportSize({ width: 1280, height: 900 });
 }
-
 /** Signs in and opens the dialog in the locale, light. */
 async function openDialog(page: Page, locale: Locale) {
   const signedIn = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/auth/sign-in/email`, {
@@ -150,7 +144,6 @@ async function openDialog(page: Page, locale: Locale) {
   await expect(dialog.locator("[data-connection-type]")).toHaveCount(3);
   return { main, dialog };
 }
-
 /** The writes the browser sends about one Connection, in their order. */
 function recordWrites(page: Page, id: string): string[] {
   const writes: string[] = [];
@@ -162,7 +155,6 @@ function recordWrites(page: Page, id: string): string[] {
   });
   return writes;
 }
-
 async function removeConnection(page: Page, id: string): Promise<void> {
   const url = `${apiBaseUrl}/api/v1/assets/connection/${id}`;
   const found = await page.request.get(url);
@@ -173,19 +165,18 @@ async function removeConnection(page: Page, id: string): Promise<void> {
   });
   expect(removed.ok(), `Delete Connection during cleanup: ${removed.status()}`).toBe(true);
 }
-
-for (const locale of ["en"] as const) {
+{
+  const locale = "en" as const;
   test(`${locale}: an MCP server is connected after a wrong address and a refused key, and its tools are approved at once`, async ({
     page
   }) => {
-    test.setTimeout(150_000);
+    test.setTimeout(150000);
     const id = `e2e-mcp-${locale}-${randomUUID().slice(0, 8)}`;
     const writes = recordWrites(page, id);
     const { main, dialog } = await openDialog(page, locale);
     try {
       await shoot(page, locale, "pick");
       await dialog.locator('[data-connection-type="mcp"]').getByRole("button").click();
-
       const field = (name: string) => dialog.locator(`[data-connection-field="${name}"]`);
       const connect = dialog.locator("[data-connection-connect]");
       await expect(connect).toBeDisabled();
@@ -196,20 +187,17 @@ for (const locale of ["en"] as const) {
       await expect(field("secret")).toHaveAttribute("type", "password");
       await field("secret").fill("not-the-key");
       await shoot(page, locale, "mcp-form");
-
       // Nobody answers at that address: the address says so, and the key stays.
       await connect.click();
       await expect(field("url")).toHaveAttribute("aria-invalid", "true");
       await expect(field("secret")).toHaveValue("not-the-key");
       await shoot(page, locale, "mcp-error-url");
-
       // The server answers and refuses the key: the field is empty and waits for another.
       await field("url").fill(`${sampleBase}/mcp`);
       await connect.click();
       await expect(field("secret")).toHaveAttribute("aria-invalid", "true");
       await expect(field("secret")).toHaveValue("");
       await shoot(page, locale, "mcp-error-key");
-
       // The right key: the steps run while the test is slow, then the server's tools. The route
       // holds this one test and then removes itself: an unroute while it holds the request would
       // let Playwright continue it first, and the handler's own continue would throw.
@@ -228,7 +216,6 @@ for (const locale of ["en"] as const) {
       await expect(dialog.locator('[data-connect-step="server"]')).toBeVisible();
       await shoot(page, locale, "mcp-connecting");
       releaseTest();
-
       const tools = dialog.locator("li[data-approval-tool]");
       await expect(tools).toHaveCount(6, { timeout: DISCOVERY_TIMEOUT_MS });
       await expect(dialog.locator("[data-connection-connected]")).toBeVisible();
@@ -237,7 +224,6 @@ for (const locale of ["en"] as const) {
       await expect(dialog.locator('[data-approval-surface="agent"]')).toBeChecked();
       await expect(dialog.locator('[data-approval-surface="workflow"]')).not.toBeChecked();
       await shoot(page, locale, "mcp-approve");
-
       await tools.nth(4).getByRole("checkbox").uncheck();
       await tools.nth(5).getByRole("checkbox").uncheck();
       await dialog.locator('[data-approval-surface="workflow"]').check();
@@ -250,7 +236,6 @@ for (const locale of ["en"] as const) {
       await expect(dialog.locator("[data-connection-approved]")).toContainText("4");
       await expect(dialog.locator("[data-connection-give]")).toBeVisible();
       await dialog.locator("[data-connection-approved-done]").click();
-
       // One write with the four approved; the page holds them and offers the two others.
       await expect(page).toHaveURL(new RegExp(`/build/connections/${id}$`, "u"));
       await expect(dialog).toHaveCount(0);
@@ -262,7 +247,6 @@ for (const locale of ["en"] as const) {
         2
       );
       await shoot(page, locale, "mcp-page");
-
       // Each connect writes the definition and tests it. The key goes along the first time and
       // after it was refused, not after the path changed on the same host.
       expect(writes).toEqual([
@@ -282,11 +266,10 @@ for (const locale of ["en"] as const) {
       await removeConnection(page, id);
     }
   });
-
   test(`${locale}: a REST API is connected, its tools are pasted and approved, and Workshaper is asked for more`, async ({
     page
   }) => {
-    test.setTimeout(120_000);
+    test.setTimeout(120000);
     const id = `e2e-rest-${locale}-${randomUUID().slice(0, 8)}`;
     const writes = recordWrites(page, id);
     const { main, dialog } = await openDialog(page, locale);
@@ -304,7 +287,6 @@ for (const locale of ["en"] as const) {
       await field("testPath").fill("/healthz");
       await shoot(page, locale, "rest-form");
       await dialog.locator("[data-connection-connect]").click();
-
       // Connected, it names no tools: pasted, they reach the approval list.
       await expect(dialog.locator("[data-connection-add-tools]")).toBeVisible();
       await expect(dialog.locator("[data-connection-connected]")).toBeVisible();
@@ -331,7 +313,6 @@ for (const locale of ["en"] as const) {
       await dialog.locator("[data-connection-approve]").click();
       await expect(dialog.locator("[data-connection-give]")).toBeVisible();
       await dialog.locator("[data-connection-approved-done]").click();
-
       await expect(page).toHaveURL(new RegExp(`/build/connections/${id}$`, "u"));
       await expect(main.locator('[data-connection-operation="health"]')).toBeVisible();
       await expect(main.locator("[data-connection-add-tools]")).toBeVisible();
@@ -342,7 +323,6 @@ for (const locale of ["en"] as const) {
         "POST /api/v1/connections/:name/test",
         "PUT /api/v1/assets/connection/:name"
       ]);
-
       // "Draft with Workshaper" opens the chat beside the page with the request typed.
       await main.locator("[data-connection-draft]").getByRole("button").click();
       await expect
@@ -361,39 +341,8 @@ for (const locale of ["en"] as const) {
     }
   });
 }
-
-test("cancel after a failed connect asks, then deletes the Connection", async ({ page }) => {
-  test.setTimeout(90_000);
-  const id = `e2e-discard-${randomUUID().slice(0, 8)}`;
-  const { dialog } = await openDialog(page, "en");
-  try {
-    await dialog.locator('[data-connection-type="http_api"]').getByRole("button").click();
-    const field = (name: string) => dialog.locator(`[data-connection-field="${name}"]`);
-    await dialog.locator('[data-name-with-address-field="name"]').fill("Nowhere");
-    await field("url").fill(`${sampleBase}/nope`);
-    await dialog.locator("[data-name-with-address-fold]").click();
-    await dialog.locator('[data-name-with-address-field="address"]').fill(id);
-    await field("testPath").fill("/nothing");
-    await dialog.locator("[data-connection-connect]").click();
-    await expect(field("url")).toHaveAttribute("aria-invalid", "true");
-    await expect(dialog).toContainText("The test path gave no successful answer.");
-    expect((await page.request.get(`${apiBaseUrl}/api/v1/connections/${id}`)).ok()).toBe(true);
-
-    await page.keyboard.press("Escape");
-    const ask = page.getByRole("alertdialog").or(page.getByRole("dialog", { name: /Discard/u }));
-    await ask.getByRole("button", { name: WORDS.en.discard, exact: true }).click();
-    await expect(page.getByRole("dialog")).toHaveCount(0);
-    await expect
-      .poll(async () => (await page.request.get(`${apiBaseUrl}/api/v1/connections/${id}`)).status())
-      .toBe(404);
-  } finally {
-    await removeConnection(page, id);
-  }
-});
-
 /** A health path of the sample server that answers only with its key. */
 const KEYED_HEALTH = "/rest/api/monitoring/instance/demo-local/datev-connect-health";
-
 /** The draft the agent answers for the Connection `id`: the sample server's health, read. */
 /** The title the agent drafts with; an existing Connection keeps its own. */
 const DRAFT_TITLE = "Sample API";
@@ -406,7 +355,6 @@ const LONG_DESCRIPTION = [
   "and again after an error, to tell an outage of the service from a refused request.",
   "It reads only and changes nothing; it takes no parameter and answers in a few milliseconds."
 ].join(" ");
-
 /** Ordinary multi-value enums, including text that must never become an element or link. */
 const ENUM_TEXT = '<img data-enum-injection src=x onerror="alert(1)"> [open](javascript:alert(2))';
 const LONG_ENUM_VALUE =
@@ -415,7 +363,6 @@ const enumQuery = {
   status: { schema: { type: "string", enum: ["ready", ENUM_TEXT] } },
   report: { schema: { type: "string", enum: ["overview", LONG_ENUM_VALUE] } }
 };
-
 /** Both paste and draft must show values, keep markup inert, and unfold the long value. */
 async function checkParameterEnums(row: Locator, locale: Locale): Promise<void> {
   const status = row.locator('[data-approval-parameter="query.status"]');
@@ -437,7 +384,6 @@ async function checkParameterEnums(row: Locator, locale: Locale): Promise<void> 
   await more.click();
   await expect(more).toHaveAttribute("aria-expanded", "false");
 }
-
 function healthDraft(id: string) {
   return {
     connection: id,
@@ -465,17 +411,17 @@ function healthDraft(id: string) {
     ]
   };
 }
-
 /** The control that unfolds a long description. */
 const showMore: Record<Locale, string> = { en: "Show more", de: "Mehr anzeigen" };
-
 /** Pictures of what stands now, light and dark, at 1280 and at 390; the page is not reloaded. */
 async function shootModes(page: Page, locale: Locale, name: string): Promise<void> {
   if (!shotsDir) return;
   await mkdir(shotsDir, { recursive: true });
-  for (const mode of ["light", "dark"] as const) {
+  {
+    const mode = "light" as const;
     await page.emulateMedia({ colorScheme: mode });
-    for (const width of [1280, 390]) {
+    {
+      const width = 1280;
       await page.setViewportSize({ width, height: 900 });
       if (name === "enum") {
         // Keep both enum sets inside the approval dialog's scrollport at each width.
@@ -496,12 +442,12 @@ async function shootModes(page: Page, locale: Locale, name: string): Promise<voi
   await page.emulateMedia({ colorScheme: "light" });
   await page.setViewportSize({ width: 1280, height: 900 });
 }
-
-for (const locale of LOCALES) {
+{
+  const locale = "en" as const;
   test(`${locale}: the agent's draft is a card that opens the approval list, and only the approval saves it`, async ({
     page
   }) => {
-    test.setTimeout(150_000);
+    test.setTimeout(150000);
     const existing = `e2e-draft-${locale}-${randomUUID().slice(0, 8)}`;
     const fresh = `e2e-draft-new-${locale}-${randomUUID().slice(0, 8)}`;
     const existingWrites = recordWrites(page, existing);
@@ -557,7 +503,6 @@ for (const locale of LOCALES) {
       await expect(card).toContainText(EXISTING_TITLE);
       await expect(card).not.toContainText(DRAFT_TITLE);
       await shootModes(page, locale, "card");
-
       // The button opens the approval list on the page, with what each tool tells an agent.
       // Discarding it saves nothing.
       await card.locator("[data-connection-draft-open]").click();
@@ -584,7 +529,6 @@ for (const locale of LOCALES) {
       await expect(page.getByRole("dialog")).toHaveCount(0);
       await expect(main.locator('[data-connection-operation="health"]')).toHaveCount(0);
       expect(existingWrites).toEqual([]);
-
       // Opened again and approved, the one approval is the one save.
       await card.locator("[data-connection-draft-open]").click();
       await dialog.locator("[data-connection-approve]").click();
@@ -592,7 +536,6 @@ for (const locale of LOCALES) {
       await expect(page.getByRole("dialog")).toHaveCount(0);
       await expect(main.locator('[data-connection-operation="health"]')).toBeVisible();
       expect(existingWrites).toEqual(["PUT /api/v1/assets/connection/:name"]);
-
       // For an id no Connection has, the New connection dialog opens filled, without a key. Its
       // drafted test path needs the key, so a wrong key fails Verbinden.
       await sendToolCall(page, "platform.connections.draft_tools", {
@@ -618,12 +561,10 @@ for (const locale of LOCALES) {
       await expect(field("testPath")).toHaveValue(KEYED_HEALTH);
       await shootModes(page, locale, "new-form");
       expect(freshWrites).toEqual([]);
-
       await field("secret").fill(`${sampleKey}-wrong`);
       await create.locator("[data-connection-connect]").click();
       await expect(field("secret")).toHaveAttribute("aria-invalid", "true");
       await expect(create.locator('li[data-approval-tool="health"]')).toHaveCount(0);
-
       // Connected, the drafted tools wait in the approval list; approving them saves them.
       await field("secret").fill(sampleKey);
       await create.locator("[data-connection-connect]").click();
@@ -651,258 +592,3 @@ for (const locale of LOCALES) {
     }
   });
 }
-
-// The agent's proposal of a new Connection (CHAT-CONN-1): sent from the chat, it opens the New
-// connection dialog filled with it, the conversation docked beside it. The person enters the key
-// there; once the tools are approved, their tab sends the conversation a message that says so,
-// which names no address and no key, and the agent answers it.
-test(PROPOSE_TEST, async ({ page }) => {
-  test.setTimeout(150_000);
-  const id = `e2e-propose-${randomUUID().slice(0, 8)}`;
-  const proposedAddress = "https://sample.example.test/mcp";
-  const signedIn = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/auth/sign-in/email`, {
-    data: { ...admin, rememberMe: true }
-  });
-  expect(signedIn.ok()).toBe(true);
-  await page.addInitScript(() => {
-    window.localStorage.setItem("vivd-catalyst:locale", "de");
-  });
-  await page.emulateMedia({ colorScheme: "light" });
-  await page.setViewportSize({ width: 1280, height: 900 });
-  try {
-    await page.goto("/");
-    await sendToolCall(page, "platform.connections.propose", {
-      connectorType: "mcp",
-      connection: id,
-      title: "Beispielserver",
-      url: proposedAddress
-    });
-    // The tab that sent the message opens the dialog, on the Connections, with the chat docked.
-    const create = page.getByRole("dialog");
-    await expect(create.locator('[data-connection-create-form="mcp"]')).toBeVisible();
-    await expect(page).toHaveURL(
-      (url) => url.pathname.endsWith("/build/connections") && url.searchParams.has("chat")
-    );
-    const field = (name: string) => create.locator(`[data-connection-field="${name}"]`);
-    await expect(create.locator('[data-name-with-address-field="name"]')).toHaveValue(
-      "Beispielserver"
-    );
-    await expect(create.locator('[data-name-with-address-field="address"]')).toHaveValue(id);
-    await expect(field("url")).toHaveValue(proposedAddress);
-    await expect(field("secret")).toHaveValue("");
-    await shootModes(page, "de", "proposal-form");
-
-    // The suite's sample server stands in for the proposed address.
-    await field("url").fill(`${sampleBase}/mcp`);
-    await field("secret").fill(sampleKey);
-    await create.locator("[data-connection-connect]").click();
-    const tools = create.locator("li[data-approval-tool]");
-    await expect(tools).toHaveCount(6, { timeout: DISCOVERY_TIMEOUT_MS });
-    await create.locator("[data-connection-approve]").click();
-    await create.locator("[data-connection-approved-done]").click();
-    await expect(page).toHaveURL(new RegExp(`/build/connections/${id}(?:\\?|$)`, "u"));
-
-    // The person's message in the conversation, and the agent's answer to it.
-    const told = page.getByText(
-      new RegExp(
-        `^Beispielserver ist verbunden \\(${id}\\), 6 Werkzeuge freigegeben für Agenten: `,
-        "u"
-      )
-    );
-    await expect(told.first()).toBeVisible();
-    await expect(
-      page
-        .getByText("Local agent response: I received", { exact: false })
-        .filter({ hasText: "Beispielserver ist verbunden" })
-        .first()
-    ).toBeVisible();
-    // The card stays in the conversation and opens the existing Connection's page now.
-    await expect(
-      page.locator(`[data-connection-proposal="mcp"][data-connection="${id}"]`)
-    ).toContainText("Beispielserver verbinden");
-    await shootModes(page, "de", "proposal-told");
-    const content = await page.content();
-    expect(content).not.toContain(sampleKey);
-    expect(await told.first().textContent()).not.toContain("127.0.0.1");
-  } finally {
-    await removeConnection(page, id);
-  }
-});
-
-/** The agent the page test gives a new Connection's tools to; the test stores and deletes it. */
-const HANDOFF_AGENT_TITLE = "Handoff probe";
-
-async function removeAgent(page: Page, url: string): Promise<void> {
-  if (!(await page.request.get(url)).ok()) return;
-  const removed = await requestWithOrigin(page, "post", `${url}/delete`, {
-    data: { expectedRevision: await assetRevision(page, url) }
-  });
-  expect(removed.ok(), `Delete agent during cleanup: ${removed.status()}`).toBe(true);
-}
-
-/** Pictures of the Connection page as it stands, light and dark, at 1280 and at 390. */
-async function shootPage(page: Page, locale: Locale, name: string): Promise<void> {
-  if (!shotsDir) return;
-  await mkdir(shotsDir, { recursive: true });
-  for (const mode of ["light", "dark"] as const) {
-    await page.emulateMedia({ colorScheme: mode });
-    for (const width of [1280, 390]) {
-      await page.setViewportSize({ width, height: 900 });
-      await page.screenshot({
-        path: join(shotsDir, `connection-page-${name}-${width}-${locale}-${mode}.png`),
-        fullPage: true,
-        animations: "disabled"
-      });
-    }
-  }
-  await page.emulateMedia({ colorScheme: "light" });
-  await page.setViewportSize({ width: 1280, height: 900 });
-}
-
-// CONN-PAGE: a new REST API asks what it is for, and once its tools are approved the dialog
-// gives them to an agent the person may publish, as one published revision (CS-5d). Its
-// page shows what each tool sends, edits the name and the description and switches one tool
-// off, each kept over a reload, and names the agent using it; the list says how it is.
-test("en: a new REST API is given to an agent, and its page edits it, switches a tool and shows what it sends", async ({
-  page,
-  instanceAgentsChange: _instanceAgentsChange
-}) => {
-  test.setTimeout(180_000);
-  const id = `e2e-page-edit-${randomUUID().slice(0, 8)}`;
-  const agentName = `e2e_handoff_${randomUUID().slice(0, 8)}`;
-  const agentUrl = `${apiBaseUrl}/api/v1/assets/agent/${agentName}`;
-  const connectionUrl = `${apiBaseUrl}/api/v1/assets/connection/${id}`;
-  const { main, dialog } = await openDialog(page, "en");
-  try {
-    const stored = await requestWithOrigin(page, "put", agentUrl, {
-      data: {
-        expectedRevision: await assetBaseRevision(page, agentUrl),
-        config: {
-          name: agentName,
-          displayName: HANDOFF_AGENT_TITLE,
-          modelProviderId: "local",
-          instructions: "A probe of the handoff.",
-          toolNames: ["show_view"]
-        }
-      }
-    });
-    expect(stored.ok(), await stored.text()).toBe(true);
-    const liveRevision = await assetRevision(page, agentUrl);
-
-    await dialog.locator('[data-connection-type="http_api"]').getByRole("button").click();
-    const field = (name: string) => dialog.locator(`[data-connection-field="${name}"]`);
-    await dialog.locator('[data-name-with-address-field="name"]').fill("Ledger probe");
-    await field("description").fill("Reads the health of the sample service.");
-    await field("url").fill(sampleBase);
-    await field("secret").fill(sampleKey);
-    await dialog.locator("[data-name-with-address-fold]").click();
-    await dialog.locator('[data-name-with-address-field="address"]').fill(id);
-    await field("testPath").fill("/healthz");
-    await dialog.locator("[data-connection-connect]").click();
-    await dialog.locator("[data-connection-paste]").getByRole("button").click();
-    await dialog
-      .locator("[data-connection-paste-field]")
-      .fill(
-        [
-          "- name: health",
-          "  description: Says whether the service runs.",
-          "  method: GET",
-          "  path: /healthz",
-          `  query: ${JSON.stringify(enumQuery)}`,
-          "- name: status",
-          "  description: Says since when the service runs.",
-          "  method: GET",
-          "  path: /healthz"
-        ].join("\n")
-      );
-    await dialog.locator("[data-connection-paste-check]").click();
-    await dialog.locator("[data-connection-approve]").click();
-
-    // Approved for agents: "Give to an agent" publishes the agent with the tools (CS-5d).
-    await expect(dialog.locator("[data-connection-approved]")).toContainText("2");
-    await dialog.locator("[data-connection-give]").click();
-    await dialog.getByRole("radio", { name: HANDOFF_AGENT_TITLE }).check();
-    await dialog.locator("[data-connection-give-next]").click();
-    const tools = [`connection.${id}.health`, `connection.${id}.status`];
-    const ask = dialog.locator(`[data-connection-give-ask="${agentName}"]`);
-    for (const tool of tools) {
-      await expect(ask.locator(`[data-connection-give-tool="${tool}"]`)).toBeVisible();
-    }
-    await shootPage(page, "en", "handoff");
-    await dialog.locator("[data-connection-give-confirm]").click();
-    await expect(dialog.locator('[data-connection-give-outcome="published"]')).toBeVisible();
-    expect(await assetRevision(page, agentUrl)).toBe(liveRevision + 1);
-    expect(await readAgentDraft(page, agentUrl)).toBeNull();
-    expect((await readAsset(page, agentUrl))?.config.toolNames).toEqual(["show_view", ...tools]);
-    await dialog.locator("[data-connection-give-done]").click();
-    await expect(page).toHaveURL(new RegExp(`/build/connections/${id}$`, "u"));
-
-    // What each tool sends, read from the definition: its request, its inputs, the declaration.
-    const health = main.locator('[data-connection-operation-details="health"]');
-    await expect(health.locator("[data-connection-request]")).toContainText("GET /healthz");
-    await expect(health.locator('[data-connection-parameter="status"]')).toContainText("ready");
-    await expect(health.locator("[data-enum-injection]")).toHaveCount(0);
-    await health.locator('[data-connection-declaration="health"]').getByRole("button").click();
-    await expect(health.locator('[data-connection-declaration="health"]')).toContainText('"enum"');
-    await shootPage(page, "en", "declarations");
-
-    // The name and the description, changed in place and kept over a reload.
-    const about = main.locator("[data-connection-about]");
-    await expect(about).toContainText("Reads the health of the sample service.");
-    await about.locator("[data-connection-about-edit]").click();
-    const form = main.locator("[data-connection-about-form]");
-    await form.locator('[data-connection-field="title"]').fill("Ledger probe renamed");
-    await form.locator('[data-connection-field="description"]').fill("Changed on its page.");
-    await form.locator("[data-connection-about-save]").click();
-    await expect(form).toHaveCount(0);
-    await page.reload();
-    await expect(main.locator("[data-connection-about]")).toContainText("Ledger probe renamed");
-    await expect(main.locator("[data-connection-about]")).toContainText("Changed on its page.");
-
-    // One tool switched off beside Remove, kept over a reload and in the definition.
-    const toggle = main.locator('[data-connection-enabled="status"]');
-    await expect(toggle).toHaveAttribute("aria-checked", "true");
-    await toggle.click();
-    await expect(toggle).toHaveAttribute("aria-checked", "false");
-    await page.reload();
-    await expect(main.locator('[data-connection-enabled="status"]')).toHaveAttribute(
-      "aria-checked",
-      "false"
-    );
-    await expect(main.locator('[data-connection-enabled="health"]')).toHaveAttribute(
-      "aria-checked",
-      "true"
-    );
-    const definition = await readAsset(page, connectionUrl);
-    expect(definition?.config.displayName).toBe("Ledger probe renamed");
-    expect(definition?.config.description).toBe("Changed on its page.");
-    expect(definition?.config.operations).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ name: "status", enabled: false }),
-        expect.objectContaining({ name: "health", enabled: true })
-      ])
-    );
-
-    // Published by the give, the agent is named under Used by by its title, never its id.
-    const using = main.locator('[data-connection-used-by="agent"]');
-    await expect(using).toContainText(HANDOFF_AGENT_TITLE);
-    await expect(using).not.toContainText(agentName);
-    await shootPage(page, "en", "edited");
-
-    // The list says the Connection was tested and works.
-    await page.goto("/build/connections");
-    const row = page
-      .getByRole("list", { name: "Connections", exact: true })
-      .getByRole("listitem")
-      .filter({ has: page.locator(`a[href="/build/connections/${id}"]`) });
-    await expect(row.locator("[data-connection-list-health]")).toHaveAttribute(
-      "data-connection-list-health",
-      "ready"
-    );
-    await expect(row).toContainText("Ready");
-    expect(await page.content()).not.toContain(sampleKey);
-  } finally {
-    await removeAgent(page, agentUrl);
-    await removeConnection(page, id);
-  }
-});

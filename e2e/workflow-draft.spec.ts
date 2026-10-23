@@ -1,10 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { type Browser, type Locator, type Page } from "@playwright/test";
 import { z } from "zod";
-import type { WorkflowStep } from "@work-shape/catalyst-core";
 import { sendToolCall } from "./page-surface-fixtures";
 import { assetRevision, requestWithOrigin } from "./request-with-origin";
-import { shootLocales, shootThemes } from "./surface-shots";
+import { shootSurface } from "./surface-shots";
 import { expect, test, type PageErrorWatch } from "./test";
 
 // The page of a Workflow for the person who builds it: the page head's "Chat" opens a
@@ -14,7 +13,9 @@ import { expect, test, type PageErrorWatch } from "./test";
 // Workflow": the page offered no conversation and named no draft.
 
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
+
 const superadmin = { email: "e2e-superadmin@example.test", password: "e2e-superadmin-password" };
+
 /**
  * The member who reads the Workflow, from `tests/fixtures/e2e-users/workflow-rights.yaml`. The
  * Workflow rights spec gives this member rights too; both hold `accessState`, so one runs after
@@ -24,14 +25,19 @@ const member = {
   email: "e2e-workflow-rights@example.test",
   password: "e2e-workflow-rights-password"
 };
+
 const WIDE = { width: 1440, height: 900 };
+
 const NAME = "Draft walk";
+
 const chatAction = (page: Page) => page.getByTestId("dock-page-action");
 
 const idSchema = z.object({ id: z.string() });
+
 const workspaceListSchema = z.object({
   items: z.array(z.object({ id: z.string(), kind: z.string() }))
 });
+
 const threadSchema = z.object({
   conversation: z.object({
     collaborationWorkspaceId: z.string(),
@@ -162,7 +168,7 @@ test("the builder of a Workflow edits it with the agent and publishes or discard
     await expect(bar).not.toContainText("Draft differs from published");
     await expect(bar.getByRole("button", { name: "Discard", exact: true })).toHaveCount(0);
     await expect(chatAction(page)).toBeVisible();
-    await shootLocales(page, "nav-2-workflow-draft-page", async () => {
+    await shootSurface(page, "nav-2-workflow-draft-page", async () => {
       await expect(bar).toHaveAttribute("data-workflow-draft", "unpublished");
     });
 
@@ -227,7 +233,7 @@ test("the builder of a Workflow edits it with the agent and publishes or discard
     });
     await expect(bar).toHaveAttribute("data-workflow-draft", "ahead");
     await expect(await lastWorkLine(page)).toHaveText(/^Saved version \d+$/u);
-    await shootThemes(page, "workflow-from-page", async () => {
+    await shootSurface(page, "workflow-from-page", async () => {
       await expect(bar).toHaveAttribute("data-workflow-draft", "ahead");
       await expect(workflowPage.getByText("What the run returns.")).toBeVisible();
     });
@@ -340,6 +346,10 @@ test("the builder of a Workflow edits it with the agent and publishes or discard
       (url) => url.pathname === personalWorkflow && url.searchParams.has("chat")
     );
     const chatBefore = new URL(page.url()).searchParams.get("chat");
+    // The address changes before its thread arrives. New chat needs that thread's subject
+    // to start another conversation about this Workflow rather than an empty general chat.
+    await expect(dockHead).toHaveAttribute("data-subject-kind", "workflow");
+    await expect(dockHead).toContainText(NAME);
     await dockHead.getByRole("button", { name: "New chat", exact: true }).click();
     await expect(page).toHaveURL(
       (url) =>
@@ -354,7 +364,7 @@ test("the builder of a Workflow edits it with the agent and publishes or discard
     await expect(dockHead).toContainText(NAME);
     expect(new URL(page.url()).pathname).toBe(personalWorkflow);
     await expect(page.getByTestId("asset-opened-chip")).toHaveCount(0);
-    await shootThemes(page, "workflow-from-chat", async () => {
+    await shootSurface(page, "workflow-from-chat", async () => {
       await expect(workflowPage.getByText("What the run returns.")).toBeVisible();
     });
 
@@ -385,8 +395,8 @@ test("the builder of a Workflow edits it with the agent and publishes or discard
       await expect(dockHead).toContainText("Research Assistant");
     };
     await editorReady();
-    await shootThemes(page, "agent-from-chat", editorReady);
-    await shootLocales(page, "nav-2-agent-editor-opened", editorReady);
+    await shootSurface(page, "agent-from-chat", editorReady);
+    await shootSurface(page, "nav-2-agent-editor-opened", editorReady);
   } finally {
     // Whatever the test left: the member's rows on the Workflow.
     const listed = await page.request.get(
@@ -406,17 +416,12 @@ test("the builder of a Workflow edits it with the agent and publishes or discard
   }
 });
 
-// A failed run's "Fix with the agent" (UXA-6b): the run fails at a step whose operation the
-// instance does not have; the runs list says why on the failed row, and the run's main button
-// opens the conversation about the Workflow beside the Workflow's page, with the failed step
-// and its reason in the composer. Fails without the button or without the prompt reaching the
-// dock's composer through the workspace.
-test("a failed run is fixed with the agent beside the Workflow's page", async ({ page }) => {
+const TEST_NAME = "Test walk";
+
+test("the builder starts a test run of a Workflow's draft from its draft bar", async ({ page }) => {
   test.setTimeout(120_000);
-  const id = `fix-walk-${randomUUID().slice(0, 8)}`;
+  const id = `test-walk-${randomUUID().slice(0, 8)}`;
   const runAs = `${id}-runner`;
-  const step = "Load the clients";
-  const reason = "What this step uses no longer exists on this instance.";
   await page.setViewportSize(WIDE);
   await signIn(page, superadmin);
   page.setDefaultTimeout(30_000);
@@ -425,86 +430,80 @@ test("a failed run is fixed with the agent beside the Workflow's page", async ({
     page,
     "post",
     `${apiBaseUrl}/api/v1/instance/service-principals`,
-    { data: { name: runAs, displayLabel: runAs, description: "Runs the Workflow of a spec." } }
+    { data: { name: runAs, displayLabel: runAs, description: "Bounds the test runs of a spec." } }
   );
   expect(principal.ok(), await principal.text()).toBe(true);
-  const { manifest } = draftConfig(id, { runAs, description: "Fails at its second step." });
-  // A start does not refuse an operation the instance does not have: the run fails there.
-  const saved = await requestWithOrigin(page, "put", assetUrlOf(id), {
+  const saved = await requestWithOrigin(page, "put", `${apiBaseUrl}/api/v1/assets/workflow/${id}`, {
     data: {
       expectedRevision: null,
       config: {
         name: id,
         manifest: {
-          ...manifest,
+          id,
+          name: TEST_NAME,
+          runAs,
+          inputs: {
+            type: "object",
+            properties: { note: { type: "string", title: "Note" } },
+            required: ["note"]
+          },
+          outputs: { type: "object", properties: { note: { type: "string" } } },
           steps: [
             { id: "start", name: "Start by hand", type: "trigger", triggers: [{ kind: "manual" }] },
             {
-              id: "clients",
-              name: step,
-              type: "operation",
-              operation: `connection.${id}.list`,
-              input: {}
-            },
-            { id: "result", name: "Result", type: "output", input: { done: { value: 1 } } }
-          ] satisfies WorkflowStep[]
+              id: "result",
+              name: "Result",
+              type: "output",
+              input: { note: { ref: { step: "start", path: "input.note" } } }
+            }
+          ]
         }
       }
     }
   });
   expect(saved.ok(), await saved.text()).toBe(true);
-  const published = await requestWithOrigin(page, "post", `${assetUrlOf(id)}/publish`, {
-    data: { revision: await assetRevision(page, assetUrlOf(id)) }
-  });
-  expect(published.ok(), await published.text()).toBe(true);
   const created = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/v1/workspaces`, {
-    data: { name: `Fix walk ${id.slice(-8)}` }
+    data: { name: `Test walk ${id.slice(-8)}` }
   });
   expect(created.ok(), await created.text()).toBe(true);
-  const workspaceId = idSchema.parse(await created.json()).id;
-  const started = await requestWithOrigin(
-    page,
-    "post",
-    `${apiBaseUrl}/api/v1/workflows/${id}/runs`,
-    { data: { input: {} } }
-  );
-  expect(started.ok(), await started.text()).toBe(true);
-  const runId = idSchema.parse(await started.json()).id;
-  await expect
-    .poll(
-      async () =>
-        z
-          .looseObject({ status: z.string() })
-          .parse(
-            await (await page.request.get(`${apiBaseUrl}/api/v1/workflow-runs/${runId}`)).json()
-          ).status,
-      { timeout: 60_000 }
-    )
-    .toBe("failed");
-  const workflowPath = `/w/${workspaceId}/workflows/${id}`;
+  const workspaceId = z.object({ id: z.string() }).parse(await created.json()).id;
 
-  // The failed row says why, in the sentence of the run's page.
-  await page.goto(`${workflowPath}/runs`);
-  await expect(page.locator("[data-run-reason]")).toHaveText(reason);
+  // The draft bar of a Workflow never published offers Test run beside Publish.
+  await page.goto(`/w/${workspaceId}/workflows/${id}`);
+  const workflowPage = page.getByTestId("workflow-page");
+  await expect(workflowPage.getByRole("heading", { level: 1 })).toHaveText(TEST_NAME);
+  const bar = workflowPage.locator("[data-workflow-draft]");
+  await expect(bar).toHaveAttribute("data-workflow-draft", "unpublished");
+  await bar.getByRole("button", { name: "Test run", exact: true }).click();
 
-  // The run's main button opens the conversation about the Workflow on the Workflow's page.
-  await page.goto(`${workflowPath}/runs/${runId}`);
+  // The question asks for the draft's inputs and says what a test run does.
+  const dialog = page.getByRole("dialog", { name: `Test “${TEST_NAME}”?` });
+  await expect(dialog).toContainText("reads live data as you");
+  await dialog.getByLabel("Note").fill("Hello from the test run");
+  await dialog.getByRole("button", { name: "Start test run", exact: true }).click();
+  await expect(dialog).toBeHidden();
+
+  // The run of the draft opens and ends; its page says it is a test run.
+  await expect(page).toHaveURL(new RegExp(`/w/${workspaceId}/workflows/${id}/runs/[^/]+$`, "u"));
   const runPage = page.getByTestId("workflow-run-page");
-  await runPage.getByRole("button", { name: "Fix with the agent", exact: true }).click();
-  await expect(page).toHaveURL(
-    (url) => url.pathname === workflowPath && url.searchParams.has("chat")
-  );
-  const conversationId = new URL(page.url()).searchParams.get("chat") ?? "";
-  const thread = threadSchema.parse(
-    await (
-      await page.request.get(`${apiBaseUrl}/api/v1/conversations/${conversationId}/thread`)
-    ).json()
-  );
-  expect(thread.conversation.subject).toEqual({ kind: "workflow", name: id });
-  await expect(page.getByTestId("dock-head")).toHaveAttribute("data-subject-kind", "workflow");
-  await expect(page.getByTestId("workflow-page").getByTestId("workflow-canvas")).toBeVisible();
-  // The composer holds the failed step and its reason, unsent.
-  const composer = page.getByPlaceholder("Message");
-  await expect.poll(() => composer.inputValue()).toContain(`at the step “${step}”. ${reason}`);
-  await expect(page.locator('[data-role="user"]')).toHaveCount(0);
+  await expect(runPage.locator("[data-test-run]")).toHaveText("Test run");
+  await expect(runPage.locator("[data-run-test]")).toContainText("Test run of the draft");
+  await expect(runPage.getByRole("heading", { level: 1 })).toContainText("Test run of");
+  await expect(runPage.getByRole("button", { name: "Test again", exact: true })).toBeVisible({
+    timeout: 60_000
+  });
+
+  // The instance kept it as a test run of the draft, started by the builder.
+  const runId = new URL(page.url()).pathname.split("/").at(-1) ?? "";
+  const run = await page.request.get(`${apiBaseUrl}/api/v1/workflow-runs/${runId}`);
+  expect(run.ok()).toBe(true);
+  expect(await run.json()).toMatchObject({
+    workflow: id,
+    mode: "test",
+    status: "done",
+    startedBy: { kind: "user" }
+  });
+  // Nothing was published by testing.
+  await page.goto(`/w/${workspaceId}/workflows/${id}`);
+  await expect(bar).toHaveAttribute("data-workflow-draft", "unpublished");
 });

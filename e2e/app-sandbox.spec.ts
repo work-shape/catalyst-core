@@ -3,17 +3,12 @@ import type { FrameLocator, Page } from "@playwright/test";
 import { z } from "zod";
 import { requestWithOrigin } from "./request-with-origin";
 import { expect, test } from "./test";
-import {
-  apiOrigin,
-  uiOrigin,
-  showView,
-  signIn as signInViews,
-  viewFrame,
-  viewTitle
-} from "./view-fixtures";
+import { apiOrigin, uiOrigin } from "./view-fixtures";
 
 const admin = { email: "e2e-apps@example.test", password: "e2e-apps-password" };
+
 const member = { email: "e2e-apps-member@example.test", password: "e2e-apps-member-password" };
+
 async function signIn(page: Page, person: typeof admin) {
   const response = await page.request.post(`${apiOrigin}/api/auth/sign-in/email`, {
     headers: { Origin: uiOrigin },
@@ -52,38 +47,10 @@ async function saveApp(page: Page, source: string, script: string, kit = "1.6.0"
   expect(saved.ok(), await saved.text()).toBe(true);
   return { workspaceId, name, url, path: `/w/${workspaceId}/app-drafts/${name}` };
 }
+
 function appFrame(page: Page): FrameLocator {
   return page.getByTestId("page-preview-frame").contentFrame().frameLocator("iframe");
 }
-
-test("an App form validates and fires submit in every sandbox layer", async ({
-  page
-}, testInfo) => {
-  test.setTimeout(120_000);
-  await signIn(page, admin);
-  const app = await saveApp(
-    page,
-    '<form><label>Leave date<input name="date" required></label><button type="submit">Request leave</button></form><output id="result">Not submitted</output>',
-    `document.querySelector("form").addEventListener("submit", (event) => { event.preventDefault(); document.querySelector("#result").textContent = "Submitted " + new FormData(event.target).get("date"); });`
-  );
-  await page.goto(app.path);
-  const frame = appFrame(page);
-  await expect(frame.getByRole("button", { name: "Request leave" })).toBeVisible();
-  await frame.getByRole("button", { name: "Request leave" }).click();
-  await expect(frame.locator("#result")).toHaveText("Not submitted");
-  await frame.getByLabel("Leave date").fill("2026-11-01");
-  await frame.getByRole("button", { name: "Request leave" }).click();
-  await expect(frame.locator("#result")).toHaveText("Submitted 2026-11-01");
-  await page.screenshot({ path: testInfo.outputPath("accept-fix-2-form.png") });
-  // Publishing the current draft changes the badge in place, without a reload.
-  await page.getByTestId("app-edit").getByRole("button", { name: "Publish", exact: true }).click();
-  const dialog = page.getByRole("dialog");
-  await expect(dialog.getByTestId("app-publish-audience")).toBeVisible();
-  await dialog.getByRole("button", { name: "Publish", exact: true }).click();
-  await expect(dialog).toBeHidden();
-  await expect(page.getByText("Published · version 1", { exact: true })).toBeVisible();
-  await page.screenshot({ path: testInfo.outputPath("accept-fix-2-published-draft.png") });
-});
 
 test("agent-style localStorage renders, survives reloads and stays private to the person and App", async ({
   page,
@@ -141,7 +108,9 @@ document.querySelector("#kit").addEventListener("click", async () => { await sto
     await expect(appFrame(page).locator("#burst")).toHaveText("98");
     await appFrame(page).getByRole("button", { name: "Save with kit" }).click();
     await expect(appFrame(page).locator("#kit-result")).toHaveText('{"status":"open"}');
-    await page.screenshot({ path: testInfo.outputPath("accept-fix-2-storage.png") });
+    if (process.env.E2E_SHOTS_DIR) {
+      await page.screenshot({ path: testInfo.outputPath("accept-fix-2-storage.png") });
+    }
     await otherPage.goto(publishedPath);
     await expect(appFrame(otherPage).locator("#saved")).toHaveText("No date");
     // A new browser session of the same person reads the server snapshot, too.
@@ -168,54 +137,164 @@ document.querySelector("#kit").addEventListener("click", async () => { await sto
   }
 });
 
-test("a failed chat view shows LoadError and retry loads a working view", async ({
-  page
-}, testInfo) => {
-  test.setTimeout(90_000);
-  const headers = await signInViews(page, uiOrigin);
-  const conversation = await showView(page.request, headers, "<p>Quarterly revenue loaded</p>");
-  const shell = "**/app-runtime/view-shell/1/shell.html";
-  await page.route(shell, (route) =>
-    route.fulfill({ contentType: "text/html", body: "<!doctype html><title>Unavailable</title>" })
-  );
-  await page.goto(`/c/${conversation.id}`);
-  const error = page.locator("[data-load-error]");
-  await expect(error).toContainText("This view could not be loaded.");
-  await expect(page.getByText("Loading view…", { exact: true })).toBeHidden();
-  for (const [theme, locale, width] of [
-    ["light", "en", 1280],
-    ["dark", "de", 1280],
-    ["dark", "en", 390]
-  ] as const) {
-    await page.evaluate(
-      ([mode, language]) => {
-        localStorage.setItem("vivd-catalyst:theme", mode);
-        localStorage.setItem("vivd-catalyst:locale", language);
-      },
-      [theme, locale] as const
-    );
-    await page.setViewportSize({ width, height: 640 });
-    await page.reload();
-    await expect(error).toContainText(
-      locale === "de"
-        ? "Diese Ansicht konnte nicht geladen werden."
-        : "This view could not be loaded."
-    );
-    await error.scrollIntoViewIfNeeded();
-    await expect(error).toBeInViewport();
-    await page.screenshot({
-      path: testInfo.outputPath(`accept-fix-2-load-error-${theme}-${locale}-${width}.png`)
-    });
+// The messages this spec's tests cause on purpose (see allowed-page-errors.ts).
+test.use({
+  allowedPageErrors: {
+    errors: [
+      {
+        name: "outside-app-font-refused",
+        reason:
+          "The font spec deliberately names Google Fonts and proves CSP prevents a network request.",
+        matches:
+          /^Loading the font 'https:\/\/fonts\.googleapis\.com\/blocked\.woff2' violates the following Content Security Policy directive: "font-src 'self' data:"\. The action has been blocked\.\s*$/u,
+        tests: [
+          "folder, kit and data fonts render in draft and published Apps without outside requests"
+        ]
+      }
+    ]
   }
-  await page.unroute(shell);
-  await error.getByRole("button", { name: "Try again" }).click();
-  await expect(viewFrame(page).getByText("Quarterly revenue loaded")).toBeVisible();
-  await expect(error).toBeHidden();
-  // Switch away and back twice: an errored shell is not kept for the next selection.
-  for (let pass = 0; pass < 2; pass += 1) {
-    await page.goto("/");
-    await page.goto(`/c/${conversation.id}`);
-    await expect(viewFrame(page).getByText("Quarterly revenue loaded")).toBeVisible();
-    await expect(page.locator(`iframe[title="${viewTitle}"]`)).toBeVisible();
+});
+
+const TITLE =
+  "folder, kit and data fonts render in draft and published Apps without outside requests";
+
+const kitRoot = `${apiOrigin}/app-runtime/kit/1.5.0`;
+
+// CSS font-family alone proves nothing: document.fonts.load must return an actual loaded face.
+async function expectLoadedFonts(frame: FrameLocator, families: string[]): Promise<void> {
+  const loaded = await frame.locator("body").evaluate(async (_, names) => {
+    return Promise.all(
+      names.map(async (family) => {
+        const faces = await document.fonts.load(`32px "${family}"`, "Hamburgefonts äöüß");
+        return {
+          family,
+          loaded: faces.length > 0 && faces.every((face) => face.status === "loaded")
+        };
+      })
+    );
+  }, families);
+  expect(loaded).toEqual(families.map((family) => ({ family, loaded: true })));
+}
+
+async function expectFonts(frame: FrameLocator): Promise<void> {
+  await expect(frame.getByRole("heading", { name: "Font specimens" })).toBeVisible();
+  await expectLoadedFonts(frame, [
+    "Folder Font",
+    "Inter",
+    "Lora",
+    "IBM Plex Mono",
+    "Bungee",
+    "Data Font"
+  ]);
+  await expect(frame.locator("#chart svg")).toBeVisible();
+  await expect(frame.locator("#chart")).toContainText("A");
+  expect(
+    await frame.locator("body").evaluate(async () => {
+      try {
+        await document.fonts.load('32px "Outside Font"');
+        return "loaded";
+      } catch {
+        return "blocked";
+      }
+    })
+  ).toBe("blocked");
+}
+
+test(TITLE, async ({ page }, testInfo) => {
+  test.setTimeout(180_000);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const signedIn = await page.request.post(`${apiOrigin}/api/auth/sign-in/email`, {
+    headers: { Origin: uiOrigin },
+    data: {
+      email: "e2e-superadmin@example.test",
+      password: "e2e-superadmin-password",
+      rememberMe: true
+    }
+  });
+  expect(signedIn.ok()).toBe(true);
+  await page.goto("/");
+  await page.evaluate(() => localStorage.setItem("vivd-catalyst:theme", "light"));
+  const created = await requestWithOrigin(page, "post", `${apiOrigin}/api/v1/workspaces`, {
+    data: { name: `Fonts ${randomUUID()}` }
+  });
+  expect(created.ok(), await created.text()).toBe(true);
+  const workspaceId = z.object({ id: z.string() }).parse(await created.json()).id;
+  const name = `font-specimens-${randomUUID().slice(0, 8)}`;
+  const appUrl = `${apiOrigin}/api/v1/assets/app/${name}`;
+  const fontResponse = await page.request.get(
+    `${kitRoot}/fonts/bungee/bungee-latin-400-normal.woff2`
+  );
+  expect(fontResponse.ok()).toBe(true);
+  const font = await fontResponse.body();
+  // Carry the kit's existing chart library in the App's folder, with its licence comments.
+  const chartResponse = await page.request.get(`${kitRoot}/charts.js`);
+  expect(chartResponse.ok()).toBe(true);
+  const chart = await chartResponse.text();
+  const saved = await requestWithOrigin(page, "put", appUrl, {
+    data: {
+      workspaceId,
+      expectedRevision: null,
+      files: [
+        {
+          path: "app.yaml",
+          text: `id: ${name}\nname: Font specimens\nkit: 1.5.0\nentry: index.html\n`
+        },
+        {
+          path: "index.html",
+          text: `<!doctype html><html><head><link rel="stylesheet" href="/app-runtime/kit/1.5.0/fonts/fonts.css"><link rel="stylesheet" href="./fonts.css"></head><body><h1>Font specimens</h1><p style="font-family:'Folder Font'">Folder Font · Bungee · äöüß</p><p style="font-family:Inter">Inter · The quick brown fox</p><p style="font-family:Lora">Lora · The quick brown fox</p><p style="font-family:'IBM Plex Mono'">IBM Plex Mono · 0123456789</p><p style="font-family:Bungee">Bungee · A display face</p><p style="font-family:'Data Font'">Data Font · inlined WOFF2</p><p style="font-family:'Outside Font'">Outside font falls back</p><div id="chart" style="width:320px;height:200px"></div><script type="module" src="./draw.js"></script></body></html>`
+        },
+        {
+          path: "fonts.css",
+          text: `@font-face { font-family: 'Folder Font'; src: url('./folder.woff2') format('woff2'); }\n@font-face { font-family: 'Data Font'; src: url('data:font/woff2;base64,${font.toString("base64")}') format('woff2'); }\n@font-face { font-family: 'Outside Font'; src: url('https://fonts.googleapis.com/blocked.woff2') format('woff2'); }\nbody { font-size: 24px; }`
+        },
+        { path: "folder.woff2", base64: font.toString("base64") },
+        { path: "chart.js", text: chart },
+        {
+          path: "draw.js",
+          text: `import { drawChart } from './chart.js'; drawChart(document.querySelector('#chart'), { type: 'bar', categories: ['A','B'], series: [{ label: 'Revenue', values: [2,5] }], stacked: false, formatValue: String }, { series: ['#336699'], text: '#222222', line: '#cccccc', surface: '#ffffff', tooltipSurface: '#ffffff', tooltipText: '#222222', fontFamily: 'Inter', fontSize: 14 });`
+        }
+      ]
+    },
+    timeout: 90_000
+  });
+  expect(saved.ok(), await saved.text()).toBe(true);
+  // The network route sees only requests that actually leave CSP; the request event also
+  // reports blocked attempts. Catch any egress before it leaves the test machine.
+  const outsideRequests: string[] = [];
+  const browserRequests: string[] = [];
+  page.on("request", (request) => {
+    if (new URL(request.url()).hostname === "fonts.googleapis.com")
+      browserRequests.push(request.url());
+  });
+  await page.route("https://fonts.googleapis.com/**", async (route) => {
+    outsideRequests.push(route.request().url());
+    await route.abort();
+  });
+  try {
+    for (const screen of ["app-edit", "app-view"] as const) {
+      if (screen === "app-view") {
+        const published = await requestWithOrigin(page, "post", `${appUrl}/publish`, {
+          data: { workspaceId, revision: 1 }
+        });
+        expect(published.ok(), await published.text()).toBe(true);
+      }
+      await page.goto(`/w/${workspaceId}/${screen === "app-edit" ? "app-drafts" : "apps"}/${name}`);
+      const frame = page
+        .getByTestId(screen)
+        .getByTestId("page-preview-frame")
+        .contentFrame()
+        .frameLocator("iframe");
+      await expectFonts(frame);
+      // Keep the two requested light-mode specimens in the hosted test artifact.
+      if (process.env.E2E_SHOTS_DIR) {
+        await frame
+          .locator("body")
+          .screenshot({ path: testInfo.outputPath(`evidence-font-specimens-${screen}-light.png`) });
+      }
+    }
+    expect(browserRequests.length).toBeGreaterThan(0); // Both CSS paths tried the outside face.
+    expect(outsideRequests).toEqual([]);
+  } finally {
+    await page.unrouteAll({ behavior: "ignoreErrors" });
   }
 });

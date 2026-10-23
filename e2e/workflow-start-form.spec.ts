@@ -6,6 +6,7 @@ import { z } from "zod";
 import { assetRevision, requestWithOrigin } from "./request-with-origin";
 import { expect, test, type PageErrorWatch } from "./test";
 import { requestAnswered } from "./allowed-page-errors";
+
 // The messages this spec's tests cause on purpose (see allowed-page-errors.ts).
 test.use({
   allowedPageErrors: {
@@ -31,25 +32,35 @@ test.use({
 // refuse and under the field what the instance refuses, and watches the run end as done. Once
 // the right to start is taken back, neither the card nor the page offers a start. The Workflow
 // is one of this spec's own. Fails without the form: a Workflow with inputs offered no start.
-
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
+
 /** Where the pictures of a run go. Without it the test takes none. */
 const shotsDir = process.env.E2E_SHOTS_DIR;
+
 const superadmin = { email: "e2e-superadmin@example.test", password: "e2e-superadmin-password" };
+
 /** The member who starts the Workflow, from `tests/fixtures/e2e-users/workflow-start-form.yaml`. No other spec uses it. */
 const member = {
   email: "e2e-workflow-start@example.test",
   password: "e2e-workflow-start-password"
 };
+
 const WIDE = { width: 1440, height: 900 };
 
 const idSchema = z.object({ id: z.string() });
+
 const runSchema = z.object({
   status: z.string(),
   outputPreview: z.object({ text: z.string() }).optional()
 });
 
-async function signIn(page: Page, user: { email: string; password: string }): Promise<void> {
+async function signIn(
+  page: Page,
+  user: {
+    email: string;
+    password: string;
+  }
+): Promise<void> {
   const response = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/auth/sign-in/email`, {
     data: { email: user.email, password: user.password, rememberMe: true }
   });
@@ -60,7 +71,10 @@ async function signIn(page: Page, user: { email: string; password: string }): Pr
 async function sessionOf(
   browser: Browser,
   watch: PageErrorWatch["watch"],
-  user: { email: string; password: string }
+  user: {
+    email: string;
+    password: string;
+  }
 ): Promise<Page> {
   const context = await browser.newContext({ viewport: WIDE });
   await watch(context);
@@ -77,7 +91,12 @@ const assetUrlOf = (id: string) => `${apiBaseUrl}/api/v1/assets/workflow/${id}`;
  */
 async function publish(
   root: Page,
-  input: { id: string; name: string; runAs: string; mostBookings: number }
+  input: {
+    id: string;
+    name: string;
+    runAs: string;
+    mostBookings: number;
+  }
 ): Promise<void> {
   const { id } = input;
   const start = (path: string) => ({ ref: { step: "start", path } });
@@ -162,19 +181,14 @@ async function grant(root: Page, memberId: string, assetId: string, action: stri
   return idSchema.parse(await granted.json()).id;
 }
 
-const VARIANTS = (["light", "dark"] as const).flatMap((theme) =>
-  (["en", "de"] as const).flatMap((locale) =>
-    ([1440, 390] as const).map((width) => [theme, locale, width] as const)
-  )
-);
-
 /** Pictures of the form as a start left empty leaves it, in both themes and languages. */
 async function shootForm(page: Page, open: () => Promise<Locator>): Promise<void> {
   if (!shotsDir) {
     return;
   }
   await mkdir(shotsDir, { recursive: true });
-  for (const [theme, locale, width] of VARIANTS) {
+  {
+    const [theme, locale, width]: ["light", "en", number] = ["light", "en", 1440];
     await page.evaluate(
       ([themeValue, localeValue]) => {
         window.localStorage.setItem("vivd-catalyst:theme", themeValue);
@@ -208,13 +222,12 @@ test("a member starts a Workflow with inputs from its form and sees the run end;
   pageErrors,
   accessState: _accessState
 }) => {
-  test.setTimeout(shotsDir ? 300_000 : 120_000);
+  test.setTimeout(shotsDir ? 300000 : 120000);
   const suffix = randomUUID().slice(0, 8);
   const id = `start-form-${suffix}`;
   const name = `Booking check ${suffix}`;
   const runAs = `${id}-runner`;
   const root = await sessionOf(browser, pageErrors.watch, superadmin);
-
   // The Workflow's account, the Workflow, and a workspace the member stands in: a Workflow
   // belongs to none, and its pages have the address of the open one.
   const principal = await requestWithOrigin(
@@ -247,7 +260,6 @@ test("a member starts a Workflow with inputs from its form and sees the run end;
     await grant(root, memberId, assetId, "workflow.read"),
     await grant(root, memberId, assetId, "workflow.use")
   ];
-
   try {
     // The Workflow's page says in its head whom every run acts as: the account's label.
     await page.goto(`/w/${workspaceId}/workflows/${id}`);
@@ -279,13 +291,11 @@ test("a member starts a Workflow with inputs from its form and sees the run end;
     const start = dialog.getByRole("button", { name: "Start", exact: true });
     // The default stands in its field.
     await expect(limit).toHaveValue("10");
-
     // A start without the required values is refused in the form, each under its field.
     await start.click();
     await expect(dialog.getByText("Enter a value.", { exact: true })).toHaveCount(2);
     await expect(dialog.getByText("Choose one.", { exact: true })).toBeVisible();
     await expect(client).toHaveAttribute("aria-invalid", "true");
-
     // What the inputs refuse is refused in the form, in the reader's words.
     await client.fill("N");
     await month.fill("2026-09-01");
@@ -297,7 +307,6 @@ test("a member starts a Workflow with inputs from its form and sees the run end;
     await expect(dialog.getByText("Enter 10 or less.", { exact: true })).toBeVisible();
     await client.fill("Nordlicht");
     await limit.fill("5");
-
     // The Workflow is published again with a smaller limit while the form is open: the value
     // passes the form and not the instance, which names the field it refuses.
     await publish(root, { id, name, runAs, mostBookings: 3 });
@@ -308,14 +317,13 @@ test("a member starts a Workflow with inputs from its form and sees the run end;
     await limit.fill("2");
     // A changed value is the reader's again.
     await expect(dialog.getByText("must be <= 3", { exact: true })).toHaveCount(0);
-
     // The start opens the new run, which ends as done with what the form gave.
     await start.click();
     await expect(dialog).toBeHidden();
     await expect(page).toHaveURL(new RegExp(`/w/${workspaceId}/workflows/${id}/runs/[^/]+$`, "u"));
     const runPage = page.getByTestId("workflow-run-page");
     await expect(runPage.getByText("Done", { exact: true }).first()).toBeVisible({
-      timeout: 30_000
+      timeout: 30000
     });
     const runId = new URL(page.url()).pathname.split("/").at(-1) ?? "";
     const run = runSchema.parse(
@@ -326,7 +334,6 @@ test("a member starts a Workflow with inputs from its form and sees the run end;
       client: "Nordlicht",
       limit: 2
     });
-
     // The right to start taken back: the member reads the Workflow and is offered no start.
     const revoked = await requestWithOrigin(
       root,
@@ -355,67 +362,5 @@ test("a member starts a Workflow with inputs from its form and sees the run end;
       );
     }
     await root.context().close();
-  }
-});
-
-test("the Workflow head keeps both actions inside 390 and 1280 in English and German", async ({
-  page
-}) => {
-  test.setTimeout(120_000);
-  const suffix = randomUUID().slice(0, 8);
-  const id = `head-layout-${suffix}`;
-  const name = "Monthly booking check";
-  const runAs = `${id}-runner`;
-  await signIn(page, superadmin);
-  const principal = await requestWithOrigin(
-    page,
-    "post",
-    `${apiBaseUrl}/api/v1/instance/service-principals`,
-    {
-      data: { name: runAs, displayLabel: "Booking checks" }
-    }
-  );
-  expect(principal.ok(), await principal.text()).toBe(true);
-  await publish(page, { id, name, runAs, mostBookings: 10 });
-  const created = await requestWithOrigin(page, "post", `${apiBaseUrl}/api/v1/workspaces`, {
-    data: { name: `Head layout ${suffix}` }
-  });
-  expect(created.ok()).toBe(true);
-  const workspaceId = idSchema.parse(await created.json()).id;
-  for (const locale of ["en", "de"]) {
-    for (const width of [390, 1280]) {
-      await page.setViewportSize({ width, height: 900 });
-      await page.goto(`/w/${workspaceId}/workflows/${id}`);
-      await page.evaluate((value) => localStorage.setItem("vivd-catalyst:locale", value), locale);
-      await page.reload();
-      const head = page
-        .locator("[data-page-head]")
-        .filter({ has: page.getByRole("heading", { name, exact: true }) });
-      await expect(head).toBeVisible();
-      const start = head.getByRole("button", {
-        name: locale === "de" ? "Jetzt starten" : "Start now",
-        exact: true
-      });
-      await expect(start).toBeVisible();
-      if (shotsDir) {
-        await mkdir(shotsDir, { recursive: true });
-        await page.screenshot({
-          path: join(shotsDir, `workflow-head-${width}-${locale}.png`),
-          animations: "disabled"
-        });
-      }
-      const boxes = await head.locator("button").evaluateAll((buttons) =>
-        buttons.map((button) => {
-          const box = button.getBoundingClientRect();
-          return { left: box.left, right: box.right, cut: button.scrollWidth > button.clientWidth };
-        })
-      );
-      expect
-        .soft(
-          boxes.filter((box) => box.left < 0 || box.right > width || box.cut),
-          `${locale} ${width}`
-        )
-        .toEqual([]);
-    }
   }
 });

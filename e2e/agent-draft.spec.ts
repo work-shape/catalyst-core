@@ -4,9 +4,11 @@ import { join } from "node:path";
 import type { Page } from "@playwright/test";
 import { z } from "zod";
 import { assetBaseRevision, assetRevision, requestWithOrigin } from "./request-with-origin";
-import { shootEverywhere } from "./surface-shots";
+import { shootSurface } from "./surface-shots";
+import { signIn as signInCards } from "./inbox-fixtures";
 import { expect, test } from "./test";
 import { requestAnswered } from "./allowed-page-errors";
+
 // The messages this spec's tests cause on purpose (see allowed-page-errors.ts).
 test.use({
   allowedPageErrors: {
@@ -37,24 +39,33 @@ test.use({
 // on the page.
 
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
+
 const superadmin = { email: "e2e-superadmin@example.test", password: "e2e-superadmin-password" };
+
 /** May change agents and not publish them, from `tests/fixtures/e2e-users/agent-draft.yaml`. */
 const writer = {
   email: "e2e-agent-draft-writer@example.test",
   password: "e2e-agent-draft-writer-password"
 };
+
 /** May read the one agent of the spec and not change it, from `tests/fixtures/e2e-users/agent-draft.yaml`. */
 const reader = {
   email: "e2e-agent-draft-reader@example.test",
   password: "e2e-agent-draft-reader-password"
 };
+
 const shotsDir = process.env.E2E_SHOTS_DIR;
-const WIDE = { width: 1280, height: 800 };
+
+const WIDE = { width: 1440, height: 900 };
 
 const idSchema = z.object({ id: z.string() });
+
 const draftSchema = z.object({ draft: z.object({ revision: z.number() }).nullable() });
+
 const liveSchema = z.object({ config: z.object({ instructions: z.string() }) });
+
 const agentPath = (name: string) => `${apiBaseUrl}/api/v1/assets/agent/${name}`;
+
 const draftPath = (name: string) => `${apiBaseUrl}/api/v1/agents/${name}/draft`;
 
 async function signIn(page: Page, user = superadmin): Promise<void> {
@@ -123,7 +134,9 @@ async function shootOnce(page: Page, name: string): Promise<void> {
 
 const instructionsOf = (page: Page) =>
   page.locator("section#instructions").getByRole("textbox").first();
+
 const saveDraftOf = (page: Page) => page.getByRole("button", { name: "Save draft", exact: true });
+
 const badgeOf = (page: Page) => page.locator("[data-agent-draft-badge]");
 
 /** The agent's row in Build > Agents, found by its search. */
@@ -179,7 +192,7 @@ test("the agent page saves a draft twice, publishes it, and discards the next on
     expect(await liveInstructions(page, name)).toBe("Check every contract for a signature.");
 
     // At phone width the head gives its badge way to the name; the banner names the draft.
-    await shootEverywhere(page, "ad-4-draft", async () => {
+    await shootSurface(page, "ad-4-draft", async () => {
       await expect(badgeOf(page)).toBeAttached();
       await expect(page.locator('[data-agent-draft="pending"]')).toBeVisible();
     });
@@ -260,7 +273,7 @@ test("a writer without agent.publish, a draft written meanwhile, a reader, and a
     await expect(writerPage.locator(`[id="${reasonId}"]`)).toHaveText(
       "Publishing needs the right “Publish agents”."
     );
-    await shootEverywhere(writerPage, "ad-4-writer", async () => {
+    await shootSurface(writerPage, "ad-4-writer", async () => {
       await expect(writerPage.locator("[data-agent-publish]")).toBeDisabled();
     });
 
@@ -364,4 +377,108 @@ test("a writer without agent.publish, a draft written meanwhile, a reader, and a
     }
     await deleteAgent(page, name);
   }
+});
+
+// The Agents page: its row in the rail, the cards of the agents a person may use in the open
+// workspace, and the two ways from a card into a chat. Fails without the page: the rail had no
+// Agents row, and a person met an agent only in the picker of a conversation.
+
+/** A member without a right on an agent: no Studio row, and no way into Studio from a card. */
+const member = { email: "e2e-user@example.test", password: "e2e-user-password" };
+
+/** The agents of `tests/fixtures/e2e-assets`, and the one starter prompt of the first. */
+const DEFAULT_AGENT = "Application Assistant";
+
+const OTHER_AGENT = "Research Assistant";
+
+const PROMPT_TITLE = "Find review risks";
+
+const rail = (page: Page) => page.getByRole("navigation", { name: "Main navigation" });
+
+const agentsArea = (page: Page) => page.getByRole("region", { name: /^(Agents|Agenten)$/u });
+
+const card = (page: Page, agent: string) =>
+  agentsArea(page)
+    .getByRole("listitem")
+    .filter({ has: page.getByRole("heading", { name: agent, exact: true }) });
+
+/** The agent a message on the start page would go to. */
+const startPageAgent = (page: Page) =>
+  page.getByRole("region", { name: "Chat" }).getByRole("button", { name: "Select agent" });
+
+async function openAgents(page: Page): Promise<void> {
+  // The row has an address once the workspace is open: a click before that stays on the start page.
+  await expect(page).toHaveURL(/\/w\/[^/]+/u);
+  await rail(page).getByRole("button", { name: "Agents", exact: true }).click();
+  await expect(page).toHaveURL(/\/w\/[^/]+\/agents$/u);
+  await expect(card(page, DEFAULT_AGENT)).toBeVisible();
+}
+
+test("a member finds the agents of the workspace under New chat and starts a chat from a card", async ({
+  page,
+  instanceAgents: _instanceAgents
+}) => {
+  test.setTimeout(shotsDir ? 300_000 : 60_000);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await signInCards(page, member);
+  const navigation = rail(page);
+
+  // The row stands directly under New chat, and a member has no Studio row.
+  const rows = navigation.getByRole("button", { name: /^(New chat|Agents|Apps|Inbox)/u });
+  await expect(rows.nth(0)).toHaveAccessibleName(/^New chat/u);
+  await expect(rows.nth(1)).toHaveAccessibleName("Agents");
+  await expect(navigation.getByRole("button", { name: "Studio", exact: true })).toHaveCount(0);
+
+  await openAgents(page);
+  // The page is an area of its own: its title has the focus, and its row is the current one.
+  await expect(page.getByRole("heading", { level: 1, name: "Agents" })).toBeFocused();
+  await expect(navigation.locator('[aria-current="true"]')).toHaveAccessibleName("Agents");
+  await expect(page.locator("header").getByRole("button", { name: "Select agent" })).toHaveCount(0);
+
+  const defaultCard = card(page, DEFAULT_AGENT);
+  const otherCard = card(page, OTHER_AGENT);
+  await expect(defaultCard).toContainText("Help with application and document review.");
+  await expect(defaultCard).toContainText("Default agent");
+  await expect(otherCard).not.toContainText("Default agent");
+  // A card names the agent and what it does: its starter prompts wait in the chat with it.
+  await expect(defaultCard.getByRole("button", { name: PROMPT_TITLE })).toHaveCount(0);
+  // A member changes nothing here and is not led to where agents are changed.
+  await expect(agentsArea(page).getByRole("link", { name: "Edit in Studio" })).toHaveCount(0);
+  await shootSurface(
+    page,
+    "agents-member",
+    () => expect(card(page, DEFAULT_AGENT)).toBeVisible(),
+    [1440, 390]
+  );
+
+  // Start chat opens a new conversation with that agent, by the keyboard as by a click.
+  const start = otherCard.getByRole("button", { name: "Start chat" });
+  await start.focus();
+  await expect(start).toHaveAccessibleName(`Start chat with ${OTHER_AGENT}`);
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/\/w\/[^/]+$/u);
+  await expect(startPageAgent(page)).toHaveAccessibleName(`Select agent: ${OTHER_AGENT}`);
+  const composer = page.getByRole("textbox", { name: "Message" });
+  await expect(composer).toBeFocused();
+  await expect(composer).toHaveValue("");
+
+  // A press dragged across what the agent does, as when selecting it, starts nothing.
+  await openAgents(page);
+  const what = defaultCard.getByText("Help with application and document review.");
+  const whatBox = await what.boundingBox();
+  const fromX = whatBox?.x ?? 0;
+  const atY = (whatBox?.y ?? 0) + (whatBox?.height ?? 0) / 2;
+  await page.mouse.move(fromX + 2, atY);
+  await page.mouse.down();
+  await page.mouse.move(fromX + (whatBox?.width ?? 0) - 2, atY, { steps: 5 });
+  await page.mouse.up();
+  await expect(page).toHaveURL(/\/w\/[^/]+\/agents$/u);
+
+  // The whole card starts the chat: a click on what the agent does lands on Start chat, whose
+  // area lies over the text, so the pointer is sent there by force.
+  // The starter prompts of the default agent stand in the empty chat with it.
+  await what.click({ force: true });
+  await expect(page).toHaveURL(/\/w\/[^/]+$/u);
+  await expect(startPageAgent(page)).toHaveAccessibleName(`Select agent: ${DEFAULT_AGENT}`);
+  await expect(page.getByRole("button", { name: PROMPT_TITLE })).toBeVisible();
 });
