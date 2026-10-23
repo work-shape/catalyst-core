@@ -168,6 +168,7 @@ export const audit = defineTranslations({
     "audit.event.user.identity_linked": "Linked a sign-in to a user",
     "audit.event.user.identity_upserted": "Changed a user's sign-in",
     "audit.event.user.invitation_sent": "Invited a user",
+    "audit.event.user.operation_setting_changed": "Changed a confirmation setting",
     "audit.event.user.password_changed": "Changed a password",
     "audit.event.user.password_reset": "Reset a password",
     "audit.event.user.password_reset_requested": "Asked for a password reset email",
@@ -437,6 +438,7 @@ export const audit = defineTranslations({
     "audit.event.user.identity_linked": "Anmeldung mit einem Benutzer verknüpft",
     "audit.event.user.identity_upserted": "Anmeldung eines Benutzers geändert",
     "audit.event.user.invitation_sent": "Benutzer eingeladen",
+    "audit.event.user.operation_setting_changed": "Bestätigungseinstellung geändert",
     "audit.event.user.password_changed": "Passwort geändert",
     "audit.event.user.password_reset": "Passwort zurückgesetzt",
     "audit.event.user.password_reset_requested":
