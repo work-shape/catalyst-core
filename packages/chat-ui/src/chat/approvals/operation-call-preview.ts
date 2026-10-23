@@ -156,6 +156,60 @@ export interface PublishReview {
    * its live revision (DP-3). Approving approves all of them; absent where there are none.
    */
   publishedWith?: PublishReview[];
+  /** What an agent's publish makes live against its live revision (WS-PUB-1b). */
+  agent?: AgentPublishReview;
+}
+
+/**
+ * The review of an agent's held publish: the draft against the live definition, and where the
+ * agent is offered. The lists are absent where the draft asked for is gone.
+ */
+export interface AgentPublishReview {
+  /** The workspace that owns the agent, with its name where the reader may see it. */
+  workspace?: { id: string; name?: string };
+  /** Whether this publish, the agent's first, offers it in that workspace. */
+  offers: boolean;
+  fields?: { field: string; change: "added" | "removed" | "changed" }[];
+  toolsAdded?: string[];
+  toolsRemoved?: string[];
+  modelBindingsAdded?: string[];
+  skills?: string[];
+  instructions?: { before?: string; after: string };
+}
+
+function parseAgentReview(value: unknown): AgentPublishReview | undefined {
+  if (!isRecord(value)) return undefined;
+  const texts = (list: unknown) =>
+    Array.isArray(list) ? list.flatMap((entry) => readText(entry) ?? []) : undefined;
+  const workspace = isRecord(value.workspace) ? readText(value.workspace.id) : undefined;
+  const workspaceName = isRecord(value.workspace) ? readText(value.workspace.name) : undefined;
+  const fields = Array.isArray(value.fields)
+    ? value.fields.flatMap((entry) => {
+        if (!isRecord(entry)) return [];
+        const field = readText(entry.field);
+        const change = (["added", "removed", "changed"] as const).find(
+          (candidate) => candidate === entry.change
+        );
+        return field && change ? [{ field, change }] : [];
+      })
+    : undefined;
+  const after = isRecord(value.instructions) ? readText(value.instructions.after) : undefined;
+  const before = isRecord(value.instructions) ? readText(value.instructions.before) : undefined;
+  const lists = {
+    toolsAdded: texts(value.toolsAdded),
+    toolsRemoved: texts(value.toolsRemoved),
+    modelBindingsAdded: texts(value.modelBindingsAdded),
+    skills: texts(value.skills)
+  };
+  return {
+    ...(workspace
+      ? { workspace: { id: workspace, ...(workspaceName ? { name: workspaceName } : {}) } }
+      : {}),
+    offers: value.offers === true,
+    ...(fields ? { fields } : {}),
+    ...Object.fromEntries(Object.entries(lists).filter(([, list]) => list !== undefined)),
+    ...(after ? { instructions: { after, ...(before ? { before } : {}) } } : {})
+  };
 }
 
 /** The audiences an App's publish can choose, as the contract names them. */
@@ -334,6 +388,7 @@ function parseOneReview(value: unknown): PublishReview | undefined {
   const narrative = narrativeReadOf(parsePublishNarrative(value.publishNarrative));
   const audience = parseAudience(value.audience);
   const widens = typeof value.publish_widens === "boolean" ? value.publish_widens : undefined;
+  const agent = kind === "agent" ? parseAgentReview(value.agent) : undefined;
   return {
     kind,
     name,
@@ -362,7 +417,8 @@ function parseOneReview(value: unknown): PublishReview | undefined {
     ...(stale ? { stale } : {}),
     ...(narrative.status === "ready" || narrative.status === "failed" ? { narrative } : {}),
     ...(audience ? { audience } : {}),
-    ...(widens === undefined ? {} : { widens })
+    ...(widens === undefined ? {} : { widens }),
+    ...(agent ? { agent } : {})
   };
 }
 
