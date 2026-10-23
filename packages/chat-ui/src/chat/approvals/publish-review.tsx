@@ -307,7 +307,8 @@ function PublishReviewLists({ review }: { review: PublishReview }) {
  * The review of an agent's held publish (WS-PUB-1b): the draft revision and the live one it
  * replaces, the workspace that owns it and whether this publish offers it there, the fields
  * that differ, the tools and models it adds, the skills it names, and the draft's instructions
- * beside the live ones where they changed.
+ * beside the live ones where they changed, or that they are withheld from a reader who may not
+ * read the agent.
  */
 function AgentPublishLists({
   review,
@@ -399,6 +400,20 @@ function AgentPublishLists({
           <FoldedText data-testid="publish-review-instructions">
             {agent.instructions.after}
           </FoldedText>
+        </KeyValue>
+      ) : null}
+      {agent.instructionsWithheld ? (
+        <KeyValue
+          label={t(
+            review.liveRevision === undefined
+              ? "operations.publishAgentInstructionsFirst"
+              : "operations.publishAgentInstructions"
+          )}
+          data-field="instructions-withheld"
+        >
+          <span className="text-muted-foreground">
+            {t("operations.publishAgentInstructionsWithheld")}
+          </span>
         </KeyValue>
       ) : null}
       {agent.instructions?.before ? (

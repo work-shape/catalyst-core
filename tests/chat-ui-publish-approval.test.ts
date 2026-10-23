@@ -151,6 +151,47 @@ describe("the Inbox item of a publish that waits", () => {
     expect(firstItem("de")).toContain("Erste Version");
   });
 
+  it("says the instructions are withheld from an approver who may not read the agent", () => {
+    const review = {
+      kind: "agent",
+      name: "secret-helper",
+      title: "Secret Helper",
+      revision: 1,
+      liveRevision: 1,
+      files: [],
+      hostsAdded: [],
+      connections: [],
+      dataStores: [],
+      agent: {
+        workspace: { id: "cws_kai", name: "Kai Spezis" },
+        offers: false,
+        fields: [{ field: "instructions", change: "changed" }],
+        toolsAdded: [],
+        toolsRemoved: [],
+        modelBindingsAdded: [],
+        skills: [],
+        instructionsWithheld: true
+      }
+    };
+    const withheld = (locale: "de" | "en") =>
+      renderItem(
+        {
+          kind: "agent_publish",
+          summary: "assets.publish",
+          preview: { ...preview, review },
+          canDecide: true
+        },
+        { locale }
+      );
+    const markup = withheld("en");
+    expect(markup).toContain('data-field="instructions-withheld"');
+    expect(markup).toContain("You may not read this agent, so its instructions are not shown.");
+    expect(markup).not.toContain('data-testid="publish-review-instructions"');
+    expect(withheld("de")).toContain(
+      "Du darfst diesen Agenten nicht lesen. Deshalb werden seine Anweisungen nicht gezeigt."
+    );
+  });
+
   it("says a request whose draft moved can no longer be approved", () => {
     expect(publish({ stale: "draft_moved" })).toMatch(
       /data-testid="publish-review-stale".*The draft changed since the request was made/u
