@@ -158,7 +158,8 @@ export function readCompatiblePersistedToolResult(
       output: {
         status: result.status,
         error: persistedToolErrorSummary(runtime.toolName, result.error),
-        projectionNotice: runtime.projectionNotice
+        projectionNotice: runtime.projectionNotice,
+        ...(isRecord(result.connect) ? { connect: result.connect } : {})
       }
     };
   }

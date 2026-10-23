@@ -63,6 +63,14 @@ export {
   connectionDraftHost,
   openConnectionDraftIn
 } from "./connection-draft-card";
+export { ConnectionConnectCard, ConnectionConnectCardView } from "./connection-connect-card";
+export {
+  connectCardOfProposal,
+  connectCardOfRefusal,
+  withOwnSignIn,
+  type ConnectCard,
+  type ConnectCardState
+} from "./connection-connect-card-model";
 export { connectionReadyMessage, type ConnectionReadyOutcome } from "./connection-ready";
 export * from "./connection-give";
 export {

@@ -1837,6 +1837,37 @@ describe("OpenAI-compatible model provider", () => {
     expect(called.toolCalls).toMatchObject([{ toolName: "notes.record", input: { text: "two" } }]);
   });
 
+  it("lets the deterministic provider make a call again once the person signed in", async () => {
+    // The Connect card's word after a call refused for a missing sign-in (CHAT-CONN-2b): the
+    // call of the turn before is made again. Any other word is answered with text.
+    const complete = (
+      messages: Parameters<DeterministicModelProvider["complete"]>[0]["messages"]
+    ) =>
+      new DeterministicModelProvider("local").complete({
+        providerId: "local",
+        model: "deterministic-local",
+        messages,
+        tools: [{ name: "connection.mail.list", description: "Lists mail" }]
+      });
+    const refusedTurn = (refusal: string) => [
+      { role: "user" as const, content: "/tool connection.mail.list {}" },
+      {
+        role: "assistant" as const,
+        content: "I will run connection.mail.list with the provided input.",
+        toolCalls: [{ toolCallId: "call-1", toolName: "connection.mail.list", input: {} }]
+      },
+      { role: "tool" as const, content: refusal, toolCallId: "call-1" },
+      { role: "assistant" as const, content: "Tool work completed" },
+      { role: "user" as const, content: "Mail ist verbunden." }
+    ];
+    const again = await complete(
+      refusedTurn('{"message":"connection_not_connected: connect under Settings"}')
+    );
+    expect(again.toolCalls).toMatchObject([{ toolName: "connection.mail.list", input: {} }]);
+    const other = await complete(refusedTurn('{"message":"operation_disabled"}'));
+    expect(other.toolCalls).toEqual([]);
+  });
+
   it("streams the deterministic provider's answer in pieces", async () => {
     const clientInstanceId = asClientInstanceId("client-test");
     const registry = new DeterministicModelProvider("local");

@@ -185,6 +185,18 @@ export const connectionCreate = defineTranslations({
       "You enter the key or sign in there. Nothing is saved before you press Connect.",
     "connectionCreate.proposalCardReader": "Someone who may edit connections connects it.",
     "connectionCreate.proposalCardExists": "{title} exists already. Its page is open.",
+    "connectionCreate.connectCardReconnectTitle": "Sign in to {title} again",
+    "connectionCreate.connectCardConnectText":
+      "The agent then works in {title} with your own account. Nobody else uses it.",
+    "connectionCreate.connectCardReconnectText":
+      "Your sign-in at {title} has ended. Sign in again and the agent carries on.",
+    "connectionCreate.connectCardConnectedText": "{title} is connected.",
+    "connectionCreate.connectCardSetupText":
+      "{title} is not set up here yet. Set it up, then connect your account.",
+    "connectionCreate.connectCardSetup": "Set up",
+    "connectionCreate.connectCardAskAdmin":
+      "{title} is not set up here yet; ask your administration.",
+    "connectionCreate.connectCardTold": "{title} is connected.",
     "connectionCreate.readyTools":
       "{title} is connected ({name}), {count} tools approved for {surfaces}: {tools}.",
     "connectionCreate.readyToolsOne":
@@ -384,6 +396,18 @@ export const connectionCreate = defineTranslations({
       "Den Schlüssel gibst du dort ein oder meldest dich an. Gespeichert wird erst mit Verbinden.",
     "connectionCreate.proposalCardReader": "Verbinden kann, wer Verbindungen bearbeiten darf.",
     "connectionCreate.proposalCardExists": "{title} gibt es schon. Ihre Seite ist offen.",
+    "connectionCreate.connectCardReconnectTitle": "Bei {title} neu anmelden",
+    "connectionCreate.connectCardConnectText":
+      "Der Agent arbeitet dann mit deinem eigenen Konto in {title}. Niemand sonst nutzt es.",
+    "connectionCreate.connectCardReconnectText":
+      "Deine Anmeldung bei {title} ist abgelaufen. Melde dich neu an, dann macht der Agent weiter.",
+    "connectionCreate.connectCardConnectedText": "{title} ist verbunden.",
+    "connectionCreate.connectCardSetupText":
+      "{title} ist hier noch nicht eingerichtet. Richte es ein, danach verbindest du dein Konto.",
+    "connectionCreate.connectCardSetup": "Einrichten",
+    "connectionCreate.connectCardAskAdmin":
+      "{title} ist hier noch nicht eingerichtet; frag deine Administration.",
+    "connectionCreate.connectCardTold": "{title} ist verbunden.",
     "connectionCreate.readyTools":
       "{title} ist verbunden ({name}), {count} Werkzeuge freigegeben für {surfaces}: {tools}.",
     "connectionCreate.readyToolsOne":

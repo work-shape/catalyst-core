@@ -24,7 +24,7 @@ import type { JobId } from "./jobs";
 import type { JsonObject } from "./json";
 import type { LocaleCode } from "./localization";
 import type { ISODateString } from "./time";
-import type { ToolExecutionResult } from "./tool-execution";
+import type { ToolConnectionSignInRequest, ToolExecutionResult } from "./tool-execution";
 import type {
   AgentRunResume,
   AgentRunResumeState,
@@ -173,6 +173,8 @@ export type AgentRunProjectionPart =
       errorText?: string;
       /** The fixed recovery the host offers for an asset in a shared transcript. */
       errorReason?: "subject_conversation_shared";
+      /** The person's own sign-in the failed call needs (CHAT-CONN-2b). */
+      connect?: ToolConnectionSignInRequest;
       /** While the state is `waiting_for_decision`: what the person is asked to decide. */
       decision?: Omit<ToolDecisionRequested, "toolCallId" | "toolName">;
       /** On a `run_agent` call that started its subagent: the subagent, for its card. */
@@ -207,6 +209,7 @@ export interface AgentRunProjection {
     errorText?: string;
     /** The fixed recovery the host offers for an asset in a shared transcript. */
     errorReason?: "subject_conversation_shared";
+    connect?: ToolConnectionSignInRequest;
     decision?: Omit<ToolDecisionRequested, "toolCallId" | "toolName">;
     subagent?: SubagentRef;
   }>;

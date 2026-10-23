@@ -135,6 +135,9 @@ export function applyAgentRunObservation(
       ...(event.result.status !== "success" && event.result.recovery === "private_conversation"
         ? { errorReason: "subject_conversation_shared" as const }
         : {}),
+      ...(event.result.status !== "success" && event.result.connect
+        ? { connect: event.result.connect }
+        : {}),
       ...findSubagent(activeToolCalls, event.toolCallId)
     });
   }
