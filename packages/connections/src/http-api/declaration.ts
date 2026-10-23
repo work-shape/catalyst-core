@@ -103,6 +103,12 @@ function parameterIssues(
         });
       }
     }
+    if (field === "pathParams" && parameter.sendAs !== undefined) {
+      issues.push({
+        message: "Only a query parameter may name sendAs",
+        path: [field, name, "sendAs"]
+      });
+    }
     if (field === "pathParams" && parameter.required !== undefined) {
       issues.push({
         message: "A path parameter is always required, so it names no 'required'",
@@ -215,6 +221,12 @@ export const httpApiDeclaredOperations: DeclaredOperations = {
       ...parameterIssues(operation.pathParams, "pathParams", PATH_PARAMETER_TYPES),
       ...parameterIssues(operation.query, "query", QUERY_PARAMETER_TYPES)
     );
+    const wireNames = Object.entries(operation.query ?? {}).map(
+      ([name, parameter]) => parameter.sendAs ?? name
+    );
+    if (new Set(wireNames).size !== wireNames.length) {
+      issues.push({ message: "Query wire names must be unique", path: ["query"] });
+    }
     if (issues.length > 0) return issues;
     const measured = measureOutsideJsonSchema(inputSchemaOf(operation));
     return measured.ok ? [] : [schemaRefusal(measured.refusal, [])];

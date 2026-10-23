@@ -21,6 +21,7 @@ import {
   CONNECTOR_TYPE_PATTERN,
   EGRESS_PROTOCOLS,
   WORKFLOW_ERROR_CODES,
+  RESULT_SHAPER_NAME_PATTERN,
   connectionExposureRefusal,
   operationLimitsSchema,
   operationPagingSchema,
@@ -247,7 +248,11 @@ const declaredParametersSchema = z
       .object({
         schema: z.record(z.string(), jsonValueSchema),
         description: z.string().trim().min(1).max(1_000).optional(),
-        required: z.boolean().optional()
+        required: z.boolean().optional(),
+        sendAs: z
+          .string()
+          .regex(/^\$?[A-Za-z_][A-Za-z0-9_.-]{0,63}$/u)
+          .optional()
       })
       .strict()
   )
@@ -271,6 +276,7 @@ const operationDeclarationShape = {
   path: z.string().min(1).max(2_048).optional(),
   pathParams: declaredParametersSchema.optional(),
   query: declaredParametersSchema.optional(),
+  shaper: z.string().regex(RESULT_SHAPER_NAME_PATTERN).optional(),
   /** Reserved until the call path enforces data scope, whatever value was supplied. */
   scope: z.never({ error: CONNECTION_SCOPE_RESERVED }).optional()
 };

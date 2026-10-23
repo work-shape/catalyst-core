@@ -1,3 +1,4 @@
+import type { ResultShaper } from "@work-shape/catalyst-core";
 import type { CatalogueEntry } from "@work-shape/catalyst-connections";
 import { existsSync } from "node:fs";
 import { isAbsolute, resolve } from "node:path";
@@ -46,7 +47,7 @@ import {
 /** What a caller still gives a process of this instance: the build and the config path are its own. */
 type OfThisBuild<Input> = Omit<
   Input,
-  "configPath" | "tools" | "connectorTypes" | "catalogue" | "capabilities"
+  "configPath" | "tools" | "connectorTypes" | "catalogue" | "resultShapers" | "capabilities"
 > & { configPath?: string };
 
 export interface DefineClientInstanceInput {
@@ -65,6 +66,8 @@ export interface DefineClientInstanceInput {
    * which of them the instance offers.
    */
   catalogue?: readonly CatalogueEntry[];
+  /** Synchronous result transformations registered by this build. */
+  resultShapers?: Readonly<Record<string, ResultShaper>>;
   capabilities?: ClientInstanceCapability[];
   structuredDataPublicationReviewer?: StructuredDataPublicationReviewer;
   allowedOrigins?: string | string[];
@@ -123,6 +126,7 @@ export function defineClientInstance(input: DefineClientInstanceInput): DefinedC
     tools: input.tools ?? [],
     connectorTypes: input.connectorTypes ?? [],
     catalogue: input.catalogue ?? [],
+    resultShapers: input.resultShapers ?? {},
     capabilities: input.capabilities ?? []
   };
 

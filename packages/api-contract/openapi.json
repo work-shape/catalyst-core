@@ -7180,6 +7180,63 @@
                                 "authScheme": {
                                   "type": "string"
                                 },
+                                "credentialModes": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "enum": [
+                                      "shared",
+                                      "user"
+                                    ]
+                                  }
+                                },
+                                "defaultCredentialMode": {
+                                  "type": "string",
+                                  "enum": [
+                                    "shared",
+                                    "user"
+                                  ]
+                                },
+                                "groups": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "id": {
+                                        "type": "string"
+                                      },
+                                      "title": {
+                                        "anyOf": [
+                                          {
+                                            "type": "string"
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "en": {
+                                                "type": "string"
+                                              },
+                                              "de": {
+                                                "type": "string"
+                                              }
+                                            }
+                                          }
+                                        ]
+                                      },
+                                      "scopes": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "string"
+                                        }
+                                      }
+                                    },
+                                    "required": [
+                                      "id",
+                                      "title",
+                                      "scopes"
+                                    ]
+                                  }
+                                },
                                 "settings": {
                                   "type": "object",
                                   "propertyNames": {
@@ -7292,6 +7349,9 @@
                                     "type": "object",
                                     "properties": {
                                       "name": {
+                                        "type": "string"
+                                      },
+                                      "group": {
                                         "type": "string"
                                       },
                                       "title": {

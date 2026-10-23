@@ -4,7 +4,7 @@ import {
   type ReleaseConnectionInput
 } from "@work-shape/catalyst-config-schema";
 import { AppError, type JsonObject } from "@work-shape/catalyst-core";
-import type { Catalogue, CataloguePartView } from "./catalogue";
+import { settingsWithScopes, type Catalogue, type CataloguePartView } from "./catalogue";
 
 /** Expand references before the seed reads secrets or writes any asset. */
 export function expandReleaseConnections(
@@ -33,11 +33,8 @@ export function expandReleaseConnections(
             ? "choose a part explicitly with 'part: tools' or 'part: source'"
             : `the '${config.part}' part is not offered on this instance`
         );
-      if (part.authScheme === "oauth") {
-        fail(
-          `the '${part.part}' part uses OAuth; OAuth parts cannot be installed through release config yet. Install it at runtime in Studio instead`
-        );
-      }
+      if (!part.credentialModes.includes("shared"))
+        fail("release Connections require shared mode; install this personal part at runtime");
       const { fromEntry: _fromEntry, part: _part, settings, operations, ...overrides } = config;
       return [
         name,
@@ -47,7 +44,11 @@ export function expandReleaseConnections(
           service: entry.service,
           catalogue: { entry: entry.id, part: part.part, version: entry.version },
           ...overrides,
-          settings: mergeSettings(defaultSettings(part), settings),
+          settings: settingsWithScopes(
+            part,
+            mergeSettings(defaultSettings(part), settings),
+            operations ?? part.operations
+          ),
           // Only an explicit operator list accepts exposures. An entry grants none.
           operations:
             operations ??
@@ -109,4 +110,44 @@ function mergeSettings(base: JsonObject, overrides: JsonObject): JsonObject {
     });
   }
   return result;
+}
+
+/** Pure runtime expansion; secrets are entered separately through connections.set_secret. */
+export function expandCataloguePart(
+  part: CataloguePartView,
+  input: {
+    settings?: JsonObject;
+    operations: readonly { name: string; enabled?: boolean }[];
+    credentialMode?: CataloguePartView["defaultCredentialMode"];
+  }
+) {
+  const credentialMode = input.credentialMode ?? part.defaultCredentialMode;
+  if (!part.credentialModes.includes(credentialMode))
+    throw new AppError(
+      "VALIDATION_FAILED",
+      "The catalogue part does not allow this credential mode"
+    );
+  return {
+    connectorType: part.connectorType,
+    authScheme: part.authScheme,
+    credentialMode,
+    settings: settingsWithScopes(
+      part,
+      mergeSettings(defaultSettings(part), input.settings ?? {}),
+      input.operations
+    ),
+    operations: part.operations
+      .filter((operation) =>
+        input.operations.some(
+          (selected) => selected.name === operation.name && selected.enabled !== false
+        )
+      )
+      .map((operation) => ({
+        ...operation.declaration,
+        name: operation.name,
+        effect: operation.effect,
+        enabled: true,
+        exposure: []
+      }))
+  };
 }

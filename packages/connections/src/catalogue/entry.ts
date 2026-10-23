@@ -12,12 +12,16 @@ import {
   CONNECTION_SERVICE_PATTERN,
   CONNECTOR_TYPE_PATTERN,
   OPERATION_EFFECTS,
+  CONNECTION_CREDENTIAL_MODES,
+  normalizeEgressHost,
+  RESULT_SHAPER_NAME_PATTERN,
   type CataloguePart,
   type JsonObject,
   type JsonValue,
   type LocalizedStringConfig
 } from "@work-shape/catalyst-core";
 import { z } from "zod";
+import { oauthEntrySchema, oauthScopesSchema } from "../http-api/oauth-settings";
 
 // A catalogue entry (CAT-1): data about one outside service, with up to two parts, `tools` for
 // agents and `source` for a Knowledge Base. Each part installs one ordinary Connection. An
@@ -25,8 +29,8 @@ import { z } from "zod";
 // field this schema does not name, such as `exposure` on an operation or `grants` on a part,
 // is refused when the release loads the entry. An entry only recommends; the admin enables.
 
-/** The auth schemes an entry part may name in this cut: no sign-in of a person yet. */
-const PART_AUTH_SCHEMES = ["none", "bearer", "header", "client_credentials"] as const;
+/** The auth schemes an entry part may name. */
+const PART_AUTH_SCHEMES = ["none", "bearer", "header", "client_credentials", "oauth"] as const;
 
 const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
   z.union([
@@ -149,7 +153,11 @@ const declaredParameterSchema = z
   .object({
     schema: z.record(z.string(), jsonValueSchema),
     description: z.string().max(1_000).optional(),
-    required: z.boolean().optional()
+    required: z.boolean().optional(),
+    sendAs: z
+      .string()
+      .regex(/^\$?[A-Za-z_][A-Za-z0-9_.-]{0,63}$/u)
+      .optional()
   })
   .strict();
 
@@ -168,6 +176,8 @@ const operationSchema = z
     description: z.string().trim().min(1).max(4_000).optional(),
     effect: z.enum(OPERATION_EFFECTS),
     recommended: z.boolean().default(false),
+    group: z.string().regex(CONNECTION_SERVICE_PATTERN).optional(),
+    shaper: z.string().regex(RESULT_SHAPER_NAME_PATTERN).optional(),
     policy: z.enum(CONNECTION_OPERATION_POLICIES).optional(),
     method: z
       .string()
@@ -196,8 +206,23 @@ const partSchema = z
     title: localizedStringSchema.optional(),
     /** What the part does, on the step that prepares it. */
     description: localizedStringSchema,
-    /** Whose account the Connection reads with. Only `shared` until personal connections. */
-    credentialModes: z.array(z.literal("shared")).min(1).default(["shared"]),
+    /** Whose account the Connection reads with. */
+    credentialModes: z.array(z.enum(CONNECTION_CREDENTIAL_MODES)).min(1).max(2).default(["shared"]),
+    defaultCredentialMode: z.enum(CONNECTION_CREDENTIAL_MODES).optional(),
+    oauth: oauthEntrySchema.optional(),
+    groups: z
+      .array(
+        z
+          .object({
+            id: z.string().regex(CONNECTION_SERVICE_PATTERN),
+            title: localizedStringSchema,
+            scopes: oauthScopesSchema
+          })
+          .strict()
+      )
+      .min(1)
+      .max(64)
+      .optional(),
     /** For a part with its own fields; a part over a type's form takes the form's. */
     authScheme: z.enum(PART_AUTH_SCHEMES).optional(),
     /** Fixed settings, beside what the fields fill in. */
@@ -226,7 +251,78 @@ const partSchema = z
   .refine((part) => (part.fields ?? []).filter((field) => field.secret).length <= 1, {
     message: "A part asks for one secret at most",
     path: ["fields"]
-  });
+  })
+  .superRefine((part, context) => {
+    const issue = (message: string, path: (string | number)[]) =>
+      context.addIssue({ code: "custom", message, path });
+    if (new Set(part.credentialModes).size !== part.credentialModes.length)
+      issue("A credential mode is listed once", ["credentialModes"]);
+    if (
+      part.defaultCredentialMode !== undefined &&
+      !part.credentialModes.includes(part.defaultCredentialMode)
+    )
+      issue("The default credential mode must be allowed", ["defaultCredentialMode"]);
+    if (part.credentialModes.includes("user") && part.authScheme !== "oauth")
+      issue("Personal mode requires OAuth", ["credentialModes"]);
+    if ((part.authScheme === "oauth") !== (part.oauth !== undefined))
+      issue("An OAuth part names its authorization server in oauth", ["oauth"]);
+    if (part.authScheme === "oauth") {
+      if (part.settings?.oauth !== undefined)
+        issue("An entry names OAuth settings in oauth, not settings.oauth", ["settings", "oauth"]);
+      if (
+        part.fields?.filter((field) => field.setting === "oauth.clientId").length !== 1 ||
+        (part.fields ?? []).filter((field) => field.secret).length !== 1
+      )
+        issue("An OAuth part asks for oauth.clientId and one client secret", ["fields"]);
+      for (const field of part.fields ?? []) {
+        if (field.setting?.startsWith("oauth") && field.setting !== "oauth.clientId")
+          issue("OAuth fields fill only oauth.clientId; the secret uses the secret field", [
+            "fields"
+          ]);
+      }
+      for (const [key, value] of Object.entries(part.oauth ?? {})) {
+        if (
+          typeof value !== "string" ||
+          !["authorizationUrl", "tokenUrl", "revocationUrl", "issuer"].includes(key)
+        )
+          continue;
+        let url: URL;
+        try {
+          url = new URL(value);
+        } catch {
+          // The provider schema reports the malformed address with its field path.
+          continue;
+        }
+        if (
+          !part.egress.some(
+            (host) =>
+              host.protocol + ":" === url.protocol &&
+              normalizeEgressHost(host.host) === normalizeEgressHost(url.hostname) &&
+              host.port === Number(url.port || (url.protocol === "https:" ? 443 : 80))
+          )
+        )
+          issue("Every OAuth host must be on the part's own egress list", ["oauth", key]);
+      }
+    }
+    if (part.groups !== undefined) {
+      if (part.authScheme !== "oauth") issue("Scope groups require OAuth", ["groups"]);
+      const ids = new Set(part.groups.map((group) => group.id));
+      if (!ids.has("identity")) issue("Scope groups include identity", ["groups"]);
+      if (ids.size !== part.groups.length) issue("A group is listed once", ["groups"]);
+      if (new Set(part.groups.flatMap((group) => group.scopes)).size > 64)
+        issue("A part requests at most 64 distinct scopes", ["groups"]);
+      part.operations.forEach((operation, index) => {
+        if (operation.group === undefined || !ids.has(operation.group))
+          issue("An operation names a declared group", ["operations", index, "group"]);
+      });
+    } else if (part.operations.some((operation) => operation.group !== undefined)) {
+      issue("An operation names a declared group", ["operations"]);
+    }
+  })
+  .transform((part) => ({
+    ...part,
+    defaultCredentialMode: part.defaultCredentialMode ?? part.credentialModes[0] ?? "shared"
+  }));
 
 export const catalogueEntrySchema = z
   .object({
@@ -246,6 +342,10 @@ export const catalogueEntrySchema = z
       })
       .optional(),
     source: partSchema
+      .refine((part) => part.credentialModes.every((mode) => mode === "shared"), {
+        message: "A source part supports shared mode only",
+        path: ["credentialModes"]
+      })
       .refine((part) => part.operations.length === 0, {
         message:
           "A source part has no operations: its documents reach people through a Knowledge Base",
@@ -283,7 +383,33 @@ export function entryParts(
 
 /** The settings of a part as JSON: what the YAML wrote, which holds nothing but JSON. */
 export function partSettings(part: CatalogueEntryPart): JsonObject {
-  return structuredClone(part.settings ?? {});
+  return {
+    ...structuredClone(part.settings ?? {}),
+    ...(part.oauth === undefined
+      ? {}
+      : { oauth: { ...structuredClone(part.oauth), scopes: scopesForOperations(part, []) } })
+  };
 }
 
 export type { LocalizedStringConfig };
+
+/** Consent covers identity and the groups of enabled (approved) operations only. */
+export function scopesForOperations(
+  part: Pick<CatalogueEntryPart, "groups" | "operations">,
+  approved: readonly { name: string; enabled?: boolean }[]
+): string[] {
+  const names = new Set(
+    approved.filter((operation) => operation.enabled !== false).map((operation) => operation.name)
+  );
+  const groups = new Set([
+    "identity",
+    ...part.operations
+      .filter((operation) => names.has(operation.name))
+      .flatMap((operation) => (operation.group === undefined ? [] : [operation.group]))
+  ]);
+  return [
+    ...new Set(
+      (part.groups ?? []).filter((group) => groups.has(group.id)).flatMap((group) => group.scopes)
+    )
+  ];
+}

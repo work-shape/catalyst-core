@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { sampleResultShapers } from "../clients/demo/src/result-shapers";
+import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -6,6 +7,7 @@ import { z } from "zod";
 import {
   parseClientInstanceConfig,
   loadClientInstanceConfigFromFile,
+  connectionConfigSchema,
   releaseConnectionsConfigSchema
 } from "@work-shape/catalyst-config-schema";
 import {
@@ -14,12 +16,15 @@ import {
   createFixtureDocumentSource,
   createHttpApiConnectorType,
   expandReleaseConnections,
+  expandCataloguePart,
   loadCatalogueEntries,
   parseCatalogueEntry,
   type CatalogueEntry
 } from "@work-shape/catalyst-connections";
 import {
   CONNECTION_REFUSALS,
+  asClientInstanceId,
+  connectionCredentialOrigin,
   createConnectorTypeRegistry,
   type ConnectorTypeDefinition
 } from "@work-shape/catalyst-core";
@@ -29,6 +34,7 @@ import { required } from "./support/assertions";
 import { createTestConfig } from "./support/fixtures";
 import { generateSecretStoreKey } from "./support/test-connector";
 import { createTestInstance, type TestInstance } from "./support/test-instance";
+import { fileTestDatabaseUrl } from "./support/test-database";
 import { withTestSql } from "./support/test-sql";
 
 // The Connection Catalogue (CAT-1): what an entry may hold, what an instance checks at its
@@ -211,7 +217,8 @@ describe("the catalogue of an instance", () => {
     });
     expect(named.entries.map((view) => [view.id, view.offered])).toEqual([
       ["sample-accounting", true],
-      ["sample-files", false]
+      ["sample-files", false],
+      ["sample-oauth", false]
     ]);
     expect(named.egress.map((host) => `${host.host}:${host.port}`)).toEqual(["sample-mcp:8787"]);
     const none = createCatalogue({ entries: shipped(), named: [], connectorTypes: registry() });
@@ -443,19 +450,6 @@ describe("release config from a catalogue entry (CAT-2)", () => {
       catalogue: { entry: "ledger", part: "source", version: 1 }
     });
   });
-
-  it("refuses an OAuth part in release config with an actionable message", () => {
-    const catalogue = catalogueOf([parsed(entry())]);
-    const oauth = {
-      entries: catalogue.entries.map((entry) => ({
-        ...entry,
-        parts: entry.parts.map((part) => ({ ...part, authScheme: "oauth" }))
-      }))
-    };
-    expect(() => expandReleaseConnections(release({ fromEntry: "ledger" }), oauth)).toThrow(
-      "catalogue entry 'ledger': the 'tools' part uses OAuth; OAuth parts cannot be installed through release config yet"
-    );
-  });
 });
 
 describe("a write of a Connection's catalogue link", () => {
@@ -531,12 +525,16 @@ describe("a write of a Connection's catalogue link", () => {
 });
 
 describe("an install on an assembled instance", () => {
+  // Provision and migrate the file fixture during setup, outside any individual scenario.
+  beforeAll(async () => {
+    await fileTestDatabaseUrl();
+  });
   const started: TestInstance[] = [];
   afterEach(async () => {
     await Promise.all(started.splice(0).map((instance) => instance.close()));
   });
 
-  async function start(connections: Record<string, unknown> = {}) {
+  async function start(connections: Record<string, unknown> = {}, oauth = false) {
     const key = generateSecretStoreKey();
     const config = parseClientInstanceConfig({
       ...createTestConfig({
@@ -552,7 +550,7 @@ describe("an install on an assembled instance", () => {
       }),
       modules: { assetManagement: { enabled: true }, connections: { enabled: true } },
       secretStore: { keys: [{ id: "k1", ref: "CATALYST_SECRET_STORE_KEY" }] },
-      catalogue: { entries: ["sample-accounting"] },
+      catalogue: { entries: ["sample-accounting", ...(oauth ? ["sample-oauth"] : [])] },
       connections
     });
     const instance = await createTestInstance({
@@ -560,7 +558,8 @@ describe("an install on an assembled instance", () => {
       env: { CATALYST_SECRET_STORE_KEY: key },
       tools: [],
       connectorTypes: [folderSourceConnector],
-      catalogue: shipped()
+      catalogue: shipped(),
+      resultShapers: sampleResultShapers
     });
     started.push(instance);
     return instance;
@@ -579,6 +578,122 @@ describe("an install on an assembled instance", () => {
         )
       })
     )
+  });
+
+  it("stores a personal OAuth install and recalculates consent when another group is enabled", async () => {
+    const instance = await start({}, true);
+    const catalogue = createCatalogue({
+      entries: shipped(),
+      named: ["sample-oauth"],
+      connectorTypes: createConnectorTypeRegistry([
+        createHttpApiConnectorType(sampleResultShapers),
+        folderSourceConnector
+      ]),
+      resultShapers: sampleResultShapers
+    });
+    const part = required(catalogue.entries.find((entry) => entry.id === "sample-oauth")?.parts[0]);
+    const initial = {
+      ...expandCataloguePart(part, {
+        credentialMode: "user",
+        operations: [],
+        settings: { oauth: { clientId: "sample-client" } }
+      }),
+      name: "sample-oauth",
+      displayName: "Sample OAuth",
+      catalogue: { entry: "sample-oauth", part: "tools", version: 1 }
+    };
+    const put = (config: Record<string, unknown>, expectedRevision: number | null) =>
+      instance.call("assets.put", {
+        params: { kind: "connection", name: "sample-oauth" },
+        payload: { config, expectedRevision }
+      });
+    const installed = await put(initial, null);
+    expect(installed.statusCode, installed.body).toBe(200);
+    const read = () =>
+      instance.call("assets.get", { params: { kind: "connection", name: "sample-oauth" } });
+    const stored = z
+      .object({ revision: z.number(), config: z.record(z.string(), z.unknown()) })
+      .parse((await read()).json());
+    expect(stored.config).toMatchObject({
+      credentialMode: "user",
+      settings: { oauth: { scopes: ["sample.identity"] } }
+    });
+    const storedConfig = connectionConfigSchema.parse(stored.config);
+    const type = required(registry().get("http_api"));
+    const asset = required(
+      await instance.stores.configAssets.getConfigAsset({
+        clientInstanceId: asClientInstanceId("demo-local"),
+        kind: "connection",
+        name: "sample-oauth"
+      })
+    );
+    const owner = await instance.stores.users.createUser({
+      clientInstanceId: asClientInstanceId("demo-local"),
+      displayLabel: "Sample OAuth owner",
+      roles: ["user"],
+      permissions: []
+    });
+    const key = {
+      clientInstanceId: asClientInstanceId("demo-local"),
+      connectionAssetId: asset.id,
+      subject: `user:${owner.id}`
+    };
+    const binding = required(
+      await instance.stores.connections.connectConnectionBinding({
+        ...key,
+        scheme: "oauth",
+        userId: owner.id,
+        grantedScopes: ["sample.identity"],
+        secretHandle: "sec_sample_token_set",
+        secretVersion: 1,
+        origin: connectionCredentialOrigin(
+          type.target(storedConfig.settings),
+          type.oauthEndpoints?.(storedConfig.settings)
+        ),
+        expectedRowVersion: null
+      })
+    );
+    const enabled = expandCataloguePart(part, {
+      operations: [{ name: "listCustomers" }]
+    }).operations;
+    const edited = await put({ ...stored.config, operations: enabled }, stored.revision);
+    expect(edited.statusCode, edited.body).toBe(200);
+    expect(await instance.stores.connections.getConnectionBinding(key)).toMatchObject({
+      state: "connected",
+      rowVersion: binding.rowVersion,
+      grantedScopes: ["sample.identity"],
+      secretHandle: "sec_sample_token_set"
+    });
+    expect((await read()).json()).toMatchObject({
+      config: {
+        credentialMode: "user",
+        secretHandle: stored.config.secretHandle,
+        settings: {
+          oauth: { clientId: "sample-client", scopes: ["sample.identity", "sample.read"] }
+        }
+      }
+    });
+  });
+
+  it("seeds an OAuth fromEntry as shared with consent scopes and its registered shaper", async () => {
+    const instance = await start(
+      { sample: { fromEntry: "sample-oauth", settings: { oauth: { clientId: "sample-client" } } } },
+      true
+    );
+    const stored = await instance.call("assets.get", {
+      params: { kind: "connection", name: "sample" }
+    });
+    expect(stored.statusCode, stored.body).toBe(200);
+    expect(stored.json()).toMatchObject({
+      config: {
+        credentialMode: "shared",
+        authScheme: "oauth",
+        settings: { oauth: { scopes: ["sample.identity", "sample.read"] } },
+        operations: [
+          { name: "listCustomers", shaper: "sample.customers", query: { top: { sendAs: "$top" } } }
+        ]
+      }
+    });
   });
 
   it("seeds an expanded release entry and keeps its catalogue link on a repeated seed", async () => {
@@ -618,7 +733,8 @@ describe("an install on an assembled instance", () => {
     const entries = offersSchema.parse(offers.json()).entries;
     expect(entries.map((view) => [view.id, view.offered])).toEqual([
       ["sample-accounting", true],
-      ["sample-files", false]
+      ["sample-files", false],
+      ["sample-oauth", false]
     ]);
 
     const grantsBefore = await withTestSql(
