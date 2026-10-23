@@ -3,8 +3,11 @@ import { z } from "zod";
 import { parseClientInstanceConfig } from "@work-shape/catalyst-config-schema";
 import {
   asClientInstanceId,
+  asAgentRunId,
+  asToolCallId,
   asUserId,
   connectionOAuthCallbackPath,
+  type AuthenticatedUser,
   type AuthenticatedIdentity
 } from "@work-shape/catalyst-core";
 import { runOperation, type OperationOutcome } from "@work-shape/catalyst-tool-execution";
@@ -87,7 +90,12 @@ export interface OAuthWorld {
   /** The call path of a worker process of the instance, on the same rows. */
   calls(): Promise<ReturnType<typeof getTestExecution>["operationCalls"]>;
   /** A Connection operation called by the person as the CLI calls it. */
-  call(connectionName: string, operation: string, cookie: string): Promise<OperationOutcome>;
+  call(
+    connectionName: string,
+    operation: string,
+    cookie: string,
+    origin?: "cli" | "agent"
+  ): Promise<OperationOutcome>;
   /** `connections.discover` in the person's browser session, and the discovery run. */
   discover(name: string, cookie: string): Promise<void>;
   /** `connections.disconnect` in the person's browser session. */
@@ -169,7 +177,7 @@ function cookieOf(response: Response): string {
     .join("; ");
 }
 
-export async function createOAuthWorld(): Promise<OAuthWorld> {
+export async function createOAuthWorld(options: { extraPort?: number } = {}): Promise<OAuthWorld> {
   const secrets: string[] = [];
   const provider: OAuthWorld["provider"] = {};
   const clientSecret = generateTestSecret();
@@ -239,6 +247,17 @@ export async function createOAuthWorld(): Promise<OAuthWorld> {
     secretStore: { keys: [{ id: "k1", ref: "CATALYST_SECRET_STORE_KEY" }] },
     egress: {
       allow: [
+        ...(options.extraPort === undefined
+          ? []
+          : [
+              {
+                protocol: "http",
+                host: "127.0.0.1",
+                port: options.extraPort,
+                network: "private",
+                cidrs: ["127.0.0.1/32"]
+              }
+            ]),
         {
           protocol: "http",
           host: "127.0.0.1",
@@ -309,7 +328,7 @@ export async function createOAuthWorld(): Promise<OAuthWorld> {
     return getTestExecution(worker).operationCalls;
   }
   const clientInstanceId = asClientInstanceId(config.clientInstance.id);
-  async function identityOf(cookie: string): Promise<AuthenticatedIdentity> {
+  async function identityOf(cookie: string): Promise<AuthenticatedUser> {
     const response = await fetch(`${api}/api/v1/me`, { headers: { cookie } });
     const userId = asUserId(meSchema.parse(await response.json()).id);
     const user = await instance.stores.users.getUser({ clientInstanceId, userId });
@@ -361,18 +380,54 @@ export async function createOAuthWorld(): Promise<OAuthWorld> {
     oauth: sampleOAuth,
     identityOf,
     calls: callPath,
-    async call(connectionName, operation, cookie) {
+    async call(connectionName, operation, cookie, origin = "cli") {
       const calls = await callPath();
+      const actor = await identityOf(cookie);
+      const personalWorkspace =
+        origin === "agent"
+          ? await worker.stores.workspaces.ensurePersonalWorkspace({
+              clientInstanceId,
+              userId: asUserId(actor.id)
+            })
+          : undefined;
+      const conversation =
+        personalWorkspace === undefined
+          ? undefined
+          : await worker.stores.conversations.createConversation({
+              clientInstanceId,
+              collaborationWorkspaceId: personalWorkspace.id,
+              createdByUserId: asUserId(actor.id),
+              createdByExternalUserId: actor.externalUserId,
+              visibility: "private",
+              title: "Personal Connection fixture",
+              retainedUntil: "2099-01-01T00:00:00.000Z"
+            });
       return runOperation(
         {
           operation: `connection.${connectionName}.${operation}`,
           effect: "reading",
           input: {},
-          actor: await identityOf(cookie),
-          origin: { kind: "cli" },
+          actor,
+          origin:
+            conversation !== undefined
+              ? {
+                  kind: "agent",
+                  conversationId: conversation.id,
+                  agentRunId: asAgentRunId(`run_${generateTestSecret().slice(0, 12)}`),
+                  toolCallId: asToolCallId(`call_${generateTestSecret().slice(0, 12)}`),
+                  agentName: "personal-fixture",
+                  toolName: `connection.${connectionName}.${operation}`
+                }
+              : { kind: "cli" },
           correlationId: `corr_${generateTestSecret().slice(0, 12)}`
         },
-        calls.deps
+        origin === "agent"
+          ? {
+              ...calls.deps,
+              // This fixture supplies the agent's accepted tool; lifecycle tests have no agent asset.
+              agentToolNames: async () => [`connection.${connectionName}.${operation}`]
+            }
+          : calls.deps
       );
     },
     async disconnect(name, cookie) {

@@ -1,6 +1,7 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import {
   AppError,
+  asUserId,
   CONNECTION_ASSET_KIND,
   CONNECTION_OAUTH_CONNECTED,
   CONNECTION_OAUTH_LANDING_PATH,
@@ -11,6 +12,7 @@ import {
   connectionCallError,
   connectionCallReasonOf,
   connectionOAuthError,
+  personalConnectionBrowserError,
   connectionOAuthCallbackPath,
   connectionOAuthReasonOf,
   signInSecretSubject,
@@ -45,6 +47,7 @@ import { createSdkOAuthPort } from "./sdk-adapter";
 import { checkedServer, portFailure } from "./server";
 import { signInServerOf, staticServerOf, withAuthorizationParams } from "./static-server";
 import { writeTokenSet } from "./token-set";
+import { accountLabel, bindingAuditSubject } from "../personal-bindings";
 
 // The shared OAuth sign-in of a Connection (CS-4b2): its start and its callback. The start
 // discovers the server, settles the client, and stores a setup session that holds the state as
@@ -135,6 +138,7 @@ export interface ConnectionSignIn {
     completer: SignInCompleter | undefined;
     /** Whether the person holds `connection.write` on the Connection now. */
     mayWrite(resource: OperationResource): boolean;
+    mayUse?(resource: OperationResource): boolean;
     audit: SignInAudit;
     signal?: AbortSignal;
   }): Promise<{ location: string; connectionName: string }>;
@@ -243,7 +247,8 @@ export function createConnectionSignIn(deps: ConnectionSignInDeps): ConnectionSi
     audit: SignInAudit,
     stage: "start" | "callback",
     error: unknown,
-    connection?: StoredConnection
+    connection?: StoredConnection,
+    ownerUserId?: string
   ): Promise<void> {
     const reason =
       connectionOAuthReasonOf(error) ??
@@ -259,7 +264,11 @@ export function createConnectionSignIn(deps: ConnectionSignInDeps): ConnectionSi
       correlationId: audit.correlationId,
       metadata: {
         stage,
-        subjectKind: SHARED_CREDENTIAL_SUBJECT,
+        ...bindingAuditSubject(
+          connection?.config.credentialMode === "user" && (ownerUserId ?? audit.actor.userId)
+            ? `user:${ownerUserId ?? audit.actor.userId}`
+            : SHARED_CREDENTIAL_SUBJECT
+        ),
         ...(connection === undefined
           ? {}
           : { connectionName: connection.config.name, connectionRevision: connection.revision })
@@ -455,7 +464,10 @@ export function createConnectionSignIn(deps: ConnectionSignInDeps): ConnectionSi
       clientInstanceId: deps.clientInstanceId,
       connectionAssetId: connection.assetId,
       connectionRevision: connection.revision,
-      subject: SHARED_CREDENTIAL_SUBJECT,
+      subject:
+        connection.config.credentialMode === "user"
+          ? `user:${starter.userId}`
+          : SHARED_CREDENTIAL_SUBJECT,
       actorUserId: starter.userId,
       authSessionId: starter.authSessionId,
       stateHash,
@@ -558,6 +570,7 @@ export function createConnectionSignIn(deps: ConnectionSignInDeps): ConnectionSi
     } catch (error) {
       throw portFailure(error, "oauth_denied");
     }
+    const label = accountLabel(tokens.idToken, session.scopes);
     const granted = tokens.scope === undefined ? session.scopes : scopesOf(tokens.scope);
     const { text: tokenSet, accessExpiresAt } = writeTokenSet({
       tokens,
@@ -569,6 +582,19 @@ export function createConnectionSignIn(deps: ConnectionSignInDeps): ConnectionSi
     // stored for the origin of that revision, and the binding names it. A write of the
     // Connection waits; one that landed before is seen here and refuses everything.
     await deps.stores.transaction(async (stores) => {
+      if (connection.config.credentialMode === "user") {
+        // Rights/user lock first, then asset and binding, then secret: the same order as
+        // deactivation. No grant acquired while the exchange ran can survive disable.
+        await stores.access.lockRights({
+          clientInstanceId: deps.clientInstanceId,
+          userId: session.actorUserId
+        });
+        const owner = await stores.users.getUser({
+          clientInstanceId: deps.clientInstanceId,
+          userId: asUserId(session.actorUserId)
+        });
+        if (owner?.status !== "active") throw connectionOAuthError("oauth_requires_person");
+      }
       const held = await stores.configAssets.getConfigAsset({
         clientInstanceId: deps.clientInstanceId,
         kind: CONNECTION_ASSET_KIND,
@@ -586,9 +612,9 @@ export function createConnectionSignIn(deps: ConnectionSignInDeps): ConnectionSi
       const key = {
         clientInstanceId: deps.clientInstanceId,
         connectionAssetId: session.connectionAssetId,
-        subject: SHARED_CREDENTIAL_SUBJECT
+        subject: session.subject
       };
-      const previous = await stores.connections.getConnectionBinding(key);
+      const previous = await stores.connections.getConnectionBinding({ ...key, lock: "update" });
       const written = await createSecretStore({
         clientInstanceId: deps.clientInstanceId,
         keyring,
@@ -596,7 +622,7 @@ export function createConnectionSignIn(deps: ConnectionSignInDeps): ConnectionSi
       }).put({
         binding: {
           connectionAssetId: session.connectionAssetId,
-          subject: signInSecretSubject(SHARED_CREDENTIAL_SUBJECT)
+          subject: signInSecretSubject(session.subject)
         },
         value: tokenSet,
         source: "runtime",
@@ -606,6 +632,8 @@ export function createConnectionSignIn(deps: ConnectionSignInDeps): ConnectionSi
       const connected = await stores.connections.connectConnectionBinding({
         ...key,
         scheme: "oauth",
+        ...(connection.config.credentialMode === "user" ? { userId: session.actorUserId } : {}),
+        ...(label === undefined ? {} : { accountLabel: label }),
         grantedScopes: granted,
         secretHandle: written.handle,
         secretVersion: written.version,
@@ -637,8 +665,8 @@ export function createConnectionSignIn(deps: ConnectionSignInDeps): ConnectionSi
       metadata: {
         connectionName: connection.config.name,
         connectionRevision: connection.revision,
-        subjectKind: SHARED_CREDENTIAL_SUBJECT,
-        scopes: granted
+        ...bindingAuditSubject(session.subject),
+        ...(connection.config.credentialMode === "user" ? {} : { scopes: granted })
       }
     });
   }
@@ -655,6 +683,12 @@ export function createConnectionSignIn(deps: ConnectionSignInDeps): ConnectionSi
       const connection = await readConnection(deps, name);
       if (!connection) throw new AppError("NOT_FOUND", `Connection '${name}' does not exist`);
       try {
+        if (
+          connection.config.credentialMode === "user" &&
+          starter.authSessionId.startsWith("key:")
+        ) {
+          throw personalConnectionBrowserError();
+        }
         return await start(connection, starter, audit, deadline(signal));
       } catch (error) {
         await refused(audit, "start", error, connection);
@@ -672,8 +706,9 @@ export function createConnectionSignIn(deps: ConnectionSignInDeps): ConnectionSi
       return session?.actorUserId === userId && session.connectionAssetId === connection.assetId;
     },
 
-    async complete({ connectionName, query, completer, mayWrite, audit, signal }) {
+    async complete({ connectionName, query, completer, mayWrite, mayUse, audit, signal }) {
       let connection: StoredConnection | undefined;
+      let ownerUserId: string | undefined;
       try {
         // Only a person in their own signed-in browser completes a sign-in: an embedding
         // host's token or a key proves no browser of the person who was asked.
@@ -690,6 +725,8 @@ export function createConnectionSignIn(deps: ConnectionSignInDeps): ConnectionSi
         if (consumed.outcome === "unknown") throw connectionOAuthError("oauth_state_invalid");
         if (consumed.outcome === "expired") throw connectionOAuthError("oauth_session_expired");
         const { session } = consumed;
+        ownerUserId = session.actorUserId;
+        if (session.subject.startsWith("user:")) connection = await connectionOfSession(session);
         // The person who started, in the session they started from. A start through a
         // personal key is completed in any first-party session of the same person.
         const sameSession =
@@ -698,7 +735,7 @@ export function createConnectionSignIn(deps: ConnectionSignInDeps): ConnectionSi
         if (session.actorUserId !== completer.userId || !sameSession) {
           throw connectionOAuthError("oauth_state_invalid");
         }
-        connection = await connectionOfSession(session);
+        connection ??= await connectionOfSession(session);
         // The browser came back to the address of the Connection whose client asked: a code
         // of one authorization server cannot complete the sign-in of another Connection, also
         // where the server sends no `iss`.
@@ -708,10 +745,17 @@ export function createConnectionSignIn(deps: ConnectionSignInDeps): ConnectionSi
         ) {
           throw connectionOAuthError("oauth_state_invalid");
         }
-        if (!mayWrite(resourceOf(connection))) {
+        const personal = connection.config.credentialMode === "user";
+        if (
+          session.subject !== (personal ? `user:${completer.userId}` : SHARED_CREDENTIAL_SUBJECT) ||
+          (personal && session.authSessionId !== completer.firstPartySessionId)
+        ) {
+          throw connectionOAuthError("oauth_state_invalid");
+        }
+        if (!(personal ? mayUse?.(resourceOf(connection)) : mayWrite(resourceOf(connection)))) {
           throw new AppError(
             "FORBIDDEN",
-            "forbidden: connecting the Connection needs the right connection.write",
+            `forbidden: connecting the Connection needs the right ${personal ? "connection.use" : "connection.write"}`,
             { reason: "forbidden" }
           );
         }
@@ -723,7 +767,7 @@ export function createConnectionSignIn(deps: ConnectionSignInDeps): ConnectionSi
         );
         return { location, connectionName: connection.config.name };
       } catch (error) {
-        await refused(audit, "callback", error, connection);
+        await refused(audit, "callback", error, connection, ownerUserId);
         throw connection === undefined ? error : withConnection(error, connection.config.name);
       }
     }

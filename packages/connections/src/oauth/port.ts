@@ -49,6 +49,8 @@ export interface OAuthRegisteredClient extends OAuthClient {
 
 /** A token endpoint's answer. Lives in memory until it is sealed into the Secret Store. */
 export interface OAuthTokenSet {
+  /** Display hint only; never an authorization identity. */
+  idToken?: string;
   accessToken: string;
   tokenType: string;
   /** Seconds, as the server answered. */

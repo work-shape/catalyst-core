@@ -24,14 +24,14 @@ export async function endConnectionSignIn(
     ConnectionsStore,
     "getConnectionBinding" | "changeConnectionBindingState" | "deleteSecrets"
   >,
-  key: { clientInstanceId: ClientInstanceId; connectionAssetId: string },
+  key: { clientInstanceId: ClientInstanceId; connectionAssetId: string; subject?: string },
   end: { reason: ConnectionBindingEndReason; changedBy?: string }
 ): Promise<ConnectionBindingRecord | undefined> {
-  const bindingKey = { ...key, subject: SHARED_CREDENTIAL_SUBJECT };
+  const bindingKey = { ...key, subject: key.subject ?? SHARED_CREDENTIAL_SUBJECT };
   let ended: ConnectionBindingRecord | undefined;
   // Two tries: a refresh or a sign-in may change the row between the read and the write.
   for (let attempt = 0; attempt < 2; attempt += 1) {
-    const binding = await store.getConnectionBinding(bindingKey);
+    const binding = await store.getConnectionBinding({ ...bindingKey, lock: "update" });
     if (binding === undefined || binding.state === "revoked") break;
     const changed = await store.changeConnectionBindingState({
       ...bindingKey,
@@ -45,7 +45,7 @@ export async function endConnectionSignIn(
       break;
     }
   }
-  await store.deleteSecrets({ ...key, subject: signInSecretSubject(SHARED_CREDENTIAL_SUBJECT) });
+  await store.deleteSecrets({ ...key, subject: signInSecretSubject(bindingKey.subject) });
   return ended;
 }
 
@@ -63,6 +63,8 @@ export interface ConnectionSignInEnding {
   end(
     stores: { connections: ConnectionsStore },
     input: {
+      /** Explicit only inside owner Disconnect; bulk cleanup never decrypts personal tokens. */
+      subject?: string;
       connectionAssetId: string;
       connectionName: string;
       connectionRevision: number;

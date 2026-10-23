@@ -22,6 +22,8 @@ export type { ConnectionBindingState, ConnectionProviderRevocation };
  */
 export const CONNECTION_BINDING_END_REASONS = [
   "disconnect",
+  "admin_revoked",
+  "user_deactivated",
   "deleted",
   "origin_changed",
   "scheme_changed"
@@ -158,6 +160,12 @@ export interface ConnectionPersonContextRecord extends ConnectionBindingKey {
 }
 
 export interface ConnectionBindingsStore {
+  /** OAuth bindings only; filtered within this instance before any display projection. */
+  listConnectionBindings(input: {
+    clientInstanceId: ClientInstanceId;
+    connectionAssetId?: string;
+    userId?: string;
+  }): Promise<ConnectionBindingRecord[]>;
   /** Clears values made for an origin/header the Connection no longer uses. Keeps CAS versions. */
   revokeConnectionPersonContexts(input: {
     clientInstanceId: ClientInstanceId;
@@ -178,7 +186,9 @@ export interface ConnectionBindingsStore {
       changedBy: string;
     }
   ): Promise<boolean>;
-  getConnectionBinding(key: ConnectionBindingKey): Promise<ConnectionBindingRecord | undefined>;
+  getConnectionBinding(
+    key: ConnectionBindingKey & { lock?: "update" }
+  ): Promise<ConnectionBindingRecord | undefined>;
   /**
    * Writes a completed sign-in as a connected binding. `expectedRowVersion` is the version the
    * writer read: `null` creates the binding, a number replaces that version of it, as a new

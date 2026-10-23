@@ -12,6 +12,7 @@ import {
   or,
   sql
 } from "drizzle-orm";
+import { AppError } from "@work-shape/catalyst-core";
 import type {
   ConnectionBindingKey,
   ConnectionBindingRecord,
@@ -19,7 +20,7 @@ import type {
   ConnectionSetupSessionRecord
 } from "@work-shape/catalyst-core";
 import type { PostgresConnection } from "./postgres-database";
-import { connectionBindings, connectionSetupSessions } from "./schema";
+import { connectionBindings, connectionSetupSessions, productUsers } from "./schema";
 
 // The rows of sign-in bindings and setup sessions. Every decision about time is the database
 // clock's at the statement (`clock_timestamp()`), so a lease or an expiry reads the same in
@@ -104,6 +105,22 @@ export function createPostgresConnectionBindingOperations(
   const oauthBindingOf = (key: ConnectionBindingKey) =>
     and(bindingOf(key), eq(connectionBindings.scheme, "oauth"));
   return {
+    async listConnectionBindings({ clientInstanceId, connectionAssetId, userId }) {
+      const rows = await db
+        .select()
+        .from(connectionBindings)
+        .where(
+          and(
+            eq(connectionBindings.clientInstanceId, clientInstanceId),
+            eq(connectionBindings.scheme, "oauth"),
+            connectionAssetId === undefined
+              ? undefined
+              : eq(connectionBindings.connectionAssetId, connectionAssetId),
+            userId === undefined ? undefined : eq(connectionBindings.userId, userId)
+          )
+        );
+      return rows.map(mapBinding);
+    },
     async revokeConnectionPersonContexts(input) {
       await db
         .update(connectionBindings)
@@ -186,10 +203,33 @@ export function createPostgresConnectionBindingOperations(
       return rows.length === 1;
     },
     async getConnectionBinding(key) {
-      const [row] = await db.select().from(connectionBindings).where(oauthBindingOf(key)).limit(1);
+      const query = db.select().from(connectionBindings).where(oauthBindingOf(key)).limit(1);
+      const [row] = await (key.lock === "update" ? query.for("update") : query);
       return row ? mapBinding(row) : undefined;
     },
     async connectConnectionBinding({ expectedRowVersion, ...signIn }) {
+      if (signIn.userId !== undefined) {
+        // Serializes the callback with deactivation's row update. Its enclosing transaction
+        // also writes the secret, so a deactivated owner never retains a new token set.
+        const [user] = await db
+          .select({
+            status: productUsers.status,
+            deletionRequestedAt: productUsers.deletionRequestedAt
+          })
+          .from(productUsers)
+          .where(
+            and(
+              eq(productUsers.clientInstanceId, signIn.clientInstanceId),
+              eq(productUsers.id, signIn.userId)
+            )
+          )
+          .for("share");
+        if (!user || user.status !== "active" || user.deletionRequestedAt !== null) {
+          throw new AppError("FORBIDDEN", "oauth_requires_person: the owner is inactive", {
+            reason: "oauth_requires_person"
+          });
+        }
+      }
       const values = {
         userId: signIn.userId ?? null,
         state: "connected" as const,
