@@ -8,11 +8,11 @@ export const guardrails = defineTranslations({
     "guardrails.shippedHeading": "Shipped with the platform",
     "guardrails.shippedPublishTitle": "Publishing needs an instance admin's approval",
     "guardrails.shippedPublishText":
-      "A new version of an App or a Workflow goes live once an instance admin approved it. An admin's own Publish is the approval.",
+      "A new version of an App, a Workflow or a workspace's agent goes live once an instance admin approved it. An admin's own Publish is the approval.",
     "guardrails.shippedPublishOffText":
-      "Switched off: whoever may publish an App or a Workflow makes a new version live with their own click. Nobody else is asked.",
+      "Switched off: whoever may publish an App, a Workflow or a workspace's agent makes a new version live with their own click. Nobody else is asked.",
     "guardrails.shippedPublishOffAsk":
-      "Whoever may publish an App or a Workflow then makes a new version live with their own click, and no admin is asked. You can switch it on again here.",
+      "Whoever may publish an App, a Workflow or a workspace's agent then makes a new version live with their own click, and no admin is asked. You can switch it on again here.",
     "guardrails.shippedSwitch": "{name}, on or off",
     "guardrails.shippedAsShipped": "On, as the platform ships it.",
     "guardrails.shippedOnBy": "Switched on by {name}, {when}.",
@@ -132,11 +132,11 @@ export const guardrails = defineTranslations({
     "guardrails.shippedHeading": "Mit der Plattform geliefert",
     "guardrails.shippedPublishTitle": "Veröffentlichen braucht die Freigabe eines Instanz-Admins",
     "guardrails.shippedPublishText":
-      "Eine neue Version einer App oder eines Workflows geht erst live, wenn ein Instanz-Admin sie freigegeben hat. Veröffentlicht ein Admin selbst, ist das die Freigabe.",
+      "Eine neue Version einer App, eines Workflows oder eines Agenten eines Arbeitsbereichs geht erst live, wenn ein Instanz-Admin sie freigegeben hat. Veröffentlicht ein Admin selbst, ist das die Freigabe.",
     "guardrails.shippedPublishOffText":
-      "Ausgeschaltet: Wer eine App oder einen Workflow veröffentlichen darf, macht eine neue Version mit dem eigenen Klick live. Niemand sonst wird gefragt.",
+      "Ausgeschaltet: Wer eine App, einen Workflow oder einen Agenten eines Arbeitsbereichs veröffentlichen darf, macht eine neue Version mit dem eigenen Klick live. Niemand sonst wird gefragt.",
     "guardrails.shippedPublishOffAsk":
-      "Wer eine App oder einen Workflow veröffentlichen darf, macht dann eine neue Version mit dem eigenen Klick live, und kein Admin wird gefragt. Du kannst sie hier wieder einschalten.",
+      "Wer eine App, einen Workflow oder einen Agenten eines Arbeitsbereichs veröffentlichen darf, macht dann eine neue Version mit dem eigenen Klick live, und kein Admin wird gefragt. Du kannst sie hier wieder einschalten.",
     "guardrails.shippedSwitch": "{name}, ein oder aus",
     "guardrails.shippedAsShipped": "Eingeschaltet, wie die Plattform sie liefert.",
     "guardrails.shippedOnBy": "Eingeschaltet von {name}, {when}.",

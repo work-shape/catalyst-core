@@ -102,8 +102,8 @@ export interface AssetKindActions {
   publish?: string;
   /**
    * Decides a publish that waits for an approval, and makes its holder's own publish the
-   * approval a guardrail on the kind's publish asks for. Only a `draft_published` kind whose
-   * publish a guardrail can hold names it.
+   * approval a guardrail on the kind's publish asks for. Only a kind whose publish a guardrail
+   * can hold names it: a `draft_published` kind, and the agent with its draft (WS-PUB-1b).
    */
   approve?: string;
   /**

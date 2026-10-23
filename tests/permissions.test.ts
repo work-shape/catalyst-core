@@ -23,6 +23,7 @@ describe("permissions", () => {
       "agent.read",
       "agent.write",
       "agent.publish",
+      "agent.approve",
       "agent.delete",
       "agent.use",
       "skill.read",
@@ -89,6 +90,7 @@ describe("permissions", () => {
       action === "roles.edit_built_in" ||
       action === "feedback.review" ||
       action === "agent.publish" ||
+      action === "agent.approve" ||
       action === "agent.use" ||
       action === "builder" ||
       action === "publisher";
@@ -145,6 +147,7 @@ describe("permissions", () => {
       "agent.read",
       "agent.write",
       "agent.publish",
+      "agent.approve",
       "agent.delete",
       "agent.use",
       "skill.read",

@@ -34,6 +34,11 @@ export interface GuardrailSubject {
   name?: string;
   /** The authored display title, used in a refusal rather than the internal name. */
   title?: LocalizedStringConfig;
+  /**
+   * The workspace that owns the asset, where one does. Read by a shipped guardrail bound to an
+   * event for a workspace's assets only, never by a filter.
+   */
+  workspaceId?: string;
 }
 
 /**

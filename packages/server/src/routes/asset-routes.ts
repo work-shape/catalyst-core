@@ -125,8 +125,14 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
     beforeEvents: (input, _origin, actor) => together.events(input, actor),
     // A publish a guardrail holds waits for the holders of the kind's `approve` right.
     approval: (input) => together.approval(input),
+    // An instance-owned agent's publish is made live without a terminal; a workspace's agent
+    // keeps the question, so `--yes` waits as the person's confirmation (WS-PUB-1b).
     policyFloorOf: (origin, input) =>
-      typeof input === "object" && input !== null && "kind" in input && input.kind === "agent"
+      typeof input === "object" &&
+      input !== null &&
+      "kind" in input &&
+      input.kind === "agent" &&
+      !("workspaceId" in input && typeof input.workspaceId === "string")
         ? undefined
         : publishPolicyFloor(origin),
     execute: async (input, context) => {

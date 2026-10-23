@@ -8,6 +8,7 @@ import {
   WORKFLOW_ASSET_KIND,
   WORKFLOW_MANIFEST_FILE,
   isJsonObject,
+  type AgentProposalStore,
   type ApprovalFurtherRight,
   type AssetKindRegistry,
   type ConfigAssetRevisionRecord,
@@ -31,6 +32,16 @@ import type { AssetTarget } from "../assets/asset-target";
 import type { WorkflowAssetKind } from "../asset-kinds/shared";
 import type { HeldCallApprovalKind } from "./held-call-kind";
 import {
+  AGENT_PUBLISH_APPROVAL_KIND,
+  agentPublishMoved,
+  agentPublishResource,
+  agentPublishReview,
+  agentPublishReviewableSubjects,
+  agentPublishSubject,
+  agentPublishSubjectSchema,
+  type PublishMoved
+} from "./agent-publish-review";
+import {
   unavailablePublishNarrative,
   type PublishNarrator
 } from "../publish-narrative/publish-narrator";
@@ -41,16 +52,20 @@ import {
 // request cannot be approved once the draft or the live revision moved. Spec:
 // events-workflows-and-guardrails.md, Publishing needs a person's click.
 
+/** The right that decides an agent's held publish (WS-PUB-1b). */
+const AGENT_APPROVE: PlatformAction = "agent.approve";
+
 /** The approval kind of a held publish and the right that decides it, by the asset kind. */
 const PUBLISH_APPROVALS: Readonly<Record<string, { kind: string; approve: PlatformAction }>> = {
   [APP_ASSET_KIND]: { kind: "app_publish", approve: APP_ACTIONS.approve },
   [WORKFLOW_ASSET_KIND]: { kind: "workflow_publish", approve: WORKFLOW_ACTIONS.approve }
 };
 
-/** The approval kinds of a held publish. */
-export const PUBLISH_APPROVAL_KINDS: readonly string[] = Object.values(PUBLISH_APPROVALS).map(
-  ({ kind }) => kind
-);
+/** The approval kinds of a held publish: an App's, a Workflow's and a workspace agent's. */
+export const PUBLISH_APPROVAL_KINDS: readonly string[] = [
+  ...Object.values(PUBLISH_APPROVALS).map(({ kind }) => kind),
+  AGENT_PUBLISH_APPROVAL_KIND
+];
 
 /** One asset of a held publish and its two pointers when the request was filed. */
 const publishedAssetSchema = z.object({
@@ -102,8 +117,25 @@ export function publishApproval(
   audiencePersonName?: string,
   publishWidens?: boolean
 ): OperationApproval | undefined {
-  const approval = PUBLISH_APPROVALS[target.kind.kind];
   const { asset } = target;
+  if (target.kind.kind === "agent") {
+    // An instance-owned agent's publish that a guardrail of the instance holds stays an
+    // operation call for the approvers of operations, with no self-approval (Events 104).
+    if (asset?.status !== "active" || asset.scope.kind !== "workspace") return undefined;
+    const subject = agentPublishSubject(
+      asset,
+      titleOf(target.kind, asset) ?? target.name,
+      revision
+    );
+    // The caller's own click approves it only where they hold the right on this agent too.
+    return {
+      kind: AGENT_PUBLISH_APPROVAL_KIND,
+      action: AGENT_APPROVE,
+      alsoRequires: [{ action: AGENT_APPROVE, resource: agentPublishResource(subject) }],
+      subject
+    };
+  }
+  const approval = PUBLISH_APPROVALS[target.kind.kind];
   if (approval === undefined || asset?.status !== "active") return undefined;
   const subject: PublishSubject = {
     kind: target.kind.kind,
@@ -179,7 +211,6 @@ export function publishPolicyFloor(origin: OperationOrigin): PolicyValue | undef
  * Why a held publish can no longer be approved: the asset is gone, or its draft or its live
  * revision moved. The item words the code; the request keeps the sentence.
  */
-type PublishMoved = "gone" | "draft_moved" | "live_moved";
 
 const MOVED_SENTENCES: Readonly<Record<PublishMoved, (name: string) => string>> = {
   gone: (name) => `'${name}' is gone. Nothing was published.`,
@@ -248,7 +279,12 @@ export interface PublishApprovalKindsOptions {
   clientInstanceId: ClientInstanceId;
   /** The registered kinds, which say what a revision reaches. Without them the review omits it. */
   kinds?: AssetKindRegistry<WorkflowAssetKind>;
-  store: Pick<ConfigAssetStore, "getConfigAsset" | "getConfigAssetRevision">;
+  store: Pick<
+    ConfigAssetStore,
+    "getConfigAsset" | "getConfigAssetRevision" | "listAgentAvailability" | "listActiveConfigAssets"
+  >;
+  /** The agents' drafts, which a held agent publish names. */
+  drafts: Pick<AgentProposalStore, "get">;
   files: Pick<PagesStore, "getAssetFileSet">;
   /** The effect of an operation a Workflow step calls, where it is registered. */
   effectOf(operation: string): Promise<OperationEffect | undefined>;
@@ -260,6 +296,55 @@ export interface PublishApprovalKindsOptions {
 
 /** The held-call kinds of a publish: one for each kind of asset whose publish can be held. */
 export function publishApprovalKinds(options: PublishApprovalKindsOptions): HeldCallApprovalKind[] {
+  return [...assetPublishApprovalKinds(options), agentPublishApprovalKind(options)];
+}
+
+/**
+ * The held publish of an agent (WS-PUB-1b): decided by a holder of `agent.approve` on that
+ * agent, a holder in its workspace included, and listed to them alone.
+ */
+function agentPublishApprovalKind(options: PublishApprovalKindsOptions): HeldCallApprovalKind {
+  const { clientInstanceId } = options;
+  const parse = (subject: JsonObject) => {
+    const parsed = agentPublishSubjectSchema.safeParse(subject);
+    if (!parsed.success) throw undecidable();
+    return parsed.data;
+  };
+  return {
+    kind: AGENT_PUBLISH_APPROVAL_KIND,
+    requiredPermission: AGENT_APPROVE,
+    resourceOf: (subject) => agentPublishResource(parse(subject)),
+    reviewableSubjects: (access) =>
+      agentPublishReviewableSubjects({ clientInstanceId, store: options.store }, access),
+    async moved(subject, store) {
+      const parsed = agentPublishSubjectSchema.safeParse(subject);
+      if (!parsed.success) return "The request names no revision it publishes.";
+      const moved = await agentPublishMoved(clientInstanceId, parsed.data, store, options.drafts);
+      return moved ? MOVED_SENTENCES[moved](parsed.data.name) : undefined;
+    },
+    async review(subject, inList) {
+      const parsed = agentPublishSubjectSchema.safeParse(subject);
+      if (!parsed.success) return undefined;
+      return agentPublishReview(
+        {
+          clientInstanceId,
+          store: options.store,
+          drafts: options.drafts,
+          ...(options.workspaces ? { workspaces: options.workspaces } : {})
+        },
+        parsed.data,
+        inList
+      );
+    },
+    subjectKey(subject) {
+      const parsed = agentPublishSubjectSchema.safeParse(subject);
+      return parsed.success ? { assetId: parsed.data.assetId } : subject;
+    }
+  };
+}
+
+/** The held publish of an App and of a Workflow. */
+function assetPublishApprovalKinds(options: PublishApprovalKindsOptions): HeldCallApprovalKind[] {
   const { clientInstanceId } = options;
   return Object.values(PUBLISH_APPROVALS).map(({ kind, approve }) => ({
     kind,

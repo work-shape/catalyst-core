@@ -312,18 +312,27 @@ export interface ShippedGuardrail {
   /** What a person it stops or holds is told. */
   reason: string;
   on: readonly GuardrailEvent[];
+  /**
+   * The events of `on` where it answers only for an asset a workspace owns, which the event's
+   * subject names (`GuardrailSubject.workspaceId`): an instance-owned agent's publish is not
+   * held by default (WS-PUB-1b).
+   */
+  workspaceOwnedOnly?: readonly GuardrailEvent[];
   outcome: GuardrailOutcome;
 }
 
 /**
- * Every publish of an App or a Workflow waits for an approval, which a holder of the kind's
- * `approve` right gives with their own Publish (GR-PUB-1).
+ * Every publish of an App or a Workflow, and of an agent a workspace owns, waits for an
+ * approval, which a holder of the kind's `approve` right gives with their own Publish (GR-PUB-1,
+ * WS-PUB-1b).
  */
 export const PUBLISH_APPROVAL_GUARDRAIL = {
   name: "publishing-needs-approval",
   displayName: "Publishing needs an instance admin's approval",
-  reason: "A new revision of an App or a Workflow goes live once an instance admin approved it.",
-  on: ["app.before_publish", "workflow.before_publish"],
+  reason:
+    "A new revision of an App, a Workflow or a workspace's agent goes live once an instance admin approved it.",
+  on: ["app.before_publish", "workflow.before_publish", "agent.before_publish"],
+  workspaceOwnedOnly: ["agent.before_publish"],
   outcome: "require_approval"
 } as const satisfies ShippedGuardrail;
 

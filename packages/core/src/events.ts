@@ -86,7 +86,7 @@ export interface PlatformEventContext extends Pick<
   "actor" | "origin" | "workspaceId" | "correlationId"
 > {
   /** What the event is about. A before-event of an asset not written yet has its name only. */
-  subject: { kind: string; id?: string; name?: string };
+  subject: { kind: string; id?: string; name?: string; workspaceId?: string };
   phase: PlatformEventPhase;
   /**
    * The fields a guardrail at a before-event reads, by the names the event declares checkable:

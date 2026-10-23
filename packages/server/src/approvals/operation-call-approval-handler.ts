@@ -1,6 +1,7 @@
 import {
   AppError,
   DATA_STORE_OPERATION_PREFIX,
+  type ActorAccess,
   approvalExecutionOf,
   asUserId,
   isAppError,
@@ -142,6 +143,7 @@ export function createOperationCallApprovalHandler(
       // A kind that asks further rights reads them from the subject; without one, it refuses.
       return about?.furtherPermissions ? about.furtherPermissions(call.subject ?? {}) : [];
     },
+    ...onAsset(held),
     validate(payload) {
       return toJsonObject(parsePayload(payload));
     },
@@ -698,5 +700,22 @@ async function currentActor(
     ...(principal ? { principal: { ...principal, clientInstanceId } } : {}),
     ...(run.actor.delegatedActor ? { delegatedActor: run.actor.delegatedActor } : {}),
     ...(payload.actor.scopes ? { scopes: payload.actor.scopes } : {})
+  };
+}
+
+/**
+ * Where a held kind's right is decided on its asset, such as an agent's publish (WS-PUB-1b):
+ * the request asks `requiredPermission` there, and its lists show a holder on some assets only
+ * the requests about those.
+ */
+function onAsset(
+  held: HeldCallApprovalKind | undefined
+): Pick<ApprovalRequestHandler, "resourceOf" | "reviewableSubjects"> {
+  const resourceOf = held?.resourceOf;
+  if (!resourceOf) return {};
+  const reviewable = held.reviewableSubjects;
+  return {
+    resourceOf: (payload: JsonObject) => resourceOf(parsePayload(payload).subject ?? {}),
+    ...(reviewable ? { reviewableSubjects: (access: ActorAccess) => reviewable(access) } : {})
   };
 }

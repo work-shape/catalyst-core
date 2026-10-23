@@ -90,6 +90,7 @@ describe("the vocabulary of Connection rights", () => {
           adminActions: ROLE_DEFAULT_ACTIONS.admin.filter(
             (action) =>
               action !== "agent.publish" &&
+              action !== "agent.approve" &&
               !/^(?:connection|app|workflow|data_store|knowledge_base|guardrail)\./u.test(action)
           )
         }) +
@@ -126,9 +127,11 @@ describe("the vocabulary of Connection rights", () => {
       );
       expect(scopes.includes("instance"), action).toBe(
         !bundle &&
-          // Using an agent is no legacy key's, so it is written for the whole instance too
-          // (AGENT-USE-1).
-          (!/^(?:agent|skill)\./u.test(action) || action === "agent.use") &&
+          // Using an agent and approving its publish are no legacy key's, so they are written
+          // for the whole instance too (AGENT-USE-1, WS-PUB-1b).
+          (!/^(?:agent|skill)\./u.test(action) ||
+            action === "agent.use" ||
+            action === "agent.approve") &&
           action !== "workflow.read_run_data" &&
           action !== "mail_sender.use"
       );

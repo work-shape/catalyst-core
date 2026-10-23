@@ -685,6 +685,7 @@ describe("a Connection through the asset operations", () => {
       read: "agent.read",
       write: "agent.write",
       publish: "agent.publish",
+      approve: "agent.approve",
       delete: "agent.delete"
     });
     expect(context.actions).toEqual(
