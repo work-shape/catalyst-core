@@ -1,8 +1,8 @@
 import postgres from "postgres";
 import { describe, expect, it } from "vitest";
-import { createPlatformId, type OperationOrigin } from "@work-shape/catalyst-core";
+import { asUserId, createPlatformId, type OperationOrigin } from "@work-shape/catalyst-core";
 import { runOperation } from "@work-shape/catalyst-tool-execution";
-import { useDataStoreInstance } from "./support/data-store-instance";
+import { clientInstanceId, useDataStoreInstance } from "./support/data-store-instance";
 import { fileTestDatabaseUrl } from "./support/test-database";
 
 describe("records proposals on an assembled instance", () => {
@@ -95,12 +95,31 @@ describe("records proposals on an assembled instance", () => {
       const url = new URL(await fileTestDatabaseUrl());
       url.pathname = `/${record.location.database}`;
       const sql = postgres(url.toString(), { max: 1, onnotice: () => undefined });
+      // An agent's call names a real chat without personal data: a conversation the store
+      // does not know counts as personal and asks a confirmation first (CS-9d).
+      const chat = async () =>
+        (
+          await instance.stores.conversations.createConversation({
+            visibility: "workspace",
+            clientInstanceId,
+            collaborationWorkspaceId: (
+              await instance.stores.workspaces.ensurePersonalWorkspace({
+                clientInstanceId,
+                userId: asUserId(actor.id)
+              })
+            ).id,
+            createdByUserId: actor.id,
+            createdByExternalUserId: actor.externalUserId,
+            title: "Records proposal",
+            retainedUntil: "2099-01-01T00:00:00.000Z"
+          })
+        ).id;
       const origin: OperationOrigin =
         kind === "agent"
           ? {
               kind,
               agentRunId: createPlatformId("agr"),
-              conversationId: createPlatformId("conv"),
+              conversationId: await chat(),
               agentName: "test",
               toolCallId: createPlatformId("tc"),
               toolName: "data_store.findings.records.propose"

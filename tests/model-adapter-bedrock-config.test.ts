@@ -115,8 +115,20 @@ describe("Bedrock adapter: what a config may name", () => {
         )
       });
     }
-    await expect(bedrockFactory({ region: undefined })).rejects.toMatchObject({
-      message: expect.stringContaining("is required and must be one of eu, global")
+    // A model entry may leave its region unset; the factory then refuses it as not 'eu'.
+    const unset = await bedrockFactory({ region: undefined });
+    expect(
+      captured(() =>
+        unset({
+          id: "bedrock",
+          type: "aws-bedrock",
+          region: undefined,
+          model: RECORDED_BEDROCK_PROFILE
+        })
+      )
+    ).toMatchObject({
+      code: "VALIDATION_FAILED",
+      message: expect.stringContaining("'infrastructure.models.bedrock.region' must be 'eu'")
     });
   });
 

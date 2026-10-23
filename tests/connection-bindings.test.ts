@@ -390,7 +390,12 @@ describe("the bindings of Connections", () => {
           reason: "refresh_refused"
         })
       );
-      expect(await reasonOf()).toEqual({ reason: "connection_needs_reconnect" });
+      // The refusal names the state and why it was entered, so a person's Connect card can say it.
+      expect(await reasonOf()).toEqual({
+        reason: "connection_needs_reconnect",
+        state: "needs_reconnect",
+        cause: "refresh_refused"
+      });
 
       await stores.connections.changeConnectionBindingState({
         ...key,
