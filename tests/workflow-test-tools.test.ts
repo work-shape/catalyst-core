@@ -147,6 +147,7 @@ describe("the agent projections of Workflow testing", () => {
       const f = await fixture();
       const context = {
         ...f.context,
+        resource: undefined,
         origin:
           kind === "agent"
             ? f.context.origin

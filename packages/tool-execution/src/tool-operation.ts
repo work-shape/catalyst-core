@@ -174,12 +174,13 @@ export function toolOperation(
     async execute(input, context) {
       const { request, toolContext } = toolCallOf(tool, input, context, options);
       try {
-        const staticView =
-          tool.name === "show_view" &&
-          ((await options.personalConversation?.(request.conversationId)) ?? true);
         const result = await tool.execute(input, toolContext);
         // Store the decision with this display. Earlier views retain their original kind.
-        if (staticView && result.status === "success" && result.display) {
+        if (
+          result.status === "success" &&
+          result.display?.kind === "html.rendered" &&
+          ((await options.personalConversation?.(request.conversationId)) ?? true)
+        ) {
           result.display = { ...result.display, kind: "private_hydrated_view" };
         }
         const validated =

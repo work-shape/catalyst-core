@@ -876,6 +876,8 @@ export const conversationUserStateSchema = z.object({
 });
 
 export const conversationThreadSnapshotSchema = z.object({
+  /** Effective root mark. Missing means unknown and must disable scripted file previews. */
+  personalData: z.boolean().optional(),
   followUps: z.array(conversationFollowUpSchema).optional(),
   conversation: conversationSchema,
   messages: z.array(messageSchema),

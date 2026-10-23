@@ -5,6 +5,7 @@ import {
   WORKFLOW_START_KEY_INPUT,
   auditActorFromIdentity,
   isWorkflowRunEnded,
+  requireUnmarkedConversation,
   type AuthenticatedIdentity,
   workflowRunKeySchema,
   workflowStartOperationName,
@@ -120,7 +121,7 @@ export function createWorkflowStartSource(options: {
       draftTarget: "test" as const,
       scope: "config_assets:write" as const,
       auth: "principal" as const,
-      action: "workflow.use",
+      action: null,
       module: "workflows",
       timeoutMs: WORKFLOW_START_OPERATION_TIMEOUT_MS,
       inputJsonSchema: startInputJsonSchema(published?.manifest.inputs),
@@ -134,10 +135,21 @@ export function createWorkflowStartSource(options: {
       inputSchema: jsonObjectSchema,
       outputSchema: z.object({ id: z.string() }),
       resource: () => workflowResource(workflow, asset),
+      async authorize(
+        _input: unknown,
+        context: import("@work-shape/catalyst-core").OperationAuthorizeContext
+      ) {
+        await requireUnmarkedConversation(stores, clientInstanceId, context.origin);
+        const decision = context.access.authorize("workflow.use", context.resource);
+        return decision.allowed
+          ? { allowed: true as const }
+          : { allowed: false as const, action: "workflow.use", reason: decision.reason };
+      },
       async execute(
         input: unknown,
         context: import("@work-shape/catalyst-core").OperationExecutionContext
       ) {
+        await requireUnmarkedConversation(stores, clientInstanceId, context.origin);
         const first = await stores.workflowRuns.findRunByOperation({
           clientInstanceId,
           operationRunId: context.runId

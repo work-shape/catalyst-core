@@ -5,11 +5,13 @@ import {
   asAgentRunId,
   asClientInstanceId,
   asToolCallId,
+  asUserId,
   createPlatformId,
   type AuthenticatedUser,
+  type ConfigAssetRecord,
   type CentralPolicySetting
 } from "@work-shape/catalyst-core";
-import { appActionDefinition } from "../packages/server/src/apps/action-source";
+import { createAppActionOperationSource } from "@work-shape/catalyst-server";
 import { runOperation } from "@work-shape/catalyst-tool-execution";
 import { required } from "./support/assertions";
 import { auditEvents, runJobs, statuses, storedState } from "./support/connection-discovery-world";
@@ -129,7 +131,7 @@ describe("the discovery of an MCP Connection", () => {
       };
       const workspace = await instance.stores.workspaces.ensurePersonalWorkspace({
         clientInstanceId,
-        userId: actor.id
+        userId: asUserId(actor.id)
       });
       const chat = await instance.stores.conversations.createConversation({
         clientInstanceId,
@@ -180,28 +182,47 @@ describe("the discovery of an MCP Connection", () => {
             }
           }
         );
-      const action = await appActionDefinition(
-        { ...calls.deps, modules: getTestExecution(worker).modules },
-        {
-          resource: { kind: "app", id: "privacy" },
-          dataStores: [],
-          published: true,
-          operationName: () => "app.privacy.load",
-          authorize: () => ({ allowed: true })
-        },
-        {
-          kind: "connection",
-          name: "load",
-          file: "actions/load.action.yaml",
-          description: "Read",
-          effect: "reading",
-          connection: "outside",
-          operation: "revenue_by_month",
-          input: {
-            schema: { type: "object", properties: { month: { type: "string" } } },
-            mapping: { month: "{{month}}" }
-          }
+      const publishedConfig = {
+        manifest: {
+          actions: [
+            {
+              kind: "connection",
+              name: "load",
+              file: "actions/load.action.yaml",
+              description: "Read",
+              effect: "reading",
+              connection: "outside",
+              operation: "revenue_by_month",
+              input: {
+                schema: { type: "object", properties: { month: { type: "string" } } },
+                mapping: { month: "{{month}}" }
+              }
+            }
+          ]
         }
+      };
+      const app: ConfigAssetRecord = {
+        id: "privacy",
+        clientInstanceId,
+        kind: "app",
+        name: "privacy",
+        scope: { kind: "workspace", workspaceId: workspace.id },
+        status: "active",
+        activeRevisionId: "published",
+        publishedRevisionId: "published",
+        revision: 1,
+        config: publishedConfig,
+        publishedConfig,
+        createdAt: chat.createdAt,
+        updatedAt: chat.createdAt
+      };
+      const action = required(
+        await createAppActionOperationSource({
+          ...calls.deps,
+          modules: { isEnabled: () => true },
+          clientInstanceId,
+          store: { getConfigAsset: async () => app, listPublishedConfigAssets: async () => [] }
+        }).resolve("app.privacy.load")
       );
       const actionOrigin = {
         kind: "agent" as const,
@@ -212,7 +233,7 @@ describe("the discovery of an MCP Connection", () => {
         toolName: "app.privacy.load"
       };
       expect(
-        await action.definition.policyFloorOf?.(actionOrigin, { month: "private-canary" })
+        await action.policyFloorOf?.(actionOrigin, { month: "private-canary" })
       ).toBeUndefined();
       expect((await call()).result.status).toBe("done");
       const before = server.rpc("tools/call").length;
@@ -241,9 +262,9 @@ describe("the discovery of an MCP Connection", () => {
           {}
         )
       ).toBe("confirm");
-      expect(
-        await action.definition.policyFloorOf?.(actionOrigin, { month: "private-canary" })
-      ).toBe("confirm");
+      expect(await action.policyFloorOf?.(actionOrigin, { month: "private-canary" })).toBe(
+        "confirm"
+      );
       expect((await call()).result.status).toBe("pending_confirmation");
       settings = [{ operation, value: "deny" }];
       expect((await call()).result.status).toBe("denied");
