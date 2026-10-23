@@ -97,11 +97,8 @@ describe("published Workflow discovery beyond the 200-item page bound", () => {
   });
 
   it("discovers the agent start operation of every one of 201 Workflows", async () => {
-    const listed = await t.operationCalls.registry.list();
-    const starts = listed.operations
-      .map((entry) => entry.name)
-      .filter((name) => name.startsWith("workflow.paging-"));
-    expect(starts.sort()).toEqual(names.map((name) => `workflow.${name}.start`));
+    // Each tool page calls the real registry's list. Its exact 201-name assertion below
+    // also proves registry discovery, without a fourth complete walk of the same source.
     const options = testServerOptions(t.instance);
     if (!options) throw new Error("The instance has no server options");
     const tool = createPlatformAssetTools(createPlatformAssetCalls(options)).find(

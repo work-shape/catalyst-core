@@ -187,19 +187,20 @@ describe("PROC-2 extraction through the public Knowledge Base operation", () => 
         },
         defaultLocale
       );
-      for (const index of cases.keys()) {
-        world.world.put({
-          folderId: "folder",
-          name: `contract-${index}.txt`,
-          mime: "text/plain",
-          bytes: new TextEncoder().encode(
-            "Wohnfläche 120,5 m². 1,5 Zimmer. 350.000 EUR. 350,000 USD. 35O.OOO. 15 Einheiten."
-          )
-        });
-      }
+      // Every case reads the same evidence text. Keep one real synced document; the
+      // distinct record keys below isolate each proposal and its evidence verdict.
+      world.world.put({
+        folderId: "folder",
+        name: "contract.txt",
+        mime: "text/plain",
+        bytes: new TextEncoder().encode(
+          "Wohnfläche 120,5 m². 1,5 Zimmer. 350.000 EUR. 350,000 USD. 35O.OOO. 15 Einheiten."
+        )
+      });
       await world.drain(await world.sync());
-      const documents =
-        await world.sql`select id, file_name from catalyst_kb.documents where withdrawn_at is null`;
+      const [document] =
+        await world.sql`select id from catalyst_kb.documents where withdrawn_at is null`;
+      const documentId = String(required(document).id);
       const config = world.dataStores.readFiles([
         {
           path: "store.yaml",
@@ -271,9 +272,6 @@ describe("PROC-2 extraction through the public Knowledge Base operation", () => 
         for (const callerLocale of [undefined, "de", "en"] as const) {
           for (const [index, test] of cases.entries()) {
             if (!localeSensitive(test.quote) && callerLocale !== "de") continue;
-            const documentId = String(
-              required(documents.find((doc) => doc.file_name === `contract-${index}.txt`)).id
-            );
             const name = typeof test.value === "string" ? "label" : "amount";
             extract.mockResolvedValueOnce({
               text: JSON.stringify({
@@ -339,7 +337,7 @@ describe("PROC-2 extraction through the public Knowledge Base operation", () => 
             );
             expect(proposed).toMatchObject({ failures: { rowCount: 0 } });
             const [candidate] =
-              await target`select evidence, record_key from catalyst.record_fields where document_id=${documentId} and field_name=${name}`;
+              await target`select evidence, record_key from catalyst.record_fields where document_id=${documentId} and field_name=${name} and record_key=${index}::jsonb`;
             expect(required(candidate).record_key).toBe(index);
             expect(required(candidate).evidence, test.quote).toMatchObject({
               status: test.passes ? "passed" : "failed"

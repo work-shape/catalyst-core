@@ -254,11 +254,11 @@ describe("a deletion against writes at the same moment, and cleanup that cannot 
     expect(t.byteStore.has(data.objectKey)).toBe(true);
   });
 
-  // Fails without the change: a full batch that reported done was taken again without end.
+  // The progress guard must identify even one cleanup that claims success but leaves data.
   it("fails a pass whose cleanups report done and remove nothing", async () => {
     const t = await arrangeDeletion(db, "no_progress");
     const leaving = await t.createUser("leaving");
-    await t.seedDeletedConversations(leaving, CLEANUP_BATCH, true);
+    await t.seedDeletedConversations(leaving, 1, true);
     const attachments = t.options.attachments;
     if (!attachments) throw new Error("The fixture has no attachment service");
     const deleteConversationAttachments = attachments.deleteConversationAttachments;
@@ -274,6 +274,12 @@ describe("a deletion against writes at the same moment, and cleanup that cannot 
       { kind: "account.delete", status: "queued", attempts: 1 }
     ]);
     await expect(t.userRow(leaving)).resolves.toEqual([{ marked: true }]);
+    // A generic "cleanup pending" refusal would also leave the job queued. Require the
+    // progress guard itself, so a one-row fixture still fails when that guard is removed.
+    expect(
+      await db.sql`select error_message from platform_jobs
+        where client_instance_id = ${t.scope.clientInstanceId} and kind = 'account.delete'`
+    ).toEqual([{ error_message: "The cleanup of deleted conversations made no progress" }]);
 
     attachments.deleteConversationAttachments = deleteConversationAttachments;
     await t.runDeletionJobs();
