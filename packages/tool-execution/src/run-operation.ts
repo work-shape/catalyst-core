@@ -217,6 +217,7 @@ export async function runOperation(
       operation: definition.name,
       effect: definition.effect,
       actor,
+      ...(definition.personalConnection && actor.kind === "user" ? { ownerUserId: actor.id } : {}),
       workspaceId: frozen.workspaceId,
       origin: call.origin,
       target,
@@ -592,10 +593,11 @@ async function admit(context: RunContext, surface: OperationAuthorization): Prom
         decision: { mode: "approved", reason: "approved_by_caller" }
       };
     }
+    // Personal calls never freeze their input in an approval outside the conversation.
     // A held call is executed later, when nobody is there to be shown the secret once. An
     // approval the instance default alone asks for never gets here: the policy takes it as a
     // confirmation. So this refuses what a setting for the operation or a guardrail asked.
-    if (definition.secret) {
+    if (definition.secret || definition.personalConnection) {
       return { ending: await denyRun(context, { kind: "policy", operation: definition.name }) };
     }
     const unavailable: OperationDenial = {
@@ -685,7 +687,7 @@ async function holdForConfirmation(context: RunContext): Promise<OperationEnding
   const pending = await endRun(context, {
     status: "pending_confirmation",
     finishedAt: now().toISOString(),
-    inputRef: `agent_run:${call.origin.agentRunId}`,
+    ...(definition.personalConnection ? {} : { inputRef: `agent_run:${call.origin.agentRunId}` }),
     expiresAt
   });
   return {
@@ -714,7 +716,13 @@ async function holdInInbox(
 ): Promise<OperationEnding> {
   const { run, definition, call, deps, now } = context;
   const refused: OperationDenial = { kind: "policy", operation: definition.name };
-  if (definition.secret || call.draft || context.unrecorded || !deps.approvals) {
+  if (
+    definition.secret ||
+    definition.personalConnection ||
+    call.draft ||
+    context.unrecorded ||
+    !deps.approvals
+  ) {
     return denyRun(context, refused);
   }
   const expiresAt = new Date(now().getTime() + INBOX_CONFIRMATION_EXPIRES_AFTER_MS).toISOString();

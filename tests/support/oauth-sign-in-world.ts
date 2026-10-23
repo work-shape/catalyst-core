@@ -6,9 +6,9 @@ import {
   asAgentRunId,
   asToolCallId,
   asUserId,
+  createUserPrincipal,
   connectionOAuthCallbackPath,
-  type AuthenticatedUser,
-  type AuthenticatedIdentity
+  type AuthenticatedUser
 } from "@work-shape/catalyst-core";
 import { runOperation, type OperationOutcome } from "@work-shape/catalyst-tool-execution";
 import type { SampleOAuthOptions } from "@work-shape/catalyst-demo/sample-mcp";
@@ -86,7 +86,7 @@ export interface OAuthWorld {
   /** The authorization server's switches and counts. */
   readonly oauth: SampleOAuthHandle;
   /** The identity of the person whose session `cookie` is, as the call path is handed it. */
-  identityOf(cookie: string): Promise<AuthenticatedIdentity>;
+  identityOf(cookie: string): Promise<AuthenticatedUser>;
   /** The call path of a worker process of the instance, on the same rows. */
   calls(): Promise<ReturnType<typeof getTestExecution>["operationCalls"]>;
   /** A Connection operation called by the person as the CLI calls it. */
@@ -402,6 +402,32 @@ export async function createOAuthWorld(options: { extraPort?: number } = {}): Pr
               title: "Personal Connection fixture",
               retainedUntil: "2099-01-01T00:00:00.000Z"
             });
+      const agentRunId = asAgentRunId(`run_${generateTestSecret().slice(0, 12)}`);
+      if (conversation) {
+        const message = await worker.stores.conversations.appendMessage({
+          clientInstanceId,
+          conversationId: conversation.id,
+          role: "user",
+          text: "Use my Connection"
+        });
+        await worker.stores.agentRuns.createAgentRun({
+          id: agentRunId,
+          clientInstanceId,
+          conversationId: conversation.id,
+          ownerUserId: actor.id,
+          inputMessageId: message.id,
+          agentName: "personal-fixture",
+          status: "running",
+          startedAt: new Date().toISOString(),
+          correlationId: agentRunId,
+          authorization: {
+            personalConnectionsAllowed: true,
+            principal: createUserPrincipal(actor),
+            subjectUserId: actor.id,
+            scopes: ["*"]
+          }
+        });
+      }
       return runOperation(
         {
           operation: `connection.${connectionName}.${operation}`,
@@ -413,7 +439,7 @@ export async function createOAuthWorld(options: { extraPort?: number } = {}): Pr
               ? {
                   kind: "agent",
                   conversationId: conversation.id,
-                  agentRunId: asAgentRunId(`run_${generateTestSecret().slice(0, 12)}`),
+                  agentRunId,
                   toolCallId: asToolCallId(`call_${generateTestSecret().slice(0, 12)}`),
                   agentName: "personal-fixture",
                   toolName: `connection.${connectionName}.${operation}`

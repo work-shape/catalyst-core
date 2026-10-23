@@ -337,6 +337,35 @@ describe("a reviewer for one workspace (check 20)", () => {
 });
 
 describe("the exchange", () => {
+  it("never copies a marked conversation to reviewers, on send or later update", async () => {
+    const at = await setup();
+    const answer = await answered(at, at.kai);
+    const id = asConversationId(answer.conversationId);
+    await at.stores.conversations.markPersonalData({
+      clientInstanceId,
+      conversationId: id,
+      userId: at.kai.id,
+      at: new Date().toISOString()
+    });
+    const sent = await at.call(at.kai.id, "feedback.send", {
+      params: { conversationId: id },
+      payload: { runId: answer.runId, text: COMMENT, includeExchange: true }
+    });
+    expect(sent.json()).toMatchObject({
+      error: { details: { reason: "personal_conversation_private" } }
+    });
+    const feedbackId = await send(at, at.kai, answer, false);
+    const updated = await at.call(at.kai.id, "feedback.update", {
+      params: { conversationId: id, feedbackId },
+      payload: { text: COMMENT, includeExchange: true }
+    });
+    expect(updated.json()).toMatchObject({
+      error: { details: { reason: "personal_conversation_private" } }
+    });
+    const read = await at.expectOk(at.admin.id, "feedback.get", { params: { feedbackId } });
+    expect(read.json()).not.toHaveProperty("exchange");
+  });
+
   it("is the one question and answer, kept after the conversation is gone (check 21)", async () => {
     const at = await setup();
     const answer = await answered(at, at.kai);

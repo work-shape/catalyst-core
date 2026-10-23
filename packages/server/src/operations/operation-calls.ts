@@ -1,5 +1,6 @@
 import {
   asUserId,
+  rootConversationOf,
   createOperationRegistry,
   isAgentAvailableInWorkspace,
   isAuthenticatedServicePrincipal,
@@ -102,6 +103,9 @@ export function createOperationCalls(options: OperationCallsOptions): OperationC
       : {})
   };
   const policy: RunOperationDeps["policy"] = {
+    personalConversation: async (id) =>
+      (await rootConversationOf(options.stores, clientInstanceId, id))?.personalDataAt !==
+      undefined,
     instanceDefaults: options.config.policy.defaults,
     centralSettings: () => options.operations?.centralPolicySettings?.() ?? []
   };

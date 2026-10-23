@@ -86,6 +86,11 @@ export class LocalAgentRuntime implements AgentRuntime {
         reasoningEffort: input.reasoningEffort,
         locale: context.locale,
         authorization: {
+          personalConnectionsAllowed:
+            context.user.authenticationMethod === "session-cookie" &&
+            context.user.sessionId !== undefined &&
+            context.user.delegatedActor === undefined &&
+            context.user.keyScopes === undefined,
           principal: context.principal ?? getAuthPrincipal(context.user),
           subjectUserId: context.subjectUserId ?? getRuntimeSubjectUserId(context),
           delegatedActor: context.delegatedActor ?? context.user.delegatedActor,

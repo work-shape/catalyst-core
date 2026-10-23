@@ -5,6 +5,7 @@ import {
   connectionOperationName,
   exposureOfOrigin,
   parseConnectionOperationName,
+  requirePersonalConnectionContext,
   type ConnectionOperationConfig,
   type ConnectorOperationDescriptor,
   type DataToolDescriptor,
@@ -88,16 +89,25 @@ export function connectionExposureDenial(
 }
 
 /**
- * The operation's own check of the caller. The exposure is asked first, so an operation that
+ * The operation's own check of the caller. A personal context is checked first, independently
+ * of grants and even for obsolete stored exposure. Then exposure is asked, so an operation that
  * is not exposed to the caller's surface never reaches the policy and files no approval. Then
  * the right `connection.use` on the Connection. A refusal names the right in its denial and
  * says in a sentence that it is a refusal, not a fault of the Connection.
  */
-function authorizeCall(
+async function authorizeCall(
+  deps: ConnectionOperationSourceDeps,
   connection: StoredConnection,
   operation: ConnectionOperationConfig,
   context: OperationAuthorizeContext
-): OperationAuthorization {
+): Promise<OperationAuthorization> {
+  if (connection.config.credentialMode === "user") {
+    await requirePersonalConnectionContext({
+      ...deps,
+      actor: context.actor,
+      origin: context.origin
+    });
+  }
   const unexposed = connectionExposureDenial(operation, context.origin);
   if (unexposed) return unexposed;
   const decision = context.access.authorize(CONNECTION_ACTIONS.use, resourceOf(connection));
@@ -182,8 +192,9 @@ function definitionOf(
     connection.type?.carriesIdempotencyKey === true
       ? { repeatsUnderKey: true as const }
       : {}),
+    ...(connection.config.credentialMode === "user" ? { personalConnection: true as const } : {}),
     action: null,
-    authorize: (_input, context) => authorizeCall(connection, operation, context),
+    authorize: (_input, context) => authorizeCall(deps, connection, operation, context),
     scope: null,
     auth: "principal",
     inputSchema: inputSchemaOf(deps, connection, operation, descriptor),

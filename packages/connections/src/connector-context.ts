@@ -1,5 +1,6 @@
 import {
   AppError,
+  personalConnectionContextError,
   CREDENTIAL_REFUSALS,
   EGRESS_DENIED,
   LOG_REDACTION,
@@ -221,6 +222,8 @@ function storedSecretHandle(config: ConnectionConfig): string {
 
 export interface OpenConnectorContextInput {
   actor?: AuthenticatedIdentity;
+  /** Only the operation call path supplies this owner gate and durable privacy mark. */
+  personalCall?: () => Promise<void>;
   type: ConnectorTypeDefinition;
   /** The Connection of the call: its asset id, its revision and the config of that revision. */
   connection: { id: string; revision: number; config: ConnectionConfig };
@@ -251,6 +254,11 @@ export async function openConnectorContext(
 ): Promise<ConnectorContext> {
   const { type, connection, egress, credentials, signal } = input;
   const { config } = connection;
+  if (config.credentialMode === "user" && !input.personalCall) {
+    throw personalConnectionContextError(
+      "personal credentials are available only through the owner's agent call, never a test or discovery"
+    );
+  }
   const settings = type.settingsSchema.safeParse(config.settings);
   if (!settings.success || !type.authSchemes.includes(config.authScheme)) {
     throw new AppError(
@@ -263,6 +271,8 @@ export async function openConnectorContext(
   // A call that ended while its target was checked resolves no credential.
   if (signal.aborted) throw connectionCallError("upstream_timeout");
 
+  if (config.credentialMode === "user") await input.personalCall?.();
+  if (signal.aborted) throw connectionCallError("upstream_timeout");
   let credential: ConnectionCredential | undefined;
   if (config.authScheme !== AUTH_SCHEME_NONE) {
     // Only a secret set, or a sign-in made, for the origin the call goes to is handed out.

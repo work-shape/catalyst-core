@@ -59,6 +59,7 @@ export const operationRuns = pgTable(
     // The answer of a completed changing call, wrapped so that an answer of `null` is kept.
     output: jsonb("output").$type<{ value: JsonValue }>(),
     resultRef: text("result_ref"),
+    resultBytes: integer("result_bytes"),
     // A code and a safe message, and for a refused run what refused it. Never provider text.
     error: jsonb("error").$type<OperationRunError & { denial?: OperationDenial }>(),
     usage: jsonb("usage").$type<OperationRunUsage>(),
