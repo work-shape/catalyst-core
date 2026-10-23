@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import type { ApprovalRequestView } from "@work-shape/catalyst-api-client";
-import { Badge, Banner, KeyValue, KeyValueList } from "@work-shape/catalyst-ui";
+import { Badge, Banner, FoldedText, KeyValue, KeyValueList } from "@work-shape/catalyst-ui";
 import { useTranslation, type TranslationKey } from "../../shared/i18n";
 import { useAppPublishData } from "../../studio/apps/app-data";
 import { AppPublishData } from "../../studio/apps/app-publish-data";
@@ -11,6 +11,7 @@ import {
 } from "../../shared/publish-narrative";
 import {
   parseOperationCallPreview,
+  type AgentPublishReview,
   type PublishChange,
   type PublishReview,
   type PublishStale
@@ -32,7 +33,27 @@ const CHANGE: Record<PublishChange["change"], TranslationKey> = {
 /** How the item names the kind it publishes. Another kind is "the asset". */
 const KIND_PHRASE: Record<string, TranslationKey> = {
   app: "operations.publishKindApp",
-  workflow: "operations.publishKindWorkflow"
+  workflow: "operations.publishKindWorkflow",
+  agent: "operations.publishKindAgent"
+};
+
+/** The words of an agent's field, as the review of its publish names the fields that differ. */
+const AGENT_FIELD: Record<string, TranslationKey> = {
+  displayName: "operations.agentField.displayName",
+  description: "operations.agentField.description",
+  instructions: "operations.agentField.instructions",
+  modelBindingId: "operations.agentField.modelBindingId",
+  userSelectableModelBindingIds: "operations.agentField.userSelectableModelBindingIds",
+  reasoningEffort: "operations.agentField.reasoningEffort",
+  fastMode: "operations.agentField.fastMode",
+  maxSteps: "operations.agentField.maxSteps",
+  toolNames: "operations.agentField.toolNames",
+  skillNames: "operations.agentField.skillNames",
+  knowledgeBases: "operations.agentField.knowledgeBases",
+  subagentNames: "operations.agentField.subagentNames",
+  welcomeMessage: "operations.agentField.welcomeMessage",
+  welcomeSubtitle: "operations.agentField.welcomeSubtitle",
+  initialPrompts: "operations.agentField.initialPrompts"
 };
 
 /** The words for the kind a publish makes live, as a sentence names it. */
@@ -209,6 +230,7 @@ function PublishedWith({ reviews }: { reviews: readonly PublishReview[] }) {
 /** The lists of the review, as they stood before its sentence. */
 function PublishReviewLists({ review }: { review: PublishReview }) {
   const { t } = useTranslation();
+  if (review.agent) return <AgentPublishLists review={review} agent={review.agent} />;
   const none = <span className="text-muted-foreground">{t("operations.publishNone")}</span>;
   const names = (list: readonly string[]) => (list.length === 0 ? none : list.join(", "));
   const changes = (list: readonly PublishChange[]) =>
@@ -275,6 +297,112 @@ function PublishReviewLists({ review }: { review: PublishReview }) {
       {review.runAs ? (
         <KeyValue label={t("operations.publishRunsAs")} data-field="runs-as">
           {review.runAs}
+        </KeyValue>
+      ) : null}
+    </KeyValueList>
+  );
+}
+
+/**
+ * The review of an agent's held publish (WS-PUB-1b): the draft revision and the live one it
+ * replaces, the workspace that owns it and whether this publish offers it there, the fields
+ * that differ, the tools and models it adds, the skills it names, and the draft's instructions
+ * beside the live ones where they changed.
+ */
+function AgentPublishLists({
+  review,
+  agent
+}: {
+  review: PublishReview;
+  agent: AgentPublishReview;
+}) {
+  const { t } = useTranslation();
+  const none = <span className="text-muted-foreground">{t("operations.publishNone")}</span>;
+  const names = (list: readonly string[] | undefined) =>
+    list === undefined || list.length === 0 ? none : list.join(", ");
+  const workspace = agent.workspace?.name ?? agent.workspace?.id;
+  return (
+    <KeyValueList layout="stacked">
+      <KeyValue label={t("operations.publishVersion")} data-field="version">
+        {review.liveRevision === undefined
+          ? t("operations.publishFirst", { number: review.revision })
+          : t("operations.publishDraftReplaces", {
+              number: review.revision,
+              live: review.liveRevision
+            })}
+      </KeyValue>
+      {workspace ? (
+        <KeyValue label={t("operations.publishAgentWorkspace")} data-field="workspace">
+          <span className="grid min-w-0 gap-1">
+            <span className="wrap-anywhere" data-testid="publish-review-workspace">
+              {workspace}
+            </span>
+            <span
+              className="text-caption text-muted-foreground"
+              data-testid="publish-review-offers"
+              data-offers={agent.offers ? "true" : "false"}
+            >
+              {agent.offers
+                ? t("operations.publishAgentOffers", { workspace })
+                : t("operations.publishAgentOffered")}
+            </span>
+          </span>
+        </KeyValue>
+      ) : null}
+      {agent.fields ? (
+        <KeyValue label={t("operations.publishAgentFields")} data-field="agent-fields">
+          {agent.fields.length === 0 ? (
+            none
+          ) : (
+            <ul className="grid gap-1">
+              {agent.fields.map((entry) => {
+                const label = AGENT_FIELD[entry.field];
+                return (
+                  <li
+                    key={entry.field}
+                    className="flex min-w-0 flex-wrap items-center gap-2"
+                    data-agent-field={entry.field}
+                  >
+                    <span className="wrap-anywhere">{label ? t(label) : entry.field}</span>
+                    <Badge tone="neutral">{t(CHANGE[entry.change])}</Badge>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </KeyValue>
+      ) : null}
+      {agent.fields ? (
+        <>
+          <KeyValue label={t("operations.publishAgentToolsAdded")} data-field="tools-added">
+            {names(agent.toolsAdded)}
+          </KeyValue>
+          {agent.toolsRemoved && agent.toolsRemoved.length > 0 ? (
+            <KeyValue label={t("operations.publishAgentToolsRemoved")} data-field="tools-removed">
+              {names(agent.toolsRemoved)}
+            </KeyValue>
+          ) : null}
+          <KeyValue label={t("operations.publishAgentModels")} data-field="models-added">
+            {names(agent.modelBindingsAdded)}
+          </KeyValue>
+          <KeyValue label={t("operations.publishAgentSkills")} data-field="skills">
+            {names(agent.skills)}
+          </KeyValue>
+        </>
+      ) : null}
+      {agent.instructions ? (
+        <KeyValue label={t("operations.publishAgentInstructions")} data-field="instructions">
+          <FoldedText data-testid="publish-review-instructions">
+            {agent.instructions.after}
+          </FoldedText>
+        </KeyValue>
+      ) : null}
+      {agent.instructions?.before ? (
+        <KeyValue
+          label={t("operations.publishAgentInstructionsLive")}
+          data-field="instructions-live"
+        >
+          <FoldedText className="text-muted-foreground">{agent.instructions.before}</FoldedText>
         </KeyValue>
       ) : null}
     </KeyValueList>

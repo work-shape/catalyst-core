@@ -59,6 +59,59 @@ describe("the Inbox item of a publish that waits", () => {
     expect(german).toContain("Freigeben und veröffentlichen");
   });
 
+  it("shows a workspace agent's draft against live, what it adds and where it is offered (WS-PUB-1b)", () => {
+    const review = {
+      kind: "agent",
+      name: "kai-helper",
+      title: "Kai Helper",
+      revision: 3,
+      liveRevision: 1,
+      files: [],
+      hostsAdded: [],
+      connections: [],
+      dataStores: [],
+      agent: {
+        workspace: { id: "cws_kai", name: "Kai Spezis" },
+        offers: true,
+        fields: [
+          { field: "instructions", change: "changed" },
+          { field: "toolNames", change: "added" }
+        ],
+        toolsAdded: ["known.tool"],
+        toolsRemoved: [],
+        modelBindingsAdded: ["plain"],
+        skills: ["team-notes"],
+        instructions: { after: "Answer in German.", before: "Help." }
+      }
+    };
+    const agentItem = (locale: "de" | "en") =>
+      renderItem(
+        {
+          kind: "agent_publish",
+          summary: "assets.publish",
+          preview: { ...preview, review },
+          canDecide: true
+        },
+        { locale }
+      );
+    const markup = agentItem("en");
+    expect(markup).toContain("Draft version 3, in place of version 1");
+    expect(markup).toMatch(/data-testid="publish-review-workspace"[^>]*>Kai Spezis/u);
+    expect(markup).toContain("Approving also offers the agent to everyone in Kai Spezis.");
+    expect(markup).toMatch(/data-agent-field="instructions".*Instructions.*Changed/u);
+    expect(markup).toMatch(/data-field="tools-added".*known\.tool/u);
+    expect(markup).toMatch(/data-field="models-added".*plain/u);
+    expect(markup).toMatch(/data-field="skills".*team-notes/u);
+    expect(markup).toContain("Answer in German.");
+    expect(markup).toContain("Approve and publish");
+    // An agent has no files, hosts or stores of its own, so the App's lists stay away.
+    expect(markup).not.toContain('data-field="files"');
+
+    const german = agentItem("de");
+    expect(german).toContain("Entwurfsversion 3, statt Version 1");
+    expect(german).toContain("Freigeben bietet den Agenten außerdem allen in Kai Spezis an.");
+  });
+
   it("says a request whose draft moved can no longer be approved", () => {
     expect(publish({ stale: "draft_moved" })).toMatch(
       /data-testid="publish-review-stale".*The draft changed since the request was made/u
