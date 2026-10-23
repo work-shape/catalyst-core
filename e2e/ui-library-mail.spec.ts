@@ -37,6 +37,20 @@ test("the gallery shows MailPreview, RecipientField and TemplateTextField light,
     await chooseMode(page, "Light");
     await page.setViewportSize({ width: 390, height: 844 });
     await shoot(page, name, "light-390");
+    if (name === "MailPreview") {
+      // The sender's address stands on its own line under the name and is never broken.
+      const address = page
+        .locator('[data-gallery-entry="MailPreview"] [data-mail-from-address]')
+        .first();
+      await expect(address).toHaveAttribute("title", /@/u);
+      const box = await address.evaluate((element) => ({
+        wrap: getComputedStyle(element).whiteSpace,
+        lines: Math.round(
+          element.getBoundingClientRect().height / parseFloat(getComputedStyle(element).lineHeight)
+        )
+      }));
+      expect(box).toEqual({ wrap: "nowrap", lines: 1 });
+    }
     // Nothing of the entry scrolls sideways at a phone's width.
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth

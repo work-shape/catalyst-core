@@ -211,16 +211,26 @@ export function MailPreview({
         <dl className="grid gap-1.5">
           {from === undefined ? null : (
             <Row label={labels.mailFrom} field="from">
-              <span className="inline-flex min-w-0 items-center gap-1.5">
+              <span className="flex min-w-0 items-start gap-1.5">
                 {from.icon === undefined ? null : (
-                  <span className="inline-flex shrink-0 text-muted-foreground [&_svg]:size-4">
+                  <span className="inline-flex shrink-0 pt-0.5 text-muted-foreground [&_svg]:size-4">
                     {from.icon}
                   </span>
                 )}
-                <span className="font-medium">{from.name}</span>
-                {from.address === undefined ? null : (
-                  <span className="text-muted-foreground">{`<${from.address}>`}</span>
-                )}
+                <span className="grid min-w-0">
+                  <span className="font-medium">{from.name}</span>
+                  {from.address === undefined ? null : (
+                    // An address is never broken: too wide, it ends in an ellipsis and its
+                    // whole is the title.
+                    <span
+                      className="truncate text-caption text-muted-foreground"
+                      title={from.address}
+                      data-mail-from-address=""
+                    >
+                      {from.address}
+                    </span>
+                  )}
+                </span>
               </span>
             </Row>
           )}
