@@ -254,7 +254,8 @@ test.describe("an OAuth entry", () => {
       env: {
         ...process.env,
         DEMO_SAMPLE_MCP_KEY: randomBytes(24).toString("base64url"),
-        HOST: "localhost",
+        // Both families: `localhost` binds only ::1, and the browser may ask 127.0.0.1.
+        HOST: "::",
         PORT: "8787",
         SAMPLE_OAUTH_ISSUER_BASE: OAUTH_BASE,
         SAMPLE_OAUTH_REST_CLIENT_ID: OAUTH_CLIENT_ID,
