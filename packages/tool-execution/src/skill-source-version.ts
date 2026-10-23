@@ -26,6 +26,11 @@ export function createSkillSourceVersion(skill: SkillConfig): string {
       .update("\0")
       .update(resource.content);
   }
+  for (const file of [...(skill.files ?? [])].sort((left, right) =>
+    left.path.localeCompare(right.path)
+  )) {
+    hash.update("\0").update(file.path).update("\0").update(file.sha256);
+  }
   const digest = hash.digest("hex");
   return `sha256:${digest}`;
 }

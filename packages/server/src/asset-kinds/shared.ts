@@ -366,7 +366,10 @@ export interface WorkflowAssetKind extends RegisteredAssetKind<ConfigAssetKind> 
    * What the answer of a write says of a definition that was written and that its caller
    * should know: each a warning with a code, none a refusal.
    */
-  writeWarnings?(definition: unknown): { code: string; message: string }[];
+  writeWarnings?(
+    definition: unknown,
+    files?: readonly { path: string; bytes: Uint8Array }[]
+  ): { code: string; message: string }[];
   /**
    * What a publish does beside moving the published pointer, with `stores` bound to the
    * transaction that moves it. A throw refuses the publish and leaves the pointer where it was.

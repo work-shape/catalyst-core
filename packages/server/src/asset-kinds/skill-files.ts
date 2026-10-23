@@ -95,7 +95,7 @@ export interface SkillFileInput {
 const utf8 = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
 
 /** The text of a file, or nothing where its bytes are no UTF-8 text. */
-function textOf(bytes: Uint8Array): string | undefined {
+export function skillFileText(bytes: Uint8Array): string | undefined {
   if (bytes.includes(0)) return undefined;
   try {
     return utf8.decode(bytes);
@@ -323,7 +323,7 @@ export function readSkillFiles(name: string, files: readonly SkillFileInput[]): 
     if (file === manifest) continue;
     const { path, bytes } = file;
     const [folder, ...below] = path.split("/");
-    const text = textOf(bytes);
+    const text = skillFileText(bytes);
     const inScripts = below.length > 0 && folder === SKILL_SCRIPTS_FOLDER;
     const extension = /\.([A-Za-z0-9]+)$/u.exec(path)?.[1]?.toLowerCase();
     if (
@@ -358,7 +358,7 @@ function readSkillManifest(name: string, bytes: Uint8Array): Record<string, unkn
     details: JsonObject = {},
     reason: SkillFileRefusal = "skill_manifest_invalid"
   ) => refusal(reason, message, { path: SKILL_MANIFEST_FILE, ...details });
-  const text = textOf(bytes);
+  const text = skillFileText(bytes);
   if (text === undefined) {
     throw invalid(`'${SKILL_MANIFEST_FILE}' is no UTF-8 text.`);
   }
@@ -408,7 +408,7 @@ export function storedFileMatchesConfig(config: unknown, file: SkillFileInput): 
   if (!skill.success) return false;
   if (file.path !== SKILL_MANIFEST_FILE) {
     const resource = skill.data.resources?.find((candidate) => candidate.path === file.path);
-    return resource !== undefined && textOf(file.bytes) === resource.content;
+    return resource !== undefined && skillFileText(file.bytes) === resource.content;
   }
   try {
     const read = skillConfigSchema.safeParse(readSkillManifest(skill.data.name, file.bytes));

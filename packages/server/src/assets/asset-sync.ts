@@ -377,7 +377,14 @@ async function checkBatch(
   // Asked here as well as by the writer, so that a check of the batch refuses it too.
   assertDefaultOwnedByInstance(kinds.kinds, mutations, stored.assets);
   return {
-    warnings: changed.warnings,
+    warnings: [
+      ...changed.warnings,
+      ...ready().flatMap((entry) =>
+        entry.item.type === "put"
+          ? (entry.kind.writeWarnings?.(acceptedByName(entry.kind.kind).get(entry.name)) ?? [])
+          : []
+      )
+    ],
     planned,
     ready: ready(),
     storedDefault,

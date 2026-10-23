@@ -4,6 +4,7 @@ import type {
   ConversationOfferSource,
   ToolExecutionContext
 } from "@work-shape/catalyst-core";
+import { runSkillNames } from "./run-skills";
 import { createSkillSourceVersion } from "./skill-source-version";
 import {
   defineTool,
@@ -58,6 +59,17 @@ const readSkillOutputSchema = z.object({
       })
     )
     .optional(),
+  files: z
+    .array(
+      z.object({
+        path: skillResourcePathSchema,
+        mediaType: z.string(),
+        bytes: z.number(),
+        opensIn: z.literal("workspace")
+      })
+    )
+    .optional(),
+  workspaceNotice: z.string().optional(),
   sourceVersion: z.string(),
   saveApproval: z.object({ approverNames: z.array(z.string()) }).optional()
 });
@@ -97,26 +109,12 @@ export function createReadSkillTool(options: ReadSkillToolOptions): AnyToolDefin
         return toolFailed("handler_failed", "read_skill requires an active agent run");
       }
 
-      // The skills the platform ships are offered to a conversation of an agent that holds the
-      // platform's tools, and no agent's definition needs to list them. They are stored skills,
-      // read like any other. A Try turn reads the skills of its frozen draft, with no offer.
-      const conversationId = context.toolRequest?.conversationId;
       const assets = await options.assetSource.getSnapshot();
-      const draft = context.agentPreview?.config;
-      const preview = draft?.name === agentName ? draft : undefined;
-      const agent = preview ?? assets.agents.find((candidate) => candidate.name === agentName);
-      const offer =
-        conversationId && !preview
-          ? await options.conversationOffer?.offerOf({
-              clientInstanceId: context.clientInstanceId,
-              conversationId,
-              agentToolNames: agent?.toolNames ?? []
-            })
-          : undefined;
-      const allowedSkillNames = new Set([
-        ...(agent?.skillNames ?? []),
-        ...(offer?.skillNames ?? [])
-      ]);
+      const allowedSkillNames = await runSkillNames({
+        context,
+        assets,
+        conversationOffer: options.conversationOffer
+      });
       if (!allowedSkillNames.has(input.name)) {
         return toolFailed(
           "not_allowed",
@@ -136,6 +134,16 @@ export function createReadSkillTool(options: ReadSkillToolOptions): AnyToolDefin
 
       const sourceVersion = createSkillSourceVersion(skill);
       if (input.resourcePath) {
+        if (skill.files?.some((file) => file.path === input.resourcePath)) {
+          return {
+            status: "failed",
+            error: {
+              code: "validation_failed",
+              message: `The skill file '${input.resourcePath}' is used in the workspace.`,
+              details: { reason: "skill_file_in_workspace", path: input.resourcePath }
+            }
+          };
+        }
         const resource = (skill.resources ?? []).find(
           (candidate) => candidate.path === input.resourcePath
         );
@@ -170,6 +178,23 @@ export function createReadSkillTool(options: ReadSkillToolOptions): AnyToolDefin
       const resources = [...(skill.resources ?? [])]
         .sort((left, right) => left.path.localeCompare(right.path))
         .map((resource) => ({ path: resource.path, mediaType: resource.mediaType }));
+      const files = [...(skill.files ?? [])]
+        .sort((left, right) => left.path.localeCompare(right.path))
+        .map(({ path, mediaType, bytes }) => ({
+          path,
+          mediaType,
+          bytes,
+          opensIn: "workspace" as const
+        }));
+      const draft = context.agentPreview?.config;
+      const agent =
+        draft?.name === agentName
+          ? draft
+          : assets.agents.find((candidate) => candidate.name === agentName);
+      const workspaceNotice =
+        files.length && !agent?.toolNames.includes("workspace.exec")
+          ? "These files need a workspace that this agent does not have."
+          : undefined;
       return toolSuccess(
         {
           name: skill.name,
@@ -177,6 +202,8 @@ export function createReadSkillTool(options: ReadSkillToolOptions): AnyToolDefin
           description: skill.description,
           content: skill.content,
           ...(resources.length ? { resources } : {}),
+          ...(files.length ? { files } : {}),
+          ...(workspaceNotice ? { workspaceNotice } : {}),
           sourceVersion,
           ...(saveApproval ? { saveApproval } : {})
         },

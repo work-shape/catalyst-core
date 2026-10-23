@@ -18,7 +18,11 @@ import { createStaticConfigAssetSource } from "./support/static-config-asset-sou
 import { createTestToolRunner } from "./support/tool-runner";
 import { loadClientInstanceConfigFromFile } from "@work-shape/catalyst-config-schema";
 import { platformDocsSkill } from "@work-shape/catalyst-client-assembly";
-import { createReadSkillTool, ToolRegistry } from "@work-shape/catalyst-tool-execution";
+import {
+  createReadSkillTool,
+  createSkillSourceVersion,
+  ToolRegistry
+} from "@work-shape/catalyst-tool-execution";
 
 const supportSkill = {
   name: "support_review",
@@ -170,6 +174,86 @@ describe("client skills", () => {
         sourceVersion: expect.stringMatching(/^sha256:/u)
       }
     });
+  });
+
+  it.each([false, true])("lists workspace files, with workspace access %s", async (workspace) => {
+    const files = [
+      { path: "scripts/fill.py", sha256: "a".repeat(64), bytes: 24, mediaType: "text/x-python" },
+      { path: "assets/t.pdf", sha256: "b".repeat(64), bytes: 80, mediaType: "application/pdf" }
+    ];
+    const execution = createExecution({
+      agents: [
+        {
+          ...agent("allowed_agent", [supportSkill.name]),
+          toolNames: ["read_skill", ...(workspace ? ["workspace.exec"] : [])]
+        }
+      ],
+      skills: [{ ...packagedSkill, files }]
+    });
+    const root = await executeReadSkill(execution, request("allowed_agent", supportSkill.name));
+    expect(root).toMatchObject({
+      status: "success",
+      output: {
+        content: supportSkill.content,
+        resources: packagedSkill.resources?.map(({ path, mediaType }) => ({ path, mediaType })),
+        files: [
+          { path: "assets/t.pdf", mediaType: "application/pdf", bytes: 80, opensIn: "workspace" },
+          { path: "scripts/fill.py", mediaType: "text/x-python", bytes: 24, opensIn: "workspace" }
+        ]
+      }
+    });
+    if (root.status !== "success") throw new Error("Expected root read");
+    if (workspace) expect(root.output).not.toHaveProperty("workspaceNotice");
+    else
+      expect(root.output.workspaceNotice).toBe(
+        "These files need a workspace that this agent does not have."
+      );
+    expect(root.output).not.toHaveProperty("folder");
+    const selected = await executeReadSkill(
+      execution,
+      request("allowed_agent", supportSkill.name, "assets/t.pdf")
+    );
+    expect(selected).toMatchObject({
+      status: "failed",
+      error: {
+        code: "validation_failed",
+        message: "The skill file 'assets/t.pdf' is used in the workspace.",
+        details: { reason: "skill_file_in_workspace", path: "assets/t.pdf" }
+      }
+    });
+    expect(selected).not.toHaveProperty("output");
+    expect(JSON.stringify(selected)).not.toContain("content");
+  });
+
+  it("keeps the fixed text-only version and hashes paths and hashes of sorted files", () => {
+    expect(createSkillSourceVersion(packagedSkill)).toBe(
+      "sha256:35a728c57d7e5768fb59831aa75cb21b22c661f34239b793dbe7f6ec208f38e7"
+    );
+    expect(createSkillSourceVersion({ ...packagedSkill, files: [] })).toBe(
+      createSkillSourceVersion(packagedSkill)
+    );
+    const files = [
+      { path: "scripts/fill.py", sha256: "a".repeat(64), bytes: 24, mediaType: "text/x-python" },
+      { path: "assets/t.pdf", sha256: "b".repeat(64), bytes: 80, mediaType: "application/pdf" }
+    ];
+    const version = createSkillSourceVersion({ ...packagedSkill, files });
+    expect(createSkillSourceVersion({ ...packagedSkill, files: [...files].reverse() })).toBe(
+      version
+    );
+    expect(
+      createSkillSourceVersion({
+        ...packagedSkill,
+        files: files.map((file) => ({ ...file, bytes: 99, mediaType: "different" }))
+      })
+    ).toBe(version);
+    expect(
+      createSkillSourceVersion({
+        ...packagedSkill,
+        files: files.map((file) =>
+          file.path === "assets/t.pdf" ? { ...file, sha256: "c".repeat(64) } : file
+        )
+      })
+    ).not.toBe(version);
   });
 
   it("lists packaged resources and selectively reads one exact resource", async () => {
