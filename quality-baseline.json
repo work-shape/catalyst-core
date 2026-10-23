@@ -39,13 +39,6 @@
     {
       "target": "lint",
       "rule": "@typescript-eslint/no-non-null-assertion",
-      "scope": "e2e",
-      "count": 2,
-      "owner": "CB-1b"
-    },
-    {
-      "target": "lint",
-      "rule": "@typescript-eslint/no-non-null-assertion",
       "scope": "packages/config-cli",
       "count": 19,
       "owner": "PA-1b"
@@ -96,7 +89,7 @@
       "target": "lint",
       "rule": "@typescript-eslint/no-unsafe-type-assertion",
       "scope": "e2e",
-      "count": 6,
+      "count": 1,
       "owner": "CB-1b"
     },
     {
