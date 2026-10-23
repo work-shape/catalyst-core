@@ -31,7 +31,10 @@ export const connectionCatalogue = defineTranslations({
       "Each person connects their own account under Settings > You > Connections. Agents read with it only in that person's private chats.",
     "connectionCatalogue.ownOptional": "Optional: your own account, which only you use.",
     "connectionCatalogue.connectOwn": "Connect your account now",
-    "connectionCatalogue.ownConnected": "Your account is connected."
+    "connectionCatalogue.ownConnected": "Your account is connected.",
+    "connectionCatalogue.ownNeedsUse":
+      "To connect your own account, you need the right to use this connection.",
+    "connectionCatalogue.ownAccessLink": "Give it under use rights"
   },
   de: {
     "connectionCatalogue.services": "Dienste",
@@ -61,6 +64,9 @@ export const connectionCatalogue = defineTranslations({
       "Jede Person verbindet ihr eigenes Konto unter Einstellungen > Du > Verbindungen. Agenten lesen damit nur in den privaten Chats dieser Person.",
     "connectionCatalogue.ownOptional": "Optional: dein eigenes Konto, das nur du nutzt.",
     "connectionCatalogue.connectOwn": "Jetzt mit deinem Konto verbinden",
-    "connectionCatalogue.ownConnected": "Dein Konto ist verbunden."
+    "connectionCatalogue.ownConnected": "Dein Konto ist verbunden.",
+    "connectionCatalogue.ownNeedsUse":
+      "Um dein eigenes Konto zu verbinden, brauchst du das Recht, diese Verbindung zu nutzen.",
+    "connectionCatalogue.ownAccessLink": "Unter Nutzungsrechten vergeben"
   }
 });
