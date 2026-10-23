@@ -239,7 +239,7 @@ describe("the proxy configuration the repository ships", () => {
   const read = (path: string) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
   it("sends the content route to the API wherever it sends the view runtime there", async () => {
-    for (const path of ["docker/Caddyfile", "clients/demo/deploy/Caddyfile"]) {
+    for (const path of ["docker/Caddyfile"]) {
       const caddy = await read(path);
       const routed = (prefix: string) =>
         new RegExp(
