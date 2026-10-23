@@ -497,6 +497,7 @@ async function executeClaimedRun(
         // A subagent never waits for a decision and starts no subagent of its own (CR-1).
         ...(run.parentRunId ? { subagent: true } : {}),
         ...(run.workflowStepRunId ? { workflowAgent: true } : {}),
+        ...(run.authorization?.personalConnectionsAllowed === true ? { firstPartyRun: true } : {}),
         ...(workflowDraft ? { workflowDraft } : {}),
         ...(!run.parentRunId && (scheduled || options.unattended?.(run))
           ? { unattended: true }

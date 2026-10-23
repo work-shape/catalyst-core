@@ -96,6 +96,9 @@ async function policyInputOf(context: OperationPolicyContext): Promise<PolicyInp
  * for a signed-in person, in chat or in their scheduled run, made with that person's own
  * identity. A Workflow's call, an agent step of a Workflow and a service principal's call act
  * for nobody who sets values, and a person's setting never reaches another person's call.
+ * A call made with a key (a personal API key, an embedding host's token) or for a delegated
+ * actor keeps the person's Ask me and Never but never gets their Always allow: as with
+ * personal Connections, only the person's own first-party session and what it starts do.
  */
 async function personOf(context: OperationPolicyContext): Promise<PolicyPerson | undefined> {
   const { call, definition, deps, runtime } = context;
@@ -112,6 +115,15 @@ async function personOf(context: OperationPolicyContext): Promise<PolicyPerson |
     userId: getSubjectUserId(call.actor),
     operation: definition.name
   });
+  // A worker's actor is rebuilt from the run and no longer shows a key; the run recorded it.
+  const workerCall = runtime.runFence?.runId === call.origin.agentRunId;
+  const firstParty =
+    call.actor.delegatedActor === undefined &&
+    call.actor.keyScopes === undefined &&
+    (!workerCall || runtime.firstPartyRun === true);
+  if (!firstParty) {
+    return { ...(setting && setting !== "always_allow" ? { setting } : {}), mayAlwaysAllow: false };
+  }
   return {
     ...(setting ? { setting } : {}),
     mayAlwaysAllow: mayAlwaysAllow(definition, deps.policy.alwaysAllowLocked)

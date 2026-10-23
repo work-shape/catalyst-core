@@ -13,6 +13,7 @@ import { toOperationRunResource } from "../operations/operation-run-resource";
 import type { ResolvedChatServerOptions } from "../types";
 import {
   alwaysAllowRefusal,
+  isFirstPartyPerson,
   recordOperationSettingChanged,
   setOwnOperationSetting
 } from "../users/operation-settings-service";
@@ -88,7 +89,7 @@ export function registerOperationDecisionRoutes(
         throw new AppError("VALIDATION_FAILED", "Always allow comes only with allowing the call");
       }
       // Only the person's own click sets it: never a delegated or other caller.
-      if (alwaysAllow && (actor.delegatedActor !== undefined || context.origin.kind !== "user")) {
+      if (alwaysAllow && (!isFirstPartyPerson(actor) || context.origin.kind !== "user")) {
         throw new AppError("FORBIDDEN", "Only you set Always allow, in the interface");
       }
       const alwaysAllowed = alwaysAllow ? await checkAlwaysAllow(runId) : undefined;

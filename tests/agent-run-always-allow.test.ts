@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import {
+  PERSONAL_API_KEY_ACTIONS,
   asAgentRunId,
   asClientInstanceId,
   type AgentRunStatus,
@@ -12,7 +13,14 @@ import { required, waitUntil } from "./support/assertions";
 import { injectStartConversationRun } from "./support/chat-server-run-harness";
 import { createTestConfig } from "./support/fixtures";
 import { createToolCallingModel, TOOL_CALLING_MODEL_PROVIDER } from "./support/held-model";
-import { createTestInstance, getTestConfig, type TestInstance } from "./support/test-instance";
+import { setupPersonalKeyInstance } from "./support/personal-api-keys";
+import {
+  createTestInstance,
+  getTestAgentRunJobs,
+  getTestConfig,
+  type TestInstance
+} from "./support/test-instance";
+import { withTestSql } from "./support/test-sql";
 
 // OP-6: a person's own confirmation settings. "Always allow" set from a confirmation lets
 // that person's next call of the operation run; it is offered only where it has an effect,
@@ -31,7 +39,7 @@ const tool = (
     description: `Changes ${name}.`,
     inputSchema: z.object({ text: z.string() }),
     ...extra,
-    execute(input) {
+    execute(input: { text: string }) {
       // Stands for everything the call does once admitted, its credential included.
       executed.push(`${name}:${input.text}`);
       return toolSuccess({ changed: input.text });
@@ -75,7 +83,12 @@ afterEach(async () => {
   close = undefined;
 });
 
-async function fixture(options: { unattended?: boolean } = {}) {
+/**
+ * `firstParty`: the runs are started as in the person's own signed-in session, which the run
+ * records. Development sign-in is no such session, so a run started with it is marked here,
+ * before its worker takes it.
+ */
+async function fixture(options: { unattended?: boolean; firstParty?: boolean } = {}) {
   executed.length = 0;
   const config = createTestConfig({
     tools: tools.map((entry) => ({ name: entry.name, enabled: true })),
@@ -96,9 +109,11 @@ async function fixture(options: { unattended?: boolean } = {}) {
     capabilities: [model.capability],
     tools,
     operations: { centralPolicySettings: () => confirmAll },
-    ...(options.unattended ? { unattendedRuns: () => true } : {})
+    ...(options.unattended ? { unattendedRuns: () => true } : {}),
+    startAgentRunJobs: false
   });
   close = () => app.close();
+  const jobs = getTestAgentRunJobs(app);
   const clientInstanceId = asClientInstanceId(getTestConfig(app).clientInstance.id);
   const as = (userId: string) => ({ "x-dev-user-id": userId });
   const agentRun = async (runId: string) =>
@@ -111,6 +126,7 @@ async function fixture(options: { unattended?: boolean } = {}) {
     );
   const settled = (runId: string) =>
     waitUntil(async () => {
+      await jobs.runDue();
       const status: AgentRunStatus = (await agentRun(runId)).status;
       return status === "completed" || status === "waiting_for_decision" || status === "failed";
     }, "the run completes or waits");
@@ -132,6 +148,12 @@ async function fixture(options: { unattended?: boolean } = {}) {
         `/tool ${name} ${JSON.stringify({ text })}`,
         { headers: as(userId) }
       );
+      if (options.firstParty !== false) {
+        await withTestSql(
+          (sql) =>
+            sql`update agent_runs set authorization_context = authorization_context || '{"personalConnectionsAllowed": true}'::jsonb where id = ${started.run.id}`
+        );
+      }
       await settled(started.run.id);
       const calls = await callsOf(started.run.id);
       const waiting: OperationRun | undefined = calls.find(
@@ -174,7 +196,10 @@ async function fixture(options: { unattended?: boolean } = {}) {
         (event) => event.type === "user.operation_setting_changed"
       ),
     until: (runId: string, status: AgentRunStatus) =>
-      waitUntil(async () => (await agentRun(runId)).status === status, `the run is ${status}`)
+      waitUntil(async () => {
+        await jobs.runDue();
+        return (await agentRun(runId)).status === status;
+      }, `the run is ${status}`)
   };
 }
 
@@ -218,7 +243,7 @@ describe("Always allow from a confirmation card (OP-6)", () => {
     const f = await fixture();
     for (const name of ["demo.remove", "demo.locked", "demo.floored"]) {
       const said = await f.call(name, "x");
-      const waiting = required(said.waiting, `${name} waits`);
+      const waiting = required(said.waiting);
       expect(waiting.offersAlwaysAllow, name).toBeUndefined();
       expect(said.requested, name).not.toHaveProperty("alwaysAllow");
       const refused = await f.decide(waiting.id, { decision: "confirm", alwaysAllow: true });
@@ -336,5 +361,48 @@ describe("Always allow from the Inbox (OP-6)", () => {
     const next = await f.call("demo.insert", "two");
     expect(next.waiting).toBeUndefined();
     expect(executed).toEqual(["demo.insert:one", "demo.insert:two"]);
+  });
+});
+
+describe("Always allow reaches only the person's own first-party session (OP-6)", () => {
+  it("is not offered in a run no first-party session started, and a stored one asks", async () => {
+    const f = await fixture({ firstParty: false });
+    expect((await f.set("demo.insert", "always_allow")).statusCode).toBe(200);
+    const said = await f.call("demo.insert", "key");
+    const waiting = required(said.waiting);
+    expect(waiting.offersAlwaysAllow).toBeUndefined();
+    expect(said.requested).not.toHaveProperty("alwaysAllow");
+    expect(executed).toEqual([]);
+    // Never still holds there: a person's stricter setting reaches every call made for them.
+    expect((await f.set("demo.insert", "never")).statusCode).toBe(200);
+    expect((await f.call("demo.insert", "never")).waiting).toBeUndefined();
+    expect(executed).toEqual([]);
+  });
+
+  it("refuses reading and setting confirmations with a personal key", async () => {
+    const t = await setupPersonalKeyInstance();
+    const { secret } = await t.issue([...PERSONAL_API_KEY_ACTIONS], t.root.id);
+    const headers = await t.tokenFor(secret);
+    const listed = await t.call(t.root.id, "me.operation_settings.list", { headers });
+    expect(listed.statusCode, listed.body).toBe(403);
+    const set = await t.call(t.root.id, "me.operation_settings.set", {
+      payload: { operation: "demo.insert", value: "always_allow" },
+      headers
+    });
+    expect(set.statusCode, set.body).toBe(403);
+    await t.expectOk(t.root.id, "me.operation_settings.list");
+  });
+});
+
+describe("the admin's locks are checked at startup (OP-6)", () => {
+  it("refuses to start with a lock that names no operation", async () => {
+    const config = createTestConfig({
+      tools: tools.map((entry) => ({ name: entry.name, enabled: true })),
+      toolNames: tools.map((entry) => entry.name)
+    });
+    config.policy.alwaysAllow = { locked: ["demo.insert", "demo.missing"] };
+    await expect(
+      createTestInstance({ config, env: {}, capabilities: [model.capability], tools })
+    ).rejects.toThrow(/'demo\.missing' names no operation/u);
   });
 });

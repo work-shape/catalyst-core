@@ -1,8 +1,8 @@
 import { apiOperations } from "@work-shape/catalyst-api-contract";
-import { isAuthenticatedServicePrincipal } from "@work-shape/catalyst-core";
 import type { Route } from "../http/route";
 import type { ResolvedChatServerOptions } from "../types";
 import {
+  isFirstPartyPerson,
   listOwnOperationSettings,
   recordOperationSettingChanged,
   setOwnOperationSetting,
@@ -40,9 +40,7 @@ export function registerOperationSettingRoutes(
     // A setting is changed back as easily as it was set.
     changeClass: "reversible",
     authorize: (_input, { actor, origin }) =>
-      isAuthenticatedServicePrincipal(actor) ||
-      actor.delegatedActor !== undefined ||
-      origin.kind !== "user"
+      !isFirstPartyPerson(actor) || origin.kind !== "user"
         ? {
             allowed: false,
             action: setOwn.id,

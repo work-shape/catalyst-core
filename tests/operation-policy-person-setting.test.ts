@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
+import { parseClientInstanceConfig } from "@work-shape/catalyst-config-schema";
 import {
+  alwaysAllowLockIssues,
+  asAgentRunId,
   mayAlwaysAllow,
   offersAlwaysAllow,
   resolvePolicy,
@@ -9,6 +12,7 @@ import {
   type PolicyInput
 } from "@work-shape/catalyst-core";
 import { resolveGuardedPolicy } from "@work-shape/catalyst-tool-execution";
+import { createTestConfig } from "./support/fixtures";
 
 // OP-6: a person's own setting is one input of `resolvePolicy`. It makes a call stricter, or
 // lowers a confirmation to a run where the admin permits it; floors, locks and guardrails win.
@@ -20,7 +24,7 @@ const reversible = { name: "rows.insert", effect: "changing", changeClass: "reve
 function resolve(input: Partial<PolicyInput> = {}) {
   const full: PolicyInput = {
     definition: reversible,
-    origin: { kind: "agent", agentRunId: "run_1" },
+    origin: { kind: "agent", agentRunId: asAgentRunId("run_1") } as OperationOrigin,
     instanceDefaults: defaults,
     centralSettings: [],
     callerCanConfirm: false,
@@ -138,7 +142,7 @@ describe("whose calls the person's setting reaches", () => {
         policy: {
           instanceDefaults: defaults,
           centralSettings: () => [{ operation: "rows.insert", value: "allow" }],
-          personSetting: ({ userId }) => {
+          personSetting: async ({ userId }) => {
             asked.push(userId);
             return "never";
           }
@@ -163,5 +167,106 @@ describe("whose calls the person's setting reaches", () => {
       })
     ).toMatchObject({ policy: { value: "allow" } });
     expect(asked).toEqual([]);
+  });
+});
+
+describe("Always allow reaches only the person's own first-party calls", () => {
+  const definition = { ...reversible, input: z.object({}) } as unknown as Parameters<
+    typeof resolveGuardedPolicy
+  >[0]["definition"];
+  const person = { id: "user-1", displayLabel: "One" };
+  const origin = { kind: "agent", agentRunId: "run_1" } as OperationOrigin;
+  const policy = (
+    actor: Record<string, unknown>,
+    runtime: Record<string, unknown> = {},
+    setting: "always_allow" | "never" = "always_allow"
+  ) =>
+    resolveGuardedPolicy({
+      definition,
+      call: { input: {}, origin, actor: actor as unknown as AuthenticatedUser },
+      resource: undefined,
+      runtime: runtime as never,
+      emit: async () => ({ outcome: "allow", guardrails: [] }) as never,
+      deps: {
+        policy: {
+          instanceDefaults: defaults,
+          centralSettings: () => [],
+          personSetting: async () => setting
+        }
+      }
+    });
+  const worker = { runFence: { runId: "run_1", lease: "lease_1" } };
+
+  it("runs the call of the person's own session, and of their run's worker", async () => {
+    expect(await policy(person)).toMatchObject({
+      policy: { value: "allow", source: "person_setting" }
+    });
+    expect(await policy(person, { ...worker, firstPartyRun: true })).toMatchObject({
+      policy: { value: "allow", source: "person_setting" }
+    });
+  });
+
+  it("asks for a call made with a key or for a delegated actor, and offers nothing", async () => {
+    for (const actor of [
+      { ...person, keyScopes: ["agent_runs:write"] },
+      { ...person, keyScopes: [] },
+      { ...person, delegatedActor: { kind: "external", id: "host-user" } }
+    ]) {
+      // Even in a run its owner's session started: the call's own actor carries the key.
+      const resolved = await policy(actor, { ...worker, firstPartyRun: true });
+      expect(resolved).toMatchObject({ policy: { value: "confirm" } });
+      expect(resolved).not.toHaveProperty("offersAlwaysAllow");
+    }
+  });
+
+  it("asks in the worker of a run no first-party session started", async () => {
+    const resolved = await policy(person, worker);
+    expect(resolved).toMatchObject({ policy: { value: "confirm" } });
+    expect(resolved).not.toHaveProperty("offersAlwaysAllow");
+  });
+
+  it("still refuses a call the person never allows, whoever makes it", async () => {
+    expect(await policy({ ...person, keyScopes: [] }, worker, "never")).toMatchObject({
+      policy: { value: "deny", source: "person_setting" }
+    });
+  });
+});
+
+describe("the admin's locks of Always allow", () => {
+  const withLocks = (locked: string[]) =>
+    parseClientInstanceConfig({ ...createTestConfig(), policy: { alwaysAllow: { locked } } });
+
+  it("takes an operation's name or every operation under a prefix", () => {
+    expect(
+      withLocks(["rows.insert", "connection.crm.*", "rows.*", "web_search"]).policy.alwaysAllow
+        .locked
+    ).toEqual(["rows.insert", "connection.crm.*", "rows.*", "web_search"]);
+  });
+
+  it("refuses a bare star, a cut-off name and a star inside a name at load", () => {
+    for (const entry of ["*", "rows*", "rows.ins*", "rows.*.insert", ".*", "rows.", ""]) {
+      expect(() => withLocks([entry]), entry).toThrow(/policy\.alwaysAllow\.locked/u);
+    }
+  });
+
+  it("names an entry that names no operation of the instance", () => {
+    const registry = { releaseNames: () => ["rows.insert", "rows.remove", "app.save"] };
+    expect(
+      alwaysAllowLockIssues(
+        [
+          "rows.insert",
+          "rows.*",
+          "connection.crm.*",
+          "connection.crm.send",
+          "connection.*",
+          "workflow.*",
+          "app.*"
+        ],
+        registry
+      )
+    ).toEqual([]);
+    const issues = alwaysAllowLockIssues(["rows.upsert", "files.*", "connection"], registry);
+    expect(issues).toHaveLength(3);
+    expect(issues[0]).toMatch(/'rows\.upsert' names no operation/u);
   });
 });

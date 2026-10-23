@@ -515,6 +515,8 @@ export interface OperationRegistry {
     stores?: OperationResolutionStores
   ): Promise<Map<string, OperationDefinition>>;
   list(scope?: OperationListScope): Promise<OperationListing>;
+  /** The names of the operations of the release registered so far, without what sources add. */
+  releaseNames(): string[];
 }
 
 /**
@@ -549,6 +551,45 @@ function sourcePrefixOf(name: string): string | undefined {
       (prefix) => name.startsWith(prefix) && name.indexOf(".", prefix.length) > 0
     )
   );
+}
+
+/**
+ * Whether a name, or the start `<start>.` of a pattern `<start>.*`, lies where operations come
+ * from data, so no release names them: `connection.crm.send`, `connection.crm.`, `workflow.`.
+ */
+function namesDataOperations(name: string, pattern: boolean): boolean {
+  return (
+    sourcePrefixOf(name) !== undefined ||
+    (pattern &&
+      [PAGE_ACTION_OPERATION_PREFIX, ...SOURCED_OPERATION_PREFIXES].some((prefix) =>
+        name.startsWith(prefix)
+      ))
+  );
+}
+
+/**
+ * What is wrong with the admin's locks of "Always allow" (OP-6), one sentence per entry. An
+ * entry names an operation exactly or every operation under a prefix, `<prefix>.*`: one of the
+ * release, or one that comes from data, such as a Connection's `connection.<name>.<operation>`.
+ * Asked once every operation of the release is registered; the format is checked at load.
+ */
+export function alwaysAllowLockIssues(
+  locked: readonly string[],
+  registry: Pick<OperationRegistry, "releaseNames">
+): string[] {
+  const releaseNames = registry.releaseNames();
+  return locked.flatMap((entry) => {
+    const pattern = entry.endsWith(".*");
+    const stem = pattern ? entry.slice(0, -1) : entry;
+    const known = pattern
+      ? releaseNames.some((name) => name.startsWith(stem)) || namesDataOperations(stem, true)
+      : releaseNames.includes(entry) || namesDataOperations(entry, false);
+    return known
+      ? []
+      : [
+          `policy.alwaysAllow.locked: '${entry}' names no operation of this instance. Name an operation exactly, or every operation under a prefix such as 'connection.crm.*'`
+        ];
+  });
 }
 
 export function createOperationRegistry(): OperationRegistry {
@@ -607,6 +648,9 @@ export function createOperationRegistry(): OperationRegistry {
         }
       }
       return found;
+    },
+    releaseNames() {
+      return [...registered.keys()];
     },
     async list(scope = {}) {
       const contributed = await Promise.all(sources.map((source) => source.list(scope)));
