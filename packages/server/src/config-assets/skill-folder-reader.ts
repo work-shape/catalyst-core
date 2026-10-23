@@ -5,6 +5,7 @@ import {
   type ClientInstanceId,
   type ObjectStorage,
   type PlatformStores,
+  type SkillFolderFile,
   type SkillFolderReader
 } from "@work-shape/catalyst-core";
 import { createSkillSourceVersion } from "@work-shape/catalyst-tool-execution";
@@ -15,8 +16,11 @@ import { readRevisionFolder } from "../assets/asset-files";
  * Reads the folder of one revision of a skill of this instance for the command worker, with
  * the read `assets.get files=true` answers: `SKILL.md`, its text resources and every file of
  * its file set. It reads the revision a command recorded, not the live one, and refuses a
- * revision of another instance, a deleted one, or one whose version is not the recorded one.
- * It answers no rights: the command was given its skills when it was queued.
+ * revision of another instance, one that is not stored, one whose version is not the recorded
+ * one, and a folder whose files are not the ones the revision records: a file missing from
+ * storage, other bytes, or a file it does not name. It answers no rights: the command was given
+ * its skills when it was queued. It is read on a cache miss only; a command whose folder the
+ * worker holds mounts it as recorded, even if the skill was deleted since it was queued.
  */
 export function createSkillFolderReader(options: {
   clientInstanceId: ClientInstanceId;
@@ -67,11 +71,40 @@ export function createSkillFolderReader(options: {
           ...(revision.fileSetId ? { fileSetId: revision.fileSetId } : {})
         }
       );
-      return files.map((file) => ({
+      const folder = files.map((file) => ({
         path: file.path,
         bytes: file.bytes,
         sha256: createHash("sha256").update(file.bytes).digest("hex")
       }));
+      matchRecordedFiles(folder, revision.config, skill.files ?? []);
+      return folder;
     }
   };
+}
+
+/**
+ * Refuses a folder that is not the one the revision records: each file of its index present
+ * with the bytes and hash it records, and every other file one that its config holds.
+ */
+function matchRecordedFiles(
+  folder: readonly SkillFolderFile[],
+  config: unknown,
+  recorded: readonly { path: string; sha256: string; bytes: number }[]
+): void {
+  const mismatch = () =>
+    new AppError("INTERNAL", "A file of the skill is not the one its revision records", {
+      reason: "skill_file_mismatch"
+    });
+  const read = new Map(folder.map((file) => [file.path, file]));
+  for (const entry of recorded) {
+    const file = read.get(entry.path);
+    if (!file || file.bytes.byteLength !== entry.bytes || file.sha256 !== entry.sha256) {
+      throw mismatch();
+    }
+  }
+  const named = new Set([
+    ...recorded.map((entry) => entry.path),
+    ...SKILL_REVISION_FILES.filesOfConfig(config).map((file) => file.path)
+  ]);
+  if (folder.some((file) => !named.has(file.path))) throw mismatch();
 }
