@@ -28,6 +28,28 @@ export type ConnectionOAuthChoice = (typeof CONNECTION_OAUTH_CHOICES)[number];
  */
 export type ConnectionFormAuthScheme = ConnectionAuthChoice | ConnectionOAuthChoice;
 
+/**
+ * Whose account a Connection that signs a person in uses: one account for everyone (`shared`),
+ * or each person's own (`user`). Fixed once the Connection is made.
+ */
+export type ConnectionCredentialMode = "shared" | "user";
+
+/**
+ * Whether the form offers the choice of whose account: only where a person signs in with
+ * OAuth, an MCP server, which signs in once its server asks, or a REST API's sign-in.
+ */
+export function offersCredentialMode(
+  connectorType: ConnectionFormType,
+  auth: "key" | ConnectionOAuthChoice
+): boolean {
+  return connectorType === "mcp" || auth === "oauth";
+}
+
+/** The mode a definition names. A definition without one shares its account. */
+export function credentialModeOf(config: Record<string, unknown>): ConnectionCredentialMode {
+  return config.credentialMode === "user" ? "user" : "shared";
+}
+
 /** How a REST API's client proves itself at the token endpoint. */
 export const CONNECTION_TOKEN_AUTH_METHODS = CONNECTOR_TOKEN_AUTH_METHODS;
 export type ConnectionTokenAuthMethod = ConnectorTokenAuthMethod;
@@ -315,10 +337,18 @@ export function withConnectionForm(
  * instance writes the origin, the owner and the secret handle itself.
  */
 export function newConnectionConfig(
-  start: { name: string; title: string; description?: string; copyOf?: Record<string, unknown> },
+  start: {
+    name: string;
+    title: string;
+    description?: string;
+    copyOf?: Record<string, unknown>;
+    /** Each person signs in with their own account: the Connection signs in with OAuth. */
+    credentialMode?: ConnectionCredentialMode;
+  },
   form: ConnectionFormState
 ): Record<string, unknown> {
   const copied = start.copyOf ?? {};
+  const personal = start.credentialMode === "user";
   // What the person typed, an empty field included; without a field, the copied description.
   const description = (start.description ?? textOf(copied.description)).trim();
   return withConnectionForm(
@@ -327,10 +357,11 @@ export function newConnectionConfig(
       displayName: start.title,
       ...(description === "" ? {} : { description }),
       connectorType: form.connectorType,
+      ...(personal ? { credentialMode: "user" } : {}),
       operations: acceptedOperationsOf(copied),
       enabled: true
     },
-    form
+    personal ? { ...form, authScheme: "oauth" } : form
   );
 }
 

@@ -217,6 +217,8 @@ export const connectionToolsSchema = z.object({
       service: z.string().optional(),
       /** The Connector type. The interface shows the icon of its category without a `service`. */
       connectorType: z.string().optional(),
+      /** Each person uses their own account: its tools run only in that person's private chats. */
+      personal: z.literal(true).optional(),
       tools: z.array(connectionToolSchema)
     })
   )

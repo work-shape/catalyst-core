@@ -63,7 +63,13 @@ export interface ToolPackageView {
   /** The sentence of an own tool, or nothing. */
   summary?: string;
   /** The Connection: its name for the way to its page, and what picks its icon. */
-  connection?: { name: string; service?: string; connectorType?: string };
+  connection?: {
+    name: string;
+    service?: string;
+    connectorType?: string;
+    /** Each person uses their own account: the row carries the Personal chip. */
+    personal?: true;
+  };
   tools: InstanceToolView[];
   /** The tools with a check box: what the row's switch turns on and off. */
   choosable: string[];
@@ -243,7 +249,8 @@ export function toolPackages(input: {
             connection: {
               name: connection.name,
               ...(connection.service ? { service: connection.service } : {}),
-              ...(connection.connectorType ? { connectorType: connection.connectorType } : {})
+              ...(connection.connectorType ? { connectorType: connection.connectorType } : {}),
+              ...(connection.personal ? { personal: true as const } : {})
             },
             tools,
             choosable: choosableOf(tools),

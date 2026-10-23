@@ -4,6 +4,7 @@ import {
   Badge,
   Button,
   Checkbox,
+  Chip,
   ConnectionIcon,
   Disclosure,
   DisclosureContent,
@@ -20,6 +21,9 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
   cn
 } from "@work-shape/catalyst-ui";
 import { connectionCategory } from "../../shared/connection-facts";
@@ -247,6 +251,24 @@ export function ToolPackagesSection({
   );
 }
 
+/**
+ * The chip of a personal Connection's row, with what it means on hover. It stands in the row's
+ * fold-out button, so it takes no focus of its own.
+ */
+function PersonalChip() {
+  const { t } = useTranslation();
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="inline-flex" data-tool-personal="">
+          <Chip size="sm">{t("personalConnections.chip")}</Chip>
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>{t("personalConnections.chipTooltip")}</TooltipContent>
+    </Tooltip>
+  );
+}
+
 /** One row, and the tools it folds out. */
 function PackageRow({
   item,
@@ -280,10 +302,15 @@ function PackageRow({
       description={face.text}
       descriptionWraps
       chips={
-        signInNeeded ? (
-          <Badge tone="warning" size="sm" data-tool-sign-in-needed="">
-            {t("connectionSignIn.needed")}
-          </Badge>
+        signInNeeded || item.connection?.personal ? (
+          <>
+            {item.connection?.personal ? <PersonalChip /> : null}
+            {signInNeeded ? (
+              <Badge tone="warning" size="sm" data-tool-sign-in-needed="">
+                {t("connectionSignIn.needed")}
+              </Badge>
+            ) : null}
+          </>
         ) : undefined
       }
       actionsVisible

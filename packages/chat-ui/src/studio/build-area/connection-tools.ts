@@ -128,8 +128,9 @@ export function useConnectionToolChoice(): ConnectionToolChoice {
   });
   // The list says nothing of a sign-in: each Connection that may sign in is read by itself,
   // as its page reads it. A read that fails shows no badge.
+  // A personal Connection has no shared sign-in: each person connects their own account.
   const signingIn = (query.data?.connections ?? []).filter(
-    (connection) => connection.connectorType === SIGNS_IN_CONNECTOR_TYPE
+    (connection) => connection.connectorType === SIGNS_IN_CONNECTOR_TYPE && !connection.personal
   );
   const details = useQueries({
     queries: signingIn.map(({ name }) => ({

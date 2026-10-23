@@ -122,20 +122,35 @@ export function readSignInMessage(data: unknown): SignInLanding | undefined {
   return { outcome: outcomeOf(data.outcome), ...(connection === undefined ? {} : { connection }) };
 }
 
+/**
+ * What a sign-in reads of its Connection while it waits: the sign-in it waits on, and for the
+ * client step the registration and the version of the client secret. A Connection's detail is
+ * one; a personal sign-in reads the person's own sign-in instead, the only one it changes.
+ */
+export interface SignInRead {
+  binding?: { state: string; connectedAt?: string };
+  oauth?: ConnectionDetail["oauth"];
+  secret?: { version?: number };
+}
+
 /** Whether the Connection is signed in with a sign-in other than the one it had before. */
-export function signedInSince(
-  detail: Pick<ConnectionDetail, "binding">,
-  before: Pick<ConnectionDetail, "binding"> | undefined
-): boolean {
+export function signedInSince(detail: SignInRead, before: SignInRead | undefined): boolean {
   const { binding } = detail;
   if (binding?.state !== "connected") return false;
   const earlier = before?.binding;
   return earlier?.state !== "connected" || earlier.connectedAt !== binding.connectedAt;
 }
 
-/** Whether a Connection that signs in has no sign-in its calls can use. */
-export function needsSignIn(detail: Pick<ConnectionDetail, "binding" | "oauth">): boolean {
-  return detail.oauth !== undefined && detail.binding?.state !== "connected";
+/**
+ * Whether a Connection that signs in has no shared sign-in its calls can use. A personal one
+ * never has one: each person connects their own account.
+ */
+export function needsSignIn(
+  detail: Pick<ConnectionDetail, "binding" | "oauth" | "sharedCredential">
+): boolean {
+  return (
+    detail.oauth !== undefined && detail.sharedCredential && detail.binding?.state !== "connected"
+  );
 }
 
 /**
@@ -186,13 +201,13 @@ export function withOAuthSettings(
 
 /** How a wait for the other tab ended. */
 export type SignInWaitOutcome =
-  | { status: "connected"; detail: ConnectionDetail }
+  | { status: "connected"; detail: SignInRead }
   | { status: "failed"; error: SignInError }
   | { status: "cancelled" };
 
 /** What a wait for the other tab is handed. */
 export interface SignInWaitCalls {
-  readDetail(): Promise<ConnectionDetail>;
+  readDetail(): Promise<SignInRead>;
   pause(ms: number, signal: AbortSignal): Promise<void>;
   now(): number;
   /** Hears the landing tabs of the origin until the returned function is called. */
@@ -208,7 +223,7 @@ export async function waitForSignIn(
   input: {
     connection: string;
     start: Pick<ConnectionOAuthStart, "expiresAt" | "providerHost">;
-    before: Pick<ConnectionDetail, "binding"> | undefined;
+    before: SignInRead | undefined;
     signal: AbortSignal;
   }
 ): Promise<SignInWaitOutcome> {
