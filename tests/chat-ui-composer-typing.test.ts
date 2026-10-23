@@ -99,7 +99,7 @@ describe("chat runtime thread list state", () => {
   it("is a new object once a field of the thread list changed", () => {
     const list = { mainThreadId: "first", threadIds: ["first"] as readonly string[] };
     const threads = { getState: () => ({ ...list }) };
-    stabilizeThreadListState({ threads } as unknown as AssistantRuntime);
+    stabilizeThreadListState({ threads });
     const before = threads.getState();
     expect(threads.getState()).toBe(before);
     list.threadIds = ["first", "second"];
