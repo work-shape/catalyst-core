@@ -116,6 +116,9 @@ export function createOperationApprovalFiler(
         effect: run.effect,
         input,
         ...(heldInput ? { heldInput } : {}),
+        ...(runtime.modelRoutes
+          ? { modelRoutes: runtime.modelRoutes.map(({ id, region }) => ({ id, region })) }
+          : {}),
         ...(confirmation ? { mode: "confirmation" as const } : {}),
         ...(approval?.subject
           ? {
