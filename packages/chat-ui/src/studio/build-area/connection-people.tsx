@@ -200,7 +200,9 @@ export function useOwnConnectionControls(
         title={t("personalConnections.disconnectTitle", { title: connection.title })}
         confirmLabel={t("personalConnections.disconnect")}
         loading={disconnecting}
-        onConfirm={() => void disconnect()}
+        onConfirm={() => {
+          disconnect().catch(() => undefined);
+        }}
         onClose={() => setAsking(false)}
       >
         {t("personalConnections.disconnectText", { title: connection.title })}
@@ -286,7 +288,13 @@ export function ConnectionPeopleSection({ name, mayWrite }: { name: string; mayW
     return (
       <InlineError className="flex flex-wrap items-center justify-between gap-2">
         <span>{t("personalConnections.peopleFailed")}</span>
-        <Button variant="outline" size="sm" onClick={() => void people.refetch()}>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            people.refetch().catch(() => undefined);
+          }}
+        >
           {t("tryAgain")}
         </Button>
       </InlineError>
@@ -346,7 +354,7 @@ export function ConnectionPeopleSection({ name, mayWrite }: { name: string; mayW
         confirmLabel={t("personalConnections.revoke")}
         loading={revoking}
         onConfirm={() => {
-          if (asking) void revoke(asking.userId);
+          if (asking) revoke(asking.userId).catch(() => undefined);
         }}
         onClose={() => setAsking(undefined)}
       >
