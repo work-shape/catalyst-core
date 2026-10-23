@@ -5391,13 +5391,19 @@
         ],
         "security": [
           {
-            "sessionCookie": []
+            "sessionCookie": [
+              "config_assets:write"
+            ]
           },
           {
-            "sessionToken": []
+            "sessionToken": [
+              "config_assets:write"
+            ]
           },
           {
-            "accessToken": []
+            "accessToken": [
+              "config_assets:write"
+            ]
           }
         ],
         "parameters": [
@@ -5790,10 +5796,14 @@
         ],
         "security": [
           {
-            "sessionCookie": []
+            "sessionCookie": [
+              "config_assets:read"
+            ]
           },
           {
-            "sessionToken": []
+            "sessionToken": [
+              "config_assets:read"
+            ]
           }
         ],
         "parameters": [
@@ -5877,10 +5887,14 @@
         ],
         "security": [
           {
-            "sessionCookie": []
+            "sessionCookie": [
+              "config_assets:write"
+            ]
           },
           {
-            "sessionToken": []
+            "sessionToken": [
+              "config_assets:write"
+            ]
           }
         ],
         "parameters": [
@@ -24325,10 +24339,14 @@
         ],
         "security": [
           {
-            "sessionCookie": []
+            "sessionCookie": [
+              "me:read"
+            ]
           },
           {
-            "sessionToken": []
+            "sessionToken": [
+              "me:read"
+            ]
           }
         ],
         "parameters": [],
