@@ -202,3 +202,21 @@ describe("workflows.list for the child picker", () => {
     expect(page.items.map(({ id, triggers }) => [id, triggers])).toEqual([["child", ["parent"]]]);
   });
 });
+
+describe("operations.list_callable and mail.send (MAIL-3)", () => {
+  const names = async (t: WorkflowFixture, user: UserRecord) =>
+    (await listed(t, user, { prefix: "mail." })).operations.map(({ name }) => name);
+
+  it("offers a step mail.send where the instance has it, to whom may send as a sender", async () => {
+    const off = await workflowFixture({ definitions: "assets" });
+    open = off;
+    expect(await names(off, off.root)).toEqual([]);
+    await off.instance.close();
+
+    const t = await workflowFixture({ definitions: "assets", mail: { recipientDomains: [] } });
+    open = t;
+    expect(await names(t, t.root)).toEqual(["mail.send"]);
+    // Kai holds mail_sender.use on no sender: the palette offers no e-mail step.
+    expect(await names(t, t.kai)).toEqual([]);
+  });
+});
