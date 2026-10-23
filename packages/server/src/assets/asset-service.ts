@@ -1,3 +1,4 @@
+import type { AssetFileInput } from "./asset-files";
 import { validateAssetDefinition } from "./asset-validation";
 import type {
   AgentAvailability,
@@ -202,6 +203,7 @@ export class AssetWorkflow {
     input: {
       kind: string;
       config: Record<string, unknown>;
+      files?: readonly AssetFileInput[];
       workspaceId?: string;
       availability?: Omit<AgentAvailability, "collaborationWorkspaceIds"> & {
         collaborationWorkspaceIds: string[];

@@ -1,4 +1,9 @@
-import { asCollaborationWorkspaceId, type AgentAvailability } from "@work-shape/catalyst-core";
+import {
+  AppError,
+  asCollaborationWorkspaceId,
+  type AgentAvailability
+} from "@work-shape/catalyst-core";
+import { decodeAssetFiles, type AssetFileInput } from "./asset-files";
 import { readDefinitionName } from "../asset-kinds/shared";
 import type { AssetWorkflowOptions } from "../types";
 import type { AssetCall } from "./asset-access";
@@ -25,6 +30,7 @@ export async function validateAssetDefinition(
   input: {
     kind: string;
     config: Record<string, unknown>;
+    files?: readonly AssetFileInput[];
     workspaceId?: string;
     availability?: Omit<AgentAvailability, "collaborationWorkspaceIds"> & {
       collaborationWorkspaceIds: string[];
@@ -39,6 +45,33 @@ export async function validateAssetDefinition(
   });
   const { kind } = target;
   call.access.require(kind.actions.read, target.resource);
+  let config = input.config;
+  if (input.files !== undefined) {
+    if (!kind.revisionFiles || name === undefined)
+      throw new AppError(
+        "VALIDATION_FAILED",
+        "Folder validation needs a name and a kind that holds revision files",
+        { reason: "config_required" }
+      );
+    try {
+      config = kind.revisionFiles.read(name, decodeAssetFiles(input.files)).config;
+    } catch (error) {
+      if (!(error instanceof AppError)) throw error;
+      const details = isRecord(error.details) ? error.details : {};
+      const path = typeof details.path === "string" ? [details.path] : undefined;
+      return {
+        valid: false,
+        warnings: [],
+        issues: [
+          {
+            message: error.message,
+            ...(path ? { path } : {}),
+            ...(typeof details.reason === "string" ? { code: details.reason } : {})
+          }
+        ]
+      };
+    }
+  }
   const kinds = options.configAssets.kinds.kinds;
   const stored = await loadStoredAssets(options);
   const view = loadReferableAssets(options, call.access, stored);
@@ -46,7 +79,7 @@ export async function validateAssetDefinition(
   const prepared = keptStored(
     kind,
     current,
-    kind.prepareInteractiveUpsert({ current, next: input.config, principalId: call.actor.id })
+    kind.prepareInteractiveUpsert({ current, next: config, principalId: call.actor.id })
   );
   const drafted = (set: AssetSet) => withDefinition(set, kind.kind, name ?? "", prepared);
   const found = findAssetSetIssues(kinds, drafted(view.set), view.set);
@@ -137,4 +170,8 @@ export async function validateAssetDefinition(
       ...(code === undefined ? {} : { code })
     }))
   };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

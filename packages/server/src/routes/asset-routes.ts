@@ -77,6 +77,7 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
   });
 
   route.operation(apiOperations["assets.validate"], {
+    bodyLimitBytes: ASSET_PUT_BODY_LIMIT_BYTES,
     authorize: (input, { access }) => workflow.authorizeValidate(access, input),
     resource: (input) => assetResource({ ...input, name: readDefinitionName(input.config) }),
     policyTargets: (input) =>

@@ -35,9 +35,9 @@ A working copy that never pulled from an instance pushes every asset as a creati
 
 There is no `--force`. A push never overwrites a change it did not read: the flag is refused with the procedure below. A deleted asset keeps its name with its history. `pull` records the revision of a delete it sees, and the next push that creates the asset again names it; without that pull the creation is reported as a conflict with the delete.
 
-The CLI reads with `assets.list` and `assets.get` and writes with `assets.sync`, the operations under [The asset API](#the-asset-api). Each push is one Operation Run in the name of whoever the key belongs to: the person or the service principal. A push whose answer is lost on the way is sent again under the same idempotency key, so it is applied once. One push holds at most 2,000 assets and 20 MiB, and one asset in it at most 2 MiB; a larger release is pushed in parts with `--only`. `validate` asks `assets.sync_check` whether a push of the whole working copy would be accepted and writes nothing. On an instance whose policy holds a release for approval, `push` reports the waiting Operation Run and exits with 1; pull after the approval.
+The CLI reads with `assets.list` and `assets.get` and writes release batches with `assets.sync`, the operations under [The asset API](#the-asset-api). Each release batch is one Operation Run in the name of whoever the key belongs to: the person or the service principal. A push whose answer is lost on the way is sent again under the same idempotency key, so it is applied once. One push holds at most 2,000 assets and 20 MiB, and one asset in it at most 2 MiB; a larger release is pushed in parts with `--only`. `validate` asks `assets.sync_check` whether a push of the whole working copy would be accepted and writes nothing. On an instance whose policy holds a release for approval, `push` reports the waiting Operation Run and exits with 1; pull after the approval.
 
-If a touched asset was updated, deleted, or created on the instance since its baseline, the server rejects the **whole push** without applying anything. The CLI lists every conflicting asset with its current revision, whether that revision is its delete, who wrote it and when, then prints a scoped pull command. A key that may not read an asset is told its name only:
+If a touched asset was updated, deleted, or created on the instance since its baseline, the server rejects the **whole release batch** without applying anything. The CLI lists every conflicting asset with its current revision, whether that revision is its delete, who wrote it and when, then prints a scoped pull command. A key that may not read an asset is told its name only:
 
 ```sh
 catalyst config pull --only skill:support_review --only agent:assistant
@@ -95,14 +95,19 @@ CLI and server ship together. The addresses the CLI used before, `/api/v1/instan
 The canonical skill package layout is:
 
 ```text
-skills/support_review/
+skills/form/
 ├── SKILL.md
-└── references/
-    ├── escalation.md
-    └── response-format.json
+├── references/
+│   ├── guide.md
+│   └── schema.json
+├── scripts/
+│   └── fill_form.py
+└── assets/
+    ├── template.pdf
+    └── logo.png
 ```
 
-The CLI recursively includes `.md`, `.txt`, `.json`, `.yaml`, and `.yml` resources below each matched skill directory. It validates them as UTF-8 text, includes them in pull/diff/push, and rejects unsupported files instead of silently dropping them. Resource paths are normalized relative paths; absolute paths, traversal, duplicate paths, and a second `SKILL.md` resource are invalid. The working copy carries a skill's text files only. A skill with other files, such as images or scripts, is written from its folder with `catalyst skill put --from <folder>` or the asset API; see [A skill as a folder of files](#a-skill-as-a-folder-of-files).
+The CLI pulls and pushes every file beside `SKILL.md`, preserving its bytes. Text resources (`.md`, `.txt`, `.json`, `.yaml`, `.yml` outside `scripts/`) stay in the config; scripts and other files travel as the whole folder with `assets.put` when their hashes change. Text-only edits stay in the `assets.sync` batch. Folder writes need the key scope `config_assets:write` and the instance module `assetManagement`. They follow that batch, each against its pulled revision, so a later conflict, refusal or approval can leave earlier writes applied; the CLI records and reports those writes and prints a scoped pull command for conflicts. `validate` checks folders with `assets.validate` and files. `.catalyst-state.json` records each file's SHA-256; neither it nor `.catalyst-skill.json` is a skill file. UTF-8 files show text diffs; other files show `binary, <old size> → <new size>`. Before sending, the CLI checks the server's limits: 2 MiB per file, 500 files and 8 MiB per skill, with UTF-8 scripts and no compiled programs or Git LFS pointers. Errors name the path and reason. `catalyst skill put <name> --from <folder> --if-revision <n|new>` also sends every file, as text or base64. Paths stay within the folder without links. See [A skill as a folder of files](#a-skill-as-a-folder-of-files).
 
 A working copy holds the instance's [guardrails](#guardrails-as-assets) where `catalyst.yaml` lists their files under `guardrails`, such as `guardrails/*/guardrail.yaml`; each is a folder with its `guardrail.yaml` and, for a `model_judge` check, its instruction in `check.md`. Without that list, pull, diff and `push --prune` leave the instance's guardrails alone. `pull` brings the draft and `--only guardrail:<name>` selects one. Guardrails are no part of a release: after the `assets.sync` batch of agents and skills, `push` writes each changed guardrail as its next draft with `assets.put` against the revision of its last pull, and `push --prune` deletes one with `assets.delete`, so the key needs `config_assets:write` and the instance the module `assetManagement`. `push` checks every changed guardrail with `assets.validate` and checks its pulled revision before starting the batch or any guardrail write. Invalid definitions stop the push without applying anything; diagnostics name paths and issue counts. The separate guardrail writes remain subject to concurrency checks, rights and approvals, so a later refusal can leave earlier writes applied; the CLI records and reports those writes. `validate` leaves guardrails to these push checks. Publishing stays a step of its own, and the guardrails of release config are never part of a working copy.
 
