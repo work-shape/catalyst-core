@@ -497,6 +497,7 @@ export async function createClientInstanceExecutionAssembly(
   }
   const platformTools = createPlatformTools({
     stores: store,
+    catalogueStores: store,
     modules,
     connections,
     dataTools: () => configAssets.dataTools,
