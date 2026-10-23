@@ -39,7 +39,13 @@ export function PersonalConnectionsPage() {
         ) : query.isError ? (
           <InlineError className="flex flex-wrap items-center justify-between gap-2">
             <span>{t("personalConnections.loadFailed")}</span>
-            <Button variant="outline" size="sm" onClick={() => void query.refetch()}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                query.refetch().catch(() => undefined);
+              }}
+            >
               {t("tryAgain")}
             </Button>
           </InlineError>
