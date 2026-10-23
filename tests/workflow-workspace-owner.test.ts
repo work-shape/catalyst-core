@@ -1,7 +1,12 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
-import { WORKFLOW_ACTIONS, WORKFLOW_ASSET_KIND } from "@work-shape/catalyst-core";
+import {
+  WORKFLOW_ACTIONS,
+  WORKFLOW_ASSET_KIND,
+  type OperationAuthorizeContext
+} from "@work-shape/catalyst-core";
 import { clientInstanceId } from "./support/access-instance";
+import { identityOf } from "./support/connection-operations";
 import { runSchema, type WorkflowFixture } from "./support/workflow-instance";
 import { NOTE, notifyClients, readyWorkflows } from "./support/workflow-runs";
 
@@ -12,6 +17,7 @@ import { NOTE, notifyClients, readyWorkflows } from "./support/workflow-runs";
 
 const INSTANCE_WORKFLOW = "notify-clients";
 const OWN = "nordlicht-notify";
+const SIBLING = "nordlicht-check";
 const FOREIGN = "other-check";
 
 const listSchema = z.object({
@@ -236,6 +242,65 @@ describe("a Workflow a workspace owns", () => {
       )
     ).toEqual([t.lena.id]);
   });
+
+  it.each(["asset", "workspace", "none"] as const)(
+    "preserves workflow.use for a start operation with a %s grant",
+    async (grant) => {
+      const { t, nordlicht, other } = await ready();
+      for (const [name, workspaceId] of [
+        [OWN, nordlicht],
+        [SIBLING, nordlicht],
+        [FOREIGN, other]
+      ] as const) {
+        const revision = await put(t, t.admin.id, name, workspaceId, null);
+        await t.expectOk(t.root.id, "assets.publish", {
+          params: { kind: WORKFLOW_ASSET_KIND, name },
+          payload: { revision, workspaceId }
+        });
+      }
+      const assetId = await t.assetId(WORKFLOW_ASSET_KIND, OWN);
+      if (grant !== "none")
+        await t.grant(
+          t.lena.id,
+          WORKFLOW_ACTIONS.use,
+          grant === "asset" ? { assetId } : { workspaceId: nordlicht }
+        );
+
+      const actor = identityOf(t.lena);
+      const access = await t.operationCalls.deps.authorizer.forActor(actor);
+      for (const name of [OWN, SIBLING, FOREIGN, INSTANCE_WORKFLOW]) {
+        const binding = await t.operationCalls.registry.resolve(`workflow.${name}.start`);
+        if (!binding || binding.action !== null) throw new Error("Workflow start check missing");
+        const input = { note: NOTE };
+        const resource = binding.resource(input);
+        expect(resource).toMatchObject({
+          kind: WORKFLOW_ASSET_KIND,
+          name,
+          assetId: await t.assetId(WORKFLOW_ASSET_KIND, name),
+          ...(name === INSTANCE_WORKFLOW
+            ? {}
+            : { workspaceId: name === FOREIGN ? other : nordlicht })
+        });
+        const context: OperationAuthorizeContext = {
+          actor,
+          access,
+          resource,
+          origin: { kind: "user" },
+          correlationId: "workflow-start-rights"
+        };
+        const allowed =
+          (grant === "asset" && name === OWN) ||
+          (grant === "workspace" && (name === OWN || name === SIBLING));
+        // The old action: "workflow.use" path asked exactly this access and resource.
+        expect(access.authorize(WORKFLOW_ACTIONS.use, resource).allowed).toBe(allowed);
+        expect(await binding.authorize(input, context)).toEqual(
+          allowed
+            ? { allowed: true }
+            : { allowed: false, action: "workflow.use", reason: "no_grant" }
+        );
+      }
+    }
+  );
 
   it("goes with its workspace by its own delete: the name stays taken, the principal is retired and open runs end", async () => {
     const { t, nordlicht, other } = await ready();

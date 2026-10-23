@@ -327,7 +327,10 @@ describe("a test run of a Workflow draft", () => {
         audit: t.operationCalls.deps.audit
       };
       const authorize = () =>
-        binding.authorize({ note: NOTE }, { ...context, resource: undefined });
+        binding.authorize(
+          { note: NOTE },
+          { ...context, resource: binding.resource({ note: NOTE }) }
+        );
       expect(await authorize()).toEqual({ allowed: true });
       await t.stores.conversations.markPersonalData({
         clientInstanceId,

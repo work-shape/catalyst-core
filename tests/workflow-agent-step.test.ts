@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   asClientInstanceId,
   asUserId,
+  asToolCallId,
   defineProvider,
   createPlatformId,
   WORKFLOW_STEP_TRANSCRIPT_MAX_MESSAGES,
@@ -30,9 +31,11 @@ import {
 import { createTestConfig } from "./support/fixtures";
 import { required, waitUntil } from "./support/assertions";
 import { withTestSql } from "./support/test-sql";
-import { agentOutputError } from "@work-shape/catalyst-workflows";
+import { agentOutputError, workflowRunActor } from "@work-shape/catalyst-workflows";
+import { runOperation } from "@work-shape/catalyst-tool-execution";
 
 const toolName = "connection.fixture.change";
+const workflowStartToolName = "workflow.agent-target.start";
 const outputSchema = {
   type: "object",
   properties: { answer: { type: "string" } },
@@ -51,6 +54,7 @@ type Mode =
   | "repair_tool"
   | "confirm"
   | "approval"
+  | "workflow"
   | "test_confirm";
 interface FixtureOptions {
   /** Exercises EW-TEXT through the input of a Child Agent Run. */
@@ -75,6 +79,7 @@ async function fixture(
 ) {
   changed.length = 0;
   const draft = mode === "test" || mode === "test_confirm";
+  const calledToolName = mode === "workflow" ? workflowStartToolName : toolName;
   const requests: ModelAdapterRequest[] = [];
   const answer = (request: ModelAdapterRequest): ModelCompletion => {
     requests.push(request);
@@ -182,8 +187,8 @@ async function fixture(
   };
   config.infrastructure.models = { local: { provider: "workflow-scripted", model: "local" } };
   const policies: CentralPolicySetting[] =
-    mode === "test"
-      ? [{ operation: toolName, value: "allow" }]
+    mode === "test" || mode === "workflow"
+      ? [{ operation: calledToolName, value: "allow" }]
       : mode === "approval"
         ? [{ operation: toolName, value: "approval" }]
         : mode === "confirm" || mode === "test_confirm"
@@ -258,6 +263,43 @@ async function fixture(
       scopeId: connectionAsset.id,
       grantedBy: asUserId(owner.json<{ id: string }>().id)
     });
+  if (mode === "workflow") {
+    const target = {
+      id: "agent-target",
+      name: "Started by an agent step",
+      runAs: "workflow-runner",
+      inputs: { type: "object" },
+      outputs: { type: "object" },
+      steps: [
+        { id: "start", name: "Start", type: "trigger", triggers: [{ kind: "manual" }] },
+        { id: "result", name: "Result", type: "output", input: {} }
+      ]
+    };
+    const params = { kind: "workflow", name: target.id };
+    const put = await app.call("assets.put", {
+      params,
+      payload: { expectedRevision: null, config: { name: target.id, manifest: target } }
+    });
+    expect(put.statusCode, put.body).toBe(200);
+    const published = await app.call("assets.publish", {
+      params,
+      payload: { revision: put.json<{ revision: number }>().revision }
+    });
+    expect(published.statusCode, published.body).toBe(200);
+    const asset = required(
+      await app.stores.configAssets.getConfigAsset({ clientInstanceId, ...params })
+    );
+    await app.stores.access.createGrant({
+      clientInstanceId,
+      holderKind: "service_principal",
+      holderId: principal.id,
+      action: "workflow.use",
+      effect: "allow",
+      scopeKind: "asset",
+      scopeId: asset.id,
+      grantedBy: asUserId(owner.json<{ id: string }>().id)
+    });
+  }
   const manifest: Record<string, import("@work-shape/catalyst-core").JsonValue> & {
     id: string;
     steps: import("@work-shape/catalyst-core").JsonValue[];
@@ -267,7 +309,7 @@ async function fixture(
     runAs: "workflow-runner",
     inputs: { type: "object", properties: { text: { type: "string" } } },
     outputs: outputSchema,
-    tools: options.webTools ? [toolName, "web_search", "web_fetch"] : [toolName],
+    tools: options.webTools ? [calledToolName, "web_search", "web_fetch"] : [calledToolName],
     steps: [
       { id: "start", name: "Start", type: "trigger", triggers: [{ kind: "manual" }] },
       {
@@ -365,6 +407,62 @@ async function fixture(
 }
 
 describe("Workflow Child Agent Runs (CR-2)", () => {
+  it("admits another Workflow start from a published agent step's recorded run and listed tool", async () => {
+    const f = await fixture("workflow");
+    const step = await f.ended("done");
+    const child = required(
+      await f.app.stores.childAgentRuns.readWorkflowAgentRun({
+        clientInstanceId: f.clientInstanceId,
+        stepRunId: step.id
+      })
+    );
+    expect(
+      await f.app.stores.conversations.getConversation(f.clientInstanceId, child.conversationId)
+    ).toBeUndefined();
+    const execution = await createTestInstance({ execution: f.input });
+    const calls = getTestExecution(execution).operationCalls;
+    expect(await calls.deps.agentToolNames?.(child.agentName, child.conversationId)).toContain(
+      workflowStartToolName
+    );
+    const parent = required(
+      await f.app.stores.workflowRuns.readRun({ clientInstanceId: f.clientInstanceId, id: f.runId })
+    );
+    const actor = required(await workflowRunActor(f.app.stores.apiAccess, parent));
+    const outcome = await runOperation(
+      {
+        operation: workflowStartToolName,
+        effect: "changing",
+        input: {},
+        actor,
+        origin: {
+          kind: "agent",
+          agentName: child.agentName,
+          agentRunId: child.id,
+          conversationId: child.conversationId,
+          toolCallId: asToolCallId("start-workflow"),
+          toolName: workflowStartToolName
+        },
+        correlationId: "workflow-agent-start"
+      },
+      calls.deps,
+      { unattended: true }
+    );
+    expect(outcome.result.status).toBe("done");
+    const call = required(
+      await f.app.stores.operationRuns.get({
+        clientInstanceId: f.clientInstanceId,
+        id: outcome.result.runId
+      })
+    );
+    expect(call).toMatchObject({ status: "done", origin: { kind: "agent", agentRunId: child.id } });
+    expect(
+      await f.app.stores.workflowRuns.listRuns({
+        clientInstanceId: f.clientInstanceId,
+        workflow: "agent-target"
+      })
+    ).toEqual([expect.objectContaining({ mode: "live", operationRunId: call.id })]);
+  });
+
   it("keeps web tools for a published Workflow child without a conversation row", async () => {
     const f = await fixture("valid", false, "user-1", { webTools: true });
     const step = await f.ended("done");
