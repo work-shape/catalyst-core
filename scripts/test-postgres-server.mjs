@@ -1,7 +1,7 @@
-// How a throwaway test Postgres runs: `pnpm check:local`, the agent stories' stack and the
-// browser runner's Compose stack. Such a server keeps nothing past its run, so its data
-// directory is memory and nothing waits for a disk: no fsync, no full-page images, and a
-// checkpoint only when a statement asks for one (DROP DATABASE does, for every test file).
+// How a throwaway test Postgres runs: `pnpm check:local` and the browser runner's Compose stack.
+// Such a server keeps nothing past its run, so its data directory is memory and nothing waits
+// for a disk: no fsync, no full-page images, and a checkpoint only when a statement asks for one
+// (DROP DATABASE does, for every test file).
 // .github/scripts/start-postgres.sh repeats these lines for the hosted check.
 // Never for an instance's database.
 
