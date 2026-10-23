@@ -123,6 +123,8 @@ export const popupSignInBrowser: SignInBrowser = {
 /** Where the step stands. */
 export type SignInPhase =
   | { phase: "starting" }
+  /** A one-click sign-in that was cancelled: nothing runs. */
+  | { phase: "idle" }
   /** The start was refused before anything could be shown. */
   | { phase: "failed"; error: SignInError }
   /** The provider registers no client: the person enters the one it issued. */
@@ -143,6 +145,8 @@ export interface ConnectionSignIn {
   entersClient: boolean;
   /** The person connects their own account, which nobody else uses. */
   personal: boolean;
+  /** A sign-in started here is starting or waiting for the provider. */
+  busy: boolean;
   /**
    * The redirect URI of a client the provider issued, to copy into its app: the instance names
    * it once the Connection is saved. Nothing for a client registered by DCR.
@@ -153,6 +157,12 @@ export interface ConnectionSignIn {
   setClient(client: { id: string; secret: string }): void;
   /** Opens the provider's page. Called in the click, so the browser opens its tab. */
   open(): void;
+  /**
+   * Signs in with one click, without the step: opens the window in the click, starts the
+   * sign-in and sends the window to the provider, whose own page shows the permissions. For a
+   * person's own account, where there is nothing to choose before.
+   */
+  connect(): void;
   cancel(): void;
   retry(): void;
   saveClient(): void;
@@ -248,6 +258,33 @@ export function useConnectionSignIn(
     }
     spent.current = true;
     tab.go(opened.authorizationUrl);
+    await waitOn(opened, (error) =>
+      setState({ phase: "ready", start: opened, opening: false, ...(error ? { error } : {}) })
+    );
+  }
+
+  /** Signs in in one click: the window is open, the step is skipped. */
+  async function connectNow(tab: SignInTab) {
+    const { calls: current } = latest.current;
+    let start: ConnectionOAuthStart;
+    try {
+      before.current = await current.readDetail().catch(() => undefined);
+      start = await current.start();
+    } catch (error) {
+      tab.close();
+      setState({ phase: "failed", error: signInErrorOf(error) });
+      return;
+    }
+    spent.current = true;
+    tab.go(start.authorizationUrl);
+    await waitOn(start, (error) =>
+      setState(error ? { phase: "failed", error } : { phase: "idle" })
+    );
+  }
+
+  /** Waits for the sign-in the provider's page was opened for; `back` hears a miss. */
+  async function waitOn(opened: ConnectionOAuthStart, back: (error?: SignInError) => void) {
+    const { calls: current } = latest.current;
     const controller = new AbortController();
     waiting.current = controller;
     setState({ phase: "waiting", start: opened });
@@ -272,10 +309,10 @@ export function useConnectionSignIn(
         latest.current.onConnected(outcome.detail);
         return;
       case "failed":
-        setState({ phase: "ready", start: opened, opening: false, error: outcome.error });
+        back(outcome.error);
         return;
       case "cancelled":
-        setState({ phase: "ready", start: opened, opening: false });
+        back();
         return;
     }
   }
@@ -300,8 +337,11 @@ export function useConnectionSignIn(
     await begin();
   }
 
+  // "starting" before anything began is the rest state of a step that is not shown yet.
+  const busy = state.phase === "waiting" || (begun.current && state.phase === "starting");
   return {
     state,
+    busy,
     offered,
     ticked,
     choosesScopes: calls.writeOAuth !== undefined,
@@ -328,6 +368,17 @@ export function useConnectionSignIn(
       }
       setState({ phase: "ready", start, opening: true });
       run(openStarted(start, tab));
+    },
+    connect() {
+      if (busy) return;
+      const tab = browser.openTab();
+      if (!tab) {
+        setState({ phase: "failed", error: { failure: "tab_blocked" } });
+        return;
+      }
+      begun.current = true;
+      setState({ phase: "starting" });
+      run(connectNow(tab));
     },
     cancel: () => waiting.current?.abort(),
     retry: () => run(begin()),
@@ -387,6 +438,8 @@ export function SignInBody({ signIn }: { signIn: ConnectionSignIn }) {
   const failureText = useSignInFailureText();
   const { state } = signIn;
   switch (state.phase) {
+    case "idle":
+      return null;
     case "starting":
       return (
         <p
@@ -556,6 +609,7 @@ export function SignInActions({ signIn }: { signIn: ConnectionSignIn }) {
   const { t } = useTranslation();
   const { state } = signIn;
   switch (state.phase) {
+    case "idle":
     case "starting":
     case "connected":
       return null;
