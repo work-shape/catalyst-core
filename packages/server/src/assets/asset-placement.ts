@@ -268,7 +268,8 @@ export interface AssetWarning {
  * Where an agent that a put or a revert creates starts. It is available in the shared
  * workspace it is made in and nowhere else: the one the write names, else the workspace that
  * owns it, else the conversation's. Made in no shared workspace, such as a personal
- * one or by the CLI, it is hidden, and the caller is warned. Wider is an instance admin's
+ * one or by the CLI, or by someone without `agent.approve` in the workspace that owns it, it
+ * is hidden, and the caller is warned. Wider is an instance admin's
  * step: `all` here, a workspace other than the one that owns the agent, or the availability
  * later. The instance's first agent becomes its default, which every workspace offers; a
  * workspace's agent never does.
@@ -340,6 +341,25 @@ export async function initialAgentPlacement(
     // admin's step, as widening it later is: asked without a resource, so only an entry at
     // instance scope answers.
     call.access.require(kind.actions.write);
+  }
+  if (
+    input.madeIn !== undefined &&
+    kind.actions.approve !== undefined &&
+    !call.access.authorize(kind.actions.approve, { kind: kind.kind, workspaceId: input.madeIn })
+      .allowed
+  ) {
+    // A workspace's agent made by someone who may not approve its publish starts offered
+    // nowhere, whoever made it and however: its first publish, once approved, offers it in its
+    // workspace (WS-PUB-1b, access check 11).
+    return {
+      initialAgentAvailability: "hidden",
+      warnings: [
+        {
+          code: "agent_hidden",
+          message: `Agent '${input.name}' is offered in its workspace once its first publish is approved`
+        }
+      ]
+    };
   }
   const workspace = await memberWorkspace(options, call, named ?? input.madeIn ?? call.workspaceId);
   if (named !== undefined && !workspace) {

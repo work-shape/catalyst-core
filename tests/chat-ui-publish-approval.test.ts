@@ -95,7 +95,7 @@ describe("the Inbox item of a publish that waits", () => {
         { locale }
       );
     const markup = agentItem("en");
-    expect(markup).toContain("Draft version 3, in place of version 1");
+    expect(markup).toContain("Draft based on version 1");
     expect(markup).toMatch(/data-testid="publish-review-workspace"[^>]*>Kai Spezis/u);
     expect(markup).toContain("Approving also offers the agent to everyone in Kai Spezis.");
     expect(markup).toMatch(/data-agent-field="instructions".*Instructions.*Changed/u);
@@ -108,8 +108,47 @@ describe("the Inbox item of a publish that waits", () => {
     expect(markup).not.toContain('data-field="files"');
 
     const german = agentItem("de");
-    expect(german).toContain("Entwurfsversion 3, statt Version 1");
+    expect(german).toContain("Entwurf auf Basis von Version 1");
     expect(german).toContain("Freigeben bietet den Agenten außerdem allen in Kai Spezis an.");
+  });
+
+  it("reviews a first version alone, with no live version beside it (access check 11)", () => {
+    const review = {
+      kind: "agent",
+      name: "lena-made",
+      title: "Lena Made",
+      revision: 1,
+      files: [],
+      hostsAdded: [],
+      connections: [],
+      dataStores: [],
+      agent: {
+        workspace: { id: "cws_kai", name: "Kai Spezis" },
+        offers: true,
+        toolsAdded: ["known.tool"],
+        toolsRemoved: [],
+        modelBindingsAdded: [],
+        skills: [],
+        instructions: { after: "Help." }
+      }
+    };
+    const firstItem = (locale: "de" | "en") =>
+      renderItem(
+        {
+          kind: "agent_publish",
+          summary: "assets.publish",
+          preview: { ...preview, review },
+          canDecide: true
+        },
+        { locale }
+      );
+    const markup = firstItem("en");
+    expect(markup).toMatch(/data-field="version".*First version/u);
+    expect(markup).toMatch(/data-field="instructions"><dt[^>]*>Instructions</u);
+    expect(markup).not.toContain('data-field="agent-fields"');
+    expect(markup).not.toContain('data-field="instructions-live"');
+    expect(markup).toContain("Approving also offers the agent to everyone in Kai Spezis.");
+    expect(firstItem("de")).toContain("Erste Version");
   });
 
   it("says a request whose draft moved can no longer be approved", () => {

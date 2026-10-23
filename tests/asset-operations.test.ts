@@ -321,14 +321,16 @@ describe("assets.put, assets.delete and assets.revert", () => {
 
     const created = await put(t.kai.id, "First.", null);
     expect(created.statusCode).toBe(200);
-    // A new agent made in no workspace starts hidden, and the answer says so.
+    // A new agent made by someone who may not approve its publish starts hidden until its first
+    // publish is approved (WS-PUB-1b), and the answer says so.
     expect(writeSchema.parse(created.json())).toEqual({
       version: 2,
       revision: 1,
       warnings: [
         {
           code: "agent_hidden",
-          message: "Agent 'kai-intake' is hidden until an instance admin makes it available"
+          message:
+            "Agent 'kai-intake' is offered in its workspace once its first publish is approved"
         }
       ]
     });
@@ -491,8 +493,12 @@ describe("assets.put, assets.delete and assets.revert", () => {
     // Call order is the revision each row names: audit timestamps of two calls may tie, and the
     // list breaks a tie by random id.
     const events = await t.stores.audit.listAuditEvents({ clientInstanceId, limit: 200 });
+    // The first publish's offering of the agent in its workspace names no revision (WS-PUB-1b).
     const written = events
-      .filter((event) => event.type.startsWith("config_asset."))
+      .filter(
+        (event) =>
+          event.type.startsWith("config_asset.") && event.type !== "config_asset.availability_set"
+      )
       .sort((left, right) => Number(left.metadata?.revision) - Number(right.metadata?.revision));
     expect(written.map((event) => [event.type, event.metadata?.revision])).toEqual([
       ["config_asset.updated", 1],

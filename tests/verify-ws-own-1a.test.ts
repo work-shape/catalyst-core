@@ -292,6 +292,9 @@ describe("WS-OWN-1a verifier: workspace boundary and existence oracle", () => {
 
   it("offers another workspace's agent nowhere in one's own workspace", async () => {
     const { t, team, other } = await setup(true);
+    // Lena may approve her workspace's agents, so the one she makes is offered there at once
+    // (WS-PUB-1b): the probe below needs an agent that is listed somewhere.
+    await t.grant(t.lena.id, "agent.approve", { workspaceId: other });
     expect((await putIn(t, t.lena.id, "agent", agent("other-agent"), other)).statusCode).toBe(200);
     const listed = await t.call(t.kai.id, "workspaces.agents.list", {
       params: { collaborationWorkspaceId: team }

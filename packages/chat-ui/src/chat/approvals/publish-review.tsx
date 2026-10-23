@@ -325,11 +325,8 @@ function AgentPublishLists({
     <KeyValueList layout="stacked">
       <KeyValue label={t("operations.publishVersion")} data-field="version">
         {review.liveRevision === undefined
-          ? t("operations.publishFirst", { number: review.revision })
-          : t("operations.publishDraftReplaces", {
-              number: review.revision,
-              live: review.liveRevision
-            })}
+          ? t("operations.publishAgentFirst")
+          : t("operations.publishDraftBasedOn", { live: review.liveRevision })}
       </KeyValue>
       {workspace ? (
         <KeyValue label={t("operations.publishAgentWorkspace")} data-field="workspace">
@@ -372,7 +369,7 @@ function AgentPublishLists({
           )}
         </KeyValue>
       ) : null}
-      {agent.fields ? (
+      {agent.toolsAdded ? (
         <>
           <KeyValue label={t("operations.publishAgentToolsAdded")} data-field="tools-added">
             {names(agent.toolsAdded)}
@@ -391,7 +388,14 @@ function AgentPublishLists({
         </>
       ) : null}
       {agent.instructions ? (
-        <KeyValue label={t("operations.publishAgentInstructions")} data-field="instructions">
+        <KeyValue
+          label={t(
+            review.liveRevision === undefined
+              ? "operations.publishAgentInstructionsFirst"
+              : "operations.publishAgentInstructions"
+          )}
+          data-field="instructions"
+        >
           <FoldedText data-testid="publish-review-instructions">
             {agent.instructions.after}
           </FoldedText>

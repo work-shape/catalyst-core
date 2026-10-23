@@ -342,9 +342,10 @@ describe("the default and the availability of an asset", () => {
     const t = await setup();
     const team = await t.sharedWorkspace("Team");
     const other = await t.sharedWorkspace("Other");
-    // Kai builds in Team; the administrator, a member of both as their creator, builds the
+    // Kai builds in Team and may approve its agents' publish, so what he makes there is offered
+    // at once (WS-PUB-1b); the administrator, a member of both as their creator, builds the
     // instance's own agents.
-    for (const action of ["agent.read", "agent.write"]) {
+    for (const action of ["agent.read", "agent.write", "agent.approve"]) {
       await t.grant(t.kai.id, action, { workspaceId: team });
     }
     for (const workspace of [team, other]) await join(t, t.kai, workspace);

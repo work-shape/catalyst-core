@@ -110,7 +110,8 @@ export const publishVerb: Verb = {
         session,
         outcome,
         (output) => [
-          output.draftRevision !== undefined && agent
+          // An agent's first version without a draft replaces nothing: it is offered as made.
+          output.replacedRevision !== undefined && agent
             ? `Published draft revision ${output.draftRevision} of agent '${name}' as live revision ${output.publishedRevision}${output.replacedRevision === undefined ? "" : ` in place of revision ${output.replacedRevision}`}.`
             : `Published revision ${output.publishedRevision} of ${session.kind.kind} '${name}'${output.replacedRevision === undefined ? "" : ` in place of revision ${output.replacedRevision}`}.`
         ],

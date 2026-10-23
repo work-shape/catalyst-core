@@ -296,4 +296,64 @@ describe("publishing an agent a workspace owns (WS-PUB-1b)", () => {
     expect(await live("denied-agent")).toMatchObject({ revision: 1 });
     expect(await request(t.root.id, held.approvalRequestId)).toMatchObject({ canDecide: true });
   });
+
+  it("starts an agent a member without agent.approve made offered nowhere, and approves its first version", async () => {
+    const { t, team, other, live, publish, listed, request, decide } = await setup();
+    // Lena is a member of Kai Spezis and its Builder and Publisher, without agent.approve.
+    for (const bundle of ["builder", "publisher"])
+      await t.grant(t.lena.id, bundle, { workspaceId: team });
+    const made = await t.call(t.lena.id, "assets.put", {
+      params: { kind: "agent", name: "lena-made" },
+      payload: { config: agent("lena-made"), expectedRevision: null, workspaceId: team },
+      headers: { "x-test-key": "personal" }
+    });
+    expect(made.statusCode, made.body).toBe(200);
+    expect(await live("lena-made")).toMatchObject({ revision: 1 });
+    expect(await listed(t.lena.id, team)).not.toContain("lena-made");
+
+    // Its first publish needs no draft: version 1 waits for an approver, reviewed alone.
+    const response = await publish(t.lena.id, "lena-made", 1);
+    expect(response.statusCode, response.body).toBe(202);
+    const held = heldSchema.parse(response.json());
+    expect(await listed(t.lena.id, team)).not.toContain("lena-made");
+    const item = await request(t.admin.id, held.approvalRequestId);
+    expect(item).toMatchObject({ kind: "agent_publish", canDecide: true });
+    expect(item.preview.review).toMatchObject({
+      kind: "agent",
+      name: "lena-made",
+      revision: 1,
+      agent: { workspace: { id: team }, offers: true, instructions: { after: "Help." } }
+    });
+    expect(item.preview.review).not.toHaveProperty("liveRevision");
+    expect(item.preview.review?.agent).not.toHaveProperty("fields");
+    expect(item.preview.review?.agent).not.toHaveProperty("instructions.before");
+
+    const approved = await decide(t.admin.id, held.approvalRequestId);
+    expect(approved.statusCode, approved.body).toBe(200);
+    expect(await live("lena-made")).toMatchObject({ revision: 1 });
+    expect(await listed(t.lena.id, team)).toContain("lena-made");
+    expect(await listed(t.lena.id, other)).not.toContain("lena-made");
+
+    // A second publish without a draft is no first one: there is nothing to publish.
+    expect((await publish(t.lena.id, "lena-made", 1)).statusCode).toBe(412);
+  });
+
+  it("keeps a creator who holds agent.approve offering the agent in the workspace at once", async () => {
+    const { t, team, live, create, listed } = await setup();
+    // The administrator made Kai Spezis and is its member.
+    await create(t.admin.id, "admin-made", team);
+    expect(await live("admin-made")).toMatchObject({ revision: 1 });
+    expect(await listed(t.lena.id, team)).toContain("admin-made");
+  });
+
+  it("files no first version where a draft stands beside it, and none for an instance agent", async () => {
+    const { t, team, create, push, publish } = await setup();
+    await create(t.kai.id, "drafted", team);
+    await push(t.kai.id, "drafted", { instructions: "Draft." });
+    // Revision 1 names the draft here, not the stored version: that is the ordinary publish.
+    const held = await publish(t.kai.id, "drafted", 1);
+    expect(held.statusCode, held.body).toBe(202);
+    await create(t.admin.id, "house-plain");
+    expect((await publish(t.admin.id, "house-plain", 1)).statusCode).toBe(412);
+  });
 });
