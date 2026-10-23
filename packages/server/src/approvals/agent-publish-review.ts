@@ -74,6 +74,11 @@ export function agentPublishSubject(
 export interface AgentPublishChecked {
   revision: number;
   firstVersion: boolean;
+  /**
+   * What a held publish was approved as, kept beside its input: the call the approval resumes
+   * publishes that, or nothing, whatever its guardrails read when it runs.
+   */
+  approvedFirstVersion?: boolean;
 }
 
 /** Why a held publish can no longer be approved, an App's, a Workflow's or an agent's. */

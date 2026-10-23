@@ -153,6 +153,13 @@ export function syncWriteEvents(input: {
   );
 }
 
+/**
+ * The input key a held agent publish keeps whether it publishes the first version, so the
+ * approved call cannot publish a draft numbered like it, nor the first version of a draft
+ * discarded meanwhile.
+ */
+export const AGENT_PUBLISH_HELD_KEY = "agentPublishFirstVersion";
+
 const checkedAgentPublishes = new WeakMap<OperationBeforeEvent, AgentPublishChecked>();
 
 /**
@@ -160,9 +167,14 @@ const checkedAgentPublishes = new WeakMap<OperationBeforeEvent, AgentPublishChec
  * publish makes exactly that live, or nothing.
  */
 export function agentPublishChecked(
-  events: readonly OperationBeforeEvent[] | undefined
+  events: readonly OperationBeforeEvent[] | undefined,
+  input: object
 ): AgentPublishChecked | undefined {
-  return events?.flatMap((event) => checkedAgentPublishes.get(event) ?? []).at(0);
+  const checked = events?.flatMap((event) => checkedAgentPublishes.get(event) ?? []).at(0);
+  const approved: unknown = Reflect.get(input, AGENT_PUBLISH_HELD_KEY);
+  return checked && typeof approved === "boolean"
+    ? { ...checked, approvedFirstVersion: approved }
+    : checked;
 }
 
 /** The publish event of each kind that has one. */
@@ -222,8 +234,12 @@ export async function publishEvents(
         ...(asset.scope.kind === "workspace" ? { workspaceId: asset.scope.workspaceId } : {})
       }
     };
-    checkedAgentPublishes.set(publish, { revision: input.revision, firstVersion });
-    return [write, publish];
+    const held: OperationBeforeEvent = {
+      ...publish,
+      heldInput: () => ({ [AGENT_PUBLISH_HELD_KEY]: firstVersion })
+    };
+    checkedAgentPublishes.set(held, { revision: input.revision, firstVersion });
+    return [write, held];
   }
   const name = PUBLISH_EVENTS[input.kind];
   if (name === undefined) {

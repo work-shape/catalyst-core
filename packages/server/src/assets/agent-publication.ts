@@ -63,7 +63,8 @@ export async function publishAgentDraft(
           agentName: target.name,
           expectedAssetId: target.asset?.id,
           expectedAvailability,
-          availability: reviewed
+          availability: reviewed,
+          keepAwaitingFirstPublish: true
         });
       else if (expectedAvailability !== null)
         throw new AppError(
