@@ -7,6 +7,7 @@ import {
   readConnectionDraft,
   readConnectionProposal
 } from "../../studio/build-area/connection-draft";
+import { connectCardOfRefusal } from "../../studio/build-area/connection-connect-card-model";
 import {
   CONNECTION_OFFER_TOOL_NAME,
   readConnectionOffer
@@ -43,9 +44,10 @@ export function createAssistantMessageGroupBy(): (
   // The card of a save says that a Page is being built, so it stands in the thread while the
   // run goes on and does not fold into the count of tool calls. An open of an asset stands
   // there too: a change of what the conversation is about is always seen. So does a subagent's
-  // card, which is how the person follows and stops it.
+  // card, which is how the person follows and stops it, and the Connect card of a call refused
+  // for a missing sign-in, which is how the person connects.
   return (part, context) =>
-    isPageSaveCall(part) || isStandingOpen(part) || isSubagentCall(part)
+    isPageSaveCall(part) || isStandingOpen(part) || isSubagentCall(part) || isConnectCall(part)
       ? []
       : byType(part, context);
 }
@@ -192,6 +194,7 @@ function staysVisibleAfterRun(
     isStandingOpen(part) ||
     isAppSavedLine(part) ||
     isConnectionDraftCard(part) ||
+    isConnectCall(part) ||
     isSubagentCall(part) ||
     (index > finalTextIndex && isVisibleFinalAssistantPart(part))
   );
@@ -245,6 +248,15 @@ function isConnectionDraftCard(part: {
       (part.toolName === CONNECTION_OFFER_TOOL_NAME &&
         readConnectionOffer(part.result) !== undefined))
   );
+}
+
+/**
+ * A call of a personal Connection refused because the person has not signed in carries the
+ * Connect card in place of its error (CHAT-CONN-2b): it is how the person connects, so it stands
+ * in the thread, during the run and after it.
+ */
+function isConnectCall(part: { type: string; result?: unknown } | undefined): boolean {
+  return part?.type === "tool-call" && connectCardOfRefusal(part.result) !== undefined;
 }
 
 /**
@@ -360,6 +372,7 @@ function isStandaloneToolCall(
     isStandingOpen(part) ||
     isAppSavedLine(part) ||
     isConnectionDraftCard(part) ||
+    isConnectCall(part) ||
     isSubagentCall(part)
   ) {
     return true;

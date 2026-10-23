@@ -7,10 +7,13 @@ import {
   asToolCallId,
   createPlatformId,
   projectAgentRun,
+  createAssistantToolCallsMetadata,
+  createToolResultMetadata,
   type AgentRuntimeEvent,
   type RunObservation
 } from "@work-shape/catalyst-core";
 import { toolResultFromOperationResult } from "@work-shape/catalyst-tool-execution";
+import type { PartState } from "@assistant-ui/react";
 import { createElement } from "react";
 import { describe, expect, it } from "vitest";
 import {
@@ -23,7 +26,12 @@ import {
   type ConnectionDraft,
   type ConnectionSignIn
 } from "@work-shape/catalyst-chat-ui/build-area";
-import { readCompatiblePersistedToolResult } from "./support/chat-ui/chat-assistant";
+import {
+  createAssistantMessageGroupBy,
+  createCompletedAssistantWorkIndices,
+  readCompatiblePersistedToolResult,
+  toUiMessages
+} from "./support/chat-ui/chat-assistant";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 
 // The Connect card in the conversation (CHAT-CONN-2b): its state from the agent's proposal of a
@@ -213,6 +221,67 @@ describe("the Connect card in place of a refused call", () => {
       title: "Gmail",
       personal: true,
       state: expected
+    });
+  });
+
+  it("stands in the thread: it does not fold into the work, during the run or after it", () => {
+    const connect = {
+      connection: { name: "gmail", title: "Gmail" },
+      state: "not_connected" as const
+    };
+    const parts = [
+      { type: "tool-call", toolName: names.toolName, result: { status: "failed" }, isError: true },
+      { type: "tool-call", toolName: names.toolName, result: { status: "failed", connect } },
+      { type: "text", text: "Verbinde Gmail." }
+    ];
+    expect(createCompletedAssistantWorkIndices(parts, 2)).toEqual([0]);
+    const groupBy = createAssistantMessageGroupBy();
+    const call = (result: unknown): PartState => ({
+      type: "tool-call",
+      toolCallId: "call_1",
+      toolName: names.toolName,
+      args: {},
+      argsText: "{}",
+      result,
+      isError: true,
+      status: { type: "complete" }
+    });
+    expect(groupBy(call({ status: "failed", connect }), {})).toEqual([]);
+    expect(groupBy(call({ status: "failed" }), {})).not.toEqual([]);
+  });
+
+  it("reaches the thread as the part's output, which an errored part would drop", () => {
+    const connect = {
+      connection: { name: "gmail", title: "Gmail" },
+      state: "not_connected" as const
+    };
+    const toolCall = { toolCallId: "call_1", toolName: names.toolName, input: {} };
+    const base = { conversationId: "conv_1", clientInstanceId: "client_1", text: "" };
+    const [assistant] = toUiMessages([
+      {
+        ...base,
+        id: "msg_calls",
+        role: "assistant",
+        createdAt: "2026-10-23T10:00:00.000Z",
+        metadata: createAssistantToolCallsMetadata({ runId: "run_1", toolCalls: [toolCall] })
+      },
+      {
+        ...base,
+        id: "msg_result",
+        role: "tool",
+        createdAt: "2026-10-23T10:00:01.000Z",
+        metadata: createToolResultMetadata({
+          runId: "run_1",
+          toolCall,
+          result: { status: "failed", error: { code: "handler_failed", message: "x" }, connect },
+          modelOutput: { text: "x" }
+        })
+      }
+    ]);
+    const part = assistant?.parts.find((entry) => entry.type === "dynamic-tool");
+    expect(part).toMatchObject({
+      state: "output-available",
+      output: { status: "failed", connect }
     });
   });
 

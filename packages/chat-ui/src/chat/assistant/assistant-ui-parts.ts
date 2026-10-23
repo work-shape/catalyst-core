@@ -272,27 +272,25 @@ function toToolCallUiPart(
     toolName: toolCall.toolName,
     toolCallId: toolCall.toolCallId,
     title: toolCall.toolName,
-    state: projectedErrorText ? "output-error" : toAssistantToolState(toolCall.state),
+    state: toAssistantToolState(toolCall.state),
     input: toolCall.input,
     ...(projectedErrorText
       ? {
+          state: "output-error",
           errorText: projectedErrorText,
           ...(toolCall.output !== undefined ? { output: toolCall.output } : {})
         }
-      : toolCall.state === "output_error"
-        ? {
-            errorText: toolCall.errorText ?? "Tool call failed",
-            // A call of a personal Connection the person has not signed in to: its Connect card
-            // reads what to connect from the output.
-            ...(toolCall.connect
-              ? { output: { status: "failed", connect: toolCall.connect } }
-              : toolCall.output !== undefined
-                ? { output: toolCall.output }
-                : {})
-          }
-        : toolCall.state === "output_available"
-          ? { output: toolCall.output }
-          : {})
+      : toolCall.state === "output_error" && toolCall.connect
+        ? connectRefusalPart({ status: "failed", connect: toolCall.connect })
+        : toolCall.state === "output_error"
+          ? {
+              state: "output-error",
+              errorText: toolCall.errorText ?? "Tool call failed",
+              ...(toolCall.output !== undefined ? { output: toolCall.output } : {})
+            }
+          : toolCall.state === "output_available"
+            ? { output: toolCall.output }
+            : {})
   } as UIMessage["parts"][number];
 }
 
@@ -310,6 +308,21 @@ function terminalToolErrorForActiveRun(
     return "Run cancelled";
   }
   return undefined;
+}
+
+/**
+ * A call of a personal Connection refused for a missing sign-in (CHAT-CONN-2b). Its part carries
+ * the refusal as its output: an errored part keeps only the error text, and the Connect card that
+ * stands in place of the error reads what to connect from the output.
+ */
+function connectRefusalPart(output: Record<string, unknown>) {
+  return { state: "output-available", output } as const;
+}
+
+function isConnectRefusalOutput(output: unknown): output is Record<string, unknown> {
+  return (
+    typeof output === "object" && output !== null && "connect" in output && output.connect != null
+  );
 }
 
 function toAssistantToolState(
@@ -351,6 +364,10 @@ export function toUiMessageParts(
       : undefined;
     const projectedErrorText =
       toolResult?.status === "failed" ? toolResult.errorText : workspaceToolError;
+    const connectOutput =
+      toolResult?.status === "failed" && isConnectRefusalOutput(toolResult.output)
+        ? toolResult.output
+        : undefined;
     parts.push({
       type: "dynamic-tool",
       toolName: toolCall.toolName,
@@ -362,14 +379,16 @@ export function toUiMessageParts(
           ? "output-available"
           : "input-available",
       input: toolCall.input,
-      ...(projectedErrorText
-        ? {
-            errorText: projectedErrorText,
-            ...(toolResult?.output !== undefined ? { output: toolResult.output } : {})
-          }
-        : toolResult
-          ? { output: toolResult.output }
-          : {})
+      ...(connectOutput
+        ? connectRefusalPart(connectOutput)
+        : projectedErrorText
+          ? {
+              errorText: projectedErrorText,
+              ...(toolResult?.output !== undefined ? { output: toolResult.output } : {})
+            }
+          : toolResult
+            ? { output: toolResult.output }
+            : {})
     } as UIMessage["parts"][number]);
   }
 
