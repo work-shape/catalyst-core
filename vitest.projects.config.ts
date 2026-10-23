@@ -49,6 +49,7 @@ const isolatedPostgresFiles = new Set([
   "tests/chat-server-agent-runs.test.ts",
   // Earlier files mutate administration defaults used by these pristine-default assertions.
   "tests/module-registry.test.ts",
+  "tests/module-off.test.ts",
   "tests/skill-change-workflow.test.ts",
   // Rootless provider checks require the world's per-test real-timer cleanup.
   "tests/infrastructure.test.ts"

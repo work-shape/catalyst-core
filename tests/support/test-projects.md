@@ -51,6 +51,7 @@ before Postgres reset. Applying it to every shared file would undo unrelated fil
 | `infrastructure.test.ts`         | Rootless fake-clock checks leave timers installed, so Postgres reset waits on a timer that cannot fire.                                                                                                       |
 | `chat-server-agent-runs.test.ts` | With unpaced streaming, the second send is accepted after the first run has already completed, and cancellation still observes the last token in the stream. Keeps real pacing for both unchanged assertions. |
 | `module-registry.test.ts`        | The UTC shared-worker run inherited `assetManagement.enabled: true` instead of the pristine `false`, failing both legacy-switch and config-operation assertions.                                              |
+| `module-off.test.ts`             | The Mac mini shared-worker run inherited `assetManagement.enabled: true` instead of `false` in the module-state listing.                                                                                      |
 | `skill-change-workflow.test.ts`  | The UTC shared-worker run inherited `administration.agentConfiguration.allowSkillEditing: true` instead of `false` in the approver/provenance test.                                                           |
 
 Files calling `openConnectionDraft` also stay isolated: SSR leaves its requested draft in a
