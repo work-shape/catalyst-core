@@ -44,6 +44,7 @@ import { navigation } from "./navigation";
 import { operations } from "./operations";
 import { pages } from "./pages";
 import { personalApiKeys } from "./personal-api-keys";
+import { personalConnections } from "./personal-connections";
 import { publishNarrative } from "./publish-narrative";
 import { rights } from "./rights";
 import { scheduled } from "./scheduled";
@@ -108,6 +109,7 @@ export const translations = combineTranslations(common)
   .and(operations)
   .and(pages)
   .and(personalApiKeys)
+  .and(personalConnections)
   .and(publishNarrative)
   .and(rights)
   .and(scheduled)

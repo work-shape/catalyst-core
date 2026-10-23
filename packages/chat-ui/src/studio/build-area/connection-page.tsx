@@ -40,7 +40,10 @@ import {
   waitsForDiscovery,
   type DiscoveryWait
 } from "./connection-form-model";
-import { authSchemeLabel, connectorTypeLabel } from "./connection-form";
+import { authSchemeLabel, connectorTypeLabel, CredentialModeField } from "./connection-form";
+import { ConnectionPeopleSection, PersonalSignInSection } from "./connection-people";
+import { isPersonalConfig, showsPeople } from "./connection-people-model";
+import { credentialModeOf } from "./connection-form-model";
 import { offerText, type ConnectorTypeOffer } from "./connection-typed-model";
 import { ConnectionOperations, EditableOperations } from "./connection-operations";
 import { PersonContextSection } from "./connection-person-context";
@@ -126,6 +129,9 @@ export function ConnectionPage({
   const personContextHeader = personContextHeaderOf(config);
   // The mappings are admin data: only a reader who may change the Connection reads them.
   const personContext = source.mayTest(asset) ? source.personContext : undefined;
+  // Each person connects their own account: the page's sign-in is the reader's own.
+  const personal = isPersonalConfig(config);
+  const signsIn = textOf(config, "authScheme") === "oauth";
   const sections: {
     id: string;
     label: string;
@@ -191,51 +197,74 @@ export function ConnectionPage({
         </>
       )
     },
-    ...(detail?.oauth
+    ...(detail?.oauth && personal
       ? [
           {
             id: "sign-in",
             label: t("connectionSignIn.sectionTitle"),
-            description: t("connectionSignIn.sectionDescription"),
-            body: (
-              <ConnectionSignInSection
-                asset={asset}
-                detail={detail}
-                source={source}
-                mayWrite={source.mayTest(asset)}
-                {...(editing
-                  ? {
-                      writeOAuth: async (oauth: { clientId?: string; scopes?: string[] }) => {
-                        const outcome = await editing.save(withOAuthSettings(config, oauth));
-                        if (!outcome.ok || outcome.revision === undefined)
-                          throw new Error("The sign-in settings were not saved");
-                        written();
-                        return outcome.revision;
-                      }
-                    }
-                  : {})}
-                onSignedIn={written}
-              />
-            )
-          }
+            description: t("personalConnections.sectionDescription"),
+            body: <PersonalSignInSection name={asset.name} title={title} />
+          },
+          ...(showsPeople(config, source.mayTest(asset))
+            ? [
+                {
+                  id: "people",
+                  label: t("personalConnections.peopleTitle"),
+                  description: t("personalConnections.peopleDescription"),
+                  body: <ConnectionPeopleSection name={asset.name} mayWrite />
+                }
+              ]
+            : [])
         ]
-      : []),
+      : detail?.oauth
+        ? [
+            {
+              id: "sign-in",
+              label: t("connectionSignIn.sectionTitle"),
+              description: t("connectionSignIn.sectionDescription"),
+              body: (
+                <ConnectionSignInSection
+                  asset={asset}
+                  detail={detail}
+                  source={source}
+                  mayWrite={source.mayTest(asset)}
+                  {...(editing
+                    ? {
+                        writeOAuth: async (oauth: { clientId?: string; scopes?: string[] }) => {
+                          const outcome = await editing.save(withOAuthSettings(config, oauth));
+                          if (!outcome.ok || outcome.revision === undefined)
+                            throw new Error("The sign-in settings were not saved");
+                          written();
+                          return outcome.revision;
+                        }
+                      }
+                    : {})}
+                  onSignedIn={written}
+                />
+              )
+            }
+          ]
+        : []),
     {
       id: "settings",
       label: t("connections.settingsTitle"),
       description: t("connections.settingsDescription"),
-      body:
-        editing && formEdits ? (
-          <ConnectionSettingsEditor
-            asset={asset}
-            frame={editing}
-            written={written}
-            view={<ConnectionSettings config={config} offer={offer} withDescription={false} />}
-            {...(detail?.secret.state === "set" ? { keyUsers: detail } : {})}
-          />
-        ) : (
-          <ConnectionSettings config={config} offer={offer} />
-        )
+      body: (
+        <>
+          {signsIn ? <CredentialModeField value={credentialModeOf(config)} /> : null}
+          {editing && formEdits ? (
+            <ConnectionSettingsEditor
+              asset={asset}
+              frame={editing}
+              written={written}
+              view={<ConnectionSettings config={config} offer={offer} withDescription={false} />}
+              {...(detail?.secret.state === "set" ? { keyUsers: detail } : {})}
+            />
+          ) : (
+            <ConnectionSettings config={config} offer={offer} />
+          )}
+        </>
+      )
     },
     ...(personContextHeader && personContext
       ? [

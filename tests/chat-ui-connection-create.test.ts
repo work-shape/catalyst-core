@@ -428,7 +428,8 @@ describe("a REST API that signs in with OAuth (CONN-OAUTH-1)", () => {
     form: { ...emptyConnectionForm("http_api"), url: "https://graph.example.test/v1.0" },
     key: "",
     sendAs: "bearer",
-    auth
+    auth,
+    credentialMode: "shared"
   });
   const render = (locale: "en" | "de", auth: CreateFields["auth"]) =>
     renderToStaticMarkup(

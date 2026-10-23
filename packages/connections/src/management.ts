@@ -144,6 +144,8 @@ export interface ConnectionToolsView {
     /** The system behind the Connection, as it names it for its icon. */
     service?: string;
     connectorType: string;
+    /** Each person uses their own account (`credentialMode: user`). */
+    personal?: true;
     tools: {
       toolName: string;
       operation: string;
@@ -672,6 +674,9 @@ export function createConnectionManagement(
                   title: displayName,
                   ...(service === undefined ? {} : { service }),
                   connectorType,
+                  ...(connection.config.credentialMode === "user"
+                    ? { personal: true as const }
+                    : {}),
                   tools
                 }
               ]
