@@ -42,7 +42,7 @@ import {
   type CreateFieldErrors,
   type CreateFields
 } from "./connection-create-form";
-import { useDraftForNewConnection } from "./connection-draft";
+import { connectionDraftEntry, useDraftForNewConnection } from "./connection-draft";
 import { connectionReadyMessage, type ConnectionReadyOutcome } from "./connection-ready";
 import {
   DISCOVERY_WAIT_MS,
@@ -150,16 +150,26 @@ export function ConnectionCreateFlow({
   const draftedType = drafted?.connection.connectorType;
   const typedDraft =
     draftedType !== undefined && draftedType !== "mcp" && draftedType !== "http_api";
-  const [stage, setStage] = useState<Stage>({ step: drafted && !typedDraft ? "form" : "pick" });
+  const [stage, setStage] = useState<Stage>({
+    step: drafted && !drafted.entry && !typedDraft ? "form" : "pick"
+  });
   // A proposal of a type with a form of its own opens that form once the types are read.
   const typedOpened = useRef(false);
   useEffect(() => {
-    if (!typedDraft || typedOpened.current) return;
+    if (typedOpened.current) return;
+    if (drafted?.entry) {
+      const entry = connectionDraftEntry(drafted, entries);
+      if (!entry) return;
+      typedOpened.current = true;
+      setStage({ step: "entry", entry });
+      return;
+    }
+    if (!typedDraft) return;
     const offer = allOffers.find((entry) => entry.type === draftedType);
     if (offer === undefined) return;
     typedOpened.current = true;
     setStage({ step: "typed", offer });
-  }, [draftedType, allOffers, typedDraft]);
+  }, [draftedType, allOffers, typedDraft, drafted, entries]);
   // The conversation whose agent proposed the Connection hears once that it is connected.
   const told = useRef(false);
   const tellReady = (outcome: ConnectionReadyOutcome, connection = { name, title }) => {

@@ -1,3 +1,19 @@
+import type {
+  CataloguePart,
+  ConnectionCredentialMode,
+  ConnectionProposalState,
+  ConnectionProposalBindingState,
+  ConnectorTokenAuthMethod
+} from "@work-shape/catalyst-core";
+import {
+  CONNECTION_AUTH_CHOICES,
+  CONNECTION_OAUTH_CHOICES,
+  CONNECTION_TOKEN_AUTH_METHODS,
+  connectionConfigToForm,
+  type ConnectionFormState,
+  type ConnectionFormAuthScheme
+} from "./connection-form-model";
+import type { CatalogueEntryOffer } from "./connection-catalogue-model";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { forgetWhenSessionEnds, sessionMark, sessionStillOn } from "../../shared/shell-session";
 import { toolAnswer } from "../../chat/conversation/subject-run";
@@ -15,9 +31,8 @@ import {
 // before the person approves. A draft holds no key: only what is read here reaches the card,
 // the page and the dialog, and no value of a header is among it.
 //
-// The agent's proposal of a new Connection (CHAT-CONN-1) is the same draft with no operation:
-// any Connector type, its id, name and address. It opens the New connection dialog, filled,
-// and the dialog tells the conversation it came from once the Connection is connected.
+// A proposal also carries its auth scheme, OAuth settings, credential mode, optional read
+// declarations or a catalogue entry link, plus the state needed by the Connect card.
 
 /** The platform tool the agent drafts with. */
 export const CONNECTION_DRAFT_TOOL_NAME = "platform.connections.draft_tools";
@@ -30,8 +45,25 @@ const HTTP_API = "http_api";
 
 /** A draft as the card and the approval list read it. */
 export interface ConnectionDraft {
+  /** A catalogue proposal opens Dienste at this part. */
+  entry?: { id: string; part: CataloguePart };
+  state?: ConnectionProposalState;
+  mayWrite?: boolean;
+  bindingState?: ConnectionProposalBindingState;
+  /** Proposals may carry read declarations too. */
+  proposal?: true;
   /** The Connection the tools are for, and what a new one is filled with. */
   connection: {
+    authScheme?: ConnectionFormAuthScheme;
+    credentialMode?: ConnectionCredentialMode;
+    oauth?: {
+      authorizationUrl?: string;
+      tokenUrl: string;
+      revocationUrl?: string;
+      clientId: string;
+      scopes?: string[];
+      tokenAuthMethod?: ConnectorTokenAuthMethod;
+    };
     /** `http_api` for a draft of tools; any type for a proposal. */
     connectorType: string;
     name: string;
@@ -44,7 +76,7 @@ export interface ConnectionDraft {
     /** The header a proposal sends the key in, by name: the person types the key. */
     keyHeader?: string;
   };
-  /** The drafted operations, as rows of the approval list. None for a proposal. */
+  /** The drafted read operations, as rows of the approval list. */
   operations: ApprovalCandidate[];
   /**
    * The conversation whose agent proposed the Connection, and that agent: once the dialog has
@@ -96,20 +128,68 @@ function namesOf(value: unknown): string[] {
     : [];
 }
 
-/**
- * The new Connection the propose tool answered, as a draft with no operation, or nothing for
- * an answer that is no proposal. Reads the members a proposal has and no other.
- */
+/** Only public OAuth settings from an answer enter the dialog model. */
+function proposalOAuth(value: unknown): ConnectionDraft["connection"]["oauth"] {
+  const oauth = recordOf(value);
+  const tokenUrl = textOf(oauth?.tokenUrl);
+  const clientId = textOf(oauth?.clientId);
+  if (!oauth || tokenUrl === undefined || clientId === undefined) return undefined;
+  const authorizationUrl = textOf(oauth.authorizationUrl);
+  const revocationUrl = textOf(oauth.revocationUrl);
+  const tokenAuthMethod = CONNECTION_TOKEN_AUTH_METHODS.find(
+    (method) => method === oauth.tokenAuthMethod
+  );
+  return {
+    tokenUrl,
+    clientId,
+    ...(authorizationUrl === undefined ? {} : { authorizationUrl }),
+    ...(revocationUrl === undefined ? {} : { revocationUrl }),
+    ...(Array.isArray(oauth.scopes) ? { scopes: namesOf(oauth.scopes) } : {}),
+    ...(tokenAuthMethod === undefined ? {} : { tokenAuthMethod })
+  };
+}
+
+/** The public fields of a proposal, including its card state and optional read declarations. */
 export function readConnectionProposal(result: unknown): ConnectionDraft | undefined {
-  const connection = recordOf(toolAnswer(result)?.connection);
+  const answer = toolAnswer(result);
+  const connection = recordOf(answer?.connection);
   const connectorType = textOf(connection?.connectorType);
   const name = textOf(connection?.name);
   const title = textOf(connection?.title);
   if (connectorType === undefined || name === undefined || title === undefined) return undefined;
   const testPath = textOf(connection?.testPath);
   const keyHeader = textOf(connection?.keyHeader);
+  const authScheme = [...CONNECTION_AUTH_CHOICES, ...CONNECTION_OAUTH_CHOICES].find(
+    (scheme) => scheme === connection?.authScheme
+  );
+  const mode = connection?.credentialMode;
+  const oauth = proposalOAuth(connection?.oauth);
+  const entry = recordOf(answer?.entry);
+  const operations = Array.isArray(answer?.operations)
+    ? answer.operations.flatMap((value) => {
+        const operation = recordOf(value);
+        const name = textOf(operation?.name);
+        return operation && name ? [declaredCandidate(declarationOf(operation), name)] : [];
+      })
+    : [];
   return {
+    ...(entry && typeof entry.id === "string" && (entry.part === "tools" || entry.part === "source")
+      ? { entry: { id: entry.id, part: entry.part } }
+      : {}),
+    ...(answer?.state === "ready" || answer?.state === "needs_setup"
+      ? { state: answer.state }
+      : {}),
+    ...(typeof answer?.mayWrite === "boolean" ? { mayWrite: answer.mayWrite } : {}),
+    ...(answer?.bindingState === "connected" ||
+    answer?.bindingState === "needs_reconnect" ||
+    answer?.bindingState === "not_connected"
+      ? { bindingState: answer.bindingState }
+      : {}),
+    ...(operations.length > 0 ? { proposal: true as const } : {}),
     connection: {
+      ...(authScheme === undefined ? {} : { authScheme }),
+      ...(mode === "user" || mode === "shared" ? { credentialMode: mode } : {}),
+      ...(oauth === undefined ? {} : { oauth }),
       connectorType,
       name,
       title,
@@ -118,13 +198,45 @@ export function readConnectionProposal(result: unknown): ConnectionDraft | undef
       ...(testPath === undefined ? {} : { testPath }),
       ...(keyHeader === undefined ? {} : { keyHeader })
     },
-    operations: []
+    operations
   };
 }
 
-/** A proposal of a new Connection: a draft with no operation of its own. */
+/** A proposal opens a new Connection even when it carries read declarations. */
 export function isConnectionProposal(draft: ConnectionDraft): boolean {
-  return draft.operations.length === 0;
+  return draft.proposal === true || draft.operations.length === 0;
+}
+
+/** Maps only the public fields to the existing dialog model. */
+export function connectionDraftForm(draft: ConnectionDraft): ConnectionFormState {
+  const connection = draft.connection;
+  return connectionConfigToForm({
+    connectorType: connection.connectorType,
+    authScheme: connection.authScheme ?? (connection.keyHeader ? "header" : "none"),
+    settings: {
+      url: connection.baseUrl,
+      baseUrl: connection.baseUrl,
+      headerName: connection.keyHeader,
+      testPath: connection.testPath,
+      headers: Object.fromEntries(connection.headerNames.map((name) => [name, ""])),
+      ...(connection.oauth === undefined ? {} : { oauth: connection.oauth })
+    }
+  });
+}
+
+/** The requested part first, so the existing installer opens there. */
+export function connectionDraftEntry(
+  draft: ConnectionDraft,
+  entries: readonly CatalogueEntryOffer[]
+): CatalogueEntryOffer | undefined {
+  const entry = entries.find((entry) => entry.offered && entry.id === draft.entry?.id);
+  if (!entry || !entry.parts.some((part) => part.part === draft.entry?.part)) return undefined;
+  return {
+    ...entry,
+    parts: [...entry.parts].sort(
+      (a, b) => Number(b.part === draft.entry?.part) - Number(a.part === draft.entry?.part)
+    )
+  };
 }
 
 /** The members of a declared operation a draft carries. Whatever else an answer holds stays out. */
@@ -193,6 +305,13 @@ export async function openConnectionDraft(
   }
 ): Promise<ConnectionDraftOpening> {
   const mark = sessionMark();
+  if (draft.entry) {
+    requested = { draft, place: "new" };
+    changed();
+    host.requestCreateDialog();
+    host.showConnection(undefined);
+    return "opened";
+  }
   let connectorType: string | undefined;
   try {
     connectorType = await host.connectorTypeOf(draft.connection.name);
