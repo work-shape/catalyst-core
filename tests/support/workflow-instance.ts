@@ -6,6 +6,7 @@ import {
   type MailTransport
 } from "@work-shape/catalyst-mail";
 import { StoreBackedAuditRecorder } from "@work-shape/catalyst-core";
+import { infrastructureConfigSchema } from "@work-shape/catalyst-config-schema";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
@@ -365,6 +366,23 @@ export async function workflowFixture(
           ...(options.personalKeys ? { personalApiKeys: { enabled: true } } : {})
         },
         server(stores, config, kinds) {
+          if (options.mail)
+            config.infrastructure = infrastructureConfigSchema.parse({
+              ...config.infrastructure,
+              mail: {
+                provider: "capture",
+                appUrl: "https://catalyst.example.test",
+                sender: {
+                  fromAddress: MAIL_IDENTITY.fromAddress,
+                  fromName: MAIL_IDENTITY.fromName
+                },
+                outbound: {
+                  enabled: true,
+                  recipientDomains: options.mail.recipientDomains,
+                  limits: options.mail.limits
+                }
+              }
+            });
           const server = {
             ...connectionOptions.server?.(stores, config, kinds),
             ...(options.personalKeys ? personalKeyServer(stores) : {}),

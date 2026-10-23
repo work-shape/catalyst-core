@@ -147,6 +147,53 @@ describe("WF-PANEL-1a facts of the Workflow revision read", () => {
     ]);
   });
 
+  it("names the system mail sender and its recipient policy for a Workflow reader", async () => {
+    const t = await ready({ mail: { recipientDomains: ["example.test"] } });
+    await store(
+      t,
+      "workflow",
+      address.name,
+      {
+        name: address.name,
+        manifest: definition([op("send", "mail.send")], ["mail.send"])
+      },
+      true
+    );
+    await t.allow({ kind: "user", id: t.kai.id }, "workflow.read");
+    const asset = await read(t, t.kai.id, "published");
+    const fact = {
+      source: { kind: "mail_sender", title: "Example Catalyst", service: "system-mail" },
+      mailSender: {
+        sender: "system",
+        title: "Example Catalyst",
+        icon: "system-mail",
+        address: "catalyst@mail.example.test",
+        recipientDomains: ["example.test"]
+      },
+      effect: "changing",
+      available: true,
+      inputSchema: { type: "object" },
+      outputSchema: { type: "object" }
+    };
+    expect(asset.stepFacts?.send).toMatchObject(fact);
+    expect(asset.stepFacts?.start?.tools).toMatchObject([{ name: "mail.send", ...fact }]);
+    expect(asset.config).not.toHaveProperty("stepFacts");
+    expect(JSON.stringify(asset.config)).not.toContain("catalyst@mail.example.test");
+    expect(JSON.stringify(asset.stepFacts)).not.toContain("capture");
+  });
+
+  it("keeps the mail source kind when outbound mail is unavailable", async () => {
+    const t = await ready();
+    await store(t, "workflow", address.name, {
+      name: address.name,
+      manifest: definition([op("send", "mail.send")])
+    });
+    expect((await read(t)).stepFacts?.send).toEqual({
+      source: { kind: "mail_sender" },
+      available: false
+    });
+  });
+
   it("names Data Stores, Knowledge Bases and Workflow operations, and marks unknown operations", async () => {
     const t = await ready();
     await store(t, "data_store", "findings", { title: "Findings" });

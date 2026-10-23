@@ -1,5 +1,12 @@
 import type { Asset } from "@work-shape/catalyst-api-contract";
-import { workflowStepsDeep, type ActorAccess, type JsonObject } from "@work-shape/catalyst-core";
+import {
+  MAIL_SEND_OPERATION,
+  MAIL_SENDER_SYSTEM,
+  MAIL_SENDER_SYSTEM_ICON,
+  workflowStepsDeep,
+  type ActorAccess,
+  type JsonObject
+} from "@work-shape/catalyst-core";
 import { z } from "zod";
 import { jsonSchemaOf } from "../platform/platform-callable-operations";
 import { workflowFacts } from "../publish-narrative/narrative-facts";
@@ -22,12 +29,31 @@ export async function workflowStepFacts(
   const manifest = manifestSchema.safeParse(config).data?.manifest;
   if (!declared || !manifest) return {};
   const sourceOf = sourceReader(options, access);
+  const mail = options.config.infrastructure.mail;
+  const mailSender = mail?.outbound.enabled
+    ? {
+        sender: MAIL_SENDER_SYSTEM,
+        title: mail.sender.fromName ?? options.config.clientInstance.displayName,
+        icon: MAIL_SENDER_SYSTEM_ICON,
+        address: mail.sender.fromAddress,
+        recipientDomains: mail.outbound.recipientDomains
+      }
+    : undefined;
   const operations = new Map<string, Promise<OperationFact>>();
   function operationFact(name: string): Promise<OperationFact> {
     let pending = operations.get(name);
     if (!pending) {
       pending = (async (): Promise<OperationFact> => {
-        const resolved = await readOperationSource(sourceOf, name);
+        const resolved =
+          name === MAIL_SEND_OPERATION
+            ? {
+                readable: true,
+                source: {
+                  kind: "mail_sender" as const,
+                  ...(mailSender ? { title: mailSender.title, service: mailSender.icon } : {})
+                }
+              }
+            : await readOperationSource(sourceOf, name);
         if (!resolved.readable) return { name, source: resolved.source };
         const operation = await options.operationCalls?.registry.resolve(name);
         if (!operation) return { name, source: resolved.source, available: false };
@@ -36,6 +62,7 @@ export async function workflowStepFacts(
         return {
           name,
           source: resolved.source,
+          ...(name === MAIL_SEND_OPERATION && mailSender ? { mailSender } : {}),
           available: operation.available ?? true,
           effect: operation.effect,
           title: operationTitle(operation),

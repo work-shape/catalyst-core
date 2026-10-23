@@ -45561,6 +45561,7 @@
                   "data_store",
                   "knowledge_base",
                   "workflow",
+                  "mail_sender",
                   "other"
                 ]
               },
@@ -45573,6 +45574,43 @@
             },
             "required": [
               "kind"
+            ]
+          },
+          "mailSender": {
+            "type": "object",
+            "properties": {
+              "sender": {
+                "type": "string",
+                "minLength": 1
+              },
+              "title": {
+                "type": "string",
+                "minLength": 1
+              },
+              "icon": {
+                "type": "string",
+                "minLength": 1
+              },
+              "address": {
+                "type": "string",
+                "maxLength": 254,
+                "format": "email",
+                "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+              },
+              "recipientDomains": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "maxLength": 254
+                }
+              }
+            },
+            "required": [
+              "sender",
+              "title",
+              "icon",
+              "address",
+              "recipientDomains"
             ]
           },
           "title": {
@@ -45624,6 +45662,7 @@
                         "data_store",
                         "knowledge_base",
                         "workflow",
+                        "mail_sender",
                         "other"
                       ]
                     },
@@ -45636,6 +45675,43 @@
                   },
                   "required": [
                     "kind"
+                  ]
+                },
+                "mailSender": {
+                  "type": "object",
+                  "properties": {
+                    "sender": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "title": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "icon": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "address": {
+                      "type": "string",
+                      "maxLength": 254,
+                      "format": "email",
+                      "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+                    },
+                    "recipientDomains": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "maxLength": 254
+                      }
+                    }
+                  },
+                  "required": [
+                    "sender",
+                    "title",
+                    "icon",
+                    "address",
+                    "recipientDomains"
                   ]
                 },
                 "title": {
