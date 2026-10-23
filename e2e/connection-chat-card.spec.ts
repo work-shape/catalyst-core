@@ -57,7 +57,9 @@ async function startProvider(baseURL: string | undefined): Promise<void> {
     env: {
       ...process.env,
       DEMO_SAMPLE_MCP_KEY: randomBytes(24).toString("base64url"),
-      HOST: "localhost",
+      // The API reaches localhost on its IPv4 address, where a server on "localhost" may not
+      // listen: it binds the first address the name resolves to.
+      HOST: "127.0.0.1",
       PORT: "8787",
       SAMPLE_OAUTH_ISSUER_BASE: OAUTH_BASE,
       SAMPLE_OAUTH_REST_CLIENT_ID: CLIENT_ID,
@@ -156,7 +158,6 @@ async function storeAgent(page: Page, name: string, toolNames: string[]): Promis
         name,
         displayName: `Karten-Probe ${name.slice(-8)}`,
         description: "Liest die Beispielkunden.",
-        modelBindingId: "primary",
         instructions: "Hilf mit den Beispielkunden.",
         toolNames
       }
@@ -172,6 +173,15 @@ async function removeAsset(page: Page, url: string): Promise<void> {
     data: { expectedRevision: await assetRevision(page, url) }
   });
   expect(removed.ok(), `Delete during cleanup: ${removed.status()}`).toBe(true);
+}
+
+async function pickAgent(page: Page, displayName: string): Promise<void> {
+  const chip = page.getByRole("button", { name: /^Agent auswählen: /u }).first();
+  if ((await chip.getAttribute("title")) !== displayName) {
+    await chip.click();
+    await page.getByRole("option", { name: displayName }).click();
+  }
+  await expect(chip).toHaveAttribute("title", displayName);
 }
 
 /** A new conversation with the agent, from its card on the Agents page. */
@@ -271,11 +281,13 @@ test("de: a refused call of a personal Connection shows Connect by itself, and t
     await expect(card).not.toContainText("@");
     await expect(page.locator("[data-connection-draft-open]")).toHaveCount(0);
     await shoot(page, "connect", card);
+    // A reload for the pictures forgets the conversation's agent; the person's word goes to it.
+    if (shotsDir) await pickAgent(page, `Karten-Probe ${agent.slice(-8)}`);
 
     // Connect opens the provider in a window of its own; it signs in and closes.
     const opened = page.waitForEvent("popup");
     await card.locator('[data-connect-card-connect="connect"]').click();
-    await (await opened).waitForEvent("close");
+    await (await opened).waitForEvent("close", { timeout: 30_000 });
     await expect(card).toHaveAttribute("data-connect-card", "connected");
 
     // The person's word is sent as theirs, and the agent's next step reads the customers.

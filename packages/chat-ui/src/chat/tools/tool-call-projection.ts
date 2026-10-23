@@ -4,6 +4,7 @@ import { type ReactNode } from "react";
 import { readToolDisplayPayloadFromToolResult } from "../../shared/domain-ui-widgets";
 import { connectionOperationOfTool } from "../../shared/connection-facts";
 import { useTranslation } from "../../shared/i18n";
+import { connectCardOfRefusal } from "../../studio/build-area/connection-connect-card-model";
 import {
   isFailedWorkspaceExecResult,
   projectWorkspaceToolDisplay,
@@ -40,7 +41,8 @@ export function toolUiState({
   if (status?.type === "running" || status?.type === "requires-action" || result === undefined) {
     return "running";
   }
-  if (isFailedWorkspaceExecResult({ result, toolName })) {
+  // A call refused for a missing sign-in carries its refusal as its output (CHAT-CONN-2b).
+  if (isFailedWorkspaceExecResult({ result, toolName }) || connectCardOfRefusal(result)) {
     return "failed";
   }
   return "completed";
