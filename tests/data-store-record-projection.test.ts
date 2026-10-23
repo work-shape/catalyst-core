@@ -460,23 +460,16 @@ describe("REC-1a records projection through the public operation source", () => 
     ]);
     expect(await w.target`select count(*)::int as n from objekt`).toEqual([{ n: 0 }]);
   });
-  it.each([
-    { kind: "unique", constraint: "unique_address", code: "23505" },
-    { kind: "check", constraint: "bounded_price", code: "23514" },
-    { kind: "not-null", constraint: "NOT NULL (baujahr)", code: "23502" },
-    { kind: "foreign-key", constraint: "known_year", code: "23503" }
-  ])(
-    "names the $kind constraint for load and records in EN/DE, rolls back and keeps values out of errors, logs and Operation Runs",
-    async ({ kind, constraint, code }) => {
-      const marker = "row-value-must-stay-private";
-      let rows: JsonObject[] = [];
-      const w = await world(
-        `constraint-${kind}`,
-        [
-          records(),
-          {
-            path: "migrations/0001_objects.sql",
-            text: `create table years (year integer primary key);
+  it("names all four constraints for load and records in EN/DE, rolls back and keeps values out of errors, logs and Operation Runs", async () => {
+    const marker = "row-value-must-stay-private";
+    let rows: JsonObject[] = [];
+    const w = await world(
+      "constraints",
+      [
+        records(),
+        {
+          path: "migrations/0001_objects.sql",
+          text: `create table years (year integer primary key);
         insert into years values (2000);
         create table objekt (
           objekt_nr integer primary key,
@@ -485,28 +478,40 @@ describe("REC-1a records projection through the public operation source", () => 
           kaufpreis numeric constraint bounded_price check(kaufpreis < 1000),
           wohnflaeche numeric
         );
-        insert into objekt values (7, '${kind === "unique" ? marker : "existing"}', 2000, 1, null);`
-          }
-        ],
-        undefined,
-        {
-          async *read() {
-            yield rows;
-          }
+        insert into objekt values (7, '${marker}', 2000, 1, null);`
         }
-      );
+      ],
+      undefined,
+      {
+        async *read() {
+          yield rows;
+        }
+      }
+    );
+    for (const { kind, constraint, code } of [
+      { kind: "unique", constraint: "unique_address", code: "23505" },
+      { kind: "check", constraint: "bounded_price", code: "23514" },
+      { kind: "not-null", constraint: "NOT NULL (baujahr)", code: "23502" },
+      { kind: "foreign-key", constraint: "known_year", code: "23503" }
+    ]) {
       const before = await w.target`select * from objekt order by objekt_nr`;
       const values: JsonObject = {
-        adresse: marker,
+        adresse: kind === "unique" ? marker : `${marker}-${kind}`,
         ...(kind === "not-null" ? {} : { baujahr: kind === "foreign-key" ? 1999 : 2000 }),
         kaufpreis: kind === "check" ? 123456789 : 100
       };
-      const good = await w.item("ca", "kaufvertrag", {
+      const good = await w.item(`ca${code}`, "kaufvertrag", {
         adresse: "good",
         baujahr: 2000,
         kaufpreis: 100
       });
-      const bad = await w.item("cb", "kaufvertrag", values, "2026-10-18", "/Objekte/1403/file.pdf");
+      const bad = await w.item(
+        `cb${code}`,
+        "kaufvertrag",
+        values,
+        "2026-10-18",
+        "/Objekte/1403/file.pdf"
+      );
       rows = [
         { objekt_nr: 1402, adresse: "good", baujahr: 2000, kaufpreis: 100 },
         { objekt_nr: 1403, baujahr: null, ...values }
@@ -535,9 +540,9 @@ describe("REC-1a records projection through the public operation source", () => 
               origin: {
                 kind: "workflow",
                 workflowRunId: "constraint-run",
-                stepRunId: `${verb}-${locale}`
+                stepRunId: `${kind}-${verb}-${locale}`
               },
-              idempotencyKey: `constraint-${verb}-${locale}`,
+              idempotencyKey: `constraint-${kind}-${verb}-${locale}`,
               correlationId: "constraint-test"
             },
             {
@@ -594,7 +599,7 @@ describe("REC-1a records projection through the public operation source", () => 
         }
       }
     }
-  );
+  });
 
   it("replays a Workflow step without a call key, including its original failures reference", async () => {
     const w = await world("step-replay");

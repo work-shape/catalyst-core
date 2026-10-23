@@ -4,7 +4,7 @@ import { manifest, refusal, useDataStoreWorld } from "./support/data-store-world
 describe("timeouts after an unscoped replacement gets its table lock", () => {
   const { published, call, connect } = useDataStoreWorld("data_store_load_timeouts");
 
-  it.each(["group", "later-chunk row"] as const)("keeps a %s wait as TIMEOUT", async (phase) => {
+  it("keeps a later-chunk row wait as TIMEOUT", async () => {
     const held = { month: "2026-10", id: 2_000, note: "stored" };
     const first = Array.from({ length: 1_100 }, (_, id) => ({
       month: "2026-09",
@@ -37,7 +37,7 @@ describe("timeouts after an unscoped replacement gets its table lock", () => {
         }
       },
       undefined,
-      { load: { rows: 100_000, bytes: 64 * 1024 ** 2, timeoutMs: 2_000 } }
+      { load: { rows: 100_000, bytes: 64 * 1024 ** 2, timeoutMs: 500 } }
     );
     const storedBytes = Buffer.byteLength(JSON.stringify([held]));
     await call(world, "load", {
@@ -47,12 +47,8 @@ describe("timeouts after an unscoped replacement gets its table lock", () => {
     const holder = await connect(world.record.location.database).reserve();
     try {
       await holder`begin`;
-      // Neither holder takes the replacement table lock: the load acquires it first.
-      if (phase === "group") {
-        await holder`select pg_advisory_xact_lock(hashtextextended('month_findings ' || row('2026-09'::text)::text, 0))`;
-      } else {
-        await holder`select * from month_findings where month = '2026-10' for update`;
-      }
+      // The replacement gets its table lock before it reaches this held row.
+      await holder`select * from month_findings where month = '2026-10' for update`;
       expect(
         await refusal(
           call(world, "load", {
@@ -67,7 +63,7 @@ describe("timeouts after an unscoped replacement gets its table lock", () => {
           })
         )
       ).toMatchObject({ code: "TIMEOUT", details: { sqlState: "57014" } });
-      expect(reachedLaterPart).toBe(phase === "later-chunk row");
+      expect(reachedLaterPart).toBe(true);
     } finally {
       await holder`rollback`;
       holder.release();

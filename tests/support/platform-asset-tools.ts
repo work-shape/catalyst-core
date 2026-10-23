@@ -34,7 +34,6 @@ export const WORKFLOW = "month-end";
 const OWNER = "owner";
 export const OTHER = "other";
 export const subject = { kind: WORKFLOW_ASSET_KIND, name: WORKFLOW };
-const address = subject;
 
 const ref = (step: string, path: string) => ({ ref: { step, path } });
 export const trigger = {
@@ -123,6 +122,14 @@ interface AssetToolsFixture {
   call(conversationId: string, tool: string, input?: unknown): Promise<unknown>;
   asset(): Promise<z.infer<typeof assetSchema>>;
   publishedRevisionId(): Promise<string | undefined>;
+  workflow(name: string): Promise<NamedAssetToolsFixture>;
+}
+
+interface NamedAssetToolsFixture extends AssetToolsFixture {
+  subject: typeof subject;
+  WORKFLOW: string;
+  manifest: typeof manifest;
+  configOf: typeof configOf;
 }
 
 /**
@@ -252,16 +259,6 @@ export async function createAssetToolsFixture(
     expect(answered.statusCode, answered.body).toBe(200);
     return answered;
   };
-  // The owner writes the Workflow and publishes it: revision 1 is what runs.
-  const written = await ok(
-    app.call("assets.put", {
-      params: address,
-      payload: { config: configOf(), expectedRevision: null }
-    })
-  );
-  const { revision: published } = assetSchema.parse(written.json());
-  await ok(app.call("assets.publish", { params: address, payload: { revision: published } }));
-
   const converse = async (about: typeof subject | undefined, as?: string) =>
     app.call(
       "conversations.create",
@@ -284,20 +281,47 @@ export async function createAssetToolsFixture(
     const parsed: unknown = JSON.parse(answer ?? "null");
     return parsed;
   };
-  const asset = async () =>
-    assetSchema.parse((await ok(app.call("assets.get", { params: address }))).json());
-  const publishedRevisionId = async () =>
-    (await app.stores.configAssets.getConfigAsset({ clientInstanceId, ...address }))
-      ?.publishedRevisionId;
-  return {
-    app,
-    clientInstanceId,
-    published,
-    ok,
-    converse,
-    say,
-    call,
-    asset,
-    publishedRevisionId
+  // A test can own another Workflow without rebuilding the assembled instance.
+  const workflow = async (name: string): Promise<NamedAssetToolsFixture> => {
+    const address = { kind: WORKFLOW_ASSET_KIND, name };
+    const namedManifest = (steps: unknown[] = []) => ({ ...manifest(steps), id: name });
+    const namedConfig = (steps: unknown[] = []) => ({ name, manifest: namedManifest(steps) });
+    const principals = await app.stores.apiAccess.listServicePrincipals({ clientInstanceId });
+    if (!principals.some((principal) => principal.name === "workflow-runner")) {
+      await app.stores.apiAccess.createServicePrincipal({
+        clientInstanceId,
+        displayLabel: "workflow-runner"
+      });
+    }
+    const written = await ok(
+      app.call("assets.put", {
+        params: address,
+        payload: { config: namedConfig(), expectedRevision: null }
+      })
+    );
+    const { revision: published } = assetSchema.parse(written.json());
+    await ok(app.call("assets.publish", { params: address, payload: { revision: published } }));
+    const asset = async () =>
+      assetSchema.parse((await ok(app.call("assets.get", { params: address }))).json());
+    const publishedRevisionId = async () =>
+      (await app.stores.configAssets.getConfigAsset({ clientInstanceId, ...address }))
+        ?.publishedRevisionId;
+    return {
+      app,
+      clientInstanceId,
+      published,
+      ok,
+      converse,
+      say,
+      call,
+      asset,
+      publishedRevisionId,
+      workflow,
+      subject: address,
+      WORKFLOW: name,
+      manifest: namedManifest,
+      configOf: namedConfig
+    };
   };
+  return workflow(WORKFLOW);
 }

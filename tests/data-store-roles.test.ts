@@ -308,7 +308,7 @@ describe("the roles of a Data Store", () => {
     expect(await sqlState(connect(record.location.database, appRole)`select 1`)).toBe("53300");
   });
 
-  it("opens no more connections to a store than the pool cap of release config, under 50 calls at once", async () => {
+  it("opens no more connections to a store than the pool cap of release config, under 12 calls at once", async () => {
     const most = async (label: string, limits?: { poolMaxConnections: number }) => {
       const world = await setup(label, limits);
       const record = await settle(world, await publish(world, [manifest(), init]), 1);
@@ -323,14 +323,14 @@ describe("the roles of a Data Store", () => {
         }
       })();
       const answers = await Promise.all(
-        Array.from({ length: 50 }, () =>
+        Array.from({ length: 12 }, () =>
           call(world, "query", { sql: "select pg_sleep(0.1)::text as slept" })
         )
       );
       sampling = false;
       await sample;
       // Every call waited for one of the connections and was answered.
-      expect(answers).toHaveLength(50);
+      expect(answers).toHaveLength(12);
       return seen;
     };
 

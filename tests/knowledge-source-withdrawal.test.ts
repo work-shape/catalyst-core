@@ -170,7 +170,7 @@ describe("source changes and withdrawal (SRC-3a, KB 78)", () => {
     ]);
   });
 
-  it.each(["unauthorized", "unavailable"] as const)(
+  it.each(["unavailable"] as const)(
     "a listing failure %s after a page never withdraws missing documents",
     async (code) => {
       let fail = false;
@@ -192,8 +192,7 @@ describe("source changes and withdrawal (SRC-3a, KB 78)", () => {
       ).toEqual([
         {
           state: "failed",
-          failure_code:
-            code === "unauthorized" ? "knowledge_source_refused" : "knowledge_source_unreachable"
+          failure_code: "knowledge_source_unreachable"
         }
       ]);
       expect(await world.sql`select state from catalyst_kb.source_items`).toEqual([

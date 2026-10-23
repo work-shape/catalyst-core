@@ -225,21 +225,7 @@ describe("a deletion against writes at the same moment, and cleanup that cannot 
   it("finishes with execution workspaces off and more than one batch of their rows", async () => {
     const t = await arrangeDeletion(db, "feature_off", { executionWorkspaceCleanup: undefined });
     const leaving = await t.createUser("leaving");
-    for (let index = 0; index <= CLEANUP_BATCH; index += 1) {
-      const conversation = await t.createConversation(leaving, `c${index}`, {
-        withMessage: false
-      });
-      await db.store.executionWorkspaces.ensureExecutionWorkspace({
-        ...t.scope,
-        conversationId: conversation.id,
-        ownerUserId: leaving.id
-      });
-      await db.store.conversations.deleteConversation({
-        ...t.scope,
-        conversationId: conversation.id,
-        deletedAt: new Date().toISOString()
-      });
-    }
+    await t.seedDeletedConversations(leaving, CLEANUP_BATCH + 1);
 
     expect((await t.api.call("me.delete", {}, leaving.id)).statusCode).toBe(200);
     await expect(t.userRow(leaving)).resolves.toEqual([]);
@@ -272,17 +258,7 @@ describe("a deletion against writes at the same moment, and cleanup that cannot 
   it("fails a pass whose cleanups report done and remove nothing", async () => {
     const t = await arrangeDeletion(db, "no_progress");
     const leaving = await t.createUser("leaving");
-    for (let index = 0; index < CLEANUP_BATCH; index += 1) {
-      const conversation = await t.createConversation(leaving, `c${index}`, {
-        withMessage: false
-      });
-      await t.createObjects(conversation);
-      await db.store.conversations.deleteConversation({
-        ...t.scope,
-        conversationId: conversation.id,
-        deletedAt: new Date().toISOString()
-      });
-    }
+    await t.seedDeletedConversations(leaving, CLEANUP_BATCH, true);
     const attachments = t.options.attachments;
     if (!attachments) throw new Error("The fixture has no attachment service");
     const deleteConversationAttachments = attachments.deleteConversationAttachments;

@@ -113,6 +113,7 @@ type InstanceState = Awaited<ReturnType<typeof readInstance>>;
 interface SeededInstance {
   first: SeedReport;
   second: SeedReport;
+  seedAgain: () => Promise<SeedReport>;
   /** The instance after the first run and after the second. */
   before: InstanceState;
   after: InstanceState;
@@ -311,7 +312,16 @@ export function useSeededInstance(input: SeededInstanceInput): () => SeededInsta
     const written = /^CATALYST_API_KEY=(.+)$/mu.exec(await readFile(envFile, "utf8"))?.[1];
     const second = await seed({ CATALYST_API_KEY: written ?? "" });
     const after = await readInstance(input, fetchImpl);
-    seeded = { first, second, before, after, assetsDir, instanceAssetsDir, envFile };
+    seeded = {
+      first,
+      second,
+      before,
+      after,
+      assetsDir,
+      instanceAssetsDir,
+      envFile,
+      seedAgain: () => seed({ CATALYST_API_KEY: written ?? "" })
+    };
   }, 120_000);
 
   afterAll(async () => {

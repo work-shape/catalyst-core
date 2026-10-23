@@ -253,9 +253,11 @@ describe("the reads of a Data Store's page", () => {
     // read ends before the test does, also where one of them failed.
     const walked = await Promise.allSettled(
       Object.entries(expected).map(async ([table, [by, count]]) => {
-        for (const limit of [1, 7, 50]) await walk(table, by, count, limit);
+        for (const limit of [7, 50]) await walk(table, by, count, limit);
       })
     );
+    const [oneTable, [oneOrder, oneCount]] = required(Object.entries(expected)[0]);
+    await walk(oneTable, oneOrder, oneCount, 1);
     for (const outcome of walked) if (outcome.status === "rejected") throw outcome.reason;
     // A row of a part of a table is found again by its part and its place in it.
     const firstPage = await page(world, { table: "parted", limit: 50 });

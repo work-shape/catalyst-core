@@ -11,7 +11,7 @@ import {
   writeSchema
 } from "./support/platform-asset-tools";
 
-it("tests the subject and reads its run and steps through a separate agent-run worker", async () => {
+it("tests its subject and reads, writes and audits its asset through one separate agent-run worker", async () => {
   const t = await createAssetToolsFixture("separate");
   const { id } = z.object({ id: z.string() }).parse((await t.ok(t.converse(subject))).json());
   const started = z
@@ -26,11 +26,7 @@ it("tests the subject and reads its run and steps through a separate agent-run w
   expect(await t.call(id, "workflows.list_step_runs", { runId: started.id })).toMatchObject({
     items: expect.arrayContaining([expect.objectContaining({ stepId: "start" })])
   });
-}, 120_000);
 
-it("reads and writes the conversation's asset as its owner through a separate agent-run worker process", async () => {
-  const t = await createAssetToolsFixture("separate");
-  const { id } = z.object({ id: z.string() }).parse((await t.ok(t.converse(subject))).json());
   const read = readSchema.parse(await t.call(id, "platform.assets.get"));
   expect(read).toMatchObject({
     config: { name: WORKFLOW },

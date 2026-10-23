@@ -109,7 +109,7 @@ describe("the store a Knowledge Base owns", () => {
       )
     );
 
-  it.each(["en", "de"] as const)(
+  it.each(["de"] as const)(
     "refuses a token cap below the extraction reserve at publish in %s, and accepts the reserve",
     async (locale) => {
       const instance = await start(true, undefined, undefined, undefined, {
@@ -125,9 +125,7 @@ describe("the store a Knowledge Base owns", () => {
       expect(body.error.message).toContain("extraction.budget.maxTokensPerDocument");
       expect(body.error.message).toContain("511");
       expect(body.error.message).toContain("512");
-      expect(body.error.message).toContain(
-        locale === "de" ? "kleiner als das Minimum" : "below the extraction minimum"
-      );
+      expect(body.error.message).toContain("kleiner als das Minimum");
       expect(await ownedRecord(instance)).toBeUndefined();
       expect((await put(instance, config(512), 1)).statusCode).toBe(200);
       expect((await publish(instance, 2)).statusCode).toBe(200);

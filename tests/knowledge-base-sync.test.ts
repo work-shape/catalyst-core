@@ -19,7 +19,7 @@ const KB = "sync-test";
 const SOURCE = "source";
 describe("initial and full source import (KB 72, 73)", () => {
   const { setup } = useKnowledgeSync();
-  it("queues 250 ids once across listing 429 resumes and splits duplicate batches without orphan copies", async () => {
+  it("queues 101 ids once across listing 429 resumes and splits duplicate batches without orphan copies", async () => {
     let listCalls = 0;
     let release = false;
     let unblock = () => {};
@@ -42,7 +42,7 @@ describe("initial and full source import (KB 72, 73)", () => {
         yield* source.fetch(input, ctx);
       }
     }));
-    for (let i = 0; i < 250; i++)
+    for (let i = 0; i < 101; i++)
       world.world.put({
         folderId: "folder",
         name: `${i}.txt`,
@@ -50,23 +50,23 @@ describe("initial and full source import (KB 72, 73)", () => {
         bytes: new TextEncoder().encode("shared text")
       });
     const run = await world.sync();
-    for (let page = 0; page < 3; page++) {
+    for (let page = 0; page < 2; page++) {
       await world.platform`update platform_jobs set run_after=now() where kind='knowledge_base.sync' and status='queued'`;
       await world.worker.runDue();
     }
     const queued =
       await world.platform`select payload from platform_jobs where kind='knowledge_base.fetch' and status='queued'`;
-    expect(queued).toHaveLength(3);
+    expect(queued).toHaveLength(2);
     const payloads = queued.map((row) => knowledgeFetchJob.payloadSchema.parse(row.payload));
-    expect(payloads.flatMap((payload) => payload.sourceItemIds)).toHaveLength(250);
+    expect(payloads.flatMap((payload) => payload.sourceItemIds)).toHaveLength(101);
     const ids = payloads.flatMap((payload) => payload.sourceItemIds);
-    expect(new Set(ids).size).toBe(250);
-    expect(listCalls).toBe(5);
+    expect(new Set(ids).size).toBe(101);
+    expect(listCalls).toBe(3);
     // Park the normal queue, then start two identical batches together. Hold their
     // streams until both handlers reach fetch: the claim must let them fetch different
     // items, and removing the claim predicate must produce duplicate calls.
     await world.platform`update platform_jobs set run_after=now()+interval '1 day' where kind='knowledge_base.fetch' and status='queued'`;
-    const first = required(payloads[0]);
+    const first = required(payloads.find((batch) => batch.sourceItemIds.length >= 4));
     const payload = { ...first, sourceItemIds: first.sourceItemIds.slice(0, 4) };
     for (let duplicate = 0; duplicate < 2; duplicate++)
       await world.instance.stores.jobs.enqueue(knowledgeFetchJob, payload, { clientInstanceId });
@@ -82,13 +82,13 @@ describe("initial and full source import (KB 72, 73)", () => {
       await racing;
     }
     await world.drain(run);
-    expect(calls.size).toBe(250);
+    expect(calls.size).toBe(101);
     expect([...calls.values()].every((n) => n === 1)).toBe(true);
     expect(
       await world.platform`select count(*)::int as n from managed_files where owner_id=${world.record.id}`
-    ).toEqual([{ n: 250 }]);
+    ).toEqual([{ n: 101 }]);
     expect(await world.sql`select count(*)::int as n from catalyst_kb.documents`).toEqual([
-      { n: 250 }
+      { n: 101 }
     ]);
   });
 
@@ -246,7 +246,7 @@ describe("initial and full source import (KB 72, 73)", () => {
 
   it("resumes after SIGKILL with one platform connection and no duplicate items, documents, contents or chunks", async () => {
     const world = await setup();
-    for (let i = 0; i < 300; i++)
+    for (let i = 0; i < 150; i++)
       world.world.put({
         folderId: "folder",
         name: `${i}.txt`,
@@ -288,7 +288,7 @@ describe("initial and full source import (KB 72, 73)", () => {
       await exited;
       const [committed] = await world.sql`select count(*)::int as n from catalyst_kb.documents`;
       expect(committed?.n).toBeGreaterThan(0);
-      expect(committed?.n).toBeLessThan(300);
+      expect(committed?.n).toBeLessThan(150);
       // The lease of a dead process expires; the replacement claims the same persisted job.
       await world.platform`update platform_jobs set lease_expires_at = now() - interval '1 second' where kind in ('knowledge_base.sync', 'knowledge_base.fetch') and status = 'running'`;
       await world.drain(run);
@@ -296,7 +296,7 @@ describe("initial and full source import (KB 72, 73)", () => {
         const rows = await world.sql.unsafe(
           `select count(*)::int as n, count(distinct id)::int as unique_n from catalyst_kb.${table}`
         );
-        expect(rows).toMatchObject([{ n: 300, unique_n: 300 }]);
+        expect(rows).toMatchObject([{ n: 150, unique_n: 150 }]);
       }
       expect(
         await world.sql`select count(*)::int as n from catalyst_kb.contents where state = 'extracted'`

@@ -65,6 +65,53 @@ export async function arrangeDeletion(
       known.set(user.id, user);
       return user;
     },
+    /** A cleanup batch, seeded in one statement instead of one store round-trip per row. */
+    async seedDeletedConversations(owner: AuthenticatedUser, count: number, objects = false) {
+      const workspace = await fixture.personalWorkspaceOf(owner);
+      const ids = Array.from({ length: count }, () => createPlatformId<"ConversationId">("conv"));
+      await db.sql`
+        with seeded as (
+          insert into conversations (id, client_instance_id, collaboration_workspace_id,
+            created_by_user_id, created_by_external_user_id, visibility, title, status,
+            created_at, updated_at, retained_until, deleted_at)
+          select id, ${fixture.clientInstanceId}, ${workspace.id}, ${owner.id},
+            ${owner.externalUserId}, 'workspace', id, 'deleted', now(), now(), now(), now()
+          from unnest(${ids}::text[]) as id returning id
+        ), workspaces as (
+          insert into execution_workspaces (id, client_instance_id, conversation_id,
+            owner_user_id, status, created_at, updated_at)
+          select 'ew_' || id, ${fixture.clientInstanceId}, id, ${owner.id}, 'active', now(), now()
+          from seeded where not ${objects}
+        ), files as (
+          insert into managed_files (id, client_instance_id, owner_user_id, filename, mime_type,
+            byte_size, checksum, object_key, status, created_at)
+          select 'file_' || id, ${fixture.clientInstanceId}, ${owner.id}, 'retention.txt',
+            'text/plain', 1, 'sha256:seed', 'files/' || id || '/seed', 'available', now()
+          from seeded where ${objects} returning id
+        ), artifacts as (
+          insert into managed_artifacts (id, client_instance_id, conversation_id, source_file_id,
+            kind, object_key, filename, mime_type, byte_size, checksum, metadata, status, created_at)
+          select 'art_' || seeded.id, ${fixture.clientInstanceId}, seeded.id, files.id,
+            'test.preview', 'artifacts/' || seeded.id || '/seed', 'preview.txt', 'text/plain',
+            1, 'sha256:seed', '{}'::jsonb, 'available', now()
+          from seeded join files on files.id = 'file_' || seeded.id
+          returning id
+        )
+        insert into conversation_attachments (id, client_instance_id, conversation_id, file_id,
+          filename, mime_type, byte_size, checksum, status, format, artifact_refs, warnings,
+          created_at, updated_at)
+        select 'att_' || seeded.id, ${fixture.clientInstanceId}, seeded.id, files.id,
+          'retention.txt', 'text/plain', 1, 'sha256:seed', 'ready', 'txt',
+          jsonb_build_object('preview', artifacts.id), '[]'::jsonb, now(), now()
+        from seeded join files on files.id = 'file_' || seeded.id
+          join artifacts on artifacts.id = 'art_' || seeded.id`;
+      if (objects) {
+        for (const id of ids) {
+          await fixture.byteStore.put(`files/${id}/seed`, new Uint8Array([1]));
+          await fixture.byteStore.put(`artifacts/${id}/seed`, new Uint8Array([1]));
+        }
+      }
+    },
     /** One attempt of every queued deletion job, without waiting for its backoff. */
     async runDeletionJobs() {
       await db.sql`

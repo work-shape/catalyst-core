@@ -70,9 +70,13 @@ function datasetsOfTest() {
 describe("a load into a Data Store", () => {
   const { db, published, call, connect } = useDataStoreWorld("data_store_loads");
 
-  async function store(label: string, files: StoreFile[] = [manifest(), init, keyed]) {
+  async function store(
+    label: string,
+    files: StoreFile[] = [manifest(), init, keyed],
+    limits: Parameters<typeof published>[4] = {}
+  ) {
     const datasets = datasetsOfTest();
-    return { ...(await published(label, files, datasets.reader)), datasets };
+    return { ...(await published(label, files, datasets.reader, undefined, limits)), datasets };
   }
 
   type World = Awaited<ReturnType<typeof store>>;
@@ -712,18 +716,24 @@ describe("a load into a Data Store", () => {
     expect(world.datasets.reads()).toBe(0);
 
     // A dataset that holds more than its reference says is refused where it passes the bound.
-    const rows = Array.from({ length: 101 }, (_, part) => many(1_000, {}, part * 1_000));
-    const understated = { ...world.datasets.put("ds_rows", rows), rowCount: 10, bytes: 10 };
-    expect(await refusal(load(world, understated))).toMatchObject({
+    const bounded = await store("stream-bound", undefined, {
+      load: { rows: 1_002, bytes: 1024 * 1024, timeoutMs: 600_000 }
+    });
+    // Bounds are checked before the 1,000-row flush: both probes reach a successful
+    // statement before failing, so the empty table below proves streamed writes roll back.
+    const rows = [many(1_003)];
+    const understated = { ...bounded.datasets.put("ds_rows", rows), rowCount: 10, bytes: 10 };
+    expect(await refusal(load(bounded, understated))).toMatchObject({
       details: { reason: "load_too_large", cap: "dataStores.load.rows" }
     });
-    const heavy = Array.from({ length: 65 }, (_, index) => [
-      found(index, { note: "n".repeat(1024 ** 2) })
-    ]);
+    expect(await count(bounded)).toBe(0);
+    const heavy = [many(1_001, { note: "" }), [found(1_001, { note: "n".repeat(1024 ** 2 + 1) })]];
     expect(
-      await refusal(load(world, { ...world.datasets.put("ds_bytes", heavy), offset: 0, bytes: 10 }))
+      await refusal(
+        load(bounded, { ...bounded.datasets.put("ds_bytes", heavy), offset: 0, bytes: 10 })
+      )
     ).toMatchObject({ details: { reason: "load_too_large", cap: "dataStores.load.bytes" } });
-    expect(await count(world)).toBe(0);
+    expect(await count(bounded)).toBe(0);
   });
 
   it("refuses an oversized known view before reading, using its own parts rather than its parent's bytes", async () => {
@@ -772,12 +782,14 @@ describe("a load into a Data Store", () => {
   });
 
   it("takes the whole bound in one call", async () => {
-    const world = await store("whole");
-    const rows = Array.from({ length: 100 }, (_, part) => many(1_000, {}, part * 1_000));
+    const world = await store("whole", undefined, {
+      load: { rows: 1_000, bytes: 67_108_864, timeoutMs: 600_000 }
+    });
+    const rows = [many(1_000)];
 
     expect(await load(world, world.datasets.put("ds_whole", rows))).toMatchObject({
-      inserted: 100_000
+      inserted: 1_000
     });
-    expect(await count(world)).toBe(100_000);
+    expect(await count(world)).toBe(1_000);
   });
 });

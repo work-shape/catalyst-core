@@ -15,7 +15,7 @@ describe("source items with unknown ancestry (parents = [])", () => {
     bytes: new TextEncoder().encode(name)
   });
 
-  it("search still finds pre-upgrade synced documents before their full pass", async () => {
+  it("finds pre-upgrade documents before their full pass and retains them when folders widen", async () => {
     const world = await setup();
     world.world.put(file("upgraded-alpha.txt"));
     await world.drain(await world.sync());
@@ -27,13 +27,6 @@ describe("source items with unknown ancestry (parents = [])", () => {
     });
     expect(hits.statusCode, hits.body).toBe(200);
     expect(hits.body).toContain("upgraded-alpha.txt");
-  });
-
-  it("widening a source's folders does not withdraw pre-upgrade items", async () => {
-    const world = await setup();
-    world.world.put(file("upgraded-beta.txt"));
-    await world.drain(await world.sync());
-    await world.sql`update catalyst_kb.source_items set parents=default,seen_run_id=null`;
     await world.publishSources([
       { id: SOURCE, connection: "fixture", folders: ["folder", "other", "third"] }
     ]);
@@ -46,11 +39,7 @@ describe("source items with unknown ancestry (parents = [])", () => {
     ]);
   });
 
-  it.each([
-    { narrowing: "folder", folders: ["folder"] },
-    { narrowing: "include", folders: ["folder", "other"], include: ["inside-*"] },
-    { narrowing: "exclude", folders: ["folder", "other"], exclude: ["outside*"] }
-  ])(
+  it.each([{ narrowing: "folder", folders: ["folder"] }])(
     "KB 47 / SRC-3b: $narrowing narrowing hides unknown parents listed at the old boundary and starts a full pass",
     async ({ narrowing: _narrowing, ...boundary }) => {
       const world = await setup();

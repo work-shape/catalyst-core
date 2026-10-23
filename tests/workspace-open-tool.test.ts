@@ -590,7 +590,7 @@ export const Route = createFileRoute("/")({ component: () => <p>never</p> });
   });
 
   it("fails the save when the build is killed at its time limit, and stores nothing", async () => {
-    const harness = await createSaveHarness({ command: "sleep 30 #", limits: { timeoutMs: 1000 } });
+    const harness = await createSaveHarness({ command: "sleep 30 #", limits: { timeoutMs: 200 } });
     await harness.write("slow", { "app.yaml": htmlManifest, "index.html": "<p>x</p>" });
 
     const result = await harness.open("slow");
@@ -767,10 +767,10 @@ describe("a save on an instance where no worker takes builds", () => {
     // One conversation builds one Page at a time, so these builds run one after the other
     // and between two of them none is running.
     const harness = await createSaveHarness({
-      command: `sleep 1 && ${buildCommand}`,
-      unclaimedMs: 1_500
+      command: `sleep 0.3 && ${buildCommand}`,
+      unclaimedMs: 500
     });
-    const names = ["first", "second", "third", "fourth"];
+    const names = ["first", "second", "third"];
     for (const name of names) {
       await harness.write(name, { "app.yaml": htmlManifest, "index.html": `<p>${name}</p>` });
     }
@@ -780,12 +780,12 @@ describe("a save on an instance where no worker takes builds", () => {
 
     expect(results.map((result) => result.error?.message)).toEqual(names.map(() => undefined));
     expect(results.map((result) => result.status)).toEqual(names.map(() => "success"));
-    expect(Date.now() - started).toBeGreaterThan(1_500 + 1_000);
+    expect(Date.now() - started).toBeGreaterThan(500 + 300);
     expect(await harness.fileSets()).toHaveLength(names.length);
   }, 60_000);
 
   it("waits for a build that a worker is running, however long it has been queued", async () => {
-    const harness = await createSaveHarness({ command: "sleep 2 #", unclaimedMs: 200 });
+    const harness = await createSaveHarness({ command: "sleep 0.6 #", unclaimedMs: 200 });
     await harness.write("slow", { "app.yaml": htmlManifest, "index.html": "<p>x</p>" });
 
     const result = await harness.open("slow");

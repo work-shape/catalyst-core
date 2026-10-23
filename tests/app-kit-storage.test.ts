@@ -58,7 +58,7 @@ describe("shared App Kit storage", () => {
     const parent = await mkdtemp(join(tmpdir(), "app-kit-shared-"));
     try {
       const root = join(parent, "app-kit");
-      await cp(kitRoot, root, { recursive: true });
+      await cp(join(kitRoot, "1.0.0"), join(root, "1.0.0"), { recursive: true });
       await cp(join(vendorRoot, "app-kit-shared"), join(parent, "app-kit-shared"), {
         recursive: true
       });

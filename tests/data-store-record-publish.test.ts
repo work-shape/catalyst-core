@@ -1,5 +1,6 @@
 import postgres from "postgres";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
+import { beforeAllWithPostgres as beforeAll } from "./support/postgres-hooks";
 import { eventually, waitUntil } from "./support/assertions";
 import { fileTestDatabaseUrl } from "./support/test-database";
 import { useDataStoreInstance, type DataStoreInstance } from "./support/data-store-instance";
@@ -19,7 +20,17 @@ const manifest = (withRules: boolean) => ({
 });
 
 describe("records keys across publishes over HTTP", () => {
-  const { start, put, publish, settle, recordOf } = useDataStoreInstance();
+  const { start, put, publish, settle, recordOf } = useDataStoreInstance({ scope: "suite" });
+
+  let instance: DataStoreInstance;
+  let storeNumber = 0;
+  let world: DataStoreInstance;
+  beforeAll(async () => {
+    instance = await start(true);
+  });
+  beforeEach(() => {
+    world = { ...instance, storeName: `records-${++storeNumber}` };
+  });
 
   async function revision(
     world: DataStoreInstance,
@@ -49,12 +60,14 @@ describe("records keys across publishes over HTTP", () => {
         }
       });
     });
-    const state = await world.api.call("data_stores.get", { params: { store: "findings" } });
+    const state = await world.api.call("data_stores.get", {
+      params: { store: world.storeName ?? "findings" }
+    });
     expect(state.statusCode, state.body).toBe(200);
     expect(state.body).toContain("Nothing of it was applied.");
     expect(state.body).toContain("0002_");
     const described = await world.api.call("data_stores.describe", {
-      params: { store: "findings" }
+      params: { store: world.storeName ?? "findings" }
     });
     expect(described.statusCode, described.body).toBe(200);
     expect(described.json()).toMatchObject({
@@ -65,7 +78,6 @@ describe("records keys across publishes over HTTP", () => {
   }
 
   it("refuses an invalid rule without pending DDL with HTTP 422 and keeps the published pointer", async () => {
-    const world = await start(true);
     await revision(world, 1, false);
     await settle(world, 1);
     const invalid = manifest(true);
@@ -85,7 +97,6 @@ describe("records keys across publishes over HTTP", () => {
   });
 
   it("rolls back a migration that drops a published records key, including its other DDL", async () => {
-    const world = await start(true);
     // The schema and rules can be published in one step.
     await revision(world, 1, true);
     expect((await settle(world, 1)).failure).toBeUndefined();
@@ -100,7 +111,6 @@ describe("records keys across publishes over HTTP", () => {
     ["unrelated", "create table should_not_run (id text);"],
     ["failing", "select 1 / 0;"]
   ])("rolls back 0002 dropping an existing unique records key before %s 0003", async (_, sql) => {
-    const world = await start(true);
     const uniqueSchema = {
       ...schema,
       text: "create table findings (objekt_nr text unique);"
@@ -137,7 +147,7 @@ describe("records keys across publishes over HTTP", () => {
       });
     });
     const described = await world.api.call("data_stores.describe", {
-      params: { store: "findings" }
+      params: { store: world.storeName ?? "findings" }
     });
     expect(described.statusCode, described.body).toBe(200);
     expect(described.body).not.toContain("should_roll_back");
@@ -149,7 +159,6 @@ describe("records keys across publishes over HTTP", () => {
   });
 
   it("reports a records key not created yet when the batch fails before its key-adding file", async () => {
-    const world = await start(true);
     await revision(world, 1, true, [
       { ...schema, text: "create table findings (id text);" },
       { path: "migrations/0002_failing.sql", text: "select 1 / 0;" },
@@ -166,14 +175,15 @@ describe("records keys across publishes over HTTP", () => {
         }
       });
     });
-    const state = await world.api.call("data_stores.get", { params: { store: "findings" } });
+    const state = await world.api.call("data_stores.get", {
+      params: { store: world.storeName ?? "findings" }
+    });
     expect(state.statusCode, state.body).toBe(200);
     expect(state.body).toContain("A records key is not there yet:");
     expect(state.body).toContain("records.findings.key.id");
   });
 
   it("refuses a key swap split across 0002 and 0003 but accepts it inside one migration", async () => {
-    const world = await start(true);
     await revision(world, 1, true);
     expect((await settle(world, 1)).failure).toBeUndefined();
     const replacementKey = "alter table findings add constraint findings_id_key unique (id);";
@@ -199,7 +209,7 @@ describe("records keys across publishes over HTTP", () => {
       migrations: [{ number: 1 }, { number: 2 }]
     });
     const described = await world.api.call("data_stores.describe", {
-      params: { store: "findings" }
+      params: { store: world.storeName ?? "findings" }
     });
     expect(described.statusCode, described.body).toBe(200);
     expect(described.json()).toMatchObject({
@@ -217,7 +227,6 @@ describe("records keys across publishes over HTTP", () => {
   });
 
   it("allows a table and its records key to be created in separate migrations of one publish", async () => {
-    const world = await start(true);
     await revision(world, 1, true, [
       { ...schema, text: "create table findings (id text);" },
       { path: "migrations/0002_key.sql", text: "alter table findings add primary key (id);" }
@@ -230,7 +239,7 @@ describe("records keys across publishes over HTTP", () => {
       migrations: [{ number: 1 }, { number: 2 }]
     });
     const described = await world.api.call("data_stores.describe", {
-      params: { store: "findings" }
+      params: { store: world.storeName ?? "findings" }
     });
     expect(described.statusCode, described.body).toBe(200);
     expect(described.json()).toMatchObject({
@@ -239,7 +248,6 @@ describe("records keys across publishes over HTTP", () => {
   });
 
   it("rolls back the final migration when the batch never creates its records key", async () => {
-    const world = await start(true);
     await revision(world, 1, true, [
       { ...schema, text: "create table findings (id text);" },
       { path: "migrations/0002_incomplete.sql", text: "create table should_roll_back (id text);" }
@@ -248,7 +256,6 @@ describe("records keys across publishes over HTTP", () => {
   });
 
   it("protects rules published while an earlier batch is queued before a non-final key drop", async () => {
-    const world = await start(true);
     await revision(world, 1, false);
     await settle(world, 1);
     const migrations = [
@@ -263,14 +270,13 @@ describe("records keys across publishes over HTTP", () => {
     expect(await recordOf(world)).toMatchObject({ targetRevision: 3 });
     await rolledBack(world);
     const described = await world.api.call("data_stores.describe", {
-      params: { store: "findings" }
+      params: { store: world.storeName ?? "findings" }
     });
     expect(described.statusCode, described.body).toBe(200);
     expect(described.body).not.toContain("should_not_run");
   });
 
   it("protects rules published during a running batch before a non-final key drop", async () => {
-    const world = await start(true);
     await revision(world, 1, false);
     const record = await settle(world, 1);
     const platformUrl = await fileTestDatabaseUrl();
@@ -342,7 +348,7 @@ describe("records keys across publishes over HTTP", () => {
         });
       });
       const described = await world.api.call("data_stores.describe", {
-        params: { store: "findings" }
+        params: { store: world.storeName ?? "findings" }
       });
       expect(described.statusCode, described.body).toBe(200);
       expect(described.json()).toMatchObject({

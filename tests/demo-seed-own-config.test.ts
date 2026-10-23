@@ -1,4 +1,6 @@
 import { resolve } from "node:path";
+import postgres from "postgres";
+import { fileTestDatabaseUrl } from "./support/test-database";
 import { describe, expect, it } from "vitest";
 import { listAll } from "@work-shape/catalyst-api-client";
 import { assetKindLabelKey } from "@work-shape/catalyst-chat-ui/access";
@@ -24,6 +26,10 @@ const seeded = useSeededInstance({
   // The config names the secrets. No model is called and the sample server is not running.
   env: demoConfigEnv()
 });
+
+// The recovery test below mails Noah again on the shared instance. Mail capture has no delete,
+// so the once-only test leaves out exactly those mails, whichever of the two runs first.
+const recoveryMailIds = new Set<string>();
 
 describe("the demo seed on the demo's own config", () => {
   it("has a name for every asset kind the instance registers", async () => {
@@ -135,7 +141,9 @@ describe("the demo seed on the demo's own config", () => {
     expect(seeded().first.steps.find((step) => step.name === "people")?.note).toBeUndefined();
     // Read after the second run: it sent no further mail.
     const mails = await listAll((paging) => client.captured_mail.list({ query: paging }));
-    expect(mails.map((mail) => mail.to.email)).toEqual(["noah.fischer@nordlicht-beratung.test"]);
+    expect(
+      mails.filter((mail) => !recoveryMailIds.has(mail.id)).map((mail) => mail.to.email)
+    ).toEqual(["noah.fischer@nordlicht-beratung.test"]);
   });
 
   it("gives sales and tax their rights on the Connection of the release config", async () => {
@@ -210,5 +218,35 @@ describe("the demo seed on the demo's own config", () => {
 
   it("answers the Check tab for the Connection, with using it as an action of its own", async () => {
     await expectCheckAnswers(seeded().before, connectionCheckQuestions);
+  });
+
+  it("mails the invitation an interrupted seed did not send, once", async () => {
+    const { after, seedAgain } = seeded();
+    const noah = after.users.find((user) => user.email === "noah.fischer@nordlicht-beratung.test");
+    expect(noah).toBeDefined();
+    const prior = await listAll((paging) => after.client.captured_mail.list({ query: paging }));
+    const priorIds = new Set(prior.map((mail) => mail.id));
+    const sql = postgres(await fileTestDatabaseUrl(), { max: 1 });
+    try {
+      const removed = await sql`delete from audit_events
+        where type = 'user.invitation_sent' and subject = ${noah?.id ?? ""} returning id`;
+      expect(removed).toHaveLength(1);
+      // Capture mail is in memory and has no delete operation. Reading only mail sent after
+      // this point gives the interrupted run an empty mailbox without a product test seam.
+      const recovered = await seedAgain();
+      expect(createdBy(recovered).people).toBe(0);
+      expect(recovered.steps.find((step) => step.name === "people")?.note).toBe(
+        "Mailed the invitation an earlier run created the person for and did not send."
+      );
+      const mails = await listAll((paging) => after.client.captured_mail.list({ query: paging }));
+      const sent = mails.filter((mail) => !priorIds.has(mail.id));
+      for (const mail of sent) recoveryMailIds.add(mail.id);
+      expect(sent.map((mail) => mail.to.email)).toEqual(["noah.fischer@nordlicht-beratung.test"]);
+      const audited = await sql`select id from audit_events
+        where type = 'user.invitation_sent' and subject = ${noah?.id ?? ""}`;
+      expect(audited).toHaveLength(1);
+    } finally {
+      await sql.end();
+    }
   });
 });

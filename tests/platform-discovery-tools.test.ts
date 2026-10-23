@@ -437,7 +437,7 @@ describe("the tools that find what is on the platform", () => {
       expect(
         read.parse((await owner("platform.context", { person: query })).answer).people
       ).toEqual([]);
-    for (let index = 0; index < 22; index++)
+    for (let index = 0; index < 21; index++)
       await t.app.stores.users.createUser({
         clientInstanceId: t.clientInstanceId,
         displayLabel: `Team ${index}`

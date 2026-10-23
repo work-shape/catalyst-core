@@ -7,11 +7,7 @@ import {
   loadClientInstanceConfigFromFile,
   releaseConnectionConfigSchema
 } from "@work-shape/catalyst-config-schema";
-import {
-  compileJsonSchema,
-  MCP_CALL_TIMEOUT_MS,
-  MCP_RESULT_MAX_BYTES
-} from "@work-shape/catalyst-connections";
+import { compileJsonSchema, MCP_RESULT_MAX_BYTES } from "@work-shape/catalyst-connections";
 import { isJsonObject, unknownToJsonValue } from "@work-shape/catalyst-core";
 import {
   ACCOUNTING_DEFAULT_PAGE_SIZE,
@@ -23,6 +19,7 @@ import {
   SIZE_GROUPS
 } from "@work-shape/catalyst-demo/sample-mcp";
 import { required } from "./support/assertions";
+import { expectLargestLedgerPages, expectLedgerMonthEnds } from "./support/demo-accounting-volume";
 import {
   clientIdsOf,
   everyPosting,
@@ -32,17 +29,13 @@ import {
   MONTHS,
   sample,
   sizeGroupOf,
-  type Account,
-  type Posting
+  type Account
 } from "./support/sample-accounting";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const key = "test-only-sample-mcp-bearer-key-0001";
 const CONNECTION = "sample-accounting";
-/** The share of a Connection's result bound the largest page may fill. */
 const PAGE_BYTES_SHARE = 0.75;
-/** Wide, because one green run proves no timing: the largest page takes well under a second. */
-const PAGE_TIME_BOUND_MS = MCP_CALL_TIMEOUT_MS / 6;
 
 type SampleClient = Awaited<ReturnType<typeof connectSampleMcpClient>>;
 type ToolName = keyof typeof accountingOutputSchemas;
@@ -98,7 +91,7 @@ async function readToEnd<S extends z.ZodType<{ rows: unknown[] }>>(
   }
 }
 
-/** The bytes of a result as a call of an MCP Connection counts them: content and structured content. */
+/** The bytes a Connection counts: content and structured content. */
 function connectionBytes(result: ToolResult): number {
   return Buffer.byteLength(
     JSON.stringify({ content: result.content, structuredContent: result.structuredContent })
@@ -356,39 +349,10 @@ describe("demo sample accounting", () => {
     expect(defaults).toEqual(expected.slice(0, ACCOUNTING_DEFAULT_PAGE_SIZE));
   });
 
-  it("pages the largest client's 100,000 bookings at the maximum page size, each page under the Connection's bound and far inside its time", async () => {
+  it("keeps the largest ledger's first, middle, last and empty pages within byte and time bounds", async () => {
     const { client } = await start();
-    const clientId = required(clientIdsOf("large")[0]);
-    const expected = everyPosting(clientId, MONTH);
-    expect(expected).toHaveLength(100_000);
-    expect(expected.map(({ date }) => date)).toEqual(expected.map(({ date }) => date).sort());
-    const rows: Posting[] = [];
-    let largestBytes = 0;
-    let slowestMs = 0;
-    // 100 full pages and the empty one that ends them.
-    for (let page = 1; page <= 101; page += 1) {
-      const started = performance.now();
-      const result = await client.callTool({
-        name: "list_postings",
-        arguments: {
-          client_id: clientId,
-          month: MONTH,
-          page,
-          page_size: ACCOUNTING_MAXIMUM_PAGE_SIZE
-        }
-      });
-      slowestMs = Math.max(slowestMs, performance.now() - started);
-      expect(result.isError).toBeUndefined();
-      largestBytes = Math.max(largestBytes, connectionBytes(result));
-      const read = accountingOutputSchemas.list_postings.parse(result.structuredContent).rows;
-      expect(read).toHaveLength(page === 101 ? 0 : ACCOUNTING_MAXIMUM_PAGE_SIZE);
-      rows.push(...read);
-    }
-    expect(rows).toEqual(expected);
-    expect(largestBytes).toBeGreaterThan(MCP_RESULT_MAX_BYTES / 2);
-    expect(largestBytes).toBeLessThanOrEqual(PAGE_BYTES_SHARE * MCP_RESULT_MAX_BYTES);
-    expect(slowestMs).toBeLessThan(PAGE_TIME_BOUND_MS);
-  }, 120_000);
+    await expectLargestLedgerPages(client);
+  });
 
   it("gives two servers of one seed the same data and a server of another seed other data", async () => {
     const [first, second, other] = await Promise.all([
@@ -539,14 +503,8 @@ describe("demo sample accounting", () => {
     );
   });
 
-  it("opens every month of every client with the month's exact count", () => {
-    for (const { client_id } of sample.clients) {
-      for (const month of sample.months) {
-        const count = sample.postingCount(client_id, month);
-        // The last booking exists and nothing stands behind it.
-        expect(sample.postings(client_id, month, count - 1, 2)).toHaveLength(1);
-      }
-    }
+  it("opens every month of twenty clients and one month of every client with the exact count", () => {
+    expectLedgerMonthEnds();
   });
 
   it("guards the second address with the same key and logs it under its own path", async () => {

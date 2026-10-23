@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import postgres from "postgres";
-import { afterEach, expect } from "vitest";
+import { afterAll, afterEach, expect } from "vitest";
 import { z } from "zod";
 import { loadSecretKeyring } from "@work-shape/catalyst-connections";
 import {
@@ -101,33 +101,38 @@ export async function refusal(run: Promise<unknown>) {
 }
 
 /**
- * Call it in the `describe` that holds the tests. After each test it closes what the test
- * opened and removes every database and role the test made: they are the cluster's, which
- * other suites share.
+ * Call it in the `describe` that holds the tests. It closes its resources and removes its
+ * databases and roles after each test, or at suite teardown when `scope` is `suite`.
+ * A suite-scoped world is for read-only cases; mutating cases keep their own world.
  */
-export function useDataStoreWorld(prefix: string) {
+export function useDataStoreWorld(prefix: string, options: { scope?: "test" | "suite" } = {}) {
   const db = usePostgresSuite(prefix);
   const jobs = useJobExecutorHarness(db);
   const opened: DataStores[] = [];
+  const clientInstances: string[] = [];
   const connections: postgres.Sql[] = [];
   const platformRoles: string[] = [];
   const platformDatabase = () => new URL(db.databaseUrl).pathname.slice(1);
 
   // Dropping a database forces a checkpoint: the sixteen of a test on a busy machine outlast the
   // default hook timeout.
-  afterEach(async () => {
+  const cleanup = options.scope === "suite" ? afterAll : afterEach;
+  cleanup(async () => {
     await Promise.all(connections.splice(0).map((sql) => sql.end({ timeout: 1 })));
     await Promise.all(opened.splice(0).map((dataStores) => dataStores.close()));
     const records = await db.sql<
       { database_name: string; app_role: string; migration_role: string }[]
-    >`select database_name, app_role, migration_role from data_stores`;
+    >`select database_name, app_role, migration_role from data_stores
+      where client_instance_id = any(${clientInstances})`;
     for (const record of records) {
       await db.sql.unsafe(`drop database if exists "${record.database_name}" with (force)`);
       await db.sql.unsafe(`drop role if exists "${record.app_role}"`);
       await db.sql.unsafe(`drop role if exists "${record.migration_role}"`);
     }
-    await db.sql`delete from data_stores`;
-    await db.sql`delete from config_assets where kind = ${DATA_STORE_ASSET_KIND}`;
+    await db.sql`delete from data_stores where client_instance_id = any(${clientInstances})`;
+    await db.sql`delete from config_assets where kind = ${DATA_STORE_ASSET_KIND}
+      and client_instance_id = any(${clientInstances})`;
+    clientInstances.splice(0);
     for (const role of platformRoles.splice(0)) {
       await db.sql.unsafe(`alter database "${platformDatabase()}" owner to current_user`);
       await db.sql.unsafe(`drop role if exists "${role}"`);
@@ -144,6 +149,7 @@ export function useDataStoreWorld(prefix: string) {
     scopes?: Parameters<typeof createDataStores>[0]["scopes"]
   ) {
     const clientInstanceId = db.clientInstance(label);
+    clientInstances.push(clientInstanceId);
     const logged: unknown[] = [];
     const record: Logger["error"] = (fields, message) => {
       logged.push({ fields, message });

@@ -31,9 +31,9 @@ const alex = { person: "Alex", starts: "2026-11-02", ends: "2026-11-06" };
 const key = { person: alex.person, starts: alex.starts };
 
 /** Registered from data-store-api.test.ts so every row case uses the real assembled API. */
-export function testDataStoreRowWrites(): void {
+export function testDataStoreRowWrites(options: { resetStateOnCleanup?: true } = {}): void {
   describe("Rows from chat: atomic primary-key mutations", () => {
-    const { start, put, publish, settle, person } = useDataStoreInstance();
+    const { start, put, publish, settle, person } = useDataStoreInstance(options);
     async function setup() {
       const instance = await start(true, "allow");
       expect((await put(instance, holidayFiles)).statusCode).toBe(200);

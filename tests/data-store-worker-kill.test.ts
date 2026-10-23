@@ -14,19 +14,9 @@ import { fileTestDatabaseUrl } from "./support/test-database";
 import { stepRunsSchema } from "./support/workflow-instance";
 import { ended, openProbeWorld, waitFor, type ProbeWorld } from "./support/workflow-probe-world";
 
-// The kill probe of a Data Store: the server of an assembled instance runs the step of a
-// Workflow that inserts a thousand rows in a process of its own, and that process is ended
-// with SIGKILL twice. Once while the insert is on its way in the store's database, and once
-// when the store has kept the rows and the Operation Run of the call is not yet complete. The
-// rows of a call and its Operation Run are in two databases and cannot be kept together, so
-// the store records the key of the call with the rows. Each time a new process makes the call
-// again under the same key: the first time the store has nothing of it and takes the rows, the
-// second time it has the record and answers what the first call was answered. Both runs end
-// `done` and the store holds each row once.
-//
-// A killed process keeps its step for the lease of its job and its call for the time its
-// operation gives a call. The test sees that nothing takes the step up and then moves both
-// times in the database, as the kill probe of the engine does.
+// The Data Store's one real kill probe ends the worker after the store committed its rows,
+// before the platform kept the Operation Run's outcome. Recovery must replay the answer under
+// the same key without adding the rows twice. workflow-worker-kill covers an in-flight kill.
 
 const MINUTE_MS = 60_000;
 const ROWS = 1_000;
@@ -165,7 +155,7 @@ describe("a Workflow Run that inserts into a Data Store and whose worker process
 
   /** Ends the wait for what a dead process held: the lease of its job and the time of its call. */
   async function afterTheDeadProcess(t: ProbeWorld, runId: string): Promise<void> {
-    await new Promise((resolve) => setTimeout(resolve, 3_000));
+    await new Promise((resolve) => setTimeout(resolve, 500));
     expect(ended(await t.run(runId)), "the run ended before the lease did").toBe(false);
     await t.sql(async (sql) => {
       await sql`
@@ -196,7 +186,7 @@ describe("a Workflow Run that inserts into a Data Store and whose worker process
   // Fails without the record of the key: the call that was cut off is never made again and
   // the run ends as failed with `operation_interrupted`.
   it(
-    "makes the insert again under its key after each kill, and the store holds each row once",
+    "replays the committed insert under its key after a kill, and holds each row once",
     async () => {
       const { world: t, worker: first } = await openProbeWorld({
         modules: { dataStores: { enabled: true } },
@@ -230,25 +220,7 @@ describe("a Workflow Run that inserts into a Data Store and whose worker process
             where operation = 'data_store.findings.insert' order by created_at`
         );
 
-      // 1. Killed while the insert is on its way in the store's database.
-      await holder`select pg_advisory_lock(${HOLD})`;
-      const one = await t.start(WORKFLOW.id, { rows: findingsOf("run-1") });
-      await waitFor(insertWaits, "the insert of the first run is in flight", MINUTE_MS);
-      await first.kill();
-      await holder`select pg_advisory_unlock(${HOLD})`;
-      // The transaction of the dead process is gone with it: nothing of its rows is kept.
-      await waitFor(async () => !(await insertWaits()), "the cut insert ended", MINUTE_MS);
-      expect(await rowsOf("run-1")).toEqual({ rows: 0, clients: 0 });
-
-      const second = await t.startWorker();
-      await afterTheDeadProcess(t, one.id);
-      expect(await recordOf(t, one.id)).toEqual({
-        run: { status: "done", error: undefined },
-        store: [{ status: "done", attempt: 2 }]
-      });
-      expect(await rowsOf("run-1")).toEqual({ rows: ROWS, clients: ROWS });
-
-      // 2. Killed when the store has kept the rows and the Operation Run is not complete: the
+      // Killed when the store has kept the rows and the Operation Run is not complete: the
       // test holds the row of the run, which the process writes the outcome to.
       await holder`select pg_advisory_lock(${HOLD})`;
       const two = await t.start(WORKFLOW.id, { rows: findingsOf("run-2") });
@@ -268,7 +240,7 @@ describe("a Workflow Run that inserts into a Data Store and whose worker process
       expect(
         (await held`select status from operation_runs where id = ${required(locked[0]).id}`)[0]
       ).toEqual({ status: "running" });
-      await second.kill();
+      await first.kill();
       // The process died before its write of the outcome reached the database. The session it
       // left waits for the test's lock and would still write once the lock is gone, so the
       // test ends that session as the death of its process does where nothing held it.
@@ -298,21 +270,19 @@ describe("a Workflow Run that inserts into a Data Store and whose worker process
       });
       // The second call was answered from the record of the first: each row is there once.
       expect(await rowsOf("run-2")).toEqual({ rows: ROWS, clients: ROWS });
-      expect(await rowsOf("run-1")).toEqual({ rows: ROWS, clients: ROWS });
 
       // One Operation Run per step run, made twice under the key of its step run.
       const runs = await insertRuns();
       expect(runs.map(({ status, attempt }) => ({ status, attempt }))).toEqual([
-        { status: "done", attempt: 2 },
         { status: "done", attempt: 2 }
       ]);
-      expect(new Set(runs.map(({ key }) => key)).size).toBe(2);
+      expect(new Set(runs.map(({ key }) => key)).size).toBe(1);
       // The store recorded each call once, with what it answered.
       expect(
         await store<{ operation: string; outcome: unknown }[]>`
           select operation, outcome from catalyst.calls order by made_at`
       ).toEqual(
-        [1, 2].map(() => ({
+        [1].map(() => ({
           operation: "data_store.findings.insert",
           outcome: { table: "findings", inserted: ROWS, skipped: 0 }
         }))

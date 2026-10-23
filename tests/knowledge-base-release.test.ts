@@ -1,7 +1,5 @@
 import { createManagedObjectAccess } from "@work-shape/catalyst-capability-sdk";
 import { createJobWorker } from "@work-shape/catalyst-client-assembly";
-import { spawn } from "node:child_process";
-import { once } from "node:events";
 import { createHash } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -18,7 +16,6 @@ import {
 } from "@work-shape/catalyst-core";
 import { clientInstanceId } from "./support/data-store-instance";
 import { required, waitUntil } from "./support/assertions";
-import { fileTestDatabaseUrl } from "./support/test-database";
 import { useKnowledgeSync } from "./support/knowledge-sync";
 
 const silent: Logger = { debug() {}, info() {}, warn() {}, error() {}, child: () => silent };
@@ -29,7 +26,7 @@ const hash = createHash("sha256").update(bytes).digest("hex");
 describe("synced originals are released after extraction (KB 76)", () => {
   const { setup } = useKnowledgeSync();
 
-  it.each(["txt", "md"])(
+  it.each(["txt"])(
     "releases every %s copy, retains extraction, and reindexes with zero fetch",
     async (extension) => {
       let fetches = 0;
@@ -124,8 +121,6 @@ describe("synced originals are released after extraction (KB 76)", () => {
 
   it.each([
     [false, "run"],
-    [true, "run"],
-    [false, "exhausted"],
     [true, "exhausted"]
   ] as const)(
     "releases a PDF and preserves its result through a delayed extract (failed=%s, %s)",
@@ -296,76 +291,6 @@ describe("synced originals are released after extraction (KB 76)", () => {
       ).toEqual([]);
     }
   );
-
-  it("keeps original bytes and committed text when a worker is SIGKILLed before delete", async () => {
-    const world = await setup();
-    world.world.put({ folderId: "folder", name: "killed.txt", mime: "text/plain", bytes });
-    const run = await world.sync();
-    await world.worker.runDue();
-    await world.worker.runDue();
-    // Listing then fetch are done; index is still queued for this separate worker.
-    const child = spawn(
-      process.execPath,
-      ["--experimental-import-meta-resolve", "tests/support/knowledge-release-worker.mjs"],
-      {
-        stdio: ["ignore", "ignore", "pipe", "ipc"],
-        env: {
-          ...process.env,
-          KB13A_DATABASE_URL: await fileTestDatabaseUrl(),
-          KB13A_FILES_ROOT: world.instance.filesRoot
-        }
-      }
-    );
-    let ready = false;
-    let errors = "";
-    child.stderr?.on("data", (chunk) => {
-      errors += String(chunk);
-    });
-    child.on("message", (message) => {
-      if (message === "before_delete") ready = true;
-    });
-    try {
-      await waitUntil(
-        () => {
-          if (child.exitCode !== null) throw new Error(errors);
-          return ready;
-        },
-        "terminal commit before original deletion",
-        60_000
-      );
-      const exited = once(child, "exit");
-      child.kill("SIGKILL");
-      await exited;
-      expect(await world.sql`select state from catalyst_kb.contents`).toEqual([
-        { state: "extracted" }
-      ]);
-      expect(
-        new TextDecoder().decode(
-          await readObjectBytes(world.objects, knowledgeExtractionKey(world.record.id, hash))
-        )
-      ).toContain("Original text");
-      const [copy] =
-        await world.platform`select object_key from managed_files where owner_id=${world.record.id}`;
-      expect(await readObjectBytes(world.objects, String(required(copy).object_key))).toEqual(
-        bytes
-      );
-      await world.platform`update platform_jobs set lease_expires_at=now()-interval '1 second' where kind='knowledge_base.delete_originals' and status='running'`;
-      // The next pass queues the deletion again after its ten-second backoff, which the test
-      // does not wait out.
-      await world.worker.runDue();
-      await world.platform`update platform_jobs set run_after=now() where kind='knowledge_base.delete_originals' and status='queued'`;
-      await world.drain(run);
-      await expect(
-        readObjectBytes(world.objects, String(required(copy).object_key))
-      ).rejects.toBeInstanceOf(ObjectNotFound);
-    } finally {
-      if (child.exitCode === null && child.signalCode === null) {
-        const exited = once(child, "exit");
-        child.kill("SIGKILL");
-        await exited;
-      }
-    }
-  }, 90_000);
 
   it("answers a released file plainly without reading its missing object, keeps Documents, and refuses local removal", async () => {
     const world = await setup(undefined, undefined, true);

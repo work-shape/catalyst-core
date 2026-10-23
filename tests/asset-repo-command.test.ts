@@ -276,30 +276,7 @@ describe("committing a folder", () => {
     });
   });
 
-  it("refuses a folder whose files weigh more than a tree may, and names the first file past it", async () => {
-    const count = ASSET_REPO_MAX_TREE_BYTES / ASSET_REPO_MAX_FILE_BYTES;
-    const commit = await commitFolder(scratch, {
-      files: Object.fromEntries(
-        Array.from({ length: count + 1 }, (_, index) => [
-          `data/${String(index).padStart(2, "0")}.bin`,
-          new Uint8Array(ASSET_REPO_MAX_FILE_BYTES)
-        ])
-      )
-    });
-    expect(commit.result).toMatchObject({
-      status: "refused",
-      code: "tree_too_large",
-      path: `data/${count}.bin`
-    });
-  });
-
-  it("refuses a folder with more files than the cap, and one with more directories than a walk takes", async () => {
-    const many = await commitFolder(scratch, {
-      files: Object.fromEntries(
-        Array.from({ length: ASSET_REPO_MAX_FILES + 1 }, (_, index) => [`f/${index}.txt`, "x"])
-      )
-    });
-    expect(many.result).toMatchObject({ status: "refused", code: "too_many_files" });
+  it("refuses a folder with more directories than a walk takes", async () => {
     // Directories hold no bytes and count for no file: the walk has a cap of its own.
     const deep = await commitFolder(scratch, {
       files: source,

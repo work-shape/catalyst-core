@@ -1,6 +1,7 @@
 import { testDataStoreRowWrites } from "./support/data-store-row-cases";
 import postgres from "postgres";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
+import { beforeAllWithPostgres as beforeAll } from "./support/postgres-hooks";
 import { z } from "zod";
 import { apiOperations } from "@work-shape/catalyst-api-contract";
 import { parseClientInstanceConfig } from "@work-shape/catalyst-config-schema";
@@ -49,7 +50,9 @@ interface ErrorBody {
 }
 
 describe("a Data Store on an assembled instance", () => {
-  const { start, close, put, publish, publishStore, recordOf, person } = useDataStoreInstance();
+  const { start, close, put, publish, publishStore, recordOf, person } = useDataStoreInstance({
+    resetStateOnCleanup: true
+  });
 
   function call(
     world: World,
@@ -166,91 +169,6 @@ describe("a Data Store on an assembled instance", () => {
     ).toEqual([]);
   });
 
-  it("brings the kind with the contract's rights, the jobs with their retries and the schedule while the module is on", async () => {
-    const instance = await start(true);
-
-    expect(instance.execution.configAssets.kinds.require(DATA_STORE_ASSET_KIND).actions).toEqual(
-      DATA_STORE_ACTIONS
-    );
-    expect(startedKinds(instance)).toEqual({
-      jobs: Object.values(DATA_STORE_JOB_KINDS),
-      schedules: [DATA_STORE_JOB_KINDS.measureSizeTick, DATA_STORE_JOB_KINDS.upgradeOwnedTick],
-      // A scheduled measurement is not retried by hand: the next tick is its retry.
-      retries: [
-        DATA_STORE_JOB_KINDS.provision,
-        DATA_STORE_JOB_KINDS.migrate,
-        DATA_STORE_JOB_KINDS.drop
-      ]
-    });
-  });
-
-  it("publishes a store from its folder, inserts findings and queries them over HTTP", async () => {
-    const instance = await start(true);
-    const record = await publishStore(instance);
-
-    const inserted = await overHttp(instance, "data_stores.insert", {
-      payload: { table: "findings", rows: [finding] }
-    });
-    const queried = await overHttp(instance, "data_stores.query", {
-      payload: {
-        sql: "select client_id, amount from findings where rule_id = $1",
-        parameters: [{ type: "text", value: "vat-rate" }]
-      }
-    });
-
-    expect(inserted.statusCode).toBe(200);
-    expect(inserted.json()).toEqual({ table: "findings", inserted: 1, skipped: 0 });
-    expect(queried.statusCode).toBe(200);
-    expect(queried.json()).toEqual({
-      columns: [
-        { name: "client_id", type: "text", nativeType: "text" },
-        { name: "amount", type: "number", nativeType: "numeric" }
-      ],
-      rows: [{ client_id: "client-secret-7", amount: "119.50" }],
-      truncated: false
-    });
-    // Publishing made a database of its own, and the platform database reads as current.
-    expect(record.location.database).toMatch(/^catalyst_ds_/u);
-    expect(await instance.stores.readiness?.()).toMatchObject({ status: "ready" });
-  });
-
-  it("describes the tables of a store and previews the rows of one over HTTP", async () => {
-    const instance = await start(true);
-    await publishStore(instance);
-    await overHttp(instance, "data_stores.insert", {
-      payload: { table: "findings", rows: [finding] }
-    });
-
-    const described = await overHttp(instance, "data_stores.describe", {});
-    const previewed = await overHttp(instance, "data_stores.preview_rows", {
-      query: { table: "findings", limit: "5" }
-    });
-
-    expect(described.statusCode).toBe(200);
-    expect(described.json()).toMatchObject({
-      schemaLevel: 1,
-      tables: [
-        {
-          name: "findings",
-          columns: expect.arrayContaining([
-            {
-              name: "amount",
-              type: "number",
-              nativeType: "numeric(14,2)",
-              nullable: true,
-              primaryKey: false
-            }
-          ])
-        }
-      ]
-    });
-    expect(previewed.statusCode).toBe(200);
-    expect(previewed.json()).toMatchObject({
-      rows: [{ client_id: "client-secret-7", revision: 3 }],
-      truncated: false
-    });
-  });
-
   it("records one run per call and audit rows that hold names and counts, never a value", async () => {
     const instance = await start(true);
     const admin = await person(instance, "user-1", ["user", "admin", "superadmin"]);
@@ -292,190 +210,6 @@ describe("a Data Store on an assembled instance", () => {
     const kept = JSON.stringify({ runs, audit, record });
     expect(kept).not.toContain("client-secret-7");
     expect(kept).not.toContain("select client_id");
-  });
-
-  it("answers a repeated insert of one key with the first answer and adds nothing twice", async () => {
-    const instance = await start(true);
-    await publishStore(instance);
-    const insert = () =>
-      overHttp(instance, "data_stores.insert", {
-        payload: { table: "findings", rows: [finding] },
-        headers: { "idempotency-key": "month-2026-09" }
-      });
-
-    const first = await insert();
-    const second = await insert();
-
-    expect(first.statusCode).toBe(200);
-    expect(second.json()).toEqual(first.json());
-    const counted = await overHttp(instance, "data_stores.query", {
-      payload: { sql: "select count(*)::integer as count from findings" }
-    });
-    expect(counted.json()).toMatchObject({ rows: [{ count: 1 }] });
-  });
-
-  it("asks data_store.read to query, describe and preview and data_store.insert to insert, which data_store.write does not give", async () => {
-    const instance = await start(true);
-    const admin = await person(instance, "user-1", ["user", "admin", "superadmin"]);
-    const principal = await person(instance, "workflow-principal", ["user"]);
-    const record = await publishStore(instance);
-    const grant = (action: string) =>
-      instance.stores.access.createGrant({
-        clientInstanceId,
-        holderKind: "user",
-        holderId: principal.id,
-        action,
-        effect: "allow",
-        scopeKind: "asset",
-        scopeId: record.id,
-        grantedBy: asUserId(admin.id)
-      });
-    const outcome = async (verb: DataStoreOperationVerb, input: unknown) => {
-      const { result } = await call(instance, principal, verb, input);
-      return result.status === "denied" ? result.reason : result.status;
-    };
-    const denied = (action: string) => ({ kind: "forbidden", action, reason: "no_grant" });
-    const insert = { table: "findings", rows: [finding] };
-    const reads = [
-      ["query", { sql: "select count(*)::integer as count from findings" }],
-      ["describe", {}],
-      ["preview_rows", { table: "findings" }]
-    ] as const;
-
-    for (const [verb, input] of reads) {
-      expect(await outcome(verb, input), verb).toEqual(denied(DATA_STORE_ACTIONS.read));
-    }
-    await grant(DATA_STORE_ACTIONS.read);
-    for (const [verb, input] of reads) expect(await outcome(verb, input), verb).toBe("done");
-
-    // Who may change the definition may not add rows by that, and the other way round.
-    await grant(DATA_STORE_ACTIONS.write);
-    expect(await outcome("insert", insert)).toEqual(denied(DATA_STORE_ACTIONS.insert));
-    await grant(DATA_STORE_ACTIONS.insert);
-    expect(await outcome("insert", insert)).toBe("done");
-  });
-
-  it("pauses an agent insert for confirmation under the ordinary instance defaults", async () => {
-    const instance = await start(true);
-    await publishStore(instance);
-    const definition = required(
-      await instance.execution.operationCalls.registry.resolve("data_store.findings.insert")
-    );
-    expect(
-      resolvePolicy({
-        definition,
-        origin: {
-          kind: "agent",
-          agentRunId: asAgentRunId("run_probe"),
-          conversationId: asConversationId("conv_probe"),
-          agentName: "platform",
-          toolCallId: asToolCallId("call_probe"),
-          toolName: definition.name
-        },
-        instanceDefaults: instance.execution.operationCalls.deps.policy.instanceDefaults,
-        centralSettings: [],
-        callerCanConfirm: false,
-        canPause: true
-      })
-    ).toMatchObject({ value: "confirm", next: "await_confirmation", deliver: "conversation" });
-  });
-
-  it("declares for each verb the scope, the caller, the effect and the right the contract names, and no policy of its own", async () => {
-    const instance = await start(true);
-    await publishStore(instance);
-
-    const declared = await Promise.all(
-      DATA_STORE_OPERATION_VERBS.map(async (verb) => {
-        const operation = required(
-          await instance.execution.operationCalls.registry.resolve(
-            dataStoreOperationName("findings", verb)
-          )
-        );
-        return [
-          verb,
-          operation.scope,
-          operation.auth,
-          operation.effect,
-          // `load` asks its rights itself: which ones depends on what the call does.
-          operation.action,
-          operation.recordsEveryCall ?? false,
-          operation.defaultPolicy
-        ];
-      })
-    );
-
-    // The routes ask the same scopes of a key as the operations they run.
-    expect(
-      (["query", "insert", "describe", "preview_rows"] as const).map(
-        (verb) => apiOperations[`data_stores.${verb}`].scope
-      )
-    ).toEqual([
-      DATA_STORE_OPERATION_SCOPES.query,
-      DATA_STORE_OPERATION_SCOPES.insert,
-      DATA_STORE_OPERATION_SCOPES.describe,
-      DATA_STORE_OPERATION_SCOPES.preview_rows
-    ]);
-    const { read, insert, execute } = DATA_STORE_ACTIONS;
-    // A read is recorded every time. No verb names a policy of its own: what a changing call
-    // waits for is the instance's to say, for every caller.
-    expect(declared).toEqual([
-      ["query", DATA_STORE_OPERATION_SCOPES.query, "principal", "reading", read, true, undefined],
-      [
-        "insert",
-        DATA_STORE_OPERATION_SCOPES.insert,
-        "principal",
-        "changing",
-        insert,
-        false,
-        undefined
-      ],
-      [
-        "update",
-        DATA_STORE_OPERATION_SCOPES.update,
-        "principal",
-        "changing",
-        execute,
-        false,
-        undefined
-      ],
-      [
-        "delete_rows",
-        DATA_STORE_OPERATION_SCOPES.delete_rows,
-        "principal",
-        "changing",
-        execute,
-        false,
-        undefined
-      ],
-      ["load", DATA_STORE_OPERATION_SCOPES.load, "principal", "changing", null, false, undefined],
-      [
-        "records.propose",
-        DATA_STORE_OPERATION_SCOPES["records.propose"],
-        "principal",
-        "changing",
-        DATA_STORE_ACTIONS.records,
-        false,
-        undefined
-      ],
-      [
-        "describe",
-        DATA_STORE_OPERATION_SCOPES.describe,
-        "principal",
-        "reading",
-        read,
-        true,
-        undefined
-      ],
-      [
-        "preview_rows",
-        DATA_STORE_OPERATION_SCOPES.preview_rows,
-        "principal",
-        "reading",
-        read,
-        true,
-        undefined
-      ]
-    ]);
   });
 
   it("refuses a person without a right on the store its rows over HTTP with the right named, whatever the request says of where it comes from", async () => {
@@ -547,165 +281,6 @@ describe("a Data Store on an assembled instance", () => {
     expect(counted.json()).toMatchObject({ rows: [{ count: 1 }] });
   });
 
-  it("never runs a changing operation through a reading route", async () => {
-    const instance = await start(true);
-    await publishStore(instance);
-    const count = async () =>
-      (
-        await overHttp(instance, "data_stores.query", {
-          payload: { sql: "select count(*)::integer as count from findings" }
-        })
-      ).json();
-    const viaReadingRoute = (store: string, payload: JsonObject) =>
-      instance.api.call("data_stores.query", { params: { store }, payload });
-    const insert = { table: "findings", rows: [finding] };
-
-    // The route names its verb itself: an id that carries another verb is no store.
-    const smuggled = await viaReadingRoute("findings.insert", { sql: "select 1" });
-    expect(smuggled.statusCode).toBe(404);
-    expect(smuggled.json<ErrorBody>().error.message).toBe("Data Store is not available");
-    // And the body of an insert is no query: it is refused before anything runs.
-    const asQuery = await viaReadingRoute("findings", insert);
-    expect(asQuery.statusCode).toBeGreaterThanOrEqual(400);
-    expect(asQuery.statusCode).toBeLessThan(500);
-    expect(await count()).toMatchObject({ rows: [{ count: 0 }] });
-
-    const runs = await instance.stores.operationRuns.list({ clientInstanceId });
-    expect(
-      runs.filter((run) => run.effect === "changing" && run.operation.startsWith("data_store"))
-    ).toEqual([]);
-  });
-
-  it("answers an id no store has as not available, to a caller who holds the right", async () => {
-    const instance = await start(true);
-
-    const response = await instance.api.call("data_stores.describe", {
-      params: { store: "nowhere" }
-    });
-
-    expect(response.statusCode).toBe(404);
-    expect(response.json<ErrorBody>().error.message).toBe("Data Store is not available");
-  });
-
-  it("offers the operations of a store to an agent as tools, each with a description of its use", async () => {
-    const instance = await start(true);
-    await publishStore(instance);
-    const [source] = instance.execution.modulesStarted.dataToolSources;
-    const names = DATA_STORE_OPERATION_VERBS.map((verb) =>
-      dataStoreOperationName("findings", verb)
-    );
-
-    const tools = await required(source).describe([...names, "data_store.unknown.query"], {});
-
-    // Workflow-only verbs are resolved for steps, but never offered as agent tools.
-    expect(tools.map((tool) => [tool.name, tool.effect])).toEqual([
-      ["data_store.findings.query", "reading"],
-      ["data_store.findings.insert", "changing"],
-      ["data_store.findings.update", "changing"],
-      ["data_store.findings.delete_rows", "changing"],
-      ["data_store.findings.describe", "reading"],
-      ["data_store.findings.preview_rows", "reading"]
-    ]);
-    for (const tool of tools) {
-      expect(tool.description).toContain("the Data Store 'Findings'");
-      expect(tool.inputJsonSchema).toMatchObject({ type: "object" });
-    }
-  });
-
-  it("answers the state of a store over HTTP to a caller who may read it", async () => {
-    const instance = await start(true);
-    const record = await publishStore(instance);
-    const principal = await person(instance, "reader", ["user"]);
-    const state = () => instance.api.call("data_stores.get", { params: { store: "findings" } });
-
-    const answered = await state();
-    expect(answered.statusCode).toBe(200);
-    expect(answered.json()).toMatchObject({
-      id: record.id,
-      name: "findings",
-      status: "ready",
-      level: 1,
-      publishedLevel: 1,
-      size: { limitBytes: 5 * 1024 ** 3, nearLimit: false },
-      lastMigration: { outcome: "applied", migration: { number: 1, name: "init" } }
-    });
-    // It is the store's own operation, asked the store's own right.
-    const refused = await runOperation(
-      {
-        operation: "data_store.findings.state",
-        effect: "reading",
-        input: {},
-        actor: principal,
-        origin: { kind: "user" },
-        correlationId: "corr_data_store"
-      },
-      instance.execution.operationCalls.deps
-    );
-    expect(refused.result).toMatchObject({
-      status: "denied",
-      reason: { kind: "forbidden", action: DATA_STORE_ACTIONS.read }
-    });
-    const none = await instance.api.call("data_stores.get", { params: { store: "nowhere" } });
-    expect(none.statusCode).toBe(404);
-  });
-
-  it("serves the reads of a store's page over HTTP: the list, a page of rows, one value and what uses the store", async () => {
-    const instance = await start(true);
-    const record = await publishStore(instance);
-    await overHttp(instance, "data_stores.insert", {
-      payload: { table: "findings", rows: [finding, { ...finding, client_id: "client-8" }] }
-    });
-    const get = (
-      operation: "data_stores.rows" | "data_stores.value" | "data_stores.used_by",
-      query?: Record<string, string>,
-      store = "findings"
-    ) => instance.api.call(operation, { params: { store }, ...(query ? { query } : {}) });
-
-    const listed = await instance.api.call("data_stores.list", {});
-    expect(listed.statusCode).toBe(200);
-    expect(listed.json()).toMatchObject({
-      items: [{ id: record.id, name: "findings", status: "ready", level: 1, tableCount: 1 }],
-      truncated: false
-    });
-
-    // The table has no key: its rows come as they lie, one to a page here.
-    const first = await get("data_stores.rows", { table: "findings", limit: "1" });
-    expect(first.statusCode).toBe(200);
-    const page = rowsPageSchema.parse(first.json());
-    expect(page).toMatchObject({
-      order: { by: "physical" },
-      rows: [{ values: { client_id: "client-secret-7" } }],
-      valueMaxChars: 1_000
-    });
-    const second = await get("data_stores.rows", {
-      table: "findings",
-      limit: "1",
-      after: required(page.next)
-    });
-    expect(rowsPageSchema.parse(second.json()).rows).toMatchObject([
-      { values: { client_id: "client-8" } }
-    ]);
-    const value = await get("data_stores.value", {
-      table: "findings",
-      column: "details",
-      at: required(page.rows[0]).at
-    });
-    expect(value.json()).toEqual({ value: { booking: 7 } });
-
-    const used = await get("data_stores.used_by");
-    expect(used.statusCode).toBe(200);
-    expect(used.json()).toEqual({
-      apps: [],
-      workflows: [],
-      knowledgeBases: [],
-      readers: { holders: [], hiddenHolders: 0 },
-      hidden: { apps: 0, workflows: 0, knowledgeBases: 0, fills: 0, reads: 0 },
-      truncated: false
-    });
-    expect((await get("data_stores.rows", { table: "findings" }, "nowhere")).statusCode).toBe(404);
-    expect((await get("data_stores.used_by", undefined, "nowhere")).statusCode).toBe(404);
-  });
-
   it("gives back its connections to the stores when the process closes", async () => {
     const instance = await start(true);
     const admin = await person(instance, "user-1", ["user", "admin", "superadmin"]);
@@ -764,6 +339,456 @@ describe("a Data Store on an assembled instance", () => {
     expect(again.statusCode).toBe(409);
     expect(again.json<ErrorBody>().error.details).toMatchObject({ reason: "data_store_id_held" });
   });
+  describe("with one assembled instance and store", () => {
+    const { start, publishStore } = useDataStoreInstance({
+      scope: "suite",
+      resetStateOnCleanup: true
+    });
+    let shared: World;
+    let sharedRecord: Awaited<ReturnType<typeof publishStore>>;
+    beforeAll(async () => {
+      shared = await start(true);
+      sharedRecord = await publishStore(shared);
+    });
+    beforeEach(async () => {
+      const url = new URL(await fileTestDatabaseUrl());
+      url.pathname = `/${sharedRecord.location.database}`;
+      const sql = postgres(url.toString(), { max: 1 });
+      const platform = postgres(await fileTestDatabaseUrl(), { max: 1 });
+      try {
+        await sql`truncate findings`;
+        await sql`delete from catalyst.calls`;
+        await platform`delete from permission_grants`;
+        await platform`delete from operation_runs`;
+        await platform`delete from audit_events`;
+      } finally {
+        await Promise.all([sql.end(), platform.end()]);
+      }
+    });
+    it("brings the kind with the contract's rights, the jobs with their retries and the schedule while the module is on", async () => {
+      const instance = shared;
+
+      expect(instance.execution.configAssets.kinds.require(DATA_STORE_ASSET_KIND).actions).toEqual(
+        DATA_STORE_ACTIONS
+      );
+      expect(startedKinds(instance)).toEqual({
+        jobs: Object.values(DATA_STORE_JOB_KINDS),
+        schedules: [DATA_STORE_JOB_KINDS.measureSizeTick, DATA_STORE_JOB_KINDS.upgradeOwnedTick],
+        // A scheduled measurement is not retried by hand: the next tick is its retry.
+        retries: [
+          DATA_STORE_JOB_KINDS.provision,
+          DATA_STORE_JOB_KINDS.migrate,
+          DATA_STORE_JOB_KINDS.drop
+        ]
+      });
+    });
+
+    it("publishes a store from its folder, inserts findings and queries them over HTTP", async () => {
+      const instance = shared;
+      const record = sharedRecord;
+
+      const inserted = await overHttp(instance, "data_stores.insert", {
+        payload: { table: "findings", rows: [finding] }
+      });
+      const queried = await overHttp(instance, "data_stores.query", {
+        payload: {
+          sql: "select client_id, amount from findings where rule_id = $1",
+          parameters: [{ type: "text", value: "vat-rate" }]
+        }
+      });
+
+      expect(inserted.statusCode).toBe(200);
+      expect(inserted.json()).toEqual({ table: "findings", inserted: 1, skipped: 0 });
+      expect(queried.statusCode).toBe(200);
+      expect(queried.json()).toEqual({
+        columns: [
+          { name: "client_id", type: "text", nativeType: "text" },
+          { name: "amount", type: "number", nativeType: "numeric" }
+        ],
+        rows: [{ client_id: "client-secret-7", amount: "119.50" }],
+        truncated: false
+      });
+      // Publishing made a database of its own, and the platform database reads as current.
+      expect(record.location.database).toMatch(/^catalyst_ds_/u);
+      expect(await instance.stores.readiness?.()).toMatchObject({ status: "ready" });
+    });
+
+    it("describes the tables of a store and previews the rows of one over HTTP", async () => {
+      const instance = shared;
+      await overHttp(instance, "data_stores.insert", {
+        payload: { table: "findings", rows: [finding] }
+      });
+
+      const described = await overHttp(instance, "data_stores.describe", {});
+      const previewed = await overHttp(instance, "data_stores.preview_rows", {
+        query: { table: "findings", limit: "5" }
+      });
+
+      expect(described.statusCode).toBe(200);
+      expect(described.json()).toMatchObject({
+        schemaLevel: 1,
+        tables: [
+          {
+            name: "findings",
+            columns: expect.arrayContaining([
+              {
+                name: "amount",
+                type: "number",
+                nativeType: "numeric(14,2)",
+                nullable: true,
+                primaryKey: false
+              }
+            ])
+          }
+        ]
+      });
+      expect(previewed.statusCode).toBe(200);
+      expect(previewed.json()).toMatchObject({
+        rows: [{ client_id: "client-secret-7", revision: 3 }],
+        truncated: false
+      });
+    });
+
+    it("answers a repeated insert of one key with the first answer and adds nothing twice", async () => {
+      const instance = shared;
+      const insert = () =>
+        overHttp(instance, "data_stores.insert", {
+          payload: { table: "findings", rows: [finding] },
+          headers: { "idempotency-key": "month-2026-09" }
+        });
+
+      const first = await insert();
+      const second = await insert();
+
+      expect(first.statusCode).toBe(200);
+      expect(second.json()).toEqual(first.json());
+      const counted = await overHttp(instance, "data_stores.query", {
+        payload: { sql: "select count(*)::integer as count from findings" }
+      });
+      expect(counted.json()).toMatchObject({ rows: [{ count: 1 }] });
+    });
+
+    it("asks data_store.read to query, describe and preview and data_store.insert to insert, which data_store.write does not give", async () => {
+      const instance = shared;
+      const admin = await person(instance, "user-1", ["user", "admin", "superadmin"]);
+      const principal = await person(instance, "workflow-principal", ["user"]);
+      const record = sharedRecord;
+      const grant = (action: string) =>
+        instance.stores.access.createGrant({
+          clientInstanceId,
+          holderKind: "user",
+          holderId: principal.id,
+          action,
+          effect: "allow",
+          scopeKind: "asset",
+          scopeId: record.id,
+          grantedBy: asUserId(admin.id)
+        });
+      const outcome = async (verb: DataStoreOperationVerb, input: unknown) => {
+        const { result } = await call(instance, principal, verb, input);
+        return result.status === "denied" ? result.reason : result.status;
+      };
+      const denied = (action: string) => ({ kind: "forbidden", action, reason: "no_grant" });
+      const insert = { table: "findings", rows: [finding] };
+      const reads = [
+        ["query", { sql: "select count(*)::integer as count from findings" }],
+        ["describe", {}],
+        ["preview_rows", { table: "findings" }]
+      ] as const;
+
+      for (const [verb, input] of reads) {
+        expect(await outcome(verb, input), verb).toEqual(denied(DATA_STORE_ACTIONS.read));
+      }
+      await grant(DATA_STORE_ACTIONS.read);
+      for (const [verb, input] of reads) expect(await outcome(verb, input), verb).toBe("done");
+
+      // Who may change the definition may not add rows by that, and the other way round.
+      await grant(DATA_STORE_ACTIONS.write);
+      expect(await outcome("insert", insert)).toEqual(denied(DATA_STORE_ACTIONS.insert));
+      await grant(DATA_STORE_ACTIONS.insert);
+      expect(await outcome("insert", insert)).toBe("done");
+    });
+
+    it("pauses an agent insert for confirmation under the ordinary instance defaults", async () => {
+      const instance = shared;
+      const definition = required(
+        await instance.execution.operationCalls.registry.resolve("data_store.findings.insert")
+      );
+      expect(
+        resolvePolicy({
+          definition,
+          origin: {
+            kind: "agent",
+            agentRunId: asAgentRunId("run_probe"),
+            conversationId: asConversationId("conv_probe"),
+            agentName: "platform",
+            toolCallId: asToolCallId("call_probe"),
+            toolName: definition.name
+          },
+          instanceDefaults: instance.execution.operationCalls.deps.policy.instanceDefaults,
+          centralSettings: [],
+          callerCanConfirm: false,
+          canPause: true
+        })
+      ).toMatchObject({ value: "confirm", next: "await_confirmation", deliver: "conversation" });
+    });
+
+    it("declares for each verb the scope, the caller, the effect and the right the contract names, and no policy of its own", async () => {
+      const instance = shared;
+
+      const declared = await Promise.all(
+        DATA_STORE_OPERATION_VERBS.map(async (verb) => {
+          const operation = required(
+            await instance.execution.operationCalls.registry.resolve(
+              dataStoreOperationName("findings", verb)
+            )
+          );
+          return [
+            verb,
+            operation.scope,
+            operation.auth,
+            operation.effect,
+            // `load` asks its rights itself: which ones depends on what the call does.
+            operation.action,
+            operation.recordsEveryCall ?? false,
+            operation.defaultPolicy
+          ];
+        })
+      );
+
+      // The routes ask the same scopes of a key as the operations they run.
+      expect(
+        (["query", "insert", "describe", "preview_rows"] as const).map(
+          (verb) => apiOperations[`data_stores.${verb}`].scope
+        )
+      ).toEqual([
+        DATA_STORE_OPERATION_SCOPES.query,
+        DATA_STORE_OPERATION_SCOPES.insert,
+        DATA_STORE_OPERATION_SCOPES.describe,
+        DATA_STORE_OPERATION_SCOPES.preview_rows
+      ]);
+      const { read, insert, execute } = DATA_STORE_ACTIONS;
+      // A read is recorded every time. No verb names a policy of its own: what a changing call
+      // waits for is the instance's to say, for every caller.
+      expect(declared).toEqual([
+        ["query", DATA_STORE_OPERATION_SCOPES.query, "principal", "reading", read, true, undefined],
+        [
+          "insert",
+          DATA_STORE_OPERATION_SCOPES.insert,
+          "principal",
+          "changing",
+          insert,
+          false,
+          undefined
+        ],
+        [
+          "update",
+          DATA_STORE_OPERATION_SCOPES.update,
+          "principal",
+          "changing",
+          execute,
+          false,
+          undefined
+        ],
+        [
+          "delete_rows",
+          DATA_STORE_OPERATION_SCOPES.delete_rows,
+          "principal",
+          "changing",
+          execute,
+          false,
+          undefined
+        ],
+        ["load", DATA_STORE_OPERATION_SCOPES.load, "principal", "changing", null, false, undefined],
+        [
+          "records.propose",
+          DATA_STORE_OPERATION_SCOPES["records.propose"],
+          "principal",
+          "changing",
+          DATA_STORE_ACTIONS.records,
+          false,
+          undefined
+        ],
+        [
+          "describe",
+          DATA_STORE_OPERATION_SCOPES.describe,
+          "principal",
+          "reading",
+          read,
+          true,
+          undefined
+        ],
+        [
+          "preview_rows",
+          DATA_STORE_OPERATION_SCOPES.preview_rows,
+          "principal",
+          "reading",
+          read,
+          true,
+          undefined
+        ]
+      ]);
+    });
+
+    it("never runs a changing operation through a reading route", async () => {
+      const instance = shared;
+      const count = async () =>
+        (
+          await overHttp(instance, "data_stores.query", {
+            payload: { sql: "select count(*)::integer as count from findings" }
+          })
+        ).json();
+      const viaReadingRoute = (store: string, payload: JsonObject) =>
+        instance.api.call("data_stores.query", { params: { store }, payload });
+      const insert = { table: "findings", rows: [finding] };
+
+      // The route names its verb itself: an id that carries another verb is no store.
+      const smuggled = await viaReadingRoute("findings.insert", { sql: "select 1" });
+      expect(smuggled.statusCode).toBe(404);
+      expect(smuggled.json<ErrorBody>().error.message).toBe("Data Store is not available");
+      // And the body of an insert is no query: it is refused before anything runs.
+      const asQuery = await viaReadingRoute("findings", insert);
+      expect(asQuery.statusCode).toBeGreaterThanOrEqual(400);
+      expect(asQuery.statusCode).toBeLessThan(500);
+      expect(await count()).toMatchObject({ rows: [{ count: 0 }] });
+
+      const runs = await instance.stores.operationRuns.list({ clientInstanceId });
+      expect(
+        runs.filter((run) => run.effect === "changing" && run.operation.startsWith("data_store"))
+      ).toEqual([]);
+    });
+
+    it("answers an id no store has as not available, to a caller who holds the right", async () => {
+      const instance = shared;
+
+      const response = await instance.api.call("data_stores.describe", {
+        params: { store: "nowhere" }
+      });
+
+      expect(response.statusCode).toBe(404);
+      expect(response.json<ErrorBody>().error.message).toBe("Data Store is not available");
+    });
+
+    it("offers the operations of a store to an agent as tools, each with a description of its use", async () => {
+      const instance = shared;
+      const [source] = instance.execution.modulesStarted.dataToolSources;
+      const names = DATA_STORE_OPERATION_VERBS.map((verb) =>
+        dataStoreOperationName("findings", verb)
+      );
+
+      const tools = await required(source).describe([...names, "data_store.unknown.query"], {});
+
+      // Workflow-only verbs are resolved for steps, but never offered as agent tools.
+      expect(tools.map((tool) => [tool.name, tool.effect])).toEqual([
+        ["data_store.findings.query", "reading"],
+        ["data_store.findings.insert", "changing"],
+        ["data_store.findings.update", "changing"],
+        ["data_store.findings.delete_rows", "changing"],
+        ["data_store.findings.describe", "reading"],
+        ["data_store.findings.preview_rows", "reading"]
+      ]);
+      for (const tool of tools) {
+        expect(tool.description).toContain("the Data Store 'Findings'");
+        expect(tool.inputJsonSchema).toMatchObject({ type: "object" });
+      }
+    });
+
+    it("answers the state of a store over HTTP to a caller who may read it", async () => {
+      const instance = shared;
+      const record = sharedRecord;
+      const principal = await person(instance, "reader", ["user"]);
+      const state = () => instance.api.call("data_stores.get", { params: { store: "findings" } });
+
+      const answered = await state();
+      expect(answered.statusCode).toBe(200);
+      expect(answered.json()).toMatchObject({
+        id: record.id,
+        name: "findings",
+        status: "ready",
+        level: 1,
+        publishedLevel: 1,
+        size: { limitBytes: 5 * 1024 ** 3, nearLimit: false },
+        lastMigration: { outcome: "applied", migration: { number: 1, name: "init" } }
+      });
+      // It is the store's own operation, asked the store's own right.
+      const refused = await runOperation(
+        {
+          operation: "data_store.findings.state",
+          effect: "reading",
+          input: {},
+          actor: principal,
+          origin: { kind: "user" },
+          correlationId: "corr_data_store"
+        },
+        instance.execution.operationCalls.deps
+      );
+      expect(refused.result).toMatchObject({
+        status: "denied",
+        reason: { kind: "forbidden", action: DATA_STORE_ACTIONS.read }
+      });
+      const none = await instance.api.call("data_stores.get", { params: { store: "nowhere" } });
+      expect(none.statusCode).toBe(404);
+    });
+
+    it("serves the reads of a store's page over HTTP: the list, a page of rows, one value and what uses the store", async () => {
+      const instance = shared;
+      const record = sharedRecord;
+      await overHttp(instance, "data_stores.insert", {
+        payload: { table: "findings", rows: [finding, { ...finding, client_id: "client-8" }] }
+      });
+      const get = (
+        operation: "data_stores.rows" | "data_stores.value" | "data_stores.used_by",
+        query?: Record<string, string>,
+        store = "findings"
+      ) => instance.api.call(operation, { params: { store }, ...(query ? { query } : {}) });
+
+      const listed = await instance.api.call("data_stores.list", {});
+      expect(listed.statusCode).toBe(200);
+      expect(listed.json()).toMatchObject({
+        items: [{ id: record.id, name: "findings", status: "ready", level: 1, tableCount: 1 }],
+        truncated: false
+      });
+
+      // The table has no key: its rows come as they lie, one to a page here.
+      const first = await get("data_stores.rows", { table: "findings", limit: "1" });
+      expect(first.statusCode).toBe(200);
+      const page = rowsPageSchema.parse(first.json());
+      expect(page).toMatchObject({
+        order: { by: "physical" },
+        rows: [{ values: { client_id: "client-secret-7" } }],
+        valueMaxChars: 1_000
+      });
+      const second = await get("data_stores.rows", {
+        table: "findings",
+        limit: "1",
+        after: required(page.next)
+      });
+      expect(rowsPageSchema.parse(second.json()).rows).toMatchObject([
+        { values: { client_id: "client-8" } }
+      ]);
+      const value = await get("data_stores.value", {
+        table: "findings",
+        column: "details",
+        at: required(page.rows[0]).at
+      });
+      expect(value.json()).toEqual({ value: { booking: 7 } });
+
+      const used = await get("data_stores.used_by");
+      expect(used.statusCode).toBe(200);
+      expect(used.json()).toEqual({
+        apps: [],
+        workflows: [],
+        knowledgeBases: [],
+        readers: { holders: [], hiddenHolders: 0 },
+        hidden: { apps: 0, workflows: 0, knowledgeBases: 0, fills: 0, reads: 0 },
+        truncated: false
+      });
+      expect((await get("data_stores.rows", { table: "findings" }, "nowhere")).statusCode).toBe(
+        404
+      );
+      expect((await get("data_stores.used_by", undefined, "nowhere")).statusCode).toBe(404);
+    });
+  });
 });
 
-testDataStoreRowWrites();
+testDataStoreRowWrites({ resetStateOnCleanup: true });

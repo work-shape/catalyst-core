@@ -42,7 +42,7 @@ const dataStores = createDataStores({
   logger
 });
 const fixture = createFixtureDocumentSource({ secret: "test", pageSize: 100 });
-for (let i = 0; i < 300; i++)
+for (let i = 0; i < 150; i++)
   fixture.world.put({
     folderId: "folder",
     name: `${i}.txt`,

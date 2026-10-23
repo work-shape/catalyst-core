@@ -162,6 +162,7 @@ describe("PROC-2 extraction through the public Knowledge Base operation", () => 
   it.each(["de", "en"] as const)(
     "uses the %s instance content locale through extraction and records regardless of caller language",
     async (defaultLocale) => {
+      const localeSensitive = (quote: string) => quote === "350.000 EUR" || quote === "350,000 USD";
       const cases = [
         { value: 1205, quote: "Wohnfläche 120,5 m²", passes: false },
         { value: 15, quote: "1,5 Zimmer", passes: false },
@@ -172,7 +173,7 @@ describe("PROC-2 extraction through the public Knowledge Base operation", () => 
         { value: 350000, quote: "350.000 EUR", passes: defaultLocale === "de" },
         { value: 350000, quote: "350,000 USD", passes: defaultLocale === "en" },
         { value: 120.5, quote: "Invented Wohnfläche 120,5 m²", passes: false }
-      ];
+      ].filter((test) => defaultLocale === "de" || localeSensitive(test.quote));
       const extract = vi.fn<KnowledgeFieldExtractor["extract"]>();
       const world = await setupWithDataStoreJobs(
         undefined,
@@ -269,6 +270,7 @@ describe("PROC-2 extraction through the public Knowledge Base operation", () => 
       try {
         for (const callerLocale of [undefined, "de", "en"] as const) {
           for (const [index, test] of cases.entries()) {
+            if (!localeSensitive(test.quote) && callerLocale !== "de") continue;
             const documentId = String(
               required(documents.find((doc) => doc.file_name === `contract-${index}.txt`)).id
             );

@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import postgres from "postgres";
-import { afterEach, expect } from "vitest";
+import { afterAll, afterEach, expect } from "vitest";
 import {
   PLATFORM_TOOL_NAMES,
   type ClientInstanceCapability
@@ -22,7 +22,7 @@ import {
 } from "@work-shape/catalyst-core";
 import { eventually, required } from "./assertions";
 import { createTestConfig, setTestAgent } from "./fixtures";
-import { fileTestDatabaseUrl } from "./test-database";
+import { fileTestDatabaseUrl, resetFileTestDatabase } from "./test-database";
 import {
   createTestInstance,
   getTestExecution,
@@ -81,6 +81,8 @@ export interface DataStoreInstance {
   execution: ReturnType<typeof getTestExecution>;
   /** The directory of the instance's store of files (`infrastructure.objectStorage.files`). */
   filesRoot: string;
+  /** A test may publish its own store on a suite instance. */
+  storeName?: string;
 }
 
 type StoreFiles = readonly { path: string; text: string }[];
@@ -121,10 +123,12 @@ const documentsModuleCapability: ClientInstanceCapability = {
 type Answer = ReturnType<TestInstance["call"]>;
 
 /**
- * Call it in the `describe` that holds the tests. After each test it closes the instances the
- * test started and removes every database and role a store of the test made.
+ * Call it in the `describe` that holds the tests. It closes the instances and removes the
+ * databases and roles after each test, or at suite teardown when `scope` is `suite`.
  */
-export function useDataStoreInstance(): {
+export function useDataStoreInstance(
+  options: { scope?: "test" | "suite"; resetStateOnCleanup?: true } = {}
+): {
   start(
     dataStores: boolean,
     changing?: PolicyValue,
@@ -157,7 +161,8 @@ export function useDataStoreInstance(): {
 
   const close = () => Promise.all(started.splice(0).map((instance) => instance.close()));
 
-  afterEach(async () => {
+  const cleanup = options.scope === "suite" ? afterAll : afterEach;
+  cleanup(async () => {
     // Another fixture in this file may own stores even when this one was never started.
     if (roots.length === 0) return;
 
@@ -188,6 +193,9 @@ export function useDataStoreInstance(): {
       await sql.end();
     }
     await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
+    // Mixed files retain their suite fixture globally. Their per-test fixtures explicitly
+    // remove state after closing, including when a shuffled suite ran before them.
+    if (options.resetStateOnCleanup) await resetFileTestDatabase();
   });
 
   /**
@@ -365,18 +373,25 @@ export function useDataStoreInstance(): {
   }
 
   const put = (
-    { api }: DataStoreInstance,
+    { api, storeName = "findings" }: DataStoreInstance,
     storeFiles = files,
     expectedRevision: number | null = null
   ) =>
     api.call("assets.put", {
-      params: { kind: DATA_STORE_ASSET_KIND, name: "findings" },
-      payload: { files: storeFiles, expectedRevision }
+      params: { kind: DATA_STORE_ASSET_KIND, name: storeName },
+      payload: {
+        files: storeFiles.map((file) =>
+          file.path === DATA_STORE_MANIFEST_FILE
+            ? { ...file, text: file.text.replace(/^id: findings$/m, `id: ${storeName}`) }
+            : file
+        ),
+        expectedRevision
+      }
     });
 
-  const publish = ({ api }: DataStoreInstance, revision: number) =>
+  const publish = ({ api, storeName = "findings" }: DataStoreInstance, revision: number) =>
     api.call("assets.publish", {
-      params: { kind: DATA_STORE_ASSET_KIND, name: "findings" },
+      params: { kind: DATA_STORE_ASSET_KIND, name: storeName },
       payload: { revision }
     });
 
@@ -387,9 +402,12 @@ export function useDataStoreInstance(): {
     return settle(world, 1);
   }
 
-  async function recordOf({ stores }: DataStoreInstance): Promise<DataStoreRecord> {
+  async function recordOf({
+    stores,
+    storeName = "findings"
+  }: DataStoreInstance): Promise<DataStoreRecord> {
     return required(
-      await stores.dataStores.findDataStoreByName({ clientInstanceId, name: "findings" })
+      await stores.dataStores.findDataStoreByName({ clientInstanceId, name: storeName })
     );
   }
 

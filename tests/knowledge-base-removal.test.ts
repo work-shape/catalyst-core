@@ -27,6 +27,7 @@ import {
 } from "./support/data-store-instance";
 import { getTestJobs } from "./support/test-instance";
 import { fileTestDatabaseUrl } from "./support/test-database";
+import { registerKnowledgeRemovalVolumeTest } from "./support/knowledge-removal-volume";
 
 // KB-5e: checks 59, 60 and 62. Search's same-statement withdrawn filter and citation chips
 // belong to KB-7; here the authoritative document rows and listing prove withdrawal.
@@ -118,7 +119,6 @@ const removalDueNow = () =>
   );
 const purgeEvents = async (world: DataStoreInstance) =>
   world.stores.audit.listAuditEvents({ clientInstanceId, type: "knowledge_base.deleted" });
-const countOf = (rows: readonly { count: number }[]) => rows[0]?.count ?? -1;
 
 function captureLogger() {
   const lines: unknown[] = [];
@@ -454,12 +454,11 @@ describe("removing documents from a Knowledge Base", () => {
   it("purges past an object it cannot delete, ends failed with a code, and finishes on retry", async () => {
     const { world, record, objects } = await setup();
     const docs = [];
-    for (let i = 0; i < 20; i += 1)
+    for (let i = 0; i < 3; i += 1)
       docs.push(await add(world, `${MARKER} ${i}`, `document-${i}.txt`));
     await runJobs(world);
     const extraction = (i: number) => knowledgeExtractionKey(record.id, sha256(`${MARKER} ${i}`));
-    for (let i = 0; i < 20; i += 1)
-      await objects.put(extraction(i), new TextEncoder().encode("{}"));
+    for (let i = 0; i < 3; i += 1) await objects.put(extraction(i), new TextEncoder().encode("{}"));
     // The last extraction key is a directory, so deleting it fails until it is removed.
     const last = docs.length - 1;
     await objects.delete(extraction(last));
@@ -550,144 +549,5 @@ describe("removing documents from a Knowledge Base", () => {
     ).toEqual([{ id: doc.originalFileId }]);
   });
 
-  it("deletes a large Knowledge Base in committed pages and continues after an interruption", async () => {
-    const { world, record, objects } = await setup();
-    const total = 2000;
-    const docs = Array.from({ length: total }, (_, i) => {
-      const n = String(i).padStart(4, "0");
-      // Documents 1,000 apart share a content, so a content outlives its first holder's page.
-      return {
-        id: `doc-${n}`,
-        fileId: `file_kb_large_${n}`,
-        objectKey: `knowledge-bases/${record.id}/large-${n}`,
-        content: sha256(`content ${i % 1000}`)
-      };
-    });
-    const contents = [...new Set(docs.map((doc) => doc.content))];
-    const bytes = new TextEncoder().encode("bytes");
-    const now = new Date();
-    await platformSql(async (sql) => {
-      for (let start = 0; start < total; start += 500) {
-        const rows = docs.slice(start, start + 500).map((doc) => ({
-          id: doc.fileId,
-          client_instance_id: clientInstanceId,
-          owner_user_id: "user-1",
-          owner_kind: "knowledge_base",
-          owner_id: record.id,
-          filename: `${MARKER}-${doc.id}.txt`,
-          mime_type: "text/plain",
-          byte_size: bytes.byteLength,
-          checksum: doc.content,
-          object_key: doc.objectKey,
-          status: "available",
-          created_at: now
-        }));
-        await sql`insert into managed_files ${sql(rows)}`;
-      }
-    });
-    for (let start = 0; start < total; start += 200) {
-      await Promise.all(
-        docs.slice(start, start + 200).map((doc) => objects.put(doc.objectKey, bytes))
-      );
-    }
-    for (let start = 0; start < contents.length; start += 200) {
-      await Promise.all(
-        contents
-          .slice(start, start + 200)
-          .map((content) => objects.put(knowledgeExtractionKey(record.id, content), bytes))
-      );
-    }
-    await inStore(record, async (sql) => {
-      await sql`insert into catalyst_kb.contents ${sql(
-        contents.map((sha) => ({ sha256: sha, format: "txt", state: "extracted" }))
-      )}`;
-      for (let start = 0; start < total; start += 500) {
-        await sql`insert into catalyst_kb.documents ${sql(
-          docs.slice(start, start + 500).map((doc) => ({
-            id: doc.id,
-            managed_file_id: doc.fileId,
-            content_sha256: doc.content,
-            title: doc.id,
-            file_name: `${MARKER}-${doc.id}.txt`
-          }))
-        )}`;
-      }
-      await sql`insert into catalyst_kb.chunks ${sql(
-        contents.map((sha) => ({
-          id: `chunk-${sha}`,
-          content_sha256: sha,
-          chunking_revision: 1,
-          position: 0,
-          text: MARKER,
-          token_count: 1
-        }))
-      )}`;
-      // An interruption in the seventh page of 100, after its files are gone.
-      await sql.unsafe(`
-        create function catalyst_kb.interrupt() returns trigger language plpgsql
-          as $$ begin raise exception 'interrupted'; end $$;
-        create trigger interrupt before delete on catalyst_kb.documents
-          for each row when (old.id = 'doc-0650') execute function catalyst_kb.interrupt();`);
-    });
-    expect((await deleteKnowledgeBase(world)).statusCode).toBe(200);
-    await runJobs(world);
-    const remaining = () =>
-      inStore(
-        record,
-        (sql) => sql`select min(id) as first, count(*)::int as count from catalyst_kb.documents`
-      );
-    // Six pages committed; the seventh rolled back its rows but its files were already gone.
-    expect(await remaining()).toEqual([{ first: "doc-0600", count: 1400 }]);
-    expect(
-      countOf(
-        await inStore(record, (sql) => sql`select count(*)::int as count from catalyst_kb.contents`)
-      )
-    ).toBe(1000);
-    expect(
-      countOf(
-        await platformSql(
-          (sql) =>
-            sql`select count(*)::int as count from managed_files where owner_kind = 'knowledge_base'`
-        )
-      )
-    ).toBe(1300);
-    await expect(objects.head(required(docs[0]).objectKey)).rejects.toThrow();
-    await expect(objects.head(required(docs[1999]).objectKey)).resolves.toBeDefined();
-    await expect(
-      objects.head(knowledgeExtractionKey(record.id, required(docs[0]).content))
-    ).resolves.toBeDefined();
-    expect(
-      await world.stores.dataStores.getDataStore({ clientInstanceId, id: record.id })
-    ).toMatchObject({ status: "retired" });
-    await inStore(record, (sql) => sql`drop trigger interrupt on catalyst_kb.documents`);
-    await removalDueNow();
-    await eventually(async () => {
-      await runJobs(world);
-      expect(
-        await world.stores.dataStores.getDataStore({ clientInstanceId, id: record.id })
-      ).toBeUndefined();
-    });
-    expect(
-      countOf(
-        await platformSql(
-          (sql) =>
-            sql`select count(*)::int as count from managed_files where owner_kind = 'knowledge_base'`
-        )
-      )
-    ).toBe(0);
-    for (const doc of [docs[0], docs[650], docs[1999]].map(required)) {
-      await expect(objects.head(doc.objectKey)).rejects.toThrow();
-      await expect(objects.head(knowledgeExtractionKey(record.id, doc.content))).rejects.toThrow();
-    }
-    const events = await purgeEvents(world);
-    const sum = (key: "documents" | "contents" | "files" | "extractionResults") =>
-      events.reduce((total, event) => total + z.number().parse(event.metadata?.[key]), 0);
-    expect(events.map((event) => event.status).sort()).toEqual(["failed", "success"]);
-    expect({
-      documents: sum("documents"),
-      contents: sum("contents"),
-      files: sum("files"),
-      extractionResults: sum("extractionResults")
-    }).toEqual({ documents: total, contents: 1000, files: total, extractionResults: 1000 });
-  }, 180_000);
+  registerKnowledgeRemovalVolumeTest({ documents: 300, contents: 200, interruptAt: 150 });
 });

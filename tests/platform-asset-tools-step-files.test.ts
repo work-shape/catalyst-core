@@ -1,5 +1,5 @@
 import { PLATFORM_TOOL_NAMES } from "@work-shape/catalyst-client-assembly";
-import { afterEach, describe, expect, it } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import type { ClientInstanceCapability } from "@work-shape/catalyst-client-assembly";
 import {
@@ -170,10 +170,12 @@ function createWritingModel(): {
 }
 
 describe("a conversation about a Workflow with a code step", () => {
-  let open: TestInstance | undefined;
-  afterEach(async () => {
-    await open?.close();
-    open = undefined;
+  let t: Awaited<ReturnType<typeof fixture>>;
+  beforeAll(async () => {
+    t = await fixture();
+  });
+  beforeEach(async () => {
+    await t.reset();
   });
 
   /** The instance, with the Workflow published at revision 1 with its one script. */
@@ -204,7 +206,6 @@ describe("a conversation about a Workflow with a code step", () => {
       capabilities: [model.capability],
       tools: []
     });
-    open = app;
     await app.stores.apiAccess.createServicePrincipal({
       clientInstanceId: asClientInstanceId(config.clientInstance.id),
       displayLabel: "workflow-runner"
@@ -220,7 +221,7 @@ describe("a conversation about a Workflow with a code step", () => {
         payload: { config: configOf([good]), expectedRevision: null }
       })
     );
-    const { revision: published } = assetSchema.parse(written.json());
+    let published = assetSchema.parse(written.json()).revision;
     await ok(app.call("assets.publish", { params: address, payload: { revision: published } }));
 
     /**
@@ -258,11 +259,61 @@ describe("a conversation about a Workflow with a code step", () => {
       z
         .object({ config: z.object({ files: z.array(fileSchema) }) })
         .parse((await ok(app.call("assets.get", { params: address }))).json()).config.files;
-    return { published, get, validate, put, asset, storedFiles };
+    const apiIssues = issuesSchema.element
+      .extend({
+        path: z
+          .union([z.string(), z.array(z.union([z.string(), z.number()]))])
+          .transform((path) => (typeof path === "string" ? path : path.join(".")))
+      })
+      .array();
+    const validateApi = async (candidate: unknown) => {
+      const checked = await ok(
+        app.call("assets.validate", {
+          params: { kind: WORKFLOW_ASSET_KIND },
+          payload: { config: candidate }
+        })
+      );
+      return checkSchema.extend({ issues: apiIssues }).parse(checked.json());
+    };
+    const putApi = async (candidate: unknown, expectedRevision: number) => {
+      const response = await app.call("assets.put", {
+        params: address,
+        payload: { config: candidate, expectedRevision }
+      });
+      expect(response.statusCode, response.body).toBe(422);
+      const { error } = z
+        .object({ error: z.object({ details: z.object({ issues: apiIssues }) }) })
+        .parse(response.json());
+      return { saved: false, issues: error.details.issues };
+    };
+    const reset = async () => {
+      const current = await asset();
+      if (current.revision === published) return;
+      const written = await ok(
+        app.call("assets.put", {
+          params: address,
+          payload: { config: configOf([good]), expectedRevision: current.revision }
+        })
+      );
+      published = assetSchema.parse(written.json()).revision;
+      await ok(app.call("assets.publish", { params: address, payload: { revision: published } }));
+    };
+    return {
+      get published() {
+        return published;
+      },
+      reset,
+      get,
+      validate,
+      put,
+      validateApi,
+      putApi,
+      asset,
+      storedFiles
+    };
   }
 
   it("reads the scripts with the definition, and saves a changed and an added script as a draft a later read answers", async () => {
-    const t = await fixture();
     const read = await t.get();
     expect(read).toMatchObject({ revision: t.published, shows: "published" });
     expect(read.config.files).toEqual([good]);
@@ -297,7 +348,8 @@ describe("a conversation about a Workflow with a code step", () => {
   }, 120_000);
 
   it("says of a config what a save of its files is refused for, each issue with its path and code, and saves none of them", async () => {
-    const t = await fixture();
+    const before = await t.asset();
+    const filesBefore = await t.storedFiles();
     const other = { path: "steps/other.py", content: "" };
     const large = "#".repeat(WORKFLOW_CODE_FILE_MAX_BYTES + 1);
     const names = Array.from({ length: 9 }, (_, position) => `part${position}.py`);
@@ -341,7 +393,10 @@ describe("a conversation about a Workflow with a code step", () => {
       ]
     ];
     for (const [title, candidate, issues] of cases) {
-      const checked = await t.validate(candidate);
+      // The aggregate byte case exceeds the HTTP body bound. Keep it and the mismatched
+      // script on the agent path; the remaining validation matrix calls the API directly.
+      const agentPath = title === "another script" || title === "too large together";
+      const checked = await (agentPath ? t.validate : t.validateApi)(candidate);
       expect(checked.valid, title).toBe(false);
       expect(
         checked.issues.map(({ path, code }) => ({ path, code })),
@@ -349,7 +404,7 @@ describe("a conversation about a Workflow with a code step", () => {
       ).toEqual(issues);
       for (const issue of checked.issues) expect(issue.message, title).not.toBe("");
       // A save is refused for what the check said, and stores nothing.
-      const refused = await t.put(candidate, t.published);
+      const refused = await (agentPath ? t.put : t.putApi)(candidate, before.revision);
       expect(refused.saved, title).toBe(false);
       expect(refused.issues, title).toEqual(checked.issues);
     }
@@ -358,9 +413,9 @@ describe("a conversation about a Workflow with a code step", () => {
     const shape = await t.validate(shapeless);
     expect(shape.valid).toBe(false);
     expect(shape.issues[0]?.path).toBe("files.0.content");
-    expect((await t.put(shapeless, t.published)).saved).toBe(false);
+    expect((await t.put(shapeless, before.revision)).saved).toBe(false);
 
-    expect(await t.asset()).toEqual({ revision: t.published, publishedRevision: t.published });
-    expect((await t.get()).config.files).toEqual([good]);
+    expect(await t.asset()).toEqual(before);
+    expect((await t.get()).config.files).toEqual(filesBefore);
   }, 240_000);
 });
