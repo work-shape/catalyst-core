@@ -110,7 +110,21 @@ function readParts(node: HTMLElement): TemplatePart[] {
     });
   };
   walk(node);
-  return normalizeTemplateParts(parts);
+  return withoutTrailingLines(normalizeTemplateParts(parts));
+}
+
+/**
+ * The parts without new lines at their end: a text never needs one, and a browser leaves one
+ * after a value at the end of the editor.
+ */
+function withoutTrailingLines(parts: readonly TemplatePart[]): TemplatePart[] {
+  const kept = [...parts];
+  const last = kept.at(-1);
+  if (typeof last !== "string") return kept;
+  const trimmed = last.replace(/[\r\n]+$/u, "");
+  if (trimmed === "") kept.pop();
+  else kept[kept.length - 1] = trimmed;
+  return kept;
 }
 
 function writeParts(

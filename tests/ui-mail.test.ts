@@ -88,11 +88,12 @@ describe("TemplateTextField", () => {
       editor.dispatchEvent(new Event("input", { bubbles: true }));
     });
     expect(seen.at(-1)).toEqual(["Hi\n", { option: "load#emails" }]);
+    // A text never ends in a new line: the value stays the last part.
     await act(async () => {
-      editor.append(document.createElement("br"));
+      editor.append(document.createElement("br"), document.createTextNode("\n\n"));
       editor.dispatchEvent(new Event("input", { bubbles: true }));
     });
-    expect(seen.at(-1)).toEqual(["Hi\n", { option: "load#emails" }, "\n"]);
+    expect(seen.at(-1)).toEqual(["Hi\n", { option: "load#emails" }]);
   });
 
   it("shows the text read-only with its chips", async () => {
