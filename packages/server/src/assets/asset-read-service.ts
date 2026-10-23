@@ -28,7 +28,7 @@ import {
   type PolicyTarget
 } from "@work-shape/catalyst-core";
 import { resolveConfigLocale } from "@work-shape/catalyst-config-schema";
-import { accessResource, decide, listedTo, readsAssetDraft, type AssetCall } from "./asset-access";
+import { accessResource, decide, listedTo, type AssetCall } from "./asset-access";
 import { isReleaseSync } from "./asset-write-rules";
 import { readRevisionFiles, readSourceFiles, type AssetFileOutput } from "./asset-files";
 import type { AddresseeNames, WorkflowAssetKind } from "../asset-kinds/shared";
@@ -148,12 +148,16 @@ export class AssetReadWorkflow {
       requestedLocale: input.locale ?? call.runtime?.locale
     });
     const scope = scopeOf(input.workspaceId);
+    const searchText = input.text?.toLowerCase();
     const [after] = page?.after ?? [];
-    // Whoever reads the asset is shown all of it; a holder of the use right its published view.
+    // As in assets.get, a draft is for writers and publishers; readers see the live revision.
     const reads = (resource: AssetTarget["resource"]) =>
       input.forUse !== true &&
-      (call.access.authorize(kind.actions.read, resource).allowed ||
-        readsAssetDraft(kind, call.access, resource));
+      (kind.lifecycle === "draft_published"
+        ? call.access.authorize(kind.actions.write, resource).allowed ||
+          (kind.actions.publish !== undefined &&
+            call.access.authorize(kind.actions.publish, resource).allowed)
+        : call.access.authorize(kind.actions.read, resource).allowed);
     const [defaultName, records] = await Promise.all([
       this.defaultName(kind, scope),
       this.options.configAssets.store.listConfigAssetPage({
@@ -166,17 +170,38 @@ export class AssetReadWorkflow {
           : {
               text: {
                 contains: input.text,
-                // The title of the revision the caller is shown, as the summary below is.
-                titleOf: (asset, revisions) =>
-                  summarizeAsset(
+                // Published titles remain searchable for writers too; only they may also
+                // match a draft title. Keep each match within a single visible title.
+                titleOf: (asset, revisions) => {
+                  const publishedTitle = summarizeAsset(
                     kind,
                     asset.name,
-                    reads(accessResource(asset.kind, asset.name, asset.scope, asset.id)) ||
-                      kind.lifecycle === "active"
+                    revisions.published,
+                    locale
+                  ).title;
+                  if (
+                    searchText !== undefined &&
+                    publishedTitle.toLowerCase().includes(searchText)
+                  ) {
+                    return publishedTitle;
+                  }
+                  return summarizeAsset(
+                    kind,
+                    asset.name,
+                    reads(
+                      accessResource(
+                        asset.kind,
+                        asset.name,
+                        asset.scope,
+                        asset.id,
+                        asset.appAvailability
+                      )
+                    ) || kind.lifecycle === "active"
                       ? revisions.active
                       : revisions.published,
                     locale
-                  ).title
+                  ).title;
+                }
               }
             }),
         afterName: typeof after === "string" ? after : undefined,
@@ -216,7 +241,13 @@ export class AssetReadWorkflow {
       ).map((state) => [state.connectionAssetId, state.health])
     );
     return records.map((record) => {
-      const resource = accessResource(record.kind, record.name, record.scope, record.id);
+      const resource = accessResource(
+        record.kind,
+        record.name,
+        record.scope,
+        record.id,
+        record.appAvailability
+      );
       const allowed = allowedOn(kind, call, resource);
       if (!reads(resource)) {
         return { ...this.publishedSummary(kind, record, locale), allowed };

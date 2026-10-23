@@ -135,16 +135,16 @@ describe("the Apps a member of the workspace is shown", () => {
     expectStatus(await get(t.lena.id, "offers"), 403);
   });
 
-  it("leaves a reader, a writer and a publisher what they were shown", async () => {
+  it("shows readers the published list entry and writers and publishers the draft", async () => {
     await withGrant("app.read", async () => {
       const items = await list(t.kai.id);
       expect(items.map((item) => item.name)).toEqual(["offers", "sketch"]);
       expect(items[0]).toMatchObject({
-        title: "Renamed",
-        revision: 2,
-        draftRevision: 2,
+        title: "Offers",
+        revision: 1,
         publishedRevision: 1
       });
+      expect(items[0]).not.toHaveProperty("draftRevision");
       // The draft is not a reader's: a read that names no revision answers the published view,
       // and a read that names the draft is refused.
       const plain = await get(t.kai.id, "offers");
@@ -163,6 +163,13 @@ describe("the Apps a member of the workspace is shown", () => {
     });
     for (const action of ["app.write", "app.publish"]) {
       await withGrant(action, async () => {
+        const items = await list(t.kai.id);
+        expect(items[0], action).toMatchObject({
+          title: "Renamed",
+          revision: 2,
+          draftRevision: 2,
+          publishedRevision: 1
+        });
         const draft = await get(t.kai.id, "offers");
         expectStatus(draft, 200);
         expect(draft.json(), action).toMatchObject({
