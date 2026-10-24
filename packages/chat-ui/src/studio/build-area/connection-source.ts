@@ -137,9 +137,11 @@ export interface ConnectionSource {
   discover(name: string): Promise<void>;
   /**
    * A hook: the Connector types the build offers with a form of their own, for the New
-   * connection dialog. Nothing until they are read; a failed read offers none.
+   * connection dialog and the page of a Connection of such a type. Read for whoever may make a
+   * Connection, and with `mayChange` for whoever may change the one on the page. Nothing until
+   * they are read; a failed read offers none.
    */
-  useConnectorTypes?(): readonly ConnectorTypeOffer[] | undefined;
+  useConnectorTypes?(mayChange?: boolean): readonly ConnectorTypeOffer[] | undefined;
   /**
    * A hook: the catalogue's entries, for the "Dienste" group of the New connection dialog,
    * read with the Connector types. Nothing until they are read; a failed read offers none.
@@ -260,12 +262,12 @@ export function useConnectionSource(): ConnectionSource {
     }
   };
   // One read of the Connector types and the catalogue's entries. Offered to whoever may make a
-  // Connection; nobody else asks.
-  const useConnectorTypeOffers = () =>
+  // Connection, or change the one on the page; nobody else asks.
+  const useConnectorTypeOffers = (mayChange = false) =>
     useQuery({
       queryKey: ["connector-types", apiBaseUrl, authScope],
       queryFn: ({ signal }) => calls.connector_types({ signal }),
-      enabled: context.data?.actions.includes(CONNECTION_WRITE_ACTION) ?? false,
+      enabled: mayChange || (context.data?.actions.includes(CONNECTION_WRITE_ACTION) ?? false),
       retry: false,
       staleTime: Infinity
     });
@@ -381,8 +383,8 @@ export function useConnectionSource(): ConnectionSource {
         throw error;
       }
     },
-    useConnectorTypes() {
-      const query = useConnectorTypeOffers();
+    useConnectorTypes(mayChange) {
+      const query = useConnectorTypeOffers(mayChange);
       return query.isError ? [] : query.data?.types;
     },
     useCatalogueEntries() {

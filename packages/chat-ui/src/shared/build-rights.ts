@@ -9,6 +9,8 @@ const INSTANCE_WRITE_PERMISSION = "config_assets.write";
 /** The asset kind of agents, as the instance names it. */
 export const AGENT_ASSET_KIND = "agent";
 export const CONNECTION_ASSET_KIND = "connection";
+/** The kinds the legacy keys read and write on the whole instance. */
+const KEYED_KINDS = [AGENT_ASSET_KIND, "skill"] as const;
 
 /** `publish` is named by a kind with a draft and a published revision only. */
 export type AssetVerb = "read" | "write" | "delete" | "publish";
@@ -117,8 +119,11 @@ export function resolveBuildRights(
   const verbs = ["read", "write", "delete"] as const;
   const action = (kind: string, verb: AssetVerb): string | undefined =>
     context?.kinds.find((candidate) => candidate.kind === kind)?.actions[verb];
+  // The legacy key writes agents and skills only. A kind that came later, such as Connections,
+  // is written on the whole instance by its own action, which the platform context names.
+  const keyedKind = (kind: string) => KEYED_KINDS.some((keyed) => keyed === kind);
   const onWholeInstance = (verb: AssetVerb, kind: string): boolean => {
-    const named = verb === "publish" ? action(kind, verb) : undefined;
+    const named = verb === "publish" || !keyedKind(kind) ? action(kind, verb) : undefined;
     return named === undefined ? instanceWrite : onInstance.includes(named);
   };
   // Studio is open to a reader with a right on the instance's or a Shared Workspace's assets.
@@ -168,7 +173,8 @@ export function resolveBuildRights(
       onWholeInstance(verb, asset.kind) ||
       (asset.workspaceId !== undefined && holdsIn(asset.kind, verb, asset.workspaceId)),
     mayCreate: (kind, workspaceId) =>
-      instanceWrite || (workspaceId !== undefined && holdsIn(kind, "write", workspaceId))
+      onWholeInstance("write", kind) ||
+      (workspaceId !== undefined && holdsIn(kind, "write", workspaceId))
   };
 }
 
