@@ -114,8 +114,9 @@ export async function arrangeDeletion(
     },
     /** One attempt of every queued deletion job, without waiting for its backoff. */
     async runDeletionJobs() {
+      // Fast-forward into the past, away from a wall-clock correction between connections.
       await db.sql`
-        update platform_jobs set run_after = now()
+        update platform_jobs set run_after = 'epoch'::timestamptz
         where client_instance_id = ${fixture.clientInstanceId}
           and kind = any(${DELETION_KINDS}) and status = 'queued'`;
       await getTestJobs(api).runDue();

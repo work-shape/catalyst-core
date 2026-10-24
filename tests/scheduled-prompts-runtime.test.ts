@@ -110,9 +110,9 @@ async function fixture() {
     return scheduledStartSchema.parse(response.json());
   }
   async function fire(id: string) {
-    // Only this test's future tick is moved to the database's present. No wall-clock sleep.
+    // Only this test's tick is moved into the past, away from wall-clock corrections.
     await withTestSql(async (sql) => {
-      await sql`update platform_jobs set run_after = now() where client_instance_id = ${clientInstanceId} and kind = 'scheduled_prompt.fire' and subject = ${id} and status = 'queued'`;
+      await sql`update platform_jobs set run_after = 'epoch'::timestamptz where client_instance_id = ${clientInstanceId} and kind = 'scheduled_prompt.fire' and subject = ${id} and status = 'queued'`;
     });
     await getTestJobs(app).runDue();
   }

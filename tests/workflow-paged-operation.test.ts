@@ -24,6 +24,7 @@ import { fetchTestOperation, listenTestInstance } from "./support/test-instance"
 import { clientInstanceId } from "./support/access-instance";
 import { operationOf, write } from "./support/connection-operations";
 import { skipStepWaits, stepRunsOf } from "./support/workflow-runs";
+import { recordJobDelays } from "./support/job-delay-recorder";
 
 let t: WorkflowFixture | undefined;
 afterEach(async () => {
@@ -433,16 +434,15 @@ it("runs a paged step above sixty minutes under the EW-LIM operator ceiling", as
 
 // These regressions adapt the independent verifier's crash, sweep and retry probes.
 /**
- * Gives a worker passes until the run has ended. The waits of its step job before a page is read
- * again are cut short and kept in `waits`.
+ * Gives a worker passes until the run has ended, cutting short its step jobs' waits.
  */
-async function finishDeferred(f: WorkflowFixture, id: string, waits: number[] = []) {
+async function finishDeferred(f: WorkflowFixture, id: string) {
   const worker = f.worker();
   let result: Awaited<ReturnType<WorkflowFixture["finish"]>> | undefined;
   await waitUntil(
     async () => {
       result = await f.finish(id, worker, 1).catch(() => undefined);
-      if (result === undefined) waits.push(...(await skipStepWaits()));
+      if (result === undefined) await skipStepWaits();
       return result !== undefined;
     },
     "the deferred paged run ends",
@@ -530,6 +530,7 @@ it("queueing for a slot consumes no paged minutes", async () => {
 });
 it("retries each page independently with two- and four-second backoffs, then fails when attempts are exhausted", async () => {
   const { fixture: f, id } = await setup({ by: "page", param: "p", sizeParam: "s", size: 2 });
+  const takeDelays = await recordJobDelays(clientInstanceId, "workflow_run.execute_step");
   const calls = new Map<number, number>();
   f.setBehaviour(async (_op, input) => {
     const { p } = z.object({ p: z.number() }).parse(input);
@@ -538,9 +539,9 @@ it("retries each page independently with two- and four-second backoffs, then fai
     if (count < 3) throw connectionCallError("connection_unavailable");
     return { rows: p === 1 ? [{ id: 0 }, { id: 1 }] : [] };
   });
-  const waits: number[] = [];
   // Each page gets all three attempts, including the empty page that ends the run.
-  expect(await finishDeferred(f, id, waits)).toMatchObject({ status: "done" });
+  expect(await finishDeferred(f, id)).toMatchObject({ status: "done" });
+  const waits = await takeDelays();
   expect([...calls.entries()]).toEqual([
     [1, 3],
     [2, 3]
@@ -553,7 +554,6 @@ it("retries each page independently with two- and four-second backoffs, then fai
 
   // Reuse the instance for an exhausted page after a successful one.
   calls.clear();
-  waits.length = 0;
   f.setBehaviour(async (_op, input) => {
     const { p } = z.object({ p: z.number() }).parse(input);
     calls.set(p, (calls.get(p) ?? 0) + 1);
@@ -568,7 +568,7 @@ it("retries each page independently with two- and four-second backoffs, then fai
       })
     ).json()
   );
-  expect(await finishDeferred(f, next.id, waits)).toMatchObject({
+  expect(await finishDeferred(f, next.id)).toMatchObject({
     status: "failed",
     error: { code: "operation_page_failed" }
   });
@@ -576,9 +576,10 @@ it("retries each page independently with two- and four-second backoffs, then fai
     [1, 1],
     [2, 3]
   ]);
-  expect(waits).toHaveLength(2);
-  expect(required(waits[0])).toBeGreaterThanOrEqual(2_000);
-  expect(required(waits[1])).toBeGreaterThanOrEqual(4_000);
+  const failedPageWaits = await takeDelays();
+  expect(failedPageWaits).toHaveLength(2);
+  expect(required(failedPageWaits[0])).toBeGreaterThanOrEqual(2_000);
+  expect(required(failedPageWaits[1])).toBeGreaterThanOrEqual(4_000);
 });
 
 it("fails immediately when a cursor repeats", async () => {
