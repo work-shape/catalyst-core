@@ -119,7 +119,8 @@ export default defineConfig({
             "operate/how-rights-work",
             "operate/rights-for-one-person",
             "manage/guardrails",
-            "operate/governance"
+            "operate/governance",
+            "operate/usage-by-person"
           ]
         },
         {
