@@ -3,7 +3,7 @@ import {
   DATA_STORE_ACTIONS,
   DATA_STORE_ASSET_KIND,
   type AccessResource,
-  type ActorAccess,
+  type ApprovalPreviewViewer,
   type ApprovalRequestHandler
 } from "@work-shape/catalyst-core";
 import type { DataStoreRuntime } from "../runtime";
@@ -60,18 +60,31 @@ async function waiting(runtime: DataStoreRuntime, store: PublishedStore): Promis
   );
 }
 
+/**
+ * The counts read for one reader's page of the Inbox, by store. A page passes one viewer to
+ * every row: the notices of one store on it, ended ones included, read one count.
+ */
+const countsOfPage = new WeakMap<ApprovalPreviewViewer, Map<string, Promise<number>>>();
+
 /** How many fields of the store wait now for this reader, as "Prüfen" lists them to them. */
-async function waitingFor(
+function waitingFor(
   runtime: DataStoreRuntime,
   store: PublishedStore,
-  access: ActorAccess
+  viewer: ApprovalPreviewViewer
 ): Promise<number> {
-  return countReadableFlaggedFields(
-    runtime,
-    runtime.server.asPlatform(store.record.location.database),
-    store.definition.records ?? [],
-    access
-  );
+  const counts = countsOfPage.get(viewer) ?? new Map<string, Promise<number>>();
+  countsOfPage.set(viewer, counts);
+  let count = counts.get(store.record.id);
+  if (!count) {
+    count = countReadableFlaggedFields(
+      runtime,
+      runtime.server.asPlatform(store.record.location.database),
+      store.definition.records ?? [],
+      viewer.access
+    );
+    counts.set(store.record.id, count);
+  }
+  return count;
 }
 
 /** The published stores as the operations read them: one by its name, or all of them. */
@@ -107,10 +120,10 @@ export function createReviewNoticeHandler(
     async preview(payload, context) {
       const store = await current(payload);
       // Without a reader there is nobody to count for: the count is left out.
-      const access = context.viewer?.access;
+      const viewer = context.viewer;
       const flagged =
-        store && access
-          ? await waitingFor(runtime, store, access).catch((error: unknown) => {
+        store && viewer
+          ? await waitingFor(runtime, store, viewer).catch((error: unknown) => {
               runtime.logger.warn(
                 { storeId: payload.subject.dataStoreId, err: error },
                 "The fields waiting in a store's review could not be counted"

@@ -539,6 +539,40 @@ describe("REC-2 records review through the public operation source", () => {
       listed: 4
     });
     expect(await seen(using("reader-none"))).toEqual({ flagged: 0, listed: 0, documents: [] });
+    // A deny on one Knowledge Base wins over the right to use every one.
+    const denied = reviewerOf(w, "reader-denied");
+    const deniedAccess = accessOf(denied, {
+      grants: [
+        {
+          id: "grant_reader-denied_use",
+          clientInstanceId: denied.clientInstanceId,
+          holderKind: "user",
+          holderId: denied.id,
+          action: "knowledge_base.use",
+          effect: "allow",
+          scopeKind: "instance",
+          grantedBy: asUserId("records-admin"),
+          createdAt: "2026-10-24T00:00:00.000Z"
+        },
+        {
+          id: "grant_reader-denied_deny",
+          clientInstanceId: denied.clientInstanceId,
+          holderKind: "user",
+          holderId: denied.id,
+          action: "knowledge_base.use",
+          effect: "deny",
+          scopeKind: "asset",
+          scopeId: gutachten.kbId,
+          grantedBy: asUserId("records-admin"),
+          createdAt: "2026-10-24T00:00:00.000Z"
+        }
+      ]
+    });
+    expect(await seen({ actor: denied, access: deniedAccess })).toEqual({
+      flagged: 2,
+      listed: 2,
+      documents: ["a11", "b11"]
+    });
     // A withdrawn document leaves the count with its candidates, for the reader who saw it.
     await gutachten.source`update catalyst_kb.documents set withdrawn_at = now() where id = 'e11'`;
     expect(await seen(gutachtenReader)).toEqual({
@@ -547,5 +581,30 @@ describe("REC-2 records review through the public operation source", () => {
       documents: ["g11", "h11"]
     });
     expect(await seen(unterlagen)).toMatchObject({ flagged: 2, listed: 2 });
+  });
+
+  it("counts past the first 500 cited documents of a Knowledge Base, leaving out a withdrawn one on a later page", async () => {
+    const w = await world("paging-count");
+    const ids = Array.from({ length: 502 }, (_, index) => `p${String(index).padStart(3, "0")}`);
+    await call(w, "records.propose", {
+      table: "objekt",
+      items: await Promise.all(
+        ids.map((id) =>
+          w.item(id, "expose", { adresse: `Weg ${id}` }, "2026-10-18", `/Other/${id}.pdf`)
+        )
+      )
+    });
+    // One on the first page of 500 and the last, alone on the second.
+    await w.source`update catalyst_kb.documents set withdrawn_at = now() where id in ('p250', 'p501')`;
+    const [notice] = await notices(w);
+    const handler = w.dataStores.reviewNotice;
+    const preview = await handler.preview(handler.validate(required(notice).payload), {
+      clientInstanceId: w.clientInstanceId,
+      requestId: required(notice).id,
+      correlationId: "records-review",
+      viewer: { access: accessOf(recordsActorOf(w.clientInstanceId)), inList: true }
+    });
+    const listed = groupFlagged((await flagged(w, { limit: 1_000 })).items).fieldCount;
+    expect({ flagged: preview.flagged, listed }).toEqual({ flagged: 500, listed: 500 });
   });
 });
