@@ -113,9 +113,13 @@ export const safeConfigSchema = z.object({
     })
   }),
   /** What a generated view may load besides the instance's own view runtime. */
-  views: z.object({ allowedScriptSrc: z.array(z.string()) }).default({ allowedScriptSrc: [] }),
+  views: z
+    .object({ allowedScriptSrc: z.array(z.string()) })
+    .default(() => ({ allowedScriptSrc: [] })),
   /** Hosts a link in a reply or a Markdown file preview may point to besides the instance. */
-  replies: z.object({ allowedLinkHosts: z.array(z.string()) }).default({ allowedLinkHosts: [] }),
+  replies: z
+    .object({ allowedLinkHosts: z.array(z.string()) })
+    .default(() => ({ allowedLinkHosts: [] })),
   /** Every module of the product with its state on this instance. */
   modules: z.record(z.string(), z.object({ enabled: z.boolean() })).default({}),
   /** Written feedback on agent messages: whether the comment may carry its exchange. */

@@ -123,7 +123,7 @@ const viewsConfigSchema = z
       .default([])
       .transform((sources) => Array.from(new Set(sources)))
   })
-  .default({ allowedScriptSrc: [] });
+  .prefault({});
 
 const replyLinkHostSchema = z
   .string()
@@ -147,7 +147,7 @@ const repliesConfigSchema = z
       .transform((hosts) => Array.from(new Set(hosts)))
   })
   .strict()
-  .default({ allowedLinkHosts: [] });
+  .prefault({});
 
 const dataSourceConfigSchema = z.object({
   kind: z.literal("postgres"),
@@ -284,18 +284,7 @@ export const uiConfigSchema = z
     darkTheme: darkUiThemeSchema,
     defaultThemeMode: z.enum(THEME_MODE_PREFERENCES).default("system")
   })
-  .default({
-    title: "Workshape Catalyst",
-    welcomeMessage: DEFAULT_WELCOME_MESSAGE,
-    showAgentName: true,
-    showAgentDescriptions: true,
-    resources: {},
-    accentColor: defaultLightUiTheme.accentColor,
-    logoInvertOnDark: false,
-    theme: defaultLightUiTheme,
-    darkTheme: defaultDarkUiTheme,
-    defaultThemeMode: "system"
-  });
+  .prefault({});
 
 export const uiConfigOverlaySchema = uiConfigSchema
   .unwrap()
@@ -324,25 +313,9 @@ export const administrationConfigSchema = z
           })
           .default({ enabled: false, allowSkillCreation: false })
       })
-      .default({
-        editableAgentFields: [],
-        allowAgentCreation: false,
-        allowAgentDeletion: false,
-        allowDefaultAgentChange: false,
-        allowSkillEditing: false,
-        agentSkillChanges: { enabled: false, allowSkillCreation: false }
-      })
+      .prefault({})
   })
-  .default({
-    agentConfiguration: {
-      editableAgentFields: [],
-      allowAgentCreation: false,
-      allowAgentDeletion: false,
-      allowDefaultAgentChange: false,
-      allowSkillEditing: false,
-      agentSkillChanges: { enabled: false, allowSkillCreation: false }
-    }
-  });
+  .prefault({});
 
 /**
  * One switch per module, `modules.<name>.enabled`. A module without an entry is off, except
@@ -495,9 +468,7 @@ export const clientInstanceConfigSchema = z.object({
         })
         .default({ byVerifiedEmail: true })
     })
-    .default({
-      identityLinking: { byVerifiedEmail: true }
-    }),
+    .prefault({}),
   retention: z
     .object({
       conversationDays: z.number().int().positive().max(3650).default(30),

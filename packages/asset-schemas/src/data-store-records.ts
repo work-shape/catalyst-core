@@ -23,7 +23,7 @@ export const dataStoreRecordsRuleSchema = z
       z.strictObject({ column: name, fromField: name })
     ]),
     precedence: z.array(name).default([]),
-    review: z.strictObject({ always: z.array(name).default([]) }).default({ always: [] }),
+    review: z.strictObject({ always: z.array(name).default([]) }).prefault({}),
     retainWithoutSource: z.boolean().default(false)
   })
   .superRefine((rule, context) => {
