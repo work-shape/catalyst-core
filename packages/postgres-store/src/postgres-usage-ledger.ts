@@ -40,6 +40,7 @@ import {
   type CounterScope,
   type LockedCounter
 } from "./postgres-usage-counters";
+import { createPostgresSpendLimitStore } from "./postgres-usage-limits";
 import {
   readModelUsageMaintenance,
   writeModelUsageMaintenance
@@ -73,10 +74,15 @@ function attribution(event: ModelUsageEventRecordInput): SQL {
       for share
     ),
     attributed_workspace as (
-      select id from collaboration_workspaces
+      select id, kind from collaboration_workspaces
       where client_instance_id = ${event.clientInstanceId} and id = ${workspace}
         and deletion_requested_at is null
       for share
+    ),
+    -- The workspace whose counters the event counts on: a shared one. A Personal Workspace
+    -- has none: its usage is its person's.
+    workspace_scope as (
+      select id from attributed_workspace where kind = 'shared'
     )`;
 }
 
@@ -228,6 +234,10 @@ type AdmissionRow = {
   admitted: boolean;
   scope_kind: CounterScope["kind"];
   scope_id: string;
+  /** The shared workspace the event counts on, if any. */
+  workspace_id: string | null;
+  /** The event continues an agent run that made a call before (`ModelUsageLimits.own`). */
+  continuing: boolean;
   counters: LockedCounter[];
 };
 
@@ -237,6 +247,20 @@ const NO_LIMITS: ModelUsageLimits = {
   person: { day: {}, month: {} },
   unattended: { day: {}, month: {} }
 };
+
+/**
+ * Whether the event continues an agent run that already made a call: the run has an event.
+ * It reads the snapshot of the statement, so the event being written is not in it.
+ */
+function continuesRun(event: ModelUsageEventRecordInput): SQL {
+  return event.agentRunId === undefined
+    ? drizzleSql`false`
+    : drizzleSql`exists (
+        select 1 from model_usage_events
+        where client_instance_id = ${event.clientInstanceId}
+          and agent_run_id = ${event.agentRunId}
+      )`;
+}
 
 /**
  * The statement of admission and of an event nobody admitted. It locks the counters of the
@@ -260,22 +284,26 @@ async function countAndInsert(
     {
       kind: drizzleSql`scope.kind`,
       id: drizzleSql`scope.id`,
-      purpose: drizzleSql`${event.purpose ?? null}::text`
+      purpose: drizzleSql`${event.purpose ?? null}::text`,
+      workspace: drizzleSql`(select id from workspace_scope)`
     },
     TODAY,
     THIS_MONTH
   );
   const ended = input.status !== "pending";
-  // KB-ISO: ingestion is recorded and rolled up, but reserves no chat counters.
+  // KB-ISO: ingestion is recorded and rolled up, but reserves no chat counters. Any other
+  // event counts on the day and the month of the instance and of its scope, and of its shared
+  // workspace where it has one.
   const expectedCounters = KNOWLEDGE_INGESTION_PURPOSES.some((purpose) => purpose === event.purpose)
-    ? 0
-    : 4;
+    ? drizzleSql`0`
+    : drizzleSql`(case when exists (select 1 from workspace_scope) then 6 else 4 end)`;
   const rows = await db.execute<AdmissionRow>(drizzleSql`
     with ${attribution(event)},
     ${written(event, input.id)},
+    continuing as (select ${continuesRun(event)} as yes),
     locked as (
       select c.scope_kind, c.scope_id, c.period_kind, c.model_call_count, c.tokens, c.cost_micros,
-        ${withinLimits(input.limits, counted)} as within
+        ${withinLimits(input.limits, counted, drizzleSql`(select yes from continuing)`)} as within
       from ${modelUsageCounters} c, scope
       where ${counters}
         -- The rows of the user and the workspace are locked first: nothing that holds one of
@@ -314,6 +342,8 @@ async function countAndInsert(
     }
     select verdict.present, verdict.admitted,
       (select kind from scope) as scope_kind, (select id from scope) as scope_id,
+      (select id from workspace_scope) as workspace_id,
+      (select yes from continuing) as continuing,
       coalesce((
         select json_agg(json_build_object(
           'scope_kind', scope_kind, 'scope_id', scope_id, 'period_kind', period_kind,
@@ -334,10 +364,12 @@ async function countedInsert(
   for (let attempt = 0; attempt < COUNTER_START_ATTEMPTS; attempt += 1) {
     const row = await countAndInsert(db, input);
     if (row.present) return row;
-    await startCounters(db, input.event.clientInstanceId, {
-      kind: row.scope_kind,
-      id: row.scope_id
-    });
+    await startCounters(
+      db,
+      input.event.clientInstanceId,
+      { kind: row.scope_kind, id: row.scope_id },
+      row.workspace_id ?? undefined
+    );
   }
   throw new AppError("INTERNAL", "The usage counters of the period could not be started");
 }
@@ -355,7 +387,7 @@ async function admitModelUsageEvent(
     limits: input.limits
   });
   if (row.admitted) return { id };
-  const refused = refusalOf(row.counters, input.limits, input.reservation);
+  const refused = refusalOf(row.counters, input.limits, input.reservation, row.continuing);
   if (!refused) throw new AppError("INTERNAL", "Admission refused a call within every limit");
   return { refused };
 }
@@ -402,12 +434,17 @@ async function settleModelUsageEvent(
 ): Promise<boolean> {
   const { settlement, counted } = input;
   const old = drizzleSql`old`;
-  // The counters the event was admitted on: its scope is read from the row as admission wrote
-  // it. An event the deletion has erased since settles on the instance's alone: its person's
-  // counters are gone.
+  // The counters the event was admitted on: its scope and its workspace are read from the row
+  // as admission wrote it. An event the deletion has erased since settles on the instance's
+  // alone: its person's counters are gone, and so is a deleted workspace's reference.
   const counters = countersOf(
     input.clientInstanceId,
-    { kind: scopeKindOf(old), id: scopeIdOf(old), purpose: drizzleSql`old.purpose` },
+    {
+      kind: scopeKindOf(old),
+      id: scopeIdOf(old),
+      purpose: drizzleSql`old.purpose`,
+      workspace: drizzleSql`old.collaboration_workspace_id`
+    },
     dayOf(drizzleSql`old.created_at`),
     monthOf(drizzleSql`old.created_at`)
   );
@@ -726,6 +763,7 @@ async function reconcileLocked(
 
 export function createPostgresUsageStore(db: PostgresConnection): ModelUsageEventStore {
   return {
+    ...createPostgresSpendLimitStore(db),
     appendModelUsageEvent: (input, counted) => appendModelUsageEvent(db, input, counted),
     admitModelUsageEvent: (input) => admitModelUsageEvent(db, input),
     settleModelUsageEvent: (input) => settleModelUsageEvent(db, input),

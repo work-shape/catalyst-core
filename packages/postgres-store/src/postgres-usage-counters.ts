@@ -4,6 +4,7 @@ import {
   type ModelSystemPurpose,
   type ModelUsageCounterLimits,
   type ModelUsageLimits,
+  type ModelUsagePeriodLimits,
   type ModelUsageRefusal
 } from "@work-shape/catalyst-core";
 import type { PostgresConnection } from "./postgres-database";
@@ -58,19 +59,21 @@ const countsAsChat = (purpose: SQL): SQL => drizzleSql`(
 )`;
 
 /**
- * The counters of the instance and of one scope for a day and a month. `c` names the counter
- * table.
+ * The counters of the instance, of one scope and of the event's workspace for a day and a
+ * month. `c` names the counter table. Only a shared workspace has counters (`workspace`, its
+ * id), so `workspace` may name any workspace or none: a Personal Workspace matches no row.
  */
 export const countersOf = (
   clientInstanceId: string,
-  scope: { kind: SQL; id: SQL; purpose: SQL },
+  scope: { kind: SQL; id: SQL; purpose: SQL; workspace: SQL },
   day: SQL,
   month: SQL
 ): SQL => drizzleSql`
   c.client_instance_id = ${clientInstanceId}
   and ${countsAsChat(scope.purpose)}
   and ((c.scope_kind = 'instance' and c.scope_id = '')
-    or (c.scope_kind = ${scope.kind} and c.scope_id = ${scope.id}))
+    or (c.scope_kind = ${scope.kind} and c.scope_id = ${scope.id})
+    or (c.scope_kind = 'workspace' and c.scope_id = ${scope.workspace}))
   and ((c.period_kind = 'day' and c.period_start = ${day})
     or (c.period_kind = 'month' and c.period_start = ${month}))`;
 
@@ -103,17 +106,28 @@ const within = (
   return drizzleSql.join(checks, drizzleSql` and `);
 };
 
-/** Whether counter `c` still holds once the reservation is added, by the limits of its scope. */
+const NO_PERIOD_LIMITS: ModelUsagePeriodLimits = { day: {}, month: {} };
+
+/**
+ * Whether counter `c` still holds once the reservation is added, by the limits of its scope.
+ * `continuing` is true for a call of an agent run that already made one: the spend limits of
+ * the person and the workspace do not stop it (`ModelUsageLimits.own`).
+ */
 export function withinLimits(
   limits: ModelUsageLimits,
-  reservation: { tokens: number; costMicros: number }
+  reservation: { tokens: number; costMicros: number },
+  continuing: SQL = drizzleSql`false`
 ): SQL {
-  const byPeriod = (scope: ModelUsageLimits[keyof ModelUsageLimits]): SQL => drizzleSql`
+  const byPeriod = (scope: ModelUsagePeriodLimits): SQL => drizzleSql`
     case c.period_kind when 'day' then ${within(scope.day, reservation)}
       else ${within(scope.month, reservation)} end`;
   return drizzleSql`case
     when c.scope_kind = 'instance' then ${byPeriod(limits.instance)}
     when c.scope_kind = 'system' and c.scope_id = '' then ${byPeriod(limits.unattended)}
+    when c.scope_kind = 'workspace'
+      then (${continuing} or ${byPeriod(limits.workspace ?? NO_PERIOD_LIMITS)})
+    when c.scope_kind = 'user' then ${byPeriod(limits.person)}
+      and (${continuing} or ${byPeriod(limits.own ?? NO_PERIOD_LIMITS)})
     else ${byPeriod(limits.person)}
   end`;
 }
@@ -135,7 +149,8 @@ export interface LockedCounter {
 export function refusalOf(
   counters: readonly LockedCounter[],
   limits: ModelUsageLimits,
-  reservation: { tokens: number; costMicros: number }
+  reservation: { tokens: number; costMicros: number },
+  continuing = false
 ): ModelUsageRefusal | undefined {
   const scoped = [...counters].sort(
     (a, b) => Number(a.scope_kind === "instance") - Number(b.scope_kind === "instance")
@@ -145,27 +160,35 @@ export function refusalOf(
     for (const metric of ["modelCallCount", "tokens", "costMicros"] as const) {
       for (const counter of scoped) {
         if (counter.period_kind !== period) continue;
-        const limit = limitsOf(limits, counter)[period][metric];
         const held = {
           modelCallCount: counter.model_call_count,
           tokens: counter.tokens,
           costMicros: counter.cost_micros
         }[metric];
-        if (limit !== undefined && held + added[metric] > limit)
-          return { period, metric, scope: counter.scope_kind };
+        for (const scope of limitsOf(limits, counter, continuing)) {
+          const limit = scope[period][metric];
+          if (limit !== undefined && held + added[metric] > limit)
+            return { period, metric, scope: counter.scope_kind };
+        }
       }
     }
   }
   return undefined;
 }
 
+/** The limits a counter is held against, as `withinLimits` holds it. */
 function limitsOf(
   limits: ModelUsageLimits,
-  counter: LockedCounter
-): ModelUsageLimits[keyof ModelUsageLimits] {
-  if (counter.scope_kind === "instance") return limits.instance;
-  if (counter.scope_kind === "system" && counter.scope_id === "") return limits.unattended;
-  return limits.person;
+  counter: LockedCounter,
+  continuing: boolean
+): ModelUsagePeriodLimits[] {
+  if (counter.scope_kind === "instance") return [limits.instance];
+  if (counter.scope_kind === "system" && counter.scope_id === "") return [limits.unattended];
+  if (counter.scope_kind === "workspace")
+    return continuing || !limits.workspace ? [] : [limits.workspace];
+  if (counter.scope_kind === "user")
+    return continuing || !limits.own ? [limits.person] : [limits.person, limits.own];
+  return [limits.person];
 }
 
 /**
@@ -177,12 +200,14 @@ function limitsOf(
  *
  * A person's counters start at zero, so starting one never reads a person's events. The only
  * events they miss are those a previous release wrote in the period, before it counted by
- * scope; reconciliation adds them.
+ * scope; reconciliation adds them. A shared workspace's counters start from the events its
+ * period already has, as the instance's do: it has no counter before this release.
  */
 export async function startCounters(
   db: PostgresConnection,
   clientInstanceId: string,
-  scope: CounterScope
+  scope: CounterScope,
+  workspaceId?: string
 ): Promise<void> {
   const e = drizzleSql`e`;
   const periods = drizzleSql`(values
@@ -194,8 +219,8 @@ export async function startCounters(
     where c.client_instance_id = ${clientInstanceId} and c.scope_kind = ${kind}
       and c.scope_id = ${id} and c.period_kind = period.kind and c.period_start = period.first_day
   )`;
-  const fromEvents = (kind: string, events: SQL): SQL => drizzleSql`
-    select ${clientInstanceId}, ${kind}, '', period.kind, period.first_day,
+  const fromEvents = (kind: string, events: SQL, id = ""): SQL => drizzleSql`
+    select ${clientInstanceId}, ${kind}, ${id}, period.kind, period.first_day,
       count(${e}.id), coalesce(sum(${countedTokens(e)}), 0), coalesce(sum(${countedCost(e)}), 0)
     from ${periods}
     left join model_usage_events ${e}
@@ -204,7 +229,7 @@ export async function startCounters(
       and ${e}.created_at < period.next_day::timestamp at time zone 'UTC'
       and ${countsAsChat(drizzleSql`${e}.purpose`)}
       and ${events}
-    where ${missing(kind, "")}
+    where ${missing(kind, id)}
     group by period.kind, period.first_day`;
   const scoped =
     scope.id === ""
@@ -222,6 +247,15 @@ export async function startCounters(
     ${fromEvents("instance", drizzleSql`true`)}
     union all
     ${scoped}
+    ${
+      workspaceId === undefined
+        ? drizzleSql``
+        : drizzleSql`union all ${fromEvents(
+            "workspace",
+            drizzleSql`${e}.collaboration_workspace_id = ${workspaceId}`,
+            workspaceId
+          )}`
+    }
     on conflict do nothing
   `);
 }
@@ -258,7 +292,10 @@ export async function reconcileCounters(
         coalesce(sum(${countedTokens(e)}), 0) as tokens,
         coalesce(sum(${countedCost(e)}), 0) as cost
       from model_usage_events ${e}
-      cross join lateral (values ('instance', ''), (${scopeKindOf(e)}, ${scopeIdOf(e)}))
+      cross join lateral (values ('instance', ''), (${scopeKindOf(e)}, ${scopeIdOf(e)}),
+        -- Only a shared workspace has counters; the events of any other match none.
+        (case when ${e}.collaboration_workspace_id is not null then 'workspace' end,
+          coalesce(${e}.collaboration_workspace_id, '')))
         scope(kind, id)
       cross join lateral (values ('month', ${THIS_MONTH}), ('day', ${TODAY}))
         period(kind, first_day)

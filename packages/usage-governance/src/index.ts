@@ -29,7 +29,10 @@ import {
   type UsageCostRecord,
   type UsageRateCardConfig,
   type UsageRateCardTokenRatesConfig,
-  type UsageSafeguardsConfig
+  type UsageSafeguardsConfig,
+  type UsageSpendAmounts,
+  type UsageSpendCounter,
+  type UsageSpendLimitsOfCall
 } from "@work-shape/catalyst-core";
 import { calculateUsageCost, normalizeCount, priceTokens, totalComponents } from "./cost";
 
@@ -203,11 +206,12 @@ export class ModelUsageGovernance implements ModelUsageRecorder {
    * the call. Knowledge Base ingestion writes its event without using these chat counters.
    */
   async admitModelCall(call: ModelCallAdmission): Promise<AdmittedModelCall> {
-    const reserved = this.reservationOf(call);
+    const spend = await this.spendLimitsOf(call);
+    const reserved = this.reservationOf(call, spend);
     const admitted = await this.store.admitModelUsageEvent({
       event: this.eventOf(call, NOTHING_REPORTED),
       reservation: reserved,
-      limits: this.limits()
+      limits: this.limits(spend)
     });
     if ("refused" in admitted) throw refusalError(admitted.refused);
     return {
@@ -290,7 +294,7 @@ export class ModelUsageGovernance implements ModelUsageRecorder {
   }): Promise<SafeUsageSummary> {
     const now = input.now ?? new Date();
     const { todayStart, currentMonthStart } = createModelUsageWindowBounds(now);
-    const [history, recent, recentEvents, budgetSpend] = await Promise.all([
+    const [history, recent, recentEvents, budgetSpend, stored] = await Promise.all([
       this.store.summarizeModelUsageHistory({ clientInstanceId: input.clientInstanceId }),
       this.store.summarizeRecentModelUsage({
         clientInstanceId: input.clientInstanceId,
@@ -304,8 +308,10 @@ export class ModelUsageGovernance implements ModelUsageRecorder {
         clientInstanceId: input.clientInstanceId,
         todayStart,
         currentMonthStart
-      })
+      }),
+      this.store.readSpendLimits({ clientInstanceId: input.clientInstanceId })
     ]);
+    const instanceLimits = this.instanceSpendLimits(stored.instance);
     const rateCard = this.costs.customer;
     const showWebSearchCost =
       input.webSearchEnabled ??
@@ -350,12 +356,12 @@ export class ModelUsageGovernance implements ModelUsageRecorder {
       spendBudget: {
         ...budgetSpend,
         ...(rateCard?.currency ? { currency: rateCard.currency } : {}),
-        ...(this.budget.dailySpendLimit === undefined
+        ...(instanceLimits.dailyMicros === undefined
           ? {}
-          : { dailyLimitMicros: toMicros(this.budget.dailySpendLimit) }),
-        ...(this.budget.monthlySpendLimit === undefined
+          : { dailyLimitMicros: instanceLimits.dailyMicros }),
+        ...(instanceLimits.monthlyMicros === undefined
           ? {}
-          : { monthlyLimitMicros: toMicros(this.budget.monthlySpendLimit) })
+          : { monthlyLimitMicros: instanceLimits.monthlyMicros })
       },
       safeguards: this.safeguards,
       today: costed(days.get(todayStart.slice(0, 10)), todayStart),
@@ -376,15 +382,150 @@ export class ModelUsageGovernance implements ModelUsageRecorder {
     };
   }
 
+  /** The release config's spend limits of the instance: the ceiling an admin stays under. */
+  spendCeiling(): UsageSpendAmounts {
+    const { dailySpendLimit, monthlySpendLimit } = this.budget;
+    return {
+      ...(dailySpendLimit ? { dailyMicros: toMicros(dailySpendLimit) } : {}),
+      ...(monthlySpendLimit ? { monthlyMicros: toMicros(monthlySpendLimit) } : {})
+    };
+  }
+
   /**
-   * The spend budgets hold for the instance as a whole. The safeguards hold for each person on
-   * their own, and for the calls of no person together (`ModelUsageLimits`).
+   * Where one person stands against the spend limits of the current UTC day and month (LU-2):
+   * their own limit with what their own calls hold, the shared workspace's where one is named,
+   * and the instance's. A level reached holds a counter at or above its limit as admission
+   * applies it, safety multiplier included; a call is refused before that when its
+   * reservation would cross it.
    */
-  private limits(): ModelUsageLimits {
-    const { safeguards, budget } = this;
+  async spendStatus(input: {
+    clientInstanceId: ClientInstanceId;
+    userId: string;
+    workspaceId?: string;
+  }): Promise<UsageSpendStatus> {
+    const [stored, counters] = await Promise.all([
+      this.store.readSpendLimits({
+        clientInstanceId: input.clientInstanceId,
+        userId: input.userId,
+        ...(input.workspaceId === undefined ? {} : { workspaceId: input.workspaceId })
+      }),
+      this.store.readSpendCounters({
+        clientInstanceId: input.clientInstanceId,
+        users: [input.userId],
+        ...(input.workspaceId === undefined ? {} : { workspaces: [input.workspaceId] })
+      })
+    ]);
+    const level = (
+      scopeKind: UsageSpendCounter["scopeKind"],
+      scopeId: string,
+      limits: UsageSpendAmounts | undefined
+    ): UsageSpendLevelStatus => {
+      const period = (name: UsageSpendCounter["period"]): UsageSpendPeriodStatus => {
+        const spentMicros =
+          counters.find(
+            (counter) =>
+              counter.scopeKind === scopeKind &&
+              counter.scopeId === scopeId &&
+              counter.period === name
+          )?.costMicros ?? 0;
+        const limitMicros = name === "day" ? limits?.dailyMicros : limits?.monthlyMicros;
+        return {
+          spentMicros,
+          ...(limitMicros === undefined
+            ? {}
+            : {
+                limitMicros,
+                reached: spentMicros >= this.heldSpend(limitMicros)
+              })
+        };
+      };
+      return { day: period("day"), month: period("month") };
+    };
+    const currency = this.spendCurrency();
+    return {
+      ...(currency ? { currency } : {}),
+      own: level("user", input.userId, stored.user),
+      ...(stored.workspace
+        ? {
+            workspace: {
+              id: stored.workspace.id,
+              ...level("workspace", stored.workspace.id, stored.workspace.limits)
+            }
+          }
+        : {}),
+      instance: level("instance", "", this.instanceSpendLimits(stored.instance))
+    };
+  }
+
+  /** What a spend limit holds a counter to: the limit lowered by the safety multiplier. */
+  heldSpend(limitMicros: number): number {
+    return Math.floor(limitMicros / (this.budget.costSafetyMultiplier ?? 1));
+  }
+
+  /** The currency of the Customer Rate Card, which every spend limit is in. */
+  spendCurrency(): string | undefined {
+    return this.costs.customer?.currency;
+  }
+
+  /**
+   * The instance's spend limits as they hold: what an admin set, never above the release
+   * config's ceiling, and the ceiling where the admin set nothing.
+   */
+  instanceSpendLimits(stored: UsageSpendAmounts | undefined): UsageSpendAmounts {
+    const ceiling = this.spendCeiling();
+    const lower = (a: number | undefined, b: number | undefined) =>
+      a === undefined ? b : b === undefined ? a : Math.min(a, b);
+    const dailyMicros = lower(ceiling.dailyMicros, stored?.dailyMicros);
+    const monthlyMicros = lower(ceiling.monthlyMicros, stored?.monthlyMicros);
+    return {
+      ...(dailyMicros === undefined ? {} : { dailyMicros }),
+      ...(monthlyMicros === undefined ? {} : { monthlyMicros })
+    };
+  }
+
+  /**
+   * The spend limits a call is held against (LU-2): the instance's always, the shared
+   * workspace's where it happens in one, and the user's only for a call that is their own. A
+   * title, a guardrail check or any other call the product adds for a person counts against
+   * the workspace and the instance, never the person. Knowledge Base ingestion is held against
+   * none.
+   */
+  private async spendLimitsOf(call: ModelCallAdmission): Promise<CallSpendLimits> {
+    const { attribution } = call;
+    const purpose = attribution.kind === "system" ? attribution.purpose : undefined;
+    if (KNOWLEDGE_INGESTION_PURPOSES.some((ingestion) => ingestion === purpose)) return {};
+    const stored: UsageSpendLimitsOfCall = await this.store.readSpendLimits({
+      clientInstanceId: call.clientInstanceId,
+      ...(attribution.userId === undefined ? {} : { userId: attribution.userId }),
+      ...(attribution.workspaceId === undefined ? {} : { workspaceId: attribution.workspaceId }),
+      ...(attribution.conversationId === undefined
+        ? {}
+        : { conversationId: attribution.conversationId })
+    });
+    const own =
+      attribution.userId !== undefined &&
+      (attribution.kind !== "system" || attribution.purpose === "knowledge_query");
+    return {
+      instance: this.instanceSpendLimits(stored.instance),
+      ...(stored.workspace?.limits ? { workspace: stored.workspace.limits } : {}),
+      ...(own && stored.user ? { own: stored.user } : {})
+    };
+  }
+
+  /**
+   * The spend budgets hold for the instance as a whole, for a shared workspace and for a
+   * person's own calls. The safeguards hold for each person on their own, and for the calls of
+   * no person together (`ModelUsageLimits`).
+   */
+  private limits(spendLimits: CallSpendLimits = {}): ModelUsageLimits {
+    const { safeguards } = this;
     // A counter holds costs as they are settled. The safety multiplier lowers the limit.
-    const spend = (limit: number | undefined): { costMicros?: number } =>
-      limit ? { costMicros: Math.floor(toMicros(limit) / (budget.costSafetyMultiplier ?? 1)) } : {};
+    const spend = (micros: number | undefined): { costMicros?: number } =>
+      micros === undefined ? {} : { costMicros: this.heldSpend(micros) };
+    const periods = (amounts: UsageSpendAmounts): ModelUsagePeriodLimits => ({
+      day: spend(amounts.dailyMicros),
+      month: spend(amounts.monthlyMicros)
+    });
     const safeguardsTimes = (factor: number): ModelUsagePeriodLimits => {
       const { modelCallsPerDay, tokensPerDay, tokensPerMonth } = safeguards;
       // A valid limit is a safe integer; so is the shared bucket's, however large the limit.
@@ -398,22 +539,22 @@ export class ModelUsageGovernance implements ModelUsageRecorder {
       };
     };
     return {
-      instance: {
-        day: spend(budget.dailySpendLimit),
-        month: spend(budget.monthlySpendLimit)
-      },
+      instance: periods(spendLimits.instance ?? {}),
       person: safeguardsTimes(1),
-      unattended: safeguardsTimes(UNATTENDED_SAFEGUARD_FACTOR)
+      unattended: safeguardsTimes(UNATTENDED_SAFEGUARD_FACTOR),
+      ...(spendLimits.own ? { own: periods(spendLimits.own) } : {}),
+      ...(spendLimits.workspace ? { workspace: periods(spendLimits.workspace) } : {})
     };
   }
 
   /**
    * The most a call can use, taken from its request before it is sent: the input by its size,
    * the output by the request's maximum, and both at the highest price the rate card has for
-   * the model. With a spend budget, a model without a price is refused: nothing bounds what
-   * its call costs. A provider that bills nothing needs no price: its calls reserve no cost.
+   * the model. With a spend limit on any level the call is held against, a model without a
+   * price is refused: nothing bounds what its call costs, so the limit fails closed (ADR-0014).
+   * A provider that bills nothing needs no price: its calls reserve no cost.
    */
-  private reservationOf(call: ModelCallAdmission): ModelUsageCounted {
+  private reservationOf(call: ModelCallAdmission, spendLimits: CallSpendLimits): ModelUsageCounted {
     const inputTokens = Math.ceil(
       normalizeCount(call.request.inputCharacters) / RESERVED_CHARACTERS_PER_INPUT_TOKEN
     );
@@ -425,9 +566,12 @@ export class ModelUsageGovernance implements ModelUsageRecorder {
       ? 0
       : this.highestCost(call, inputTokens, outputTokens);
     const purpose = call.attribution.kind === "system" ? call.attribution.purpose : undefined;
+    const limited = [spendLimits.instance, spendLimits.workspace, spendLimits.own].some(
+      (amounts) => amounts?.dailyMicros !== undefined || amounts?.monthlyMicros !== undefined
+    );
     if (
       costMicros === undefined &&
-      (this.budget.dailySpendLimit || this.budget.monthlySpendLimit) &&
+      limited &&
       !KNOWLEDGE_INGESTION_PURPOSES.some((ingestion) => ingestion === purpose)
     ) {
       throw new ModelNotPricedError();
@@ -487,6 +631,35 @@ export class ModelUsageGovernance implements ModelUsageRecorder {
   }
 }
 
+/** One period of a spend limit as a person sees it: what is held, and the limit if one is set. */
+export interface UsageSpendPeriodStatus {
+  spentMicros: number;
+  limitMicros?: number;
+  /** Set with a limit: the counter is at or above it. */
+  reached?: boolean;
+}
+
+export interface UsageSpendLevelStatus {
+  day: UsageSpendPeriodStatus;
+  month: UsageSpendPeriodStatus;
+}
+
+export interface UsageSpendStatus {
+  currency?: string;
+  own: UsageSpendLevelStatus;
+  /** The shared workspace named, absent for a Personal Workspace and none. */
+  workspace?: UsageSpendLevelStatus & { id: string };
+  instance: UsageSpendLevelStatus;
+}
+
+/** The spend limits one call is held against, each level as it holds. */
+interface CallSpendLimits {
+  instance?: UsageSpendAmounts;
+  workspace?: UsageSpendAmounts;
+  /** The person's own limit, for a call that is their own. */
+  own?: UsageSpendAmounts;
+}
+
 const NOTHING_COUNTED: ModelUsageCounted = { tokens: 0, costMicros: 0 };
 
 /**
@@ -518,7 +691,9 @@ function refusalError(refusal: ModelUsageRefusal): ModelUsageLimitReachedError {
       ? "your own calls"
       : refusal.scope === "system"
         ? "product calls"
-        : "the instance";
+        : refusal.scope === "workspace"
+          ? "this workspace"
+          : "the instance";
   const reset = refusal.period === "day" ? "at midnight UTC" : "at the start of next month UTC";
   return new ModelUsageLimitReachedError(
     `${period} ${limit} has been reached for ${scope}. Resets ${reset}.`,

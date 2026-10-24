@@ -1030,6 +1030,13 @@
       "when": 1792788728912,
       "tag": "0146_user_operation_settings",
       "breakpoints": true
+    },
+    {
+      "idx": 147,
+      "version": "7",
+      "when": 1792858406452,
+      "tag": "0147_usage_spend_limits",
+      "breakpoints": true
     }
   ]
 }

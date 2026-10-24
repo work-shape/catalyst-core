@@ -116,7 +116,8 @@ const USAGE_LIMIT_METRICS: Record<ModelUsageRefusal["metric"], TranslationKey> =
 const USAGE_LIMIT_SCOPES: Record<ModelUsageRefusal["scope"], TranslationKey> = {
   user: "runUsageLimitScopeUser",
   system: "runUsageLimitScopeSystem",
-  instance: "runUsageLimitScopeInstance"
+  instance: "runUsageLimitScopeInstance",
+  workspace: "runUsageLimitScopeWorkspace"
 };
 
 /**

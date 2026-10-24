@@ -1,7 +1,8 @@
 import {
   MODEL_USAGE_EVENT_STATUSES,
   MODEL_USAGE_SOURCES,
-  USAGE_COST_STATUSES
+  USAGE_COST_STATUSES,
+  USAGE_SPEND_LIMIT_LEVELS
 } from "@work-shape/catalyst-asset-schemas";
 import type {
   AgentRunId,
@@ -264,7 +265,9 @@ export interface ModelUsagePeriodLimits {
  * Every chat call counts on the instance. A call a person made counts
  * on that person (`user`); a call the product made for a person, such as a title or a guardrail
  * check, counts on that person's `system` bucket; a call no person made counts on the shared
- * `system` bucket. The query of a Knowledge Base search is the person's own, as chat is.
+ * `system` bucket. The query of a Knowledge Base search is the person's own, as chat is. A call
+ * inside a shared workspace also counts on that workspace (`workspace`), whoever made it; a
+ * Personal Workspace has no counter of its own (limits spec 3.1).
  */
 export interface ModelUsageLimits {
   instance: ModelUsagePeriodLimits;
@@ -272,6 +275,59 @@ export interface ModelUsageLimits {
   person: ModelUsagePeriodLimits;
   /** The `system` bucket the calls of no person share. */
   unattended: ModelUsagePeriodLimits;
+  /**
+   * The spend limit of the person a call is their own: held on their own bucket alone, so a
+   * call the product adds for them never uses it up. A call that continues an agent run that
+   * already made one is not held against it: the answer that crossed it finishes.
+   */
+  own?: ModelUsagePeriodLimits;
+  /** The spend limit of the shared workspace a call happens in, with the same exception. */
+  workspace?: ModelUsagePeriodLimits;
+}
+
+export type UsageSpendLimitLevel = (typeof USAGE_SPEND_LIMIT_LEVELS)[number];
+/** The levels whose value is one workspace's or one user's. */
+export type UsageSpendLimitTarget = Extract<UsageSpendLimitLevel, "workspace" | "user">;
+
+/**
+ * Money per UTC day and per UTC month, in micros of the Customer Rate Card's currency. An absent
+ * amount is no limit.
+ */
+export interface UsageSpendAmounts {
+  dailyMicros?: number;
+  monthlyMicros?: number;
+}
+
+/** One limit an admin set (LU-2). Its row replaces nothing but what its level names. */
+export interface UsageSpendLimitRecord extends UsageSpendAmounts {
+  level: UsageSpendLimitLevel;
+  /** The workspace of `workspace`, the user of `user`. Absent on the other levels. */
+  targetId?: string;
+  updatedAt: ISODateString;
+  updatedBy?: string;
+}
+
+/**
+ * The limits an admin set that one call is held against, as stored: the release config's
+ * ceiling is not in it. A level nobody set is absent.
+ */
+export interface UsageSpendLimitsOfCall {
+  instance?: UsageSpendAmounts;
+  /**
+   * The shared workspace the call happens in, named by the call or else by its conversation,
+   * with its own value or else the default. Absent in a Personal Workspace and outside any.
+   */
+  workspace?: { id: string; limits?: UsageSpendAmounts };
+  /** The user's own value or else the default. Absent for a call of no user. */
+  user?: UsageSpendAmounts;
+}
+
+/** What a counter of the current UTC day or month holds in money, settled and reserved. */
+export interface UsageSpendCounter {
+  scopeKind: "instance" | "user" | "workspace";
+  scopeId: string;
+  period: ModelUsageRefusal["period"];
+  costMicros: number;
 }
 
 /** What settlement writes onto the usage event of an admitted call. */
@@ -377,7 +433,7 @@ export interface ModelUsageBackfillTarget {
   bindingId?: string;
 }
 
-export interface ModelUsageEventStore {
+export interface ModelUsageEventStore extends UsageSpendLimitStore {
   /**
    * Writes the event of a call nobody admitted, such as usage a tool reports, and adds it to
    * the counters of its day and month and to the sums of its day. Without `counted` the
@@ -496,6 +552,44 @@ export interface ModelUsageEventStore {
     after?: ModelUsageBackfillPosition;
     limit: number;
   }): Promise<{ next?: ModelUsageBackfillPosition; changedCount: number }>;
+}
+
+/** The spend limits an admin sets (LU-2) and what their counters hold. */
+export interface UsageSpendLimitStore {
+  /**
+   * The limits one call is held against: the instance's, the shared workspace's (named, or
+   * that of the conversation) and the user's, each level's own value before its default.
+   */
+  readSpendLimits(input: {
+    clientInstanceId: ClientInstanceId;
+    userId?: string;
+    workspaceId?: string;
+    conversationId?: string;
+  }): Promise<UsageSpendLimitsOfCall>;
+  /** Every limit set on the instance. */
+  listSpendLimits(input: { clientInstanceId: ClientInstanceId }): Promise<UsageSpendLimitRecord[]>;
+  /**
+   * Sets the limit of one level, or removes it with `null`: the default applies again to one
+   * workspace or user, no limit to a default, the release config's ceiling to the instance.
+   * Resolves with what was set before.
+   */
+  setSpendLimit(input: {
+    clientInstanceId: ClientInstanceId;
+    level: UsageSpendLimitLevel;
+    targetId?: string;
+    limits: UsageSpendAmounts | null;
+    updatedBy?: string;
+  }): Promise<{ previous?: UsageSpendAmounts }>;
+  /**
+   * What the counters of the current UTC day and month hold in money: the instance's, and those
+   * of the users and shared workspaces named, or of every user and workspace with `all`.
+   */
+  readSpendCounters(input: {
+    clientInstanceId: ClientInstanceId;
+    users?: readonly string[];
+    workspaces?: readonly string[];
+    all?: boolean;
+  }): Promise<UsageSpendCounter[]>;
 }
 
 export interface ModelUsageRecorder {
