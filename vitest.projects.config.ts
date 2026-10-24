@@ -7,10 +7,8 @@ import ts from "typescript";
 // hiding its database access behind a helper. Type-only imports are erased by Vitest.
 export const toolingFiles = [
   "tests/ci-check-results.test.ts",
-  "tests/ci-image-retry.test.ts",
   "tests/config-cli-pty.test.ts",
   "tests/docs-commit-stamp.test.ts",
-  "tests/limit-guard.test.ts",
   "tests/migration-policy.test.ts",
   "tests/quality-asset-boundaries.test.ts",
   "tests/quality-baseline.test.ts",
