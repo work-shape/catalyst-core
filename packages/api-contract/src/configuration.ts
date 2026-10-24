@@ -124,6 +124,12 @@ export const safeConfigSchema = z.object({
   modules: z.record(z.string(), z.object({ enabled: z.boolean() })).default({}),
   /** Written feedback on agent messages: whether the comment may carry its exchange. */
   feedback: z.object({ exchangeSnapshot: z.boolean() }).optional(),
+  /**
+   * Knowledge Bases on this instance. `semanticSearch`: the knowledge module is on and release
+   * config names a default embedding binding, so a Knowledge Base can search by meaning; a new
+   * one made in the interface then starts with `[semantic, keyword]`, else with `[keyword]`.
+   */
+  knowledge: z.object({ semanticSearch: z.boolean() }).optional(),
   /** Derived from `modules` for one transition release. */
   features: z.object({
     attachments: z.object({

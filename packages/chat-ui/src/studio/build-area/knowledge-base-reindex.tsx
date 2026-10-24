@@ -44,6 +44,10 @@ export function KnowledgeEmbedding({
     source.reindex !== undefined &&
     target !== undefined &&
     (state === "reindex_needed" || state === "reindex_available");
+  // With no index answering by meaning yet, as after turning it on, the first one is built.
+  const building = t(active ? "knowledge.reindexing" : "knowledge.embeddingFirst", {
+    model: target?.model ?? ""
+  });
   return (
     <div className="grid min-w-0 gap-3" data-knowledge-embedding={state}>
       <KeyValueList>
@@ -61,9 +65,9 @@ export function KnowledgeEmbedding({
         </Banner>
       ) : state === "reindexing" && progress ? (
         <div className="grid min-w-0 gap-1.5" data-knowledge-reindexing="">
-          <p className="text-label">{t("knowledge.reindexing", { model: target?.model ?? "" })}</p>
+          <p className="text-label">{building}</p>
           <Progress
-            label={t("knowledge.reindexing", { model: target?.model ?? "" })}
+            label={building}
             value={progress.embedded}
             max={Math.max(progress.total, 1)}
             tone="info"
@@ -72,7 +76,9 @@ export function KnowledgeEmbedding({
               total: number(progress.total)
             })}
           />
-          <p className="text-label text-muted-foreground">{t("knowledge.reindexingNote")}</p>
+          <p className="text-label text-muted-foreground">
+            {t(active ? "knowledge.reindexingNote" : "knowledge.embeddingFirstNote")}
+          </p>
         </div>
       ) : null}
       {offered && source.reindex ? (

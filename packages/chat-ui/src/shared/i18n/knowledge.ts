@@ -81,6 +81,9 @@ export const knowledge = defineTranslations({
     "knowledge.embeddingAvailable":
       "This knowledge base is set to {target}. Search answers with {active} until it is re-indexed.",
     "knowledge.reindexing": "Re-indexing with {model}",
+    "knowledge.embeddingFirst": "Embedding the passages with {model}",
+    "knowledge.embeddingFirstNote":
+      "Search finds passages by their words and titles until every passage is embedded.",
     "knowledge.reindexProgress": "{embedded} of {total} passages",
     "knowledge.reindexingNote":
       "Search answers from the current index until the new one is complete.",
@@ -154,10 +157,14 @@ export const knowledge = defineTranslations({
     "knowledge.holdsDocuments": "Documents",
     "knowledge.holdsDocumentsDescription":
       "Files you add: {formats}. Agents search them for words.",
+    "knowledge.holdsDocumentsDescriptionSemantic":
+      "Files you add: {formats}. Agents search them by meaning and for words.",
     "knowledge.holdsTables": "Tables of a data store",
     "knowledge.holdsTablesDescription": "Agents read the rows of the tables you describe with SQL.",
     "knowledge.sourceDocumentsDescription":
       "It keeps its documents in a store of its own and searches them for words. You add files under Documents, and folders through a synced source.",
+    "knowledge.sourceDocumentsDescriptionSemantic":
+      "It keeps its documents in a store of its own and searches them by meaning and for words. You add files under Documents, and folders through a synced source.",
     "knowledge.statusDocumentsDescription":
       "Whether the published version can keep and search its documents. It is checked when it is published and when you check now.",
     "knowledge.notPublishedDocuments":
@@ -345,6 +352,9 @@ export const knowledge = defineTranslations({
     "knowledge.embeddingAvailable":
       "Diese Wissensbasis ist auf {target} eingestellt. Bis sie neu indexiert ist, antwortet die Suche mit {active}.",
     "knowledge.reindexing": "Neuindexierung mit {model}",
+    "knowledge.embeddingFirst": "Die Passagen werden mit {model} eingebettet",
+    "knowledge.embeddingFirstNote":
+      "Bis jede Passage eingebettet ist, findet die Suche Passagen über ihre Wörter und Titel.",
     "knowledge.reindexProgress": "{embedded} von {total} Passagen",
     "knowledge.reindexingNote":
       "Bis der neue Index fertig ist, antwortet die Suche aus dem bisherigen.",
@@ -420,11 +430,15 @@ export const knowledge = defineTranslations({
     "knowledge.holdsDocuments": "Dokumente",
     "knowledge.holdsDocumentsDescription":
       "Dateien, die du hinzufügst: {formats}. Agenten durchsuchen sie nach Wörtern.",
+    "knowledge.holdsDocumentsDescriptionSemantic":
+      "Dateien, die du hinzufügst: {formats}. Agenten durchsuchen sie nach Bedeutung und nach Wörtern.",
     "knowledge.holdsTables": "Tabellen eines Datenspeichers",
     "knowledge.holdsTablesDescription":
       "Agenten lesen die Zeilen der Tabellen, die du beschreibst, mit SQL.",
     "knowledge.sourceDocumentsDescription":
       "Sie hält ihre Dokumente in einem eigenen Speicher und durchsucht sie nach Wörtern. Dateien fügst du unter Dokumente hinzu, Ordner über eine synchronisierte Quelle.",
+    "knowledge.sourceDocumentsDescriptionSemantic":
+      "Sie hält ihre Dokumente in einem eigenen Speicher und durchsucht sie nach Bedeutung und nach Wörtern. Dateien fügst du unter Dokumente hinzu, Ordner über eine synchronisierte Quelle.",
     "knowledge.statusDocumentsDescription":
       "Ob die veröffentlichte Version ihre Dokumente speichern und durchsuchen kann. Das wird beim Veröffentlichen geprüft und wenn du jetzt prüfst.",
     "knowledge.notPublishedDocuments":

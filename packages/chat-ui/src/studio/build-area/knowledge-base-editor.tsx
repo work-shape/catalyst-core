@@ -122,6 +122,8 @@ export function KnowledgeBaseEditor({
   };
   const published = asset?.publishedRevision;
   const documents = form.holds === "documents";
+  // A definition that names no methods searches by meaning and by words, as the instance reads it.
+  const semantic = form.methods.length === 0 || form.methods.includes("semantic");
   // What only a published Knowledge Base has: its documents, its status and a test.
   const live = asset !== undefined && published !== undefined;
   // The Connector types of the instance its documents can be synced from, named under Source.
@@ -184,16 +186,21 @@ export function KnowledgeBaseEditor({
       label: t("knowledge.holdsDocuments"),
       // The formats this instance reads: PDF and DOCX need its document processing, the same
       // module switch the instance reads them by. Without the settings, the text formats.
-      description: t("knowledge.holdsDocumentsDescription", {
-        formats: uploadFormatList(
-          uploadFormats(
-            settings?.config.modules.documents?.enabled === true
-              ? KNOWLEDGE_DOCUMENT_FORMATS
-              : undefined
-          ),
-          locale
-        )
-      })
+      description: t(
+        semantic
+          ? "knowledge.holdsDocumentsDescriptionSemantic"
+          : "knowledge.holdsDocumentsDescription",
+        {
+          formats: uploadFormatList(
+            uploadFormats(
+              settings?.config.modules.documents?.enabled === true
+                ? KNOWLEDGE_DOCUMENT_FORMATS
+                : undefined
+            ),
+            locale
+          )
+        }
+      )
     },
     {
       value: "tables",
@@ -241,7 +248,11 @@ export function KnowledgeBaseEditor({
       id: "source",
       label: t("knowledge.sourceTitle"),
       description: t(
-        documents ? "knowledge.sourceDocumentsDescription" : "knowledge.sourceDescription"
+        !documents
+          ? "knowledge.sourceDescription"
+          : semantic
+            ? "knowledge.sourceDocumentsDescriptionSemantic"
+            : "knowledge.sourceDocumentsDescription"
       ),
       ...(documents ? {} : { count: form.tables.length }),
       refusalField: "source",

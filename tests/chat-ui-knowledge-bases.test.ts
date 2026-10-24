@@ -493,6 +493,17 @@ describe("Knowledge Bases of documents", () => {
     });
   });
 
+  it("writes a new one that searches by meaning and by words where the instance offers it", () => {
+    const form = startedKnowledgeBaseForm({ name: "contracts-kb", title: "Contracts" }, true);
+
+    expect(knowledgeBaseFormToConfig({ ...form, description: "Signed contracts." })).toEqual({
+      name: "contracts-kb",
+      title: "Contracts",
+      description: "Signed contracts.",
+      methods: ["semantic", "keyword"]
+    });
+  });
+
   it("keeps a definition as it was: methods it names, none where it names none, and tables", () => {
     const documents = documentsKnowledgeBase().config;
     expect(knowledgeBaseFormToConfig(knowledgeBaseConfigToForm(documents))).toEqual(documents);
