@@ -14,7 +14,13 @@ import {
   type KnowledgeDocumentStore,
   type PlatformStores
 } from "@work-shape/catalyst-core";
-import { publishReindexReview, reindexStatementLines, startPublishedReindex } from "./reindex";
+import {
+  enqueueDropUnusedEmbeddings,
+  publishDropsEmbeddings,
+  publishReindexReview,
+  reindexStatementLines,
+  startPublishedReindex
+} from "./reindex";
 import { knowledgeProcessingOf, knowledgeDocumentTypesSchema } from "./document-types";
 import {
   knowledgeBaseDefinitionSchema,
@@ -316,7 +322,19 @@ export async function confirmKnowledgeProcessing(
     records: stores.dataStores,
     locale: runtime.defaultLocale
   });
-  if (!review) return;
+  // Turning `semantic` off, or setting the binding back while a re-index builds: what the
+  // revision no longer uses is dropped by a job after the publish, and nothing is asked.
+  const drops = await publishDropsEmbeddings(runtime, {
+    assetId: input.assetId,
+    config: input.config,
+    previous: input.replaced,
+    embedding,
+    records: stores.dataStores
+  });
+  if (!review) {
+    if (drops) await enqueueDropUnusedEmbeddings(runtime, stores, input.assetId);
+    return;
+  }
   if (input.confirmProcessing !== review.confirmation || !review.priced)
     throw new AppError(
       "VALIDATION_FAILED",
@@ -333,6 +351,7 @@ export async function confirmKnowledgeProcessing(
       },
       { exposeMessage: true }
     );
+  if (drops) await enqueueDropUnusedEmbeddings(runtime, stores, input.assetId);
   const next = knowledgeBaseDefinitionSchema.parse(input.config);
   const before = knowledgeBaseDefinitionSchema.parse(input.replaced);
   if (review.reindex && input.actor) {

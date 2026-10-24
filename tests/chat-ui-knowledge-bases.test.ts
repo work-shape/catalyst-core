@@ -135,7 +135,9 @@ function render(
     locale = "en",
     workflows,
     settings,
-    availability
+    availability,
+    reindex,
+    documents
   }: {
     newAsset?: boolean;
     state?: KnowledgeBaseState;
@@ -146,6 +148,10 @@ function render(
     settings?: SettingsPageContextValue;
     /** Where agents can use it, as the instance answers it to a reader who may change it. */
     availability?: AvailabilityChoice;
+    /** The re-index the page may start. */
+    reindex?: KnowledgeBaseSource["reindex"];
+    /** Its documents, where not the handbook alone. */
+    documents?: KnowledgeDocument[];
   } = {}
 ): string {
   const name = newAsset ? undefined : asset.name;
@@ -179,7 +185,9 @@ function render(
   const planted = knowledgeBaseKindOn(() => ({
     ...source,
     useState: () => ready(state),
-    ...(availability === undefined ? {} : { useAvailability: () => availability })
+    ...(availability === undefined ? {} : { useAvailability: () => availability }),
+    ...(reindex === undefined ? {} : { reindex }),
+    ...(documents === undefined ? {} : { useDocuments: () => ready({ documents }) })
   }));
   const kinds = buildAssetKinds.map((kind) => (kind.kind === "knowledge_base" ? planted : kind));
   const page = createElement(
@@ -432,6 +440,42 @@ describe("Knowledge Bases of documents", () => {
     expect(page).not.toContain("Braucht Aufmerksamkeit");
     // What is no fault is shown as no error.
     expect(page).not.toContain("is being made.");
+  });
+
+  it("offers to embed the searchable documents of one that searches by meaning and has no index yet", () => {
+    const semantic = documentsKnowledgeBase();
+    const asset = { ...semantic, config: { ...semantic.config, methods: ["semantic", "keyword"] } };
+    const unembedded: KnowledgeBaseState = {
+      id: "asset_handbook",
+      name: "handbook-kb",
+      status: "ok",
+      revision: 2,
+      checkedAt: "2026-10-17T09:00:00.000Z",
+      tables: [],
+      embedding: {
+        state: "none",
+        target: { bindingId: "embedding", model: "text-embedding-small", dimensions: 8 }
+      }
+    };
+    const reindex: KnowledgeBaseSource["reindex"] = async () => ({
+      ok: true,
+      data: { started: false, state: "none" }
+    });
+
+    const english = render(asset, { state: unembedded, reindex });
+    expect(english).toContain('data-knowledge-embedding="none"');
+    expect(english).toContain("data-knowledge-reindex");
+    expect(english).toContain("Embed passages…");
+    expect(english).toContain("The passages are not embedded yet");
+    expect(english).not.toContain("Re-index…");
+    const german = render(asset, { state: unembedded, reindex, locale: "de" });
+    expect(german).toContain("Passagen einbetten…");
+    expect(german).toContain("Die Passagen sind noch nicht eingebettet.");
+
+    // With no searchable document there is nothing to embed, and nothing is offered.
+    const empty = render(asset, { state: unembedded, reindex, documents: [] });
+    expect(empty).toContain('data-knowledge-embedding="none"');
+    expect(empty).not.toContain("data-knowledge-reindex");
   });
 
   it("starts a new Knowledge Base with the choice of documents or tables, documents chosen", () => {
