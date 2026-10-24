@@ -208,7 +208,7 @@ export const PROVIDER_KINDS: Record<ModelProviderKind, ProviderKind> = {
     fields: [
       {
         flag: "base-url",
-        question: "Base address of the API, such as https://api.example.com/v1",
+        question: "Base address of the API (https://<host>/v1)",
         required: true,
         refusal: httpsUrl("--base-url")
       },
