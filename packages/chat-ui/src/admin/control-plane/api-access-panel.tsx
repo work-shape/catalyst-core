@@ -110,9 +110,21 @@ export function ApiAccessPanel({
   const [credentialDialogOpen, setCredentialDialogOpen] = useState(false);
   const [credentialToRevoke, setCredentialToRevoke] = useState<ApiCredential>();
   const [actionError, setActionError] = useState<string>();
+  // The principal a save just answered with, until the list is read again and holds it. Without
+  // it the page fell back to the first principal of the old list after a create, and showed
+  // that one's rights as if they were the new principal's.
+  const [saved, setSaved] = useState<ServicePrincipalDetail>();
 
   const selectedPrincipal =
-    principals.find(({ principal }) => principal.id === selectedPrincipalId) ?? principals[0];
+    principals.find(({ principal }) => principal.id === selectedPrincipalId) ??
+    (saved?.principal.id === selectedPrincipalId ? saved : undefined) ??
+    principals[0];
+
+  useEffect(() => {
+    if (saved && principals.some(({ principal }) => principal.id === saved.principal.id)) {
+      setSaved(undefined);
+    }
+  }, [principals, saved]);
 
   useEffect(() => {
     // Until the list is read there is no first principal to fall back to: the one named in
@@ -250,6 +262,7 @@ export function ApiAccessPanel({
                   principalDialog === "edit" && selectedPrincipal
                     ? await onUpdatePrincipal(selectedPrincipal.principal.id, input)
                     : await onCreatePrincipal(input as CreateServicePrincipalRequest);
+                setSaved(detail);
                 setSelectedPrincipalId(detail.principal.id);
                 setPrincipalDialog(undefined);
               } catch (caught) {
