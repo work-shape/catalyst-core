@@ -251,9 +251,17 @@ export function UsageView({
             </CardContent>
           </Card>
         </TabsContent>
-        {breakdown === undefined ? null : <TabsContent value="breakdown">{breakdown}</TabsContent>}
-        {users === undefined ? null : <TabsContent value="users">{users}</TabsContent>}
-        <TabsContent value="recent">
+        {breakdown === undefined ? null : (
+          <TabsContent value="breakdown" className="min-w-0">
+            {breakdown}
+          </TabsContent>
+        )}
+        {users === undefined ? null : (
+          <TabsContent value="users" className="min-w-0">
+            {users}
+          </TabsContent>
+        )}
+        <TabsContent value="recent" className="min-w-0">
           <Card>
             <CardHeader className="p-4 pb-2">
               <CardTitle className="text-base">{t("settings.usageRecentTitle")}</CardTitle>
@@ -553,10 +561,13 @@ function SpendBudgetProgress({
 /** Spend or tokens per UTC day, drawn by the library's chart. */
 export function DailyUsageCard({
   days,
-  defaultMetric
+  defaultMetric,
+  title
 }: {
   days: ModelUsageDailyBucket[];
   defaultMetric: DailyUsageMetric;
+  /** The card's title; by default, the number of days drawn. */
+  title?: string;
 }) {
   const { t, locale } = useTranslation();
   const [metric, setMetric] = useState<DailyUsageMetric>(defaultMetric);
@@ -580,7 +591,7 @@ export function DailyUsageCard({
       <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 p-4 pb-2">
         <CardTitle className="inline-flex items-center gap-2 text-base">
           <CalendarDays size={15} aria-hidden="true" className="text-muted-foreground" />
-          {t("settings.usageDailyTitle", { count: dayCount })}
+          {title ?? t("settings.usageDailyTitle", { count: dayCount })}
         </CardTitle>
         <SegmentedControl
           size="sm"
