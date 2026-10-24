@@ -119,8 +119,8 @@ describe("platform.context.get", () => {
       "skill.write",
       "skill.delete"
     ]);
-    // The role administers service principals (RIGHTS-1a).
-    expect(admin.instanceActions).toEqual(["service_principals.manage"]);
+    // The role administers service principals (RIGHTS-1a) and the spend limits (LU-2).
+    expect(admin.instanceActions).toEqual(["service_principals.manage", "limits.manage"]);
     // Agents and skills are used through no right of their own: no use level is offered.
     expect(admin.useActions).toEqual([]);
     // What the key `catalyst setup` asks for: authoring and publishing, never deleting.

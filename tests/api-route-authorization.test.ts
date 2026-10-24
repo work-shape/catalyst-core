@@ -62,6 +62,7 @@ const acceptedBodies: Partial<Record<ApiOperationName, unknown>> = {
   "service_principals.create": { displayLabel: "Service" },
   "service_principals.update": { displayLabel: "Service" },
   "api_credentials.create": { name: "Credential" },
+  "usage.limits.set": { level: "instance", limits: { daily: 1 } },
   "users.create": { displayLabel: "Person" },
   "users.update": { displayLabel: "Person" },
   "users.identities.upsert": { authSource: "test", externalUserId: "person" },
