@@ -109,7 +109,9 @@ export function ConnectionPage({
   // A type with a form of its own, such as a document source, discovers nothing, and its
   // settings are not the address and key this page edits: they show as they are.
   const { connectorType } = asset.config;
-  const offer = (source.useConnectorTypes?.() ?? []).find((type) => type.type === connectorType);
+  const offer = (source.useConnectorTypes?.(source.mayTest(asset)) ?? []).find(
+    (type) => type.type === connectorType
+  );
   const discovers = connectorType !== "http_api" && offer === undefined;
   const formEdits = offer === undefined;
   const [wait, setWait] = useState<DiscoveryWait | undefined>(() =>
