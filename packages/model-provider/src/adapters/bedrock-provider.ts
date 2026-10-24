@@ -1,3 +1,4 @@
+import { BEDROCK_REGION, bedrockProfileRefusal } from "@work-shape/catalyst-asset-schemas";
 import {
   AppError,
   type ProviderCheckContext,
@@ -40,42 +41,9 @@ import type {
   ModelToolCall
 } from "../types";
 
-/**
- * The one region this adapter calls. Bedrock's data retention is set to `none` there and
- * nowhere else, and the EU inference profiles route from it to EU regions only.
- */
-export const BEDROCK_REGION = "eu-central-1";
+export { BEDROCK_REGION };
 /** The one host this adapter calls. No setting names another. */
 export const BEDROCK_RUNTIME_HOST = `bedrock-runtime.${BEDROCK_REGION}.amazonaws.com`;
-
-const BEDROCK_ARN = /^arn:aws:bedrock:([a-z0-9-]*):(\d{12}):([a-z-]+)\/([a-zA-Z0-9.:_-]+)$/u;
-const APPLICATION_INFERENCE_PROFILE = "application-inference-profile";
-
-/**
- * Why a model id is not one this adapter calls, or undefined for an application inference
- * profile of the configured account in the adapter's region. A profile of another account is
- * refused before anything is sent: the key would be shown to a resource this instance does not
- * own. Usage on Bedrock is attributed to a consumer by its
- * application inference profile and the consumer's credential may call that alone, so a model id
- * or a shared profile is refused here and never sent. The reason never repeats the id: an ARN
- * holds the account id.
- */
-function bedrockModelRefusal(model: string, accountId: string): string | undefined {
-  const arn = BEDROCK_ARN.exec(model);
-  if (!arn) {
-    return "a model id or a shared inference profile such as 'eu.anthropic.…' is not attributed to this consumer";
-  }
-  if (arn[3] !== APPLICATION_INFERENCE_PROFILE) {
-    return "the ARN names a foundation model or a shared inference profile, which is not attributed to this consumer";
-  }
-  if (arn[1] !== BEDROCK_REGION) {
-    return `the profile is in another region, and calls go to ${BEDROCK_REGION} only`;
-  }
-  if (arn[2] !== accountId) {
-    return "the profile belongs to another AWS account than the provider's 'accountId'";
-  }
-  return undefined;
-}
 
 /**
  * What Claude on Bedrock does through this adapter. Web search is not declared: Bedrock has
@@ -117,7 +85,7 @@ export class BedrockProvider {
 
   /** Throws a config error for a model this adapter does not call. */
   assertModel(model: string): void {
-    const refusal = bedrockModelRefusal(model, this.options.accountId);
+    const refusal = bedrockProfileRefusal(model, this.options.accountId);
     if (refusal !== undefined) {
       throw new AppError(
         "VALIDATION_FAILED",

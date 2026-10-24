@@ -441,6 +441,8 @@ The address is part of the public branding the interface reads, so it is not a p
 
 ## Model Provider Configuration
 
+`catalyst models add` writes a provider on Azure OpenAI, Vertex AI, Bedrock or another OpenAI-compatible endpoint, its binding and its price into this file: [Use your own model provider](/operate/own-model-provider/).
+
 OpenAI-compatible providers keep API-specific request shapes behind the model-provider boundary. Agents and tools still see Workshape Catalyst's provider-neutral messages, tools, tool calls, tool results, and usage.
 
 Tools reach an OpenAI-compatible provider under a readable name derived from the tool name (dots become underscores), shortened with a short suffix when the name is too long or would clash.

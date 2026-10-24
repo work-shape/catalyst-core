@@ -852,6 +852,9 @@ importers:
 
   packages/model-provider:
     dependencies:
+      '@work-shape/catalyst-asset-schemas':
+        specifier: workspace:*
+        version: link:../asset-schemas
       '@work-shape/catalyst-core':
         specifier: workspace:*
         version: link:../core
