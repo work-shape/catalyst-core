@@ -186,6 +186,7 @@
     "me.operation_settings.list": "own",
     "me.password.change": "own",
     "me.update": "own",
+    "me.usage.get": "own",
     "openapi.get": "own",
     "operations.get_run": "own",
     "pages.files.get": "conversation_access",

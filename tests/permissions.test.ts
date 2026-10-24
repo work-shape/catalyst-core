@@ -80,7 +80,7 @@ describe("permissions", () => {
       "publisher"
     ]);
     // The rights of a Connection, an App, a Workflow, a Data Store, a Knowledge Base, a Guardrail
-    // and a mail sender came after the legacy keys, as did the right over service principals and
+    // and a mail sender came after the legacy keys, as did the rights over service principals and spend limits and
     // the two bundles and the right to edit the built-in roles: no key names one, so nobody holds
     // one through the legacy column.
     const unkeyed = (action: string) =>
@@ -88,6 +88,7 @@ describe("permissions", () => {
         action
       ) ||
       action === "service_principals.manage" ||
+      action === "limits.manage" ||
       action === "roles.edit_built_in" ||
       action === "feedback.review" ||
       action === "agent.publish" ||
