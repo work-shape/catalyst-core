@@ -39,6 +39,8 @@ import { useState } from "react";
 import { useTranslation, type TranslationKey } from "../../../shared/i18n";
 import { formatDateTime, formatElapsed } from "../../../shared/locale-format";
 import { useModuleName } from "../../../shared/module-texts";
+import { usePlatformContextQuery } from "../../../shared/api/workspace-queries";
+import { canRetryJobs } from "../../../shared/governance";
 import { useSettingsPage } from "../../../shared/settings-page-context";
 
 // A worker polls once a second, so a due job is taken within seconds while a process that
@@ -273,7 +275,7 @@ function JobSummaryTable({
 
 function JobList({ tab, kind }: { tab: JobTab; kind: string | undefined }) {
   const { t, locale } = useTranslation();
-  const { user } = useSettingsPage();
+  const { apiBaseUrl, authScope } = useSettingsPage();
   const { client, scope } = useJobsApi();
   const queryClient = useQueryClient();
   const filter: JobListFilter = { statuses: tab.statuses, kind };
@@ -294,7 +296,10 @@ function JobList({ tab, kind }: { tab: JobTab; kind: string | undefined }) {
     // Whatever the answer, the job is no longer what the row says.
     onSettled: () => queryClient.invalidateQueries({ queryKey: scope })
   });
-  const canRetry = user.roles.includes("superadmin");
+  // Retry is the right `jobs.retry`, which the instance tells in its platform context.
+  const canRetry = canRetryJobs(
+    usePlatformContextQuery({ apiBaseUrl, authScope, client, enabled: true }).data
+  );
   const moduleName = useModuleName();
   const jobs = jobsQuery.data?.pages.flatMap((page) => page.items);
 

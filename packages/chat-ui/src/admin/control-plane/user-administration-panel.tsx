@@ -59,6 +59,8 @@ interface UserAdministrationPanelProps {
   loading: boolean;
   error?: string;
   canManageSuperadminAccess: boolean;
+  /** The viewer holds `users.delete`, and the page offers to delete an account. */
+  canDeleteUsers: boolean;
   mutating: boolean;
   onCreateUser(input: CreateAdministeredUserRequest): Promise<AdministeredUser>;
   onUpdateUser(userId: string, input: UpdateAdministeredUserRequest): Promise<AdministeredUser>;
@@ -80,6 +82,7 @@ export function UserAdministrationPanel({
   loading,
   error,
   canManageSuperadminAccess,
+  canDeleteUsers,
   mutating,
   onCreateUser,
   onUpdateUser,
@@ -119,7 +122,7 @@ export function UserAdministrationPanel({
       <UserDetail
         user={selectedUser}
         canManageSuperadminAccess={canManageSuperadminAccess}
-        canDeleteUser={canManageSuperadminAccess}
+        canDeleteUser={canDeleteUsers}
         mutating={mutating}
         onBack={() => setSelectedUserId(undefined)}
         onUpdateUser={onUpdateUser}

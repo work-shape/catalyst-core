@@ -361,14 +361,20 @@ describe("user administration: who may change a user", () => {
       );
       expect({ operation, status: refused.statusCode }).toEqual({ operation, status: 403 });
       // No right a caller can be granted opens the rule, so the refusal names the operation.
-      expect(errorOf(refused)).toMatchObject({
-        code: "FORBIDDEN",
-        message:
-          operation === "users.delete"
-            ? "Only a superadmin may delete a user"
-            : "Only a superadmin may change a superadmin",
-        details: { action: operation, reason: "no_grant" }
-      });
+      // Deleting asks `users.delete` first, which an admin does not hold by default.
+      expect(errorOf(refused)).toMatchObject(
+        operation === "users.delete"
+          ? {
+              code: "FORBIDDEN",
+              message: "Missing the right 'users.delete'",
+              details: { action: "users.delete", reason: "no_grant" }
+            }
+          : {
+              code: "FORBIDDEN",
+              message: "Only a superadmin may change a superadmin",
+              details: { action: operation, reason: "no_grant" }
+            }
+      );
       const [run] = await fixture.runs(operation);
       expect(run?.error?.message).toBe(errorOf(refused).message);
       expect(await fixture.rowsOfRun(run?.id)).toEqual([
@@ -466,7 +472,9 @@ describe("user administration: who may change a user", () => {
       headers: as.superadmin
     });
     expect(self.statusCode).toBe(422);
-    expect(errorOf(self).message).toBe("Superadmins cannot delete their own user account");
+    expect(errorOf(self).message).toBe(
+      "Nobody deletes their own user account through user administration"
+    );
 
     const release = await fixture.server.call("users.create", {
       headers: as.superadmin,

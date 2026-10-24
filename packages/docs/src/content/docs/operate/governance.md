@@ -117,8 +117,8 @@ and its API never show a job's payload or an error message, because either can q
 provider or a record.
 
 A job is `dead` when its attempts are used up, and `failed` when another attempt could not
-help or when a schedule tick failed. A superadmin can retry a failed or dead job. The retry
-queues the job again and puts the record it works on back into the state the job starts from,
+help or when a schedule tick failed. A holder of "Retry jobs" (`jobs.retry`, which a
+Superadmin holds by default) can retry a failed or dead job. The retry queues the job again and puts the record it works on back into the state the job starts from,
 so a preview that failed is rendered again and a draft attachment that failed is preprocessed
 again. There is no retry for a schedule tick, since the next tick does its work, none for a
 workspace command, since a command is never run a second time, and none for a kind whose

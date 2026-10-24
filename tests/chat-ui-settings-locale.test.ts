@@ -45,6 +45,7 @@ describe("German Settings copy", () => {
         users: [user],
         loading: false,
         canManageSuperadminAccess: true,
+        canDeleteUsers: true,
         mutating: false,
         onCreateUser: unused,
         onUpdateUser: unused,

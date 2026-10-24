@@ -12,6 +12,8 @@ import { MAIL_SENDER_GRANT_SCOPES } from "./grantable-scopes/mail-sender";
 import { WORKSPACE_GRANT_SCOPES } from "./grantable-scopes/workspace";
 import { ROLE_GRANT_SCOPES } from "./grantable-scopes/role";
 import { USAGE_GRANT_SCOPES } from "./grantable-scopes/usage";
+import { USERS_GRANT_SCOPES } from "./grantable-scopes/users";
+import { JOBS_GRANT_SCOPES } from "./grantable-scopes/jobs";
 
 /**
  * The actions a grant row can be written for, with the scope kinds it can be written at. A row
@@ -32,5 +34,7 @@ export const GRANTABLE_ACTION_SCOPES = {
   ...MAIL_SENDER_GRANT_SCOPES,
   ...WORKSPACE_GRANT_SCOPES,
   ...ROLE_GRANT_SCOPES,
-  ...USAGE_GRANT_SCOPES
+  ...USAGE_GRANT_SCOPES,
+  ...USERS_GRANT_SCOPES,
+  ...JOBS_GRANT_SCOPES
 } as const satisfies ActionScopes;

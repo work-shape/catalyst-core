@@ -1,6 +1,12 @@
-/** Rights over the instance itself: people, roles, usage, audit, API access, models and releases. */
+/**
+ * Rights over the instance itself: people, roles, usage, audit, background jobs, API access,
+ * models and releases.
+ */
 export const ADMINISTRATION_ACTIONS = [
   "users.manage",
+  // Deleting a person's account and their data, beside `users.manage` (RIGHTS-1e, D5). Its
+  // default sits with `superadmin` alone.
+  "users.delete",
   "usage.view",
   // Setting the spend limits of the instance, of shared workspaces and of users (LU-2).
   // Instance admins hold it; workspace owners do not.
@@ -10,6 +16,9 @@ export const ADMINISTRATION_ACTIONS = [
   // works council has a say on it (BetrVG section 87(1) no. 6).
   "usage.view_users",
   "audit.view",
+  // Running a background job again that failed or died (RIGHTS-1e; UX audit ruling 2). Its
+  // default sits with `superadmin` alone.
+  "jobs.retry",
   "api_access.manage",
   // Creating service principals, giving and taking their rights, enabling and disabling them.
   // Their keys stay with `api_access.manage`.

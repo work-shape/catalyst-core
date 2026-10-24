@@ -140,7 +140,7 @@ export function UserDetail({
           />
           <DeleteUserCard
             user={user}
-            canDeleteUser={canDeleteUser}
+            canDeleteUser={canDeleteUser && canManageUser}
             mutating={mutating}
             onDeleteUser={onDeleteUser}
             onDeleted={onDeleted}

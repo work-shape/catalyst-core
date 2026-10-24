@@ -1,5 +1,4 @@
 import { apiOperations, parseJobStatusList } from "@work-shape/catalyst-api-contract";
-import { isAuthenticatedServicePrincipal, isSuperadmin } from "@work-shape/catalyst-core";
 import type { Route } from "../http/route";
 import { JobAdminWorkflow } from "../jobs/job-admin-service";
 import type { ChatServerOptions } from "../types";
@@ -21,12 +20,9 @@ export function registerJobRoutes(route: Route, options: ChatServerOptions): voi
     )
   );
 
+  // A retry runs work again that the product gave up on: the right `jobs.retry`, whose default
+  // sits with `superadmin` alone (RIGHTS-1e).
   route.operation(retry, {
-    // A retry runs work again that the product gave up on, so it is a superadmin's alone.
-    authorize: (_input, { actor }) =>
-      !isAuthenticatedServicePrincipal(actor) && isSuperadmin(actor)
-        ? { allowed: true }
-        : { allowed: false, action: retry.id, reason: "no_grant" },
     resource: ({ jobId }) => ({ kind: "job", id: jobId }),
     execute: ({ jobId }, context) => workflow.retry(jobId, context)
   });

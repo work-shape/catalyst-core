@@ -68,10 +68,12 @@ describe("permissions", () => {
       "operations.approve",
       "feedback.review",
       "users.manage",
+      "users.delete",
       "usage.view",
       "limits.manage",
       "usage.view_users",
       "audit.view",
+      "jobs.retry",
       "api_access.manage",
       "service_principals.manage",
       "agent_models.manage",
@@ -82,8 +84,9 @@ describe("permissions", () => {
     ]);
     // The rights of a Connection, an App, a Workflow, a Data Store, a Knowledge Base, a Guardrail
     // and a mail sender came after the legacy keys, as did the rights over service principals and
-    // spend limits, the right to view usage by person, the two bundles and the right to edit the
-    // built-in roles: no key names one, so nobody holds one through the legacy column.
+    // spend limits, the right to view usage by person, the two bundles, the right to edit the
+    // built-in roles and those to delete users and retry jobs: no key names one, so nobody holds
+    // one through the legacy column.
     const unkeyed = (action: string) =>
       /^(?:connection|app|workflow|data_store|knowledge_base|guardrail|mail_sender)\./u.test(
         action
@@ -92,6 +95,8 @@ describe("permissions", () => {
       action === "limits.manage" ||
       action === "usage.view_users" ||
       action === "roles.edit_built_in" ||
+      action === "users.delete" ||
+      action === "jobs.retry" ||
       action === "feedback.review" ||
       action === "agent.publish" ||
       action === "agent.approve" ||

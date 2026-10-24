@@ -91,7 +91,10 @@ describe("the role model", () => {
     expect(roleAreaOf("roles.edit_built_in")).toBe("roles");
     expect(roleAreaOf("builder")).toBe("workspace");
     expect(roleAreaOf("agent.use")).toBe("agent");
-    expect(roleAreaOf("users.manage")).toBe("administration");
+    expect(roleAreaOf("users.manage")).toBe("users");
+    expect(roleAreaOf("users.delete")).toBe("users");
+    expect(roleAreaOf("jobs.retry")).toBe("jobs");
+    expect(roleAreaOf("audit.view")).toBe("administration");
     expect(ROLE_AREAS.at(-1)).toBe("administration");
   });
 
@@ -129,7 +132,9 @@ describe("the role model", () => {
       rights: rights(["users.manage", "roles.edit_built_in", "usage.view"])
     };
     const choices = new Map(
-      areaRightChoices("administration", reviewers.grants, narrow).map((c) => [c.action, c])
+      ["administration", "users"]
+        .flatMap((area) => areaRightChoices(area, reviewers.grants, narrow))
+        .map((c) => [c.action, c])
     );
     // Held: tickable. Ticked already: may be unticked although not held.
     expect(choices.get("users.manage")).toEqual({ action: "users.manage", checked: false });
@@ -203,11 +208,11 @@ describe("the role model", () => {
         scopeId: "ws"
       }
     ];
-    expect(withAreaAllows(grants, "administration", ["users.manage"])).toEqual([
+    expect(withAreaAllows(grants, "administration", ["limits.manage"])).toEqual([
       allow("agent.use"),
       { action: "usage.view", effect: "deny", scopeKind: "instance" },
       { action: "users.manage", effect: "allow", scopeKind: "workspace", scopeId: "ws" },
-      allow("users.manage")
+      allow("limits.manage")
     ]);
     expect(
       withoutGrant(grants, { action: "usage.view", effect: "deny", scopeKind: "instance" })

@@ -481,7 +481,7 @@ describe("Instance > Jobs: who may", () => {
     await expect(storedJob("job_dead")).resolves.toMatchObject({ status: "dead" });
   });
 
-  it("lets an administrator read and leaves the retry to a superadmin", async () => {
+  it("lets an administrator read and refuses the retry naming jobs.retry, which a superadmin holds", async () => {
     const server = await createServer();
     await plant({ id: "job_dead", kind: "report.build", status: "dead" });
 
@@ -498,12 +498,12 @@ describe("Instance > Jobs: who may", () => {
       403,
       expect.objectContaining({
         code: "FORBIDDEN",
-        details: { action: "instance.jobs.retry", reason: "no_grant" }
+        message: "Missing the right 'jobs.retry'",
+        details: { action: "jobs.retry", reason: "no_grant" }
       })
     ]);
     await expect(storedJob("job_dead")).resolves.toMatchObject({ status: "dead", attempts: 3 });
-    // A service principal with the right reads as a person does. It is no superadmin: the
-    // retry takes a person.
+    // A service principal with the right reads as a person does. The retry takes a person.
     const service = asCaller({ kind: "service", permissions: auditView });
     const read = [
       await server.call("instance.jobs.summary", {}, service),
@@ -519,6 +519,55 @@ describe("Instance > Jobs: who may", () => {
       service
     );
     expect(serviceRetry.statusCode).toBe(403);
+    await expect(storedJob("job_dead")).resolves.toMatchObject({ status: "dead", attempts: 3 });
+  });
+
+  it("lets a person granted jobs.retry retry a dead job, without being a superadmin (check 40)", async () => {
+    const server = await createServer();
+    await plant({ id: "job_dead", kind: "report.build", status: "dead" });
+    const operator = asCaller({ id: "usr_operator", roles: ["user"], permissions: auditView });
+    await withSql(
+      (sql) => sql`
+        insert into permission_grants
+          (id, client_instance_id, holder_kind, holder_id, action, scope_kind, effect, granted_by, created_at)
+        values
+          ('grant_retry', ${clientInstanceId}, 'user', 'usr_operator', 'jobs.retry', 'instance',
+           'allow', 'usr_root', now())`
+    );
+
+    const retry = await server.call(
+      "instance.jobs.retry",
+      { params: { jobId: "job_dead" } },
+      operator
+    );
+
+    expect(retry.statusCode).toBe(200);
+    await expect(storedJob("job_dead")).resolves.toMatchObject({ status: "queued", attempts: 0 });
+  });
+
+  it("refuses the retry to a superadmin denied jobs.retry on their person", async () => {
+    const server = await createServer();
+    await plant({ id: "job_dead", kind: "report.build", status: "dead" });
+    // A deny written on the person reaches a superadmin (ADR-0028, amended 2026-10-21).
+    await withSql(
+      (sql) => sql`
+        insert into permission_grants
+          (id, client_instance_id, holder_kind, holder_id, action, scope_kind, effect, granted_by, created_at)
+        values
+          ('grant_no_retry', ${clientInstanceId}, 'user', 'usr_root', 'jobs.retry', 'instance',
+           'deny', 'usr_root', now())`
+    );
+
+    const retry = await server.call(
+      "instance.jobs.retry",
+      { params: { jobId: "job_dead" } },
+      superadmin
+    );
+
+    expect([retry.statusCode, errorOf(retry).details]).toEqual([
+      403,
+      { action: "jobs.retry", reason: "denied" }
+    ]);
     await expect(storedJob("job_dead")).resolves.toMatchObject({ status: "dead", attempts: 3 });
   });
 });
