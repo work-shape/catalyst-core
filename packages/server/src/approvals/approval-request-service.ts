@@ -580,11 +580,7 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
     const { access } = viewer;
     const handler = this.handler(request.kind);
     const canDecideWithToken = hasAuthScope(user, APPROVAL_DECIDE_AUTH_SCOPE);
-    // A request addressed to a person is decided by that person, and by the right of nobody.
-    const decides =
-      request.addresseeUserId !== undefined
-        ? request.addresseeUserId === user.id
-        : holdsDecidingRight(handler, request, access) && decidesFurther(handler, request, access);
+    const decides = decidesRequest(handler, request, user, access);
     const preview = await handler.preview(handler.validate(request.payload), {
       ...this.handlerContext(request, context),
       viewer,
@@ -758,6 +754,22 @@ const NARROWER_SCOPES = GRANT_SCOPE_KINDS.filter((scope) => scope !== "instance"
  * The asset a request's right is asked on, where its kind names one. A payload the kind cannot
  * read names none, and the right is asked of the instance.
  */
+/**
+ * Whether `decider` decides one request, whatever its status and their token's scopes: the
+ * person it is addressed to, and by the right of nobody; else who holds its deciding right and
+ * every further right it asks.
+ */
+export function decidesRequest(
+  handler: ApprovalRequestHandler,
+  request: ApprovalRequest,
+  decider: { id: string },
+  access: ActorAccess
+): boolean {
+  return request.addresseeUserId !== undefined
+    ? request.addresseeUserId === decider.id
+    : holdsDecidingRight(handler, request, access) && decidesFurther(handler, request, access);
+}
+
 /**
  * The further rights one request asks of who decides it (a joint publish: each member kind's
  * `approve` right). A payload the kind cannot read throws, as its preview does: it is never
