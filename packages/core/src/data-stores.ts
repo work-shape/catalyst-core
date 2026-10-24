@@ -67,6 +67,8 @@ export const DATA_STORE_OPERATION_VERBS = [
   "delete_rows",
   "load",
   "records.propose",
+  "records.decide",
+  "records.flagged",
   "describe",
   "preview_rows"
 ] as const;
@@ -81,6 +83,8 @@ export const DATA_STORE_OPERATION_RIGHTS = {
   delete_rows: DATA_STORE_ACTIONS.execute,
   load: DATA_STORE_ACTIONS.insert,
   "records.propose": DATA_STORE_ACTIONS.records,
+  "records.decide": DATA_STORE_ACTIONS.records,
+  "records.flagged": DATA_STORE_ACTIONS.records,
   describe: DATA_STORE_ACTIONS.read,
   preview_rows: DATA_STORE_ACTIONS.read
 } as const satisfies Record<DataStoreOperationVerb, string>;
@@ -97,6 +101,8 @@ export const DATA_STORE_OPERATION_SCOPES = {
   delete_rows: "data_store_rows:write",
   load: "data_store_rows:write",
   "records.propose": "data_store_rows:write",
+  "records.decide": "data_store_rows:write",
+  "records.flagged": "data_store_rows:read",
   describe: "config_assets:read",
   preview_rows: "data_store_rows:read"
 } as const satisfies Record<DataStoreOperationVerb, OperationScope>;
@@ -495,6 +501,7 @@ export {
   RECORDS_PROPOSE_MAX_FIELDS_PER_ITEM,
   RECORDS_FLAGGED_MAX_ITEMS_PER_PAGE,
   RECORD_FIELD_STATES,
+  RECORD_FLAG_REASONS,
   RECORD_FIELD_FAILURE_CODES,
   dataStoreRecordProposalItemSchema,
   dataStoreRecordsProposeInputSchema,
@@ -503,6 +510,7 @@ export {
   dataStoreRecordsFlaggedInputSchema,
   dataStoreRecordsFlaggedOutputSchema,
   dataStoreRecordFieldSchema,
+  recordColumnTakes,
   type RecordColumn,
   type DataStoreRecordsRule,
   type RecordEvidenceResult,

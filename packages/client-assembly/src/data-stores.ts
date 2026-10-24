@@ -49,6 +49,9 @@ function workflowAssetKind(dataStores: DataStores): WorkflowAssetKind {
   };
 }
 
+/** How many flagged candidates one page of "Prüfen" answers where the caller names none. */
+const RECORDS_FLAGGED_DEFAULT_PAGE = 200;
+
 /** What a caller who may read stores is told of an id no store has. */
 const STORE_NOT_AVAILABLE = "Data Store is not available";
 
@@ -89,6 +92,15 @@ const registerStoreRoutes: RouteRegistration = (routes) => {
   routes.resourceOperation(apiOperations["data_stores.delete_rows"], bind("delete_rows"));
   routes.resourceOperation(apiOperations["data_stores.describe"], bind("describe"));
   routes.resourceOperation(apiOperations["data_stores.preview_rows"], bind("preview_rows"));
+  // "Prüfen": the fields that wait for a person, and a person's decision on one.
+  routes.resourceOperation(apiOperations["data_stores.records_flagged"], {
+    ...bind("records.flagged"),
+    target: ({ store, ...input }: { store: string; limit?: number }) => ({
+      operation: dataStoreOperationName(store, "records.flagged"),
+      input: { ...input, limit: input.limit ?? RECORDS_FLAGGED_DEFAULT_PAGE }
+    })
+  });
+  routes.resourceOperation(apiOperations["data_stores.records_decide"], bind("records.decide"));
   // The state of a store is its own operation, which reads no row and no database of a store.
   // The reads of a store's page, each the store's own operation of the same name.
   const page = (part: "rows" | "value" | "used_by") => ({
@@ -217,6 +229,7 @@ export const assembleDataStores: ModuleSeam = async (parts) => {
     logger: parts.logger
   });
   return {
+    approvalRequestHandlers: [dataStores.reviewNotice],
     assetKinds: [workflowAssetKind(dataStores)],
     knowledgeBackend: dataStores.knowledgeBackend,
     knowledgeSourceJobs: dataStores.knowledgeSourceJobs,

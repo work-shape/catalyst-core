@@ -34,6 +34,17 @@ export function recordKey(
     const fromField = rule.key.fromField;
     value = item.fields.find((field) => field.name === fromField)?.value;
   }
+  return coerceRecordKey(column, value);
+}
+
+/**
+ * A key as the key column holds it, or null: a number or a boolean column also takes its text,
+ * as a path segment and a person's assignment give it.
+ */
+export function coerceRecordKey(
+  column: Pick<DataStoreColumn, "type">,
+  value: JsonValue | undefined
+): string | number | boolean | null {
   if (typeof value === "string" && value !== "") {
     if (column.type === "integer" || column.type === "number") {
       if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/u.test(value)) return null;

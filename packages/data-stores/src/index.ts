@@ -25,6 +25,7 @@ import {
   defineAssetKind,
   defineModule,
   type ActorAccess,
+  type ApprovalRequestHandler,
   type ClientInstanceId,
   type DataToolSource,
   type PublishNarrativeStoredData,
@@ -53,7 +54,13 @@ import { createKnowledgeBackend } from "./knowledge/backends";
 import { listDataStores } from "./list";
 import { appDataSources } from "./used-by";
 import { createPublishNarrativeData } from "./publish-narrative-data";
-import { createDataStoreOperationSource, createDataStoreToolSource } from "./operations";
+import {
+  createDataStoreOperationSource,
+  createDataStoreToolSource,
+  readStore,
+  readStores
+} from "./operations";
+import { createReviewNoticeHandler } from "./records/review-notice";
 import { ensureVectorExtension } from "./provisioning";
 import type { DataStoreDatasetReader, DataStoreLimits, DataStoreRuntime } from "./runtime";
 import { createDataStoreServer } from "./server";
@@ -183,6 +190,8 @@ export interface DataStores {
   /** Describes the operations to an agent that lists them as tools. */
   readonly toolSource: DataToolSource;
   readonly jobHandlers: readonly RegisteredJobHandler[];
+  /** The Inbox notice of a store whose records wait in "Prüfen" (REC-2). */
+  readonly reviewNotice: ApprovalRequestHandler;
   readonly schedules: readonly JobSchedule[];
   readonly jobRetries: readonly JobRetry[];
   /**
@@ -290,6 +299,10 @@ export function createDataStores(input: {
     publishNarrativeData: createPublishNarrativeData(runtime),
     toolSource: createDataStoreToolSource(runtime),
     jobHandlers: jobs.handlers,
+    reviewNotice: createReviewNoticeHandler(runtime, {
+      one: (name) => readStore(runtime, name),
+      all: async () => (await readStores(runtime)).stores
+    }),
     schedules: jobs.schedules,
     jobRetries: jobs.retries,
     knowledgeBackend: createKnowledgeBackend(runtime, input.embedding ?? {}),

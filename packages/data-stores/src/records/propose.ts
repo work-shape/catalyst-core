@@ -3,35 +3,21 @@ import { z } from "zod";
 import {
   AppError,
   DATA_STORE_RECORD_OPERATIONS,
-  RECORD_FIELD_STATES,
   DATA_STORE_LOAD_DEFAULT_LIMITS,
   dataStoreRecordsProposeInputSchema,
   workflowDatasetReferenceSchema,
-  recordEvidenceResultSchema,
-  type JsonObject,
-  type JsonValue,
   type OperationBatchFailure,
   type DataStoreRecordProposalItem
 } from "@work-shape/catalyst-core";
 import { readTables, readKeyIndexes } from "../catalog";
-import { statementsOf } from "../load-statements";
-import { recordProjection } from "./projection";
+import { projectRecords, recordLockName } from "./project";
 import { storeSizeBytes } from "../size";
 import { AnsweredBefore, changeWhole, reclaim, storeFull, type StoreVerb } from "../verbs";
 import { requireRecordsUpgrade } from "./readiness";
 import { readRecordedCall } from "../calls";
-import { recordKey, mergeField } from "./merge";
+import { recordKey } from "./merge";
 import { recordEvidence } from "@work-shape/catalyst-core";
 import { proposalSource } from "./source";
-
-const candidateRow = z.object({
-  field_name: z.string(),
-  value: z.json(),
-  kind: z.string(),
-  document_date: z.string().nullable(),
-  state: z.enum(RECORD_FIELD_STATES),
-  evidence: recordEvidenceResultSchema
-});
 
 export const recordsPropose: StoreVerb = {
   verb: "records.propose",
@@ -179,7 +165,7 @@ export const recordsPropose: StoreVerb = {
             for (const key of keys)
               await sql.run(
                 "select pg_advisory_xact_lock(hashtextextended($1::text,0))::text as held",
-                [`records:${table.name}:${key}`]
+                [recordLockName(table.name, key)]
               );
             for (const { item, source, key } of valid) {
               const live = await proposalSource(runtime, item, context, {
@@ -226,69 +212,14 @@ export const recordsPropose: StoreVerb = {
                 );
               }
             }
-            const counts = { inserted: 0, updated: 0, rows: 0, bytes: 0 };
-            const projection = recordProjection(sql);
-            for (const encodedKey of keys) {
-              if (encodedKey === "null") continue;
-              const key: unknown = JSON.parse(encodedKey);
-              const candidates = z.array(candidateRow).parse(
-                await sql.run(
-                  `select field_name,value,kind,document_date::text,state,evidence from catalyst.record_fields
-              where table_name=$1::text and record_key=$2::jsonb`,
-                  [table.name, encodedKey]
-                )
-              );
-              const fields: [string, JsonValue][] = [
-                [rule.key.column, z.union([z.string(), z.number(), z.boolean()]).parse(key)]
-              ];
-              for (const name of new Set(candidates.map((candidate) => candidate.field_name))) {
-                if (name === rule.key.column) continue;
-                const merged = mergeField(
-                  rule,
-                  name,
-                  candidates
-                    .filter((candidate) => candidate.field_name === name)
-                    .map((candidate) => ({ ...candidate, documentDate: candidate.document_date }))
-                );
-                fields.push([name, merged.value]);
-                await sql.run(
-                  `update catalyst.record_fields set state=$4::text where table_name=$1::text and record_key=$2::jsonb and field_name=$3::text and state not in ('confirmed','corrected')`,
-                  [table.name, encodedKey, name, merged.conflict ? "conflict" : "extracted"]
-                );
-              }
-              const row: JsonObject = Object.fromEntries<JsonValue>(fields);
-              const text = JSON.stringify(row);
-              counts.rows++;
-              counts.bytes += Buffer.byteLength(text);
-              if (counts.rows > limits.rows || counts.bytes > limits.bytes)
-                throw new AppError(
-                  "VALIDATION_FAILED",
-                  "The records projection exceeds dataStores.load.rows or dataStores.load.bytes; split the proposals or raise the operator ceilings",
-                  { reason: "load_too_large" }
-                );
-              const plan = statementsOf(
-                {
-                  table: table.name,
-                  key: [rule.key.column],
-                  onConflict: "update",
-                  dataset: { $dataset: "records", rowCount: 1, bytes: Buffer.byteLength(text) }
-                },
-                table,
-                new Map(
-                  table.columns
-                    .filter((column) => !column.generated)
-                    .map((column) => [column.name, column.nativeType])
-                ),
-                Object.keys(row),
-                false
-              );
-              const written = await projection.write(plan.write, `[${text}]`);
-              counts.inserted += written.inserted;
-              counts.updated += written.updated;
-              const after = await size();
-              if (after > store.record.sizeLimitBytes) throw storeFull(store.record, after);
-            }
-            await projection.write(null, "[]");
+            const counts = await projectRecords(sql, {
+              table,
+              rule,
+              keys,
+              limits,
+              record: store.record,
+              size
+            });
             const result = {
               done: valid.length,
               failed: failures.length,
