@@ -188,7 +188,8 @@ test("a skill's files are uploaded, written, replaced and deleted, and a refused
     await script.fill("print('filled', 2)\n");
     await row(page, "assets/form.pdf").click();
     const replaced = page.waitForEvent("filechooser");
-    await page.getByRole("button", { name: "Replace" }).click();
+    // The file's own Replace, not the page's "Replace from folder".
+    await page.getByRole("button", { name: "Replace", exact: true }).click();
     await (
       await replaced
     ).setFiles({ name: "form-2.pdf", mimeType: "application/pdf", buffer: PDF_2 });

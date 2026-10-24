@@ -208,9 +208,11 @@ test("de: a refused call of a personal Connection shows Connect by itself, and t
   try {
     // The entry's part, installed for each person's own account, its one reading tool given to
     // the agent. Nobody has connected.
+    // An earlier spec may have deleted the entry's Connection: creating it again names the
+    // revision of that delete.
     const created = await requestWithOrigin(page, "put", connectionUrl, {
       data: {
-        expectedRevision: null,
+        expectedRevision: await assetBaseRevision(page, connectionUrl),
         config: {
           name: ENTRY,
           displayName: TITLE,

@@ -140,7 +140,10 @@ test("an administrator grants by level, checks, denies and revokes rights", asyn
     const inWorkspace = grantDialog.getByRole("radio", { name: /^In a shared workspace/u });
     const onAsset = grantDialog.getByRole("radio", { name: /^On one asset/u });
     await expect(inWorkspace).toBeChecked();
-    await expect(grantDialog.getByRole("checkbox")).toHaveCount(0);
+    // The levels are radios, not a box per action. The one box is Approve, a right beside the
+    // levels that decides a held publish of a workspace's agent (WS-PUB-1b).
+    await expect(grantDialog.getByRole("checkbox")).toHaveCount(1);
+    await expect(grantDialog.getByRole("checkbox", { name: /^Approve/u })).not.toBeChecked();
     const level = (name: string) => grantDialog.getByRole("radio", { name, exact: true });
     // Use is the agents' lowest level (AGENT-USE-1).
     for (const name of ["Use", "View", "Edit", "Publish", "Delete"]) {
