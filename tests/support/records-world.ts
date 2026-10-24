@@ -90,47 +90,55 @@ export function recordsWorlds(dataStoreWorld: ReturnType<typeof useDataStoreWorl
     });
     const id = await publish(ready, files);
     const world = { ...ready, id, record: await settle(ready, id, files.length - 1) };
-    const kbId = await asset(world, "knowledge_base", "unterlagen", {
-      name: "unterlagen",
-      title: "Objektunterlagen",
-      description: "Test documents",
-      methods: ["keyword"]
-    });
-    await world.dataStores.knowledgeBackend.publish(db.store, {
-      target: { backend: "builtin", assetId: kbId, name: "unterlagen", methods: ["keyword"] },
-      replaced: undefined,
-      access: accessOf(recordsActorOf(world.clientInstanceId))
-    });
-    await settle(world, kbId, 12);
-    const source = connect((await recordOf(world, kbId)).location.database);
-    const target = connect(world.record.location.database);
-    async function item(
-      documentId: string,
-      kind: string,
-      values: JsonObject,
-      date = "2026-10-17",
-      path = "/Objekte/1402/file.pdf"
-    ) {
-      const hash = createHash("sha256").update(documentId).digest("hex");
-      const text = Object.values(values).join(" ");
-      await source`insert into catalyst_kb.contents(sha256,format,state) values (${hash},'pdf','extracted') on conflict do nothing`;
-      await source`insert into catalyst_kb.documents(id,managed_file_id,content_sha256,title,file_name) values (${documentId},${documentId},${hash},'Document',${`${documentId}.pdf`}) on conflict do nothing`;
-      await source`insert into catalyst_kb.chunks(id,content_sha256,chunking_revision,position,page,text,token_count) values (${documentId},${hash},1,0,1,${text},10) on conflict do nothing`;
-      return {
-        knowledgeBaseId: kbId,
-        documentId,
-        kind,
-        documentDate: date,
-        path,
-        fields: Object.entries(values).map(([name, value]) => ({
-          name,
-          value,
-          page: 1,
-          quote: String(value)
-        }))
-      };
+    /**
+     * A Knowledge Base beside the store, published and ready, with `item`, which writes one of
+     * its documents and turns it into a proposal item.
+     */
+    async function knowledgeBase(name: string, title: string) {
+      const kbId = await asset(world, "knowledge_base", name, {
+        name,
+        title,
+        description: "Test documents",
+        methods: ["keyword"]
+      });
+      await world.dataStores.knowledgeBackend.publish(db.store, {
+        target: { backend: "builtin", assetId: kbId, name, methods: ["keyword"] },
+        replaced: undefined,
+        access: accessOf(recordsActorOf(world.clientInstanceId))
+      });
+      await settle(world, kbId, 12);
+      const source = connect((await recordOf(world, kbId)).location.database);
+      async function item(
+        documentId: string,
+        kind: string,
+        values: JsonObject,
+        date = "2026-10-17",
+        path = "/Objekte/1402/file.pdf"
+      ) {
+        const hash = createHash("sha256").update(documentId).digest("hex");
+        const text = Object.values(values).join(" ");
+        await source`insert into catalyst_kb.contents(sha256,format,state) values (${hash},'pdf','extracted') on conflict do nothing`;
+        await source`insert into catalyst_kb.documents(id,managed_file_id,content_sha256,title,file_name) values (${documentId},${documentId},${hash},'Document',${`${documentId}.pdf`}) on conflict do nothing`;
+        await source`insert into catalyst_kb.chunks(id,content_sha256,chunking_revision,position,page,text,token_count) values (${documentId},${hash},1,0,1,${text},10) on conflict do nothing`;
+        return {
+          knowledgeBaseId: kbId,
+          documentId,
+          kind,
+          documentDate: date,
+          path,
+          fields: Object.entries(values).map(([name, value]) => ({
+            name,
+            value,
+            page: 1,
+            quote: String(value)
+          }))
+        };
+      }
+      return { kbId, source, item };
     }
-    return { ...world, failures, kbId, source, target, item };
+    const { kbId, source, item } = await knowledgeBase("unterlagen", "Objektunterlagen");
+    const target = connect(world.record.location.database);
+    return { ...world, failures, kbId, source, target, item, knowledgeBase };
   }
 
   return { asset, world };

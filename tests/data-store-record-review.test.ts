@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   asClientInstanceId,
+  asUserId,
   createPlatformId,
   dataStoreOperationName,
   dataStoreRecordsFlaggedOutputSchema,
   type AuditEvent,
   type AuditRecorder,
+  type ActorAccess,
   type AuthenticatedUser,
   type DataStoreOperationVerb,
   type JsonObject,
@@ -18,6 +20,7 @@ import {
   recordsActorOf,
   recordsWorlds
 } from "./support/records-world";
+import { groupFlagged } from "@work-shape/catalyst-chat-ui/build-area";
 import { accessOf } from "./support/access";
 import { required } from "./support/assertions";
 
@@ -38,7 +41,8 @@ describe("REC-2 records review through the public operation source", () => {
     actor: AuthenticatedUser,
     verb: DataStoreOperationVerb,
     input: unknown,
-    origin: OperationOrigin = { kind: "user" }
+    origin: OperationOrigin = { kind: "user" },
+    access: ActorAccess = accessOf(actor)
   ) {
     const events: Parameters<AuditRecorder["record"]>[0][] = [];
     const audit: AuditRecorder = {
@@ -62,16 +66,16 @@ describe("REC-2 records review through the public operation source", () => {
       origin,
       correlationId: "records-review",
       runtime: {},
-      access: accessOf(actor),
+      access,
       audit
     });
     return { output, events };
   }
 
   /** A person who holds `data_store.records` and may use no Knowledge Base. */
-  const reviewerOf = (w: World): AuthenticatedUser => ({
-    id: "records-reviewer",
-    externalUserId: "records-reviewer",
+  const reviewerOf = (w: World, id = "records-reviewer"): AuthenticatedUser => ({
+    id,
+    externalUserId: id,
     displayLabel: "Records reviewer",
     roles: [],
     permissionRefs: [],
@@ -429,14 +433,18 @@ describe("REC-2 records review through the public operation source", () => {
     });
     expect(JSON.stringify(notice)).not.toContain("1402");
     const handler = w.dataStores.reviewNotice;
-    const preview = () =>
+    const preview = (access?: ActorAccess) =>
       handler.preview(handler.validate(required(notice).payload), {
         clientInstanceId: w.clientInstanceId,
         requestId: required(notice).id,
-        correlationId: "records-review"
+        correlationId: "records-review",
+        ...(access ? { viewer: { access, inList: true } } : {})
       });
+    // Read without a reader, the notice holds no count: there is nobody to count for.
+    expect(await preview()).not.toHaveProperty("flagged");
+    const admin = () => preview(accessOf(recordsActorOf(w.clientInstanceId)));
     // Two fields in conflict and one unassigned field.
-    expect(await preview()).toMatchObject({ store: "findings", title: "Findings", flagged: 3 });
+    expect(await admin()).toMatchObject({ store: "findings", title: "Findings", flagged: 3 });
     await call(w, "records.decide", {
       table: "objekt",
       key: 1402,
@@ -445,6 +453,99 @@ describe("REC-2 records review through the public operation source", () => {
       knowledgeBaseId: w.kbId,
       documentId: "a6"
     });
-    expect(await preview()).toMatchObject({ flagged: 2 });
+    expect(await admin()).toMatchObject({ flagged: 2 });
+  });
+
+  it("counts for each reader only the fields whose candidates come from a Knowledge Base they may use, as their list shows", async () => {
+    const w = await world("readers");
+    const gutachten = await w.knowledgeBase("gutachten", "Gutachten");
+    await call(w, "records.propose", {
+      table: "objekt",
+      items: [
+        // kaufpreis disagrees within unterlagen alone, baujahr within gutachten alone, and
+        // wohnflaeche between the two; a gutachten document waits for its object.
+        await w.item("a11", "kaufvertrag", { kaufpreis: 100, wohnflaeche: 80 }),
+        await w.item("b11", "kaufvertrag", { kaufpreis: 200 }),
+        await gutachten.item("g11", "kaufvertrag", { baujahr: 1990, wohnflaeche: 90 }),
+        await gutachten.item("h11", "kaufvertrag", { baujahr: 1991 }),
+        await gutachten.item(
+          "e11",
+          "expose",
+          { adresse: "Nebenweg 2" },
+          "2026-10-18",
+          "/Other/e.pdf"
+        )
+      ]
+    });
+    const [notice] = await notices(w);
+    const handler = w.dataStores.reviewNotice;
+    const using = (id: string, ...knowledgeBaseIds: string[]) => {
+      const actor = reviewerOf(w, id);
+      return {
+        actor,
+        access: accessOf(actor, {
+          grants: knowledgeBaseIds.map((scopeId, index) => ({
+            id: `grant_${id}_${String(index)}`,
+            clientInstanceId: actor.clientInstanceId,
+            holderKind: "user",
+            holderId: id,
+            action: "knowledge_base.use",
+            effect: "allow",
+            scopeKind: "asset",
+            scopeId,
+            grantedBy: asUserId("records-admin"),
+            createdAt: "2026-10-24T00:00:00.000Z"
+          }))
+        })
+      };
+    };
+    /** The reader's count on the notice, and the fields their "Prüfen" list groups. */
+    const seen = async ({ actor, access }: ReturnType<typeof using>) => {
+      const preview = await handler.preview(handler.validate(required(notice).payload), {
+        clientInstanceId: w.clientInstanceId,
+        requestId: required(notice).id,
+        correlationId: "records-review",
+        viewer: { access, inList: true }
+      });
+      const { output } = await callAs(
+        w,
+        actor,
+        "records.flagged",
+        { limit: 100 },
+        { kind: "user" },
+        access
+      );
+      const items = dataStoreRecordsFlaggedOutputSchema.parse(output).items;
+      return {
+        flagged: preview.flagged,
+        listed: groupFlagged(items).fieldCount,
+        documents: [...new Set(items.map((item) => item.documentId))].sort()
+      };
+    };
+    const unterlagen = using("reader-unterlagen", w.kbId);
+    const gutachtenReader = using("reader-gutachten", gutachten.kbId);
+    expect(await seen(unterlagen)).toEqual({
+      flagged: 2,
+      listed: 2,
+      documents: ["a11", "b11"]
+    });
+    expect(await seen(gutachtenReader)).toEqual({
+      flagged: 3,
+      listed: 3,
+      documents: ["e11", "g11", "h11"]
+    });
+    expect(await seen(using("reader-both", w.kbId, gutachten.kbId))).toMatchObject({
+      flagged: 4,
+      listed: 4
+    });
+    expect(await seen(using("reader-none"))).toEqual({ flagged: 0, listed: 0, documents: [] });
+    // A withdrawn document leaves the count with its candidates, for the reader who saw it.
+    await gutachten.source`update catalyst_kb.documents set withdrawn_at = now() where id = 'e11'`;
+    expect(await seen(gutachtenReader)).toEqual({
+      flagged: 2,
+      listed: 2,
+      documents: ["g11", "h11"]
+    });
+    expect(await seen(unterlagen)).toMatchObject({ flagged: 2, listed: 2 });
   });
 });
