@@ -372,6 +372,22 @@ describe("server follow-up queue on Postgres", () => {
     }
   );
 
+  it("FU-4 refuses Send now by a non-author and leaves the paused queue unchanged", async () => {
+    const f = await fixture();
+    const item = await f.queue("Only my author may send me");
+    await f.fail();
+    await f.dispatch();
+    const refused = await f.app.call(
+      "conversations.follow_ups.dispatch",
+      { params: { conversationId: f.scope.conversationId }, payload: {} },
+      "other"
+    );
+    expect(refused.statusCode, refused.body).toBe(403);
+    await f.dispatch();
+    expect(await f.pending()).toMatchObject([{ id: item.id, status: "pending" }]);
+    expect((await f.messages()).map((message) => message.text)).toEqual(["First"]);
+  });
+
   it("FU-5 claims queued attachments immediately, isolates the next draft, and transfers them only to their dispatched message", async () => {
     const f = await fixture();
     const attached = await f.attachment();

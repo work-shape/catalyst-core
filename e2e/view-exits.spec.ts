@@ -921,7 +921,7 @@ exitTest.describe("a Page is held where the interface put it", () => {
     await expect
       .poll(async () => Number(await view.locator("body").getAttribute("data-frame-attempts")))
       .toBeGreaterThanOrEqual(3);
-    await browserTurn(page);
+    await otherHost.observeQuiet();
 
     await expect(view.locator("iframe, frame, object, embed")).toHaveCount(0);
     expect(asked).toEqual([]);

@@ -57,7 +57,7 @@ function appContentRequests(page: Page, part: string): string[] {
 export const pageHeldTests: readonly PageHeldTest[] = [
   {
     title: pageTestTitles.failClosed,
-    async run({ page, refusals }) {
+    async run({ page, otherHost, refusals }) {
       // The guard is the one script the policy of the answer names. Here the answer arrives
       // without that name, so the browser runs no script in the Page's frame.
       await page.route(
@@ -84,7 +84,7 @@ export const pageHeldTests: readonly PageHeldTest[] = [
       await expect
         .poll(() => refusals.filter((line) => line.startsWith("Executing inline script violates")))
         .toHaveLength(1);
-      await browserTurn(page);
+      await otherHost.observeQuiet();
       // The Page is written by the guard and by nothing else: its frame stays empty, and none
       // of its files was asked for.
       await expect(view.locator("head")).toHaveCount(1);
@@ -170,7 +170,7 @@ export const pageHeldTests: readonly PageHeldTest[] = [
   },
   {
     title: pageTestTitles.nameAndHistory,
-    async run({ page }) {
+    async run({ page, otherHost }) {
       await page.goto(`${apiOrigin}/health`);
       const attempts = [
         `() => { parent.name = "planted"; }`,
@@ -203,7 +203,7 @@ export const pageHeldTests: readonly PageHeldTest[] = [
       // The Page's own history is the one thing it may call. It moves no page but its own.
       await view.locator("#back").click();
       await expect(view.locator("body")).toHaveAttribute("data-went", "true");
-      await browserTurn(page);
+      await otherHost.observeQuiet();
 
       expectOnInterface(page);
       expect({ address: page.url(), ...(await state()) }).toEqual(before);
@@ -216,7 +216,7 @@ export const pageHeldTests: readonly PageHeldTest[] = [
   },
   {
     title: pageTestTitles.forgedMessage,
-    async run({ page }) {
+    async run({ page, otherHost }) {
       // The interface listens for the messages of the shell of a view. A Page sends each of
       // them, to the page at the top and to its own shell.
       const types = ["view-shell-ready", "view-shell-document", "view-shell-loaded"]
@@ -273,7 +273,7 @@ export const pageHeldTests: readonly PageHeldTest[] = [
       expect(await arrived).toEqual(
         types.map((type) => ({ type, origin: "null", fromOwnFrame: false }))
       );
-      await browserTurn(page);
+      await otherHost.observeQuiet();
       expect(await height()).toBe(before);
       await expect(page.getByText("Part of this view could not load.")).toHaveCount(0);
       await expect(page.getByText("Loading view…")).toHaveCount(0);

@@ -418,45 +418,53 @@ test(
   { tag: "@chat-state" },
   async ({ page }) => {
     const suffix = Date.now();
-    const sourceTitle = `Streaming source ${suffix}`;
+    const messageToken = `session-isolation-${suffix}`;
+    const sourceConversation = page.getByTestId("conversation-row").filter({
+      has: page.getByTitle(new RegExp(messageToken, "iu"))
+    });
     const targetTitle = `Stable target ${suffix}`;
-    const source = await createListedConversation(page, sourceTitle);
+    let sourceId = "";
     const target = await createListedConversation(page, targetTitle);
 
-    // Hold every event stream through the switches and Stop. Releasing before Stop lets a
-    // completed run remove the button between stopActiveRun's count check and its click.
+    test.setTimeout(LONG_RUN_TEST_TIMEOUT_MS);
+    // Keep the source answer pending while switching, then finish it in the background.
     const releaseAnswer = await holdAnswer(page);
-    const eventRequests = countRequests(page, "GET", isRunEventsPath);
+    const eventConversations: string[] = [];
+    page.on("request", (request) => {
+      const { pathname } = new URL(request.url());
+      if (request.method() === "GET" && isRunEventsPath(pathname)) {
+        eventConversations.push(decodeURIComponent(pathname.split("/")[4] ?? ""));
+      }
+    });
     const answeredEventStreams = countResponses(page, "GET", isRunEventsPath);
 
     try {
       await page.goto("/");
       const input = page.getByPlaceholder("Message");
       const chatRegion = page.getByRole("region", { name: "Chat" });
-      const sourceConversation = page
-        .getByTestId("conversation-row")
-        .filter({ hasText: sourceTitle });
       const targetConversation = page
         .getByTestId("conversation-row")
         .filter({ hasText: targetTitle });
-      await expect(sourceConversation).toHaveCount(1);
       await expect(targetConversation).toHaveCount(1);
 
-      await sourceConversation.getByRole("button").first().click();
       const sendButton = page.getByRole("button", { name: "Send message" });
-      await expect(sendButton).toBeEnabled();
-      const messageToken = `session-isolation-${suffix}`;
       await input.fill(longRunMessage(messageToken));
+      await expect(sendButton).toBeEnabled();
       await sendButton.click();
+      await expect(page).toHaveURL(collaborationWorkspaceConversationUrlPattern);
+      sourceId = currentConversationId(page);
+      // Generated titles animate their visible text; the title attribute arrives at once.
+      await expect(sourceConversation).toHaveCount(1);
       await expect(chatRegion.getByText(messageToken, { exact: false }).first()).toBeVisible();
       await expect(page.getByRole("button", { name: "Stop generating" })).toBeVisible();
-      await expect.poll(() => eventRequests()).toBeGreaterThan(0);
+      await expect.poll(() => eventConversations.length).toBeGreaterThan(0);
       await expect(sourceConversation.getByTestId("conversation-running-indicator")).toBeVisible();
 
       await targetConversation.getByRole("button").first().click();
       await expect(chatRegion.getByText(messageToken, { exact: false })).toHaveCount(0);
       await expect(page.getByTestId("run-activity")).toHaveCount(0);
       await expect(sourceConversation.getByTestId("conversation-running-indicator")).toBeVisible();
+      expect(eventConversations.every((id) => id === sourceId)).toBe(true);
 
       // Back in the source the run shows as in progress and the composer offers to stop it
       // instead of sending.
@@ -466,7 +474,40 @@ test(
       await expect(stopButton).toBeVisible();
       await expect(page.getByRole("button", { name: "Send message" })).toHaveCount(0);
       expect(answeredEventStreams()).toBe(0);
-      await stopButton.click();
+      await targetConversation.getByRole("button").first().click();
+      await expect(targetConversation).toHaveAttribute("data-selected", "true");
+      releaseAnswer();
+      await expect
+        .poll(
+          async () => {
+            const response = await page.request.get(
+              `${apiBaseUrl}/api/v1/conversations/${sourceId}/thread`
+            );
+            expect(response.ok()).toBe(true);
+            const thread = apiOperations["conversations.thread.get"].response.schema.parse(
+              await response.json()
+            );
+            return {
+              active: thread.activeRun !== undefined,
+              answered: thread.messages.some(
+                (message) => message.role === "assistant" && message.text.includes(messageToken)
+              )
+            };
+          },
+          { timeout: LONG_RUN_END_TIMEOUT_MS }
+        )
+        .toEqual({ active: false, answered: true });
+      await expect(sourceConversation.getByTestId("conversation-running-indicator")).toHaveCount(0);
+      await expect(page).toHaveURL(conversationUrlPattern(target.id));
+      await expect(targetConversation).toHaveAttribute("data-selected", "true");
+      await expect(chatRegion.getByText(messageToken, { exact: false })).toHaveCount(0);
+      await expect(page.getByTestId("run-activity")).toHaveCount(0);
+      await expect(chatRegion.locator('[data-role="user"]')).toHaveText([
+        `Opening message for ${targetTitle}`
+      ]);
+      await expect(chatRegion.locator('[data-role="assistant"]')).toHaveCount(1);
+      expect(eventConversations.length).toBeGreaterThan(0);
+      expect(eventConversations.every((id) => id === sourceId)).toBe(true);
     } finally {
       releaseAnswer();
     }
@@ -483,7 +524,12 @@ test(
       )
         .filter((message) => message.role === "user")
         .map((message) => message.text);
-    const sourceBefore = await userTexts(source.id);
+    const sourceBefore = await userTexts(sourceId);
+    await sourceConversation.getByRole("button").first().click();
+    await expect(page).toHaveURL(conversationUrlPattern(sourceId));
+    await expect(
+      page.getByRole("region", { name: "Chat" }).getByText(messageToken, { exact: false }).first()
+    ).toBeVisible();
     await page
       .getByTestId("conversation-row")
       .filter({ hasText: targetTitle })
@@ -493,8 +539,15 @@ test(
     const switchedText = `Sent right after the switch ${suffix}`;
     await page.getByPlaceholder("Message").fill(switchedText);
     await page.getByPlaceholder("Message").press("Enter");
+    await expect(page).toHaveURL(conversationUrlPattern(target.id));
+    await expect(
+      page
+        .getByRole("region", { name: "Chat" })
+        .locator('[data-role="user"]')
+        .getByText(switchedText, { exact: true })
+    ).toBeVisible();
     await expect.poll(() => userTexts(target.id)).toContain(switchedText);
-    expect(await userTexts(source.id)).toEqual(sourceBefore);
+    expect(await userTexts(sourceId)).toEqual(sourceBefore);
   }
 );
 
