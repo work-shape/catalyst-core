@@ -134,6 +134,19 @@ Other exact pins stay in place.
 Unrelated UI helpers and tooling keep their existing ranges. Changes to these lines require
 a deliberate manifest/lock update and both the frozen-lock Check and fresh consumer gate.
 
+## Renaming a deployment package scope
+
+Private deployment assemblies are supplied explicitly when migrating their package scope:
+
+```sh
+node scripts/release/rename-scope.mjs --write --assembly <name> ../deployment.<customer>
+```
+
+`--assembly <name>` maps `@vivd-catalyst/<name>` to `@work-shape/deployment-<name>` for
+that run and can be repeated for several assemblies. Without `--write`, the command reports
+changes only. An unlisted package outside `packages/` stops the run before any file is written.
+Lockfiles are skipped; regenerate them afterwards.
+
 ## The Postgres image
 
 The checks start the instance's own Postgres image (ADR-0023): `docker/postgres/Dockerfile`, the
@@ -149,7 +162,7 @@ name the digest.
 Before another repository consumes it, grant that repository **Read** under **Manage Actions
 access** in the [package settings](https://github.com/orgs/work-shape/packages/container/catalyst-postgres/settings).
 This applies to `catalyst-capabilities`, `deployment.catalyst` and
-`deployment.musterbau` when they switch to the pinned image. Keep core's existing
+`deployment.<customer>` when they switch to the pinned image. Keep core's existing
 publishing access. Repository transfers and image publication do not grant these other
 repositories access. Each consuming workflow also needs `packages: read` and must sign in
 with its own `GITHUB_TOKEN` before pulling (service containers use `credentials`). A successful

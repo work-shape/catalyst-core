@@ -5,6 +5,8 @@
 //   node scripts/release/rename-scope.mjs <root>...          report what would change
 //   node scripts/release/rename-scope.mjs --write <root>...  apply
 //   node scripts/release/rename-scope.mjs --check <root>...  exit 1 if anything is left
+//   Add --assembly <name> for each private assembly: maps the old scope/<name> to
+//   @work-shape/deployment-<name> for this run. The option is repeatable.
 //
 // Works on text, not on syntax: package names, dependency keys, import specifiers, --filter
 // arguments, tsconfig paths, Dockerfiles, compose files, workflows, docs and Tailwind @source
@@ -16,14 +18,46 @@ import { join, relative, resolve, sep } from "node:path";
 const OLD_SCOPE = ["@vivd", "catalyst"].join("-");
 const NEW_PREFIX = "@work-shape/catalyst-";
 
-// Private client and deployment packages. They are never published, so they do not take the
-// product prefix by default. Every package outside packages/ must be listed here; an unknown
-// one stops the run instead of getting a guessed name.
+const flags = new Set();
+const roots = [];
+const assemblies = [];
+const args = process.argv.slice(2);
+let invalidArgs = false;
+for (let index = 0; index < args.length; index += 1) {
+  const arg = args[index];
+  if (arg === "--assembly") {
+    const name = args[index + 1];
+    if (!name || !/^[a-z0-9][a-z0-9._-]*$/u.test(name)) {
+      invalidArgs = true;
+      break;
+    }
+    assemblies.push(name);
+    index += 1;
+  } else if (arg === "--write" || arg === "--check") {
+    flags.add(arg);
+  } else if (arg.startsWith("--")) {
+    invalidArgs = true;
+  } else {
+    roots.push(resolve(arg));
+  }
+}
+if (invalidArgs || roots.length === 0 || (flags.has("--write") && flags.has("--check"))) {
+  console.error(
+    "Usage: rename-scope.mjs [--write | --check] [--assembly <name>]... <repo-root>..."
+  );
+  process.exit(2);
+}
+const mode = flags.has("--write") ? "write" : flags.has("--check") ? "check" : "dry-run";
+
+// Private client and deployment packages do not take the product prefix by default.
+// Every package outside packages/ must have a built-in target or be named with --assembly;
+// an unknown one stops the run instead of getting a guessed name.
 const ASSEMBLY_TARGETS = {
   [`${OLD_SCOPE}/demo`]: "@work-shape/catalyst-demo",
-  [`${OLD_SCOPE}/musterbau`]: "@work-shape/deployment-musterbau",
   [`${OLD_SCOPE}/catalyst-deployment`]: "@work-shape/deployment-catalyst",
-  [`${OLD_SCOPE}/exampletax`]: "@work-shape/deployment-exampletax"
+  ...Object.fromEntries(
+    assemblies.map((name) => [`${OLD_SCOPE}/${name}`, `@work-shape/deployment-${name}`])
+  )
 };
 
 // Package-name changes only; directory moves and package folds belong to step D.
@@ -189,20 +223,6 @@ function printResult(result, mode) {
   }
 }
 
-const args = process.argv.slice(2);
-const flags = new Set(args.filter((arg) => arg.startsWith("--")));
-const roots = args.filter((arg) => !arg.startsWith("--")).map((root) => resolve(root));
-const unknownFlags = [...flags].filter((flag) => flag !== "--write" && flag !== "--check");
-if (
-  roots.length === 0 ||
-  unknownFlags.length > 0 ||
-  (flags.has("--write") && flags.has("--check"))
-) {
-  console.error("Usage: rename-scope.mjs [--write | --check] <repo-root>...");
-  process.exit(2);
-}
-const mode = flags.has("--write") ? "write" : flags.has("--check") ? "check" : "dry-run";
-
 // First pass never writes: an unknown assembly package must stop the run before any file changes.
 const scans = roots.map((root) => scanRoot(root, false));
 const unknownPackages = scans.flatMap((scan) => scan.packages.filter((pkg) => !pkg.known));
@@ -222,7 +242,7 @@ console.log(
 );
 
 if (unknownPackages.length > 0) {
-  console.error("Add the packages marked above to ASSEMBLY_TARGETS. Nothing was written.");
+  console.error("Pass --assembly <name> for the packages marked above. Nothing was written.");
   process.exit(1);
 }
 if (mode === "check" && occurrences + unhandled > 0) {

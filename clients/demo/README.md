@@ -285,7 +285,7 @@ A planted booking is an ordinary booking of the client with one thing wrong, add
 - A fiscal year is named by the year it starts in.
 - There is no maximum `page_size` in the documentation; the sample's maximum is its own.
 
-Sources, read on 2026-10-12 without an account: <https://exampledata.com/en/docs/mcp-setup>, <https://exampledata.com/en/products/mcp/scope>, <https://api.exampledata.com/docs/enterprise>.
+Source: the public documentation of a DATEV gateway vendor, read on 2026-10-12 without an account.
 
 ## Agent and skill configuration
 
@@ -355,7 +355,7 @@ connector exposes an array as `{ items }`:
 
 Both sizes default to 100. Continue until a page is shorter than the requested size.
 Gateway client rows have `id`, `number`, `name`, `status`, `organization_number`, following
-[Exampledata's public Gateway example](https://api.exampledata.com/docs/gateway).
+the public documentation of a DATEV gateway vendor, read on 2026-10-12.
 `clientId` is the decimal sample client id, such as `1402`; `fiscalYearId` is its fiscal-year
 start, such as `20260101`, returned as `id` by the fiscal-year endpoint. DATEV's public
 [Accounting 1.7.4 portal](https://developer.datev.de/en/product-detail/accounting/1.7.4/overview)

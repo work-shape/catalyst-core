@@ -21,12 +21,11 @@ whose README says how to clone and install everything. From the workspace root:
 
 ```sh
 pnpm install
-sh scripts/local.sh start catalyst          # http://127.0.0.1:5274
-sh scripts/local.sh start musterbau  # http://127.0.0.1:5174
+sh scripts/local.sh start catalyst  # http://127.0.0.1:5274
 ```
 
-Both instances build against this checkout. `sh scripts/local.sh check <instance>` says whether
-one is ready, `stop` stops it and keeps its data.
+A deployment repository starts its own local instance against this checkout.
+`sh scripts/local.sh check <instance>` says whether one is ready, `stop` stops it and keeps its data.
 
 `pnpm docs:dev` serves the docs site. The reference client on its own is described in
 [Run the reference client locally](packages/docs/src/content/docs/getting-started/local-demo.md).

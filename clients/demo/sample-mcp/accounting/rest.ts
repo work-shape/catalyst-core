@@ -61,7 +61,7 @@ function only(query: URLSearchParams, names: readonly string[]) {
 }
 
 function gatewayClient(client: ClientRow) {
-  // Exampledata's Gateway example: https://api.exampledata.com/docs/gateway (2026-10-17).
+  // Follows the public documentation of a DATEV gateway vendor, read on 2026-10-12.
   return {
     id: String(client.client_id),
     number: client.client_number,

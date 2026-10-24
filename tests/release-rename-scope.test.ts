@@ -143,72 +143,112 @@ describe("rename-scope codemod", () => {
     expect(second.output).toContain("rewrote 0 occurrence(s) in 0 file(s)");
   });
 
-  it("gives deployment packages their listed names across several roots", () => {
+  it("gives deployment packages their explicit names across several roots", () => {
     const platform = createTree({
       "packages/core/package.json": JSON.stringify({ name: `${OLD}/core` })
     });
     const deployment = createTree({
       "package.json": JSON.stringify({
-        name: `${OLD}/musterbau`,
+        name: `${OLD}/acme`,
         private: true,
         dependencies: { [`${OLD}/core`]: "workspace:*" }
       }),
-      "docker-compose.yml": `APP_PACKAGE: "${OLD}/musterbau"\n`
+      "docker-compose.yml": `APP_PACKAGE: "${OLD}/acme"\n`
     });
 
-    expect(run("--write", platform, deployment).status).toBe(0);
+    expect(run("--write", "--assembly", "acme", platform, deployment).status).toBe(0);
 
     expect(JSON.parse(read(deployment, "package.json"))).toEqual({
-      name: "@work-shape/deployment-musterbau",
+      name: "@work-shape/deployment-acme",
       private: true,
       dependencies: { "@work-shape/catalyst-core": "workspace:*" }
     });
     expect(read(deployment, "docker-compose.yml")).toBe(
-      'APP_PACKAGE: "@work-shape/deployment-musterbau"\n'
+      'APP_PACKAGE: "@work-shape/deployment-acme"\n'
     );
     expect(JSON.parse(read(platform, "packages/core/package.json")).name).toBe(
       "@work-shape/catalyst-core"
     );
   });
 
-  it("renames the server package and the local exampletax assembly without moving files", () => {
+  it("renames the server package and the local examplecorp assembly without moving files", () => {
     const platform = createTree({
       "packages/server/package.json": JSON.stringify({ name: `${OLD}/chat-server` }),
       "src/server.ts": `export * from "${OLD}/chat-server";\n`
     });
     const deployment = createTree({
-      "package.json": JSON.stringify({ name: `${OLD}/exampletax`, private: true }),
-      "deploy/deployment.env": `APP_PACKAGE=${OLD}/exampletax\n`
+      "package.json": JSON.stringify({ name: `${OLD}/examplecorp`, private: true }),
+      "deploy/deployment.env": `APP_PACKAGE=${OLD}/examplecorp\n`
     });
 
-    expect(run("--write", platform, deployment).status).toBe(0);
+    expect(run("--write", "--assembly", "examplecorp", platform, deployment).status).toBe(0);
     expect(JSON.parse(read(platform, "packages/server/package.json")).name).toBe(
       "@work-shape/catalyst-server"
     );
     expect(read(platform, "src/server.ts")).toContain('"@work-shape/catalyst-server"');
     expect(JSON.parse(read(deployment, "package.json")).name).toBe(
-      "@work-shape/deployment-exampletax"
+      "@work-shape/deployment-examplecorp"
     );
     expect(read(deployment, "deploy/deployment.env")).toBe(
-      "APP_PACKAGE=@work-shape/deployment-exampletax\n"
+      "APP_PACKAGE=@work-shape/deployment-examplecorp\n"
     );
     expect(run("--check", platform, deployment).status).toBe(0);
   });
 
   it("refuses to guess a name for an unlisted client or deployment package", () => {
-    const manifest = JSON.stringify({ name: `${OLD}/new-customer`, private: true });
+    const manifest = JSON.stringify({ name: `${OLD}/examplecorp`, private: true });
     const root = createTree({
       "package.json": manifest,
       "src/index.ts": `import "${OLD}/core";\n`
     });
 
-    const result = run("--write", root);
+    const listed = createTree({
+      "package.json": JSON.stringify({ name: `${OLD}/acme`, private: true })
+    });
+    const result = run("--write", "--assembly", "acme", listed, root);
 
     expect(result.status).toBe(1);
     expect(result.output).toContain("no target in ASSEMBLY_TARGETS");
+    expect(result.output).toContain("Pass --assembly <name>");
+    expect(JSON.parse(read(listed, "package.json")).name).toBe(`${OLD}/acme`);
     expect(read(root, "package.json")).toBe(manifest);
     expect(read(root, "src/index.ts")).toContain(`${OLD}/core`);
   });
+
+  it("accepts repeated --assembly options and keeps built-in deployment targets", () => {
+    const root = createTree({
+      "clients/acme/package.json": JSON.stringify({ name: `${OLD}/acme` }),
+      "clients/examplecorp/package.json": JSON.stringify({ name: `${OLD}/examplecorp` }),
+      "clients/deployment/package.json": JSON.stringify({ name: `${OLD}/catalyst-deployment` }),
+      "src/index.ts": `import "${OLD}/acme/tools";\nimport "${OLD}/examplecorp";\n`
+    });
+
+    expect(run("--assembly", "acme", root, "--assembly", "examplecorp", "--write").status).toBe(0);
+    expect(JSON.parse(read(root, "clients/acme/package.json")).name).toBe(
+      "@work-shape/deployment-acme"
+    );
+    expect(JSON.parse(read(root, "clients/examplecorp/package.json")).name).toBe(
+      "@work-shape/deployment-examplecorp"
+    );
+    expect(JSON.parse(read(root, "clients/deployment/package.json")).name).toBe(
+      "@work-shape/deployment-catalyst"
+    );
+    expect(read(root, "src/index.ts")).toBe(
+      'import "@work-shape/deployment-acme/tools";\nimport "@work-shape/deployment-examplecorp";\n'
+    );
+    expect(run("--check", "--assembly", "acme", "--assembly", "examplecorp", root).status).toBe(0);
+  });
+
+  it.each(["", "--write", "../acme", "@example/acme"])(
+    "refuses a missing or invalid assembly name: %j",
+    (name) => {
+      const root = createTree(fixture());
+      const before = read(root, "packages/core/package.json");
+
+      expect(run(root, "--assembly", ...(name ? [name] : [])).status).toBe(2);
+      expect(read(root, "packages/core/package.json")).toBe(before);
+    }
+  );
 
   it("reports scope uses it cannot rewrite instead of touching them", () => {
     const root = createTree({

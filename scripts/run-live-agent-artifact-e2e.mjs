@@ -120,7 +120,7 @@ if (process.env.LIVE_AGENT_E2E !== "1") {
       "Use --deployment-dir to point at a client/deployment checkout.",
       "",
       "Example:",
-      "  LIVE_AGENT_E2E=1 LIVE_AGENT_E2E_DEPLOYMENT_DIR=../deployment.musterbau \\",
+      "  LIVE_AGENT_E2E=1 LIVE_AGENT_E2E_DEPLOYMENT_DIR=../deployment.<customer> \\",
       "    LIVE_AGENT_E2E_USER_EMAIL=user@example.test \\",
       "    LIVE_AGENT_E2E_USER_PASSWORD=... \\",
       "    pnpm test:e2e:live-agent-artifacts"
@@ -764,7 +764,7 @@ function requireArg(argv, index, flagName) {
 }
 
 function printUsage() {
-  console.log(`Usage: LIVE_AGENT_E2E=1 node scripts/run-live-agent-artifact-e2e.mjs --deployment-dir ../deployment.musterbau [options]
+  console.log(`Usage: LIVE_AGENT_E2E=1 node scripts/run-live-agent-artifact-e2e.mjs --deployment-dir ../deployment.<customer> [options]
 
 Runs a real local API/model/workspace-worker artifact workflow over HTTP. This is a
 manual or release smoke, not a normal unit test.
