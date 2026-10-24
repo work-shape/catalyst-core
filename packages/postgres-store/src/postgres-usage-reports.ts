@@ -1,10 +1,10 @@
 import { sql as drizzleSql, type SQL } from "drizzle-orm";
 import {
   KNOWLEDGE_INGESTION_PURPOSES,
+  USAGE_BREAKDOWN_DIMENSIONS,
   type ModelUsageEventStore,
   type UsageActivityCounts,
   type UsageBreakdownDimension,
-  type UsageBreakdownFilter,
   type UsageBreakdownGroup,
   type UserMonthSpend,
   type WorkspaceMemberUsage
@@ -38,25 +38,25 @@ const ORIGIN = drizzleSql`case
 end`;
 
 /** The value of each dimension on a row of the daily sums. */
-const DIMENSION: Record<UsageBreakdownDimension | "day", SQL> = {
+const DIMENSION: Record<UsageBreakdownDimension | "day" | "all", SQL> = {
   workspace: drizzleSql`workspace_key`,
   agent: drizzleSql`agent_name`,
   app: drizzleSql`app_name`,
   workflow: drizzleSql`workflow_name`,
   model: drizzleSql`model`,
   origin: ORIGIN,
-  day: drizzleSql`to_char(day, 'YYYY-MM-DD')`
+  day: drizzleSql`to_char(day, 'YYYY-MM-DD')`,
+  all: drizzleSql`''::text`
 };
 
 async function summarizeModelUsageBreakdown(
   db: PostgresConnection,
   input: Parameters<Store["summarizeModelUsageBreakdown"]>[0]
 ): Promise<UsageBreakdownGroup[]> {
-  const narrowed = Object.entries(input.filter ?? {}).flatMap(([dimension, value]) =>
-    value === undefined
-      ? []
-      : [drizzleSql`${DIMENSION[dimension as keyof UsageBreakdownFilter]} = ${value}`]
-  );
+  const narrowed = USAGE_BREAKDOWN_DIMENSIONS.flatMap((dimension) => {
+    const value = input.filter?.[dimension];
+    return value === undefined ? [] : [drizzleSql`${DIMENSION[dimension]} = ${value}`];
+  });
   const key = DIMENSION[input.groupBy];
   const rows = await db.execute<TotalsRow & { key: string }>(drizzleSql`
     select ${key} as key, ${TOTALS}

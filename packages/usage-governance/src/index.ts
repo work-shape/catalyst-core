@@ -7,6 +7,7 @@ import {
   KNOWLEDGE_INGESTION_PURPOSES,
   type AdmittedModelCall,
   type ClientInstanceId,
+  type CollaborationWorkspaceId,
   type ModelAttribution,
   type ModelCallAdmission,
   type ModelCallUsage,
@@ -32,7 +33,10 @@ import {
   type UsageSafeguardsConfig,
   type UsageSpendAmounts,
   type UsageSpendCounter,
-  type UsageSpendLimitsOfCall
+  type UsageSpendLimitsOfCall,
+  type UsageActivityCounts,
+  type UsageBreakdownDimension,
+  type UsageBreakdownFilter
 } from "@work-shape/catalyst-core";
 import { calculateUsageCost, normalizeCount, priceTokens, totalComponents } from "./cost";
 
@@ -117,7 +121,46 @@ export type SafeModelUsageEvent = Pick<
 > & {
   /** The call was settled with the fast rates. */
   billedAsFast: boolean;
+  /**
+   * The workspace the call was made in: a shared one by its id and name, every Personal
+   * Workspace by the one key `personal`, never by whose it is (limits spec 3.4).
+   */
+  workspace?: UsageWorkspaceLabel;
 };
+
+/** How a workspace is shown on the Usage page. */
+export interface UsageWorkspaceLabel {
+  key: string;
+  name?: string;
+}
+
+/** Labels the workspaces of usage events by their ids; an id it leaves out is shown as none. */
+export type UsageWorkspaceLabeler = (
+  workspaceIds: readonly string[]
+) => Promise<ReadonlyMap<string, UsageWorkspaceLabel>>;
+
+/** One row of the Breakdown: the value of its dimension and the costed sums. */
+export interface SafeCostedUsageBreakdownRow extends SafeCostedModelUsageWindowSummary {
+  key: string;
+}
+
+export interface SafeUsageBreakdown {
+  total: SafeCostedModelUsageWindowSummary;
+  rows: SafeCostedUsageBreakdownRow[];
+}
+
+/** What one member used in one shared workspace; `userId` absent once it is not recorded. */
+export interface SafeCostedWorkspaceMemberUsage extends SafeCostedModelUsageWindowSummary {
+  userId?: string;
+}
+
+/** What one person's own calls hold on their spend counter of a month. */
+export interface UsageUserMonthSpend {
+  userId: string;
+  spentMicros: number;
+  modelCallCount: number;
+  tokens: number;
+}
 
 export interface SafeCostedModelUsageEvent extends SafeModelUsageEvent {
   cost: SafeModelUsageBillableCost;
@@ -144,6 +187,8 @@ export interface SafeUsageSummary {
   /** The days of `dailyUsage`, split by model, provider, region and purpose or agent. */
   attributedUsage: SafeCostedModelUsageAttributionGroup[];
   recentEvents: SafeCostedModelUsageEvent[];
+  /** What was started in the current month, and by how many people. */
+  activity: UsageActivityCounts;
 }
 
 const DAILY_USAGE_BUCKET_COUNT = 30;
@@ -291,10 +336,12 @@ export class ModelUsageGovernance implements ModelUsageRecorder {
     clientInstanceId: ClientInstanceId;
     now?: Date;
     webSearchEnabled?: boolean;
+    /** Names the workspaces of the recent calls; without it they name none. */
+    labelWorkspaces?: UsageWorkspaceLabeler;
   }): Promise<SafeUsageSummary> {
     const now = input.now ?? new Date();
     const { todayStart, currentMonthStart } = createModelUsageWindowBounds(now);
-    const [history, recent, recentEvents, budgetSpend, stored] = await Promise.all([
+    const [history, recent, recentEvents, budgetSpend, stored, activity] = await Promise.all([
       this.store.summarizeModelUsageHistory({ clientInstanceId: input.clientInstanceId }),
       this.store.summarizeRecentModelUsage({
         clientInstanceId: input.clientInstanceId,
@@ -309,8 +356,20 @@ export class ModelUsageGovernance implements ModelUsageRecorder {
         todayStart,
         currentMonthStart
       }),
-      this.store.readSpendLimits({ clientInstanceId: input.clientInstanceId })
+      this.store.readSpendLimits({ clientInstanceId: input.clientInstanceId }),
+      this.store.countUsageActivity({
+        clientInstanceId: input.clientInstanceId,
+        from: currentMonthStart,
+        to: utcMonthStart(new Date(currentMonthStart), 1).toISOString()
+      })
     ]);
+    const workspaceIds = [
+      ...new Set(recentEvents.flatMap((event) => event.collaborationWorkspaceId ?? []))
+    ];
+    const workspaces =
+      input.labelWorkspaces && workspaceIds.length > 0
+        ? await input.labelWorkspaces(workspaceIds)
+        : new Map<string, UsageWorkspaceLabel>();
     const instanceLimits = this.instanceSpendLimits(stored.instance);
     const rateCard = this.costs.customer;
     const showWebSearchCost =
@@ -378,8 +437,116 @@ export class ModelUsageGovernance implements ModelUsageRecorder {
         ...(group.agentName === undefined ? {} : { agentName: group.agentName }),
         ...costed(group)
       })),
-      recentEvents: recentEvents.map((event) => toSafeEvent(event, showWebSearchCost))
+      recentEvents: recentEvents.map((event) => {
+        const workspace =
+          event.collaborationWorkspaceId === undefined
+            ? undefined
+            : workspaces.get(event.collaborationWorkspaceId);
+        return {
+          ...toSafeEvent(event, showWebSearchCost),
+          ...(workspace === undefined ? {} : { workspace })
+        };
+      }),
+      activity
     };
+  }
+
+  /**
+   * The Breakdown of the Usage page (LU-3): the daily sums from `from` up to `to` (UTC days,
+   * `to` excluded) grouped by one dimension or by day, narrowed by any, and their total.
+   */
+  async summarizeBreakdown(input: {
+    clientInstanceId: ClientInstanceId;
+    from: string;
+    to: string;
+    groupBy: UsageBreakdownDimension | "day";
+    filter?: UsageBreakdownFilter;
+    webSearchEnabled?: boolean;
+  }): Promise<SafeUsageBreakdown> {
+    const query = {
+      clientInstanceId: input.clientInstanceId,
+      from: input.from,
+      to: input.to,
+      ...(input.filter === undefined ? {} : { filter: input.filter })
+    };
+    const [groups, whole] = await Promise.all([
+      this.store.summarizeModelUsageBreakdown({ ...query, groupBy: input.groupBy }),
+      this.store.summarizeModelUsageBreakdown({ ...query, groupBy: "all" })
+    ]);
+    const showWebSearchCost = this.showsWebSearchCost(input.webSearchEnabled);
+    const start = `${input.from}T00:00:00.000Z`;
+    const end = `${input.to}T00:00:00.000Z`;
+    return {
+      total: toSafeWindow(whole[0] ?? NO_USAGE, start, end, this.costs.customer, showWebSearchCost),
+      rows: groups.map(({ key, ...totals }) => ({
+        key,
+        ...(input.groupBy === "day"
+          ? toSafeWindow(
+              totals,
+              `${key}T00:00:00.000Z`,
+              utcDayStart(new Date(`${key}T00:00:00.000Z`), 1).toISOString(),
+              this.costs.customer,
+              showWebSearchCost
+            )
+          : toSafeWindow(totals, start, end, this.costs.customer, showWebSearchCost))
+      }))
+    };
+  }
+
+  /** What was started from `from` up to `to`, in the instance or in one shared workspace. */
+  countActivity(input: Parameters<ModelUsageEventStore["countUsageActivity"]>[0]) {
+    return this.store.countUsageActivity(input);
+  }
+
+  /**
+   * What each member used in one shared workspace in one UTC month (`YYYY-MM`), from its usage
+   * events, so the members add up to the workspace's row of the Breakdown.
+   */
+  async summarizeWorkspaceMembers(input: {
+    clientInstanceId: ClientInstanceId;
+    collaborationWorkspaceId: CollaborationWorkspaceId;
+    month: string;
+    webSearchEnabled?: boolean;
+  }): Promise<SafeCostedWorkspaceMemberUsage[]> {
+    const start = `${input.month}-01T00:00:00.000Z`;
+    const end = utcMonthStart(new Date(start), 1).toISOString();
+    const members = await this.store.summarizeWorkspaceMemberUsage({
+      clientInstanceId: input.clientInstanceId,
+      collaborationWorkspaceId: input.collaborationWorkspaceId,
+      from: start,
+      to: end
+    });
+    const showWebSearchCost = this.showsWebSearchCost(input.webSearchEnabled);
+    return members.map(({ userId, ...totals }) => ({
+      ...(userId === undefined ? {} : { userId }),
+      ...toSafeWindow(totals, start, end, this.costs.customer, showWebSearchCost)
+    }));
+  }
+
+  /**
+   * What each person's own calls hold on their spend counter of one UTC month (`YYYY-MM`): the
+   * figure their limit is held against, in the currency of the Customer Rate Card.
+   */
+  async listUserMonthSpend(input: {
+    clientInstanceId: ClientInstanceId;
+    month: string;
+  }): Promise<{ currency?: string; items: UsageUserMonthSpend[] }> {
+    const rows = await this.store.listUserMonthSpend(input);
+    const currency = this.costs.customer?.currency;
+    return {
+      ...(currency ? { currency } : {}),
+      items: rows.map((row) => ({
+        userId: row.userId,
+        spentMicros: row.costMicros,
+        modelCallCount: row.modelCallCount,
+        tokens: row.tokens
+      }))
+    };
+  }
+
+  /** Web search cost is shown where search is on or the rate card prices it. */
+  private showsWebSearchCost(webSearchEnabled: boolean | undefined): boolean {
+    return webSearchEnabled ?? Boolean(this.costs.customer?.webSearch?.length);
   }
 
   /** The release config's spend limits of the instance: the ceiling an admin stays under. */

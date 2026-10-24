@@ -19702,6 +19702,143 @@
         "x-catalyst-rate-class": "read"
       }
     },
+    "/api/v1/instance/usage/breakdown": {
+      "get": {
+        "operationId": "usage.breakdown.get",
+        "summary": "Read the instance's usage of a period grouped by workspace, agent, App, Workflow, model or origin, narrowed by any of them",
+        "tags": [
+          "Governance"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "governance:read"
+            ]
+          },
+          {
+            "sessionToken": [
+              "governance:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            }
+          },
+          {
+            "name": "groupBy",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/UsageBreakdownDimension"
+            }
+          },
+          {
+            "name": "workspace",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "agent",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "app",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "workflow",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "model",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "origin",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/UsageOrigin"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsageBreakdown"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-requires": [
+          "usage.view"
+        ],
+        "x-catalyst-rate-class": "read"
+      }
+    },
     "/api/v1/instance/usage/limits": {
       "get": {
         "operationId": "usage.limits.get",
@@ -19885,6 +20022,73 @@
           "limits.manage"
         ],
         "x-catalyst-rate-class": "write"
+      }
+    },
+    "/api/v1/instance/usage/users": {
+      "get": {
+        "operationId": "usage.users.list",
+        "summary": "Read each person's own spend of one month, by name and without ranking. Every read is an audit event.",
+        "tags": [
+          "Governance"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "governance:read"
+            ]
+          },
+          {
+            "sessionToken": [
+              "governance:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "month",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsageUsers"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-requires": [
+          "usage.view_users"
+        ],
+        "x-catalyst-rate-class": "read"
       }
     },
     "/api/v1/instance/users": {
@@ -33810,6 +34014,224 @@
         "x-catalyst-rate-class": "write"
       }
     },
+    "/api/v1/workspaces/{collaborationWorkspaceId}/usage": {
+      "get": {
+        "operationId": "workspaces.usage.get",
+        "summary": "Read a shared workspace's usage: this month, its days and a period grouped by one dimension. Needs the role Owner or Admin.",
+        "tags": [
+          "Collaboration Workspaces"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "collaboration_workspace:read"
+            ]
+          },
+          {
+            "sessionToken": [
+              "collaboration_workspace:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "collaborationWorkspaceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            }
+          },
+          {
+            "name": "groupBy",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "agent",
+                "app",
+                "workflow",
+                "model",
+                "origin"
+              ]
+            }
+          },
+          {
+            "name": "agent",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "app",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "workflow",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "model",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "origin",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/UsageOrigin"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceUsage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-rate-class": "read"
+      }
+    },
+    "/api/v1/workspaces/{collaborationWorkspaceId}/usage/members": {
+      "get": {
+        "operationId": "workspaces.member_usage.list",
+        "summary": "Read what each member used in a shared workspace in one month. Needs the role Owner or Admin and the right to view usage by person; every read is an audit event.",
+        "tags": [
+          "Collaboration Workspaces"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "collaboration_workspace:read"
+            ]
+          },
+          {
+            "sessionToken": [
+              "collaboration_workspace:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "collaborationWorkspaceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "month",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceMembersUsage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-rate-class": "read"
+      }
+    },
     "/ready": {
       "get": {
         "operationId": "ready.get",
@@ -42851,6 +43273,20 @@
           "createdAt": {
             "$ref": "#/components/schemas/Timestamp"
           },
+          "workspace": {
+            "type": "object",
+            "properties": {
+              "key": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "key"
+            ]
+          },
           "cost": {
             "$ref": "#/components/schemas/ModelUsageBillableCost"
           }
@@ -47264,6 +47700,139 @@
           "externalUserId"
         ]
       },
+      "UsageActivity": {
+        "type": "object",
+        "properties": {
+          "activeUsers": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "conversations": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "agentRuns": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "appActionRuns": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "workflowRuns": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "activeUsers",
+          "conversations",
+          "agentRuns",
+          "appActionRuns",
+          "workflowRuns"
+        ]
+      },
+      "UsageBreakdown": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "groupBy": {
+            "$ref": "#/components/schemas/UsageBreakdownDimension"
+          },
+          "personalWorkspacesKey": {
+            "type": "string",
+            "const": "personal"
+          },
+          "total": {
+            "$ref": "#/components/schemas/ModelUsageWindowSummary"
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UsageBreakdownRow"
+            }
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "groupBy",
+          "personalWorkspacesKey",
+          "total",
+          "rows"
+        ]
+      },
+      "UsageBreakdownDimension": {
+        "type": "string",
+        "enum": [
+          "workspace",
+          "agent",
+          "app",
+          "workflow",
+          "model",
+          "origin"
+        ]
+      },
+      "UsageBreakdownRow": {
+        "type": "object",
+        "properties": {
+          "start": {
+            "$ref": "#/components/schemas/Timestamp"
+          },
+          "end": {
+            "$ref": "#/components/schemas/Timestamp"
+          },
+          "modelCallCount": {
+            "type": "number"
+          },
+          "inputTokens": {
+            "type": "number"
+          },
+          "cachedInputTokens": {
+            "type": "number"
+          },
+          "outputTokens": {
+            "type": "number"
+          },
+          "totalTokens": {
+            "type": "number"
+          },
+          "webSearchCallCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "cost": {
+            "$ref": "#/components/schemas/ModelUsageBillableCostSummary"
+          },
+          "key": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "modelCallCount",
+          "inputTokens",
+          "cachedInputTokens",
+          "outputTokens",
+          "totalTokens",
+          "webSearchCallCount",
+          "cost",
+          "key"
+        ]
+      },
       "UsageLimitTarget": {
         "type": "object",
         "properties": {
@@ -47379,6 +47948,16 @@
           "period",
           "limit",
           "percent"
+        ]
+      },
+      "UsageOrigin": {
+        "type": "string",
+        "enum": [
+          "conversation",
+          "app",
+          "workflow",
+          "knowledge_base",
+          "system"
         ]
       },
       "UsageSafeguards": {
@@ -47587,6 +48166,9 @@
               "$ref": "#/components/schemas/ModelUsageAttributionGroup"
             }
           },
+          "activity": {
+            "$ref": "#/components/schemas/UsageActivity"
+          },
           "recentEvents": {
             "type": "array",
             "items": {
@@ -47604,6 +48186,59 @@
           "dailyUsage",
           "monthlyUsage",
           "recentEvents"
+        ]
+      },
+      "UsageUserMonth": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "spent": {
+            "type": "number",
+            "minimum": 0
+          },
+          "modelCallCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "tokens": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "userId",
+          "name",
+          "spent",
+          "modelCallCount",
+          "tokens"
+        ]
+      },
+      "UsageUsers": {
+        "type": "object",
+        "properties": {
+          "month": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UsageUserMonth"
+            }
+          }
+        },
+        "required": [
+          "month",
+          "items"
         ]
       },
       "UserDeletionState": {
@@ -48247,6 +48882,73 @@
           "hasPendingAccessRequest"
         ]
       },
+      "WorkspaceMemberUsage": {
+        "type": "object",
+        "properties": {
+          "start": {
+            "$ref": "#/components/schemas/Timestamp"
+          },
+          "end": {
+            "$ref": "#/components/schemas/Timestamp"
+          },
+          "modelCallCount": {
+            "type": "number"
+          },
+          "inputTokens": {
+            "type": "number"
+          },
+          "cachedInputTokens": {
+            "type": "number"
+          },
+          "outputTokens": {
+            "type": "number"
+          },
+          "totalTokens": {
+            "type": "number"
+          },
+          "webSearchCallCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "cost": {
+            "$ref": "#/components/schemas/ModelUsageBillableCostSummary"
+          },
+          "userId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "modelCallCount",
+          "inputTokens",
+          "cachedInputTokens",
+          "outputTokens",
+          "totalTokens",
+          "webSearchCallCount",
+          "cost"
+        ]
+      },
+      "WorkspaceMembersUsage": {
+        "type": "object",
+        "properties": {
+          "month": {
+            "type": "string"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceMemberUsage"
+            }
+          }
+        },
+        "required": [
+          "month",
+          "items"
+        ]
+      },
       "WorkspaceMembership": {
         "type": "object",
         "properties": {
@@ -48284,6 +48986,40 @@
           "owner",
           "admin",
           "member"
+        ]
+      },
+      "WorkspaceUsage": {
+        "type": "object",
+        "properties": {
+          "workspaceName": {
+            "type": "string"
+          },
+          "month": {
+            "$ref": "#/components/schemas/ModelUsageWindowSummary"
+          },
+          "days": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ModelUsageDailyBucket"
+            }
+          },
+          "activity": {
+            "$ref": "#/components/schemas/UsageActivity"
+          },
+          "breakdown": {
+            "$ref": "#/components/schemas/UsageBreakdown"
+          },
+          "membersVisible": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "workspaceName",
+          "month",
+          "days",
+          "activity",
+          "breakdown",
+          "membersVisible"
         ]
       },
       "WorkspaceVisibility": {

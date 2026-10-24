@@ -7,7 +7,6 @@ import {
   type ModelUsageEventStore,
   type ModelUsageHistory,
   type ModelUsageLimits,
-  type ModelUsageTotals,
   type RecentModelUsage,
   AppError,
   KNOWLEDGE_INGESTION_PURPOSES,

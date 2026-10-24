@@ -1,7 +1,10 @@
 import {
   MODEL_USAGE_EVENT_STATUSES,
   MODEL_USAGE_SOURCES,
+  PERSONAL_WORKSPACES_KEY,
+  USAGE_BREAKDOWN_DIMENSIONS,
   USAGE_COST_STATUSES,
+  USAGE_ORIGINS,
   USAGE_SPEND_LIMIT_LEVELS
 } from "@work-shape/catalyst-asset-schemas";
 import type {
@@ -415,34 +418,8 @@ export interface RecentModelUsage {
   byAttribution: ModelUsageAttributionGroup[];
 }
 
-/**
- * The workspace key every Personal Workspace shares in the usage sums (LU-3). No sum names a
- * person by their workspace: the Usage page shows them as one row (limits spec 3.4).
- */
-export const PERSONAL_WORKSPACES_KEY = "personal";
-
-/** What the Breakdown of the Usage page groups by (limits spec 3.3, view 2). */
-export const USAGE_BREAKDOWN_DIMENSIONS = [
-  "workspace",
-  "agent",
-  "app",
-  "workflow",
-  "model",
-  "origin"
-] as const;
+export { PERSONAL_WORKSPACES_KEY, USAGE_BREAKDOWN_DIMENSIONS, USAGE_ORIGINS };
 export type UsageBreakdownDimension = (typeof USAGE_BREAKDOWN_DIMENSIONS)[number];
-
-/**
- * Where usage came from (limits spec 3.2): a conversation, an App, a Workflow, Knowledge Base
- * ingestion, or a call the product made for itself, such as a title or a guardrail check.
- */
-export const USAGE_ORIGINS = [
-  "conversation",
-  "app",
-  "workflow",
-  "knowledge_base",
-  "system"
-] as const;
 export type UsageOrigin = (typeof USAGE_ORIGINS)[number];
 
 /** The rows a Breakdown is narrowed to: a value per dimension, the empty string for none. */
@@ -561,7 +538,8 @@ export interface ModelUsageEventStore extends UsageSpendLimitStore {
     clientInstanceId: ClientInstanceId;
     from: string;
     to: string;
-    groupBy: UsageBreakdownDimension | "day";
+    /** `day` groups by UTC day, `all` sums the whole period into one row. */
+    groupBy: UsageBreakdownDimension | "day" | "all";
     filter?: UsageBreakdownFilter;
   }): Promise<UsageBreakdownGroup[]>;
   /**

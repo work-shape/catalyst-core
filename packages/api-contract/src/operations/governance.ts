@@ -6,6 +6,12 @@ import {
   usageLimitsSchema,
   usageSpendLimitChangeSchema
 } from "../usage-limits";
+import {
+  usageBreakdownQuerySchema,
+  usageBreakdownSchema,
+  usageMonthQuerySchema,
+  usageUsersSchema
+} from "../usage-reports";
 import { defineOperation, defineRegisteredOperation, json, page } from "./define-operation";
 
 export const governanceOperations = {
@@ -50,6 +56,40 @@ export const governanceOperations = {
     requires: ["usage.view"],
     effect: "reading",
     response: json(usageSummarySchema),
+    errors: [],
+    rateClass: "read"
+  }),
+  // The Usage page (LU-3): the Breakdown by one dimension, and usage by named person, which
+  // needs its own right and is audited on every read (limits spec 3.4).
+  "usage.breakdown.get": defineOperation({
+    id: "usage.breakdown.get",
+    method: "GET",
+    path: "/api/v1/instance/usage/breakdown",
+    summary:
+      "Read the instance's usage of a period grouped by workspace, agent, App, Workflow, model or origin, narrowed by any of them",
+    tag: "Governance",
+    auth: "user",
+    scope: "governance:read",
+    requires: ["usage.view"],
+    effect: "reading",
+    query: usageBreakdownQuerySchema,
+    response: json(usageBreakdownSchema),
+    errors: [],
+    rateClass: "read"
+  }),
+  "usage.users.list": defineOperation({
+    id: "usage.users.list",
+    method: "GET",
+    path: "/api/v1/instance/usage/users",
+    summary:
+      "Read each person's own spend of one month, by name and without ranking. Every read is an audit event.",
+    tag: "Governance",
+    auth: "user",
+    scope: "governance:read",
+    requires: ["usage.view_users"],
+    effect: "reading",
+    query: usageMonthQuerySchema,
+    response: json(usageUsersSchema),
     errors: [],
     rateClass: "read"
   }),
