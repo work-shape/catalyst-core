@@ -14,6 +14,7 @@ import {
   type ClientInstanceConfig
 } from "@work-shape/catalyst-config-schema";
 import {
+  asClientInstanceId,
   createEnvironmentSecretResolver,
   type ModelUsageEventStore
 } from "@work-shape/catalyst-core";
@@ -84,8 +85,7 @@ const unusedUsageStore: ModelUsageEventStore = {
   listModelUsageEvents: unused,
   clearUserFromModelUsageEvents: unused,
   clearWorkspaceFromModelUsageEvents: unused,
-  backfillModelUsageAttribution: unused,
-  recordModelUsage: unused
+  backfillModelUsageAttribution: unused
 };
 
 /**
@@ -106,7 +106,7 @@ async function startupAccepts(
   });
   await createWorkerCapabilityModels({
     config,
-    clientInstanceId: config.clientInstance.id,
+    clientInstanceId: asClientInstanceId(config.clientInstance.id),
     infrastructure,
     store: { usage: unusedUsageStore },
     bindingIds: config.modelBindings.map((binding) => binding.id)
