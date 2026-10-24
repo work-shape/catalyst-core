@@ -3,6 +3,7 @@ import { DataScopes, declaresDataScope, useDataScopeOverview } from "../../acces
 import { useState } from "react";
 import { ApiError } from "@work-shape/catalyst-api-client";
 import {
+  INSTANCE_GRANT_KINDS,
   checkedAssetId,
   furtherGrantKinds,
   grantRowCount,
@@ -144,12 +145,17 @@ export function AccessPage() {
       ];
     })
   );
-  // Builder and Publisher name a workspace, never an asset; editing the built-in roles is a
-  // right on the whole instance.
+  // Builder and Publisher name a workspace, never an asset; editing the built-in roles,
+  // administering service principals and the other rights of the instance itself name the
+  // whole instance.
   const kindAssets = {
     ...assetChoices,
-    workspace: { items: [], failed: false },
-    roles: { items: [], failed: false }
+    ...Object.fromEntries(
+      INSTANCE_GRANT_KINDS.map((kind): [GrantKind, GrantChoices] => [
+        kind,
+        { items: [], failed: false }
+      ])
+    )
   };
   // What a role's grant names, as the Rights tab names a person's: a workspace by its name, an
   // asset by the title its kind's list gives it.

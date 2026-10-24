@@ -37,16 +37,7 @@ const NAMED = {
   notAGate: "Not a gate: no right is asked"
 } as const;
 
-/**
- * Checks of the role that are no item of the named list and no gate of the sweep: found by
- * RIGHTS-1e's scan and left to their own ticket. Each becomes a right and leaves this list.
- */
-const NOT_YET_A_RIGHT = {
-  mailAnyWorkspace: "An instance admin may mail any shared workspace (RIGHTS-1f: `users.manage`)"
-} as const;
-
-type Reason =
-  (typeof NAMED)[keyof typeof NAMED] | (typeof NOT_YET_A_RIGHT)[keyof typeof NOT_YET_A_RIGHT];
+type Reason = (typeof NAMED)[keyof typeof NAMED];
 
 /** Each file with a check of the role, how many it has, and why each may stay. */
 const ALLOWED: Record<string, { count: number; reason: Reason }> = {
@@ -83,11 +74,7 @@ const ALLOWED: Record<string, { count: number; reason: Reason }> = {
     reason: NAMED.notAGate
   },
   // The local CLI key is made for the seed's superadmin.
-  "packages/client-assembly/src/local-key.ts": { count: 1, reason: NAMED.notAGate },
-  "packages/server/src/mail/mail-send-operation.ts": {
-    count: 1,
-    reason: NOT_YET_A_RIGHT.mailAnyWorkspace
-  }
+  "packages/client-assembly/src/local-key.ts": { count: 1, reason: NAMED.notAGate }
 };
 
 function sourceFiles(directory: string): string[] {
@@ -128,16 +115,15 @@ describe("access check 40: the named list", () => {
   });
 
   it("gives each allowed check a reason", () => {
-    const reasons = new Set<string>([...Object.values(NAMED), ...Object.values(NOT_YET_A_RIGHT)]);
+    const reasons = new Set<string>(Object.values(NAMED));
     for (const { reason } of Object.values(ALLOWED)) expect(reasons.has(reason)).toBe(true);
   });
 });
 
-/** How the spec's sweep resolved a gate: a right a person is granted, a role's, or named. */
+/** How the spec's sweep resolved a gate: a right a person is granted, or named. */
 type Resolution =
   | { grantable: readonly ("workspace" | "asset" | "instance")[] }
-  | { named: "legacy key a superadmin hands out" }
-  | { role: "given through a role on the whole instance; to a person by RIGHTS-1f" };
+  | { named: "legacy key a superadmin hands out" };
 
 /** The sweep under "No hard-wired gates", with the default the spec gives each right. */
 const SWEEP: readonly {
@@ -150,10 +136,10 @@ const SWEEP: readonly {
     resolution: { grantable: ["asset", "workspace", "instance"] },
     default: "admin"
   },
-  // Given to a person only through a role until RIGHTS-1f makes it grantable at instance scope.
+  // Given to a person on the whole instance since RIGHTS-1f.
   {
     action: "service_principals.manage",
-    resolution: { role: "given through a role on the whole instance; to a person by RIGHTS-1f" },
+    resolution: { grantable: ["instance"] },
     default: "admin"
   },
   {
@@ -212,14 +198,10 @@ describe("access check 40: the sweep", () => {
         ? GRANTABLE_ACTION_SCOPES[gate.action]
         : [];
       expect(scopes).toEqual(expect.arrayContaining([...gate.resolution.grantable]));
-    } else if ("named" in gate.resolution) {
+    } else {
       // A superadmin hands it out on the Users page, as a legacy key (D8).
       expect(isPermission(gate.action)).toBe(true);
       expect(SUPERADMIN_GRANTED_ACTIONS.some((action) => action === gate.action)).toBe(true);
-    } else {
-      // A role holds any action on the whole instance; a person is given it through a role.
-      expect(isGrantableAction(gate.action)).toBe(false);
-      expect(isPermission(gate.action)).toBe(false);
     }
   });
 });

@@ -24,7 +24,7 @@ import { activePersonOf, mailRecipientItemsOf, workspaceMailableBy } from "./mai
 
 export interface MailSendStepRule {
   clientInstanceId: ClientInstanceId;
-  stores: Pick<PlatformStores, "users" | "workspaces">;
+  stores: Pick<PlatformStores, "users" | "workspaces" | "access">;
   /**
    * The person who saves or publishes the definition, by user id: a `{ workspace }` recipient
    * must be a Shared Workspace they may mail (`workspaceMailableBy`). Absent where no person

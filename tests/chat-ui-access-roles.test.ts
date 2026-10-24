@@ -132,7 +132,8 @@ describe("the role model", () => {
       rights: rights(["users.manage", "roles.edit_built_in", "usage.view"])
     };
     const choices = new Map(
-      ["administration", "users"]
+      // Service principals are their own area since RIGHTS-1f grants them to a person.
+      ["administration", "users", "service_principals"]
         .flatMap((area) => areaRightChoices(area, reviewers.grants, narrow))
         .map((c) => [c.action, c])
     );

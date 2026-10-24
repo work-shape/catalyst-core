@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { z } from "zod";
 import {
   asAgentRunId,
   asToolCallId,
@@ -547,6 +548,57 @@ describe("a workspace as recipient (MAIL-2)", () => {
       t.kai.id
     );
     expect(member.statusCode, member.body).toBe(200);
+  });
+
+  it("mails any Shared Workspace for a holder of users.manage on the whole instance, not by the role (RIGHTS-1f)", async () => {
+    const { t, shared } = await team();
+    await t.allow({ kind: "user", id: t.kai.id }, "workflow.write");
+    const draft = () => mailFlow("team", basic({ value: [{ workspace: shared }] }));
+    refusedFor(await put(t, draft(), t.kai.id));
+
+    // The key "Manage users", given to a person who holds no role beyond User.
+    await t.expectOk(t.root.id, "users.update", {
+      params: { userId: t.kai.id },
+      payload: { permissions: ["users.manage"] }
+    });
+    const keyed = await put(t, draft(), t.kai.id);
+    expect(keyed.statusCode, keyed.body).toBe(200);
+    // A workspace in the instance is not every workspace: a Personal Workspace stays closed.
+    const personal = await t.stores.workspaces.ensurePersonalWorkspace({
+      clientInstanceId,
+      userId: t.kai.id
+    });
+    refusedFor(
+      await put(t, mailFlow("own", basic({ value: [{ workspace: personal.id }] })), t.kai.id)
+    );
+  });
+
+  it("refuses an admin whose users.manage a role denies, at save and in a run (RIGHTS-1f)", async () => {
+    const { t, shared } = await team();
+    const ada = await person(t, "Ada Admin", "ada@kanzlei.de", ["user", "admin"]);
+    await save(t, mailFlow("team", basic({ value: [{ workspace: shared }] })), {
+      writer: ada.id,
+      publisher: ada.id
+    });
+    const refusing = z.object({ id: z.string() }).parse(
+      (
+        await t.expectOk(t.root.id, "roles.create", {
+          payload: {
+            name: "No user administration",
+            grants: [{ action: "users.manage", effect: "deny", scopeKind: "instance" }]
+          }
+        })
+      ).json()
+    );
+    await t.expectOk(t.root.id, "users.update", {
+      params: { userId: ada.id },
+      payload: { roles: ["user", "admin", refusing.id] }
+    });
+
+    refusedFor(await put(t, mailFlow("again", basic({ value: [{ workspace: shared }] })), ada.id));
+    const ran = await run(t, "team");
+    expect(ran.step.error).toMatchObject({ code: "workspace_not_allowed" });
+    expect(t.capturedMail()).toEqual([]);
   });
 
   it("is refused at publish where the publisher is no member of it", async () => {

@@ -20,6 +20,7 @@ export {
   grantsNameWorkspaces,
   grantVerbs,
   groupGrants,
+  INSTANCE_GRANT_KINDS,
   splitGrantableAction,
   withGrantKind,
   type GrantForm
