@@ -3,6 +3,7 @@ import { auditActorFromUser } from "@work-shape/catalyst-core";
 import {
   AppError,
   type ActorAccess,
+  type AgentConfig,
   type AgentPreview,
   type PrepareConversationRunStartInput,
   type ConversationFollowUp,
@@ -28,10 +29,17 @@ import {
   authorReasoningEffort,
   defaultReasoningEffortForAgentBinding,
   isModelBindingUserSelectableForAgent,
+  modelRouteAllowedForPersonalData,
+  PersonalDataModelRegionError,
   reasoningEffortChoiceForBinding,
   reasoningEffortsOffered
 } from "@work-shape/catalyst-core";
-import { resolveModelBinding } from "@work-shape/catalyst-config-schema";
+import {
+  getModelProviderConfigs,
+  getModelSelectionForAgent,
+  getPersonalModelRegions,
+  resolveModelBinding
+} from "@work-shape/catalyst-config-schema";
 import {
   agentWriter,
   callerAccess,
@@ -104,7 +112,9 @@ export class RunStartWorkflow {
     requestedReasoningEffort: ReasoningEffortConfig | undefined,
     caller: { user: AuthenticatedUser; access?: ActorAccess; correlationId: string },
     acceptedFollowUp = false,
-    preview?: AgentPreview
+    preview?: AgentPreview,
+    /** The conversation carries the personal-data mark (MODEL-REGION-3). */
+    personalData = false
   ): Promise<{
     agentName: string;
     modelBindingId?: string;
@@ -183,6 +193,7 @@ export class RunStartWorkflow {
       }
     }
     const modelBindingId = requestedModelBindingId ?? agent?.modelBindingId;
+    if (personalData) this.requirePersonalDataModel(agent, modelBindingId);
     const binding = this.options.config.modelBindings.find(
       (candidate) => candidate.id === modelBindingId
     );
@@ -194,6 +205,28 @@ export class RunStartWorkflow {
         (agent && binding ? defaultReasoningEffortForAgentBinding(agent, binding) : undefined) ??
         binding?.reasoningEffort
     };
+  }
+
+  /**
+   * A conversation with personal data runs only on a model whose route is in a region allowed
+   * for it, whether the person named the model or the run falls back to the agent's own. The
+   * runtime checks every request again; this refuses before a run or a follow-up is created.
+   */
+  private requirePersonalDataModel(
+    agent: AgentConfig | undefined,
+    modelBindingId: string | undefined
+  ): void {
+    if (!this.options.modules.isEnabled("connections")) return;
+    const { config } = this.options;
+    const allowed = getPersonalModelRegions(config);
+    const provider = modelBindingId
+      ? resolveModelBinding(config, modelBindingId).provider
+      : agent
+        ? getModelSelectionForAgent(config, agent).provider
+        : getModelProviderConfigs(config)[0];
+    if (!provider || !modelRouteAllowedForPersonalData(provider, allowed)) {
+      throw new PersonalDataModelRegionError(allowed);
+    }
   }
 
   startMessageRun(
@@ -244,7 +277,8 @@ export class RunStartWorkflow {
         command.reasoningEffort,
         { user, access: command.access, correlationId: context.correlationId },
         Boolean(command.dispatchFollowUpId),
-        preview
+        preview,
+        conversation.personalDataAt !== undefined
       );
       const attachments = this.options.attachments;
       const pendingDraftAttachments =

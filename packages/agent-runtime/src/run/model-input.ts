@@ -5,6 +5,7 @@ import {
   isModelBindingUserSelectableForAgent,
   reasoningEffortChoiceForBinding,
   getRuntimeSubjectUserId,
+  requirePersonalDataModelRoute,
   type AgentConfig,
   type AgentRunId,
   type ChatMessage,
@@ -214,19 +215,31 @@ export class ModelInput {
     };
   }
 
-  /** Re-read the permanent mark: a sibling subagent may have made the personal call. */
+  /**
+   * Re-read the permanent mark until it is seen: a sibling subagent may have made the personal
+   * call. Its own flag, not web access: web access may be off where the mark was never read.
+   */
+  async personalDataMarked(
+    runId: AgentRunId,
+    state: RunState,
+    input: StartAgentRunInput
+  ): Promise<boolean> {
+    if (!state.holdsPersonalData() && this.options.personalData) {
+      const restricted = await this.options.personalData.personalConversation(
+        input.conversationId,
+        runId
+      );
+      if (restricted) state.notePersonalData();
+    }
+    return state.holdsPersonalData();
+  }
+
   async webAccessOff(
     runId: AgentRunId,
     state: RunState,
     input: StartAgentRunInput
   ): Promise<boolean> {
-    if (!state.isWebAccessOff() && this.options.personalData) {
-      const restricted = await this.options.personalData.personalConversation(
-        input.conversationId,
-        runId
-      );
-      if (restricted) state.disableWebAccess();
-    }
+    if (!state.isWebAccessOff()) await this.personalDataMarked(runId, state, input);
     return state.isWebAccessOff();
   }
 
@@ -242,6 +255,17 @@ export class ModelInput {
     runEvents: RunEvents
   ) {
     const { capabilities } = modelSelection;
+    // MODEL-REGION-3: a conversation with personal data keeps every request on an allowed
+    // route. Asked before each request, so a later turn, a resumed run, a subagent's parent and
+    // a run whose sibling made the personal call mid-run are all held to it.
+    const allowed = this.options.personalModelRegions;
+    if (allowed) {
+      await requirePersonalDataModelRoute({
+        route: modelSelection.provider,
+        allowed,
+        marked: () => this.personalDataMarked(runId, state, input)
+      });
+    }
     // Materialization stays fixed for the run. Only this privacy restriction can remove
     // tools between requests; native search must never be offered with personal data.
     const requestTools = (await this.webAccessOff(runId, state, input))

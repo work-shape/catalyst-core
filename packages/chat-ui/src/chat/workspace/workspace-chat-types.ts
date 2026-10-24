@@ -294,6 +294,13 @@ export interface SelectedChatModel {
   selectedAgentName: string | undefined;
   /** The active agent's own model first, then the models users may pick instead. */
   selectableModels: AgentSelectableModel[];
+  /**
+   * The open conversation holds data from personal connections: a model marked
+   * `personalDataBlocked` shows disabled (MODEL-REGION-3).
+   */
+  personalData: boolean;
+  /** No model the agent offers may be used in it; the composer points to a new conversation. */
+  noModelForPersonalData: boolean;
   selectedModelBindingId: string | undefined;
   /** The effort a run with the selected model would use. */
   selectedReasoningEffort: ReasoningEffort | undefined;

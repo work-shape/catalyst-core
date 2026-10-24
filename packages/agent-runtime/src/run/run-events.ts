@@ -72,9 +72,16 @@ export interface LocalAgentRuntimeOptions {
   conversationOffer?: ConversationOfferSource;
   webAccess?: WebAccessConfig;
   /**
-   * Required when web access is enabled. These host-only readers let the
-   * runtime switch web access off before a personal call, and inherit the root chat's mark
-   * on every model request (including resumed and subagent runs).
+   * `modules.connections.personalModelRegions`, set where the Connections module is on. Then
+   * every model request of a conversation whose root carries the personal-data mark goes only to
+   * a route whose region is in it, or the run fails with `personal_data_model_region`
+   * (MODEL-REGION-3). Requires `personalData`.
+   */
+  personalModelRegions?: readonly string[];
+  /**
+   * Required when web access is enabled or `personalModelRegions` is set. These host-only
+   * readers let the runtime switch web access off before a personal call, and inherit the root
+   * chat's mark on every model request (including resumed and subagent runs).
    */
   personalData?: {
     personalConversation(conversationId: ConversationId, runId: AgentRunId): Promise<boolean>;

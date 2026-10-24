@@ -1,11 +1,15 @@
 import { MODEL_USAGE_TIERS } from "@work-shape/catalyst-core";
 import { cn, LevelMeter, Popover, PopoverContent, PopoverTrigger } from "@work-shape/catalyst-ui";
 import { Check, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
-import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { useTranslation, type TranslationKey } from "../../shared/i18n";
 import { modelDisplayLabel } from "../../shared/model-label";
 import { reasoningEffortLabel } from "../../shared/reasoning-effort-label";
-import type { AgentSelectableModel, ReasoningEffort } from "../workspace/agent-model-selection";
+import {
+  modelAllowedHere,
+  type AgentSelectableModel,
+  type ReasoningEffort
+} from "../workspace/agent-model-selection";
 import { EuResidencyBadge, ModelVendorIcon, modelVendorLabel } from "./model-vendor";
 
 type UsageTier = NonNullable<AgentSelectableModel["usageTier"]>;
@@ -69,6 +73,7 @@ const surfaceClassName = "rounded-xl border bg-popover text-popover-foreground s
  */
 export function ModelPicker({
   models,
+  personalData = false,
   selectedModelBindingId,
   reasoningEffort,
   disabled,
@@ -77,6 +82,11 @@ export function ModelPicker({
 }: {
   /** The active agent's own model first, then the models users may pick instead. */
   models: AgentSelectableModel[];
+  /**
+   * The conversation holds data from personal connections: a model not allowed for it shows
+   * disabled, and one line under the list says why (MODEL-REGION-3).
+   */
+  personalData?: boolean;
   selectedModelBindingId: string | undefined;
   /** The effort a run with the selected model would use. */
   reasoningEffort: ReasoningEffort | undefined;
@@ -97,6 +107,8 @@ export function ModelPicker({
   const pendingFocus = useRef<"panel" | Panel>(undefined);
   const selectedModel =
     models.find((model) => model.bindingId === selectedModelBindingId) ?? models[0];
+  const someBlocked = models.some((model) => !modelAllowedHere(model, personalData));
+  const blockedNoteId = useId();
   const { beside: besideMenu, opensRight } = placement;
 
   // A window that resizes while the picker is open can cross the breakpoint: the placement
@@ -323,16 +335,22 @@ export function ModelPicker({
             >
               {models.map((model) => {
                 const selected = model === selectedModel;
+                const blocked = !modelAllowedHere(model, personalData);
                 return (
                   <button
                     key={model.bindingId ?? ""}
                     type="button"
                     role="option"
                     aria-selected={selected}
+                    // Still focusable and described on hover, so the person learns why.
+                    aria-disabled={blocked || undefined}
+                    aria-describedby={blocked ? blockedNoteId : undefined}
                     className={cn(
                       "grid min-h-9 grid-cols-[1rem_minmax(0,1fr)_auto_1rem] items-center gap-2 rounded-md px-2 text-left text-sm outline-none transition-colors",
                       "hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground",
-                      selected && "bg-accent text-accent-foreground"
+                      selected && "bg-accent text-accent-foreground",
+                      blocked &&
+                        "cursor-not-allowed text-muted-foreground opacity-60 hover:bg-transparent hover:text-muted-foreground"
                     )}
                     onPointerEnter={(event) => {
                       if (event.pointerType === "mouse") {
@@ -342,6 +360,7 @@ export function ModelPicker({
                     onFocus={() => setPreviewedModel(model)}
                     onBlur={() => setPreviewedModel(undefined)}
                     onClick={() => {
+                      if (blocked) return;
                       onSelectModelBinding(model.bindingId ?? "");
                       closePanel();
                     }}
@@ -362,6 +381,14 @@ export function ModelPicker({
                 );
               })}
             </div>
+            {someBlocked ? (
+              <p
+                id={blockedNoteId}
+                className="shrink-0 border-t px-3.5 py-2.5 text-xs leading-4 text-muted-foreground"
+              >
+                {t("modelPickerPersonalDataBlocked")}
+              </p>
+            ) : null}
           </div>
         ) : null}
 

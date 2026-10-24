@@ -60,7 +60,20 @@ export interface StartAgentRunInput {
   };
   /** Set where the run waited for a decision and goes on where it stopped. */
   resume?: AgentRunResume;
+  /**
+   * Of a subagent: the runs above it, nearest first, each by what picks its model. Their model
+   * routes join the subagent's own, so a personal call is admitted only where every route of
+   * the run and of its ancestors is allowed (MODEL-REGION-3). An ancestor whose model cannot be
+   * read is a route without a region, which no personal call passes.
+   */
+  ancestors?: readonly AgentRunModelOrigin[];
 }
+
+/** What picks a run's model: its agent, the preview it ran, the binding its person picked. */
+export type AgentRunModelOrigin = Pick<
+  StartAgentRunInput,
+  "agentName" | "preview" | "modelBindingId"
+>;
 
 export interface AgentRunHandle {
   runId: AgentRunId;

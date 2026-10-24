@@ -761,9 +761,12 @@ export function useWorkspaceChatModel({
     latestRun: selectedThread?.modelSelection,
     userDefault: changedUserModelPicks ?? modelPreferenceQuery.data ?? NO_MODEL_PICKS
   });
-  const { selectableModels, selectedModel } = agentModelSelection(
+  // MODEL-REGION-3: the conversation holds data from personal connections, as its thread says.
+  const conversationPersonalData = selectedThread?.personalData === true;
+  const { selectableModels, selectedModel, noModelAllowed } = agentModelSelection(
     activeAgent,
-    modelPicks.modelBindingId
+    modelPicks.modelBindingId,
+    conversationPersonalData
   );
   // A change applies to the conversation on screen and becomes the default for new ones.
   const changeModelPicks = (picks: ModelPicks) => {
@@ -1148,6 +1151,8 @@ export function useWorkspaceChatModel({
       locale: activeLocale,
       selectedAgentName: activeAgentName,
       selectableModels,
+      personalData: conversationPersonalData,
+      noModelForPersonalData: noModelAllowed,
       selectedModelBindingId,
       selectedReasoningEffort: reasoningEffortSelection.reasoningEffort,
       requestedReasoningEffort: reasoningEffortSelection.requested,
@@ -1190,7 +1195,8 @@ export function useWorkspaceChatModel({
         loadFailed: collaborationWorkspace.loadFailed,
         workspacesListed: collaborationWorkspace.collaborationWorkspaces.length > 0,
         locale: activeLocale,
-        usageLimitReason
+        usageLimitReason,
+        noModelForPersonalData: noModelAllowed
       }),
       attachmentsEnabled,
       attachmentAccept,

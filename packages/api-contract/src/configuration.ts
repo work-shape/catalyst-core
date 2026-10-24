@@ -171,6 +171,12 @@ export const safeConfigSchema = z.object({
           vendor: z.string().optional(),
           description: z.string().optional(),
           region: modelRegionSchema.optional(),
+          /**
+           * Set where the model's region is not one the instance allows for data from personal
+           * connections. In a conversation that holds such data the model cannot be chosen, and a
+           * run on it is refused with `personal_data_model_region`.
+           */
+          personalDataBlocked: z.literal(true).optional(),
           usageTier: modelUsageTierSchema.optional(),
           /** The effort a run uses when the user picks none. */
           reasoningEffort: reasoningEffortSchema.optional(),

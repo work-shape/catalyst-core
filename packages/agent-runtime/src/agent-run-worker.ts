@@ -36,7 +36,8 @@ import {
   type PlatformStores,
   type RegisteredJobHandler,
   type RuntimeCallContext,
-  type StartAgentRunInput
+  type StartAgentRunInput,
+  type AgentRunModelOrigin
 } from "@work-shape/catalyst-core";
 import { setTimeout as delay } from "node:timers/promises";
 import { LocalAgentRuntime, type LocalAgentRuntimeOptions } from "./local-agent-runtime";
@@ -592,8 +593,10 @@ async function reconstructInput(
     );
   const attachmentManifest = readUserAttachmentManifest(message.metadata);
   const workflowAgent = run.workflowStepRunId ? await workflowAgentOf(options, run) : undefined;
+  const ancestors = run.parentRunId ? await ancestorsOf(options, run.parentRunId) : undefined;
   return {
     ...(workflowAgent ? { workflowAgent } : {}),
+    ...(ancestors ? { ancestors } : {}),
     agentName: run.agentName,
     preview,
     modelBindingId: run.modelBindingId,
@@ -609,6 +612,44 @@ async function reconstructInput(
       attachmentManifest: attachmentManifest?.attachments.length ? attachmentManifest : undefined
     }
   };
+}
+
+/** How many runs above a subagent are read. A subagent is never started deeper than one. */
+const ANCESTORS_MAX = 4;
+
+/**
+ * What picked the model of each run above a subagent, nearest first, read as each run was
+ * started (MODEL-REGION-3). A run above it that cannot be read fails the subagent's run.
+ */
+async function ancestorsOf(
+  options: AgentRunJobsOptions,
+  parentRunId: AgentRunId
+): Promise<AgentRunModelOrigin[]> {
+  const ancestors: AgentRunModelOrigin[] = [];
+  let next: AgentRunId | undefined = parentRunId;
+  while (next && ancestors.length < ANCESTORS_MAX) {
+    const parent = await options.stores.agentRuns.getAgentRun({
+      clientInstanceId: options.clientInstanceId,
+      runId: next
+    });
+    if (!parent)
+      throw new AppError("NOT_FOUND", "The run that started this subagent is not available");
+    const { agentName, preview, modelBindingId } = await reconstructInput(
+      options,
+      {
+        ...parent,
+        parentRunId: undefined
+      },
+      undefined
+    );
+    ancestors.push({
+      agentName,
+      ...(preview ? { preview } : {}),
+      ...(modelBindingId ? { modelBindingId } : {})
+    });
+    next = parent.parentRunId;
+  }
+  return ancestors;
 }
 
 function fencedConversationHistory(

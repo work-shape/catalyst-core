@@ -40,7 +40,7 @@ export const clientInstanceId = asClientInstanceId("demo-local");
 export const otherClientInstanceId = asClientInstanceId("another-instance");
 
 /** The modules that are on beside the ones the config turns on by itself. */
-type ModuleSwitches = Record<string, { enabled: boolean }>;
+type ModuleSwitches = Record<string, { enabled: boolean } & Record<string, unknown>>;
 
 /** The editing limits of the instance. Each test instance may set its own. */
 type EditingLimits = Record<string, boolean | string[]>;
@@ -51,10 +51,16 @@ const PLAIN_MODEL_BINDINGS: readonly Record<string, unknown>[] = [
   { id: "other", providerId: "local" }
 ];
 
+/** The one model route an instance has unless a test names its own. */
+const LOCAL_MODELS: Record<string, Record<string, unknown>> = {
+  local: { provider: "deterministic", model: "local" }
+};
+
 const configWith = (
   editingLimits: EditingLimits,
   modules: ModuleSwitches = {},
-  modelBindings = PLAIN_MODEL_BINDINGS
+  modelBindings = PLAIN_MODEL_BINDINGS,
+  models = LOCAL_MODELS
 ) =>
   parseClientInstanceConfig({
     modules,
@@ -83,7 +89,7 @@ const configWith = (
         ...editingLimits
       }
     },
-    infrastructure: { models: { local: { provider: "deterministic", model: "local" } } },
+    infrastructure: { models },
     modelBindings,
     tools: [
       { name: "known.tool", enabled: true },
@@ -298,6 +304,8 @@ export interface AccessInstanceOptions {
   modules?: ModuleSwitches;
   /** The bindings `plain` and `other` with fields of their own, such as efforts to choose. */
   modelBindings?: readonly Record<string, unknown>[];
+  /** The model routes of `infrastructure.models`, by name. Left out, the one route `local`. */
+  models?: Record<string, Record<string, unknown>>;
   /**
    * The runtime reads the stored agents and skills, as an assembled instance does, so what a
    * workspace offers follows the writes. Left out, the runtime sees none.
@@ -321,11 +329,11 @@ export async function setupAccessInstance(
 ): Promise<AccessInstance> {
   const { operations, furtherToolNames = [], editingLimits = {}, furtherKinds = [] } = options;
   const config = {
-    ...configWith(editingLimits, options.modules, options.modelBindings),
+    ...configWith(editingLimits, options.modules, options.modelBindings, options.models),
     ...(options.scopes ? { scopes: options.scopes } : {})
   };
   const validationRefs = {
-    modelProviderIds: ["local"],
+    modelProviderIds: Object.keys(options.models ?? LOCAL_MODELS),
     modelBindingIds: ["plain", "other"],
     modelBindings: [
       { id: "plain", model: "local" },

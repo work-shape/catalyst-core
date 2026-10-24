@@ -25,6 +25,7 @@ import { createManagedObjectAccess } from "@work-shape/catalyst-capability-sdk";
 import {
   AppError,
   KNOWLEDGE_JOB_KINDS,
+  personalDataConversation,
   type ConnectorTypeDefinition,
   type HttpRuntime,
   type JobWorker,
@@ -365,7 +366,21 @@ export async function createClientInstanceExecutionAssembly(
   const modelProviders = getModelProviderConfigs(config);
   // Before the capabilities: one of them may call a model, and asks at startup what the model
   // of its binding can do.
-  const models = await createInstanceModels({ config, clientInstanceId, infrastructure, store });
+  const models = await createInstanceModels({
+    config,
+    clientInstanceId,
+    infrastructure,
+    store,
+    ...(modules.isEnabled("connections")
+      ? {
+          personalData: {
+            allowed: getPersonalModelRegions(config),
+            marked: (conversationId, agentRunId) =>
+              personalDataConversation(store, clientInstanceId, conversationId, agentRunId)
+          }
+        }
+      : {})
+  });
   const { governance: usageGovernance, gateway: modelGateway } = models;
   // The Knowledge Base module starts after the capabilities: their tools reach its documents
   // once it has.
@@ -696,6 +711,11 @@ export async function createClientInstanceExecutionAssembly(
     // A run reads how its subagents ended at the end of the step that started them.
     subagents: store.childAgentRuns,
     webAccess: config.webAccess,
+    // MODEL-REGION-3: with Connections on, a conversation holding personal data keeps every
+    // model request on a route in the list. The readers below are wired either way.
+    ...(modules.isEnabled("connections")
+      ? { personalModelRegions: getPersonalModelRegions(config) }
+      : {}),
     personalData: {
       personalConversation: async (id, runId) =>
         (await operationCalls.deps.policy.personalConversation?.(id, runId)) ?? true,

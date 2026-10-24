@@ -1,9 +1,17 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { defineCapability } from "@work-shape/catalyst-capability-sdk";
 import { guardrailsModule } from "@work-shape/catalyst-client-assembly";
 import { parseClientInstanceConfig } from "@work-shape/catalyst-config-schema";
-import { defineProvider } from "@work-shape/catalyst-core";
+import {
+  asAgentRunId,
+  asToolCallId,
+  asUserId,
+  createUserPrincipal,
+  defineProvider,
+  type AuthenticatedUser
+} from "@work-shape/catalyst-core";
+import { runOperation } from "@work-shape/catalyst-tool-execution";
 import {
   DETERMINISTIC_CAPABILITIES,
   type ModelAdapterFactory,
@@ -12,7 +20,12 @@ import {
 } from "@work-shape/catalyst-model-provider";
 import { createTestConfig } from "./support/fixtures";
 import { errorOf, fixture } from "./support/operation-approval";
-import { createTestInstance, getTestJobs } from "./support/test-instance";
+import {
+  createTestInstance,
+  getTestConfig,
+  getTestExecution,
+  getTestJobs
+} from "./support/test-instance";
 import { withTestSql } from "./support/test-sql";
 
 // The guardrails as the platform's built-in capability (core-extraction-guardrails.md,
@@ -124,6 +137,158 @@ describe("the guardrails capability", () => {
         where client_instance_id = ${t.clientInstanceId}`
     );
     expect(usage.map((row) => row.purpose)).toContain("guardrail_judge");
+  });
+
+  it("refuses a judge on a route outside the personal regions in a conversation with personal data", async () => {
+    const judge = judgeProvider();
+    const t = await fixture({
+      capabilities: [judge.capability],
+      settings: () => [],
+      release: {
+        modules: { connections: { enabled: true } },
+        infrastructure: {
+          models: {
+            local: { provider: "judge-test", model: "local", region: "eu" },
+            abroad: { provider: "judge-test", model: "abroad", region: "us" }
+          }
+        },
+        modelBindings: [{ id: "judge", providerId: "abroad", agentSelectable: false }],
+        guardrails: {
+          no_names: {
+            on: "operation.before_call",
+            check: { kind: "model_judge", modelBindingId: "judge", instruction: "No names." },
+            outcome: "block"
+          }
+        }
+      }
+    });
+    // Agent calls run in a worker process of the instance, on the same rows.
+    const worker = await createTestInstance({
+      execution: {
+        config: getTestConfig(t.app),
+        env: {},
+        tools: [],
+        capabilities: [judge.capability]
+      }
+    });
+    const OPERATION = "test.notes.read";
+    const execute = vi.fn(async () => ({ read: true }));
+    const definition = {
+      name: OPERATION,
+      effect: "reading" as const,
+      defaultPolicy: "allow" as const,
+      action: null,
+      authorize: async () => ({ allowed: true as const }),
+      scope: null,
+      auth: "principal" as const,
+      inputSchema: z.unknown(),
+      outputSchema: z.unknown(),
+      resource: () => undefined,
+      timeoutMs: 1000,
+      execute
+    };
+    getTestExecution(worker).operationCalls.registry.addSource({
+      resolve: async (name) => (name === OPERATION ? definition : undefined),
+      list: async () => ({ operations: [definition], truncated: [] })
+    });
+    const stores = t.app.stores;
+    // The development user exists once it has signed in.
+    expect((await t.app.call("me.get", { headers: t.as("requester") })).statusCode).toBe(200);
+    const userId = asUserId(await t.userId("Requester"));
+    const user = await stores.users.getUser({ clientInstanceId: t.clientInstanceId, userId });
+    if (!user) throw new Error("No requester");
+    const actor: AuthenticatedUser = { ...user, externalUserId: "requester", authSource: "test" };
+    const { collaborationWorkspaceId } = await stores.workspaces
+      .ensurePersonalWorkspace({ clientInstanceId: t.clientInstanceId, userId })
+      .then((workspace) => ({ collaborationWorkspaceId: workspace.id }));
+    /** The agent's call of the operation in a new private chat of the requester. */
+    const agentCall = async (marked: boolean) => {
+      const conversation = await stores.conversations.createConversation({
+        clientInstanceId: t.clientInstanceId,
+        collaborationWorkspaceId,
+        createdByUserId: userId,
+        createdByExternalUserId: "requester",
+        visibility: "private",
+        title: "Held call",
+        retainedUntil: "2099-01-01T00:00:00.000Z"
+      });
+      const message = await stores.conversations.appendMessage({
+        clientInstanceId: t.clientInstanceId,
+        conversationId: conversation.id,
+        role: "user",
+        text: "Add Ada"
+      });
+      const agentRunId = asAgentRunId(`run_${conversation.id}`);
+      await stores.agentRuns.createAgentRun({
+        id: agentRunId,
+        clientInstanceId: t.clientInstanceId,
+        conversationId: conversation.id,
+        ownerUserId: userId,
+        inputMessageId: message.id,
+        agentName: "assistant",
+        status: "running",
+        startedAt: new Date().toISOString(),
+        correlationId: agentRunId,
+        authorization: {
+          principal: createUserPrincipal(actor),
+          subjectUserId: userId,
+          scopes: ["*"]
+        }
+      });
+      if (marked) {
+        await stores.conversations.markPersonalData({
+          clientInstanceId: t.clientInstanceId,
+          conversationId: conversation.id,
+          userId,
+          at: new Date().toISOString()
+        });
+      }
+      const calls = getTestExecution(worker).operationCalls;
+      return runOperation(
+        {
+          operation: OPERATION,
+          effect: "reading",
+          input: { note: "Ada Lovelace" },
+          actor,
+          origin: {
+            kind: "agent",
+            conversationId: conversation.id,
+            agentRunId,
+            toolCallId: asToolCallId(`call_${conversation.id}`),
+            agentName: "assistant",
+            toolName: OPERATION
+          },
+          correlationId: `corr_${conversation.id}`
+        },
+        { ...calls.deps, agentToolNames: async () => [OPERATION] },
+        { modelRoutes: [{ id: "local", region: "eu" }] }
+      );
+    };
+
+    // Marked: the judge's model is never asked, the check could not be evaluated, the call stops.
+    const marked = await agentCall(true);
+    expect(marked.result).toMatchObject({
+      status: "denied",
+      reason: {
+        kind: "guardrail",
+        guardrailId: "no_names",
+        guardrailReason: "Check 'no_names' could not be evaluated. Try again later."
+      }
+    });
+    expect(JSON.stringify(marked)).not.toMatch(/abroad|"us"|Ada Lovelace/u);
+    expect(judge.requests).toHaveLength(0);
+    expect(execute).not.toHaveBeenCalled();
+
+    // Unmarked, the judge is asked as before and finds the name.
+    const unmarked = await agentCall(false);
+    expect(judge.requests).toHaveLength(1);
+    expect(unmarked.result).toMatchObject({
+      status: "denied",
+      reason: { kind: "guardrail", guardrailReason: "Names a person." }
+    });
+    expect(execute).not.toHaveBeenCalled();
+    await worker.close();
+    await t.app.close();
   });
 
   it("deletes hits past the audit retention, also while its module is off", async () => {

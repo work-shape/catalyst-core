@@ -92,6 +92,7 @@ function guardrailCallContext(
     ...(isAuthenticatedServicePrincipal(actor) ? {} : { userId: getSubjectUserId(actor) }),
     ...(context.workspaceId ? { workspaceId: context.workspaceId } : {}),
     ...(conversationId ? { conversationId } : {}),
+    ...(origin.kind === "agent" ? { agentRunId: origin.agentRunId } : {}),
     ...(typeof payload.operationRunId === "string"
       ? { operationRunId: payload.operationRunId }
       : {}),

@@ -113,6 +113,8 @@ function AssistantRuntimePane({
     locale,
     selectedAgentName,
     selectableModels,
+    personalData,
+    noModelForPersonalData,
     selectedModelBindingId,
     selectedReasoningEffort,
     requestedReasoningEffort,
@@ -445,12 +447,16 @@ function AssistantRuntimePane({
               noAgentsMessage={noAgentsMessage}
               selectedAgentName={selectedAgentName}
               selectableModels={selectableModels}
+              personalData={personalData}
               selectedModelBindingId={selectedModelBindingId}
               selectedReasoningEffort={selectedReasoningEffort}
               showContextIndicator={showContextIndicator}
               contextSnapshot={contextSnapshot}
               notice={visibleNotice}
               usageNote={usageNote}
+              onNewConversationForPersonalData={
+                noModelForPersonalData ? chat.startNewConversation : undefined
+              }
               newConversationPrivate={newConversationPrivate}
               subjectLine={
                 conversationSubject === undefined &&

@@ -80,6 +80,29 @@ export class ModelNotPricedError extends AppError {
 }
 
 /**
+ * The reason a model request, a run start or a follow-up is refused because the conversation
+ * holds data from a personal Connection and the model's route is not in a region allowed for
+ * it (MODEL-REGION-3). A run fails with it as its code, so a client words it itself.
+ */
+export const PERSONAL_DATA_MODEL_REGION_REASON = "personal_data_model_region";
+
+/**
+ * A model request refused before it was sent: the conversation carries the personal-data mark
+ * and the route's region is not in `modules.connections.personalModelRegions`. It names the
+ * allowed regions, never a route, a model or anything of the conversation.
+ */
+export class PersonalDataModelRegionError extends AppError {
+  constructor(allowed: readonly string[]) {
+    super(
+      "FORBIDDEN",
+      `This conversation holds data from a personal connection, so it can only use a model in a region allowed for that: ${allowed.length > 0 ? allowed.join(", ") : "none"}. Choose another model or start a new conversation.`,
+      { reason: PERSONAL_DATA_MODEL_REGION_REASON },
+      { exposeMessage: true }
+    );
+  }
+}
+
+/**
  * What a failed run carries of an error besides its message: the error's own code, or the
  * narrower one of a refusal a client words itself, and for a usage limit which limit it was.
  */
@@ -118,6 +141,7 @@ export function runFailureCodeOf(error: AppError): string {
   if (error instanceof WorkflowAgentOutputInvalidError) return "output_invalid";
   if (error instanceof ConfirmationUnattendedError) return "confirmation_unattended";
   if (error instanceof ModelNotPricedError) return MODEL_NOT_PRICED_CODE;
+  if (error instanceof PersonalDataModelRegionError) return PERSONAL_DATA_MODEL_REGION_REASON;
   if (error instanceof ModelUsageLimitReachedError) return MODEL_USAGE_LIMIT_REACHED_CODE;
   return error.code;
 }

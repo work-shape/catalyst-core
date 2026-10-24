@@ -9,11 +9,13 @@ import {
   systemClock,
   unknownToJsonValue,
   type AgentConfig,
+  type AgentRunModelOrigin,
   type KnowledgeCitationSource,
   type AgentRunId,
   type AgentRunResumeState,
   type LocaleCode,
   type PausedToolCall,
+  type RuntimeAssetSnapshot,
   type RuntimeCallContext,
   type StartAgentRunInput
 } from "@work-shape/catalyst-core";
@@ -46,6 +48,8 @@ import { isRunAgentCall } from "./subagents";
 import type { LocalAgentRuntimeOptions } from "./run-events";
 
 const DEFAULT_MAX_STEPS = 64;
+/** The route id of a run above a subagent whose model cannot be read. It has no region. */
+const UNREAD_ANCESTOR_ROUTE = "unread-ancestor";
 
 export class TurnLoop {
   constructor(
@@ -63,10 +67,13 @@ export class TurnLoop {
   ): Promise<void> {
     if (input.preview) context = { ...context, agentPreview: input.preview };
     const setup = await this.prepareRun(runId, input, context);
+    // A subagent's routes include those of the runs above it (MODEL-REGION-3): mail it reads
+    // reaches its parent's model too, so a personal call needs every one of them allowed.
     context = {
       ...context,
       modelRoutes: [
-        { id: setup.modelSelection.provider.id, region: setup.modelSelection.provider.region }
+        { id: setup.modelSelection.provider.id, region: setup.modelSelection.provider.region },
+        ...setup.ancestorRoutes
       ]
     };
     const entry = input.resume
@@ -197,6 +204,7 @@ export class TurnLoop {
     const userMessage: ModelMessage = { role: "user", content: userContent };
     return {
       modelSelection,
+      ancestorRoutes: (input.ancestors ?? []).map((ancestor) => this.routeOf(assets, ancestor)),
       tools,
       offeredDataTools,
       compactThresholdTokens,
@@ -205,6 +213,25 @@ export class TurnLoop {
       userMessage,
       maxSteps: agent.maxSteps ?? this.options.maxSteps ?? DEFAULT_MAX_STEPS
     };
+  }
+
+  /**
+   * The route a run above a subagent was started on. One whose model cannot be read now is a
+   * route without a region, which no personal call passes.
+   */
+  private routeOf(
+    assets: RuntimeAssetSnapshot,
+    ancestor: AgentRunModelOrigin
+  ): NonNullable<RuntimeCallContext["modelRoutes"]>[number] {
+    try {
+      const { provider } = this.modelInput.getModelSelectionForAgent(
+        ancestor.preview?.config ?? getSnapshotAgentConfig(assets, ancestor.agentName),
+        ancestor.modelBindingId
+      );
+      return { id: provider.id, region: provider.region };
+    } catch {
+      return { id: UNREAD_ANCESTOR_ROUTE };
+    }
   }
 
   /** A run that starts: the conversation's history, then its input message. */
@@ -611,6 +638,8 @@ export class TurnLoop {
 /** What every step of a run uses. */
 interface RunSetup {
   modelSelection: ReturnType<ModelInput["getModelSelectionForAgent"]>;
+  /** The routes of the runs above a subagent, nearest first; none for any other run. */
+  ancestorRoutes: NonNullable<RuntimeCallContext["modelRoutes"]>;
   tools: ModelTool[];
   offeredDataTools: ReadonlySet<string>;
   compactThresholdTokens: number | undefined;

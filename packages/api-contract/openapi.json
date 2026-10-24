@@ -40156,6 +40156,10 @@
                       "region": {
                         "$ref": "#/components/schemas/ModelRegion"
                       },
+                      "personalDataBlocked": {
+                        "type": "boolean",
+                        "const": true
+                      },
                       "usageTier": {
                         "$ref": "#/components/schemas/ModelUsageTier"
                       },
@@ -46554,6 +46558,10 @@
                       },
                       "region": {
                         "$ref": "#/components/schemas/ModelRegion"
+                      },
+                      "personalDataBlocked": {
+                        "type": "boolean",
+                        "const": true
                       },
                       "usageTier": {
                         "$ref": "#/components/schemas/ModelUsageTier"
