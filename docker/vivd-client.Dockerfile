@@ -202,8 +202,11 @@ FROM deps AS server-build
 ARG APP_PACKAGE
 ARG ARTIFACT_PREVIEW_WORKER_ENTRY=""
 
+# As in release.yml, client-assembly's type declarations need a 6 GiB heap, with one package
+# built at a time. Keep these settings on the build command, out of the runtime image.
 RUN dependencies=$(dependency-filters "${APP_PACKAGE}") \
-  && pnpm --fail-if-no-match ${dependencies} build \
+  && npm_config_workspace_concurrency=1 NODE_OPTIONS=--max-old-space-size=6144 \
+    pnpm --fail-if-no-match ${dependencies} build \
   && pnpm --filter "${APP_PACKAGE}" build:server \
   && if [ -n "${ARTIFACT_PREVIEW_WORKER_ENTRY}" ]; then \
     test -f "${ARTIFACT_PREVIEW_WORKER_ENTRY}" \
@@ -228,7 +231,8 @@ ENV VITE_CHAT_API_URL=${VITE_CHAT_API_URL}
 ENV VITE_CHAT_API_PORT=${VITE_CHAT_API_PORT}
 
 RUN dependencies=$(dependency-filters "${UI_PACKAGE}") \
-  && pnpm --fail-if-no-match ${dependencies} build \
+  && npm_config_workspace_concurrency=1 NODE_OPTIONS=--max-old-space-size=6144 \
+    pnpm --fail-if-no-match ${dependencies} build \
   && pnpm --filter "${UI_PACKAGE}" build:ui
 
 FROM node:24-bookworm-slim AS api
