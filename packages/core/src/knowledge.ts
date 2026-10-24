@@ -165,6 +165,8 @@ export interface KnowledgeSearchAnswer {
  */
 export type KnowledgeQueryEmbedding = (generation: {
   bindingId: string;
+  /** The model the generation was embedded with: a binding that names another now embeds nothing. */
+  model: string;
   dimensions: number;
 }) => Promise<number[] | undefined>;
 
@@ -175,6 +177,9 @@ export type KnowledgeQueryEmbedding = (generation: {
  */
 export type KnowledgeQueryEmbedder = (call: {
   bindingId: string;
+  /** The model the active generation was embedded with: nothing where the binding names another. */
+  model: string;
+  dimensions: number;
   text: string;
   attribution: {
     userId?: string;
@@ -530,7 +535,8 @@ export const KNOWLEDGE_JOB_KINDS = {
   releaseOriginals: "knowledge_base.release_originals",
   deleteOriginals: "knowledge_base.delete_originals",
   reconcileSources: "knowledge_base.reconcile_sources",
-  reprocess: "knowledge_base.reprocess"
+  reprocess: "knowledge_base.reprocess",
+  reindex: "knowledge_base.reindex"
 } as const;
 
 /** Chunks and optionally embeds a content in the configured ingestion process. */
@@ -745,6 +751,33 @@ export interface KnowledgePassageToEmbed {
   text: string;
 }
 
+/**
+ * A passage as a re-index embeds it into a generation being built: its chunk, and the document
+ * whose title and file name make its prefix, as the index job made it.
+ */
+export interface KnowledgePassageToReindex extends KnowledgePassageToEmbed {
+  title: string;
+  fileName: string;
+}
+
+/**
+ * What a re-index into a new generation would embed, read in one statement of the store: the
+ * passages search reads, their estimated tokens with prefixes, and the size of the store now.
+ */
+export interface KnowledgeReindexEstimate {
+  chunks: number;
+  tokens: number;
+  storeBytes: number;
+}
+
+/** A generation being served or built, with how far it is embedded. */
+export interface KnowledgeEmbeddingGenerationProgress extends KnowledgeEmbeddingGeneration {
+  /** The passages it had to embed when it was started; for one being built, its goal. */
+  chunkCount: number;
+  embeddedCount: number;
+  startedAt: ISODateString;
+}
+
 /** A document of a Knowledge Base as its page lists it. */
 export interface KnowledgeDocumentEntry {
   /** Extraction budget paused; indexing and search remain available. */
@@ -947,6 +980,38 @@ export interface KnowledgeDocumentStore {
     signal?: AbortSignal
   ): Promise<KnowledgeEmbeddingGeneration[]>;
   /**
+   * Starts a generation `building` beside the active one with `model` (KB-8): its row, with the
+   * passages search reads now as its goal, and its table of vectors. One being built with the
+   * same model is answered as it is; one being built with another model is retired and its
+   * table dropped. Search keeps answering from the active generation meanwhile.
+   */
+  startGeneration(
+    model: KnowledgeEmbeddingModel,
+    signal?: AbortSignal
+  ): Promise<KnowledgeEmbeddingGeneration>;
+  /**
+   * Up to `limit` passages that search reads and that have no vector in the generation, of
+   * every content, in a stable order, each with the document its prefix is made of.
+   */
+  passagesToReindex(
+    input: { generation: number; limit: number },
+    signal?: AbortSignal
+  ): Promise<KnowledgePassageToReindex[]>;
+  /**
+   * Makes the generation being built `active` in one transaction, where every passage search
+   * reads has its vector there: the active one is retired and its table dropped in the same
+   * transaction, so no search sees the passages of two models. Answers whether it switched; a
+   * passage still without a vector, or a generation no longer being built, leaves all as is.
+   */
+  switchGeneration(
+    generation: number,
+    signal?: AbortSignal
+  ): Promise<{ switched: boolean; retired?: number }>;
+  /** What a re-index into a new generation would embed, and the size of the store now. */
+  reindexEstimate(signal?: AbortSignal): Promise<KnowledgeReindexEstimate>;
+  /** The generations being served or built, with their progress, by generation. */
+  generationProgress(signal?: AbortSignal): Promise<KnowledgeEmbeddingGenerationProgress[]>;
+  /**
    * Up to `limit` passages of the content at the chunking revision that have no vector in the
    * generation, in order.
    */
@@ -955,12 +1020,12 @@ export interface KnowledgeDocumentStore {
     signal?: AbortSignal
   ): Promise<KnowledgePassageToEmbed[]>;
   /**
-   * Writes one vector per passage into the generation. A passage that has one keeps it, and one
-   * removed meanwhile gets none. Answers how many were written.
+   * Writes one vector per passage into the generation, of one content or of many. The contents
+   * of the passages are held against a rewrite of their chunks while it writes. A passage that
+   * has one keeps it, and one removed meanwhile gets none. Answers how many were written.
    */
   writeEmbeddings(
     input: {
-      contentSha256: string;
       generation: KnowledgeEmbeddingGeneration;
       vectors: readonly { chunkId: string; vector: readonly number[] }[];
     },

@@ -213,7 +213,9 @@ export function useKnowledgeSync({ withDataStoreJobs = false } = {}) {
     const embedding = {
       defaultBinding: "embedding",
       processingPrices: [{ bindingId: "embedding", currency: "USD", perMillionTokens: 1 }],
-      models: [{ bindingId: "embedding", model: "test", dimensions: 8 }]
+      // The model of the instance's own binding: search through the instance embeds the query
+      // only with the model the index was built with, and answers by words alone otherwise.
+      models: [{ bindingId: "embedding", model: "local", dimensions: 8 }]
     };
     const recordFailures: OperationBatchFailure[][] = [];
     const dataStores = createDataStores({

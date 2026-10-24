@@ -134,9 +134,11 @@ function queryEmbedding(
   const { embedQuery } = runtime;
   if (!embedQuery) return undefined;
   const { actor, origin, workspaceId, runId, correlationId } = context;
-  return ({ bindingId }) =>
+  return ({ bindingId, model, dimensions }) =>
     embedQuery({
       bindingId,
+      model,
+      dimensions,
       text: query,
       attribution: {
         ...(isAuthenticatedServicePrincipal(actor) ? {} : { userId: actor.id }),

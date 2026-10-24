@@ -149,7 +149,19 @@ const definitionFieldsSchema = z.strictObject({
     .optional(),
   documentTypes: knowledgeDocumentTypesSchema.optional(),
   records: knowledgeRecordsRefusalSchema,
-  indexing: later("indexing", "DS-7, indexing settings"),
+  indexing: z
+    .strictObject({
+      /** Only with `semantic`. A change of it, published, starts a re-index (KB-8). */
+      embedding: z
+        .strictObject({
+          /** An approved binding of kind `embedding` of release config. */
+          binding: z.string().trim().min(1).max(200)
+        })
+        .optional(),
+      chunking: later("indexing.chunking", "DS-7, chunking settings"),
+      languages: later("indexing.languages", "KB-12, keyword languages")
+    })
+    .optional(),
   search: later("search", "DS-7, search settings"),
   extraction: z
     .strictObject({
@@ -217,6 +229,11 @@ export const knowledgeBaseDefinitionSchema = definitionFieldsSchema.transform(
       return z.NEVER;
     };
     if (backend) {
+      if (fields.indexing)
+        return refuse(
+          "indexing",
+          "Indexing settings apply to a Knowledge Base that keeps documents, not to one on a Data Store"
+        );
       if (fields.extraction)
         return refuse(
           "extraction",
@@ -260,7 +277,14 @@ export const knowledgeBaseDefinitionSchema = definitionFieldsSchema.transform(
     }
     // Without methods it searches by meaning and by words, the spec's default pair. Whether the
     // instance can search by meaning is its own rule, asked on every write and publish.
-    return { ...fields, methods: (methods ?? KNOWLEDGE_SEARCH_METHODS).filter(isSearchMethod) };
+    const searchMethods = (methods ?? KNOWLEDGE_SEARCH_METHODS).filter(isSearchMethod);
+    if (fields.indexing?.embedding && !searchMethods.includes("semantic")) {
+      return refuse(
+        "indexing",
+        "'indexing.embedding' names the embedding model of search by meaning: list 'semantic' in 'methods', or remove it."
+      );
+    }
+    return { ...fields, methods: searchMethods };
   }
 );
 
@@ -302,6 +326,34 @@ export function approvedEmbeddingModel(
   return bindingId === undefined
     ? undefined
     : embedding.models?.find((model) => model.bindingId === bindingId);
+}
+
+/**
+ * The binding a Knowledge Base that searches by meaning embeds with: the one its definition
+ * names, else the instance's default. Spec: Changing the embedding model.
+ */
+export function knowledgeEmbeddingBinding(
+  definition: KnowledgeBaseDefinition,
+  embedding: Pick<KnowledgeEmbedding, "defaultBinding">
+): string | undefined {
+  return "backend" in definition
+    ? undefined
+    : (definition.indexing?.embedding?.binding ?? embedding.defaultBinding);
+}
+
+/**
+ * Why a Knowledge Base cannot be written or published with the embedding binding it names: one
+ * that is not an approved binding of kind `embedding` on this instance. Nothing for any other.
+ */
+export function embeddingBindingIssue(
+  knowledgeBase: KnowledgeBaseDefinition,
+  embedding: KnowledgeEmbedding
+): string | undefined {
+  const binding =
+    "backend" in knowledgeBase ? undefined : knowledgeBase.indexing?.embedding?.binding;
+  if (binding === undefined || approvedEmbeddingModel(embedding, binding)) return undefined;
+  const approved = (embedding.models ?? []).map((model) => `'${model.bindingId}'`).join(", ");
+  return `Knowledge Base '${knowledgeBase.name}' names the embedding binding '${binding}', which this instance does not approve. ${approved ? `Approved: ${approved}.` : "This instance approves no embedding binding."}`;
 }
 
 /**

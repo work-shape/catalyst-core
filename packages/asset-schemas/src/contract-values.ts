@@ -745,6 +745,21 @@ export const KNOWLEDGE_BASE_STATUSES = ["unchecked", "preparing", "ok", "needs_a
 export type KnowledgeBaseStatus = (typeof KNOWLEDGE_BASE_STATUSES)[number];
 
 /**
+ * The embedding of a Knowledge Base that searches by meaning. `current`: its index embeds with
+ * the model it is set to. `reindex_needed`: the index's model is gone from the instance, so
+ * search answers by words and titles alone. `reindex_available`: it is set to another model
+ * than its index uses. `reindexing`: a new index is being built beside the one search reads.
+ * `none`: nothing is embedded yet.
+ */
+export const KNOWLEDGE_EMBEDDING_STATES = [
+  "current",
+  "reindex_needed",
+  "reindex_available",
+  "reindexing",
+  "none"
+] as const;
+
+/**
  * What the page of a Knowledge Base shows of one document. `pending` is added and not yet
  * searchable: waiting for its index job, being indexed or waiting for extraction. `indexed` is
  * found by search. `failed` carries one of `KNOWLEDGE_DOCUMENT_FAILURE_CODES`; Retry puts it

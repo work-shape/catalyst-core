@@ -73,6 +73,31 @@ export const knowledge = defineTranslations({
     "knowledge.statusUnchecked": "Not checked yet",
     "knowledge.checkedAt": "Last checked",
     "knowledge.checkNow": "Check now",
+    "knowledge.embeddingModel": "Embedding model",
+    "knowledge.embeddingModelNone": "None yet",
+    "knowledge.embeddingNeededTitle": "Search finds by words only",
+    "knowledge.embeddingNeeded":
+      "The model this index was built with is no longer available. Until the knowledge base is re-indexed, search finds passages by their words and titles, not by meaning.",
+    "knowledge.embeddingAvailable":
+      "This knowledge base is set to {target}. Search answers with {active} until it is re-indexed.",
+    "knowledge.reindexing": "Re-indexing with {model}",
+    "knowledge.reindexProgress": "{embedded} of {total} passages",
+    "knowledge.reindexingNote":
+      "Search answers from the current index until the new one is complete.",
+    "knowledge.reindexAction": "Re-index…",
+    "knowledge.reindexTitle": "Re-index this knowledge base?",
+    "knowledge.reindexStatement":
+      "Every passage is embedded again with {model}: {chunks} passages, about {tokens} tokens. Nothing is extracted again.",
+    "knowledge.reindexCost": "Estimated cost: {cost}.",
+    "knowledge.reindexNoPrice": "This model has no price set, so the cost is not estimated.",
+    "knowledge.reindexKeeps":
+      "Search answers from the current index until the new one is complete, then switches to it at once.",
+    "knowledge.reindexNoRoom":
+      "The store has no room for both indexes: {used} used, about {added} more needed, a limit of {limit}. Remove documents or raise the store's limit first.",
+    "knowledge.reindexConfirm": "Re-index",
+    "knowledge.reindexFailed": "The re-index could not be started.",
+    "knowledge.reindexChanged":
+      "The numbers changed in the meantime. Check them and confirm again.",
     "knowledge.checkFailed": "The check could not be run.",
     "knowledge.tableReadable": "Readable",
     "knowledge.tableUnreadable": "Cannot be read",
@@ -312,6 +337,32 @@ export const knowledge = defineTranslations({
     "knowledge.statusUnchecked": "Noch nicht geprüft",
     "knowledge.checkedAt": "Zuletzt geprüft",
     "knowledge.checkNow": "Jetzt prüfen",
+    "knowledge.embeddingModel": "Embedding-Modell",
+    "knowledge.embeddingModelNone": "Noch keines",
+    "knowledge.embeddingNeededTitle": "Die Suche findet nur über Wörter",
+    "knowledge.embeddingNeeded":
+      "Das Modell, mit dem dieser Index erstellt wurde, ist nicht mehr verfügbar. Bis die Wissensbasis neu indexiert ist, findet die Suche Passagen über ihre Wörter und Titel, nicht über ihre Bedeutung.",
+    "knowledge.embeddingAvailable":
+      "Diese Wissensbasis ist auf {target} eingestellt. Bis sie neu indexiert ist, antwortet die Suche mit {active}.",
+    "knowledge.reindexing": "Neuindexierung mit {model}",
+    "knowledge.reindexProgress": "{embedded} von {total} Passagen",
+    "knowledge.reindexingNote":
+      "Bis der neue Index fertig ist, antwortet die Suche aus dem bisherigen.",
+    "knowledge.reindexAction": "Neu indexieren…",
+    "knowledge.reindexTitle": "Diese Wissensbasis neu indexieren?",
+    "knowledge.reindexStatement":
+      "Jede Passage wird mit {model} neu eingebettet: {chunks} Passagen, etwa {tokens} Tokens. Nichts wird neu extrahiert.",
+    "knowledge.reindexCost": "Geschätzte Kosten: {cost}.",
+    "knowledge.reindexNoPrice":
+      "Für dieses Modell ist kein Preis hinterlegt, darum werden keine Kosten geschätzt.",
+    "knowledge.reindexKeeps":
+      "Bis der neue Index fertig ist, antwortet die Suche aus dem bisherigen und wechselt dann sofort.",
+    "knowledge.reindexNoRoom":
+      "Der Speicher hat keinen Platz für beide Indexe: {used} belegt, etwa {added} kämen dazu, die Grenze liegt bei {limit}. Entferne zuerst Dokumente oder erhöhe die Grenze des Speichers.",
+    "knowledge.reindexConfirm": "Neu indexieren",
+    "knowledge.reindexFailed": "Die Neuindexierung konnte nicht gestartet werden.",
+    "knowledge.reindexChanged":
+      "Die Zahlen haben sich inzwischen geändert. Prüf sie und bestätige noch einmal.",
     "knowledge.checkFailed": "Die Prüfung konnte nicht laufen.",
     "knowledge.tableReadable": "Lesbar",
     "knowledge.tableUnreadable": "Nicht lesbar",

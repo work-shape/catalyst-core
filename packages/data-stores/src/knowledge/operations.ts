@@ -50,6 +50,12 @@ import { addFilesOperation } from "./add-files";
 import { listDocumentsOperation, retryDocumentsOperation } from "./document-operations";
 import { checkKnowledgeBase, type CheckedKnowledgeState, type KnowledgeRuntime } from "./runtime";
 import { knowledgeSearchInputSchema, searchOperation } from "./search-operation";
+import {
+  knowledgeEmbeddingState,
+  knowledgeReindexJob,
+  knowledgeReindexOutputSchema,
+  reindexOperation
+} from "./reindex";
 
 // The operations of one Knowledge Base, `knowledge.<id>.<part>`, each called through
 // `runOperation` like every other operation, and the one agent tool over all of an agent's.
@@ -92,6 +98,10 @@ const stateOutputSchema = z.object({
   agentsTruncated: z.boolean().optional(),
   dataFlows: workflowDataFlowsSchema.optional(),
   processingWaiting: z.boolean().optional(),
+  /** The embedding of a Knowledge Base that searches by meaning in its own store. */
+  embedding: knowledgeReindexOutputSchema
+    .pick({ state: true, active: true, target: true, progress: true })
+    .optional(),
   /** The formats this instance reads into a Knowledge Base that keeps documents. */
   documentFormats: z.array(z.string()).optional(),
   /** The id of the Knowledge Base's asset. */
@@ -177,7 +187,7 @@ async function stateOf(
     : {
         processingWaiting: (
           await Promise.all(
-            [knowledgeSyncJob, knowledgeIndexJob].map((kind) =>
+            [knowledgeSyncJob, knowledgeIndexJob, knowledgeReindexJob].map((kind) =>
               noWorkerTakesJobs(runtime.stores.jobs, {
                 clientInstanceId: runtime.clientInstanceId,
                 kind
@@ -187,8 +197,10 @@ async function stateOf(
         ).some(Boolean),
         documentFormats: [...runtime.documentFormats]
       };
+  const embedding = await embeddingOf(runtime, knowledgeBase);
   return {
     ...processing,
+    ...(embedding ? { embedding } : {}),
     id: asset.id,
     name: asset.name,
     ...(state
@@ -201,6 +213,38 @@ async function stateOf(
         }
       : { status: "unchecked", tables: [] })
   };
+}
+
+/**
+ * The embedding of a Knowledge Base that searches by meaning in the built-in store: the model
+ * search answers from, the one it is set to, and a re-index under way. A store not made yet,
+ * or not reachable, shows none; the page shows its status from the check.
+ */
+async function embeddingOf(
+  runtime: KnowledgeRuntime,
+  knowledgeBase: PublishedKnowledgeBase
+): Promise<StateOutput["embedding"]> {
+  const target = documentsTargetOf(runtime, knowledgeBase);
+  const { embedding } = runtime;
+  if (!target || !embedding || !target.definition.methods.some((method) => method === "semantic"))
+    return undefined;
+  try {
+    return knowledgeEmbeddingState(
+      await target.store.generationProgress(),
+      target.definition,
+      embedding
+    );
+  } catch (error) {
+    runtime.logger.warn(
+      {
+        type: "knowledge_base.embedding_state_failed",
+        knowledgeBase: knowledgeBase.asset.name,
+        errorName: error instanceof Error ? error.name : "unknown"
+      },
+      "The embedding of a Knowledge Base could not be read"
+    );
+    return undefined;
+  }
 }
 
 /**
@@ -497,6 +541,17 @@ const OPERATIONS = {
   remove_documents: (runtime: KnowledgeRuntime, knowledgeBase: PublishedKnowledgeBase) => {
     const target = documentsTargetOf(runtime, knowledgeBase);
     return runtime.files && target && removeDocumentsOperation(runtime, target);
+  },
+  reindex: (runtime: KnowledgeRuntime, knowledgeBase: PublishedKnowledgeBase) => {
+    const target = documentsTargetOf(runtime, knowledgeBase);
+    const { embedding } = runtime;
+    return (
+      (target &&
+        embedding &&
+        target.definition.methods.some((method) => method === "semantic") &&
+        reindexOperation(runtime, embedding, target)) ||
+      undefined
+    );
   },
   state: stateOperation,
   check: checkOperation

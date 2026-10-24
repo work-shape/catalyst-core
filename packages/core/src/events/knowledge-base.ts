@@ -28,6 +28,13 @@ export const knowledgeBaseEvents = {
   "knowledge_base.sync_started": { ...LIVE_ONCE_AUDIT, name: "knowledge_base.sync_started" },
   "knowledge_base.sync_finished": { ...LIVE_ONCE_AUDIT, name: "knowledge_base.sync_finished" },
   "knowledge_base.source_added": { ...LIVE_ONCE_AUDIT, name: "knowledge_base.source_added" },
+  // A re-index into a new generation of embeddings (KB-8): the generation, the binding and the
+  // counts, never a passage or a file name. Finished is the switch, or the build given up.
+  "knowledge_base.reindex_started": { ...LIVE_ONCE_AUDIT, name: "knowledge_base.reindex_started" },
+  "knowledge_base.reindex_finished": {
+    ...LIVE_ONCE_AUDIT,
+    name: "knowledge_base.reindex_finished"
+  },
   "knowledge_base.source_narrowed": { ...LIVE_ONCE_AUDIT, name: "knowledge_base.source_narrowed" },
   "knowledge_base.source_removed": { ...LIVE_ONCE_AUDIT, name: "knowledge_base.source_removed" },
   "knowledge_base.files_added": {

@@ -73,17 +73,18 @@ export function knowledgeEmbedding(
 
 /**
  * How a search embeds its query: one text through the gateway with the purpose
- * `knowledge_query`, with a binding of kind `embedding` that release config has now. A binding
- * it no longer has answers nothing, and the search answers from full text and titles.
+ * `knowledge_query`, with a binding of kind `embedding` that release config has now, behind
+ * the same model and dimensions as the index it searches. A binding it no longer has, or one
+ * now behind another model, answers nothing, and the search answers from full text and titles.
  */
 function queryEmbedder(
-  config: Pick<ClientInstanceConfig, "modelBindings">,
+  embedding: KnowledgeEmbedding,
   clientInstanceId: ClientInstanceId,
   gateway: Pick<ModelGateway, "embed">
 ): KnowledgeQueryEmbedder {
-  return async ({ bindingId, text, attribution, correlationId, signal }) => {
-    const binding = config.modelBindings.find((candidate) => candidate.id === bindingId);
-    if (binding?.kind !== "embedding") return undefined;
+  return async ({ bindingId, model, dimensions, text, attribution, correlationId, signal }) => {
+    const approved = embedding.models?.find((candidate) => candidate.bindingId === bindingId);
+    if (approved?.model !== model || approved.dimensions !== dimensions) return undefined;
     const answer = await gateway.embed({
       binding: { bindingId },
       texts: [text],
@@ -122,8 +123,18 @@ function workflowAssetKind(knowledgeBases: KnowledgeBases): WorkflowAssetKind {
     assertInteractiveUpsertAllowed: () => undefined,
     assertInteractiveDeleteAllowed: () => undefined,
     publishQuestion: (input) => knowledgeBases.publishQuestion(input),
-    onPublish: ({ stores, access, assetId, revision, config, replaced, confirmProcessing }) =>
+    onPublish: ({
+      stores,
+      actor,
+      access,
+      assetId,
+      revision,
+      config,
+      replaced,
+      confirmProcessing
+    }) =>
       knowledgeBases.publish(stores, {
+        actor,
         access,
         assetId,
         revision,
@@ -163,7 +174,8 @@ const knowledgeRoutes: RouteRegistration = (routes) => {
       | "retry"
       | "remove_documents"
       | "search"
-      | "extract_fields",
+      | "extract_fields"
+      | "reindex",
     right: string
   ) => ({
     target: ({ knowledgeBase, ...input }: { knowledgeBase: string }) => ({
@@ -227,6 +239,11 @@ const knowledgeRoutes: RouteRegistration = (routes) => {
     apiOperations["knowledge_bases.retry_documents"],
     bind("retry", KNOWLEDGE_BASE_ACTIONS.write)
   );
+  // Re-indexing spends on the model as publishing a changed one does, so it takes that right.
+  routes.resourceOperation(
+    apiOperations["knowledge_bases.reindex"],
+    bind("reindex", KNOWLEDGE_BASE_ACTIONS.publish)
+  );
   routes.resourceOperation(
     apiOperations["knowledge_bases.extract_fields"],
     bind("extract_fields", KNOWLEDGE_BASE_ACTIONS.read)
@@ -283,7 +300,7 @@ export const assembleKnowledge: ModuleSeam = (parts, earlier) => {
     operationSources: (runtime) => [
       knowledgeBases.operationSource(
         runtime.files,
-        queryEmbedder(parts.config, parts.clientInstanceId, runtime.modelGateway),
+        queryEmbedder(embedding, parts.clientInstanceId, runtime.modelGateway),
         runtime.knowledgeFieldExtractor
       )
     ],

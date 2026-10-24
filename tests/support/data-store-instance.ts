@@ -100,6 +100,11 @@ interface KnowledgeOptions {
    * `TEST_EMBEDDING_MODEL`. The test answers its `/embeddings` by stubbing `fetch`.
    */
   embeddingBaseUrl?: string;
+  /**
+   * With `embeddingBaseUrl`: more embedding bindings on the same provider, each behind its own
+   * model and dimensions, which a Knowledge Base may name in `indexing.embedding.binding`.
+   */
+  extraEmbeddingBindings?: readonly { id: string; model: string; dimensions: number }[];
   /** `usage.safeguards` of release config. */
   usageSafeguards?: { modelCallsPerDay?: number };
   attachments?: ClientInstanceCapability;
@@ -285,7 +290,12 @@ export function useDataStoreInstance(
                 providerId: knowledge.embeddingBaseUrl === undefined ? "local" : "azure-eu",
                 kind: "embedding",
                 dimensions: 8
-              }
+              },
+              ...(knowledge.extraEmbeddingBindings ?? []).map((binding) => ({
+                ...binding,
+                providerId: "azure-eu",
+                kind: "embedding"
+              }))
             ]
           }
         : {}),

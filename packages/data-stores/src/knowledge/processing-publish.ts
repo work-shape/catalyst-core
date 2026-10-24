@@ -10,9 +10,11 @@ import {
   KNOWLEDGE_FILE_MAX_BYTES,
   type DataStoreRecordsStore,
   type KnowledgeProcessingContent,
+  type AuthenticatedIdentity,
   type KnowledgeDocumentStore,
   type PlatformStores
 } from "@work-shape/catalyst-core";
+import { publishReindexReview, reindexStatementLines, startPublishedReindex } from "./reindex";
 import { knowledgeProcessingOf, knowledgeDocumentTypesSchema } from "./document-types";
 import {
   knowledgeBaseDefinitionSchema,
@@ -60,7 +62,7 @@ async function* contents(store: KnowledgeDocumentStore, signal?: AbortSignal) {
     after = rows.at(-1)?.contentSha256 ?? after;
   }
 }
-export async function knowledgeProcessingReview(
+async function knowledgeProcessingReview(
   runtime: KnowledgeRuntime,
   config: unknown,
   previous: unknown,
@@ -237,6 +239,61 @@ export function createKnowledgeReprocessHandler(runtime: KnowledgeRuntime) {
   });
 }
 
+/**
+ * What a publish of a Knowledge Base asks to be confirmed: documents processed again
+ * (`knowledgeProcessingReview`) and the embedding model changed (KB-8), as one statement with
+ * one confirmation. Nothing where it changes neither.
+ */
+export async function knowledgePublishReview(
+  runtime: KnowledgeRuntime,
+  input: {
+    config: unknown;
+    previous: unknown;
+    assetId: string;
+    embedding: KnowledgeEmbedding;
+    draftOnly?: boolean;
+    records?: DataStoreRecordsStore;
+    locale?: string;
+  }
+) {
+  const records = input.records ?? runtime.stores.dataStores;
+  const processing = await knowledgeProcessingReview(
+    runtime,
+    input.config,
+    input.previous,
+    input.assetId,
+    input.embedding,
+    input.draftOnly ?? false,
+    records
+  );
+  const reindex = await publishReindexReview(runtime, {
+    assetId: input.assetId,
+    config: input.config,
+    previous: input.previous,
+    embedding: input.embedding,
+    records
+  });
+  if (!processing && !reindex) return undefined;
+  const confirmation =
+    processing && reindex
+      ? createHash("sha256")
+          .update(`${processing.confirmation}:${reindex.statement.confirmation}`)
+          .digest("hex")
+      : (processing?.confirmation ?? reindex?.statement.confirmation ?? "");
+  return {
+    processing,
+    reindex,
+    confirmation,
+    priced: processing?.priced ?? true,
+    lines: [
+      // The processing statement without its own line on how to confirm.
+      ...(processing ? processing.lines.slice(0, -1) : []),
+      ...(reindex ? reindexStatementLines(reindex.statement, input.locale) : []),
+      `Confirm with assets.publish confirmProcessing: '${confirmation}' (CLI: --confirm ${confirmation}).`
+    ]
+  };
+}
+
 export async function confirmKnowledgeProcessing(
   runtime: KnowledgeRuntime,
   stores: PlatformStores,
@@ -246,32 +303,48 @@ export async function confirmKnowledgeProcessing(
     config: unknown;
     replaced: unknown;
     confirmProcessing?: string;
+    /** Who publishes: a re-index it starts is counted for them. */
+    actor?: AuthenticatedIdentity;
   },
   embedding: KnowledgeEmbedding
 ) {
-  const review = await knowledgeProcessingReview(
-    runtime,
-    input.config,
-    input.replaced,
-    input.assetId,
+  const review = await knowledgePublishReview(runtime, {
+    config: input.config,
+    previous: input.replaced,
+    assetId: input.assetId,
     embedding,
-    false,
-    stores.dataStores
-  );
+    records: stores.dataStores,
+    locale: runtime.defaultLocale
+  });
   if (!review) return;
   if (input.confirmProcessing !== review.confirmation || !review.priced)
     throw new AppError(
       "VALIDATION_FAILED",
       review.lines.join("\n"),
       {
-        reason: "knowledge_processing_confirmation_required",
-        count: review.count,
+        reason: review.processing
+          ? "knowledge_processing_confirmation_required"
+          : "knowledge_reindex_confirmation_required",
+        ...(review.processing ? { count: review.processing.count } : {}),
+        ...(review.reindex
+          ? { chunks: review.reindex.statement.chunks, tokens: review.reindex.statement.tokens }
+          : {}),
         confirmation: review.confirmation
       },
       { exposeMessage: true }
     );
   const next = knowledgeBaseDefinitionSchema.parse(input.config);
   const before = knowledgeBaseDefinitionSchema.parse(input.replaced);
+  if (review.reindex && input.actor) {
+    await startPublishedReindex(runtime, stores, {
+      assetId: input.assetId,
+      name: next.name,
+      revision: input.revision,
+      actor: input.actor,
+      statement: review.reindex.statement
+    });
+  }
+  if (!review.processing) return;
   await stores.jobs.enqueue(
     knowledgeReprocessJob,
     {

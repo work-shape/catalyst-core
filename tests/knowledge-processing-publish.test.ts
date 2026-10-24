@@ -144,7 +144,7 @@ describe("confirmed, selective processing at publish (KB 80)", () => {
     await publish();
     // A newly building generation changes the embedding cost without changing content.
     // A confirmation must cover the current rate/binding selection too.
-    await world.sql`insert into catalyst_kb.index_generations (generation,binding_id,model,dimensions,state) values (2,'embedding','test',8,'building')`;
+    await world.sql`insert into catalyst_kb.index_generations (generation,binding_id,model,dimensions,state) values (2,'embedding','local',8,'building')`;
     await expect(publish()).rejects.toMatchObject({
       details: { reason: "knowledge_processing_confirmation_required" }
     });

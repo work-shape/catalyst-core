@@ -174,6 +174,7 @@ export function KnowledgeBaseEditor({
         knowledgeBase={knowledgeBase}
         publishedRevision={publishedRevision}
         canCheck={canWrite}
+        canReindex={frame.draft?.canPublish === true}
       />
     )
   });
