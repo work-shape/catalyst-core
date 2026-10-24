@@ -23,7 +23,7 @@ process.env.E2E_SECRET_STORE_KEY = e2eSecretStoreKey;
 
 export default defineConfig({
   testDir: "./e2e",
-  reporter: [["list"], ["./scripts/playwright-budget-reporter.ts"]],
+  reporter: [["list"]],
   // Hosted shards have separate databases and one worker each. Split large files between
   // them without introducing concurrent tests inside one instance; serial groups stay whole.
   fullyParallel: process.env.E2E_FULLY_PARALLEL === "1",

@@ -21,7 +21,7 @@ export const toolingFiles = [
   "tests/release-rename-scope.test.ts",
   "tests/resolve-only-run.test.ts",
   "tests/source-aliases.test.ts",
-  "tests/test-duration-budget.test.ts",
+  "tests/suite-time.test.ts",
   "tests/vitest-configs.test.ts",
   "tests/vitest-projects.test.ts"
 ];

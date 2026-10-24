@@ -169,10 +169,3 @@ test("every job runs on every release run, after the dispatch policy", () => {
       .sort()
   );
 });
-
-test("release reporter overrides retain both test time budgets", () => {
-  const unit = jobs.tests.steps.find((step) => step.run?.includes("vitest run"));
-  assert.ok(unit.run.includes("--reporter=./scripts/vitest-budget-reporter.ts"));
-  const browser = jobs["browser-shard"].steps.find((step) => step.name === "Browser suite");
-  assert.ok(browser.run.includes("./scripts/playwright-budget-reporter.ts"));
-});

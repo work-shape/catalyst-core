@@ -1,5 +1,5 @@
 # Everything once a night on main, on our own Mac mini runner: the pull request check plus
-# the scale tests, compatibility, release tooling, docs, images and the full browser suite.
+# the suites' time limit, the scale tests, compatibility, release tooling, docs, images and the full browser suite.
 # A red night is fixed or reverted first thing the next morning.
 name: Nightly
 on:
@@ -22,8 +22,6 @@ jobs:
   full:
     runs-on: [self-hosted, catalyst-mini]
     timeout-minutes: 90
-    env:
-      CATALYST_SCALE_TESTS: "1"
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -56,8 +54,16 @@ jobs:
         run: pnpm --filter @work-shape/catalyst-docs check:site
       - name: Release tooling
         run: node --test 'scripts/release/*.test.mjs' && pnpm release:check --skip-build
-      - name: Unit, database and scale tests
-        run: pnpm exec vitest run
+      # The suites' one time limit: 15 minutes on 16 cores, scaled by 16 / cores. Nothing is
+      # limited per test or per file; the scale tests and probes after it are not timed.
+      - name: Unit and database tests
+        run: pnpm exec vitest run 2>&1 | tee unit-run.log
+      - name: Unit suite time
+        run: node scripts/suite-time.mjs vitest unit-run.log
+      - name: Scale tests
+        env:
+          CATALYST_SCALE_TESTS: "1"
+        run: pnpm exec vitest run .scale.test
       - name: Workflow probes
         run: pnpm exec vitest run --config vitest.probes.config.ts
       - name: Deployment kit tests
@@ -100,6 +106,8 @@ jobs:
           E2E_EXTERNAL_POSTGRES: "1"
           E2E_SKIP_BUILD: "1"
         run: pnpm test:e2e --retries=1 --workers=1 2>&1 | tee browser-run.log
+      - name: Browser suite time
+        run: node scripts/suite-time.mjs playwright browser-run.log
       - name: Keep traces and the server log of a failed run
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
