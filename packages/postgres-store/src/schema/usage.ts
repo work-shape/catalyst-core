@@ -92,8 +92,10 @@ export const modelUsageEvents = pgTable(
     index("model_usage_events_user_idx")
       .on(table.userId)
       .where(sql`${table.userId} is not null`),
-    index("model_usage_events_workspace_idx")
-      .on(table.collaborationWorkspaceId)
+    // What the deletion of a workspace finds its usage events by, and what the Usage tab of a
+    // shared workspace sums its members' month from (LU-3).
+    index("model_usage_events_workspace_created_idx")
+      .on(table.collaborationWorkspaceId, table.createdAt)
       .where(sql`${table.collaborationWorkspaceId} is not null`),
     index("model_usage_events_agent_run_idx")
       .on(table.clientInstanceId, table.agentRunId)
@@ -145,8 +147,9 @@ export const modelUsageCounters = pgTable(
 
 /**
  * The sums the Usage page shows, kept by the transaction that ends a call: one row per UTC day,
- * model, provider, region, purpose or agent, and currency. An absent value is the empty string,
- * so the key is whole. Calls in flight are in no row.
+ * model, provider, region, purpose or agent, workspace, App, Workflow and currency. An absent
+ * value is the empty string, so the key is whole. Calls in flight are in no row. No row names a
+ * person: every Personal Workspace is the one key `personal` (limits spec 3.4).
  */
 export const modelUsageDailyRollups = pgTable(
   "model_usage_daily_rollups",
@@ -158,6 +161,11 @@ export const modelUsageDailyRollups = pgTable(
     region: text("region").notNull(),
     purpose: text("purpose").notNull(),
     agentName: text("agent_name").notNull(),
+    // A shared workspace's id, `personal` for any Personal Workspace, empty for none (LU-3).
+    workspaceKey: text("workspace_key").notNull().default(""),
+    // The App and the Workflow the call counts to, by name; empty for none.
+    appName: text("app_name").notNull().default(""),
+    workflowName: text("workflow_name").notNull().default(""),
     // The currency of the settled costs in the row. Empty for calls whose cost is not settled.
     currency: text("currency").notNull(),
     modelCallCount: amount("model_call_count"),
@@ -184,6 +192,9 @@ export const modelUsageDailyRollups = pgTable(
         table.region,
         table.purpose,
         table.agentName,
+        table.workspaceKey,
+        table.appName,
+        table.workflowName,
         table.currency
       ]
     })
