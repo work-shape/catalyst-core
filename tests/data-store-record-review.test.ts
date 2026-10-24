@@ -363,7 +363,9 @@ describe("REC-2 records review through the public operation source", () => {
     await w.source`update catalyst_kb.documents set withdrawn_at = now() where id = 'b9'`;
     const after = await flagged(w);
     expect(after.items.map((item) => item.documentId)).toEqual(["a9"]);
-    expect(JSON.stringify(after)).not.toContain("b9");
+    // Its id, its file and its quote; quoted, since a random id may hold the letters "b9".
+    for (const left of ['"b9"', '"b9.pdf"', '"200"'])
+      expect(JSON.stringify(after)).not.toContain(left);
   });
 
   it("never counts a correction that a later decision replaced as read from its document", async () => {
