@@ -14,20 +14,9 @@ export const userIdentitySchema = z.object({
   authSource: z.string().min(1).default("development")
 });
 
-const defaultDevelopmentUser = {
-  id: "dev-user",
-  externalUserId: "dev-user",
-  displayLabel: "Development User",
-  groups: [],
-  roles: ["user", "admin"],
-  permissionRefs: [],
-  permissions: [],
-  authSource: "development"
-};
-
 export const developmentAuthConfigSchema = z.object({
   enabled: z.boolean().default(false),
-  user: userIdentitySchema.default(defaultDevelopmentUser),
+  user: userIdentitySchema.prefault({}),
   users: z.array(userIdentitySchema).default([]),
   defaultUserId: z.string().min(1).optional()
 });

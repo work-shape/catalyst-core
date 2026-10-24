@@ -15,10 +15,7 @@ export const localizationConfigSchema = z
     defaultLocale: localeCodeSchema.default("en"),
     supportedLocales: z.array(localeCodeSchema).min(1).default(["en", "de"])
   })
-  .default({
-    defaultLocale: "en",
-    supportedLocales: ["en", "de"]
-  })
+  .prefault({})
   .superRefine((config, context) => {
     if (!config.supportedLocales.includes(config.defaultLocale)) {
       context.addIssue({

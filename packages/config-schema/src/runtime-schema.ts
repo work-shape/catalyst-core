@@ -37,11 +37,7 @@ export const modelContextConfigSchema = z
         maxTokens: 60000
       })
   })
-  .default({
-    toolOutput: {
-      maxTokens: 60000
-    }
-  });
+  .prefault({});
 
 const REMOVED_WEB_SEARCH_KEYS = ["mode", "managedProvider"] as const;
 
@@ -312,32 +308,4 @@ export const executionWorkspacesConfigSchema = z
       });
     }
   })
-  .default({
-    enabled: false,
-    sourceFiles: {
-      maxFileBytes: 25 * 1024 * 1024
-    },
-    command: {
-      defaultTimeoutSeconds: 60,
-      maxTimeoutSeconds: 300,
-      idleTimeoutSeconds: 30,
-      maxStdoutBytes: 64 * 1024,
-      maxStderrBytes: 64 * 1024,
-      maxWorkspaceBytes: 100 * 1024 * 1024
-    },
-    worker: {
-      concurrency: 1,
-      pollIntervalMs: 1000,
-      leaseDurationMs: 10 * 60 * 1000,
-      heartbeatIntervalMs: 5000,
-      cancellationPollIntervalMs: 1000,
-      staleRecoveryIntervalMs: 30000,
-      staleRecoveryLimit: 50
-    },
-    cleanup: {
-      deletedWorkspaceCleanupIntervalMs: 60 * 60 * 1000,
-      deletedWorkspaceCleanupBatchSize: 100,
-      tempStateCleanupIntervalMs: 10 * 60 * 1000,
-      hydratedWorkspaceIdleTtlMs: 60 * 60 * 1000
-    }
-  });
+  .prefault({});
