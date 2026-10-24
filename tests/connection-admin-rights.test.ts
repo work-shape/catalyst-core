@@ -196,6 +196,45 @@ describe("a grant of writing, deleting or approving a Connection", () => {
     expect(await t.secretOf(t.beta)).toBeDefined();
   });
 
+  it("on one Connection goes with its deletion and does not come back with its name", async () => {
+    const t = await twoConnections();
+    for (const action of ADMIN_RIGHTS) {
+      await t.grant(t.kai.id, action, { assetId: t.alpha });
+      await t.grant(t.kai.id, action, { assetId: t.beta });
+    }
+    await t.grant(t.lena.id, "connection.use", { assetId: t.alpha }, "deny");
+    await t.expectOk(t.admin.id, "assets.delete", t.asset("alpha"));
+    const onAsset = async (assetId: string) =>
+      (await t.stores.access.listGrants({ clientInstanceId }))
+        .filter((row) => row.scopeKind === "asset" && row.scopeId === assetId)
+        .map((row) => [row.holderId, row.action, row.effect]);
+    // The allows went with the Connection, as with every kind. A deny stays, as with every kind:
+    // the retained revisions are still what it refuses.
+    expect(await onAsset(t.alpha)).toEqual([[t.lena.id, "connection.use", "deny"]]);
+    expect(await onAsset(t.beta)).toHaveLength(ADMIN_RIGHTS.length);
+
+    // The name made again reuses the row, and Kai's grants do not reach it.
+    const again = t.created("alpha");
+    // Made again over the revision that deleted it.
+    await t.expectOk(t.admin.id, "assets.put", {
+      ...again,
+      payload: { ...again.payload, expectedRevision: 2 }
+    });
+    expect(await t.assetId("connection", "alpha")).toBe(t.alpha);
+    await t.expectRefused(
+      t.kai.id,
+      "assets.put",
+      t.changed("alpha"),
+      t.forbidden("connection.write", "no_grant")
+    );
+    await t.expectRefused(
+      t.kai.id,
+      "assets.delete",
+      t.asset("alpha"),
+      t.forbidden("connection.delete", "no_grant")
+    );
+  });
+
   it("on the instance opens every Connection and makes new ones", async () => {
     const t = await twoConnections();
     for (const action of ADMIN_RIGHTS) await grantOnInstance(t, t.kai.id, action);
