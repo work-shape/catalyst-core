@@ -25,6 +25,16 @@ export const governanceEvents = {
     audited: true,
     phases: ["after"]
   },
+  // The usage of named people was opened (LU-3, limits spec 3.4): the Users view of the
+  // instance or the members of one workspace, and the month. No figure and no name of anyone
+  // shown.
+  "governance.usage_users_viewed": {
+    name: "governance.usage_users_viewed",
+    subject: "instance",
+    legacy: false,
+    audited: true,
+    phases: ["after"]
+  },
   "governance.usage_viewed": {
     ...LEGACY_AUDIT,
     name: "governance.usage_viewed",

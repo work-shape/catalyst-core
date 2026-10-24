@@ -84,6 +84,7 @@
 {"name":"governance.config_assets_viewed","legacy":true,"audited":true,"phases":["after"]}
 {"name":"governance.config_assets_write_authorized","legacy":true,"audited":true,"phases":["after"]}
 {"name":"governance.usage_limit_changed","legacy":false,"audited":true,"phases":["after"]}
+{"name":"governance.usage_users_viewed","legacy":false,"audited":true,"phases":["after"]}
 {"name":"governance.usage_viewed","legacy":true,"audited":true,"phases":["after"]}
 {"name":"governance.users_viewed","legacy":true,"audited":true,"phases":["after"]}
 {"name":"guardrail.published","legacy":false,"audited":true,"phases":["after"]}

@@ -61,7 +61,8 @@ const GRANT_VERB_RANK: Record<GrantVerb, number> = {
   builder: 10,
   publisher: 11,
   review: 12,
-  edit_built_in: 13
+  edit_built_in: 13,
+  view_users: 14
 };
 
 function isGrantKind(kind: string): kind is GrantKind {

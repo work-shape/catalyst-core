@@ -101,6 +101,7 @@ export const audit = defineTranslations({
     "audit.event.governance.config_assets_write_authorized":
       "Allowed a change to the instance's assets",
     "audit.event.governance.usage_limit_changed": "Changed a spend limit",
+    "audit.event.governance.usage_users_viewed": "Viewed usage by person",
     "audit.event.governance.usage_viewed": "Viewed usage",
     "audit.event.governance.user_create_authorized": "Allowed creating a user",
     "audit.event.governance.user_identity_delete_authorized": "Allowed removing a user's sign-in",
@@ -370,6 +371,7 @@ export const audit = defineTranslations({
     "audit.event.governance.config_assets_write_authorized":
       "Änderung an den Assets der Instanz erlaubt",
     "audit.event.governance.usage_limit_changed": "Ausgabenlimit geändert",
+    "audit.event.governance.usage_users_viewed": "Nutzung pro Person angesehen",
     "audit.event.governance.usage_viewed": "Nutzung angesehen",
     "audit.event.governance.user_create_authorized": "Anlegen eines Benutzers erlaubt",
     "audit.event.governance.user_identity_delete_authorized":

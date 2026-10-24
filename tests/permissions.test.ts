@@ -70,6 +70,7 @@ describe("permissions", () => {
       "users.manage",
       "usage.view",
       "limits.manage",
+      "usage.view_users",
       "audit.view",
       "api_access.manage",
       "service_principals.manage",
@@ -80,15 +81,16 @@ describe("permissions", () => {
       "publisher"
     ]);
     // The rights of a Connection, an App, a Workflow, a Data Store, a Knowledge Base, a Guardrail
-    // and a mail sender came after the legacy keys, as did the rights over service principals and spend limits and
-    // the two bundles and the right to edit the built-in roles: no key names one, so nobody holds
-    // one through the legacy column.
+    // and a mail sender came after the legacy keys, as did the rights over service principals and
+    // spend limits, the right to view usage by person, the two bundles and the right to edit the
+    // built-in roles: no key names one, so nobody holds one through the legacy column.
     const unkeyed = (action: string) =>
       /^(?:connection|app|workflow|data_store|knowledge_base|guardrail|mail_sender)\./u.test(
         action
       ) ||
       action === "service_principals.manage" ||
       action === "limits.manage" ||
+      action === "usage.view_users" ||
       action === "roles.edit_built_in" ||
       action === "feedback.review" ||
       action === "agent.publish" ||
@@ -196,6 +198,7 @@ describe("permissions", () => {
       "users.manage",
       "usage.view",
       "limits.manage",
+      "usage.view_users",
       "audit.view",
       "service_principals.manage",
       // Instance admins hold Builder and Publisher in every workspace by default [P36].

@@ -5,6 +5,10 @@ export const ADMINISTRATION_ACTIONS = [
   // Setting the spend limits of the instance, of shared workspaces and of users (LU-2).
   // Instance admins hold it; workspace owners do not.
   "limits.manage",
+  // Usage by named person beyond one's own (LU-3, limits spec 3.4): the Users view of the
+  // instance, and an owner's figures per member of a workspace. A separate right because the
+  // works council has a say on it (BetrVG section 87(1) no. 6).
+  "usage.view_users",
   "audit.view",
   "api_access.manage",
   // Creating service principals, giving and taking their rights, enabling and disabling them.

@@ -4,6 +4,7 @@ import { accessApp } from "./access-app";
 import { accessConnection } from "./access-connection";
 import { accessDataStore } from "./access-data-store";
 import { accessFeedback } from "./access-feedback";
+import { accessUsage } from "./access-usage";
 import { accessGuardrail } from "./access-guardrail";
 import { accessKnowledgeBase } from "./access-knowledge-base";
 import { accessMailSender } from "./access-mail-sender";
@@ -73,6 +74,7 @@ export const translations = combineTranslations(common)
   .and(accessConnection)
   .and(accessDataStore)
   .and(accessFeedback)
+  .and(accessUsage)
   .and(accessGuardrail)
   .and(accessKnowledgeBase)
   .and(accessMailSender)
