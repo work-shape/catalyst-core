@@ -261,12 +261,15 @@ const WORKFLOW_SOURCES = `
 `;
 
 // KBW-1: one call of `knowledge.<id>.ingest` is a sync run of mode `ingest` of the calling
-// Workflow's source. Several may run at once for one source, so the one-running rule keeps to
-// the connector modes. `pass_state` is the completeness rule's: a `complete` pass waits for its
-// Workflow run to end `done` before it withdraws what the run did not name. Items that never
-// became a row (no identity, over the document limit) keep their outcome in `ingest_failures`,
-// with the item's identity and never its content.
+// Workflow's source. One pass of a source runs at a time, by the running index every mode
+// shares; a further call waits in `ingest_waiting`. `pass_state` is the completeness rule's: a
+// `complete` pass waits for its Workflow run to end `done` before it withdraws what the run did
+// not name. `named_run_id` is the last pass that named an item, valid or not: an item whose new
+// version is invalid keeps its old one and is not withdrawn as unnamed. Items that never became
+// a row (no identity, over the document limit) keep their outcome in `ingest_failures` until
+// their pass ends, with the item's identity and never its content.
 const WORKFLOW_INGEST = `
+  alter table catalyst_kb.source_items add column named_run_id text;
   alter table catalyst_kb.sync_runs drop constraint sync_runs_mode_check;
   alter table catalyst_kb.sync_runs add constraint sync_runs_mode_check
     check (mode in ('initial','changes','full','ingest')) not valid;
