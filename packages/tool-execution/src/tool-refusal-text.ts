@@ -174,6 +174,7 @@ const OWN_ACTION_WORDS: Record<OwnWordAction, Words> = {
   "users.manage": { en: "manage users", de: "Benutzer verwalten" },
   "usage.view": { en: "view usage", de: "Nutzung ansehen" },
   "limits.manage": { en: "set spend limits", de: "Ausgabenlimits festlegen" },
+  "usage.view_users": { en: "view usage by person", de: "Nutzung pro Person ansehen" },
   "audit.view": { en: "view the audit log", de: "Auditprotokoll ansehen" },
   "api_access.manage": { en: "manage API access", de: "API-Zugriff verwalten" },
   "service_principals.manage": {

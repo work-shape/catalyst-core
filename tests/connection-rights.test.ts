@@ -126,6 +126,8 @@ describe("the vocabulary of Connection rights", () => {
           /^(?:agent|skill|app|data_store|guardrail)\./u.test(action) ||
           // Feedback on the agents a workspace owns is reviewed there (LU-4).
           action === "feedback.review" ||
+          // A workspace's Owners see what its members used there (LU-3).
+          action === "usage.view_users" ||
           // A workspace owns the Workflows made in it; their run data is granted one by one
           // (WS-OWN-1b).
           (/^workflow\./u.test(action) && action !== "workflow.read_run_data")

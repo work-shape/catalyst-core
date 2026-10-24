@@ -12,6 +12,7 @@ import { knowledgeBaseKind } from "./kinds/knowledge-base";
 import { mailSenderKind } from "./kinds/mail-sender";
 import { rolesKind } from "./kinds/roles";
 import { skillKind } from "./kinds/skill";
+import { usageKind } from "./kinds/usage";
 import { workflowKind } from "./kinds/workflow";
 import { workspaceKind } from "./kinds/workspace";
 
@@ -34,6 +35,7 @@ export const grantKinds: { [Kind in GrantKind]: GrantKindEntry<Kind> } = {
   guardrail: guardrailKind,
   mail_sender: mailSenderKind,
   feedback: feedbackKind,
+  usage: usageKind,
   workspace: workspaceKind,
   roles: rolesKind
 };
