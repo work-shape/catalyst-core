@@ -134,8 +134,12 @@ export {
 export { DataStoreValueDialog } from "./data-store-rows";
 export { draftTablesOf, type DraftField, type DraftTable } from "./data-store-draft-fields";
 export type {
+  DataStoreDecision,
+  DataStoreFlagged,
+  DataStoreFlaggedItem,
   DataStoreListed,
   DataStoreRead,
+  DataStoreReviewSource,
   DataStoreRowsPage,
   DataStoreSchema,
   DataStoreSource,
@@ -144,6 +148,7 @@ export type {
   DataStoreValue
 } from "./data-store-source";
 export { useDataStoreSource, usingPageRoute } from "./data-store-source";
+export { groupFlagged, reviewValueOf } from "./data-store-review-model";
 export { DataStoreReaders } from "./data-store-provenance";
 export {
   appDataLines,

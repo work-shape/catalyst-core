@@ -1,6 +1,7 @@
 import {
   Bell,
   Bot,
+  ClipboardCheck,
   BookOpen,
   MessageSquareText,
   FileText,
@@ -33,6 +34,11 @@ import type { TranslationContextValue, TranslationKey } from "../../shared/i18n"
 import type { InboxItemActions } from "./inbox-item-actions";
 import { NoticeBody, NoticeFoot, parseNoticePreview } from "./notice-item";
 import { FeedbackBody, feedbackAgentLabel, parseFeedbackPreview } from "./feedback-item";
+import {
+  DataStoreReviewBody,
+  parseDataStoreReviewPreview,
+  reviewStoreLabel
+} from "./data-store-review-item";
 
 export type Translate = TranslationContextValue["t"];
 
@@ -335,6 +341,30 @@ const feedbackReview: InboxItemKind = {
 };
 
 /**
+ * The one notice of a Data Store whose records wait in "Prüfen" (REC-2), for whoever may decide
+ * them: how many fields wait now and the way to the store. Its reader marks it handled.
+ */
+const dataStoreReview: InboxItemKind = {
+  kind: "data_store_review",
+  label: "inbox.kindDataStoreReview",
+  icon: ClipboardCheck,
+  heading(item, t) {
+    const preview = parseDataStoreReviewPreview(item.preview);
+    return preview
+      ? t("inbox.dataStoreReviewHeading", { store: reviewStoreLabel(preview) })
+      : undefined;
+  },
+  subject(item) {
+    const preview = parseDataStoreReviewPreview(item.preview);
+    return preview ? reviewStoreLabel(preview) : undefined;
+  },
+  Body: DataStoreReviewBody,
+  decisions: [{ decision: "approve", label: "inbox.noticeMarkHandled" }],
+  handled: true,
+  Foot: NoticeFoot
+};
+
+/**
  * The item kinds of the platform. This is deliberately not the client widget registry: an item
  * decides a change to the instance, so its body must not be replaceable by a client assembly.
  */
@@ -345,7 +375,8 @@ export const inboxItemKinds: readonly InboxItemKind[] = [
   publishKind("workflow_publish", "inbox.kindWorkflowPublish", Workflow),
   publishKind("agent_publish", "inbox.kindAgentPublish", Bot),
   notice,
-  feedbackReview
+  feedbackReview,
+  dataStoreReview
 ];
 
 const InboxItemKindsContext = createContext<readonly InboxItemKind[]>(inboxItemKinds);

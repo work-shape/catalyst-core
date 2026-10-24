@@ -20,6 +20,9 @@ import {
   type BuildAssetRow,
   type BuildLocation,
   type BuildSource,
+  type DataStoreFlaggedItem,
+  groupFlagged,
+  reviewValueOf,
   type DataStoreListed,
   type DataStoreRead,
   type DataStoreRowsPage,
@@ -223,6 +226,7 @@ interface StoreAnswers {
   usedBy?: DataStoreRead<DataStoreUsedBy>;
   /** The reader is shown the pages of Workflows too, not only of Apps. */
   workflowPages?: boolean;
+  review?: DataStoreSource["review"];
 }
 
 function storeSource(answers: StoreAnswers = {}): DataStoreSource {
@@ -240,7 +244,11 @@ function storeSource(answers: StoreAnswers = {}): DataStoreSource {
         ? { href: `/w/ws_1/apps/${name}`, open: noop }
         : answers.workflowPages
           ? { href: `/w/ws_1/workflows/${name}`, open: noop }
-          : undefined
+          : undefined,
+    review: answers.review ?? {
+      useFlagged: () => ready({ items: [] }),
+      decide: () => Promise.resolve(undefined)
+    }
   };
 }
 
@@ -257,7 +265,16 @@ function storeRow(name: string, overrides: Partial<BuildAssetRow> = {}): BuildAs
   };
 }
 
-function storeAsset(name: string): BuildAsset {
+/** The records rule of a store whose objects are filled from documents (REC-2). */
+const objektRule = {
+  table: "objekt",
+  key: { column: "objekt_nr", fromPath: "/Objekte/{objekt_nr}/" },
+  precedence: [],
+  review: { always: [] },
+  retainWithoutSource: false
+};
+
+function storeAsset(name: string, records = false): BuildAsset {
   return {
     id: `asset_${name}`,
     kind: "data_store",
@@ -268,7 +285,8 @@ function storeAsset(name: string): BuildAsset {
       name,
       title: "Visit log",
       description: "Every visit of a page of the public site.",
-      migrations: []
+      migrations: [],
+      ...(records ? { records: [objektRule] } : {})
     },
     updatedAt: "2026-10-08T10:00:00.000Z"
   };
@@ -308,6 +326,8 @@ interface RenderInput extends StoreAnswers {
   /** What the agent in the dock is working on now. */
   agentWork?: { kind: string; name: string };
   locale?: LocaleCode;
+  /** The store has a records rule over `objekt`. */
+  records?: boolean;
 }
 
 /** The Build frame at an address, with the Data Store kind on fixed answers. */
@@ -338,7 +358,7 @@ function render(location: BuildLocation, input: RenderInput = {}): string {
     }),
     useAsset: (_kind, name) => ({
       status: "ready",
-      asset: input.draft ? draftAsset(name) : storeAsset(name),
+      asset: input.draft ? draftAsset(name) : storeAsset(name, input.records),
       loadedAt: 1,
       reload: async () => "loaded"
     }),
@@ -1234,5 +1254,141 @@ describe("where an App's data comes from", () => {
     expect(fillerLine({ ...nightly, account: {} }, translate("de").t, "de")).toBe(
       "Kopiert aus Exampledata und CRM · Läuft als technisches Konto"
     );
+  });
+});
+
+describe("Prüfen: the records of a Data Store that wait for a person (REC-2)", () => {
+  const candidate = (
+    documentId: string,
+    overrides: Partial<DataStoreFlaggedItem> = {}
+  ): DataStoreFlaggedItem => ({
+    table: "objekt",
+    key: 1402,
+    name: "kaufpreis",
+    value: 100,
+    page: 3,
+    quote: "Kaufpreis 100",
+    knowledgeBaseId: "kb_1",
+    documentId,
+    kind: "kaufvertrag",
+    documentDate: "2026-10-17",
+    extractedAt: "2026-10-18T10:00:00.000Z",
+    evidence: { status: "passed" },
+    state: "conflict",
+    decidedBy: null,
+    decidedAt: null,
+    reason: "conflict",
+    document: { knowledgeBase: "unterlagen", fileName: `${documentId}.pdf` },
+    ...overrides
+  });
+  const flagged = [
+    candidate("a1"),
+    candidate("b1", { value: 200, quote: "Kaufpreis 200", page: 4 }),
+    candidate("a1", {
+      name: "baujahr",
+      value: 1990,
+      quote: "Baujahr 1991",
+      state: "extracted",
+      reason: "not_evidenced",
+      evidence: { status: "failed", reason: "quote_not_found" }
+    }),
+    candidate("e4", {
+      key: null,
+      name: "adresse",
+      value: "Nebenweg 1",
+      kind: "expose",
+      state: "extracted",
+      reason: "key_unresolved",
+      document: { knowledgeBase: "unterlagen", fileName: "expose.pdf" }
+    })
+  ];
+  const review = (items: DataStoreFlaggedItem[] = flagged, nextCursor?: string) => ({
+    useFlagged: () => ready({ items, ...(nextCursor ? { nextCursor } : {}) }),
+    decide: () => Promise.resolve(undefined)
+  });
+
+  it("groups by object and field, stands the candidates side by side with the page each cites, and offers the three decisions", () => {
+    const page = render(
+      { kindPath: "data-stores", name: "objects" },
+      { records: true, review: review() }
+    );
+    expect(page).toContain('id="review"');
+    expect(page).toContain(">Review</");
+    expect(page).toContain('data-review-object="1402"');
+    expect(page).toContain(">objekt 1402</h3>");
+    expect(page).toContain('data-review-field="kaufpreis"');
+    expect(page).toContain(">Conflict</span>");
+    expect(page).toContain(">Not evidenced</span>");
+    expect(page).toContain(">Quote not found on the page</span>");
+    // Each candidate cites its document and page.
+    expect(page).toContain("a1.pdf, p. 3");
+    expect(page).toContain("b1.pdf, p. 4");
+    expect(page).toContain("“Kaufpreis 200”");
+    expect(page.match(/data-review-confirm=""/gu)).toHaveLength(3);
+    expect(page.match(/data-review-correct=""/gu)).toHaveLength(3);
+    // The document without an object waits apart, with "Assign object".
+    expect(page).toContain('data-review-document="e4"');
+    expect(page).toContain(">Assign object</button>");
+
+    const german = render(
+      { kindPath: "data-stores", name: "objects" },
+      { records: true, review: review(), locale: "de" }
+    );
+    for (const said of [
+      ">Prüfen</",
+      ">Widerspruch</span>",
+      ">Nicht belegt</span>",
+      ">Bestätigen</button>",
+      ">Korrigieren</button>",
+      ">Objekt zuordnen</button>",
+      "Dokumente ohne Objekt"
+    ]) {
+      expect(german, said).toContain(said);
+    }
+  });
+
+  it("has no section without a records rule, nor for a reader who may not decide, and says when nothing waits", () => {
+    expect(
+      render({ kindPath: "data-stores", name: "visit-log" }, { review: review() })
+    ).not.toContain('id="review"');
+    const refused = render(
+      { kindPath: "data-stores", name: "objects" },
+      {
+        records: true,
+        review: {
+          useFlagged: () => ({ status: "refused" }),
+          decide: () => Promise.resolve(undefined)
+        }
+      }
+    );
+    expect(refused).not.toContain('id="review"');
+    const empty = render(
+      { kindPath: "data-stores", name: "objects" },
+      { records: true, review: review([]) }
+    );
+    expect(empty).toContain("Nothing waits for review.");
+    const more = render(
+      { kindPath: "data-stores", name: "objects" },
+      { records: true, review: review(flagged, "next") }
+    );
+    expect(more).toContain(">Show more fields</button>");
+  });
+
+  it("counts each flagged field once and each field of a document without an object", () => {
+    const groups = groupFlagged(flagged);
+    expect(groups.fieldCount).toBe(3);
+    expect(
+      groups.objects.map((object) => object.fields.map((field) => field.candidates.length))
+    ).toEqual([[2, 1]]);
+    expect(groups.documents.map((document) => document.fileName)).toEqual(["expose.pdf"]);
+  });
+
+  it("reads a typed value as the kind the candidate holds", () => {
+    expect(reviewValueOf("150", 100)).toEqual({ value: 150 });
+    expect(reviewValueOf("1.234,5", 100)).toEqual({ value: 1234.5 });
+    expect(reviewValueOf("teuer", 100)).toEqual({ invalid: "number" });
+    expect(reviewValueOf("ja", true)).toEqual({ value: true });
+    expect(reviewValueOf("150", "Nebenweg 1")).toEqual({ value: "150" });
+    expect(reviewValueOf("  ", "x")).toEqual({ invalid: "empty" });
   });
 });

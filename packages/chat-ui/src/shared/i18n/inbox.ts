@@ -19,6 +19,15 @@ export const inbox = defineTranslations({
     "inbox.skillChangeHeading": "Skill change by {actor}: {title}",
     "inbox.skillNewHeading": "New skill by {actor}: {title}",
     "inbox.kindNotice": "Notice",
+    "inbox.kindDataStoreReview": "Fields to review",
+    "inbox.dataStoreReviewHeading": "Review fields in {store}",
+    "inbox.dataStoreReviewText":
+      "{count} fields of the records in {store} wait for a person: evidence disagrees, is missing, or the store asks for a confirmation.",
+    "inbox.dataStoreReviewTextOne":
+      "1 field of the records in {store} waits for a person: evidence disagrees, is missing, or the store asks for a confirmation.",
+    "inbox.dataStoreReviewTextNone":
+      "Fields of the records in {store} wait for a person. Their number could not be read.",
+    "inbox.dataStoreReviewOpen": "Open review",
     "inbox.noticeMarkHandled": "Mark handled",
     "inbox.noticeDone": "Done",
     "inbox.open": "Open",
@@ -64,6 +73,15 @@ export const inbox = defineTranslations({
     "inbox.skillChangeHeading": "Skill-Änderung von {actor}: {title}",
     "inbox.skillNewHeading": "Neuer Skill von {actor}: {title}",
     "inbox.kindNotice": "Mitteilung",
+    "inbox.kindDataStoreReview": "Zu prüfende Felder",
+    "inbox.dataStoreReviewHeading": "Felder in {store} prüfen",
+    "inbox.dataStoreReviewText":
+      "{count} Felder der Datensätze in {store} warten auf eine Person: Belege widersprechen sich, fehlen, oder der Speicher verlangt eine Bestätigung.",
+    "inbox.dataStoreReviewTextOne":
+      "1 Feld der Datensätze in {store} wartet auf eine Person: Belege widersprechen sich, fehlen, oder der Speicher verlangt eine Bestätigung.",
+    "inbox.dataStoreReviewTextNone":
+      "Felder der Datensätze in {store} warten auf eine Person. Ihre Anzahl konnte nicht gelesen werden.",
+    "inbox.dataStoreReviewOpen": "Prüfen öffnen",
     "inbox.noticeMarkHandled": "Als erledigt markieren",
     "inbox.noticeDone": "Erledigt",
     "inbox.open": "Offen",
