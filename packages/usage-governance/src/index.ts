@@ -429,14 +429,13 @@ export class ModelUsageGovernance implements ModelUsageRecorder {
               counter.period === name
           )?.costMicros ?? 0;
         const limitMicros = name === "day" ? limits?.dailyMicros : limits?.monthlyMicros;
+        if (limitMicros === undefined) return { spentMicros };
+        const held = this.heldSpend(limitMicros);
         return {
           spentMicros,
-          ...(limitMicros === undefined
-            ? {}
-            : {
-                limitMicros,
-                reached: spentMicros >= this.heldSpend(limitMicros)
-              })
+          limitMicros,
+          leftMicros: Math.max(held - spentMicros, 0),
+          reached: spentMicros >= held
         };
       };
       return { day: period("day"), month: period("month") };
@@ -635,6 +634,11 @@ export class ModelUsageGovernance implements ModelUsageRecorder {
 export interface UsageSpendPeriodStatus {
   spentMicros: number;
   limitMicros?: number;
+  /**
+   * Set with a limit: what is left before the limit stops calls, as admission holds it, safety
+   * multiplier included. The share of the limit a person has used is `spent / (spent + left)`.
+   */
+  leftMicros?: number;
   /** Set with a limit: the counter is at or above it. */
   reached?: boolean;
 }

@@ -46689,6 +46689,9 @@
           "limit": {
             "type": "number"
           },
+          "left": {
+            "type": "number"
+          },
           "reached": {
             "type": "boolean"
           },

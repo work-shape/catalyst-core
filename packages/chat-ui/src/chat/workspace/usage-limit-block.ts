@@ -84,6 +84,14 @@ export function usageLimitBlockReason(
   return undefined;
 }
 
+/**
+ * Whether a person has used 80 percent of a limit: of what admission holds them to, `spent`
+ * and `left` together, the same measure `reached` is taken against.
+ */
+export function nearLimit(spent: number, left: number): boolean {
+  return spent > 0 && spent >= (spent + left) * NEAR_SHARE;
+}
+
 /** The quiet note at 80 percent of the person's own limit, once per period. */
 export interface UsageNearNote {
   /** Names the limit and its period, so a dismissed note stays away until the period ends. */
@@ -99,12 +107,13 @@ export function usageNearNote(
   const currency = usage?.currency;
   if (!usage || currency === undefined) return undefined;
   for (const period of ["day", "month"] as const) {
-    const { spent, limit, reached, resetsAt } = usage.own[period];
-    if (reached === true || spent === undefined || limit === undefined || limit <= 0) continue;
-    if (spent < limit * NEAR_SHARE) continue;
+    const { spent, left, reached, resetsAt } = usage.own[period];
+    if (reached === true || spent === undefined || left === undefined) continue;
+    // Measured as `reached` is: against what admission holds the person to.
+    if (!nearLimit(spent, left)) continue;
     return {
       key: `${period}:${resetsAt}`,
-      text: t(NEAR[period], { amount: formatSpend(Math.max(limit - spent, 0), currency, locale) })
+      text: t(NEAR[period], { amount: formatSpend(left, currency, locale) })
     };
   }
   return undefined;
