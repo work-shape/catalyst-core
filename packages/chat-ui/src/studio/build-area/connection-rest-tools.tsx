@@ -1,5 +1,5 @@
 import { ChevronRight, ClipboardPaste, Sparkles } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import {
   Button,
   Card,
@@ -23,6 +23,7 @@ import {
 import { useOpenedConnectionDraft, type ConnectionDraft } from "./connection-draft";
 import { connectionConfigToForm, withApprovedOperations } from "./connection-form-model";
 import type { ConnectionSource } from "./connection-source";
+import { connectionReadyMessage } from "./connection-ready";
 import {
   ConnectionApprovedBody,
   useGiveToAgent,
@@ -162,6 +163,7 @@ function AddToolsDialog({
   title,
   drafted,
   give: giveHost,
+  tell,
   onClose,
   approve
 }: {
@@ -172,6 +174,11 @@ function AddToolsDialog({
   drafted?: ConnectionDraft;
   /** Gives the approved tools to an agent from the done state (CS-5d). */
   give?: ConnectionGiveHost;
+  /**
+   * Tells the conversation whose card opened the draft, as the person, once the tools are
+   * approved (CHAT-CONN-1), so its agent goes on. Absent for a draft opened from elsewhere.
+   */
+  tell?: (text: string) => Promise<void>;
   onClose(): void;
   /** Saves the approved operations with the surfaces. Answers what refused them, or nothing. */
   approve(
@@ -191,6 +198,8 @@ function AddToolsDialog({
   const [approved, setApproved] = useState<{ count: number; giving: boolean }>();
   const approval = useApprovalChoice(drafted?.operations ?? []);
   const chosen = candidates ? selectedCandidates(candidates, approval.choice.selected) : [];
+  // The conversation hears once, and only of tools that were saved.
+  const told = useRef(false);
   const give = useGiveToAgent({
     host: giveHost,
     enabled: approved?.giving === true,
@@ -216,9 +225,19 @@ function AddToolsDialog({
     const surfaces = [...approval.choice.surfaces];
     approve(chosen, surfaces)
       .then((refused) => {
-        if (refused !== undefined) setRefusals(refused);
+        if (refused !== undefined) {
+          setRefusals(refused);
+          return;
+        }
+        if (tell && !told.current) {
+          told.current = true;
+          const tools = chosen.map((operation) => operation.name);
+          tell(
+            connectionReadyMessage({ name, title }, { kind: "approved", tools, surfaces }, t)
+          ).catch(() => undefined);
+        }
         // Where agents may use them, the done state offers them to one.
-        else if (giveHost && surfaces.includes("agent"))
+        if (giveHost && surfaces.includes("agent"))
           setApproved({ count: chosen.length, giving: false });
         else onClose();
       })
@@ -361,6 +380,9 @@ export function RestToolsSection({
       : asset.name;
   const baseUrl = connectionConfigToForm(config).url;
   const startChat = source.draftInChat;
+  // Only a draft opened from a card in this tab names the conversation it came from.
+  const from = opened.draft?.from;
+  const tellConversation = source.tellConversation;
   return (
     <>
       <AddToolsChoices
@@ -383,6 +405,9 @@ export function RestToolsSection({
           title={title}
           {...(opened.draft ? { drafted: opened.draft } : {})}
           {...(source.give ? { give: source.give } : {})}
+          {...(from && tellConversation
+            ? { tell: (text: string) => tellConversation(from, text) }
+            : {})}
           onClose={() => {
             setPasting(false);
             opened.close();

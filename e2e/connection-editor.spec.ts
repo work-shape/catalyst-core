@@ -536,6 +536,15 @@ async function shootModes(page: Page, locale: Locale, name: string): Promise<voi
       await expect(page.getByRole("dialog")).toHaveCount(0);
       await expect(main.locator('[data-connection-operation="health"]')).toBeVisible();
       expect(existingWrites).toEqual(["PUT /api/v1/assets/connection/:name"]);
+      // The conversation of the card hears it once, as the person, and its agent goes on
+      // without the person typing (CHAT-CONN-1).
+      const told = page.getByText(
+        new RegExp(
+          `^Local agent response: I received "${EXISTING_TITLE} is connected \\(${existing}\\), .*health`,
+          "u"
+        )
+      );
+      await expect(told).toHaveCount(1);
       // For an id no Connection has, the New connection dialog opens filled, without a key. Its
       // drafted test path needs the key, so a wrong key fails Verbinden.
       await sendToolCall(page, "platform.connections.draft_tools", {
