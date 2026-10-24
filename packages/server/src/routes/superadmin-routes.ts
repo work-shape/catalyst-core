@@ -98,7 +98,7 @@ export function registerSuperadminRoutes(route: Route, options: ChatServerOption
     authorize: (input, context) =>
       authorizeUserAdministration(options, remove.id, context, {
         userId: input.userId,
-        superadminOnly: true
+        deletes: true
       }),
     resource: ({ userId }) => ({ kind: "user", id: userId }),
     execute: async (input, context) =>

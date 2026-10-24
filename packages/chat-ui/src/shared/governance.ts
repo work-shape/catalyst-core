@@ -37,6 +37,13 @@ export function canManageSpendLimits(
   return Boolean(platform?.instanceActions.includes("limits.manage"));
 }
 
+/** Retries a failed or dead job on Settings › Instance › Jobs (RIGHTS-1e): a right of the instance itself. */
+export function canRetryJobs(
+  platform: Pick<PlatformContext, "instanceActions"> | undefined
+): boolean {
+  return Boolean(platform?.instanceActions.includes("jobs.retry"));
+}
+
 export function canViewAudit(user: ApiUser | undefined): boolean {
   return hasPermission(user, "audit.view");
 }

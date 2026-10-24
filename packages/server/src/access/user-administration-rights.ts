@@ -27,6 +27,9 @@ import type { ChatServerOptions } from "../types";
 /** The right every user administration operation asks for, on the instance. */
 const USERS_MANAGE_ACTION = "users.manage";
 
+/** The right deleting a user asks for beside it (RIGHTS-1e). */
+const USERS_DELETE_ACTION = "users.delete";
+
 /** What a call changes about a user's roles and directly held rights, as far as it names them. */
 interface UserRightsChange {
   roles?: readonly UserRole[];
@@ -41,8 +44,8 @@ interface UserAdministrationCall extends UserRightsChange {
   userId?: string;
   /** The name of the user a call creates, as a refusal names them. */
   displayLabel?: string;
-  /** Only a superadmin makes this call at all: deleting a user. */
-  superadminOnly?: true;
+  /** The call deletes the user, which asks for `users.delete` as well. */
+  deletes?: true;
 }
 
 /** Who makes the call, with the rights of the call itself. */
@@ -71,9 +74,9 @@ export function changedPermissionEntries(
  * Who may call a user administration operation. It is the `authorize` of the seven changing
  * operations, so the run records the check and a refusal, and nothing of the operation runs
  * for anybody else. `users.manage` is asked first, so a caller without it causes no read, and
- * so is the deletion only a superadmin makes. A refusal by a superadmin rule names the
- * operation and says the rule, since no right a caller can be granted opens it. A user that
- * does not exist passes: the operation answers that itself.
+ * so is `users.delete` for a deletion. A refusal by a superadmin rule names the operation and
+ * says the rule, since no right a caller can be granted opens it. A user that does not exist
+ * passes: the operation answers that itself.
  */
 export async function authorizeUserAdministration(
   options: RulesOptions,
@@ -94,8 +97,11 @@ export async function authorizeUserAdministration(
       message: "Only a signed-in user may administer users"
     };
   }
-  if (call.superadminOnly && !isSuperadminActor(caller.actor)) {
-    return superadminRuleRefusal(operationId, "Only a superadmin may delete a user");
+  if (call.deletes) {
+    const deletion = caller.access.authorize(USERS_DELETE_ACTION);
+    if (!deletion.allowed) {
+      return { allowed: false, action: USERS_DELETE_ACTION, reason: deletion.reason };
+    }
   }
   const target =
     call.userId === undefined
@@ -265,7 +271,6 @@ function superadminRuleAgainst(
   call: Omit<UserAdministrationCall, "userId">
 ): string | undefined {
   if (isSuperadminActor(actor)) return undefined;
-  if (call.superadminOnly) return "Only a superadmin may delete a user";
   if (target && isSuperadmin(target)) return "Only a superadmin may change a superadmin";
   if (call.roles && isSuperadmin({ roles: [...call.roles] })) {
     return "Only a superadmin may assign the superadmin role";

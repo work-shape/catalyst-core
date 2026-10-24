@@ -911,11 +911,11 @@ describe("client instance app vertical slice", () => {
       }
     });
     expect(adminDelete.statusCode).toBe(403);
-    // The refusal says the superadmin rule and names the operation it refused.
+    // An admin does not hold `users.delete` by default: the refusal names the right.
     expect(adminDelete.json()).toMatchObject({
       error: {
         code: "FORBIDDEN",
-        message: "Only a superadmin may delete a user",
+        message: "Missing the right 'users.delete'",
         details: { action: "users.delete", reason: "no_grant" }
       }
     });
@@ -928,7 +928,7 @@ describe("client instance app vertical slice", () => {
     });
     expect(selfDelete.statusCode).toBe(422);
     expect((selfDelete.json() as { error: { message: string } }).error.message).toContain(
-      "cannot delete their own user account"
+      "Nobody deletes their own user account"
     );
 
     await app.close();

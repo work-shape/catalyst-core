@@ -46,6 +46,7 @@ function panel(users: AdministeredUser[], locale: "en" | "de" = "en"): string {
         users,
         loading: false,
         canManageSuperadminAccess: true,
+        canDeleteUsers: true,
         mutating: false,
         onCreateUser: unused,
         onUpdateUser: unused,

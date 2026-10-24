@@ -9,10 +9,12 @@ import type { GrantKindEntry, KindWords } from "./kinds/entry";
 import { feedbackKind } from "./kinds/feedback";
 import { guardrailKind } from "./kinds/guardrail";
 import { knowledgeBaseKind } from "./kinds/knowledge-base";
+import { jobsKind } from "./kinds/jobs";
 import { mailSenderKind } from "./kinds/mail-sender";
 import { rolesKind } from "./kinds/roles";
 import { skillKind } from "./kinds/skill";
 import { usageKind } from "./kinds/usage";
+import { usersKind } from "./kinds/users";
 import { workflowKind } from "./kinds/workflow";
 import { workspaceKind } from "./kinds/workspace";
 
@@ -37,7 +39,9 @@ export const grantKinds: { [Kind in GrantKind]: GrantKindEntry<Kind> } = {
   feedback: feedbackKind,
   usage: usageKind,
   workspace: workspaceKind,
-  roles: rolesKind
+  roles: rolesKind,
+  users: usersKind,
+  jobs: jobsKind
 };
 
 function entryOf(kind: string): GrantKindEntry<GrantKind> | undefined {

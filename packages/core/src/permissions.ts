@@ -87,7 +87,8 @@ export function legacyKeysHeld(rows: readonly LegacyRowView[]): Permission[] {
 export const INSTANCE_ACTIONS = [
   "service_principals.manage",
   "limits.manage",
-  "usage.view_users"
+  "usage.view_users",
+  "jobs.retry"
 ] as const satisfies readonly PlatformAction[];
 
 export interface PermissionGrant {

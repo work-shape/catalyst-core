@@ -197,7 +197,10 @@ export class UserAdministrationWorkflow {
   ): Promise<DeletionOutcome<UserRecord>> {
     const actor = personOf(context.actor);
     if (command.userId === actor.id) {
-      throw new AppError("VALIDATION_FAILED", "Superadmins cannot delete their own user account");
+      throw new AppError(
+        "VALIDATION_FAILED",
+        "Nobody deletes their own user account through user administration"
+      );
     }
     return requestAccountDeletion(
       this.options,
@@ -212,7 +215,7 @@ export class UserAdministrationWorkflow {
         this.whileRightsHeld(context, command.userId, async (held, now) => {
           await requireUserAdministration(held.options, operationId, now, {
             userId: command.userId,
-            superadminOnly: true
+            deletes: true
           });
           // The mark refuses to delete the last active superadmin.
           await held.getUserOrThrow(command.userId);

@@ -18740,7 +18740,7 @@
     "/api/v1/instance/jobs/{jobId}/retry": {
       "post": {
         "operationId": "instance.jobs.retry",
-        "summary": "Queue a failed or dead background job again; superadmins only",
+        "summary": "Queue a failed or dead background job again. Needs the right `jobs.retry`.",
         "tags": [
           "Jobs"
         ],
@@ -18854,6 +18854,9 @@
           }
         },
         "x-catalyst-effect": "changing",
+        "x-catalyst-requires": [
+          "jobs.retry"
+        ],
         "x-catalyst-rate-class": "write"
       }
     },
@@ -20432,7 +20435,7 @@
       },
       "delete": {
         "operationId": "users.delete",
-        "summary": "Delete a user and their data. Answers `deleted`, or `deleting` while the data is still being removed. Needs the right `users.manage`. Only a superadmin deletes a user.",
+        "summary": "Delete a user and their data. Answers `deleted`, or `deleting` while the data is still being removed. Needs the rights `users.manage` and `users.delete`, and every right the user holds. Only a superadmin deletes a superadmin.",
         "tags": [
           "Users"
         ],

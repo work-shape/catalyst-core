@@ -8,9 +8,11 @@ import { accessUsage } from "./access-usage";
 import { usageReports } from "./usage-reports";
 import { accessGuardrail } from "./access-guardrail";
 import { accessKnowledgeBase } from "./access-knowledge-base";
+import { accessJobs } from "./access-jobs";
 import { accessMailSender } from "./access-mail-sender";
 import { accessRoles } from "./access-roles";
 import { accessSkill } from "./access-skill";
+import { accessUsers } from "./access-users";
 import { accessWorkflow } from "./access-workflow";
 import { accessWorkspace } from "./access-workspace";
 import { administration } from "./administration";
@@ -78,9 +80,11 @@ export const translations = combineTranslations(common)
   .and(accessUsage)
   .and(accessGuardrail)
   .and(accessKnowledgeBase)
+  .and(accessJobs)
   .and(accessMailSender)
   .and(accessRoles)
   .and(accessSkill)
+  .and(accessUsers)
   .and(accessWorkflow)
   .and(accessWorkspace)
   .and(administration)

@@ -261,7 +261,9 @@ A switch is stored as grants for the whole instance, one per action the right st
 | Manage API access           | `api_access.manage`    | Superadmin        |
 | Manage agent model settings | `agent_models.manage`  | Superadmin        |
 
-Some things are reserved for a Superadmin. Only a Superadmin gives somebody the Superadmin role, changes another Superadmin, deletes a user, or switches "Manage API access" and "Manage agent model settings" on or off.
+Some things are reserved for a Superadmin. Only a Superadmin gives somebody the Superadmin role, changes or deletes another Superadmin, or switches "Manage API access" and "Manage agent model settings" on or off.
+
+Two more rights are on no switch, and Superadmins carry them: "Delete users" (`users.delete`) and "Retry jobs" (`jobs.retry`). A Superadmin gives either to a person, or to a role, on the Access page, and its holder gives it on in turn. Deleting a user also needs "Manage users" and every right the account holds, like any change of an account, and nobody deletes their own account. "Retry jobs" queues a failed or dead background job again on the Jobs page.
 
 "Manage users" does not let you hand out more than you hold. Giving a person a role, a switch or a grant asks whether you hold every right it carries, at the place it is given. Writing a deny, and taking one away, ask the same of the right the deny names. Nobody gives a right to themselves, and nobody writes or lifts a grant of their own, even one they already hold.
 

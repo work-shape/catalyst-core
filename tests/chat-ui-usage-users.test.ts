@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createApiClient, type AdministeredUser } from "@work-shape/catalyst-api-client";
 import { apiOperations } from "@work-shape/catalyst-api-contract";
 import { administration } from "@work-shape/catalyst-chat-ui/admin";
+import { ROLE_DEFAULT_ACTIONS } from "@work-shape/catalyst-core";
 import { CONDITION_WAIT_MS, required } from "./support/assertions";
 import {
   mountPage,
@@ -79,6 +80,21 @@ async function usersPage(roles: string[], users = [account]) {
       const request = input instanceof Request ? input : new Request(input, init);
       const path = new URL(request.url).pathname;
       if (request.method === "GET") {
+        // What the page's own reader holds: their roles' defaults on the whole instance.
+        if (path === apiOperations["permissions.effective"].path) {
+          const actions = roles.flatMap((role) =>
+            role === "admin" || role === "superadmin" ? ROLE_DEFAULT_ACTIONS[role] : []
+          );
+          return Response.json({
+            holderActive: true,
+            items: actions.map((action) => ({
+              action,
+              effect: "allow",
+              scopeKind: "instance",
+              source: "role"
+            }))
+          });
+        }
         return path === apiOperations["users.list"].path
           ? Response.json({ items: rows })
           : Response.json(
