@@ -2,7 +2,7 @@ import { createManagedObjectTestAttachmentCapability } from "./chat-server-attac
 import { randomBytes } from "node:crypto";
 import postgres from "postgres";
 import { afterEach, expect, vi } from "vitest";
-import { createJobWorker } from "@work-shape/catalyst-client-assembly";
+import { createDiagnosedJobWorker as createJobWorker } from "./job-worker-diagnostics";
 import { createFixtureDocumentSource, loadSecretKeyring } from "@work-shape/catalyst-connections";
 import { createDataStores, createKnowledgeBases } from "@work-shape/catalyst-data-stores";
 import { createFilesystemObjectStorage } from "@work-shape/catalyst-object-storage";

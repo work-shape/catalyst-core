@@ -12,7 +12,6 @@ import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import {
   createInstanceWorkflows,
-  createJobWorker,
   createWorkflowAssetKind,
   resolveInstanceModules,
   workflowLimitCeilingsOf,
@@ -41,6 +40,7 @@ import {
   type WorkflowLimitCeilings,
   type WorkflowDefinitionSource
 } from "@work-shape/catalyst-workflows";
+import { createDiagnosedJobWorker as createJobWorker } from "./job-worker-diagnostics";
 import { clientInstanceId, setupAccessInstance } from "./access-instance";
 import { fixtureOn, operationOf, type ConnectionOperationsFixture } from "./connection-operations";
 import { personalKeyServer } from "./personal-api-keys";

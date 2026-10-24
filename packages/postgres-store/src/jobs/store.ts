@@ -469,6 +469,13 @@ export async function listKindsWithWork(
   return new Set([...rows, ...wakes].map((row) => row.kind));
 }
 
+export interface JobClaimResult {
+  jobs: JobRow[];
+  availableSlots: number;
+  globalRunning: number | null;
+  candidateExhausted: boolean;
+}
+
 /**
  * Recovers the expired leases of a kind that have attempts left and claims up to `limit` due
  * jobs. Claims of one kind are serialized by an advisory lock held to the end of the
@@ -480,7 +487,7 @@ export async function listKindsWithWork(
 export async function claimJobs(
   db: PostgresConnection,
   input: { clientInstanceId: ClientInstanceId; kind: JobKind; workerId: string; limit: number }
-): Promise<JobRow[]> {
+): Promise<JobClaimResult> {
   const { clientInstanceId, kind } = input;
   const ofKind = and(
     eq(platformJobs.clientInstanceId, clientInstanceId),
@@ -512,14 +519,16 @@ export async function claimJobs(
         )
       );
     let free = input.limit;
+    let globalRunning: number | null = null;
     if (kind.concurrency.global !== undefined) {
-      const running = await tx.$count(
+      globalRunning = await tx.$count(
         platformJobs,
         and(ofKind, eq(platformJobs.status, "running"))
       );
-      free = Math.min(free, kind.concurrency.global - running);
+      free = Math.min(free, kind.concurrency.global - globalRunning);
     }
     const claimed: JobRow[] = [];
+    let candidateExhausted = false;
     // One at a time, so each claim counts the ones before it against the limit per key.
     while (claimed.length < free) {
       const [candidate] = await tx
@@ -543,7 +552,10 @@ export async function claimJobs(
         .orderBy(asc(platformJobs.runAfter), asc(platformJobs.createdAt), asc(platformJobs.id))
         .limit(1)
         .for("update", { skipLocked: true });
-      if (!candidate) break;
+      if (!candidate) {
+        candidateExhausted = true;
+        break;
+      }
       const [row] = await tx
         .update(platformJobs)
         .set({
@@ -559,7 +571,7 @@ export async function claimJobs(
         .returning();
       if (row) claimed.push(row);
     }
-    return claimed;
+    return { jobs: claimed, availableSlots: free, globalRunning, candidateExhausted };
   });
 }
 

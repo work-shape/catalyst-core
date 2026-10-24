@@ -8,7 +8,7 @@ import {
   type PlatformStores,
   type RegisteredJobHandler
 } from "@work-shape/catalyst-core";
-import { createPostgresJobWorker } from "@work-shape/catalyst-postgres-store";
+import { createDiagnosedJobWorker as createPostgresJobWorker } from "./job-worker-diagnostics";
 import { afterEach, expect, vi } from "vitest";
 import { z } from "zod";
 import { required } from "./assertions";

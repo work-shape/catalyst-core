@@ -38,6 +38,7 @@ import {
   renewLockedJobLease,
   reportJobWorker,
   type JobEnding,
+  type JobClaimResult,
   type JobLease,
   type JobRow
 } from "./store";
@@ -84,6 +85,16 @@ type Outcome = { type: "ended"; ending: JobEnding } | { type: "exhausted"; endin
 /** What one pass leaves running: the attempts it started. Each settles its own job. */
 interface Pass {
   started: Promise<void>[];
+}
+
+interface KindPassDecision {
+  kind: string;
+  slots: number;
+  active: number;
+  workFound: boolean;
+  concurrency: { readonly global?: number; readonly perKey?: number };
+  reason: "no_due_work" | "no_local_slots" | "global_limit" | "no_candidate" | "claimed" | "error";
+  claim?: Omit<JobClaimResult, "jobs"> & { requestedSlots: number; claimedJobIds: JobId[] };
 }
 
 export function createPostgresJobWorker(input: CreatePostgresJobWorkerInput): JobWorker {
@@ -387,31 +398,72 @@ export function createPostgresJobWorker(input: CreatePostgresJobWorkerInput): Jo
   /** One pass over the kinds served here. Returns the attempts it started. */
   async function onePass(): Promise<Pass> {
     const started: Promise<void>[] = [];
-    if (stopping) return { started };
+    const decisions: KindPassDecision[] = [];
+    const report = (withWork: ReadonlySet<string>) =>
+      logger.debug(
+        {
+          clientInstanceId,
+          stopping,
+          withWork: [...withWork],
+          decisions,
+          startedCount: started.length
+        },
+        "Job worker pass ended"
+      );
+    if (stopping) {
+      report(new Set());
+      return { started };
+    }
     await reportServedKinds();
     await ensureSchedules();
     const withWork = await listKindsWithWork(db, { clientInstanceId, kinds: [...handlers.keys()] });
     for (const handler of handlers.values()) {
       const kind = handler.kind.kind;
-      if (!withWork.has(kind)) continue;
+      const running = [...active.values()].filter((job) => job.kind === kind).length;
+      const decision: KindPassDecision = {
+        kind,
+        slots: handler.slots,
+        active: running,
+        workFound: withWork.has(kind),
+        concurrency: handler.kind.concurrency,
+        reason: "no_due_work"
+      };
+      decisions.push(decision);
+      if (!decision.workFound) continue;
+      decision.reason = "no_local_slots";
       try {
         // A burial has no slots: this process claims nothing of the kind.
         if (handler.slots > 0) {
-          const running = [...active.values()].filter((job) => job.kind === kind).length;
-          const rows = await claimJobs(db, {
+          const result = await claimJobs(db, {
             clientInstanceId,
             kind: handler.kind,
             workerId,
             limit: handler.slots - running
           });
-          for (const row of rows) started.push(run(handler, row));
+          const { jobs, ...claim } = result;
+          decision.claim = {
+            ...claim,
+            requestedSlots: handler.slots - running,
+            claimedJobIds: jobs.map((job) => job.id)
+          };
+          decision.reason =
+            jobs.length > 0
+              ? "claimed"
+              : handler.slots <= running
+                ? "no_local_slots"
+                : result.availableSlots <= 0
+                  ? "global_limit"
+                  : "no_candidate";
+          for (const row of jobs) started.push(run(handler, row));
         }
         await buryExhausted(handler);
       } catch (error) {
+        decision.reason = "error";
         logger.error({ ...describeWithoutMessage(error), kind }, "Job poll failed for a kind");
       }
     }
     if (stopping && !draining) await releaseActive();
+    report(withWork);
     return { started };
   }
 
