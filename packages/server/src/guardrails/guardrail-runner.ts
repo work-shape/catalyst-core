@@ -5,11 +5,13 @@ import {
   isAppError,
   isModelUsageLimitReached,
   type ApprovalCheckResult,
-  type ApprovalRequest,
   type AssetScope,
+  type BeforeActionCallContext,
+  type BeforeActionCheck,
+  type BeforeActionInput,
+  type BeforeActionPreview,
   type ClientInstanceId,
   type ConfigAssetStore,
-  type ConversationId,
   type GuardrailAnswer,
   type GuardrailConfig,
   type GuardrailEvent,
@@ -19,8 +21,7 @@ import {
   type GuardrailStore,
   type GuardrailSubject,
   type RuntimeCallContext,
-  SHIPPED_GUARDRAILS,
-  getRuntimeSubjectUserId
+  SHIPPED_GUARDRAILS
 } from "@work-shape/catalyst-core";
 import {
   GUARDRAIL_CHECKED_FIELD_MAX_CHARS,
@@ -36,6 +37,10 @@ import {
   reasoningEffortTheModelTakes,
   type SystemModelGateway
 } from "./system-model-call";
+import {
+  approvalRequestChecks,
+  type ApprovalRequestCheckInput
+} from "../approvals/approval-request-checks";
 
 // Protects an agent run from a judge model that never answers. Past it a blocking guardrail
 // refuses and names this limit; a warning one lets the action go on as not evaluated.
@@ -78,56 +83,6 @@ export interface GuardrailOfAsset {
   revision: number;
 }
 
-/** What a before-event hands the guardrails bound to it. */
-export interface GuardrailEventInput {
-  event: GuardrailEvent;
-  /** What is checked, as its hits name it. */
-  subject: GuardrailSubject;
-  /** What a filter narrows by. A key the event has no value for matches no filter that names it. */
-  match: GuardrailFilter;
-  /** The content under review. Read only where a guardrail applies, and never kept. */
-  fields(): GuardrailFields | Promise<GuardrailFields>;
-  /**
-   * Set where the action writes, publishes or deletes a guardrail, or reads one to test it:
-   * only the release floor answers, so no published guardrail can stop the change of
-   * guardrails. An `asset.before_write` of the kind `guardrail` is such an action by itself.
-   */
-  aboutGuardrails?: boolean;
-}
-
-/** Who and what a judge's model call is counted for, and how long it may take. */
-export interface GuardrailCallContext {
-  correlationId: string;
-  userId?: string;
-  workspaceId?: string;
-  conversationId?: ConversationId;
-  operationRunId?: string;
-  deadline?: Date;
-  signal?: AbortSignal;
-  /**
-   * Set where the event is asked again for the same action, as before a call that waited for
-   * an approval is executed: its hits were kept when it was first asked, and only a block,
-   * which is new, is kept again.
-   */
-  repeated?: boolean;
-  /**
-   * Set where the action cannot wait for an approval and no request is filed for it: a
-   * `require_approval` answers as a `block`, and its hit is kept as one.
-   */
-  cannotWait?: boolean;
-}
-
-/** What `approval_request.before_create` hands its guardrails. */
-export interface GuardrailCheckInput {
-  event: "approval_request.before_create";
-  /** The kind of the request, which a guardrail's filter names. */
-  subjectKind: string;
-  /** The summary and the new content. Undefined where the request has nothing to check. */
-  fields(): { summary: string; newContent: string } | undefined;
-  /** The conversation the request comes from, for the usage of the judge's call. */
-  origin?: ApprovalRequest["origin"];
-}
-
 type Outcome = GuardrailAnswer["outcome"];
 
 /** What a bound guardrail is read as, the floor's and an asset's alike. */
@@ -163,7 +118,9 @@ type CheckedBound = Extract<Bound, { shipped?: undefined }>;
  * overrides a warning or a block. The one place guardrails run, so a before-event never runs
  * a check of its own.
  */
-export class GuardrailRunner {
+export class GuardrailRunner implements BeforeActionCheck {
+  /** A change of a guardrail is answered by the release floor alone. */
+  readonly protectedKinds = [GUARDRAIL_ASSET_KIND] as const;
   // Release config was checked at start: every pattern compiles.
   private readonly patterns = new Map<string, GuardrailPattern>();
 
@@ -177,8 +134,8 @@ export class GuardrailRunner {
    * stops the change of guardrails.
    */
   async answer(
-    input: GuardrailEventInput,
-    context: GuardrailCallContext
+    input: BeforeActionInput,
+    context: BeforeActionCallContext
   ): Promise<GuardrailAnswer[]> {
     const bound = await this.boundAt(input);
     if (bound.length === 0) {
@@ -225,7 +182,7 @@ export class GuardrailRunner {
   async evaluate(
     asset: GuardrailOfAsset,
     fields: GuardrailFields,
-    context: GuardrailCallContext
+    context: BeforeActionCallContext
   ): Promise<GuardrailAnswer> {
     const bound = this.boundOf(asset);
     const [answer] = await this.evaluateBound(
@@ -237,7 +194,7 @@ export class GuardrailRunner {
   }
 
   private async boundAt(
-    input: Pick<GuardrailEventInput, "event" | "match" | "aboutGuardrails" | "subject">,
+    input: Pick<BeforeActionInput, "event" | "match" | "aboutProtectedKind" | "subject">,
     published?: Promise<GuardrailOfAsset[]>
   ): Promise<Bound[]> {
     const floor = Object.entries(this.options.config.guardrails)
@@ -250,7 +207,7 @@ export class GuardrailRunner {
         pattern: this.patternOf(`release:${name}`, guardrail)
       }));
     const aboutGuardrails =
-      input.aboutGuardrails === true ||
+      input.aboutProtectedKind === true ||
       (input.event === "asset.before_write" && input.subject.kind === GUARDRAIL_ASSET_KIND);
     const assets = aboutGuardrails
       ? []
@@ -270,10 +227,7 @@ export class GuardrailRunner {
    * The runtime check without effects: patterns read known literals normally; references and
    * model judges retain a conditional answer. It records no hit and calls no model.
    */
-  async preview(
-    input: GuardrailEventInput,
-    dynamic: boolean
-  ): Promise<(GuardrailAnswer & { checked: boolean })[]> {
+  async preview(input: BeforeActionInput, dynamic: boolean): Promise<BeforeActionPreview[]> {
     return this.previewAt(input, dynamic);
   }
 
@@ -289,10 +243,10 @@ export class GuardrailRunner {
   }
 
   private async previewAt(
-    input: GuardrailEventInput,
+    input: BeforeActionInput,
     dynamic: boolean,
     published?: Promise<GuardrailOfAsset[]>
-  ): Promise<(GuardrailAnswer & { checked: boolean })[]> {
+  ): Promise<BeforeActionPreview[]> {
     const bound = await this.boundAt(input, published);
     const answers = await this.evaluateBound(
       bound,
@@ -390,8 +344,8 @@ export class GuardrailRunner {
   /** Patterns first, and a block among them skips the judges. Keeps no hit. */
   private async evaluateBound(
     bound: readonly Bound[],
-    input: Pick<GuardrailEventInput, "event" | "fields">,
-    context: GuardrailCallContext,
+    input: Pick<BeforeActionInput, "event" | "fields">,
+    context: BeforeActionCallContext,
     preview = false
   ): Promise<GuardrailAnswer[]> {
     const fields = await input.fields();
@@ -432,31 +386,11 @@ export class GuardrailRunner {
   }
 
   /** The guardrails of a request before it is filed, as the request keeps their results. */
-  async check(
-    input: GuardrailCheckInput,
+  check(
+    input: ApprovalRequestCheckInput,
     context: RuntimeCallContext
   ): Promise<ApprovalCheckResult[]> {
-    const answers = await this.answer(
-      {
-        event: input.event,
-        subject: { kind: input.subjectKind },
-        match: { kind: input.subjectKind },
-        fields: () => input.fields() ?? {}
-      },
-      {
-        correlationId: context.correlationId,
-        userId: getRuntimeSubjectUserId(context),
-        ...(input.origin ? { conversationId: input.origin.conversationId } : {}),
-        ...(context.deadline ? { deadline: context.deadline } : {}),
-        ...(context.signal ? { signal: context.signal } : {})
-      }
-    );
-    return answers.map((answer) => ({
-      id: answer.guardrailName,
-      status:
-        answer.outcome === "block" ? "blocked" : answer.outcome === "warn" ? "warned" : "passed",
-      message: answer.reason
-    }));
+    return approvalRequestChecks(this, input, context);
   }
 
   private patternOf(key: string, guardrail: BoundGuardrail): GuardrailPattern | undefined {
@@ -472,7 +406,7 @@ export class GuardrailRunner {
   private async judge(
     entry: CheckedBound,
     content: readonly Checked[],
-    context: GuardrailCallContext
+    context: BeforeActionCallContext
   ): Promise<GuardrailAnswer> {
     const { name, guardrail } = entry;
     const { check } = guardrail;

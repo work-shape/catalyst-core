@@ -6,6 +6,8 @@ import {
   legacyPermissionFor,
   type CentralPolicySetting
 } from "@work-shape/catalyst-core";
+import type { ClientInstanceCapability } from "@work-shape/catalyst-capability-sdk";
+import { parseClientInstanceConfig } from "@work-shape/catalyst-config-schema";
 import { createTestConfig } from "./fixtures";
 import { registeredTestOperations as operations } from "./operations";
 import {
@@ -36,6 +38,10 @@ export async function fixture(
     settings?: () => CentralPolicySetting[] | Promise<CentralPolicySetting[]>;
     /** The time the fixture operation may take. */
     timeoutMs?: number;
+    /** The capabilities the instance is assembled with. */
+    capabilities?: ClientInstanceCapability[];
+    /** Release config keys set beside the fixture's own, such as `guardrails` or `modules`. */
+    release?: Record<string, unknown>;
   } = {}
 ) {
   /** `<actor id>:<name>` of every execution of the fixture operation. */
@@ -50,25 +56,27 @@ export async function fixture(
     permissionRefs: [],
     permissions: rights
   });
+  const config = createTestConfig({
+    developmentAuth: {
+      enabled: true,
+      users: [
+        // May call the operation and may not decide on it.
+        person("requester", ["user"], [legacyPermissionFor("users.manage")]),
+        // An admin: may call and may decide, their own calls included.
+        person("approver", ["admin"]),
+        person("second", ["admin"]),
+        // May delete an account.
+        person("root", ["superadmin"]),
+        person("stranger", ["user"])
+      ],
+      defaultUserId: "requester"
+    }
+  });
   const app = await createTestInstance({
-    config: createTestConfig({
-      developmentAuth: {
-        enabled: true,
-        users: [
-          // May call the operation and may not decide on it.
-          person("requester", ["user"], [legacyPermissionFor("users.manage")]),
-          // An admin: may call and may decide, their own calls included.
-          person("approver", ["admin"]),
-          person("second", ["admin"]),
-          // May delete an account.
-          person("root", ["superadmin"]),
-          person("stranger", ["user"])
-        ],
-        defaultUserId: "requester"
-      }
-    }),
+    config: input.release ? parseClientInstanceConfig({ ...config, ...input.release }) : config,
     env: {},
     tools: [],
+    ...(input.capabilities ? { capabilities: input.capabilities } : {}),
     operations: {
       centralPolicySettings: input.settings ?? (() => [approvalSetting]),
       ...(input.now ? { now: input.now } : {})

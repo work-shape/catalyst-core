@@ -10,6 +10,7 @@ export * from "./app-workflow-refusals";
 export * from "./artifact-preview-lifecycle";
 export * from "./asset-address";
 export * from "./attached-file-titles";
+export * from "./before-action-check";
 export { boundedActorAccess } from "./bounded-actor-access";
 export * from "./child-agent-runs";
 export * from "./config-asset-concurrency";

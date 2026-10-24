@@ -14,6 +14,7 @@ import {
   getSubjectUserId,
   isAuthenticatedServicePrincipal,
   liveRevisionId,
+  type BeforeActionCallContext,
   type ConfigAssetRecord,
   type GuardrailEvent,
   type GuardrailFields,
@@ -23,7 +24,7 @@ import {
 import type { AssetCall } from "../assets/asset-access";
 import { storedRevisionFields } from "./asset-guardrail-events";
 import type { AssetWorkflow } from "../assets/asset-service";
-import type { GuardrailCallContext, GuardrailOfAsset, GuardrailRunner } from "./guardrail-runner";
+import type { GuardrailOfAsset, GuardrailRunner } from "./guardrail-runner";
 import type { AssetWorkflowOptions } from "../types";
 
 // A guardrail tried before it enforces: `guardrails.test` on sample content or on an asset, and
@@ -65,7 +66,7 @@ export async function guardrailUnderTrial(
 }
 
 /** Who a trial's model calls are counted for: the person, and the guardrail's scope. */
-function trialContext(call: AssetCall): GuardrailCallContext {
+function trialContext(call: AssetCall): BeforeActionCallContext {
   return {
     correlationId: call.correlationId,
     ...(isAuthenticatedServicePrincipal(call.actor) ? {} : { userId: getSubjectUserId(call.actor) })

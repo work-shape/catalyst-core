@@ -24,6 +24,7 @@ import {
   createAuthorizer,
   createConnectorTypeRegistry,
   egressOriginOf,
+  NO_BEFORE_ACTION_CHECK,
   type AuthenticatedIdentity,
   type Authorizer,
   type CentralPolicySetting,
@@ -380,6 +381,7 @@ export async function fixtureOn<Instance extends AccessInstance>(
         modules: resolveInstanceModules(config, []).snapshot,
         operations,
         approvalRequests,
+        checks: NO_BEFORE_ACTION_CHECK,
         // The kinds, as the assembly hands them: the publish review reads a Workflow's account.
         ...(kinds ? { configAssets: { kinds } } : {}),
         agentToolNames: (agentName) => state.agentTools.get(agentName) ?? []

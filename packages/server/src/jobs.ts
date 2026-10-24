@@ -7,6 +7,7 @@ import {
   asUserId,
   createAgentRunUpkeepJobs,
   createAuthorizer,
+  NO_BEFORE_ACTION_CHECK,
   defineJobHandler,
   defineSchedule,
   type JobSchedule,
@@ -310,7 +311,9 @@ export function createChatServerJobs(
     options.operationCalls ??
     createOperationCalls({
       ...options,
-      authorizer: options.authorizer ?? createAuthorizer(options.stores.access)
+      authorizer: options.authorizer ?? createAuthorizer(options.stores.access),
+      // Its registry is read, and it executes no approved call: no before-event is asked.
+      checks: NO_BEFORE_ACTION_CHECK
     });
   const operationRunJobOptions = {
     clientInstanceId: options.clientInstanceId,

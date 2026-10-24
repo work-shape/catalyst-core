@@ -522,6 +522,9 @@ export async function createClientInstanceExecutionAssembly(
     configAssets,
     approvalRequestHandlers,
     operations: input.operations,
+    capabilityChecks: capabilityContributions.flatMap((contribution) =>
+      contribution.beforeActionCheck ? [contribution.beforeActionCheck] : []
+    ),
     ...(moduleAssembly.publishNarrativeData
       ? { publishStoredData: moduleAssembly.publishNarrativeData }
       : {})

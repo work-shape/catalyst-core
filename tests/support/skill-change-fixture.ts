@@ -137,7 +137,7 @@ export async function fixture(guardrails?: Record<string, unknown>) {
     onDecided,
     ...(guarded
       ? {
-          guardrails: new GuardrailRunner({
+          checks: new GuardrailRunner({
             clientInstanceId,
             config: guarded,
             hits: store.guardrails,

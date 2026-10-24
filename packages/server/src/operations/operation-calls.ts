@@ -32,9 +32,8 @@ import {
   callerAccess,
   recordAgentUseRefusal
 } from "../workspaces/agent-availability";
-import type { GuardrailRunner } from "../guardrails/guardrail-runner";
 import { createPublishNarrator } from "../publish-narrative/publish-narrator";
-import type { PublishNarrativeStoredData } from "@work-shape/catalyst-core";
+import type { BeforeActionCheck, PublishNarrativeStoredData } from "@work-shape/catalyst-core";
 
 export type OperationCallsOptions = Pick<
   Omit<ResolvedChatServerOptions, "operationCalls">,
@@ -49,9 +48,13 @@ export type OperationCallsOptions = Pick<
 > & {
   /** Without it this process holds no call for an approval and refuses one that needs it. */
   approvalRequests?: ChatServerOptions["approvalRequests"] &
-    Pick<ApprovalRequestWorkflowOptions, "guardrails">;
-  /** Runs the guardrails at every before-event of a call. Without it nothing is checked. */
-  guardrails?: GuardrailRunner;
+    Pick<ApprovalRequestWorkflowOptions, "checks">;
+  /**
+   * What answers at every before-event of a call, and dry at the publish question. Required,
+   * so a process that forgets it fails to build instead of allowing everything: one that checks
+   * nothing says so with `NO_BEFORE_ACTION_CHECK`.
+   */
+  checks: BeforeActionCheck;
   /**
    * The asset kinds of the instance: incomplete resources of declared rights are resolved
    * against them, and a held `assets.put` is shown as the asset it saves.
@@ -121,7 +124,7 @@ export function createOperationCalls(options: OperationCallsOptions): OperationC
       : { timeZone: options.config.clientInstance.timeZone }),
     stores: options.stores,
     ...(options.configAssets ? { kinds: options.configAssets.kinds } : {}),
-    ...(options.guardrails ? { guardrails: options.guardrails } : {}),
+    checks: options.checks,
     resolve: (operation) => deps.registry.resolve(operation),
     policy,
     ...(options.publishStoredData ? { storedData: options.publishStoredData } : {}),
@@ -191,7 +194,7 @@ export function createOperationCalls(options: OperationCallsOptions): OperationC
     authorizer: options.authorizer,
     events:
       options.operations?.events ??
-      createAuditingEventEmitter(options.auditRecorder, options.guardrails),
+      createAuditingEventEmitter(options.auditRecorder, options.checks),
     audit: options.auditRecorder,
     policy,
     approvals: options.operations?.approvals ?? filer,

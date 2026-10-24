@@ -11,11 +11,13 @@ import type { ClientInstanceConfig } from "@work-shape/catalyst-config-schema";
 import {
   AGENTS_RUN_OPERATION,
   RUN_AGENT_TOOL_NAME,
+  combineBeforeActionChecks,
   createAuthorizer,
   knowledgeOperationNamesOf,
   type ApprovalRequestHandlerRegistry,
   type AuditRecorder,
   type Authorizer,
+  type BeforeActionCheck,
   type ClientInstanceId,
   type ConfigAssetSource,
   type ConversationOfferSource,
@@ -56,6 +58,8 @@ export interface InstanceOperationCallsInput {
   conversationOffer?: ConversationOfferSource;
   /** Who sees which stored data, for the publish question's sentence. */
   publishStoredData?: PublishNarrativeStoredData;
+  /** The checks the capabilities contribute, which answer beside the guardrails. */
+  capabilityChecks: readonly BeforeActionCheck[];
 }
 
 export interface InstanceOperationCalls {
@@ -74,14 +78,18 @@ export function createInstanceOperationCalls(
 ): InstanceOperationCalls {
   const { clientInstanceId, config, store, auditRecorder, assetSource } = input;
   const authorizer = createAuthorizer(store.access);
-  const guardrails = new GuardrailRunner({
-    clientInstanceId,
-    config,
-    modelGateway: input.modelGateway,
-    hits: store.guardrails,
-    assets: store.configAssets,
-    shipped: store.guardrails
-  });
+  // One check for every consumer of the process: the guardrails, then each capability's.
+  const checks = combineBeforeActionChecks([
+    new GuardrailRunner({
+      clientInstanceId,
+      config,
+      modelGateway: input.modelGateway,
+      hits: store.guardrails,
+      assets: store.configAssets,
+      shipped: store.guardrails
+    }),
+    ...input.capabilityChecks
+  ]);
   const operationCalls = createOperationCalls({
     clientInstanceId,
     stores: store,
@@ -92,12 +100,12 @@ export function createInstanceOperationCalls(
     modules: input.modules,
     configAssets: input.configAssets,
     operations: input.operations,
-    guardrails,
+    checks,
     ...(input.publishStoredData ? { publishStoredData: input.publishStoredData } : {}),
     approvalRequests: {
       store: store.approvals,
       handlers: input.approvalRequestHandlers,
-      guardrails
+      checks
     },
     async workflowAgentActor(runId) {
       const run = await store.agentRuns.getAgentRun({ clientInstanceId, runId });
@@ -142,7 +150,7 @@ export function createInstanceOperationCalls(
     clientInstanceId,
     store: store.approvals,
     handlers: operationCalls.approvalRequestHandlers,
-    guardrails,
+    checks,
     onDecided: (request) => store.approvals.appendApprovalDecision(request),
     auditRecorder
   });

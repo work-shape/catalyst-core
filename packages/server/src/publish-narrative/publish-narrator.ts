@@ -22,6 +22,8 @@ import {
   type JsonObject,
   type LocaleCode,
   type OperationDefinition,
+  type BeforeActionCheck,
+  type BeforeActionPreview,
   type PlatformStores,
   type PublishNarrative,
   type PublishNarrativeAudience,
@@ -35,7 +37,6 @@ import {
 } from "@work-shape/catalyst-tool-execution";
 import { guardrailMatch } from "../operations/event-emitter";
 import type { WorkflowAssetKind } from "../asset-kinds/shared";
-import type { GuardrailRunner } from "../guardrails/guardrail-runner";
 import {
   appSummary,
   oneLine,
@@ -92,8 +93,8 @@ export interface PublishNarratorOptions {
   };
   /** The registered kinds, for the account a Workflow runs as. */
   kinds?: Pick<AssetKindRegistry<WorkflowAssetKind>, "get">;
-  /** Runtime guardrails, dry-evaluated without model calls or recorded hits. */
-  guardrails?: Pick<GuardrailRunner, "previewSession">;
+  /** The checks of the before-events, dry-evaluated without model calls or recorded hits. */
+  checks?: Pick<BeforeActionCheck, "preview" | "previewSession">;
   /** The definition of an operation a step calls, where this process registers it. */
   resolve(operation: string): Promise<OperationDefinition | undefined>;
   /** The same central settings and defaults used by operation admission. */
@@ -468,7 +469,7 @@ async function stepStops(
   definitions: ReadonlyMap<string, OperationDefinition | undefined>,
   deadline: number
 ): Promise<StepStop[]> {
-  const guardrails = options.guardrails?.previewSession();
+  const checks = options.checks?.previewSession?.() ?? options.checks;
   const unchecked = (step: WorkflowFacts["calls"][number]): StepStop[] => [
     {
       step: oneLine(step.name),
@@ -500,7 +501,7 @@ async function stepStops(
       origin: { kind: "workflow" as const, workflowRunId: "publish-preview", stepRunId: step.id },
       workspaceId: operationWorkspace({}, resource)
     };
-    const met: Awaited<ReturnType<GuardrailRunner["preview"]>> = [];
+    const met: BeforeActionPreview[] = [];
     const result = await resolveGuardedPolicy({
       definition,
       call,
@@ -513,12 +514,12 @@ async function stepStops(
         }
       },
       emit: async (event, _phase, _payload, before = {}) => {
-        if (expired || !isGuardrailEvent(event) || !guardrails) return PLATFORM_EVENT_ALLOW;
-        const answers = await guardrails.preview(
+        if (expired || !isGuardrailEvent(event) || !checks) return PLATFORM_EVENT_ALLOW;
+        const answers = await checks.preview(
           {
             event,
             match: guardrailMatch({ ...call, filterBy: before.filterBy }),
-            aboutGuardrails: before.aboutGuardrails,
+            aboutProtectedKind: before.aboutGuardrails,
             subject:
               before.subject ??
               (resource
