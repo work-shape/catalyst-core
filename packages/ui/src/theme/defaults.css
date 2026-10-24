@@ -1,10 +1,10 @@
 /* Generated from the config schema defaults by tests/ui-theme.test.ts. Do not edit by hand. */
 :root {
-  --background: #fcfcfa;
+  --background: #fafaf8;
   --foreground: #1c1c1b;
-  --card: #fcfcfa;
+  --card: #fafaf8;
   --card-foreground: #1c1c1b;
-  --popover: #fcfcfa;
+  --popover: #fafaf8;
   --popover-foreground: #1c1c1b;
   --primary: #b5573a;
   --primary-foreground: #ffffff;
@@ -13,7 +13,7 @@
   --primary-border: color-mix(in srgb, #b5573a 35%, transparent);
   --secondary: color-mix(in srgb, #1c1c1b 6%, transparent);
   --secondary-foreground: #1c1c1b;
-  --muted: #f4f4f1;
+  --muted: #f3f3f0;
   --muted-foreground: #5e5d5a;
   --accent: color-mix(in srgb, #1c1c1b 6%, transparent);
   --accent-foreground: #8c3f26;
@@ -56,17 +56,17 @@
   --file-slides: #d2571c;
   --file-pdf: #c8322b;
   --file-foreground: #ffffff;
-  --border: #e3e2de;
-  --input: color-mix(in srgb, #1c1c1b 12%, #e3e2de);
+  --border: #e1e0dc;
+  --input: color-mix(in srgb, #1c1c1b 12%, #e1e0dc);
   --input-strong: color-mix(in srgb, #5e5d5a 70%, transparent);
   --ring: #b5573a;
-  --sidebar: #f4f4f1;
+  --sidebar: #f3f3f0;
   --sidebar-foreground: #1c1c1b;
   --sidebar-primary: #b5573a;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #fcfcfa;
+  --sidebar-accent: #fafaf8;
   --sidebar-accent-foreground: #8c3f26;
-  --sidebar-border: #e3e2de;
+  --sidebar-border: #e1e0dc;
   --sidebar-ring: #b5573a;
   --shadow-control: inset 0 1px 0 rgb(255 255 255 / 0.4), 0 1px 2px rgb(0 0 0 / 0.05);
   --shadow-raised: 0 1px 2px rgb(0 0 0 / 0.04), 0 2px 12px rgb(0 0 0 / 0.06);
@@ -74,11 +74,11 @@
   --shadow-modal: 0 16px 48px rgb(0 0 0 / 0.18);
 }
 :root[data-vivd-theme="dark"] {
-  --background: #19191c;
+  --background: #18181a;
   --foreground: #ececeb;
-  --card: #19191c;
+  --card: #18181a;
   --card-foreground: #ececeb;
-  --popover: color-mix(in srgb, #ececeb 6%, #19191c);
+  --popover: color-mix(in srgb, #ececeb 6%, #18181a);
   --popover-foreground: #ececeb;
   --primary: #d98c6c;
   --primary-foreground: #111111;
@@ -87,7 +87,7 @@
   --primary-border: color-mix(in srgb, #d98c6c 35%, transparent);
   --secondary: color-mix(in srgb, #ececeb 6%, transparent);
   --secondary-foreground: #ececeb;
-  --muted: #141417;
+  --muted: #131315;
   --muted-foreground: #a9aaac;
   --accent: color-mix(in srgb, #ececeb 6%, transparent);
   --accent-foreground: #e8ab90;
@@ -130,17 +130,17 @@
   --file-slides: #dc6328;
   --file-pdf: #d6453d;
   --file-foreground: #ffffff;
-  --border: #2e2f32;
-  --input: color-mix(in srgb, #ececeb 12%, #2e2f32);
+  --border: #2d2d30;
+  --input: color-mix(in srgb, #ececeb 12%, #2d2d30);
   --input-strong: color-mix(in srgb, #a9aaac 70%, transparent);
   --ring: #d98c6c;
-  --sidebar: #141417;
+  --sidebar: #131315;
   --sidebar-foreground: #ececeb;
   --sidebar-primary: #d98c6c;
   --sidebar-primary-foreground: #111111;
-  --sidebar-accent: #19191c;
+  --sidebar-accent: #18181a;
   --sidebar-accent-foreground: #e8ab90;
-  --sidebar-border: #2e2f32;
+  --sidebar-border: #2d2d30;
   --sidebar-ring: #d98c6c;
   --shadow-control: inset 0 1px 0 rgb(255 255 255 / 0.07), 0 1px 2px rgb(0 0 0 / 0.3);
   --shadow-raised: 0 1px 2px rgb(0 0 0 / 0.4);
