@@ -21,7 +21,7 @@ import { CONDITION_WAIT_MS } from "./support/assertions";
 // After the person approves drafted tools, or gives a Connection's tools to an agent from the
 // agent's card, the conversation the card stands in hears it once, as the person's message
 // (CHAT-CONN-1), so its agent goes on without the person typing. Only an action that took
-// effect is told: a refusal, a conflict, a draft left unpublished or a wait for an approval
+// effect is told: a refusal, a conflict or a wait for an approval
 // tells nothing, and nor does the same action opened outside that conversation.
 
 const NAME = "crm";
@@ -150,14 +150,15 @@ describe("giving the tools from the agent's card", () => {
     const given: ConnectionGiveSource = {
       connection: async () => ({ title: "CRM", tools }),
       agents: async () => [{ name: "workshaper", title: "Workshaper" }],
-      readAgent: async () => ({ revision: 4, config: { toolNames: ["read_skill"] } }),
-      readDraft: async () => null,
-      saveDraft: async () => 5,
-      publish: async () => {
+      readAgent: async () => ({
+        id: "agent-workshaper",
+        revision: 4,
+        config: { toolNames: ["read_skill"] }
+      }),
+      give: async () => {
         if (options.publishRefused) throw new Error("refused");
         return options.publishWaits ? "waits" : "done";
-      },
-      discard: async () => undefined
+      }
     };
     return given;
   }

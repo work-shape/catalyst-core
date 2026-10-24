@@ -55,6 +55,11 @@ export type AssetUpsert = {
   operation?: "revert";
   expectedDraftRevision?: number | null;
   agentPublish?: number;
+  /**
+   * Tools given to the live agent (`agents.give_tools`): the write is a live revision, never a
+   * draft, and a pending draft takes the tools along.
+   */
+  agentToolsGiven?: readonly string[];
   releaseDraft?: boolean;
   audit: "config_asset.updated" | "config_asset.reverted";
   /** The stored file set of the revision, with the id its asset has or gets. */
@@ -173,7 +178,8 @@ export async function upsertAsset(
       ...(write.operation ? { operation: write.operation } : {}),
       ...(kind.kind === "agent" &&
       target.asset?.status === "active" &&
-      write.agentPublish === undefined
+      write.agentPublish === undefined &&
+      write.agentToolsGiven === undefined
         ? {
             agentDraft: {
               expectedDraftRevision: write.expectedDraftRevision ?? null,
@@ -182,6 +188,9 @@ export async function upsertAsset(
           }
         : {}),
       ...(write.agentPublish === undefined ? {} : { agentPublish: write.agentPublish }),
+      ...(write.agentToolsGiven === undefined
+        ? {}
+        : { agentToolsGiven: [...write.agentToolsGiven] }),
       // A kind with a published revision moves its draft with a write and nothing else.
       ...(kind.lifecycle === "draft_published" ? { draft: true as const } : {}),
       ...(write.fileSet ?? {}),
@@ -244,7 +253,9 @@ export async function upsertAsset(
         // A revision that copies a Page names it: the trail says where the content came from.
         ...(write.origin?.kind === "page" ? { pageId: write.origin.pageId } : {}),
         ...(pageLinked ? { pageLinked: true } : {}),
-        ...(write.auditFiles ? { files: write.auditFiles.map((file) => ({ ...file })) } : {})
+        ...(write.auditFiles ? { files: write.auditFiles.map((file) => ({ ...file })) } : {}),
+        // The names of the tools a give added, never what they do.
+        ...(write.agentToolsGiven ? { givenTools: [...write.agentToolsGiven] } : {})
       })
   ]);
   await afterWrite(options, call, target, { previous: current, config: toJsonObject(next) });

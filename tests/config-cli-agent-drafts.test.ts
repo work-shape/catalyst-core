@@ -503,6 +503,54 @@ describe("catalyst config and agent drafts (Platform Access 66)", () => {
     });
   });
 
+  it("gives tools to an agent a release push left a draft of, live at once, and the draft keeps them", async () => {
+    const { t, live, draft } = await setup({}, "instance");
+    const mine = await workingCopy();
+    const release = cliAs(
+      t.instance,
+      { service: "sp_release", scopes: "config_assets:read config_assets:release" },
+      mine
+    );
+    await release.ok(["config", "pull"]);
+    await editInstructions(mine, "Released instructions.");
+    await release.ok(["config", "push"]);
+    expect(await draft()).toMatchObject({ revision: 1, author: { release: true } });
+
+    // The release key gives nothing: only a person may publish.
+    const refused = await release.run(["agent", "give-tools", AGENT, "--tool", "known.tool"]);
+    expect(refused.code).toBe(1);
+    expect(await live()).toMatchObject({ revision: 1 });
+
+    const person = cliAs(t.instance, { user: t.admin.id }, mine);
+    const given = await person.run(["agent", "give-tools", AGENT, "--tool", "known.tool"]);
+    expect(given.code, given.err).toBe(0);
+    expect(given.out).toContain(
+      "Gave agent 'kai-helper' 1 tool as live revision 2 in place of revision 1: known.tool."
+    );
+    expect(await live()).toMatchObject({
+      revision: 2,
+      config: { instructions: "Help.", toolNames: ["known.tool"] }
+    });
+    expect(await draft()).toMatchObject({
+      revision: 2,
+      baseRevision: 2,
+      author: { release: true },
+      config: { instructions: "Released instructions.", toolNames: ["known.tool"] }
+    });
+
+    // A revision the live agent moved past is refused; the draft is still publishable.
+    const stale = await person.run([
+      ...["agent", "give-tools", AGENT, "--tool", "second.tool", "--if-revision", "1"]
+    ]);
+    expect(stale.code).toBe(1);
+    expect(await live()).toMatchObject({ revision: 2 });
+    await person.ok(["agent", "publish", AGENT, "--revision", "2"]);
+    expect(await live()).toMatchObject({
+      revision: 3,
+      config: { instructions: "Released instructions.", toolNames: ["known.tool"] }
+    });
+  });
+
   it("refuses an agent push with a state file from before agent drafts until one pull", async () => {
     const { t, team, draft } = await setup();
     const mine = await workingCopy(team);

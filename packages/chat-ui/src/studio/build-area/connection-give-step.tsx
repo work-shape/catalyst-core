@@ -1,12 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import {
-  Banner,
-  Button,
-  Checkbox,
-  FormNotice,
-  RadioGroup,
-  SkeletonList
-} from "@work-shape/catalyst-ui";
+import { Banner, Button, FormNotice, RadioGroup, SkeletonList } from "@work-shape/catalyst-ui";
 import { useTranslation, type TranslationContextValue } from "../../shared/i18n";
 import {
   giveTools,
@@ -44,7 +37,7 @@ type Load =
 type Step =
   | { step: "pick" }
   | { step: "ask"; plan: Extract<GivePlan, { status: "ready" }> }
-  /** Nothing is asked: the agent has the tools, somebody else's draft is open, a read failed. */
+  /** Nothing is asked: the agent has the tools, or a read failed. */
   | { step: "refused"; plan: Exclude<GivePlan, { status: "ready" }> }
   | { step: "done"; agent: GiveAgent; outcome: GiveOutcome };
 
@@ -82,7 +75,6 @@ export function useGiveToAgent(input: {
   const [attempt, setAttempt] = useState(0);
   const [chosen, setChosen] = useState<string | undefined>();
   const [step, setStep] = useState<Step>({ step: "pick" });
-  const [publishDraft, setPublishDraft] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const source = host?.source;
@@ -115,13 +107,8 @@ export function useGiveToAgent(input: {
     const agent = agentOf(chosen);
     if (!host || !agent || !ready?.connection) return;
     setBusy(true);
-    const planned = await planGive(host.source, {
-      agent,
-      tools: ready.connection.tools,
-      viewerId: host.viewerId
-    });
+    const planned = await planGive(host.source, { agent, tools: ready.connection.tools });
     setBusy(false);
-    setPublishDraft(false);
     setStep(
       planned.status === "ready"
         ? { step: "ask", plan: planned }
@@ -133,12 +120,9 @@ export function useGiveToAgent(input: {
     const agent = agentOf(asked.agent);
     if (!host || !agent) return;
     setBusy(true);
-    const outcome = await giveTools(host.source, asked, {
-      publishDraft,
-      viewerId: host.viewerId
-    });
+    const outcome = await giveTools(host.source, asked);
     setBusy(false);
-    if (outcome.status !== "failed" && outcome.status !== "other_draft") {
+    if (outcome.status === "published" || outcome.status === "waits") {
       host.given?.();
       input.onGiven?.(agent, outcome, asked.tools);
     }
@@ -241,25 +225,14 @@ export function useGiveToAgent(input: {
             </li>
           ))}
         </ul>
-        {asked.now.ownDraft ? (
-          <>
-            <Banner layout="line" data-connection-give-own-draft="">
-              {t("connectionGive.ownDraftNotice", { agent })}
-            </Banner>
-            <Checkbox
-              checked={publishDraft}
-              onCheckedChange={setPublishDraft}
-              disabled={busy}
-              label={t("connectionGive.publishDraft")}
-              description={t("connectionGive.publishDraftHint")}
-              data-connection-give-publish-draft=""
-            />
-          </>
-        ) : (
-          <p className="text-body text-muted-foreground">
-            {t("connectionGive.publishes", { agent })}
-          </p>
-        )}
+        <p className="text-body text-muted-foreground">
+          {t("connectionGive.publishes", { agent })}
+        </p>
+        {asked.draft ? (
+          <Banner layout="line" data-connection-give-draft="">
+            {t("connectionGive.draftKeeps", { agent })}
+          </Banner>
+        ) : null}
       </div>
     );
   }
@@ -294,7 +267,6 @@ export function useGiveToAgent(input: {
       }
       case "ask": {
         const asked = step.plan;
-        const publishes = !asked.now.ownDraft || publishDraft;
         return (
           <>
             <Button variant="outline" disabled={busy} onClick={back}>
@@ -307,31 +279,26 @@ export function useGiveToAgent(input: {
                 give(asked).catch(() => setBusy(false));
               }}
             >
-              {t(publishes ? "connectionGive.confirmPublish" : "connectionGive.confirmDraft")}
+              {t("connectionGive.confirmPublish")}
             </Button>
           </>
         );
       }
       case "refused":
         return (
-          <>
-            <Button variant="outline" onClick={back}>
-              {t("connectionGive.back")}
-            </Button>
-            {step.plan.status === "other_draft" || step.plan.status === "stale_draft"
-              ? openAgent(step.plan.agent, step.plan.title)
-              : null}
-          </>
+          <Button variant="outline" onClick={back}>
+            {t("connectionGive.back")}
+          </Button>
         );
       case "done": {
         const { outcome, agent } = step;
-        if (outcome.status === "failed" || outcome.status === "other_draft") {
+        if (outcome.status === "failed" || outcome.status === "changed") {
           return (
             <>
               <Button variant="outline" onClick={back}>
                 {t("connectionGive.back")}
               </Button>
-              {outcome.status === "other_draft" ? openAgent(agent.name, agent.title) : null}
+              {openAgent(agent.name, agent.title)}
             </>
           );
         }
@@ -371,40 +338,12 @@ function RefusedNotice({
     case "held":
       return (
         <Banner layout="line" tone="success" data-connection-give-held="">
-          {t(plan.inDraft ? "connectionGive.heldDraft" : "connectionGive.held", {
-            agent: plan.title
-          })}
-        </Banner>
-      );
-    case "other_draft":
-      return <OtherDraftNotice agent={plan.title} author={plan.author} t={t} />;
-    case "stale_draft":
-      return (
-        <Banner layout="line" tone="warning" data-connection-give-stale-draft="">
-          {t("connectionGive.staleDraft", { agent: plan.title })}
+          {t("connectionGive.held", { agent: plan.title })}
         </Banner>
       );
     case "failed":
       return <FormNotice tone="error">{plan.message ?? t("connectionGive.failed")}</FormNotice>;
   }
-}
-
-function OtherDraftNotice({
-  agent,
-  author,
-  t
-}: {
-  agent: string;
-  author: string | undefined;
-  t: TranslationContextValue["t"];
-}) {
-  return (
-    <Banner layout="line" tone="warning" data-connection-give-other-draft="">
-      {author === undefined
-        ? t("connectionGive.otherDraftNoName", { agent })
-        : t("connectionGive.otherDraft", { agent, author })}
-    </Banner>
-  );
 }
 
 /** What the give did. */
@@ -426,20 +365,18 @@ function OutcomeNotice({
           {t("connectionGive.published", { agent, connection })}
         </Banner>
       );
-    case "drafted":
-      return (
-        <Banner layout="line" tone="success" data-connection-give-outcome="drafted">
-          {t("connectionGive.drafted", { agent })}
-        </Banner>
-      );
     case "waits":
       return (
         <Banner layout="line" data-connection-give-outcome="waits">
           {t("connectionGive.waits", { agent })}
         </Banner>
       );
-    case "other_draft":
-      return <OtherDraftNotice agent={agent} author={outcome.author} t={t} />;
+    case "changed":
+      return (
+        <Banner layout="line" tone="warning" data-connection-give-outcome="changed">
+          {t("connectionGive.changed", { agent })}
+        </Banner>
+      );
     case "failed":
       return (
         <FormNotice tone="error" data-connection-give-outcome="failed">

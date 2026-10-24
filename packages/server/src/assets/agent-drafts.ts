@@ -39,6 +39,16 @@ interface DraftHost {
     makeDependenciesAvailable?: boolean,
     expectedAvailability?: AgentAvailability | null
   ): Promise<{ revision: number }>;
+  /**
+   * Writes `config` as the agent's new live revision over `expectedRevision`, never as a
+   * draft: a pending draft takes `toolNames` along (`agents.give_tools`).
+   */
+  giveTools(
+    call: AssetCall,
+    target: AssetTarget,
+    config: Record<string, unknown>,
+    write: { expectedRevision: number; toolNames: readonly string[] }
+  ): Promise<{ revision: number }>;
   /** Offers a first version without a draft in its workspace; nothing where that is not it. */
   publishFirstVersion(
     call: AssetCall,
@@ -202,6 +212,68 @@ export class AgentDraftWorkflow {
     };
   }
 
+  /**
+   * `agents.give_tools`: a person who may change and publish an instance's own agent gives it
+   * tools, as one new live revision of what is published plus the tools. Whoever wrote a pending
+   * draft keeps it; it gains the same tools. A workspace's agent is not addressed: its publish
+   * waits for its approvers (WS-PUB-1b), and a give that goes live at once would pass them by.
+   */
+  async authorizeGiveTools(
+    call: Pick<AssetCall, "actor" | "access">,
+    input: { name: string }
+  ): Promise<OperationAuthorization> {
+    if (isAuthenticatedServicePrincipal(call.actor))
+      return { allowed: false, action: "agent.publish", reason: "user_only" };
+    const target = await this.host.target({ kind: "agent", name: input.name });
+    // Both rights, each with its own deny: the give is a change and a publish at once.
+    const write = decide(call.access, "agent.write", target.resource);
+    if (!write.allowed) return write;
+    return decide(call.access, "agent.publish", target.resource);
+  }
+
+  async giveTools(
+    call: AssetCall,
+    input: {
+      name: string;
+      agentId: string;
+      toolNames: readonly string[];
+      expectedLiveRevision: number;
+    },
+    checked?: AgentGiveChecked
+  ) {
+    if (isAuthenticatedServicePrincipal(call.actor))
+      throw new AppError("FORBIDDEN", "A service principal cannot give tools to an agent");
+    const target = await this.host.target({ kind: "agent", name: input.name });
+    call.access.require("agent.write", target.resource);
+    call.access.require("agent.publish", target.resource);
+    const live = requireActive(target);
+    if (live.id !== input.agentId)
+      throw new AppError("CONFLICT", `Another agent carries the name '${input.name}' now`, {
+        kind: "agent",
+        name: input.name,
+        reason: "asset_replaced"
+      });
+    // What its guardrails read is what goes live: the published agent at this revision, with
+    // the tools added. A live change since refuses the give.
+    if (
+      live.revision !== input.expectedLiveRevision ||
+      (checked !== undefined && checked.liveRevision !== input.expectedLiveRevision)
+    )
+      throw liveChanged(live.revision);
+    const added = toolsToGive(live.config, input.toolNames);
+    if (added.length === 0)
+      return { publishedRevision: live.revision, replacedRevision: live.revision, givenTools: [] };
+    const written = await this.host.giveTools(call, target, withGivenTools(live.config, added), {
+      expectedRevision: live.revision,
+      toolNames: added
+    });
+    return {
+      publishedRevision: written.revision,
+      replacedRevision: live.revision,
+      givenTools: added
+    };
+  }
+
   async discard(
     call: AssetCall,
     input: { name: string; workspaceId?: string; expectedRevision: number }
@@ -231,6 +303,41 @@ export class AgentDraftWorkflow {
       agentId
     });
   }
+}
+
+/** What `agents.give_tools` was checked against by its guardrails: the live revision. */
+export interface AgentGiveChecked {
+  liveRevision: number;
+}
+
+function liveChanged(currentRevision: number): AppError {
+  return new AppError(
+    "REVISION_CONFLICT",
+    "The published agent changed. Read it again before giving it tools",
+    { reason: "live_changed", currentRevision }
+  );
+}
+
+/** The tool names of a definition, in its order. */
+function toolNamesOf(config: Record<string, unknown>): string[] {
+  const names = config.toolNames;
+  return Array.isArray(names)
+    ? names.filter((name): name is string => typeof name === "string")
+    : [];
+}
+
+/** Of `toolNames`, those the definition does not hold yet, each once, in their order. */
+function toolsToGive(config: Record<string, unknown>, toolNames: readonly string[]): string[] {
+  const held = new Set(toolNamesOf(config));
+  return [...new Set(toolNames)].filter((name) => !held.has(name));
+}
+
+/** The definition with `toolNames` added after the tools it holds. */
+export function withGivenTools(
+  config: Record<string, unknown>,
+  toolNames: readonly string[]
+): Record<string, unknown> {
+  return { ...config, toolNames: [...new Set([...toolNamesOf(config), ...toolNames])] };
 }
 
 function draftChanged(): AppError {

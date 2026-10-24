@@ -103,8 +103,9 @@ export function readDraftRefusal(error: unknown): AgentDraftRefusal | undefined 
 
 /**
  * Who wrote the draft last, as people read it: the person by name, with the agent where it
- * wrote the draft in their Build conversation, or a release push. A person who is gone, or
- * whose name the instance did not tell, is named as unknown.
+ * wrote the draft in their Build conversation, or the team that runs the instance for a release
+ * push. A person who is gone, or whose name the instance did not tell, is named as unknown. It
+ * opens a sentence: the author is its subject.
  */
 export function draftAuthorLabel(
   author: AgentDraft["author"],

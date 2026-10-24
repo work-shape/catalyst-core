@@ -3,7 +3,12 @@ import { getConfigAssetState } from "./postgres-config-asset-state";
 import { appAvailabilityColumn } from "./app-availability";
 import { removeAgentProposal } from "./postgres-agent-proposal-operations";
 import { chunksOf, type WrittenAsset } from "./config-asset-batch";
-import { writeAgentDraft, consumeAgentDraft, carryAgentSkillChange } from "./agent-draft-mutations";
+import {
+  writeAgentDraft,
+  consumeAgentDraft,
+  carryAgentSkillChange,
+  carryAgentToolsGiven
+} from "./agent-draft-mutations";
 import { keysetFilter } from "./paging";
 import { and, asc, desc, eq, inArray, max, or, sql, type SQL } from "drizzle-orm";
 import {
@@ -405,6 +410,16 @@ async function applyConfigAssetMutations(
           agentId: asset.id,
           revision: asset.newest,
           change: mutation.agentSkillChange,
+          savedAt: now.toISOString()
+        });
+      }
+      if (mutation.agentToolsGiven) {
+        await carryAgentToolsGiven(tx, {
+          clientInstanceId: input.clientInstanceId,
+          agentId: asset.id,
+          replacedRevision: current.get(key)?.revision.revision ?? 0,
+          revision: asset.newest,
+          toolNames: mutation.agentToolsGiven,
           savedAt: now.toISOString()
         });
       }

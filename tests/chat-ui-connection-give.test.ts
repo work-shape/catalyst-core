@@ -1,13 +1,11 @@
 import { createElement } from "react";
 import { describe, expect, it } from "vitest";
-import type { AgentDraft } from "@work-shape/catalyst-api-client";
 import {
   ConnectionApprovedBody,
   ConnectionGiveCardView,
   giveTools,
   planGive,
   readConnectionOffer,
-  withGivenTools,
   type ConnectionGiveSource,
   type GiveAgent,
   type GivePlan,
@@ -15,14 +13,13 @@ import {
 } from "@work-shape/catalyst-chat-ui/build-area";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 
-// "Einem Agenten geben" (CS-5d; manager's ruling of 2026-10-19): the approved tools of a
-// Connection go to one agent as one published revision, after a confirmation that names the
-// agent and the tools. Somebody else's draft is never written; the reader's own draft takes the
-// tools and is published only where the reader confirms publishing the whole draft. The give is
-// the agent page's own save and publish, so rights, policy and audit are theirs.
+// "Einem Agenten geben" (CS-5d; ruling of 2026-10-24): the approved tools of a Connection go to
+// one agent after a confirmation that names the agent and the tools, as one call of
+// `agents.give_tools` over the published agent the reader read. A pending draft, anybody's,
+// changes nothing of the question and is never published by the give: the instance carries the
+// tools into it. Rights, guardrails, policy and audit are the operation's.
 
 const VIEWER = "user-give";
-const OTHER = "user-other";
 
 const tools: GiveTool[] = [
   { toolName: "connection.crm.list_clients", title: "List clients" },
@@ -31,67 +28,28 @@ const tools: GiveTool[] = [
 
 const agent: GiveAgent = { name: "assistant", title: "Assistant" };
 
-function draftBy(userId: string, toolNames: string[], name = "Ada Example"): AgentDraft {
-  return {
-    agent: "assistant",
-    revision: 7,
-    baseRevision: 4,
-    liveRevision: 4,
-    stale: false,
-    config: { instructions: "Help.", toolNames },
-    author: { userId, name, displayLabel: name, release: false },
-    updatedAt: "2026-10-19T09:00:00.000Z"
-  };
-}
+type Call = {
+  name: string;
+  agentId: string;
+  toolNames: string[];
+  expectedLiveRevision: number;
+};
 
-type Call =
-  | {
-      op: "save";
-      config: Record<string, unknown>;
-      liveRevision: number;
-      draftRevision: number | null;
-    }
-  | { op: "publish"; revision: number }
-  | { op: "discard"; revision: number };
-
-/** A source over one agent at live revision 4, which records every write. */
-function fakeSource(options: {
-  draft?: AgentDraft | null;
-  /** The draft the instance answers after a save was refused. */
-  draftAfterConflict?: AgentDraft | null;
-  saveRefused?: unknown;
-  saveWaits?: boolean;
-  publishRefused?: unknown;
-  publishWaits?: boolean;
-}) {
+/** A source over one agent at live revision 4, which records every give. */
+function fakeSource(options: { toolNames?: string[]; refused?: unknown; waits?: boolean }) {
   const calls: Call[] = [];
-  let conflicted = false;
   const source: ConnectionGiveSource = {
     connection: async () => ({ title: "CRM", tools }),
     agents: async () => [agent],
     readAgent: async () => ({
+      id: "agent-1",
       revision: 4,
-      config: { instructions: "Help.", toolNames: ["read_skill"] }
+      config: { instructions: "Help.", toolNames: options.toolNames ?? ["read_skill"] }
     }),
-    readDraft: async () =>
-      conflicted && options.draftAfterConflict !== undefined
-        ? options.draftAfterConflict
-        : (options.draft ?? null),
-    saveDraft: async (_name, config, expected) => {
-      calls.push({ op: "save", config, ...expected });
-      if (options.saveRefused) {
-        conflicted = true;
-        throw options.saveRefused;
-      }
-      return options.saveWaits ? "waits" : 9;
-    },
-    publish: async (_name, revision) => {
-      calls.push({ op: "publish", revision });
-      if (options.publishRefused) throw options.publishRefused;
-      return options.publishWaits ? "waits" : "done";
-    },
-    discard: async (_name, revision) => {
-      calls.push({ op: "discard", revision });
+    give: async (name, input) => {
+      calls.push({ name, ...input });
+      if (options.refused) throw options.refused;
+      return options.waits ? "waits" : "done";
     }
   };
   return { source, calls };
@@ -103,179 +61,75 @@ function ready(plan: GivePlan): Extract<GivePlan, { status: "ready" }> {
 }
 
 describe("the give of a Connection's tools to an agent", () => {
-  it("adds the tools to the published agent and publishes it as one revision", async () => {
+  it("gives the tools over the published agent it read, as one call", async () => {
     const { source, calls } = fakeSource({});
-    const plan = ready(await planGive(source, { agent, tools, viewerId: VIEWER }));
+    const plan = ready(await planGive(source, { agent, tools }));
     expect(plan.tools.map((tool) => tool.toolName)).toEqual([
       "connection.crm.list_clients",
       "connection.crm.get_client"
     ]);
-    expect(plan.now.ownDraft).toBeUndefined();
+    expect(plan.draft).toBe(false);
 
-    const outcome = await giveTools(source, plan, { publishDraft: false, viewerId: VIEWER });
-    expect(outcome).toEqual({ status: "published" });
+    expect(await giveTools(source, plan)).toEqual({ status: "published" });
     expect(calls).toEqual([
       {
-        op: "save",
-        config: {
-          instructions: "Help.",
-          toolNames: ["read_skill", "connection.crm.list_clients", "connection.crm.get_client"]
-        },
-        liveRevision: 4,
-        draftRevision: null
-      },
-      { op: "publish", revision: 9 }
-    ]);
-  });
-
-  it("refuses an agent with somebody else's draft, names them, and writes nothing", async () => {
-    const { source, calls } = fakeSource({ draft: draftBy(OTHER, ["read_skill"]) });
-    const plan = await planGive(source, { agent, tools, viewerId: VIEWER });
-    expect(plan).toEqual({
-      status: "other_draft",
-      agent: "assistant",
-      title: "Assistant",
-      author: "Ada Example"
-    });
-    expect(calls).toEqual([]);
-  });
-
-  it("refuses a draft a release wrote as somebody else's", async () => {
-    const release = draftBy(OTHER, []);
-    const { source } = fakeSource({
-      draft: { ...release, author: { release: true } }
-    });
-    expect((await planGive(source, { agent, tools, viewerId: VIEWER })).status).toBe("other_draft");
-  });
-
-  it("adds the tools to the reader's own draft and leaves it unpublished without consent", async () => {
-    const { source, calls } = fakeSource({ draft: draftBy(VIEWER, ["web_fetch"]) });
-    const plan = ready(await planGive(source, { agent, tools, viewerId: VIEWER }));
-    expect(plan.now.ownDraft).toEqual({ revision: 7 });
-
-    const outcome = await giveTools(source, plan, { publishDraft: false, viewerId: VIEWER });
-    expect(outcome).toEqual({ status: "drafted" });
-    expect(calls).toEqual([
-      {
-        op: "save",
-        config: {
-          instructions: "Help.",
-          toolNames: ["web_fetch", "connection.crm.list_clients", "connection.crm.get_client"]
-        },
-        liveRevision: 4,
-        draftRevision: 7
+        name: "assistant",
+        agentId: "agent-1",
+        toolNames: ["connection.crm.list_clients", "connection.crm.get_client"],
+        expectedLiveRevision: 4
       }
     ]);
   });
 
-  it("publishes the reader's whole draft where they confirm publishing it", async () => {
-    const { source, calls } = fakeSource({ draft: draftBy(VIEWER, ["web_fetch"]) });
-    const plan = ready(await planGive(source, { agent, tools, viewerId: VIEWER }));
-    const outcome = await giveTools(source, plan, { publishDraft: true, viewerId: VIEWER });
-    expect(outcome).toEqual({ status: "published" });
-    expect(calls.map((call) => call.op)).toEqual(["save", "publish"]);
-  });
-
-  it("refuses the reader's own draft that is behind the published agent, and writes nothing", async () => {
-    // A save would base the draft on the published version unseen, and its publish would undo
-    // what was published since: the agent's page says such a draft cannot be published.
-    for (const draft of [
-      { ...draftBy(VIEWER, ["web_fetch"]), baseRevision: 3, stale: true },
-      { ...draftBy(VIEWER, ["web_fetch"]), baseRevision: 3 }
-    ]) {
-      const { source, calls } = fakeSource({ draft });
-      expect(await planGive(source, { agent, tools, viewerId: VIEWER })).toEqual({
-        status: "stale_draft",
-        agent: "assistant",
-        title: "Assistant"
-      });
-      expect(calls).toEqual([]);
+  it("asks the same question where the agent has a draft, anybody's, and says it keeps it", async () => {
+    for (const draft of [{ userId: VIEWER }, { userId: "user-other", authorName: "Ada" }, {}]) {
+      const { source, calls } = fakeSource({});
+      const plan = ready(await planGive(source, { agent: { ...agent, draft }, tools }));
+      expect(plan.draft).toBe(true);
+      expect(await giveTools(source, plan)).toEqual({ status: "published" });
+      expect(calls).toHaveLength(1);
     }
   });
 
-  it("asks nothing where the agent, or the reader's draft, holds every tool already", async () => {
-    const held = fakeSource({
-      draft: draftBy(
-        VIEWER,
-        tools.map((tool) => tool.toolName)
-      )
-    });
-    expect(await planGive(held.source, { agent, tools, viewerId: VIEWER })).toEqual({
+  it("asks nothing where the published agent holds every tool already", async () => {
+    const { source, calls } = fakeSource({ toolNames: tools.map((tool) => tool.toolName) });
+    expect(await planGive(source, { agent, tools })).toEqual({
       status: "held",
       agent: "assistant",
-      title: "Assistant",
-      inDraft: true
+      title: "Assistant"
     });
-    expect(held.calls).toEqual([]);
+    expect(calls).toEqual([]);
   });
 
-  it("adds only the tools the agent does not hold", async () => {
-    const { source } = fakeSource({
-      draft: draftBy(VIEWER, ["connection.crm.get_client"])
-    });
-    const plan = ready(await planGive(source, { agent, tools, viewerId: VIEWER }));
+  it("names only the tools the published agent does not hold", async () => {
+    const { source } = fakeSource({ toolNames: ["connection.crm.get_client"] });
+    const plan = ready(await planGive(source, { agent, tools }));
     expect(plan.tools.map((tool) => tool.toolName)).toEqual(["connection.crm.list_clients"]);
   });
 
-  it("discards the draft it wrote itself where the publish is refused, and says why", async () => {
-    const { source, calls } = fakeSource({
-      publishRefused: { code: "FORBIDDEN", message: "You may not publish this agent." }
-    });
-    const plan = ready(await planGive(source, { agent, tools, viewerId: VIEWER }));
-    const outcome = await giveTools(source, plan, { publishDraft: false, viewerId: VIEWER });
-    expect(outcome).toEqual({ status: "failed", message: "You may not publish this agent." });
-    expect(calls.map((call) => call.op)).toEqual(["save", "publish", "discard"]);
-    expect(calls[2]).toEqual({ op: "discard", revision: 9 });
+  it("says the give waits where the instance holds it for an approval", async () => {
+    const { source } = fakeSource({ waits: true });
+    const plan = ready(await planGive(source, { agent, tools }));
+    expect(await giveTools(source, plan)).toEqual({ status: "waits" });
   });
 
-  it("keeps the reader's own draft where its publish is refused", async () => {
-    const { source, calls } = fakeSource({
-      draft: draftBy(VIEWER, []),
-      publishRefused: { code: "FORBIDDEN", message: "No." }
-    });
-    const plan = ready(await planGive(source, { agent, tools, viewerId: VIEWER }));
-    await giveTools(source, plan, { publishDraft: true, viewerId: VIEWER });
-    expect(calls.map((call) => call.op)).toEqual(["save", "publish"]);
+  it("says the agent changed where the published agent moved since it was read", async () => {
+    for (const code of ["REVISION_CONFLICT", "CONFLICT"]) {
+      const { source } = fakeSource({ refused: { code, message: "The agent changed." } });
+      const plan = ready(await planGive(source, { agent, tools }));
+      expect(await giveTools(source, plan)).toEqual({ status: "changed" });
+    }
   });
 
-  it("keeps the draft a publish waits for, for the approval in the Inbox", async () => {
-    const { source, calls } = fakeSource({ publishWaits: true });
-    const plan = ready(await planGive(source, { agent, tools, viewerId: VIEWER }));
-    expect(await giveTools(source, plan, { publishDraft: false, viewerId: VIEWER })).toEqual({
-      status: "waits"
+  it("says why a give is refused", async () => {
+    const { source } = fakeSource({
+      refused: { code: "FORBIDDEN", message: "You may not publish this agent." }
     });
-    expect(calls.map((call) => call.op)).toEqual(["save", "publish"]);
-  });
-
-  it("publishes nothing where the save itself waits for an approval", async () => {
-    const { source, calls } = fakeSource({ saveWaits: true });
-    const plan = ready(await planGive(source, { agent, tools, viewerId: VIEWER }));
-    expect(await giveTools(source, plan, { publishDraft: false, viewerId: VIEWER })).toEqual({
-      status: "waits"
+    const plan = ready(await planGive(source, { agent, tools }));
+    expect(await giveTools(source, plan)).toEqual({
+      status: "failed",
+      message: "You may not publish this agent."
     });
-    expect(calls.map((call) => call.op)).toEqual(["save"]);
-  });
-
-  it("names the author of a draft written between the plan and the save", async () => {
-    const { source, calls } = fakeSource({
-      saveRefused: { code: "REVISION_CONFLICT", message: "The draft changed." },
-      draftAfterConflict: draftBy(OTHER, [], "Grace Example")
-    });
-    const plan = ready(await planGive(source, { agent, tools, viewerId: VIEWER }));
-    expect(await giveTools(source, plan, { publishDraft: false, viewerId: VIEWER })).toEqual({
-      status: "other_draft",
-      author: "Grace Example"
-    });
-    expect(calls.map((call) => call.op)).toEqual(["save"]);
-  });
-
-  it("adds each tool once, after those the definition holds", () => {
-    expect(withGivenTools({ toolNames: ["a", "b"], other: 1 }, ["b", "c", "c"]).toolNames).toEqual([
-      "a",
-      "b",
-      "c"
-    ]);
-    expect(withGivenTools({}, ["c"])).toEqual({ toolNames: ["c"] });
   });
 });
 

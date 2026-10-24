@@ -277,7 +277,7 @@ describe("saving the agent page", () => {
     // The page shows the draft it wrote, and the badge names it.
     expect(instructions().value).toBe("Help the user and cite the contract.");
     expect(badge()).toBe("Draft version 1");
-    expect(pending()).toContain("Draft version 1, saved by Me on ");
+    expect(pending()).toContain("Me saved draft version 1 on ");
     expect(host.querySelector('[data-published-field="instructions"]')?.textContent).toContain(
       "Help the user."
     );
@@ -295,7 +295,7 @@ describe("saving the agent page", () => {
     mount(world);
     await settle();
     expect(badge()).toBe("Draft version 1");
-    expect(pending()).toContain("saved by Ana Writer on ");
+    expect(pending()).toContain("Ana Writer saved draft version 1 on ");
 
     // Somebody else saves the draft while this page has it open.
     world.writtenBy("Ben Builder", "Only read the contract.");

@@ -75,7 +75,16 @@ export class AssetWorkflow {
             })
         ),
       publishFirstVersion: (call, target, revision) =>
-        publishFirstVersion(options, call, target, revision)
+        publishFirstVersion(options, call, target, revision),
+      giveTools: async (call, target, config, write) => {
+        // A person's change of the live agent: the editing switch and its record, as a publish.
+        await authorizeInteractiveWrite(options, call.actor, call, call.audit);
+        return this.upsert(call, target, config, {
+          expectedRevision: write.expectedRevision,
+          agentToolsGiven: write.toolNames,
+          audit: "config_asset.updated"
+        });
+      }
     });
     this.reads = new AssetReadWorkflow(options, {
       target: (address) => this.target(address),

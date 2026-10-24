@@ -161,7 +161,7 @@ describe("the agent page with a draft", () => {
     expect(markup).toMatch(/data-published-field="instructions"[\s\S]*Help the user\./u);
     expect(markup).toMatch(/data-published-field="skillNames"[\s\S]*?Tax review/u);
     expect(markup).toMatch(
-      /Draft version 2, saved by Ana Writer on .+? 2026, .+?, is not live\. Everyone who uses “Assistant” gets the published version until the draft is published\./u
+      /Ana Writer saved draft version 2 on .+? 2026, .+?\. It is not live: everyone who uses “Assistant” gets the published version until the draft is published\./u
     );
   });
 
@@ -198,10 +198,14 @@ describe("the agent page with a draft", () => {
   it("carries a short draft badge, and the banner names the author and the time", () => {
     const markup = agentPage(source(draftOf(drafted)));
     expect(markup).toMatch(/data-agent-draft-badge="2"[^>]*>(?:<span[^>]*>)?Draft version 2</u);
-    expect(markup).toMatch(/data-agent-draft="pending"[\s\S]*saved by Ana Writer on .+? 2026/u);
+    expect(markup).toMatch(
+      /data-agent-draft="pending"[\s\S]*Ana Writer saved draft version 2 on .+? 2026/u
+    );
     const german = agentPage(source(draftOf(drafted)), { locale: "de" });
     expect(german).toMatch(/data-agent-draft-badge="2"[^>]*>(?:<span[^>]*>)?Entwurfsversion 2</u);
-    expect(german).toMatch(/Entwurfsversion 2, gespeichert von Ana Writer am /u);
+    expect(german).toMatch(
+      /Ana Writer hat am .+? Entwurfsversion 2 gespeichert\. Sie ist nicht live/u
+    );
   });
 
   it("offers Publish to a holder of agent.publish, and Discard in the menu", () => {
@@ -240,7 +244,7 @@ describe("the agent page with a draft", () => {
   it("says a newer draft was read in place of the one Publish named", () => {
     const markup = agentPage(source(draftOf(drafted), { answerFor: () => ({ kind: "changed" }) }));
     expect(markup).toMatch(
-      /data-agent-draft="pending"[\s\S]*Someone saved a newer draft while you were looking at it\.[\s\S]*Draft version 2, saved by Ana Writer on /u
+      /data-agent-draft="pending"[\s\S]*Someone saved a newer draft while you were looking at it\.[\s\S]*Ana Writer saved draft version 2 on /u
     );
   });
 
@@ -283,15 +287,15 @@ describe("the agent page without a draft", () => {
 
 describe("the author of a draft", () => {
   const { t } = createTranslationContext("en");
-  it("is the person by name, with the agent, a release push, or someone gone", () => {
+  it("is the person by name, with the agent, the team that runs the instance, or someone gone", () => {
     expect(draftAuthorLabel({ userId: "u", name: "Ana Writer", release: false }, t)).toBe(
       "Ana Writer"
     );
     expect(
       draftAuthorLabel({ userId: "u", name: "Ana Writer", conversationId: "c", release: false }, t)
     ).toBe("Ana Writer with the agent");
-    expect(draftAuthorLabel({ release: true }, t)).toBe("a release push");
-    expect(draftAuthorLabel({ userId: "u", release: false }, t)).toBe("someone no longer here");
+    expect(draftAuthorLabel({ release: true }, t)).toBe("The team that runs this instance");
+    expect(draftAuthorLabel({ userId: "u", release: false }, t)).toBe("A former member");
   });
 });
 

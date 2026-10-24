@@ -1,5 +1,6 @@
 import {
   AppError,
+  type AgentProposal,
   type ConfigAssetMutation,
   type ClientInstanceId,
   type JsonObject
@@ -100,9 +101,57 @@ export async function carryAgentSkillChange(
   const skillNames = input.change.attached
     ? [...new Set([...existing, input.change.name])]
     : existing.filter((name) => name !== input.change.name);
-  const config: JsonObject = { ...draft.config, skillNames };
+  await carryIntoDraft(tx, input, draft, { ...draft.config, skillNames });
+}
+
+/**
+ * Tools given to the live agent go into the pending draft too, which keeps its content and its
+ * author: publishing it later does not take them away. A draft written on the live revision the
+ * give replaced moves onto the new one. A draft that was already behind stays behind, so that
+ * its publish cannot undo what went live in between.
+ */
+export async function carryAgentToolsGiven(
+  tx: PostgresTransaction,
+  input: {
+    clientInstanceId: ClientInstanceId;
+    agentId: string;
+    /** The live revision the give replaced. */
+    replacedRevision: number;
+    /** The live revision the give wrote. */
+    revision: number;
+    toolNames: readonly string[];
+    savedAt: string;
+  }
+): Promise<void> {
+  const draft = await getAgentProposal(tx, input);
+  if (!draft) return;
+  const names = draft.config.toolNames;
+  const existing = Array.isArray(names)
+    ? names.filter((name): name is string => typeof name === "string")
+    : [];
+  const toolNames = [...new Set([...existing, ...input.toolNames])];
+  await carryIntoDraft(
+    tx,
+    {
+      ...input,
+      revision: draft.baseRevision === input.replacedRevision ? input.revision : draft.baseRevision
+    },
+    draft,
+    { ...draft.config, toolNames }
+  );
+}
+
+/** Saves the draft's new content on the live revision `revision` as its base, by its own author. */
+async function carryIntoDraft(
+  tx: PostgresTransaction,
+  input: { clientInstanceId: ClientInstanceId; agentId: string; revision: number; savedAt: string },
+  draft: AgentProposal,
+  config: JsonObject
+): Promise<void> {
   const saved = await saveAgentProposal(tx, {
-    ...input,
+    clientInstanceId: input.clientInstanceId,
+    agentId: input.agentId,
+    savedAt: input.savedAt,
     config,
     baseRevision: input.revision,
     expectedDraftRevision: draft.revision,
