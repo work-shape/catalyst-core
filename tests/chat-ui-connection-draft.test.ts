@@ -10,6 +10,7 @@ import {
   connectionDraftHost,
   openConnectionDraft,
   readConnectionDraft,
+  readConnectionProposal,
   type ConnectionDraft,
   type ConnectionSource
 } from "@work-shape/catalyst-chat-ui/build-area";
@@ -168,6 +169,83 @@ describe("the card's host", () => {
     const input = { ...API_SCOPE, client: client({}), showRoute: () => undefined };
     expect(connectionDraftHost({ ...input, mayWriteConnections: false }).open).toBeUndefined();
     expect(connectionDraftHost({ ...input, mayWriteConnections: true }).open).toBeDefined();
+  });
+
+  it("lets a writer of one Connection open its page, and never the New connection dialog", async () => {
+    const shown: unknown[] = [];
+    const host = connectionDraftHost({
+      ...API_SCOPE,
+      client: client({ exampledata: { connectorType: "http_api", displayName: "Kanzlei-API" } }),
+      mayWriteConnections: false,
+      showRoute: (route) => shown.push(route)
+    });
+    expect(host.open).toBeUndefined();
+    expect(await host.openExisting?.(draft())).toBe("exists");
+    expect(shown).toHaveLength(1);
+    expect(JSON.stringify(shown[0])).toContain("exampledata");
+    // A Connection that does not exist, or that the reader may not read, opens nothing.
+    const missing = connectionDraftHost({
+      ...API_SCOPE,
+      client: client({}, 403),
+      mayWriteConnections: false,
+      showRoute: (route) => shown.push(route)
+    });
+    expect(await missing.openExisting?.(draft())).toBe("failed");
+    expect(shown).toHaveLength(1);
+    // Whoever may create Connections opens drafts as before.
+    expect(
+      connectionDraftHost({
+        ...API_SCOPE,
+        client: client({}),
+        mayWriteConnections: true,
+        showRoute: () => undefined
+      }).openExisting
+    ).toBeUndefined();
+  });
+
+  it("offers Set up on a proposal to a writer of the Connection it names, and to nobody else", () => {
+    const proposal = (mayWrite: boolean) => {
+      const read = readConnectionProposal({
+        output: {
+          entry: { id: "gmail", part: "tools" },
+          connection: {
+            connectorType: "http_api",
+            name: "gmail",
+            title: "Gmail",
+            credentialMode: "shared",
+            headerNames: []
+          },
+          state: "needs_setup",
+          mayWrite
+        }
+      });
+      if (!read) throw new Error("Expected a proposal");
+      return read;
+    };
+    const host = connectionDraftHost({
+      ...API_SCOPE,
+      client: client({}),
+      mayWriteConnections: false,
+      showRoute: () => undefined
+    });
+    const render = (draft: ConnectionDraft) =>
+      renderToStaticMarkup(
+        createElement(
+          QueryClientProvider,
+          { client: new QueryClient() },
+          createElement(
+            ConnectionDraftHostProvider,
+            { value: host, children: null },
+            createElement(
+              TranslationProvider,
+              { locale: "en", children: null },
+              createElement(ConnectionDraftCard, { draft })
+            )
+          )
+        )
+      );
+    expect(render(proposal(true))).toContain("data-connect-card-setup");
+    expect(render(proposal(false))).not.toContain("data-connect-card-setup");
   });
 
   it("names an existing Connection by its own title, and a new id by nothing", async () => {

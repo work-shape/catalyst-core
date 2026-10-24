@@ -92,7 +92,8 @@ function HostedConnectCard({
     card,
     own ? personalViewOf(own) : mine.data && card.personal ? "unusable" : undefined
   );
-  const { open } = host;
+  // Whoever may create Connections opens the proposal; a writer of the one it names, its page.
+  const open = host.open ?? (draft?.mayWrite === true ? host.openExisting : undefined);
   return (
     <ConnectionConnectCardView
       title={title}
