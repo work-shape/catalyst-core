@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { PanelRight } from "lucide-react";
 import { Avatar, PageHeaderShellAction, SplitHandle } from "@work-shape/catalyst-ui";
 import { conversationTitle } from "../../shared/conversation-title";
@@ -16,7 +16,7 @@ import {
   DockTabs,
   type ChatColumnMode
 } from "./chat-dock";
-import { DockSubjectContext } from "./dock-subject";
+import { DockRunContext, DockSubjectContext, type DockAgentWork } from "./dock-subject";
 import { useDockArrival, useDockWidth } from "./use-dock-layout";
 
 /** How the shell lays out the conversation and the page for the dock. */
@@ -75,6 +75,7 @@ export function DockedChat({
   agentTry,
   onOpenFullChat,
   onNewChat,
+  onAgentWork,
   children
 }: {
   view: ChatDockView & { mode: ChatColumnMode };
@@ -89,11 +90,24 @@ export function DockedChat({
   onOpenFullChat?: () => void;
   /** The dock's "New chat": a new conversation for the page. */
   onNewChat?: () => void;
+  /** Takes the asset the agent works on while its run goes, and nothing once it stops. */
+  onAgentWork?: (work: DockAgentWork | undefined) => void;
   children: ReactNode;
 }) {
   const { t } = useTranslation();
   const { layout } = view;
   const [subject, reportSubject] = useState<ConversationSubjectState>();
+  const [running, reportRunning] = useState(false);
+  const workKind = running ? subject?.subject.kind : undefined;
+  const workName = running ? subject?.subject.name : undefined;
+  useEffect(() => {
+    onAgentWork?.(
+      workKind === undefined || workName === undefined
+        ? undefined
+        : { kind: workKind, name: workName }
+    );
+  }, [onAgentWork, workKind, workName]);
+  useEffect(() => () => onAgentWork?.(undefined), [onAgentWork]);
   const subjectAgent = subject === undefined ? undefined : agent;
   const trying = agentTry?.tab === "try" ? agentTry : undefined;
   const tabs =
@@ -160,7 +174,9 @@ export function DockedChat({
         />
       }
     >
-      <DockSubjectContext.Provider value={reportSubject}>{children}</DockSubjectContext.Provider>
+      <DockSubjectContext.Provider value={reportSubject}>
+        <DockRunContext.Provider value={reportRunning}>{children}</DockRunContext.Provider>
+      </DockSubjectContext.Provider>
     </ChatColumn>
   );
 }

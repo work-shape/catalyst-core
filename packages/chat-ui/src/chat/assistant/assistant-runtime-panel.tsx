@@ -22,7 +22,7 @@ import { AssistantToolRegistry } from "./assistant-tool-registry";
 import { transcriptMessageTimes } from "./thread-time";
 import { useRegisterToolDisplayActions } from "../../shared/domain-ui-widgets";
 import { useConversationSubject } from "../conversation/use-conversation-subject";
-import { useReportDockSubject } from "../dock/dock-subject";
+import { useReportDockRun, useReportDockSubject } from "../dock/dock-subject";
 import { useFollowUpQueueModel } from "../conversation/use-follow-up-queue";
 import { FollowUpQueueProvider } from "./follow-up-queue";
 import {
@@ -191,6 +191,7 @@ function AssistantRuntimePane({
     workspaceId: selectedConversationWorkspaceId ?? collaborationWorkspaceId
   });
   useReportDockSubject(conversationSubject);
+  useReportDockRun(conversationRunning === true);
   const pendingOpen = agentOpens.pending;
   // A build refused because others read this conversation goes on in a private one (E3).
   const privateBuild = usePrivateBuildOffer(chat, followUpSource.currentUserId, continuePrivately);

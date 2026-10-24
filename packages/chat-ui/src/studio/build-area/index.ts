@@ -132,6 +132,7 @@ export {
   formatDataStoreSize
 } from "./data-store-model";
 export { DataStoreValueDialog } from "./data-store-rows";
+export { draftTablesOf, type DraftField, type DraftTable } from "./data-store-draft-fields";
 export type {
   DataStoreListed,
   DataStoreRead,

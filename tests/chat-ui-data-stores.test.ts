@@ -31,6 +31,7 @@ import {
   type DataStoreValue,
   usingPageRoute
 } from "@work-shape/catalyst-chat-ui/build-area";
+import { DockAgentWorkContext } from "@work-shape/catalyst-chat-ui/dock-page-chat";
 import { required } from "./support/assertions";
 import { platformContext } from "./chat-ui-build-fixtures";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
@@ -304,6 +305,8 @@ interface RenderInput extends StoreAnswers {
   scoped?: boolean;
   /** The list has not answered yet. */
   listLoading?: boolean;
+  /** What the agent in the dock is working on now. */
+  agentWork?: { kind: string; name: string };
   locale?: LocaleCode;
 }
 
@@ -361,21 +364,25 @@ function render(location: BuildLocation, input: RenderInput = {}): string {
   const kinds = buildAssetKinds.map((kind) => (kind.kind === "data_store" ? planted : kind));
   return renderToStaticMarkup(
     createElement(
-      TranslationProvider,
-      { children: null, locale: input.locale ?? "en" },
+      DockAgentWorkContext.Provider,
+      { value: input.agentWork },
       createElement(
-        BuildAssetKindsProvider,
-        { value: kinds },
+        TranslationProvider,
+        { children: null, locale: input.locale ?? "en" },
         createElement(
-          BuildNavigationProvider,
-          {
-            value: {
-              location,
-              open: noop,
-              href: (place) => `/build/${place.kindPath ?? ""}/${place.name ?? ""}`
-            }
-          },
-          createElement(BuildFrame, { source })
+          BuildAssetKindsProvider,
+          { value: kinds },
+          createElement(
+            BuildNavigationProvider,
+            {
+              value: {
+                location,
+                open: noop,
+                href: (place) => `/build/${place.kindPath ?? ""}/${place.name ?? ""}`
+              }
+            },
+            createElement(BuildFrame, { source })
+          )
         )
       )
     )
@@ -626,6 +633,24 @@ describe("A Data Store never published", () => {
     expect(
       render({ kindPath: "data-stores", name: "visit-log" }, { draft: true, locale: "de" })
     ).toContain("Entwurf · nicht veröffentlicht");
+  });
+
+  it("holds Publish back while the agent in the dock is still working on the store", () => {
+    const address = { kindPath: "data-stores", name: "visit-log" };
+    const working = render(address, {
+      draft: true,
+      agentWork: { kind: "data_store", name: "visit-log" }
+    });
+    expect(working).not.toContain("data-data-store-publish");
+    expect(working).toContain("data-data-store-agent-working");
+    expect(working).toContain("The agent is still working on this Data Store.");
+    // An agent at work on something else holds nothing back here.
+    const elsewhere = render(address, {
+      draft: true,
+      agentWork: { kind: "data_store", name: "orders" }
+    });
+    expect(elsewhere).toContain("data-data-store-publish");
+    expect(elsewhere).not.toContain("data-data-store-agent-working");
   });
 });
 
