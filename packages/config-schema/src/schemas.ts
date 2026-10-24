@@ -208,21 +208,21 @@ export {
 const defaultLightUiTheme = {
   accentColor: "#b5573a",
   accentStrongColor: "#8c3f26",
-  backgroundColor: "#f4f4f1",
-  surfaceColor: "#fcfcfa",
+  backgroundColor: "#f3f3f0",
+  surfaceColor: "#fafaf8",
   textColor: "#1c1c1b",
   mutedTextColor: "#5e5d5a",
-  borderColor: "#e3e2de"
+  borderColor: "#e1e0dc"
 };
 
 const defaultDarkUiTheme = {
   accentColor: "#d98c6c",
   accentStrongColor: "#e8ab90",
-  backgroundColor: "#141417",
-  surfaceColor: "#19191c",
+  backgroundColor: "#131315",
+  surfaceColor: "#18181a",
   textColor: "#ececeb",
   mutedTextColor: "#a9aaac",
-  borderColor: "#2e2f32"
+  borderColor: "#2d2d30"
 };
 
 function createUiThemeSchema(defaultTheme: typeof defaultLightUiTheme) {

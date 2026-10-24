@@ -277,7 +277,7 @@ describe("composed view document", () => {
     );
     expect(html).toContain("tailwind.config={theme:{extend:{colors,");
     expect(html).toContain("--primary: #b5573a;");
-    expect(html).toContain("--background: #fcfcfa;");
+    expect(html).toContain("--background: #fafaf8;");
     expect(html).toContain("--success: #047857;");
     expect(html).toContain("--warning: #b45309;");
     expect(html).toContain("--info: #32669a;");
