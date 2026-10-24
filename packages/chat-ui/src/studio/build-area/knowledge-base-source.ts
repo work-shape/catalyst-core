@@ -31,6 +31,13 @@ import type { ConnectorTypeOffer } from "./connection-typed-model";
 export type KnowledgeBaseState = Awaited<ReturnType<ApiClient["knowledge_bases"]["get"]>> & {
   dataFlows?: DataFlows;
 };
+/** The embedding of a Knowledge Base that searches by meaning, as its state names it. */
+export type KnowledgeEmbeddingState = NonNullable<KnowledgeBaseState["embedding"]>;
+/** What a re-index answers: the state after the call, with the statement where one would start. */
+export type KnowledgeReindexAnswer = Extract<
+  Awaited<ReturnType<ApiClient["knowledge_bases"]["reindex"]>>,
+  { status: "done" }
+>["output"];
 /** The rows a query answers, with the Knowledge Base and its tables as their source. */
 export type KnowledgeQueryAnswer = Awaited<ReturnType<ApiClient["knowledge_bases"]["query"]>>;
 
@@ -89,15 +96,21 @@ export function documentsStillIndexing(
 
 /**
  * Whether the state of a Knowledge Base is read again every few seconds: while its store is being
- * made, while its processing waits for a worker, so the page sees it recover, and always on the
- * Documents section of a Knowledge Base that keeps documents. There a sync from a source can be
- * queued before any document exists, so no document's state tells when no worker takes it.
+ * made, while its processing waits for a worker, so the page sees it recover, while it is being
+ * re-indexed, so the page shows the progress and the switch, and always on the Documents section
+ * of a Knowledge Base that keeps documents. There a sync from a source can be queued before any
+ * document exists, so no document's state tells when no worker takes it.
  */
 export function knowledgeStateStillChanging(
-  state: Pick<KnowledgeBaseState, "status" | "processingWaiting">,
+  state: Pick<KnowledgeBaseState, "status" | "processingWaiting" | "embedding">,
   watchProcessing: boolean
 ): boolean {
-  return watchProcessing || state.status === "preparing" || state.processingWaiting === true;
+  return (
+    watchProcessing ||
+    state.status === "preparing" ||
+    state.processingWaiting === true ||
+    state.embedding?.state === "reindexing"
+  );
 }
 
 /** How many documents one page of the Documents section asks the instance for. */
@@ -170,6 +183,12 @@ export interface KnowledgeBaseSource {
   ): KnowledgeRead<KnowledgeBaseState>;
   /** Checks the published revision now. */
   check(knowledgeBase: string): Promise<KnowledgeCall<KnowledgeBaseState>>;
+  /**
+   * Re-indexes with the embedding model the Knowledge Base is set to. Without `confirm` it
+   * answers what that embeds and costs and starts nothing; with the statement's confirmation it
+   * starts. Absent where the page offers no re-index.
+   */
+  reindex?(knowledgeBase: string, confirm?: string): Promise<KnowledgeCall<KnowledgeReindexAnswer>>;
   /** Runs one read-only statement on the published revision. */
   query(knowledgeBase: string, sql: string): Promise<KnowledgeCall<KnowledgeQueryAnswer>>;
   /** Searches the documents of the published revision, as an agent does. */
@@ -374,6 +393,19 @@ export function useKnowledgeBaseSource(): KnowledgeBaseSource {
               : checked
         );
         return checked;
+      }),
+    reindex: (knowledgeBase, confirm) =>
+      called(async () => {
+        const outcome = await client.knowledge_bases.reindex({
+          params: { knowledgeBase },
+          body: confirm === undefined ? {} : { confirm }
+        });
+        if (outcome.status !== "done") throw new PendingApprovalError();
+        // A start shows at once: the state reads the generation being built, and polls.
+        if (outcome.output.started) {
+          await queryClient.invalidateQueries({ queryKey: key("state", knowledgeBase) });
+        }
+        return outcome.output;
       }),
     query: (knowledgeBase, sql) =>
       called(() => client.knowledge_bases.query({ params: { knowledgeBase }, body: { sql } })),

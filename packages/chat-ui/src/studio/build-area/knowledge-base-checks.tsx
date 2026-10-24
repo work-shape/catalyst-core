@@ -21,6 +21,7 @@ import { formatDateTime } from "../../shared/locale-format";
 import { useTranslation } from "../../shared/i18n";
 import { ReadState } from "./data-store-read-state";
 import { KNOWLEDGE_STATUS_VIEWS } from "./knowledge-base-model";
+import { KnowledgeEmbedding } from "./knowledge-base-reindex";
 import type {
   KnowledgeBaseSource,
   KnowledgeBaseState,
@@ -38,12 +39,15 @@ export function KnowledgeStatus({
   source,
   knowledgeBase,
   publishedRevision,
-  canCheck
+  canCheck,
+  canReindex = false
 }: {
   source: KnowledgeBaseSource;
   knowledgeBase: string;
   publishedRevision: number;
   canCheck: boolean;
+  /** Whether the reader may publish it, which a re-index asks as a changed model does. */
+  canReindex?: boolean;
 }) {
   const { t } = useTranslation();
   const read = source.useState(knowledgeBase, publishedRevision);
@@ -60,6 +64,14 @@ export function KnowledgeStatus({
       {(state) => (
         <>
           <StatusFacts state={state} />
+          {state.embedding ? (
+            <KnowledgeEmbedding
+              embedding={state.embedding}
+              source={source}
+              knowledgeBase={knowledgeBase}
+              canReindex={canReindex}
+            />
+          ) : null}
           {failure ? <FormNotice tone="error">{failure}</FormNotice> : null}
           {canCheck ? (
             <div>

@@ -96,6 +96,8 @@
 {"name":"knowledge_base.documents_purged","legacy":false,"audited":true,"phases":["after"]}
 {"name":"knowledge_base.documents_removed","legacy":false,"audited":true,"phases":["after"]}
 {"name":"knowledge_base.files_added","legacy":false,"audited":true,"phases":["after"]}
+{"name":"knowledge_base.reindex_finished","legacy":false,"audited":true,"phases":["after"]}
+{"name":"knowledge_base.reindex_started","legacy":false,"audited":true,"phases":["after"]}
 {"name":"knowledge_base.searched","legacy":false,"audited":true,"phases":["after"]}
 {"name":"knowledge_base.source_added","legacy":false,"audited":true,"phases":["after"]}
 {"name":"knowledge_base.source_narrowed","legacy":false,"audited":true,"phases":["after"]}

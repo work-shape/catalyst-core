@@ -33,6 +33,7 @@ import {
 } from "./builtin/chunking";
 import {
   approvedEmbeddingModel,
+  knowledgeEmbeddingBinding,
   knowledgeBaseDefinitionSchema,
   knowledgeTargetOf,
   type KnowledgeEmbedding,
@@ -68,12 +69,13 @@ import { releaseSyncedOriginals, enqueueOriginalRelease } from "./original-relea
 //
 // Embeddings (KB-5d), only where the published revision lists `semantic`: a Knowledge Base
 // without it makes no embedding call and has no vectors.
-// - Generation 1 is started with the instance's default embedding binding when the Knowledge
-//   Base has no generation yet. Its model and dimensions are recorded with it, and its vectors
+// - Generation 1 is started with the binding the Knowledge Base names
+//   (`indexing.embedding.binding`), else the instance's default, when it has no generation yet. Its model and dimensions are recorded with it, and its vectors
 //   go into `embeddings_1` as `halfvec(<dimensions>)`.
 // - A later change of the default or of the binding re-embeds nothing by itself: a generation
 //   whose binding is gone from release config, or now names another model or another length,
-//   gets no vector here. KB-8's re-index starts a generation for the new model.
+//   gets no vector here. KB-8's re-index (`reindex.ts`) starts a generation for the new model;
+//   while it is built, a passage indexed here gets its vector in both.
 // - Passages that have no vector in a generation being served or built are sent through
 //   `gateway.embed`, the passage with its prefix (title, file name, heading), in batches of up
 //   to 2,048 passages and up to `KNOWLEDGE_EMBEDDING_BATCH_TOKENS` estimated tokens, prefixes
@@ -107,7 +109,7 @@ export const KNOWLEDGE_EMBEDDING_BATCH = 2_048;
  * scripts, so the bound keeps half of the cap. A provider that still refuses a batch as too
  * large gets it in halves.
  */
-const KNOWLEDGE_EMBEDDING_BATCH_TOKENS = 150_000;
+export const KNOWLEDGE_EMBEDDING_BATCH_TOKENS = 150_000;
 
 /** How long ingestion waits before it asks again while a usage limit refuses its calls. */
 export const KNOWLEDGE_USAGE_LIMIT_WAIT_MS = 30 * 60_000;
@@ -178,7 +180,9 @@ export async function indexTargetOf(
  * How long a failed embedding call makes the job wait, and what the page says meanwhile; or
  * nothing where the error is one the job's own retries are for.
  */
-function waitOf(error: unknown): { ms: number; code?: KnowledgeDocumentWaitCode } | undefined {
+export function waitOf(
+  error: unknown
+): { ms: number; code?: KnowledgeDocumentWaitCode } | undefined {
   if (isModelUsageLimitReached(error)) {
     return { ms: KNOWLEDGE_USAGE_LIMIT_WAIT_MS, code: "knowledge_usage_limit_reached" };
   }
@@ -201,7 +205,7 @@ function waitOf(error: unknown): { ms: number; code?: KnowledgeDocumentWaitCode 
  * `max_tokens_per_request`, or a 413. Read from the fields of the gateway's provider error,
  * which this package does not import.
  */
-function refusedAsTooLarge(error: unknown): boolean {
+export function refusedAsTooLarge(error: unknown): boolean {
   if (!(error instanceof AppError) || !("status" in error)) return false;
   if (error.status === 413) return true;
   return (
@@ -215,7 +219,7 @@ function refusedAsTooLarge(error: unknown): boolean {
  * Packs the texts, in order, into batches of at most `maxTokens` estimated tokens each. A text
  * above the bound alone is a batch of its own.
  */
-function batchesByTokens<T extends { text: string }>(
+export function batchesByTokens<T extends { text: string }>(
   items: readonly T[],
   maxTokens: number
 ): T[][] {
@@ -237,7 +241,7 @@ function batchesByTokens<T extends { text: string }>(
 }
 
 /** The text a passage is embedded as: its prefix line, then its text. */
-function embeddingText(
+export function embeddingText(
   document: { title: string; fileName: string },
   passage: { heading?: string; text: string }
 ): string {
@@ -313,7 +317,11 @@ export function createKnowledgeIndexJobHandler(
     const { store } = found;
     let generations: KnowledgeEmbeddingGeneration[] = await store.embeddingGenerations(signal);
     if (generations.length === 0) {
-      const model = approvedEmbeddingModel(embedding, embedding.defaultBinding);
+      // The binding the Knowledge Base names, else the instance's default at its first index.
+      const model = approvedEmbeddingModel(
+        embedding,
+        knowledgeEmbeddingBinding(found.definition, embedding)
+      );
       // No model approved: semantic search is refused on the instance, and nothing is sent.
       if (!model) return { vectors: 0 };
       generations = await store.startFirstGeneration(model, signal);
@@ -324,7 +332,7 @@ export function createKnowledgeIndexJobHandler(
     for (const generation of generations) {
       const model = approvedEmbeddingModel(embedding, generation.bindingId);
       // The binding is gone, or embeds with another model now: never mix two models in one
-      // generation. Its re-index is KB-8's.
+      // generation. A re-index moves the Knowledge Base to a model it has (`reindex.ts`).
       if (model?.model !== generation.model || model.dimensions !== generation.dimensions) {
         continue;
       }
@@ -406,7 +414,6 @@ export function createKnowledgeIndexJobHandler(
           }
           vectors += await store.writeEmbeddings(
             {
-              contentSha256: payload.contentSha256,
               generation,
               vectors: batch.map((item, index) => {
                 const vector = answer.vectors[index];

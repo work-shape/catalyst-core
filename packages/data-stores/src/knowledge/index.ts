@@ -3,9 +3,10 @@ import { knowledgeHitDocument } from "./hit-document";
 import { FIELD_OUTPUT_MIN_TOKENS } from "./field-budget";
 import {
   confirmKnowledgeProcessing,
-  knowledgeProcessingReview,
+  knowledgePublishReview,
   createKnowledgeReprocessHandler
 } from "./processing-publish";
+import { createKnowledgeReindexHandler } from "./reindex";
 import { sourceBoundaryKey } from "./source-boundary";
 import { sourcePolicyJob } from "./builtin/source-policy-job";
 import { knowledgePublishQuestion } from "./publish-question";
@@ -20,6 +21,7 @@ import {
   KNOWLEDGE_BASE_ASSET_KIND,
   type ActorAccess,
   type AuditRecorder,
+  type AuthenticatedIdentity,
   type AssetScope,
   type ClientInstanceId,
   type DataToolSource,
@@ -41,6 +43,7 @@ import {
   KNOWLEDGE_BASE_NAME_RULE,
   knowledgeBaseDefinitionSchema,
   knowledgeTargetOf,
+  embeddingBindingIssue,
   semanticSearchIssue,
   type KnowledgeEmbedding
 } from "./definition";
@@ -76,6 +79,8 @@ export interface KnowledgeBases {
       config: unknown;
       replaced: unknown;
       confirmProcessing?: string;
+      /** Who publishes: a re-index the publish starts is counted for them. */
+      actor?: AuthenticatedIdentity;
     }
   ): Promise<void>;
   /**
@@ -167,6 +172,7 @@ export function createKnowledgeBases(input: {
     stores: input.stores,
     backend: input.backend,
     ...(input.sources ? { sources: input.sources } : {}),
+    embedding: input.embedding,
     documentFormats: input.documentFormats,
     maxDocuments: input.maxDocuments,
     ...(input.maxPages === undefined ? {} : { maxPages: input.maxPages }),
@@ -189,14 +195,14 @@ export function createKnowledgeBases(input: {
         kind: "knowledge_base",
         name: knowledgeBaseDefinitionSchema.parse(question.config).name
       });
-      const review = await knowledgeProcessingReview(
-        runtime,
-        question.config,
-        asset?.publishedConfig,
-        question.assetId,
-        input.embedding,
-        true
-      );
+      const review = await knowledgePublishReview(runtime, {
+        config: question.config,
+        previous: asset?.publishedConfig,
+        assetId: question.assetId,
+        embedding: input.embedding,
+        draftOnly: true,
+        ...(question.locale ? { locale: question.locale } : {})
+      });
       return [
         ...(await knowledgePublishQuestion(input.stores, input.clientInstanceId, question)),
         ...(review?.lines ?? [])
@@ -220,7 +226,12 @@ export function createKnowledgeBases(input: {
       validateWrite: (context, knowledgeBases) =>
         knowledgeBases
           .filter((knowledgeBase) => context.changes(KNOWLEDGE_BASE_ASSET_KIND, knowledgeBase.name))
-          .flatMap((knowledgeBase) => semanticSearchIssue(knowledgeBase, input.embedding) ?? [])
+          .flatMap((knowledgeBase) =>
+            [
+              semanticSearchIssue(knowledgeBase, input.embedding),
+              embeddingBindingIssue(knowledgeBase, input.embedding)
+            ].filter((issue): issue is string => issue !== undefined)
+          )
           .map((message) => ({ message })),
       summarize: (knowledgeBase) => ({
         name: knowledgeBase.name,
@@ -228,7 +239,10 @@ export function createKnowledgeBases(input: {
         description: knowledgeBase.description
       })
     }),
-    async publish(stores, { access, assetId, revision, config, replaced, confirmProcessing }) {
+    async publish(
+      stores,
+      { access, assetId, revision, config, replaced, confirmProcessing, actor }
+    ) {
       const definition = knowledgeBaseDefinitionSchema.parse(config);
       const maxTokens = definition.extraction?.budget.maxTokensPerDocument;
       if (maxTokens !== undefined && maxTokens < FIELD_OUTPUT_MIN_TOKENS)
@@ -254,7 +268,8 @@ export function createKnowledgeBases(input: {
           revision,
           config,
           replaced,
-          ...(confirmProcessing ? { confirmProcessing } : {})
+          ...(confirmProcessing ? { confirmProcessing } : {}),
+          ...(actor ? { actor } : {})
         },
         input.embedding
       );
@@ -381,6 +396,11 @@ export function createKnowledgeBases(input: {
           ...(files
             ? [
                 createKnowledgeReprocessHandler({ ...runtime, files }),
+                createKnowledgeReindexHandler(runtime, {
+                  auditRecorder,
+                  embedding: input.embedding,
+                  embed
+                }),
                 createKnowledgeIndexJobHandler(runtime, {
                   files,
                   auditRecorder,

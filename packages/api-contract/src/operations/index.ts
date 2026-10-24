@@ -160,6 +160,11 @@ export * from "./workflow-principal-rights";
 
 export type ApiOperationName = keyof typeof apiOperations;
 
-export { knowledgeWriteContracts } from "./knowledge";
+export {
+  knowledgeWriteContracts,
+  type KnowledgeEmbeddingModelState,
+  type KnowledgeEmbeddingStateResponse,
+  type KnowledgeReindexResponse
+} from "./knowledge";
 
 export * from "./mail";

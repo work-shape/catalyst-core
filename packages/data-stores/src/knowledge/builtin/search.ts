@@ -44,6 +44,7 @@ const KNOWLEDGE_EMBEDDING_VECTOR_COLUMN = "embedding";
 const generationRow = z.object({
   generation: z.number().int().min(1),
   binding_id: z.string(),
+  model: z.string(),
   dimensions: z.number().int().min(1).max(4_000),
   table_present: z.boolean()
 });
@@ -64,7 +65,7 @@ const hitRow = z.object({
 async function activeGeneration(sql: PostgresChangeStatements) {
   const [row] = z.array(generationRow).parse(
     await sql.run(
-      `select generation, binding_id, dimensions,
+      `select generation, binding_id, model, dimensions,
          pg_catalog.to_regclass('catalyst_kb.embeddings_' || generation) is not null
            as table_present
        from catalyst_kb.index_generations where state = 'active'`
@@ -91,39 +92,51 @@ export async function searchKnowledgeStore(
   input: { query: string; limit: number; embed?: KnowledgeQueryEmbedding }
 ): Promise<KnowledgeSearchAnswer> {
   const { embed } = input;
-  let vector: QueryVector | undefined;
-  if (target.methods.includes("semantic") && embed) {
-    const generation = await run(activeGeneration);
-    const embedded =
-      generation &&
-      (await embed({ bindingId: generation.binding_id, dimensions: generation.dimensions }));
+  const semanticAsked = target.methods.includes("semantic") && embed !== undefined;
+  /** The query in the model of `generation`, where the instance can still embed with it. */
+  const embedFor = async (
+    generation: z.infer<typeof generationRow> | undefined
+  ): Promise<QueryVector | undefined> => {
+    if (!generation || !embed) return undefined;
+    const embedded = await embed({
+      bindingId: generation.binding_id,
+      model: generation.model,
+      dimensions: generation.dimensions
+    });
     // A model that answers another length than the generation's is not the generation's.
-    if (generation && embedded?.length === generation.dimensions) {
-      vector = {
-        generation: generation.generation,
-        dimensions: generation.dimensions,
-        vector: embedded
-      };
-    }
+    return embedded?.length === generation.dimensions
+      ? { generation: generation.generation, dimensions: generation.dimensions, vector: embedded }
+      : undefined;
+  };
+  let vector = semanticAsked ? await embedFor(await run(activeGeneration)) : undefined;
+  // A re-index switched generations between the embedding and the search (KB-8): the query is
+  // embedded once more with the model now active, so the search still ranks by meaning.
+  for (let attempt = 0; ; attempt += 1) {
+    let signals: KnowledgeSearchSignal[] = [];
+    let switched: z.infer<typeof generationRow> | undefined;
+    const rows = await run(async (sql) => {
+      // The generation may have switched since it was read and its table be gone: it is read
+      // again in the transaction of the search, and a vector of another generation is not used.
+      const current = vector && (await activeGeneration(sql));
+      const semantic = vector && current?.generation === vector.generation ? vector : undefined;
+      if (vector && !semantic && current && attempt === 0) {
+        switched = current;
+        return undefined;
+      }
+      signals = signalsOf(target.methods, semantic !== undefined);
+      return z
+        .array(hitRow)
+        .parse(
+          await sql.run(searchStatement(signals, semantic), [
+            input.query,
+            input.limit,
+            ...(semantic ? [`[${semantic.vector.join(",")}]`] : [])
+          ])
+        );
+    });
+    if (rows) return { hits: rows.map(hitOf), signals };
+    vector = await embedFor(switched);
   }
-  let signals: KnowledgeSearchSignal[] = [];
-  const rows = await run(async (sql) => {
-    // The generation may have switched since it was read and its table be gone: it is read
-    // again in the transaction of the search, and a vector of another generation is not used.
-    const current = vector && (await activeGeneration(sql));
-    const semantic = vector && current?.generation === vector.generation ? vector : undefined;
-    signals = signalsOf(target.methods, semantic !== undefined);
-    return z
-      .array(hitRow)
-      .parse(
-        await sql.run(searchStatement(signals, semantic), [
-          input.query,
-          input.limit,
-          ...(semantic ? [`[${semantic.vector.join(",")}]`] : [])
-        ])
-      );
-  });
-  return { hits: rows.map(hitOf), signals };
 }
 
 /**

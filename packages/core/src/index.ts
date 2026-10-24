@@ -167,6 +167,7 @@ export { KNOWLEDGE_CHECK_STATUSES } from "@work-shape/catalyst-asset-schemas";
 export { KNOWLEDGE_DOCUMENT_FAILURE_CODES } from "@work-shape/catalyst-asset-schemas";
 export { KNOWLEDGE_DOCUMENT_STATES } from "@work-shape/catalyst-asset-schemas";
 export { KNOWLEDGE_DOCUMENT_WAIT_CODES } from "@work-shape/catalyst-asset-schemas";
+export { KNOWLEDGE_EMBEDDING_STATES } from "@work-shape/catalyst-asset-schemas";
 export { KNOWLEDGE_SEARCH_SIGNALS } from "@work-shape/catalyst-asset-schemas";
 export { KNOWLEDGE_SOURCE_FAILURE_CODES } from "@work-shape/catalyst-asset-schemas";
 export { KNOWLEDGE_SOURCE_ITEM_FAILURE_CODES } from "@work-shape/catalyst-asset-schemas";

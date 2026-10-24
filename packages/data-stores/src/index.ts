@@ -143,7 +143,8 @@ export const knowledgeModule = defineModule({
     "knowledge_bases.upload_file",
     "knowledge_bases.list_documents",
     "knowledge_bases.retry_documents",
-    "knowledge_bases.remove_documents"
+    "knowledge_bases.remove_documents",
+    "knowledge_bases.reindex"
   ]
 });
 

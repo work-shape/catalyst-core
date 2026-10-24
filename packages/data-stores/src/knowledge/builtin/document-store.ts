@@ -17,6 +17,7 @@ import {
   type KnowledgeChunkInput,
   type KnowledgeDocumentStore,
   type KnowledgeEmbeddingGeneration,
+  type KnowledgeEmbeddingModel,
   type KnowledgeRetriedDocument
 } from "@work-shape/catalyst-core";
 import type { PostgresChangeStatements } from "@work-shape/catalyst-postgres-connector";
@@ -107,6 +108,52 @@ function generationOf(row: z.infer<typeof generationRow>): KnowledgeEmbeddingGen
     state: row.state
   };
 }
+
+/** Whether a generation embeds with exactly this model. */
+function sameModel(generation: KnowledgeEmbeddingModel, model: KnowledgeEmbeddingModel): boolean {
+  return (
+    generation.bindingId === model.bindingId &&
+    generation.model === model.model &&
+    generation.dimensions === model.dimensions
+  );
+}
+
+/** The dimensions of a model are written into the type of its table: a whole number only. */
+function assertDimensions(model: KnowledgeEmbeddingModel): void {
+  if (!Number.isSafeInteger(model.dimensions) || model.dimensions < 1) {
+    throw new AppError("INTERNAL", "The dimensions of an embedding model are a whole number");
+  }
+}
+
+/**
+ * Whether chunk `c` is one a re-index embeds and a switch waits for: of a content not failed,
+ * chunked at the content's revision, that a document not withdrawn holds. A content still
+ * `pending` is in it, because its index job may have read the generations before this one was
+ * started; it then has its vector before the switch.
+ */
+const REINDEXED_CHUNK = `exists (
+    select 1 from catalyst_kb.contents ct
+    where ct.sha256 = c.content_sha256 and ct.state <> 'failed'
+      and ct.chunking_revision = c.chunking_revision
+  )
+  and exists (
+    select 1 from catalyst_kb.documents d
+    where d.content_sha256 = c.content_sha256 and d.withdrawn_at is null
+  )`;
+
+const reindexPassageRow = passageRow.extend({ title: z.string(), file_name: z.string() });
+
+const estimateRow = z.object({
+  chunks: z.number().int(),
+  tokens: z.string().regex(/^\d+$/u),
+  bytes: z.string().regex(/^\d+$/u)
+});
+
+const progressRow = generationRow.extend({
+  chunk_count: z.number().int(),
+  embedded_count: z.number().int(),
+  started_at: z.string()
+});
 
 /** The generations being served or built, as the transaction sees them. */
 async function liveGenerations(
@@ -467,12 +514,7 @@ export function createBuiltinDocumentStore(
             "select 1 as held from catalyst_kb.index_generations limit 1"
           );
           if (any) return liveGenerations(sql);
-          if (!Number.isSafeInteger(model.dimensions) || model.dimensions < 1) {
-            throw new AppError(
-              "INTERNAL",
-              "The dimensions of an embedding model are a whole number"
-            );
-          }
+          assertDimensions(model);
           await sql.run(
             `insert into catalyst_kb.index_generations
              (generation, binding_id, model, dimensions, state, switched_at)
@@ -531,24 +573,30 @@ export function createBuiltinDocumentStore(
         }
       }
       const table = embeddingsTable(generation);
+      const chunkIds = input.vectors.map((each) => each.chunkId);
       return inStore(
         "Writing the embeddings",
         KNOWLEDGE_EMBEDDINGS_WRITE_TIMEOUT_MS,
         signal,
         async (sql) => {
-          // Held against a rewrite of the content's chunks, which locks the row for update, so
-          // a passage found here is not removed before its vector is in.
+          // Held against a rewrite of their chunks, which locks a content's row for update, so
+          // a passage found here is not removed before its vector is in. In one order, so two
+          // writers of overlapping contents do not wait on each other in a circle.
           const held = await sql.run(
-            "select 1 as held from catalyst_kb.contents where sha256 = $1::pg_catalog.text for share",
-            [input.contentSha256]
+            `select 1 as held from catalyst_kb.contents where sha256 in (
+               select content_sha256 from catalyst_kb.chunks where id = any($1::pg_catalog.text[])
+             ) order by sha256 for share`,
+            [{ type: "text[]", value: chunkIds }]
           );
           if (held.length === 0) return 0;
           // One writer per generation at a time keeps its count exact.
-          await sql.run(
+          const live = await sql.run(
             `select 1 as held from catalyst_kb.index_generations
-           where generation = $1::pg_catalog.int4 for update`,
+           where generation = $1::pg_catalog.int4 and state in ('building', 'active') for update`,
             [generation]
           );
+          // A generation retired meanwhile has no table any more.
+          if (live.length === 0) return 0;
           const written = await sql.run(
             `insert into ${table} (chunk_id, embedding)
            select v.chunk_id, v.embedding::public.halfvec(${dimensions})
@@ -557,7 +605,7 @@ export function createBuiltinDocumentStore(
            on conflict (chunk_id) do nothing
            returning chunk_id`,
             [
-              { type: "text[]", value: input.vectors.map((each) => each.chunkId) },
+              { type: "text[]", value: chunkIds },
               { type: "text[]", value: input.vectors.map((each) => vectorText(each.vector)) }
             ]
           );
@@ -571,6 +619,208 @@ export function createBuiltinDocumentStore(
           );
           return written.length;
         }
+      );
+    },
+
+    async startGeneration(model, signal) {
+      assertDimensions(model);
+      const record = await storeOf(runtime, records, target);
+      try {
+        await ensureVectorExtension(
+          runtime.server,
+          record,
+          signal ?? AbortSignal.timeout(KNOWLEDGE_DOCUMENTS_TIMEOUT_MS)
+        );
+      } catch (error) {
+        throw databaseFailureError(error, "Making pgvector in the store");
+      }
+      return inStore(
+        "Starting a generation of embeddings",
+        KNOWLEDGE_DOCUMENTS_TIMEOUT_MS,
+        signal,
+        async (sql) => {
+          // One caller starts it; one waiting here finds it started.
+          await sql.run("lock table catalyst_kb.index_generations in exclusive mode");
+          const live = await liveGenerations(sql);
+          const building = live.find((each) => each.state === "building");
+          if (building && sameModel(building, model)) return building;
+          if (building) {
+            // A re-index to another model replaces the one being built: one model at a time.
+            await sql.run(
+              `update catalyst_kb.index_generations set state = 'retired'
+               where generation = $1::pg_catalog.int4`,
+              [building.generation]
+            );
+            await sql.script(`drop table if exists ${embeddingsTable(building.generation)};`);
+          }
+          const [next] = z
+            .array(z.object({ next: z.number().int() }))
+            .parse(
+              await sql.run(
+                "select coalesce(max(generation), 0)::pg_catalog.int4 + 1 as next from catalyst_kb.index_generations"
+              )
+            );
+          const generation = next?.next ?? 1;
+          const [goal] = z
+            .array(countRow)
+            .parse(
+              await sql.run(
+                `select count(*)::pg_catalog.int4 as count from catalyst_kb.chunks c where ${REINDEXED_CHUNK}`
+              )
+            );
+          await sql.run(
+            `insert into catalyst_kb.index_generations
+             (generation, binding_id, model, dimensions, state, chunk_count)
+           values ($1::pg_catalog.int4, $2::pg_catalog.text, $3::pg_catalog.text,
+             $4::pg_catalog.int4, 'building', $5::pg_catalog.int4)`,
+            [generation, model.bindingId, model.model, model.dimensions, goal?.count ?? 0]
+          );
+          await sql.script(
+            `create table ${embeddingsTable(generation)} (
+             chunk_id text primary key references catalyst_kb.chunks (id) on delete cascade,
+             embedding public.halfvec(${model.dimensions}) not null,
+             created_at timestamp with time zone not null default now()
+           );`
+          );
+          return { generation, ...model, state: "building" as const };
+        }
+      );
+    },
+
+    passagesToReindex(input, signal) {
+      return inStore(
+        "Reading the passages to embed again",
+        KNOWLEDGE_DOCUMENTS_TIMEOUT_MS,
+        signal,
+        async (sql) => {
+          const rows = z.array(reindexPassageRow).parse(
+            await sql.run(
+              `select c.id, c.heading, c.text, d.title, d.file_name from catalyst_kb.chunks c
+             cross join lateral (
+               select title, file_name from catalyst_kb.documents
+               where content_sha256 = c.content_sha256 and withdrawn_at is null
+               order by added_at, id limit 1
+             ) d
+             where ${REINDEXED_CHUNK}
+               and not exists (
+                 select 1 from ${embeddingsTable(input.generation)} e where e.chunk_id = c.id
+               )
+             order by c.id
+             limit $1::pg_catalog.int4`,
+              [input.limit]
+            )
+          );
+          return rows.map((row) => ({
+            chunkId: row.id,
+            ...(row.heading === null ? {} : { heading: row.heading }),
+            text: row.text,
+            title: row.title,
+            fileName: row.file_name
+          }));
+        }
+      );
+    },
+
+    switchGeneration(generation, signal) {
+      return inStore(
+        "Switching the generation of embeddings",
+        KNOWLEDGE_DOCUMENTS_TIMEOUT_MS,
+        signal,
+        async (sql) => {
+          const table = embeddingsTable(generation);
+          // Read before the lock, so searches are not held while it is looked for. A passage
+          // written after it is embedded by its own index job into what is active then.
+          const [missing] = await sql.run(
+            `select 1 as missing from catalyst_kb.chunks c where ${REINDEXED_CHUNK}
+               and not exists (select 1 from ${table} e where e.chunk_id = c.id) limit 1`
+          );
+          if (missing) return { switched: false };
+          // A search reads the active generation and its table in one transaction: this waits
+          // for the searches under way and holds the next until the switch is committed, so no
+          // search sees the passages of two generations or a table that is gone.
+          await sql.run("lock table catalyst_kb.index_generations in access exclusive mode");
+          const live = await liveGenerations(sql);
+          if (!live.some((each) => each.generation === generation && each.state === "building")) {
+            return { switched: false };
+          }
+          const retired = live.find((each) => each.state === "active");
+          if (retired) {
+            await sql.run(
+              `update catalyst_kb.index_generations set state = 'retired'
+               where generation = $1::pg_catalog.int4`,
+              [retired.generation]
+            );
+          }
+          const [count] = z
+            .array(countRow)
+            .parse(await sql.run(`select count(*)::pg_catalog.int4 as count from ${table}`));
+          await sql.run(
+            `update catalyst_kb.index_generations
+             set state = 'active', switched_at = now(), embedded_count = $2::pg_catalog.int4
+             where generation = $1::pg_catalog.int4`,
+            [generation, count?.count ?? 0]
+          );
+          if (retired)
+            await sql.script(`drop table if exists ${embeddingsTable(retired.generation)};`);
+          return { switched: true, ...(retired ? { retired: retired.generation } : {}) };
+        }
+      );
+    },
+
+    reindexEstimate(signal) {
+      return inStore(
+        "Estimating a re-index",
+        KNOWLEDGE_DOCUMENTS_TIMEOUT_MS,
+        signal,
+        async (sql) => {
+          const [row] = z.array(estimateRow).parse(
+            await sql.run(
+              // The prefix (title, file name, heading) is embedded with each passage: about one
+              // token per three characters of it, a little above the chunker's own estimate.
+              `select count(*)::pg_catalog.int4 as chunks,
+                 coalesce(sum(c.token_count + ceil(pg_catalog.char_length(
+                   d.title || d.file_name || coalesce(c.heading, '')) / 3.0)), 0)::pg_catalog.int8::pg_catalog.text as tokens,
+                 pg_catalog.pg_database_size(pg_catalog.current_database())::pg_catalog.text as bytes
+               from catalyst_kb.chunks c
+               cross join lateral (
+                 select title, file_name from catalyst_kb.documents
+                 where content_sha256 = c.content_sha256 and withdrawn_at is null
+                 order by added_at, id limit 1
+               ) d
+               where ${REINDEXED_CHUNK}`
+            )
+          );
+          return {
+            chunks: row?.chunks ?? 0,
+            tokens: Number(row?.tokens ?? 0),
+            storeBytes: Number(row?.bytes ?? 0)
+          };
+        }
+      );
+    },
+
+    generationProgress(signal) {
+      return inStore(
+        "Reading the generations of embeddings",
+        KNOWLEDGE_DOCUMENTS_TIMEOUT_MS,
+        signal,
+        async (sql) =>
+          z
+            .array(progressRow)
+            .parse(
+              await sql.run(
+                `select generation, binding_id, model, dimensions, state, chunk_count,
+                   embedded_count, started_at::text
+                 from catalyst_kb.index_generations
+                 where state in ('building', 'active') order by generation`
+              )
+            )
+            .map((row) => ({
+              ...generationOf(row),
+              chunkCount: row.chunk_count,
+              embeddedCount: row.embedded_count,
+              startedAt: new Date(row.started_at).toISOString()
+            }))
       );
     },
 

@@ -11,7 +11,11 @@ import type {
   LocaleCode,
   PlatformStores
 } from "@work-shape/catalyst-core";
-import { knowledgeTargetOf, type KnowledgeBaseDefinition } from "./definition";
+import {
+  knowledgeTargetOf,
+  type KnowledgeBaseDefinition,
+  type KnowledgeEmbedding
+} from "./definition";
 
 /** What everything that serves Knowledge Bases in one process is built on. */
 export interface KnowledgeRuntime {
@@ -30,6 +34,8 @@ export interface KnowledgeRuntime {
    */
   embedQuery?: KnowledgeQueryEmbedder;
   fieldExtractor?: import("@work-shape/catalyst-core").KnowledgeFieldExtractor;
+  /** The embedding models release config approves, and the default. */
+  embedding?: KnowledgeEmbedding;
   /** The formats a file added here may be in: text, and PDF and DOCX with document processing. */
   documentFormats: readonly KnowledgeDocumentFormat[];
   /** How many documents one Knowledge Base holds at most (`knowledge.maxDocuments`). */
