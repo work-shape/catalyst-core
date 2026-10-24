@@ -75,6 +75,8 @@ modules:
   # workspace until an admin offers it in "Available in".
   workshaper:
     enabled: true
+  guardrails:
+    enabled: true
 # The file area per conversation and the commands an agent runs in it. The commands run in the
 # Docker sandbox, so the Compose files start a workspace command worker and build its runner image.
 executionWorkspaces:
