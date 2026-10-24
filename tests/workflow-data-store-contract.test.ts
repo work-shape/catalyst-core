@@ -432,6 +432,8 @@ describe("the names of a Data Store and of a Knowledge Base", () => {
       "delete_rows",
       "load",
       "records.propose",
+      "records.decide",
+      "records.flagged",
       "describe",
       "preview_rows"
     ]);
@@ -442,6 +444,8 @@ describe("the names of a Data Store and of a Knowledge Base", () => {
       | "delete_rows"
       | "load"
       | "records.propose"
+      | "records.decide"
+      | "records.flagged"
       | "describe"
       | "preview_rows"
     >();
@@ -454,6 +458,8 @@ describe("the names of a Data Store and of a Knowledge Base", () => {
       delete_rows: "data_store.execute",
       load: "data_store.insert",
       "records.propose": "data_store.records",
+      "records.decide": "data_store.records",
+      "records.flagged": "data_store.records",
       describe: "data_store.read",
       preview_rows: "data_store.read"
     });

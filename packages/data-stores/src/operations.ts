@@ -1,5 +1,8 @@
 import { scopePredicate } from "./scoped-tables";
 import { recordsPropose } from "./records/propose";
+import { recordsDecide } from "./records/decide";
+import { recordsFlagged } from "./records/flagged";
+import { fileReviewNotice } from "./records/review-notice";
 import { query, rowsSchema } from "./query";
 import {
   AppError,
@@ -129,6 +132,8 @@ const VERBS: readonly StoreVerb[] = [
   deleteRows,
   load,
   recordsPropose,
+  recordsDecide,
+  recordsFlagged,
   describe,
   previewRows
 ];
@@ -271,10 +276,11 @@ async function runVerb(
         { reason: "data_store_not_ready" }
       );
     }
-    // Fixed proposal reads use the platform connection; the preinstalled frame performs
-    // customer writes as the app role. Neither role repair nor call-record DDL runs here.
-    if (verb.verb === "records.propose")
-      return await verb.run(
+    // The records verbs read and write `catalyst.record_fields` on the platform connection;
+    // the preinstalled frame performs customer writes as the app role. Neither role repair nor
+    // call-record DDL runs here.
+    if (verb.verb.startsWith("records.")) {
+      const output = await verb.run(
         {
           runtime,
           store,
@@ -287,6 +293,10 @@ async function runVerb(
         },
         input
       );
+      // A proposal that leaves fields for a person tells the store's reviewers, once.
+      if (verb.verb === "records.propose") await fileReviewNotice(runtime, store);
+      return output;
+    }
     // The app role as the platform gave it, before anything runs as that role.
     const output = await asStoreRole(runtime, record, signal, async () => {
       const target = {

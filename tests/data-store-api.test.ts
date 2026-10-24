@@ -567,6 +567,13 @@ describe("a Data Store on an assembled instance", () => {
         DATA_STORE_OPERATION_SCOPES.describe,
         DATA_STORE_OPERATION_SCOPES.preview_rows
       ]);
+      expect([
+        apiOperations["data_stores.records_flagged"].scope,
+        apiOperations["data_stores.records_decide"].scope
+      ]).toEqual([
+        DATA_STORE_OPERATION_SCOPES["records.flagged"],
+        DATA_STORE_OPERATION_SCOPES["records.decide"]
+      ]);
       const { read, insert, execute } = DATA_STORE_ACTIONS;
       // A read is recorded every time. No verb names a policy of its own: what a changing call
       // waits for is the instance's to say, for every caller.
@@ -607,6 +614,24 @@ describe("a Data Store on an assembled instance", () => {
           "changing",
           DATA_STORE_ACTIONS.records,
           false,
+          undefined
+        ],
+        [
+          "records.decide",
+          DATA_STORE_OPERATION_SCOPES["records.decide"],
+          "principal",
+          "changing",
+          DATA_STORE_ACTIONS.records,
+          false,
+          undefined
+        ],
+        [
+          "records.flagged",
+          DATA_STORE_OPERATION_SCOPES["records.flagged"],
+          "principal",
+          "reading",
+          DATA_STORE_ACTIONS.records,
+          true,
           undefined
         ],
         [

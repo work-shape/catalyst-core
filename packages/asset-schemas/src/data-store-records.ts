@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { operationBatchResultSchema } from "./operation-batch";
-import { knowledgeExtractFieldsOutputSchema } from "./knowledge-write";
+import { knowledgeExtractFieldsOutputSchema, knowledgeFieldValueSchema } from "./knowledge-write";
 import type { DATA_STORE_SCALAR_TYPES } from "./contract-values";
 
 // REC-0: frozen contracts, no callable operations. Extraction's value/page/quote is
@@ -51,6 +51,13 @@ export const recordEvidenceResultSchema = z.discriminatedUnion("status", [
 export type RecordEvidenceResult = z.infer<typeof recordEvidenceResultSchema>;
 
 export const RECORD_FIELD_STATES = ["extracted", "confirmed", "corrected", "conflict"] as const;
+/** Why a field waits for a person in "Prüfen". */
+export const RECORD_FLAG_REASONS = [
+  "conflict",
+  "not_evidenced",
+  "confirmation_required",
+  "key_unresolved"
+] as const;
 export const RECORD_FIELD_FAILURE_CODES = ["record_field_unknown"] as const;
 
 const fieldSchema = knowledgeExtractFieldsOutputSchema.shape.fields.valueType.extend({ name });
@@ -91,7 +98,7 @@ const decisionSchema = z.strictObject({
 export const dataStoreRecordsDecideInputSchema = z
   .discriminatedUnion("action", [
     decisionSchema.extend({ action: z.literal("confirm") }),
-    decisionSchema.extend({ action: z.literal("correct"), value: z.json() }),
+    decisionSchema.extend({ action: z.literal("correct"), value: knowledgeFieldValueSchema }),
     decisionSchema.extend({ action: z.literal("assign"), documentId: id, knowledgeBaseId: id })
   ])
   .refine(
@@ -136,7 +143,10 @@ export const dataStoreRecordsFlaggedOutputSchema = z.strictObject({
   items: z
     .array(
       dataStoreRecordFieldSchema.extend({
-        reason: z.enum(["conflict", "not_evidenced", "confirmation_required", "key_unresolved"])
+        reason: z.enum(RECORD_FLAG_REASONS),
+        // REC-2: the cited document as its chip opens it, by the Knowledge Base's name. Absent
+        // where the document is no longer there to open.
+        document: z.strictObject({ knowledgeBase: name, fileName: name }).optional()
       })
     )
     .max(RECORDS_FLAGGED_MAX_ITEMS_PER_PAGE),
@@ -158,6 +168,10 @@ const scalarSchemas = {
   date: z.iso.date(),
   timestamp: z.iso.datetime({ offset: true })
 };
+/** Whether a column takes the value, as a proposal and a person's correction are checked. */
+export function recordColumnTakes(column: RecordColumn, value: unknown): boolean {
+  return compatible(column, value);
+}
 function compatible(column: RecordColumn, value: unknown): boolean {
   if (column.generated || column.type === "other") return false;
   if (value === null) return column.nullable;
