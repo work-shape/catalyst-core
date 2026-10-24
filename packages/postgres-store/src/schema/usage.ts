@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import {
   bigint,
   boolean,
+  check,
   date,
   foreignKey,
   index,
@@ -10,14 +11,16 @@ import {
   pgTable,
   primaryKey,
   text,
-  timestamp
+  timestamp,
+  uniqueIndex
 } from "drizzle-orm/pg-core";
 import type {
   JsonObject,
   ModelSystemPurpose,
   ModelUsageEvent,
   ModelUsageEventStatus,
-  ProviderRegion
+  ProviderRegion,
+  UsageSpendLimitLevel
 } from "@work-shape/catalyst-core";
 import { productUsers } from "./users";
 import { collaborationWorkspaces } from "./workspaces";
@@ -116,7 +119,7 @@ export const modelUsageCounters = pgTable(
   "model_usage_counters",
   {
     clientInstanceId: text("client_instance_id").notNull(),
-    // `instance` today. A limit per workspace or per user adds rows of its own kind.
+    // `instance`, `user` and `system` for a person or for nobody, `workspace` for a shared one.
     scopeKind: text("scope_kind").notNull(),
     scopeId: text("scope_id").notNull(),
     periodKind: text("period_kind").$type<"day" | "month">().notNull(),
@@ -201,5 +204,51 @@ export const modelUsageMaintenance = pgTable(
       name: "model_usage_maintenance_pk",
       columns: [table.clientInstanceId, table.task]
     })
+  ]
+);
+
+/**
+ * The spend limits an admin sets (LU-2): one row per level, and per workspace or user for the
+ * levels that name one. An amount is micros of the Customer Rate Card's currency; null is no
+ * limit. A row of one workspace or user replaces the default as a whole and goes with them.
+ */
+export const usageSpendLimits = pgTable(
+  "usage_spend_limits",
+  {
+    clientInstanceId: text("client_instance_id").notNull(),
+    level: text("level").$type<UsageSpendLimitLevel>().notNull(),
+    userId: text("user_id"),
+    collaborationWorkspaceId: text("collaboration_workspace_id"),
+    dailyLimitMicros: bigint("daily_limit_micros", { mode: "number" }),
+    monthlyLimitMicros: bigint("monthly_limit_micros", { mode: "number" }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
+    // Who set it last. Kept as text: the audit record is what names them for good.
+    updatedBy: text("updated_by")
+  },
+  (table) => [
+    uniqueIndex("usage_spend_limits_level_idx").on(
+      table.clientInstanceId,
+      table.level,
+      sql`coalesce(${table.userId}, ${table.collaborationWorkspaceId}, '')`
+    ),
+    foreignKey({
+      name: "usage_spend_limits_user_fk",
+      columns: [table.userId],
+      foreignColumns: [productUsers.id]
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "usage_spend_limits_workspace_fk",
+      columns: [table.collaborationWorkspaceId],
+      foreignColumns: [collaborationWorkspaces.id]
+    }).onDelete("cascade"),
+    check(
+      "usage_spend_limits_target_check",
+      sql`(${table.level} = 'user') = (${table.userId} is not null)
+        and (${table.level} = 'workspace') = (${table.collaborationWorkspaceId} is not null)`
+    ),
+    check(
+      "usage_spend_limits_amount_check",
+      sql`coalesce(${table.dailyLimitMicros}, 0) >= 0 and coalesce(${table.monthlyLimitMicros}, 0) >= 0`
+    )
   ]
 );

@@ -36,6 +36,7 @@ export const workspace = defineTranslations({
     runUsageLimitScopeUser: "your own calls",
     runUsageLimitScopeSystem: "the calls the product makes",
     runUsageLimitScopeInstance: "the calls of everyone on this instance",
+    runUsageLimitScopeWorkspace: "the calls of everyone in this workspace",
     runUsageLimitResetDay: "at midnight UTC",
     runUsageLimitResetMonth: "at the start of next month (UTC)",
     runNotStarted:
@@ -92,6 +93,7 @@ export const workspace = defineTranslations({
     runUsageLimitScopeUser: "deine eigenen Aufrufe",
     runUsageLimitScopeSystem: "die Aufrufe des Produkts",
     runUsageLimitScopeInstance: "die Aufrufe aller auf dieser Instanz",
+    runUsageLimitScopeWorkspace: "die Aufrufe aller in diesem Arbeitsbereich",
     runUsageLimitResetDay: "um Mitternacht UTC",
     runUsageLimitResetMonth: "zu Beginn des nächsten Monats (UTC)",
     runNotStarted:
