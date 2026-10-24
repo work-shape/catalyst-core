@@ -38,7 +38,10 @@ export interface ModelProviderConfig {
   /** The registered provider type. Only its adapter knows what the type means. */
   type: string;
   model: string;
-  /** Operator-declared processing region; only `eu` admits personal Connections. */
+  /**
+   * Operator-declared processing region. Personal Connections are admitted only where it is in
+   * `modules.connections.personalModelRegions`, `[eu]` unless release config widens it.
+   */
   region?: ProviderRegion;
   api?: OpenAiCompatibleModelProviderApiConfig;
   reasoningEffort?: ReasoningEffortConfig;

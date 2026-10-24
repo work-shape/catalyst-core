@@ -300,7 +300,8 @@ describe("personal Connection context isolation", () => {
           execution: "refused",
           error: {
             code: "FORBIDDEN",
-            message: "This instance cannot use personal Connections with its model setup."
+            message:
+              "This instance cannot use personal Connections with its model setup. Every model route of the run has to declare one of the regions allowed for personal Connections: eu."
           }
         });
         await expect(authorize.mock.results.at(-1)?.value).rejects.toMatchObject({
@@ -339,7 +340,8 @@ describe("personal Connection context isolation", () => {
         status: "failed",
         error: {
           code: "FORBIDDEN",
-          message: "This instance cannot use personal Connections with its model setup.",
+          message:
+            "This instance cannot use personal Connections with its model setup. Every model route of the run has to declare one of the regions allowed for personal Connections: eu.",
           details: { reason: "personal_connection_region" }
         }
       });

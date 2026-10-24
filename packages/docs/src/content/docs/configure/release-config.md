@@ -966,11 +966,14 @@ infrastructure:
 - `infrastructure.models.<name>.region` optionally declares where a model provider processes
   data: `eu`, or another non-empty string of at most 32 characters, such as `global` or `us`.
   A personal Connection (`credentialMode: user`) is refused with `personal_connection_region`
-  unless every model route the run can use, including fallbacks, declares exactly `eu`.
-  An unset region is refused too, before credentials are resolved; this refusal offers no
-  Connect card. The check uses the run's resolved model, including a model picked by the user
-  or used in Preview or a subagent. The runtime currently uses one route and has no configured
-  cross-provider fallbacks. Set `region: eu` only for an agreed EU processing route.
+  unless every model route the run can use, including fallbacks, declares a region listed in
+  [`modules.connections.personalModelRegions`](#personal-connections-and-model-regions), which
+  is `[eu]` unless set. An unset region is refused too, before credentials are resolved; this
+  refusal offers no Connect card and names the allowed regions, never a route. The check uses
+  the run's resolved model, including a model picked by the user or used in Preview or a
+  subagent. The runtime currently uses one route and has no configured cross-provider
+  fallbacks. Set `region: eu` only for an agreed EU processing route that is excluded from
+  training.
 - For other provider ports, `region` is `eu` or `global`. An external provider (`mailjet`, `s3`)
   must state it; a local provider (`capture`, `filesystem`, `docker`, `local`) must not.
   A `docker` sandbox with an `endpoint` runs on another host and must state it too.
@@ -1123,6 +1126,29 @@ egress:
 Each key under `connections` is the name of a Connection. The instance owns it, and `connection.read` or `connection.use` is [granted](/operate/rights-for-one-person/#grants) on this one Connection. An entry takes `connectorType`, `displayName`, `description`, `settings`, `authScheme`, `secret` and `operations`, and nothing else. `settings` is checked against the strict schema of the connector type before anything is stored, and a `connectorType` this build does not ship stops startup with the place of the fault. An entry of `operations` takes `name`, `effect` (`reading` or `changing`), `exposure` (any of `agent`, `bridge`, `workflow`, `outside`) and optionally `policy` and `schemaFingerprint`; an operation of `http_api` also declares its request ([below](#a-rest-interface-http_api)). What stands in the list is accepted; nothing else of the outside system can be called. Each exposure admits one kind of caller: `agent` an agent, `bridge` an App, `workflow` a Workflow, and `outside` the CLI and the platform MCP server, a caller with an API key or a Service Principal's credential, whose results leave the instance. A person in the browser outside an App and a schedule are admitted by none. `outside` is off unless the list names it.
 
 `secret` is the name of a secret, resolved like every other secret of the instance: from the environment variable of that name or from the file `<NAME>_FILE` points at. It is the only place of a Connection where a secret may stand, and it never holds the value. An `authScheme` other than `none` needs it, and `none` refuses it.
+
+### Personal Connections and model regions
+
+A personal Connection reads a person's own data, such as their mailbox, and the result goes to
+the model of the run. By default only routes that declare `region: eu` may receive it. A
+customer who accepts other regions widens the list:
+
+```yaml
+modules:
+  connections:
+    enabled: true
+    personalModelRegions: [eu, us]
+```
+
+A personal call passes when every model route of the run declares one of the listed regions.
+A route without a `region` never passes. An empty list, an entry that is not a string or an
+entry longer than 32 characters stops startup, and the message names the field. There is no
+switch for it in the interface and no right: the list changes only with a release.
+
+Widen the list only on the customer's written instruction, and only for provider routes that
+are contractually excluded from training. File the instruction in the deployment repository's
+`docs/` and commit it together with the change to the list and the provider entry, so the
+repository's history and the deploy record the decision.
 
 ### A REST interface: `http_api`
 

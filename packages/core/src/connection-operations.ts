@@ -217,7 +217,8 @@ const CONNECTION_CALL_MESSAGES: Record<ConnectionCallReason, string> = {
   secret_unreadable: "the stored secret of the Connection cannot be read",
   personal_connection_context:
     "personal connections require an owner-authorized agent in an owner-only conversation",
-  personal_connection_region: "personal connections require EU-only model routes",
+  personal_connection_region:
+    "personal connections require model routes in a region the instance allows for them",
   connection_not_connected: "nobody has signed in to the outside system for the Connection",
   connection_needs_reconnect: "the outside system refused the Connection's sign-in",
   operation_unknown: "the Connection has no such operation now",

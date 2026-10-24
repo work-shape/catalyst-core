@@ -1,4 +1,8 @@
-import { AppError, asClientInstanceId } from "@work-shape/catalyst-core";
+import {
+  AppError,
+  asClientInstanceId,
+  DEFAULT_PERSONAL_MODEL_REGIONS
+} from "@work-shape/catalyst-core";
 import type {
   AgentConfig,
   ClientInstanceConfig,
@@ -9,6 +13,14 @@ import { getModelProviderConfigs } from "./infrastructure";
 
 export function getClientInstanceId(config: ClientInstanceConfig) {
   return asClientInstanceId(config.clientInstance.id);
+}
+
+/**
+ * The regions a model route may declare for a run to call a personal Connection:
+ * `modules.connections.personalModelRegions`, or `[eu]` where release config names none.
+ */
+export function getPersonalModelRegions(config: ClientInstanceConfig): readonly string[] {
+  return config.modules.connections?.personalModelRegions ?? DEFAULT_PERSONAL_MODEL_REGIONS;
 }
 
 export interface ResolvedModelSelection {
