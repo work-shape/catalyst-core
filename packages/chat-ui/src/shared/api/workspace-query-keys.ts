@@ -127,6 +127,12 @@ export const workspaceQueryKeys = {
     ["superadmin-users", apiBaseUrl, authScope] as const,
   servicePrincipals: (apiBaseUrl: string, authScope: string) =>
     ["service-principals", apiBaseUrl, authScope] as const,
+  /** The spend limits of every level (LU-2), for holders of `limits.manage`. */
+  usageLimits: (apiBaseUrl: string, authScope: string) =>
+    ["usage-limits", apiBaseUrl, authScope] as const,
+  /** The signed-in person's own consumption against the limits, in one workspace or none. */
+  ownUsage: (apiBaseUrl: string, authScope: string, workspaceId?: string) =>
+    ["own-usage", apiBaseUrl, authScope, workspaceId ?? null] as const,
   /** The signed-in person's own confirmation settings (OP-6). */
   ownOperationSettings: (apiBaseUrl: string, authScope: string) =>
     ["own-operation-settings", apiBaseUrl, authScope] as const,

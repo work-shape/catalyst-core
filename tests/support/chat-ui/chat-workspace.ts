@@ -60,6 +60,10 @@ export {
   shownRailSections,
   WorkspaceRail
 } from "../../../packages/chat-ui/src/chat/workspace/workspace-rail";
+export {
+  usageLimitBlockReason,
+  usageNearNote
+} from "../../../packages/chat-ui/src/chat/workspace/usage-limit-block";
 export { workspaceSendBlock } from "../../../packages/chat-ui/src/chat/workspace/workspace-send-block";
 export { WorkspaceUiStateProvider } from "../../../packages/chat-ui/src/chat/workspace/workspace-ui-state";
 export { ClosedWorkspaceLinkBanner } from "../../../packages/chat-ui/src/chat/workspace/workspace-chrome";

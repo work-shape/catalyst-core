@@ -241,6 +241,8 @@ export interface SelectedChatModel {
   collaborationWorkspaceId: string | undefined;
   /** No conversation yet, and the Shared Workspace would start one as private. */
   newConversationPrivate: boolean;
+  /** The quiet note at 80 percent of the person's own spend limit, until they dismiss it. */
+  usageNote?: { text: string; dismiss(): void };
   selectedConversationId: string | undefined;
   /** The open conversation's retention date, once its thread has loaded. */
   selectedConversationRetainedUntil: string | undefined;

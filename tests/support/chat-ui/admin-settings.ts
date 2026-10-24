@@ -19,6 +19,8 @@ export {
   type LocalAgentCommandState,
   type LocalAgentTool
 } from "../../../packages/chat-ui/src/admin/settings/pages/connect-local-agent";
+export { LimitsPage } from "../../../packages/chat-ui/src/admin/settings/pages/limits";
+export { OwnUsagePage } from "../../../packages/chat-ui/src/admin/settings/pages/own-usage";
 export { LanguageAppearanceView } from "../../../packages/chat-ui/src/admin/settings/pages/language-appearance";
 export { WorkspaceGeneralView } from "../../../packages/chat-ui/src/admin/settings/pages/workspace-general";
 export {

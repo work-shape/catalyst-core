@@ -95,6 +95,7 @@ function AssistantRuntimePane({
     agentsWorkspaceScoped,
     collaborationWorkspaceId,
     newConversationPrivate,
+    usageNote,
     selectedConversationId,
     selectedConversationRetainedUntil,
     selectedConversationSubject,
@@ -449,6 +450,7 @@ function AssistantRuntimePane({
               showContextIndicator={showContextIndicator}
               contextSnapshot={contextSnapshot}
               notice={visibleNotice}
+              usageNote={usageNote}
               newConversationPrivate={newConversationPrivate}
               subjectLine={
                 conversationSubject === undefined &&
