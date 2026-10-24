@@ -1,8 +1,6 @@
 import { z } from "zod";
 import {
   AppError,
-  CONNECTION_ACTIONS,
-  CONNECTION_ASSET_KIND,
   KNOWLEDGE_WRITE_OPERATIONS,
   knowledgeWorkflowSourceSchema,
   workflowDatasetReferenceSchema,
@@ -72,25 +70,6 @@ async function callingWorkflow(
   return { run, origin, workflowId: run.workflow };
 }
 
-/** The Connections the caller may use, for a `fetch` item's check in the pass. */
-async function usableConnections(runtime: KnowledgeRuntime, context: OperationExecutionContext) {
-  const connections = await runtime.stores.configAssets.listActiveConfigAssets({
-    clientInstanceId: runtime.clientInstanceId,
-    kind: CONNECTION_ASSET_KIND
-  });
-  return connections
-    .filter(
-      (asset) =>
-        asset.status === "active" &&
-        context.access.authorize(CONNECTION_ACTIONS.use, {
-          kind: CONNECTION_ASSET_KIND,
-          assetId: asset.id,
-          name: asset.name
-        }).allowed
-    )
-    .map((asset) => asset.name);
-}
-
 /** The operations a Workflow writes to a Knowledge Base with. */
 export type KnowledgeWritePart = "ingest" | "withdraw";
 
@@ -155,8 +134,7 @@ export function writeOperation(
           stepRunId: origin.stepRunId,
           operationRunId: context.runId,
           items: "dataset" in parsed ? { dataset: parsed.dataset } : { inline: parsed.items },
-          complete: parsed.complete ?? false,
-          connections: await usableConnections(runtime, context)
+          complete: parsed.complete ?? false
         },
         context.runtime.signal ?? new AbortController().signal
       );

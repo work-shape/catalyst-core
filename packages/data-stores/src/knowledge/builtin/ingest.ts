@@ -3,10 +3,15 @@ import { z } from "zod";
 import {
   AppError,
   asUserId,
+  CONNECTION_ACTIONS,
+  CONNECTION_ASSET_KIND,
+  createActorAccess,
   createPlatformId,
   enqueueKnowledgeIndex,
   isOperationRunId,
   isWorkflowRunEnded,
+  KNOWLEDGE_BASE_ACTIONS,
+  KNOWLEDGE_BASE_ASSET_KIND,
   knowledgeIndexPayloadOfFetch,
   knowledgeIngestItemSchema,
   knowledgeSourceKey,
@@ -58,6 +63,11 @@ import type { SourceJobRuntime } from "./source-runtime";
 // The job polls the run's end rather than being told: the engine knows nothing of Knowledge
 // Bases, and a missed wake would leave a pass waiting for ever.
 //
+// The Workflow's account is asked afresh before every page and before a complete pass
+// withdraws (KBW-2a), as a connector sync asks for `connection.use` per batch: a pass whose
+// account lost `knowledge_base.write` ends `failed` with `knowledge_source_refused`, what it
+// wrote stays, and it withdraws nothing. A `fetch` item's Connection is asked on its page.
+//
 // Content is never audit data or a failure message: a failure row keeps the item's identity
 // (id, version, name, path, link), and its message names a field and a code.
 
@@ -78,8 +88,7 @@ const progressSchema = z.object({
   complete: z.boolean(),
   offset: z.number().int().min(0),
   /** The rows up to which the run's counts were added, so a page read again adds none. */
-  counted: z.number().int().min(0),
-  connections: z.array(z.string())
+  counted: z.number().int().min(0)
 });
 type IngestProgress = z.infer<typeof progressSchema>;
 
@@ -158,9 +167,9 @@ function refused(position: number, row: unknown, code: string, field: string): C
 
 /**
  * Checks one item on its own. Until CONN-DL a `fetch` item fails: with
- * `knowledge_fetch_not_allowed` where the caller may not use its Connection, and as not yet
- * supported otherwise. A `fileId` names a Managed File a Workflow could read, and a Workflow
- * reads none yet.
+ * `knowledge_fetch_not_allowed` where the Workflow's account may not use its Connection now,
+ * and as not yet supported otherwise. A `fileId` names a Managed File a Workflow could read,
+ * and a Workflow reads none yet.
  */
 function classify(row: unknown, position: number, connections: readonly string[]): Classified {
   const fetch = isObject(row) ? row.fetch : undefined;
@@ -189,6 +198,78 @@ function classify(row: unknown, position: number, connections: readonly string[]
       path: item.path,
       originLink: item.originLink,
       text: item.text
+    }
+  };
+}
+
+/**
+ * What the account of the pass's Workflow run may do now, read afresh from its grants: write
+ * the Knowledge Base, and use which Connections (asked only where a page names one). An
+ * account that is gone, disabled or no longer the run's may do nothing, and neither may any
+ * account on a Knowledge Base that is no longer published.
+ */
+async function workflowAccount(
+  runtime: SourceJobRuntime,
+  payload: KnowledgeSyncJobPayload,
+  workflowRunId: string
+): Promise<{ write: boolean; uses(connection: string): Promise<boolean> }> {
+  const nothing = { write: false, uses: () => Promise.resolve(false) };
+  const { stores, clientInstanceId } = runtime.data;
+  const run = await stores.workflowRuns.readRun({ clientInstanceId, id: workflowRunId });
+  if (!run) return nothing;
+  const principal = await stores.apiAccess.findServicePrincipalByName({
+    clientInstanceId,
+    name: run.principal.name
+  });
+  // A name is one principal's for good, so another id under it is not the run's principal.
+  if (principal?.status !== "active" || principal.id !== run.principal.id) return nothing;
+  const knowledgeBase = await knowledgeBaseOf(runtime, payload.knowledgeBaseId, stores);
+  if (!knowledgeBase) return nothing;
+  const workspaceId =
+    knowledgeBase.scope.kind === "workspace" ? knowledgeBase.scope.workspaceId : undefined;
+  const access = createActorAccess(
+    {
+      kind: "service_principal",
+      id: principal.id,
+      clientInstanceId,
+      roles: [],
+      permissionRefs: principal.permissionRefs
+    },
+    await stores.access.loadPersistedAccess({
+      clientInstanceId,
+      holder: { kind: "service_principal", id: principal.id },
+      workspaceId: workspaceId ?? null
+    })
+  );
+  const write = access.authorize(KNOWLEDGE_BASE_ACTIONS.write, {
+    kind: KNOWLEDGE_BASE_ASSET_KIND,
+    assetId: knowledgeBase.id,
+    name: knowledgeBase.name,
+    ...(workspaceId === undefined ? {} : { workspaceId })
+  }).allowed;
+  let usable: Promise<Set<string>> | undefined;
+  return {
+    write,
+    async uses(connection) {
+      usable ??= stores.configAssets
+        .listActiveConfigAssets({ clientInstanceId, kind: CONNECTION_ASSET_KIND })
+        .then(
+          (connections) =>
+            new Set(
+              connections
+                .filter(
+                  (asset) =>
+                    asset.status === "active" &&
+                    access.authorize(CONNECTION_ACTIONS.use, {
+                      kind: CONNECTION_ASSET_KIND,
+                      assetId: asset.id,
+                      name: asset.name
+                    }).allowed
+                )
+                .map((asset) => asset.name)
+            )
+        );
+      return (await usable).has(connection);
     }
   };
 }
@@ -231,8 +312,7 @@ export async function startIngest(
   const progress: IngestProgress = {
     complete: false,
     offset: 0,
-    counted: 0,
-    connections: [...call.connections]
+    counted: 0
   };
   await createSourceStore(runtime, call.knowledgeBaseId, signal).change(async (sql) => {
     await sql.run(
@@ -475,10 +555,16 @@ async function workflowRunGone(runtime: SourceJobRuntime, workflowRunId: string)
   return !run || (isWorkflowRunEnded(run.status) && run.status !== "done");
 }
 
+/**
+ * Ends a running pass `failed`: `knowledge_ingest_cancelled` where its run ended first,
+ * `knowledge_source_refused` where its account may no longer write. What it wrote stays, and a
+ * complete pass withdraws nothing.
+ */
 async function cancelPass(
   runtime: SourceJobRuntime,
   payload: KnowledgeSyncJobPayload,
-  control: JobControl
+  control: JobControl,
+  code: "knowledge_ingest_cancelled" | "knowledge_source_refused" = "knowledge_ingest_cancelled"
 ) {
   await sourceTransaction(runtime.data, payload, control, async (store) => {
     await store.change(async (sql) => {
@@ -488,7 +574,7 @@ async function cancelPass(
       );
       await forgetPassRows(sql, payload.syncRunId);
     });
-    await store.finish(payload, "knowledge_ingest_cancelled");
+    await store.finish(payload, code);
   });
 }
 
@@ -551,6 +637,13 @@ async function readPass(
         await cancelPass(runtime, payload, control);
         return false;
       }
+      // The account is asked before every page, the first among them: a right taken away
+      // stops the pass at the next page.
+      const account = await workflowAccount(runtime, payload, run.workflow_run_id);
+      if (!account.write) {
+        await cancelPass(runtime, payload, control, "knowledge_source_refused");
+        return false;
+      }
       const rows: unknown[] =
         run.dataset && datasets
           ? await datasets.read({
@@ -561,8 +654,14 @@ async function readPass(
               signal: control.signal
             })
           : await inlinePage(runtime, payload, control, progress.offset);
+      const usable = new Set<string>();
+      for (const row of rows) {
+        const connection = isObject(row) && isObject(row.fetch) ? row.fetch.connection : undefined;
+        if (typeof connection === "string" && (await account.uses(connection)))
+          usable.add(connection);
+      }
       const classified = rows.map((row, index) =>
-        classify(row, progress.offset + index, progress.connections)
+        classify(row, progress.offset + index, [...usable])
       );
       const written = await writePage(runtime, job, control, progress, classified);
       if (written === undefined) return false;
@@ -1223,6 +1322,12 @@ async function completePass(
     return;
   }
   for (;;) {
+    // The account still writes the Knowledge Base, or the pass withdraws nothing more: a
+    // Workflow whose right was taken away keeps its documents until a person removes them.
+    if (!(await workflowAccount(runtime, payload, run.workflow_run_id)).write) {
+      await setPass(runtime, payload, control, "dropped");
+      return;
+    }
     const more = await sourceTransaction(runtime.data, payload, control, (store, stores) =>
       store.change(async (sql) => {
         const held = await readIngestRun(sql, payload.syncRunId, true);

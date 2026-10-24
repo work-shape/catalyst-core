@@ -22,8 +22,6 @@ export interface KnowledgeIngestCall {
   /** The items as handed in, each checked on its own by the pass; or the dataset that holds them. */
   items: { inline: readonly unknown[] } | { dataset: WorkflowDatasetReference };
   complete: boolean;
-  /** The Connections the caller may use, for a `fetch` item's check. */
-  connections: readonly string[];
 }
 
 /** The source engine port used by operations, on the owned database's pools. */
