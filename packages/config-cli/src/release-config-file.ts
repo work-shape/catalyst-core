@@ -157,7 +157,7 @@ export async function addToReleaseConfigFile(
   const original = await readFile(file.path, "utf8");
   const lineEnding = original.includes("\r\n") ? "\r\n" : "\n";
   const text = additions.reduce(
-    (current, addition) => placeAddition(current, addition, shown),
+    (current, addition, index) => placeAddition(current, addition, shown, index === 0),
     original.replaceAll("\r\n", "\n")
   );
   const expected = loadYamlData(original.replaceAll("\r\n", "\n"), file.path);
@@ -176,11 +176,21 @@ export function shownPath(cwd: string, path: string): string {
   return shown.startsWith("..") ? path : shown;
 }
 
-function placeAddition(text: string, addition: ReleaseConfigAddition, shown: string): string {
+function placeAddition(
+  text: string,
+  addition: ReleaseConfigAddition,
+  shown: string,
+  original: boolean
+): string {
   const document = parseDocument(text);
   const [invalid] = document.errors;
   if (invalid !== undefined) {
-    throw new ReleaseConfigError(`${shown} is not valid YAML: ${invalid.message}`);
+    // After the first addition the text is this command's own, not the file as it was.
+    throw new ReleaseConfigError(
+      original
+        ? `${shown} is not valid YAML: ${invalid.message}`
+        : `The change could not be placed in ${shown} without touching what is there. Nothing was written.`
+    );
   }
   const root = document.contents;
   const path = addition.path;
@@ -251,11 +261,10 @@ function fillEmptyKey(text: string, pair: Pair, value: unknown): string {
   const colon = text.indexOf(":", keyRange[1]);
   const end = pair.value ? rangeOf(pair.value)[1] : colon + 1;
   const written = text.slice(colon + 1, end);
-  // `models: {}` or `models: ~` on the key's own line: the empty value gives way to the lines.
-  const cleared =
-    !written.includes("\n") && /^\s*(?:\{\}|\[\]|~|null|Null|NULL)?\s*$/u.test(written)
-      ? text.slice(0, colon + 1) + text.slice(end)
-      : text;
+  // `models: {}` or `models: ~`, on the key's line or below: the empty value gives way.
+  const cleared = /^\s*(?:\{\}|\[\]|~|null|Null|NULL)?\s*$/u.test(written)
+    ? text.slice(0, colon + 1) + text.slice(end)
+    : text;
   return insertLines(cleared, colon + 1, block(value, indent), indent);
 }
 

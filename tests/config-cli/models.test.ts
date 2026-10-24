@@ -547,6 +547,92 @@ clientInstance:
       "azure-sweden"
     ]);
   });
+
+  it("refuses an id that an environment file sets itself: the new keys would merge into its entry", async () => {
+    const base = `${FRESH_CONFIG.replace("  environment: development\n", "")}infrastructure:
+  models:
+    local:
+      provider: deterministic
+`;
+    const production = `extends: ./app.base.yaml
+clientInstance:
+  environment: development
+infrastructure:
+  models:
+    azure-eu:
+      provider: openai-compatible
+      region: eu
+      model: production-deployment
+      baseUrl: https://production.example.test/v1
+      credentialSecret: PRODUCTION_API_KEY
+`;
+    const root = await repository({
+      "config/app.base.yaml": base,
+      "config/app.production.yaml": production
+    });
+    const refused = await run(root, [
+      "models",
+      "add",
+      "azure",
+      "--endpoint",
+      "https://byo-test.openai.azure.com",
+      "--model",
+      "byo-gpt-deployment",
+      ...PRICES
+    ]);
+    expect(refused.code).toBe(1);
+    expect(refused.err).toContain(
+      "config/app.production.yaml already sets a model provider 'azure-eu', and the entry written into config/app.base.yaml would merge into it. Choose another --id. Nothing was written."
+    );
+    expect(await readFile(join(root, "config/app.base.yaml"), "utf8")).toBe(base);
+  });
+
+  it("writes nothing where an added line would change what is there, such as a list an alias repeats", async () => {
+    const original = `${FRESH_CONFIG}infrastructure:
+  models:
+    local:
+      provider: deterministic
+modelBindings: &bindings
+  - id: primary
+    providerId: local
+x-bindings: *bindings
+`;
+    const root = await repository({ "config/app.yaml": original });
+    const result = await run(root, [
+      "models",
+      "add",
+      "vertex",
+      "--project",
+      "byo-test-project",
+      "--model",
+      "gemini-3.1-flash-lite",
+      ...PRICES
+    ]);
+    expect(result.code).toBe(1);
+    expect(result.err).toContain(
+      "The change could not be placed in config/app.yaml without touching what is there. Nothing was written."
+    );
+    expect(await readFile(join(root, "config/app.yaml"), "utf8")).toBe(original);
+  });
+
+  it("fills an empty list written on the line below its key", async () => {
+    const root = await repository({ "config/app.yaml": `${FRESH_CONFIG}modelBindings:\n  []\n` });
+    const result = await run(root, [
+      "models",
+      "add",
+      "vertex",
+      "--project",
+      "byo-test-project",
+      "--model",
+      "gemini-3.1-flash-lite",
+      ...PRICES
+    ]);
+    expect(result, result.err).toMatchObject({ code: 0 });
+    const config = await startupAccepts(join(root, "config/app.yaml"), {
+      GOOGLE_VERTEX_CREDENTIALS: replayServiceAccountKey()
+    });
+    expect(config.modelBindings.map((binding) => binding.id)).toEqual(["vertex-eu"]);
+  });
 });
 
 function apiFetch(answer: (request: Request) => Response | Promise<Response>): typeof fetch {
@@ -661,15 +747,19 @@ describe("catalyst models check", () => {
     }
   });
 
-  it("names a provider the instance does not have, and passes on the instance's refusal", async () => {
+  it("names the providers the instance has, never repeats an id it does not, and passes on the instance's refusal", async () => {
     const root = await repository({});
-    const absent = await run(root, ["models", "check", "bedrock-eu", "--instance", INSTANCE], {
-      fetchImpl: apiFetch(() => Response.json(infrastructure({ status: "pending" })))
-    });
-    expect(absent.code).toBe(1);
-    expect(absent.err).toContain(
-      "The instance has no model provider 'bedrock-eu' (it has azure-eu). Deploy the release config that adds it, then check again."
-    );
+    // A key pasted where the id belongs is not a provider of the instance, and is not repeated.
+    for (const id of ["bedrock-eu", KEY_VALUE]) {
+      const absent = await run(root, ["models", "check", id, "--instance", INSTANCE], {
+        fetchImpl: apiFetch(() => Response.json(infrastructure({ status: "pending" })))
+      });
+      expect(absent.code).toBe(1);
+      expect(absent.err).toContain(
+        "The instance has no model provider by that id (it has azure-eu). Deploy the release config that adds it, then check again."
+      );
+      expect(absent.out + absent.err).not.toContain(id);
+    }
     const refused = await run(root, ["models", "check", "azure-eu", "--instance", INSTANCE], {
       fetchImpl: apiFetch(() =>
         Response.json(
