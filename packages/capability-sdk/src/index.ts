@@ -8,6 +8,8 @@ import {
   type AttachmentManifest,
   type BeforeActionCheck,
   type ClientInstanceId,
+  type ConfigAssetStore,
+  type GuardrailStore,
   type KnowledgeHitDocuments,
   type ConversationAttachment,
   type ConversationId,
@@ -31,6 +33,7 @@ import {
   type ModuleSnapshot,
   type ObjectStorage,
   type PlatformFileStore,
+  type PlatformStores,
   type ProviderRegion,
   type RegisteredJobHandler,
   type RegisteredProviderDefinition,
@@ -118,16 +121,30 @@ export interface ClientInstanceCapabilityContext {
   /** The instance's models. Every call a capability makes to a model goes through here. */
   models: ClientInstanceCapabilityModels;
   /**
+   * What a capability reads and writes of the platform's own records. The platform keeps the
+   * tables and their migrations; a capability reaches them through these ports alone.
+   */
+  stores: ClientInstanceCapabilityPlatformStores;
+  /**
    * The documents of Knowledge Bases that a search hit names by file id, as the person may read
    * them (KB-7c). Answers none where Knowledge Bases are off or the process keeps no files.
    */
   knowledgeDocuments?: KnowledgeHitDocuments;
 }
 
+/**
+ * The platform's records a capability may reach: the guardrails' hits and shipped switches,
+ * which the platform keeps for the guardrails capability, and the published config assets.
+ */
+export interface ClientInstanceCapabilityPlatformStores {
+  guardrails: GuardrailStore;
+  configAssets: Pick<ConfigAssetStore, "listPublishedConfigAssets">;
+}
+
 /** What a capability calls a model for. It names the call on its usage record. */
 export type CapabilityModelPurpose = Extract<
   ModelSystemPurpose,
-  "document_extraction" | "knowledge_field_extraction"
+  "document_extraction" | "knowledge_field_extraction" | "guardrail_judge"
 >;
 
 /** What a capability hands a model to read. */
@@ -140,8 +157,15 @@ export interface CapabilityModelCall {
   /** The model binding of the instance config the call goes to. */
   bindingId: string;
   purpose: CapabilityModelPurpose;
+  /** What the model is told before it reads `content`, as the instance's own turn. */
+  instructions?: string;
   /** What the model reads, as one turn of a user. */
   content: CapabilityModelContentPart[];
+  /**
+   * `configured` calls the model with the reasoning effort its binding is configured with,
+   * where the model takes one. Without it the call names none.
+   */
+  reasoningEffort?: "configured";
   /** Asks for an answer in JSON of this schema. The answer is then JSON; its shape is not checked. */
   output?: { jsonSchema: JsonObject };
   maxOutputTokens?: number;
@@ -235,7 +259,8 @@ export interface ClientInstanceCapabilityContribution {
   /**
    * Answers at every before-event of the instance, beside the platform's own checks: in every
    * process, for every call, asset write, publish and approval request. The strictest answer
-   * of all checks is the event's. A check that throws refuses the action.
+   * of all checks is the event's. A check that throws or does not answer in time refuses the
+   * action with the reason `check_unavailable`.
    */
   beforeActionCheck?: BeforeActionCheck;
   knowledgeFieldExtractor?: import("@work-shape/catalyst-core").KnowledgeFieldExtractor;
@@ -243,7 +268,38 @@ export interface ClientInstanceCapabilityContribution {
   attachments?: ClientInstanceAttachmentHandler[];
   managedObjects?: ClientInstanceManagedObjectReaderContribution[];
   jobRetries?: ClientInstanceJobRetry[];
+  /**
+   * Runs once in the API process after the capabilities are created and before it takes a
+   * request, as the platform's own seed does. A worker process never runs it. What it throws
+   * stops the start.
+   */
+  instanceSeed?(input: ClientInstanceCapabilitySeedInput): Promise<void>;
+  /**
+   * Deletes what the capability keeps past the audit retention, in the transaction that
+   * deletes the audit events, so both go or neither does. It answers the counts the
+   * `audit.pruned` event records, by name. It runs whether the capability's module is on or
+   * off: what was kept while it was on is deleted all the same.
+   */
+  retention?(
+    input: ClientInstanceCapabilityRetentionInput
+  ): Promise<Readonly<Record<string, number>>>;
   close?: () => Promise<void>;
+}
+
+/** What a capability's seed writes through: the platform's records it keeps, in one transaction. */
+export interface ClientInstanceCapabilitySeedInput {
+  stores: {
+    transaction<Result>(
+      fn: (stores: Pick<PlatformStores, "guardrails" | "configAssets">) => Promise<Result>
+    ): Promise<Result>;
+  };
+}
+
+export interface ClientInstanceCapabilityRetentionInput {
+  /** The audit retention of the instance: what is older is deleted. */
+  days: number;
+  /** Bound to the transaction that deletes the audit events. */
+  stores: { guardrails: Pick<GuardrailStore, "deleteHitsOlderThan"> };
 }
 
 export interface UploadDraftAttachmentInput {

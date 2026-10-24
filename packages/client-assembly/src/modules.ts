@@ -10,6 +10,7 @@ import {
   resolveModuleSwitches,
   type ClientInstanceConfig
 } from "@work-shape/catalyst-config-schema";
+import { withBuiltInCapabilities } from "./built-in-capabilities";
 import type { ClientInstanceCapability } from "./capabilities";
 import { assembleDataStores, dataStoresModule } from "./data-stores";
 import { assembleKnowledge, knowledgeModule } from "./knowledge";
@@ -23,7 +24,6 @@ import { appsModule } from "./platform-modules/apps";
 import { assetManagementModule } from "./platform-modules/asset-management";
 import { connectionsModule } from "./platform-modules/connections";
 import { feedbackModule } from "./platform-modules/feedback";
-import { guardrailsModule } from "./platform-modules/guardrails";
 import { personalApiKeysModule } from "./platform-modules/personal-api-keys";
 import { resourcesModule } from "./platform-modules/resources";
 import { userInvitationsModule } from "./platform-modules/user-invitations";
@@ -44,8 +44,7 @@ export const platformModules = [
   knowledgeModule,
   personalApiKeysModule,
   feedbackModule,
-  workshaperModule,
-  guardrailsModule
+  workshaperModule
 ];
 
 /**
@@ -115,7 +114,10 @@ export function resolveInstanceModules(
 ): InstanceModules {
   const registry = createModuleRegistry([
     ...platformModules,
-    ...capabilities.flatMap((capability) => capability.modules ?? [])
+    // The built-in capabilities ship their modules as any other capability does.
+    ...withBuiltInCapabilities(config, capabilities).flatMap(
+      (capability) => capability.modules ?? []
+    )
   ]);
   return { registry, snapshot: registry.snapshot(resolveModuleSwitches(config)) };
 }

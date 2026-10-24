@@ -40,6 +40,12 @@ export {
 } from "./seed-auth";
 export { createJobWorker, type CreateJobWorkerInput } from "./job-worker";
 export {
+  GUARDRAILS_CAPABILITY_NAME,
+  createGuardrailsCapability,
+  guardrailsModule,
+  withBuiltInCapabilities
+} from "./built-in-capabilities";
+export {
   assertCommandWorkerServesModuleJobKinds,
   platformModules,
   resolveInstanceModules,

@@ -58,7 +58,12 @@ export async function seedReleaseGuardrails(input: {
   clientInstanceId: ClientInstanceId;
   /** `guardrails` of release config. */
   guardrails: Readonly<Record<string, ReleaseGuardrailConfig>>;
-  stores: PlatformStores;
+  /** The guardrails' records and the config assets, written in one transaction. */
+  stores: {
+    transaction<Result>(
+      fn: (stores: Pick<PlatformStores, "guardrails" | "configAssets">) => Promise<Result>
+    ): Promise<Result>;
+  };
 }): Promise<GuardrailSeedResult> {
   const { clientInstanceId } = input;
   const configured = new Map(

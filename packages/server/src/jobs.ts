@@ -198,22 +198,27 @@ export function createChatServerJobs(
             clientInstanceId: options.clientInstanceId,
             days: options.config.retention.auditDays
           });
-          // The hits of guardrails are kept as long as the audit events.
-          const guardrailHitsDeletedCount = await stores.guardrails.deleteHitsOlderThan({
-            clientInstanceId: options.clientInstanceId,
-            days: options.config.retention.auditDays
-          });
+          // What the capabilities keep, such as the guardrails' hits, is kept as long as the
+          // audit events.
+          const capabilityCounts: Record<string, number> = {};
+          for (const retain of options.retention ?? []) {
+            Object.assign(
+              capabilityCounts,
+              await retain({ days: options.config.retention.auditDays, stores })
+            );
+          }
           await stores.audit.appendAuditEvent({
             clientInstanceId: options.clientInstanceId,
             type: "audit.pruned",
             status: "success",
             correlationId: job.correlationId,
+            // A capability's count never stands in for one of the platform's own.
             metadata: {
+              ...capabilityCounts,
               deletedCount,
               createdBefore,
               auditDays: options.config.retention.auditDays,
-              operationRunsDeletedCount,
-              guardrailHitsDeletedCount
+              operationRunsDeletedCount
             }
           });
         });
