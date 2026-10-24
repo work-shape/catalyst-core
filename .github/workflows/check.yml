@@ -61,23 +61,10 @@ jobs:
           build: "false"
       - name: Build
         run: pnpm build
-      # Tar preserves executable modes and hidden build files. Never share node_modules
-      # or restore a build from another commit; every consumer uses this run's build.
-      - name: Archive build
-        run: find packages clients -mindepth 2 -maxdepth 2 -type d -name dist -print0 | tar --null -T - -czf /tmp/check-build.tgz
-      - name: Save this run's build
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          path: /tmp/check-build.tgz
-          name: check-build-${{ github.run_id }}-${{ github.sha }}
-          if-no-files-found: error
-          compression-level: 0
-          overwrite: true
-          retention-days: 1
   static:
     needs: build
     runs-on: blacksmith-8vcpu-ubuntu-2404
-    timeout-minutes: 14
+    timeout-minutes: 22
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -99,7 +86,7 @@ jobs:
   docs:
     needs: build
     runs-on: blacksmith-4vcpu-ubuntu-2404
-    timeout-minutes: 6
+    timeout-minutes: 14
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -114,7 +101,7 @@ jobs:
     name: tests ${{ matrix.shard }}/4
     needs: build
     runs-on: blacksmith-4vcpu-ubuntu-2404
-    timeout-minutes: 14
+    timeout-minutes: 22
     strategy:
       fail-fast: false
       matrix:
@@ -146,7 +133,7 @@ jobs:
   upgrade:
     needs: build
     runs-on: blacksmith-4vcpu-ubuntu-2404
-    timeout-minutes: 9
+    timeout-minutes: 17
     env:
       POSTGRES_STORE_TEST_DATABASE_URL: postgresql://catalyst:local-check@localhost:5432/catalyst_test
     steps:
@@ -168,8 +155,8 @@ jobs:
         run: pnpm test:compatibility
   release:
     needs: build
-    runs-on: blacksmith-2vcpu-ubuntu-2404
-    timeout-minutes: 5
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 18
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -249,8 +236,8 @@ jobs:
     needs: build
     # Six isolated databases amortize setup; one worker per database keeps shared accounts
     # and fixed-port beforeAll servers sequential.
-    runs-on: blacksmith-2vcpu-ubuntu-2404
-    timeout-minutes: 15
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 28
     # Must match @playwright/test in pnpm-lock.yaml (check-policy.test.mjs).
     container: mcr.microsoft.com/playwright:v1.60.0-noble
     services:
@@ -275,7 +262,7 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-check
-      # The shared build is restored above; the runner migrates and starts the API and the
+      # setup-check builds this commit; the runner migrates and starts the API and the
       # interface itself. A test that fails is tried once more; one that fails twice fails the job.
       - name: Browser suite
         shell: bash
