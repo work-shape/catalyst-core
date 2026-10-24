@@ -14,6 +14,7 @@ import { SERVICE_PRINCIPAL_STATUSES } from "@work-shape/catalyst-core";
 import {
   Badge,
   Banner,
+  prefersReducedMotion,
   Button,
   Card,
   CardContent,
@@ -35,7 +36,7 @@ import {
   Textarea
 } from "@work-shape/catalyst-ui";
 import { KeyRound, Pencil, Plus, ShieldCheck } from "lucide-react";
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { useTranslation } from "../../shared/i18n";
 import {
   constrainCredentialScopes,
@@ -110,10 +111,16 @@ export function ApiAccessPanel({
   const [credentialDialogOpen, setCredentialDialogOpen] = useState(false);
   const [credentialToRevoke, setCredentialToRevoke] = useState<ApiCredential>();
   const [actionError, setActionError] = useState<string>();
+  // A refused save of a dialog is said in that dialog, which stays open over the page.
+  const [dialogError, setDialogError] = useState<string>();
   // The principal a save just answered with, until the list is read again and holds it. Without
   // it the page fell back to the first principal of the old list after a create, and showed
   // that one's rights as if they were the new principal's.
   const [saved, setSaved] = useState<ServicePrincipalDetail>();
+  // The principal to bring into view once it is shown: where the detail stands under the list,
+  // a save would otherwise leave the reader at the top of the page.
+  const [reveal, setReveal] = useState<string>();
+  const detailRef = useRef<HTMLDivElement>(null);
 
   const selectedPrincipal =
     principals.find(({ principal }) => principal.id === selectedPrincipalId) ??
@@ -125,6 +132,19 @@ export function ApiAccessPanel({
       setSaved(undefined);
     }
   }, [principals, saved]);
+
+  useEffect(() => {
+    const detail = detailRef.current;
+    if (!reveal || !detail || selectedPrincipal?.principal.id !== reveal) return;
+    setReveal(undefined);
+    const top = detail.getBoundingClientRect().top;
+    if (top < 0 || top > window.innerHeight * 0.75) {
+      detail.scrollIntoView({
+        block: "start",
+        behavior: prefersReducedMotion() ? "auto" : "smooth"
+      });
+    }
+  }, [reveal, selectedPrincipal]);
 
   useEffect(() => {
     // Until the list is read there is no first principal to fall back to: the one named in
@@ -158,11 +178,13 @@ export function ApiAccessPanel({
           ) : undefined
         }
       />
-      <div className="grid min-w-0 content-start gap-4">
+      <div className="@container grid min-w-0 content-start gap-4">
         {error || actionError ? <Banner tone="danger">{actionError ?? error}</Banner> : null}
 
-        <div className="grid min-h-0 gap-4 xl:grid-cols-[minmax(17rem,0.72fr)_minmax(28rem,1.28fr)]">
-          <Card>
+        {/* Two columns by the room the page gives them, not by the window's width: beside the
+            navigation and the settings rail a wide window leaves too little for both. */}
+        <div className="grid min-h-0 min-w-0 gap-4 @[42rem]:grid-cols-[minmax(14rem,0.72fr)_minmax(0,1.28fr)]">
+          <Card className="min-w-0">
             <CardHeader className="p-4 pb-2">
               <CardTitle className="text-base">{t("apiAccessServicePrincipals")}</CardTitle>
               <p className="text-xs text-muted-foreground">
@@ -237,15 +259,17 @@ export function ApiAccessPanel({
           </Card>
 
           {selectedPrincipal ? (
-            <PrincipalDetail
-              detail={selectedPrincipal}
-              mutating={mutating}
-              may={may}
-              onEdit={() => setPrincipalDialog("edit")}
-              onCreateCredential={() => setCredentialDialogOpen(true)}
-              onRevokeCredential={setCredentialToRevoke}
-              rights={renderRights?.(selectedPrincipal)}
-            />
+            <div ref={detailRef} className="min-w-0 scroll-mt-4">
+              <PrincipalDetail
+                detail={selectedPrincipal}
+                mutating={mutating}
+                may={may}
+                onEdit={() => setPrincipalDialog("edit")}
+                onCreateCredential={() => setCredentialDialogOpen(true)}
+                onRevokeCredential={setCredentialToRevoke}
+                rights={renderRights?.(selectedPrincipal)}
+              />
+            </div>
           ) : null}
         </div>
 
@@ -254,9 +278,13 @@ export function ApiAccessPanel({
             mode={principalDialog}
             detail={principalDialog === "edit" ? selectedPrincipal : undefined}
             pending={mutating}
-            onClose={() => setPrincipalDialog(undefined)}
+            error={dialogError}
+            onClose={() => {
+              setDialogError(undefined);
+              setPrincipalDialog(undefined);
+            }}
             onSubmit={async (input) => {
-              setActionError(undefined);
+              setDialogError(undefined);
               try {
                 const detail =
                   principalDialog === "edit" && selectedPrincipal
@@ -264,9 +292,10 @@ export function ApiAccessPanel({
                     : await onCreatePrincipal(input as CreateServicePrincipalRequest);
                 setSaved(detail);
                 setSelectedPrincipalId(detail.principal.id);
+                setReveal(detail.principal.id);
                 setPrincipalDialog(undefined);
               } catch (caught) {
-                setActionError(errorMessage(caught, t("settings.requestFailed")));
+                setDialogError(errorMessage(caught, t("settings.requestFailed")));
               }
             }}
           />
@@ -277,15 +306,19 @@ export function ApiAccessPanel({
             open={credentialDialogOpen}
             detail={selectedPrincipal}
             pending={mutating}
-            onClose={() => setCredentialDialogOpen(false)}
+            error={dialogError}
+            onClose={() => {
+              setDialogError(undefined);
+              setCredentialDialogOpen(false);
+            }}
             onSubmit={async (input) => {
               if (!selectedPrincipal) return;
-              setActionError(undefined);
+              setDialogError(undefined);
               try {
                 await onCreateCredential(selectedPrincipal.principal.id, input);
                 setCredentialDialogOpen(false);
               } catch (caught) {
-                setActionError(errorMessage(caught, t("settings.requestFailed")));
+                setDialogError(errorMessage(caught, t("settings.requestFailed")));
               }
             }}
           />
@@ -483,12 +516,14 @@ function PrincipalDialog({
   mode,
   detail,
   pending,
+  error,
   onClose,
   onSubmit
 }: {
   mode: "create" | "edit" | undefined;
   detail?: ServicePrincipalDetail;
   pending: boolean;
+  error?: string;
   onClose(): void;
   onSubmit(input: CreateServicePrincipalRequest | UpdateServicePrincipalRequest): Promise<void>;
 }) {
@@ -505,6 +540,7 @@ function PrincipalDialog({
           key={`${mode}:${principal?.id ?? "new"}`}
           principal={principal}
           pending={pending}
+          error={error}
           onCancel={onClose}
           onSubmit={onSubmit}
         />
@@ -516,11 +552,13 @@ function PrincipalDialog({
 function PrincipalForm({
   principal,
   pending,
+  error,
   onCancel,
   onSubmit
 }: {
   principal?: ServicePrincipalDetail["principal"];
   pending: boolean;
+  error?: string;
   onCancel(): void;
   onSubmit(input: CreateServicePrincipalRequest | UpdateServicePrincipalRequest): Promise<void>;
 }) {
@@ -564,6 +602,7 @@ function PrincipalForm({
         </Select>
       </Field>
       <GrantFields permissions={permissions} onChange={setPermissions} />
+      {error ? <Banner tone="danger">{error}</Banner> : null}
       <div className="flex justify-end gap-2">
         <Button type="button" variant="outline" onClick={onCancel}>
           {t("cancel")}
@@ -610,12 +649,14 @@ function CredentialDialog({
   open,
   detail,
   pending,
+  error,
   onClose,
   onSubmit
 }: {
   open: boolean;
   detail?: ServicePrincipalDetail;
   pending: boolean;
+  error?: string;
   onClose(): void;
   onSubmit(input: CreateApiCredentialRequest): Promise<void>;
 }) {
@@ -627,6 +668,7 @@ function CredentialDialog({
           key={detail.principal.id}
           detail={detail}
           pending={pending}
+          error={error}
           onCancel={onClose}
           onSubmit={onSubmit}
         />
@@ -638,11 +680,13 @@ function CredentialDialog({
 function CredentialForm({
   detail,
   pending,
+  error,
   onCancel,
   onSubmit
 }: {
   detail: ServicePrincipalDetail;
   pending: boolean;
+  error?: string;
   onCancel(): void;
   onSubmit(input: CreateApiCredentialRequest): Promise<void>;
 }) {
@@ -693,6 +737,7 @@ function CredentialForm({
           />
         ))}
       </fieldset>
+      {error ? <Banner tone="danger">{error}</Banner> : null}
       <div className="flex justify-end gap-2">
         <Button type="button" variant="outline" onClick={onCancel}>
           {t("cancel")}

@@ -56,21 +56,19 @@ function shownPrincipal(): string | undefined {
   return selected?.querySelector("span span")?.textContent ?? undefined;
 }
 
-it("shows the principal just created, with its rights, before the list is read again", async () => {
-  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-  const rightless = principal("sp_first", "A first, no rights", []);
-  const created = principal("sp_reader", "Reader", ["config_assets.read"]);
-  const sent: unknown[] = [];
-  const props: ComponentProps<typeof ApiAccessPanel> = {
+function panelProps(
+  principals: ServicePrincipalDetail[],
+  onCreatePrincipal: ComponentProps<typeof ApiAccessPanel>["onCreatePrincipal"]
+): ComponentProps<typeof ApiAccessPanel> {
+  return {
     may: { principals: true, keys: true },
-    principals: [rightless],
+    principals,
     loading: false,
     mutating: false,
-    onCreatePrincipal: async (input) => {
-      sent.push(input);
-      return created;
+    onCreatePrincipal,
+    onUpdatePrincipal: async () => {
+      throw new Error("not called");
     },
-    onUpdatePrincipal: async () => created,
     onCreateCredential: async () => {
       throw new Error("not called");
     },
@@ -79,27 +77,49 @@ it("shows the principal just created, with its rights, before the list is read a
     },
     onClearRevealedCredential: () => undefined
   };
-  const render = (input: ComponentProps<typeof ApiAccessPanel>) =>
-    createElement(
-      UiRoot,
-      { mode: "light", labels: uiLabelsEn },
-      createElement(TranslationProvider, {
-        locale: "en",
-        children: createElement(ApiAccessPanel, input)
-      })
-    );
+}
+
+function panel(input: ComponentProps<typeof ApiAccessPanel>) {
+  return createElement(
+    UiRoot,
+    { mode: "light", labels: uiLabelsEn },
+    createElement(TranslationProvider, {
+      locale: "en",
+      children: createElement(ApiAccessPanel, input)
+    })
+  );
+}
+
+async function renderPanel(input: ComponentProps<typeof ApiAccessPanel>): Promise<void> {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   const host = document.body.appendChild(document.createElement("div"));
   root = createRoot(host);
-  await act(async () => root?.render(render(props)));
-  expect(shownPrincipal()).toBe("A first, no rights");
+  await act(async () => root?.render(panel(input)));
+}
 
+/** Opens the create dialog, names the principal and saves, the default right left ticked. */
+async function createNamed(label: string): Promise<void> {
   await act(async () => button("Create service principal").click());
   const name = required(document.querySelector<HTMLInputElement>("dialog input"));
   await act(async () => {
-    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(name, "Reader");
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(name, label);
     name.dispatchEvent(new Event("input", { bubbles: true }));
   });
   await act(async () => button("Save").click());
+}
+
+it("shows the principal just created, with its rights, before the list is read again", async () => {
+  const rightless = principal("sp_first", "A first, no rights", []);
+  const created = principal("sp_reader", "Reader", ["config_assets.read"]);
+  const sent: unknown[] = [];
+  const props = panelProps([rightless], async (input) => {
+    sent.push(input);
+    return created;
+  });
+  await renderPanel(props);
+  expect(shownPrincipal()).toBe("A first, no rights");
+
+  await createNamed("Reader");
   await waitUntil(() => !document.querySelector("dialog"), "the dialog closes");
 
   expect(sent).toEqual([
@@ -114,8 +134,33 @@ it("shows the principal just created, with its rights, before the list is read a
   expect(detail()).not.toContain("No configuration rights");
 
   // Read again, the list holds it, and it stays the one shown.
-  await act(async () => root?.render(render({ ...props, principals: [rightless, created] })));
+  await act(async () => root?.render(panel({ ...props, principals: [rightless, created] })));
   expect(shownPrincipal()).toBe("Reader");
   expect(detail()).toContain("sp_reader");
   expect(detail()).not.toContain("No configuration rights");
+});
+
+it("says a refused create in its dialog, which stays open with what was entered", async () => {
+  const refusal = "This call does not hold 'config_assets.read' on the whole instance";
+  await renderPanel(
+    panelProps([principal("sp_first", "A first, no rights", [])], async () => {
+      throw new Error(refusal);
+    })
+  );
+
+  await createNamed("Reader");
+  await waitUntil(
+    () => document.querySelector("dialog")?.textContent?.includes(refusal) ?? false,
+    "the dialog says the refusal"
+  );
+  const dialog = required(document.querySelector("dialog"));
+  expect(dialog.querySelector('[role="alert"]')?.textContent).toContain(refusal);
+  expect(required(dialog.querySelector<HTMLInputElement>("input")).value).toBe("Reader");
+  // Said once, in the dialog, and not on the page behind it.
+  expect(document.body.textContent?.split(refusal)).toHaveLength(2);
+
+  // Closed, the dialog takes its refusal with it.
+  await act(async () => button("Cancel").click());
+  await waitUntil(() => !document.querySelector("dialog"), "the dialog closes");
+  expect(document.body.textContent).not.toContain(refusal);
 });
