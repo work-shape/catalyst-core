@@ -99,6 +99,10 @@ const MODEL_NOT_PRICED_CODE = "MODEL_NOT_PRICED";
 // call (`@work-shape/catalyst-core`).
 const MODEL_USAGE_LIMIT_REACHED_CODE = "MODEL_USAGE_LIMIT_REACHED";
 
+// The code a run is failed with when the model provider kept refusing calls for too many requests
+// after the worker had waited about a minute (`@work-shape/catalyst-model-provider`).
+const MODEL_RATE_LIMITED_CODE = "RATE_LIMITED";
+
 // The words for each part of the limit that refused a run. Its windows are UTC days and months.
 const USAGE_LIMIT_PERIODS: Record<ModelUsageRefusal["period"], TranslationKey> = {
   day: "runUsageLimitPeriodDay",
@@ -161,6 +165,8 @@ export function terminalRunNotice(
   if (error.code === MODEL_USAGE_LIMIT_REACHED_CODE) {
     return usageLimitNotice(error.usageLimit, t, viewer.seesRateCard);
   }
+  // The provider's own words are English and do not say whether the run goes on.
+  if (error.code === MODEL_RATE_LIMITED_CODE) return t("runRateLimited");
   // Only a refusal of the application speaks to the person. An internal, aborted or unknown
   // failure carries the worker's words, such as "Agent run failed": it reads as interrupted.
   // Only a cancellation says stopped.

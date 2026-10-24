@@ -124,6 +124,30 @@ describe("chat UI conversation controller", () => {
       }
     });
 
+    it("says in the person's language that a rate-limited run stopped and how to go on", () => {
+      // What the model provider fails a run with after its minute of waiting (`model-provider/src/retry.ts`).
+      const error = {
+        code: "RATE_LIMITED",
+        message: "The model is receiving too many requests. Try again in a minute.",
+        category: "app_error"
+      } as const;
+      const live = applyRunObservationToControllerState(
+        createControllerStateFromSnapshot(createSnapshot({ lastSequence: 1, text: "" })),
+        createObservation({ sequence: 2, type: "run_failed", payload: { error } })
+      ).state;
+      const reloaded = createControllerStateFromSnapshot(
+        createSnapshot({ lastSequence: 2, text: "", runStatus: "failed", error })
+      );
+      for (const state of [live, reloaded]) {
+        const notice = notices(state);
+        expect(notice.de).toContain("Das Modell ist gerade überlastet");
+        expect(notice.de).toContain("Sie geht nicht von selbst weiter");
+        expect(notice.de).toContain("„weiter“");
+        expect(notice.en).toContain("It does not continue on its own");
+        expect(notice.de).not.toContain("too many requests");
+      }
+    });
+
     describe("a reached usage limit that the run names", () => {
       const advice = {
         en: "Your answer so far is kept. Ask an administrator of this instance to check the usage limits.",
