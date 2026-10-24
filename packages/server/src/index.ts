@@ -7,6 +7,7 @@ import {
   AppError,
   alwaysAllowLockIssues,
   createAuthorizer,
+  NO_BEFORE_ACTION_CHECK,
   normalizeAllowedOrigins
 } from "@work-shape/catalyst-core";
 import cors from "@fastify/cors";
@@ -209,7 +210,10 @@ export async function createChatServer(
 ): Promise<HttpRuntime> {
   const allowedOrigins = normalizeAllowedOrigins(input.allowedOrigins);
   const authorizer = input.authorizer ?? createAuthorizer(input.stores.access);
-  const operationCalls = input.operationCalls ?? createOperationCalls({ ...input, authorizer });
+  // A server without the call path of an assembly checks nothing at its before-events.
+  const operationCalls =
+    input.operationCalls ??
+    createOperationCalls({ ...input, authorizer, checks: NO_BEFORE_ACTION_CHECK });
   const options: ResolvedChatServerOptions = {
     ...input,
     allowedOrigins,
@@ -315,7 +319,8 @@ export async function createChatServer(
 }
 
 export { GuardrailRunner } from "./guardrails/guardrail-runner";
-export type { GuardrailCheckInput, GuardrailRunnerOptions } from "./guardrails/guardrail-runner";
+export type { GuardrailRunnerOptions } from "./guardrails/guardrail-runner";
+export type { ApprovalRequestCheckInput } from "./approvals/approval-request-checks";
 export { createPublishNarrator } from "./publish-narrative/publish-narrator";
 export type {
   PublishNarrateInput,

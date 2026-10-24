@@ -3,12 +3,14 @@ import type { RunOperationDeps } from "@work-shape/catalyst-tool-execution";
 import {
   asClientInstanceId,
   asCollaborationWorkspaceId,
+  combineBeforeActionChecks,
   isJsonObject,
   unknownToJsonValue,
   INSTANCE_ASSET_SCOPE,
   type AccessDecision,
   type ActorAccess,
   type AssetScope,
+  type BeforeActionCheck,
   type ConfigAssetRecord,
   type GuardrailConfig,
   type JsonObject,
@@ -220,6 +222,8 @@ export function narrator(input: {
   onHit?: () => void;
   timeZone?: string;
   mailSender?: { name: string; address: string };
+  /** A capability's check, which answers beside the guardrails. */
+  check?: BeforeActionCheck;
 }) {
   const base = createTestConfig();
   const runner = new GuardrailRunner({
@@ -289,7 +293,7 @@ export function narrator(input: {
         }
       }
     },
-    guardrails: runner,
+    checks: input.check ? combineBeforeActionChecks([runner, input.check]) : runner,
     resolve: (operation) => {
       const override = input.definitions?.find((definition) => definition.name === operation);
       if (override) return Promise.resolve(override);

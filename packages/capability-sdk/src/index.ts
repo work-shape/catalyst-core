@@ -6,6 +6,7 @@ import {
   isAppError,
   readObjectBytes,
   type AttachmentManifest,
+  type BeforeActionCheck,
   type ClientInstanceId,
   type KnowledgeHitDocuments,
   type ConversationAttachment,
@@ -231,6 +232,12 @@ export interface ClientInstanceJobRetry {
 }
 
 export interface ClientInstanceCapabilityContribution {
+  /**
+   * Answers at every before-event of the instance, beside the platform's own checks: in every
+   * process, for every call, asset write, publish and approval request. The strictest answer
+   * of all checks is the event's. A check that throws refuses the action.
+   */
+  beforeActionCheck?: BeforeActionCheck;
   knowledgeFieldExtractor?: import("@work-shape/catalyst-core").KnowledgeFieldExtractor;
   tools?: AnyToolDefinition[];
   attachments?: ClientInstanceAttachmentHandler[];

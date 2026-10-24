@@ -12,6 +12,7 @@ import {
   type ActorAccess,
   type ApprovalPreviewViewer,
   type ApprovalRequest,
+  type BeforeActionCheck,
   type ApprovalRequestContext,
   type ApprovalRequestCreator,
   type ApprovalRequestDecision,
@@ -32,7 +33,7 @@ import {
 } from "@work-shape/catalyst-core";
 import { guardrailDenial } from "@work-shape/catalyst-tool-execution";
 import { HELD_ASSET_OPERATION } from "./held-asset-preview";
-import type { GuardrailRunner } from "../guardrails/guardrail-runner";
+import { approvalRequestChecks } from "./approval-request-checks";
 
 /** Scopes the approval routes require; the view flags use the same ones. */
 const APPROVAL_DECIDE_AUTH_SCOPE = "governance:write";
@@ -57,8 +58,11 @@ export interface ApprovalRequestWorkflowOptions {
   store: ApprovalRequestStore;
   handlers: ApprovalRequestHandlerRegistry;
   auditRecorder: AuditRecorder;
-  /** Runs the guardrails of `approval_request.before_create` before a request is filed. */
-  guardrails?: GuardrailRunner;
+  /**
+   * Answers at `approval_request.before_create` before a request is filed, and at the before-
+   * events of a change when it is approved or reverted. Without it nothing is checked.
+   */
+  checks?: BeforeActionCheck;
   /**
    * The language of the person who opens a request: their account's, else the one their
    * request names, else the instance's. A kind words its review in it. Absent: the request's.
@@ -104,23 +108,27 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
     if (!command.summary.trim()) {
       throw new AppError("VALIDATION_FAILED", "Approval request summary is required");
     }
-    const checks =
-      (await this.options.guardrails?.check(
-        {
-          event: "approval_request.before_create",
-          subjectKind: command.kind,
-          fields: () => {
-            const newContent = handler.checkContent?.(payload);
-            return newContent === undefined ? undefined : { summary: command.summary, newContent };
+    const checks = this.options.checks
+      ? await approvalRequestChecks(
+          this.options.checks,
+          {
+            event: "approval_request.before_create",
+            subjectKind: command.kind,
+            fields: () => {
+              const newContent = handler.checkContent?.(payload);
+              return newContent === undefined
+                ? undefined
+                : { summary: command.summary, newContent };
+            },
+            ...(command.origin ? { origin: command.origin } : {})
           },
-          ...(command.origin ? { origin: command.origin } : {})
-        },
-        {
-          ...context,
-          user,
-          clientInstanceId: this.options.clientInstanceId
-        }
-      )) ?? [];
+          {
+            ...context,
+            user,
+            clientInstanceId: this.options.clientInstanceId
+          }
+        )
+      : [];
     const blocked = checks.filter((check) => check.status === "blocked");
     if (blocked.length > 0) {
       throw new AppError(
@@ -445,11 +453,11 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
     context: CallContext,
     asked: "approval" | "revert"
   ): Promise<AppError | undefined> {
-    const { guardrails } = this.options;
-    if (!guardrails) return undefined;
+    const { checks } = this.options;
+    if (!checks) return undefined;
     const { origin } = request;
     for (const event of events) {
-      const answers = await guardrails.answer(
+      const answers = await checks.answer(
         {
           event: event.name,
           subject: event.subject,

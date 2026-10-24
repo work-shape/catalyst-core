@@ -167,7 +167,7 @@ async function fixture(
     clientInstanceId,
     store: store.approvals,
     handlers: new Map([[handler.kind, handler]]),
-    guardrails: runner,
+    checks: runner,
     auditRecorder: new StoreBackedAuditRecorder({ clientInstanceId, store: store.audit })
   });
   return { config, store, complete, runner, workflow, usageGovernance };
@@ -633,7 +633,7 @@ async function skillFixture() {
     clientInstanceId,
     store: f.store.approvals,
     handlers: new Map([[skillHandler.kind, skillHandler]]),
-    guardrails: f.runner,
+    checks: f.runner,
     auditRecorder: new StoreBackedAuditRecorder({ clientInstanceId, store: f.store.audit })
   });
   const tool = createProposeSkillChangeTool({

@@ -26,6 +26,7 @@ import {
   createAssetKindRegistry,
   createAuthorizer,
   NoopAuditRecorder,
+  NO_BEFORE_ACTION_CHECK,
   SecretNotResolvedError,
   type HttpRuntime,
   type JobWorker,
@@ -447,7 +448,8 @@ export function completeServerOptions(
   return {
     ...completed,
     authorizer,
-    operationCalls: completed.operationCalls ?? createOperationCalls(calls)
+    operationCalls:
+      completed.operationCalls ?? createOperationCalls({ ...calls, checks: NO_BEFORE_ACTION_CHECK })
   };
 }
 
