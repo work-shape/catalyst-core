@@ -1,0 +1,8 @@
+---
+section: Added
+---
+
+- **Knowledge Bases:** A data Workflow puts documents into a Knowledge Base that keeps documents with `knowledge.<id>.ingest` (KBW-1). One call takes items inline or as a dataset of its run, is one Operation Run that ends once every item is indexed or failed, and answers `{ accepted, done, failed, failures, withdrawn }` with the failures as a dataset of the step: one invalid item fails alone, and a failure row carries the item's identity, never its text. Items carry `text` for now; `fileId` items and `fetch` items fail per item until Workflows read Managed Files and CONN-DL, a `fetch` naming a Connection the Workflow's account may not use with `knowledge_fetch_not_allowed`.
+- **Knowledge Bases:** The source of kind `workflow` (`workflow:<workflow>`) is made by a Workflow's first call and listed by `knowledge_bases.sources`; its documents are searchable and keep their copy. `knowledge.<id>.withdraw({ itemIds })` takes items of the calling Workflow's source out of search at once.
+- **Knowledge Bases:** `complete: true` withdraws the items of the source its Workflow run did not name, only once that run ended `done`; a run that ended otherwise withdraws nothing, and the pass's sync run ends with `knowledge_ingest_cancelled` where its run ended before it. A withdrawal above `withdrawShareConfirm` of the source (20 percent by default) waits for a confirmation in the publisher's Inbox.
+- **Studio:** The Knowledge Base page lists a Workflow-fed source with its Workflow, its last run, "Stand: letzter Lauf vor …" and a note that the Workflow's runs decide what it holds, with no Sync now or Try again.

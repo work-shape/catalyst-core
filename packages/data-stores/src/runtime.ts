@@ -49,6 +49,33 @@ export interface DataStoreDatasetReader {
   ): AsyncIterable<readonly JsonObject[]>;
 }
 
+/**
+ * The datasets of one Workflow run, outside of an operation call (KBW-1): the ingest pass reads
+ * the rows its step was given and writes its failures as a dataset of the same step run. Both
+ * are bound to the run: a dataset the run may not read is refused as on its own steps.
+ */
+export interface WorkflowRunDatasetPort {
+  /** Throws an `AppError` where the run may not read the dataset, or it is gone. */
+  check(input: { workflowRunId: string; reference: WorkflowDatasetReference }): Promise<void>;
+  /** At most `limit` rows from `offset`, in the dataset's order. */
+  read(input: {
+    workflowRunId: string;
+    reference: WorkflowDatasetReference;
+    offset: number;
+    limit: number;
+    signal?: AbortSignal;
+  }): Promise<JsonObject[]>;
+  /** Writes the rows once per step run and field; a repeated write answers the first. */
+  write(input: {
+    workflowRunId: string;
+    stepRunId: string;
+    field: string;
+    rowSchema: JsonObject;
+    rows: AsyncIterable<JsonObject>;
+    signal?: AbortSignal;
+  }): Promise<WorkflowDatasetReference>;
+}
+
 /** What everything that serves Data Stores in one process is built on. */
 export interface DataStoreRuntime {
   /** Instance content locale until Knowledge Bases support a content-language setting. */
@@ -70,6 +97,8 @@ export interface DataStoreRuntime {
       context: OperationExecutionContext
     ): Promise<WorkflowDatasetReference>;
   };
+  /** A Workflow run's datasets for `knowledge.<id>.ingest`; absent without dataset storage. */
+  workflowDatasets?: WorkflowRunDatasetPort;
   /** The stores this process has seen to hold the table of their call records, by id. */
   callRecords: Map<string, Promise<void>>;
   logger: Logger;

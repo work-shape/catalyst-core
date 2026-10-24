@@ -5,6 +5,8 @@ import { afterEach, expect, vi } from "vitest";
 import { createDiagnosedJobWorker as createJobWorker } from "./job-worker-diagnostics";
 import { createFixtureDocumentSource, loadSecretKeyring } from "@work-shape/catalyst-connections";
 import { createDataStores, createKnowledgeBases } from "@work-shape/catalyst-data-stores";
+import { workflowRunDatasetPort } from "@work-shape/catalyst-client-assembly";
+import { createWorkflowDatasets } from "@work-shape/catalyst-workflows";
 import { createFilesystemObjectStorage } from "@work-shape/catalyst-object-storage";
 import {
   asUserId,
@@ -132,7 +134,7 @@ export function useKnowledgeSync({ withDataStoreJobs = false } = {}) {
         name: `knowledge-base:${KB}`
       });
       expect(row?.status).toBe("ready");
-      expect(row?.level).toBe(12);
+      expect(row?.level).toBe(13);
       return required(row);
     });
     const url = new URL(await fileTestDatabaseUrl());
@@ -218,6 +220,12 @@ export function useKnowledgeSync({ withDataStoreJobs = false } = {}) {
       models: [{ bindingId: "embedding", model: "local", dimensions: 8 }]
     };
     const recordFailures: OperationBatchFailure[][] = [];
+    const datasets = createWorkflowDatasets({
+      clientInstanceId,
+      stores: instance.stores,
+      objects,
+      limits: instance.execution.config.workflows.datasets
+    });
     const dataStores = createDataStores({
       defaultLocale,
       embedding,
@@ -239,6 +247,10 @@ export function useKnowledgeSync({ withDataStoreJobs = false } = {}) {
           };
         }
       },
+      workflowDatasets: workflowRunDatasetPort(
+        { clientInstanceId, stores: instance.stores },
+        () => datasets
+      ),
       logger
     });
     cleanups.push(() => dataStores.close());
@@ -396,6 +408,7 @@ export function useKnowledgeSync({ withDataStoreJobs = false } = {}) {
     return {
       publishSources,
       recordFailures,
+      datasets,
       ...fixture,
       dataStores,
       openSource,

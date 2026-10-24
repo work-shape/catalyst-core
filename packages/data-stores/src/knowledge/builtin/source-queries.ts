@@ -20,6 +20,7 @@ import { discardUnusableKnowledgeExtraction } from "../index-extraction";
 import type { DataStoreRuntime } from "../../runtime";
 import { createSourceStore, syncResult } from "./source-store";
 import { enqueueSourceSync, sourceSyncStarted } from "./source-lifecycle";
+import { startIngest, withdrawWorkflowItems } from "./ingest";
 
 // All operations use the same derived state: the item owns fetch state, the content owns indexing.
 const JOIN = `from catalyst_kb.source_items i left join catalyst_kb.documents d on d.id=i.document_id left join catalyst_kb.contents c on c.sha256=d.content_sha256`;
@@ -42,6 +43,8 @@ const rowSchema = z.object({
   purged_at: z.coerce.date().nullable()
 });
 const SELECT = `select i.id,i.item_id,i.source_id,i.name,i.path,i.document_id,i.origin_link,i.changed_at,i.discovered_at,i.fetched_at,i.withdrawn_at,i.purged_at,${STATE} as state,${FAILURE} as failure_code ${JOIN}`;
+// The owned-store migration that gave a source its kind (`workflow_sources`).
+const WORKFLOW_SOURCES_MIGRATION = 6;
 // Keep a bounded page in memory. A retry by code walks every matching item in pages.
 const RETRY_BATCH_ITEMS = 100;
 
@@ -94,13 +97,17 @@ export function createKnowledgeSources(runtime: DataStoreRuntime): KnowledgeSour
       signal: AbortSignal
     ) {
       signal.throwIfAborted();
-      // The published definition already answers an empty list. Its owned store is made
-      // asynchronously after the first publish and is needed only for sync state and counts.
-      if (sources.length === 0) return { sources: [] };
       const record = await runtime.stores.dataStores.getDataStore({
         clientInstanceId: runtime.clientInstanceId,
         id
       });
+      // A Workflow-fed source is made by its first `ingest` and is in the owned store alone;
+      // before the store is ready there is none, and the definition answers the rest.
+      const storeReady =
+        record?.ownerKnowledgeBaseId !== undefined &&
+        record.status === "ready" &&
+        record.migrations.some(({ number }) => number === WORKFLOW_SOURCES_MIGRATION);
+      if (sources.length === 0 && !storeReady) return { sources: [] };
       // The database and its initial tables are made by separate jobs. Before either is
       // ready there is no sync state yet. Existing stores awaiting an upgrade keep their
       // counts; failed preparation still follows the store's normal error path.
@@ -120,7 +127,20 @@ export function createKnowledgeSources(runtime: DataStoreRuntime): KnowledgeSour
         });
       return store(id, signal).change(async (sql) => {
         const result = [];
-        for (const source of sources) {
+        const workflows = storeReady
+          ? z
+              .array(z.object({ source_id: z.string(), workflow_id: z.string() }))
+              .parse(
+                await sql.run(
+                  "select source_id,workflow_id from catalyst_kb.source_cursors where kind='workflow' order by source_id"
+                )
+              )
+          : [];
+        const listed: { id: string; connection?: string; workflowId?: string }[] = [
+          ...sources,
+          ...workflows.map((row) => ({ id: row.source_id, workflowId: row.workflow_id }))
+        ];
+        for (const source of listed) {
           const groups = z
             .array(z.object({ state: z.string(), code: z.string().nullable(), n: z.number() }))
             .parse(
@@ -163,7 +183,9 @@ export function createKnowledgeSources(runtime: DataStoreRuntime): KnowledgeSour
             );
           result.push({
             id: source.id,
-            connection: source.connection,
+            ...(source.workflowId === undefined
+              ? { connection: source.connection }
+              : { kind: "workflow", workflowId: source.workflowId }),
             items,
             failures: groups
               .filter((g) => g.state === "failed" && g.code)
@@ -276,13 +298,17 @@ export function createKnowledgeSources(runtime: DataStoreRuntime): KnowledgeSour
           .array(z.object({ id: z.string() }))
           .parse(
             await sql.run(
-              "select id from catalyst_kb.documents where id=any($1::text[]) and source_item_id is not null",
+              // A Workflow-fed document keeps its copy, so it is indexed again like a file added
+              // by hand; there is no source to fetch it from (KBW-1).
+              "select d.id from catalyst_kb.documents d join catalyst_kb.source_items i on i.id=d.source_item_id where d.id=any($1::text[]) and i.source_id not like 'workflow:%'",
               [ids]
             )
           )
           .map((row) => row.id)
       );
     },
+    ingest: (call, signal) => startIngest(runtime, call, signal),
+    withdraw: (input, signal) => withdrawWorkflowItems(runtime, input, signal),
     async retry(
       id: string,
       input: z.infer<typeof knowledgeRetryInputSchema>,

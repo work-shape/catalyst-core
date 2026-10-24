@@ -22403,6 +22403,7 @@
                               "knowledge_source_limit_reached",
                               "knowledge_item_invalid",
                               "knowledge_fetch_not_allowed",
+                              "knowledge_ingest_cancelled",
                               "knowledge_file_over_limit",
                               "knowledge_file_format_unsupported"
                             ]
@@ -24092,6 +24093,7 @@
                                             "knowledge_source_limit_reached",
                                             "knowledge_item_invalid",
                                             "knowledge_fetch_not_allowed",
+                                            "knowledge_ingest_cancelled",
                                             "knowledge_file_over_limit",
                                             "knowledge_file_format_unsupported"
                                           ]
@@ -24138,7 +24140,8 @@
                                     "enum": [
                                       "initial",
                                       "changes",
-                                      "full"
+                                      "full",
+                                      "ingest"
                                     ]
                                   },
                                   "startedAt": {
@@ -24172,7 +24175,8 @@
                                     "enum": [
                                       "initial",
                                       "changes",
-                                      "full"
+                                      "full",
+                                      "ingest"
                                     ]
                                   },
                                   "reason": {
@@ -24252,7 +24256,8 @@
                                       "knowledge_fetch_failed",
                                       "knowledge_source_limit_reached",
                                       "knowledge_item_invalid",
-                                      "knowledge_fetch_not_allowed"
+                                      "knowledge_fetch_not_allowed",
+                                      "knowledge_ingest_cancelled"
                                     ]
                                   },
                                   "startedAt": {
@@ -24354,6 +24359,7 @@
                                             "knowledge_source_limit_reached",
                                             "knowledge_item_invalid",
                                             "knowledge_fetch_not_allowed",
+                                            "knowledge_ingest_cancelled",
                                             "knowledge_file_over_limit",
                                             "knowledge_file_format_unsupported"
                                           ]
@@ -24400,7 +24406,8 @@
                                     "enum": [
                                       "initial",
                                       "changes",
-                                      "full"
+                                      "full",
+                                      "ingest"
                                     ]
                                   },
                                   "startedAt": {
@@ -24434,7 +24441,8 @@
                                     "enum": [
                                       "initial",
                                       "changes",
-                                      "full"
+                                      "full",
+                                      "ingest"
                                     ]
                                   },
                                   "reason": {
@@ -24514,7 +24522,8 @@
                                       "knowledge_fetch_failed",
                                       "knowledge_source_limit_reached",
                                       "knowledge_item_invalid",
-                                      "knowledge_fetch_not_allowed"
+                                      "knowledge_fetch_not_allowed",
+                                      "knowledge_ingest_cancelled"
                                     ]
                                   },
                                   "startedAt": {
@@ -24668,6 +24677,7 @@
                     "knowledge_source_limit_reached",
                     "knowledge_item_invalid",
                     "knowledge_fetch_not_allowed",
+                    "knowledge_ingest_cancelled",
                     "knowledge_file_over_limit",
                     "knowledge_file_format_unsupported"
                   ]
@@ -24759,6 +24769,7 @@
                                   "knowledge_source_limit_reached",
                                   "knowledge_item_invalid",
                                   "knowledge_fetch_not_allowed",
+                                  "knowledge_ingest_cancelled",
                                   "knowledge_file_over_limit",
                                   "knowledge_file_format_unsupported"
                                 ]
@@ -24968,7 +24979,8 @@
                       "enum": [
                         "initial",
                         "changes",
-                        "full"
+                        "full",
+                        "ingest"
                       ]
                     },
                     "reason": {
@@ -25048,7 +25060,8 @@
                         "knowledge_fetch_failed",
                         "knowledge_source_limit_reached",
                         "knowledge_item_invalid",
-                        "knowledge_fetch_not_allowed"
+                        "knowledge_fetch_not_allowed",
+                        "knowledge_ingest_cancelled"
                       ]
                     },
                     "startedAt": {

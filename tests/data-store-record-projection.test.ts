@@ -84,7 +84,7 @@ describe("REC-1a records projection through the public operation source", () => 
       ).toEqual([{ n: 1 }]);
       if (kind === "owned")
         expect(await sql`select number from catalyst_kb.migrations order by number`).toHaveLength(
-          12
+          13
         );
     }
   );

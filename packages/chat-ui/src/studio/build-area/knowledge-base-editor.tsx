@@ -303,6 +303,8 @@ export function KnowledgeBaseEditor({
                   owner={frame.owner}
                   sources={form.sources}
                   canWrite={canWrite}
+                  workflows={dataFlows?.fills}
+                  workflowPage={workflowPage}
                   onChange={(sources) => update({ sources })}
                 />
                 <FieldRefusals messages={refusalsOf(outcome, "sources")} />

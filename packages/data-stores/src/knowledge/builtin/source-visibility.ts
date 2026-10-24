@@ -48,6 +48,8 @@ export async function visibleSourceDocumentIds(
     rows
       .filter((row) => {
         if (row.source_id === null) return false;
+        // A Workflow-fed source has no boundary in the definition: its runs decide (KBW-1).
+        if (row.source_id.startsWith("workflow:")) return false;
         const source = definition.sources?.find((source) => source.id === row.source_id);
         return (
           !source ||

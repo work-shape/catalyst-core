@@ -61,7 +61,16 @@ export const knowledgeSources = defineTranslations({
     "knowledgeSources.failureFetch": "Fetching failed, even after several tries.",
     "knowledgeSources.failureLimit": "The knowledge base holds as many documents as it may.",
     "knowledgeSources.failureItemInvalid": "The source described the item in a way it cannot read.",
-    "knowledgeSources.failureNotAllowed": "The source does not allow the file to be downloaded."
+    "knowledgeSources.failureNotAllowed": "The source does not allow the file to be downloaded.",
+    "knowledgeSources.failureIngestCancelled": "The workflow's run ended before it was taken in.",
+    "knowledgeSources.workflowSources": "Filled by workflows",
+    "knowledgeSources.workflow": "Workflow",
+    "knowledgeSources.stateIngesting": "Taking documents in",
+    "knowledgeSources.stateRunEnded": "Last run ended early",
+    "knowledgeSources.lastRun": "Last run",
+    "knowledgeSources.workflowFreshness": "As of the last run {elapsed} ago",
+    "knowledgeSources.workflowNote":
+      "The workflow's runs decide what this source holds: a complete run removes what it no longer names. To delete documents, change the workflow or its schedule."
   },
   de: {
     "knowledgeSources.title": "Synchronisierte Quellen",
@@ -125,6 +134,16 @@ export const knowledgeSources = defineTranslations({
     "knowledgeSources.failureLimit": "Die Wissensbasis enthält so viele Dokumente, wie sie darf.",
     "knowledgeSources.failureItemInvalid":
       "Die Quelle hat das Element so beschrieben, dass es sich nicht lesen lässt.",
-    "knowledgeSources.failureNotAllowed": "Die Quelle erlaubt nicht, die Datei herunterzuladen."
+    "knowledgeSources.failureNotAllowed": "Die Quelle erlaubt nicht, die Datei herunterzuladen.",
+    "knowledgeSources.failureIngestCancelled":
+      "Der Lauf des Workflows endete, bevor es übernommen wurde.",
+    "knowledgeSources.workflowSources": "Von Workflows gefüllt",
+    "knowledgeSources.workflow": "Workflow",
+    "knowledgeSources.stateIngesting": "Übernahme läuft",
+    "knowledgeSources.stateRunEnded": "Letzter Lauf vorzeitig beendet",
+    "knowledgeSources.lastRun": "Letzter Lauf",
+    "knowledgeSources.workflowFreshness": "Stand: letzter Lauf vor {elapsed}",
+    "knowledgeSources.workflowNote":
+      "Was diese Quelle enthält, bestimmen die Läufe des Workflows: Ein vollständiger Lauf entfernt, was er nicht mehr nennt. Um Dokumente zu löschen, ändere den Workflow oder seinen Zeitplan."
   }
 });

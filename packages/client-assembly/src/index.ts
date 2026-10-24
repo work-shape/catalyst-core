@@ -39,6 +39,7 @@ export {
   type SeedStandaloneAuthResult
 } from "./seed-auth";
 export { createJobWorker, type CreateJobWorkerInput } from "./job-worker";
+export { workflowRunDatasetPort } from "./workflow-run-datasets";
 export {
   GUARDRAILS_CAPABILITY_NAME,
   createGuardrailsCapability,

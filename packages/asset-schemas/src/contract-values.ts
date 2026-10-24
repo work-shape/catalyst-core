@@ -835,7 +835,9 @@ export const KNOWLEDGE_SOURCE_FAILURE_CODES = [
   // The Knowledge Base holds its document limit; the listing stopped discovering there.
   "knowledge_source_limit_reached",
   "knowledge_item_invalid",
-  "knowledge_fetch_not_allowed"
+  "knowledge_fetch_not_allowed",
+  // The Workflow run that called `ingest` ended before the pass did; what it wrote stays.
+  "knowledge_ingest_cancelled"
 ] as const;
 export type KnowledgeSourceFailureCode = (typeof KNOWLEDGE_SOURCE_FAILURE_CODES)[number];
 
@@ -861,9 +863,10 @@ export type KnowledgeSourceItemState = (typeof KNOWLEDGE_SOURCE_ITEM_STATES)[num
 
 /**
  * How a sync of a source walks it: `initial` and `full` list every item below its folders,
- * `changes` reads the source's change feed from the stored cursor.
+ * `changes` reads the source's change feed from the stored cursor, and `ingest` is one call
+ * of `knowledge.<id>.ingest` from a Workflow into its Workflow-fed source.
  */
-export const KNOWLEDGE_SYNC_MODES = ["initial", "changes", "full"] as const;
+export const KNOWLEDGE_SYNC_MODES = ["initial", "changes", "full", "ingest"] as const;
 export type KnowledgeSyncMode = (typeof KNOWLEDGE_SYNC_MODES)[number];
 
 export const KNOWLEDGE_SYNC_RUN_STATES = ["running", "done", "failed", "superseded"] as const;

@@ -102,7 +102,8 @@ function render(
     status = { sources: [running] },
     connections = [{ name: "handbook-folders", title: "Handbook folders" }],
     sourceTypes,
-    inBuild = false
+    inBuild = false,
+    workflows
   }: {
     canWrite?: boolean;
     /** No revision is published yet. */
@@ -115,6 +116,8 @@ function render(
     sourceTypes?: readonly string[];
     /** The section sits in Studio, which can open the New connection dialog. */
     inBuild?: boolean;
+    /** The Workflows that fill the Knowledge Base, as its state names them. */
+    workflows?: readonly { id: string; name: string; title: string }[];
   } = {}
 ): string {
   const section = createElement(KnowledgeSourcesSection, {
@@ -124,6 +127,7 @@ function render(
     owner: undefined,
     sources,
     canWrite,
+    ...(workflows ? { workflows } : {}),
     onChange: () => undefined
   });
   return renderToStaticMarkup(
@@ -326,5 +330,96 @@ describe("the question before a publish", () => {
     expect(publishQuestionHolds({ status: "failed" })).toBe(true);
     expect(publishQuestionHolds({ status: "ready", lines: [] })).toBe(false);
     expect(publishQuestionHolds({ status: "none" })).toBe(false);
+  });
+});
+
+describe("a source a Workflow fills (KBW-1)", () => {
+  const hour = 60 * 60 * 1000;
+  const fed = (endedAt: string) =>
+    ({
+      id: "workflow:nightly-import",
+      kind: "workflow",
+      workflowId: "nightly-import",
+      items: { discovered: 0, fetched: 0, indexed: 198, failed: 2, withdrawn: 10 },
+      failures: [{ code: "knowledge_extraction_failed", count: 2 }],
+      last: {
+        syncRunId: "kbsync_1",
+        source: "workflow:nightly-import",
+        mode: "ingest",
+        state: "done",
+        counts: {
+          discovered: 200,
+          added: 198,
+          changed: 0,
+          moved: 0,
+          withdrawn: 10,
+          failed: 2,
+          skipped: 0
+        },
+        bytesFetched: 0,
+        startedAt: endedAt,
+        endedAt
+      }
+    }) satisfies KnowledgeSourceStatus;
+
+  it.each([
+    [
+      "de",
+      "Nachtimport",
+      "Stand: letzter Lauf vor 2 Std.",
+      "Letzter Lauf",
+      "bestimmen die Läufe des Workflows"
+    ],
+    [
+      "en",
+      "Nachtimport",
+      "As of the last run 2 hr ago",
+      "Last run",
+      "decide what this source holds"
+    ]
+  ] as const)(
+    "names the Workflow, its last run and how fresh it is in %s, with no Sync now or Try again",
+    (locale, title, freshness, lastRun, note) => {
+      const html = render(locale, {
+        sources: [],
+        status: { sources: [fed(new Date(Date.now() - 2 * hour - 60_000).toISOString())] },
+        workflows: [{ id: "wf_1", name: "nightly-import", title }]
+      });
+      expect(html).toContain('data-knowledge-source-kind="workflow"');
+      expect(html).toContain(title);
+      expect(html).toContain(freshness);
+      expect(html).toContain(lastRun);
+      expect(html).toContain(note);
+      expect(html).not.toContain("data-knowledge-source-sync");
+      expect(html).not.toContain("knowledgeSources.");
+      expect(html).not.toContain(locale === "de" ? "Erneut versuchen" : "Try again");
+      // A Workflow-fed source alone is no empty list of synced sources.
+      expect(html).not.toContain(locale === "de" ? "Noch keine Quelle." : "No source yet.");
+    }
+  );
+
+  it("names the Workflow by its id where the reader may not read it", () => {
+    const html = render("en", {
+      sources: [],
+      status: { sources: [fed(new Date().toISOString())] }
+    });
+    expect(html).toContain("nightly-import");
+  });
+
+  it("shows a pass that runs as taking documents in, and one its run cut short as ended early", () => {
+    expect(
+      sourceStateView({
+        running: { syncRunId: "s", mode: "ingest", startedAt: "2026-10-24T08:00:00.000Z" }
+      })
+    ).toMatchObject({ label: "knowledgeSources.stateIngesting" });
+    expect(
+      sourceStateView({
+        last: {
+          ...fed("2026-10-24T08:00:00.000Z").last,
+          state: "failed",
+          failureCode: "knowledge_ingest_cancelled"
+        }
+      })
+    ).toMatchObject({ state: "failed", label: "knowledgeSources.stateRunEnded" });
   });
 });

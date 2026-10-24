@@ -94,9 +94,9 @@ async function queueIndex(
   return content;
 }
 
-async function releaseCopy(
+export async function releaseCopy(
   runtime: SourceJobRuntime,
-  payload: KnowledgeFetchJobPayload,
+  payload: Pick<KnowledgeFetchJobPayload, "knowledgeBaseId">,
   fileId: string
 ) {
   const target = {

@@ -24,6 +24,7 @@ import {
   type DataStores
 } from "@work-shape/catalyst-data-stores";
 import { PLATFORM_SECRET_NAMES } from "./infrastructure";
+import { workflowRunDatasetPort } from "./workflow-run-datasets";
 import { knowledgeEmbedding } from "./knowledge";
 import type { ModuleSeam } from "./module-assembly";
 
@@ -225,6 +226,8 @@ export const assembleDataStores: ModuleSeam = async (parts) => {
         });
       }
     },
+    // KBW-1: a Workflow's `ingest` reads its items, and writes its failures, as that run.
+    workflowDatasets: workflowRunDatasetPort(parts, () => datasets),
     embedding: knowledgeEmbedding(config),
     logger: parts.logger
   });
