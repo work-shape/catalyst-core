@@ -183,7 +183,6 @@ export function createUsageAttributionBackfill(
   };
 }
 
-/** What the reconciliation recorded of its last run. */
 /**
  * The keys the daily sums are summed under. A record that names other keys, or none, was
  * written before the sums were keyed so: the next run reads every event and puts the sums of
@@ -191,6 +190,7 @@ export function createUsageAttributionBackfill(
  */
 const USAGE_SUM_KEYS = "workspace_app_workflow";
 
+/** What the reconciliation recorded of its last run. */
 interface UsageReconciliationState {
   /** Whether the daily sums were built from the events that were there before the sums. */
   sumsBuilt: boolean;

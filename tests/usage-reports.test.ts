@@ -245,6 +245,62 @@ describe("a shared workspace's Usage tab (check 14)", () => {
     expect(members.items).toHaveLength(2);
   });
 
+  it("keeps a workspace's grant of usage by person to that workspace", async () => {
+    const { t, shared, other } = await setup();
+    await t.stores.workspaces.addMembership({
+      clientInstanceId,
+      collaborationWorkspaceId: other,
+      userId: asUserId(t.kai.id),
+      role: "owner"
+    });
+    await t.grant(t.kai.id, "usage.view_users", { workspaceId: shared });
+
+    // Owner of the other workspace as well, but the right is only for the first.
+    const otherUsage = workspaceUsageSchema.parse(
+      (await workspaceUsage(t, t.kai.id, other)).json()
+    );
+    expect(otherUsage.membersVisible).toBe(false);
+    await t.expectRefused(
+      t.kai.id,
+      "workspaces.member_usage.list",
+      { params: { collaborationWorkspaceId: other } },
+      { status: 403, code: "FORBIDDEN" }
+    );
+    // Nor does it reach the instance's Users view or its Breakdown.
+    await t.expectRefused(t.kai.id, "usage.users.list", {}, { status: 403, code: "FORBIDDEN" });
+    await t.expectRefused(
+      t.kai.id,
+      "usage.breakdown.get",
+      { query: { ...period(), groupBy: "agent" } },
+      { status: 403, code: "FORBIDDEN" }
+    );
+    expect(await audited(t, "governance.usage_users_viewed")).toHaveLength(0);
+  });
+
+  it("refuses a month that does not exist before anything is read or audited", async () => {
+    const { t, shared } = await setup();
+    await t.grant(t.kai.id, "usage.view_users", { workspaceId: shared });
+    await t.expectRefused(
+      t.admin.id,
+      "usage.users.list",
+      { query: { month: "2026-13" } },
+      { status: 422, code: "VALIDATION_FAILED" }
+    );
+    await t.expectRefused(
+      t.kai.id,
+      "workspaces.member_usage.list",
+      { params: { collaborationWorkspaceId: shared }, query: { month: "2026-00" } },
+      { status: 422, code: "VALIDATION_FAILED" }
+    );
+    await t.expectRefused(
+      t.admin.id,
+      "usage.breakdown.get",
+      { query: { from: "2026-02-30", to: "2026-03-02", groupBy: "agent" } },
+      { status: 422, code: "VALIDATION_FAILED" }
+    );
+    expect(await audited(t, "governance.usage_users_viewed")).toHaveLength(0);
+  });
+
   it("has no Usage tab for a Personal Workspace", async () => {
     const { t } = await setup();
     const personal = await t.stores.workspaces.ensurePersonalWorkspace({

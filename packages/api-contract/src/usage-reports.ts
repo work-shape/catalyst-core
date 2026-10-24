@@ -18,7 +18,19 @@ import {
 // here says when a person was active (3.4).
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/u;
-const MONTH = /^\d{4}-\d{2}$/u;
+const MONTH = /^\d{4}-(?:0[1-9]|1[0-2])$/u;
+
+/** A UTC day that exists: `2026-02-30` is refused here, not by the database. */
+const daySchema = z
+  .string()
+  .regex(DAY)
+  .refine(
+    (day) => {
+      const time = Date.parse(`${day}T00:00:00Z`);
+      return !Number.isNaN(time) && new Date(time).toISOString().slice(0, 10) === day;
+    },
+    { message: "No such day" }
+  );
 
 /** The most days one Breakdown reads: a year and a day, far above a period anyone picks. */
 export const USAGE_BREAKDOWN_MAX_DAYS = 366;
@@ -31,8 +43,8 @@ const filterValue = z.string().max(200);
 /** The period, from and to UTC days (`to` excluded), the dimension, and what it is narrowed to. */
 export const usageBreakdownQuerySchema = z
   .object({
-    from: z.string().regex(DAY),
-    to: z.string().regex(DAY),
+    from: daySchema,
+    to: daySchema,
     groupBy: usageBreakdownDimensionSchema,
     workspace: filterValue.optional(),
     agent: filterValue.optional(),
@@ -141,8 +153,8 @@ export const workspaceUsageSchema: z.ZodType<WorkspaceUsage> = z.object({
 
 export const workspaceUsageQuerySchema = z
   .object({
-    from: z.string().regex(DAY),
-    to: z.string().regex(DAY),
+    from: daySchema,
+    to: daySchema,
     groupBy: usageBreakdownDimensionSchema.exclude(["workspace"]),
     agent: filterValue.optional(),
     app: filterValue.optional(),
