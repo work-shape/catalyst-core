@@ -69,6 +69,8 @@ const webSearchConfigSchema = z.preprocess(
   z.object({ enabled: z.boolean().default(false) }).default({ enabled: false })
 );
 
+// Parse the missing object through its child defaults. Zod's object .default() only
+// copies the outer object, so nested search/fetch objects otherwise leak between configs.
 export const webAccessConfigSchema = z
   .object({
     enabled: z.boolean().default(false),
@@ -86,27 +88,9 @@ export const webAccessConfigSchema = z
         maxTextCharacters: z.number().int().positive().max(200000).default(20000),
         maxRedirects: z.number().int().nonnegative().max(10).default(5)
       })
-      .default({
-        enabled: false,
-        timeoutMs: 10000,
-        maxResponseBytes: 1024 * 1024,
-        maxTextCharacters: 20000,
-        maxRedirects: 5
-      })
+      .prefault({})
   })
-  .default({
-    enabled: false,
-    search: {
-      enabled: false
-    },
-    fetch: {
-      enabled: false,
-      timeoutMs: 10000,
-      maxResponseBytes: 1024 * 1024,
-      maxTextCharacters: 20000,
-      maxRedirects: 5
-    }
-  });
+  .prefault({});
 
 /**
  * The sandbox of a Workflow's code step. A code step runs one script on the input its

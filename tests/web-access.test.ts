@@ -342,6 +342,25 @@ describe("web access app assembly", () => {
     }
   });
 
+  it("does not share nested web defaults between release configs", () => {
+    const first = createTestConfig();
+    const original = structuredClone(first.webAccess);
+    try {
+      first.webAccess.search.enabled = true;
+      first.webAccess.fetch.enabled = true;
+      first.webAccess.fetch.timeoutMs = 1;
+      for (const webAccess of [undefined, {}]) {
+        const next = createTestConfig({ webAccess });
+        expect(next.webAccess).toEqual(original);
+        expect(next.webAccess.search).not.toBe(first.webAccess.search);
+        expect(next.webAccess.fetch).not.toBe(first.webAccess.fetch);
+      }
+    } finally {
+      Object.assign(first.webAccess.search, original.search);
+      Object.assign(first.webAccess.fetch, original.fetch);
+    }
+  });
+
   it("keeps web search disabled by default in release config", () => {
     const config = createTestConfig();
 
