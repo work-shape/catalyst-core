@@ -1,5 +1,6 @@
 import { parseArgs } from "node:util";
 import type { Infrastructure, InfrastructureProvider } from "@work-shape/catalyst-api-contract";
+import { isPlainConfigObject } from "@work-shape/catalyst-asset-schemas";
 import { ConfigApiError, toConfigApiError } from "./api";
 import { formatRefusal } from "./asset-output";
 import {
@@ -24,7 +25,6 @@ import {
 import {
   addToReleaseConfigFile,
   fileSetting,
-  isPlainObject,
   locateReleaseConfig,
   overlaysReplacing,
   readReleaseConfig,
@@ -227,7 +227,7 @@ async function addProvider(
   }
   const card = valueAt(config.merged, ["usage", "costs", "customer"]);
   const currency =
-    isPlainObject(card) && typeof card.currency === "string"
+    isPlainConfigObject(card) && typeof card.currency === "string"
       ? card.currency
       : (values.currency ?? DEFAULT_CURRENCY);
   for (const field of fields) {
@@ -259,7 +259,7 @@ async function addProvider(
     if (refusal) throw new ReleaseConfigError(refusal);
   }
   const models = valueAt(config.merged, ["infrastructure", "models"]);
-  if (isPlainObject(models) && id in models)
+  if (isPlainConfigObject(models) && id in models)
     throw new ReleaseConfigError(
       `The release config already has a model provider '${id}'. Choose another --id.`
     );
@@ -324,7 +324,7 @@ async function addProvider(
   const additions: ReleaseConfigAddition[] = [
     { path: ["infrastructure", "models"], key: id, value: entry },
     { path: BINDINGS, item: binding },
-    isPlainObject(card)
+    isPlainConfigObject(card)
       ? { path: PRICES, item: price }
       : {
           path: ["usage", "costs"],
@@ -381,7 +381,7 @@ function defaultSecret(
   const spec = PROVIDER_KINDS[kind];
   const models = valueAt(config.merged, ["infrastructure", "models"]);
   const taken = new Set(
-    isPlainObject(models)
+    isPlainConfigObject(models)
       ? Object.values(models).flatMap((entry) =>
           isRecord(entry) && typeof entry.credentialSecret === "string"
             ? [entry.credentialSecret]
@@ -486,7 +486,7 @@ async function listProviders(
   const models = valueAt(config.merged, ["infrastructure", "models"]);
   const bindings = valueAt(config.merged, BINDINGS);
   const prices = valueAt(config.merged, PRICES);
-  const listed: ListedProvider[] = Object.entries(isPlainObject(models) ? models : {}).map(
+  const listed: ListedProvider[] = Object.entries(isPlainConfigObject(models) ? models : {}).map(
     ([id, entry]) => {
       const record = isRecord(entry) ? entry : {};
       const ownBindings = (Array.isArray(bindings) ? bindings : []).filter(

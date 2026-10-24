@@ -633,6 +633,34 @@ x-bindings: *bindings
     });
     expect(config.modelBindings.map((binding) => binding.id)).toEqual(["vertex-eu"]);
   });
+
+  it("keeps a comment beside an empty key, with or without an empty value", async () => {
+    for (const [empty, kept] of [
+      ["modelBindings: # none yet", "modelBindings: # none yet"],
+      ["modelBindings: [] # none yet", "modelBindings: # none yet"],
+      ["modelBindings: ~", "modelBindings:"]
+    ]) {
+      const root = await repository({ "config/app.yaml": `${FRESH_CONFIG}${empty}\nusage: {}\n` });
+      const result = await run(root, [
+        "models",
+        "add",
+        "vertex",
+        "--project",
+        "byo-test-project",
+        "--model",
+        "gemini-3.1-flash-lite",
+        ...PRICES
+      ]);
+      expect(result, result.err).toMatchObject({ code: 0 });
+      expect(await readFile(join(root, "config/app.yaml"), "utf8")).toContain(
+        `${kept}\n  - id: vertex-eu\n`
+      );
+      const config = await startupAccepts(join(root, "config/app.yaml"), {
+        GOOGLE_VERTEX_CREDENTIALS: replayServiceAccountKey()
+      });
+      expect(config.modelBindings.map((binding) => binding.id)).toEqual(["vertex-eu"]);
+    }
+  });
 });
 
 function apiFetch(answer: (request: Request) => Response | Promise<Response>): typeof fetch {

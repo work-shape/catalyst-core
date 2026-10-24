@@ -1,7 +1,11 @@
 import { access, readFile, readdir, writeFile } from "node:fs/promises";
 import { dirname, extname, relative, resolve } from "node:path";
 import { isDeepStrictEqual } from "node:util";
-import { loadYamlData } from "@work-shape/catalyst-asset-schemas";
+import {
+  isPlainConfigObject,
+  loadYamlData,
+  mergeConfigObjects
+} from "@work-shape/catalyst-asset-schemas";
 import {
   isMap,
   isNode,
@@ -73,7 +77,8 @@ export async function readReleaseConfig(path: string): Promise<ReleaseConfig> {
     }
     const text = (await readFile(next, "utf8")).replaceAll("\r\n", "\n");
     const raw = loadYamlData(text, next);
-    if (!isPlainObject(raw)) throw new ReleaseConfigError(`${next} holds no mapping of settings.`);
+    if (!isPlainConfigObject(raw))
+      throw new ReleaseConfigError(`${next} holds no mapping of settings.`);
     const { extends: extendsValue, ...data } = raw;
     chain.push({ path: next, text, data });
     if (extendsValue === undefined) next = undefined;
@@ -97,7 +102,7 @@ export async function readReleaseConfig(path: string): Promise<ReleaseConfig> {
 export function valueAt(data: unknown, path: readonly string[]): unknown {
   let current = data;
   for (const key of path) {
-    if (!isPlainObject(current)) return undefined;
+    if (!isPlainConfigObject(current)) return undefined;
     current = current[key];
   }
   return current;
@@ -261,10 +266,11 @@ function fillEmptyKey(text: string, pair: Pair, value: unknown): string {
   const colon = text.indexOf(":", keyRange[1]);
   const end = pair.value ? rangeOf(pair.value)[1] : colon + 1;
   const written = text.slice(colon + 1, end);
-  // `models: {}` or `models: ~`, on the key's line or below: the empty value gives way.
-  const cleared = /^\s*(?:\{\}|\[\]|~|null|Null|NULL)?\s*$/u.test(written)
-    ? text.slice(0, colon + 1) + text.slice(end)
-    : text;
+  // `models: {}` or `models: ~`, on the key's line or below: the empty value gives way, and
+  // what follows it on its line, such as a comment, stays.
+  const empty = /^\s*(?:\{\}|\[\]|~|null|Null|NULL)/u.exec(written);
+  const cleared =
+    empty === null ? text : text.slice(0, colon + 1) + text.slice(colon + 1 + empty[0].length);
   return insertLines(cleared, colon + 1, block(value, indent), indent);
 }
 
@@ -298,7 +304,7 @@ function block(value: unknown, indent: number): string {
 
 function nested(path: readonly string[], leaf: unknown): Record<string, unknown> {
   if (path.length === 0) {
-    if (!isPlainObject(leaf)) throw new ReleaseConfigError("A list cannot stand alone.");
+    if (!isPlainConfigObject(leaf)) throw new ReleaseConfigError("A list cannot stand alone.");
     return leaf;
   }
   const [head, ...tail] = path;
@@ -307,12 +313,13 @@ function nested(path: readonly string[], leaf: unknown): Record<string, unknown>
 }
 
 function applyToData(data: unknown, addition: ReleaseConfigAddition): void {
-  if (!isPlainObject(data)) throw new ReleaseConfigError("The file holds no mapping of settings.");
+  if (!isPlainConfigObject(data))
+    throw new ReleaseConfigError("The file holds no mapping of settings.");
   let current: Record<string, unknown> = data;
   const steps = "item" in addition ? addition.path.slice(0, -1) : addition.path;
   for (const key of steps) {
     const next = current[key];
-    if (isPlainObject(next)) current = next;
+    if (isPlainConfigObject(next)) current = next;
     else {
       const created: Record<string, unknown> = {};
       current[key] = created;
@@ -366,27 +373,4 @@ async function exists(path: string): Promise<boolean> {
   } catch {
     return false;
   }
-}
-
-/** Objects merge key by key, the extending file winning; lists and values replace. */
-function mergeConfigObjects(
-  base: Record<string, unknown>,
-  overrides: Record<string, unknown>
-): Record<string, unknown> {
-  const result: Record<string, unknown> = { ...base };
-  for (const [key, override] of Object.entries(overrides)) {
-    if (key === "__proto__") continue;
-    const baseValue = result[key];
-    result[key] =
-      isPlainObject(baseValue) && isPlainObject(override)
-        ? mergeConfigObjects(baseValue, override)
-        : override;
-  }
-  return result;
-}
-
-export function isPlainObject(value: unknown): value is Record<string, unknown> {
-  if (typeof value !== "object" || value === null) return false;
-  const prototype: unknown = Object.getPrototypeOf(value);
-  return prototype === Object.prototype || prototype === null;
 }
