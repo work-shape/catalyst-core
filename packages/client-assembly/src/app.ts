@@ -38,6 +38,7 @@ import {
   formerReleaseToolWarnings,
   getClientInstanceId,
   getModelProviderConfigs,
+  getPersonalModelRegions,
   loadClientInstanceConfigFromFile,
   validateConfigAssetBundle
 } from "@work-shape/catalyst-config-schema";
@@ -215,7 +216,8 @@ export async function createClientInstanceApp(
               reportedByJobKind: KNOWLEDGE_JOB_KINDS.index
             }
           ]
-        : []
+        : [],
+      execution.modules.isEnabled("connections") ? getPersonalModelRegions(config) : undefined
     ),
     clientInstanceId,
     authAdapter,

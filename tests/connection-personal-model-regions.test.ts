@@ -1,9 +1,11 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
+import type { ClientInstanceConfig } from "@work-shape/catalyst-config-schema";
 import type { OperationCallRuntime } from "@work-shape/catalyst-core";
 import { createOAuthWorld, landingOf, type OAuthWorld } from "./support/oauth-sign-in-world";
 import { createPersonalOAuthProvider } from "./support/personal-oauth-provider";
-import { getTestExecution } from "./support/test-instance";
+import { createTestConfig } from "./support/fixtures";
+import { createTestInstance, getTestExecution } from "./support/test-instance";
 
 // MODEL-REGION-2: release config widens the regions a personal call admits. The instance is
 // assembled from that config, so the test also proves the setting reaches the check.
@@ -120,5 +122,39 @@ describe("personal model regions widened to eu and us", () => {
     }
     expect(spy).not.toHaveBeenCalled();
     expect(fake.headers).toHaveLength(before);
+  });
+});
+
+describe("Instance > Infrastructure shows the regions personal Connections admit", () => {
+  const superadmin = { id: "root", externalUserId: "root", displayLabel: "Root" };
+  async function infrastructureOf(
+    connections: NonNullable<ClientInstanceConfig["modules"]["connections"]>
+  ) {
+    const base = createTestConfig({
+      developmentAuth: {
+        enabled: true,
+        users: [{ ...superadmin, roles: ["user", "admin", "superadmin"] }]
+      }
+    });
+    const app = await createTestInstance({
+      config: { ...base, modules: { ...base.modules, connections } },
+      capabilities: [],
+      tools: []
+    });
+    const response = await app.call("instance.infrastructure.get", {}, superadmin.id);
+    expect(response.statusCode, response.body).toBe(200);
+    return z
+      .object({ personalConnectionModelRegions: z.array(z.string()).optional() })
+      .parse(response.json());
+  }
+
+  it("reads the release config's list, [eu] where it names none, and nothing without Connections", async () => {
+    expect(await infrastructureOf({ enabled: true, personalModelRegions: ["eu", "us"] })).toEqual({
+      personalConnectionModelRegions: ["eu", "us"]
+    });
+    expect(await infrastructureOf({ enabled: true })).toEqual({
+      personalConnectionModelRegions: ["eu"]
+    });
+    expect(await infrastructureOf({ enabled: false })).toEqual({});
   });
 });

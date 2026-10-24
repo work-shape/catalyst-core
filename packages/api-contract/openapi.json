@@ -42787,6 +42787,13 @@
             "required": [
               "available"
             ]
+          },
+          "personalConnectionModelRegions": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ModelRegion"
+            }
           }
         },
         "required": [

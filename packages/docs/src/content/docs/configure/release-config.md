@@ -1144,6 +1144,7 @@ A personal call passes when every model route of the run declares one of the lis
 A route without a `region` never passes. An empty list, an entry that is not a string or an
 entry longer than 32 characters stops startup, and the message names the field. There is no
 switch for it in the interface and no right: the list changes only with a release.
+Instance › Infrastructure shows the list under Models, read-only.
 
 Widen the list only on the customer's written instruction, and only for provider routes that
 are contractually excluded from training. File the instruction in the deployment repository's

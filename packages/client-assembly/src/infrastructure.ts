@@ -425,9 +425,12 @@ export function createInfrastructureWorkflow(
   config: ClientInstanceConfig,
   infrastructure: InstanceInfrastructure,
   stores: PlatformStores,
-  processes: readonly InfrastructureEntry[] = []
+  processes: readonly InfrastructureEntry[] = [],
+  /** The regions personal Connections admit, where the instance runs Connections. */
+  personalConnectionModelRegions?: readonly string[]
 ): InfrastructureWorkflow {
   return new InfrastructureWorkflow({
+    ...(personalConnectionModelRegions ? { personalConnectionModelRegions } : {}),
     entries: [...infrastructureOverview({ config, infrastructure, stores }), ...processes],
     declaredSecretNames: declaredSecretNames(config, infrastructure.registry),
     secrets: infrastructure.secrets,
