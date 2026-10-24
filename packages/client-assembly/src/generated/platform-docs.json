@@ -5505,7 +5505,7 @@
         "- **My requests**: the requests the person made, in every state, with who decided and the comment.",
         "- **Decided**: the requests of the kinds the person may decide that were decided in the last 30 days. An accepted change is undone from here.",
         "",
-        "To decide and Decided need a right to decide, such as `agent_skills.approve` for skill changes. A person without one sees their own requests as a single list. Every signed-in person can read their own requests through `approval_requests.list_mine`; `approval_requests.list` stays with the people who may decide.",
+        "To decide and Decided need a right to decide, such as `agent_skills.approve` for skill changes. A held call on one Connection, one of its operations or a change or deletion of its definition, is also decided by a holder of `connection.approve` on that Connection or on every Connection; the call still runs as the person who made it, so deciding it gives no right on the Connection. A person without one sees their own requests as a single list. Every signed-in person can read their own requests through `approval_requests.list_mine`; `approval_requests.list` stays with the people who may decide.",
         "",
         "Opening a row shows the request beside the list at `/inbox/<id>`. A decision is made there or on the card in the conversation; both read and change the same Approval Request. Who may decide is answered by the server for each request.",
         "",
