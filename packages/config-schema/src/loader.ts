@@ -1,7 +1,9 @@
 import { readFile } from "node:fs/promises";
 import { dirname, extname, resolve } from "node:path";
 import {
+  isPlainConfigObject,
   loadYamlData,
+  mergeConfigObjects,
   parseSkillMarkdown as parseSkillFileMarkdown,
   SkillMarkdownError
 } from "@work-shape/catalyst-asset-schemas";
@@ -57,7 +59,7 @@ async function loadUiConfigFile(baseDir: string, uiFile: string, overlay?: unkno
   const uiPath = resolve(baseDir, uiFile);
   const uiRaw = withoutRemovedWorkspaceSwitch(await readStructuredFile(uiPath));
   const mergedUi =
-    isPlainObject(uiRaw) && isPlainObject(overlay)
+    isPlainConfigObject(uiRaw) && isPlainConfigObject(overlay)
       ? mergeConfigObjects(uiRaw, overlay)
       : (overlay ?? uiRaw);
   const ui = uiConfigSchema.safeParse(mergedUi);
@@ -92,7 +94,7 @@ async function readConfigFileWithExtends(path: string, visited: Set<string>): Pr
   visited.add(path);
 
   const raw = await readStructuredFile(path);
-  if (!isPlainObject(raw) || !("extends" in raw)) {
+  if (!isPlainConfigObject(raw) || !("extends" in raw)) {
     return raw;
   }
   const { extends: extendsValue, ...overrides } = raw;
@@ -103,41 +105,13 @@ async function readConfigFileWithExtends(path: string, visited: Set<string>): Pr
     );
   }
   const base = await readConfigFileWithExtends(resolve(dirname(path), extendsValue), visited);
-  if (!isPlainObject(base)) {
+  if (!isPlainConfigObject(base)) {
     throw new AppError(
       "VALIDATION_FAILED",
       `Config file '${extendsValue}' extended from '${path}' must contain an object`
     );
   }
   return mergeConfigObjects(base, overrides);
-}
-
-function mergeConfigObjects(
-  base: Record<string, unknown>,
-  overrides: Record<string, unknown>
-): Record<string, unknown> {
-  const result: Record<string, unknown> = { ...base };
-  for (const [key, override] of Object.entries(overrides)) {
-    if (key === "__proto__") {
-      continue;
-    }
-    const baseValue = result[key];
-    result[key] =
-      isPlainObject(baseValue) && isPlainObject(override)
-        ? mergeConfigObjects(baseValue, override)
-        : override;
-  }
-  return result;
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  if (typeof value !== "object" || value === null) {
-    return false;
-  }
-  // Exclude arrays and YAML-derived non-record objects such as Date: those
-  // replace the base value wholesale instead of merging into it.
-  const prototype: unknown = Object.getPrototypeOf(value);
-  return prototype === Object.prototype || prototype === null;
 }
 
 /** Reads a `SKILL.md`. A file that is no skill is refused as a validation failure. */

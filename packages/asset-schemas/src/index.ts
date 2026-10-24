@@ -1,5 +1,6 @@
 export * from "./asset-types";
 export * from "./bedrock-profiles";
+export * from "./config-merge";
 export * from "./contract-values";
 export * from "./schemas";
 export * from "./secret-names";
