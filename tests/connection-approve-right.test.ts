@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { asToolCallId } from "@work-shape/catalyst-core";
-import { agentOrigin, fixture, operationOf } from "./support/connection-operations";
+import { URL_OF_HOST, agentOrigin, fixture, operationOf } from "./support/connection-operations";
+import { clientInstanceId } from "./support/access-instance";
 import { connection } from "./support/connections";
 
 // RIGHTS-1d: `connection.approve` decides an Approval Request for an operation or a
@@ -172,5 +173,43 @@ describe("a held change of a Connection's configuration", () => {
       });
     expect((await decide(onLedger)).statusCode).toBe(404);
     expect((await decide(onCrm)).statusCode).toBe(200);
+  });
+});
+
+describe("a held call on a Connection that is deleted", () => {
+  it("ends with it, and the Connection made again under its name decides nothing of it", async () => {
+    const { t, crm, requests, decide, list } = await heldOnTwo();
+    const asset = { params: { kind: "connection", name: "crm" } };
+    await t.expectOk(t.admin.id, "assets.delete", asset);
+    // Made again under its name, it gets the deleted one's asset id back.
+    await t.expectOk(t.admin.id, "assets.put", {
+      ...asset,
+      payload: {
+        config: connection("crm", {
+          connectorType: "test",
+          settings: { url: URL_OF_HOST },
+          origin: "runtime",
+          operations: HELD
+        }),
+        expectedRevision: 2
+      }
+    });
+    expect(await t.assetId("connection", "crm")).toBe(crm);
+    await t.grant(t.lena.id, "connection.approve", { assetId: crm });
+
+    // It shows as ended, and nobody decides it any more.
+    expect(await list(t.lena.id)).toEqual([{ id: requests.crm, canDecide: false }]);
+    expect((await decide(t.lena.id, requests.crm)).statusCode).toBe(409);
+    const ended = await t.stores.approvals.getApprovalRequest({
+      clientInstanceId,
+      requestId: requests.crm
+    });
+    expect(ended).toMatchObject({ status: "superseded" });
+    // The call on the other Connection still waits.
+    const other = await t.stores.approvals.getApprovalRequest({
+      clientInstanceId,
+      requestId: requests.ledger
+    });
+    expect(other).toMatchObject({ status: "pending" });
   });
 });

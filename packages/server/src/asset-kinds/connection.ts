@@ -30,6 +30,7 @@ import {
   type EgressChecker,
   type EgressTarget
 } from "@work-shape/catalyst-core";
+import { endHeldCallsOnDeletedConnection } from "../approvals/connection-held-calls";
 import { requestConnectionDiscovery } from "../connections/connection-jobs";
 import {
   configValuesEqual,
@@ -644,12 +645,18 @@ export function createConnectionAssetKind(options: ConnectionAssetKindOptions): 
       }
     },
     // The secret and the runtime state go with the Connection. An asset revert never brings
-    // back a secret.
+    // back a secret. The calls that wait for an approval on it end: the asset id comes back
+    // with a Connection made again under its name, and they were not made on that one.
     async onRemove({ clientInstanceId, assetId, stores }) {
       await stores.connections.deleteSecrets({ clientInstanceId, connectionAssetId: assetId });
       await stores.connections.deleteConnectionState({
         clientInstanceId,
         connectionAssetId: assetId
+      });
+      await endHeldCallsOnDeletedConnection({
+        clientInstanceId,
+        connectionAssetId: assetId,
+        stores
       });
     }
   };
