@@ -1,0 +1,37 @@
+# Core is public: no customer or vendor name may enter it, in code, commit messages or PR text.
+# Runs on every PR change, including an edited title or body, and on every push to main.
+name: Names
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  names:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+      - name: No customer or vendor names
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_AFTER: ${{ github.sha }}
+        run: |
+          if [ "$EVENT" = pull_request ]; then
+            node scripts/check-names.mjs --range "$PR_BASE..$PR_HEAD" --event "$GITHUB_EVENT_PATH"
+          elif [ "$PUSH_BEFORE" = 0000000000000000000000000000000000000000 ]; then
+            node scripts/check-names.mjs --range "$PUSH_AFTER~1..$PUSH_AFTER"
+          else
+            node scripts/check-names.mjs --range "$PUSH_BEFORE..$PUSH_AFTER"
+          fi
