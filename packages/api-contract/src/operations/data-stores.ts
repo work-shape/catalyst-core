@@ -124,7 +124,10 @@ const dataStoreStateResponseSchema = z.object({
     /** Whether the store is at 80 percent of its limit or above. */
     nearLimit: z.boolean()
   }),
-  /** What the server leaves open around the store, each with what an operator does about it. */
+  /**
+   * What the server leaves open around the store, each with what an operator does about it.
+   * Empty for a reader without `system.view`.
+   */
   conditions: z.array(z.object({ code: z.enum(DATA_STORE_CONDITIONS), message: z.string() })),
   /** How the last attempt to bring the store to its published revision ended. */
   lastMigration: z.object({

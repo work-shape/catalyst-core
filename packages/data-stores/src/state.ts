@@ -54,7 +54,10 @@ const dataStoreStateSchema = z.object({
     /** Whether the store is at 80 percent of its limit or above. */
     nearLimit: z.boolean()
   }),
-  /** What the last job of the store found open on the server, each with what an operator does. */
+  /**
+   * What the last job of the store found open on the server, each with what an operator does.
+   * Empty for a reader without `system.view`.
+   */
   conditions: z.array(z.object({ code: z.enum(DATA_STORE_CONDITIONS), message: z.string() })),
   /**
    * How the last attempt to bring the store to its published revision ended. `applied`: the
@@ -73,7 +76,17 @@ const dataStoreStateSchema = z.object({
 
 type DataStoreState = z.infer<typeof dataStoreStateSchema>;
 
-function stateOf({ record, definition }: PublishedStore): DataStoreState {
+/**
+ * Who is shown what the server leaves open around a store: who sees how the instance runs
+ * (`system.view`, RIGHTS-1e), as who runs the database server does. Nobody else can close it,
+ * so the read answers them none.
+ */
+const SEES_SERVER_CONDITIONS = "system.view";
+
+function stateOf(
+  { record, definition }: PublishedStore,
+  seesServerConditions: boolean
+): DataStoreState {
   const published = definition.migrations;
   const next = published.find((migration) => migration.number > record.level);
   const last = record.migrations.at(-1);
@@ -105,7 +118,9 @@ function stateOf({ record, definition }: PublishedStore): DataStoreState {
         record.sizeBytes !== undefined &&
         record.sizeBytes >= record.sizeLimitBytes * DATA_STORE_SIZE_WARNING_RATIO
     },
-    conditions: record.conditions.map((code) => ({ code, message: CONDITION_ADVICE[code] })),
+    conditions: seesServerConditions
+      ? record.conditions.map((code) => ({ code, message: CONDITION_ADVICE[code] }))
+      : [],
     lastMigration
   };
 }
@@ -120,7 +135,8 @@ export function dataStoreStateOperationName(store: string): string {
 
 /**
  * The read of one store's state. It needs `data_store.read` on the store and reads no row of
- * it, so a call that completes leaves no run.
+ * it, so a call that completes leaves no run. What the server leaves open is answered to a
+ * holder of `system.view` alone.
  */
 export function stateOperation(store: PublishedStore, module: string): OperationDefinition {
   return {
@@ -135,6 +151,7 @@ export function stateOperation(store: PublishedStore, module: string): Operation
     resource: () => store.resource,
     module,
     timeoutMs: DATA_STORE_STATE_TIMEOUT_MS,
-    execute: () => Promise.resolve(stateOf(store))
+    execute: (_input, context) =>
+      Promise.resolve(stateOf(store, context.access.authorize(SEES_SERVER_CONDITIONS).allowed))
   };
 }
