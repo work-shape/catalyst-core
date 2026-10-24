@@ -712,3 +712,85 @@ describe("Knowledge Base source commands", () => {
     expect(bodies).toHaveLength(1);
   });
 });
+
+describe("data-store review", () => {
+  it("lists one page of flagged fields with the filters it was given", async () => {
+    const requests: Request[] = [];
+    const page = { items: [], nextCursor: "next" };
+    const result = await run(
+      ["data-store", "review", "list", "findings", "--table", "objekt", "--limit", "20", "--json"],
+      {
+        fetchImpl: apiFetch((request) => {
+          requests.push(request);
+          return Response.json(page);
+        })
+      }
+    );
+    expect(result.code, result.err).toBe(0);
+    expect(JSON.parse(result.out)).toEqual(page);
+    const url = new URL(required(requests[0]).url);
+    expect(url.pathname).toBe(
+      apiOperations["data_stores.records_flagged"].buildPath({ params: { store: "findings" } })
+    );
+    expect(Object.fromEntries(url.searchParams)).toEqual({ table: "objekt", limit: "20" });
+  });
+
+  it("sends a correction with its JSON value and citation, and refuses an incomplete one offline", async () => {
+    const bodies: unknown[] = [];
+    const fetchImpl = apiFetch(async (request) => {
+      bodies.push(await request.json());
+      return Response.json({ decided: true });
+    });
+    const decide = (...extra: string[]) =>
+      run(
+        [
+          "data-store",
+          "review",
+          "decide",
+          "findings",
+          "--table",
+          "objekt",
+          "--key",
+          "1402",
+          "--field",
+          "kaufpreis",
+          ...extra
+        ],
+        { fetchImpl }
+      );
+    const corrected = await decide(
+      "--action",
+      "correct",
+      "--value",
+      "150",
+      "--knowledge-base",
+      "kb-1",
+      "--document",
+      "doc-1"
+    );
+    expect(corrected.code, corrected.err).toBe(0);
+    expect(corrected.out).toContain("decided: true");
+    expect(bodies).toEqual([
+      {
+        table: "objekt",
+        key: "1402",
+        field: "kaufpreis",
+        action: "correct",
+        value: 150,
+        knowledgeBaseId: "kb-1",
+        documentId: "doc-1"
+      }
+    ]);
+    for (const bad of [
+      ["--action", "correct"],
+      ["--action", "confirm", "--value", "1"],
+      ["--action", "assign"],
+      ["--action", "confirm", "--document", "doc-1"],
+      ["--action", "delete"]
+    ]) {
+      const refused = await decide(...bad);
+      expect(refused.code, bad.join(" ")).toBe(1);
+    }
+    expect(bodies).toHaveLength(1);
+  });
+});

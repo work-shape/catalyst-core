@@ -51,6 +51,7 @@ describe("command group routing", () => {
     ["login", "--help"],
     ["init", "--help"],
     ["knowledge-base", "source", "add", "--help"],
+    ["data-store", "review", "decide", "--help"],
     ["workflow", "runs", "--help"],
     ["workflow", "--help"],
     ["connection", "test", "--help"],

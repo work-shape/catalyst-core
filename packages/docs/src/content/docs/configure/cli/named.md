@@ -31,3 +31,17 @@ catalyst limits set --from limit.json  # {"level":"user","target":"<user id>","l
 `limits show` and `limits set` read and change the spend limits of Settings, Instance, Limits through `usage.limits.get` and `usage.limits.set`; both require `limits.manage`. `--from` reads one change: a `level` (`instance`, `workspace_default`, `workspace`, `user_default` or `user`), a `target` id for `workspace` and `user`, and `limits` with `daily` and `monthly` amounts in the currency of the rate card, or `null` to remove the value. An instance value above the release config's limit is refused. Each change is recorded in the audit log with its old and new value.
 
 `guardrail hits` preserves the API's counts and `hasMore`; `data-store used-by` preserves hidden counts and `truncated`, and `app actions` preserves `truncated`. These bounded responses are not paginated lists. All commands accept `--instance` and `--dir` as above, and use the same exit codes, including 3 for a held change.
+
+## Data Store review
+
+The fields of a store's records that wait for a person, as "Prüfen" on the store's page shows them, and a decision on one:
+
+```sh
+catalyst data-store review list findings --table objekt
+catalyst data-store review decide findings --table objekt --key 1402 --field kaufpreis \
+  --action correct --value 150 --knowledge-base <kb-id> --document <document-id>
+```
+
+`review list` prints one page of candidates, each with its reason (`conflict`, `not_evidenced`, `confirmation_required` or `key_unresolved`) and the document and page it cites. It shows only candidates from Knowledge Bases you may use. Pass `--cursor` with the `nextCursor` it printed for the next page, and `--limit` for a page size other than 200.
+
+`review decide` confirms a candidate (`confirm`), corrects it to `--value` (`correct`), or assigns a document whose object was not known to the object `--key` (`assign`). `--value` is read as JSON, so `150` is a number and `'"150"'` is text; anything that is not JSON is text. Where the candidates of a field disagree, name the document you decide on with `--knowledge-base` and `--document`; `assign` always names it. A confirmed or corrected value stays through later syncs. Both need `data_store.records` on the store, and a decision that cites a document needs `knowledge_base.use` on its Knowledge Base. The audit event names the table, field and action, never the value.
