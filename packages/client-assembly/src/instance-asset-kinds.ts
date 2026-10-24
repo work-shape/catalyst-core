@@ -24,7 +24,7 @@ export function createInstanceAssetKinds(input: {
     createAgentAssetKind(input.agent),
     createSkillAssetKind(input.skill),
     ...(input.connections ? [createConnectionAssetKind(input.connections)] : []),
-    createGuardrailAssetKind(),
+    ...(input.modules.isEnabled("guardrails") ? [createGuardrailAssetKind()] : []),
     ...(input.modules.isEnabled("apps") ? [createAppAssetKind()] : []),
     ...input.moduleKinds
   ]);

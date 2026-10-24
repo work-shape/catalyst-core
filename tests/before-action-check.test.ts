@@ -3,6 +3,8 @@ import { operationRunSchema } from "@work-shape/catalyst-api-contract";
 import {
   NO_BEFORE_ACTION_CHECK,
   combineBeforeActionChecks,
+  refusingWhenUnavailable,
+  type BeforeActionCheck,
   type BeforeActionInput
 } from "@work-shape/catalyst-core";
 import { skill } from "./support/access-instance";
@@ -214,18 +216,60 @@ describe("a capability's check through the assembly", () => {
     expect(t.executed).toEqual([]);
   });
 
-  // As a guardrail runner that throws today: the call fails as an internal error and nothing
-  // of it runs. Spec section 3 rule 2 (GUARDRAIL_BLOCKED, reason `check_unavailable`) is not
-  // built yet; it changes this answer and waits for a decision.
+  // Spec section 3 rule 2: a check that cannot answer refuses the action, named with the
+  // reason `check_unavailable`, and nothing of it runs.
   it("refuses a call where the check throws, and never carries it out", async () => {
     const check = testBeforeActionCheck();
     check.failWith(new Error("The check is unavailable"));
     const t = await fixture({ capabilities: [capabilityWithCheck(check)], settings: () => [] });
     const refused = await t.call("requester", "refused");
-    expect(refused.statusCode).toBe(500);
-    expect(errorOf(refused).code).toBe("INTERNAL");
-    expect((await t.run(String(refused.headers["operation-run-id"]))).status).toBe("failed");
+    expect(refused.statusCode).toBe(403);
+    expect(errorOf(refused)).toMatchObject({
+      code: "GUARDRAIL_BLOCKED",
+      details: { guardrailId: "operation.before_call", reason: "check_unavailable" }
+    });
+    expect((await t.run(String(refused.headers["operation-run-id"]))).status).toBe("denied");
     expect(t.executed).toEqual([]);
+  });
+});
+
+describe("a check that cannot answer", () => {
+  it("answers one block for the event where the check throws", async () => {
+    const failing = testBeforeActionCheck();
+    failing.failWith(new Error("The check is unavailable"));
+    const answers = await refusingWhenUnavailable(failing).answer(
+      input(() => Promise.resolve({})),
+      { correlationId: "c" }
+    );
+    expect(answers).toEqual([
+      expect.objectContaining({
+        guardrailName: "operation.before_call",
+        outcome: "block",
+        unavailable: true
+      })
+    ]);
+  });
+
+  it("answers one block for the event where the check does not answer in time", async () => {
+    const silent: BeforeActionCheck = {
+      answer: () => new Promise(() => undefined),
+      preview: () => Promise.resolve([])
+    };
+    const answers = await refusingWhenUnavailable(silent, 10).answer(
+      input(() => Promise.resolve({})),
+      { correlationId: "c" }
+    );
+    expect(answers).toMatchObject([{ outcome: "block", unavailable: true }]);
+  });
+
+  it("passes what a check answers in time through unchanged", async () => {
+    const check = testBeforeActionCheck([block("operation.before_call")]);
+    const answers = await refusingWhenUnavailable(check, 1000).answer(
+      input(() => Promise.resolve({})),
+      { correlationId: "c" }
+    );
+    expect(answers).toMatchObject([{ guardrailName: "planted", outcome: "block" }]);
+    expect(answers[0]).not.toHaveProperty("unavailable");
   });
 });
 

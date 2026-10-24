@@ -23,6 +23,7 @@ import { appsModule } from "./platform-modules/apps";
 import { assetManagementModule } from "./platform-modules/asset-management";
 import { connectionsModule } from "./platform-modules/connections";
 import { feedbackModule } from "./platform-modules/feedback";
+import { guardrailsModule } from "./platform-modules/guardrails";
 import { personalApiKeysModule } from "./platform-modules/personal-api-keys";
 import { resourcesModule } from "./platform-modules/resources";
 import { userInvitationsModule } from "./platform-modules/user-invitations";
@@ -43,7 +44,8 @@ export const platformModules = [
   knowledgeModule,
   personalApiKeysModule,
   feedbackModule,
-  workshaperModule
+  workshaperModule,
+  guardrailsModule
 ];
 
 /**

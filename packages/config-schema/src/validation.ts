@@ -114,11 +114,22 @@ function assertExecutionWorkspaceInfrastructure(config: ClientInstanceConfig): v
 }
 
 /**
- * The switches agree with their legacy keys, and invitations are on only where one can be sent:
- * an invitation is an emailed link to set a password, so the module needs both.
+ * The switches agree with their legacy keys, release guardrails come only with their module,
+ * and invitations are on only where one can be sent: an invitation is an emailed link to set a
+ * password, so the module needs both.
  */
 function assertModuleSwitches(config: ClientInstanceConfig): void {
-  if (!resolveModuleSwitches(config).userInvitations?.enabled || isPasswordMailEnabled(config)) {
+  const switches = resolveModuleSwitches(config);
+  // Guardrails of release config with their module off would never run: refused, so nobody
+  // believes a rule is in force that is not.
+  const guardrails = Object.keys(config.guardrails);
+  if (!switches.guardrails?.enabled && guardrails.length > 0) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      `Module 'guardrails' is off but release config sets 'guardrails' (${guardrails.join(", ")}). Remove them or turn 'modules.guardrails.enabled' on`
+    );
+  }
+  if (!switches.userInvitations?.enabled || isPasswordMailEnabled(config)) {
     return;
   }
   throw new AppError(

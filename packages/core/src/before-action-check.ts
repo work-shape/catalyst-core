@@ -56,8 +56,8 @@ export type BeforeActionPreview = GuardrailAnswer & { checked: boolean };
 /**
  * What answers at a before-event. `answer` is asked for an action and may keep a record of
  * what it answered; `preview` is asked for a publish question and keeps nothing, calls no
- * model and executes nothing. A check that throws refuses the action: the error reaches the
- * caller, and the action is not carried out.
+ * model and executes nothing. A check that throws or does not answer in time refuses the
+ * action where `refusingWhenUnavailable` guards it, as the assembly guards every check.
  */
 export interface BeforeActionCheck {
   answer(input: BeforeActionInput, context: BeforeActionCallContext): Promise<GuardrailAnswer[]>;
@@ -109,5 +109,54 @@ function readOnce(input: BeforeActionInput): BeforeActionInput {
   return {
     ...input,
     fields: () => (fields ??= Promise.resolve().then(() => input.fields()))
+  };
+}
+
+/**
+ * How long a check may take before the action is refused as unavailable. Longer than a
+ * guardrail judge's own limit, so a judge that does not answer refuses with its own reason.
+ */
+export const BEFORE_ACTION_CHECK_TIMEOUT_MS = 75_000;
+
+/** Why an action was refused where a check could not answer. */
+export const CHECK_UNAVAILABLE_REASON = "check_unavailable";
+
+/**
+ * The check, refusing the action where it throws or does not answer within `timeoutMs`: the
+ * event then answers one `block`, marked `unavailable`, which a refusal names with the reason
+ * `check_unavailable`. A check that cannot answer never lets an action through. A preview is
+ * not guarded: the publish question says on its own what it could not check.
+ */
+export function refusingWhenUnavailable(
+  check: BeforeActionCheck,
+  timeoutMs = BEFORE_ACTION_CHECK_TIMEOUT_MS
+): BeforeActionCheck {
+  return {
+    ...check,
+    async answer(input, context) {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const timedOut = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error("The check did not answer in time")), timeoutMs);
+      });
+      try {
+        return await Promise.race([check.answer(input, context), timedOut]);
+      } catch {
+        return [unavailableAnswer(input.event)];
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+  };
+}
+
+/** The answer of a check that could not answer: a block that names the event, not a rule. */
+function unavailableAnswer(event: GuardrailEvent): GuardrailAnswer {
+  return {
+    guardrailName: event,
+    displayName: event,
+    outcome: "block",
+    reason: "A check of this action could not answer. Try again later.",
+    origin: "release",
+    unavailable: true
   };
 }

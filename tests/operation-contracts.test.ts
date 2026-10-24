@@ -336,6 +336,7 @@ describe("operation contracts", () => {
           message?: string;
           guardrailTitle?: string;
           guardrailReason?: string;
+          reason?: "check_unavailable";
         }
       | { kind: "declined"; by: string; comment?: string; reason?: "steered" }
     >();

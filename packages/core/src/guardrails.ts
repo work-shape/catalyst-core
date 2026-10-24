@@ -163,6 +163,11 @@ export interface GuardrailAnswer {
    * approval (`PlatformEventContext.cannotWait`).
    */
   approvalCannotWait?: true;
+  /**
+   * Set on the `block` of a check that could not answer: it threw or did not answer in time
+   * (`refusingWhenUnavailable`). A refusal names the reason `check_unavailable`.
+   */
+  unavailable?: true;
 }
 
 /** One Guardrail as the asset store keeps it. */

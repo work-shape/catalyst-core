@@ -157,7 +157,9 @@ describe("legacy module switches", () => {
       documents: { enabled: false },
       resources: { enabled: true },
       assetManagement: { enabled: false },
-      userInvitations: { enabled: false }
+      userInvitations: { enabled: false },
+      // Guardrails had no switch: one transition release keeps them on without one.
+      guardrails: { enabled: true }
     });
 
     const legacy = parseClientInstanceConfig(
@@ -176,7 +178,8 @@ describe("legacy module switches", () => {
       documents: { enabled: true },
       resources: { enabled: false },
       assetManagement: { enabled: true },
-      userInvitations: { enabled: true }
+      userInvitations: { enabled: true },
+      guardrails: { enabled: true }
     });
   });
 
@@ -353,7 +356,9 @@ describe("the snapshot in a running instance", () => {
       personalApiKeys: { enabled: true },
       feedback: { enabled: false },
       // It ships Workshaper, offered nowhere until an admin offers it.
-      workshaper: { enabled: true }
+      workshaper: { enabled: true },
+      // Without a switch, guardrails stay on for one transition release.
+      guardrails: { enabled: true }
     });
     expect(safe.features).toEqual({
       attachments: { enabled: false, accept: "" },
@@ -407,7 +412,8 @@ describe("the snapshot in a running instance", () => {
         knowledge: { enabled: false },
         personalApiKeys: { enabled: false },
         feedback: { enabled: false },
-        workshaper: { enabled: false }
+        workshaper: { enabled: false },
+        guardrails: { enabled: true }
       });
       expect(answer.features.resources).toEqual({ enabled: false });
     } finally {
