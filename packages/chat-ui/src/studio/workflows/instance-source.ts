@@ -4,6 +4,7 @@ import { WORKFLOW_ACTIONS, WORKFLOW_ASSET_KIND } from "@work-shape/catalyst-core
 import { principalGrantRequest } from "../../admin/access/principal-grants-model";
 import { PendingApprovalError } from "../build-area/build-refusals";
 import {
+  appCallersOf,
   listedOf,
   toAssetWorkflowListItem,
   toWorkflow,
@@ -463,6 +464,7 @@ export function createInstanceSource(client: WorkflowsClient, key: string): Work
           asset
         ),
         definition,
+        ...appCallersOf(asset),
         ...(asset.workflowCallers === undefined
           ? {}
           : {

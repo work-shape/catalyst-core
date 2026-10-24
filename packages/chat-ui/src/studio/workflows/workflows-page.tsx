@@ -29,6 +29,7 @@ import { BuildWithAgentDialog } from "../build-with-agent-dialog";
 import { BuildWithAgentEmptyState, type BuildWithAgentCopy } from "../build-with-agent-empty";
 import { RouteLink } from "../route-link";
 import { useStartRun } from "./start-run";
+import { WorkflowAppCallers } from "./workflow-app-callers";
 import { useRunsAvailable, useWorkflowList, type WorkflowList } from "./workflow-data";
 import { doneWithFailedRuns, listedToReader, runsReadable, startOffered } from "./workflow-model";
 import type { WorkflowListItem } from "./workflow-views";
@@ -331,6 +332,11 @@ function WorkflowCard({
         {workflow.description ? (
           <p className="text-body text-muted-foreground">{workflow.description}</p>
         ) : null}
+        <WorkflowAppCallers
+          callers={workflow.appCallers}
+          workspaceId={workspaceId}
+          onOpenRoute={onOpenRoute}
+        />
       </CardHeader>
       <CardContent>
         <p className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-caption text-muted-foreground">

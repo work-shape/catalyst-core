@@ -417,3 +417,57 @@ describe("the Workflows that call a Workflow (WF-EDIT-5b)", () => {
     expect(container.querySelector("[data-workflow-callers]")).toBeNull();
   });
 });
+
+// The Workflow's page names every App that starts it, under the Workflows that call it, each a
+// link to the App in the workspace that owns it.
+describe("the Apps that start a Workflow, on its page", () => {
+  const appSource = (appCallers: unknown[]) =>
+    createInstanceSource(
+      recordedApiClient(({ operation }) =>
+        operation === "assets.get"
+          ? {
+              id: "asset_1",
+              kind: "workflow",
+              name: WORKFLOW,
+              scope: { kind: "instance" },
+              revision: 2,
+              publishedRevision: 2,
+              updatedAt: "2026-10-23T00:00:00.000Z",
+              config: { name: WORKFLOW, manifest: manifestWith([{ kind: "manual" }]) },
+              appCallers
+            }
+          : { items: [] }
+      ).client,
+      "workflow-app-callers"
+    );
+  const three = [
+    { name: "intake", title: "Client intake", scope: { kind: "workspace", workspaceId: "cw_2" } },
+    { name: "orders", title: "Orders", scope: { kind: "workspace", workspaceId: "cw_1" } },
+    { name: "returns", title: "Returns", scope: { kind: "workspace", workspaceId: "cw_1" } }
+  ];
+
+  it("names every App, each a link to it", async () => {
+    const opened: unknown[] = [];
+    const container = await mount(appSource(three), false, {
+      onOpenRoute: (route) => opened.push(route)
+    });
+    const line = required(container.querySelector("[data-workflow-app-callers]"));
+    expect(line.textContent).toBe("Started by the apps “Client intake”, “Orders”, and “Returns”");
+    const links = [...line.querySelectorAll("a")];
+    expect(links.map((link) => link.textContent)).toEqual(["Client intake", "Orders", "Returns"]);
+    await act(async () => required(links[0]).click());
+    expect(opened).toEqual([{ kind: "app", collaborationWorkspaceId: "cw_2", app: "intake" }]);
+  });
+
+  it("says it in German", async () => {
+    const container = await mount(appSource(three), false, { locale: "de" });
+    expect(required(container.querySelector("[data-workflow-app-callers]")).textContent).toBe(
+      "Gestartet von den Apps „Client intake“, „Orders“ und „Returns“"
+    );
+  });
+
+  it("says nothing where no App starts it", async () => {
+    const container = await mount(appSource([]));
+    expect(container.querySelector("[data-workflow-app-callers]")).toBeNull();
+  });
+});

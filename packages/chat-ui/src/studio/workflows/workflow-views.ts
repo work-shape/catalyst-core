@@ -49,6 +49,8 @@ export interface WorkflowListItem {
   startForm: StartForm;
   /** The latest run, where the instance names it on the list. */
   lastRun?: WorkflowLastRunView;
+  /** The Apps that start it, as far as the reader may open them, by title. */
+  appCallers?: readonly WorkflowAppCallerView[];
 }
 
 /** The latest run of a Workflow, as its row of the list names it. */
@@ -218,6 +220,18 @@ export interface WorkflowView {
    * read, as the instance names them. Absent where the source does not say.
    */
   callers?: readonly WorkflowCallerView[];
+  /** The Apps whose actions start it, as far as the reader may open them, by title. */
+  appCallers?: readonly WorkflowAppCallerView[];
+}
+
+/** An App one of whose actions starts a Workflow. */
+export interface WorkflowAppCallerView {
+  /** Its name, which addresses it. */
+  id: string;
+  /** What it is called. */
+  title: string;
+  /** The workspace that owns it. Absent for the instance's own. */
+  workspaceId?: string;
 }
 
 /** A Workflow one of whose steps calls another. */
