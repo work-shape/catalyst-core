@@ -18956,6 +18956,191 @@
         "x-catalyst-rate-class": "read"
       }
     },
+    "/api/v1/instance/usage/limits": {
+      "get": {
+        "operationId": "usage.limits.get",
+        "summary": "Read the spend limits of the instance, of shared workspaces and of users, with those at or near a limit",
+        "tags": [
+          "Governance"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "governance:read"
+            ]
+          },
+          {
+            "sessionToken": [
+              "governance:read"
+            ]
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsageLimits"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlocked"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-requires": [
+          "limits.manage"
+        ],
+        "x-catalyst-rate-class": "read"
+      },
+      "put": {
+        "operationId": "usage.limits.set",
+        "summary": "Set or remove the spend limit per day and month of the instance, of shared workspaces or of users. An instance limit stays at or below the release config's.",
+        "tags": [
+          "Governance"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "governance:write"
+            ]
+          },
+          {
+            "sessionToken": [
+              "governance:write"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A key the caller chooses for one changing call, up to 255 characters. The same key with the same input answers what the first call answered instead of acting twice. A key belongs to its caller: another caller's same key is another call.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
+          },
+          {
+            "name": "Catalyst-Unattended",
+            "in": "header",
+            "description": "`1` on a call of an API credential when nobody watches its terminal, such as `catalyst <kind> publish --yes`. The call is then not its caller's own confirmation: a call that needs one waits in the caller's Inbox and answers `202` with its run, status `pending_confirmation`. It only ever makes a call stricter; a browser session's call ignores it.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetUsageSpendLimitRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsageSpendLimitChange"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "202": {
+            "description": "The call waits for somebody else to approve it. This is its Operation Run; read it again at `Location`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationRun"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Location": {
+                "$ref": "#/components/headers/Location"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlockedOrDeclined"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/IdempotencyKeyReusedOrOperationInProgressOrOperationExpiredOrOutputNotRetained"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "changing",
+        "x-catalyst-requires": [
+          "limits.manage"
+        ],
+        "x-catalyst-rate-class": "write"
+      }
+    },
     "/api/v1/instance/users": {
       "get": {
         "operationId": "users.list",
@@ -24881,6 +25066,71 @@
         },
         "x-catalyst-effect": "changing",
         "x-catalyst-rate-class": "auth"
+      }
+    },
+    "/api/v1/me/usage": {
+      "get": {
+        "operationId": "me.usage.get",
+        "summary": "Read the signed-in user's own spend this day and month against their limit, and whether a workspace or the instance limit stops them",
+        "tags": [
+          "Account"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "me:read"
+            ]
+          },
+          {
+            "sessionToken": [
+              "me:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OwnUsage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-rate-class": "read"
       }
     },
     "/api/v1/openapi.json": {
@@ -33669,7 +33919,8 @@
                 "enum": [
                   "instance",
                   "user",
-                  "system"
+                  "system",
+                  "workspace"
                 ]
               }
             },
@@ -42940,6 +43191,43 @@
           "updatedAt"
         ]
       },
+      "OwnUsage": {
+        "type": "object",
+        "properties": {
+          "currency": {
+            "type": "string"
+          },
+          "own": {
+            "$ref": "#/components/schemas/UsageSpendLevel"
+          },
+          "workspace": {
+            "type": "object",
+            "properties": {
+              "day": {
+                "$ref": "#/components/schemas/UsageSpendPeriod"
+              },
+              "month": {
+                "$ref": "#/components/schemas/UsageSpendPeriod"
+              },
+              "id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "day",
+              "month",
+              "id"
+            ]
+          },
+          "instance": {
+            "$ref": "#/components/schemas/UsageSpendLevel"
+          }
+        },
+        "required": [
+          "own",
+          "instance"
+        ]
+      },
       "Page": {
         "type": "object",
         "properties": {
@@ -45233,6 +45521,33 @@
           "value"
         ]
       },
+      "SetUsageSpendLimitRequest": {
+        "type": "object",
+        "properties": {
+          "level": {
+            "$ref": "#/components/schemas/UsageSpendLimitLevel"
+          },
+          "target": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "limits": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UsageSpendAmounts"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "level",
+          "limits"
+        ]
+      },
       "StartConnectCodeRequest": {
         "type": "object",
         "properties": {
@@ -46104,6 +46419,123 @@
           "externalUserId"
         ]
       },
+      "UsageLimitTarget": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ]
+      },
+      "UsageLimits": {
+        "type": "object",
+        "properties": {
+          "currency": {
+            "type": "string"
+          },
+          "ceiling": {
+            "$ref": "#/components/schemas/UsageSpendAmounts"
+          },
+          "instance": {
+            "$ref": "#/components/schemas/UsageSpendLimit"
+          },
+          "effectiveInstance": {
+            "$ref": "#/components/schemas/UsageSpendAmounts"
+          },
+          "workspaceDefault": {
+            "$ref": "#/components/schemas/UsageSpendLimit"
+          },
+          "userDefault": {
+            "$ref": "#/components/schemas/UsageSpendLimit"
+          },
+          "workspaces": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UsageSpendLimitOverride"
+            }
+          },
+          "users": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UsageSpendLimitOverride"
+            }
+          },
+          "nearLimit": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UsageNearLimit"
+            }
+          },
+          "workspaceOptions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UsageLimitTarget"
+            }
+          },
+          "userOptions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UsageLimitTarget"
+            }
+          }
+        },
+        "required": [
+          "ceiling",
+          "effectiveInstance",
+          "workspaces",
+          "users",
+          "nearLimit",
+          "workspaceOptions",
+          "userOptions"
+        ]
+      },
+      "UsageNearLimit": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "workspace",
+              "user"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "period": {
+            "type": "string",
+            "enum": [
+              "day",
+              "month"
+            ]
+          },
+          "limit": {
+            "type": "number"
+          },
+          "percent": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "kind",
+          "id",
+          "period",
+          "limit",
+          "percent"
+        ]
+      },
       "UsageSafeguards": {
         "type": "object",
         "properties": {
@@ -46115,6 +46547,21 @@
           },
           "tokensPerMonth": {
             "type": "number"
+          }
+        }
+      },
+      "UsageSpendAmounts": {
+        "type": "object",
+        "properties": {
+          "daily": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1000000000
+          },
+          "monthly": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1000000000
           }
         }
       },
@@ -46145,6 +46592,113 @@
             "maximum": 9007199254740991
           }
         }
+      },
+      "UsageSpendLevel": {
+        "type": "object",
+        "properties": {
+          "day": {
+            "$ref": "#/components/schemas/UsageSpendPeriod"
+          },
+          "month": {
+            "$ref": "#/components/schemas/UsageSpendPeriod"
+          }
+        },
+        "required": [
+          "day",
+          "month"
+        ]
+      },
+      "UsageSpendLimit": {
+        "type": "object",
+        "properties": {
+          "daily": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1000000000
+          },
+          "monthly": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1000000000
+          },
+          "updatedAt": {
+            "$ref": "#/components/schemas/Timestamp"
+          }
+        }
+      },
+      "UsageSpendLimitChange": {
+        "type": "object",
+        "properties": {
+          "level": {
+            "$ref": "#/components/schemas/UsageSpendLimitLevel"
+          },
+          "target": {
+            "type": "string"
+          },
+          "limits": {
+            "$ref": "#/components/schemas/UsageSpendAmounts"
+          }
+        },
+        "required": [
+          "level"
+        ]
+      },
+      "UsageSpendLimitLevel": {
+        "type": "string",
+        "enum": [
+          "instance",
+          "workspace_default",
+          "workspace",
+          "user_default",
+          "user"
+        ]
+      },
+      "UsageSpendLimitOverride": {
+        "type": "object",
+        "properties": {
+          "daily": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1000000000
+          },
+          "monthly": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1000000000
+          },
+          "updatedAt": {
+            "$ref": "#/components/schemas/Timestamp"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "UsageSpendPeriod": {
+        "type": "object",
+        "properties": {
+          "spent": {
+            "type": "number"
+          },
+          "limit": {
+            "type": "number"
+          },
+          "reached": {
+            "type": "boolean"
+          },
+          "resetsAt": {
+            "$ref": "#/components/schemas/Timestamp"
+          }
+        },
+        "required": [
+          "resetsAt"
+        ]
       },
       "UsageSummary": {
         "type": "object",

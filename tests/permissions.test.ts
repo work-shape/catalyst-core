@@ -69,6 +69,7 @@ describe("permissions", () => {
       "feedback.review",
       "users.manage",
       "usage.view",
+      "limits.manage",
       "audit.view",
       "api_access.manage",
       "service_principals.manage",
@@ -193,6 +194,7 @@ describe("permissions", () => {
       "feedback.review",
       "users.manage",
       "usage.view",
+      "limits.manage",
       "audit.view",
       "service_principals.manage",
       // Instance admins hold Builder and Publisher in every workspace by default [P36].

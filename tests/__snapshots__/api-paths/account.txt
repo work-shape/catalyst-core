@@ -6,5 +6,6 @@ me.operation_settings.list  GET /api/v1/me/operation-settings
 me.operation_settings.set  PUT /api/v1/me/operation-settings
 me.password.change  POST /api/v1/me/password
 me.update  PATCH /api/v1/me
+me.usage.get  GET /api/v1/me/usage
 password_reset.request  POST /api/v1/password-reset
 password_setup.complete  POST /api/v1/password-setup

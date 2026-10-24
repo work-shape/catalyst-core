@@ -49,6 +49,7 @@ const ownActionKeys: Record<Exclude<PlatformAction, VerbAction>, TranslationKey>
   "feedback.review": "rights.actionFeedbackReview",
   "users.manage": "rights.actionUsersManage",
   "usage.view": "rights.actionUsageView",
+  "limits.manage": "rights.actionLimitsManage",
   "audit.view": "rights.actionAuditView",
   "api_access.manage": "rights.actionApiAccessManage",
   "service_principals.manage": "rights.actionServicePrincipalsManage",

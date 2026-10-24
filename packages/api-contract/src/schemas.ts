@@ -23,4 +23,5 @@ export * from "./platform";
 export * from "./shared";
 export { knowledgeFieldValueSchema } from "@work-shape/catalyst-asset-schemas";
 export * from "./system";
+export * from "./usage-limits";
 export * from "./workspace-files";
