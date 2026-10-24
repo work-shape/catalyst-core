@@ -415,9 +415,12 @@ export function useWorkspaceChatModel({
     enabled: isAuthenticated
   });
   const refetchOwnUsage = ownUsageQuery.refetch;
+  // A refetch runs past `enabled`, so a signed-out page asks nothing.
   useEffect(() => {
-    if (!selectedConversationRunning) refetchOwnUsage().catch(() => undefined);
-  }, [refetchOwnUsage, selectedConversationRunning]);
+    if (isAuthenticated && !selectedConversationRunning) {
+      refetchOwnUsage().catch(() => undefined);
+    }
+  }, [isAuthenticated, refetchOwnUsage, selectedConversationRunning]);
   const usageText = createTranslationContext(activeLocale);
   const usageLimitReason = usageLimitBlockReason(ownUsageQuery.data, usageText);
   const usageNote = useUsageNote(ownUsageQuery.data, usageText);
