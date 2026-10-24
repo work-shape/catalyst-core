@@ -751,10 +751,6 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
 const NARROWER_SCOPES = GRANT_SCOPE_KINDS.filter((scope) => scope !== "instance");
 
 /**
- * The asset a request's right is asked on, where its kind names one. A payload the kind cannot
- * read names none, and the right is asked of the instance.
- */
-/**
  * Whether `decider` decides one request, whatever its status and their token's scopes: the
  * person it is addressed to, and by the right of nobody; else who holds its deciding right and
  * every further right it asks.
@@ -835,6 +831,10 @@ function decidesFurther(
   }
 }
 
+/**
+ * The asset a request's right is asked on, where its kind names one. A payload the kind cannot
+ * read names none, and the right is asked of the instance.
+ */
 export function resourceOfRequest(
   handler: ApprovalRequestHandler,
   request: ApprovalRequest
