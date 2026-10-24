@@ -14,6 +14,9 @@ export const connectionKind: GrantKindEntry<"connection"> = {
   },
   sentences: {
     "connection.read": "access.actionReadConnectionDescription",
-    "connection.use": "access.actionUseConnectionDescription"
+    "connection.use": "access.actionUseConnectionDescription",
+    "connection.write": "access.actionWriteConnectionDescription",
+    "connection.delete": "access.actionDeleteConnectionDescription",
+    "connection.approve": "access.actionApproveConnectionDescription"
   }
 };

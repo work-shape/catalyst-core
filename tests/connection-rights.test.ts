@@ -98,11 +98,16 @@ describe("the vocabulary of Connection rights", () => {
     ).toMatchFileSnapshot("./__snapshots__/rights.txt");
   });
 
-  it("lets a new grant row name reading and using on one Connection or the instance", () => {
-    expect(GRANTABLE_ACTIONS.filter((action) => action.startsWith("connection."))).toEqual([
-      "connection.read",
-      "connection.use"
-    ]);
+  it("lets a new grant row name every Connection right on one Connection or the instance", () => {
+    // Writing, deleting and approving are grantable since a change of host clears the key
+    // (RIGHTS-1d, D11).
+    expect(GRANTABLE_ACTIONS.filter((action) => action.startsWith("connection."))).toEqual(
+      CONNECTION_RIGHTS
+    );
+    const scopesOf: Readonly<Record<string, readonly string[]>> = GRANTABLE_ACTION_SCOPES;
+    for (const action of CONNECTION_RIGHTS) {
+      expect(scopesOf[action], action).toEqual(["asset", "instance"]);
+    }
     // A workspace owns agents, skills, Apps and Data Stores (WS-OWN-1a), so their rights are
     // written there too. No workspace owns a Connection, so no right on Connections is written
     // at workspace scope. A right no legacy key carries is also written for the whole instance
@@ -351,7 +356,7 @@ describe("a right on a Connection", () => {
 describe("a grant of a Connection right", () => {
   const invalidScope = { status: 422, code: "VALIDATION_FAILED" };
 
-  it("is written on one Connection and refused for every other action and place", async () => {
+  it("is written on one Connection and refused at every other place", async () => {
     const t = await setupConnectionInstance();
     const a = await t.seed("alpha");
     const agentId = await t.assetId("agent", "assistant");
@@ -375,13 +380,9 @@ describe("a grant of a Connection right", () => {
 
     await t.expectOk(t.admin.id, "permissions.grant", grant("connection.use", onAlpha));
     await t.expectOk(t.admin.id, "permissions.grant", grant("connection.read", onAlpha));
-    for (const action of ["connection.write", "connection.delete", "connection.approve"]) {
-      await refusedFor(action, onAlpha, "action_not_grantable");
-    }
-    // No instance row with a place named. Writing stays with the role on the whole instance as
-    // on one Connection.
+    // No instance row with a place named.
     await refusedFor("connection.use", { scopeKind: "instance", scopeId: a }, "invalid_scope");
-    await refusedFor("connection.write", { scopeKind: "instance" }, "action_not_grantable");
+    await refusedFor("connection.write", { scopeKind: "instance", scopeId: a }, "invalid_scope");
     // The asset has to be a Connection, and a Connection is no scope of an agent right.
     await refusedFor("connection.use", { scopeKind: "asset", scopeId: agentId }, "invalid_scope");
     await refusedFor("agent.read", onAlpha, "invalid_scope");
@@ -404,7 +405,7 @@ describe("a grant of a Connection right", () => {
   it("is refused on a workspace, which owns no Connection", async () => {
     const t = await setupConnectionInstance();
     const team = await t.sharedWorkspace("Team");
-    for (const action of ["connection.use", "connection.read"]) {
+    for (const action of CONNECTION_RIGHTS) {
       const error = await t.expectRefused(
         t.admin.id,
         "permissions.grant",

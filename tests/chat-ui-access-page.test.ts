@@ -664,23 +664,33 @@ describe("what the dialogs send", () => {
         ...patch
       })?.map((row) => `${row.effect} ${row.action}`);
     expect(grantLevels("workflow")).toEqual(["read", "use", "write", "publish", "delete"]);
-    expect(grantLevels("connection")).toEqual(["read", "use"]);
+    expect(grantLevels("connection")).toEqual(["read", "use", "write", "delete"]);
     expect(actions({ kind: "workflow", level: "read" })).toEqual(["allow workflow.read"]);
     expect(actions({ kind: "workflow", level: "use" })).toEqual([
       "allow workflow.read",
       "allow workflow.use"
     ]);
     expect(actions({ kind: "connection", level: "read" })).toEqual(["allow connection.read"]);
+    // Changing a Connection brings viewing and using it; approving is given on its own
+    // (RIGHTS-1d).
+    expect(actions({ kind: "connection", level: "write" })).toEqual([
+      "allow connection.read",
+      "allow connection.use",
+      "allow connection.write"
+    ]);
+    expect(grantExtras("connection")).toEqual(["approve"]);
     // A deny of Use leaves viewing alone.
     expect(actions({ kind: "connection", level: "use", effect: "deny" })).toEqual([
-      "deny connection.use"
+      "deny connection.use",
+      "deny connection.write",
+      "deny connection.delete"
     ]);
     // A Knowledge Base is queried, not acted as: Use stays below View.
     expect(grantLevels("knowledge_base")).toEqual(["use", "read", "write", "publish", "delete"]);
   });
 
   it("offers a new right in a workspace or on one asset, and never in a workspace that owns no such asset", () => {
-    expect(grantVerbs("connection")).toEqual(["read", "use"]);
+    expect(grantVerbs("connection")).toEqual(["read", "use", "write", "approve", "delete"]);
     // A Connection is the instance's own, so a workspace would cover nothing. No legacy key
     // carries its rights, so the whole instance is a place too (RIGHTS-1c, D3).
     expect(grantScopeKinds("connection")).toEqual(["asset", "instance"]);
@@ -716,12 +726,12 @@ describe("what the dialogs send", () => {
     });
     // A level the new kind lacks is not kept.
     expect(
-      withGrantKind({ ...emptyGrantForm, level: "write" }, "connection").level
+      withGrantKind({ ...emptyGrantForm, level: "publish" }, "connection").level
     ).toBeUndefined();
     expect(grantRequests(onConnection)).toBeUndefined();
     // Viewing a Connection is its lowest level: using it calls the outside system with its
     // credentials, so View never brings Use.
-    expect(grantLevels("connection")).toEqual(["read", "use"]);
+    expect(grantLevels("connection")).toEqual(["read", "use", "write", "delete"]);
     expect(
       grantRequests({ ...onConnection, level: "read", assetId: "asset-crm" })?.map(
         (row) => row.action
@@ -740,7 +750,7 @@ describe("what the dialogs send", () => {
     // No row is asked for where the server writes none: a verb the kind lacks, a workspace
     // for a Connection, the whole instance for agents, whose rights a legacy key carries.
     expect(
-      grantRequests({ ...onConnection, level: "write", assetId: "asset-crm" })
+      grantRequests({ ...onConnection, level: "publish", assetId: "asset-crm" })
     ).toBeUndefined();
     const inPlace = (kind: "connection" | "agent", scopeKind: "workspace" | "instance") =>
       grantRequests({ ...onConnection, kind, scopeKind, workspaceId: "ws-1" });
