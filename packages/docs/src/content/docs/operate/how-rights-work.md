@@ -277,7 +277,7 @@ Changing a person's account asks whether you hold every right the person holds: 
 
 One right is on no switch. Pushing a release with `catalyst config push` needs `config_assets.release`, and only a Service Principal can hold it. See [API keys and Service Principals](#api-keys-and-service-principals).
 
-Managing Service Principals, `service_principals.manage`, is on no switch either. Admins and Superadmins carry it with their level. It creates a Service Principal, gives and takes its rights, and switches it on and off. Its keys stay with "Manage API access".
+Managing Service Principals, `service_principals.manage`, is on no switch either. Admins and Superadmins carry it with their level, and whoever holds it can grant it to a person on the whole instance on the Access page. It creates a Service Principal, gives and takes its rights, and switches it on and off. Its keys stay with "Manage API access".
 
 Chatting is not on this list. Which conversations you see depends on the Collaboration Workspaces you are a member of and on whether a conversation is private, and not on one of these rights. The one exception is a Superadmin, who can enter every Shared Workspace.
 

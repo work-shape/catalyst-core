@@ -13,6 +13,7 @@ import { jobsKind } from "./kinds/jobs";
 import { systemKind } from "./kinds/system";
 import { mailSenderKind } from "./kinds/mail-sender";
 import { rolesKind } from "./kinds/roles";
+import { servicePrincipalsKind } from "./kinds/service-principals";
 import { skillKind } from "./kinds/skill";
 import { usageKind } from "./kinds/usage";
 import { usersKind } from "./kinds/users";
@@ -43,7 +44,8 @@ export const grantKinds: { [Kind in GrantKind]: GrantKindEntry<Kind> } = {
   roles: rolesKind,
   users: usersKind,
   jobs: jobsKind,
-  system: systemKind
+  system: systemKind,
+  service_principals: servicePrincipalsKind
 };
 
 function entryOf(kind: string): GrantKindEntry<GrantKind> | undefined {

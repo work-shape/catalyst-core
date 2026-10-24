@@ -16,9 +16,10 @@ import {
   asCollaborationWorkspaceId,
   asUserId,
   auditActorFromIdentity,
+  authenticatedUserFromRecord,
+  createAuthorizer,
   getSubjectUserId,
   isAuthenticatedServicePrincipal,
-  isSuperadmin,
   mailCopyRecipientListSchema,
   mailDomainAllowed,
   mailDomainOf,
@@ -72,11 +73,20 @@ const MAIL_SEND_TIMEOUT_MS = 60_000;
  */
 const MAIL_INPUT_INVALID_REASON = "input_invalid";
 
+/** Who sees who is in every workspace, and so may mail any Shared Workspace (RIGHTS-1f). */
+const USERS_MANAGE = "users.manage";
+
 export interface MailSendOperationOptions {
   clientInstanceId: ClientInstanceId;
   stores: Pick<
     PlatformStores,
-    "users" | "workspaces" | "workflowRuns" | "configAssets" | "operationRuns" | "workflowNotices"
+    | "users"
+    | "workspaces"
+    | "access"
+    | "workflowRuns"
+    | "configAssets"
+    | "operationRuns"
+    | "workflowNotices"
   >;
   /** The instance's mailer, rendering in the frame of `workflow-message`. */
   sender: Pick<MailSender, "send" | "preview">;
@@ -162,11 +172,12 @@ export function mailRecipientItemsOf(value: MailSendRecipientList): MailRecipien
 
 /**
  * Whether a person may mail the members of a workspace (MAIL-2): a Shared Workspace they are a
- * member of, or any Shared Workspace for an instance admin. Nobody else learns who is in it,
- * and no Personal Workspace is ever mailed. Nobody (`undefined`) may mail none.
+ * member of, or any Shared Workspace for a holder of `users.manage` on the whole instance, who
+ * sees who is in each workspace already (RIGHTS-1f). Nobody else learns who is in it, and no
+ * Personal Workspace is ever mailed. Nobody (`undefined`) may mail none.
  */
 export async function workspaceMailableBy(
-  stores: Pick<PlatformStores, "users" | "workspaces">,
+  stores: Pick<PlatformStores, "users" | "workspaces" | "access">,
   clientInstanceId: ClientInstanceId,
   workspaceId: string,
   author: string | undefined
@@ -178,13 +189,29 @@ export async function workspaceMailableBy(
     stores.users.getUser({ clientInstanceId, userId: asUserId(author) })
   ]);
   if (workspace?.kind !== "shared" || user?.status !== "active") return false;
-  if (user.roles.includes("admin") || isSuperadmin(user)) return true;
+  if (await managesUsers(stores, user)) return true;
   const membership = await stores.workspaces.getMembership({
     clientInstanceId,
     collaborationWorkspaceId: id,
     userId: user.id
   });
   return membership !== undefined;
+}
+
+/**
+ * The person holds `users.manage` on the whole instance, as their record and rows say now: by
+ * a role, a custom one included, or by the key given them, and a deny takes it away.
+ */
+async function managesUsers(
+  stores: Pick<PlatformStores, "access">,
+  user: UserRecord
+): Promise<boolean> {
+  const actor = authenticatedUserFromRecord({
+    user,
+    identity: { authSource: "mail-workspace", externalUserId: user.id }
+  });
+  const access = await createAuthorizer(stores.access).forActor(actor);
+  return access.authorize(USERS_MANAGE).allowed;
 }
 
 /** The active person of the instance whose address this is, where one is. */

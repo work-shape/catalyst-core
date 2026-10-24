@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { EffectivePermissions } from "@work-shape/catalyst-api-client";
-import { grantOptions } from "@work-shape/catalyst-chat-ui/access";
+import { grantOptions, INSTANCE_GRANT_KINDS } from "@work-shape/catalyst-chat-ui/access";
 
 const assets = {
   app: {
@@ -179,5 +179,38 @@ describe("rights held only through membership or availability", () => {
       workspaces
     );
     expect(options.verbs("workflow", "asset", "flow-a")).toEqual([]);
+  });
+
+  it("offers service principals on the whole instance to who holds the right, and not past a deny (RIGHTS-1f)", () => {
+    // What the Access page hands the dialog for the kinds that name no asset.
+    const instanceKinds = Object.fromEntries(
+      INSTANCE_GRANT_KINDS.map((kind) => [kind, { failed: false, items: [] }])
+    );
+    expect(INSTANCE_GRANT_KINDS).toContain("service_principals");
+    const role = (action: string): EffectivePermissions["items"][number] => ({
+      ...allow(action, "instance"),
+      source: "role"
+    });
+    const holder = grantOptions(
+      entries([role("service_principals.manage")]),
+      instanceKinds,
+      workspaces
+    );
+    expect(holder.kinds).toEqual(["service_principals"]);
+    expect(holder.places("service_principals", [])).toEqual(["instance"]);
+    expect(holder.verbs("service_principals", "instance")).toEqual(["manage"]);
+
+    expect(grantOptions(entries([role("users.manage")]), instanceKinds, workspaces).kinds).toEqual(
+      []
+    );
+    const denied = grantOptions(
+      entries([
+        role("service_principals.manage"),
+        { ...allow("service_principals.manage", "instance"), effect: "deny" }
+      ]),
+      instanceKinds,
+      workspaces
+    );
+    expect(denied.kinds).not.toContain("service_principals");
   });
 });

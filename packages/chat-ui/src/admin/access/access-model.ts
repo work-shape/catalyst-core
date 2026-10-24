@@ -14,6 +14,8 @@ import {
   GRANT_SCOPE_KINDS as SCOPE_KINDS,
   GRANTABLE_ACTION_SCOPES,
   GRANTABLE_ACTIONS,
+  INSTANCE_ACTIONS,
+  SUPERADMIN_DEFAULT_ACTIONS,
   type GrantableAction,
   type PermissionGrant
 } from "@work-shape/catalyst-core";
@@ -64,7 +66,8 @@ const GRANT_VERB_RANK: Record<GrantVerb, number> = {
   edit_built_in: 13,
   view_users: 14,
   retry: 15,
-  view: 16
+  view: 16,
+  manage: 17
 };
 
 function isGrantKind(kind: string): kind is GrantKind {
@@ -185,6 +188,21 @@ function grantRightPosition(action: string): number {
     ? GRANT_KINDS.indexOf(parts.kind) * GRANT_RIGHTS.length + GRANT_VERB_RANK[parts.verb]
     : GRANT_KINDS.length * GRANT_RIGHTS.length;
 }
+
+/**
+ * The kinds the dialog offers without an asset to choose: Builder and Publisher of a workspace,
+ * and the kinds whose every right is one of the instance itself (`INSTANCE_ACTIONS` and the
+ * superadmin's defaults): the built-in roles, users, jobs, the System pages, usage by person and
+ * service principals. No module registers them, so every instance has them; the dialog offers
+ * one wherever the giver holds a right of it.
+ */
+export const INSTANCE_GRANT_KINDS: readonly GrantKind[] = GRANT_KINDS.filter(
+  (kind) =>
+    kind === BUNDLE_KIND ||
+    grantRights(kind).every((right) =>
+      [...INSTANCE_ACTIONS, ...SUPERADMIN_DEFAULT_ACTIONS].some((action) => action === right.action)
+    )
+);
 
 /**
  * The kinds beyond agents and skills a grant can name on an instance: each one core writes a
