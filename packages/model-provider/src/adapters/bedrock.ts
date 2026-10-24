@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { AWS_ACCOUNT_ID } from "@work-shape/catalyst-asset-schemas";
 import { AppError, defineProvider, secretRef } from "@work-shape/catalyst-core";
 import {
   BEDROCK_CAPABILITIES,
@@ -13,7 +14,7 @@ const bedrockConfigSchema = z.object({
    * The AWS account the instance's application inference profiles belong to. Not a secret. A
    * profile of another account is refused before a request is sent.
    */
-  accountId: z.string().regex(/^\d{12}$/u, "must be the 12 digits of an AWS account id"),
+  accountId: z.string().regex(AWS_ACCOUNT_ID, "must be the 12 digits of an AWS account id"),
   /** Names the secret that holds the Bedrock API key of this consumer. */
   credentialSecret: secretRef().default("AWS_BEARER_TOKEN_BEDROCK")
 });
