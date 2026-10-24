@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
-import { platformContextSchema } from "@work-shape/catalyst-api-contract";
+import { platformContextSchema, roleSchema } from "@work-shape/catalyst-api-contract";
 import { asUserId } from "@work-shape/catalyst-core";
 import {
   clientInstanceId,
@@ -157,5 +157,116 @@ describe("system.view", () => {
 
     // The admin reads it by `audit.view`, though the list is refused them.
     await t.expectOk(t.admin.id, "operations.get_run", { params: { runId: runId ?? "" } });
+  });
+});
+
+const instanceRow = (action: string, effect: "allow" | "deny" = "allow") => ({
+  action,
+  effect,
+  scopeKind: "instance"
+});
+
+describe("the three rights under the rule of no escalation and of deny", () => {
+  it("are not put into a role by an admin, also not into the admin role by its editor", async () => {
+    const t = await setup();
+    for (const action of ["system.view", "jobs.retry", "users.delete"]) {
+      await t.expectRefused(
+        t.admin.id,
+        "roles.create",
+        { payload: { name: `With ${action}`, grants: [instanceRow(action)] } },
+        t.forbidden(action, "no_grant")
+      );
+    }
+    // Who may edit the built-in roles still gives only what they hold.
+    await t.expectOk(t.root.id, "permissions.grant", give(t.admin.id, "roles.edit_built_in"));
+    const admin = roleSchema.parse(
+      (await t.expectOk(t.root.id, "roles.get", { params: { roleId: "admin" } })).json()
+    );
+    const widened = await t.call(t.admin.id, "roles.update", {
+      params: { roleId: "admin" },
+      payload: { grants: [...admin.grants, instanceRow("system.view")] }
+    });
+    expect(widened.statusCode).toBe(403);
+    await t.expectRefused(
+      t.admin.id,
+      "instance.jobs.list",
+      {},
+      t.forbidden("system.view", "no_grant")
+    );
+  });
+
+  it("are held on the whole instance only", async () => {
+    const t = await setup();
+    const workspaceId = await t.sharedWorkspace("Operators");
+    for (const action of ["system.view", "jobs.retry", "users.delete"]) {
+      const refused = await t.call(t.root.id, "permissions.grant", {
+        payload: {
+          holderKind: "user",
+          holderId: t.kai.id,
+          action,
+          scopeKind: "workspace",
+          scopeId: workspaceId
+        }
+      });
+      expect(refused.statusCode, action).toBe(422);
+    }
+  });
+
+  it("give way to a deny, on the person over a role and on a role over the person", async () => {
+    const t = await setup();
+    const operators = roleSchema.parse(
+      (
+        await t.expectOk(t.root.id, "roles.create", {
+          payload: {
+            name: "Operators",
+            grants: ["system.view", "jobs.retry", "users.delete", "users.manage"].map((action) =>
+              instanceRow(action)
+            )
+          }
+        })
+      ).json()
+    );
+    await t.expectOk(t.root.id, "users.update", {
+      params: { userId: t.kai.id },
+      payload: { roles: ["user", operators.id] }
+    });
+    for (const operation of SYSTEM_READS) await t.expectOk(t.kai.id, operation);
+
+    for (const action of ["system.view", "jobs.retry", "users.delete"]) {
+      await t.expectOk(t.root.id, "permissions.grant", {
+        payload: { ...give(t.kai.id, action).payload, effect: "deny" }
+      });
+    }
+    for (const operation of [...SYSTEM_READS, "instance.infrastructure.check"] as const) {
+      await t.expectRefused(t.kai.id, operation, {}, t.forbidden("system.view", "denied"));
+    }
+    const context = platformContextSchema.parse(
+      (await t.expectOk(t.kai.id, "platform.context.get")).json()
+    );
+    expect(context.instanceActions).toEqual([]);
+    expect(
+      (await t.call(t.kai.id, "users.delete", { params: { userId: t.lena.id } })).statusCode
+    ).toBe(403);
+    expect(await stillThere(t, t.lena.id)).toBe(true);
+
+    const refusing = roleSchema.parse(
+      (
+        await t.expectOk(t.root.id, "roles.create", {
+          payload: { name: "No System", grants: [instanceRow("system.view", "deny")] }
+        })
+      ).json()
+    );
+    await t.expectOk(t.root.id, "permissions.grant", give(t.lena.id, "system.view"));
+    await t.expectOk(t.lena.id, "instance.jobs.list");
+    await t.expectOk(t.root.id, "users.update", {
+      params: { userId: t.lena.id },
+      payload: { roles: ["user", refusing.id] }
+    });
+    await t.expectRefused(
+      t.lena.id,
+      "instance.jobs.list",
+      {},
+      t.forbidden("system.view", "denied")
+    );
   });
 });
