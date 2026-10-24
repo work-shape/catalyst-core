@@ -17,7 +17,8 @@ import {
 import {
   createSkillChangeApprovalHandler,
   createChatServer,
-  createChatServerJobs
+  createChatServerJobs,
+  workflowAssetKindOf
 } from "@work-shape/catalyst-server";
 import type { ChatAttachmentService, ChatServerOptions } from "@work-shape/catalyst-server";
 import { createManagedObjectAccess } from "@work-shape/catalyst-capability-sdk";
@@ -476,6 +477,9 @@ export async function createClientInstanceExecutionAssembly(
       skill: { config, shippedSkillNames: shippedSkillNamesOf(capabilities) },
       connections,
       modules,
+      capabilityKinds: capabilityContributions.flatMap((contribution) =>
+        (contribution.assetKinds ?? []).map(workflowAssetKindOf)
+      ),
       moduleKinds: moduleAssembly.assetKinds
     }),
     validationRefs,

@@ -2,7 +2,6 @@ import {
   createAgentAssetKind,
   createAppAssetKind,
   createConnectionAssetKind,
-  createGuardrailAssetKind,
   createSkillAssetKind,
   type WorkflowAssetKind
 } from "@work-shape/catalyst-server";
@@ -18,13 +17,15 @@ export function createInstanceAssetKinds(input: {
   skill: Parameters<typeof createSkillAssetKind>[0];
   connections: InstanceConnections | undefined;
   modules: ModuleSnapshot;
+  /** The kinds the capabilities bring, in the order of the capabilities. */
+  capabilityKinds: readonly WorkflowAssetKind[];
   moduleKinds: readonly WorkflowAssetKind[];
 }) {
   return createAssetKindRegistry([
     createAgentAssetKind(input.agent),
     createSkillAssetKind(input.skill),
     ...(input.connections ? [createConnectionAssetKind(input.connections)] : []),
-    ...(input.modules.isEnabled("guardrails") ? [createGuardrailAssetKind()] : []),
+    ...input.capabilityKinds,
     ...(input.modules.isEnabled("apps") ? [createAppAssetKind()] : []),
     ...input.moduleKinds
   ]);

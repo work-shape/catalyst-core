@@ -363,7 +363,8 @@ export {
 export { workflowLiveCallerWarnings } from "./apps/live-workflow-callers";
 export { ASSET_PUT_BODY_LIMIT_BYTES } from "./assets/asset-files";
 export { createConnectionAssetKind } from "./asset-kinds/connection";
-export { createGuardrailAssetKind } from "./asset-kinds/guardrail";
+export { createGuardrailAssetKind, defineGuardrailAssetKind } from "./asset-kinds/guardrail";
+export { workflowAssetKindOf } from "./asset-kinds/capability-kind";
 export {
   seedReleaseGuardrails,
   type GuardrailSeedResult

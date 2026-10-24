@@ -4,7 +4,11 @@ import {
 } from "@work-shape/catalyst-capability-sdk";
 import type { ReleaseGuardrailConfig } from "@work-shape/catalyst-config-schema";
 import { GUARDRAIL_ASSET_KIND, defineModule } from "@work-shape/catalyst-core";
-import { GuardrailRunner, seedReleaseGuardrails } from "@work-shape/catalyst-server";
+import {
+  GuardrailRunner,
+  defineGuardrailAssetKind,
+  seedReleaseGuardrails
+} from "@work-shape/catalyst-server";
 
 /**
  * Guardrails: rules at the before-events that allow, warn, hold for an approval or block, from
@@ -61,6 +65,7 @@ export function createGuardrailsCapability(input: {
       // Off, nothing answers at a before-event and stored guardrails are kept as they are.
       if (!context.modules.isEnabled(guardrailsModule.name)) return { retention };
       return {
+        assetKinds: [defineGuardrailAssetKind()],
         beforeActionCheck: new GuardrailRunner({
           clientInstanceId,
           guardrails: input.guardrails,

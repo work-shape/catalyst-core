@@ -7,6 +7,7 @@ import {
   readObjectBytes,
   type AttachmentManifest,
   type BeforeActionCheck,
+  type CapabilityAssetKind,
   type ClientInstanceId,
   type ConfigAssetStore,
   type GuardrailStore,
@@ -65,6 +66,7 @@ import {
 import { createHash } from "node:crypto";
 
 export { defineConfiguredTool, defineTool, toolFailed, toolSuccess };
+export type { CapabilityAssetKind };
 export type {
   DataSourceDescribeInput,
   DataSourceDescribeResult,
@@ -274,6 +276,13 @@ export interface ClientInstanceCapabilityContribution {
    * stops the start.
    */
   instanceSeed?(input: ClientInstanceCapabilitySeedInput): Promise<void>;
+  /**
+   * The asset kinds the capability brings: each is registered with the platform's own, read,
+   * written and published through the asset operations under the rights the kind names. A
+   * capability brings a module's kind only while that module is on; the platform refuses a
+   * kind it already has.
+   */
+  assetKinds?: readonly CapabilityAssetKind[];
   /**
    * Deletes what the capability keeps past the audit retention, in the transaction that
    * deletes the audit events, so both go or neither does. It answers the counts the

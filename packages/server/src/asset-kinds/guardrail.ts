@@ -14,11 +14,13 @@ import {
   defineAssetKind,
   isAgentAvailableInWorkspace,
   type AssetScope,
+  type CapabilityAssetKind,
   type ClientInstanceId,
   type GuardrailConfig,
   type GuardrailFilter,
   type PlatformStores
 } from "@work-shape/catalyst-core";
+import { workflowAssetKindOf } from "./capability-kind";
 import { readDefinitionField, type WorkflowAssetKind } from "./shared";
 
 const AGENT_ASSET_KIND = "agent";
@@ -134,9 +136,9 @@ async function assertGuardrailReach(
  * guardrail of release config is published by the release seed and read-only; one written as
  * an asset is a draft until a holder of `guardrail.publish` at its scope, the instance or one
  * workspace, publishes it. It is no part of the release bundle and offered in no workspace
- * list.
+ * list. The guardrails capability brings it; the platform registers it while the module is on.
  */
-export function createGuardrailAssetKind(): WorkflowAssetKind {
+export function defineGuardrailAssetKind(): CapabilityAssetKind {
   return {
     ...defineAssetKind({
       kind: GUARDRAIL_ASSET_KIND,
@@ -191,18 +193,12 @@ export function createGuardrailAssetKind(): WorkflowAssetKind {
     }),
     // A filter governs an event; it consumes no asset. Reach is checked separately below.
     references: () => [],
-    holdsInstanceDefault: false,
-    hasWorkspaceAvailability: false,
-    prepareInteractiveUpsert: ({ next }) => next,
-    missingUpsertRight: () => undefined,
     // Asked before anything else of a write, a delete and a sync included.
     assertStoredWritable({ current }) {
       if (readDefinitionField(current, "origin") === "release") {
         throw readOnly();
       }
     },
-    assertInteractiveUpsertAllowed: () => undefined,
-    assertInteractiveDeleteAllowed: () => undefined,
     // The floor is published by the release seed alone, an earlier revision of it included.
     authorizeLive({ config }) {
       if (readDefinitionField(config, "origin") === "release") {
@@ -227,6 +223,11 @@ export function createGuardrailAssetKind(): WorkflowAssetKind {
         stores
       })
   };
+}
+
+/** The Guardrail kind as the asset workflow registers it, for a server assembled by hand. */
+export function createGuardrailAssetKind(): WorkflowAssetKind {
+  return workflowAssetKindOf(defineGuardrailAssetKind());
 }
 
 function filterOf(definition: unknown): GuardrailFilter | undefined {

@@ -6,6 +6,7 @@ import type {
   AuthenticatedIdentity,
   ClientInstanceId,
   ConfigAssetKind,
+  CapabilityAssetKindChecks,
   ConfigAssetRecord,
   FileSet,
   JsonObject,
@@ -104,7 +105,8 @@ export interface AddresseeNames {
  * A registered kind with what the config asset workflow asks of it. Everything the workflow
  * does differently for one kind is answered here, by that kind's registration.
  */
-export interface WorkflowAssetKind extends RegisteredAssetKind<ConfigAssetKind> {
+export interface WorkflowAssetKind
+  extends RegisteredAssetKind<ConfigAssetKind>, CapabilityAssetKindChecks {
   /**
    * A release carries this kind: the release holder writes it through a sync, and the overview
    * of the instance lists it. A kind without it is read and written by its own rights alone.
@@ -120,12 +122,6 @@ export interface WorkflowAssetKind extends RegisteredAssetKind<ConfigAssetKind> 
   readRunsAs?(config: JsonObject): Promise<string | undefined>;
   /** The Workflow schedule, using the engine's cron and clock. */
   readSchedule?(config: JsonObject): { timeZone: string; nextDueAt?: string };
-  /**
-   * Every asset the definition names, including operation targets. The common save and
-   * publish checks use this one inventory for reference resolution and owner boundaries.
-   * Kinds with no references return an empty list.
-   */
-  references?(definition: unknown): readonly { kind: string; name: string }[];
   /** Workspace targets an instance-owned source may name; every Workflow call checks its principal. */
   readonly crossOwnerReferences?: readonly string[];
   /** Adjusts what an interactive save sends before it is validated. */
@@ -174,12 +170,6 @@ export interface WorkflowAssetKind extends RegisteredAssetKind<ConfigAssetKind> 
     modelBindingsListed: boolean;
   }): void;
   /**
-   * Throws where the stored asset may not be changed through any asset operation, whatever
-   * the caller sends and whoever calls: an asset that release config defines. It is asked of
-   * what is stored before the write is read, so its refusal comes before every other one.
-   */
-  assertStoredWritable?(input: { current: unknown }): void;
-  /**
    * What every write keeps of the stored definition, a release's and a revert included: the
    * fields only the platform writes, such as what a shipped agent was shipped as. It throws
    * where no write but the platform's may create the asset.
@@ -187,16 +177,6 @@ export interface WorkflowAssetKind extends RegisteredAssetKind<ConfigAssetKind> 
   keepStored?(input: { current: unknown; next: Record<string, unknown> }): Record<string, unknown>;
   /** Throws where the stored asset may not be deleted, by a release either. */
   assertStoredDeletable?(input: { current: unknown }): void;
-  /**
-   * Throws where this caller may not make this revision the one the asset's users are served,
-   * whatever the kind's publish right says: the revision lends something its writer could not
-   * give, such as the grants of the service principal a Workflow runs as. It is asked of the
-   * revision that becomes live and of who makes it so: on a publish, of the newest revision
-   * and of an earlier one alike. Who wrote the revision is not asked. Only a kind with the
-   * lifecycle `draft_published` may set it, and the registry refuses any other: there a
-   * revision goes live by a publish and by nothing else, and a delete takes the published
-   * revision away, so a deleted asset that is written again is a draft.
-   */
   /**
    * What a revision reaches beside its live revision, for the review of a held publish. A kind
    * whose publish no guardrail holds leaves it out.
@@ -220,29 +200,6 @@ export interface WorkflowAssetKind extends RegisteredAssetKind<ConfigAssetKind> 
    * about in place of the newest: what a publish review shows.
    */
   principalRights?(name: string, config?: JsonObject): Promise<WorkflowAccountRights[] | undefined>;
-  authorizeLive?(input: {
-    actor: AuthenticatedIdentity;
-    access: ActorAccess;
-    name: string;
-    /** The revision that becomes live. */
-    revision: number;
-    /** The config of that revision. */
-    config: unknown;
-  }): void | Promise<void>;
-  /**
-   * Throws where a write of the validated definition reaches beyond the scope that owns the
-   * asset, which only the stores can tell: a workspace guardrail whose filter names another
-   * workspace. Asked of every write through an asset operation, before it is stored.
-   */
-  assertScopedWrite?(input: {
-    clientInstanceId: ClientInstanceId;
-    scope: AssetScope;
-    name: string;
-    definition: unknown;
-    stores: PlatformStores;
-    /** Who writes it: what a definition may name can depend on what they may see. */
-    actor: AuthenticatedIdentity;
-  }): Promise<void>;
   /**
    * What a check of a definition that holds says beside its issues: a warning refuses nothing.
    * Asked by `assets.validate` only, with what is stored.
@@ -375,26 +332,6 @@ export interface WorkflowAssetKind extends RegisteredAssetKind<ConfigAssetKind> 
     definition: unknown,
     files?: readonly { path: string; bytes: Uint8Array }[]
   ): { code: string; message: string }[];
-  /**
-   * What a publish does beside moving the published pointer, with `stores` bound to the
-   * transaction that moves it. A throw refuses the publish and leaves the pointer where it was.
-   */
-  onPublish?(input: {
-    actor: AuthenticatedIdentity;
-    revisionId: string;
-    clientInstanceId: ClientInstanceId;
-    /** What the caller of the publish may do: a kind asks it for what the revision reaches. */
-    access: ActorAccess;
-    assetId: string;
-    /** The owner of the asset: what it names of other assets is read in this scope. */
-    scope: AssetScope;
-    revision: number;
-    config: JsonObject;
-    /** The config that was published until this publish, where one was. */
-    replaced?: JsonObject;
-    confirmProcessing?: string;
-    stores: PlatformStores;
-  }): Promise<void>;
   /** Withdraw live bindings in the pointer's transaction, preserving historical run data. */
   onUnpublish?(input: {
     clientInstanceId: ClientInstanceId;
