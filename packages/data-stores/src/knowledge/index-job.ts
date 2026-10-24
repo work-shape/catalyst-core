@@ -31,6 +31,7 @@ import {
   KNOWLEDGE_CHUNKING_REVISION,
   knowledgeChunkPrefix
 } from "./builtin/chunking";
+import { unusedGenerations } from "./generations";
 import {
   approvedEmbeddingModel,
   knowledgeEmbeddingBinding,
@@ -75,7 +76,9 @@ import { releaseSyncedOriginals, enqueueOriginalRelease } from "./original-relea
 // - A later change of the default or of the binding re-embeds nothing by itself: a generation
 //   whose binding is gone from release config, or now names another model or another length,
 //   gets no vector here. KB-8's re-index (`reindex.ts`) starts a generation for the new model;
-//   while it is built, a passage indexed here gets its vector in both.
+//   while it is built, a passage indexed here gets its vector in both. One being built with
+//   another model than the one the Knowledge Base is set to now gets none: the re-index job
+//   drops it (`generations.ts`).
 // - Passages that have no vector in a generation being served or built are sent through
 //   `gateway.embed`, the passage with its prefix (title, file name, heading), in batches of up
 //   to 2,048 passages and up to `KNOWLEDGE_EMBEDDING_BATCH_TOKENS` estimated tokens, prefixes
@@ -329,7 +332,12 @@ export function createKnowledgeIndexJobHandler(
     let attribution: KnowledgeEmbedCall["attribution"] | undefined;
     let vectors = 0;
     const sent = new Set<string>();
+    // One being built with another model than the one it is set to is dropped, not paid for.
+    const unused = new Set(
+      unusedGenerations(generations, found.definition, embedding).map((each) => each.generation)
+    );
     for (const generation of generations) {
+      if (unused.has(generation.generation)) continue;
       const model = approvedEmbeddingModel(embedding, generation.bindingId);
       // The binding is gone, or embeds with another model now: never mix two models in one
       // generation. A re-index moves the Knowledge Base to a model it has (`reindex.ts`).

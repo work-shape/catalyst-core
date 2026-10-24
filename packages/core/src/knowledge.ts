@@ -1008,6 +1008,12 @@ export interface KnowledgeDocumentStore {
     signal?: AbortSignal
   ): Promise<{ switched: boolean; retired?: number }>;
   /**
+   * Retires the generations and drops their tables in one transaction, an active one too, as
+   * the switch does: no search sees a table that is gone. Answers those it retired; one no
+   * longer being served or built is left.
+   */
+  retireGenerations(generations: readonly number[], signal?: AbortSignal): Promise<number[]>;
+  /**
    * What a re-index into a new generation would embed, and the size of the store now. With
    * `missingFrom`, only the passages that have no vector in that generation (KB-SEM-1).
    */

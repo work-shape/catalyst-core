@@ -101,6 +101,13 @@ export const knowledge = defineTranslations({
     "knowledge.reindexFailed": "The re-index could not be started.",
     "knowledge.reindexChanged":
       "The numbers changed in the meantime. Check them and confirm again.",
+    "knowledge.embeddingNone":
+      "The passages are not embedded yet, so search finds them by their words and titles, not by meaning.",
+    "knowledge.embedAction": "Embed passages…",
+    "knowledge.embedTitle": "Embed the passages of this knowledge base?",
+    "knowledge.embedStatement":
+      "Every passage is embedded with {model}: {chunks} passages, about {tokens} tokens. Nothing is extracted again.",
+    "knowledge.embedConfirm": "Embed",
     "knowledge.checkFailed": "The check could not be run.",
     "knowledge.tableReadable": "Readable",
     "knowledge.tableUnreadable": "Cannot be read",
@@ -373,6 +380,13 @@ export const knowledge = defineTranslations({
     "knowledge.reindexFailed": "Die Neuindexierung konnte nicht gestartet werden.",
     "knowledge.reindexChanged":
       "Die Zahlen haben sich inzwischen geändert. Prüf sie und bestätige noch einmal.",
+    "knowledge.embeddingNone":
+      "Die Passagen sind noch nicht eingebettet. Bis dahin findet die Suche sie über ihre Wörter und Titel, nicht über ihre Bedeutung.",
+    "knowledge.embedAction": "Passagen einbetten…",
+    "knowledge.embedTitle": "Die Passagen dieser Wissensbasis einbetten?",
+    "knowledge.embedStatement":
+      "Jede Passage wird mit {model} eingebettet: {chunks} Passagen, etwa {tokens} Tokens. Nichts wird neu extrahiert.",
+    "knowledge.embedConfirm": "Einbetten",
     "knowledge.checkFailed": "Die Prüfung konnte nicht laufen.",
     "knowledge.tableReadable": "Lesbar",
     "knowledge.tableUnreadable": "Nicht lesbar",

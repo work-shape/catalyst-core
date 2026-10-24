@@ -23,7 +23,9 @@ type Statement = NonNullable<KnowledgeReindexAnswer["statement"]>;
 /**
  * The embedding of a Knowledge Base that searches by meaning: the model search answers with,
  * what it is set to where that differs, a re-index under way, and the way to start one for who
- * may publish it. The old index answers until the new one is complete.
+ * may publish it. The old index answers until the new one is complete. One with searchable
+ * documents and no index, as one published before semantic search embedded what was there,
+ * is offered to embed them.
  */
 export function KnowledgeEmbedding({
   embedding,
@@ -39,11 +41,16 @@ export function KnowledgeEmbedding({
   const { locale, t } = useTranslation();
   const number = (value: number) => new Intl.NumberFormat(locale).format(value);
   const { state, active, target, progress } = embedding;
+  const mayStart = canReindex && source.reindex !== undefined && target !== undefined;
+  // Nothing embedded yet: worth offering only where a document is searchable, so has passages.
+  const first = state === "none";
+  const documents = source.useDocuments(knowledgeBase, mayStart && first);
+  const unembedded =
+    first &&
+    documents.status === "ready" &&
+    documents.data.documents.some((document) => document.state === "indexed");
   const offered =
-    canReindex &&
-    source.reindex !== undefined &&
-    target !== undefined &&
-    (state === "reindex_needed" || state === "reindex_available");
+    mayStart && (state === "reindex_needed" || state === "reindex_available" || unembedded);
   // With no index answering by meaning yet, as after turning it on, the first one is built.
   const building = t(active ? "knowledge.reindexing" : "knowledge.embeddingFirst", {
     model: target?.model ?? ""
@@ -80,11 +87,14 @@ export function KnowledgeEmbedding({
             {t(active ? "knowledge.reindexingNote" : "knowledge.embeddingFirstNote")}
           </p>
         </div>
+      ) : unembedded ? (
+        <p className="text-label text-muted-foreground">{t("knowledge.embeddingNone")}</p>
       ) : null}
       {offered && source.reindex ? (
         <ReindexAction
           reindex={(confirm) => source.reindex?.(knowledgeBase, confirm)}
           locale={locale}
+          first={first}
         />
       ) : null}
     </div>
@@ -97,12 +107,15 @@ export function KnowledgeEmbedding({
  */
 function ReindexAction({
   reindex,
-  locale
+  locale,
+  first
 }: {
   reindex: (
     confirm?: string
   ) => ReturnType<NonNullable<KnowledgeBaseSource["reindex"]>> | undefined;
   locale: LocaleCode;
+  /** Nothing is embedded yet: the passages are embedded, not embedded again. */
+  first: boolean;
 }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
@@ -152,14 +165,14 @@ function ReindexAction({
           data-knowledge-reindex=""
         >
           <RotateCw aria-hidden="true" />
-          {t("knowledge.reindexAction")}
+          {t(first ? "knowledge.embedAction" : "knowledge.reindexAction")}
         </Button>
       </div>
       <ConfirmDialog
         open={open}
         tone="primary"
-        title={t("knowledge.reindexTitle")}
-        confirmLabel={t("knowledge.reindexConfirm")}
+        title={t(first ? "knowledge.embedTitle" : "knowledge.reindexTitle")}
+        confirmLabel={t(first ? "knowledge.embedConfirm" : "knowledge.reindexConfirm")}
         loading={busy && statement !== undefined}
         confirmDisabled={statement === undefined || !statement.room || busy}
         onConfirm={() => {
@@ -168,7 +181,7 @@ function ReindexAction({
         onClose={close}
       >
         {statement ? (
-          <ReindexStatement statement={statement} locale={locale} />
+          <ReindexStatement statement={statement} locale={locale} first={first} />
         ) : busy ? (
           <SkeletonList rows={2} />
         ) : null}
@@ -183,7 +196,15 @@ function ReindexAction({
 }
 
 /** What a re-index embeds, what it costs and whether the store has room, in the reader's words. */
-function ReindexStatement({ statement, locale }: { statement: Statement; locale: LocaleCode }) {
+function ReindexStatement({
+  statement,
+  locale,
+  first
+}: {
+  statement: Statement;
+  locale: LocaleCode;
+  first: boolean;
+}) {
   const { t } = useTranslation();
   const number = (value: number) => new Intl.NumberFormat(locale).format(value);
   const megabytes = (bytes: number) =>
@@ -195,7 +216,7 @@ function ReindexStatement({ statement, locale }: { statement: Statement; locale:
   return (
     <div className="grid gap-2" data-knowledge-reindex-statement="">
       <p>
-        {t("knowledge.reindexStatement", {
+        {t(first ? "knowledge.embedStatement" : "knowledge.reindexStatement", {
           model: statement.model,
           chunks: number(statement.chunks),
           tokens: number(statement.tokens)
@@ -215,7 +236,7 @@ function ReindexStatement({ statement, locale }: { statement: Statement; locale:
             })
           : t("knowledge.reindexNoPrice")}
       </p>
-      <p>{t("knowledge.reindexKeeps")}</p>
+      <p>{t(first ? "knowledge.embeddingFirstNote" : "knowledge.reindexKeeps")}</p>
       {statement.room ? null : (
         <FormNotice tone="error">
           {t("knowledge.reindexNoRoom", {

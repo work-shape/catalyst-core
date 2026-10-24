@@ -26,10 +26,11 @@ import {
 import {
   approvedEmbeddingModel,
   knowledgeBaseDefinitionSchema,
-  knowledgeEmbeddingBinding,
+  type BuiltinKnowledgeDefinition,
   type KnowledgeBaseDefinition,
   type KnowledgeEmbedding
 } from "./definition";
+import { embeddingTarget as reindexTarget, sameModel, unusedGenerations } from "./generations";
 import {
   batchesByTokens,
   embeddingText,
@@ -61,10 +62,15 @@ import type { KnowledgeRuntime } from "./runtime";
 //   embedding call; its page says that a re-index is needed.
 // - Turning `semantic` on embeds the passages already there (KB-SEM-1), with the same
 //   statement and confirmation: into a generation built beside nothing, while search answers
-//   by words and titles, or, where an active generation with the model is left from before
-//   (it stays when `semantic` is turned off), into that one, only the passages it lacks.
+//   by words and titles, or, where an active generation with the model is still there (turned
+//   off and on before the drop below ran), into that one, only the passages it lacks.
 //   `knowledge.<id>.reindex` does the same for a Knowledge Base that searches by meaning and
 //   has passages but no generation, as one published before KB-SEM-1 may have.
+// - What the published revision no longer uses is dropped (`generations.ts`): every generation
+//   once `semantic` is turned off, and one being built with another model than the binding
+//   names now, as when it is set back before the re-index finished. The publish queues this
+//   job to drop it, and each run of the job drops it first; the index job embeds nothing into
+//   it meanwhile.
 //
 // Usage: `knowledge_embedding`, attributed to the run that started the re-index, its person and
 // the Knowledge Base's workspace, outside chat's limits (KB-ISO-1a). A usage limit or the
@@ -81,7 +87,7 @@ const REINDEX_TIMEOUT_MS = 60_000;
  */
 const VECTOR_ROW_OVERHEAD_BYTES = 200;
 
-const reindexPayloadSchema = z.strictObject({
+const reindexOnlyPayloadSchema = z.strictObject({
   knowledgeBaseId: z.string().min(1).max(200),
   /** The binding the re-index embeds with: a later change of it supersedes this job. */
   bindingId: z.string().min(1).max(200),
@@ -89,7 +95,18 @@ const reindexPayloadSchema = z.strictObject({
   operationRunId: z.string().min(1).max(200)
 });
 
-type ReindexPayload = z.infer<typeof reindexPayloadSchema>;
+/**
+ * A job of the same kind that only drops the generations the published revision no longer
+ * uses: of the same kind, so it never runs beside a re-index of the same Knowledge Base.
+ */
+const dropUnusedPayloadSchema = z.strictObject({
+  knowledgeBaseId: z.string().min(1).max(200),
+  dropUnused: z.literal(true)
+});
+
+const reindexPayloadSchema = z.union([reindexOnlyPayloadSchema, dropUnusedPayloadSchema]);
+
+type ReindexPayload = z.infer<typeof reindexOnlyPayloadSchema>;
 
 /** One per Knowledge Base at a time; heartbeats keep its lease while it embeds. */
 export const knowledgeReindexJob = defineJobKind({
@@ -100,24 +117,6 @@ export const knowledgeReindexJob = defineJobKind({
   leaseMs: 2 * 60_000,
   concurrency: { perKey: 1 }
 });
-
-/** Whether a generation embeds with exactly this model. */
-function sameModel(generation: KnowledgeEmbeddingModel, model: KnowledgeEmbeddingModel): boolean {
-  return (
-    generation.bindingId === model.bindingId &&
-    generation.model === model.model &&
-    generation.dimensions === model.dimensions
-  );
-}
-
-/** The model a Knowledge Base that searches by meaning should embed with now, where approved. */
-function reindexTarget(
-  definition: KnowledgeBaseDefinition,
-  embedding: KnowledgeEmbedding
-): KnowledgeEmbeddingModel | undefined {
-  if (!definition.methods.some((method) => method === "semantic")) return undefined;
-  return approvedEmbeddingModel(embedding, knowledgeEmbeddingBinding(definition, embedding));
-}
 
 /** The embedding of a Knowledge Base as its page shows it. */
 export interface KnowledgeEmbeddingState {
@@ -338,7 +337,7 @@ function assertRoom(statement: KnowledgeReindexStatement, name: string): void {
 function enqueueKnowledgeReindex(
   stores: Pick<PlatformStores, "jobs">,
   clientInstanceId: KnowledgeRuntime["clientInstanceId"],
-  payload: ReindexPayload
+  payload: z.infer<typeof reindexPayloadSchema>
 ): Promise<unknown> {
   return stores.jobs.enqueue(knowledgeReindexJob, payload, {
     clientInstanceId,
@@ -377,20 +376,7 @@ export async function publishReindexReview(
   if (named(next.data) === named(before.data) && !turnsOn) return undefined;
   const target = reindexTarget(next.data, input.embedding);
   if (!target) return undefined;
-  const record = await input.records.getDataStore({
-    clientInstanceId: runtime.clientInstanceId,
-    id: input.assetId
-  });
-  if (record?.status !== "ready" || record.migrations.length === 0) return undefined;
-  const store = runtime.backend.documentStore(
-    {
-      backend: "builtin",
-      assetId: input.assetId,
-      name: next.data.name,
-      methods: next.data.methods
-    },
-    input.records
-  );
+  const store = await publishedStoreOf(runtime, input.assetId, next.data, input.records);
   if (!store) return undefined;
   const generations = await store.embeddingGenerations();
   const active = generations.find((each) => each.state === "active");
@@ -408,6 +394,68 @@ export async function publishReindexReview(
   // Turned on over no passage, or over none that lacks its vector: nothing to embed.
   if (statement.kind !== "again" && statement.chunks === 0) return undefined;
   return { statement, target };
+}
+
+/** The store of a built-in Knowledge Base a publish names, where it is made. */
+async function publishedStoreOf(
+  runtime: KnowledgeRuntime,
+  assetId: string,
+  definition: Pick<BuiltinKnowledgeDefinition, "name" | "methods">,
+  records: DataStoreRecordsStore
+): Promise<KnowledgeDocumentStore | undefined> {
+  const record = await records.getDataStore({
+    clientInstanceId: runtime.clientInstanceId,
+    id: assetId
+  });
+  if (record?.status !== "ready" || record.migrations.length === 0) return undefined;
+  return runtime.backend.documentStore(
+    { backend: "builtin", assetId, name: definition.name, methods: definition.methods },
+    records
+  );
+}
+
+/**
+ * Whether a publish leaves generations of embeddings its revision no longer uses
+ * (`unusedGenerations`): where it turns `semantic` off, or names another binding while a
+ * generation is being built. The publish then queues the job that drops them.
+ */
+export async function publishDropsEmbeddings(
+  runtime: KnowledgeRuntime,
+  input: {
+    assetId: string;
+    config: unknown;
+    previous: unknown;
+    embedding: KnowledgeEmbedding;
+    records: DataStoreRecordsStore;
+  }
+): Promise<boolean> {
+  const next = knowledgeBaseDefinitionSchema.safeParse(input.config);
+  const before = knowledgeBaseDefinitionSchema.safeParse(input.previous);
+  if (!next.success || !before.success || "backend" in next.data || "backend" in before.data) {
+    return false;
+  }
+  const searchesByMeaning = (definition: KnowledgeBaseDefinition) =>
+    definition.methods.some((method) => method === "semantic");
+  const turnsOff = searchesByMeaning(before.data) && !searchesByMeaning(next.data);
+  const named = (definition: KnowledgeBaseDefinition) =>
+    "backend" in definition ? undefined : definition.indexing?.embedding?.binding;
+  if (!turnsOff && named(next.data) === named(before.data)) return false;
+  const store = await publishedStoreOf(runtime, input.assetId, next.data, input.records);
+  if (!store) return false;
+  const generations = await store.embeddingGenerations();
+  return unusedGenerations(generations, next.data, input.embedding).length > 0;
+}
+
+/** Queues the job that drops what a publish no longer uses, in the publish's transaction. */
+export function enqueueDropUnusedEmbeddings(
+  runtime: KnowledgeRuntime,
+  stores: Pick<PlatformStores, "jobs">,
+  knowledgeBaseId: string
+): Promise<unknown> {
+  return enqueueKnowledgeReindex(stores, runtime.clientInstanceId, {
+    knowledgeBaseId,
+    dropUnused: true
+  });
 }
 
 /**
@@ -626,9 +674,10 @@ export interface KnowledgeReindexJobInput {
 }
 
 /**
- * The handler of `knowledge_base.reindex`: embeds every passage search reads into the
- * generation being built, then switches. A job whose binding is no longer the one the
- * Knowledge Base is set to ends: the publish that changed it queued its own.
+ * The handler of `knowledge_base.reindex`: drops the generations the published revision no
+ * longer uses, then embeds every passage search reads into the generation being built and
+ * switches. A job whose binding is no longer the one the Knowledge Base is set to ends: the
+ * publish that changed it queued its own.
  */
 export function createKnowledgeReindexHandler(
   runtime: KnowledgeRuntime,
@@ -655,11 +704,25 @@ export function createKnowledgeReindexHandler(
     kind: knowledgeReindexJob,
     slots: 1,
     async run(job, control: JobControl) {
-      const { payload } = job;
       const { signal } = control;
-      const found = await indexTargetOf(runtime, payload.knowledgeBaseId);
+      const found = await indexTargetOf(runtime, job.payload.knowledgeBaseId);
       if (!found) return;
       const { store, definition, scope, target: kb } = found;
+      // First what the published revision no longer uses, so nothing is paid for into it.
+      const dropped = await store.retireGenerations(
+        unusedGenerations(await store.embeddingGenerations(signal), definition, embedding).map(
+          (each) => each.generation
+        ),
+        signal
+      );
+      if (dropped.length > 0) {
+        control.logger.info(
+          { knowledgeBaseId: job.payload.knowledgeBaseId, generations: dropped },
+          "Generations of embeddings the Knowledge Base no longer uses are dropped"
+        );
+      }
+      if (!("bindingId" in job.payload)) return;
+      const payload = job.payload;
       const target = reindexTarget(definition, embedding);
       // Set to another model since, or the model is gone: this re-index is superseded.
       if (target?.bindingId !== payload.bindingId) {
@@ -776,6 +839,7 @@ export function createKnowledgeReindexHandler(
       }
     },
     async onExhausted(job) {
+      if (!("bindingId" in job.payload)) return;
       // The generation stays `building` and the old one answers; a new start goes on from it.
       try {
         await finished(job.payload, job.correlationId, { status: "failed", metadata: {} });

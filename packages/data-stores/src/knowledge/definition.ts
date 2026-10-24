@@ -207,7 +207,7 @@ export interface DataStoreKnowledgeDefinition extends DefinitionFields {
 }
 
 /** A Knowledge Base whose documents the platform keeps in a store it owns: the built-in backend. */
-interface BuiltinKnowledgeDefinition extends DefinitionFields {
+export interface BuiltinKnowledgeDefinition extends DefinitionFields {
   methods: KnowledgeSearchMethod[];
 }
 

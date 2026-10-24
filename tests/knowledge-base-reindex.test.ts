@@ -272,6 +272,17 @@ describe("changing the embedding model of a Knowledge Base", () => {
       )
     );
 
+  const keywordOnly = (): JsonObject => ({ ...definition(), methods: ["keyword"] });
+
+  const embeddedChunkIds = (record: DataStoreRecord, generation: number) =>
+    inStore(record, async (sql) =>
+      (
+        await sql.unsafe<{ id: string }[]>(
+          `select chunk_id as id from catalyst_kb.embeddings_${String(generation)} order by chunk_id`
+        )
+      ).map((row) => row.id)
+    );
+
   const queuedReindexJobs = () =>
     inPlatform(
       (sql) => sql<{ id: string }[]>`select id from platform_jobs
@@ -381,6 +392,56 @@ describe("changing the embedding model of a Knowledge Base", () => {
     );
   });
 
+  it("drops an index half-built for another model when the binding is set back, and embeds nothing more into it", async () => {
+    const provider = stubEmbeddings();
+    const { world, record } = await instance();
+    await add(world, sections(3));
+    await runJobs(world);
+
+    // The re-index to the large model waits on a 429 with its generation half-built.
+    const asked = await publish(world, definition(LARGE.id));
+    const confirmation = z
+      .string()
+      .parse(errorSchema.parse(asked.json()).error.details.confirmation);
+    provider.answerNext(
+      Response.json(
+        { error: { message: "slow down" } },
+        { status: 429, headers: { "retry-after": "120" } }
+      )
+    );
+    expect((await publish(world, definition(LARGE.id), confirmation)).statusCode).toBe(200);
+    await runJobs(world);
+    expect(await tables(record)).toEqual(["embeddings_1", "embeddings_2"]);
+    const large = provider.of(LARGE.model).length;
+
+    // Set back to the model it answers with: nothing to confirm.
+    const back = await publish(world, definition());
+    expect(back.statusCode, back.body).toBe(200);
+    // A document added before the drop runs is embedded with the active model only.
+    await inPlatform(
+      (sql) => sql`update platform_jobs set run_after = now() + interval '1 hour'
+        where kind = ${KNOWLEDGE_JOB_KINDS.reindex} and status = 'queued'`
+    );
+    await add(world, "# Neu\n\nNeuer Text.");
+    await runJobs(world);
+    expect(provider.of(LARGE.model)).toHaveLength(large);
+    expect(await embeddedChunkIds(record, 1)).toEqual(await chunkIds(record));
+
+    // Then the half-built index is dropped, and the waiting re-index ends without a call. One
+    // job of the kind runs at a time per Knowledge Base, so the second runs on the next pass.
+    await dueNow();
+    await runJobs(world);
+    await runJobs(world);
+    expect(await generations(record)).toEqual([
+      { generation: 1, binding_id: "embedding", model: TEST_EMBEDDING_MODEL, state: "active" },
+      { generation: 2, binding_id: LARGE.id, model: LARGE.model, state: "retired" }
+    ]);
+    expect(await tables(record)).toEqual(["embeddings_1"]);
+    expect(await state(world)).toMatchObject({ state: "current" });
+    expect(provider.of(LARGE.model)).toHaveLength(large);
+    expect(await queuedReindexJobs()).toHaveLength(0);
+  });
+
   it("answers by words alone while the index's model is gone, and re-indexes only with the statement's confirmation", async () => {
     const provider = stubEmbeddings();
     const { world, record } = await instance();
@@ -425,17 +486,6 @@ describe("changing the embedding model of a Knowledge Base", () => {
     await search(world, "Abschnitt 1");
     expect(provider.requests).toHaveLength(now + 1);
   });
-
-  const keywordOnly = (): JsonObject => ({ ...definition(), methods: ["keyword"] });
-
-  const embeddedChunkIds = (record: DataStoreRecord, generation: number) =>
-    inStore(record, async (sql) =>
-      (
-        await sql.unsafe<{ id: string }[]>(
-          `select chunk_id as id from catalyst_kb.embeddings_${String(generation)} order by chunk_id`
-        )
-      ).map((row) => row.id)
-    );
 
   it("embeds the passages already there when semantic search is turned on, with the statement's confirmation (KB-SEM-1)", async () => {
     const provider = stubEmbeddings();
@@ -483,27 +533,34 @@ describe("changing the embedding model of a Knowledge Base", () => {
     expect(provider.requests).toHaveLength(sent + 1);
   });
 
-  it("embeds only what came in while semantic search was off when it is turned on again", async () => {
+  it("drops the embeddings when semantic search is turned off, and embeds every passage with the confirmation when it is turned on again", async () => {
     const provider = stubEmbeddings();
     const { world, record } = await instance();
     await add(world, sections(2));
     await runJobs(world);
-    const embeddedBefore = await chunkIds(record);
-    expect(await embeddedChunkIds(record, 1)).toEqual(embeddedBefore);
+    expect(await tables(record)).toEqual(["embeddings_1"]);
 
-    // Off: the active generation stays, and what is added meanwhile gets no vector.
+    // Off: the index is dropped, and what is added meanwhile is embedded by nothing.
     expect((await publish(world, keywordOnly())).statusCode).toBe(200);
+    await runJobs(world);
+    expect(await generations(record)).toEqual([
+      { generation: 1, binding_id: "embedding", model: TEST_EMBEDDING_MODEL, state: "retired" }
+    ]);
+    expect(await tables(record)).toEqual([]);
     await add(world, "# Neu\n\nNeuer Text.");
     await runJobs(world);
     const all = await chunkIds(record);
     expect(all).toHaveLength(3);
     const calls = provider.requests.length;
+    expect(await search(world, "Abschnitt 1")).not.toHaveLength(0);
+    expect(provider.requests).toHaveLength(calls);
 
+    // On again: the statement names every passage, and the confirmed embedding builds anew.
     const asked = await publish(world, definition());
     expect(asked.statusCode, asked.body).toBe(422);
     const refusal = errorSchema.parse(asked.json()).error;
-    expect(refusal.details).toMatchObject({ chunks: 1 });
-    expect(refusal.message).toContain("Embed the passages without a vector");
+    expect(refusal.details).toMatchObject({ chunks: 3 });
+    expect(refusal.message).toContain("Embed the existing passages");
     const published = await publish(
       world,
       definition(),
@@ -512,10 +569,29 @@ describe("changing the embedding model of a Knowledge Base", () => {
     expect(published.statusCode, published.body).toBe(200);
     await runJobs(world);
     expect(await generations(record)).toEqual([
+      { generation: 1, binding_id: "embedding", model: TEST_EMBEDDING_MODEL, state: "retired" },
+      { generation: 2, binding_id: "embedding", model: TEST_EMBEDDING_MODEL, state: "active" }
+    ]);
+    expect(await embeddedChunkIds(record, 2)).toEqual(all);
+    expect(provider.requests.slice(calls).map((request) => request.input.length)).toEqual([3]);
+  });
+
+  it("keeps the index when semantic search is turned off and on again before it is dropped", async () => {
+    const provider = stubEmbeddings();
+    const { world, record } = await instance();
+    await add(world, sections(2));
+    await runJobs(world);
+    expect((await publish(world, keywordOnly())).statusCode).toBe(200);
+    const calls = provider.requests.length;
+    // Nothing lacks its vector, so nothing is asked, and the queued drop finds it in use.
+    const published = await publish(world, definition());
+    expect(published.statusCode, published.body).toBe(200);
+    await runJobs(world);
+    expect(await generations(record)).toEqual([
       { generation: 1, binding_id: "embedding", model: TEST_EMBEDDING_MODEL, state: "active" }
     ]);
-    expect(await embeddedChunkIds(record, 1)).toEqual(all);
-    expect(provider.requests.slice(calls).map((request) => request.input.length)).toEqual([1]);
+    expect(await embeddedChunkIds(record, 1)).toEqual(await chunkIds(record));
+    expect(provider.requests).toHaveLength(calls);
   });
 
   it("asks nothing when semantic search is turned on over no passage", async () => {

@@ -769,6 +769,31 @@ export function createBuiltinDocumentStore(
       );
     },
 
+    retireGenerations(generations, signal) {
+      if (generations.length === 0) return Promise.resolve([]);
+      return inStore(
+        "Dropping generations of embeddings",
+        KNOWLEDGE_DOCUMENTS_TIMEOUT_MS,
+        signal,
+        async (sql) => {
+          // As the switch: waits for the searches under way, so none reads a dropped table, and
+          // for a writer of vectors, which finds the generation retired after.
+          await sql.run("lock table catalyst_kb.index_generations in access exclusive mode");
+          const live = await liveGenerations(sql);
+          const retired = live.filter((each) => generations.includes(each.generation));
+          for (const each of retired) {
+            await sql.run(
+              `update catalyst_kb.index_generations set state = 'retired'
+               where generation = $1::pg_catalog.int4`,
+              [each.generation]
+            );
+            await sql.script(`drop table if exists ${embeddingsTable(each.generation)};`);
+          }
+          return retired.map((each) => each.generation);
+        }
+      );
+    },
+
     reindexEstimate(input, signal) {
       const missing =
         input.missingFrom === undefined
