@@ -56,7 +56,7 @@ const you = [
   "you/confirmations",
   "you/usage"
 ];
-const workspace = ["workspace/general", "workspace/members"];
+const workspace = ["workspace/general", "workspace/members", "workspace/usage"];
 const instance = [
   "instance/users",
   "instance/access",

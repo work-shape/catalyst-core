@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { createElement } from "react";
+import { act, createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { UsageSummary } from "@work-shape/catalyst-api-client";
@@ -515,11 +515,11 @@ describe("usage spend budget progress", () => {
       { ...createEvent("usage_estimated", "settled"), source: "estimated", totalTokens: 7 }
     ];
 
-    const english = renderToStaticMarkup(createElement(UsageView, { usage }));
+    const english = renderToStaticMarkup(createElement(UsageView, { usage, tab: "recent" }));
     const german = renderToStaticMarkup(
       createElement(TranslationProvider, {
         locale: "de",
-        children: createElement(UsageView, { usage })
+        children: createElement(UsageView, { usage, tab: "recent" })
       })
     );
 
@@ -552,7 +552,7 @@ describe("usage spend budget progress", () => {
 
   // Fails without the change: the table had eight columns, ten with web search, and at the
   // width of the page the last ones lay outside its box.
-  it("shows a call in five columns, with the time, the model, the region, the cached input and the status as second lines", () => {
+  it("shows a call in six columns, with the time, the model, the region, the cached input and the status as second lines", () => {
     const usage = createUsageSummary();
     usage.recentEvents = [
       {
@@ -563,12 +563,13 @@ describe("usage spend budget progress", () => {
       }
     ];
 
-    const markup = renderToStaticMarkup(createElement(UsageView, { usage }));
+    const markup = renderToStaticMarkup(createElement(UsageView, { usage, tab: "recent" }));
     const recent = markup.slice(markup.indexOf("Recent model usage"));
 
     expect([...recent.matchAll(/<th[^>]*>([^<]*)<\/th>/gu)].map((head) => head[1])).toEqual([
       "Time",
       "Caller and model",
+      "Workspace",
       "Provider and region",
       "Tokens",
       "Billable and status"
@@ -589,11 +590,11 @@ describe("usage spend budget progress", () => {
       }
     ];
 
-    const english = renderToStaticMarkup(createElement(UsageView, { usage }));
+    const english = renderToStaticMarkup(createElement(UsageView, { usage, tab: "recent" }));
     const german = renderToStaticMarkup(
       createElement(TranslationProvider, {
         locale: "de",
-        children: createElement(UsageView, { usage })
+        children: createElement(UsageView, { usage, tab: "recent" })
       })
     );
 
@@ -640,6 +641,16 @@ describe("the recent calls of Usage", () => {
     const page = required(administration.pages?.find((candidate) => candidate.id === "usage"));
     const mounted = await mountPage(settings, locale, createElement(page.component));
     try {
+      const recent = locale === "de" ? "Letzte Aufrufe" : "Recent calls";
+      await waitForText(mounted.container, recent);
+      const tab = required(
+        [...mounted.container.querySelectorAll<HTMLElement>('[role="tab"]')].find(
+          (candidate) => candidate.textContent === recent
+        )
+      );
+      await act(async () => {
+        tab.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
+      });
       await waitForText(mounted.container, name);
       expect(mounted.container.textContent).not.toContain("workflow_assistant");
     } finally {

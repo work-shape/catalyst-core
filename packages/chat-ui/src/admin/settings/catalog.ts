@@ -21,6 +21,7 @@ import { ProfilePage } from "./pages/profile";
 import { SecurityPage } from "./pages/security";
 import { WorkspaceGeneralPage } from "./pages/workspace-general";
 import { WorkspaceMembersPage } from "./pages/workspace-members";
+import { WorkspaceUsagePage } from "./pages/workspace-usage";
 
 /** The groups in the order the rail shows them. */
 export const settingsGroups: readonly { id: SettingsGroupId; labelKey: TranslationKey }[] = [
@@ -122,6 +123,14 @@ const settingsPages: readonly SettingsPageDefinition[] = [
     visible: managesAWorkspace,
     component: WorkspaceMembersPage,
     count: pendingAccessRequests
+  },
+  {
+    id: "usage",
+    group: "workspace",
+    labelKey: "settings.usage",
+    width: "wide",
+    visible: managesAWorkspace,
+    component: WorkspaceUsagePage
   }
 ];
 
