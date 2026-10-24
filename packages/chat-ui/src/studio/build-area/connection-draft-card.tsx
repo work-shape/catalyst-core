@@ -126,6 +126,14 @@ export function connectionDraftHost(input: {
         showRoute: input.showRoute,
         ...(input.from ? { from: input.from } : {})
       });
+  } else {
+    // A writer of one Connection reaches its page from the card; the page asks the right.
+    host.openExisting = async (draft) => {
+      const { name } = draft.connection;
+      if ((await connectionOf(name)) === undefined) return "failed";
+      input.showRoute(buildRouteOfLocation({ kindPath: CONNECTIONS_BUILD_PATH, name }));
+      return "exists";
+    };
   }
   return host;
 }

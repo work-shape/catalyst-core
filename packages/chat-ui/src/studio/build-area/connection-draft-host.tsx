@@ -30,6 +30,12 @@ export interface ConnectionDraftHost {
   tell?(text: string, agentName?: string): Promise<void>;
   open?(draft: ConnectionDraft): Promise<ConnectionDraftOpening>;
   /**
+   * For a person who may not create Connections: opens the page of the Connection a proposal
+   * names, where it exists, and never the New connection dialog. A proposal says with
+   * `mayWrite` whether its reader may change that one Connection.
+   */
+  openExisting?(draft: ConnectionDraft): Promise<ConnectionDraftOpening>;
+  /**
    * The Connection of an id as the instance holds it, or nothing where there is none: the card
    * names an existing Connection by its own title, never by the agent's.
    */
