@@ -426,6 +426,141 @@ describe("changing the embedding model of a Knowledge Base", () => {
     expect(provider.requests).toHaveLength(now + 1);
   });
 
+  const keywordOnly = (): JsonObject => ({ ...definition(), methods: ["keyword"] });
+
+  const embeddedChunkIds = (record: DataStoreRecord, generation: number) =>
+    inStore(record, async (sql) =>
+      (
+        await sql.unsafe<{ id: string }[]>(
+          `select chunk_id as id from catalyst_kb.embeddings_${String(generation)} order by chunk_id`
+        )
+      ).map((row) => row.id)
+    );
+
+  it("embeds the passages already there when semantic search is turned on, with the statement's confirmation (KB-SEM-1)", async () => {
+    const provider = stubEmbeddings();
+    const { world, record } = await instance();
+    expect((await publish(world, keywordOnly())).statusCode).toBe(200);
+    await add(world, sections(3));
+    await runJobs(world);
+    expect(provider.requests).toHaveLength(0);
+    expect(await generations(record)).toEqual([]);
+    const chunks = await chunkIds(record);
+    expect(chunks).toHaveLength(3);
+
+    // Without the confirmation the publish is refused with the statement, and nothing starts.
+    const asked = await publish(world, definition());
+    expect(asked.statusCode, asked.body).toBe(422);
+    const refusal = errorSchema.parse(asked.json()).error;
+    expect(refusal.details).toMatchObject({
+      reason: "knowledge_reindex_confirmation_required",
+      chunks: 3
+    });
+    expect(refusal.message).toContain(
+      `Embed the existing passages with ${TEST_EMBEDDING_MODEL} (embedding): 3 passages`
+    );
+    expect(await queuedReindexJobs()).toHaveLength(0);
+
+    const published = await publish(
+      world,
+      definition(),
+      z.string().parse(refusal.details.confirmation)
+    );
+    expect(published.statusCode, published.body).toBe(200);
+    await runJobs(world);
+    expect(await generations(record)).toEqual([
+      { generation: 1, binding_id: "embedding", model: TEST_EMBEDDING_MODEL, state: "active" }
+    ]);
+    expect(await embeddedChunkIds(record, 1)).toEqual(chunks);
+    expect(provider.of(TEST_EMBEDDING_MODEL).map((request) => request.input.length)).toEqual([3]);
+    expect(await state(world)).toMatchObject({
+      state: "current",
+      active: { model: TEST_EMBEDDING_MODEL }
+    });
+    // Search embeds its query now.
+    const sent = provider.requests.length;
+    expect(await search(world, "Abschnitt 1")).not.toHaveLength(0);
+    expect(provider.requests).toHaveLength(sent + 1);
+  });
+
+  it("embeds only what came in while semantic search was off when it is turned on again", async () => {
+    const provider = stubEmbeddings();
+    const { world, record } = await instance();
+    await add(world, sections(2));
+    await runJobs(world);
+    const embeddedBefore = await chunkIds(record);
+    expect(await embeddedChunkIds(record, 1)).toEqual(embeddedBefore);
+
+    // Off: the active generation stays, and what is added meanwhile gets no vector.
+    expect((await publish(world, keywordOnly())).statusCode).toBe(200);
+    await add(world, "# Neu\n\nNeuer Text.");
+    await runJobs(world);
+    const all = await chunkIds(record);
+    expect(all).toHaveLength(3);
+    const calls = provider.requests.length;
+
+    const asked = await publish(world, definition());
+    expect(asked.statusCode, asked.body).toBe(422);
+    const refusal = errorSchema.parse(asked.json()).error;
+    expect(refusal.details).toMatchObject({ chunks: 1 });
+    expect(refusal.message).toContain("Embed the passages without a vector");
+    const published = await publish(
+      world,
+      definition(),
+      z.string().parse(refusal.details.confirmation)
+    );
+    expect(published.statusCode, published.body).toBe(200);
+    await runJobs(world);
+    expect(await generations(record)).toEqual([
+      { generation: 1, binding_id: "embedding", model: TEST_EMBEDDING_MODEL, state: "active" }
+    ]);
+    expect(await embeddedChunkIds(record, 1)).toEqual(all);
+    expect(provider.requests.slice(calls).map((request) => request.input.length)).toEqual([1]);
+  });
+
+  it("asks nothing when semantic search is turned on over no passage", async () => {
+    stubEmbeddings();
+    const { world } = await instance();
+    expect((await publish(world, keywordOnly())).statusCode).toBe(200);
+    const published = await publish(world, definition());
+    expect(published.statusCode, published.body).toBe(200);
+    expect(await queuedReindexJobs()).toHaveLength(0);
+  });
+
+  it("re-indexes a Knowledge Base that searches by meaning but has passages and no index", async () => {
+    stubEmbeddings();
+    const { world, record } = await instance();
+    expect((await publish(world, keywordOnly())).statusCode).toBe(200);
+    await add(world, sections(2));
+    await runJobs(world);
+    // As one published on before KB-SEM-1: semantic on, its passages never embedded.
+    const asked = await publish(world, definition());
+    const confirmation = z
+      .string()
+      .parse(errorSchema.parse(asked.json()).error.details.confirmation);
+    expect((await publish(world, definition(), confirmation)).statusCode).toBe(200);
+    await inPlatform(
+      (sql) => sql`delete from platform_jobs where kind = ${KNOWLEDGE_JOB_KINDS.reindex}`
+    );
+    expect(await state(world)).toMatchObject({ state: "none" });
+
+    const stated = await reindex(world);
+    expect(stated).toMatchObject({
+      started: false,
+      state: "none",
+      statement: { model: TEST_EMBEDDING_MODEL, chunks: 2 }
+    });
+    expect(stated.lines?.join("\n")).toContain("Embed the existing passages");
+    const started = await reindex(world, stated.statement?.confirmation);
+    expect(started).toMatchObject({ started: true, state: "reindexing" });
+    await runJobs(world);
+    expect(await generations(record)).toEqual([
+      { generation: 1, binding_id: "embedding", model: TEST_EMBEDDING_MODEL, state: "active" }
+    ]);
+    expect(await embeddedChunkIds(record, 1)).toEqual(await chunkIds(record));
+    expect(await state(world)).toMatchObject({ state: "current" });
+  });
+
   it("refuses a Knowledge Base that names a binding the instance does not approve", async () => {
     stubEmbeddings();
     const { world } = await instance();

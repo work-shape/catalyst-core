@@ -1007,8 +1007,14 @@ export interface KnowledgeDocumentStore {
     generation: number,
     signal?: AbortSignal
   ): Promise<{ switched: boolean; retired?: number }>;
-  /** What a re-index into a new generation would embed, and the size of the store now. */
-  reindexEstimate(signal?: AbortSignal): Promise<KnowledgeReindexEstimate>;
+  /**
+   * What a re-index into a new generation would embed, and the size of the store now. With
+   * `missingFrom`, only the passages that have no vector in that generation (KB-SEM-1).
+   */
+  reindexEstimate(
+    input: { missingFrom?: number },
+    signal?: AbortSignal
+  ): Promise<KnowledgeReindexEstimate>;
   /** The generations being served or built, with their progress, by generation. */
   generationProgress(signal?: AbortSignal): Promise<KnowledgeEmbeddingGenerationProgress[]>;
   /**

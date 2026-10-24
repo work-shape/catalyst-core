@@ -46366,6 +46366,17 @@
               "exchangeSnapshot"
             ]
           },
+          "knowledge": {
+            "type": "object",
+            "properties": {
+              "semanticSearch": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "semanticSearch"
+            ]
+          },
           "features": {
             "type": "object",
             "properties": {

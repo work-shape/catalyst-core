@@ -103,6 +103,10 @@ export function createSafeConfigView(
       modules.modules.map((module) => [module.name, { enabled: module.enabled }])
     ),
     feedback: { exchangeSnapshot: config.feedback.exchangeSnapshot },
+    knowledge: {
+      semanticSearch:
+        modules.isEnabled("knowledge") && config.knowledge.defaultEmbeddingBinding !== undefined
+    },
     // Derived from the modules for one transition release; the interface moves to `modules`.
     features: {
       attachments: {

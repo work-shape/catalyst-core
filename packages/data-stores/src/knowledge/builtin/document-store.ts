@@ -767,7 +767,13 @@ export function createBuiltinDocumentStore(
       );
     },
 
-    reindexEstimate(signal) {
+    reindexEstimate(input, signal) {
+      const missing =
+        input.missingFrom === undefined
+          ? ""
+          : `and not exists (
+                 select 1 from ${embeddingsTable(input.missingFrom)} e where e.chunk_id = c.id
+               )`;
       return inStore(
         "Estimating a re-index",
         KNOWLEDGE_DOCUMENTS_TIMEOUT_MS,
@@ -787,7 +793,7 @@ export function createBuiltinDocumentStore(
                  where content_sha256 = c.content_sha256 and withdrawn_at is null
                  order by added_at, id limit 1
                ) d
-               where ${REINDEXED_CHUNK}`
+               where ${REINDEXED_CHUNK} ${missing}`
             )
           );
           return {

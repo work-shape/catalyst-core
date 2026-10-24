@@ -33,11 +33,16 @@ export interface KnowledgeTableForm {
  */
 export type KnowledgeBaseHolds = "documents" | "tables";
 
-/**
- * How a Knowledge Base the page starts searches its documents: by words. Search by meaning
- * needs an embedding model the instance approves, which the page cannot read yet (KB-5d).
- */
+/** How a Knowledge Base of documents searches where the instance offers no search by meaning. */
 const NEW_DOCUMENT_METHODS: readonly string[] = ["keyword"];
+
+/**
+ * How a Knowledge Base the page starts searches its documents: by meaning and by words where
+ * the instance names a default embedding model, else by words alone (KB-SEM-1).
+ */
+function newDocumentMethods(semanticSearch: boolean): string[] {
+  return semanticSearch ? ["semantic", "keyword"] : [...NEW_DOCUMENT_METHODS];
+}
 
 export interface KnowledgeBaseForm {
   name: string;
@@ -146,18 +151,22 @@ export function knowledgeBasePublishesOnCreate(config: Record<string, unknown>):
 
 /**
  * A Knowledge Base as the dialog that starts one leaves it: its id and its name. It starts with
- * documents, the choice its page offers first.
+ * documents, the choice its page offers first, searched by meaning too where the instance
+ * offers it (`semanticSearch` of its config).
  */
-export function startedKnowledgeBaseForm(start: {
-  name: string;
-  title: string;
-}): KnowledgeBaseForm {
+export function startedKnowledgeBaseForm(
+  start: {
+    name: string;
+    title: string;
+  },
+  semanticSearch = false
+): KnowledgeBaseForm {
   return {
     name: start.name,
     title: start.title,
     description: "",
     holds: "documents",
-    methods: [...NEW_DOCUMENT_METHODS],
+    methods: newDocumentMethods(semanticSearch),
     dataStore: "",
     tables: [],
     sources: [],

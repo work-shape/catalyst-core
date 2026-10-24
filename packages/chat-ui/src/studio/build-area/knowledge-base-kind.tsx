@@ -1,6 +1,7 @@
 import { Badge, Chip, type BadgeTone } from "@work-shape/catalyst-ui";
 import { useTranslation, type TranslationKey } from "../../shared/i18n";
 import { formatMomentShort } from "../../shared/locale-format";
+import { useOptionalSettingsPage } from "../../shared/settings-page-context";
 import type { BuildAssetEditorProps, BuildAssetKind, BuildAssetRow } from "./build-asset-kind";
 import { KnowledgeBaseEditor } from "./knowledge-base-editor";
 import {
@@ -107,13 +108,15 @@ export function knowledgeBaseKindOn(useSource: () => KnowledgeBaseSource): Build
     const { asset, start } = frame;
     const source = useSource();
     const availability = source.useAvailability?.(frame);
+    // A new one searches by meaning too where the instance names a default embedding model.
+    const semanticSearch = useOptionalSettingsPage()?.config.knowledge?.semanticSearch === true;
     return (
       <KnowledgeBaseEditor
         frame={frame}
         initialForm={
           asset
             ? knowledgeBaseConfigToForm(asset.config)
-            : startedKnowledgeBaseForm(start ?? { name: "", title: "" })
+            : startedKnowledgeBaseForm(start ?? { name: "", title: "" }, semanticSearch)
         }
         source={source}
         {...(availability === undefined ? {} : { availability })}

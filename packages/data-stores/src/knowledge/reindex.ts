@@ -59,6 +59,12 @@ import type { KnowledgeRuntime } from "./runtime";
 // - A Knowledge Base whose active generation names a binding release config no longer has, or
 //   one that now names another model, answers by words and titles alone and makes no
 //   embedding call; its page says that a re-index is needed.
+// - Turning `semantic` on embeds the passages already there (KB-SEM-1), with the same
+//   statement and confirmation: into a generation built beside nothing, while search answers
+//   by words and titles, or, where an active generation with the model is left from before
+//   (it stays when `semantic` is turned off), into that one, only the passages it lacks.
+//   `knowledge.<id>.reindex` does the same for a Knowledge Base that searches by meaning and
+//   has passages but no generation, as one published before KB-SEM-1 may have.
 //
 // Usage: `knowledge_embedding`, attributed to the run that started the re-index, its person and
 // the Knowledge Base's workspace, outside chat's limits (KB-ISO-1a). A usage limit or the
@@ -166,8 +172,16 @@ export function knowledgeEmbeddingState(
   return { ...base, state: target && !sameModel(target, active) ? "reindex_available" : "current" };
 }
 
+/**
+ * What a re-index embeds: `again`, every passage into a generation beside the active one;
+ * `first`, every passage into the first generation, where none is active; `missing`, the
+ * passages the active generation, already of the model, has no vector for.
+ */
+type KnowledgeReindexKind = "again" | "first" | "missing";
+
 /** What a re-index would cost and whether the store has room for it, before it starts. */
 export interface KnowledgeReindexStatement {
+  kind: KnowledgeReindexKind;
   bindingId: string;
   model: string;
   dimensions: number;
@@ -177,7 +191,7 @@ export interface KnowledgeReindexStatement {
   tokens: number;
   /** From the customer rate card; missing where the model has no rate. */
   cost?: { amount: number; currency: string };
-  /** Whether the store's size limit holds both generations until the switch. */
+  /** Whether the store's size limit holds the vectors it adds (both generations, for `again`). */
   room: boolean;
   storeBytes: number;
   /** About what the new generation's table takes. */
@@ -200,21 +214,30 @@ async function reindexStatement(
   signal?: AbortSignal
 ): Promise<KnowledgeReindexStatement> {
   const { target, store, embedding } = input;
-  const [estimate, generations, record] = await Promise.all([
-    store.reindexEstimate(signal),
-    store.embeddingGenerations(signal),
+  const generations = await store.embeddingGenerations(signal);
+  const active = generations.find((each) => each.state === "active");
+  const kind: KnowledgeReindexKind = !active
+    ? "first"
+    : sameModel(active, target)
+      ? "missing"
+      : "again";
+  const [estimate, record] = await Promise.all([
+    store.reindexEstimate(
+      kind === "missing" && active ? { missingFrom: active.generation } : {},
+      signal
+    ),
     input.records.getDataStore({ clientInstanceId: runtime.clientInstanceId, id: input.assetId })
   ]);
   const rate = embedding.processingPrices?.find((price) => price.bindingId === target.bindingId);
   const addedBytes = estimate.chunks * (target.dimensions * 2 + VECTOR_ROW_OVERHEAD_BYTES);
   const limitBytes = record?.sizeLimitBytes;
-  const active = generations.find((each) => each.state === "active");
   // The confirmation names what is decided: the Knowledge Base, the model it moves from and to,
   // and the rate. Documents added meanwhile are embedded anyway and do not ask again.
   const confirmation = createHash("sha256")
     .update(
       JSON.stringify([
         "reindex",
+        kind,
         input.assetId,
         active ? [active.generation, active.bindingId, active.model, active.dimensions] : null,
         [target.bindingId, target.model, target.dimensions],
@@ -224,6 +247,7 @@ async function reindexStatement(
     // Whole, as `assets.publish` takes a confirmation of 64 hex digits.
     .digest("hex");
   return {
+    kind,
     ...target,
     chunks: estimate.chunks,
     tokens: estimate.tokens,
@@ -264,20 +288,39 @@ export function reindexStatementLines(
       ? "unbekannt, das Modell hat keinen Preis"
       : "unknown, the model has no rate";
   const megabytes = (bytes: number) => number(bytes / 1_000_000, 1);
+  const again = statement.kind === "again";
+  const what = de
+    ? again
+      ? "beide Indexe"
+      : "die Vektoren"
+    : again
+      ? "both indexes"
+      : "the vectors";
   const room = statement.room
     ? de
-      ? "Der Speicher hat Platz für beide Indexe bis zur Umstellung."
-      : "The store has room for both indexes until the switch."
+      ? `Der Speicher hat Platz für ${what}.`
+      : `The store has room for ${what}.`
     : de
-      ? `Der Speicher hat keinen Platz für beide Indexe: ${megabytes(statement.storeBytes)} MB belegt, etwa ${megabytes(statement.addedBytes)} MB kämen dazu, die Grenze liegt bei ${megabytes(statement.limitBytes ?? 0)} MB.`
-      : `The store has no room for both indexes: ${megabytes(statement.storeBytes)} MB used, about ${megabytes(statement.addedBytes)} MB more, a limit of ${megabytes(statement.limitBytes ?? 0)} MB.`;
-  return de
-    ? [
-        `Neu einbetten mit ${statement.model} (${statement.bindingId}): ${number(statement.chunks)} Passagen, etwa ${number(statement.tokens)} Tokens, geschätzte Kosten ${cost}. Nichts wird neu extrahiert, und die Suche antwortet bis zur Umstellung aus dem bisherigen Index. ${room}`
-      ]
-    : [
-        `Re-embed with ${statement.model} (${statement.bindingId}): ${number(statement.chunks)} passages, about ${number(statement.tokens)} tokens, estimated cost ${cost}. Nothing is extracted again, and search answers from the current index until the switch. ${room}`
-      ];
+      ? `Der Speicher hat keinen Platz für ${what}: ${megabytes(statement.storeBytes)} MB belegt, etwa ${megabytes(statement.addedBytes)} MB kämen dazu, die Grenze liegt bei ${megabytes(statement.limitBytes ?? 0)} MB.`
+      : `The store has no room for ${what}: ${megabytes(statement.storeBytes)} MB used, about ${megabytes(statement.addedBytes)} MB more, a limit of ${megabytes(statement.limitBytes ?? 0)} MB.`;
+  const counts = de
+    ? `${number(statement.chunks)} Passagen, etwa ${number(statement.tokens)} Tokens, geschätzte Kosten ${cost}`
+    : `${number(statement.chunks)} passages, about ${number(statement.tokens)} tokens, estimated cost ${cost}`;
+  const model = `${statement.model} (${statement.bindingId})`;
+  if (de) {
+    const lead = {
+      again: `Neu einbetten mit ${model}: ${counts}. Nichts wird neu extrahiert, und die Suche antwortet bis zur Umstellung aus dem bisherigen Index.`,
+      first: `Die vorhandenen Passagen einbetten mit ${model}: ${counts}. Nichts wird neu extrahiert, und die Suche findet über Wörter und Titel, bis jede Passage ihren Vektor hat.`,
+      missing: `Die Passagen ohne Vektor einbetten mit ${model}: ${counts}. Nichts wird neu extrahiert.`
+    }[statement.kind];
+    return [`${lead} ${room}`];
+  }
+  const lead = {
+    again: `Re-embed with ${model}: ${counts}. Nothing is extracted again, and search answers from the current index until the switch.`,
+    first: `Embed the existing passages with ${model}: ${counts}. Nothing is extracted again, and search finds by words and titles until every passage has its vector.`,
+    missing: `Embed the passages without a vector with ${model}: ${counts}. Nothing is extracted again.`
+  }[statement.kind];
+  return [`${lead} ${room}`];
 }
 
 /** Refuses a start where the store cannot hold both generations. */
@@ -305,10 +348,11 @@ function enqueueKnowledgeReindex(
 }
 
 /**
- * What a publish needs confirmed before it changes the embedding model: the statement where
- * the published revision names another binding than the one before, and the Knowledge Base
- * already has an active generation with another model. Nothing otherwise: a first index uses
- * the binding as it is.
+ * What a publish needs confirmed before it embeds what is stored: the statement where the
+ * published revision names another binding than the one before, and the Knowledge Base
+ * already has an active generation with another model; and where it turns `semantic` on over
+ * passages that have no vector in a generation of the model (KB-SEM-1). Nothing otherwise: a
+ * first index uses the binding as it is.
  */
 export async function publishReindexReview(
   runtime: KnowledgeRuntime,
@@ -327,7 +371,10 @@ export async function publishReindexReview(
   }
   const named = (definition: KnowledgeBaseDefinition) =>
     "backend" in definition ? undefined : definition.indexing?.embedding?.binding;
-  if (named(next.data) === named(before.data)) return undefined;
+  const searchesByMeaning = (definition: KnowledgeBaseDefinition) =>
+    definition.methods.some((method) => method === "semantic");
+  const turnsOn = searchesByMeaning(next.data) && !searchesByMeaning(before.data);
+  if (named(next.data) === named(before.data) && !turnsOn) return undefined;
   const target = reindexTarget(next.data, input.embedding);
   if (!target) return undefined;
   const record = await input.records.getDataStore({
@@ -348,8 +395,9 @@ export async function publishReindexReview(
   const generations = await store.embeddingGenerations();
   const active = generations.find((each) => each.state === "active");
   const building = generations.find((each) => each.state === "building");
-  if (!active || sameModel(active, target)) return undefined;
   if (building && sameModel(building, target)) return undefined;
+  // Another binding over nothing embedded yet: the first index uses it.
+  if (!turnsOn && (!active || sameModel(active, target))) return undefined;
   const statement = await reindexStatement(runtime, {
     assetId: input.assetId,
     store,
@@ -357,6 +405,8 @@ export async function publishReindexReview(
     embedding: input.embedding,
     records: input.records
   });
+  // Turned on over no passage, or over none that lacks its vector: nothing to embed.
+  if (statement.kind !== "again" && statement.chunks === 0) return undefined;
   return { statement, target };
 }
 
@@ -518,9 +568,7 @@ export function reindexOperation(
       const stateNow = async () =>
         knowledgeEmbeddingState(await store.generationProgress(signal), definition, embedding);
       const before = await stateNow();
-      if (before.state === "current" || before.state === "none") {
-        return { started: false, ...before };
-      }
+      if (before.state === "current") return { started: false, ...before };
       const building = before.state === "reindexing";
       const generations = await store.embeddingGenerations(signal);
       if (
@@ -540,6 +588,8 @@ export function reindexOperation(
         },
         signal
       );
+      // Nothing embedded yet and no passage to embed: the first index starts the generation.
+      if (before.state === "none" && statement.chunks === 0) return { started: false, ...before };
       const lines = reindexStatementLines(statement, runtime.defaultLocale);
       if (confirm !== statement.confirmation) {
         return { started: false, ...before, statement, lines };
@@ -619,10 +669,11 @@ export function createKnowledgeReindexHandler(
         );
         return;
       }
-      // Already answering from that model: nothing to build.
+      // Already answering from that model: what it lacks goes into it, as after turning
+      // `semantic` on again, or where an index job started it while this job waited.
       const live = await store.embeddingGenerations(signal);
-      if (live.some((each) => each.state === "active" && sameModel(each, target))) return;
-      const generation = await store.startGeneration(target, signal);
+      const current = live.find((each) => each.state === "active" && sameModel(each, target));
+      const generation = current ?? (await store.startGeneration(target, signal));
       const run = await runtime.stores.operationRuns.get({
         clientInstanceId: runtime.clientInstanceId,
         id: payload.operationRunId
@@ -640,6 +691,13 @@ export function createKnowledgeReindexHandler(
           { generation: generation.generation, limit: KNOWLEDGE_EMBEDDING_BATCH },
           signal
         );
+        if (passages.length === 0 && current) {
+          await finished(payload, job.correlationId, {
+            status: "success",
+            metadata: { knowledgeBase: kb.name, generation: generation.generation, embedded }
+          });
+          return;
+        }
         if (passages.length === 0) {
           const switched = await store.switchGeneration(generation.generation, signal);
           // A passage came in meanwhile: it is embedded on the next round.
