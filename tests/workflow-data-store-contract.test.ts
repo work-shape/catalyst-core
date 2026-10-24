@@ -1,5 +1,5 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
-import { platformModules } from "@work-shape/catalyst-client-assembly";
+import { guardrailsModule, platformModules } from "@work-shape/catalyst-client-assembly";
 import {
   parseClientInstanceConfig,
   resolveModuleSwitches
@@ -610,7 +610,8 @@ describe("the modules workflows and dataStores", () => {
     expect(platformModules).toContain(workflowsModule);
     expect(platformModules).toContain(dataStoresModule);
 
-    const registry = createModuleRegistry(platformModules);
+    // The guardrails, on by default, ship with the built-in guardrails capability.
+    const registry = createModuleRegistry([...platformModules, guardrailsModule]);
     const byDefault = registry.snapshot(
       resolveModuleSwitches(parseClientInstanceConfig(createTestConfig()))
     );
