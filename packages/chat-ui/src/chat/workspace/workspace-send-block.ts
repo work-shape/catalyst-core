@@ -16,9 +16,14 @@ export function workspaceSendBlock(input: {
   /** The list arrived with a workspace in it; the page opens one right after. */
   workspacesListed: boolean;
   locale: LocaleCode;
+  /** The sentence of a spend limit that stops the person here, until it resets or is raised. */
+  usageLimitReason?: string;
 }): SendBlock | undefined {
   if (input.attachmentBlockedReason !== undefined) {
     return { reason: input.attachmentBlockedReason, loading: false };
+  }
+  if (input.usageLimitReason !== undefined) {
+    return { reason: input.usageLimitReason, loading: false };
   }
   if (
     input.selectedConversationId ||

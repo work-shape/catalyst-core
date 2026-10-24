@@ -8,7 +8,15 @@ import {
 import { ArrowDown, CircleAlert, Lock } from "lucide-react";
 import { useLayoutEffect, useMemo, useRef, type ReactNode, type RefObject } from "react";
 import type { DraftAttachment, SafeConfig } from "@work-shape/catalyst-api-client";
-import { Banner, cn, SkillIcon, Spinner, Starter, StarterList } from "@work-shape/catalyst-ui";
+import {
+  Banner,
+  Button,
+  cn,
+  SkillIcon,
+  Spinner,
+  Starter,
+  StarterList
+} from "@work-shape/catalyst-ui";
 import type { AgentSelectableModel, ReasoningEffort } from "../workspace/agent-model-selection";
 import {
   agentChipDisplayFor,
@@ -57,6 +65,7 @@ export function AssistantThread({
   showContextIndicator,
   contextSnapshot,
   notice,
+  usageNote,
   newConversationPrivate,
   subjectLine,
   start,
@@ -106,6 +115,8 @@ export function AssistantThread({
       }
     | undefined;
   notice: string | undefined;
+  /** The quiet note at 80 percent of the person's own spend limit. */
+  usageNote?: { text: string; dismiss(): void };
   newConversationPrivate?: boolean;
   /** What the open conversation is about, where it is about an asset. */
   subjectLine?: ReactNode;
@@ -292,6 +303,17 @@ export function AssistantThread({
                   <Banner tone="warning" role="alert" className="mb-2">
                     {notice}
                   </Banner>
+                ) : null}
+                {usageNote ? (
+                  <p
+                    className="mb-2 flex items-center gap-1.5 px-1 text-xs text-muted-foreground"
+                    data-testid="usage-near-limit-note"
+                  >
+                    <span className="min-w-0">{usageNote.text}</span>
+                    <Button variant="link" size="sm" onClick={usageNote.dismiss}>
+                      {t("composerLimit.dismiss")}
+                    </Button>
+                  </p>
                 ) : null}
                 {newConversationPrivate ? (
                   <p

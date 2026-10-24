@@ -15,6 +15,7 @@ import { ApiKeysPage } from "./pages/api-keys";
 import { ConfirmationsPage } from "./pages/confirmations";
 import { ConnectLocalAgentPage } from "./pages/connect-local-agent";
 import { LanguageAppearancePage } from "./pages/language-appearance";
+import { OwnUsagePage } from "./pages/own-usage";
 import { PersonalConnectionsPage } from "./pages/personal-connections";
 import { ProfilePage } from "./pages/profile";
 import { SecurityPage } from "./pages/security";
@@ -74,6 +75,14 @@ const settingsPages: readonly SettingsPageDefinition[] = [
     width: "narrow",
     visible: everyone,
     component: ConfirmationsPage
+  },
+  {
+    id: "usage",
+    group: "you",
+    labelKey: "settings.ownUsage",
+    width: "narrow",
+    visible: everyone,
+    component: OwnUsagePage
   },
   {
     id: "connections",

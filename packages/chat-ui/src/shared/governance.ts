@@ -30,6 +30,13 @@ export function canManageServicePrincipals(
   return Boolean(platform?.instanceActions.includes("service_principals.manage"));
 }
 
+/** Sets the spend limits of Settings › Instance › Limits (LU-2): a right of the instance itself. */
+export function canManageSpendLimits(
+  platform: Pick<PlatformContext, "instanceActions"> | undefined
+): boolean {
+  return Boolean(platform?.instanceActions.includes("limits.manage"));
+}
+
 export function canViewAudit(user: ApiUser | undefined): boolean {
   return hasPermission(user, "audit.view");
 }

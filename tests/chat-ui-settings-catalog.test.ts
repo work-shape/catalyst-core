@@ -49,7 +49,13 @@ function resolve(
   });
 }
 
-const you = ["you/profile", "you/language-appearance", "you/security", "you/confirmations"];
+const you = [
+  "you/profile",
+  "you/language-appearance",
+  "you/security",
+  "you/confirmations",
+  "you/usage"
+];
 const workspace = ["workspace/general", "workspace/members"];
 const instance = [
   "instance/users",
@@ -111,7 +117,10 @@ describe("Settings catalog", () => {
       "you/api-keys",
       "you/connect",
       ...workspace,
-      ...instance
+      // Limits is shown by `limits.manage`, a right the platform context tells.
+      ...instance.flatMap((page) =>
+        page === "instance/usage" ? [page, "instance/limits"] : [page]
+      )
     ]);
   });
 
@@ -163,8 +172,24 @@ describe("Settings catalog", () => {
     expect(pageIds(viewer({ authSource: "oidc" }))).toEqual([
       "you/profile",
       "you/language-appearance",
-      "you/confirmations"
+      "you/confirmations",
+      "you/usage"
     ]);
+  });
+
+  it("shows Limits exactly to a holder of limits.manage, which the platform context tells", () => {
+    const holder = {
+      ...instanceAdmin,
+      platform: { ...platformContext(), instanceActions: ["limits.manage"] }
+    };
+    expect(pageIds(holder)).toContain("instance/limits");
+    expect(pageIds(instanceAdmin)).not.toContain("instance/limits");
+    expect(pageIds(workspaceOwner)).not.toContain("instance/limits");
+    expect(
+      resolve("/settings/instance/limits", { ...workspaceOwner, platform: platformContext() })
+    ).toEqual({
+      kind: "no-access"
+    });
   });
 
   it("shows Studio to holders of config_assets.read while config assets are on", () => {

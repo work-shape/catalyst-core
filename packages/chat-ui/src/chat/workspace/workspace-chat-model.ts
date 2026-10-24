@@ -20,6 +20,9 @@ import { WORKFLOW_ASSET_KIND } from "@work-shape/catalyst-core";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useControlPlaneModel } from "../../admin/control-plane/control-plane-model";
 import { useApprovalPendingCountQuery } from "../../shared/api/approval-request-api";
+import { useOwnUsageQuery } from "../../shared/api/usage-limits";
+import { useUsageNote } from "./usage-note";
+import { usageLimitBlockReason } from "./usage-limit-block";
 import { useRailConversations } from "../../shared/api/rail-conversations";
 import { useWorkspaceApiClient } from "../../shared/api/workspace-api-client";
 import {
@@ -402,6 +405,22 @@ export function useWorkspaceChatModel({
   const attachmentsEnabled = config?.features.attachments.enabled ?? false;
   const attachmentAccept = config?.features.attachments.accept ?? "";
   const activeLocale = useWorkspaceLocale(config?.localization.locale, localePreference);
+  // The spend limits that stop the person in the workspace they work in (LU-2). A run that
+  // ended may have crossed one, so they are read again when it does.
+  const ownUsageQuery = useOwnUsageQuery({
+    apiBaseUrl,
+    authScope: WORKSPACE_AUTH_SCOPE,
+    client,
+    workspaceId: activeCollaborationWorkspaceId,
+    enabled: isAuthenticated
+  });
+  const refetchOwnUsage = ownUsageQuery.refetch;
+  useEffect(() => {
+    if (!selectedConversationRunning) refetchOwnUsage().catch(() => undefined);
+  }, [refetchOwnUsage, selectedConversationRunning]);
+  const usageText = createTranslationContext(activeLocale);
+  const usageLimitReason = usageLimitBlockReason(ownUsageQuery.data, usageText);
+  const usageNote = useUsageNote(ownUsageQuery.data, usageText);
   const controllerTerminalNotice = terminalRunNotice(
     controller.error,
     createTranslationContext(activeLocale).t,
@@ -1088,6 +1107,7 @@ export function useWorkspaceChatModel({
       agentsLoading,
       agentsWorkspaceScoped,
       collaborationWorkspaceId: activeCollaborationWorkspaceId,
+      usageNote: usageLimitReason === undefined ? usageNote : undefined,
       newConversationPrivate:
         !selectedConversationId &&
         collaborationWorkspace.activeCollaborationWorkspace?.kind === "shared" &&
@@ -1166,7 +1186,8 @@ export function useWorkspaceChatModel({
         loading: collaborationWorkspace.loading,
         loadFailed: collaborationWorkspace.loadFailed,
         workspacesListed: collaborationWorkspace.collaborationWorkspaces.length > 0,
-        locale: activeLocale
+        locale: activeLocale,
+        usageLimitReason
       }),
       attachmentsEnabled,
       attachmentAccept,
