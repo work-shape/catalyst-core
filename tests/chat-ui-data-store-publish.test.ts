@@ -227,14 +227,25 @@ describe("What the database server leaves open around a store", () => {
 });
 
 describe("Who the instance shows what the server leaves open", () => {
-  /** The store's page as the reader's roles open it, against the instance's own answers. */
+  /**
+   * The store's page as the reader's roles open it, against the instance's own answers: the
+   * platform context tells a superadmin `system.view` by default, and an admin not (RIGHTS-1e).
+   */
   async function pageAs(roles: string[]): Promise<HTMLElement> {
     const statePath = apiOperations["data_stores.get"].path.replace(":store", published.name);
+    const context = {
+      ...platformContext(),
+      instanceActions: roles.includes("superadmin") ? ["system.view"] : []
+    };
     const page = await mountBuildPage(
       published,
       "data-stores",
       (request, url) =>
-        request.method === "GET" && url.pathname === statePath ? Response.json(state) : undefined,
+        request.method === "GET" && url.pathname === statePath
+          ? Response.json(state)
+          : url.pathname === apiOperations["platform.context.get"].path
+            ? Response.json(context)
+            : undefined,
       [],
       { user: settingsUser({ roles }) }
     );
@@ -244,7 +255,7 @@ describe("Who the instance shows what the server leaves open", () => {
     return page;
   }
 
-  it("shows a superadmin the steps, and an admin of the instance none", async () => {
+  it("shows who sees how the instance runs the steps, and an admin of the instance none", async () => {
     const operator = await pageAs(["user", "admin", "superadmin"]);
     await vi.waitFor(
       () =>

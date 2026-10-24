@@ -3,6 +3,8 @@ import { useRef } from "react";
 import type { ApiClient } from "@work-shape/catalyst-api-client";
 import { OPERATIONS_AUDIENCES } from "@work-shape/catalyst-core";
 import { workspaceQueryKeys } from "../../shared/api/workspace-query-keys";
+import { usePlatformContextQuery } from "../../shared/api/workspace-queries";
+import { canViewSystem } from "../../shared/governance";
 import { workspaceRoutePath, type WorkspaceRoute } from "../../shared/routes";
 import { useSettingsPage } from "../../shared/settings-page-context";
 import { apiErrorCode } from "../../shared/workspace-utils";
@@ -93,8 +95,9 @@ export function serverConditionsShown(
  */
 export interface DataStoreSource {
   /**
-   * The reader runs the database server, as a superadmin does: only they can close what the
-   * server leaves open around a store, so only they are shown it.
+   * The reader sees how the instance runs (`system.view`, RIGHTS-1e), as who runs the database
+   * server does: only they can close what the server leaves open around a store, so only they
+   * are shown it.
    */
   seesServerConditions: boolean;
   /** A hook: where the store's migrations stand, its size and what the server leaves open. */
@@ -133,8 +136,9 @@ export interface DataStoreSource {
  * `.value`, `.used_by`, `.records_flagged` and `.records_decide`.
  */
 export function useDataStoreSource(): DataStoreSource {
-  const { apiBaseUrl, authScope, client, user } = useSettingsPage();
+  const { apiBaseUrl, authScope, client } = useSettingsPage();
   const queryClient = useQueryClient();
+  const platform = usePlatformContextQuery({ apiBaseUrl, authScope, client, enabled: true }).data;
   const calls = client.data_stores;
   const key = (read: string, ...parts: string[]) => [
     ...workspaceQueryKeys.dataStores(apiBaseUrl),
@@ -143,7 +147,7 @@ export function useDataStoreSource(): DataStoreSource {
     ...parts
   ];
   return {
-    seesServerConditions: user.roles.includes("superadmin"),
+    seesServerConditions: canViewSystem(platform),
     // A store being set up or migrated is read again until it settles, as the jobs run apart
     // from the page that published it.
     useStoreState: (store) =>

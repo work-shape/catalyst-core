@@ -27,8 +27,15 @@ import { createTestInstanceWith } from "./test-instance";
 // the API process with the workflow on a clock the test moves.
 
 export const MARKER = "secret-marker-5d1e9c";
+/** Who runs the instance: a superadmin, who holds `system.view` by default (RIGHTS-1e). */
 export const administrator = asCaller({
   id: "usr_admin",
+  roles: ["admin", "superadmin"],
+  permissions: [legacyPermissionFor("users.manage")]
+});
+/** A customer's admin: every right an admin holds by default, and not `system.view`. */
+export const customerAdmin = asCaller({
+  id: "usr_customer_admin",
   roles: ["admin"],
   permissions: [legacyPermissionFor("users.manage")]
 });

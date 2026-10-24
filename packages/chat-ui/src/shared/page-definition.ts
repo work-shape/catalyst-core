@@ -43,6 +43,11 @@ export interface PageDefinition {
 export interface SettingsPageDefinition extends PageDefinition {
   id: string;
   group: SettingsGroupId;
+  /**
+   * The page shows how the instance runs: it stands in the folded group "System" at the end of
+   * its group, at the same address. The pages of a group that have it come last.
+   */
+  system?: true;
   /** `narrow` for a form, `wide` for a page that uses all the room. A list keeps the default. */
   width?: PageWidth;
   /** What waits on the page, shown as a count on its rail entry. */

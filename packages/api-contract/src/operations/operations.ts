@@ -62,7 +62,9 @@ export const operationRunOperations = {
     tag: "Operations",
     auth: "principal",
     scope: "governance:read",
-    requires: ["audit.view"],
+    // The Operations page, in the Settings group "System" (RIGHTS-1e). One run stays readable
+    // by its caller and by `audit.view` through `operations.get_run`.
+    requires: ["system.view"],
     effect: "reading",
     query: listQuerySchema.extend({
       operation: z.string().min(1).optional(),

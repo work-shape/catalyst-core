@@ -1,4 +1,4 @@
-import { cloneElement, type ReactElement, type ReactNode } from "react";
+import { cloneElement, useState, type ReactElement, type ReactNode } from "react";
 import { cn } from "../cn";
 import { Select } from "../forms/select";
 import type { CountBadgeTone } from "../status/count-badge";
@@ -24,6 +24,12 @@ export interface SubRailGroup {
    * items is open.
    */
   scope?: ReactNode;
+  /**
+   * Beside the content the group's label folds it away. It starts folded and opens while one
+   * of its items is open; the reader can fold it again. Needs a `label`. The select above the
+   * content lists every item.
+   */
+  collapsible?: boolean;
   items: readonly SubRailItem[];
 }
 
@@ -150,7 +156,7 @@ export function SubRail({
       </Select>
       <nav aria-label={label} className="hidden gap-4 @subrail/page:grid">
         {groups.map((group) => (
-          <NavGroup key={group.id} label={group.label}>
+          <SubRailNavGroup key={group.id} group={group} value={value}>
             {group.scope === undefined ? null : (
               <div className="min-w-0 px-2 pb-1">{group.scope}</div>
             )}
@@ -162,10 +168,37 @@ export function SubRail({
                 onChoose={choose}
               />
             ))}
-          </NavGroup>
+          </SubRailNavGroup>
         ))}
       </nav>
     </div>
+  );
+}
+
+function SubRailNavGroup({
+  group,
+  value,
+  children
+}: {
+  group: SubRailGroup;
+  value: string;
+  children: ReactNode;
+}) {
+  const openItem = group.items.some((item) => item.id === value) ? value : undefined;
+  const [open, setOpen] = useState(openItem !== undefined);
+  // Opening one of its items opens the group, also when the reader had folded it.
+  const [seenItem, setSeenItem] = useState(openItem);
+  if (seenItem !== openItem) {
+    setSeenItem(openItem);
+    if (openItem !== undefined) setOpen(true);
+  }
+  if (!group.collapsible || group.label === undefined) {
+    return <NavGroup label={group.label}>{children}</NavGroup>;
+  }
+  return (
+    <NavGroup label={group.label} collapsible open={open} onOpenChange={setOpen}>
+      {children}
+    </NavGroup>
   );
 }
 

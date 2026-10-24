@@ -35,13 +35,15 @@ export const SUPERADMIN_GRANTED_ACTIONS = [
  * The rights whose default sits with `superadmin` alone. Unlike the list above, anybody who
  * holds one may give it on, to a person or a role, under the rule of no escalation.
  * `roles.edit_built_in` edits and resets `user` and `admin` (Felix, 2026-10-21, amending
- * ADR-0028 point 1). `users.delete` deletes an account and its data, and `jobs.retry` runs a
- * background job again that the product gave up on (RIGHTS-1e: D5, UX audit ruling 2).
+ * ADR-0028 point 1). `users.delete` deletes an account and its data, `jobs.retry` runs a
+ * background job again that the product gave up on, and `system.view` shows how the instance
+ * runs, the Settings group "System" (RIGHTS-1e: D5, UX audit ruling 2).
  */
 export const SUPERADMIN_DEFAULT_ACTIONS = [
   "roles.edit_built_in",
   "users.delete",
-  "jobs.retry"
+  "jobs.retry",
+  "system.view"
 ] as const satisfies readonly PlatformAction[];
 
 /**

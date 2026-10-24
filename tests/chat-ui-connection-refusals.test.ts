@@ -146,9 +146,13 @@ async function connectRefused(
     roles === undefined
       ? flow
       : createElement(
-          SettingsPageProvider,
-          { value: buildPageSettings(fetch, settingsUser({ roles })) },
-          flow
+          QueryClientProvider,
+          { client: new QueryClient({ defaultOptions: { queries: { retry: false } } }) },
+          createElement(
+            SettingsPageProvider,
+            { value: buildPageSettings(platformFor(roles), settingsUser({ roles })) },
+            flow
+          )
         );
   const container = document.createElement("div");
   document.body.append(container);
@@ -199,6 +203,26 @@ function told(container: HTMLElement): string {
 
 const mounted: Root[] = [];
 
+/**
+ * The instance as a reader of these roles finds it: a superadmin sees how the instance runs
+ * (`system.view`), an admin does not (RIGHTS-1e).
+ */
+function platformFor(roles: readonly string[]): typeof fetch {
+  return async (input, init) => {
+    const url = new URL(new Request(input, init).url);
+    return url.pathname === apiOperations["platform.context.get"].path
+      ? platformAnswer(roles)
+      : Response.json({ error: { code: "NOT_FOUND", message: "none" } }, { status: 404 });
+  };
+}
+
+function platformAnswer(roles: readonly string[]): Response {
+  return Response.json({
+    ...platformContext(),
+    instanceActions: roles.includes("superadmin") ? ["system.view"] : []
+  });
+}
+
 describe("A refused new Connection", () => {
   afterEach(async () => {
     for (const root of mounted.splice(0)) await act(async () => root.unmount());
@@ -231,9 +255,10 @@ describe("A refused new Connection", () => {
     );
   });
 
-  it("says in German how an address is written, with the instance's sentence for an admin", async () => {
-    const page = await connectRefused(INVALID_ADDRESS, ["user", "admin"]);
+  it("says in German how an address is written, with the instance's sentence for who runs it", async () => {
+    const page = await connectRefused(INVALID_ADDRESS, ["user", "admin", "superadmin"]);
     await vi.waitFor(() => expect(addressError(page)).toContain("https://"));
+    await vi.waitFor(() => expect(page.querySelector("[data-refusal-detail]")).not.toBeNull());
     expect(addressError(page)).toContain("Gib die Adresse als Webadresse an");
     expect(told(page)).not.toContain("must be an http or https address");
     const detail = page.querySelector("[data-refusal-detail]");
@@ -269,7 +294,9 @@ describe("A refused save on the Connection page", () => {
       (request, url) =>
         request.method === "GET" && url.pathname === detailPath
           ? Response.json(connectionDetail(asset.name))
-          : undefined,
+          : url.pathname === apiOperations["platform.context.get"].path
+            ? platformAnswer(roles)
+            : undefined,
       [],
       {
         user: settingsUser({ roles }),
@@ -302,10 +329,17 @@ describe("A refused save on the Connection page", () => {
     expect(page.textContent).not.toContain("release config");
   });
 
-  it.each([["admin"], ["superadmin"]])(
-    "keeps the server's sentence under Technical details for an %s, but none for a refused egress",
+  it("keeps the server's sentence from an admin, who does not see how the instance runs", async () => {
+    const page = await refusedSave(["user", "admin"], INVALID_ADDRESS, "starts with https://");
+    expect(page.querySelector("[data-refusal-detail]")).toBeNull();
+    expect(page.textContent).not.toContain("must be an http or https address");
+  });
+
+  it.each([["superadmin"]])(
+    "keeps the server's sentence under Technical details for a %s, but none for a refused egress",
     async (role) => {
       const page = await refusedSave(["user", role], INVALID_ADDRESS, "starts with https://");
+      await vi.waitFor(() => expect(page.querySelector("[data-refusal-detail]")).not.toBeNull());
       const detail = page.querySelector("[data-refusal-detail]");
       expect(detail?.textContent).toContain("Technical details");
       await act(async () => detail?.querySelector("button")?.click());

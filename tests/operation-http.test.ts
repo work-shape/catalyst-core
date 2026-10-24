@@ -233,15 +233,16 @@ describe("operation over HTTP: who checks the right", () => {
       person({ id: "usr_two" })
     );
     expect(read.statusCode).toBe(403);
-    // The legacy permission would let this caller list the runs. The authorizer decides.
+    // A superadmin would hold the right to list the runs. The authorizer decides.
     const listed = await server.call(
       "operations.list_runs",
       {},
-      person({ id: "usr_two", permissions: right("audit.view") })
+      person({ id: "usr_two", roles: ["superadmin"] })
     );
     expect(listed.statusCode).toBe(403);
     expect(errorOf(listed)).toMatchObject({ code: "FORBIDDEN", details: { reason: "denied" } });
-    expect(asked).toEqual(["users.manage", "audit.view", "audit.view"]);
+    // One run is read by `audit.view`; the list of them is the System page's (RIGHTS-1e).
+    expect(asked).toEqual(["users.manage", "audit.view", "system.view"]);
   });
 });
 
@@ -740,7 +741,7 @@ describe("operation runs: who may read them", () => {
     expect(listed.json<{ items: unknown[] }>().items).toEqual([]);
   });
 
-  it("lists the runs of the instance for the governance right only, filtered and paged", async () => {
+  it("lists the runs of the instance for system.view only, filtered and paged", async () => {
     const { server } = await createServer({
       settings: [{ operation: "testRunRead", value: "deny" }]
     });
@@ -748,16 +749,22 @@ describe("operation runs: who may read them", () => {
     await server.call("testRunChange", change("two"), person({ kind: "service", id: "sp_one" }));
     await server.call("testRunRead", { params: { itemId: "i" } }, person({ id: "usr_one" }));
 
-    const refused = await server.call(
-      "operations.list_runs",
-      {},
-      person({ id: "usr_one", permissions: right("users.manage") })
-    );
-    expect(refused.statusCode).toBe(403);
+    // The audit log's readers, an admin among them, keep the audit log and not this page.
+    for (const permissions of [right("users.manage"), right("audit.view")]) {
+      const refused = await server.call(
+        "operations.list_runs",
+        {},
+        person({ id: "usr_one", roles: ["admin"], permissions })
+      );
+      expect([refused.statusCode, errorOf(refused).details]).toEqual([
+        403,
+        { action: "system.view", reason: "no_grant" }
+      ]);
+    }
 
-    const auditor = person({ id: "usr_auditor", permissions: right("audit.view") });
+    const operator = person({ id: "usr_operator", roles: ["superadmin"] });
     const list = async (query: Record<string, string | number>) => {
-      const response = await server.call("operations.list_runs", { query }, auditor);
+      const response = await server.call("operations.list_runs", { query }, operator);
       expect(response.statusCode).toBe(200);
       return response.json<{ items: { id: string; operation: string }[]; nextCursor?: string }>();
     };

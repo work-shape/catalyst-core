@@ -35,6 +35,9 @@ export interface LayoutGalleryText {
   subRailGeneral: string;
   subRailMembers: string;
   subRailDefaults: string;
+  subRailSystem: string;
+  subRailJobs: string;
+  subRailModules: string;
   subRailOpenPage: string;
   sectionOverview: string;
   sectionOverviewDescription: string;
@@ -231,6 +234,9 @@ export const layoutGalleryText: Record<"en" | "de", LayoutGalleryText> = {
     subRailGeneral: "General",
     subRailMembers: "Members",
     subRailDefaults: "Defaults",
+    subRailSystem: "System",
+    subRailJobs: "Jobs",
+    subRailModules: "Modules",
     subRailOpenPage: "Open page",
     sectionOverview: "Overview",
     sectionOverviewDescription: "The name and what the agent is for.",
@@ -426,6 +432,9 @@ export const layoutGalleryText: Record<"en" | "de", LayoutGalleryText> = {
     subRailGeneral: "Allgemein",
     subRailMembers: "Mitglieder",
     subRailDefaults: "Standards",
+    subRailSystem: "System",
+    subRailJobs: "Jobs",
+    subRailModules: "Module",
     subRailOpenPage: "Geöffnete Seite",
     sectionOverview: "Überblick",
     sectionOverviewDescription: "Der Name und wofür der Agent da ist.",

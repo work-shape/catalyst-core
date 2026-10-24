@@ -39,13 +39,10 @@ const NAMED = {
 
 /**
  * Checks of the role that are no item of the named list and no gate of the sweep: found by
- * RIGHTS-1e's scan and left to their own tickets (the report's backlog lines). Each becomes a
- * right, or the spec names it, and leaves this list.
+ * RIGHTS-1e's scan and left to their own ticket. Each becomes a right and leaves this list.
  */
 const NOT_YET_A_RIGHT = {
-  shownDetail: "Technical detail of a refusal shown to instance admins only (backlog)",
-  serverConditions: "A Data Store's server conditions shown to superadmins only (backlog)",
-  mailAnyWorkspace: "An instance admin may mail any shared workspace (backlog)"
+  mailAnyWorkspace: "An instance admin may mail any shared workspace (RIGHTS-1f: `users.manage`)"
 } as const;
 
 type Reason =
@@ -87,14 +84,6 @@ const ALLOWED: Record<string, { count: number; reason: Reason }> = {
   },
   // The local CLI key is made for the seed's superadmin.
   "packages/client-assembly/src/local-key.ts": { count: 1, reason: NAMED.notAGate },
-  "packages/chat-ui/src/studio/build-area/refusal-notice.tsx": {
-    count: 1,
-    reason: NOT_YET_A_RIGHT.shownDetail
-  },
-  "packages/chat-ui/src/studio/build-area/data-store-source.ts": {
-    count: 1,
-    reason: NOT_YET_A_RIGHT.serverConditions
-  },
   "packages/server/src/mail/mail-send-operation.ts": {
     count: 1,
     reason: NOT_YET_A_RIGHT.mailAnyWorkspace
@@ -148,7 +137,7 @@ describe("access check 40: the named list", () => {
 type Resolution =
   | { grantable: readonly ("workspace" | "asset" | "instance")[] }
   | { named: "legacy key a superadmin hands out" }
-  | { role: "given through a role on the whole instance" };
+  | { role: "given through a role on the whole instance; to a person by RIGHTS-1f" };
 
 /** The sweep under "No hard-wired gates", with the default the spec gives each right. */
 const SWEEP: readonly {
@@ -161,9 +150,10 @@ const SWEEP: readonly {
     resolution: { grantable: ["asset", "workspace", "instance"] },
     default: "admin"
   },
+  // Given to a person only through a role until RIGHTS-1f makes it grantable at instance scope.
   {
     action: "service_principals.manage",
-    resolution: { role: "given through a role on the whole instance" },
+    resolution: { role: "given through a role on the whole instance; to a person by RIGHTS-1f" },
     default: "admin"
   },
   {
@@ -199,6 +189,7 @@ const SWEEP: readonly {
   { action: "workflow.delete", resolution: { grantable: ["asset"] }, default: "admin" },
   { action: "workflow.read_run_data", resolution: { grantable: ["asset"] }, default: "admin" },
   { action: "jobs.retry", resolution: { grantable: ["instance"] }, default: "superadmin" },
+  { action: "system.view", resolution: { grantable: ["instance"] }, default: "superadmin" },
   { action: "users.delete", resolution: { grantable: ["instance"] }, default: "superadmin" },
   {
     action: "agent_models.manage",

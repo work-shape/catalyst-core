@@ -38,27 +38,48 @@ export function SettingsArea({ settings }: { settings: SettingsAreaModel }) {
   );
   // A viewer with one group sees plain entries: a single label would only repeat the area.
   const labelled = shownGroups.length > 1;
-  const groups: SubRailGroup[] = shownGroups.map((group) => ({
-    id: group.id,
-    label: labelled ? t(group.labelKey) : undefined,
-    scope:
-      group.id === "workspace" && context.workspace ? (
-        <WorkspaceScope
-          workspace={context.workspace}
-          workspaces={workspaces}
-          worksInPersonal={context.activeWorkspace?.kind === "personal"}
-          onSelect={selectWorkspace}
-        />
-      ) : undefined,
-    items: pages
-      .filter((candidate) => candidate.group === group.id)
-      .map((candidate) => ({
-        id: pageValue(candidate),
-        label: t(candidate.labelKey),
-        count: candidate.count?.({ workspace: context.workspace }),
-        countTone: "primary"
-      }))
-  }));
+  const item = (candidate: SettingsPageDefinition) => ({
+    id: pageValue(candidate),
+    label: t(candidate.labelKey),
+    count: candidate.count?.({ workspace: context.workspace }),
+    countTone: "primary" as const
+  });
+  const groups: SubRailGroup[] = shownGroups.flatMap((group) => {
+    const own = pages.filter((candidate) => candidate.group === group.id);
+    const main = own.filter((candidate) => !candidate.system);
+    const system = own.filter((candidate) => candidate.system);
+    return [
+      ...(main.length === 0
+        ? []
+        : [
+            {
+              id: group.id,
+              label: labelled ? t(group.labelKey) : undefined,
+              scope:
+                group.id === "workspace" && context.workspace ? (
+                  <WorkspaceScope
+                    workspace={context.workspace}
+                    workspaces={workspaces}
+                    worksInPersonal={context.activeWorkspace?.kind === "personal"}
+                    onSelect={selectWorkspace}
+                  />
+                ) : undefined,
+              items: main.map(item)
+            }
+          ]),
+      // How the instance runs: one folded group at the end of its group (RIGHTS-1e).
+      ...(system.length === 0
+        ? []
+        : [
+            {
+              id: `${group.id}-system`,
+              label: t("settings.system"),
+              collapsible: true,
+              items: system.map(item)
+            }
+          ])
+    ];
+  });
   const OpenPage = page?.component;
   // Where a person who may not open a page goes instead: their own settings.
   const profile = pages.find(

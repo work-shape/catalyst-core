@@ -73,7 +73,7 @@ test("an agent's tool call waits for approval, is approved in the Inbox, runs on
   ).toBeVisible();
   await expect(page.getByText(`"recorded"`)).toHaveCount(0);
 
-  // The member has no Operations page: it needs the right to view the audit log.
+  // The member has no Operations page: it needs the right to see the System pages.
   await page.goto("/settings");
   const memberPages = page.getByRole("navigation", { name: "Settings pages" });
   await expect(memberPages.getByRole("button").first()).toBeVisible();

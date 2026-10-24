@@ -23,7 +23,10 @@ const MESSAGE_MARKER = "provider-message-marker-91bc";
 
 const auditView = [legacyPermissionFor("audit.view")];
 const superadmin = asCaller({ id: "usr_root", roles: ["superadmin"], permissions: auditView });
+// A customer's admin: every right an admin holds by default, and not `system.view` (RIGHTS-1e).
 const administrator = asCaller({ id: "usr_admin", roles: ["admin"], permissions: auditView });
+// Who runs the instance and reads its jobs: a superadmin, who holds `system.view` by default.
+const operator = superadmin;
 const member = asCaller({ id: "usr_member", roles: ["user"] });
 
 const fixtureKind = (kind: string) =>
@@ -142,7 +145,7 @@ describe("Instance > Jobs: what an operator reads", () => {
       { id: "job_x1", kind: "report.build", status: "dead", instance: "another-instance" }
     );
 
-    const response = await server.call("instance.jobs.summary", {}, administrator);
+    const response = await server.call("instance.jobs.summary", {}, operator);
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({
@@ -183,7 +186,7 @@ describe("Instance > Jobs: what an operator reads", () => {
     const ended = await server.call(
       "instance.jobs.list",
       { query: { status: "failed,dead" } },
-      administrator
+      operator
     );
     expect(ended.statusCode).toBe(200);
     expect(ended.json()).toEqual({
@@ -217,7 +220,7 @@ describe("Instance > Jobs: what an operator reads", () => {
     const ofKind = await server.call(
       "instance.jobs.list",
       { query: { kind: "report.build" } },
-      administrator
+      operator
     );
     // A job that has not ended is not retried, whatever its kind.
     expect(jobListSchema.parse(ofKind.json()).items.map((job) => [job.id, job.retryable])).toEqual([
@@ -232,7 +235,7 @@ describe("Instance > Jobs: what an operator reads", () => {
     const unknownStatus = await server.call(
       "instance.jobs.list",
       { query: { status: "failed,lost" } },
-      administrator
+      operator
     );
     expect(unknownStatus.statusCode).toBe(422);
     expect(errorOf(unknownStatus).code).toBe("VALIDATION_FAILED");
@@ -256,7 +259,7 @@ describe("Instance > Jobs: what an operator reads", () => {
       const response = await server.call(
         "instance.jobs.list",
         { query: { status: "dead", limit: 2, cursor } },
-        administrator
+        operator
       );
       const page = jobListSchema.parse(response.json());
       expect(page.items.length).toBeLessThanOrEqual(2);
@@ -377,7 +380,7 @@ describe("Instance > Jobs: retry", () => {
     const listed = await server.call(
       "instance.jobs.list",
       { query: { status: "failed,dead" } },
-      administrator
+      operator
     );
     expect(jobListSchema.parse(listed.json()).items.map((job) => [job.id, job.retryable])).toEqual(
       expect.arrayContaining([
@@ -408,7 +411,7 @@ describe("Instance > Jobs: retry", () => {
     const listed = await server.call(
       "instance.jobs.list",
       { query: { kind: "workspace.command" } },
-      administrator
+      operator
     );
     // The page shows Retry for a job listed as retryable and for no other.
     expect(
@@ -481,7 +484,7 @@ describe("Instance > Jobs: who may", () => {
     await expect(storedJob("job_dead")).resolves.toMatchObject({ status: "dead" });
   });
 
-  it("lets an administrator read and refuses the retry naming jobs.retry, which a superadmin holds", async () => {
+  it("refuses an admin the jobs, naming system.view, and the retry, naming jobs.retry", async () => {
     const server = await createServer();
     await plant({ id: "job_dead", kind: "report.build", status: "dead" });
 
@@ -493,7 +496,13 @@ describe("Instance > Jobs: who may", () => {
       administrator
     );
 
-    expect([summary.statusCode, list.statusCode]).toEqual([200, 200]);
+    // Navigation check 40: by address too, the API answers an admin no System page.
+    for (const read of [summary, list]) {
+      expect([read.statusCode, errorOf(read).details]).toEqual([
+        403,
+        { action: "system.view", reason: "no_grant" }
+      ]);
+    }
     expect([retry.statusCode, errorOf(retry)]).toEqual([
       403,
       expect.objectContaining({
@@ -503,15 +512,28 @@ describe("Instance > Jobs: who may", () => {
       })
     ]);
     await expect(storedJob("job_dead")).resolves.toMatchObject({ status: "dead", attempts: 3 });
-    // A service principal with the right reads as a person does. The retry takes a person.
+    // A service principal granted `system.view` reads as a person does. The retry takes a person.
     const service = asCaller({ kind: "service", permissions: auditView });
+    await server.call("instance.jobs.list", {}, service);
+    await withSql(
+      (sql) => sql`
+        insert into permission_grants
+          (id, client_instance_id, holder_kind, holder_id, action, scope_kind, effect, granted_by, created_at)
+        values
+          ('grant_sp_system', ${clientInstanceId}, 'service_principal', 'sp_test', 'system.view',
+           'instance', 'allow', 'usr_root', now())`
+    );
     const read = [
       await server.call("instance.jobs.summary", {}, service),
       await server.call("instance.jobs.list", { query: { status: "dead" } }, service)
     ];
     expect(read.map((response) => response.statusCode)).toEqual([200, 200]);
     expect(jobListSchema.parse(read[1]?.json()).items.map((job) => job.id)).toEqual(["job_dead"]);
-    const withoutRight = await server.call("instance.jobs.list", {}, asCaller({ kind: "service" }));
+    const withoutRight = await server.call(
+      "instance.jobs.list",
+      {},
+      asCaller({ kind: "service", id: "sp_other", permissions: auditView })
+    );
     expect(withoutRight.statusCode).toBe(403);
     const serviceRetry = await server.call(
       "instance.jobs.retry",

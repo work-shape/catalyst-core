@@ -4,6 +4,7 @@ import {
   canManageSpendLimits,
   canManageUsers,
   canViewAudit,
+  canViewSystem,
   canViewUsageGovernance
 } from "../../shared/governance";
 import type { ChatShellAdministration } from "../../shared/page-definition";
@@ -23,7 +24,7 @@ import { WorkspacesPage } from "./pages/workspaces";
 
 /**
  * The administration a host mounts: the Instance pages of Settings, one line per page in rail
- * order, and Config as the Build page. A new Instance page adds its file under `pages/` and
+ * order with the System pages last, and Config as the Build page. A new Instance page adds its file under `pages/` and
  * its line here.
  */
 export const administration: ChatShellAdministration = {
@@ -76,45 +77,51 @@ export const administration: ChatShellAdministration = {
       component: AuditPage
     },
     {
-      id: "jobs",
-      group: "instance",
-      labelKey: "jobs.title",
-      width: "wide",
-      visible: (viewer) => canViewAudit(viewer.user),
-      component: JobsPage
-    },
-    {
-      id: "operations",
-      group: "instance",
-      labelKey: "operations.title",
-      width: "wide",
-      visible: (viewer) => canViewAudit(viewer.user),
-      component: OperationsPage
-    },
-    {
-      id: "modules",
-      group: "instance",
-      labelKey: "modules.title",
-      // The config key of a module stays on one line.
-      width: "wide",
-      visible: (viewer) => canViewAudit(viewer.user),
-      component: ModulesPage
-    },
-    {
-      id: "infrastructure",
-      group: "instance",
-      labelKey: "settings.infrastructure",
-      // A row holds a provider, its region, its destination, its secrets and its health.
-      width: "wide",
-      visible: (viewer) => canManageUsers(viewer.user),
-      component: InfrastructurePage
-    },
-    {
       id: "workspaces",
       group: "instance",
       labelKey: "settings.workspaces",
       visible: (viewer) => canManageUsers(viewer.user),
       component: WorkspacesPage
+    },
+    // The group "System" at the end of Instance, folded: how the instance runs, for who runs
+    // it and never for a customer's admin by default (RIGHTS-1e; UX audit ruling 2).
+    {
+      id: "jobs",
+      group: "instance",
+      system: true,
+      labelKey: "jobs.title",
+      width: "wide",
+      visible: (viewer) => canViewSystem(viewer.platform),
+      component: JobsPage
+    },
+    {
+      id: "operations",
+      group: "instance",
+      system: true,
+      labelKey: "operations.title",
+      width: "wide",
+      visible: (viewer) => canViewSystem(viewer.platform),
+      component: OperationsPage
+    },
+    {
+      id: "modules",
+      group: "instance",
+      system: true,
+      labelKey: "modules.title",
+      // The config key of a module stays on one line.
+      width: "wide",
+      visible: (viewer) => canViewSystem(viewer.platform),
+      component: ModulesPage
+    },
+    {
+      id: "infrastructure",
+      group: "instance",
+      system: true,
+      labelKey: "settings.infrastructure",
+      // A row holds a provider, its region, its destination, its secrets and its health.
+      width: "wide",
+      visible: (viewer) => canViewSystem(viewer.platform),
+      component: InfrastructurePage
     }
   ],
   build: {

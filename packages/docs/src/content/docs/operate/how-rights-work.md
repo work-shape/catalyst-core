@@ -236,7 +236,7 @@ Catalyst has three roles. You set the **Role** of a person on **Settings > Insta
 | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
 | User       | Chat, and nothing administrative.                                                                                                                  |
 | Admin      | Read and change agents and skills, approve changes, manage users, see usage and the audit log. Every right on Connections, where the module is on. |
-| Superadmin | Everything an Admin has, plus managing API access and the model settings of agents.                                                                |
+| Superadmin | Everything an Admin has, plus managing API access and the model settings of agents, deleting users, retrying jobs and the System pages. |
 
 The table shows what the roles carry as delivered. **Settings > Instance > Access, Roles** lists User, Admin and Superadmin, then the roles of your own. A role's page shows its rights by area, in the same sentences as the Rights tab.
 
@@ -263,7 +263,9 @@ A switch is stored as grants for the whole instance, one per action the right st
 
 Some things are reserved for a Superadmin. Only a Superadmin gives somebody the Superadmin role, changes or deletes another Superadmin, or switches "Manage API access" and "Manage agent model settings" on or off.
 
-Two more rights are on no switch, and Superadmins carry them: "Delete users" (`users.delete`) and "Retry jobs" (`jobs.retry`). A Superadmin gives either to a person, or to a role, on the Access page, and its holder gives it on in turn. Deleting a user also needs "Manage users" and every right the account holds, like any change of an account, and nobody deletes their own account. "Retry jobs" queues a failed or dead background job again on the Jobs page.
+Three more rights are on no switch, and Superadmins carry them: "Delete users" (`users.delete`), "Retry jobs" (`jobs.retry`) and "View the System pages" (`system.view`). A Superadmin gives any of them to a person, or to a role, on the Access page, and its holder gives it on in turn. Deleting a user also needs "Manage users" and every right the account holds, like any change of an account, and nobody deletes their own account. "Retry jobs" queues a failed or dead background job again on the Jobs page.
+
+"View the System pages" opens the group **System** at the end of Settings > Instance: Jobs, Operations, Modules and Infrastructure, the pages about how the instance runs. It also shows the technical detail under a refusal and what a database server leaves open around a Data Store. An Admin does not hold it, so a customer's admin sees none of these pages, also not by their address; the audit log stays with "View audit log".
 
 "Manage users" does not let you hand out more than you hold. Giving a person a role, a switch or a grant asks whether you hold every right it carries, at the place it is given. Writing a deny, and taking one away, ask the same of the right the deny names. Nobody gives a right to themselves, and nobody writes or lifts a grant of their own, even one they already hold.
 
@@ -497,7 +499,7 @@ Beside guardrails, fixed limits protect an instance:
 
 Every changing action on the full path leaves an **Operation Run**. That is one record of one call: which action, who called, from where, and how it ended. A reading action leaves one only when it was refused or failed. Every tool call of an agent leaves one, a reading one too. A call that is stopped at steps 1 to 4, or for invalid input, leaves none, and neither does an action off the full path.
 
-**Settings > Instance > Operations** lists them. The origin says where a call came from: User, CLI or Agent. A call that was refused has the status "Denied" and names what refused it. You need "View audit log" to open the page.
+**Settings > Instance > Operations** lists them. The origin says where a call came from: User, CLI or Agent. A call that was refused has the status "Denied" and names what refused it. You need "View the System pages" to open the page. One run stays readable by whoever made the call, and by a holder of "View audit log".
 
 Beside the run, the instance writes Audit Events, for example `permission.granted` when somebody writes a grant. The events the product writes hold names, ids and codes, and no content of an agent or a conversation. A tool written for one customer adds its own details to its events and has to keep to the same rule. See [Retention, audit and deletion](/operate/governance/#audit).
 
@@ -599,6 +601,6 @@ A release push reaches every agent and skill of the instance and is not held bac
 | Create a Service Principal or give it a right      | Settings > Instance > API access               | Manage Service Principals, and the right you give           |
 | Create a key for a script or CI                    | Settings > Instance > API access               | Manage API access, and every right of the Service Principal |
 | Decide a call or a skill change that waits         | Inbox                                          | Approve skill changes                                       |
-| See what was called, by whom, and what was refused | Settings > Instance > Operations               | View audit log                                              |
+| See what was called, by whom, and what was refused | Settings > Instance > Operations               | View the System pages                                       |
 | See who changed which right                        | Settings > Instance > Audit                    | View audit log                                              |
 | Switch a feature on or off, set the policy         | Release config, then a deploy                  | The operator                                                |

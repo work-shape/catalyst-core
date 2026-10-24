@@ -63,12 +63,17 @@ const instance = [
   "instance/api-access",
   "instance/usage",
   "instance/audit",
+  "instance/workspaces"
+];
+/** The group "System" at the end of Instance, behind `system.view` (RIGHTS-1e). */
+const system = [
   "instance/jobs",
   "instance/operations",
   "instance/modules",
-  "instance/infrastructure",
-  "instance/workspaces"
+  "instance/infrastructure"
 ];
+/** What the platform context tells a superadmin, or a person granted `system.view`. */
+const seesSystem = { ...platformContext(), instanceActions: ["system.view"] };
 
 const member = viewer();
 /** No permission on the instance, and a right in one Shared Workspace the viewer is no member of. */
@@ -89,23 +94,29 @@ const instanceAdmin = viewer(
   [personalWorkspace(), sharedWorkspace()]
 );
 // The server gives a superadmin the owner role in every shared workspace, member or not.
-const superadminWithoutMembership = viewer(
-  {
-    roles: ["user", "admin", "superadmin"],
-    permissions: [
-      "users.manage",
-      "api_access.manage",
-      "usage.view",
-      "audit.view",
-      "config_assets.read"
+const superadminWithoutMembership: SettingsViewer = {
+  ...superadminViewer(),
+  platform: seesSystem
+};
+function superadminViewer(): SettingsViewer {
+  return viewer(
+    {
+      roles: ["user", "admin", "superadmin"],
+      permissions: [
+        "users.manage",
+        "api_access.manage",
+        "usage.view",
+        "audit.view",
+        "config_assets.read"
+      ]
+    },
+    [
+      personalWorkspace(),
+      sharedWorkspace({ id: "cw_a", membershipRole: null }),
+      sharedWorkspace({ id: "cw_b", name: "Analytik", membershipRole: null })
     ]
-  },
-  [
-    personalWorkspace(),
-    sharedWorkspace({ id: "cw_a", membershipRole: null }),
-    sharedWorkspace({ id: "cw_b", name: "Analytik", membershipRole: null })
-  ]
-);
+  );
+}
 
 describe("Settings catalog", () => {
   it("lists the pages of each group in the order of the navigation spec", () => {
@@ -120,7 +131,8 @@ describe("Settings catalog", () => {
       // Limits is shown by `limits.manage`, a right the platform context tells.
       ...instance.flatMap((page) =>
         page === "instance/usage" ? [page, "instance/limits"] : [page]
-      )
+      ),
+      ...system
     ]);
   });
 
@@ -136,13 +148,10 @@ describe("Settings catalog", () => {
   });
 
   it.each<[key: string, pages: string[]]>([
-    [
-      "users.manage",
-      ["instance/users", "instance/access", "instance/infrastructure", "instance/workspaces"]
-    ],
+    ["users.manage", ["instance/users", "instance/access", "instance/workspaces"]],
     ["api_access.manage", ["instance/api-access"]],
     ["usage.view", ["instance/usage"]],
-    ["audit.view", ["instance/audit", "instance/jobs", "instance/operations", "instance/modules"]]
+    ["audit.view", ["instance/audit"]]
   ])("shows the pages behind %s exactly to its holders", (permission, pages) => {
     expect(pageIds(viewer({ permissions: [permission] }))).toEqual([...you, ...pages]);
     for (const other of ["users.manage", "api_access.manage", "usage.view", "audit.view"]) {
@@ -165,7 +174,35 @@ describe("Settings catalog", () => {
   });
 
   it("reads the role, not the membership, so a superadmin manages every shared workspace", () => {
-    expect(pageIds(superadminWithoutMembership)).toEqual([...you, ...workspace, ...instance]);
+    expect(pageIds(superadminWithoutMembership)).toEqual([
+      ...you,
+      ...workspace,
+      ...instance,
+      ...system
+    ]);
+  });
+
+  it("shows the System pages exactly to a holder of system.view, never to an admin by role", () => {
+    // Navigation check 40: every right an admin holds by default, and no System page, in the
+    // rail or by address.
+    const admin = { ...instanceAdmin, platform: platformContext() };
+    for (const page of system) {
+      expect(pageIds(admin)).not.toContain(page);
+      expect(resolve(`/settings/${page}`, admin)).toEqual({ kind: "no-access" });
+    }
+    // Granted alone, it opens the four pages and nothing else.
+    expect(pageIds({ ...member, platform: seesSystem })).toEqual([...you, ...system]);
+    for (const page of system) {
+      expect(resolve(`/settings/${page}`, superadminWithoutMembership)).toMatchObject({
+        kind: "page"
+      });
+    }
+    // The palette names them under System.
+    expect(
+      settingsGoToTargets(catalog, buildOn, superadminWithoutMembership).find(
+        (target) => target.id === "settings/instance/jobs"
+      )
+    ).toMatchObject({ groupLabelKey: "settings.system" });
   });
 
   it("leaves Security out where the password is kept elsewhere", () => {
@@ -264,7 +301,7 @@ describe("the four role views", () => {
     [
       "superadmin without a membership",
       superadminWithoutMembership,
-      [...you, ...workspace, ...instance],
+      [...you, ...workspace, ...instance, ...system],
       true
     ]
   ])(
