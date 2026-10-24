@@ -17,6 +17,8 @@ export function sourceStateView(
   status: Pick<KnowledgeSourceStatus, "running" | "last">
 ): SourceStateView {
   if (status.running !== undefined) {
+    if (status.running.mode === "ingest")
+      return { state: "syncing", tone: "info", label: "knowledgeSources.stateIngesting" };
     return status.running.mode === "initial"
       ? { state: "initial", tone: "info", label: "knowledgeSources.stateInitial" }
       : { state: "syncing", tone: "info", label: "knowledgeSources.stateSyncing" };
@@ -30,6 +32,9 @@ export function sourceStateView(
   }
   if (last.failureCode === "knowledge_source_unreachable") {
     return { state: "unreachable", tone: "danger", label: "knowledgeSources.stateUnreachable" };
+  }
+  if (last.failureCode === "knowledge_ingest_cancelled") {
+    return { state: "failed", tone: "warning", label: "knowledgeSources.stateRunEnded" };
   }
   if (last.failureCode === "knowledge_source_refused") {
     return { state: "refused", tone: "danger", label: "knowledgeSources.stateRefused" };
@@ -65,6 +70,8 @@ export function sourceFailureText(code: KnowledgeSourceFailureCode): Translation
       return "knowledgeSources.failureItemInvalid";
     case "knowledge_fetch_not_allowed":
       return "knowledgeSources.failureNotAllowed";
+    case "knowledge_ingest_cancelled":
+      return "knowledgeSources.failureIngestCancelled";
     default:
       return KNOWLEDGE_DOCUMENT_FAILURES[code];
   }

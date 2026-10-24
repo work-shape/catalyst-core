@@ -80,7 +80,7 @@ describe("uploading a file to a Knowledge Base", () => {
           clientInstanceId,
           name: `knowledge-base:${KB}`
         })
-      ).toMatchObject({ status: "ready", level: 12 });
+      ).toMatchObject({ status: "ready", level: 13 });
     });
     return instance;
   }

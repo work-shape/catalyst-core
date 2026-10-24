@@ -5,6 +5,7 @@ import { workflowDataFlowsSchema } from "@work-shape/catalyst-core";
 import { DATA_STORE_USED_BY_MAX_ASSETS, readWorkflowDataFlows } from "../workflow-data-flows";
 import { assetResource } from "../store-audience";
 import { sourceOperation } from "./source-operations";
+import { writeOperation, type KnowledgeWritePart } from "./write-operations";
 import {
   AppError,
   isAppError,
@@ -498,6 +499,23 @@ const sourceTarget = (
     },
     part
   );
+/** A Knowledge Base that keeps documents takes them from a Workflow (KBW-1). */
+const writeTarget = (
+  runtime: KnowledgeRuntime,
+  knowledgeBase: PublishedKnowledgeBase,
+  part: KnowledgeWritePart
+) =>
+  isStructured(knowledgeBase)
+    ? undefined
+    : writeOperation(
+        runtime,
+        {
+          assetId: knowledgeBase.asset.id,
+          name: knowledgeBase.asset.name,
+          resource: knowledgeBase.resource
+        },
+        part
+      );
 const OPERATIONS = {
   extract_fields: (runtime: KnowledgeRuntime, kb: PublishedKnowledgeBase) => {
     const target = documentsTargetOf(runtime, kb);
@@ -511,6 +529,10 @@ const OPERATIONS = {
     sourceTarget(runtime, kb, "source_items"),
   locate: (runtime: KnowledgeRuntime, kb: PublishedKnowledgeBase) =>
     sourceTarget(runtime, kb, "locate"),
+  ingest: (runtime: KnowledgeRuntime, kb: PublishedKnowledgeBase) =>
+    writeTarget(runtime, kb, "ingest"),
+  withdraw: (runtime: KnowledgeRuntime, kb: PublishedKnowledgeBase) =>
+    writeTarget(runtime, kb, "withdraw"),
   query: (runtime: KnowledgeRuntime, knowledgeBase: PublishedKnowledgeBase) =>
     isStructured(knowledgeBase) ? queryOperation(runtime, knowledgeBase) : undefined,
   add_files: (runtime: KnowledgeRuntime, knowledgeBase: PublishedKnowledgeBase) =>
@@ -616,7 +638,9 @@ export function createKnowledgeOperationSource(runtime: KnowledgeRuntime): Opera
               ? [queryOperation(runtime, knowledgeBase)]
               : [
                   OPERATIONS.search(runtime, knowledgeBase),
-                  OPERATIONS.extract_fields(runtime, knowledgeBase)
+                  OPERATIONS.extract_fields(runtime, knowledgeBase),
+                  OPERATIONS.ingest(runtime, knowledgeBase),
+                  OPERATIONS.withdraw(runtime, knowledgeBase)
                 ].filter((operation): operation is OperationDefinition => operation !== undefined)
           ),
         truncated:

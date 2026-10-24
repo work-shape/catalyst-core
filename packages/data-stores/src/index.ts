@@ -69,6 +69,7 @@ export { sizeLimitBytes } from "./definition";
 export { createKnowledgeBases, knowledgeOperationName, type KnowledgeBases } from "./knowledge";
 export { uploadFingerprint } from "./knowledge/add-files";
 export type { KnowledgeEmbedding } from "./knowledge/definition";
+export type { WorkflowRunDatasetPort } from "./runtime";
 export {
   KNOWLEDGE_EMBEDDING_BATCH,
   KNOWLEDGE_USAGE_LIMIT_WAIT_MS,
@@ -236,6 +237,8 @@ export function createDataStores(input: {
    */
   datasets?: DataStoreDatasetReader;
   recordFailures?: DataStoreRuntime["recordFailures"];
+  /** A Workflow run's datasets for `knowledge.<id>.ingest` (KBW-1). */
+  workflowDatasets?: DataStoreRuntime["workflowDatasets"];
   /** The embedding model release config approves for Knowledge Bases (`knowledge`), if any. */
   embedding?: KnowledgeEmbedding;
   logger: Logger;
@@ -260,6 +263,7 @@ export function createDataStores(input: {
     auditRecorder: new StoreBackedAuditRecorder({ clientInstanceId, store: stores.audit }),
     ...(input.datasets ? { datasets: input.datasets } : {}),
     ...(input.recordFailures ? { recordFailures: input.recordFailures } : {}),
+    ...(input.workflowDatasets ? { workflowDatasets: input.workflowDatasets } : {}),
     callRecords: new Map(),
     logger
   };

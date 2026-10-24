@@ -9,12 +9,13 @@ import {
   FormNotice,
   KeyValue,
   KeyValueList,
+  List,
   Picker,
   PickerButton,
   Textarea
 } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../../shared/i18n";
-import { formatMomentShort } from "../../shared/locale-format";
+import { formatElapsed, formatMomentShort } from "../../shared/locale-format";
 import type {
   KnowledgeBaseSource,
   KnowledgeChoice,
@@ -30,12 +31,18 @@ import { requestBuildCreateDialog } from "./build-create-request";
 import { CONNECTIONS_BUILD_PATH } from "./connection-tools";
 import { offerText } from "./connection-typed-model";
 import type { PagedItems } from "./paged-items";
+import { DataFlowRow, type DataFlowPage } from "./data-flows";
+import type { DataFlowRef } from "./data-flows-model";
 
 // The synced sources of a Knowledge Base of documents (SRC-2): each reads the folders it names
 // through a Connection whose type is a document source. The list is part of the draft: a source
 // added, narrowed or removed takes effect at publish, where the question names who finds what.
 // Once published, each shows how far its sync is, why items failed, and for who may change the
 // Knowledge Base, Sync now and Try again.
+// A Workflow that calls `ingest` is a source of its own (KBW-1): it is never authored in the
+// draft, so it is listed from the published state alone, with its Workflow, its last run and
+// how fresh that makes it. Its Workflow's runs decide what it holds, so it has no Sync now and
+// no Try again here.
 
 /** The search of the Connection chooser before the reader types. */
 const NO_SEARCH = "";
@@ -47,6 +54,8 @@ export function KnowledgeSourcesSection({
   owner,
   sources,
   canWrite,
+  workflows,
+  workflowPage,
   onChange
 }: {
   source: KnowledgeBaseSource;
@@ -58,6 +67,9 @@ export function KnowledgeSourcesSection({
   owner: string | undefined;
   sources: readonly KnowledgeSourceForm[];
   canWrite: boolean;
+  /** The Workflows that fill the Knowledge Base, by which a Workflow-fed source is titled. */
+  workflows?: readonly DataFlowRef[];
+  workflowPage?: DataFlowPage;
   onChange(sources: KnowledgeSourceForm[]): void;
 }) {
   const { t } = useTranslation();
@@ -72,6 +84,10 @@ export function KnowledgeSourcesSection({
           (entry): entry is KnowledgeSourceStatus => "id" in entry && entry.id === id
         )
       : undefined;
+  const fedByWorkflows =
+    status?.status === "ready" && knowledgeBase !== undefined && published !== undefined
+      ? status.data.sources.filter((entry): entry is WorkflowSourceStatus => "workflowId" in entry)
+      : [];
   const change = (id: string, patch: Partial<KnowledgeSourceForm>) =>
     onChange(sources.map((entry) => (entry.id === id ? { ...entry, ...patch } : entry)));
   const [search, setSearch] = useState(NO_SEARCH);
@@ -82,7 +98,22 @@ export function KnowledgeSourcesSection({
     canWrite && read?.status === "ready" && read.data.items.length === 0 && search === NO_SEARCH;
   return (
     <div className="grid gap-4" data-knowledge-sources="">
-      {noneToChoose && sources.length === 0 ? null : sources.length === 0 ? (
+      {fedByWorkflows.length > 0 ? (
+        <ul aria-label={t("knowledgeSources.workflowSources")} className="grid gap-3">
+          {fedByWorkflows.map((entry) => (
+            <WorkflowSourceItem
+              key={entry.id}
+              source={source}
+              knowledgeBase={knowledgeBase ?? ""}
+              status={entry}
+              workflow={workflows?.find((flow) => flow.name === entry.workflowId)}
+              page={workflowPage?.(entry.workflowId)}
+            />
+          ))}
+        </ul>
+      ) : null}
+      {(noneToChoose || fedByWorkflows.length > 0) &&
+      sources.length === 0 ? null : sources.length === 0 ? (
         <EmptyState layout="inline">
           {t(canWrite ? "knowledgeSources.empty" : "knowledgeSources.emptyReadOnly")}
         </EmptyState>
@@ -234,7 +265,8 @@ function SourceStatus({
   knowledgeBase,
   sourceId,
   status,
-  canWrite
+  canWrite,
+  fedByWorkflow = false
 }: {
   source: KnowledgeBaseSource;
   knowledgeBase: string;
@@ -242,6 +274,8 @@ function SourceStatus({
   /** Absent while it is read, and for a source the instance does not name yet. */
   status: KnowledgeSourceStatus | undefined;
   canWrite: boolean;
+  /** A Workflow-fed source: its runs decide what it holds, so it has no Sync now or Try again. */
+  fedByWorkflow?: boolean;
 }) {
   const { locale, t } = useTranslation();
   const [busy, setBusy] = useState<"sync" | KnowledgeSourceFailureCode>();
@@ -305,6 +339,13 @@ function SourceStatus({
           </Chip>
         ) : null}
       </div>
+      {fedByWorkflow && status.last?.endedAt ? (
+        <p className="text-caption text-muted-foreground" data-knowledge-source-freshness="">
+          {t("knowledgeSources.workflowFreshness", {
+            elapsed: formatElapsed(status.last.endedAt, new Date(), locale)
+          })}
+        </p>
+      ) : null}
       <KeyValueList layout="stacked">
         {status.running?.estimatedEndAt ? (
           <KeyValue label={t("knowledgeSources.estimatedEnd")}>
@@ -312,7 +353,9 @@ function SourceStatus({
           </KeyValue>
         ) : null}
         {status.last?.endedAt ? (
-          <KeyValue label={t("knowledgeSources.lastSync")}>
+          <KeyValue
+            label={t(fedByWorkflow ? "knowledgeSources.lastRun" : "knowledgeSources.lastSync")}
+          >
             {formatMomentShort(status.last.endedAt, locale)}
           </KeyValue>
         ) : null}
@@ -349,7 +392,7 @@ function SourceStatus({
                   )
                 </span>
               </span>
-              {canWrite && source.retrySource ? (
+              {canWrite && !fedByWorkflow && source.retrySource ? (
                 <Button
                   variant="outline"
                   size="sm"
@@ -369,7 +412,7 @@ function SourceStatus({
         </ul>
       ) : null}
       {notice ? <FormNotice tone={notice.tone}>{notice.text}</FormNotice> : null}
-      {canWrite && source.syncSource ? (
+      {canWrite && !fedByWorkflow && source.syncSource ? (
         <div>
           <Button
             variant="outline"
@@ -387,6 +430,53 @@ function SourceStatus({
         </div>
       ) : null}
     </div>
+  );
+}
+
+type WorkflowSourceStatus = Extract<KnowledgeSourceStatus, { workflowId: string }>;
+
+/**
+ * A source a Workflow fills through `ingest`: the Workflow, a link to its page where the reader
+ * has one, and how far its last run brought the source.
+ */
+function WorkflowSourceItem({
+  source,
+  knowledgeBase,
+  status,
+  workflow,
+  page
+}: {
+  source: KnowledgeBaseSource;
+  knowledgeBase: string;
+  status: WorkflowSourceStatus;
+  /** The Workflow as the state names it; absent where the reader may not read it. */
+  workflow: DataFlowRef | undefined;
+  page: ReturnType<DataFlowPage> | undefined;
+}) {
+  const { t } = useTranslation();
+  return (
+    <li
+      className="grid min-w-0 gap-3 rounded-md border p-4"
+      data-knowledge-source={status.id}
+      data-knowledge-source-kind="workflow"
+    >
+      <List aria-label={t("knowledgeSources.workflow")}>
+        <DataFlowRow
+          flow={workflow ?? { id: status.id, name: status.workflowId, title: status.workflowId }}
+          role="fills"
+          page={workflow === undefined ? undefined : page}
+        />
+      </List>
+      <SourceStatus
+        source={source}
+        knowledgeBase={knowledgeBase}
+        sourceId={status.id}
+        status={status}
+        canWrite={false}
+        fedByWorkflow
+      />
+      <p className="text-caption text-muted-foreground">{t("knowledgeSources.workflowNote")}</p>
+    </li>
   );
 }
 

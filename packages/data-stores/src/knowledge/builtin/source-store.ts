@@ -60,7 +60,7 @@ const itemSchema = z.object({
 export type SourceItem = z.infer<typeof itemSchema>;
 const idSchema = z.object({ id: z.string() });
 
-function sourceItemId(sourceId: string, itemId: string): string {
+export function sourceItemId(sourceId: string, itemId: string): string {
   return `kbitem_${createHash("sha256")
     .update(JSON.stringify([sourceId, itemId]))
     .digest("hex")}`;

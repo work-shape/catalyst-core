@@ -280,8 +280,10 @@ export function createBuiltinDocumentStore(
           if (terminal.length === 0) return undefined;
           const rows = z.array(z.object({ managed_file_id: z.string() })).parse(
             await sql.run(
+              // A Workflow-fed document keeps its copy: its source cannot be fetched (KBW-1).
               `select managed_file_id from catalyst_kb.documents where content_sha256=$1::text
            and source_item_id is not null and managed_file_id > $2::text
+           and not exists (select 1 from catalyst_kb.source_items i where i.id=source_item_id and i.source_id like 'workflow:%')
            and ($4::text[] is null or managed_file_id=any($4::text[]))
            order by managed_file_id limit $3::int4`,
               [

@@ -80,7 +80,8 @@ export function DataFlowList({
   );
 }
 
-function DataFlowRow({
+/** One data Workflow as a row, a link to its page where the reader is shown one. */
+export function DataFlowRow({
   flow,
   role,
   page

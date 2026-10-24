@@ -82,6 +82,8 @@ export function createSourceWithdrawalApproval(
         { clientInstanceId, kind: "knowledge_base", name: parsed.subject.name }
       );
       if (!asset || asset.status !== "active" || asset.id !== parsed.knowledgeBaseId) return true;
+      // A Workflow-fed source has no boundary in the definition: its pass is its own.
+      if (parsed.sourceId.startsWith("workflow:")) return false;
       const source = knowledgeBaseDefinitionSchema
         .parse(asset.publishedConfig)
         .sources?.find((source) => source.id === parsed.sourceId);

@@ -260,6 +260,60 @@ const WORKFLOW_SOURCES = `
     );
 `;
 
+// KBW-1: one call of `knowledge.<id>.ingest` is a sync run of mode `ingest` of the calling
+// Workflow's source. Several may run at once for one source, so the one-running rule keeps to
+// the connector modes. `pass_state` is the completeness rule's: a `complete` pass waits for its
+// Workflow run to end `done` before it withdraws what the run did not name. Items that never
+// became a row (no identity, over the document limit) keep their outcome in `ingest_failures`,
+// with the item's identity and never its content.
+const WORKFLOW_INGEST = `
+  alter table catalyst_kb.sync_runs drop constraint sync_runs_mode_check;
+  alter table catalyst_kb.sync_runs add constraint sync_runs_mode_check
+    check (mode in ('initial','changes','full','ingest')) not valid;
+  alter table catalyst_kb.sync_runs validate constraint sync_runs_mode_check;
+  alter table catalyst_kb.sync_runs
+    add column workflow_run_id text,
+    add column dataset jsonb,
+    add column complete boolean not null default false,
+    add column accepted integer not null default 0 check (accepted >= 0),
+    add column pass_state text
+      check (pass_state in ('awaiting_run','confirming','applied','dropped')),
+    add constraint sync_runs_ingest_check
+      check ((mode = 'ingest') = (workflow_run_id is not null)),
+    add constraint sync_runs_dataset_check check (dataset is null or mode = 'ingest');
+  create index sync_runs_workflow_run_idx on catalyst_kb.sync_runs (workflow_run_id, source_id)
+    where workflow_run_id is not null;
+
+  create table catalyst_kb.ingest_failures (
+    sync_run_id text not null,
+    position integer not null check (position >= 0),
+    item jsonb not null,
+    code text not null,
+    message text not null,
+    primary key (sync_run_id, position)
+  );
+  -- A call whose Workflow's source has a pass running already waits here for its turn: one
+  -- pass of a source runs at a time, by the index every release before this one also uses.
+  create table catalyst_kb.ingest_waiting (
+    sync_run_id text primary key,
+    source_id text not null,
+    operation_run_id text not null,
+    workflow_run_id text not null,
+    dataset jsonb,
+    complete boolean not null,
+    cursor_after text not null,
+    created_at timestamptz not null default now()
+  );
+  -- The items a call names inline, until its pass has read them: a dataset of the calling
+  -- step would be complete only once that step ended, and the step waits for the pass.
+  create table catalyst_kb.ingest_items (
+    sync_run_id text not null,
+    position integer not null check (position >= 0),
+    item jsonb not null,
+    primary key (sync_run_id, position)
+  );
+`;
+
 /** The tables of the store of a built-in Knowledge Base, in the order a store applies them. */
 const KNOWLEDGE_STORE_MIGRATIONS: readonly KnowledgeStoreMigration[] = [
   { number: 1, name: "documents", sql: DOCUMENTS },
@@ -298,7 +352,8 @@ const KNOWLEDGE_STORE_MIGRATIONS: readonly KnowledgeStoreMigration[] = [
   },
   { number: 10, name: "field_extraction_budget", sql: KNOWLEDGE_FIELD_SCHEMA },
   { number: 11, name: "record_content_hash_upgrade", sql: RECORD_FIELDS_CONTENT_HASH },
-  { number: 12, name: "record_projection_frame", sql: RECORD_PROJECTION_SCHEMA }
+  { number: 12, name: "record_projection_frame", sql: RECORD_PROJECTION_SCHEMA },
+  { number: 13, name: "workflow_ingest", sql: WORKFLOW_INGEST }
 ];
 
 /** A later applied number never proves that earlier migrations were applied. */

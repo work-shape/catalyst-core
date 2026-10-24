@@ -105,7 +105,7 @@ export function registerKnowledgeRemovalVolumeTest(volume: {
         clientInstanceId,
         name: `knowledge-base:${KB}`
       });
-      expect(row).toMatchObject({ status: "ready", level: 12 });
+      expect(row).toMatchObject({ status: "ready", level: 13 });
       return required(row);
     });
     return { world, record, objects: createFilesystemObjectStorage(world.filesRoot) };

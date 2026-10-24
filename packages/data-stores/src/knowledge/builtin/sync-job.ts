@@ -22,6 +22,7 @@ import {
 } from "@work-shape/catalyst-core";
 import { createSourceStore, sourceTransaction } from "./source-store";
 import { sourceTarget, type SourceJobRuntime } from "./source-runtime";
+import { dropExhaustedPass, isWorkflowSourceId, runIngestPass } from "./ingest";
 
 // 100 ids keep queue rows bounded and limit the work lost with one lease to one batch.
 const KNOWLEDGE_FETCH_BATCH_ITEMS = 100;
@@ -87,6 +88,11 @@ export function createKnowledgeSyncHandler(runtime: SourceJobRuntime): Registere
       const store = createSourceStore(runtime.data, payload.knowledgeBaseId, control.signal);
       // The publish queues ids in its transaction; the owned database is provisioned later.
       // Retry until it exists, then create the initial run exactly once.
+      // A Workflow's `ingest` call (KBW-1) reads its own items, not a source.
+      if (isWorkflowSourceId(payload.sourceId)) {
+        await runIngestPass(runtime, job, control);
+        return;
+      }
       let run = await store.run(payload.syncRunId);
       if (!run) {
         await store.change(async (sql) => {
@@ -113,7 +119,7 @@ export function createKnowledgeSyncHandler(runtime: SourceJobRuntime): Registere
         });
         run = await store.run(payload.syncRunId);
       }
-      if (!run || run.state !== "running") return;
+      if (!run || run.state !== "running" || run.mode === "ingest") return;
       const found = await sourceTarget(runtime, payload);
       if (!found || run.definitionKey !== sourceBoundaryKey(found.source)) {
         await sourceTransaction(runtime.data, payload, control, (store) =>
@@ -238,6 +244,7 @@ export function createKnowledgeSyncHandler(runtime: SourceJobRuntime): Registere
         stores
       );
       await store.finish(job.payload, "knowledge_source_unreachable");
+      await dropExhaustedPass(runtime.data, stores, job.payload);
     }
   });
 }
