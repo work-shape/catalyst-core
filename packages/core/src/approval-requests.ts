@@ -122,6 +122,19 @@ export interface ApprovalRequestHandler<TPayload extends JsonObject = JsonObject
    * counts read it, so they show what a read of each request shows. Only with `resourceOf`.
    */
   reviewableSubjects?(access: ActorAccess): Promise<readonly JsonObject[]>;
+  /**
+   * A right that decides one request in place of `requiredPermission`, on its own resource:
+   * `connection.approve` on the Connection a held call is about. `furtherPermissions` are
+   * asked all the same. A payload that names nothing it is about answers nothing, and only
+   * `requiredPermission` decides.
+   */
+  alsoDecidedBy?(payload: TPayload): ApprovalFurtherRight | undefined;
+  /**
+   * The subjects of the requests one person decides through `alsoDecidedBy` alone, as
+   * `payload.subject` holds them. Lists and counts read it, for a reader who lacks
+   * `requiredPermission` on the instance.
+   */
+  alsoDecidedSubjects?(access: ActorAccess): Promise<readonly JsonObject[]>;
   validate(payload: JsonObject): TPayload;
   /** Proposed new content only; the workflow adds the request summary. */
   checkContent?(payload: TPayload): string;
