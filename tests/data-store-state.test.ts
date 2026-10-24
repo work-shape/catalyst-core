@@ -4,7 +4,10 @@ import {
   NoopAuditRecorder,
   asClientInstanceId,
   createPlatformId,
-  type AuthenticatedUser
+  asUserId,
+  type ActorAccess,
+  type AuthenticatedUser,
+  type PermissionGrant
 } from "@work-shape/catalyst-core";
 import { accessOf } from "./support/access";
 import { eventually, required } from "./support/assertions";
@@ -28,6 +31,24 @@ const reader: AuthenticatedUser = {
   authSource: "test"
 };
 
+/** A row of the reader's on the whole instance, as the Access page writes it. */
+function instanceRow(action: string, effect: "allow" | "deny"): PermissionGrant {
+  return {
+    id: `grant_${action}_${effect}`,
+    clientInstanceId: reader.clientInstanceId,
+    holderKind: "user",
+    holderId: reader.id,
+    action,
+    effect,
+    scopeKind: "instance",
+    grantedBy: asUserId("usr_root"),
+    createdAt: "2026-10-24T00:00:00.000Z"
+  };
+}
+
+/** The reader holding `system.view` (RIGHTS-1e), as who runs the database server does. */
+const operator = accessOf(reader, { grants: [instanceRow("system.view", "allow")] });
+
 describe("the state of a Data Store", () => {
   const { db, setup, publish, published, recordOf } = useDataStoreWorld("data_store_state");
 
@@ -37,7 +58,7 @@ describe("the state of a Data Store", () => {
     return required(await world.dataStores.operationSource.resolve("data_store.findings.state"));
   }
 
-  async function stateOf(world: World) {
+  async function stateOf(world: World, access: ActorAccess = operator) {
     const operation = await operationOf(world);
     return operation.execute(operation.inputSchema.parse({}), {
       runId: createPlatformId<"OperationRunId">("opr"),
@@ -45,7 +66,7 @@ describe("the state of a Data Store", () => {
       origin: { kind: "user" },
       correlationId: "data-store-state",
       runtime: {},
-      access: accessOf(reader),
+      access,
       audit: new NoopAuditRecorder()
     });
   }
@@ -133,6 +154,35 @@ describe("the state of a Data Store", () => {
 
     await db.sql`update data_stores set conditions = '[]'::jsonb where id = ${world.id}`;
     expect(await stateOf(world)).toMatchObject({ conditions: [] });
+  });
+
+  it("answers what the server leaves open to a holder of system.view alone, and a deny takes it away", async () => {
+    const world = await published("audience");
+    await db.sql`update data_stores set conditions = ${db.sql.json(["sessions_open"])} where id = ${world.id}`;
+    const codes = async (access: ActorAccess) =>
+      stateSchema.parse(await stateOf(world, access)).conditions.map(({ code }) => code);
+
+    expect(await codes(operator)).toEqual(["sessions_open"]);
+    // An admin reads the store and does not see how the instance runs.
+    expect(await codes(accessOf(reader))).toEqual([]);
+    expect(
+      await codes(
+        accessOf(reader, {
+          grants: [instanceRow("system.view", "allow"), instanceRow("system.view", "deny")]
+        })
+      )
+    ).toEqual([]);
+    expect(await codes(accessOf({ ...reader, roles: ["user", "superadmin"] }))).toEqual([
+      "sessions_open"
+    ]);
+    // The rest of the state is the same for both.
+    const { conditions: _shown, ...forOperator } = z
+      .record(z.string(), z.unknown())
+      .parse(await stateOf(world));
+    const { conditions: _hidden, ...forAdmin } = z
+      .record(z.string(), z.unknown())
+      .parse(await stateOf(world, accessOf(reader)));
+    expect(forAdmin).toEqual(forOperator);
   });
 
   it("names the migration that failed and why, and the level the store stays at", async () => {
