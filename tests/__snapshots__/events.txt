@@ -73,6 +73,7 @@
 {"name":"data_store.migration_failed","legacy":true,"audited":true,"phases":["after"]}
 {"name":"data_store.provisioned","legacy":true,"audited":true,"phases":["after"]}
 {"name":"data_store.provisioning_failed","legacy":true,"audited":true,"phases":["after"]}
+{"name":"data_store.record_decided","legacy":false,"audited":true,"phases":["after"]}
 {"name":"data_store.rows_written","legacy":false,"audited":true,"phases":["after"]}
 {"name":"execution_workspace.cleaned_up","legacy":true,"audited":true,"phases":["after"]}
 {"name":"execution_workspace.cleanup_failed","legacy":true,"audited":true,"phases":["after"]}

@@ -89,6 +89,7 @@ export const audit = defineTranslations({
     "audit.event.data_store.migration_failed": "Updating a data store's tables failed",
     "audit.event.data_store.provisioned": "Set up a data store",
     "audit.event.data_store.provisioning_failed": "Setting up a data store failed",
+    "audit.event.data_store.record_decided": "Decided a record field in Review",
     "audit.event.data_store.rows_written": "Wrote records to a data store",
     "audit.event.execution_workspace.cleaned_up": "Removed the files of a finished run",
     "audit.event.execution_workspace.cleanup_failed": "Removing the files of a run failed",
@@ -355,6 +356,8 @@ export const audit = defineTranslations({
       "Aktualisieren der Tabellen eines Datenspeichers fehlgeschlagen",
     "audit.event.data_store.provisioned": "Datenspeicher eingerichtet",
     "audit.event.data_store.provisioning_failed": "Einrichten eines Datenspeichers fehlgeschlagen",
+    "audit.event.data_store.record_decided":
+      "Über ein Feld eines Datensatzes in „Prüfen“ entschieden",
     "audit.event.data_store.rows_written": "Datensätze in einen Datenspeicher geschrieben",
     "audit.event.execution_workspace.cleaned_up": "Dateien eines beendeten Laufs entfernt",
     "audit.event.execution_workspace.cleanup_failed":
