@@ -29,6 +29,21 @@ import { required } from "./support/assertions";
 
 const REVIEW_KIND = "data_store_review";
 
+/** No field of the record holds one of the values, as a number or as text. Not a substring of the
+ * JSON: a random id or timestamp may contain the digits. */
+function expectNoField(record: unknown, ...values: number[]): void {
+  const leaves: unknown[] = [];
+  const walk = (node: unknown): void => {
+    if (node !== null && typeof node === "object") Object.values(node).forEach(walk);
+    else leaves.push(node);
+  };
+  walk(record);
+  for (const value of values) {
+    expect(leaves).not.toContain(value);
+    expect(leaves).not.toContain(String(value));
+  }
+}
+
 describe("REC-2 records review through the public operation source", () => {
   const dataStoreWorld = useDataStoreWorld("record_review");
   const { db, call } = dataStoreWorld;
@@ -137,9 +152,9 @@ describe("REC-2 records review through the public operation source", () => {
     expect(decided).toMatchObject({
       metadata: { store: "findings", table: "objekt", field: "kaufpreis", action: "correct" }
     });
-    const text = JSON.stringify(decided);
-    expect(text).not.toContain("150");
-    expect(text).not.toContain("1402");
+    // Neither the value nor the row key is a field of the record. Compared by field, since a
+    // random id or timestamp may hold the digits.
+    expectNoField(decided, 150, 1402);
 
     // The next sync extracts both documents again: the correction is pinned.
     await call(w, "records.propose", { table: "objekt", items: [a, b] }, "resync");
@@ -431,7 +446,7 @@ describe("REC-2 records review through the public operation source", () => {
       kind: REVIEW_KIND,
       payload: { subject: { dataStoreId: w.id, store: "findings" } }
     });
-    expect(JSON.stringify(notice)).not.toContain("1402");
+    expectNoField(notice, 1402);
     const handler = w.dataStores.reviewNotice;
     const preview = (access?: ActorAccess) =>
       handler.preview(handler.validate(required(notice).payload), {
