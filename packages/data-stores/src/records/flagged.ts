@@ -133,7 +133,8 @@ export async function countFlaggedFields(
 /**
  * The Knowledge Bases whose citations the reader may see, each with the documents still there
  * to open. A citation is shown only to a reader who may use its Knowledge Base, whatever right
- * they hold on the store: the candidates of any other are left out.
+ * they hold on the store, and only while its document is one search would find: the candidates
+ * of any other Knowledge Base, and of a document withdrawn or outside its source, are left out.
  */
 async function readCitations(
   runtime: DataStoreRuntime,
@@ -265,8 +266,9 @@ export const recordsFlagged: StoreVerb = {
       : new Map<string, { knowledgeBase: string; files: Map<string, string> }>();
     const items = page.flatMap((row): FlaggedItem[] => {
       const citation = citations.get(row.knowledge_base_id);
-      if (!citation) return [];
-      const fileName = citation.files.get(row.document_id);
+      // A quote is the document's text: none of a document the reader could not open.
+      const fileName = citation?.files.get(row.document_id);
+      if (!citation || fileName === undefined) return [];
       return [
         {
           table: row.table_name,
@@ -285,7 +287,7 @@ export const recordsFlagged: StoreVerb = {
           decidedBy: row.decided_by,
           decidedAt: row.decided_at,
           reason: row.reason,
-          ...(fileName ? { document: { knowledgeBase: citation.knowledgeBase, fileName } } : {})
+          document: { knowledgeBase: citation.knowledgeBase, fileName }
         }
       ];
     });

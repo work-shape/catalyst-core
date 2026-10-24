@@ -106,7 +106,7 @@ export type ApiOperations = typeof scheduledStartOperations &
   typeof systemOperations;
 
 /** Every product operation of the HTTP API, one file per area. */
-export const apiOperations: ApiOperations = {
+const allOperations = {
   ...scheduledStartOperations,
   ...approvalRequestOperations,
   ...accountOperations,
@@ -138,7 +138,20 @@ export const apiOperations: ApiOperations = {
   ...platformOperations,
   ...referenceOperations,
   ...systemOperations
-};
+} as const;
+
+/**
+ * An area spread above and missing from {@link ApiOperations} fails here, by the name of its
+ * first operation; one named there and not spread fails the assignment below.
+ */
+const everyOperationTyped: Record<
+  Exclude<keyof typeof allOperations, keyof ApiOperations>,
+  never
+> = {};
+void everyOperationTyped;
+
+/** Every product operation of the HTTP API, one file per area. */
+export const apiOperations: ApiOperations = allOperations;
 
 export * from "./connections";
 export * from "./guardrails";
