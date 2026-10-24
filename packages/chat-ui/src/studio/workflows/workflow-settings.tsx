@@ -22,6 +22,7 @@ import { cronSchedule, scheduleCron } from "./schedule-cron";
 import { scheduleInWords, withZone } from "./schedule-words";
 import { fieldsSchema, schemaFields, withKeys } from "./schema-fields";
 import { useStartRun } from "./start-run";
+import { WorkflowAppCallers } from "./workflow-app-callers";
 import { sameValue, WORKFLOW_FIELDS, type WorkflowManifest } from "./step-edits";
 import { fieldListState, leftField } from "./step-settings-parts";
 import { useRunsAvailable, useWorkflow, type WorkflowReadProblem } from "./workflow-data";
@@ -434,6 +435,12 @@ export function WorkflowSettingsForm({
         <WorkflowCallers
           workspaceId={workspaceId}
           callers={workflow.callers}
+          onOpenRoute={onOpenRoute}
+        />
+        <WorkflowAppCallers
+          all
+          callers={workflow.appCallers}
+          workspaceId={workspaceId}
           onOpenRoute={onOpenRoute}
         />
       </section>

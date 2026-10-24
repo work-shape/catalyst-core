@@ -1,4 +1,8 @@
-import { createNotices, registerMailSendOperation } from "@work-shape/catalyst-server";
+import {
+  createAppAssetKind,
+  createNotices,
+  registerMailSendOperation
+} from "@work-shape/catalyst-server";
 import {
   CaptureMailTransport,
   TemplateMailSender,
@@ -308,6 +312,8 @@ export async function workflowFixture(
     personalKeys?: true;
     /** Module needed to project platform asset tools through the real agent runner. */
     publishTool?: true;
+    /** The kind `app` registered, for Apps whose actions start Workflows. */
+    apps?: true;
     /**
      * Outbound mail on: `mail.send` with the system sender, its mails rendered in the frame and
      * handed to the transport given, a capture where none is.
@@ -351,12 +357,17 @@ export async function workflowFixture(
     (connectionOptions) =>
       setupAccessInstance({
         ...connectionOptions,
-        furtherKinds: [...(connectionOptions.furtherKinds ?? []), ...(fromAssets ? [kind] : [])],
+        furtherKinds: [
+          ...(connectionOptions.furtherKinds ?? []),
+          ...(fromAssets ? [kind] : []),
+          ...(options.apps ? [createAppAssetKind()] : [])
+        ],
         modules: {
           ...connectionOptions.modules,
           ...(options.publishTool
             ? { assetManagement: { enabled: true }, apps: { enabled: true } }
             : {}),
+          ...(options.apps ? { apps: { enabled: true } } : {}),
           ...(options.moduleOn === false ? {} : { workflows: { enabled: true } }),
           ...(options.personalKeys ? { personalApiKeys: { enabled: true } } : {})
         },

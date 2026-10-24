@@ -1,4 +1,5 @@
 import { workflowStepFacts } from "../workflows/workflow-step-facts";
+import { appCallersByWorkflow } from "../workflows/app-callers";
 import { workflowCallers } from "../workflows/workflow-callers";
 import { agentDependencyAvailability } from "./agent-dependency-availability";
 import { appAudienceReview } from "../apps/app-audience";
@@ -240,6 +241,15 @@ export class AssetReadWorkflow {
         : []
       ).map((state) => [state.connectionAssetId, state.health])
     );
+    // The Apps that start each Workflow of the page, from one pass over the Apps.
+    const appCallers =
+      kind.kind === "workflow" && records.length > 0
+        ? await appCallersByWorkflow(this.options, call.access)
+        : undefined;
+    const startedBy = (name: string) => {
+      const callers = appCallers?.get(name);
+      return callers === undefined || callers.length === 0 ? {} : { appCallers: callers };
+    };
     return records.map((record) => {
       const resource = accessResource(
         record.kind,
@@ -250,7 +260,11 @@ export class AssetReadWorkflow {
       );
       const allowed = allowedOn(kind, call, resource);
       if (!reads(resource)) {
-        return { ...this.publishedSummary(kind, record, locale), allowed };
+        return {
+          ...this.publishedSummary(kind, record, locale),
+          allowed,
+          ...startedBy(record.name)
+        };
       }
       const summary = summarizeAsset(kind, record.name, record.config, locale);
       // Health is a `connection.read` field; use holders see the published summary only.
@@ -269,6 +283,7 @@ export class AssetReadWorkflow {
         ...pointersOf(kind, record),
         ...(draftSummaries.has(record.id) ? { agentDraft: draftSummaries.get(record.id) } : {}),
         ...(record.name === defaultName ? { isDefault: true as const } : {}),
+        ...startedBy(record.name),
         updatedAt: record.updatedAt
       };
     });
@@ -423,7 +438,11 @@ export class AssetReadWorkflow {
       ...(runsAs === undefined ? {} : { runsAs }),
       ...(stepFacts === undefined ? {} : { stepFacts }),
       ...(target.kind.kind === "workflow"
-        ? { workflowCallers: await workflowCallers(this.options, asset.name, call.access) }
+        ? {
+            workflowCallers: await workflowCallers(this.options, asset.name, call.access),
+            appCallers:
+              (await appCallersByWorkflow(this.options, call.access)).get(asset.name) ?? []
+          }
         : {}),
       ...(publication ? { publication } : {}),
       ...(publishQuestion?.length ? { publishQuestion } : {}),

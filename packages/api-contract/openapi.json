@@ -36998,6 +36998,28 @@
               ]
             }
           },
+          "appCallers": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "scope": {
+                  "$ref": "#/components/schemas/AssetScope"
+                }
+              },
+              "required": [
+                "name",
+                "title",
+                "scope"
+              ]
+            }
+          },
           "publishQuestion": {
             "type": "array",
             "items": {
@@ -37456,6 +37478,28 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/AssetVerb"
+            }
+          },
+          "appCallers": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "scope": {
+                  "$ref": "#/components/schemas/AssetScope"
+                }
+              },
+              "required": [
+                "name",
+                "title",
+                "scope"
+              ]
             }
           },
           "updatedAt": {

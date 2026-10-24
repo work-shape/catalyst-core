@@ -443,7 +443,7 @@ export interface WorkflowListed {
  */
 export function toWorkflowListItem(
   summary: WorkflowSummaryResource,
-  asset?: Pick<WorkflowAssetListed, "allowed" | "scope">
+  asset?: Pick<WorkflowAssetListed, "allowed" | "scope" | "appCallers">
 ): WorkflowListItem {
   const description = summary.description?.trim();
   const { lastRun } = summary;
@@ -459,6 +459,7 @@ export function toWorkflowListItem(
     refusedFor: startIssues(summary),
     mayStart: mayStartOf(summary),
     ...assetRightsOf(asset),
+    ...appCallersOf(asset),
     // A reader who only starts it reads no asset row: the engine's entry names the owner.
     ...(asset?.scope === undefined && summary.workspaceId !== undefined
       ? { ownerWorkspaceId: summary.workspaceId }
@@ -491,6 +492,24 @@ export interface WorkflowAssetListed {
   allowed?: readonly AssetVerb[];
   /** Who owns it: the instance, or one workspace. */
   scope?: Asset["scope"];
+  /** The Apps that start it, as far as the reader may open them, by title. */
+  appCallers?: Asset["appCallers"];
+}
+
+/** The Apps a record or a row names as starting the Workflow, where it names any. */
+export function appCallersOf(
+  asset: Pick<WorkflowAssetListed, "appCallers"> | undefined
+): Pick<WorkflowListItem, "appCallers"> {
+  const callers = asset?.appCallers ?? [];
+  return callers.length === 0
+    ? {}
+    : {
+        appCallers: callers.map((caller) => ({
+          id: caller.name,
+          title: caller.title.trim() || caller.name,
+          ...(caller.scope.kind === "workspace" ? { workspaceId: caller.scope.workspaceId } : {})
+        }))
+      };
 }
 
 /** What a record or a row says of the reader's rights on a Workflow and of its owner. */
@@ -522,6 +541,7 @@ export function toAssetWorkflowListItem(asset: WorkflowAssetListed): WorkflowLis
     refusedFor: [],
     mayStart: false,
     ...assetRightsOf(asset),
+    ...appCallersOf(asset),
     startForm: NO_START_FORM
   };
 }
