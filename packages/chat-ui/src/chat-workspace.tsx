@@ -492,6 +492,14 @@ function ChatWorkspaceContent({
           brand: mailBrandFrom(model.config.config)
         }
       : undefined;
+  // The conversation on screen and its agent: what a card in it tells, as the person.
+  const cardConversation =
+    chat.selectedConversationId === undefined
+      ? undefined
+      : {
+          conversationId: chat.selectedConversationId,
+          ...(chat.selectedAgentName === undefined ? {} : { agentName: chat.selectedAgentName })
+        };
   const connectionDraft = connectionDraftHost({
     client: chat.client,
     apiBaseUrl: model.auth.apiBaseUrl,
@@ -503,14 +511,7 @@ function ChatWorkspaceContent({
       chat.selectedConversationOwnerId !== undefined &&
       chat.selectedConversationOwnerId === model.auth.user.id,
     tellConversation: chat.tellConversation,
-    ...(chat.selectedConversationId === undefined
-      ? {}
-      : {
-          from: {
-            conversationId: chat.selectedConversationId,
-            ...(chat.selectedAgentName === undefined ? {} : { agentName: chat.selectedAgentName })
-          }
-        })
+    ...(cardConversation === undefined ? {} : { from: cardConversation })
   });
   // The agent's offer of a Connection's tools: its card gives them to an agent the person may
   // publish, with the person's own rights.
@@ -520,7 +521,11 @@ function ChatWorkspaceContent({
     apiBaseUrl: model.auth.apiBaseUrl,
     authScope: WORKSPACE_AUTH_SCOPE,
     openAgent: (name) =>
-      model.route.showRoute(buildRouteOfLocation({ kindPath: AGENTS_BUILD_PATH, name }))
+      model.route.showRoute(buildRouteOfLocation({ kindPath: AGENTS_BUILD_PATH, name })),
+    // The card stands in the conversation on screen: a give that took effect tells it.
+    ...(cardConversation === undefined
+      ? {}
+      : { tell: (text: string) => chat.tellConversation(cardConversation, text) })
   };
 
   const workspace = (

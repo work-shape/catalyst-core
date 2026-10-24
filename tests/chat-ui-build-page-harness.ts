@@ -142,6 +142,8 @@ export async function mountBuildPage(
     skillEditing?: boolean;
     /** Opens the kind's list instead of the asset's page, and records where the page goes. */
     list?: { opened: { kindPath?: string; name?: string }[] };
+    /** Sends the person's message to a conversation, as a page beside a chat can. */
+    tellConversation?: SettingsPageContextValue["tellConversation"];
   } = {}
 ): Promise<HTMLElement> {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
@@ -155,9 +157,12 @@ export async function mountBuildPage(
     return Response.json({ error: { code: "NOT_FOUND", message: "none" } }, { status: 404 });
   };
   const built = buildPageSettings(fetchImpl, reader.user, editableAgentFields);
+  const withTell: SettingsPageContextValue = reader.tellConversation
+    ? { ...built, tellConversation: reader.tellConversation }
+    : built;
   const settings: SettingsPageContextValue = reader.skillEditing
     ? {
-        ...built,
+        ...withTell,
         config: {
           ...built.config,
           features: {
@@ -166,7 +171,7 @@ export async function mountBuildPage(
           }
         }
       }
-    : built;
+    : withTell;
   const source: BuildSource = {
     kinds: [{ kind: asset.kind, canCreate: true, canDelete: true }],
     rights: resolveBuildRights({ permissions: ["config_assets.write"] }, platformContext()),

@@ -140,6 +140,12 @@ test("the agent's offer gives a Connection's tools to the agent, which calls the
     await expect(card.locator("[data-connection-give-card-given]")).toContainText(
       `Given to ${displayName}.`
     );
+    // The conversation hears it once, as the person, and its agent goes on by itself.
+    await expect(
+      page.getByText(
+        `Local agent response: I received "${displayName} (${name}) now has 1 tool of Sample business (${connection.name}): ${echo}."`
+      )
+    ).toHaveCount(1);
 
     // In the same conversation, the agent calls the new tool from the next message.
     await sendToolCall(page, echo, { text: `given ${tag}` });

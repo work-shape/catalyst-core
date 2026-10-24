@@ -1,7 +1,8 @@
 import type { TranslationContextValue, TranslationKey } from "../../shared/i18n";
 
 // What the New connection dialog tells the conversation whose agent proposed the Connection,
-// once it is connected (CHAT-CONN-1). The person's tab sends it as their message, so it reads
+// once it is connected (CHAT-CONN-1); the approval of drafted tools on a Connection's page and
+// the give of tools from a card tell it the same way. The person's tab sends it as their message, so it reads
 // as theirs: what is connected, under which id, and which tools they approved for what. It
 // names no address and holds no key: only what the card showed and the dialog's own outcome.
 
@@ -59,4 +60,29 @@ export function connectionReadyMessage(
         surfaces,
         tools
       });
+}
+
+/**
+ * What the card of an offer tells its conversation once the person gave the Connection's tools
+ * to an agent and the agent is published with them (CHAT-CONN-1): the Connection, the agent and
+ * the tools, by name. Sent as the person's message, so the agent goes on from there.
+ */
+export function connectionGivenMessage(
+  connection: { name: string; title: string },
+  agent: { name: string; title: string },
+  tools: readonly string[],
+  t: Translate
+): string {
+  const named = tools.slice(0, NAMED_TOOLS_MAX);
+  const listedTools = named.join(", ") + (tools.length > named.length ? ", …" : "");
+  const words = {
+    title: connection.title,
+    name: connection.name,
+    agent: agent.title,
+    agentName: agent.name,
+    tools: listedTools
+  };
+  return tools.length === 1
+    ? t("connectionGive.toldOne", words)
+    : t("connectionGive.told", { ...words, count: tools.length });
 }

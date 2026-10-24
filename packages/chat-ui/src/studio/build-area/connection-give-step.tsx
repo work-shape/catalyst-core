@@ -15,7 +15,8 @@ import {
   type GiveAgent,
   type GiveConnection,
   type GiveOutcome,
-  type GivePlan
+  type GivePlan,
+  type GiveTool
 } from "./connection-give";
 
 // The steps of "Einem Agenten geben" (CS-5d) inside a dialog: the agents the person may
@@ -71,7 +72,8 @@ export function useGiveToAgent(input: {
   suggested?: string;
   onBack?(): void;
   onClose(): void;
-  onGiven?(agent: GiveAgent, outcome: GiveOutcome): void;
+  /** The agent was written: the outcome, and the tools the give added, as it asked them. */
+  onGiven?(agent: GiveAgent, outcome: GiveOutcome, tools: readonly GiveTool[]): void;
 }): GiveSteps {
   const { t } = useTranslation();
   const { host, connection, suggested, onBack, onClose } = input;
@@ -138,7 +140,7 @@ export function useGiveToAgent(input: {
     setBusy(false);
     if (outcome.status !== "failed" && outcome.status !== "other_draft") {
       host.given?.();
-      input.onGiven?.(agent, outcome);
+      input.onGiven?.(agent, outcome, asked.tools);
     }
     setStep({ step: "done", agent, outcome });
   };

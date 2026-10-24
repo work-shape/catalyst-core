@@ -53,7 +53,10 @@ export const connectionGive = defineTranslations({
     "connectionGive.cardNote": "Nothing changes before you confirm.",
     "connectionGive.cardNone": "No tool of this connection is approved for agents.",
     "connectionGive.cardFailed": "The connection could not be read. Try again.",
-    "connectionGive.cardGiven": "Given to {agent}."
+    "connectionGive.cardGiven": "Given to {agent}.",
+    "connectionGive.told":
+      "{agent} ({agentName}) now has {count} tools of {title} ({name}): {tools}.",
+    "connectionGive.toldOne": "{agent} ({agentName}) now has 1 tool of {title} ({name}): {tools}."
   },
   de: {
     "connectionGive.approved": "{count} Tools freigegeben.",
@@ -110,6 +113,10 @@ export const connectionGive = defineTranslations({
     "connectionGive.cardNone": "Von dieser Verbindung ist kein Tool für Agenten freigegeben.",
     "connectionGive.cardFailed":
       "Die Verbindung konnte nicht gelesen werden. Versuch es noch einmal.",
-    "connectionGive.cardGiven": "An {agent} gegeben."
+    "connectionGive.cardGiven": "An {agent} gegeben.",
+    "connectionGive.told":
+      "{agent} ({agentName}) hat jetzt {count} Werkzeuge von {title} ({name}): {tools}.",
+    "connectionGive.toldOne":
+      "{agent} ({agentName}) hat jetzt 1 Werkzeug von {title} ({name}): {tools}."
   }
 });

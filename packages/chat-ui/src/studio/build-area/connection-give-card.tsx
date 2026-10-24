@@ -10,6 +10,7 @@ import { invalidateOfferedAgents } from "../../shared/api/agent-placement-mutati
 import { workspaceQueryKeys } from "../../shared/api/workspace-query-keys";
 import { connectionGiveSource, type GiveAgent, type GiveOutcome } from "./connection-give";
 import { useGiveToAgent, type ConnectionGiveHost } from "./connection-give-step";
+import { connectionGivenMessage } from "./connection-ready";
 
 // "Einem Agenten geben" in the conversation (CS-5d): the agent's offer of a Connection's
 // approved tools, as a card. Its button opens the steps of the give: the agents the person may
@@ -44,6 +45,11 @@ export interface ConnectionGiveCardHost {
   authScope: string;
   /** Opens an agent's page in Studio, where the reader may go there. */
   openAgent?(name: string): void;
+  /**
+   * Sends the person's message to the conversation the card stands in, queued behind a run
+   * that goes (CHAT-CONN-1): once the tools are given, its agent goes on. Absent without one.
+   */
+  tell?(text: string): Promise<void>;
 }
 
 const ConnectionGiveCardHostContext = createContext<ConnectionGiveCardHost | undefined>(undefined);
@@ -105,6 +111,7 @@ export function ConnectionGiveCard({ offer }: { offer: ConnectionOffer }) {
       <ConnectionGiveCardView
         offer={offer}
         {...(give ? { host: give } : {})}
+        {...(host?.tell ? { tell: host.tell } : {})}
         read={
           read.isPending
             ? { status: "loading" }
@@ -129,10 +136,13 @@ type CardRead =
 export function ConnectionGiveCardView({
   offer,
   host,
+  tell,
   read
 }: {
   offer: ConnectionOffer;
   host?: ConnectionGiveHost;
+  /** Tells the conversation, as the person, that the tools are given. */
+  tell?: (text: string) => Promise<void>;
   read: CardRead;
 }) {
   const { t } = useTranslation();
@@ -148,7 +158,21 @@ export function ConnectionGiveCardView({
     connectionTitle: title,
     ...(offer.agent === undefined ? {} : { suggested: offer.agent }),
     onClose: () => setOpen(false),
-    onGiven: (agent, outcome) => setGiven({ agent, outcome })
+    onGiven: (agent, outcome, tools) => {
+      setGiven({ agent, outcome });
+      // Only a give that took effect: the agent is published with the tools. A draft, a wait
+      // for an approval or a refusal leaves the conversation as it is.
+      if (tell && outcome.status === "published") {
+        tell(
+          connectionGivenMessage(
+            { name: offer.connection, title },
+            { name: agent.name, title: agent.title },
+            tools.map((tool) => tool.toolName),
+            t
+          )
+        ).catch(() => undefined);
+      }
+    }
   });
 
   return (
