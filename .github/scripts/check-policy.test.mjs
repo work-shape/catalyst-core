@@ -162,3 +162,81 @@ test("every job runs on every release run, after the dispatch policy", () => {
       .sort()
   );
 });
+
+const prWorkflow = readFileSync(new URL("../workflows/pr.yml", import.meta.url), "utf8");
+const prJobs = parse(prWorkflow).jobs;
+
+test("PR checks run three independent static jobs and eight shards on GitHub-hosted runners", () => {
+  assert.deepEqual(Object.keys(prJobs).sort(), ["check", "lint", "tests", "tooling", "types"]);
+  for (const [name, job] of Object.entries(prJobs)) {
+    assert.equal(job["runs-on"], "ubuntu-latest", name);
+    if (name !== "check") {
+      assert.equal(job.needs, undefined, name);
+      assert.equal(job.if, undefined, name);
+      assert.equal(
+        job.steps.find((step) => step.name === "Install").run,
+        "pnpm install --frozen-lockfile"
+      );
+    }
+  }
+  assert.deepEqual(prJobs.tests.strategy.matrix.shard, [1, 2, 3, 4, 5, 6, 7, 8]);
+  assert.equal(prJobs.tests.strategy["fail-fast"], false);
+  assert.equal(prJobs.tests.name, "tests (${{ matrix.shard }}/8)");
+  assert.equal(
+    prJobs.tests.steps.find((step) => step.name === "Unit and database tests").run,
+    "pnpm exec vitest run --shard=${{ matrix.shard }}/8"
+  );
+  assert.equal(prJobs.check.if, "always()");
+  assert.deepEqual(prJobs.check.needs, ["lint", "types", "tooling", "tests"]);
+});
+
+test("PR checks retain every static command in its parallel job", () => {
+  const commands = {
+    lint: ["pnpm lint"],
+    types: ["pnpm typecheck:packages", "pnpm typecheck:tests"],
+    tooling: [
+      "pnpm check:changes",
+      "node --test .github/scripts/check-policy.test.mjs",
+      "pnpm format:check",
+      "pnpm build",
+      "pnpm check:openapi && pnpm check:contract",
+      "pnpm check:migrations",
+      "pnpm test:tooling",
+      "pnpm test:upgrade",
+      "pnpm test:deployment-kit"
+    ]
+  };
+  const databaseSteps = ["Database", "Database log of a failed run", "Remove the database"];
+  for (const [name, expected] of Object.entries(commands)) {
+    const steps = prJobs[name].steps;
+    assert.deepEqual(
+      steps
+        .filter((step) => step.run && !["Runner", "Install", ...databaseSteps].includes(step.name))
+        .map((step) => step.run),
+      expected,
+      name
+    );
+  }
+  for (const name of ["tooling", "tests"]) {
+    const steps = prJobs[name].steps;
+    const database = steps.findIndex((step) => step.name === "Database");
+    assert.ok(database > steps.findIndex((step) => step.name === "Build"), name);
+    const suite = name === "tooling" ? "Tooling tests" : "Unit and database tests";
+    assert.ok(steps.findIndex((step) => step.name === suite) > database, name);
+    assert.equal(steps.find((step) => step.name === databaseSteps[1]).if, "failure()");
+    assert.equal(steps.at(-1).name, "Remove the database");
+    assert.equal(steps.at(-1).if, "always()");
+  }
+  assert.equal(prJobs.tooling.steps[0].with["fetch-depth"], 0);
+});
+
+test("PR jobs build locally when needed and never transfer compiled output", () => {
+  assert.doesNotMatch(prWorkflow, /actions\/(?:upload-artifact|download-artifact|cache)(?:\/|@)/u);
+  for (const name of ["tooling", "tests"]) {
+    assert.equal(prJobs[name].steps.find((step) => step.name === "Build").run, "pnpm build");
+  }
+  // These collectors use source aliases rather than package dist exports.
+  for (const name of ["lint", "types"]) {
+    assert.ok(!prJobs[name].steps.some((step) => step.name === "Build"), name);
+  }
+});

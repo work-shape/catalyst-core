@@ -23,9 +23,64 @@ defaults:
   run:
     shell: bash
 jobs:
-  static:
+  # The typed lint and Knip resolve workspace source; no compiled output is needed.
+  lint:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Runner
+        run: |
+          uname -mrs
+          nproc
+          free --bytes
+          uptime
+          docker info --format 'docker {{.ServerVersion}}: {{.NCPU}} CPUs, {{.MemTotal}} bytes, {{.ContainersRunning}} containers running'
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Lint
+        run: pnpm lint
+
+  # The compiler checks resolve workspace source through tsconfig aliases.
+  types:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Runner
+        run: |
+          uname -mrs
+          nproc
+          free --bytes
+          uptime
+          docker info --format 'docker {{.ServerVersion}}: {{.NCPU}} CPUs, {{.MemTotal}} bytes, {{.ContainersRunning}} containers running'
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Package types
+        run: pnpm typecheck:packages
+      - name: Test types
+        run: pnpm typecheck:tests
+
+  # Keep package and client build validation alongside the tooling checks.
+  tooling:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -47,16 +102,12 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Changes
         run: pnpm check:changes
+      - name: Check workflow policy
+        run: node --test .github/scripts/check-policy.test.mjs
       - name: Format
         run: pnpm format:check
       - name: Build
         run: pnpm build
-      - name: Lint
-        run: pnpm lint
-      - name: Package types
-        run: pnpm typecheck:packages
-      - name: Test types
-        run: pnpm typecheck:tests
       - name: OpenAPI and contract
         run: pnpm check:openapi && pnpm check:contract
       - name: Migrations
@@ -137,7 +188,7 @@ jobs:
   # The one name branch protection requires: green only when every job above is.
   check:
     if: always()
-    needs: [static, tests]
+    needs: [lint, types, tooling, tests]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
