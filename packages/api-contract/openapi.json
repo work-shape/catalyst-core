@@ -19798,7 +19798,8 @@
             "in": "query",
             "required": false,
             "schema": {
-              "$ref": "#/components/schemas/UsageOrigin"
+              "type": "string",
+              "maxLength": 200
             }
           }
         ],
@@ -34116,7 +34117,8 @@
             "in": "query",
             "required": false,
             "schema": {
-              "$ref": "#/components/schemas/UsageOrigin"
+              "type": "string",
+              "maxLength": 200
             }
           }
         ],
@@ -47948,16 +47950,6 @@
           "period",
           "limit",
           "percent"
-        ]
-      },
-      "UsageOrigin": {
-        "type": "string",
-        "enum": [
-          "conversation",
-          "app",
-          "workflow",
-          "knowledge_base",
-          "system"
         ]
       },
       "UsageSafeguards": {

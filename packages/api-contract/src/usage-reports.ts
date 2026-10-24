@@ -39,7 +39,7 @@ export const usageBreakdownQuerySchema = z
     app: filterValue.optional(),
     workflow: filterValue.optional(),
     model: filterValue.optional(),
-    origin: usageOriginSchema.optional()
+    origin: filterValue.optional()
   })
   .refine((query) => query.from < query.to, { message: "from must be before to", path: ["to"] })
   .refine(
@@ -148,7 +148,7 @@ export const workspaceUsageQuerySchema = z
     app: filterValue.optional(),
     workflow: filterValue.optional(),
     model: filterValue.optional(),
-    origin: usageOriginSchema.optional()
+    origin: filterValue.optional()
   })
   .refine((query) => query.from < query.to, { message: "from must be before to", path: ["to"] })
   .refine(

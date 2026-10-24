@@ -5,6 +5,7 @@ import { accessConnection } from "./access-connection";
 import { accessDataStore } from "./access-data-store";
 import { accessFeedback } from "./access-feedback";
 import { accessUsage } from "./access-usage";
+import { usageReports } from "./usage-reports";
 import { accessGuardrail } from "./access-guardrail";
 import { accessKnowledgeBase } from "./access-knowledge-base";
 import { accessMailSender } from "./access-mail-sender";
@@ -95,6 +96,7 @@ export const translations = combineTranslations(common)
   .and(configAssets)
   .and(confirmations)
   .and(usageLimits)
+  .and(usageReports)
   .and(connectionCatalogue)
   .and(connectionCreate)
   .and(connectionGive)
