@@ -1,6 +1,6 @@
 {
   "name": "@work-shape/catalyst-demo",
-  "version": "0.8.0-rc.8",
+  "version": "0.8.0-rc.9",
   "private": true,
   "type": "module",
   "exports": {

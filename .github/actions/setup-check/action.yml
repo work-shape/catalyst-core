@@ -1,8 +1,8 @@
 name: Set up a check consumer
-description: Install from the pnpm cache and optionally restore this run's shared build.
+description: Install from the pnpm cache and optionally build this commit.
 inputs:
   build:
-    description: Restore the build artifact produced by this run.
+    description: Build this commit before the job's steps.
     default: "true"
 runs:
   using: composite
@@ -15,14 +15,10 @@ runs:
     - name: Install
       shell: bash
       run: pnpm install --frozen-lockfile
-    # Artifacts work across host and job containers without requiring the host's zstd.
-    # Select this run and commit only; a missing build must fail the consumer.
-    - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-      if: inputs.build == 'true'
-      with:
-        name: check-build-${{ github.run_id }}-${{ github.sha }}
-        path: /tmp
-    - name: Restore build
+    # Each job builds this run's commit itself. The build is not shared through an artifact:
+    # artifact storage counts against the organisation's monthly Actions storage, and the
+    # release Check must not stop when that runs out.
+    - name: Build
       if: inputs.build == 'true'
       shell: bash
-      run: tar -xzf /tmp/check-build.tgz
+      run: pnpm build

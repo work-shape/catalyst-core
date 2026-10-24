@@ -134,23 +134,16 @@ test("release Check leaves scale tests to the nightly runner", () => {
   assert.equal(jobs.tests.env.CATALYST_SCALE_TESTS, "0");
 });
 
-test("shared builds transfer across host and Playwright containers without zstd", () => {
-  const saved = jobs.build.steps.find((step) => step.name === "Save this run's build");
-  assert.ok(saved.uses.startsWith("actions/upload-artifact@"));
-  assert.equal(saved.with.path, "/tmp/check-build.tgz");
-  assert.equal(saved.with["if-no-files-found"], "error");
-  assert.equal(saved.with["compression-level"], 0);
-  assert.equal(saved.with.overwrite, true);
+test("each job builds this commit itself; no build travels through artifact storage", () => {
+  assert.ok(!jobs.build.steps.some((step) => step.uses?.startsWith("actions/upload-artifact@")));
+  assert.equal(jobs.build.steps.find((step) => step.name === "Build").run, "pnpm build");
   const setup = parse(
     readFileSync(new URL("../actions/setup-check/action.yml", import.meta.url), "utf8")
   );
-  const download = setup.runs.steps.find((step) =>
-    step.uses?.startsWith("actions/download-artifact@")
-  );
-  assert.equal(saved.with.name, "check-build-${{ github.run_id }}-${{ github.sha }}");
-  assert.equal(download.with.name, saved.with.name);
-  assert.equal(download.with.path, "/tmp");
-  assert.equal(download.if, "inputs.build == 'true'");
+  assert.ok(!setup.runs.steps.some((step) => step.uses?.startsWith("actions/download-artifact@")));
+  const build = setup.runs.steps.find((step) => step.name === "Build");
+  assert.equal(build.run, "pnpm build");
+  assert.equal(build.if, "inputs.build == 'true'");
   assert.ok(!setup.runs.steps.some((step) => step.uses?.startsWith("actions/cache/restore@")));
   const policy = jobs.changes.steps.find((step) => step.name === "Check workflow policy");
   assert.equal(policy.run, "node --test .github/scripts/check-policy.test.mjs");
