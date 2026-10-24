@@ -78,6 +78,12 @@ export interface OperationCalls {
   publishNarrator?: PublishNarrator;
 }
 
+/** One capability's deletion past the audit retention, with the transaction's stores. */
+type InstanceRetention = (input: {
+  days: number;
+  stores: PlatformStores;
+}) => Promise<Readonly<Record<string, number>>>;
+
 export interface ChatServerOptions {
   logger: import("@work-shape/catalyst-core").Logger;
   /**
@@ -132,6 +138,11 @@ export interface ChatServerOptions {
    * those of its own kinds.
    */
   jobRetries?: JobRetry[];
+  /**
+   * What the capabilities delete past the audit retention, in the transaction that deletes the
+   * audit events. Each answers its counts by name, which the `audit.pruned` event records.
+   */
+  retention?: readonly InstanceRetention[];
   managedObjects?: {
     readArtifact(input: {
       clientInstanceId: ClientInstanceId;

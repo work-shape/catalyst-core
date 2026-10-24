@@ -27,12 +27,33 @@ function createCapabilityModels(input: {
   costs: ClientInstanceConfig["usage"]["costs"];
 }): ClientInstanceCapabilityModels {
   const { gateway, clientInstanceId } = input;
+  /**
+   * The effort the binding is configured with, where its model takes it. A model that takes
+   * none is called without one, as an agent run calls it.
+   */
+  const configuredEffort = (bindingId: string) => {
+    const binding = input.bindings.find((candidate) => candidate.id === bindingId);
+    const provider = input.providers.find((candidate) => candidate.id === binding?.providerId);
+    const configured = binding?.reasoningEffort ?? provider?.reasoningEffort;
+    return configured !== undefined &&
+      gateway.capabilities({ bindingId }).reasoningEfforts.includes(configured)
+      ? configured
+      : undefined;
+  };
   return {
     async complete(call) {
+      const reasoningEffort =
+        call.reasoningEffort === "configured" ? configuredEffort(call.bindingId) : undefined;
       const completion = await gateway.complete({
         binding: { bindingId: call.bindingId },
-        messages: [{ role: "user", content: call.content }],
+        messages: [
+          ...(call.instructions === undefined
+            ? []
+            : [{ role: "system" as const, content: call.instructions }]),
+          { role: "user", content: call.content }
+        ],
         tools: [],
+        ...(reasoningEffort === undefined ? {} : { reasoningEffort }),
         ...(call.output ? { output: call.output } : {}),
         ...(call.maxOutputTokens === undefined ? {} : { maxOutputTokens: call.maxOutputTokens }),
         attribution: {
@@ -48,6 +69,10 @@ function createCapabilityModels(input: {
         ...(call.signal ? { signal: call.signal } : {}),
         ...(call.deadline ? { deadline: call.deadline } : {})
       });
+      // A capability offers the model no tool, so an answer that calls one is no answer.
+      if (completion.toolCalls.length > 0) {
+        throw new AppError("INTERNAL", "A capability's model call cannot call tools");
+      }
       return { text: completion.text, usage: completion.usage };
     },
     describeBinding(bindingId) {

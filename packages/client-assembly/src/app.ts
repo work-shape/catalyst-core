@@ -28,6 +28,7 @@ import {
   type HttpRuntime,
   type JobWorker,
   type KnowledgeHitDocuments,
+  type ModuleSnapshot,
   type PlatformStores,
   type SecretResolver
 } from "@work-shape/catalyst-core";
@@ -61,6 +62,7 @@ import {
   findConfigAssetAgentValidationIssues,
   findModuleOffToolIssues
 } from "./assembly-validation";
+import { withBuiltInCapabilities } from "./built-in-capabilities";
 import { createInstanceModels } from "./capability-models";
 import { createConfigAssetSource } from "./config-asset-source";
 import { createInstanceAgentTools, createInstanceOperationCalls } from "./operation-calls";
@@ -234,6 +236,14 @@ export async function createClientInstanceApp(
     attachments,
     managedObjects,
     jobRetries,
+    retention: execution.capabilityContributions.flatMap(({ retention }) =>
+      retention
+        ? [
+            (retained: { days: number; stores: PlatformStores }) =>
+              retention({ days: retained.days, stores: { guardrails: retained.stores.guardrails } })
+          ]
+        : []
+    ),
     pages,
     executionWorkspaceCleanup: workspaceObjectStore
       ? {
@@ -314,7 +324,8 @@ export async function createClientInstanceExecutionAssembly(
   const env = readClientInstanceEnv(input.env);
   const config = input.config ?? (await loadConfig(input.configPath));
   const clientInstanceId = getClientInstanceId(config);
-  const { capabilities } = input;
+  // The guardrails ship as a built-in capability until they move out (ADR-0032).
+  const capabilities = withBuiltInCapabilities(config, input.capabilities);
   const modules = resolveInstanceModules(config, capabilities).snapshot;
   assertCapabilityConfigKeys(capabilities, config.capabilities);
   endResolveOnlyRun();
@@ -369,6 +380,7 @@ export async function createClientInstanceExecutionAssembly(
     jobs: store.jobs,
     transaction: (fn) => store.transaction((tx) => fn({ files: tx.files, jobs: tx.jobs })),
     models: models.capabilityModels,
+    stores: { guardrails: store.guardrails, configAssets: store.configAssets },
     knowledgeDocuments: {
       open: async (request) => knowledgeDocuments?.open(request)
     },
@@ -383,6 +395,13 @@ export async function createClientInstanceExecutionAssembly(
       }
     }
   });
+  try {
+    assertGuardrailsCheck(modules, capabilities, capabilityContributions);
+  } catch (error) {
+    await closeCapabilityContributions(capabilityContributions);
+    await store.close?.();
+    throw error;
+  }
   const capabilityAttachmentHandlers = capabilityContributions.flatMap(
     (contribution) => contribution.attachments ?? []
   );
@@ -517,7 +536,6 @@ export async function createClientInstanceExecutionAssembly(
     modules,
     store,
     auditRecorder,
-    modelGateway,
     assetSource,
     configAssets,
     approvalRequestHandlers,
@@ -733,12 +751,38 @@ export async function createClientInstanceExecutionAssembly(
     connections,
     modulesStarted,
     noticeMail,
+    capabilityContributions,
     async close() {
       await modulesStarted.close();
       await closeCapabilityContributions(capabilityContributions);
       await store.close?.();
     }
   };
+}
+
+/**
+ * Spec section 3, rule 3: with the guardrails module on, the capability that ships it answers
+ * at the before-events. One that leaves its check out would let every action through
+ * unchecked, so the start is refused.
+ */
+function assertGuardrailsCheck(
+  modules: ModuleSnapshot,
+  capabilities: readonly ClientInstanceCapability[],
+  contributions: readonly ClientInstanceCapabilityContribution[]
+): void {
+  if (!modules.isEnabled("guardrails")) return;
+  const shipping = capabilities.flatMap((capability, index) =>
+    capability.modules?.some((module) => module.name === "guardrails")
+      ? [{ name: capability.name, contribution: contributions[index] }]
+      : []
+  );
+  const silent = shipping.filter((entry) => !entry.contribution?.beforeActionCheck);
+  if (silent.length > 0) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      `Module 'guardrails' is on but capability '${silent.map((entry) => entry.name).join("', '")}' that ships it contributes no check. Turn 'modules.guardrails.enabled' off or ship a capability that checks`
+    );
+  }
 }
 
 async function createCapabilityContributions(
