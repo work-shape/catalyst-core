@@ -6,6 +6,8 @@ data_stores.insert  POST /api/v1/data-stores/:store/insert
 data_stores.list  GET /api/v1/data-stores
 data_stores.preview_rows  GET /api/v1/data-stores/:store/preview-rows
 data_stores.query  POST /api/v1/data-stores/:store/query
+data_stores.records_decide  POST /api/v1/data-stores/:store/records/decide
+data_stores.records_flagged  GET /api/v1/data-stores/:store/records/flagged
 data_stores.rows  GET /api/v1/data-stores/:store/rows
 data_stores.update  POST /api/v1/data-stores/:store/update
 data_stores.used_by  GET /api/v1/data-stores/:store/used-by
