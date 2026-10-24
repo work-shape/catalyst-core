@@ -85,7 +85,11 @@ const unusedUsageStore: ModelUsageEventStore = {
   listModelUsageEvents: unused,
   clearUserFromModelUsageEvents: unused,
   clearWorkspaceFromModelUsageEvents: unused,
-  backfillModelUsageAttribution: unused
+  backfillModelUsageAttribution: unused,
+  readSpendLimits: unused,
+  listSpendLimits: unused,
+  setSpendLimit: unused,
+  readSpendCounters: unused
 };
 
 /**
