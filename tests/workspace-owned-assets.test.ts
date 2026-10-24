@@ -1,8 +1,13 @@
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { createPlatformAssetCalls } from "@work-shape/catalyst-server";
+import { loadSecretKeyring } from "@work-shape/catalyst-connections";
+import { createDataStores, type DataStores } from "@work-shape/catalyst-data-stores";
+import { createPlatformAssetCalls, type WorkflowAssetKind } from "@work-shape/catalyst-server";
 import {
+  DATA_STORE_ACTIONS,
+  DATA_STORE_ASSET_KIND,
+  DATA_STORE_MANIFEST_FILE,
   asAgentRunId,
   asConversationId,
   asToolCallId,
@@ -21,8 +26,10 @@ import {
   skill,
   type AccessInstance
 } from "./support/access-instance";
+import { appFiles, setupAppInstance } from "./support/app-instance";
 import { applyAtCurrentRevisions } from "./support/asset-revisions";
-import { testServerOptions } from "./support/test-instance";
+import { silentTestLogger } from "./support/model-gateway";
+import { createTestInstance, testServerOptions } from "./support/test-instance";
 
 // A workspace owns the agents and skills made in it (WS-OWN-1a, access acceptance check 33):
 // made in a workspace's Studio or through a CLI root bound with `--workspace`, the workspace
@@ -525,6 +532,98 @@ describe("the agent's first save of a conversation (NAV-2)", () => {
     });
   });
 
+  // Replaces e2e/first-save-creates.spec.ts "the first save of a Data Store in a personal chat
+  // opens its draft in Studio's Personal scope, and Publish makes it": the agent's first save of
+  // a Data Store makes an unpublished draft the conversation's workspace owns.
+  it("creates a Data Store its workspace owns, and an App only a workspace owns", async () => {
+    const own = await createTestInstance();
+    const key = randomBytes(32).toString("base64");
+    const dataStores = createDataStores({
+      defaultLocale: "en",
+      clientInstanceId,
+      stores: own.stores,
+      databaseUrl: "postgres://unused.invalid/none",
+      keyring: await loadSecretKeyring({
+        keys: [{ id: "k1", ref: "WORKSPACE_OWNED_ASSETS_TEST_KEY" }],
+        secrets: { resolve: () => Promise.resolve(key) }
+      }),
+      limits: { sizeLimitBytes: 1024 ** 3, poolMaxConnections: 1 },
+      logger: silentTestLogger
+    });
+    const t = await setupAppInstance({
+      modules: { dataStores: { enabled: true } },
+      furtherKinds: [dataStoreKind(dataStores)]
+    });
+    try {
+      for (const action of [
+        "app.read",
+        "app.write",
+        DATA_STORE_ACTIONS.read,
+        DATA_STORE_ACTIONS.write
+      ])
+        await t.grant(t.kai.id, action, { workspaceId: t.workspaceId });
+      const calls = await callsOf(t);
+      const conversationId = await ownConversation(t, t.workspaceId);
+      expect(
+        await calls.put(kaiContext(t, conversationId), {
+          kind: DATA_STORE_ASSET_KIND,
+          name: "leads",
+          files: [
+            { path: DATA_STORE_MANIFEST_FILE, text: "id: leads\nname: Leads\n" },
+            { path: "migrations/0001_init.sql", text: "create table leads (name text not null);" }
+          ]
+        })
+      ).toMatchObject({
+        saved: true,
+        revision: 1,
+        created: true,
+        kind: DATA_STORE_ASSET_KIND,
+        name: "leads",
+        workspaceId: t.workspaceId
+      });
+      const store = await t.stores.configAssets.getConfigAsset({
+        clientInstanceId,
+        kind: DATA_STORE_ASSET_KIND,
+        name: "leads"
+      });
+      expect(store?.scope).toEqual({ kind: "workspace", workspaceId: t.workspaceId });
+      expect(store?.publishedRevisionId).toBeUndefined();
+      expect(await subjectOf(t, conversationId)).toEqual({
+        kind: DATA_STORE_ASSET_KIND,
+        name: "leads"
+      });
+
+      // Also for e2e/first-save-creates.spec.ts, whose cases had no App: an App's first save in
+      // a workspace makes a draft that workspace owns, and one naming no workspace makes none.
+      // The agent creates an App from a Page (`app.save`), not with `platform.assets.put`.
+      const app = await t.putApp(t.kai.id, "offers", appFiles("first save"));
+      expect(app.statusCode, app.body).toBe(200);
+      const offers = await t.stores.configAssets.getConfigAsset({
+        clientInstanceId,
+        kind: "app",
+        name: "offers"
+      });
+      expect(offers?.scope).toEqual({ kind: "workspace", workspaceId: t.workspaceId });
+      expect(offers?.publishedRevisionId).toBeUndefined();
+      const unowned = await t.call(t.admin.id, "assets.put", {
+        params: { kind: "app", name: "unowned" },
+        payload: { files: appFiles("no workspace", { id: "unowned" }), expectedRevision: null }
+      });
+      expect(unowned.statusCode, unowned.body).toBe(422);
+      expect(errorSchema.parse(unowned.json()).error.details?.reason).toBe("scope_unavailable");
+      expect(
+        await t.stores.configAssets.getConfigAsset({
+          clientInstanceId,
+          kind: "app",
+          name: "unowned"
+        })
+      ).toBeUndefined();
+    } finally {
+      await t.close();
+      await dataStores.close();
+    }
+  });
+
   it("names the agent it created and opened in the language of the run", async () => {
     // ACCEPT-1c C8: a German run's line said "Agent „Leave Reviewer“ erstellt".
     const { t, team } = await setup();
@@ -571,3 +670,22 @@ describe("the agent's first save of a conversation (NAV-2)", () => {
     }
   });
 });
+
+/** The kind `data_store` as the assembly registers it (`client-assembly/src/data-stores.ts`). */
+function dataStoreKind(dataStores: DataStores): WorkflowAssetKind {
+  return {
+    ...dataStores.assetKind,
+    references: () => [],
+    holdsInstanceDefault: false,
+    hasWorkspaceAvailability: false,
+    prepareInteractiveUpsert: ({ next }) => next,
+    missingUpsertRight: () => undefined,
+    assertInteractiveUpsertAllowed: () => undefined,
+    assertInteractiveDeleteAllowed: () => undefined,
+    manifestOfFiles: (files) => dataStores.readFiles(files),
+    configOfFiles: ({ manifest }) => manifest,
+    onPublish: ({ stores, assetId, revision, config }) =>
+      dataStores.publish(stores, { assetId, revision, config }),
+    onRemove: ({ stores, assetId }) => dataStores.retire(stores, assetId)
+  };
+}

@@ -124,6 +124,37 @@ export const pageSource = (heading: string): Record<string, string> => ({
   "src/routes/data.tsx": dataRoute
 });
 
+/** A root route that also says whom the interface shows the Page to, by the kit's `getContext()`. */
+const viewerRootRoute = `import { createRootRoute, Link, Outlet } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
+import { getContext } from "@work-shape/catalyst-app-kit";
+
+function Root() {
+  const [viewer, setViewer] = useState<string>();
+  useEffect(() => {
+    void getContext().then((context) => setViewer(context.viewer.displayName));
+  }, []);
+  return (
+    <main className="flex flex-col gap-4 p-4">
+      <nav className="flex gap-4">
+        <Link to="/">Overview</Link>
+        <Link to="/data">Data</Link>
+      </nav>
+      {viewer === undefined ? null : <p>Shown to {viewer}</p>}
+      <Outlet />
+    </main>
+  );
+}
+
+export const Route = createRootRoute({ component: Root });
+`;
+
+/** The Page of `pageSource`, whose root route says whom it is shown to. */
+export const viewerPageSource = (heading: string): Record<string, string> => ({
+  ...pageSource(heading),
+  "src/routes/__root.tsx": viewerRootRoute
+});
+
 /**
  * A Page as plain HTML that sets one rule of its own, on the heading's margin, and leaves
  * everything else about its look to the platform. Four of its class names are also names of

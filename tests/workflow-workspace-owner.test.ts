@@ -133,6 +133,20 @@ describe("a Workflow a workspace owns", () => {
         })
       )?.publishedRevision
     ).toBe(revision);
+    // Replaces e2e/workflow-workspace-owner.spec.ts "a Workflow a workspace owns is listed on its
+    // Workflows page with the workspace's chip": addressed without its workspace, the Workflow
+    // is not there, even for the superadmin; the instance owns no such one.
+    const address = { kind: WORKFLOW_ASSET_KIND, name: OWN };
+    await t.expectOk(t.root.id, "assets.get", {
+      params: address,
+      query: { workspaceId: nordlicht }
+    });
+    await t.expectRefused(
+      t.root.id,
+      "assets.get",
+      { params: address },
+      { status: 404, code: "NOT_FOUND" }
+    );
 
     // The rights in Nordlicht reach no Workflow of the instance.
     await t.expectRefused(

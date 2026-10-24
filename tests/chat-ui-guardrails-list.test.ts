@@ -1,5 +1,8 @@
-import { createElement } from "react";
-import { describe, expect, it } from "vitest";
+// @vitest-environment happy-dom
+
+import { act, createElement } from "react";
+import { createRoot } from "react-dom/client";
+import { describe, expect, it, vi } from "vitest";
 import type { ShippedGuardrailView } from "@work-shape/catalyst-api-client";
 import {
   BuildAssetKindsProvider,
@@ -14,8 +17,10 @@ import {
   type BuildSource,
   type ShippedGuardrailsRead
 } from "@work-shape/catalyst-chat-ui/build-area";
+import { UiRoot, uiLabelsEn } from "@work-shape/catalyst-ui";
 import { instanceActions, platformContext } from "./chat-ui-build-fixtures";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
+import { required } from "./support/assertions";
 
 // Build > Guardrails: the guardrail the platform ships is the first row of the one list, under
 // its search and scope, with its switch and its state line (GR-PUB-1). The list says it is
@@ -106,37 +111,37 @@ function source(
   };
 }
 
-function renderList(
-  input: {
-    read?: ShippedGuardrailsRead;
-    scope?: BuildScope;
-    rows?: BuildAssetRow[];
-    listError?: string;
-  } = {},
-  locale: "en" | "de" = "en"
-): string {
-  return renderToStaticMarkup(
+type ListInput = {
+  read?: ShippedGuardrailsRead;
+  scope?: BuildScope;
+  rows?: BuildAssetRow[];
+  listError?: string;
+};
+
+/** The Guardrails list in the frame, its shipped rows read from `input.read`. */
+function listElement(input: ListInput = {}) {
+  return createElement(
+    BuildAssetKindsProvider,
+    { value: [guardrailKind(input.read ?? ready([shipped]))] },
     createElement(
-      TranslationProvider,
-      { children: null, locale },
-      createElement(
-        BuildAssetKindsProvider,
-        { value: [guardrailKind(input.read ?? ready([shipped]))] },
-        createElement(
-          BuildNavigationProvider,
-          {
-            value: {
-              location: { kindPath: "guardrails" },
-              open: noop,
-              href: (place) => `/build/${place.kindPath ?? ""}/${place.name ?? ""}`
-            }
-          },
-          createElement(BuildFrame, {
-            source: source(input.scope ?? { kind: "instance" }, input.rows ?? [], input.listError)
-          })
-        )
-      )
+      BuildNavigationProvider,
+      {
+        value: {
+          location: { kindPath: "guardrails" },
+          open: noop,
+          href: (place) => `/build/${place.kindPath ?? ""}/${place.name ?? ""}`
+        }
+      },
+      createElement(BuildFrame, {
+        source: source(input.scope ?? { kind: "instance" }, input.rows ?? [], input.listError)
+      })
     )
+  );
+}
+
+function renderList(input: ListInput = {}, locale: "en" | "de" = "en"): string {
+  return renderToStaticMarkup(
+    createElement(TranslationProvider, { children: null, locale }, listElement(input))
   );
 }
 
@@ -254,5 +259,60 @@ describe("which shipped guardrails the list shows", () => {
   it("shows them in the instance's scope alone", () => {
     expect(shippedTitles({ scope: { kind: "instance" } })).not.toBe("");
     expect(shippedTitles({ scope: { kind: "workspace", workspaceId: TEAM } })).toBe("");
+  });
+});
+
+// Replaces e2e/guardrails.spec.ts "Studio shows the guardrail the platform ships, on, and asks
+// before it is switched off": a click on the shipped guardrail's switch asks first, and Cancel
+// leaves it on without asking the instance to switch it.
+describe("switching off the shipped guardrail", () => {
+  it("asks first, and Cancel keeps it on", async () => {
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    const switched: [string, boolean][] = [];
+    const read: ShippedGuardrailsRead = {
+      status: "ready",
+      items: [shipped],
+      switching: undefined,
+      switchTo: async (name, enabled) => {
+        switched.push([name, enabled]);
+        return undefined;
+      }
+    };
+    const host = document.createElement("div");
+    document.body.append(host);
+    const root = createRoot(host);
+    try {
+      await act(async () =>
+        root.render(
+          createElement(
+            TranslationProvider,
+            { children: null, locale: "en" },
+            createElement(UiRoot, { mode: "light", labels: uiLabelsEn }, listElement({ read }))
+          )
+        )
+      );
+      const toggle = required(document.querySelector<HTMLButtonElement>('[role="switch"]'));
+      expect(toggle.getAttribute("aria-checked")).toBe("true");
+      await act(async () => toggle.click());
+
+      const asked = required(document.querySelector<HTMLElement>("dialog[open]"));
+      expect(asked.textContent).toContain(
+        "Switch off “Publishing needs an instance admin's approval”?"
+      );
+      expect(asked.textContent).toContain("no admin is asked");
+      expect(switched).toEqual([]);
+
+      const cancel = required(
+        [...asked.querySelectorAll("button")].find((button) => button.textContent === "Cancel")
+      );
+      await act(async () => cancel.click());
+      expect(document.querySelector("dialog[open]")).toBeNull();
+      expect(toggle.getAttribute("aria-checked")).toBe("true");
+      expect(switched).toEqual([]);
+    } finally {
+      await act(async () => root.unmount());
+      host.remove();
+      vi.unstubAllGlobals();
+    }
   });
 });

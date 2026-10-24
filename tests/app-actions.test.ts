@@ -152,6 +152,28 @@ describe("a call a frame makes through the interface", () => {
     }
   });
 
+  // Replaces e2e/app-actions.spec.ts (09ba98a28), "a tile of a published App reads rows through
+  // a named action with the viewer's rights": the member granted `connection.read` on the
+  // Connection itself, with no admin role, is told the Connection's label in the refusal.
+  it("names the Connection to a viewer who holds connection.read on it directly and no role", async () => {
+    expect(t.kai.roles).toEqual(["user"]);
+    await withRight(t.kai.id, "connection.read", { assetId: crm }, async () => {
+      const frame = await openApp(t.kai.id, "published");
+      const handed = t.handed.length;
+
+      const response = await callAction(t.kai.id, frame, "load", { text: "hello" });
+
+      expect(response.statusCode).toBe(403);
+      expect(refusal(response).details).toMatchObject({
+        action: "connection.use",
+        connectionUseDenied: true,
+        frame: "app",
+        connectionLabel: "Connection crm"
+      });
+      expect(t.handed.length).toBe(handed);
+    });
+  });
+
   // A draft of an App simulates a changing action instead (ADR-0031): app-draft-safe-mode.test.ts.
   it("carries out no changing action in a Page: draft_safe_mode, no run and no call", async () => {
     const frame = await openPage(t.admin.id);
@@ -471,5 +493,42 @@ describe("a call a frame makes through the interface", () => {
         expectStatus(await publish("workspace"), 200);
       }
     });
+  });
+
+  // Replaces e2e/app-actions-view.spec.ts (09ba98a28), "a builder reads the actions of a draft,
+  // tests a reading one and finds its run in Operations": the run stays after its App is
+  // deleted, says the App is deleted and holds nothing of the input.
+  it("keeps the run of an App's action after the App is deleted, and says the App is deleted", async () => {
+    expectStatus(await t.putApp(t.admin.id, "gone", appSource("published", "gone")), 200);
+    expectStatus(await t.publish(t.admin.id, "gone", 1), 200);
+    const frame = await openApp(t.admin.id, "published", "gone");
+    const called = await callAction(t.admin.id, frame, "load", { text: "gone-marker" });
+    expectStatus(called, 200);
+    const { runId } = resultSchema.parse(called.json());
+    const read = async () => {
+      const response = await t.call(t.admin.id, "operations.get_run", { params: { runId } });
+      expectStatus(response, 200);
+      return response.json();
+    };
+    expect(await read()).toMatchObject({ app: { title: "Orders", revision: 1, deleted: false } });
+
+    expectStatus(
+      await t.call(t.admin.id, "assets.delete", {
+        params: { kind: "app", name: "gone" },
+        payload: { expectedRevision: 1, workspaceId: t.workspaceId }
+      }),
+      200
+    );
+
+    const run = await read();
+    expect(run).toMatchObject({
+      id: runId,
+      operation: "app.gone.load",
+      status: "done",
+      origin: { kind: "app", actionName: "load" }
+    });
+    expect(run.app).toEqual({ deleted: true });
+    expect(run).not.toHaveProperty("input");
+    expect(JSON.stringify(run)).not.toContain("gone-marker");
   });
 });

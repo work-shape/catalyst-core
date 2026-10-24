@@ -167,4 +167,42 @@ describe("a shared OAuth sign-in", () => {
       expect(findLeak(answers.join("\n"), value)).toBeUndefined();
     }
   });
+
+  // Replaces e2e/connection-sign-in.spec.ts (09ba98a28), "en: a provider that registers no
+  // client asks for the one it issued, and an unticked permission is not asked for": the step
+  // writes the ticked permissions to `oauth.scopes` before it starts the sign-in, and the
+  // provider is asked for exactly those, or for no `scope` at all where none is ticked.
+  it("asks the provider for the ticked permissions alone, and for none where none is ticked", async () => {
+    const alice = await world.signIn("alice");
+    const askedFor = async (scopes: string[]) => {
+      const connection = {
+        connectorType: "mcp",
+        displayName: "Sample with chosen permissions",
+        origin: "runtime",
+        settings: { url: `${world.sample}/dcr/mcp`, oauth: { scopes } },
+        authScheme: "oauth",
+        operations: [
+          {
+            name: "list_customers",
+            effect: "reading",
+            exposure: ["agent", "outside"],
+            enabled: true
+          }
+        ],
+        enabled: true
+      };
+      expect(await world.putConnection("chosen", connection, alice)).toBe(200);
+      const started = await world.start("chosen", alice);
+      expect(started.status, JSON.stringify(started.body)).toBe(200);
+      const answer = startAnswerSchema.parse(started.body);
+      expect(answer.scopes).toEqual(scopes);
+      return new URL(answer.authorizationUrl).searchParams;
+    };
+
+    expect((await askedFor(["sample.read", "sample.profile"])).get("scope")).toBe(
+      "sample.read sample.profile"
+    );
+    expect((await askedFor(["sample.profile"])).get("scope")).toBe("sample.profile");
+    expect((await askedFor([])).has("scope")).toBe(false);
+  });
 });

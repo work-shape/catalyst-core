@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, createElement } from "react";
+import { act, createElement, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "@work-shape/catalyst-api-client";
@@ -36,9 +36,9 @@ import { SettingsPageProvider } from "@work-shape/catalyst-chat-ui/settings-page
 import { assetPageRoute } from "@work-shape/catalyst-chat-ui/subject-run";
 import { UiRoot, uiLabelsEn } from "@work-shape/catalyst-ui";
 import { platformContext } from "./chat-ui-build-fixtures";
-import { buildPageSettings } from "./chat-ui-build-page-harness";
+import { buildPageSettings, listedKind } from "./chat-ui-build-page-harness";
 import { TranslationProvider } from "./chat-ui-render-harness";
-import { CONDITION_WAIT_MS } from "./support/assertions";
+import { CONDITION_WAIT_MS, required } from "./support/assertions";
 import { workspaceQueryKeys } from "./support/chat-ui";
 
 // STORE-PAGES: the pages of a Data Store and of a Knowledge Base in Build. A published store
@@ -783,5 +783,159 @@ describe("what a Data Store's publish reads again", () => {
       .findAll({ queryKey: workspaceQueryKeys.dataStores(apiBaseUrl) })
       .some((query) => query.state.isInvalidated);
     expect(stale).toBe(false);
+  });
+});
+
+// Replaces e2e/store-pages.spec.ts "a Data Store's later draft is published, edited with the
+// agent and deleted from its page" (its step "Another selection and back twice keeps the draft
+// SQL and the state with their own store"): Build's own sources on one query client, moved
+// between two stores' pages and back twice, show each page its own store's SQL alone.
+describe("two Data Stores' pages on one query client", () => {
+  const contactsMigrations = [
+    { number: 1, name: "init", sha256: "2".repeat(64), sql: "create table contacts (id int);" },
+    {
+      number: 2,
+      name: "add_phone",
+      sha256: "3".repeat(64),
+      sql: "alter table contacts add phone text;"
+    }
+  ];
+  /** Never published: its page shows the SQL of each of its migrations. */
+  const contacts: BuildAsset = {
+    ...draft,
+    id: "asset_contacts",
+    name: "contacts",
+    config: { name: "contacts", title: "Contacts", migrations: contactsMigrations }
+  };
+  const stores: Record<string, BuildAsset> = { leads: ahead, contacts };
+  const context = {
+    ...platformContext([], ["data_store.read", "data_store.write", "data_store.publish"]),
+    kinds: [
+      {
+        kind: "data_store",
+        plural: "data_stores",
+        lifecycle: "draft_published" as const,
+        representation: "files" as const,
+        owners: ["instance" as const],
+        actions: {
+          read: "data_store.read",
+          write: "data_store.write",
+          publish: "data_store.publish",
+          delete: "data_store.delete"
+        }
+      }
+    ]
+  };
+
+  it("keeps each store's draft SQL on its own page, there and back twice", async () => {
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const request = new Request(input, init);
+      const url = new URL(request.url);
+      if (url.pathname === apiOperations["platform.context.get"].path) {
+        return Response.json(context);
+      }
+      if (listedKind(request, url) === "data_store") {
+        return Response.json({ items: Object.values(stores) });
+      }
+      const read = Object.values(stores).find(
+        (store) =>
+          url.pathname ===
+          apiOperations["assets.get"].buildPath({
+            params: { kind: "data_store", name: store.name }
+          })
+      );
+      if (request.method === "GET" && read) return Response.json(read);
+      if (
+        url.pathname === apiOperations["data_stores.get"].buildPath({ params: { store: "leads" } })
+      ) {
+        return Response.json(state);
+      }
+      return Response.json({ error: { code: "NOT_FOUND", message: "none" } }, { status: 404 });
+    };
+    let go: (name: string) => void = noop;
+    function Studio() {
+      const [name, setName] = useState("leads");
+      go = setName;
+      return createElement(
+        BuildNavigationProvider,
+        {
+          value: {
+            location: { kindPath: "data-stores", name },
+            open: noop,
+            href: (place) => `/build/${place.kindPath ?? ""}/${place.name ?? ""}`
+          }
+        },
+        createElement(BuildFrame, { source: useBuildSource() })
+      );
+    }
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    unmounts.push(() => {
+      act(() => root.unmount());
+      container.remove();
+    });
+    await act(async () => {
+      root.render(
+        createElement(
+          QueryClientProvider,
+          { client: queryClient },
+          createElement(
+            SettingsPageProvider,
+            { value: buildPageSettings(fetchImpl) },
+            createElement(
+              UiRoot,
+              { mode: "light", labels: uiLabelsEn },
+              createElement(
+                TranslationProvider,
+                { locale: "en", children: null },
+                createElement(
+                  BuildAssetKindsProvider,
+                  { value: buildAssetKinds },
+                  createElement(Studio)
+                )
+              )
+            )
+          )
+        )
+      );
+    });
+    /** The SQL the page shows, once it shows the store `title`. */
+    const shownSql = async (title: string) => {
+      await vi.waitFor(
+        () => {
+          expect(container.querySelector("h1")?.textContent).toContain(title);
+          expect(container.querySelector("[data-data-store-migration-sql]")).not.toBeNull();
+        },
+        { timeout: CONDITION_WAIT_MS }
+      );
+      return [...container.querySelectorAll("[data-data-store-migration-sql]")]
+        .map((sql) => sql.textContent ?? "")
+        .join("\n");
+    };
+
+    for (let change = 0; change < 3; change++) {
+      if (change > 0) await act(async () => go("leads"));
+      const leads = await shownSql("Leads");
+      // The publish applies the later migration alone.
+      expect(required(container.querySelector("[data-data-store-pending]")).textContent).toContain(
+        "alter table leads add email text;"
+      );
+      expect(leads).not.toContain("create table leads");
+      expect(leads).not.toContain("contacts");
+      if (change === 2) break;
+
+      await act(async () => go("contacts"));
+      const other = await shownSql("Contacts");
+      expect(other).toContain("create table contacts (id int);");
+      expect(other).toContain("alter table contacts add phone text;");
+      expect(other).not.toContain("leads");
+      // Never published, its first publish applies both of its own migrations.
+      expect(required(container.querySelector("[data-data-store-pending]")).textContent).toContain(
+        "create table contacts (id int);"
+      );
+    }
   });
 });

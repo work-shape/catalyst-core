@@ -2,6 +2,7 @@ import postgres from "postgres";
 import { describe, expect, it } from "vitest";
 import { asUserId } from "@work-shape/catalyst-core";
 import { clientInstanceId, grantSchema, setupAccessInstance } from "./support/access-instance";
+import { appFiles, expectStatus, setupAppInstance } from "./support/app-instance";
 import { holdTransaction, settled } from "./support/postgres-concurrency-harness";
 import { fileTestDatabaseUrl } from "./support/test-database";
 
@@ -105,6 +106,59 @@ describe("check 41: giving a person a row", () => {
     // Taking a right away asks nothing of the rule.
     await t.expectOk(t.manager.id, "permissions.revoke", { params: { grantId: allow } });
     await t.expectOk(t.admin.id, "permissions.revoke", { params: { grantId: deny } });
+  });
+});
+
+describe("check 41: giving a person a row on one App", () => {
+  // Replaces e2e/grantable-rights.spec.ts "an asset-only giver is offered no broader scope or
+  // unheld verbs": who reads one App gives that one, and not the App's workspace or the instance.
+  it("gives an asset-only holder's right on that App alone, never wider", async () => {
+    const t = await setupAppInstance();
+    try {
+      expectStatus(await t.putApp(t.admin.id, "rights-app", appFiles("rights")), 200);
+      const appId = await t.assetId("app", "rights-app");
+      const manager = await t.stores.users.createUser({
+        clientInstanceId,
+        displayLabel: "Manager",
+        roles: ["user"],
+        permissions: ["users.manage"]
+      });
+      await t.stores.access.createGrant({
+        clientInstanceId,
+        holderKind: "user",
+        holderId: manager.id,
+        action: "app.read",
+        effect: "allow",
+        scopeKind: "asset",
+        scopeId: appId,
+        grantedBy: t.root.id
+      });
+      const give = (scope: Record<string, unknown>) => ({
+        payload: { holderKind: "user", holderId: t.kai.id, action: "app.read", ...scope }
+      });
+
+      for (const scope of [
+        { scopeKind: "workspace", scopeId: t.workspaceId },
+        { scopeKind: "instance" }
+      ]) {
+        await t.expectRefused(
+          manager.id,
+          "permissions.grant",
+          give(scope),
+          t.forbidden("app.read", "no_grant")
+        );
+      }
+      expect(await t.stores.access.listGrants({ clientInstanceId, holderId: t.kai.id })).toEqual(
+        []
+      );
+      await t.expectOk(
+        manager.id,
+        "permissions.grant",
+        give({ scopeKind: "asset", scopeId: appId })
+      );
+    } finally {
+      await t.close();
+    }
   });
 });
 

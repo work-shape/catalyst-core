@@ -130,6 +130,17 @@ describe("a right on a Workflow given through grant administration", () => {
 
     // Exactly that one, with the read right alone: its runs are hers to read, a start is not.
     expect(await listed(t, t.kai.id)).toEqual([[NOTIFY, ["workflow.read"]]]);
+    // Replaces e2e/workflow-step-settings.spec.ts "a step's Settings save one revision of the
+    // draft and carry a change over the agent's": a member who only reads cannot save the draft.
+    await t.expectRefused(
+      t.kai.id,
+      "assets.put",
+      {
+        params: { kind: WORKFLOW_ASSET_KIND, name: NOTIFY },
+        payload: { config: { name: NOTIFY, manifest: notifyClients() }, expectedRevision: 1 }
+      },
+      t.forbidden("workflow.write", "no_grant")
+    );
     await t.expectOk(t.kai.id, "workflows.list_runs", { params: { workflow: NOTIFY } });
     await t.expectRefused(
       t.kai.id,
@@ -344,6 +355,22 @@ describe("a right on a Workflow given through grant administration", () => {
     );
 
     await t.grant(t.kai.id, WORKFLOW_ACTIONS.write, { assetId: notify });
+    // Replaces e2e/workflow-rights.spec.ts "a write on one Workflow offers that one's draft, and
+    // no runs, start or sibling": writing reads no run and starts nothing, so the engine lists
+    // the Workflow to neither.
+    expect(await listed(t, t.kai.id)).toEqual([]);
+    await t.expectRefused(
+      t.kai.id,
+      "workflows.list_runs",
+      { params: { workflow: NOTIFY } },
+      t.forbidden("workflow.read", "no_grant")
+    );
+    await t.expectRefused(
+      t.kai.id,
+      "workflows.start",
+      startOf(NOTIFY),
+      t.forbidden("workflow.use", "no_grant")
+    );
     const revision = await put(t, t.kai.id, NOTIFY, next, 1);
 
     // Editing the draft makes nothing live, and the write right publishes nothing.

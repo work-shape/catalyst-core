@@ -5,7 +5,11 @@ import { ApiError, createApiClient } from "@work-shape/catalyst-api-client";
 import { apiOperations } from "@work-shape/catalyst-api-contract";
 import { required } from "./support/assertions";
 import { describe, expect, it, vi } from "vitest";
-import type { PersonalApiKey, PlatformContext } from "@work-shape/catalyst-api-client";
+import type {
+  ConfirmConnectCodeRequest,
+  PersonalApiKey,
+  PlatformContext
+} from "@work-shape/catalyst-api-client";
 import { administration } from "@work-shape/catalyst-chat-ui/admin";
 import {
   PersonalApiKeysTable,
@@ -499,6 +503,51 @@ function refusal(code: "FORBIDDEN" | "POLICY_DENIED"): ApiError {
   });
 }
 
+/** The scope box named `label`, as its label names it. */
+function scopeBox(within: ParentNode, label: string): HTMLElement {
+  const named = required(
+    [...within.querySelectorAll<HTMLLabelElement>("label")].find(
+      (candidate) => candidate.textContent === label
+    )
+  );
+  return required(document.getElementById(named.htmlFor));
+}
+
+/** The scope label whose text is `label`, which a person may click instead of its box. */
+function scopeLabel(within: ParentNode, label: string): HTMLLabelElement {
+  return required(
+    [...within.querySelectorAll<HTMLLabelElement>("label")].find(
+      (candidate) => candidate.textContent === label
+    )
+  );
+}
+
+/**
+ * Ticks and unticks scopes by the box and by its label, as e2e/personal-api-keys.spec.ts
+ * `chooseScopes` did, and checks that only the clicked one changes each time.
+ */
+async function chooseScopes(within: ParentNode): Promise<void> {
+  const checked = () =>
+    [...within.querySelectorAll('[role="checkbox"][aria-checked="true"]')].length;
+  expect(within.querySelectorAll('[role="checkbox"]').length).toBeGreaterThan(0);
+  expect(checked()).toBe(0);
+  const click = async (target: HTMLElement) => {
+    await act(async () => {
+      target.click();
+    });
+  };
+  await click(scopeBox(within, "View agents"));
+  await click(scopeLabel(within, "Edit skills"));
+  await click(scopeBox(within, "Edit agents"));
+  expect(checked()).toBe(3);
+  // A second click unticks that one box and no other.
+  await click(scopeLabel(within, "View agents"));
+  expect(checked()).toBe(2);
+  expect(scopeBox(within, "Edit agents").getAttribute("aria-checked")).toBe("true");
+  expect(scopeBox(within, "Edit skills").getAttribute("aria-checked")).toBe("true");
+  expect(scopeBox(within, "View agents").getAttribute("aria-checked")).toBe("false");
+}
+
 /** The button whose text is `label`, in the page or the dialog. */
 function buttonNamed(label: string, within: ParentNode = document): HTMLButtonElement {
   return required(
@@ -734,6 +783,91 @@ describe("You > API keys, for a person and an admin alike", () => {
         "You may not see your keys. Ask an instance admin, for example Mara."
       );
       expect(refusal.getAttribute("data-tone")).toBe("info");
+    } finally {
+      await mounted.unmount();
+    }
+  });
+
+  // Replaces e2e/personal-api-keys.spec.ts "a new key starts with no scope ticked and gets
+  // exactly the scopes ticked": a click on a box or its label changes that box alone, and the
+  // key is posted with exactly the ticked scopes.
+  it("a new key starts with no scope ticked and is posted with exactly the scopes ticked", async () => {
+    const posted: unknown[] = [];
+    const answer: typeof fetch = async (input, init) => {
+      const request = new Request(input, init);
+      const path = new URL(request.url).pathname;
+      if (path !== apiOperations["me.api_keys.list"].buildPath({})) {
+        return Response.json(platformContext());
+      }
+      if (request.method !== "POST") return Response.json({ items: [] });
+      posted.push(await request.json());
+      return Response.json({ error: { code: "FORBIDDEN", message: "Forbidden" } }, { status: 403 });
+    };
+    const mounted = await mountPage(
+      settingsPageContext(createApiClient({ baseUrl: SETTINGS_INSTANCE_URL, fetchImpl: answer })),
+      "en",
+      createElement(ApiKeysPage)
+    );
+    try {
+      await waitForText(mounted.container, "No personal API keys yet.");
+      await act(async () => {
+        buttonNamed("New key").click();
+      });
+      const dialog = required(document.querySelector<HTMLElement>("dialog[open]"));
+      const name = required(dialog.querySelector<HTMLInputElement>("input"));
+      await act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(
+          name,
+          "scope-check"
+        );
+        name.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      // Nothing is ticked, so nothing can be created yet.
+      expect(buttonNamed("Create key", dialog).disabled).toBe(true);
+      await chooseScopes(dialog);
+      await act(async () => {
+        buttonNamed("Create key", dialog).click();
+      });
+      await waitForText(document.body, "You may not issue this key.");
+      expect(posted).toEqual([
+        expect.objectContaining({ name: "scope-check", scopes: ["agent.write", "skill.write"] })
+      ]);
+    } finally {
+      await mounted.unmount();
+    }
+  });
+
+  // Replaces e2e/personal-api-keys.spec.ts "a CLI's connect code starts with no scope ticked
+  // and gets exactly the scopes ticked".
+  it("a CLI's connect code starts with no scope ticked and confirms exactly the scopes ticked", async () => {
+    const confirmed: ConfirmConnectCodeRequest[] = [];
+    const mounted = await mountPage(
+      settingsPageContext(createApiClient({ baseUrl: SETTINGS_INSTANCE_URL, fetchImpl: fetch })),
+      "en",
+      createElement(ConnectCodeConfirm, {
+        code: "BCDF-GHJK",
+        request: {
+          clientLabel: "catalyst CLI",
+          createdAt: "2026-10-13T11:58:00.000Z",
+          expiresAt: "2026-10-13T12:13:00.000Z"
+        },
+        offer: { ...cliOffer, actions: personalKeyActionOffer(platformContext()) },
+        pending: false,
+        onConfirm: async (body) => {
+          confirmed.push(body);
+        }
+      })
+    );
+    try {
+      await chooseScopes(mounted.container);
+      await act(async () => {
+        required(
+          mounted.container.querySelector<HTMLButtonElement>('button[type="submit"]')
+        ).click();
+      });
+      expect(confirmed).toEqual([
+        expect.objectContaining({ scopes: ["agent.write", "skill.write"] })
+      ]);
     } finally {
       await mounted.unmount();
     }

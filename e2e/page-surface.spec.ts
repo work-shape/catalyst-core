@@ -10,6 +10,7 @@ import {
   pageSurface,
   rewritePageFile,
   savePage,
+  viewerPageSource,
   writePageFiles
 } from "./page-surface-fixtures";
 import { expect } from "./test";
@@ -48,7 +49,7 @@ test("a Page built in chat shows beside the conversation, changes with the next 
 
   await openChat(page);
   await expect(pageSurface(page)).toBeHidden();
-  await writePageFiles(page, pageSource("Revenue overview"));
+  await writePageFiles(page, viewerPageSource("Revenue overview"));
   await savePage(page);
 
   // The save opened the Page beside the conversation, as revision 1.
@@ -58,6 +59,10 @@ test("a Page built in chat shows beside the conversation, changes with the next 
   await expectShownRevision(surface, 1);
   const built = builtPage(page);
   await expect(built.getByRole("heading", { name: "Revenue overview" })).toBeVisible();
+  // Replaces the deleted test of e2e/page-surface.spec.ts (09ba98a28), "a plain HTML Page has
+  // the platform's margin, type and colours, follows dark, and keeps a rule of its own": the
+  // Page's own script reached the interface through the kit, and `getContext()` settled.
+  await expect(built.getByText("Shown to E2E Pages")).toBeVisible();
   const card = page.getByTestId("page-card");
   await expect(card).toHaveAttribute("data-state", "built");
   await expect(card).toContainText("Shown");
@@ -194,6 +199,20 @@ test("a Page built in chat shows beside the conversation, changes with the next 
   await expect(builtPage(page).getByRole("heading", { name: "Revenue this year" })).toBeVisible();
   await pageSurface(page).getByRole("radio", { name: "Files" }).click();
   await expect(pageSurface(page).getByRole("button", { name: "All files" })).toBeVisible();
+
+  // Replaces the deleted test of e2e/page-surface.spec.ts (09ba98a28), "a Page opened from the
+  // dock beside another page is told who looks at it": beside the Agents the dock's surface
+  // stands in the interface's page host, so the Page's `getContext()` settles there too.
+  await page.setViewportSize({ width: 1280, height: 720 });
+  const workspace = /\/w\/([^/]+)\/c\//u.exec(new URL(page.url()).pathname)?.[1];
+  expect(workspace).toBeDefined();
+  await page.goto(`/w/${workspace}/agents?chat=${conversationId}`);
+  const dockCard = page.getByRole("region", { name: "Chat" }).getByTestId("page-card").last();
+  await expect(dockCard).toBeVisible();
+  await expect(pageSurface(page)).toBeHidden();
+  await dockCard.getByRole("button", { name: "Open" }).click();
+  await expect(page).toHaveURL(/\/agents\?chat=/u);
+  await expect(builtPage(page).getByText("Shown to E2E Pages")).toBeVisible();
 
   // Nothing the Page needed came from another host.
   expect(otherAddresses).toEqual([]);

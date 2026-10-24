@@ -211,6 +211,24 @@ describe("publishing needs an instance admin's approval", () => {
     }
   });
 
+  // Replaces e2e/publish-narrative.spec.ts "PUBQ-1: every publish question leads with the plain
+  // sentence in the reader's language, the lists behind Details": an approver's Inbox item of a
+  // member's publish for only themselves names the publisher (SHARE-1).
+  it("PUBQ-1: a held publish for only its publisher names the publisher in the approver's Inbox item", async () => {
+    await created("narrated-own");
+    const response = await t.call(t.kai.id, "assets.publish", {
+      params: { kind: "app", name: "narrated-own" },
+      payload: { revision: 1, workspaceId: t.workspaceId, audience: "self" }
+    });
+    expectStatus(response, 202);
+    const held = heldSchema.parse(response.json());
+    const { summary } = z
+      .object({ review: z.object({ publishNarrative: z.object({ summary: z.string() }) }) })
+      .parse((await request(t.admin.id, held.approvalRequestId)).preview).review.publishNarrative;
+    expect(summary).toMatch(/^Offers opens for /u);
+    expect(summary).toContain(t.kai.displayLabel);
+  });
+
   it.each(["en", "de"] as const)(
     "keeps the draft, Details and Inbox approval available after narration fails in %s",
     async (locale) => {

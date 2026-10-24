@@ -11,13 +11,15 @@ import {
   BuildFrame,
   BuildNavigationProvider,
   resolveBuildRights,
+  useBuildSource,
   type BuildSource
 } from "@work-shape/catalyst-chat-ui/build-area";
 import { SettingsPageProvider } from "@work-shape/catalyst-chat-ui/settings-page-context";
 import { DocsAddressProvider, UiRoot, uiLabelsEn } from "@work-shape/catalyst-ui";
-import { platformContext } from "./chat-ui-build-fixtures";
-import { buildPageSettings } from "./chat-ui-build-page-harness";
+import { instanceActions, platformContext } from "./chat-ui-build-fixtures";
+import { buildPageSettings, listedKind } from "./chat-ui-build-page-harness";
 import { TranslationProvider } from "./chat-ui-render-harness";
+import { settingsUser } from "./chat-ui-settings-fixtures";
 import { CONDITION_WAIT_MS, required } from "./support/assertions";
 
 // ACCEPT-2d E-1: creating an agent that starts available in a workspace lists what it uses that
@@ -46,6 +48,8 @@ afterEach(async () => {
 });
 
 type Put = Parameters<BuildSource["writes"]["put"]>[0];
+/** A reader who works on the instance's agents as well as in Sales, so Studio offers both. */
+const studioPermissions = ["config_assets.read", "config_assets.write"];
 
 /**
  * Build's agent list in the shared workspace Sales. The instance answers the check before a
@@ -78,11 +82,17 @@ async function mountAgents(
     checkRefused?: boolean;
     /** The check answers without the list: valid, or with an issue of the definition. */
     answerWithoutList?: "valid" | "invalid";
+    /**
+     * Studio's own source, set to Sales, writes through the instance's API: every PUT body is
+     * recorded in `sent`.
+     */
+    studioSource?: boolean;
   } = { workspace: sales }
 ) {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   const checks: unknown[] = [];
   const puts: Put[] = [];
+  const sent: unknown[] = [];
   const fetchImpl: typeof fetch = async (input, init) => {
     const request = new Request(input, init);
     const url = new URL(request.url);
@@ -110,7 +120,32 @@ async function mountAgents(
       });
     }
     if (url.pathname === apiOperations["platform.context.get"].path) {
-      return Response.json(platformContext());
+      return Response.json(
+        options.studioSource
+          ? platformContext(
+              [
+                {
+                  ...sales,
+                  kind: "shared",
+                  member: true,
+                  actions: ["agent.read", "agent.write", "skill.read"]
+                }
+              ],
+              instanceActions(studioPermissions)
+            )
+          : platformContext()
+      );
+    }
+    if (
+      request.method === "PUT" &&
+      url.pathname ===
+        apiOperations["assets.put"].buildPath({ params: { kind: "agent", name: "helper" } })
+    ) {
+      sent.push(await request.json());
+      return Response.json({ revision: 1 });
+    }
+    if (listedKind(request, url) !== undefined) {
+      return Response.json({ items: [] });
     }
     return Response.json({ error: { code: "NOT_FOUND", message: "none" } }, { status: 404 });
   };
@@ -143,6 +178,18 @@ async function mountAgents(
       revisions: async () => ({ items: [] })
     }
   };
+  const settings = buildPageSettings(
+    fetchImpl,
+    options.studioSource ? settingsUser({ permissions: studioPermissions }) : undefined,
+    ["displayName", "instructions"]
+  );
+  const configAssets = { ...settings.config.features.configAssets, allowAgentCreation: true };
+  function Studio() {
+    return createElement(BuildFrame, {
+      source: options.studioSource ? useBuildSource() : source,
+      ...(options.workspace ? { workspace: options.workspace } : {})
+    });
+  }
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   host = document.createElement("div");
   document.body.append(host);
@@ -155,7 +202,17 @@ async function mountAgents(
         { client: queryClient },
         createElement(
           SettingsPageProvider,
-          { value: buildPageSettings(fetchImpl, undefined, ["displayName", "instructions"]) },
+          {
+            value: options.studioSource
+              ? {
+                  ...settings,
+                  config: {
+                    ...settings.config,
+                    features: { ...settings.config.features, configAssets }
+                  }
+                }
+              : settings
+          },
           createElement(
             UiRoot,
             { mode: "light", labels: uiLabelsEn },
@@ -177,10 +234,7 @@ async function mountAgents(
                         href: (place) => `/build/${place.kindPath ?? ""}/${place.name ?? ""}`
                       }
                     },
-                    createElement(BuildFrame, {
-                      source,
-                      ...(options.workspace ? { workspace: options.workspace } : {})
-                    })
+                    createElement(Studio)
                   )
                 )
               )
@@ -190,7 +244,7 @@ async function mountAgents(
       )
     );
   });
-  return { checks, puts };
+  return { checks, puts, sent };
 }
 
 function button(text: string, within: ParentNode = document): HTMLButtonElement {
@@ -408,5 +462,30 @@ describe("creating an agent that starts available in a workspace", () => {
     await vi.waitFor(() => expect(page.puts).toHaveLength(1), { timeout: CONDITION_WAIT_MS });
     expect(page.puts[0]).toMatchObject({ dependencyConsent: { expectedAvailability: everywhere } });
     expect(page.puts[0]).not.toHaveProperty("availableIn");
+  });
+});
+
+// Replaces e2e/build-workspace-scope.spec.ts "an agent made in a workspace's Studio scope is the
+// workspace's, listed with its chip": Studio set to a Shared Workspace creates a new agent in
+// that workspace, so its write names the workspace as well as starting it available there.
+describe("creating an agent in a workspace's Studio scope", () => {
+  it("writes the agent into the workspace Studio is set to", async () => {
+    window.localStorage.setItem("vivd-catalyst:build-scope", sales.id);
+    try {
+      const page = await mountAgents([], inSales, { workspace: sales, studioSource: true });
+      await vi.waitFor(
+        () =>
+          expect(
+            document.querySelector('button[aria-label^="Scope: "]')?.getAttribute("aria-label")
+          ).toBe("Scope: Sales"),
+        { timeout: CONDITION_WAIT_MS }
+      );
+      await startAndCreate();
+
+      await vi.waitFor(() => expect(page.sent).toHaveLength(1), { timeout: CONDITION_WAIT_MS });
+      expect(page.sent[0]).toMatchObject({ expectedRevision: null, workspaceId: sales.id });
+    } finally {
+      window.localStorage.removeItem("vivd-catalyst:build-scope");
+    }
   });
 });

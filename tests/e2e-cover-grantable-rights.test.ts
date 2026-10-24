@@ -1,11 +1,16 @@
 // @vitest-environment happy-dom
 
-import { act, createElement } from "react";
+import { act, createElement, type ReactElement } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, vi } from "vitest";
-import type { EffectivePermissions } from "@work-shape/catalyst-api-client";
-import { grantOptions } from "@work-shape/catalyst-chat-ui/access";
+import type {
+  AdministeredUser,
+  CreatePermissionGrantRequest,
+  EffectivePermissions
+} from "@work-shape/catalyst-api-client";
+import { grantOptions, GrantsTab } from "@work-shape/catalyst-chat-ui/access";
 import { UiRoot, uiLabelsEn } from "@work-shape/catalyst-ui";
+import { required } from "./support/assertions";
 import { GrantDialog } from "./support/chat-ui";
 import { TranslationProvider } from "./support/chat-ui/shared";
 
@@ -109,4 +114,144 @@ it.each(["asset", "workspace"] as const)(
   }
 );
 
-import { required } from "./support/assertions";
+/** Mounts `element` in English, runs `check`, and unmounts. */
+async function mounted(element: ReactElement, check: () => Promise<void>): Promise<void> {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  const host = document.createElement("div");
+  document.body.append(host);
+  const root = createRoot(host);
+  try {
+    await act(async () =>
+      root.render(
+        createElement(TranslationProvider, {
+          locale: "en",
+          children: createElement(UiRoot, { mode: "light", labels: uiLabelsEn }, element)
+        })
+      )
+    );
+    await check();
+  } finally {
+    act(() => root.unmount());
+    host.remove();
+    vi.unstubAllGlobals();
+  }
+}
+
+const buttonNamed = (name: string) =>
+  [...document.querySelectorAll<HTMLButtonElement>("button")].find(
+    (node) => node.textContent?.trim() === name || node.getAttribute("aria-label")?.startsWith(name)
+  );
+const radioNamed = (name: string) =>
+  required(
+    [...document.querySelectorAll<HTMLElement>('[role="radio"]')].find(
+      (node) => label(node) === name
+    )
+  );
+const optionNamed = (name: string) =>
+  required(
+    [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(
+      (node) => node.textContent === name
+    )
+  );
+
+// Replaces e2e/grantable-rights.spec.ts "a giver with users.manage alone cannot open a new-right
+// dialog": a giver who holds no right to give, though the instance has Apps and workspaces to
+// give rights on, finds New right disabled.
+it("disables New right for a giver who holds no right to give", async () => {
+  const onGrant = vi.fn(async () => ({ added: 0, existing: 0 }));
+  await mounted(
+    createElement(GrantsTab, {
+      giver: { holderActive: true, items: [] },
+      grants: [],
+      loadFailed: false,
+      onRetry: () => undefined,
+      users: [],
+      usersFailed: false,
+      assets: [],
+      assetsFailure: undefined,
+      kindAssets: assets,
+      workspaces,
+      onGrant,
+      onRevoke: async () => undefined
+    }),
+    async () => {
+      expect(required(buttonNamed("New right")).disabled).toBe(true);
+      expect(onGrant).not.toHaveBeenCalled();
+    }
+  );
+});
+
+// Replaces e2e/grantable-rights.spec.ts "the new-right dialog offers only the giver's workspace
+// verbs and places" (its write): Edit brings View with it, so Create right writes both rows,
+// View first, for the chosen person in the chosen workspace.
+it("writes View and Edit, View first, when a workspace giver grants Edit", async () => {
+  const recipient: AdministeredUser = {
+    id: "user-r",
+    clientInstanceId: "client-1",
+    displayLabel: "Rita Recipient",
+    roles: ["user"],
+    permissionRefs: [],
+    permissions: [],
+    status: "active",
+    createdAt: "2026-10-01T10:00:00Z",
+    updatedAt: "2026-10-01T10:00:00Z",
+    identities: []
+  };
+  const rights: EffectivePermissions = {
+    holderActive: true,
+    items: ["app.read", "app.write"].map((action) => ({
+      action,
+      effect: "allow",
+      scopeKind: "workspace",
+      scopeId: "w-a",
+      source: "grant"
+    }))
+  };
+  const written: (readonly CreatePermissionGrantRequest[])[] = [];
+  const onGrant = vi.fn(async (requests: readonly CreatePermissionGrantRequest[]) => {
+    written.push(requests);
+    return { added: requests.length, existing: 0 };
+  });
+  await mounted(
+    createElement(GrantDialog, {
+      users: [recipient],
+      usersFailed: false,
+      assets: [],
+      assetsFailure: undefined,
+      kindAssets: assets,
+      options: grantOptions(rights, assets, workspaces),
+      workspaces,
+      onGrant,
+      onClose: () => undefined
+    }),
+    async () => {
+      await act(async () => required(buttonNamed("Person")).click());
+      await act(async () => optionNamed("Rita Recipient").click());
+      await act(async () => radioNamed("In a shared workspace").click());
+      await act(async () => required(buttonNamed("Workspace:")).click());
+      await act(async () => optionNamed("Held workspace").click());
+      await act(async () => radioNamed("Edit").click());
+      await act(async () => required(buttonNamed("Create right")).click());
+      expect(written).toEqual([
+        [
+          expect.objectContaining({
+            holderKind: "user",
+            holderId: "user-r",
+            action: "app.read",
+            effect: "allow",
+            scopeKind: "workspace",
+            scopeId: "w-a"
+          }),
+          expect.objectContaining({
+            holderKind: "user",
+            holderId: "user-r",
+            action: "app.write",
+            effect: "allow",
+            scopeKind: "workspace",
+            scopeId: "w-a"
+          })
+        ]
+      ]);
+    }
+  );
+});
