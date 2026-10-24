@@ -9,6 +9,7 @@ const superadminUser = {
   email: "e2e-superadmin@example.test",
   password: "e2e-superadmin-password"
 };
+const adminUser = { email: "e2e-admin@example.test", password: "e2e-admin-password" };
 
 test("an instance admin opens every group of the Settings rail", async ({ page }) => {
   await signInViaApi(page, superadminUser);
@@ -71,6 +72,46 @@ test("an instance admin opens every group of the Settings rail", async ({ page }
   await page.getByRole("button", { name: "Return to chat" }).click();
   await expect(page.getByPlaceholder("Message")).toBeVisible();
   await expect(rail).toHaveCount(0);
+});
+
+// Check 40 (RIGHTS-1e): a customer's admin keeps the audit log and sees no System page, neither
+// in the rail nor by address, and the server refuses the reads behind them.
+test("an admin finds no System pages, not by their address either", async ({ page }) => {
+  await signInViaApi(page, adminUser);
+
+  await page.goto("/settings/instance/users");
+  const rail = settingsPages(page);
+  await expect(rail.getByRole("button", { name: "Audit", exact: true })).toBeVisible();
+  await expect(rail.getByRole("group", { name: "System", exact: true })).toHaveCount(0);
+  for (const closed of ["System", "Jobs", "Operations", "Modules", "Infrastructure"]) {
+    await expect(rail.getByRole("button", { name: closed, exact: true })).toHaveCount(0);
+  }
+
+  for (const [path, heading] of [
+    ["/settings/instance/jobs", "Jobs"],
+    ["/settings/instance/operations", "Operations"],
+    ["/settings/instance/modules", "Modules"],
+    ["/settings/instance/infrastructure", "Infrastructure"]
+  ] as const) {
+    await page.goto(path);
+    await expect(
+      page.getByText("You cannot open this page: it needs a right you do not have.", {
+        exact: false
+      })
+    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: heading, level: 1 })).toHaveCount(0);
+  }
+
+  for (const path of [
+    "/api/v1/instance/jobs",
+    "/api/v1/instance/jobs/summary",
+    "/api/v1/operations/runs",
+    "/api/v1/instance/modules",
+    "/api/v1/instance/infrastructure"
+  ]) {
+    expect((await page.request.get(`${apiBaseUrl}${path}`)).status(), path).toBe(403);
+  }
+  expect((await page.request.get(`${apiBaseUrl}/api/v1/instance/audit-events`)).status()).toBe(200);
 });
 
 // A grant in a workspace opens Studio for this user: no spec hands one out while this runs.
