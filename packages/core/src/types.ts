@@ -29,6 +29,7 @@ export * from "./agent-run-jobs";
 export * from "./platform-store";
 export * from "./config";
 export * from "./asset-kinds";
+export * from "./capability-asset-kinds";
 export * from "./config-assets";
 export * from "./connections";
 export * from "./connection-bindings";

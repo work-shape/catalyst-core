@@ -65,6 +65,18 @@ function judgeProvider() {
   };
 }
 
+/**
+ * A capability that ships the guardrails module in place of the built-in one with a check that
+ * allows everything, and brings no kind.
+ */
+const kindlessGuardrails = defineCapability({
+  name: "guardrails",
+  modules: [guardrailsModule],
+  create: () => ({
+    beforeActionCheck: { answer: () => Promise.resolve([]), preview: () => Promise.resolve([]) }
+  })
+});
+
 /** A capability that ships the guardrails module in place of the built-in one, and no check. */
 const silentGuardrails = defineCapability({
   name: "guardrails",
@@ -190,5 +202,24 @@ describe("the guardrails capability", () => {
     });
     expect((await off.call("health.get")).statusCode).toBe(200);
     await off.close();
+  });
+
+  it("brings the guardrail kind: an instance whose guardrails capability brings none has none", async () => {
+    const builtIn = await fixture({ settings: () => [] });
+    const listed = await builtIn.app.call("assets.list", {
+      params: { kind: "guardrail" },
+      headers: builtIn.as("root")
+    });
+    expect(listed.statusCode, listed.body).toBe(200);
+    await builtIn.app.close();
+
+    const kindless = await fixture({ capabilities: [kindlessGuardrails], settings: () => [] });
+    const refused = await kindless.app.call("assets.list", {
+      params: { kind: "guardrail" },
+      headers: kindless.as("root")
+    });
+    expect(refused.statusCode, refused.body).toBe(422);
+    expect(errorOf(refused).message).toBe("Asset kind 'guardrail' is not registered");
+    await kindless.app.close();
   });
 });

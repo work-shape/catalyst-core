@@ -3,7 +3,6 @@ import type {
   ActorAccess,
   AssetScope,
   AuditActor,
-  AuthenticatedIdentity,
   ClientInstanceId,
   ConfigAssetKind,
   CapabilityAssetKindChecks,
