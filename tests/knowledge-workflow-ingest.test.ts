@@ -51,7 +51,7 @@ describe("a Workflow puts documents into a Knowledge Base (KBW-1)", { timeout: 6
       name: WORKFLOW,
       displayLabel: "Nightly import"
     });
-    await stores.access.createGrant({
+    const grant = await stores.access.createGrant({
       clientInstanceId,
       holderKind: "service_principal",
       holderId: principal.id,
@@ -216,7 +216,7 @@ describe("a Workflow puts documents into a Knowledge Base (KBW-1)", { timeout: 6
         await world.sql`select state, count(*)::int as n from catalyst_kb.source_items where source_id=${SOURCE} group by state order by state`;
       return Object.fromEntries(rows.map((row) => [String(row.state), Number(row.n)]));
     }
-    return { ...world, kb, principal, startRun, settle, settlePasses, states };
+    return { ...world, kb, principal, grant, startRun, settle, settlePasses, states };
   }
 
   function operationRunOf(outcome: Awaited<ReturnType<typeof runOperation>>) {
@@ -375,6 +375,101 @@ describe("a Workflow puts documents into a Knowledge Base (KBW-1)", { timeout: 6
       output: { withdrawn: 1 }
     });
     expect(await w.states()).toEqual({ fetched: ITEMS - 11, withdrawn: 11 });
+  });
+
+  it("keeps a document whose new version the pass could not take, and withdraws nothing after a pass of the run failed", async () => {
+    const w = await world();
+    const first = await w.startRun();
+    await w.settle(
+      operationRunOf(
+        await first.call("ingest", {
+          dataset: await first.dataset(Array.from({ length: ITEMS }, (_, n) => item(n)))
+        })
+      )
+    );
+    await first.end("done");
+
+    // The new version of one document is invalid: the pass named it, so it keeps its old one.
+    const second = await w.startRun();
+    const rows: unknown[] = Array.from({ length: ITEMS }, (_, n) => item(n));
+    rows[5] = { ...item(5, "2"), originLink: "ftp://dms.example.test/doc-5" };
+    const pass = await w.settle(
+      operationRunOf(
+        await second.call("ingest", { dataset: await second.dataset(rows), complete: true })
+      )
+    );
+    expect(pass.output?.value).toMatchObject({ failed: 1, withdrawn: 0 });
+    await second.end("done");
+    await w.settlePasses();
+    expect(await w.states()).toEqual({ fetched: ITEMS });
+    const [kept] =
+      await w.sql`select version from catalyst_kb.source_items where source_id=${SOURCE} and item_id=${item(5).itemId}`;
+    expect(kept?.version).toBe("1");
+
+    // A run that went on after one of its passes failed promises no complete listing.
+    const third = await w.startRun();
+    const partial = operationRunOf(
+      await third.call("ingest", {
+        dataset: await third.dataset(Array.from({ length: 10 }, (_, n) => item(n)))
+      })
+    );
+    await w.settle(partial);
+    await w.sql`update catalyst_kb.sync_runs set state='failed', failure_code='knowledge_source_unreachable' where operation_run_id=${partial}`;
+    await w.settle(
+      operationRunOf(
+        await third.call("ingest", {
+          dataset: await third.dataset(Array.from({ length: 10 }, (_, n) => item(10 + n))),
+          complete: true
+        })
+      )
+    );
+    await third.end("done");
+    await w.settlePasses();
+    expect(await w.states()).toEqual({ fetched: ITEMS });
+    const [dropped] =
+      await w.sql`select pass_state from catalyst_kb.sync_runs where source_id=${SOURCE} and workflow_run_id=${third.runId} and complete`;
+    expect(dropped?.pass_state).toBe("dropped");
+  });
+
+  it("ends a waiting call whose run ended before its turn, leaving no rows", async () => {
+    const w = await world();
+    const first = await w.startRun();
+    const second = await w.startRun();
+    const a = operationRunOf(await first.call("ingest", { items: [item(1)] }));
+    const b = operationRunOf(await second.call("ingest", { items: [item(2)], complete: true }));
+    expect(await w.sql`select sync_run_id from catalyst_kb.ingest_waiting`).toHaveLength(1);
+    await second.end("failed");
+    await w.settle(a);
+    await eventually(async () => {
+      await w.platform`update platform_jobs set run_after = now() where status = 'queued' and kind like 'knowledge_base.%'`;
+      await w.worker.runDue();
+      const run = await w.instance.stores.operationRuns.get({ clientInstanceId, id: b });
+      expect(run).toMatchObject({
+        status: "failed",
+        error: { code: "knowledge_ingest_cancelled" }
+      });
+    }, 180_000);
+    expect(await w.sql`select sync_run_id from catalyst_kb.ingest_waiting`).toEqual([]);
+    expect(await w.sql`select sync_run_id from catalyst_kb.ingest_items`).toEqual([]);
+    expect(await w.sql`select sync_run_id from catalyst_kb.ingest_failures`).toEqual([]);
+    expect(await w.states()).toEqual({ fetched: 1 });
+  });
+
+  it("refuses a Workflow whose account may not write the Knowledge Base", async () => {
+    const w = await world();
+    await w.instance.stores.access.deleteGrant({ clientInstanceId, grantId: w.grant.id });
+    const run = await w.startRun();
+    const ingest = await run.call("ingest", { items: [item(1)] });
+    expect(ingest.result, JSON.stringify(ingest.result)).toMatchObject({
+      status: "denied",
+      reason: { action: "knowledge_base.write" }
+    });
+    const withdraw = await run.call("withdraw", { itemIds: [item(1).itemId] });
+    expect(withdraw.result, JSON.stringify(withdraw.result)).toMatchObject({
+      status: "denied",
+      reason: { action: "knowledge_base.write" }
+    });
+    expect(await w.sql`select id from catalyst_kb.sync_runs where source_id=${SOURCE}`).toEqual([]);
   });
 
   it("waits for a confirmation in the Inbox above the share, and withdraws once it is given", async () => {

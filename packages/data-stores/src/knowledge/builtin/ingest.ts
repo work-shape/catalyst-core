@@ -396,6 +396,8 @@ export async function runIngestPass(
   const store = createSourceStore(runtime.data, payload.knowledgeBaseId, control.signal);
   let run = await store.change((sql) => readIngestRun(sql, payload.syncRunId));
   if (!run) {
+    // A call whose run ended while it waited for its turn leaves at once: it holds no rows.
+    if (await leaveIfRunGone(runtime, payload, control)) return;
     const waiting = await startWaiting(runtime, payload, control);
     if (waiting === "gone") return;
     if (waiting !== "started") {
@@ -417,6 +419,51 @@ export async function runIngestPass(
   const current = await store.change((sql) => readIngestRun(sql, payload.syncRunId));
   if (current?.pass_state === "awaiting_run" || current?.pass_state === "confirming")
     await completePass(runtime, payload, control, current);
+}
+
+/** Ends a waiting call whose Workflow run is gone; answers whether it did. */
+async function leaveIfRunGone(
+  runtime: SourceJobRuntime,
+  payload: KnowledgeSyncJobPayload,
+  control: JobControl
+): Promise<boolean> {
+  const store = createSourceStore(runtime.data, payload.knowledgeBaseId, control.signal);
+  const [waiting] = z
+    .array(z.object({ workflow_run_id: z.string() }))
+    .parse(
+      await store.change((sql) =>
+        sql.run(
+          "select workflow_run_id from catalyst_kb.ingest_waiting where sync_run_id=$1::text",
+          [payload.syncRunId]
+        )
+      )
+    );
+  if (!waiting || !(await workflowRunGone(runtime, waiting.workflow_run_id))) return false;
+  await store.change(async (sql) => {
+    const left = await sql.run(
+      "delete from catalyst_kb.ingest_waiting where sync_run_id=$1::text returning sync_run_id",
+      [payload.syncRunId]
+    );
+    if (!left.length) return;
+    await forgetPassRows(sql, payload.syncRunId);
+    const { operationRunId } = payload;
+    if (isOperationRunId(operationRunId))
+      await control.transaction((stores) =>
+        stores.operationRuns.finish({
+          clientInstanceId: runtime.data.clientInstanceId,
+          id: operationRunId,
+          end: {
+            status: "failed",
+            finishedAt: new Date().toISOString(),
+            error: {
+              code: "knowledge_ingest_cancelled",
+              message: "The Workflow run ended before its turn to put documents in"
+            }
+          }
+        })
+      );
+  });
+  return true;
 }
 
 /** A run that ended in any way but `done`, or is gone, ends the pass: what it wrote stays. */
@@ -525,9 +572,15 @@ async function readPass(
         ...progress,
         offset: end,
         counted: Math.max(progress.counted, end),
+        // A dataset is read to its row count, never to a short page: a pass that took a short
+        // read for the end would withdraw what it never read.
         complete:
-          rows.length < INGEST_PAGE_ROWS || (run.dataset !== null && end >= run.dataset.rowCount)
+          run.dataset !== null ? end >= run.dataset.rowCount : rows.length < INGEST_PAGE_ROWS
       };
+      if (run.dataset !== null && rows.length === 0 && !progress.complete)
+        throw new AppError("CONFLICT", "The dataset ended before its row count", {
+          reason: "dataset_reference_invalid"
+        });
       const next = JSON.stringify(progress);
       await createSourceStore(runtime.data, payload.knowledgeBaseId, control.signal).change(
         async (sql) => {
@@ -655,9 +708,9 @@ async function writePage(
         const size = Buffer.byteLength(item.text);
         await sql.run(
           `insert into catalyst_kb.source_items
-            (id,source_id,item_id,version,path,name,mime,size,modified_at,origin_link,state,seen_run_id,enqueued_run_id,fetch_job_id)
-           values ($1::text,$2::text,$3::text,$4::text,$5::text,$6::text,$7::text,$8::bigint,now(),$9::text,'discovered',$10::text,$10::text,$11::text)
-           on conflict (source_id,item_id) do update set seen_run_id=excluded.seen_run_id,withdrawn_at=null,purged_at=null,
+            (id,source_id,item_id,version,path,name,mime,size,modified_at,origin_link,state,seen_run_id,named_run_id,enqueued_run_id,fetch_job_id)
+           values ($1::text,$2::text,$3::text,$4::text,$5::text,$6::text,$7::text,$8::bigint,now(),$9::text,'discovered',$10::text,$10::text,$10::text,$11::text)
+           on conflict (source_id,item_id) do update set seen_run_id=excluded.seen_run_id,named_run_id=excluded.named_run_id,withdrawn_at=null,purged_at=null,
              version=excluded.version,path=excluded.path,name=excluded.name,mime=excluded.mime,size=excluded.size,
              modified_at=case when $12::boolean then source_items.modified_at else excluded.modified_at end,
              origin_link=excluded.origin_link,
@@ -713,6 +766,18 @@ async function writePage(
           format
         });
       }
+      // An item the pass named but could not take keeps the version it has: the pass named it,
+      // so its complete pass does not withdraw it as unnamed.
+      const namedInvalid = failures.flatMap(({ failure }) =>
+        isObject(failure.item) && typeof failure.item.itemId === "string"
+          ? [failure.item.itemId]
+          : []
+      );
+      if (namedInvalid.length)
+        await sql.run(
+          "update catalyst_kb.source_items set named_run_id=$3::text where source_id=$1::text and item_id=any($2::text[]) and state<>'withdrawn'",
+          [payload.sourceId, namedInvalid, payload.syncRunId]
+        );
       for (const { position, failure } of failures)
         await sql.run(
           "insert into catalyst_kb.ingest_failures (sync_run_id,position,item,code,message) values ($1::text,$2::int,$3::jsonb,$4::text,$5::text) on conflict do nothing",
@@ -813,9 +878,10 @@ async function writeContent(
     );
 }
 
-/** The ids of the source's items the Workflow run did not name: what its complete pass withdraws. */
+/** The ids of the source's items the Workflow run did not name, validly or not: what its
+ * complete pass withdraws. A pass of a later run that named an item counts as naming it. */
 const UNNAMED = `from catalyst_kb.source_items i where i.source_id=$1::text and i.state<>'withdrawn'
-  and (i.seen_run_id is null or i.seen_run_id not in (
+  and (i.named_run_id is null or i.named_run_id not in (
     select r.id from catalyst_kb.sync_runs r where r.source_id=$1::text and r.mode='ingest'
       and r.started_at >= (select min(f.started_at) from catalyst_kb.sync_runs f where f.workflow_run_id=$2::text and f.source_id=$1::text)))`;
 
@@ -1091,7 +1157,12 @@ async function completePass(
     await again(runtime, control, payload, SETTLE_WAIT_MAX_MS);
     return;
   }
-  if (siblings.find((sibling) => sibling.complete)?.id !== payload.syncRunId) {
+  // A pass of the run that did not end done read only part of what the run named, though the
+  // run itself went on: the run's promise of completeness no longer holds.
+  if (
+    siblings.some((sibling) => sibling.state !== "done") ||
+    siblings.find((sibling) => sibling.complete)?.id !== payload.syncRunId
+  ) {
     await setPass(runtime, payload, control, "dropped");
     return;
   }
