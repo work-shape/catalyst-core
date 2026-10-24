@@ -219,7 +219,8 @@ describe("the readers of a store", () => {
     useRowsPage: () => ({ status: "loading" }),
     useValue: () => ({ status: "loading" }),
     useUsedBy: () => ({ status: "ready", data: used }),
-    useUsingPage: () => () => undefined
+    useUsingPage: () => () => undefined,
+    review: { useFlagged: () => ({ status: "loading" }), decide: () => Promise.resolve(undefined) }
   });
   const readers = (used: DataStoreUsedBy, locale: "en" | "de" = "en") =>
     render(

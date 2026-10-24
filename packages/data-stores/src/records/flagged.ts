@@ -193,6 +193,14 @@ export const recordsFlagged: StoreVerb = {
   outputSchema: DATA_STORE_RECORD_OPERATIONS.flagged.outputSchema,
   async run({ runtime, store, target, context }, call) {
     const input = dataStoreRecordsFlaggedInputSchema.parse(call);
+    const rules = store.definition.records ?? [];
+    if (input.table !== undefined && !rules.some((rule) => rule.table === input.table))
+      throw new AppError("VALIDATION_FAILED", "The table has no published records rule", {
+        reason: "record_table_unknown"
+      });
+    const { tables, always } = ruleParameters(rules, input.table);
+    // A store without records rules has nothing to review, upgraded or not.
+    if (tables.length === 0) return { items: [] } satisfies DataStoreRecordsFlaggedOutput;
     const locale = context?.runtime.locale ?? runtime.defaultLocale;
     await requireRecordsUpgrade(
       {
@@ -208,13 +216,6 @@ export const recordsFlagged: StoreVerb = {
       store.record,
       locale
     );
-    const rules = store.definition.records ?? [];
-    if (input.table !== undefined && !rules.some((rule) => rule.table === input.table))
-      throw new AppError("VALIDATION_FAILED", "The table has no published records rule", {
-        reason: "record_table_unknown"
-      });
-    const { tables, always } = ruleParameters(rules, input.table);
-    if (tables.length === 0) return { items: [] } satisfies DataStoreRecordsFlaggedOutput;
     const after = input.cursor === undefined ? undefined : decodeCursor(input.cursor);
     const result = await runtime.server.executor.query({
       ...target,

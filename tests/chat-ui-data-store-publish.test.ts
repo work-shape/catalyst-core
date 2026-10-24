@@ -66,7 +66,8 @@ function storeSource(seesServerConditions: boolean): DataStoreSource {
     useRowsPage: () => ({ status: "loading" }),
     useValue: () => ({ status: "loading" }),
     useUsedBy: () => ({ status: "loading" }),
-    useUsingPage: () => () => undefined
+    useUsingPage: () => () => undefined,
+    review: { useFlagged: () => ({ status: "loading" }), decide: () => Promise.resolve(undefined) }
   };
 }
 

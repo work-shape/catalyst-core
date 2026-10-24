@@ -1,5 +1,5 @@
 import { Table2 } from "lucide-react";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import {
   Badge,
   Banner,
@@ -47,6 +47,8 @@ import {
 } from "./data-store-provenance";
 import { ReadState } from "./data-store-read-state";
 import { DataStoreRowsSection } from "./data-store-rows";
+import { DataStoreReview, recordsKeyColumns, REVIEW_PAGE } from "./data-store-review";
+import { groupFlagged } from "./data-store-review-model";
 import {
   serverConditionsShown,
   type DataStoreSchema,
@@ -130,6 +132,14 @@ function PublishedDataStorePage({
   const agentsNamed =
     usedBy.status === "ready" &&
     (usedBy.data.agents !== undefined || usedBy.data.hidden.agents !== undefined);
+  // "Prüfen": a store with records rules, while it is reached, to a reader who may decide.
+  const keyColumns = recordsKeyColumns(asset.config);
+  const [reviewLimit, setReviewLimit] = useState(REVIEW_PAGE);
+  const flagged = source.review.useFlagged(
+    asset.name,
+    reachable && keyColumns.size > 0 ? reviewLimit : undefined
+  );
+  const reviewShown = reachable && keyColumns.size > 0 && flagged.status !== "refused";
   const sections: {
     id: string;
     label: string;
@@ -177,6 +187,26 @@ function PublishedDataStorePage({
         </>
       )
     },
+    ...(reviewShown
+      ? [
+          {
+            id: "review",
+            label: t("dataStores.reviewTitle"),
+            description: t("dataStores.reviewDescription"),
+            count:
+              flagged.status === "ready" ? groupFlagged(flagged.data.items).fieldCount : undefined,
+            body: (
+              <DataStoreReview
+                store={asset.name}
+                read={flagged}
+                review={source.review}
+                keyColumns={keyColumns}
+                showMore={() => setReviewLimit((limit) => limit + REVIEW_PAGE)}
+              />
+            )
+          }
+        ]
+      : []),
     // Where the rows come from and who reads them is read from the published definitions,
     // whatever state the store is in. They stand right after the status, as a phone shows no
     // table of contents.

@@ -1,4 +1,4 @@
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRef } from "react";
 import type { ApiClient } from "@work-shape/catalyst-api-client";
 import { OPERATIONS_AUDIENCES } from "@work-shape/catalyst-core";
@@ -28,6 +28,30 @@ export type DataStoreValue = Awaited<ReturnType<ApiClient["data_stores"]["value"
 export type DataStoreUsedBy = Awaited<ReturnType<ApiClient["data_stores"]["used_by"]>> & {
   dataFlows?: DataFlows;
 };
+
+/** One page of the record fields that wait for a person, as `data_stores.records_flagged` answers. */
+export type DataStoreFlagged = Awaited<ReturnType<ApiClient["data_stores"]["records_flagged"]>>;
+/** One candidate of a flagged field, with the reason it waits. */
+export type DataStoreFlaggedItem = DataStoreFlagged["items"][number];
+/** A person's decision on one field, as `data_stores.records_decide` takes it. */
+export type DataStoreDecision = Parameters<ApiClient["data_stores"]["records_decide"]>[0]["body"];
+
+/**
+ * "Prüfen" of a store with records rules: the fields that wait for a person and the decision on
+ * one. The only write of the page; Publish and Delete stay the frame's.
+ */
+export interface DataStoreReviewSource {
+  /**
+   * A hook: the first `limit` candidates that wait, in the instance's order. Without a limit it
+   * reads nothing and stays loading, as for a store without records rules.
+   */
+  useFlagged(store: string, limit: number | undefined): DataStoreRead<DataStoreFlagged>;
+  /**
+   * Decides one field and reads what waits, and the rows, again. Answers the instance's
+   * sentence where it refused, and nothing where the decision was taken.
+   */
+  decide(store: string, decision: DataStoreDecision): Promise<string | undefined>;
+}
 
 /** Where one value lies: its table, its column and `at` of its row. */
 export interface DataStoreValuePlace {
@@ -64,7 +88,8 @@ export function serverConditionsShown(
 /**
  * Everything the Data Store list and page read beyond the asset the frame hands them. The page
  * is handed this and reads nothing else, so a test hands it answers of its own. Every read is
- * the store's own operation and needs the right to read the store. Nothing here writes.
+ * the store's own operation and needs the right to read the store. Only a decision in "Prüfen"
+ * writes.
  */
 export interface DataStoreSource {
   /**
@@ -99,14 +124,17 @@ export interface DataStoreSource {
     kind: (typeof OPERATIONS_AUDIENCES)[number],
     name: string
   ) => { href: string; open(): void } | undefined;
+  /** "Prüfen" of a store with records rules. */
+  review: DataStoreReviewSource;
 }
 
 /**
  * The Data Store pages on the instance: `data_stores.get`, `.describe`, `.list`, `.rows`,
- * `.value` and `.used_by`.
+ * `.value`, `.used_by`, `.records_flagged` and `.records_decide`.
  */
 export function useDataStoreSource(): DataStoreSource {
   const { apiBaseUrl, authScope, client, user } = useSettingsPage();
+  const queryClient = useQueryClient();
   const calls = client.data_stores;
   const key = (read: string, ...parts: string[]) => [
     ...workspaceQueryKeys.dataStores(apiBaseUrl),
@@ -150,7 +178,28 @@ export function useDataStoreSource(): DataStoreSource {
       ),
     useUsedBy: (store) =>
       useRead(key("used-by", store), (signal) => calls.used_by({ params: { store }, signal })),
-    useUsingPage
+    useUsingPage,
+    review: {
+      useFlagged: (store, limit) =>
+        useRead(
+          key("flagged", store, String(limit ?? 0)),
+          (signal) =>
+            calls.records_flagged({ params: { store }, query: { limit: limit ?? 1 }, signal }),
+          // A longer list keeps the shorter one while it is read.
+          { keepPrevious: true, enabled: limit !== undefined }
+        ),
+      decide: async (store, decision) => {
+        try {
+          await calls.records_decide({ params: { store }, body: decision });
+        } catch (error) {
+          return instanceSentence(error) ?? "";
+        }
+        // What waits, the rows the decision wrote and the store's size are read again.
+        await queryClient.invalidateQueries({ queryKey: key("flagged", store) });
+        await queryClient.invalidateQueries({ queryKey: key("rows", store) });
+        return undefined;
+      }
+    }
   };
 }
 
