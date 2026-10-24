@@ -161,10 +161,13 @@ export const workflows = defineTranslations({
     "workflows.flows.truncated":
       "The instance has more published workflows than one read looks through, so this list may be incomplete.",
     "workflows.failed": "The workflow could not be loaded.",
+    "workflows.kindAll": "All",
     "workflows.kindData": "Data flows",
     "workflows.kindDataEmpty": "No data flows.",
-    "workflows.kindProcessEmpty":
-      "No process workflows yet. Workflows that fill knowledge bases and data stores are under Data flows.",
+    "workflows.kindDataOne": "Data flow",
+    "workflows.kindFilter": "Show",
+    "workflows.kindProcess": "Processes",
+    "workflows.kindProcessEmpty": "No process workflows.",
     "workflows.lastRun": "Last run",
     "workflows.listFailed": "The workflows could not be loaded.",
     "workflows.open": "Open",
@@ -825,10 +828,13 @@ export const workflows = defineTranslations({
     "workflows.flows.truncated":
       "Die Instanz hat mehr veröffentlichte Workflows, als ein Lesezugriff durchsieht. Diese Liste kann unvollständig sein.",
     "workflows.failed": "Der Workflow konnte nicht geladen werden.",
+    "workflows.kindAll": "Alle",
     "workflows.kindData": "Datenflüsse",
     "workflows.kindDataEmpty": "Keine Datenflüsse.",
-    "workflows.kindProcessEmpty":
-      "Noch keine Prozess-Workflows. Workflows, die Wissensbasen und Datenspeicher füllen, findest du unter Datenflüsse.",
+    "workflows.kindDataOne": "Datenfluss",
+    "workflows.kindFilter": "Anzeigen",
+    "workflows.kindProcess": "Prozesse",
+    "workflows.kindProcessEmpty": "Keine Prozess-Workflows.",
     "workflows.lastRun": "Letzter Lauf",
     "workflows.listFailed": "Die Workflows konnten nicht geladen werden.",
     "workflows.open": "Öffnen",

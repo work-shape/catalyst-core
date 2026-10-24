@@ -14,7 +14,7 @@ import {
 } from "@work-shape/catalyst-chat-ui/workflows";
 import { UiRoot, uiLabelsEn } from "@work-shape/catalyst-ui";
 
-// WF-KIND in a browser: the Data flows choice on the Workflows page and a folded stretch of
+// WF-KIND in a browser: the choice of a kind on the Workflows page and a folded stretch of
 // empty runs that the reader opens, which stays open while older runs load.
 
 let host: HTMLDivElement;
@@ -55,7 +55,7 @@ function runLinks(): string[] {
 }
 
 describe("the Workflows page by kind", () => {
-  it("shows the data Workflows once the reader chooses Data flows, and the processes again after", () => {
+  it("lists every Workflow at first, one kind once the reader chooses it, and all again after", () => {
     const rows = [
       toWorkflowListItem({ id: "notify-clients", name: "Notify clients" }),
       toWorkflowListItem({ id: "invoice-import", name: "Invoice import", kind: "data" })
@@ -78,25 +78,31 @@ describe("the Workflows page by kind", () => {
       })
     );
     const text = () => host.textContent ?? "";
+    // Nothing waits behind a filter: both kinds stand on the list, All chosen.
+    expect(text()).toContain("Notify clients");
+    expect(text()).toContain("Invoice import");
+    const choice = (label: string) => {
+      const radio = [...host.querySelectorAll<HTMLButtonElement>('[role="radio"]')].find((button) =>
+        button.textContent?.startsWith(label)
+      );
+      if (!radio) throw new Error(`No ${label} choice.`);
+      return radio;
+    };
+    expect(choice("All").getAttribute("aria-checked")).toBe("true");
+    expect(choice("All").textContent).toBe("All2");
+
+    act(() => choice("Data flows").click());
+    expect(choice("Data flows").getAttribute("aria-checked")).toBe("true");
+    expect(text()).toContain("Invoice import");
+    expect(text()).not.toContain("Notify clients");
+
+    act(() => choice("Processes").click());
     expect(text()).toContain("Notify clients");
     expect(text()).not.toContain("Invoice import");
 
-    // One chip: pressed it lists the data flows, pressed again the processes.
-    const chip = () => {
-      const button = host.querySelector<HTMLButtonElement>("button[aria-pressed]");
-      if (!button) throw new Error("No Data flows chip.");
-      return button;
-    };
-    expect(chip().textContent).toBe("Data flows");
-    expect(chip().getAttribute("aria-pressed")).toBe("false");
-    act(() => chip().click());
-    expect(chip().getAttribute("aria-pressed")).toBe("true");
-    expect(text()).toContain("Invoice import");
-    expect(text()).not.toContain("Notify clients");
-    act(() => chip().click());
-    expect(chip().getAttribute("aria-pressed")).toBe("false");
+    act(() => choice("All").click());
     expect(text()).toContain("Notify clients");
-    expect(text()).not.toContain("Invoice import");
+    expect(text()).toContain("Invoice import");
   });
 });
 

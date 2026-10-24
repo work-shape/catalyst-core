@@ -387,7 +387,7 @@ describe("the list of Workflows", () => {
     expect(markup).toContain(t("tryAgain"));
   });
 
-  it("lists the processes first and keeps data Workflows behind Data flows (WF-KIND)", () => {
+  it("lists every Workflow at first and offers the kinds as a filter (WF-KIND)", () => {
     const importer = {
       id: "invoice-import",
       name: "Invoice import",
@@ -414,18 +414,25 @@ describe("the list of Workflows", () => {
     expect(draft({ workflowKind: "other" })).toBe("process");
     expect(draft({})).toBe("process");
 
+    // Every Workflow stands on the list at first: nothing waits behind a filter.
     const markup = render(listPage([importer, reminder]));
     expect(markup).toContain("Notify clients");
-    expect(markup).not.toContain("Invoice import");
-    // One chip, off while the processes are listed.
-    expect(markup).toMatch(/<button[^>]*aria-pressed="false"[^>]*>.*Data flows/u);
-    expect(markup.match(/aria-pressed=/gu)).toHaveLength(1);
-    expect(render(listPage([importer, reminder]), "de")).toContain(">Datenflüsse<");
-    // Without a data Workflow there is nothing to choose between.
+    expect(markup).toContain("Invoice import");
+    // A data flow says so on its card.
+    expect(markup).toContain(t("workflows.kindDataOne"));
+    // The kinds are one choice, All chosen.
+    expect(markup).toContain(t("workflows.kindAll"));
+    expect(markup).toContain(t("workflows.kindProcess"));
+    expect(markup).toContain(t("workflows.kindData"));
+    expect(markup).toMatch(/role="radio"[^>]*aria-checked="true"[^>]*>(?:(?!<\/button>).)*All/u);
+    expect(render(listPage([importer, reminder]), "de")).toContain("Alle");
+    // Without both kinds there is nothing to choose between.
     expect(render(listPage([reminder]))).not.toContain(t("workflows.kindData"));
-    // Only data Workflows: the processes say where the others are, and the list is not empty.
+    // Only data Workflows: they are listed, with no filter and no empty message.
     const onlyData = render(listPage([importer]));
-    expect(onlyData).toContain(t("workflows.kindProcessEmpty"));
+    expect(onlyData).toContain("Invoice import");
+    expect(onlyData).not.toContain(t("workflows.kindProcessEmpty"));
+    expect(onlyData).not.toContain(t("workflows.kindAll"));
     expect(onlyData).not.toContain(t("workflows.emptyReadOnly"));
   });
 });
