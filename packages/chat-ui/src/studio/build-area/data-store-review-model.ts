@@ -85,28 +85,53 @@ export function groupFlagged(items: readonly DataStoreFlaggedItem[]): ReviewGrou
   };
 }
 
-/** A value as the page shows it: text as it is, anything else as its JSON. */
-export function reviewValueText(value: unknown): string {
-  return typeof value === "string" ? value : JSON.stringify(value);
+/**
+ * A value as the page shows it: a number the way the reader's language writes it, text as it
+ * is, anything else as its JSON. `grouping: false` writes a number without thousands
+ * separators, as a field to edit holds it.
+ */
+export function reviewValueText(
+  value: unknown,
+  locale?: string,
+  options: { grouping?: boolean } = {}
+): string {
+  if (typeof value === "string") return value;
+  if (typeof value === "number" && locale !== undefined)
+    return new Intl.NumberFormat(locale, {
+      maximumFractionDigits: 20,
+      // Four digits stay whole, so a year reads 1987 and not 1.987.
+      useGrouping: options.grouping === false ? false : "min2"
+    }).format(value);
+  return JSON.stringify(value);
+}
+
+/** A number as a person writes it in their language: "1.234,5" in German, "1,234.5" in English. */
+function numberOf(text: string, locale: string): number {
+  const compact = text.replace(/\s/gu, "");
+  const german = locale.startsWith("de");
+  const group = german ? "." : ",";
+  const grouped = (german ? /^-?\d{1,3}(\.\d{3})+(,\d+)?$/u : /^-?\d{1,3}(,\d{3})+(\.\d+)?$/u).test(
+    compact
+  );
+  const plain = grouped ? compact.replaceAll(group, "") : compact;
+  // A decimal comma is read in either language where no group separator stands.
+  return Number(plain.replace(",", "."));
 }
 
 /**
  * The value a person typed, of the kind the candidate holds: a number where the candidate is
- * one, read with a decimal comma too, yes or no where it is one, and text otherwise. Nothing
- * where the text is not of that kind.
+ * one, written as their language writes it, yes or no where it is one, and text otherwise.
+ * Nothing where the text is not of that kind.
  */
 export function reviewValueOf(
   text: string,
-  like: unknown
+  like: unknown,
+  locale = "en"
 ): { value: JsonValue } | { invalid: "number" | "boolean" | "empty" } {
   const trimmed = text.trim();
   if (trimmed === "") return { invalid: "empty" };
   if (typeof like === "number") {
-    const compact = trimmed.replace(/\s/gu, "");
-    // "1.234,5" as German writes it, and "1234.5" as JSON does.
-    const number = Number(
-      compact.includes(",") ? compact.replace(/\./gu, "").replace(",", ".") : compact
-    );
+    const number = numberOf(trimmed, locale);
     return Number.isFinite(number) ? { value: number } : { invalid: "number" };
   }
   if (typeof like === "boolean") {

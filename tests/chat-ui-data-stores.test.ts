@@ -23,6 +23,7 @@ import {
   type DataStoreFlaggedItem,
   groupFlagged,
   reviewValueOf,
+  reviewValueText,
   type DataStoreListed,
   type DataStoreRead,
   type DataStoreRowsPage,
@@ -1265,7 +1266,7 @@ describe("Prüfen: the records of a Data Store that wait for a person (REC-2)", 
     table: "objekt",
     key: 1402,
     name: "kaufpreis",
-    value: 100,
+    value: 485000,
     page: 3,
     quote: "Kaufpreis 100",
     knowledgeBaseId: "kb_1",
@@ -1283,7 +1284,7 @@ describe("Prüfen: the records of a Data Store that wait for a person (REC-2)", 
   });
   const flagged = [
     candidate("a1"),
-    candidate("b1", { value: 200, quote: "Kaufpreis 200", page: 4 }),
+    candidate("b1", { value: 492500, quote: "Kaufpreis 200", page: 4 }),
     candidate("a1", {
       name: "baujahr",
       value: 1990,
@@ -1317,6 +1318,8 @@ describe("Prüfen: the records of a Data Store that wait for a person (REC-2)", 
     expect(page).toContain('data-review-object="1402"');
     expect(page).toContain(">objekt 1402</h3>");
     expect(page).toContain('data-review-field="kaufpreis"');
+    // A number is written as the reader's language writes it.
+    expect(page).toContain(">485,000<");
     expect(page).toContain(">Conflict</span>");
     expect(page).toContain(">Not evidenced</span>");
     expect(page).toContain(">Quote not found on the page</span>");
@@ -1341,7 +1344,8 @@ describe("Prüfen: the records of a Data Store that wait for a person (REC-2)", 
       ">Bestätigen</button>",
       ">Korrigieren</button>",
       ">Objekt zuordnen</button>",
-      "Dokumente ohne Objekt"
+      "Dokumente ohne Objekt",
+      ">485.000<"
     ]) {
       expect(german, said).toContain(said);
     }
@@ -1383,9 +1387,22 @@ describe("Prüfen: the records of a Data Store that wait for a person (REC-2)", 
     expect(groups.documents.map((document) => document.fileName)).toEqual(["expose.pdf"]);
   });
 
+  it("writes a number as the reader's language does, a year without a separator", () => {
+    expect(reviewValueText(485000, "de")).toBe("485.000");
+    expect(reviewValueText(485000, "en")).toBe("485,000");
+    expect(reviewValueText(1987, "de")).toBe("1987");
+    expect(reviewValueText(87.5, "de")).toBe("87,5");
+    expect(reviewValueText(492500, "de", { grouping: false })).toBe("492500");
+    expect(reviewValueText("Am Hang 3")).toBe("Am Hang 3");
+  });
+
   it("reads a typed value as the kind the candidate holds", () => {
     expect(reviewValueOf("150", 100)).toEqual({ value: 150 });
-    expect(reviewValueOf("1.234,5", 100)).toEqual({ value: 1234.5 });
+    expect(reviewValueOf("1.234,5", 100, "de")).toEqual({ value: 1234.5 });
+    expect(reviewValueOf("492.500", 100, "de")).toEqual({ value: 492500 });
+    expect(reviewValueOf("87,5", 100, "de")).toEqual({ value: 87.5 });
+    expect(reviewValueOf("1,234.5", 100, "en")).toEqual({ value: 1234.5 });
+    expect(reviewValueOf("87.5", 100, "en")).toEqual({ value: 87.5 });
     expect(reviewValueOf("teuer", 100)).toEqual({ invalid: "number" });
     expect(reviewValueOf("ja", true)).toEqual({ value: true });
     expect(reviewValueOf("150", "Nebenweg 1")).toEqual({ value: "150" });

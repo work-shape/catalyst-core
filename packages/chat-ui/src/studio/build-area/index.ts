@@ -148,7 +148,7 @@ export type {
   DataStoreValue
 } from "./data-store-source";
 export { useDataStoreSource, usingPageRoute } from "./data-store-source";
-export { groupFlagged, reviewValueOf } from "./data-store-review-model";
+export { groupFlagged, reviewValueOf, reviewValueText } from "./data-store-review-model";
 export { DataStoreReaders } from "./data-store-provenance";
 export {
   appDataLines,
