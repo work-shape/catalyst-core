@@ -75,6 +75,9 @@ function HostedConnectCard({
       personal: true,
       enabled: false,
       browser,
+      // The thread draws the card anew when the run ends: the sign-in still lands, the list of
+      // the person's Connections is read again and their word is sent once.
+      outlivesView: true,
       onConnected: () => {
         invalidate().catch(() => undefined);
         // The person's word, sent as theirs: the agent carries on with the Connection.
