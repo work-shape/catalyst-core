@@ -169,6 +169,7 @@ export function createOperationCalls(options: OperationCallsOptions): OperationC
         approvals: options.approvalRequests.store,
         held,
         authorizer: options.authorizer,
+        configAssets: options.stores.configAssets,
         ...(handlerOptions.assetPreview ? { assetPreview: handlerOptions.assetPreview } : {}),
         creator: new ApprovalRequestWorkflow({
           ...options.approvalRequests,

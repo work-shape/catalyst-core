@@ -287,7 +287,7 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
     // A request addressed to a person is theirs to decide, whatever rights they hold; only
     // they reach it here.
     if (request.addresseeUserId === undefined) {
-      access.require(handler.requiredPermission, resourceOfRequest(handler, request));
+      requireDecidingRight(handler, request, access);
       for (const { permission, resource } of furtherPermissionsOf(handler, request))
         access.require(permission, resource);
     } else if (command.decision === "request_changes") {
@@ -403,7 +403,7 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
   ): Promise<ApprovalRequestView> {
     const request = await this.visibleRequest(user, access, requestId);
     const handler = this.handler(request.kind);
-    access.require(handler.requiredPermission, resourceOfRequest(handler, request));
+    requireDecidingRight(handler, request, access);
     for (const { permission, resource } of furtherPermissionsOf(handler, request))
       access.require(permission, resource);
     const revert = handler.revert?.bind(handler);
@@ -549,9 +549,7 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
       (request.addresseeUserId !== undefined
         ? request.addresseeUserId !== user.id
         : (request.requestedBy.id !== user.id || handler?.hiddenFromRequester === true) &&
-          (!handler ||
-            !access.authorize(handler.requiredPermission, resourceOfRequest(handler, request))
-              .allowed))
+          (!handler || !holdsDecidingRight(handler, request, access)))
     ) {
       throw new AppError("NOT_FOUND", "Approval request was not found");
     }
@@ -586,8 +584,7 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
     const decides =
       request.addresseeUserId !== undefined
         ? request.addresseeUserId === user.id
-        : access.authorize(handler.requiredPermission, resourceOfRequest(handler, request))
-            .allowed && decidesFurther(handler, request, access);
+        : holdsDecidingRight(handler, request, access) && decidesFurther(handler, request, access);
     const preview = await handler.preview(handler.validate(request.payload), {
       ...this.handlerContext(request, context),
       viewer,
@@ -667,7 +664,14 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
       const permission = handler.requiredPermission;
       const onInstance = access.authorize(permission).allowed;
       if (!handler.resourceOf || !handler.reviewableSubjects) {
-        if (onInstance) kinds.push(handler.kind);
+        if (onInstance) {
+          kinds.push(handler.kind);
+          continue;
+        }
+        // Without the right on the instance, the requests a narrower right decides: those
+        // about a Connection the reader holds `connection.approve` on.
+        const subjects = (await handler.alsoDecidedSubjects?.(access)) ?? [];
+        if (subjects.length > 0) subjectKinds.push({ kind: handler.kind, subjects });
         continue;
       }
       // The right on the instance covers every asset only where no deny lies on one: a list
@@ -764,6 +768,44 @@ function furtherPermissionsOf(
   request: ApprovalRequest
 ): readonly ApprovalFurtherRight[] {
   return handler.furtherPermissions?.(handler.validate(request.payload)) ?? [];
+}
+
+/**
+ * Whether `access` holds the right that decides one request: the kind's right where the
+ * request names it, or the narrower right the kind names for this request. A payload the kind
+ * cannot read names no narrower right.
+ */
+function holdsDecidingRight(
+  handler: ApprovalRequestHandler,
+  request: ApprovalRequest,
+  access: ActorAccess
+): boolean {
+  if (access.authorize(handler.requiredPermission, resourceOfRequest(handler, request)).allowed)
+    return true;
+  const also = alsoDecidedByOf(handler, request);
+  return also !== undefined && access.authorize(also.permission, also.resource).allowed;
+}
+
+/** Refuses as the kind's right refuses, unless `holdsDecidingRight`. */
+function requireDecidingRight(
+  handler: ApprovalRequestHandler,
+  request: ApprovalRequest,
+  access: ActorAccess
+): void {
+  if (!holdsDecidingRight(handler, request, access))
+    access.require(handler.requiredPermission, resourceOfRequest(handler, request));
+}
+
+function alsoDecidedByOf(
+  handler: ApprovalRequestHandler,
+  request: ApprovalRequest
+): ApprovalFurtherRight | undefined {
+  if (!handler.alsoDecidedBy) return undefined;
+  try {
+    return handler.alsoDecidedBy(handler.validate(request.payload));
+  } catch {
+    return undefined;
+  }
 }
 
 /** Whether `access` holds every further right; a request whose rights cannot be told, never. */

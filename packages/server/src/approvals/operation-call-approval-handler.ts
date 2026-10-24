@@ -50,6 +50,7 @@ import {
   previewOf,
   type OperationCallPayload
 } from "./operation-call-payload";
+import { connectionApproveRight, connectionApproveSubjects } from "./connection-approval";
 import { PUBLISH_APPROVAL_KINDS } from "./publish-approval";
 import { z } from "zod";
 
@@ -74,7 +75,10 @@ export interface OperationCallApprovalOptions {
   /** Describes the asset a held `assets.put` saves. Without it such a call is shown as any other. */
   assetPreview?: HeldAssetPreviewer;
   /** Where a kind reads what its request is about, outside a decision. */
-  configAssets: Pick<ConfigAssetStore, "getConfigAsset" | "getConfigAssetRevision">;
+  configAssets: Pick<
+    ConfigAssetStore,
+    "getConfigAsset" | "getConfigAssetRevision" | "listActiveConfigAssets"
+  >;
   /**
    * The kinds of held call, for a request of another kind that is about the same subject: a
    * confirmation in the Inbox of a publish shows and checks the publish as its kind does.
@@ -144,6 +148,20 @@ export function createOperationCallApprovalHandler(
       return about?.furtherPermissions ? about.furtherPermissions(call.subject ?? {}) : [];
     },
     ...onAsset(held),
+    // A plain held call on one Connection is decided by `operations.approve`, or by
+    // `connection.approve` on that Connection. A confirmation is its person's alone.
+    ...(held
+      ? {}
+      : {
+          alsoDecidedBy: (payload: JsonObject) => {
+            const call = parsePayload(payload);
+            return call.mode === undefined && call.subjectKind === undefined
+              ? connectionApproveRight(call.subject)
+              : undefined;
+          },
+          alsoDecidedSubjects: (access: ActorAccess) =>
+            connectionApproveSubjects({ clientInstanceId, store: options.configAssets }, access)
+        }),
     validate(payload) {
       return toJsonObject(parsePayload(payload));
     },

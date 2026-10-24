@@ -7,7 +7,8 @@ import {
   type ApprovalRequest,
   type ApprovalRequestCreator,
   type Authorizer,
-  type ClientInstanceId
+  type ClientInstanceId,
+  type ConfigAssetStore
 } from "@work-shape/catalyst-core";
 import {
   OPERATION_CALL_APPROVAL_KIND,
@@ -24,6 +25,7 @@ import {
   endHeldOperationCalls,
   type HeldOperationCallEnderOptions
 } from "./operation-call-approval-handler";
+import { connectionSubjectOf } from "./connection-approval";
 import type { HeldCallApprovalKind } from "./held-call-kind";
 import { payloadSchema, toJsonObject, type OperationCallPayload } from "./operation-call-payload";
 
@@ -54,6 +56,8 @@ export interface OperationApprovalFilerOptions {
   held: readonly HeldCallApprovalKind[];
   assetPreview?: HeldAssetPreviewer;
   authorizer?: Authorizer;
+  /** Where the Connection a held call is about is read, for `connection.approve`. */
+  configAssets?: Pick<ConfigAssetStore, "getConfigAsset">;
 }
 
 /**
@@ -110,6 +114,16 @@ export function createOperationApprovalFiler(
         );
       }
       const heldBy = payloadSchema.shape.heldBy.unwrap().safeParse(policySource);
+      // A call on one Connection names it, so `connection.approve` on it decides the request.
+      const connection =
+        approval?.subject || confirmation || !options.configAssets
+          ? undefined
+          : await connectionSubjectOf(
+              { clientInstanceId: options.clientInstanceId, store: options.configAssets },
+              run.operation,
+              input,
+              resource
+            );
       const payload: OperationCallPayload = {
         runId: run.id,
         operation: run.operation,
@@ -137,6 +151,7 @@ export function createOperationApprovalFiler(
               }
             }
           : {}),
+        ...(connection ? { subject: connection } : {}),
         ...(confirmation && approval?.subject ? { subjectKind: approval.kind } : {}),
         actor: {
           id: actor.id,
