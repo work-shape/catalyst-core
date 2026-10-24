@@ -101,8 +101,11 @@ export function createDocumentSourceOpener(
             reject(new DocumentSourceError("unavailable", "The source stream timed out"));
           signal.addEventListener("abort", abort, { once: true });
         });
+        // Admission may still be waiting for the database when the deadline ends.
+        aborted.catch(() => undefined);
         try {
           release = await acquire();
+          signal.throwIfAborted();
           iterator = source.fetch(input, ctx)[Symbol.asyncIterator]();
           for (;;) {
             signal.throwIfAborted();

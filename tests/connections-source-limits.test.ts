@@ -18,6 +18,7 @@ import {
 import { setupConnectionInstance, connection } from "./support/connections";
 import { clientInstanceId } from "./support/access-instance";
 import { withTestSql } from "./support/test-sql";
+import { deferred } from "./support/assertions";
 
 async function sourceWorld(limits: OperationLimits) {
   const t = await setupConnectionInstance();
@@ -47,11 +48,8 @@ async function sourceWorld(limits: OperationLimits) {
       }
     }
   };
-  const open = () =>
-    createDocumentSourceOpener(deps, new ConnectionCallSlots())(
-      "documents",
-      new AbortController().signal
-    );
+  const open = (signal: AbortSignal = new AbortController().signal) =>
+    createDocumentSourceOpener(deps, new ConnectionCallSlots())("documents", signal);
   return { ...t, source, assetId, open };
 }
 const boundary = { folderIds: ["approved"] };
@@ -188,7 +186,6 @@ describe("Connection source limits (CS-6 acceptance 61)", () => {
   });
   it("releases admission when a broken adapter's stream creation or close fails", async () => {
     const t = await sourceWorld({ concurrency: 1 });
-    t.source.connectorType.limits.callTimeoutMs = 100;
     t.source.capability.fetch = () => {
       throw new Error("broken adapter");
     };
@@ -200,20 +197,72 @@ describe("Connection source limits (CS-6 acceptance 61)", () => {
       )) {
       }
     }).rejects.toThrow("broken adapter");
+    const closing = deferred<void>();
+    const cancellation = new AbortController();
     t.source.capability.fetch = () => ({
       [Symbol.asyncIterator]: () => ({
         next: async () => ({ done: false, value: new Uint8Array([1]) }),
-        return: () => new Promise<IteratorResult<Uint8Array>>(() => {})
+        return: () => {
+          closing.resolve();
+          return new Promise<IteratorResult<Uint8Array>>(() => {});
+        }
       })
     });
-    const second = await t.open();
+    const second = await t.open(cancellation.signal);
     const stream = second.capability
       .fetch({ itemId: "file", version: "1", maxBytes: 10, boundary }, second.context)
       [Symbol.asyncIterator]();
     await stream.next();
-    await stream.return?.();
+    const returned = stream.return?.();
+    await closing.promise;
+    cancellation.abort();
+    await returned;
     const third = await t.open();
     await expect(third.capability.list({ boundary }, third.context)).resolves.toMatchObject({
+      items: []
+    });
+  });
+  it("cancels a fetch during admission without dispatching or leaking its admission", async () => {
+    const t = await sourceWorld({ concurrency: 1 });
+    const cancellation = new AbortController();
+    const source = await t.open(cancellation.signal);
+    const admitted = deferred<void>();
+    const response = deferred<void>();
+    const transaction = t.stores.transaction.bind(t.stores);
+    t.stores.transaction = async (work) => {
+      t.stores.transaction = transaction;
+      const result = await transaction(work);
+      admitted.resolve();
+      await response.promise;
+      return result;
+    };
+    let fetches = 0;
+    const fetch = t.source.capability.fetch;
+    t.source.capability.fetch = (input, context) => {
+      fetches++;
+      return fetch(input, context);
+    };
+    const stream = source.capability
+      .fetch({ itemId: "file", version: "1", maxBytes: 10, boundary }, source.context)
+      [Symbol.asyncIterator]();
+    // Attach the caller's rejection handler before cancelling. The product's internal
+    // abort promise must also be handled while the database response is still pending.
+    const reading = Promise.allSettled([stream.next()]);
+    const reason = new Error("cancelled during source admission");
+    try {
+      await admitted.promise;
+      cancellation.abort(reason);
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      response.resolve();
+      expect(await reading).toEqual([{ status: "rejected", reason }]);
+      expect(fetches).toBe(0);
+    } finally {
+      response.resolve();
+      t.stores.transaction = transaction;
+      await reading;
+    }
+    const next = await t.open();
+    await expect(next.capability.list({ boundary }, next.context)).resolves.toMatchObject({
       items: []
     });
   });
