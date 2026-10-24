@@ -240,8 +240,16 @@ export async function readWorkspaceUsage(
     filter: { workspace: input.workspaceId },
     webSearchEnabled: deps.webSearchEnabled
   };
+  // The days of the month up to today: a day still to come has no usage to draw.
+  const tomorrow = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1)
+  ).toISOString();
   const [days, breakdown, activity] = await Promise.all([
-    deps.usageGovernance.summarizeBreakdown({ ...monthQuery, groupBy: "day" }),
+    deps.usageGovernance.summarizeBreakdown({
+      ...monthQuery,
+      to: (tomorrow < month.to ? tomorrow : month.to).slice(0, 10),
+      groupBy: "day"
+    }),
     deps.usageGovernance.summarizeBreakdown({
       clientInstanceId: deps.clientInstanceId,
       from: input.query.from,

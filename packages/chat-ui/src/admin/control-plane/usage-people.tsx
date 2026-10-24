@@ -84,19 +84,25 @@ export function UsageUsersPanel({
       ) : users.items.length === 0 ? (
         <EmptyState>{t("usageReports.usersEmpty")}</EmptyState>
       ) : (
-        <Table narrow="stack">
+        <Table>
           <TableHeader>
             <TableRow>
               <TableHead>{t("usageReports.person")}</TableHead>
               <TableHead align="end">{t("usageReports.spent")}</TableHead>
-              <TableHead align="end">{t("usageReports.calls")}</TableHead>
-              <TableHead align="end">{t("usageReports.tokens")}</TableHead>
+              <TableHead align="end" priority={1}>
+                {t("usageReports.calls")}
+              </TableHead>
+              <TableHead align="end" priority={2}>
+                {t("usageReports.tokens")}
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {users.items.map((item) => (
               <TableRow key={item.userId}>
-                <TableCell className="break-words">{item.name}</TableCell>
+                <TableCell className="break-words" rowDetail>
+                  {item.name}
+                </TableCell>
                 <TableCell align="end" className="whitespace-nowrap">
                   {formatMicrosCost(Math.round(item.spent * 1_000_000), users.currency, i18n)}
                 </TableCell>
@@ -141,19 +147,23 @@ export function WorkspaceMembersUsagePanel({
       ) : members.items.length === 0 ? (
         <EmptyState>{t("usageReports.usersEmpty")}</EmptyState>
       ) : (
-        <Table narrow="stack">
+        <Table>
           <TableHeader>
             <TableRow>
               <TableHead>{t("usageReports.person")}</TableHead>
               <TableHead align="end">{t("usageReports.cost")}</TableHead>
-              <TableHead align="end">{t("usageReports.calls")}</TableHead>
-              <TableHead align="end">{t("usageReports.tokens")}</TableHead>
+              <TableHead align="end" priority={1}>
+                {t("usageReports.calls")}
+              </TableHead>
+              <TableHead align="end" priority={2}>
+                {t("usageReports.tokens")}
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {members.items.map((item, index) => (
               <TableRow key={item.userId ?? `unknown-${index}`}>
-                <TableCell className="break-words">
+                <TableCell className="break-words" rowDetail>
                   {item.name ?? t("usageReports.unknownPerson")}
                 </TableCell>
                 <TableCell align="end" className="whitespace-nowrap">

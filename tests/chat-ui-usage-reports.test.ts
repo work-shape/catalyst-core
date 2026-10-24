@@ -163,6 +163,26 @@ describe("the Breakdown", () => {
     }
   });
 
+  it("names no row by another dimension while the new grouping loads", () => {
+    const markup = renderToStaticMarkup(
+      createElement(TranslationProvider, {
+        locale: "en",
+        children: createElement(
+          UiRoot,
+          { mode: "light", labels: uiLabelsEn },
+          createElement(UsageBreakdownPanel, {
+            state: { ...state, groupBy: "agent" },
+            onStateChange: () => undefined,
+            breakdown,
+            loading: true
+          })
+        )
+      })
+    );
+    expect(markup).not.toContain("Sales team");
+    expect(markup).not.toContain("cws_team");
+  });
+
   it("reads a period as UTC days, the last one excluded", () => {
     const now = new Date("2026-10-15T23:30:00.000Z");
     expect(usagePeriodDays("this_month", now)).toEqual({ from: "2026-10-01", to: "2026-10-16" });

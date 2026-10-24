@@ -196,6 +196,14 @@ describe("a shared workspace's Usage tab (check 14)", () => {
     expect(response.statusCode).toBe(200);
     const usage = workspaceUsageSchema.parse(response.json());
     expect(usage.month.modelCallCount).toBe(3);
+    // Every day of the month up to today, a day without usage too.
+    expect(usage.days.map((day) => day.date)).toEqual(
+      Array.from(
+        { length: new Date().getUTCDate() },
+        (_, index) => `${today().slice(0, 8)}${String(index + 1).padStart(2, "0")}`
+      )
+    );
+    expect(usage.days.at(-1)?.modelCallCount).toBe(3);
     expect(usage.breakdown.rows.map((row) => [row.key, row.modelCallCount])).toEqual([
       ["reader", 1],
       ["writer", 2]

@@ -128,9 +128,10 @@ export function WorkspaceUsagePage() {
           <DailyUsageCard
             days={usage.days}
             defaultMetric={usage.month.cost.complete ? "cost" : "tokens"}
+            title={t("usageReports.dailyThisMonth")}
           />
         </TabsContent>
-        <TabsContent value="breakdown">
+        <TabsContent value="breakdown" className="min-w-0">
           <UsageBreakdownPanel
             state={state}
             onStateChange={setState}
@@ -141,7 +142,7 @@ export function WorkspaceUsagePage() {
           />
         </TabsContent>
         {usage.membersVisible ? (
-          <TabsContent value="members">
+          <TabsContent value="members" className="min-w-0">
             {tab === "members" ? (
               <WorkspaceMembers workspaceId={workspace.id} month={month} onMonthChange={setMonth} />
             ) : null}

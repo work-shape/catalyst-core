@@ -194,10 +194,13 @@ export function UsageBreakdownPanel({
   const groupable = dimensions.filter(
     (dimension) => !state.path.some((step) => step.dimension === dimension)
   );
-  const rows = breakdown?.rows ?? [];
+  // The rows of another grouping, kept while the new one loads, would be named by the wrong
+  // dimension: only the rows of this grouping are shown.
+  const shown = breakdown?.groupBy === state.groupBy ? breakdown : undefined;
+  const rows = shown?.rows ?? [];
   const label = (row: UsageBreakdownRow) =>
-    breakdown ? usageBreakdownLabel(state.groupBy, row, breakdown, t, agentLabel) : row.key;
-  const incomplete = breakdown !== undefined && !breakdown.total.cost.complete && rows.length > 0;
+    shown ? usageBreakdownLabel(state.groupBy, row, shown, t, agentLabel) : row.key;
+  const incomplete = shown !== undefined && !shown.total.cost.complete && rows.length > 0;
 
   return (
     <div className="grid min-w-0 gap-4" data-testid="usage-breakdown">
@@ -261,21 +264,27 @@ export function UsageBreakdownPanel({
       ) : null}
       {error ? <Banner tone="danger">{error}</Banner> : null}
       {incomplete ? <Banner tone="info">{t("usageReports.breakdownIncomplete")}</Banner> : null}
-      {!breakdown ? (
+      {!shown ? (
         error ? null : (
           <SkeletonList />
         )
       ) : rows.length === 0 ? (
         <EmptyState>{t("usageReports.breakdownEmpty")}</EmptyState>
       ) : (
-        <Table aria-busy={loading ? true : undefined} narrow="stack">
+        <Table aria-busy={loading ? true : undefined}>
           <TableHeader>
             <TableRow>
               <TableHead>{t(DIMENSION_LABELS[state.groupBy])}</TableHead>
               <TableHead align="end">{t("usageReports.cost")}</TableHead>
-              <TableHead align="end">{t("usageReports.share")}</TableHead>
-              <TableHead align="end">{t("usageReports.calls")}</TableHead>
-              <TableHead align="end">{t("usageReports.tokens")}</TableHead>
+              <TableHead align="end" priority={1}>
+                {t("usageReports.share")}
+              </TableHead>
+              <TableHead align="end" priority={2}>
+                {t("usageReports.calls")}
+              </TableHead>
+              <TableHead align="end" priority={3}>
+                {t("usageReports.tokens")}
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -283,7 +292,7 @@ export function UsageBreakdownPanel({
               const name = label(row);
               return (
                 <TableRow key={row.key} data-usage-row={row.key}>
-                  <TableCell className="break-words">
+                  <TableCell className="break-words" rowDetail>
                     {next === undefined ? (
                       name
                     ) : (
@@ -314,7 +323,7 @@ export function UsageBreakdownPanel({
                     {formatBillableCost(row.cost, i18n)}
                   </TableCell>
                   <TableCell align="end" className="whitespace-nowrap text-muted-foreground">
-                    {breakdown ? (shareOf(row, breakdown.total, locale) ?? "–") : "–"}
+                    {shareOf(row, shown.total, locale) ?? "–"}
                   </TableCell>
                   <TableCell align="end" className="whitespace-nowrap text-muted-foreground">
                     {row.modelCallCount.toLocaleString(locale)}
@@ -326,16 +335,16 @@ export function UsageBreakdownPanel({
               );
             })}
             <TableRow data-usage-row="total" className="font-medium">
-              <TableCell>{t("usageReports.total")}</TableCell>
+              <TableCell rowDetail>{t("usageReports.total")}</TableCell>
               <TableCell align="end" className="whitespace-nowrap">
-                {formatBillableCost(breakdown.total.cost, i18n)}
+                {formatBillableCost(shown.total.cost, i18n)}
               </TableCell>
               <TableCell align="end" />
               <TableCell align="end" className="whitespace-nowrap">
-                {breakdown.total.modelCallCount.toLocaleString(locale)}
+                {shown.total.modelCallCount.toLocaleString(locale)}
               </TableCell>
               <TableCell align="end" className="whitespace-nowrap">
-                {breakdown.total.totalTokens.toLocaleString(locale)}
+                {shown.total.totalTokens.toLocaleString(locale)}
               </TableCell>
             </TableRow>
           </TableBody>

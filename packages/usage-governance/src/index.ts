@@ -476,9 +476,12 @@ export class ModelUsageGovernance implements ModelUsageRecorder {
     const showWebSearchCost = this.showsWebSearchCost(input.webSearchEnabled);
     const start = `${input.from}T00:00:00.000Z`;
     const end = `${input.to}T00:00:00.000Z`;
+    // By day, every day of the period is a row, a day without usage too: a chart of the days
+    // shows the gaps.
+    const rows = input.groupBy === "day" ? everyDay(groups, input.from, input.to) : groups;
     return {
       total: toSafeWindow(whole[0] ?? NO_USAGE, start, end, this.costs.customer, showWebSearchCost),
-      rows: groups.map(({ key, ...totals }) => ({
+      rows: rows.map(({ key, ...totals }) => ({
         key,
         ...(input.groupBy === "day"
           ? toSafeWindow(
@@ -1091,4 +1094,23 @@ function utcDayStart(reference: Date, dayOffset: number): Date {
 
 function utcMonthStart(reference: Date, monthOffset: number): Date {
   return new Date(Date.UTC(reference.getUTCFullYear(), reference.getUTCMonth() + monthOffset, 1));
+}
+
+/** The rows of each UTC day from `from` up to `to` (excluded), a day without a row as no usage. */
+function everyDay<Row extends { key: string }>(
+  rows: readonly Row[],
+  from: string,
+  to: string
+): (Row | ({ key: string } & ModelUsageTotals))[] {
+  const byDay = new Map(rows.map((row) => [row.key, row]));
+  const days: (Row | ({ key: string } & ModelUsageTotals))[] = [];
+  for (
+    let day = new Date(`${from}T00:00:00.000Z`);
+    day < new Date(`${to}T00:00:00.000Z`);
+    day = utcDayStart(day, 1)
+  ) {
+    const key = day.toISOString().slice(0, 10);
+    days.push(byDay.get(key) ?? { key, ...NO_USAGE });
+  }
+  return days;
 }
