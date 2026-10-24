@@ -1,0 +1,6 @@
+---
+section: Added
+---
+
+- **Usage:** Spend limits at three levels. An admin sets money per UTC day and month for the instance, for every shared workspace or one of them, and for every user or one of them; a model call is admitted only while the user, the workspace and the instance are all under their limits. The release config's values stay the ceiling of the instance. A Personal Workspace has no workspace limit. Titles, guardrail checks and other calls the product adds count against the workspace and the instance and not against the person; calls with no person count against the workspace and the instance; Knowledge Base ingestion counts against no limit. An answer that crosses a user or workspace limit finishes, and the next message is refused. With a limit set, a model without a price is refused (ADR-0014).
+- **Usage:** `usage.limits.get` and `usage.limits.set` read and change the limits for the screen, the API and the CLI (`catalyst limits show`, `catalyst limits set --from <file|->`). Both require the new right `limits.manage`, which administrators hold by default and workspace owners do not. Each change is recorded in the audit log as `governance.usage_limit_changed` with its old and new value. `me.usage.get` gives a person their own consumption against their limit, and whether a workspace's or the instance's limit stops them.

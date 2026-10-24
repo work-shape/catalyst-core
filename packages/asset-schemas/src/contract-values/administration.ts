@@ -2,6 +2,9 @@
 export const ADMINISTRATION_ACTIONS = [
   "users.manage",
   "usage.view",
+  // Setting the spend limits of the instance, of shared workspaces and of users (LU-2).
+  // Instance admins hold it; workspace owners do not.
+  "limits.manage",
   "audit.view",
   "api_access.manage",
   // Creating service principals, giving and taking their rights, enabling and disabling them.

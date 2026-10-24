@@ -173,6 +173,7 @@ const OWN_ACTION_WORDS: Record<OwnWordAction, Words> = {
   "feedback.review": { en: "review feedback on agents", de: "Feedback zu Agenten prüfen" },
   "users.manage": { en: "manage users", de: "Benutzer verwalten" },
   "usage.view": { en: "view usage", de: "Nutzung ansehen" },
+  "limits.manage": { en: "set spend limits", de: "Ausgabenlimits festlegen" },
   "audit.view": { en: "view the audit log", de: "Auditprotokoll ansehen" },
   "api_access.manage": { en: "manage API access", de: "API-Zugriff verwalten" },
   "service_principals.manage": {
