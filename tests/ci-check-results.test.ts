@@ -40,8 +40,8 @@ for (const name of ["check.yml", "pr.yml"]) {
     expect(needs).toContain("tests");
     if (name === "check.yml") expect(needs).toContain("browser-shard");
     else {
-      expect(needs).toEqual(["static", "tests"]);
-      expect(Object.keys(jobs).sort()).toEqual(["check", "static", "tests"]);
+      expect(needs).toEqual(["lint", "types", "tooling", "tests"]);
+      expect(Object.keys(jobs).sort()).toEqual(["check", "lint", "tests", "tooling", "types"]);
       expect(gate.if).toBe("always()");
     }
     expect(() => run(full())).not.toThrow();
