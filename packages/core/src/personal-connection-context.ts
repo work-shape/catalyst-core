@@ -1,4 +1,4 @@
-import { connectionCallFailure } from "./connection-operations";
+import { CONNECTION_CALL_REASONS, connectionCallSentence } from "./connection-operations";
 import { AppError } from "./errors";
 import {
   getSubjectUserId,
@@ -86,6 +86,12 @@ export function personalConnectionContextError(reason: string): AppError {
   );
 }
 
+/**
+ * The regions a model route may declare for a run to call a personal Connection, where release
+ * config names none. A route without a region never passes, whatever the list.
+ */
+export const DEFAULT_PERSONAL_MODEL_REGIONS: readonly string[] = Object.freeze(["eu"]);
+
 /** Owner-bound admission, independent of roles, grants and the current browser session. */
 export async function requirePersonalConnectionContext(input: {
   stores: Pick<PlatformStores, "conversations" | "agentRuns" | "workspaces">;
@@ -94,6 +100,8 @@ export async function requirePersonalConnectionContext(input: {
   origin: OperationOrigin | undefined;
   byAppAction?: boolean;
   modelRoutes?: OperationCallRuntime["modelRoutes"];
+  /** `modules.connections.personalModelRegions`; left out, `DEFAULT_PERSONAL_MODEL_REGIONS`. */
+  personalModelRegions?: readonly string[];
 }) {
   const { actor, origin, stores, clientInstanceId } = input;
   if (!origin || origin.kind !== "agent" || origin.boundBy || input.byAppAction) {
@@ -154,10 +162,28 @@ export async function requirePersonalConnectionContext(input: {
   ) {
     throw personalConnectionContextError("only its creator may read the conversation");
   }
-  if (!input.modelRoutes?.length || input.modelRoutes.some((route) => route.region !== "eu")) {
-    throw connectionCallFailure("personal_connection_region", undefined);
+  const allowed = input.personalModelRegions ?? DEFAULT_PERSONAL_MODEL_REGIONS;
+  if (
+    !input.modelRoutes?.length ||
+    input.modelRoutes.some((route) => route.region === undefined || !allowed.includes(route.region))
+  ) {
+    throw personalConnectionRegionError(allowed);
   }
   return conversation;
+}
+
+/**
+ * The region refusal names the regions the instance allows, never a route's name or region.
+ * The details carry the reason alone, so no Connect card is offered.
+ */
+function personalConnectionRegionError(allowed: readonly string[]): AppError {
+  const regions = allowed.length > 0 ? allowed.join(", ") : "none";
+  return new AppError(
+    CONNECTION_CALL_REASONS.personal_connection_region,
+    `${connectionCallSentence("personal_connection_region", undefined)} Every model route of the run has to declare one of the regions allowed for personal Connections: ${regions}.`,
+    { reason: "personal_connection_region" },
+    { exposeMessage: true }
+  );
 }
 
 /** No content is included in the refusal. */

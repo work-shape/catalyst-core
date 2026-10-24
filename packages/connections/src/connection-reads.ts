@@ -36,6 +36,11 @@ export interface ConnectionOperationSourceDeps {
    * (`outsideSchemaChecker`).
    */
   schemaChecker?: OutsideSchemaChecker;
+  /**
+   * The regions a model route may declare for a run to call a personal Connection, from
+   * `modules.connections.personalModelRegions`. Left out, only `eu` passes.
+   */
+  personalModelRegions?: readonly string[];
 }
 
 /** One stored Connection as a reader of this package sees it. */

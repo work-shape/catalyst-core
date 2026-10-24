@@ -11,6 +11,7 @@ import {
 } from "@work-shape/catalyst-client-assembly";
 import {
   createSafeConfigView,
+  getPersonalModelRegions,
   isPasswordMailEnabled,
   loadClientInstanceConfigFromFile,
   parseClientInstanceConfig,
@@ -294,6 +295,55 @@ const committedConfigFiles = [
     .filter((entry) => entry.startsWith("deployment."))
     .flatMap((entry) => instanceConfigFiles(join(workspaceRoot, entry)))
 ];
+
+describe("modules.connections.personalModelRegions", () => {
+  const withRegions = (personalModelRegions: unknown) =>
+    baseConfig({ modules: { connections: { enabled: true, personalModelRegions } } });
+
+  it("is left out unless written, and the platform's default is eu alone", () => {
+    const config = parseClientInstanceConfig(
+      baseConfig({ modules: { connections: { enabled: true } } })
+    );
+
+    expect(config.modules.connections).toEqual({ enabled: true });
+    expect(getPersonalModelRegions(config)).toEqual(["eu"]);
+    expect(getPersonalModelRegions(parseClientInstanceConfig(baseConfig()))).toEqual(["eu"]);
+  });
+
+  it("reads a list the operator widened", () => {
+    const config = parseClientInstanceConfig(withRegions(["eu", "us"]));
+
+    expect(config.modules.connections).toEqual({
+      enabled: true,
+      personalModelRegions: ["eu", "us"]
+    });
+    expect(getPersonalModelRegions(config)).toEqual(["eu", "us"]);
+  });
+
+  it.each([
+    { label: "an empty list", value: [], at: "modules.connections.personalModelRegions" },
+    { label: "a number", value: ["eu", 1], at: "modules.connections.personalModelRegions.1" },
+    { label: "an empty region", value: [" "], at: "modules.connections.personalModelRegions.0" },
+    {
+      label: "a region over 32 characters",
+      value: ["x".repeat(33)],
+      at: "modules.connections.personalModelRegions.0"
+    },
+    { label: "a single string", value: "eu", at: "modules.connections.personalModelRegions" }
+  ])("stops loading on $label, naming the field", ({ value, at }) => {
+    expect(() => parseClientInstanceConfig(withRegions(value))).toThrow(
+      `Client instance config is invalid: ${at}: `
+    );
+  });
+
+  it("refuses an unknown key under modules.connections", () => {
+    expect(() =>
+      parseClientInstanceConfig(
+        baseConfig({ modules: { connections: { enabled: true, personalModelRegion: ["us"] } } })
+      )
+    ).toThrow(/modules\.connections/u);
+  });
+});
 
 describe("committed instance configs", () => {
   it("includes the reference client's config", () => {

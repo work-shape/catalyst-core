@@ -50,7 +50,10 @@ import {
   requestConnectionDiscovery,
   type ChatServerOptions
 } from "@work-shape/catalyst-server";
-import type { ClientInstanceConfig } from "@work-shape/catalyst-config-schema";
+import {
+  getPersonalModelRegions,
+  type ClientInstanceConfig
+} from "@work-shape/catalyst-config-schema";
 import { readClientInstanceEnv } from "./env";
 import { PLATFORM_SECRET_NAMES } from "./infrastructure";
 
@@ -275,7 +278,15 @@ async function buildInstanceConnections(
         logger
       })
     : undefined;
-  const operations = { clientInstanceId, stores, connectorTypes, egress, credentials, logger };
+  const operations = {
+    clientInstanceId,
+    stores,
+    connectorTypes,
+    egress,
+    credentials,
+    logger,
+    personalModelRegions: getPersonalModelRegions(config)
+  };
   const slots = new ConnectionCallSlots();
   return {
     connectorTypes,

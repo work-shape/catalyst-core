@@ -427,6 +427,13 @@ has to be confirmed as EU-resident as well. Provider keys live in the env file o
 in Git or GitHub. Which providers an instance may use, and the record of each approval, belong to
 that instance.
 
+Personal Connections, such as a person's own mailbox, send their results only to model routes
+in the regions of `modules.connections.personalModelRegions`, `[eu]` by default. A customer who
+accepts other regions says so in writing. File that instruction in the deployment repository's
+`docs/`, and in the same commit add the provider entry with its `region` and the region to the
+list ([release config](/configure/release-config/#personal-connections-and-model-regions)).
+Declare a route's region only for a provider route that is excluded from training.
+
 ## Local development
 
 A deployment repo starts its local stack with:

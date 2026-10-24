@@ -1,5 +1,6 @@
 import {
   POLICY_VALUES,
+  providerRegionSchema,
   READING_POLICY_VALUES,
   THEME_MODE_PREFERENCES
 } from "@work-shape/catalyst-asset-schemas";
@@ -318,14 +319,35 @@ export const administrationConfigSchema = z
   })
   .prefault({});
 
+const moduleSwitchSchema = z.object({ enabled: z.boolean() }).strict();
+
 /**
  * One switch per module, `modules.<name>.enabled`. A module without an entry is off, except
  * that the four modules that had a switch before this section keep the state their legacy key
- * gives them for one transition release. `resolveModuleSwitches` reads this section; nothing
+ * gives them for one transition release. `resolveModuleSwitches` reads the switches; nothing
  * else does.
+ *
+ * `modules.connections.personalModelRegions` lists the regions a model route may declare for a
+ * run to call a personal Connection (MODEL-REGION-2). Left out, it is `[eu]`
+ * (`DEFAULT_PERSONAL_MODEL_REGIONS`). The operator widens it only on the customer's written
+ * instruction. An empty list would refuse every personal call without saying why, so it stops
+ * startup instead.
  */
 export const modulesConfigSchema = z
-  .record(z.string().min(1), z.object({ enabled: z.boolean() }).strict())
+  .object({
+    connections: moduleSwitchSchema
+      .extend({
+        personalModelRegions: z
+          .array(providerRegionSchema)
+          .min(1, {
+            message: "List at least one region, or leave the key out for the default [eu]"
+          })
+          .optional()
+      })
+      .strict()
+      .optional()
+  })
+  .catchall(moduleSwitchSchema)
   .default({});
 
 /**

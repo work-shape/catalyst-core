@@ -8,7 +8,8 @@ import {
   asUserId,
   createUserPrincipal,
   connectionOAuthCallbackPath,
-  type AuthenticatedUser
+  type AuthenticatedUser,
+  type OperationCallRuntime
 } from "@work-shape/catalyst-core";
 import { runOperation, type OperationOutcome } from "@work-shape/catalyst-tool-execution";
 import type { SampleOAuthOptions } from "@work-shape/catalyst-demo/sample-mcp";
@@ -89,12 +90,16 @@ export interface OAuthWorld {
   identityOf(cookie: string): Promise<AuthenticatedUser>;
   /** The call path of a worker process of the instance, on the same rows. */
   calls(): Promise<ReturnType<typeof getTestExecution>["operationCalls"]>;
-  /** A Connection operation called by the person as the CLI calls it. */
+  /**
+   * A Connection operation called by the person as the CLI calls it, or by their agent. The
+   * agent's run uses `modelRoutes`, one `eu` route unless a test names others.
+   */
   call(
     connectionName: string,
     operation: string,
     cookie: string,
-    origin?: "cli" | "agent"
+    origin?: "cli" | "agent",
+    modelRoutes?: OperationCallRuntime["modelRoutes"]
   ): Promise<OperationOutcome>;
   /** `connections.discover` in the person's browser session, and the discovery run. */
   discover(name: string, cookie: string): Promise<void>;
@@ -177,7 +182,9 @@ function cookieOf(response: Response): string {
     .join("; ");
 }
 
-export async function createOAuthWorld(options: { extraPort?: number } = {}): Promise<OAuthWorld> {
+export async function createOAuthWorld(
+  options: { extraPort?: number; personalModelRegions?: string[] } = {}
+): Promise<OAuthWorld> {
   const secrets: string[] = [];
   const provider: OAuthWorld["provider"] = {};
   const clientSecret = generateTestSecret();
@@ -244,7 +251,12 @@ export async function createOAuthWorld(options: { extraPort?: number } = {}): Pr
     },
     instance: { publicUrl: PUBLIC_URL },
     modules: {
-      connections: { enabled: true },
+      connections: {
+        enabled: true,
+        ...(options.personalModelRegions
+          ? { personalModelRegions: options.personalModelRegions }
+          : {})
+      },
       assetManagement: { enabled: true },
       personalApiKeys: { enabled: true }
     },
@@ -384,7 +396,13 @@ export async function createOAuthWorld(options: { extraPort?: number } = {}): Pr
     oauth: sampleOAuth,
     identityOf,
     calls: callPath,
-    async call(connectionName, operation, cookie, origin = "cli") {
+    async call(
+      connectionName,
+      operation,
+      cookie,
+      origin = "cli",
+      modelRoutes = [{ id: "local", region: "eu" }]
+    ) {
       const calls = await callPath();
       const actor = await identityOf(cookie);
       const personalWorkspace =
@@ -458,7 +476,7 @@ export async function createOAuthWorld(options: { extraPort?: number } = {}): Pr
               agentToolNames: async () => [`connection.${connectionName}.${operation}`]
             }
           : calls.deps,
-        { modelRoutes: [{ id: "local", region: "eu" }] }
+        { modelRoutes }
       );
     },
     async disconnect(name, cookie) {
