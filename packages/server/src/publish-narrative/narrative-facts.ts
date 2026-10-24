@@ -112,7 +112,9 @@ export interface AppFacts {
 function verbEffect(verb: string): StoreVerbEffect {
   const known = DATA_STORE_OPERATION_VERBS.find((candidate) => candidate === verb);
   if (known === undefined) return "changes";
-  if (DATA_STORE_OPERATION_RIGHTS[known] === DATA_STORE_ACTIONS.read) return "reads";
+  // `records.flagged` needs `data_store.records` and only reads what waits in "Prüfen".
+  if (DATA_STORE_OPERATION_RIGHTS[known] === DATA_STORE_ACTIONS.read || known === "records.flagged")
+    return "reads";
   if (known === "insert") return "adds";
   if (known === "records.propose") return "proposes";
   return "changes";

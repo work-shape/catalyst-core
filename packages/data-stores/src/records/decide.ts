@@ -7,6 +7,7 @@ import {
   KNOWLEDGE_BASE_ACTIONS,
   auditActorFromIdentity,
   dataStoreRecordsDecideInputSchema,
+  isAuthenticatedServicePrincipal,
   recordColumnTakes,
   type DataStoreRecordsDecideInput,
   type DataStoreRecordsDecideOutput,
@@ -70,13 +71,32 @@ async function requireCitationAccess(
   context.access.require(KNOWLEDGE_BASE_ACTIONS.use, assetResource(asset));
 }
 
+/**
+ * A decision is a person's: from the page or from their own credential on the CLI. A Workflow
+ * step, a schedule, an agent, an App or a service principal's key is refused, so the account
+ * that proposes a field can never confirm it (`review.always`).
+ */
+function requirePerson(context: OperationExecutionContext, locale: LocaleCode): void {
+  const { origin, actor } = context;
+  if ((origin.kind === "user" || origin.kind === "cli") && !isAuthenticatedServicePrincipal(actor))
+    return;
+  throw new AppError(
+    "FORBIDDEN",
+    locale === "de"
+      ? "Über ein Feld in „Prüfen“ entscheidet eine Person, auf der Seite des Data Stores oder mit ihrem eigenen Schlüssel in der CLI."
+      : "A person decides a field in Review, on the Data Store's page or with their own key on the CLI.",
+    { reason: "record_decision_person_required" }
+  );
+}
+
 /** The statements of one decision, inside the transaction that also projects the object. */
 async function decideField(
   sql: PostgresChangeStatements,
   input: DataStoreRecordsDecideInput,
   key: string | number | boolean,
   context: OperationExecutionContext,
-  locale: LocaleCode
+  locale: LocaleCode,
+  requireUse: (knowledgeBaseId: string) => Promise<void>
 ): Promise<void> {
   const encodedKey = JSON.stringify(key);
   const cited =
@@ -151,9 +171,16 @@ async function decideField(
       "Die Belege dieses Felds widersprechen sich: nenne das Dokument, über dessen Wert du entscheidest.",
       "VALIDATION_FAILED"
     );
-  // A new decision replaces the one before.
+  // Every candidate the decision pins comes from a Knowledge Base the person may use, cited or not.
+  for (const knowledgeBaseId of new Set(chosen.map((row) => row.knowledge_base_id)))
+    await requireUse(knowledgeBaseId);
+  // A new decision replaces the one before. A correction wrote the person's value over the
+  // candidate's, so the candidate no longer holds what its page says: it stays as evidence that
+  // does not hold, never counted as read from the document, until the document is read again.
   await sql.run(
-    `update catalyst.record_fields set state = 'extracted', decided_by = null, decided_at = null
+    `update catalyst.record_fields set state = 'extracted', decided_by = null, decided_at = null,
+       evidence = case when state = 'corrected'
+         then '{"status":"failed","reason":"value_not_parsed"}'::jsonb else evidence end
      where table_name = $1::text and record_key = $2::jsonb and field_name = $3::text
        and state in ('confirmed', 'corrected')`,
     [input.table, encodedKey, input.field]
@@ -187,6 +214,7 @@ export const recordsDecide: StoreVerb = {
   async run({ runtime, store, target, keyed, context }, call) {
     if (!context) throw new AppError("INTERNAL", "A decision needs the caller's context");
     const locale = context.runtime.locale ?? runtime.defaultLocale;
+    requirePerson(context, locale);
     const input = dataStoreRecordsDecideInputSchema.parse(call);
     await requireRecordsUpgrade(
       {
@@ -239,8 +267,13 @@ export const recordsDecide: StoreVerb = {
           `Die Spalte '${input.field}' nimmt diesen Wert nicht an.`
         );
     }
-    if (input.knowledgeBaseId !== undefined)
-      await requireCitationAccess(runtime, context, input.knowledgeBaseId);
+    const usable = new Set<string>();
+    const requireUse = async (knowledgeBaseId: string) => {
+      if (usable.has(knowledgeBaseId)) return;
+      await requireCitationAccess(runtime, context, knowledgeBaseId);
+      usable.add(knowledgeBaseId);
+    };
+    if (input.knowledgeBaseId !== undefined) await requireUse(input.knowledgeBaseId);
     const size = () =>
       storeSizeBytes(runtime.server, store.record.location.database, target.signal);
     const before = await size();
@@ -262,7 +295,7 @@ export const recordsDecide: StoreVerb = {
             "select pg_advisory_xact_lock(hashtextextended($1::text,0))::text as held",
             [recordLockName(table.name, encodedKey)]
           );
-          await decideField(sql, input, key, context, locale);
+          await decideField(sql, input, key, context, locale, requireUse);
           await projectRecords(sql, {
             table,
             rule,

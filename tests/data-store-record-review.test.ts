@@ -8,7 +8,8 @@ import {
   type AuditRecorder,
   type AuthenticatedUser,
   type DataStoreOperationVerb,
-  type JsonObject
+  type JsonObject,
+  type OperationOrigin
 } from "@work-shape/catalyst-core";
 import { refusal, useDataStoreWorld } from "./support/data-store-world";
 import {
@@ -36,7 +37,8 @@ describe("REC-2 records review through the public operation source", () => {
     w: World,
     actor: AuthenticatedUser,
     verb: DataStoreOperationVerb,
-    input: unknown
+    input: unknown,
+    origin: OperationOrigin = { kind: "user" }
   ) {
     const events: Parameters<AuditRecorder["record"]>[0][] = [];
     const audit: AuditRecorder = {
@@ -57,7 +59,7 @@ describe("REC-2 records review through the public operation source", () => {
     const output = await operation.execute(operation.inputSchema.parse(input), {
       runId: createPlatformId("opr"),
       actor,
-      origin: { kind: "user" },
+      origin,
       correlationId: "records-review",
       runtime: {},
       access: accessOf(actor),
@@ -65,6 +67,18 @@ describe("REC-2 records review through the public operation source", () => {
     });
     return { output, events };
   }
+
+  /** A person who holds `data_store.records` and may use no Knowledge Base. */
+  const reviewerOf = (w: World): AuthenticatedUser => ({
+    id: "records-reviewer",
+    externalUserId: "records-reviewer",
+    displayLabel: "Records reviewer",
+    roles: [],
+    permissionRefs: [],
+    permissions: ["data_store.records"],
+    authSource: "test",
+    clientInstanceId: asClientInstanceId(w.clientInstanceId)
+  });
 
   const flagged = async (w: World, input: JsonObject = {}) =>
     dataStoreRecordsFlaggedOutputSchema.parse(
@@ -275,16 +289,7 @@ describe("REC-2 records review through the public operation source", () => {
         await w.item("b5", "kaufvertrag", { kaufpreis: 200 })
       ]
     });
-    const reviewer: AuthenticatedUser = {
-      id: "records-reviewer",
-      externalUserId: "records-reviewer",
-      displayLabel: "Records reviewer",
-      roles: [],
-      permissionRefs: [],
-      permissions: ["data_store.records"],
-      authSource: "test",
-      clientInstanceId: asClientInstanceId(w.clientInstanceId)
-    };
+    const reviewer = reviewerOf(w);
     const { output } = await callAs(w, reviewer, "records.flagged", { limit: 100 });
     expect(output).toEqual({ items: [] });
     expect(
@@ -299,6 +304,102 @@ describe("REC-2 records review through the public operation source", () => {
         })
       )
     ).toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("refuses a decision without a citation that pins a candidate of a Knowledge Base the person may not use", async () => {
+    const w = await world("uncited");
+    await call(w, "records.propose", {
+      table: "objekt",
+      items: [await w.item("a7", "kaufvertrag", { kaufpreis: 100 })]
+    });
+    const decide = (input: JsonObject) =>
+      refusal(
+        callAs(w, reviewerOf(w), "records.decide", {
+          table: "objekt",
+          key: 1402,
+          field: "kaufpreis",
+          ...input
+        })
+      );
+    expect(await decide({ action: "correct", value: 150 })).toMatchObject({ code: "FORBIDDEN" });
+    expect(await decide({ action: "confirm" })).toMatchObject({ code: "FORBIDDEN" });
+    expect(await w.target`select document_id, state from catalyst.record_fields`).toEqual([
+      { document_id: "a7", state: "extracted" }
+    ]);
+    expect(await w.target`select kaufpreis::float8 from objekt`).toEqual([{ kaufpreis: 100 }]);
+  });
+
+  it("takes a decision only from a person: a Workflow step that may propose the field is refused", async () => {
+    const w = await world("person", [objektRecords(undefined, "[kaufpreis]"), objektSchema]);
+    await call(w, "records.propose", {
+      table: "objekt",
+      items: [await w.item("a8", "kaufvertrag", { kaufpreis: 100 })]
+    });
+    const input = { table: "objekt", key: 1402, field: "kaufpreis", action: "confirm" };
+    const actor = recordsActorOf(w.clientInstanceId);
+    for (const origin of [
+      { kind: "workflow", workflowRunId: "records-run", stepRunId: "step-1" },
+      { kind: "schedule", scheduleId: "nightly" }
+    ] satisfies OperationOrigin[])
+      expect(await refusal(callAs(w, actor, "records.decide", input, origin))).toMatchObject({
+        code: "FORBIDDEN",
+        details: { reason: "record_decision_person_required" }
+      });
+    expect(await w.target`select kaufpreis from objekt`).toEqual([{ kaufpreis: null }]);
+    await callAs(w, actor, "records.decide", input, { kind: "cli" });
+    expect(await w.target`select kaufpreis::float8 from objekt`).toEqual([{ kaufpreis: 100 }]);
+  });
+
+  it("leaves out the candidate of a withdrawn document, its quote included", async () => {
+    const w = await world("withdrawn");
+    await call(w, "records.propose", {
+      table: "objekt",
+      items: [
+        await w.item("a9", "kaufvertrag", { kaufpreis: 100 }),
+        await w.item("b9", "kaufvertrag", { kaufpreis: 200 })
+      ]
+    });
+    expect((await flagged(w)).items.map((item) => item.documentId)).toEqual(["a9", "b9"]);
+    await w.source`update catalyst_kb.documents set withdrawn_at = now() where id = 'b9'`;
+    const after = await flagged(w);
+    expect(after.items.map((item) => item.documentId)).toEqual(["a9"]);
+    expect(JSON.stringify(after)).not.toContain("b9");
+  });
+
+  it("never counts a correction that a later decision replaced as read from its document", async () => {
+    const w = await world("replaced");
+    await call(w, "records.propose", {
+      table: "objekt",
+      items: [
+        await w.item("a10", "kaufvertrag", { kaufpreis: 100 }),
+        await w.item("b10", "kaufvertrag", { kaufpreis: 200 })
+      ]
+    });
+    const base = { table: "objekt", key: 1402, field: "kaufpreis", knowledgeBaseId: w.kbId };
+    await call(w, "records.decide", { ...base, action: "correct", value: 150, documentId: "b10" });
+    await call(w, "records.decide", { ...base, action: "confirm", documentId: "a10" });
+    expect(await w.target`select kaufpreis::float8 from objekt`).toEqual([{ kaufpreis: 100 }]);
+    expect(
+      await w.target`select document_id, value, state, evidence from catalyst.record_fields order by document_id`
+    ).toEqual([
+      { document_id: "a10", value: 100, state: "confirmed", evidence: { status: "passed" } },
+      {
+        document_id: "b10",
+        value: 150,
+        state: "extracted",
+        evidence: { status: "failed", reason: "value_not_parsed" }
+      }
+    ]);
+    // Without the confirmed candidate, the person's old value is not written as read from b10.
+    await w.target`delete from catalyst.record_fields where document_id = 'a10'`;
+    await call(w, "records.propose", {
+      table: "objekt",
+      items: [await w.item("c10", "expose", { baujahr: 1990 })]
+    });
+    expect(await w.target`select kaufpreis from objekt`).toEqual([{ kaufpreis: null }]);
+    expect(
+      (await flagged(w)).items.map(({ documentId, reason }) => ({ documentId, reason }))
+    ).toEqual([{ documentId: "b10", reason: "not_evidenced" }]);
   });
 
   it("files one Inbox notice per store whose count is what waits now, not one per field or proposal", async () => {

@@ -18,6 +18,8 @@ export interface StoreUse {
 /** Whether an operation of the store adds rows: one that needs more than the right to read. */
 function verbWrites(verb: string): boolean {
   if (verb === "records.propose") return true;
+  // Reading what waits in "Prüfen" needs `data_store.records`, and still writes nothing.
+  if (verb === "records.flagged") return false;
   const known = DATA_STORE_OPERATION_VERBS.find((candidate) => candidate === verb);
   return known !== undefined && DATA_STORE_OPERATION_RIGHTS[known] !== DATA_STORE_ACTIONS.read;
 }
