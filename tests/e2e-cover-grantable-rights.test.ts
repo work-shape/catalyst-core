@@ -45,6 +45,7 @@ it.each(["asset", "workspace"] as const)(
   "renders only held verbs and places for an %s giver",
   async (scopeKind) => {
     vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     const host = document.createElement("div");
     document.body.append(host);
     const root = createRoot(host);
@@ -109,6 +110,8 @@ it.each(["asset", "workspace"] as const)(
     } finally {
       act(() => root.unmount());
       host.remove();
+      await act(async () => vi.runOnlyPendingTimersAsync());
+      vi.useRealTimers();
       vi.unstubAllGlobals();
     }
   }
@@ -117,6 +120,7 @@ it.each(["asset", "workspace"] as const)(
 /** Mounts `element` in English, runs `check`, and unmounts. */
 async function mounted(element: ReactElement, check: () => Promise<void>): Promise<void> {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
   const host = document.createElement("div");
   document.body.append(host);
   const root = createRoot(host);
@@ -133,8 +137,17 @@ async function mounted(element: ReactElement, check: () => Promise<void>): Promi
   } finally {
     act(() => root.unmount());
     host.remove();
+    await act(async () => vi.runOnlyPendingTimersAsync());
+    vi.useRealTimers();
     vi.unstubAllGlobals();
   }
+}
+
+// Radix returns focus on a zero-delay timer when a picker closes. Finish that
+// lifecycle before opening another picker, or the old focus return dismisses it.
+async function chooseOption(name: string): Promise<void> {
+  await act(async () => optionNamed(name).click());
+  await act(async () => vi.runOnlyPendingTimersAsync());
 }
 
 const buttonNamed = (name: string) =>
@@ -226,10 +239,10 @@ it("writes View and Edit, View first, when a workspace giver grants Edit", async
     }),
     async () => {
       await act(async () => required(buttonNamed("Person")).click());
-      await act(async () => optionNamed("Rita Recipient").click());
+      await chooseOption("Rita Recipient");
       await act(async () => radioNamed("In a shared workspace").click());
       await act(async () => required(buttonNamed("Workspace:")).click());
-      await act(async () => optionNamed("Held workspace").click());
+      await chooseOption("Held workspace");
       await act(async () => radioNamed("Edit").click());
       await act(async () => required(buttonNamed("Create right")).click());
       expect(written).toEqual([
