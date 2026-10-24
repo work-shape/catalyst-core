@@ -13,7 +13,7 @@ export const MODEL_PROVIDER_KINDS = ["azure", "vertex", "bedrock", "openai-compa
 export type ModelProviderKind = (typeof MODEL_PROVIDER_KINDS)[number];
 
 /** The one region this command writes. Another is the operator's decision, made by hand. */
-export const ADDED_PROVIDER_REGION = "eu";
+const ADDED_PROVIDER_REGION = "eu";
 
 /** A value the command takes as `--<flag>` or asks for at a terminal. */
 export interface ProviderField {
@@ -65,7 +65,7 @@ const oneOf = (what: string, allowed: readonly string[]) => (value: string) =>
   allowed.includes(value) ? undefined : `${what} must be one of ${allowed.join(", ")}.`;
 
 /** The v1 base address of an Azure OpenAI resource, from the address the portal shows. */
-export function azureBaseUrl(endpoint: string): string {
+function azureBaseUrl(endpoint: string): string {
   const url = new URL(endpoint);
   const path = url.pathname.replace(/\/+$/u, "");
   return `${url.origin}${path.endsWith("/openai/v1") ? path : `${path}/openai/v1`}`;
@@ -247,7 +247,7 @@ function required(values: Readonly<Record<string, string>>, flag: string): strin
 }
 
 /** The account id an ARN names, where it reads as one. */
-export function accountOfProfile(arn: string): string | undefined {
+function accountOfProfile(arn: string): string | undefined {
   const account = arn.split(":")[4];
   return account !== undefined && AWS_ACCOUNT_ID.test(account) ? account : undefined;
 }
