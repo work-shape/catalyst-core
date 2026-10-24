@@ -30,7 +30,7 @@ function usage(overrides: Partial<OwnUsage> = {}): OwnUsage {
   return {
     currency: "EUR",
     own: {
-      day: { spent: 1, limit: 10, reached: false, resetsAt: resets.day },
+      day: { spent: 1, limit: 10, left: 9, reached: false, resetsAt: resets.day },
       month: { spent: 5, resetsAt: resets.month }
     },
     instance: {
@@ -112,7 +112,7 @@ describe("the composer at a spend limit", () => {
   it("says how much is left from 80 percent of the person's own limit on, once per period", () => {
     const near = usage({
       own: {
-        day: { spent: 8.5, limit: 10, reached: false, resetsAt: resets.day },
+        day: { spent: 8.5, limit: 10, left: 1.5, reached: false, resetsAt: resets.day },
         month: { spent: 9, resetsAt: resets.month }
       }
     });
@@ -124,6 +124,27 @@ describe("the composer at a spend limit", () => {
       "Von deinem täglichen Ausgabenlimit sind noch 1,50\u00a0€ übrig."
     );
     expect(usageNearNote(usage(), en)).toBeUndefined();
+  });
+
+  it("measures the note against the limit as admission holds it, as `reached` is", () => {
+    // A safety multiplier of 1.25 holds a limit of 10 at 8: the person is stopped at 8.
+    const held = (spent: number) =>
+      usage({
+        own: {
+          day: {
+            spent,
+            limit: 10,
+            left: Math.max(8 - spent, 0),
+            reached: spent >= 8,
+            resetsAt: resets.day
+          },
+          month: { resetsAt: resets.month }
+        }
+      });
+    expect(usageNearNote(held(6), en)).toBeUndefined();
+    expect(usageNearNote(held(6.5), en)?.text).toBe("€1.50 left of your daily spend limit.");
+    expect(usageNearNote(held(8), en)).toBeUndefined();
+    expect(usageLimitBlockReason(held(8), en)).toContain("daily spend limit");
   });
 });
 

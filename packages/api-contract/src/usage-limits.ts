@@ -97,6 +97,12 @@ export const usageSpendLimitChangeSchema = z.object({
 export const usageSpendPeriodSchema = z.object({
   spent: z.number().optional(),
   limit: z.number().optional(),
+  /**
+   * What is left before the limit stops calls, where amounts are shown. The 80 percent note and
+   * `reached` are both measured against `spent + left`, which a private safety margin may set
+   * below `limit`.
+   */
+  left: z.number().optional(),
   /** Set where a limit is set: whether it is reached. */
   reached: z.boolean().optional(),
   /** When the period ends: midnight UTC, or the first of next month UTC. */

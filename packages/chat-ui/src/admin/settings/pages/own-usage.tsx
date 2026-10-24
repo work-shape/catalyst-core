@@ -11,7 +11,7 @@ import {
 import { useOwnUsageQuery } from "../../../shared/api/usage-limits";
 import { useTranslation, type TranslationKey } from "../../../shared/i18n";
 import { useSettingsPage } from "../../../shared/settings-page-context";
-import { formatSpend } from "../../../chat/workspace/usage-limit-block";
+import { formatSpend, nearLimit } from "../../../chat/workspace/usage-limit-block";
 
 const PERIODS: readonly {
   period: keyof OwnUsage["own"];
@@ -95,6 +95,8 @@ function OwnUsageRow({
 }) {
   const { t } = useTranslation();
   const spent = formatSpend(state.spent ?? 0, currency, locale);
+  // The bar runs to what admission holds the person to, so it is full when the limit stops them.
+  const held = state.left === undefined ? state.limit : (state.spent ?? 0) + state.left;
   const amount =
     state.limit === undefined
       ? t("ownUsage.spentNoLimit", { spent })
@@ -110,17 +112,17 @@ function OwnUsageRow({
           {state.reached ? (
             <span className="block text-destructive">{t("ownUsage.reached", { reset })}</span>
           ) : null}
-          {state.limit === undefined ? null : (
+          {held === undefined ? null : (
             <Progress
               className="mt-2"
               size="sm"
               label={label}
-              max={state.limit}
-              value={Math.min(state.spent ?? 0, state.limit)}
+              max={held}
+              value={state.reached ? held : Math.min(state.spent ?? 0, held)}
               tone={
                 state.reached
                   ? "danger"
-                  : (state.spent ?? 0) >= state.limit * 0.8
+                  : state.left !== undefined && nearLimit(state.spent ?? 0, state.left)
                     ? "warning"
                     : "neutral"
               }

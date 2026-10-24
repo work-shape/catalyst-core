@@ -343,6 +343,27 @@ describe("spend limits at three levels", () => {
     }
   });
 
+  it("admits no more concurrent calls than a user or workspace limit has room for", async () => {
+    const { clientInstanceId, people } = await instanceWith("race", ["anna", "ben", "cara"]);
+    const [anna, ben, cara] = [required(people[0]), required(people[1]), required(people[2])];
+    const sales = await workspace(clientInstanceId, anna);
+    await setLimit(clientInstanceId, "user", { dailyMicros: 3 * CALL_MICROS + 1 }, anna);
+    await setLimit(clientInstanceId, "workspace", { dailyMicros: 5 * CALL_MICROS + 1 }, sales);
+    const governance = governanceOf();
+    const own = await Promise.allSettled(
+      Array.from({ length: 20 }, () => governance.admitModelCall(message(clientInstanceId, anna)))
+    );
+    expect(own.filter((r) => r.status === "fulfilled")).toHaveLength(3);
+    const shared = await Promise.allSettled(
+      Array.from({ length: 20 }, (_, i) =>
+        governance.admitModelCall(
+          message(clientInstanceId, i % 2 ? ben : cara, { workspaceId: sales })
+        )
+      )
+    );
+    expect(shared.filter((r) => r.status === "fulfilled")).toHaveLength(5);
+  });
+
   // ADR-0014: a model without a price makes the cost of the period unknown.
   it.each(["user", "workspace", "instance"] as const)(
     "refuses an unpriced model under a %s limit",
@@ -378,6 +399,24 @@ describe("spend limits at three levels", () => {
     await expect(governance.admitModelCall(message(clientInstanceId, anna))).resolves.toBeDefined();
   });
 
+  it("measures what is left and reached against the limit as admission holds it", async () => {
+    const { clientInstanceId, people } = await instanceWith("margin", ["anna"]);
+    const anna = required(people[0]);
+    // A safety multiplier of 2 holds a limit of two calls and a half at one call and a quarter.
+    await setLimit(clientInstanceId, "user", { dailyMicros: 2.5 * CALL_MICROS }, anna);
+    const governance = governanceOf({ costSafetyMultiplier: 2 });
+
+    await governance.admitModelCall(message(clientInstanceId, anna));
+    const { own } = await governance.spendStatus({ clientInstanceId, userId: anna });
+    expect(own.day).toEqual({
+      spentMicros: CALL_MICROS,
+      limitMicros: 2.5 * CALL_MICROS,
+      leftMicros: 1.25 * CALL_MICROS - CALL_MICROS,
+      reached: false
+    });
+    await refusal(governance.admitModelCall(message(clientInstanceId, anna)));
+  });
+
   it("tells a person where they stand against each level", async () => {
     const { clientInstanceId, people } = await instanceWith("status", ["anna"]);
     const anna = required(people[0]);
@@ -392,17 +431,32 @@ describe("spend limits at three levels", () => {
     ).resolves.toEqual({
       currency: "EUR",
       own: {
-        day: { spentMicros: CALL_MICROS, limitMicros: ONE_CALL_MICROS, reached: false },
+        day: {
+          spentMicros: CALL_MICROS,
+          limitMicros: ONE_CALL_MICROS,
+          leftMicros: ONE_CALL_MICROS - CALL_MICROS,
+          reached: false
+        },
         month: { spentMicros: CALL_MICROS }
       },
       workspace: {
         id: sales,
         day: { spentMicros: CALL_MICROS },
-        month: { spentMicros: CALL_MICROS, limitMicros: 10 * CALL_MICROS, reached: false }
+        month: {
+          spentMicros: CALL_MICROS,
+          limitMicros: 10 * CALL_MICROS,
+          leftMicros: 9 * CALL_MICROS,
+          reached: false
+        }
       },
       instance: {
         day: { spentMicros: CALL_MICROS },
-        month: { spentMicros: CALL_MICROS, limitMicros: 1_000_000, reached: false }
+        month: {
+          spentMicros: CALL_MICROS,
+          limitMicros: 1_000_000,
+          leftMicros: 1_000_000 - CALL_MICROS,
+          reached: false
+        }
       }
     });
   });

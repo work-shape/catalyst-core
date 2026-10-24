@@ -260,6 +260,9 @@ function levelOut(
     ...(showAmounts && status.limitMicros !== undefined
       ? { limit: toAmount(status.limitMicros) }
       : {}),
+    ...(showAmounts && status.leftMicros !== undefined
+      ? { left: toAmount(status.leftMicros) }
+      : {}),
     ...(status.reached === undefined ? {} : { reached: status.reached }),
     resetsAt
   });

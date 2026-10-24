@@ -13,6 +13,7 @@ import {
   type AccessInstance
 } from "./support/access-instance";
 import { createTestFetch } from "./support/test-instance";
+import { withTestSql } from "./support/test-sql";
 
 // The spend limits' operation (LU-2, limits spec 3.1, acceptance checks 5 to 7): one registered
 // operation for the screen, the API and the CLI, the right `limits.manage`, the release config
@@ -235,6 +236,52 @@ describe("usage.limits.set", () => {
     ).toEqual(["cli", "user"]);
     expect(await t.stores.usage.listSpendLimits({ clientInstanceId })).toEqual([]);
     expect(await audited(t, "governance.usage_limit_changed")).toEqual([]);
+  });
+
+  it("lets a deny win over the admin role, and a workspace grant gives an owner nothing", async () => {
+    const t = await setup();
+    await withTestSql(async (sql) => {
+      await sql`
+        insert into permission_grants
+          (id, client_instance_id, holder_kind, holder_id, action, scope_kind, effect, granted_by, created_at)
+        values (${`grant_${crypto.randomUUID()}`}, ${clientInstanceId}, 'user', ${t.admin.id},
+          'limits.manage', 'instance', 'deny', ${t.root.id}, now())`;
+    });
+    await t.expectRefused(
+      t.admin.id,
+      "usage.limits.set",
+      { payload: { level: "user_default", limits: { daily: 1 } } },
+      { status: 403, code: "FORBIDDEN" }
+    );
+    await t.expectRefused(t.admin.id, "usage.limits.get", {}, { status: 403, code: "FORBIDDEN" });
+
+    const owned = await t.stores.workspaces.createWorkspace({
+      clientInstanceId,
+      kind: "shared",
+      name: "Kai's team",
+      creatorUserId: asUserId(t.kai.id)
+    });
+    // Whether the grant is stored or refused, a workspace scope confers no instance right.
+    await t.call(t.root.id, "permissions.grant", {
+      payload: {
+        holderKind: "user",
+        holderId: t.kai.id,
+        action: "limits.manage",
+        effect: "allow",
+        scopeKind: "workspace",
+        scopeId: owned.id
+      }
+    });
+    await t.expectRefused(
+      t.kai.id,
+      "usage.limits.set",
+      { payload: { level: "workspace", target: owned.id, limits: { daily: 1000 } } },
+      { status: 403, code: "FORBIDDEN" }
+    );
+    // A member asking about a workspace they are not in reads nothing of it.
+    const other = await t.sharedWorkspace("Other");
+    const read = await t.expectOk(t.lena.id, "me.usage.get", { query: { workspaceId: other } });
+    expect(read.json()).not.toHaveProperty("workspace");
   });
 
   it("lets an admin set and read limits through the CLI", async () => {
