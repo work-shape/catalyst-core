@@ -76,15 +76,20 @@ function byCount(
   return count === 0 ? keys.none : count === 1 ? keys.one : keys.many;
 }
 
-/** Each migration by its file name, with the SQL it runs, so a publisher reads what runs. */
-function DataStoreMigrations({
+/**
+ * Each migration by its file name, with the SQL it runs, so a publisher reads what runs. Folded,
+ * the SQL waits behind the file name for whoever wants to read it.
+ */
+export function DataStoreMigrations({
   migrations,
   label,
-  emptyText
+  emptyText,
+  folded = false
 }: {
   migrations: readonly DataStoreMigration[];
   label: string;
   emptyText: string;
+  folded?: boolean;
 }) {
   if (migrations.length === 0) {
     return <EmptyState layout="inline">{emptyText}</EmptyState>;
@@ -102,9 +107,9 @@ function DataStoreMigrations({
                 {file}
               </code>
             }
-            // The SQL stands open: a publisher reads what runs without a click, and may fold it.
+            // Open, a publisher reads what runs without a click, and may fold it.
             expandable={migration.sql !== ""}
-            defaultExpanded
+            defaultExpanded={!folded}
           >
             {migration.sql === "" ? null : (
               <CodeBlock
@@ -131,7 +136,9 @@ export function DataStorePublishSection({
   title,
   migrations,
   firstPublish,
-  publish
+  publish,
+  agentWorking = false,
+  migrationsShown = true
 }: {
   /** The store's name people read, for the question. */
   title: string;
@@ -140,6 +147,13 @@ export function DataStorePublishSection({
   /** Nothing is published yet: the publish also creates the database. */
   firstPublish: boolean;
   publish: (() => Promise<string | undefined>) | undefined;
+  /**
+   * The agent in the dock is still writing this draft: Publish waits until it is done, and the
+   * banner says so.
+   */
+  agentWorking?: boolean;
+  /** The migrations stand below the banner; the page of a draft shows them on their own. */
+  migrationsShown?: boolean;
 }) {
   const { t } = useTranslation();
   const [confirming, setConfirming] = useState(false);
@@ -147,7 +161,7 @@ export function DataStorePublishSection({
   const [failure, setFailure] = useState<string>();
   const count = migrations.length;
   const onPublish =
-    publish === undefined
+    publish === undefined || agentWorking
       ? undefined
       : async () => {
           setPublishing(true);
@@ -179,13 +193,22 @@ export function DataStorePublishSection({
               }),
               { count }
             )}
+        {agentWorking ? (
+          <span className="mt-1 block" data-data-store-agent-working="">
+            {t("dataStores.draftAgentWorking")}
+          </span>
+        ) : null}
       </Banner>
       {failure === undefined ? null : <InlineError>{failure}</InlineError>}
-      <DataStoreMigrations
-        migrations={migrations}
-        label={t(firstPublish ? "dataStores.draftMigrationsTitle" : "dataStores.pendingTitle")}
-        emptyText={t(firstPublish ? "dataStores.draftMigrationsEmpty" : "dataStores.pendingEmpty")}
-      />
+      {migrationsShown ? (
+        <DataStoreMigrations
+          migrations={migrations}
+          label={t(firstPublish ? "dataStores.draftMigrationsTitle" : "dataStores.pendingTitle")}
+          emptyText={t(
+            firstPublish ? "dataStores.draftMigrationsEmpty" : "dataStores.pendingEmpty"
+          )}
+        />
+      ) : null}
       {onPublish === undefined ? null : (
         <ConfirmDialog
           open={confirming}

@@ -23,6 +23,7 @@ import {
   TableHeader,
   TableRow
 } from "@work-shape/catalyst-ui";
+import { useDockAgentWorksOn } from "../../chat/dock/dock-subject";
 import { formatDateTime } from "../../shared/locale-format";
 import { useTranslation } from "../../shared/i18n";
 import { usePageShown } from "./asset-editor-shell";
@@ -103,6 +104,7 @@ function PublishedDataStorePage({
   const { t } = useTranslation();
   usePageShown(page, "asset");
   const head = useDataStoreMenu({ id: asset.name, title, published: true, remove });
+  const agentWorking = useDockAgentWorksOn("data_store", asset.name);
   const read = source.useStoreState(asset.name);
   const state = read.status === "ready" ? read.data : undefined;
   const conditions = state ? serverConditionsShown(source, state) : [];
@@ -151,6 +153,7 @@ function PublishedDataStorePage({
                   migrations={pending}
                   firstPublish={false}
                   publish={publish}
+                  agentWorking={agentWorking}
                 />
               )
           }

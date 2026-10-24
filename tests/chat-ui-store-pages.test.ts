@@ -368,8 +368,22 @@ describe("publishing a Data Store's later draft", () => {
     expect(page.querySelector("[data-data-store-publish]")).toBeNull();
   });
 
-  it("shows the SQL of every migration on the page of a store never published", async () => {
+  it("says what a store never published stores, and folds the SQL of its migrations", async () => {
     const page = await mount(draft);
+    // The fields in words, as the migrations leave them.
+    expect(
+      [...page.querySelectorAll("[data-data-store-draft-field]")].map((row) =>
+        row.getAttribute("data-data-store-draft-field")
+      )
+    ).toEqual(["id", "email"]);
+    expect(page.querySelector('[data-data-store-draft-field="id"]')?.textContent).toContain(
+      "Whole number"
+    );
+    // The SQL waits behind each file name, for whoever opens it.
+    expect(page.querySelector("[data-data-store-migration-sql]")).toBeNull();
+    for (const row of page.querySelectorAll("[data-data-store-migration]")) {
+      await act(async () => row.querySelector("button")?.click());
+    }
     const sql = [...page.querySelectorAll("[data-data-store-migration-sql]")].map(
       (block) => block.textContent ?? ""
     );
@@ -902,15 +916,27 @@ describe("two Data Stores' pages on one query client", () => {
         )
       );
     });
-    /** The SQL the page shows, once it shows the store `title`. */
-    const shownSql = async (title: string) => {
+    /**
+     * The SQL the page shows, once it shows the store `title`. The page of a store never
+     * published folds it, so each migration is opened first.
+     */
+    const shownSql = async (title: string, folded = false) => {
       await vi.waitFor(
         () => {
           expect(container.querySelector("h1")?.textContent).toContain(title);
-          expect(container.querySelector("[data-data-store-migration-sql]")).not.toBeNull();
+          expect(
+            container.querySelector(
+              folded ? "[data-data-store-migration]" : "[data-data-store-migration-sql]"
+            )
+          ).not.toBeNull();
         },
         { timeout: CONDITION_WAIT_MS }
       );
+      if (folded) {
+        for (const row of container.querySelectorAll("[data-data-store-migration]")) {
+          await act(async () => row.querySelector("button")?.click());
+        }
+      }
       return [...container.querySelectorAll("[data-data-store-migration-sql]")]
         .map((sql) => sql.textContent ?? "")
         .join("\n");
@@ -928,14 +954,17 @@ describe("two Data Stores' pages on one query client", () => {
       if (change === 2) break;
 
       await act(async () => go("contacts"));
-      const other = await shownSql("Contacts");
+      const other = await shownSql("Contacts", true);
       expect(other).toContain("create table contacts (id int);");
       expect(other).toContain("alter table contacts add phone text;");
       expect(other).not.toContain("leads");
-      // Never published, its first publish applies both of its own migrations.
-      expect(required(container.querySelector("[data-data-store-pending]")).textContent).toContain(
-        "create table contacts (id int);"
-      );
+      // Never published, its first publish creates both of its own fields.
+      required(container.querySelector("[data-data-store-pending]"));
+      expect(
+        [...container.querySelectorAll("[data-data-store-draft-field]")].map((row) =>
+          row.getAttribute("data-data-store-draft-field")
+        )
+      ).toEqual(["id", "phone"]);
     }
   });
 });

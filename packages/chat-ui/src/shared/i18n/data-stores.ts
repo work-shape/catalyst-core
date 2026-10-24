@@ -64,9 +64,22 @@ export const dataStores = defineTranslations({
     "dataStores.kindSingular": "Data store",
     "dataStores.draftUnpublished": "Draft · not published",
     "dataStores.draftUnpublishedText":
-      "This Data Store has no published version yet, so it has no database. Publishing creates it and applies these migrations.",
+      "This Data Store has no published version yet, so it holds no data. Publishing creates its database.",
+    "dataStores.draftAgentWorking":
+      "The agent is still working on this Data Store. You can publish it once the agent is done.",
+    "dataStores.draftFieldsTitle": "What it stores",
+    "dataStores.draftFieldsDescription":
+      "The fields of each entry, as the draft defines them. Publishing creates them.",
+    "dataStores.draftField": "Field",
+    "dataStores.draftFieldAllowed": "One of: {values}",
+    "dataStores.draftFieldRequired": "Required",
+    "dataStores.draftFieldType": "Kind of value",
+    "dataStores.draftFieldsOf": "Fields of {table}",
+    "dataStores.fieldCount": "1 field",
+    "dataStores.fieldCounts": "{count} fields",
     "dataStores.draftMigrationsTitle": "Draft migrations",
-    "dataStores.draftMigrationsDescription": "What publishing applies, in this order.",
+    "dataStores.draftMigrationsDescription":
+      "For advanced users: the SQL publishing runs, in this order.",
     "dataStores.draftMigrationsEmpty": "The draft has no migration.",
     "dataStores.draftAhead": "Draft ahead of what is published",
     "dataStores.draftAheadText":
@@ -279,10 +292,22 @@ export const dataStores = defineTranslations({
     "dataStores.kindSingular": "Datenspeicher",
     "dataStores.draftUnpublished": "Entwurf · nicht veröffentlicht",
     "dataStores.draftUnpublishedText":
-      "Dieser Datenspeicher hat noch keine veröffentlichte Version und darum keine Datenbank. Beim Veröffentlichen wird sie angelegt, und diese Migrationen werden angewendet.",
+      "Dieser Datenspeicher hat noch keine veröffentlichte Version und speichert darum noch nichts. Beim Veröffentlichen wird seine Datenbank angelegt.",
+    "dataStores.draftAgentWorking":
+      "Der Agent arbeitet noch an diesem Datenspeicher. Veröffentlichen kannst du, sobald er fertig ist.",
+    "dataStores.draftFieldsTitle": "Was gespeichert wird",
+    "dataStores.draftFieldsDescription":
+      "Die Felder je Eintrag, wie der Entwurf sie festlegt. Angelegt werden sie beim Veröffentlichen.",
+    "dataStores.draftField": "Feld",
+    "dataStores.draftFieldAllowed": "Einer dieser Werte: {values}",
+    "dataStores.draftFieldRequired": "Pflichtfeld",
+    "dataStores.draftFieldType": "Art des Werts",
+    "dataStores.draftFieldsOf": "Felder von {table}",
+    "dataStores.fieldCount": "1 Feld",
+    "dataStores.fieldCounts": "{count} Felder",
     "dataStores.draftMigrationsTitle": "Migrationen des Entwurfs",
     "dataStores.draftMigrationsDescription":
-      "Was beim Veröffentlichen angewendet wird, in dieser Reihenfolge.",
+      "Für Fortgeschrittene: das SQL, das beim Veröffentlichen läuft, in dieser Reihenfolge.",
     "dataStores.draftMigrationsEmpty": "Der Entwurf hat keine Migration.",
     "dataStores.draftAhead": "Entwurf weiter als die veröffentlichte Fassung",
     "dataStores.draftAheadText":
