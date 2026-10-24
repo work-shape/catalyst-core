@@ -184,9 +184,18 @@ export function createUsageAttributionBackfill(
 }
 
 /** What the reconciliation recorded of its last run. */
+/**
+ * The keys the daily sums are summed under. A record that names other keys, or none, was
+ * written before the sums were keyed so: the next run reads every event and puts the sums of
+ * every day under the keys of this release (LU-3: the workspace, the App and the Workflow).
+ */
+const USAGE_SUM_KEYS = "workspace_app_workflow";
+
 interface UsageReconciliationState {
   /** Whether the daily sums were built from the events that were there before the sums. */
   sumsBuilt: boolean;
+  /** The keys the sums were last built under from every event. */
+  sumKeys: typeof USAGE_SUM_KEYS;
   /** When the last run began. The next one reads the events from the month of that moment. */
   reconciledAt: string;
 }
@@ -216,9 +225,11 @@ export function createUsageReconciliation(
       const since = typeof stored?.reconciledAt === "string" ? stored.reconciledAt : undefined;
       // A state without the moment of its run says nothing of the months since: a release
       // before this one wrote it, and a rollback may lie between. Every event is read then.
-      const built = stored?.sumsBuilt === true && since !== undefined;
+      const built =
+        stored?.sumsBuilt === true && stored.sumKeys === USAGE_SUM_KEYS && since !== undefined;
       const state: UsageReconciliationState = {
         sumsBuilt: true,
+        sumKeys: USAGE_SUM_KEYS,
         reconciledAt: now().toISOString()
       };
       const corrected = await control.transaction(async (stores) => {

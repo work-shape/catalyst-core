@@ -1,17 +1,18 @@
 import { describe, expect, it, vi } from "vitest";
 import { createChatServerJobs } from "@work-shape/catalyst-server";
 import { createJobWorker } from "@work-shape/catalyst-client-assembly";
-import type {
-  ClientInstanceId,
-  Logger,
-  ModelUsageBackfillPosition
+import {
+  asUserId,
+  type ClientInstanceId,
+  type Logger,
+  type ModelUsageBackfillPosition
 } from "@work-shape/catalyst-core";
 import { waitUntil } from "./support/assertions";
 import { createFailingTestLogger } from "./support/fixtures";
 import { usePostgresSuite } from "./support/postgres-suite";
 import { createRetentionOptions } from "./support/retention-harness";
 import { createTestInstance } from "./support/test-instance";
-import { addTestStoreHelpers } from "./support/test-store";
+import { addTestStoreHelpers, ensureTestUser } from "./support/test-store";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** Rows of the fixture a batch is read on, and the size of a batch in it. */
@@ -470,6 +471,48 @@ describe("the usage attribution backfill", () => {
       select state from model_usage_maintenance
       where client_instance_id = ${clientInstanceId} and task = 'reconciliation'`;
     expect(record?.state.reconciledAt).toEqual(expect.any(String));
+  });
+
+  // LU-3: the daily sums gained the workspace, the App and the Workflow as keys. Fails without
+  // the change: the first comparison after the upgrade read the current month only, so the
+  // sums of the months before stayed under the empty workspace.
+  it("puts the sums of every day under the workspace once the sums gained it as a key", async () => {
+    const clientInstanceId = db.clientInstance("rekey");
+    await ensureTestUser(clientInstanceId, `${clientInstanceId}_owner`);
+    const workspace = await db.store.workspaces.createWorkspace({
+      clientInstanceId,
+      kind: "shared",
+      name: "team",
+      creatorUserId: asUserId(`${clientInstanceId}_owner`)
+    });
+    await runBackfill(clientInstanceId, () => monthsAgo(3));
+    await oldEvent(clientInstanceId, "usage_in_team", {
+      agentRunId: null,
+      conversationId: null,
+      agentName: "test_agent",
+      totalTokens: 100,
+      createdAt: new Date(monthsAgo(2).getTime() - 14 * DAY_MS).toISOString()
+    });
+    await db.sql`
+      update model_usage_events set collaboration_workspace_id = ${workspace.id}
+      where id = 'usage_in_team'`;
+    // As the previous release left them: summed under the empty workspace, and a record that
+    // says the sums were built, with its moment and without their keys.
+    await runBackfill(clientInstanceId, () => monthsAgo(2));
+    await db.sql`
+      update model_usage_daily_rollups set workspace_key = ''
+      where client_instance_id = ${clientInstanceId}`;
+    await db.sql`
+      update model_usage_maintenance
+      set state = jsonb_build_object('sumsBuilt', true, 'reconciledAt', now()::text)
+      where client_instance_id = ${clientInstanceId} and task = 'reconciliation'`;
+
+    await runBackfill(clientInstanceId);
+
+    const keys = await db.sql<Array<{ workspace_key: string; total_tokens: number }>>`
+      select workspace_key, total_tokens::int as total_tokens from model_usage_daily_rollups
+      where client_instance_id = ${clientInstanceId} and model_call_count > 0`;
+    expect(keys).toEqual([{ workspace_key: workspace.id, total_tokens: 100 }]);
   });
 
   // Fails without the change: there was no backfill. It also fails when the batch is taken in
