@@ -198,7 +198,7 @@ function ReviewObjectGroup({
   confirm(field: string, candidate: DataStoreFlaggedItem): void;
   correct(field: string, candidate: DataStoreFlaggedItem): void;
 }) {
-  const { t } = useTranslation();
+  const { locale, t } = useTranslation();
   const label = t("dataStores.reviewObject", {
     table: object.table,
     key: reviewValueText(object.key)
@@ -215,7 +215,7 @@ function ReviewObjectGroup({
             defaultExpanded={open}
             title={<code className="font-mono text-code">{field.name}</code>}
             description={field.candidates
-              .map((candidate) => reviewValueText(candidate.value))
+              .map((candidate) => reviewValueText(candidate.value, locale))
               .join(" · ")}
             chips={
               <Badge tone={REASON_VIEWS[field.reason].tone} size="sm">
@@ -295,7 +295,7 @@ function CandidateEvidence({ candidate }: { candidate: DataStoreFlaggedItem }) {
     <>
       <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
         <span className="min-w-0 text-body font-medium break-words text-foreground">
-          {reviewValueText(candidate.value)}
+          {reviewValueText(candidate.value, locale)}
         </span>
         {candidate.state === "confirmed" || candidate.state === "corrected" ? (
           <Badge tone="success" size="sm">
@@ -422,14 +422,14 @@ function CorrectDialog({
   onClose(): void;
   decide(decision: DataStoreDecision): Promise<string | undefined>;
 }) {
-  const { t } = useTranslation();
+  const { locale, t } = useTranslation();
   const input = useRef<HTMLInputElement>(null);
-  const [text, setText] = useState(reviewValueText(candidate.value));
+  const [text, setText] = useState(reviewValueText(candidate.value, locale, { grouping: false }));
   const [error, setError] = useState<string | undefined>(undefined);
   const [saving, setSaving] = useState(false);
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    const read = reviewValueOf(text, candidate.value);
+    const read = reviewValueOf(text, candidate.value, locale);
     if ("invalid" in read) {
       setError(
         t(
