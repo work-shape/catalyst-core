@@ -606,11 +606,11 @@ export const dataGallery: GalleryGroup = {
         <Samples label={text.timeMarkerDays}>
           <div className="grid w-full max-w-md gap-3">
             <TimeMarker label={text.timeMarkerYesterday} dateTime="2026-10-14T16:12" />
-            <p className="justify-self-end rounded-2xl bg-state-selected px-4 py-2.5 text-body">
+            <p className="justify-self-end rounded-2xl bg-secondary px-4 py-2.5 text-body">
               {text.timeMarkerFirst}
             </p>
             <TimeMarker label={text.timeMarkerToday} dateTime="2026-10-15T10:47" />
-            <p className="justify-self-end rounded-2xl bg-state-selected px-4 py-2.5 text-body">
+            <p className="justify-self-end rounded-2xl bg-secondary px-4 py-2.5 text-body">
               {text.timeMarkerSecond}
             </p>
             <ListMarker label={text.listMarkerRevision} />

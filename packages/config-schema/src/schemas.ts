@@ -202,26 +202,27 @@ export {
   type WorkflowAssetConfig
 } from "@work-shape/catalyst-asset-schemas";
 
-// The base theme: warm paper neutrals with one restrained orange accent, and a warm near-black
-// in dark mode. An instance that sets no colours gets it; a customer theme replaces all seven.
+// The base theme: clean off-white neutrals without a colour cast, one restrained orange accent,
+// and a cool near-black in dark mode. An instance that sets no colours gets it; a customer
+// theme replaces all seven.
 const defaultLightUiTheme = {
   accentColor: "#b5573a",
   accentStrongColor: "#8c3f26",
-  backgroundColor: "#f6f3ec",
-  surfaceColor: "#fdfbf7",
-  textColor: "#201c17",
-  mutedTextColor: "#655e54",
-  borderColor: "#e7e1d5"
+  backgroundColor: "#f6f6f4",
+  surfaceColor: "#fdfdfc",
+  textColor: "#1c1c1b",
+  mutedTextColor: "#5e5e5b",
+  borderColor: "#e4e4e1"
 };
 
 const defaultDarkUiTheme = {
   accentColor: "#d98c6c",
   accentStrongColor: "#e8ab90",
-  backgroundColor: "#131210",
-  surfaceColor: "#181614",
-  textColor: "#efebe4",
-  mutedTextColor: "#b3ada3",
-  borderColor: "#33302b"
+  backgroundColor: "#151619",
+  surfaceColor: "#1b1c1f",
+  textColor: "#ececeb",
+  mutedTextColor: "#a9abaf",
+  borderColor: "#2f3135"
 };
 
 function createUiThemeSchema(defaultTheme: typeof defaultLightUiTheme) {

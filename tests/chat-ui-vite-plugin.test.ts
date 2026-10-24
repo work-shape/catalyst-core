@@ -40,11 +40,11 @@ describe("vivdCatalystChatUiPlugin", () => {
     expect(style).toContain("--background:#ffffff;");
     expect(style).toContain("--success:#047857;");
     expect(style).toContain("--warning:#b45309;");
-    expect(style).toContain("--info:#0369a1;");
+    expect(style).toContain("--info:#32669a;");
     expect(style).toContain("--chart-1:#0f766e;");
     expect(style).toContain("--success:#34d399;");
     expect(style).toContain("--warning:#fbbf24;");
-    expect(style).toContain("--info:#38bdf8;");
+    expect(style).toContain("--info:#6fa8dc;");
     expect(style).toContain("--chart-1:#2dd4bf;");
     expect(style).toContain("--sidebar:#f7f9fb;");
     expect(style).toContain("--state-selected:color-mix(in srgb, #00a6e3 12%, transparent);");

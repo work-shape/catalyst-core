@@ -73,7 +73,12 @@ const avatarKinds: readonly AvatarKind[] = [
   "service"
 ];
 const chipSizes: readonly ChipSize[] = ["sm", "md"];
-const countTones: readonly CountBadgeTone[] = ["primary", "muted"];
+const countTones: readonly CountBadgeTone[] = ["primary", "info", "muted"];
+const countToneLabels = {
+  primary: "countPrimary",
+  info: "countInfo",
+  muted: "countMuted"
+} as const satisfies Record<CountBadgeTone, string>;
 
 // A workspace's own colour pair, as a user picks one. Chart colours stand in for it here.
 const sampleAccent = { background: "var(--chart-4)", foreground: "var(--background)" };
@@ -286,7 +291,7 @@ export const statusGallery: GalleryGroup = {
       render: (text) => (
         <>
           {countTones.map((tone) => (
-            <Samples key={tone} label={tone === "primary" ? text.countPrimary : text.countMuted}>
+            <Samples key={tone} label={text[countToneLabels[tone]]}>
               <CountBadge tone={tone} count={3} />
               <CountBadge tone={tone} count={42} />
               <CountBadge tone={tone} count={99} />
@@ -295,6 +300,7 @@ export const statusGallery: GalleryGroup = {
           ))}
           <Samples label={text.countDot}>
             <CountBadge dot role="img" aria-label={text.countPending} />
+            <CountBadge dot tone="info" role="img" aria-label={text.countRunning} />
             <CountBadge dot tone="muted" role="img" aria-label={text.countPending} />
             <span className="relative inline-flex">
               <Button variant="outline" size="icon" aria-label={text.navInbox}>

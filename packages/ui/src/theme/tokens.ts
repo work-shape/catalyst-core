@@ -22,20 +22,20 @@ export interface ThemeInputsByMode {
 /** The base theme of an instance that sets no colours. A test holds it equal to the config schema defaults. */
 export const DEFAULT_THEME_INPUTS: ThemeInputsByMode = {
   light: {
-    surfaceColor: "#fdfbf7",
-    backgroundColor: "#f6f3ec",
-    textColor: "#201c17",
-    mutedTextColor: "#655e54",
-    borderColor: "#e7e1d5",
+    surfaceColor: "#fdfdfc",
+    backgroundColor: "#f6f6f4",
+    textColor: "#1c1c1b",
+    mutedTextColor: "#5e5e5b",
+    borderColor: "#e4e4e1",
     accentColor: "#b5573a",
     accentStrongColor: "#8c3f26"
   },
   dark: {
-    surfaceColor: "#181614",
-    backgroundColor: "#131210",
-    textColor: "#efebe4",
-    mutedTextColor: "#b3ada3",
-    borderColor: "#33302b",
+    surfaceColor: "#1b1c1f",
+    backgroundColor: "#151619",
+    textColor: "#ececeb",
+    mutedTextColor: "#a9abaf",
+    borderColor: "#2f3135",
     accentColor: "#d98c6c",
     accentStrongColor: "#e8ab90"
   }
@@ -126,6 +126,11 @@ interface ModeConstants {
   destructive: string;
   success: string;
   warning: string;
+  /**
+   * The one blue: the quiet second accent beside the orange. It marks work that runs (a
+   * spinner, a running count, an in-progress badge) and what is said for information; it is
+   * never an action. A soft blue, so it stays below the accent.
+   */
   info: string;
   charts: readonly [string, string, string, string, string];
   /**
@@ -146,7 +151,7 @@ const MODE_CONSTANTS: Record<ThemeMode, ModeConstants> = {
     destructive: "#b42318",
     success: "#047857",
     warning: "#b45309",
-    info: "#0369a1",
+    info: "#32669a",
     charts: ["#0f766e", "#b45309", "#0369a1", "#7c3aed", "#be185d"],
     levels: ["#3082b5", "#118c8c", "#318f5a", "#8b8318", "#ae720a", "#b24b0a"],
     files: {
@@ -165,7 +170,7 @@ const MODE_CONSTANTS: Record<ThemeMode, ModeConstants> = {
     destructive: "#f87171",
     success: "#34d399",
     warning: "#fbbf24",
-    info: "#38bdf8",
+    info: "#6fa8dc",
     charts: ["#2dd4bf", "#fbbf24", "#38bdf8", "#a78bfa", "#f472b6"],
     levels: ["#6bbaf0", "#4fcdcd", "#72d699", "#d5cc55", "#f5ae4b", "#f47f46"],
     // A step lighter than in light mode, so a page stands off a dark surface and still carries
