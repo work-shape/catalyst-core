@@ -48,6 +48,27 @@ export const dataStoreEvents = {
       }
     }
   },
+  // A person's decision on one record field in "Prüfen" (REC-2). It names the field and the
+  // action, never the value or the object's key.
+  "data_store.record_decided": {
+    legacy: false,
+    audited: true,
+    phases: ["after"],
+    name: "data_store.record_decided",
+    subject: "data_store",
+    payload: {
+      type: "object",
+      additionalProperties: false,
+      required: ["store", "table", "field", "action", "operationRunId"],
+      properties: {
+        store: { type: "string" },
+        table: { type: "string" },
+        field: { type: "string" },
+        action: { type: "string", enum: ["confirm", "correct", "assign"] },
+        operationRunId: { type: "string" }
+      }
+    }
+  },
   "data_store.migrated": {
     ...LEGACY_AUDIT,
     name: "data_store.migrated",
