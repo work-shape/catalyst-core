@@ -44,14 +44,15 @@ describe("UI theme defaults", () => {
     expect(schemaDefaults.accentColor).toBe(schemaInputs.light.accentColor);
   });
 
-  it("keeps every default neutral warm and quiet, and the accent the only colour", () => {
+  it("keeps every default neutral without a colour cast, and the accent the only colour", () => {
     for (const mode of modes) {
       for (const [name, value] of Object.entries(schemaInputs[mode])) {
         const { r, g, b } = requireHex(value);
-        const warm = r >= g && g >= b;
         const accent = name === "accentColor" || name === "accentStrongColor";
-        // A neutral leans to red by a few levels only; an accent is plainly terracotta.
-        const quiet = accent ? r - b >= 80 : r - b >= 3 && r - b <= 20;
+        // An accent is plainly terracotta. A neutral is clean: red and blue at most a few levels
+        // apart, so it reads neither brown nor grey-blue.
+        const warm = accent ? r >= g && g >= b : true;
+        const quiet = accent ? r - b >= 80 : Math.abs(r - b) <= 6;
         expect([mode, name, warm, quiet]).toEqual([mode, name, true, true]);
       }
     }
@@ -160,21 +161,25 @@ describe("UI theme contrast", () => {
   });
 
   it("measures the values the design names", () => {
-    expect(table.light?.["text on page"]).toBeCloseTo(16.39, 1);
-    expect(table.light?.["text on sidebar"]).toBeCloseTo(15.28, 1);
-    expect(table.light?.["muted text on page"]).toBeCloseTo(6.19, 1);
-    expect(table.light?.["warning as text on sidebar"]).toBeCloseTo(4.53, 1);
-    expect(table.light?.["primary button label on page"]).toBeCloseTo(6.1, 1);
-    expect(table.light?.["primary button label when pressed on sidebar"]).toBeCloseTo(4.82, 1);
+    expect(table.light?.["text on page"]).toBeCloseTo(16.76, 1);
+    expect(table.light?.["text on sidebar"]).toBeCloseTo(15.76, 1);
+    expect(table.light?.["muted text on page"]).toBeCloseTo(6.39, 1);
+    expect(table.light?.["warning as text on sidebar"]).toBeCloseTo(4.64, 1);
+    expect(table.light?.["primary button label on page"]).toBeCloseTo(6.19, 1);
+    expect(table.light?.["primary button label when pressed on sidebar"]).toBeCloseTo(4.91, 1);
     expect(table.light?.["label on the solid accent"]).toBeCloseTo(4.78, 1);
-    expect(table.light?.["chosen segment on sidebar"]).toBeCloseTo(5.13, 1);
-    expect(table.dark?.["text on page"]).toBeCloseTo(15.19, 1);
-    expect(table.dark?.["text on raised"]).toBeCloseTo(13.21, 1);
-    expect(table.dark?.["muted text on raised"]).toBeCloseTo(7.05, 1);
-    expect(table.dark?.["primary button label on page"]).toBeCloseTo(7.64, 1);
-    expect(table.dark?.["danger button label on hover on raised"]).toBeCloseTo(4.83, 1);
-    expect(Math.min(...Object.values(table.light ?? {}))).toBeCloseTo(4.53, 1);
-    expect(Math.min(...Object.values(table.dark ?? {}))).toBeCloseTo(4.83, 1);
+    expect(table.light?.["chosen segment on sidebar"]).toBeCloseTo(5.24, 1);
+    expect(table.dark?.["text on page"]).toBeCloseTo(14.41, 1);
+    expect(table.dark?.["text on raised"]).toBeCloseTo(12.39, 1);
+    expect(table.dark?.["muted text on raised"]).toBeCloseTo(6.37, 1);
+    expect(table.dark?.["primary button label on page"]).toBeCloseTo(7.16, 1);
+    expect(table.dark?.["danger button label on hover on raised"]).toBeCloseTo(4.54, 1);
+    // The blue second accent, as text and as a badge.
+    expect(table.light?.["info as text on sidebar"]).toBeCloseTo(5.54, 1);
+    expect(table.dark?.["info as text on raised"]).toBeCloseTo(5.8, 1);
+    expect(table.dark?.["info badge on raised"]).toBeCloseTo(5.54, 1);
+    expect(Math.min(...Object.values(table.light ?? {}))).toBeCloseTo(4.64, 1);
+    expect(Math.min(...Object.values(table.dark ?? {}))).toBeCloseTo(4.54, 1);
   });
 
   it.each(modes)(

@@ -285,7 +285,7 @@ export function DockPageAction({
   const label = kind === "open" ? t("dock.chat") : t("dock.showChat");
   const dot = running ? (
     <>
-      <CountBadge dot aria-hidden="true" data-testid="dock-running-dot" />
+      <CountBadge dot tone="info" aria-hidden="true" data-testid="dock-running-dot" />
       <span className="sr-only">{`, ${t("dock.answerRunning")}`}</span>
     </>
   ) : null;

@@ -566,7 +566,7 @@ function UserMessage() {
         aria-hidden="true"
       />
       <MessageAttachments />
-      <div className="chat-user-message-bubble max-w-[min(42rem,88%)] rounded-2xl rounded-tr-md bg-state-selected px-4 py-2.5 text-sm leading-6 text-foreground [overflow-wrap:anywhere]">
+      <div className="chat-user-message-bubble max-w-[min(42rem,88%)] rounded-2xl rounded-tr-md bg-secondary px-4 py-2.5 text-sm leading-6 text-foreground [overflow-wrap:anywhere]">
         <CollapsibleUserContent>
           <MessagePrimitive.Parts
             components={{ Text: UserTextPart, File: FilePart, Image: ImagePart }}

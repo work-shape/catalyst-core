@@ -1,18 +1,23 @@
 import type { HTMLAttributes } from "react";
 import { cn } from "../cn";
 
-/** `primary` says something waits for you. `muted` is a plain count. */
-export type CountBadgeTone = "primary" | "muted";
+/**
+ * `primary` says something waits for you. `info` says work runs on its own, such as an answer
+ * that is still being written. `muted` is a plain count.
+ */
+export type CountBadgeTone = "primary" | "info" | "muted";
 
 const COUNT_CAP = 99;
 
 const countTones: Record<CountBadgeTone, string> = {
   primary: "bg-primary text-primary-foreground",
+  info: "bg-info text-info-foreground",
   muted: "bg-state-pressed text-foreground"
 };
 
 const dotTones: Record<CountBadgeTone, string> = {
   primary: "bg-primary",
+  info: "bg-info",
   muted: "bg-muted-foreground"
 };
 

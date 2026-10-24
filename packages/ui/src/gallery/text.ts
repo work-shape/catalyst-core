@@ -244,6 +244,7 @@ export interface GalleryText
   rowServicePrincipal: string;
   rowKnowledge: string;
   countPending: string;
+  countRunning: string;
   today: string;
   yesterday: string;
   /** The `TimeMarker` samples: a conversation over two days. */
@@ -529,6 +530,7 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     ...flowGalleryText.en,
     ...mailGalleryText.en,
     countPending: "3 requests wait",
+    countRunning: "An answer is being written",
     today: "Today",
     yesterday: "Yesterday",
     timeMarkerDays: "A conversation over two days",
@@ -810,6 +812,7 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     ...flowGalleryText.de,
     ...mailGalleryText.de,
     countPending: "3 Anfragen warten",
+    countRunning: "Eine Antwort wird geschrieben",
     today: "Heute",
     yesterday: "Gestern",
     timeMarkerDays: "Eine Unterhaltung über zwei Tage",
