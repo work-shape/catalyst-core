@@ -136,7 +136,12 @@ describe("the role model", () => {
     expect(choices.get("audit.view")).toEqual({ action: "audit.view", checked: true });
     expect(choices.get("service_principals.manage")?.lock).toBe("notHeld");
     expect(choices.get("api_access.manage")?.lock).toBe("superadminOnly");
-    expect(choices.get("usage.view")?.lock).toBe("refusedByRole");
+    // Usage is its own area since `usage.view_users` is granted on a workspace (LU-3).
+    expect(roleAreaOf("usage.view")).toBe("usage");
+    expect(
+      areaRightChoices("usage", reviewers.grants, narrow).find((c) => c.action === "usage.view")
+        ?.lock
+    ).toBe("refusedByRole");
     expect(
       areaRightChoices("administration", [], root).find((c) => c.action === "api_access.manage")
     ).toEqual({ action: "api_access.manage", checked: false });
