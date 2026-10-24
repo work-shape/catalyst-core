@@ -71,7 +71,7 @@ Turning a module off deletes nothing. Its stored data is there when the module i
 
 ## Reading The Modules Of An Instance
 
-**Settings > Instance > Modules** (German: **Einstellungen › Instanz › Module**) lists every module the product knows with its state, what it adds and its config key. The page is shown to holders of `audit.view` and changes nothing: the switch is release config. `GET /api/v1/instance/modules` returns the same list. A module whose code is not part of the build is listed as off with `shipped: false`.
+**Settings > Instance > Modules** (German: **Einstellungen › Instanz › Module**) lists every module the product knows with its state, what it adds and its config key. The page is shown to holders of `system.view` and changes nothing: the switch is release config. `GET /api/v1/instance/modules` returns the same list. A module whose code is not part of the build is listed as off with `shipped: false`.
 
 ## What Is Checked At Startup
 

@@ -455,6 +455,43 @@ describe("navigation, page structure and data components", () => {
     expect(markup).toMatch(/<a[^>]*href="\/members"[^>]*aria-current="page"/u);
   });
 
+  it("folds a collapsible sub-rail group until one of its items is open, and lists it whole in the select", () => {
+    const rail = (value: string) =>
+      render(
+        createElement(SubRail, {
+          label: "Settings",
+          value,
+          onValueChange: () => undefined,
+          groups: [
+            {
+              id: "instance",
+              label: "Instance",
+              items: [{ id: "users", label: "Users", link: link("/users") }]
+            },
+            {
+              id: "system",
+              label: "System",
+              collapsible: true,
+              items: [
+                { id: "jobs", label: "Jobs", link: link("/jobs") },
+                { id: "modules", label: "Modules", link: link("/modules") }
+              ]
+            }
+          ]
+        })
+      );
+
+    const folded = rail("users");
+    expect(folded).toMatch(/<button[^>]*aria-expanded="false"[^>]*>System/u);
+    expect(folded).not.toMatch(/<a[^>]*href="\/jobs"/u);
+    expect(folded).toMatch(/<optgroup label="System"><option value="jobs">Jobs<\/option>/u);
+
+    const open = rail("jobs");
+    expect(open).toMatch(/<button[^>]*aria-expanded="true"[^>]*>System/u);
+    expect(open).toMatch(/<a[^>]*href="\/jobs"[^>]*aria-current="page"/u);
+    expect(open).toMatch(/<a[^>]*href="\/modules"/u);
+  });
+
   it("keeps the header's slots in one order", () => {
     const markup = render(
       createElement(PageHeader, {

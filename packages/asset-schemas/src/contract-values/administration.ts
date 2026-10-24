@@ -1,6 +1,6 @@
 /**
- * Rights over the instance itself: people, roles, usage, audit, background jobs, API access,
- * models and releases.
+ * Rights over the instance itself: people, roles, usage, audit, how the instance runs, background
+ * jobs, API access, models and releases.
  */
 export const ADMINISTRATION_ACTIONS = [
   "users.manage",
@@ -16,6 +16,10 @@ export const ADMINISTRATION_ACTIONS = [
   // works council has a say on it (BetrVG section 87(1) no. 6).
   "usage.view_users",
   "audit.view",
+  // Seeing how the instance runs: its background jobs, its Operation Runs, its modules and what
+  // it runs on, the Settings group "System" (RIGHTS-1e; UX audit ruling 2). Its default sits
+  // with `superadmin` alone, so a customer's admin keeps the audit log and not these pages.
+  "system.view",
   // Running a background job again that failed or died (RIGHTS-1e; UX audit ruling 2). Its
   // default sits with `superadmin` alone.
   "jobs.retry",

@@ -292,7 +292,9 @@ export function settingsGoToTargets(
   const targets: SettingsGoToTarget[] = visibleSettingsPages(catalog, viewer).map((page) => ({
     id: `settings/${page.group}/${page.id}`,
     labelKey: page.labelKey,
-    groupLabelKey: settingsGroups.find((group) => group.id === page.group)?.labelKey,
+    groupLabelKey: page.system
+      ? "settings.system"
+      : settingsGroups.find((group) => group.id === page.group)?.labelKey,
     route: settingsPageRoute(page)
   }));
   const buildPage = visibleBuildPage(build, viewer);

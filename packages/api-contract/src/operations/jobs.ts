@@ -15,7 +15,7 @@ export const jobOperations = {
     tag: "Jobs",
     auth: "principal",
     scope: "governance:read",
-    requires: ["audit.view"],
+    requires: ["system.view"],
     effect: "reading",
     response: json(z.object({ items: z.array(jobKindSummarySchema) })),
     errors: [],
@@ -29,7 +29,7 @@ export const jobOperations = {
     tag: "Jobs",
     auth: "principal",
     scope: "governance:read",
-    requires: ["audit.view"],
+    requires: ["system.view"],
     effect: "reading",
     query: listQuerySchema.extend({
       kind: z.string().min(1).optional(),

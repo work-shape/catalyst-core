@@ -13,7 +13,7 @@ import type { ChatShellProps } from "./chat-shell";
 import { collaborationWorkspaceDisplayName } from "./shared/collaboration-workspace/collaboration-workspace-name";
 import { CollaborationWorkspacePanel } from "./shared/collaboration-workspace/collaboration-workspace-panel";
 import { CollaborationWorkspaceSelector } from "./shared/collaboration-workspace/collaboration-workspace-selector";
-import { canManageUsers, canViewAudit } from "./shared/governance";
+import { canManageUsers } from "./shared/governance";
 import { ControlPlaneRoutes } from "./admin/control-plane/control-plane-routes";
 import { DockedChat, DockedPage, useChatDockView } from "./chat/dock/docked-chat";
 import { DockAgentWorkContext, type DockAgentWork } from "./chat/dock/dock-subject";
@@ -471,7 +471,8 @@ function ChatWorkspaceContent({
     startChat: model.apps.startChat,
     editWithAgent: model.apps.editWithAgent,
     ...(model.apps.startNew ? { startNew: model.apps.startNew } : {}),
-    ...(canViewAudit(model.auth.user)
+    // The Operations page is a System page (RIGHTS-1e): linked for who may open it.
+    ...(model.controlPlane.viewsSystem
       ? { operations: { href: operationRunsHref(), runHref: operationRunHref } }
       : {})
   };

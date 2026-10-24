@@ -18488,7 +18488,7 @@
         },
         "x-catalyst-effect": "reading",
         "x-catalyst-requires": [
-          "users.manage"
+          "system.view"
         ],
         "x-catalyst-rate-class": "read"
       }
@@ -18545,7 +18545,7 @@
         },
         "x-catalyst-effect": "reading",
         "x-catalyst-requires": [
-          "users.manage"
+          "system.view"
         ],
         "x-catalyst-rate-class": "write"
       }
@@ -18659,7 +18659,7 @@
         },
         "x-catalyst-effect": "reading",
         "x-catalyst-requires": [
-          "audit.view"
+          "system.view"
         ],
         "x-catalyst-rate-class": "read"
       }
@@ -18732,7 +18732,7 @@
         },
         "x-catalyst-effect": "reading",
         "x-catalyst-requires": [
-          "audit.view"
+          "system.view"
         ],
         "x-catalyst-rate-class": "read"
       }
@@ -18928,7 +18928,7 @@
         },
         "x-catalyst-effect": "reading",
         "x-catalyst-requires": [
-          "audit.view"
+          "system.view"
         ],
         "x-catalyst-rate-class": "read"
       }
@@ -26943,7 +26943,7 @@
         },
         "x-catalyst-effect": "reading",
         "x-catalyst-requires": [
-          "audit.view"
+          "system.view"
         ],
         "x-catalyst-rate-class": "read"
       }

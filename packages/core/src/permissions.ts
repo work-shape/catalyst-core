@@ -88,7 +88,8 @@ export const INSTANCE_ACTIONS = [
   "service_principals.manage",
   "limits.manage",
   "usage.view_users",
-  "jobs.retry"
+  "jobs.retry",
+  "system.view"
 ] as const satisfies readonly PlatformAction[];
 
 export interface PermissionGrant {

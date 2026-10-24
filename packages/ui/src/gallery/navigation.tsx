@@ -388,7 +388,8 @@ function SkipLinkSample({ text }: { text: GalleryText }) {
   );
 }
 
-type SettingsRoute = "profile" | "security" | "general" | "members" | "defaults";
+type SettingsRoute =
+  "profile" | "security" | "general" | "members" | "defaults" | "jobs" | "modules";
 
 function SubRailSample({ text }: { text: GalleryText }) {
   const [route, setRoute] = useState<SettingsRoute>("general");
@@ -418,6 +419,13 @@ function SubRailSample({ text }: { text: GalleryText }) {
         { ...item("members", text.subRailMembers, 3), countTone: "primary" },
         item("defaults", text.subRailDefaults)
       ]
+    },
+    {
+      // A group that folds: it starts folded and opens while one of its pages is open.
+      id: "system",
+      label: text.subRailSystem,
+      collapsible: true,
+      items: [item("jobs", text.subRailJobs), item("modules", text.subRailModules)]
     }
   ];
   const labels: Record<SettingsRoute, string> = {
@@ -425,7 +433,9 @@ function SubRailSample({ text }: { text: GalleryText }) {
     security: text.subRailSecurity,
     general: text.subRailGeneral,
     members: text.subRailMembers,
-    defaults: text.subRailDefaults
+    defaults: text.subRailDefaults,
+    jobs: text.subRailJobs,
+    modules: text.subRailModules
   };
 
   return (
@@ -455,7 +465,9 @@ const settingsRoutes: readonly SettingsRoute[] = [
   "security",
   "general",
   "members",
-  "defaults"
+  "defaults",
+  "jobs",
+  "modules"
 ];
 
 function toSettingsRoute(id: string, fallback: SettingsRoute): SettingsRoute {

@@ -11,7 +11,6 @@ import {
 } from "@work-shape/catalyst-client-assembly";
 import { getClientInstanceId } from "@work-shape/catalyst-config-schema";
 import {
-  legacyPermissionFor,
   PROVIDER_CHECK_TIMEOUT_MS,
   runProviderCheck,
   type SecretResolver
@@ -24,6 +23,7 @@ import { eventually } from "./support/assertions";
 import {
   MARKER,
   administrator,
+  customerAdmin,
   member,
   secretValues,
   throwingModelProvider,
@@ -155,15 +155,20 @@ describe("Instance > Infrastructure: what an operator reads", () => {
     expect(response.body).not.toContain("STORE_SECRET_OTHER");
   });
 
-  it("refuses a caller without the right to administer the instance", async () => {
+  it("refuses a caller without the right to see how the instance runs, an admin too", async () => {
     const { server } = await createServer();
 
     for (const operation of [
       "instance.infrastructure.get",
       "instance.infrastructure.check"
     ] as const) {
-      const response = await server.call(operation, {}, member);
-      expect(response.statusCode).toBe(403);
+      for (const caller of [member, customerAdmin]) {
+        const response = await server.call(operation, {}, caller);
+        expect(response.statusCode).toBe(403);
+        expect(apiErrorResponseSchema.parse(response.json()).error.details).toMatchObject({
+          action: "system.view"
+        });
+      }
     }
   });
 });
@@ -252,11 +257,7 @@ describe("Instance > Infrastructure: the checks", () => {
     const second = await server.call(
       "instance.infrastructure.check",
       {},
-      asCaller({
-        id: "usr_other",
-        roles: ["admin"],
-        permissions: [legacyPermissionFor("users.manage")]
-      })
+      asCaller({ id: "usr_other", roles: ["superadmin"] })
     );
     expect(second.statusCode).toBe(429);
     expect(apiErrorResponseSchema.parse(second.json()).error).toMatchObject({

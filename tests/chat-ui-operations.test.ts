@@ -16,6 +16,7 @@ import {
 } from "@work-shape/catalyst-chat-ui/operations";
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
+import { platformContext } from "./chat-ui-build-fixtures";
 import { settingsUser } from "./chat-ui-settings-fixtures";
 
 // Every test here fails without Instance > Operations: the modules it reads did not exist.
@@ -395,16 +396,28 @@ describe("operation run detail", () => {
 });
 
 describe("Instance > Operations in the catalog", () => {
-  it("stands after Jobs, wide, behind the right to view the audit log", () => {
+  it("stands after Jobs in System, wide, behind the right to see the System pages", () => {
     const ids = administration.pages.map((page) => page.id);
     const page = administration.pages.find((candidate) => candidate.id === "operations");
 
     expect(ids.indexOf("operations")).toBe(ids.indexOf("jobs") + 1);
     expect(page?.group).toBe("instance");
+    expect(page?.system).toBe(true);
     expect(page?.width).toBe("wide");
     expect(
-      page?.visible({ user: settingsUser({ permissions: ["audit.view"] }), workspaces: [] })
+      page?.visible({
+        user: settingsUser(),
+        workspaces: [],
+        platform: { ...platformContext(), instanceActions: ["system.view"] }
+      })
     ).toBe(true);
-    expect(page?.visible({ user: settingsUser(), workspaces: [] })).toBe(false);
+    // The audit log's readers keep the audit log, not this page (RIGHTS-1e).
+    expect(
+      page?.visible({
+        user: settingsUser({ permissions: ["audit.view"] }),
+        workspaces: [],
+        platform: platformContext()
+      })
+    ).toBe(false);
   });
 });

@@ -1021,7 +1021,7 @@ The platform takes its own secrets from the same provider by fixed names: `DATAB
 The page **Instance > Infrastructure** in the settings and `GET /api/v1/instance/infrastructure`
 list every configured entry of this section and the database: the provider, its region, the host
 it calls or its bucket, its secrets with whether each is set, and the result of its last check.
-Both need `users.manage` and change nothing. A secret value, a connection string, a key and a
+Both need `system.view`, which Superadmins hold, and change nothing. A secret value, a connection string, a key and a
 path on the host are never part of the answer.
 
 A secret that is set is shown by its name. One that is missing is shown by the key of the config

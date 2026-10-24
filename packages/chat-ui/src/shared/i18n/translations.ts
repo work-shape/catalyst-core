@@ -12,6 +12,7 @@ import { accessJobs } from "./access-jobs";
 import { accessMailSender } from "./access-mail-sender";
 import { accessRoles } from "./access-roles";
 import { accessSkill } from "./access-skill";
+import { accessSystem } from "./access-system";
 import { accessUsers } from "./access-users";
 import { accessWorkflow } from "./access-workflow";
 import { accessWorkspace } from "./access-workspace";
@@ -84,6 +85,7 @@ export const translations = combineTranslations(common)
   .and(accessMailSender)
   .and(accessRoles)
   .and(accessSkill)
+  .and(accessSystem)
   .and(accessUsers)
   .and(accessWorkflow)
   .and(accessWorkspace)

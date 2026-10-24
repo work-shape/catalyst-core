@@ -48,7 +48,8 @@ const ROLE_DEFAULT_ACTIONS: Record<"user" | "admin" | "superadmin", readonly Pla
       // today's.
       action !== "roles.edit_built_in" &&
       action !== "users.delete" &&
-      action !== "jobs.retry"
+      action !== "jobs.retry" &&
+      action !== "system.view"
   ),
   superadmin: ACTIONS.filter((action) => action !== "assets.release")
 };

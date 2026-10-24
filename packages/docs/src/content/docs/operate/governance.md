@@ -111,7 +111,7 @@ Use provider-side billing alerts or budgets as an external backstop.
 
 Settings > Instance > Jobs shows what the instance works on in the background: per job kind the
 queued, running, failed and dead jobs, and below that the jobs themselves under Failed and dead,
-Running and Queued. Everyone with `audit.view` can read it. A job is shown with its kind,
+Running and Queued. Everyone with `system.view` can read it; Superadmins hold it. A job is shown with its kind,
 status, attempts, the class of its last error and the id of the record it works on. The page
 and its API never show a job's payload or an error message, because either can quote a
 provider or a record.

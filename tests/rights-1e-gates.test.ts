@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { z } from "zod";
 import { platformContextSchema } from "@work-shape/catalyst-api-contract";
 import { asUserId } from "@work-shape/catalyst-core";
 import {
@@ -7,10 +8,10 @@ import {
   type AccessInstance
 } from "./support/access-instance";
 
-// Access acceptance check 40 (RIGHTS-1e): deleting a user and retrying a job are the rights
-// `users.delete` and `jobs.retry`, held by `superadmin` by default and given on by who holds
-// them. Deleting stays under the rule on the account deleted, and a superadmin's account stays
-// a superadmin's (the named list).
+// Access acceptance check 40 (RIGHTS-1e): deleting a user, retrying a job and seeing how the
+// instance runs are the rights `users.delete`, `jobs.retry` and `system.view`, held by
+// `superadmin` by default and given on by who holds them. Deleting stays under the rule on the
+// account deleted, and a superadmin's account stays a superadmin's (the named list).
 
 const instances: AccessInstance[] = [];
 afterEach(async () => {
@@ -100,5 +101,61 @@ describe("jobs.retry", () => {
     await t.expectOk(t.root.id, "permissions.grant", give(t.kai.id, "jobs.retry"));
 
     expect(await instanceActions(t.kai.id)).toEqual(["jobs.retry"]);
+  });
+});
+
+/** The reads behind the System pages of Settings: Jobs, Operations, Modules, Infrastructure. */
+const SYSTEM_READS = [
+  "instance.jobs.summary",
+  "instance.jobs.list",
+  "operations.list_runs",
+  "instance.modules.list",
+  "instance.infrastructure.get"
+] as const;
+
+describe("system.view", () => {
+  it("keeps the System reads from an admin, by address too, and leaves them the audit log", async () => {
+    const t = await setup();
+    for (const operation of [...SYSTEM_READS, "instance.infrastructure.check"] as const) {
+      await t.expectRefused(t.admin.id, operation, {}, t.forbidden("system.view", "no_grant"));
+    }
+    await t.expectOk(t.admin.id, "audit_events.list");
+    await t.expectRefused(
+      t.admin.id,
+      "permissions.grant",
+      give(t.kai.id, "system.view"),
+      t.forbidden("system.view", "no_grant")
+    );
+
+    for (const operation of SYSTEM_READS) await t.expectOk(t.root.id, operation);
+    await t.expectOk(t.root.id, "instance.infrastructure.check");
+  });
+
+  it("opens the System reads to a person granted it, and the platform context says so", async () => {
+    const t = await setup();
+    const instanceActions = async (userId: string) =>
+      platformContextSchema.parse((await t.expectOk(userId, "platform.context.get")).json())
+        .instanceActions;
+    expect(await instanceActions(t.admin.id)).not.toContain("system.view");
+
+    await t.expectOk(t.root.id, "permissions.grant", give(t.kai.id, "system.view"));
+
+    expect(await instanceActions(t.kai.id)).toEqual(["system.view"]);
+    for (const operation of SYSTEM_READS) await t.expectOk(t.kai.id, operation);
+    // The audit log is not part of it.
+    await t.expectRefused(t.kai.id, "audit_events.list", {}, t.forbidden("audit.view", "no_grant"));
+  });
+
+  it("leaves one Operation Run to its caller and to the audit log's readers", async () => {
+    const t = await setup();
+    await t.expectOk(t.root.id, "permissions.grant", give(t.kai.id, "system.view"));
+    const runs = z
+      .object({ items: z.array(z.object({ id: z.string() })) })
+      .parse((await t.expectOk(t.root.id, "operations.list_runs")).json());
+    const runId = runs.items[0]?.id;
+    expect(runId).toBeDefined();
+
+    // The admin reads it by `audit.view`, though the list is refused them.
+    await t.expectOk(t.admin.id, "operations.get_run", { params: { runId: runId ?? "" } });
   });
 });

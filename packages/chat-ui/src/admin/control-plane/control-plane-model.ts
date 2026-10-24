@@ -47,7 +47,7 @@ import type {
   WorkspaceRouteChangeOptions,
   WorkspaceRouteView
 } from "../../shared/workspace-route";
-import { canViewAdministrationPanel } from "../../shared/governance";
+import { canViewAdministrationPanel, canViewSystem } from "../../shared/governance";
 
 export interface ControlPlaneModelInput {
   apiBaseUrl: string;
@@ -109,6 +109,8 @@ export interface ControlPlaneModel {
   build: BuildAreaModel | undefined;
   /** Which instance this is and what release it runs. Absent until the instance answered. */
   platform: PlatformIdentity | undefined;
+  /** The viewer sees how the instance runs: the System pages of Settings (`system.view`). */
+  viewsSystem: boolean;
 }
 
 export interface SettingsAreaModel {
@@ -307,6 +309,7 @@ export function useControlPlaneModel({
             navigation: buildNavigation
           }
         : undefined,
+    viewsSystem: canViewSystem(platformContext),
     platform: platformContext
       ? {
           instanceName: platformContext.instance.name,

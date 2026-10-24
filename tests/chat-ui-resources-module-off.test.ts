@@ -166,7 +166,7 @@ async function paletteOptions(): Promise<string[]> {
       const options = [...document.querySelectorAll('[role="option"]')].map(
         (option) => option.textContent ?? ""
       );
-      expect(options).toContain("Instance › Modules");
+      expect(options).toContain("Instance › Audit");
       return options;
     },
     { timeout: CONDITION_WAIT_MS }

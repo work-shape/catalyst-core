@@ -44,6 +44,16 @@ export function canRetryJobs(
   return Boolean(platform?.instanceActions.includes("jobs.retry"));
 }
 
+/**
+ * Sees how the instance runs: the Settings group "System" with Jobs, Operations, Modules and
+ * Infrastructure (RIGHTS-1e). A right of the instance itself, `superadmin`'s by default.
+ */
+export function canViewSystem(
+  platform: Pick<PlatformContext, "instanceActions"> | undefined
+): boolean {
+  return Boolean(platform?.instanceActions.includes("system.view"));
+}
+
 export function canViewAudit(user: ApiUser | undefined): boolean {
   return hasPermission(user, "audit.view");
 }
