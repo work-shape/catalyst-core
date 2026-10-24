@@ -3,15 +3,18 @@ import {
   DATA_STORE_ACTIONS,
   DATA_STORE_ASSET_KIND,
   type AccessResource,
+  type ActorAccess,
   type ApprovalRequestHandler
 } from "@work-shape/catalyst-core";
 import type { DataStoreRuntime } from "../runtime";
 import type { PublishedStore } from "../verbs";
-import { countFlaggedFields } from "./flagged";
+import { countFlaggedFields, countReadableFlaggedFields } from "./flagged";
 
 // The one Inbox notice of a store whose records wait for a person in "Prüfen": one per store at
 // a time, not one per field, seen by whoever may decide them (`data_store.records` on the
-// store). Its count is read when it is shown, so it says what waits now. Marking it handled is
+// store). Its count is read when it is shown and for the one who reads it, so it says what
+// waits now of what that reader may open in "Prüfen": candidates of a Knowledge Base they may
+// not use are not counted, whatever right they hold on the store. Marking it handled is
 // the whole answer; a later proposal that flags a field files the next one. It holds the
 // store's id and name, never a field, a key or a value.
 
@@ -48,12 +51,26 @@ function subjectOf(store: PublishedStore): ReviewNoticePayload["subject"] {
   };
 }
 
-/** How many fields of the store wait now, or nothing where that cannot be read. */
+/** How many fields of the store wait now, whoever reads them: whether a notice is filed. */
 async function waiting(runtime: DataStoreRuntime, store: PublishedStore): Promise<number> {
   return countFlaggedFields(
     runtime,
     runtime.server.asPlatform(store.record.location.database),
     store.definition.records ?? []
+  );
+}
+
+/** How many fields of the store wait now for this reader, as "Prüfen" lists them to them. */
+async function waitingFor(
+  runtime: DataStoreRuntime,
+  store: PublishedStore,
+  access: ActorAccess
+): Promise<number> {
+  return countReadableFlaggedFields(
+    runtime,
+    runtime.server.asPlatform(store.record.location.database),
+    store.definition.records ?? [],
+    access
   );
 }
 
@@ -87,17 +104,20 @@ export function createReviewNoticeHandler(
         .map(subjectOf);
     },
     validate: (payload) => payloadSchema.parse(payload),
-    async preview(payload) {
+    async preview(payload, context) {
       const store = await current(payload);
-      const flagged = store
-        ? await waiting(runtime, store).catch((error: unknown) => {
-            runtime.logger.warn(
-              { storeId: payload.subject.dataStoreId, err: error },
-              "The fields waiting in a store's review could not be counted"
-            );
-            return undefined;
-          })
-        : undefined;
+      // Without a reader there is nobody to count for: the count is left out.
+      const access = context.viewer?.access;
+      const flagged =
+        store && access
+          ? await waitingFor(runtime, store, access).catch((error: unknown) => {
+              runtime.logger.warn(
+                { storeId: payload.subject.dataStoreId, err: error },
+                "The fields waiting in a store's review could not be counted"
+              );
+              return undefined;
+            })
+          : undefined;
       return {
         store: payload.subject.store,
         ...(store ? { title: store.definition.title } : {}),

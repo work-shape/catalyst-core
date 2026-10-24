@@ -8,6 +8,8 @@ import {
   dataStoreRecordsFlaggedInputSchema,
   recordEvidenceResultSchema,
   type ActorAccess,
+  type ConfigAssetRecord,
+  type DataStoreRecord,
   type DataStoreRecordsFlaggedOutput,
   type DataStoreRecordsRule
 } from "@work-shape/catalyst-core";
@@ -50,6 +52,22 @@ const FLAGGED_FIELDS = `
       when not evidenced then 'not_evidenced'
     end as reason
   from fields`;
+
+/**
+ * Every candidate a person decides, as the CTEs `flagged` and `candidates` over the same
+ * parameters: each candidate of a flagged field with its reason, and each field of a document
+ * whose object is not known.
+ */
+const CANDIDATES = `flagged as (${FLAGGED_FIELDS}),
+  candidates as (
+    select r.*, f.reason from catalyst.record_fields r
+      join flagged f on f.table_name = r.table_name and f.record_key = r.record_key
+        and f.field_name = r.field_name
+      where f.reason is not null
+    union all
+    select r.*, 'key_unresolved' as reason from catalyst.record_fields r
+      where r.record_key is null and r.table_name = any($1::text[])
+  )`;
 
 /** The order of a page and of its cursor: by table, object, field and cited document. */
 const ORDER = `table_name collate "C", coalesce(record_key::text, '') collate "C",
@@ -110,7 +128,11 @@ function ruleParameters(rules: readonly DataStoreRecordsRule[], table?: string) 
   };
 }
 
-/** How many fields wait for a person: flagged fields, and each field of an unassigned document. */
+/**
+ * How many fields wait for a person across the store, whoever reads them: flagged fields, and
+ * each field of an unassigned document. Only to tell whether a notice is filed; a reader is
+ * shown `countReadableFlaggedFields`.
+ */
 export async function countFlaggedFields(
   runtime: DataStoreRuntime,
   target: PostgresTarget,
@@ -125,8 +147,72 @@ export async function countFlaggedFields(
            where record_key is null and table_name = any($1::text[])) as flagged`,
     parameters: [tables, always]
   });
-  return Number(
-    z.object({ flagged: z.union([z.number(), z.string()]) }).parse(result.rows[0]).flagged
+  return countOf(result.rows[0]);
+}
+
+function countOf(row: unknown): number {
+  return Number(z.object({ flagged: z.union([z.number(), z.string()]) }).parse(row).flagged);
+}
+
+/** A Knowledge Base whose citations a reader may see, with the store that holds its documents. */
+interface CitableKnowledgeBase {
+  asset: ConfigAssetRecord;
+  record: DataStoreRecord;
+}
+
+/**
+ * The Knowledge Base of a candidate as the reader may cite it: published, active and one they
+ * may use, whatever right they hold on the store. Nothing for any other.
+ */
+async function citableKnowledgeBase(
+  runtime: DataStoreRuntime,
+  access: ActorAccess,
+  knowledgeBaseId: string
+): Promise<CitableKnowledgeBase | undefined> {
+  const record = await runtime.stores.dataStores.getDataStore({
+    clientInstanceId: runtime.clientInstanceId,
+    id: knowledgeBaseId
+  });
+  if (!record?.ownerKnowledgeBaseId) return undefined;
+  const asset = await runtime.stores.configAssets.getConfigAsset({
+    clientInstanceId: runtime.clientInstanceId,
+    kind: "knowledge_base",
+    name: record.ownerKnowledgeBaseId
+  });
+  if (
+    !asset ||
+    asset.id !== knowledgeBaseId ||
+    asset.status !== "active" ||
+    !knowledgeBaseDefinitionSchema.safeParse(asset.publishedConfig).success ||
+    !access.authorize(KNOWLEDGE_BASE_ACTIONS.use, assetResource(asset)).allowed
+  )
+    return undefined;
+  return { asset, record };
+}
+
+function knowledgeTarget(
+  runtime: DataStoreRuntime,
+  { record }: CitableKnowledgeBase,
+  signal: AbortSignal | undefined
+): PostgresTarget {
+  return { ...runtime.server.asPlatform(record.location.database), ...(signal ? { signal } : {}) };
+}
+
+/** Of the documents, those still there to open: not withdrawn, inside their source, indexed. */
+async function openableDocuments(
+  runtime: DataStoreRuntime,
+  knowledgeBase: CitableKnowledgeBase,
+  documentIds: readonly string[],
+  signal: AbortSignal | undefined
+): Promise<Set<string>> {
+  if (knowledgeBase.record.status !== "ready") return new Set();
+  const target = knowledgeTarget(runtime, knowledgeBase, signal);
+  return visibleSourceDocumentIds(
+    runtime,
+    knowledgeBase.asset.id,
+    knowledgeBase.asset.name,
+    documentIds,
+    (work) => runtime.server.executor.change({ ...target, timeoutMs: 15_000 }, work)
   );
 }
 
@@ -144,36 +230,14 @@ async function readCitations(
 ): Promise<Map<string, { knowledgeBase: string; files: Map<string, string> }>> {
   const shown = new Map<string, { knowledgeBase: string; files: Map<string, string> }>();
   for (const [knowledgeBaseId, documentIds] of wanted) {
-    const record = await runtime.stores.dataStores.getDataStore({
-      clientInstanceId: runtime.clientInstanceId,
-      id: knowledgeBaseId
-    });
-    if (!record?.ownerKnowledgeBaseId) continue;
-    const asset = await runtime.stores.configAssets.getConfigAsset({
-      clientInstanceId: runtime.clientInstanceId,
-      kind: "knowledge_base",
-      name: record.ownerKnowledgeBaseId
-    });
-    if (
-      !asset ||
-      asset.id !== knowledgeBaseId ||
-      asset.status !== "active" ||
-      !knowledgeBaseDefinitionSchema.safeParse(asset.publishedConfig).success ||
-      !access.authorize(KNOWLEDGE_BASE_ACTIONS.use, assetResource(asset)).allowed
-    )
-      continue;
+    const knowledgeBase = await citableKnowledgeBase(runtime, access, knowledgeBaseId);
+    if (!knowledgeBase) continue;
     const files = new Map<string, string>();
-    if (record.status === "ready") {
-      const ids = [...documentIds];
-      const target = {
-        ...runtime.server.asPlatform(record.location.database),
-        ...(signal ? { signal } : {})
-      };
-      const visible = await visibleSourceDocumentIds(runtime, asset.id, asset.name, ids, (work) =>
-        runtime.server.executor.change({ ...target, timeoutMs: 15_000 }, work)
-      );
+    const ids = [...documentIds];
+    const visible = await openableDocuments(runtime, knowledgeBase, ids, signal);
+    if (visible.size > 0) {
       const named = await runtime.server.executor.query({
-        ...target,
+        ...knowledgeTarget(runtime, knowledgeBase, signal),
         sql: "select id, coalesce(nullif(file_name, ''), nullif(title, ''), id) as file_name from catalyst_kb.documents where id = any($1::text[])",
         parameters: [ids.filter((id) => visible.has(id))]
       });
@@ -182,9 +246,91 @@ async function readCitations(
         .parse(named.rows))
         files.set(row.id, row.file_name);
     }
-    shown.set(knowledgeBaseId, { knowledgeBase: asset.name, files });
+    shown.set(knowledgeBaseId, { knowledgeBase: knowledgeBase.asset.name, files });
   }
   return shown;
+}
+
+/** How many cited documents one reading of a Knowledge Base's candidates takes at most. */
+const COUNT_DOCUMENT_PAGE = 500;
+
+/**
+ * How many fields wait for this reader: the fields "Prüfen" lists to them, by the rule the list
+ * reads (`readCitations`). A flagged field counts where one of its candidates comes from a
+ * Knowledge Base the reader may use and from a document still there to open; a document whose
+ * object is not known counts each of its fields by the same rule. The candidates of any other
+ * Knowledge Base are not counted, so the count says nothing of what the reader cannot open.
+ */
+export async function countReadableFlaggedFields(
+  runtime: DataStoreRuntime,
+  target: PostgresTarget,
+  rules: readonly DataStoreRecordsRule[],
+  access: ActorAccess
+): Promise<number> {
+  const { tables, always } = ruleParameters(rules);
+  if (tables.length === 0) return 0;
+  const cited = z.array(z.object({ knowledge_base_id: z.string() })).parse(
+    (
+      await runtime.server.executor.query({
+        ...target,
+        sql: `with ${CANDIDATES} select distinct knowledge_base_id from candidates`,
+        parameters: [tables, always]
+      })
+    ).rows
+  );
+  const usable: string[] = [];
+  const hidden: { knowledgeBaseId: string; documentId: string }[] = [];
+  for (const { knowledge_base_id: knowledgeBaseId } of cited) {
+    const knowledgeBase = await citableKnowledgeBase(runtime, access, knowledgeBaseId);
+    if (!knowledgeBase) continue;
+    usable.push(knowledgeBaseId);
+    // The documents the reader cannot open, page by page: few, beside the many still there.
+    let after: string | null = null;
+    for (;;) {
+      const page = await runtime.server.executor.query({
+        ...target,
+        limits: { ...target.limits, maxRows: COUNT_DOCUMENT_PAGE },
+        sql: `with ${CANDIDATES}
+          select distinct document_id collate "C" as document_id from candidates
+          where knowledge_base_id = $3::text
+            and ($4::text is null or document_id collate "C" > $4::text collate "C")
+          order by 1 limit $5::int`,
+        parameters: [tables, always, knowledgeBaseId, after, COUNT_DOCUMENT_PAGE]
+      });
+      const ids = z
+        .array(z.object({ document_id: z.string() }))
+        .parse(page.rows)
+        .map((row) => row.document_id);
+      const open = await openableDocuments(runtime, knowledgeBase, ids, undefined);
+      for (const documentId of ids)
+        if (!open.has(documentId)) hidden.push({ knowledgeBaseId, documentId });
+      const last = ids.at(-1);
+      if (last === undefined || (ids.length < COUNT_DOCUMENT_PAGE && !page.truncated)) break;
+      after = last;
+    }
+  }
+  if (usable.length === 0) return 0;
+  const result = await runtime.server.executor.query({
+    ...target,
+    sql: `with ${CANDIDATES},
+      readable as (
+        select * from candidates c
+        where c.knowledge_base_id = any($3::text[])
+          and not exists (select 1 from unnest($4::text[], $5::text[]) h(kb, doc)
+            where h.kb = c.knowledge_base_id and h.doc = c.document_id)
+      )
+      select (select count(*) from (select distinct table_name, record_key, field_name
+                from readable where record_key is not null) f)
+        + (select count(*) from readable where record_key is null) as flagged`,
+    parameters: [
+      tables,
+      always,
+      usable,
+      hidden.map((row) => row.knowledgeBaseId),
+      hidden.map((row) => row.documentId)
+    ]
+  });
+  return countOf(result.rows[0]);
 }
 
 export const recordsFlagged: StoreVerb = {
@@ -221,16 +367,7 @@ export const recordsFlagged: StoreVerb = {
     const result = await runtime.server.executor.query({
       ...target,
       limits: { ...target.limits, maxRows: input.limit + 1 },
-      sql: `with flagged as (${FLAGGED_FIELDS}),
-        candidates as (
-          select r.*, f.reason from catalyst.record_fields r
-            join flagged f on f.table_name = r.table_name and f.record_key = r.record_key
-              and f.field_name = r.field_name
-            where f.reason is not null
-          union all
-          select r.*, 'key_unresolved' as reason from catalyst.record_fields r
-            where r.record_key is null and r.table_name = any($1::text[])
-        )
+      sql: `with ${CANDIDATES}
         select table_name, record_key, field_name, knowledge_base_id, document_id, kind, value,
           page, quote, document_date::text as document_date,
           to_json(extracted_at) #>> '{}' as extracted_at, evidence, state, decided_by,
