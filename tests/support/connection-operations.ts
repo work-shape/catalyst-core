@@ -59,6 +59,9 @@ import { applyAtCurrentRevisions } from "./asset-revisions";
 
 const HOST = "outside.example.com";
 export const URL_OF_HOST = `https://${HOST}/api`;
+/** A second system on the egress list: a Connection moved there no longer reaches the first. */
+const SECOND_HOST = "second.example.com";
+export const URL_OF_SECOND_HOST = `https://${SECOND_HOST}/api`;
 const KEY_REF = "TEST_SECRET_STORE_KEY";
 
 export const echo: ConnectorOperationDescriptor = {
@@ -315,7 +318,13 @@ export async function fixtureOn<Instance extends AccessInstance>(
       ? Promise.resolve([{ address: "93.184.216.34", family: 4 as const }])
       : Promise.reject(new Error("ENOTFOUND"));
   const open = createEgressChecker({
-    allow: [{ protocol: "https", host: HOST, port: 443, network: "public", cidrs: [] }],
+    allow: [HOST, SECOND_HOST].map((host) => ({
+      protocol: "https" as const,
+      host,
+      port: 443,
+      network: "public" as const,
+      cidrs: []
+    })),
     resolve: address
   });
   const closed = createEgressChecker({ allow: [], resolve: address });

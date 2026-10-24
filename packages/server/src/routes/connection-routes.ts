@@ -310,9 +310,13 @@ export function registerConnectionRoutes(route: Route, options: ChatServerOption
   });
 
   route.operation(apiOperations["connections.connector_types"], {
-    // What a Connection can be made of, for whoever may make one.
+    // What a Connection can be made of, for whoever may make one or change one: a writer of a
+    // single Connection reads its type's form on the Connection's page. The list names the
+    // build's types and the catalogue's entries, nothing of any Connection.
     authorize: (_input, { access }) =>
-      decide(access, CONNECTION_ACTIONS.write, { kind: CONNECTION_ASSET_KIND }),
+      access.holdsGrantAt(CONNECTION_ACTIONS.write, ["asset"])
+        ? { allowed: true }
+        : decide(access, CONNECTION_ACTIONS.write, { kind: CONNECTION_ASSET_KIND }),
     module: CONNECTIONS_MODULE,
     execute: () => (connections ? connections.connectorTypes() : { types: [] })
   });

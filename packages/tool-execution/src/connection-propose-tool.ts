@@ -127,7 +127,11 @@ export interface ConnectionProposalCatalogueEntry {
 
 export interface ConnectionProposalCatalogue {
   read(context: ToolExecutionContext): Promise<ConnectionProposalCatalogueEntry[]>;
-  mayWrite(context: ToolExecutionContext): Promise<boolean>;
+  /**
+   * Whether the person may set the Connection of this name up: `connection.write` on it where
+   * it exists, on the instance where it would be made.
+   */
+  mayWrite(context: ToolExecutionContext, connectionName: string): Promise<boolean>;
 }
 
 const outputSchema = z.object({
@@ -411,7 +415,8 @@ export function createConnectionProposeTool(input: {
     outputSchema,
     async execute(proposal, context) {
       const entries = (await input.catalogue?.read(context)) ?? [];
-      const mayWrite = (await input.catalogue?.mayWrite(context)) ?? false;
+      const mayWrite = async (connectionName: string) =>
+        (await input.catalogue?.mayWrite(context, connectionName)) ?? false;
       if ("entry" in proposal) {
         const entry = entries.find((entry) => entry.id === proposal.entry.id);
         const part = entry?.parts.find((part) => part.part === proposal.entry.part);
@@ -430,17 +435,18 @@ export function createConnectionProposeTool(input: {
             auditSummary
           };
         const existing = part.connection;
+        const name = existing?.name ?? part.name;
         return toolSuccess<Proposal>(
           {
             entry: proposal.entry,
             state: existing?.clientSecretSet ? "ready" : "needs_setup",
-            mayWrite,
+            mayWrite: await mayWrite(name),
             ...(existing?.credentialMode === "user"
               ? { bindingState: existing.bindingState ?? "not_connected" }
               : {}),
             connection: {
               connectorType: part.connectorType,
-              name: existing?.name ?? part.name,
+              name,
               title: entry.title,
               credentialMode: existing?.credentialMode ?? part.defaultCredentialMode,
               headerNames: []
@@ -471,7 +477,11 @@ export function createConnectionProposeTool(input: {
         };
       }
       return toolSuccess<Proposal>(
-        { ...checked.proposal, state: "needs_setup", mayWrite },
+        {
+          ...checked.proposal,
+          state: "needs_setup",
+          mayWrite: await mayWrite(checked.proposal.connection.name)
+        },
         { auditSummary }
       );
     }

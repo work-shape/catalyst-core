@@ -14,9 +14,22 @@ export function connectionProposalCatalogue(input: {
   authorizer(): Authorizer | undefined;
 }): ConnectionProposalCatalogue {
   return {
-    async mayWrite(context) {
+    // Asked on the Connection where it exists, so a right on that one Connection counts; one
+    // that would be made, or made again after a delete, is written on the instance.
+    async mayWrite(context, connectionName) {
       const access = await input.authorizer()?.forActor(context.user);
-      return access?.authorize("connection.write", { kind: "connection" }).allowed ?? false;
+      if (!access) return false;
+      const stored = await input.stores.configAssets.getConfigAsset({
+        clientInstanceId: context.clientInstanceId,
+        kind: "connection",
+        name: connectionName
+      });
+      return access.authorize(
+        "connection.write",
+        stored?.status === "active"
+          ? { kind: "connection", name: stored.name, assetId: stored.id }
+          : { kind: "connection" }
+      ).allowed;
     },
     async read(context) {
       const { clientInstanceId } = context;
