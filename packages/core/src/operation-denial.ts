@@ -59,6 +59,8 @@ export type OperationDenial =
       message?: string;
       guardrailTitle?: string;
       guardrailReason?: string;
+      /** `check_unavailable`: a check could not answer, so the call was refused. */
+      reason?: "check_unavailable";
     }
   | {
       kind: "declined";
@@ -121,7 +123,10 @@ export function operationDenialError(denial: OperationDenial): AppError {
       return new AppError("GUARDRAIL_BLOCKED", denial.message ?? "A guardrail blocked the call", {
         guardrailId: denial.guardrailId,
         ...(denial.guardrailTitle === undefined ? {} : { guardrailTitle: denial.guardrailTitle }),
-        ...(denial.guardrailReason === undefined ? {} : { guardrailReason: denial.guardrailReason })
+        ...(denial.guardrailReason === undefined
+          ? {}
+          : { guardrailReason: denial.guardrailReason }),
+        ...(denial.reason === undefined ? {} : { reason: denial.reason })
       });
     case "declined":
       if (denial.reason === "steered") {

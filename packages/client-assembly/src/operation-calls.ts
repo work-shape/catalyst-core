@@ -13,6 +13,7 @@ import {
   RUN_AGENT_TOOL_NAME,
   combineBeforeActionChecks,
   createAuthorizer,
+  refusingWhenUnavailable,
   knowledgeOperationNamesOf,
   type ApprovalRequestHandlerRegistry,
   type AuditRecorder,
@@ -78,18 +79,26 @@ export function createInstanceOperationCalls(
 ): InstanceOperationCalls {
   const { clientInstanceId, config, store, auditRecorder, assetSource } = input;
   const authorizer = createAuthorizer(store.access);
-  // One check for every consumer of the process: the guardrails, then each capability's.
-  const checks = combineBeforeActionChecks([
-    new GuardrailRunner({
-      clientInstanceId,
-      config,
-      modelGateway: input.modelGateway,
-      hits: store.guardrails,
-      assets: store.configAssets,
-      shipped: store.guardrails
-    }),
-    ...input.capabilityChecks
-  ]);
+  // One check for every consumer of the process: the guardrails where their module is on, then
+  // each capability's. Off, only policy, floors and rights decide. A check that throws or does
+  // not answer in time refuses the action.
+  const checks = refusingWhenUnavailable(
+    combineBeforeActionChecks([
+      ...(input.modules.isEnabled("guardrails")
+        ? [
+            new GuardrailRunner({
+              clientInstanceId,
+              config,
+              modelGateway: input.modelGateway,
+              hits: store.guardrails,
+              assets: store.configAssets,
+              shipped: store.guardrails
+            })
+          ]
+        : []),
+      ...input.capabilityChecks
+    ])
+  );
   const operationCalls = createOperationCalls({
     clientInstanceId,
     stores: store,

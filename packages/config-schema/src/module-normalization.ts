@@ -15,7 +15,7 @@ interface LegacyModuleSwitch {
 
 /**
  * The switches of every module as the instance runs them. Four modules had their own switch
- * before the `modules` section. For one transition release a config that still uses a legacy
+ * before the `modules` section, and guardrails were core without one. For one transition release a config that still uses a legacy
  * key, or no key at all, keeps the state it has today: the new key wins when it is the only one
  * set, the legacy key or its former default applies otherwise, and a config that sets both to
  * different values is refused, because no order of precedence would be right for every
@@ -65,7 +65,11 @@ function legacyModuleSwitches(config: ClientInstanceConfig): LegacyModuleSwitch[
       fallback: false
     },
     // Invitations had no key: they were on wherever their mail could be sent.
-    { name: "userInvitations", fallback: isPasswordMailEnabled(config) }
+    { name: "userInvitations", fallback: isPasswordMailEnabled(config) },
+    // Guardrails were core and had no switch. For one transition release a config without one
+    // keeps them on, so an upgrade to a build without their code refuses to start instead of
+    // dropping them quietly (core-extraction-guardrails.md, section 3, rule 4).
+    { name: "guardrails", fallback: true }
   ];
 }
 

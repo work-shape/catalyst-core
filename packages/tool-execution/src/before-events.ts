@@ -1,5 +1,6 @@
 import { PLATFORM_ASSET_TOOLS } from "./platform-asset-tools";
 import {
+  CHECK_UNAVAILABLE_REASON,
   GUARDRAIL_ASSET_KIND,
   type GuardrailAnswer,
   type LocaleCode,
@@ -202,7 +203,8 @@ export function approvalAskedBy(answers: readonly SubjectAnswer[]): GuardrailNam
 /**
  * The refusal of a call a guardrail stopped. The guardrail that refused names itself and its
  * reason; where only a hold refused a read, which cannot wait, the one that asked for the
- * approval is named. An emitter that names no guardrail leaves the event that asked.
+ * approval is named. An emitter that names no guardrail leaves the event that asked. A check
+ * that could not answer names the event and the reason `check_unavailable`.
  */
 export function guardrailDenial(
   answers: readonly SubjectAnswer[],
@@ -213,6 +215,17 @@ export function guardrailDenial(
   const refusing =
     named.find((answer) => answer.outcome === "block") ??
     named.find((answer) => answer.outcome !== "allow");
+  if (refusing?.unavailable) {
+    return {
+      kind: "guardrail",
+      guardrailId: refusing.guardrailName,
+      reason: CHECK_UNAVAILABLE_REASON,
+      message:
+        locale === "de"
+          ? "Eine Prüfung dieser Aktion konnte nicht antworten, darum wurde sie verhindert. Versuche es später noch einmal."
+          : "A check of this action could not answer, so the action was refused. Try again later."
+    };
+  }
   return refusing
     ? {
         kind: "guardrail",
