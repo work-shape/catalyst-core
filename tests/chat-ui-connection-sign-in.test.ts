@@ -218,17 +218,20 @@ function typeInto(selector: string, value: string) {
 function OneClickHarness({
   calls,
   browser,
-  onConnected
+  onConnected,
+  outlivesView
 }: {
   calls: SignInCalls;
   browser: SignInBrowser;
   onConnected(detail: ConnectionDetail): void;
+  outlivesView?: boolean;
 }) {
   const signIn = useConnectionSignIn(calls, {
     onConnected,
     browser,
     personal: true,
-    enabled: false
+    enabled: false,
+    ...(outlivesView ? { outlivesView } : {})
   });
   return createElement(
     "section",
@@ -267,6 +270,35 @@ describe("a person's own sign-in", () => {
     tabs.tick();
     await settle();
     expect(connected).toHaveBeenCalledTimes(1);
+  });
+
+  it("goes on once signed in after its view is gone where it outlives the view, and not otherwise", async () => {
+    for (const outlivesView of [true, false]) {
+      const run = testCalls();
+      const tabs = testBrowser();
+      const connected = vi.fn();
+      mount(
+        createElement(OneClickHarness, {
+          calls: run.calls,
+          browser: tabs.browser,
+          onConnected: connected,
+          outlivesView
+        }),
+        "de"
+      );
+      await settle();
+      await click("[data-connect]");
+      expect(tabs.listening()).toBe(1);
+
+      // The chat draws its card anew while the person signs in.
+      act(() => root.render(createElement("p")));
+      run.signIn();
+      tabs.land({ outcome: "connected", connection: "crm" });
+      tabs.tick();
+      await settle();
+      expect(connected).toHaveBeenCalledTimes(outlivesView ? 1 : 0);
+      expect(tabs.listening()).toBe(0);
+    }
   });
 
   it("closes the window and says why where the start is refused", async () => {

@@ -137,6 +137,8 @@ infrastructure:
   models:
     local:
       provider: deterministic
+      # A personal Connection is called only where every model route says eu (MODEL-REGION-1).
+      region: eu
   objectStorage:
     files:
       provider: filesystem

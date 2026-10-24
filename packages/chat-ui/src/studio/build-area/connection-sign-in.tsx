@@ -182,6 +182,11 @@ export function useConnectionSignIn(
     enabled?: boolean;
     /** Where the permissions were decided, for a step that cannot change them. */
     fixedScopesNote?: string;
+    /**
+     * The wait goes on when the view is gone, until the sign-in lands or its session ends. The
+     * chat draws its Connect card anew when the run ends, maybe while the person signs in.
+     */
+    outlivesView?: boolean;
   }
 ): ConnectionSignIn {
   const enabled = options.enabled ?? true;
@@ -192,8 +197,16 @@ export function useConnectionSignIn(
   const [client, setClient] = useState({ id: "", secret: "" });
   const [redirectUri, setRedirectUri] = useState<string>();
   // The latest calls and callback, read by work that outlives a render.
-  const latest = useRef({ calls, onConnected: options.onConnected });
-  latest.current = { calls, onConnected: options.onConnected };
+  const latest = useRef({
+    calls,
+    onConnected: options.onConnected,
+    outlivesView: options.outlivesView === true
+  });
+  latest.current = {
+    calls,
+    onConnected: options.onConnected,
+    outlivesView: options.outlivesView === true
+  };
   /** What the Connection was before this sign-in: a later sign-in is told apart from it. */
   const before = useRef<SignInRead | undefined>(undefined);
   /** The start shown is spent: the next open starts again. */
@@ -241,7 +254,12 @@ export function useConnectionSignIn(
     }
     // The sign-in starts once, when the step first shows.
   }, [enabled]);
-  useEffect(() => () => waiting.current?.abort(), []);
+  useEffect(
+    () => () => {
+      if (!latest.current.outlivesView) waiting.current?.abort();
+    },
+    []
+  );
 
   async function openStarted(start: ConnectionOAuthStart, tab: SignInTab) {
     const { calls: current } = latest.current;
