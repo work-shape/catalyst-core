@@ -161,25 +161,25 @@ describe("UI theme contrast", () => {
   });
 
   it("measures the values the design names", () => {
-    expect(table.light?.["text on page"]).toBeCloseTo(16.76, 1);
-    expect(table.light?.["text on sidebar"]).toBeCloseTo(15.76, 1);
-    expect(table.light?.["muted text on page"]).toBeCloseTo(6.39, 1);
-    expect(table.light?.["warning as text on sidebar"]).toBeCloseTo(4.64, 1);
-    expect(table.light?.["primary button label on page"]).toBeCloseTo(6.19, 1);
-    expect(table.light?.["primary button label when pressed on sidebar"]).toBeCloseTo(4.91, 1);
+    expect(table.light?.["text on page"]).toBeCloseTo(16.6, 1);
+    expect(table.light?.["text on sidebar"]).toBeCloseTo(15.48, 1);
+    expect(table.light?.["muted text on page"]).toBeCloseTo(6.41, 1);
+    expect(table.light?.["warning as text on sidebar"]).toBeCloseTo(4.56, 1);
+    expect(table.light?.["primary button label on page"]).toBeCloseTo(6.13, 1);
+    expect(table.light?.["primary button label when pressed on sidebar"]).toBeCloseTo(4.84, 1);
     expect(table.light?.["label on the solid accent"]).toBeCloseTo(4.78, 1);
-    expect(table.light?.["chosen segment on sidebar"]).toBeCloseTo(5.24, 1);
-    expect(table.dark?.["text on page"]).toBeCloseTo(14.41, 1);
-    expect(table.dark?.["text on raised"]).toBeCloseTo(12.39, 1);
-    expect(table.dark?.["muted text on raised"]).toBeCloseTo(6.37, 1);
-    expect(table.dark?.["primary button label on page"]).toBeCloseTo(7.16, 1);
-    expect(table.dark?.["danger button label on hover on raised"]).toBeCloseTo(4.54, 1);
+    expect(table.light?.["chosen segment on sidebar"]).toBeCloseTo(5.15, 1);
+    expect(table.dark?.["text on page"]).toBeCloseTo(14.84, 1);
+    expect(table.dark?.["text on raised"]).toBeCloseTo(12.82, 1);
+    expect(table.dark?.["muted text on raised"]).toBeCloseTo(6.52, 1);
+    expect(table.dark?.["primary button label on page"]).toBeCloseTo(7.4, 1);
+    expect(table.dark?.["danger button label on hover on raised"]).toBeCloseTo(4.68, 1);
     // The blue second accent, as text and as a badge.
-    expect(table.light?.["info as text on sidebar"]).toBeCloseTo(5.54, 1);
-    expect(table.dark?.["info as text on raised"]).toBeCloseTo(5.8, 1);
-    expect(table.dark?.["info badge on raised"]).toBeCloseTo(5.54, 1);
-    expect(Math.min(...Object.values(table.light ?? {}))).toBeCloseTo(4.64, 1);
-    expect(Math.min(...Object.values(table.dark ?? {}))).toBeCloseTo(4.54, 1);
+    expect(table.light?.["info as text on sidebar"]).toBeCloseTo(5.44, 1);
+    expect(table.dark?.["info as text on raised"]).toBeCloseTo(6.0, 1);
+    expect(table.dark?.["info badge on raised"]).toBeCloseTo(5.74, 1);
+    expect(Math.min(...Object.values(table.light ?? {}))).toBeCloseTo(4.56, 1);
+    expect(Math.min(...Object.values(table.dark ?? {}))).toBeCloseTo(4.68, 1);
   });
 
   it.each(modes)(
