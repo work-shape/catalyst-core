@@ -1,6 +1,6 @@
 import type { GuardrailEvent, GuardrailFields, GuardrailSubject } from "./guardrail-events";
 import type { GuardrailAnswer, GuardrailFilter } from "./guardrails";
-import type { ConversationId } from "./ids";
+import type { AgentRunId, ConversationId } from "./ids";
 
 // The hook core keeps at every before-event: what an action hands the checks bound to it, and
 // what they answer. Guardrails are one check; a capability may contribute others. The caller
@@ -34,6 +34,11 @@ export interface BeforeActionCallContext {
   userId?: string;
   workspaceId?: string;
   conversationId?: ConversationId;
+  /**
+   * The agent run that made the call. With `conversationId` it lets a model call of the check
+   * read the conversation's personal-data mark, as for a Workflow step's run (MODEL-REGION-3).
+   */
+  agentRunId?: AgentRunId;
   operationRunId?: string;
   deadline?: Date;
   signal?: AbortSignal;

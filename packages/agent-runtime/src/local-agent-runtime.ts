@@ -42,6 +42,12 @@ export class LocalAgentRuntime implements AgentRuntime {
     if (options.webAccess?.enabled && !options.personalData) {
       throw new AppError("VALIDATION_FAILED", "Web access requires personal-data readers");
     }
+    if (options.personalModelRegions && !options.personalData) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        "Personal model regions require personal-data readers"
+      );
+    }
     if (
       !options.modelProviderContinuationStore &&
       options.modelProviders.some(

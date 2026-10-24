@@ -7,19 +7,39 @@ export type ReasoningEffort = AgentSelectableModel["selectableReasoningEfforts"]
 export type ReasoningEffortPicks = Readonly<Record<string, ReasoningEffort>>;
 
 /**
+ * Whether a model can be chosen where the conversation holds data from personal connections
+ * (MODEL-REGION-3). The server marks a model whose region the instance does not allow for it.
+ */
+export function modelAllowedHere(model: AgentSelectableModel, personalData: boolean): boolean {
+  return !(personalData && model.personalDataBlocked);
+}
+
+/**
  * The models the composer offers for an agent, and the one a run would use. The agent's own
  * model comes first; the user's pick applies only while this agent offers it, so switching to
- * an agent without it falls back to that agent's own model.
+ * an agent without it falls back to that agent's own model. In a conversation with personal
+ * data a model it may not use is never selected: the pick, then the agent's own model, then
+ * the first one allowed. `noModelAllowed` says the agent offers none it may use there.
  */
 export function agentModelSelection(
   agent: Pick<SafeAgent, "selectableModels"> | undefined,
-  pickedModelBindingId: string | undefined
-): { selectableModels: AgentSelectableModel[]; selectedModel: AgentSelectableModel | undefined } {
+  pickedModelBindingId: string | undefined,
+  personalData = false
+): {
+  selectableModels: AgentSelectableModel[];
+  selectedModel: AgentSelectableModel | undefined;
+  noModelAllowed: boolean;
+} {
   const selectableModels = agent?.selectableModels ?? [];
+  const allowed = selectableModels.filter((model) => modelAllowedHere(model, personalData));
   const picked = pickedModelBindingId
-    ? selectableModels.find((model) => model.bindingId === pickedModelBindingId)
+    ? allowed.find((model) => model.bindingId === pickedModelBindingId)
     : undefined;
-  return { selectableModels, selectedModel: picked ?? selectableModels[0] };
+  return {
+    selectableModels,
+    selectedModel: picked ?? allowed[0] ?? selectableModels[0],
+    noModelAllowed: selectableModels.length > 0 && allowed.length === 0
+  };
 }
 
 /**

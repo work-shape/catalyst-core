@@ -171,9 +171,15 @@ export interface CapabilityModelCall {
   /** Asks for an answer in JSON of this schema. The answer is then JSON; its shape is not checked. */
   output?: { jsonSchema: JsonObject };
   maxOutputTokens?: number;
-  /** The user and the conversation the call is made for, for its usage record. */
+  /**
+   * The user and the conversation the call is made for, for its usage record. A call that names
+   * a conversation holding data from a personal connection is refused with
+   * `personal_data_model_region` where its model's region is not allowed for that data.
+   */
   userId?: string;
   conversationId?: ConversationId;
+  /** The agent run the call is made for, where an agent's call caused it. */
+  agentRunId?: string;
   /**
    * The workspace and the Operation Run of the tool call that makes the call, as the tool's
    * context names them (`context.operationRun`), for its usage record.

@@ -77,6 +77,8 @@ export class RunState {
   readonly startedAt: ISODateString;
   private status: AgentRunStatus = "running";
   private webAccessOff = false;
+  /** The root chat carries the personal-data mark; read once seen, as the mark is permanent. */
+  private personalData = false;
   private sequence: number;
   private resumeState: AgentRunResumeState | undefined;
   private closed = false;
@@ -103,6 +105,15 @@ export class RunState {
 
   isWebAccessOff(): boolean {
     return this.webAccessOff;
+  }
+
+  notePersonalData(): void {
+    this.personalData = true;
+    this.webAccessOff = true;
+  }
+
+  holdsPersonalData(): boolean {
+    return this.personalData;
   }
 
   getStatus(): AgentRunStatus {

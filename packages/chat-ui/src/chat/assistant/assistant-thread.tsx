@@ -60,12 +60,14 @@ export function AssistantThread({
   noAgentsMessage,
   selectedAgentName,
   selectableModels,
+  personalData,
   selectedModelBindingId,
   selectedReasoningEffort,
   showContextIndicator,
   contextSnapshot,
   notice,
   usageNote,
+  onNewConversationForPersonalData,
   newConversationPrivate,
   subjectLine,
   start,
@@ -105,6 +107,8 @@ export function AssistantThread({
   noAgentsMessage?: string;
   selectedAgentName: string | undefined;
   selectableModels: AgentSelectableModel[];
+  /** The conversation holds data from personal connections; blocked models show disabled. */
+  personalData?: boolean;
   selectedModelBindingId: string | undefined;
   selectedReasoningEffort: ReasoningEffort | undefined;
   showContextIndicator: boolean;
@@ -117,6 +121,11 @@ export function AssistantThread({
   notice: string | undefined;
   /** The quiet note at 80 percent of the person's own spend limit. */
   usageNote?: { text: string; dismiss(): void };
+  /**
+   * Set where the conversation holds personal data and no model the agent offers is allowed
+   * for it: the composer says so and offers a new conversation (MODEL-REGION-3).
+   */
+  onNewConversationForPersonalData?: () => void;
   newConversationPrivate?: boolean;
   /** What the open conversation is about, where it is about an asset. */
   subjectLine?: ReactNode;
@@ -315,6 +324,18 @@ export function AssistantThread({
                     </Button>
                   </p>
                 ) : null}
+                {onNewConversationForPersonalData ? (
+                  <p
+                    className="mb-2 flex items-center gap-1.5 pl-1 text-xs text-muted-foreground"
+                    data-testid="personal-data-no-model-note"
+                  >
+                    <Lock size={12} className="shrink-0" aria-hidden="true" />
+                    <span className="min-w-0 flex-1">{t("personalDataNoModel")}</span>
+                    <Button variant="link" size="sm" onClick={onNewConversationForPersonalData}>
+                      {t("personalDataNewConversation")}
+                    </Button>
+                  </p>
+                ) : null}
                 {newConversationPrivate ? (
                   <p
                     className="mb-2 flex items-center gap-1.5 px-1 text-xs text-muted-foreground"
@@ -341,6 +362,7 @@ export function AssistantThread({
                     attachmentsEnabled={attachmentsEnabled}
                     attachmentAccept={attachmentAccept}
                     selectableModels={selectableModels}
+                    personalData={personalData}
                     selectedModelBindingId={selectedModelBindingId}
                     selectedReasoningEffort={selectedReasoningEffort}
                     showContextIndicator={showContextIndicator}

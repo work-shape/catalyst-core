@@ -36,7 +36,8 @@ describe("agent model selection", () => {
   it("offers the agent's own model first and uses it without a pick", () => {
     expect(agentModelSelection(chooser, undefined)).toEqual({
       selectableModels: [own, terra],
-      selectedModel: own
+      selectedModel: own,
+      noModelAllowed: false
     });
   });
 
@@ -64,7 +65,53 @@ describe("agent model selection", () => {
   it("offers nothing while the agent is unknown", () => {
     expect(agentModelSelection(undefined, "terra")).toEqual({
       selectableModels: [],
-      selectedModel: undefined
+      selectedModel: undefined,
+      noModelAllowed: false
+    });
+  });
+
+  describe("in a conversation with data from personal connections", () => {
+    const outside = { ...own, personalDataBlocked: true as const };
+    const blockedFirst = { selectableModels: [outside, terra] };
+
+    it("gives a blocked default way to the first allowed model, and ignores a blocked pick", () => {
+      expect(agentModelSelection(blockedFirst, undefined, true)).toEqual({
+        selectableModels: [outside, terra],
+        selectedModel: terra,
+        noModelAllowed: false
+      });
+      expect(agentModelSelection(blockedFirst, "sol", true).selectedModel).toEqual(terra);
+    });
+
+    it("says when the agent offers no model allowed there", () => {
+      expect(
+        agentModelSelection({ selectableModels: [outside] }, undefined, true).noModelAllowed
+      ).toBe(true);
+    });
+
+    it("leaves a conversation without the mark as before", () => {
+      expect(agentModelSelection(blockedFirst, undefined, false)).toEqual({
+        selectableModels: [outside, terra],
+        selectedModel: outside,
+        noModelAllowed: false
+      });
+    });
+
+    it.each([
+      [
+        "en",
+        "Not allowed in a conversation with data from personal connections",
+        "New conversation"
+      ],
+      [
+        "de",
+        "Nicht für Unterhaltungen mit Daten aus persönlichen Verbindungen freigegeben",
+        "Neue Unterhaltung"
+      ]
+    ] as const)("words the blocked model and the way out (%s)", (locale, blocked, fresh) => {
+      const { t } = createTranslationContext(locale);
+      expect(t("modelPickerPersonalDataBlocked")).toBe(blocked);
+      expect(t("personalDataNewConversation")).toBe(fresh);
     });
   });
 

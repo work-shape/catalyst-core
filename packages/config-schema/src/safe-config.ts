@@ -4,6 +4,7 @@ import {
   SUBJECT_TOOL_PREFIX,
   authorReasoningEffort,
   defaultReasoningEffortForAgentBinding,
+  modelRouteAllowedForPersonalData,
   modelUsageTierFromRates,
   reasoningEffortChoiceForBinding,
   reasoningEffortsOffered,
@@ -24,7 +25,11 @@ import {
   type ConfigLocaleInput
 } from "./localization";
 import type { AgentConfig, ClientInstanceConfig } from "./schemas";
-import { getModelSelectionForAgent, resolveModelBinding } from "./selectors";
+import {
+  getModelSelectionForAgent,
+  getPersonalModelRegions,
+  resolveModelBinding
+} from "./selectors";
 
 /** The tool that saves and creates assets: an agent that lists it builds them. */
 const ASSET_PUT_TOOL = `${SUBJECT_TOOL_PREFIX}put`;
@@ -68,7 +73,10 @@ export function createSafeConfigView(
   const models: ModelViewContext = {
     config,
     locale,
-    reasoningEffortsOfBinding: options.reasoningEffortsOfBinding ?? (() => [])
+    reasoningEffortsOfBinding: options.reasoningEffortsOfBinding ?? (() => []),
+    ...(modules.isEnabled("connections")
+      ? { personalModelRegions: getPersonalModelRegions(config) }
+      : {})
   };
   const {
     environment: _environment,
@@ -296,11 +304,13 @@ interface ModelViewContext {
   config: ClientInstanceConfig;
   locale: LocaleCode;
   reasoningEffortsOfBinding: (bindingId: string) => readonly ReasoningEffortConfig[];
+  /** `modules.connections.personalModelRegions` where the Connections module is on. */
+  personalModelRegions?: readonly string[];
 }
 
 /** What the model picker shows for one model: who makes it, where it runs and what it costs. */
 function modelView(
-  { config, locale, reasoningEffortsOfBinding }: ModelViewContext,
+  { config, locale, reasoningEffortsOfBinding, personalModelRegions }: ModelViewContext,
   selection: {
     provider: ModelProviderConfig;
     binding: ModelBindingConfig | undefined;
@@ -329,6 +339,11 @@ function modelView(
     ...(binding?.vendor ? { vendor: binding.vendor } : {}),
     ...(description ? { description } : {}),
     ...(provider.region ? { region: provider.region } : {}),
+    // MODEL-REGION-3: the list stays on the server; the picker greys the model out in a
+    // conversation with personal data.
+    ...(personalModelRegions && !modelRouteAllowedForPersonalData(provider, personalModelRegions)
+      ? { personalDataBlocked: true as const }
+      : {}),
     ...(usageTier ? { usageTier } : {}),
     ...(reasoning.defaultEffort ? { reasoningEffort: reasoning.defaultEffort } : {}),
     selectableReasoningEfforts: reasoning.selectable

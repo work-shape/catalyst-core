@@ -66,6 +66,7 @@ interface GuardrailJudgeCall {
   userId?: string;
   workspaceId?: string;
   conversationId?: ConversationId;
+  agentRunId?: string;
   operationRunId?: string;
   correlationId: string;
   signal?: AbortSignal;
@@ -492,7 +493,11 @@ export class GuardrailRunner implements BeforeActionCheck {
           : context.workspaceId
             ? { workspaceId: context.workspaceId }
             : {}),
+        // A judge reads a held call's input, which in a conversation with personal data may
+        // hold mail: its models refuse a route outside the allowed regions for that
+        // conversation, and the refusal answers below as "could not be evaluated".
         ...(context.conversationId ? { conversationId: context.conversationId } : {}),
+        ...(context.agentRunId ? { agentRunId: context.agentRunId } : {}),
         ...(context.operationRunId ? { operationRunId: context.operationRunId } : {}),
         correlationId: context.correlationId,
         ...(context.signal ? { signal: context.signal } : {}),

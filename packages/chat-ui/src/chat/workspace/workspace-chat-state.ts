@@ -95,6 +95,10 @@ const RUN_COMMAND_NOT_TAKEN_CODE = "AGENT_RUN_COMMAND_NOT_TAKEN";
 // The code a run is failed with when its model has no price on the rate card (`@work-shape/catalyst-core`).
 const MODEL_NOT_PRICED_CODE = "MODEL_NOT_PRICED";
 
+// The code a run is failed with when its conversation holds personal data and its model's region
+// is not allowed for that (`@work-shape/catalyst-core`, MODEL-REGION-3).
+const PERSONAL_DATA_MODEL_REGION_CODE = "personal_data_model_region";
+
 // The code a run is failed with when a usage safeguard or spend budget refused its next model
 // call (`@work-shape/catalyst-core`).
 const MODEL_USAGE_LIMIT_REACHED_CODE = "MODEL_USAGE_LIMIT_REACHED";
@@ -162,6 +166,7 @@ export function terminalRunNotice(
   if (error.code === MODEL_NOT_PRICED_CODE) {
     return t(viewer.seesRateCard ? "runModelNotPricedOperator" : "runModelNotPriced");
   }
+  if (error.code === PERSONAL_DATA_MODEL_REGION_CODE) return t("runPersonalDataModelRegion");
   if (error.code === MODEL_USAGE_LIMIT_REACHED_CODE) {
     return usageLimitNotice(error.usageLimit, t, viewer.seesRateCard);
   }

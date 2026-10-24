@@ -1,5 +1,5 @@
 import { CONNECTION_CALL_REASONS, connectionCallSentence } from "./connection-operations";
-import { AppError } from "./errors";
+import { AppError, PersonalDataModelRegionError } from "./errors";
 import {
   getSubjectUserId,
   isAuthenticatedServicePrincipal,
@@ -92,6 +92,33 @@ export function personalConnectionContextError(reason: string): AppError {
  */
 export const DEFAULT_PERSONAL_MODEL_REGIONS: readonly string[] = Object.freeze(["eu"]);
 
+/**
+ * Whether a model route may carry personal data: its region is in the list. A route without a
+ * region never passes. The one rule for a personal call's admission and for every model request
+ * of a conversation with the personal-data mark (MODEL-REGION-3).
+ */
+export function modelRouteAllowedForPersonalData(
+  route: { region?: string },
+  allowed: readonly string[] = DEFAULT_PERSONAL_MODEL_REGIONS
+): boolean {
+  return route.region !== undefined && allowed.includes(route.region);
+}
+
+/**
+ * Refuses a model request on a route outside `allowed` where the conversation carries the
+ * personal-data mark. The mark is read only for such a route; a mark that cannot be read counts
+ * as set (`personalDataConversation`). A model call that sends a conversation's content goes
+ * through this check.
+ */
+export async function requirePersonalDataModelRoute(input: {
+  route: { region?: string };
+  allowed: readonly string[];
+  marked: () => Promise<boolean>;
+}): Promise<void> {
+  if (modelRouteAllowedForPersonalData(input.route, input.allowed)) return;
+  if (await input.marked()) throw new PersonalDataModelRegionError(input.allowed);
+}
+
 /** Owner-bound admission, independent of roles, grants and the current browser session. */
 export async function requirePersonalConnectionContext(input: {
   stores: Pick<PlatformStores, "conversations" | "agentRuns" | "workspaces">;
@@ -165,7 +192,7 @@ export async function requirePersonalConnectionContext(input: {
   const allowed = input.personalModelRegions ?? DEFAULT_PERSONAL_MODEL_REGIONS;
   if (
     !input.modelRoutes?.length ||
-    input.modelRoutes.some((route) => route.region === undefined || !allowed.includes(route.region))
+    input.modelRoutes.some((route) => !modelRouteAllowedForPersonalData(route, allowed))
   ) {
     throw personalConnectionRegionError(allowed);
   }

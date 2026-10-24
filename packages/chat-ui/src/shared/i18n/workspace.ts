@@ -19,6 +19,8 @@ export const workspace = defineTranslations({
     runInterrupted: "The reply was interrupted. Please send your message again.",
     runRateLimited:
       "The model is overloaded right now, so the reply was interrupted. It does not continue on its own. The steps already done are kept: in about a minute, write “continue” and the agent picks up where it left off.",
+    runPersonalDataModelRegion:
+      "This model is not allowed in a conversation with data from personal connections. Choose another model or start a new conversation.",
     runModelNotPriced:
       "This model cannot be used at the moment. Choose another model or ask an administrator.",
     runModelNotPricedOperator:
@@ -78,6 +80,8 @@ export const workspace = defineTranslations({
     runInterrupted: "Die Antwort wurde unterbrochen. Bitte sende deine Nachricht erneut.",
     runRateLimited:
       "Das Modell ist gerade überlastet, deshalb wurde die Antwort unterbrochen. Sie geht nicht von selbst weiter. Die erledigten Schritte bleiben erhalten: Schreib in etwa einer Minute „weiter“, dann macht der Agent dort weiter, wo er aufgehört hat.",
+    runPersonalDataModelRegion:
+      "Dieses Modell ist für Unterhaltungen mit Daten aus persönlichen Verbindungen nicht freigegeben. Wähle ein anderes Modell oder beginne eine neue Unterhaltung.",
     runModelNotPriced:
       "Dieses Modell kann gerade nicht verwendet werden. Wähle ein anderes Modell oder wende dich an einen Administrator.",
     runModelNotPricedOperator:

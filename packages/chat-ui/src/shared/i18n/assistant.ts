@@ -63,6 +63,11 @@ export const assistant = defineTranslations({
     modelPickerModel: "Model",
     modelPickerReasoning: "Reasoning effort",
     modelPickerReasoningHint: "Higher reasoning consumes more usage and may take longer.",
+    modelPickerPersonalDataBlocked:
+      "Not allowed in a conversation with data from personal connections",
+    personalDataNoModel:
+      "This conversation holds data from personal connections, and no model you can choose here is allowed for it.",
+    personalDataNewConversation: "New conversation",
     modelPickerResidencyEu: "Processed in the EU",
     modelPickerResidencyGlobal: "Processed outside the EU",
     modelPickerUsage: "Usage consumption",
@@ -168,6 +173,11 @@ export const assistant = defineTranslations({
     modelPickerModel: "Modell",
     modelPickerReasoning: "Denkaufwand",
     modelPickerReasoningHint: "Mehr Denkaufwand verbraucht mehr Kontingent und kann länger dauern.",
+    modelPickerPersonalDataBlocked:
+      "Nicht für Unterhaltungen mit Daten aus persönlichen Verbindungen freigegeben",
+    personalDataNoModel:
+      "Diese Unterhaltung enthält Daten aus persönlichen Verbindungen, und keines der wählbaren Modelle ist dafür freigegeben.",
+    personalDataNewConversation: "Neue Unterhaltung",
     modelPickerResidencyEu: "Verarbeitung in der EU",
     modelPickerResidencyGlobal: "Verarbeitung außerhalb der EU",
     modelPickerUsage: "Verbrauch",

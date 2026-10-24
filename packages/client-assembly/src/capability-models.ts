@@ -1,7 +1,11 @@
 import type { ClientInstanceCapabilityModels } from "@work-shape/catalyst-capability-sdk";
 import {
   AppError,
+  asAgentRunId,
+  requirePersonalDataModelRoute,
+  type AgentRunId,
   type ClientInstanceId,
+  type ConversationId,
   type ModelBindingConfig,
   type ModelProviderConfig,
   type PlatformStores
@@ -25,6 +29,7 @@ function createCapabilityModels(input: {
   providers: readonly ModelProviderConfig[];
   bindings: readonly ModelBindingConfig[];
   costs: ClientInstanceConfig["usage"]["costs"];
+  personalData?: CapabilityPersonalDataGate;
 }): ClientInstanceCapabilityModels {
   const { gateway, clientInstanceId } = input;
   /**
@@ -42,6 +47,21 @@ function createCapabilityModels(input: {
   };
   return {
     async complete(call) {
+      const { personalData } = input;
+      if (personalData && call.conversationId !== undefined) {
+        const { conversationId, agentRunId } = call;
+        const binding = input.bindings.find((candidate) => candidate.id === call.bindingId);
+        const provider = input.providers.find((candidate) => candidate.id === binding?.providerId);
+        await requirePersonalDataModelRoute({
+          route: provider ?? {},
+          allowed: personalData.allowed,
+          marked: () =>
+            personalData.marked(
+              conversationId,
+              agentRunId === undefined ? undefined : asAgentRunId(agentRunId)
+            )
+        });
+      }
       const reasoningEffort =
         call.reasoningEffort === "configured" ? configuredEffort(call.bindingId) : undefined;
       const completion = await gateway.complete({
@@ -107,6 +127,17 @@ function createCapabilityModels(input: {
   };
 }
 
+/**
+ * MODEL-REGION-3: a capability's call that names a conversation holding personal data goes only
+ * to a route in `allowed`, as every request of an agent run in it does. Set where the Connections
+ * module is on and the process reads conversations.
+ */
+export interface CapabilityPersonalDataGate {
+  allowed: readonly string[];
+  /** The root's personal-data mark; a read that fails counts as marked. */
+  marked(conversationId: ConversationId, agentRunId: AgentRunId | undefined): Promise<boolean>;
+}
+
 /** The model gateway of an instance with the governance its calls are admitted and settled by. */
 export interface InstanceModels {
   governance: ModelUsageGovernance;
@@ -127,6 +158,7 @@ export async function createInstanceModels(input: {
   infrastructure: InstanceInfrastructure;
   store: Pick<PlatformStores, "usage">;
   bindingIds?: readonly string[];
+  personalData?: CapabilityPersonalDataGate;
 }): Promise<InstanceModels> {
   const { config, bindingIds } = input;
   const allProviders = getModelProviderConfigs(config);
@@ -207,7 +239,8 @@ export async function createInstanceModels(input: {
       clientInstanceId: input.clientInstanceId,
       providers,
       bindings,
-      costs: config.usage.costs
+      costs: config.usage.costs,
+      ...(input.personalData ? { personalData: input.personalData } : {})
     })
   };
 }

@@ -18,9 +18,17 @@ export function workspaceSendBlock(input: {
   locale: LocaleCode;
   /** The sentence of a spend limit that stops the person here, until it resets or is raised. */
   usageLimitReason?: string;
+  /** The conversation holds personal data and the agent offers no model allowed for it. */
+  noModelForPersonalData?: boolean;
 }): SendBlock | undefined {
   if (input.attachmentBlockedReason !== undefined) {
     return { reason: input.attachmentBlockedReason, loading: false };
+  }
+  if (input.noModelForPersonalData) {
+    return {
+      reason: createTranslationContext(input.locale).t("personalDataNoModel"),
+      loading: false
+    };
   }
   if (input.usageLimitReason !== undefined) {
     return { reason: input.usageLimitReason, loading: false };

@@ -42,6 +42,7 @@ export function AssistantComposer({
   attachmentsEnabled,
   attachmentAccept,
   selectableModels,
+  personalData,
   selectedModelBindingId,
   selectedReasoningEffort,
   showContextIndicator,
@@ -67,6 +68,8 @@ export function AssistantComposer({
   attachmentAccept: string;
   /** The active agent's own model first, then the models users may pick instead. */
   selectableModels: AgentSelectableModel[];
+  /** The conversation holds data from personal connections; blocked models show disabled. */
+  personalData?: boolean;
   selectedModelBindingId: string | undefined;
   selectedReasoningEffort: ReasoningEffort | undefined;
   showContextIndicator: boolean;
@@ -381,6 +384,7 @@ export function AssistantComposer({
             ) : null}
             <ModelPicker
               models={selectableModels}
+              personalData={personalData}
               selectedModelBindingId={selectedModelBindingId}
               reasoningEffort={selectedReasoningEffort}
               disabled={conversationRunning}
