@@ -69,8 +69,44 @@ export const operationAreas: Readonly<Record<string, Readonly<Record<string, unk
   workflows: workflowOperations
 };
 
+/**
+ * The type of {@link apiOperations}, named by area: inferred, the declarations would spell out
+ * every operation's type in one node, which is more than the compiler writes out.
+ */
+export type ApiOperations = typeof scheduledStartOperations &
+  typeof approvalRequestOperations &
+  typeof accountOperations &
+  typeof instanceOperations &
+  typeof roleOperations &
+  typeof collaborationWorkspaceOperations &
+  typeof conversationOperations &
+  typeof conversationFileOperations &
+  typeof governanceOperations &
+  typeof jobOperations &
+  typeof operationRunOperations &
+  typeof pageOperations &
+  typeof appOperations &
+  typeof configAssetOperations &
+  typeof assetOperations &
+  typeof agentOperations &
+  typeof connectionOperations &
+  typeof guardrailOperations &
+  typeof workflowOperations &
+  typeof workflowPrincipalRightsOperations &
+  typeof dataStoreOperations &
+  typeof knowledgeOperations &
+  typeof userOperations &
+  typeof apiAccessOperations &
+  typeof personalApiKeyOperations &
+  typeof feedbackOperations &
+  typeof accessOperations &
+  typeof credentialOperations &
+  typeof platformOperations &
+  typeof referenceOperations &
+  typeof systemOperations;
+
 /** Every product operation of the HTTP API, one file per area. */
-export const apiOperations = {
+export const apiOperations: ApiOperations = {
   ...scheduledStartOperations,
   ...approvalRequestOperations,
   ...accountOperations,
@@ -102,7 +138,7 @@ export const apiOperations = {
   ...platformOperations,
   ...referenceOperations,
   ...systemOperations
-} as const;
+};
 
 export * from "./connections";
 export * from "./guardrails";
