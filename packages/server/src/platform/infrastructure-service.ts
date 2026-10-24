@@ -103,6 +103,8 @@ export class InfrastructureWorkflow {
       clientInstanceId: ClientInstanceId;
       logger: Logger;
       now?: () => Date;
+      /** Shown as it is: release config `modules.connections.personalModelRegions`. */
+      personalConnectionModelRegions?: readonly string[];
     }
   ) {
     this.now = options.now ?? (() => new Date());
@@ -137,7 +139,10 @@ export class InfrastructureWorkflow {
       ...(availableAt !== undefined && availableAt > now
         ? { checkAvailableAt: new Date(availableAt).toISOString() }
         : {}),
-      ...(sandbox ? { codeExecution: codeExecutionOf(sandbox) } : {})
+      ...(sandbox ? { codeExecution: codeExecutionOf(sandbox) } : {}),
+      ...(this.options.personalConnectionModelRegions
+        ? { personalConnectionModelRegions: [...this.options.personalConnectionModelRegions] }
+        : {})
     };
   }
 

@@ -21,7 +21,11 @@ import {
   type BadgeTone
 } from "@work-shape/catalyst-ui";
 import { formatTime } from "../../../shared/locale-format";
-import { useTranslation, type TranslationKey } from "../../../shared/i18n";
+import {
+  useTranslation,
+  type TranslationContextValue,
+  type TranslationKey
+} from "../../../shared/i18n";
 import { OperatorManaged } from "../operator-managed";
 import { useSettingsPage } from "../../../shared/settings-page-context";
 
@@ -131,7 +135,10 @@ export function InfrastructurePage() {
             {infrastructureQuery.error ? (
               <Banner tone="danger">{t("infrastructure.refreshFailed")}</Banner>
             ) : null}
-            <ProviderTable providers={infrastructure.items} />
+            <ProviderTable
+              providers={infrastructure.items}
+              personalConnectionModelRegions={infrastructure.personalConnectionModelRegions}
+            />
           </>
         ) : infrastructureQuery.error ? (
           <Banner tone="danger">{t("infrastructure.loadFailed")}</Banner>
@@ -159,7 +166,13 @@ function useFutureMoment(moment: string | undefined): string | undefined {
 
 const COLUMN_COUNT = 5;
 
-function ProviderTable({ providers }: { providers: readonly InfrastructureProvider[] }) {
+function ProviderTable({
+  providers,
+  personalConnectionModelRegions
+}: {
+  providers: readonly InfrastructureProvider[];
+  personalConnectionModelRegions: readonly string[] | undefined;
+}) {
   const { t } = useTranslation();
   return (
     <Table>
@@ -188,6 +201,9 @@ function ProviderTable({ providers }: { providers: readonly InfrastructureProvid
               {ofClass.map((provider) => (
                 <ProviderRow key={provider.id} provider={provider} />
               ))}
+              {id === "models" && personalConnectionModelRegions ? (
+                <PersonalConnectionRegionsRow regions={personalConnectionModelRegions} />
+              ) : null}
             </Fragment>
           );
         })}
@@ -213,7 +229,7 @@ function ProviderRow({ provider }: { provider: InfrastructureProvider }) {
         {provider.region === undefined ? (
           <span className="text-muted-foreground">{t("infrastructure.regionInside")}</span>
         ) : (
-          t(provider.region === "eu" ? "infrastructure.regionEu" : "infrastructure.regionGlobal")
+          regionLabel(provider.region, t)
         )}
       </TableCell>
       <TableCell>
@@ -245,6 +261,32 @@ function ProviderRow({ provider }: { provider: InfrastructureProvider }) {
       </TableCell>
       <TableCell>
         <Health check={provider.check} />
+      </TableCell>
+    </TableRow>
+  );
+}
+
+/** A region the page has no name for, such as `us`, is shown as the release config states it. */
+function regionLabel(region: string, t: TranslationContextValue["t"]): string {
+  if (region === "eu") return t("infrastructure.regionEu");
+  if (region === "global") return t("infrastructure.regionGlobal");
+  return region;
+}
+
+/**
+ * The regions a model route has to declare for an agent to call a personal Connection. Release
+ * config sets them, like the providers above, so the row only reads.
+ */
+function PersonalConnectionRegionsRow({ regions }: { regions: readonly string[] }) {
+  const { t } = useTranslation();
+  return (
+    <TableRow data-personal-connection-regions={regions.join(" ")}>
+      <TableCell>
+        {t("infrastructure.personalConnections")}
+        <TableCellDetail>{t("infrastructure.personalConnectionsDetail")}</TableCellDetail>
+      </TableCell>
+      <TableCell colSpan={COLUMN_COUNT - 1}>
+        {regions.map((region) => regionLabel(region, t)).join(", ")}
       </TableCell>
     </TableRow>
   );
