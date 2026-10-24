@@ -80,6 +80,8 @@ interface ProbeWorldOptions {
 export interface ProbeWorker {
   /** The process id of the server, which the probe started and alone may kill. */
   readonly pid: number;
+  /** Identifies this process's platform database sessions within the file's database. */
+  readonly applicationName: string;
   /** The resident set of the process now, in bytes. */
   residentBytes(): Promise<number>;
   /** The largest resident set the process had when it was sampled, in bytes. */
@@ -338,6 +340,7 @@ export async function openProbeWorld(
         );
         return {
           pid,
+          applicationName,
           residentBytes: () => residentBytes(pid),
           async memorySamples() {
             const text = await readFile(memoryFile, "utf8").catch(() => "");

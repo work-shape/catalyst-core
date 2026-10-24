@@ -185,9 +185,12 @@ describe("a Workflow Run that inserts into a Data Store and whose worker process
 
   // Fails without the record of the key: the call that was cut off is never made again and
   // the run ends as failed with `operation_interrupted`.
-  it(
-    "replays the committed insert under its key after a kill, and holds each row once",
-    async () => {
+  it.each([
+    { backend: "disconnects naturally", disconnectBeforeObservation: false },
+    { backend: "has already disconnected", disconnectBeforeObservation: true }
+  ])(
+    "replays the committed insert under its key after a kill, holding each row once, when its backend $backend",
+    async ({ disconnectBeforeObservation }) => {
       const { world: t, worker: first } = await openProbeWorld({
         modules: { dataStores: { enabled: true } },
         fileStore: true
@@ -241,23 +244,29 @@ describe("a Workflow Run that inserts into a Data Store and whose worker process
         (await held`select status from operation_runs where id = ${required(locked[0]).id}`)[0]
       ).toEqual({ status: "running" });
       await first.kill();
-      // The process died before its write of the outcome reached the database. The session it
-      // left waits for the test's lock and would still write once the lock is gone, so the
-      // test ends that session as the death of its process does where nothing held it.
-      const [waiting] = await held<{ pids: number[] }[]>`
-        select array_agg(pid) as pids from pg_stat_activity
-        where pg_backend_pid() = any (pg_blocking_pids(pid))`;
-      expect(waiting?.pids).toHaveLength(1);
-      await held`select pg_terminate_backend(pid) from unnest(${required(waiting).pids}::int4[]) as pid`;
-      await waitFor(
-        async () =>
-          (
-            await held`select 1 from pg_stat_activity
-              where pg_backend_pid() = any (pg_blocking_pids(pid))`
-          ).length === 0,
-        "the session of the dead process ended",
-        MINUTE_MS
-      );
+      // Close the killed process's own sessions before releasing the row lock. Looking only
+      // for blocked writes races both a disconnected session and one not yet waiting to write.
+      // Observe outside the held transaction: its statistics snapshot can retain dead pids.
+      const sessions = () =>
+        t.sql(
+          (sql) => sql<{ pid: number }[]>`
+        select pid from pg_stat_activity
+        where datname = current_database() and application_name = ${first.applicationName}`
+        );
+      const disconnect = () =>
+        t.sql(
+          (sql) => sql`
+        select pg_terminate_backend(pid, 5000) from pg_stat_activity
+        where datname = current_database() and application_name = ${first.applicationName}`
+        );
+      if (disconnectBeforeObservation) {
+        // Force the legal ordering that failed in CI. Postgres waits for termination here,
+        // so the next observation deterministically sees no backend, without a test poll.
+        await disconnect();
+        expect(await sessions()).toHaveLength(0);
+      }
+      await disconnect();
+      expect(await sessions()).toHaveLength(0);
       await held`rollback`;
       held.release();
       expect((await insertRuns()).at(-1)).toMatchObject({ status: "running", attempt: 1 });
