@@ -214,6 +214,8 @@
     "workspaces.get": "workspace_role",
     "workspaces.list": "own",
     "workspaces.member_candidates.list": "workspace_role",
-    "workspaces.members.list": "workspace_role"
+    "workspaces.member_usage.list": "workspace_role",
+    "workspaces.members.list": "workspace_role",
+    "workspaces.usage.get": "workspace_role"
   }
 }

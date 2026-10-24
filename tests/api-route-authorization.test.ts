@@ -90,7 +90,8 @@ const acceptedQueries: Partial<Record<ApiOperationName, Record<string, string>>>
   "scope_assignments.list": { holderKind: "user", holderId: "missing" },
   "permissions.effective": { holderKind: "user", holderId: "missing" },
   "permissions.rights": { holderKind: "user", holderId: "missing" },
-  "permissions.check": { holderKind: "user", holderId: "missing", kind: "agent" }
+  "permissions.check": { holderKind: "user", holderId: "missing", kind: "agent" },
+  "usage.breakdown.get": { from: "2026-10-01", to: "2026-10-02", groupBy: "workspace" }
 };
 
 function call(name: ApiOperationName, as: ReturnType<typeof asCaller>, headers = {}) {
