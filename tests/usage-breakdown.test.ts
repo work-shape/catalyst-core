@@ -14,6 +14,7 @@ import {
   type UsageRateCardConfig
 } from "@work-shape/catalyst-core";
 import { ModelUsageGovernance } from "@work-shape/catalyst-usage-governance";
+import { required } from "./support/assertions";
 import { usePostgresSuite } from "./support/postgres-suite";
 import { ensureTestUser } from "./support/test-store";
 
@@ -226,6 +227,8 @@ describe("usage breakdown", () => {
     const days = await breakdown(clientInstanceId, "day");
     const total = days.reduce((sum, day) => sum + cost(day), 0);
     expect(total).toBeGreaterThan(0);
+    const [whole] = await breakdown(clientInstanceId, "all");
+    expect(whole && [cost(whole), whole.modelCallCount]).toEqual([total, 8]);
     for (const dimension of USAGE_BREAKDOWN_DIMENSIONS) {
       const rows = await breakdown(clientInstanceId, dimension);
       expect(rows.reduce((sum, row) => sum + cost(row), 0)).toBe(total);
@@ -267,7 +270,7 @@ describe("usage breakdown", () => {
       ].sort(([a], [b]) => String(a).localeCompare(String(b)))
     );
     const [sharedRow] = await breakdown(clientInstanceId, "day", { workspace: shared });
-    expect(members.reduce((sum, member) => sum + cost(member), 0)).toBe(cost(sharedRow!));
+    expect(members.reduce((sum, member) => sum + cost(member), 0)).toBe(cost(required(sharedRow)));
   });
 
   it("lists each person's own month from their spend counter, without the product's calls", async () => {

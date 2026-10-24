@@ -12,9 +12,11 @@ workspaces.files.list  GET /api/v1/workspaces/:collaborationWorkspaceId/files
 workspaces.get  GET /api/v1/workspaces/:collaborationWorkspaceId
 workspaces.list  GET /api/v1/workspaces
 workspaces.member_candidates.list  GET /api/v1/workspaces/:collaborationWorkspaceId/member-candidates
+workspaces.member_usage.list  GET /api/v1/workspaces/:collaborationWorkspaceId/usage/members
 workspaces.members.add  POST /api/v1/workspaces/:collaborationWorkspaceId/members
 workspaces.members.leave  DELETE /api/v1/workspaces/:collaborationWorkspaceId/members/me
 workspaces.members.list  GET /api/v1/workspaces/:collaborationWorkspaceId/members
 workspaces.members.remove  DELETE /api/v1/workspaces/:collaborationWorkspaceId/members/:userId
 workspaces.members.update_role  PATCH /api/v1/workspaces/:collaborationWorkspaceId/members/:userId
 workspaces.update  PATCH /api/v1/workspaces/:collaborationWorkspaceId
+workspaces.usage.get  GET /api/v1/workspaces/:collaborationWorkspaceId/usage

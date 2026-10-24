@@ -1,6 +1,7 @@
 import { apiOperations } from "@work-shape/catalyst-api-contract";
 import { asUserId } from "@work-shape/catalyst-core";
 import { recordGovernanceAccess } from "../access/governance-actions";
+import { workspaceLabeler } from "../usage/usage-report-service";
 import type { Route } from "../http/route";
 import { deletionState } from "./deletion-answer";
 import { requirePathParam } from "./request-context";
@@ -36,7 +37,8 @@ export function registerSuperadminRoutes(route: Route, options: ChatServerOption
 
     return options.usageGovernance.createSafeSummary({
       clientInstanceId: options.clientInstanceId,
-      webSearchEnabled: options.config.webAccess.enabled && options.config.webAccess.search.enabled
+      webSearchEnabled: options.config.webAccess.enabled && options.config.webAccess.search.enabled,
+      labelWorkspaces: workspaceLabeler(options)
     });
   });
 

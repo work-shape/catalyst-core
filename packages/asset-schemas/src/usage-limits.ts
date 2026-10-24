@@ -27,3 +27,28 @@ export interface ModelUsageRefusal {
    */
   scope: (typeof MODEL_USAGE_LIMIT_SCOPES)[number];
 }
+
+/** The workspace key every Personal Workspace shares in the usage sums (LU-3): one row. */
+export const PERSONAL_WORKSPACES_KEY = "personal";
+
+/** What the Breakdown of the Usage page groups by (LU-3, limits spec 3.3, view 2). */
+export const USAGE_BREAKDOWN_DIMENSIONS = [
+  "workspace",
+  "agent",
+  "app",
+  "workflow",
+  "model",
+  "origin"
+] as const;
+
+/**
+ * Where usage came from (limits spec 3.2): a conversation, an App, a Workflow, Knowledge Base
+ * ingestion, or a call the product made for itself, such as a title or a guardrail check.
+ */
+export const USAGE_ORIGINS = [
+  "conversation",
+  "app",
+  "workflow",
+  "knowledge_base",
+  "system"
+] as const;

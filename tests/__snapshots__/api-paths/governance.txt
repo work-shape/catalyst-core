@@ -1,5 +1,7 @@
 audit_activities.list  GET /api/v1/instance/audit-activities
 audit_events.list  GET /api/v1/instance/audit-events
+usage.breakdown.get  GET /api/v1/instance/usage/breakdown
 usage.get_summary  GET /api/v1/instance/usage
 usage.limits.get  GET /api/v1/instance/usage/limits
 usage.limits.set  PUT /api/v1/instance/usage/limits
+usage.users.list  GET /api/v1/instance/usage/users
