@@ -65,6 +65,8 @@ export const conversations = pgTable(
       "conversations_run_thread_check",
       sql`(${table.kind} = 'chat' and ${table.parentConversationId} is null and ${table.workflowRunId} is null and ${table.collaborationWorkspaceId} is not null and ${table.createdByUserId} is not null and ${table.createdByExternalUserId} is not null) or (${table.kind} = 'run_thread' and ((${table.parentConversationId} is not null and ${table.workflowRunId} is null and ${table.collaborationWorkspaceId} is not null and ${table.createdByUserId} is not null and ${table.createdByExternalUserId} is not null) or (${table.parentConversationId} is null and ${table.workflowRunId} is not null and ${table.collaborationWorkspaceId} is null and ${table.createdByUserId} is null and ${table.createdByExternalUserId} is null)))`
     ),
+    // What the Usage page counts the conversations of a period by (LU-3).
+    index("conversations_client_created_idx").on(table.clientInstanceId, table.createdAt),
     index("conversations_parent_idx")
       .on(table.clientInstanceId, table.parentConversationId)
       .where(sql`${table.parentConversationId} is not null`),

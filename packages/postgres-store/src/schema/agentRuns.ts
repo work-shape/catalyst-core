@@ -106,6 +106,8 @@ export const agentRuns = pgTable(
       table.ownerUserId,
       table.startedAt.desc()
     ),
+    // What the Usage page counts the runs of a period by (LU-3).
+    index("agent_runs_client_started_idx").on(table.clientInstanceId, table.startedAt),
     index("agent_runs_queue_idx").on(table.clientInstanceId, table.status, table.startedAt.asc()),
     index("agent_runs_lease_idx").on(table.clientInstanceId, table.status, table.leaseExpiresAt)
   ]

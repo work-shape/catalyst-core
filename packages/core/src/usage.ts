@@ -416,6 +416,67 @@ export interface RecentModelUsage {
 }
 
 /**
+ * The workspace key every Personal Workspace shares in the usage sums (LU-3). No sum names a
+ * person by their workspace: the Usage page shows them as one row (limits spec 3.4).
+ */
+export const PERSONAL_WORKSPACES_KEY = "personal";
+
+/** What the Breakdown of the Usage page groups by (limits spec 3.3, view 2). */
+export const USAGE_BREAKDOWN_DIMENSIONS = [
+  "workspace",
+  "agent",
+  "app",
+  "workflow",
+  "model",
+  "origin"
+] as const;
+export type UsageBreakdownDimension = (typeof USAGE_BREAKDOWN_DIMENSIONS)[number];
+
+/**
+ * Where usage came from (limits spec 3.2): a conversation, an App, a Workflow, Knowledge Base
+ * ingestion, or a call the product made for itself, such as a title or a guardrail check.
+ */
+export const USAGE_ORIGINS = [
+  "conversation",
+  "app",
+  "workflow",
+  "knowledge_base",
+  "system"
+] as const;
+export type UsageOrigin = (typeof USAGE_ORIGINS)[number];
+
+/** The rows a Breakdown is narrowed to: a value per dimension, the empty string for none. */
+export type UsageBreakdownFilter = Partial<Record<UsageBreakdownDimension, string>>;
+
+/** One row of a Breakdown: the value of its dimension, empty where usage has none. */
+export interface UsageBreakdownGroup extends ModelUsageTotals {
+  key: string;
+}
+
+/** What a period held, counted from the records that exist: no click or view is tracked. */
+export interface UsageActivityCounts {
+  activeUsers: number;
+  conversations: number;
+  agentRuns: number;
+  appActionRuns: number;
+  workflowRuns: number;
+}
+
+/** What one person's own calls held on their spend counter in one month (LU-3, Users view). */
+export interface UserMonthSpend {
+  userId: string;
+  costMicros: number;
+  modelCallCount: number;
+  tokens: number;
+}
+
+/** What one member used in a shared workspace in one month. */
+export interface WorkspaceMemberUsage extends ModelUsageTotals {
+  /** Absent for usage whose person is no longer recorded. */
+  userId?: string;
+}
+
+/**
  * Where a backfill call ended: the creation time, as the database writes it, and the id of the
  * last event it read. Events are stored in the order of their creation time, so a batch in
  * that order reads and writes neighbouring pages.
@@ -492,6 +553,43 @@ export interface ModelUsageEventStore extends UsageSpendLimitStore {
     clientInstanceId: ClientInstanceId;
     from: ISODateString;
   }): Promise<RecentModelUsage>;
+  /**
+   * The daily sums of the UTC days from `from` up to `to` (`YYYY-MM-DD`, `to` excluded), narrowed
+   * by `filter` and grouped by one dimension or by day. Reads no usage event.
+   */
+  summarizeModelUsageBreakdown(input: {
+    clientInstanceId: ClientInstanceId;
+    from: string;
+    to: string;
+    groupBy: UsageBreakdownDimension | "day";
+    filter?: UsageBreakdownFilter;
+  }): Promise<UsageBreakdownGroup[]>;
+  /**
+   * What each person used in one shared workspace from `from` up to `to`, summed from its usage
+   * events: one workspace and a bounded period, by `model_usage_events_workspace_created_idx`.
+   */
+  summarizeWorkspaceMemberUsage(input: {
+    clientInstanceId: ClientInstanceId;
+    collaborationWorkspaceId: CollaborationWorkspaceId;
+    from: ISODateString;
+    to: ISODateString;
+  }): Promise<WorkspaceMemberUsage[]>;
+  /**
+   * The people active and the conversations, Agent Runs, App action runs and Workflow Runs
+   * started from `from` up to `to`; of one shared workspace, from its usage events and its
+   * Operation Runs, where one is named.
+   */
+  countUsageActivity(input: {
+    clientInstanceId: ClientInstanceId;
+    from: ISODateString;
+    to: ISODateString;
+    collaborationWorkspaceId?: CollaborationWorkspaceId;
+  }): Promise<UsageActivityCounts>;
+  /** What each person's own calls hold on their spend counter of one UTC month (`YYYY-MM`). */
+  listUserMonthSpend(input: {
+    clientInstanceId: ClientInstanceId;
+    month: string;
+  }): Promise<UserMonthSpend[]>;
   /**
    * Compares the counters of the current day and month and the daily sums with the usage
    * events, and corrects what differs, such as what a process of the previous release wrote.

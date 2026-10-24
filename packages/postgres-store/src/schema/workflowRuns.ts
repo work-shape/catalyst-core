@@ -139,6 +139,8 @@ export const workflowRuns = pgTable(
     ),
     // A constraint and not an index, so that the table has it before a row refers to it.
     unique("workflow_runs_client_id_key").on(table.clientInstanceId, table.id),
+    // What the Usage page counts the runs of a period by (LU-3).
+    index("workflow_runs_client_created_idx").on(table.clientInstanceId, table.createdAt),
     // The runs of one Workflow, newest first. Ascending and read backwards: see
     // `operation_runs_list_idx`.
     index("workflow_runs_workflow_list_idx").on(
