@@ -550,9 +550,17 @@ describe("Workflow notices and counts-only mail digests", () => {
       mailsQueued: 3,
       mailsUnsent: 1
     });
-    // The provider's failure is logged without what it said, which here held the title.
+    // Only the executor's metadata is logged; the provider's text held the notice title.
     expect(f.logs.join("\n")).not.toContain("Muster");
-    expect(f.logs).toHaveLength(0);
+    expect(f.logs.map((line) => JSON.parse(line))).toEqual([
+      [
+        expect.objectContaining({
+          startedCount: 1,
+          decisions: [expect.objectContaining({ kind: "notice.deliver_mail", reason: "claimed" })]
+        }),
+        "Job worker pass ended"
+      ]
+    ]);
   });
 
   it("refuses the whole notice when an id names no user or Shared Workspace, naming the id", async () => {
