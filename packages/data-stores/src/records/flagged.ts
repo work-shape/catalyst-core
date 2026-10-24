@@ -282,7 +282,8 @@ export async function countReadableFlaggedFields(
   const hidden: { knowledgeBaseId: string; documentId: string }[] = [];
   for (const { knowledge_base_id: knowledgeBaseId } of cited) {
     const knowledgeBase = await citableKnowledgeBase(runtime, access, knowledgeBaseId);
-    if (!knowledgeBase) continue;
+    // One not ready opens no document: none of its candidates counts.
+    if (!knowledgeBase || knowledgeBase.record.status !== "ready") continue;
     usable.push(knowledgeBaseId);
     // The documents the reader cannot open, page by page: few, beside the many still there.
     let after: string | null = null;
