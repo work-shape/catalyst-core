@@ -17,6 +17,8 @@ export const workspace = defineTranslations({
     runCommandNotTaken:
       "The reply was stopped because code could not be run. Code execution is unavailable right now. Try again later or ask an administrator.",
     runInterrupted: "The reply was interrupted. Please send your message again.",
+    runRateLimited:
+      "The model is overloaded right now, so the reply was interrupted. It does not continue on its own. The steps already done are kept: in about a minute, write “continue” and the agent picks up where it left off.",
     runModelNotPriced:
       "This model cannot be used at the moment. Choose another model or ask an administrator.",
     runModelNotPricedOperator:
@@ -73,6 +75,8 @@ export const workspace = defineTranslations({
     runCommandNotTaken:
       "Die Antwort wurde gestoppt, weil Code gerade nicht ausgeführt werden kann. Versuche es später erneut oder wende dich an einen Administrator.",
     runInterrupted: "Die Antwort wurde unterbrochen. Bitte sende deine Nachricht erneut.",
+    runRateLimited:
+      "Das Modell ist gerade überlastet, deshalb wurde die Antwort unterbrochen. Sie geht nicht von selbst weiter. Die erledigten Schritte bleiben erhalten: Schreib in etwa einer Minute „weiter“, dann macht der Agent dort weiter, wo er aufgehört hat.",
     runModelNotPriced:
       "Dieses Modell kann gerade nicht verwendet werden. Wähle ein anderes Modell oder wende dich an einen Administrator.",
     runModelNotPricedOperator:
