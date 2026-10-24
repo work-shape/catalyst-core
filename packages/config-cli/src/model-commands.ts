@@ -314,6 +314,13 @@ async function addProvider(
       );
     }
   }
+  // An environment file that sets this entry itself would take the new keys into its own.
+  const [clash] = await overlaysReplacing(target.path, [["infrastructure", "models", id]]);
+  if (clash !== undefined) {
+    throw new ReleaseConfigError(
+      `${shownPath(options.cwd, clash.file)} already sets a model provider '${id}', and the entry written into ${shown} would merge into it. Choose another --id. Nothing was written.`
+    );
+  }
   const additions: ReleaseConfigAddition[] = [
     { path: ["infrastructure", "models"], key: id, value: entry },
     { path: BINDINGS, item: binding },
@@ -402,9 +409,10 @@ async function checkProvider(id: string, json: boolean, options: Options): Promi
     const known = answer.items
       .filter((candidate) => candidate.class === "models")
       .map((candidate) => candidate.name);
+    // A word the instance does not know may be a pasted key: it is not repeated.
     writeError(
       options,
-      `The instance has no model provider '${id}'${known.length > 0 ? ` (it has ${known.join(", ")})` : ""}. Deploy the release config that adds it, then check again.`
+      `The instance has no model provider by that id${known.length > 0 ? ` (it has ${known.join(", ")})` : ""}. Deploy the release config that adds it, then check again.`
     );
     return 1;
   }
