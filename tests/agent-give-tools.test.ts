@@ -10,7 +10,8 @@ import {
   setupAccessInstance,
   type AccessInstance
 } from "./support/access-instance";
-import { guardedEvents } from "./support/guardrails";
+import { guardedEvents, judge } from "./support/guardrails";
+import { getTestJobs } from "./support/test-instance";
 
 // `agents.give_tools` (ruling of 2026-10-24): a person who may change and publish an instance's
 // own agent gives it tools as one new live revision of what is live plus the tools. A pending
@@ -31,12 +32,31 @@ afterEach(async () => {
   await Promise.all(instances.splice(0).map((t) => t.instance.close()));
 });
 
-async function setup(guardrails: Record<string, unknown> = {}) {
+async function setup(
+  guardrails: Record<string, unknown> = {},
+  /** What a judge answers, call after call: whether the content breaks its rule. */
+  verdicts: boolean[] = []
+) {
   const t = await setupAccessInstance({
     furtherToolNames: ["read_skill"],
     ...(Object.keys(guardrails).length > 0
       ? {
-          server: (stores) => ({ operations: { events: guardedEvents(stores, guardrails).events } })
+          server: (stores) => {
+            const guarded = guardedEvents(stores, guardrails);
+            let asked = 0;
+            guarded.complete.mockImplementation(async () => ({
+              text: JSON.stringify({ violates: verdicts[asked++] ?? false, reason: "Look." }),
+              toolCalls: [],
+              usage: {
+                inputTokens: 1,
+                outputTokens: 1,
+                totalTokens: 2,
+                source: "provider_reported",
+                webSearchCallCount: 0
+              }
+            }));
+            return { operations: { events: guarded.events } };
+          }
         }
       : {})
   });
@@ -125,9 +145,12 @@ describe("giving tools to an agent", () => {
       type: "config_asset.updated",
       page: { limit: 100 }
     });
-    expect(events.filter((event) => event.metadata?.name === AGENT).at(-1)?.metadata).toMatchObject(
-      { givenTools: ["second.tool"] }
-    );
+    const recorded = events.filter((event) => event.metadata?.name === AGENT);
+    expect(
+      recorded.find((event) => event.metadata?.revision === before.revision + 1)?.metadata
+    ).toEqual(expect.objectContaining({ givenTools: ["second.tool"] }));
+    // The names of the tools, and nothing else of them, on the give's event alone.
+    expect(recorded.filter((event) => event.metadata?.givenTools !== undefined)).toHaveLength(1);
 
     // And it is still publishable, as it stands.
     const pending = await draft();
@@ -244,19 +267,26 @@ describe("giving tools to an agent", () => {
       action: "agent.publish"
     });
 
-    await t.grant(t.kai.id, "agent.publish", onAgent);
-    await t.grant(t.kai.id, "agent.publish", onAgent, "deny");
-    expect((await give(t.kai.id, ["second.tool"])).statusCode).toBe(403);
-
     await t.grant(t.lena.id, "agent.publish", onAgent);
     const publishOnly = await give(t.lena.id, ["second.tool"]);
     expect(publishOnly.statusCode, publishOnly.body).toBe(403);
     expect(errorSchema.parse(publishOnly.json()).error.details).toMatchObject({
       action: "agent.write"
     });
-    await t.grant(t.lena.id, "agent.write", onAgent);
-    await t.grant(t.lena.id, "agent.write", onAgent, "deny");
-    expect((await give(t.lena.id, ["second.tool"])).statusCode).toBe(403);
+
+    // An administrator holds both on the whole instance; a deny of either on this agent wins.
+    for (const denied of ["agent.write", "agent.publish"]) {
+      const administrator = await t.instance.stores.users.createUser({
+        clientInstanceId,
+        displayLabel: `Administrator without ${denied}`,
+        roles: ["user", "admin"],
+        permissions: []
+      });
+      await t.grant(administrator.id, denied, onAgent, "deny");
+      const refused = await give(administrator.id, ["second.tool"]);
+      expect(refused.statusCode, refused.body).toBe(403);
+      expect(errorSchema.parse(refused.json()).error.details).toMatchObject({ action: denied });
+    }
     expect(await live()).toEqual(before);
 
     // Both rights and no deny: the give goes live.
@@ -333,5 +363,60 @@ describe("giving tools to an agent", () => {
     expect(blocked.statusCode, blocked.body).toBe(403);
     expect(await live()).toEqual(before);
     expect(await draft()).toEqual(pending);
+  });
+
+  it("waits for an approval as a publish does, and gives what was approved over the agent it was asked about", async () => {
+    const { t, live, draft, releaseDraft, give } = await setup(
+      { held: judge("agent.before_publish", "require_approval") },
+      [true, false, true]
+    );
+    await releaseDraft("Released.");
+    const before = await live();
+    const pending = await draft();
+    const held = await give(t.admin.id, ["second.tool"]);
+    expect(held.statusCode, held.body).toBe(202);
+    // Nothing is changed while it waits: neither the live agent nor the draft.
+    expect(await live()).toEqual(before);
+    expect(await draft()).toEqual(pending);
+    const { approvalRequestId } = z.object({ approvalRequestId: z.string() }).parse(held.json());
+    await t.expectOk(t.root.id, "approval_requests.decide", {
+      params: { requestId: approvalRequestId },
+      payload: { decision: "approve" }
+    });
+    await getTestJobs(t.instance).runDue();
+    expect(await live()).toMatchObject({
+      revision: before.revision + 1,
+      config: { instructions: "Help.", toolNames: ["known.tool", "second.tool"] }
+    });
+    expect(await draft()).toMatchObject({
+      baseRevision: before.revision + 1,
+      author: { release: true },
+      config: { instructions: "Released.", toolNames: ["known.tool", "second.tool"] }
+    });
+
+    // A live change while a give waits: the approved give changes nothing.
+    const waiting = await give(t.admin.id, ["read_skill"]);
+    expect(waiting.statusCode, waiting.body).toBe(202);
+    const request = z.object({ approvalRequestId: z.string() }).parse(waiting.json());
+    const now = await live();
+    await t.stores.configAssets.applyConfigAssetMutations({
+      clientInstanceId,
+      baseRevisions: { [`agent:${AGENT}`]: now.revision },
+      mutations: [
+        {
+          type: "upsert",
+          kind: "agent",
+          name: AGENT,
+          config: { ...now.config, instructions: "Changed meanwhile." }
+        }
+      ]
+    });
+    const changed = await live();
+    await t.expectOk(t.root.id, "approval_requests.decide", {
+      params: { requestId: request.approvalRequestId },
+      payload: { decision: "approve" }
+    });
+    await getTestJobs(t.instance).runDue();
+    expect(await live()).toEqual(changed);
   });
 });
