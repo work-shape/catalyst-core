@@ -352,6 +352,7 @@ Every asset is read and written at one address, `/api/v1/assets/{kind}/{name}`, 
 | `assets.sync_check`       | `POST /api/v1/assets/sync/check`                  | per item             |
 | `agents.draft.get`        | `GET /api/v1/agents/{name}/draft`                 | `agent.write`        |
 | `agents.draft.discard`    | `POST /api/v1/agents/{name}/draft/discard`        | `agent.write`        |
+| `agents.give_tools`       | `POST /api/v1/agents/{name}/give-tools`           | `agent.write` and `agent.publish` |
 | `platform.context.get`    | `GET /api/v1/context`                             | any signed-in caller |
 | `platform.references.get` | `GET /api/v1/context/references`                  | a right on any kind  |
 

@@ -30,6 +30,7 @@ import { readFileSetFile } from "../pages/page-file-sets";
 import { readDefinitionName } from "../asset-kinds/shared";
 import { scopeOf } from "../assets/asset-target";
 import { firstVersionOffering, type AgentPublishChecked } from "../approvals/agent-publish-review";
+import { withGivenTools, type AgentGiveChecked } from "../assets/agent-drafts";
 import type { AssetWorkflowOptions } from "../types";
 
 // The before-events of the asset operations: `asset.before_write` for each asset a call saves
@@ -175,6 +176,53 @@ export function agentPublishChecked(
   return checked && typeof approved === "boolean"
     ? { ...checked, approvedFirstVersion: approved }
     : checked;
+}
+
+const checkedAgentGives = new WeakMap<OperationBeforeEvent, AgentGiveChecked>();
+
+/** What the guardrails of `agents.give_tools` read, from the events they were last asked. */
+export function agentGiveChecked(
+  events: readonly OperationBeforeEvent[] | undefined
+): AgentGiveChecked | undefined {
+  return events?.flatMap((event) => checkedAgentGives.get(event) ?? []).at(0);
+}
+
+/**
+ * `asset.before_write` and `agent.before_publish` of `agents.give_tools`, with the text of
+ * what it makes live: the published agent at the revision the caller read, with the tools
+ * added. A live agent that moved since is refused here, never checked as something else.
+ */
+export async function giveToolsEvents(
+  options: RevisionOptions,
+  input: { name: string; toolNames: readonly string[]; expectedLiveRevision: number }
+): Promise<OperationBeforeEvent[]> {
+  const asset = await options.configAssets.store.getConfigAsset({
+    clientInstanceId: options.clientInstanceId,
+    kind: "agent",
+    name: input.name
+  });
+  if (
+    !asset ||
+    asset.status !== "active" ||
+    asset.config === null ||
+    asset.scope.kind !== "instance"
+  )
+    throw new AppError("NOT_FOUND", `Config agent '${input.name}' was not found`);
+  if (asset.revision !== input.expectedLiveRevision)
+    throw new AppError(
+      "REVISION_CONFLICT",
+      "The published agent changed. Read it again before giving it tools",
+      { reason: "live_changed", currentRevision: asset.revision }
+    );
+  const config = withGivenTools(asset.config, input.toolNames);
+  const write = assetWriteEvent({ kind: "agent", name: input.name, config });
+  const publish: OperationBeforeEvent = {
+    ...write,
+    name: "agent.before_publish",
+    subject: { ...write.subject, id: asset.id }
+  };
+  checkedAgentGives.set(publish, { liveRevision: asset.revision });
+  return [write, publish];
 }
 
 /** The publish event of each kind that has one. */

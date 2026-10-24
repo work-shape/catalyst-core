@@ -655,17 +655,15 @@ describe("The done step of a new REST API", () => {
           { name: "assistant", title: "Assistant" },
           { name: "reporter", title: "Reporter" }
         ],
-        readAgent: async () => ({ revision: 3, config: { toolNames: ["show_view"] } }),
-        readDraft: async () => null,
-        saveDraft: async (name, config) => {
-          writes.push(`save ${name} ${JSON.stringify(config.toolNames)}`);
-          return 4;
-        },
-        publish: async (name, revision) => {
-          writes.push(`publish ${name} ${revision}`);
+        readAgent: async () => ({
+          id: "agent-assistant",
+          revision: 3,
+          config: { toolNames: ["show_view"] }
+        }),
+        give: async (name, input) => {
+          writes.push(`give ${name} ${JSON.stringify(input)}`);
           return "waits";
-        },
-        discard: async () => undefined
+        }
       }
     };
     const source: ConnectionSource = {
@@ -761,8 +759,7 @@ describe("The done step of a new REST API", () => {
       { timeout: CONDITION_WAIT_MS }
     );
     expect(writes).toEqual([
-      'save assistant ["show_view","connection.ledger.list_invoices"]',
-      "publish assistant 4"
+      'give assistant {"agentId":"agent-assistant","toolNames":["connection.ledger.list_invoices"],"expectedLiveRevision":3}'
     ]);
     expect(body.textContent).toContain(
       "The change to Assistant waits for an approval in the Inbox."

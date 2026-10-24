@@ -72,7 +72,15 @@ export async function readAsset(
 }
 
 const agentDraftSchema = z.object({
-  draft: z.object({ revision: z.number(), config: z.record(z.string(), z.unknown()) }).nullable()
+  draft: z
+    .object({
+      revision: z.number(),
+      baseRevision: z.number(),
+      stale: z.boolean(),
+      config: z.record(z.string(), z.unknown()),
+      author: z.object({ displayLabel: z.string().optional() })
+    })
+    .nullable()
 });
 
 /** The shared draft, read explicitly by browser tests of the agent save contract. */

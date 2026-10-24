@@ -7,8 +7,10 @@ import {
 import { ASSET_PUT_BODY_LIMIT_BYTES } from "../assets/asset-files";
 import {
   AGENT_PUBLISH_HELD_KEY,
+  agentGiveChecked,
   agentPublishChecked,
   assetWriteEvent,
+  giveToolsEvents,
   revertWriteEvents,
   syncWriteEvents
 } from "../guardrails/asset-guardrail-events";
@@ -252,6 +254,19 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
       await tries.settled(context, input, "discarded");
       return result;
     }
+  });
+  // Tools for the instance's own agent, live at once (T8 ruling, 2026-10-24): the rights of a
+  // change and of a publish, the guardrails of both on what goes live, and the policy's wait.
+  route.operation(apiOperations["agents.give_tools"], {
+    authorize: (input, { actor, access }) =>
+      workflow.agentDrafts.authorizeGiveTools({ actor, access }, input),
+    resource: draftResource,
+    policyTargets: (input) => workflow.policyTargets({ name: input.name, kind: "agent" }),
+    changeClass: "reversible",
+    module: ASSET_WRITE_MODULE,
+    beforeEvents: (input) => giveToolsEvents(options, input),
+    execute: (input, context) =>
+      workflow.agentDrafts.giveTools(context, input, agentGiveChecked(context.beforeEvents))
   });
   route.operation(apiOperations["agents.try.open"], {
     authorize: (input, { actor, access }) => tries.authorize(actor, access, input),

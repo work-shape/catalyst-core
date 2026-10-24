@@ -393,6 +393,11 @@ export type ConfigAssetMutation =
       agentPublish?: number;
       /** Approved skill attachment/detachment is carried into a pending draft. */
       agentSkillChange?: { name: string; attached: boolean };
+      /**
+       * Tools given to the live agent (`agents.give_tools`): the write is the live revision, and
+       * a pending draft keeps its content and author, gains these tools and moves onto it.
+       */
+      agentToolsGiven?: readonly string[];
       /** The file set of the revision, stored before the write, for a `files` kind. */
       fileSetId?: FileSetId;
       /** The commit of the revision and its bundle, for an asset whose content is a repository. */

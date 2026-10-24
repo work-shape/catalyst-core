@@ -25,26 +25,16 @@ export const connectionGive = defineTranslations({
     "connectionGive.question": "Give {agent} {count} tools of {connection}?",
     "connectionGive.questionOne": "Give {agent} 1 tool of {connection}?",
     "connectionGive.publishes":
-      "This publishes {agent} with these tools added. Every chat with {agent} can use them from its next message.",
-    "connectionGive.ownDraftNotice":
-      "You have an unpublished draft of {agent}. The tools are added to it.",
-    "connectionGive.publishDraft": "Publish the whole draft now",
-    "connectionGive.publishDraftHint": "Your other changes in the draft are published with them.",
-    "connectionGive.confirmPublish": "Give and publish",
-    "connectionGive.confirmDraft": "Add to draft",
-    "connectionGive.otherDraft":
-      "{author} has an unpublished draft of {agent}. Nothing was changed: the draft is theirs to publish or discard first.",
-    "connectionGive.otherDraftNoName":
-      "Someone else has an unpublished draft of {agent}. Nothing was changed: the draft is theirs to publish or discard first.",
-    "connectionGive.staleDraft":
-      "Your unpublished draft of {agent} is based on an older published version. Nothing was changed: open {agent} to bring the draft up to date or discard it first.",
+      "{agent} gets these tools live at once. Every chat with {agent} can use them from its next message.",
+    "connectionGive.draftKeeps":
+      "{agent} has an unpublished draft. It stays unpublished as it is and gets these tools too.",
+    "connectionGive.confirmPublish": "Give tools",
     "connectionGive.openAgent": "Open {agent}",
     "connectionGive.held": "{agent} has these tools already.",
-    "connectionGive.heldDraft": "Your draft of {agent} has these tools already.",
     "connectionGive.published": "{agent} can use the tools of {connection} from the next message.",
-    "connectionGive.drafted":
-      "The tools are in your draft of {agent}. They work once you publish the draft.",
     "connectionGive.waits": "The change to {agent} waits for an approval in the Inbox.",
+    "connectionGive.changed":
+      "{agent} was changed in the meantime. Nothing was given: go back and try again.",
     "connectionGive.failed": "The tools could not be given. Try again.",
     "connectionGive.done": "Done",
     "connectionGive.cardTitle": "Tools of {connection} for an agent",
@@ -82,28 +72,17 @@ export const connectionGive = defineTranslations({
     "connectionGive.question": "{agent} {count} Tools von {connection} geben?",
     "connectionGive.questionOne": "{agent} 1 Tool von {connection} geben?",
     "connectionGive.publishes":
-      "Damit wird {agent} mit diesen Tools veröffentlicht. Jeder Chat mit {agent} kann sie ab der nächsten Nachricht nutzen.",
-    "connectionGive.ownDraftNotice":
-      "Du hast einen unveröffentlichten Entwurf von {agent}. Die Tools kommen in diesen Entwurf.",
-    "connectionGive.publishDraft": "Den ganzen Entwurf jetzt veröffentlichen",
-    "connectionGive.publishDraftHint":
-      "Deine anderen Änderungen im Entwurf werden mit veröffentlicht.",
-    "connectionGive.confirmPublish": "Geben und veröffentlichen",
-    "connectionGive.confirmDraft": "Zum Entwurf hinzufügen",
-    "connectionGive.otherDraft":
-      "{author} hat einen unveröffentlichten Entwurf von {agent}. Es wurde nichts geändert: Den Entwurf veröffentlicht oder verwirft zuerst {author}.",
-    "connectionGive.otherDraftNoName":
-      "Jemand anderes hat einen unveröffentlichten Entwurf von {agent}. Es wurde nichts geändert: Der Entwurf muss zuerst veröffentlicht oder verworfen werden.",
-    "connectionGive.staleDraft":
-      "Dein unveröffentlichter Entwurf von {agent} beruht auf einer älteren veröffentlichten Version. Es wurde nichts geändert: Öffne {agent} und bring den Entwurf zuerst auf den neuen Stand oder verwirf ihn.",
+      "{agent} bekommt diese Tools sofort live. Jeder Chat mit {agent} kann sie ab der nächsten Nachricht nutzen.",
+    "connectionGive.draftKeeps":
+      "{agent} hat einen unveröffentlichten Entwurf. Er bleibt unveröffentlicht, wie er ist, und bekommt diese Tools auch.",
+    "connectionGive.confirmPublish": "Tools geben",
     "connectionGive.openAgent": "{agent} öffnen",
     "connectionGive.held": "{agent} hat diese Tools schon.",
-    "connectionGive.heldDraft": "Dein Entwurf von {agent} hat diese Tools schon.",
     "connectionGive.published":
       "{agent} kann die Tools von {connection} ab der nächsten Nachricht nutzen.",
-    "connectionGive.drafted":
-      "Die Tools sind in deinem Entwurf von {agent}. Sie wirken, sobald du den Entwurf veröffentlichst.",
     "connectionGive.waits": "Die Änderung an {agent} wartet auf eine Freigabe im Eingang.",
+    "connectionGive.changed":
+      "{agent} wurde inzwischen geändert. Es wurde nichts vergeben: Geh zurück und versuch es noch einmal.",
     "connectionGive.failed": "Die Tools konnten nicht vergeben werden. Versuch es noch einmal.",
     "connectionGive.done": "Fertig",
     "connectionGive.cardTitle": "Tools von {connection} für einen Agenten",

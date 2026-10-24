@@ -172,7 +172,7 @@ test("the agent page saves a draft twice, publishes it, and discards the next on
     await expect(badgeOf(page)).toHaveText("Draft version 1");
     // The banner names the author and the time; the head's badge only the revision.
     await expect(page.locator('[data-agent-draft="pending"]')).toContainText(
-      "Draft version 1, saved by E2E Superadmin on "
+      "E2E Superadmin saved draft version 1 on "
     );
     await expect(instructionsOf(page)).toHaveValue(
       "Check every contract for a signature and name the clause."
@@ -263,7 +263,7 @@ test("a writer without agent.publish, a draft written meanwhile, a reader, and a
     await writerPage.goto(`/build/agents/${name}`);
     await expect(badgeOf(writerPage)).toHaveText("Draft version 1");
     await expect(writerPage.locator('[data-agent-draft="pending"]')).toContainText(
-      "saved by E2E Superadmin on "
+      "E2E Superadmin saved draft version 1 on "
     );
     await expect(instructionsOf(writerPage)).toHaveValue("Check every contract twice.");
     const publish = writerPage.locator("[data-agent-publish]");
@@ -296,7 +296,7 @@ test("a writer without agent.publish, a draft written meanwhile, a reader, and a
     await saveDraftOf(writerPage).click();
     await expect(badgeOf(writerPage)).toHaveText("Draft version 3");
     await expect(writerPage.locator('[data-agent-draft="pending"]')).toContainText(
-      "saved by E2E Zz Agent Draft Writer on "
+      "E2E Zz Agent Draft Writer saved draft version 3 on "
     );
     expect(await draftRevision(page, name)).toBe(3);
 

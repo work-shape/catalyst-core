@@ -83,7 +83,8 @@ export function AgentDraftNotice({
       >
         {latest === null
           ? t("agentDraft.gone")
-          : t("agentDraft.behind", {
+          : // German closes the team's relative clause with a comma: a sentence of its own.
+            t(latest.author.release ? "agentDraft.behindRelease" : "agentDraft.behind", {
               author: draftAuthorLabel(latest.author, t),
               revision: latest.revision,
               time: formatMomentShort(latest.updatedAt, locale)
@@ -104,7 +105,7 @@ export function AgentDraftNotice({
             {/* The head's badge gives way to the name where the row is full: the banner names
                 the author and the time too. */}
             <p>
-              {t("agentDraft.pending", {
+              {t(draft.author.release ? "agentDraft.pendingRelease" : "agentDraft.pending", {
                 revision: draft.revision,
                 name,
                 author: draftAuthorLabel(draft.author, t),

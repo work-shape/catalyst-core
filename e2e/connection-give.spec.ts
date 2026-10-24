@@ -7,6 +7,7 @@ import { sendToolCall } from "./page-surface-fixtures";
 import {
   assetBaseRevision,
   assetRevision,
+  publishAgentDraft,
   readAgentDraft,
   readAsset,
   requestWithOrigin
@@ -15,10 +16,10 @@ import { expect, test } from "./test";
 
 // "Einem Agenten geben" (CS-5d) in the conversation: the agent offers a card for a Connection's
 // approved tools; the person picks the agent, sees it named with the tools, and confirms, which
-// publishes the agent with them as one revision. The agent of the same conversation calls the
-// new tool from the next message. An agent with somebody else's draft is refused with their
-// name, and nothing is written. Fails without the change: the agent holds no offer tool, and
-// no step gives a Connection's tools to an agent but its page.
+// gives the agent the tools as one live revision (`agents.give_tools`). The agent of the same
+// conversation calls the new tool from the next message. An agent with somebody else's draft
+// gets the tools live too, and the draft keeps its author and content, gains the tools and can
+// still be published. Fails without the change: a draft by somebody else refuses the give.
 
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
 const superadmin = { email: "e2e-superadmin@example.test", password: "e2e-superadmin-password" };
@@ -125,7 +126,8 @@ test("the agent's offer gives a Connection's tools to the agent, which calls the
     const ask = dialog.locator(`[data-connection-give-ask="${name}"]`);
     await expect(ask).toContainText(`Give ${displayName} 1 tool of Sample business?`);
     await expect(ask.locator(`[data-connection-give-tool="${echo}"]`)).toBeVisible();
-    await expect(ask).toContainText(`This publishes ${displayName} with these tools added.`);
+    await expect(ask).toContainText(`${displayName} gets these tools live at once.`);
+    await expect(ask.locator("[data-connection-give-draft]")).toHaveCount(0);
     expect(await toolNamesOf(page, name)).toEqual([OFFER_TOOL]);
 
     // The confirmation publishes the agent with the tool, as one revision and no draft.
@@ -152,17 +154,14 @@ test("the agent's offer gives a Connection's tools to the agent, which calls the
     expect(page.url()).toBe(conversation);
     await expect(page.getByText(`given ${tag}`).last()).toBeVisible();
 
-    // Somebody else's draft: the give is refused with their name and writes nothing.
+    // Somebody else's draft: the give still goes live, and the draft stays theirs.
     await signIn(adminPage, admin);
     const live = await assetRevision(adminPage, agentPath(name));
     const drafted = await requestWithOrigin(adminPage, "put", agentPath(name), {
       data: {
         expectedRevision: live,
         expectedDraftRevision: null,
-        config: {
-          ...agentConfig(name, displayName, "A draft of the admin."),
-          toolNames: [OFFER_TOOL, echo]
-        }
+        config: agentConfig(name, displayName, "A draft of the admin.")
       }
     });
     expect(drafted.ok(), await drafted.text()).toBe(true);
@@ -175,6 +174,7 @@ test("the agent's offer gives a Connection's tools to the agent, which calls the
       name: `e2e_other_${tag}`,
       displayName: "Other business"
     };
+    const otherEcho = `connection.${other.name}.echo`;
     await plantConnection(other);
     try {
       await sendToolCall(page, OFFER_TOOL, { connection: other.name, agent: name });
@@ -185,23 +185,34 @@ test("the agent's offer gives a Connection's tools to the agent, which calls the
       await expect(dialog.locator(`[data-connection-give-agent="${name}"]`)).toBeVisible();
       await expect(dialog.getByRole("radio", { name: displayName })).toBeChecked();
       await dialog.locator("[data-connection-give-next]").click();
-      await expect(dialog.locator("[data-connection-give-other-draft]")).toContainText(
-        `E2E Admin has an unpublished draft of ${displayName}. Nothing was changed`
+      const otherAsk = dialog.locator(`[data-connection-give-ask="${name}"]`);
+      await expect(otherAsk).toContainText(`Give ${displayName} 1 tool of Other business?`);
+      await expect(otherAsk.locator("[data-connection-give-draft]")).toContainText(
+        `${displayName} has an unpublished draft. It stays unpublished as it is and gets these tools too.`
       );
-      await expect(dialog.locator("[data-connection-give-open-agent]")).toBeVisible();
-      await expect(dialog.locator("[data-connection-give-confirm]")).toHaveCount(0);
-      expect(await assetRevision(page, agentPath(name))).toBe(live);
-      expect((await readAgentDraft(adminPage, agentPath(name)))?.revision).toBe(
-        adminDraft?.revision
-      );
-      expect((await readAgentDraft(adminPage, agentPath(name)))?.config.toolNames).toEqual([
-        OFFER_TOOL,
-        echo
-      ]);
+      await dialog.locator("[data-connection-give-confirm]").click();
+      await expect(dialog.locator('[data-connection-give-outcome="published"]')).toBeVisible();
 
-      // Open leads to the agent's page in Studio, where the draft is.
-      await dialog.locator("[data-connection-give-open-agent]").click();
-      await expect(page).toHaveURL(new RegExp(`/build/agents/${name}(?:\\?|$)`, "u"));
+      // Live: what was live plus the tool, as one revision.
+      expect(await assetRevision(page, agentPath(name))).toBe(live + 1);
+      expect(await toolNamesOf(page, name)).toEqual([OFFER_TOOL, echo, otherEcho]);
+      const liveAsset = await readAsset(page, agentPath(name));
+      expect(liveAsset?.config.instructions).toBe("Help with the sample business.");
+
+      // The draft keeps its author and content, gains the tool, and is based on the new live.
+      const after = await readAgentDraft(adminPage, agentPath(name));
+      expect(after?.author.displayLabel).toBe(adminDraft?.author.displayLabel);
+      expect(after?.config.instructions).toBe("A draft of the admin.");
+      expect(after?.config.toolNames).toEqual([OFFER_TOOL, otherEcho]);
+      expect(after?.baseRevision).toBe(live + 1);
+      expect(after?.stale).toBe(false);
+      await dialog.locator("[data-connection-give-done]").click();
+      await expect(page.getByRole("dialog")).toHaveCount(0);
+
+      // And it can still be published by its author.
+      await publishAgentDraft(adminPage, agentPath(name));
+      expect(await readAgentDraft(adminPage, agentPath(name))).toBeNull();
+      expect(await toolNamesOf(page, name)).toEqual([OFFER_TOOL, otherEcho]);
     } finally {
       await removeConnection(other.id);
     }
