@@ -18,6 +18,8 @@ import {
   LoadMore,
   Page,
   PageHeader,
+  SegmentedControl,
+  SegmentedControlItem,
   SkeletonList
 } from "@work-shape/catalyst-ui";
 import { formatUpdated } from "../build-area/build-model";
@@ -53,6 +55,9 @@ const WORKFLOW_BUILD: BuildWithAgentCopy = {
     }
   ]
 };
+
+/** Which Workflows the list shows: all of them, or those of one kind. */
+type KindFilter = "all" | WorkflowListItem["kind"];
 
 /** The Workflows of the open workspace, as far as the reader may read them. */
 export function WorkflowsPage() {
@@ -132,12 +137,15 @@ export function WorkflowsPageView({
 }) {
   const { t } = useTranslation();
   const rows = list.rows;
-  // Process Workflows first; the data Workflows, which fill Knowledge Bases and Data Stores,
-  // stand behind Data flows. The choice is offered only once there is a data Workflow.
-  const [kind, setKind] = useState<WorkflowListItem["kind"]>("process");
+  // Every Workflow stands on the list at first, processes and data flows alike: nothing waits
+  // behind a filter. The choice of one kind is offered once the list holds both.
+  const [kind, setKind] = useState<KindFilter>("all");
   const dataCount = rows?.filter((workflow) => workflow.kind === "data").length ?? 0;
-  const offerKinds = dataCount > 0 || kind === "data";
-  const shown = rows?.filter((workflow) => workflow.kind === kind);
+  const processCount = (rows?.length ?? 0) - dataCount;
+  const offerKinds = (dataCount > 0 && processCount > 0) || kind !== "all";
+  const shown = kind === "all" ? rows : rows?.filter((workflow) => workflow.kind === kind);
+  // A count is what the list holds once it is read to its end.
+  const counted = (count: number) => (list.hasMore ? {} : { count, exactCount: true });
   // A page may come back empty with more to read: the list is empty only once read to its end.
   const listedNone = rows?.length === 0 && !list.hasMore;
   const [briefing, setBriefing] = useState(false);
@@ -178,20 +186,34 @@ export function WorkflowsPageView({
             {offerKinds ? (
               <FilterBar
                 filters={
-                  // One chip: on, the list shows the data Workflows; off again, the processes.
-                  <Chip
-                    pressed={kind === "data"}
-                    onClick={() => setKind(kind === "data" ? "process" : "data")}
+                  <SegmentedControl
+                    size="sm"
+                    label={t("workflows.kindFilter")}
+                    value={kind}
+                    onValueChange={(value) =>
+                      setKind(value === "data" || value === "process" ? value : "all")
+                    }
                   >
-                    {t("workflows.kindData")}
-                  </Chip>
+                    <SegmentedControlItem value="all" {...counted(rows.length)}>
+                      {t("workflows.kindAll")}
+                    </SegmentedControlItem>
+                    <SegmentedControlItem value="process" {...counted(processCount)}>
+                      {t("workflows.kindProcess")}
+                    </SegmentedControlItem>
+                    <SegmentedControlItem value="data" {...counted(dataCount)}>
+                      {t("workflows.kindData")}
+                    </SegmentedControlItem>
+                  </SegmentedControl>
                 }
               />
             ) : null}
             {shown === undefined || shown.length === 0 ? (
-              <EmptyState layout="inline">
-                {t(kind === "data" ? "workflows.kindDataEmpty" : "workflows.kindProcessEmpty")}
-              </EmptyState>
+              // A page read empty with more behind it waits for Show more; a kind says it has none.
+              kind === "all" ? null : (
+                <EmptyState layout="inline">
+                  {t(kind === "data" ? "workflows.kindDataEmpty" : "workflows.kindProcessEmpty")}
+                </EmptyState>
+              )
             ) : (
               <ul
                 aria-label={t("workflows.title")}
@@ -287,6 +309,12 @@ function WorkflowCard({
             {/* Whose it is: the open workspace's, as Studio's lists say it (WS-OWN-1b). */}
             {workflow.ownerWorkspaceId === workspaceId ? (
               <Chip size="sm">{workspaceName ?? t("workflows.ownerWorkspace")}</Chip>
+            ) : null}
+            {/* A data flow says so where it stands among the processes. */}
+            {workflow.kind === "data" ? (
+              <Badge tone="neutral" size="sm">
+                {t("workflows.kindDataOne")}
+              </Badge>
             ) : null}
             {workflow.published ? null : (
               <Badge tone="neutral" size="sm">
