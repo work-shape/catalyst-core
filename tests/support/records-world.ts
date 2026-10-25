@@ -106,7 +106,7 @@ export function recordsWorlds(dataStoreWorld: ReturnType<typeof useDataStoreWorl
         replaced: undefined,
         access: accessOf(recordsActorOf(world.clientInstanceId))
       });
-      await settle(world, kbId, 13);
+      await settle(world, kbId, 15);
       const source = connect((await recordOf(world, kbId)).location.database);
       async function item(
         documentId: string,

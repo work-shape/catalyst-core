@@ -98,12 +98,14 @@
 {"name":"knowledge_base.files_added","legacy":false,"audited":true,"phases":["after"]}
 {"name":"knowledge_base.reindex_finished","legacy":false,"audited":true,"phases":["after"]}
 {"name":"knowledge_base.reindex_started","legacy":false,"audited":true,"phases":["after"]}
+{"name":"knowledge_base.removal_hold_lifted","legacy":false,"audited":true,"phases":["after"]}
 {"name":"knowledge_base.searched","legacy":false,"audited":true,"phases":["after"]}
 {"name":"knowledge_base.source_added","legacy":false,"audited":true,"phases":["after"]}
 {"name":"knowledge_base.source_narrowed","legacy":false,"audited":true,"phases":["after"]}
 {"name":"knowledge_base.source_removed","legacy":false,"audited":true,"phases":["after"]}
 {"name":"knowledge_base.sync_finished","legacy":false,"audited":true,"phases":["after"]}
 {"name":"knowledge_base.sync_started","legacy":false,"audited":true,"phases":["after"]}
+{"name":"knowledge_base.workflow_source_ended","legacy":false,"audited":true,"phases":["after"]}
 {"name":"live_once.cleared","legacy":false,"audited":true,"phases":["after"]}
 {"name":"live_once.switched_on","legacy":false,"audited":true,"phases":["after"]}
 {"name":"live_once.used","legacy":false,"audited":true,"phases":["after"]}
