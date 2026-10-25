@@ -290,6 +290,8 @@ describe(
       }, 180_000);
       // The step's timeout ended the run, as `operation_still_running` does; the pass waits on.
       await run.end("failed");
+      // Its next look, which waits on the confirmation, finds it still waiting.
+      await w.platform`update platform_job_wakes set run_after = now() where kind like 'knowledge_base.%'`;
       await w.platform`update platform_jobs set run_after = now() where status = 'queued' and kind like 'knowledge_base.%'`;
       await w.worker.runDue();
       expect((await sourceStatus(w, WORKFLOW_SOURCE)).confirmation).toBeDefined();
@@ -306,6 +308,103 @@ describe(
       expect(
         await w.sql`select pass_state from catalyst_kb.sync_runs where source_id = ${WORKFLOW_SOURCE}`
       ).toEqual([{ pass_state: "dropped" }]);
+    });
+
+    it("counts the passes of one run together, so splitting the items does not pass the stop", async () => {
+      const w = await world();
+      const run = await w.startRun();
+      const first = operationRunOf(
+        await run.call("ingest", {
+          dataset: await run.dataset(Array.from({ length: 120 }, (_, n) => item(n)))
+        })
+      );
+      expect((await w.settle(first)).output?.value).toMatchObject({ accepted: 120, done: 120 });
+      const second = operationRunOf(
+        await run.call("ingest", {
+          dataset: await run.dataset(Array.from({ length: 110 }, (_, n) => item(n + 120)))
+        })
+      );
+      const waiting = await eventually(async () => {
+        await w.platform`update platform_jobs set run_after = now() where status = 'queued' and kind like 'knowledge_base.%'`;
+        await w.worker.runDue();
+        expect(await w.states()).toEqual({ fetched: STOP });
+        const status = await sourceStatus(w, WORKFLOW_SOURCE);
+        expect(status.confirmation).toBeDefined();
+        return status;
+      }, 180_000);
+      expect(waiting.confirmation).toMatchObject({ items: 230, stop: STOP });
+
+      // Another Knowledge Base holds nothing of this source to confirm.
+      const other = await w.addKnowledgeBase("other-kb", "Other");
+      await other.sql.end();
+      const elsewhere = await w.instance.api.call("knowledge_bases.sync", {
+        params: { knowledgeBase: "other-kb" },
+        payload: { source: WORKFLOW_SOURCE, confirm: true }
+      });
+      expect(elsewhere.statusCode, elsewhere.body).toBe(409);
+      expect((await sourceStatus(w, WORKFLOW_SOURCE)).confirmation).toBeDefined();
+
+      const confirmed = await w.instance.api.call("knowledge_bases.sync", {
+        params: { knowledgeBase: KB },
+        payload: { source: WORKFLOW_SOURCE, confirm: true }
+      });
+      expect(confirmed.statusCode, confirmed.body).toBe(202);
+      expect((await w.settle(second)).output?.value).toMatchObject({ accepted: 110, done: 110 });
+      expect(await w.states()).toEqual({ fetched: 230 });
+
+      // Once confirmed, a later pass of the same run does not stop again.
+      const third = operationRunOf(
+        await run.call("ingest", {
+          dataset: await run.dataset(Array.from({ length: 60 }, (_, n) => item(n + 230)))
+        })
+      );
+      expect((await w.settle(third)).output?.value).toMatchObject({ accepted: 60, done: 60 });
+    });
+
+    it.each([
+      ["confirmed after", true],
+      ["never confirmed once", false]
+    ])("ends a pass %s its run's dataset expired, withdrawing nothing", async (_label, confirm) => {
+      const w = await world();
+      const run = await w.startRun();
+      const rows = await run.dataset(Array.from({ length: 230 }, (_, n) => item(n)));
+      const operationRunId = operationRunOf(
+        await run.call("ingest", { dataset: rows, complete: true })
+      );
+      await eventually(async () => {
+        await w.platform`update platform_jobs set run_after = now() where status = 'queued' and kind like 'knowledge_base.%'`;
+        await w.worker.runDue();
+        expect((await sourceStatus(w, WORKFLOW_SOURCE)).confirmation).toBeDefined();
+      }, 180_000);
+      await run.end("failed");
+      // Seven days on, the failed run's datasets are gone.
+      await w.platform`update workflow_run_datasets set state = 'deleted' where id = ${rows.$dataset}`;
+      if (confirm) {
+        const confirmed = await w.instance.api.call("knowledge_bases.sync", {
+          params: { knowledgeBase: KB },
+          payload: { source: WORKFLOW_SOURCE, confirm: true }
+        });
+        expect(confirmed.statusCode, confirmed.body).toBe(202);
+      }
+      const ended = await eventually(async () => {
+        await w.platform`update platform_job_wakes set run_after = now() where kind like 'knowledge_base.%'`;
+        await w.platform`update platform_jobs set run_after = now() where status = 'queued' and kind like 'knowledge_base.%'`;
+        await w.worker.runDue();
+        const call = await w.instance.stores.operationRuns.get({
+          clientInstanceId,
+          id: operationRunId
+        });
+        expect(call?.status).toBe("failed");
+        return required(call);
+      }, 180_000);
+      expect(ended.error?.code).toBe("knowledge_ingest_cancelled");
+      expect(await w.states()).toEqual({ fetched: STOP });
+      const status = await sourceStatus(w, WORKFLOW_SOURCE);
+      expect(status).not.toHaveProperty("confirmation");
+      expect(status).not.toHaveProperty("running");
+      expect(
+        await w.sql`select state, pass_state from catalyst_kb.sync_runs where source_id = ${WORKFLOW_SOURCE}`
+      ).toEqual([{ state: "failed", pass_state: "dropped" }]);
     });
   }
 );
