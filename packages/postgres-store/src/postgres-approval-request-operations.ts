@@ -294,7 +294,7 @@ async function transitionApprovedApprovalRequest(
 /** Postgres answers a `FOR UPDATE NOWAIT` on a locked row with this code. */
 const LOCK_NOT_AVAILABLE = "55P03";
 
-function isLockNotAvailable(error: unknown): boolean {
+export function isLockNotAvailable(error: unknown): boolean {
   for (let cause = error, depth = 0; depth < 4; depth++) {
     if (typeof cause !== "object" || cause === null) return false;
     if ("code" in cause && cause.code === LOCK_NOT_AVAILABLE) return true;

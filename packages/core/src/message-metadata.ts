@@ -12,6 +12,7 @@ import type { CreateMessageInput } from "./conversation";
 import type { AttachmentManifest } from "./files";
 import type { AgentRunId, MessageId, ToolCallId } from "./ids";
 import { asMessageId } from "./ids";
+import { personLabelForModel } from "./person-labels";
 import { isJsonObject, unknownToJsonValue, type JsonObject, type JsonValue } from "./json";
 import type { ToolExecutionResult } from "./tool-execution";
 import type { MessageCitation, WebSource, WebSourceProvider } from "./web-source";
@@ -196,7 +197,7 @@ export function approvalDecisionNote(event: ApprovalDecisionMessageMetadata): st
           : event.status === "reverted"
             ? " The approved change has been reverted."
             : "";
-  return `${subject} was ${event.status} by ${JSON.stringify(event.decidedByLabel)} at ${event.decidedAt}.${outcome}${event.comment ? ` Comment: ${JSON.stringify(event.comment)}` : ""}`;
+  return `${subject} was ${event.status} by ${personLabelForModel(event.decidedByLabel)} at ${event.decidedAt}.${outcome}${event.comment ? ` Comment: ${JSON.stringify(event.comment)}` : ""}`;
 }
 
 export function readApprovalDecisionMetadata(

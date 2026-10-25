@@ -34,6 +34,7 @@ import type {
   DataStoreRead,
   DataStoreReviewSource
 } from "./data-store-source";
+import { personName } from "../../shared/person-name";
 
 // "Prüfen" on a store's page: the fields of its records that the documents do not settle on
 // their own, each object with its fields and each field with its candidates side by side, every
@@ -335,9 +336,10 @@ function CandidateEvidence({ candidate }: { candidate: DataStoreFlaggedItem }) {
             </span>
             {candidate.decidedAt ? (
               <span className="block text-caption text-muted-foreground">
-                {candidate.decidedByName
+                {candidate.decidedBy
                   ? t("dataStores.reviewCorrectedBy", {
-                      name: candidate.decidedByName,
+                      // The list names no one whose account is gone.
+                      name: personName(candidate.decidedByName, t),
                       date: formatDate(candidate.decidedAt, locale)
                     })
                   : t("dataStores.reviewCorrectedOn", {

@@ -51,6 +51,7 @@ import {
   type OpenRoute
 } from "./workflows-frame";
 import { useWorkflowsHost } from "./workflows-host";
+import { personName } from "../../shared/person-name";
 
 /** How often the times on the page of a run that is going are counted again. */
 const CLOCK_MS = 1_000;
@@ -486,7 +487,7 @@ function RunNotices({
   const failedLoop = failedEntries?.opens?.loopStepId;
   const testLine =
     run.test && run.startedBy !== undefined
-      ? t("workflows.run.testLine", { person: run.startedBy.name })
+      ? t("workflows.run.testLine", { person: personName(run.startedBy.name, t) })
       : undefined;
   const line =
     stopping && !run.ended

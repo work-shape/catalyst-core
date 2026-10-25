@@ -28,6 +28,7 @@ export function registerApprovalRequestRoutes(
     ...options.approvalRequests,
     clientInstanceId: options.clientInstanceId,
     auditRecorder: options.auditRecorder,
+    users: options.stores.users,
     approverNames: (user, handler, request) =>
       visibleApproverNames(options, user, handler, request),
     // A held publish's review leads with a sentence in the language of who opens it (PUBQ-1).

@@ -50,7 +50,8 @@ function mapFeedback(row: FeedbackRow, authorDisplayLabel?: string | null): Feed
         }
       : {}),
     state: row.state,
-    ...(row.handledByUserId && row.handledByLabel && row.handledAt
+    // An emptied label is still a handled comment: its handler's account was deleted.
+    ...(row.handledByUserId && row.handledByLabel !== null && row.handledAt
       ? {
           handled: {
             byUserId: row.handledByUserId,

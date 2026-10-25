@@ -1391,19 +1391,25 @@ describe("Prüfen: the records of a Data Store that wait for a person (REC-2)", 
     expect(german).toContain(
       `Von Rita Reviewer am ${new Date("2026-10-25T09:30:00.000Z").toLocaleDateString("de")}`
     );
-    // Without a name to show (an account gone), the date stands alone, never the account id.
+    // Without a name to show, the account is gone: it reads as a deleted account, never as
+    // the account id (ERASE-ACTOR-IDS).
+    const gone = review(corrected.map(({ decidedByName: _, ...rest }) => rest));
     const unnamed = render(
       { kindPath: "data-stores", name: "objects" },
-      {
-        records: true,
-        review: review(corrected.map(({ decidedByName: _, ...rest }) => rest)),
-        locale: "de"
-      }
+      { records: true, review: gone, locale: "de" }
     );
     expect(unnamed).toContain(
-      `>Am ${new Date("2026-10-25T09:30:00.000Z").toLocaleDateString("de")}<`
+      `>Von Gelöschtes Konto am ${new Date("2026-10-25T09:30:00.000Z").toLocaleDateString("de")}<`
     );
     expect(unnamed).not.toContain("records-admin");
+    const unnamedEnglish = render(
+      { kindPath: "data-stores", name: "objects" },
+      { records: true, review: gone }
+    );
+    expect(unnamedEnglish).toContain(
+      `>By Deleted account on ${new Date("2026-10-25T09:30:00.000Z").toLocaleDateString("en")}<`
+    );
+    expect(unnamedEnglish).not.toContain("records-admin");
   });
 
   it("has no section without a records rule, nor for a reader who may not decide, and says when nothing waits", () => {

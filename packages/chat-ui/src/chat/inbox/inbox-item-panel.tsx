@@ -44,6 +44,7 @@ import {
   type InboxItemKind
 } from "./inbox-item-kinds";
 import { inboxItemPlaces } from "./inbox-places";
+import { personName } from "../../shared/person-name";
 
 /**
  * One item of the Inbox in the surface slot. It follows the item's live state, so it shows the
@@ -141,7 +142,10 @@ export function InboxItemView({
             t("inbox.askedAt", { asked, date })
           ) : (
             <>
-              {t("approvalRequestedBy", { name: item.requestedBy.displayLabel, date })}
+              {t("approvalRequestedBy", {
+                name: personName(item.requestedBy.displayLabel, t),
+                date
+              })}
               {agentLabel ? ` · ${t("inbox.via", { agent: agentLabel })}` : null}
             </>
           )}
@@ -195,7 +199,7 @@ function InboxItemOutcome({ item }: { item: ApprovalRequestView }) {
       {decision ? (
         <p className="text-caption text-muted-foreground">
           {t("approvalDecidedBy", {
-            name: decision.decidedByLabel,
+            name: personName(decision.decidedByLabel, t),
             date: formatApprovalDate(decision.decidedAt, locale)
           })}
         </p>
@@ -208,7 +212,7 @@ function InboxItemOutcome({ item }: { item: ApprovalRequestView }) {
       {reversion ? (
         <p className="text-caption text-muted-foreground">
           {t("approvalRevertedBy", {
-            name: reversion.revertedByLabel,
+            name: personName(reversion.revertedByLabel, t),
             date: formatApprovalDate(reversion.revertedAt, locale)
           })}
         </p>

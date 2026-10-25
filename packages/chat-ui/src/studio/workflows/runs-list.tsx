@@ -8,6 +8,7 @@ import { runsListEntries, type RunGroup, type RunPart } from "./run-groups";
 import { TestRunBadge } from "./test-run-badge";
 import type { WorkflowRunView } from "./workflow-views";
 import { RunStateBadge, durationText, routeLink, type OpenRoute } from "./workflows-frame";
+import { personName } from "../../shared/person-name";
 
 /** Who started a run, as a part of a sentence. */
 export function startedByText(
@@ -16,7 +17,7 @@ export function startedByText(
 ): string {
   return run.startedBy === undefined
     ? t("workflows.run.startedBySchedule")
-    : t("workflows.run.startedByPerson", { person: run.startedBy.name });
+    : t("workflows.run.startedByPerson", { person: personName(run.startedBy.name, t) });
 }
 
 /**

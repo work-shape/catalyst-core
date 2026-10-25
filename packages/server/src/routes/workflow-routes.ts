@@ -1,6 +1,7 @@
 import { apiOperations } from "@work-shape/catalyst-api-contract";
 import {
   AppError,
+  createPersonLabelLookup,
   requireUnmarkedConversation,
   WORKFLOW_ACTIONS,
   WORKFLOW_ASSET_KIND,
@@ -29,6 +30,8 @@ type WorkflowSubjects = {
   clientInstanceId: ClientInstanceId;
   stores: {
     conversations: Pick<PlatformStores["conversations"], "getConversation" | "createdAsset">;
+    /** Whose name a run shows as who started it, as it is now. Without it, the stored one. */
+    users?: Pick<PlatformStores["users"], "getUser">;
   } & AssetTitleSource["stores"];
 };
 
@@ -86,6 +89,29 @@ function registerWorkflowRoutes(
   /** The Workflow of this name as rights are decided on it, with its asset where it has one. */
   async function resourceOf(workflow: string): Promise<AccessResource> {
     return workflowOf(workflow, await workflows?.assetOf(workflow));
+  }
+
+  /**
+   * The runs with the name of the person who started each as it is now: a deleted account's
+   * is empty, which the interface shows as "Deleted account".
+   */
+  async function namedNow(runs: WorkflowRunView[]): Promise<WorkflowRunView[]> {
+    const users = subjects.stores.users;
+    if (!users) return runs;
+    const labelOf = createPersonLabelLookup(users, subjects.clientInstanceId);
+    return Promise.all(
+      runs.map(async (run) =>
+        run.startedBy.kind === "user"
+          ? {
+              ...run,
+              startedBy: {
+                ...run.startedBy,
+                label: await labelOf(run.startedBy.id, run.startedBy.label)
+              }
+            }
+          : run
+      )
+    );
   }
 
   /** The run, for a caller its Workflow lets through. Any other is told there is none. */
@@ -321,7 +347,7 @@ function registerWorkflowRoutes(
       });
       return withConnectionTitles(
         context.access,
-        runs.map((run) => toRunResource(run, !run.hasAgentSteps || includeData))
+        (await namedNow(runs)).map((run) => toRunResource(run, !run.hasAgentSteps || includeData))
       );
     }
   });
@@ -371,7 +397,8 @@ function registerWorkflowRoutes(
     resource: runResource,
     module: WORKFLOWS_MODULE,
     execute: async (input, { access, actor, origin }) => {
-      const run = await runOf(input.runId, mayReadRun(access, actor, origin));
+      const [run] = await namedNow([await runOf(input.runId, mayReadRun(access, actor, origin))]);
+      if (!run) throw new AppError("NOT_FOUND", "There is no such Workflow Run");
       const resource = toRunResource(
         run,
         !run.hasAgentSteps ||

@@ -4,6 +4,7 @@ import {
   AppError,
   GRANT_SCOPE_KINDS,
   auditActorFromUser,
+  createPersonLabelLookup,
   getSubjectUserId,
   hasAuthScope,
   isJsonObject,
@@ -27,6 +28,8 @@ import {
   type ClientInstanceId,
   type JsonObject,
   type OperationBeforeEvent,
+  type PersonLabelLookup,
+  type UserStore,
   type ApprovalFurtherRight,
   type ApprovalTransactionStores,
   type RuntimeCallContext
@@ -69,6 +72,11 @@ export interface ApprovalRequestWorkflowOptions {
    */
   readerLocale?(userId: string, requested: LocaleCode | undefined): Promise<LocaleCode>;
   onDecided?(request: ApprovalRequest): void | Promise<void>;
+  /**
+   * The accounts whose names a request shows as they are now: its requester, who decided and
+   * who reverted it. Without it a request shows the names stored with it.
+   */
+  users?: Pick<UserStore, "getUser">;
   /** A few people this reader can see who currently hold this request's approval right. */
   approverNames?(
     user: AuthenticatedUser,
@@ -203,7 +211,10 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
     });
     // One viewer for the page: what a kind reads for one row it does not read for the next.
     const viewer: ApprovalPreviewViewer = { access, inList: true };
-    return Promise.all(requests.map((request) => this.view(user, viewer, context, request)));
+    const labelOf = this.personLabels();
+    return Promise.all(
+      requests.map((request) => this.view(user, viewer, context, request, labelOf))
+    );
   }
 
   /**
@@ -228,7 +239,10 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
     });
     // One viewer for the page: what a kind reads for one row it does not read for the next.
     const viewer: ApprovalPreviewViewer = { access, inList: true };
-    return Promise.all(requests.map((request) => this.view(user, viewer, context, request)));
+    const labelOf = this.personLabels();
+    return Promise.all(
+      requests.map((request) => this.view(user, viewer, context, request, labelOf))
+    );
   }
 
   async pendingCount(
@@ -567,6 +581,13 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
   }
 
   /** Who reads a list: requests addressed to somebody are listed to that person alone. */
+  /** One lookup of names for one read: a list looks each person up once. */
+  private personLabels(): PersonLabelLookup | undefined {
+    return this.options.users
+      ? createPersonLabelLookup(this.options.users, this.options.clientInstanceId)
+      : undefined;
+  }
+
   private reader(user: AuthenticatedUser): { userId: string; addressedKinds: string[] } {
     return { userId: user.id, addressedKinds: this.registeredKinds() };
   }
@@ -575,7 +596,8 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
     user: AuthenticatedUser,
     viewer: ApprovalPreviewViewer,
     context: CallContext,
-    request: ApprovalRequest
+    request: ApprovalRequest,
+    labelOf = this.personLabels()
   ): Promise<ApprovalRequestView> {
     const { access } = viewer;
     const handler = this.handler(request.kind);
@@ -623,7 +645,7 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
     }
     const { asset: _asset, input, ...payload } = request.payload;
     return {
-      ...request,
+      ...(labelOf ? await namedNow(request, labelOf) : request),
       payload: {
         ...payload,
         ...(!withholdInput && input !== undefined ? { input } : {}),
@@ -845,4 +867,38 @@ export function resourceOfRequest(
   } catch {
     return undefined;
   }
+}
+
+/**
+ * The request with the names of its people as they are now: a deleted account's is empty,
+ * which the interface shows as "Deleted account".
+ */
+async function namedNow(
+  request: ApprovalRequest,
+  labelOf: PersonLabelLookup
+): Promise<ApprovalRequest> {
+  const { requestedBy, decision, reversion } = request;
+  return {
+    ...request,
+    requestedBy: {
+      ...requestedBy,
+      displayLabel: await labelOf(requestedBy.id, requestedBy.displayLabel)
+    },
+    ...(decision
+      ? {
+          decision: {
+            ...decision,
+            decidedByLabel: await labelOf(decision.decidedBy, decision.decidedByLabel)
+          }
+        }
+      : {}),
+    ...(reversion
+      ? {
+          reversion: {
+            ...reversion,
+            revertedByLabel: await labelOf(reversion.revertedBy, reversion.revertedByLabel)
+          }
+        }
+      : {})
+  };
 }

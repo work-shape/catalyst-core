@@ -39,6 +39,7 @@ import {
   parseDataStoreReviewPreview,
   reviewStoreLabel
 } from "./data-store-review-item";
+import { personName } from "../../shared/person-name";
 
 export type Translate = TranslationContextValue["t"];
 
@@ -239,7 +240,10 @@ const operationCall: InboxItemKind = {
     }
     const call = parseOperationCallPreview(item.preview);
     return call
-      ? t("operations.callSubject", { operation: call.operation, actor: call.actor.label })
+      ? t("operations.callSubject", {
+          operation: call.operation,
+          actor: personName(call.actor.label, t)
+        })
       : undefined;
   },
   heading(item, t) {
@@ -249,7 +253,7 @@ const operationCall: InboxItemKind = {
     if (call && skill) {
       // Two requests for one skill differ by who asked, so the heading names them.
       return t(skill.isNew ? "inbox.skillNewHeading" : "inbox.skillChangeHeading", {
-        actor: call.actor.label,
+        actor: personName(call.actor.label, t),
         title: skill.title
       });
     }
@@ -327,7 +331,7 @@ const feedbackReview: InboxItemKind = {
     return feedback ? feedbackAgentLabel(feedback) : undefined;
   },
   // The author asked; the heading names the agent.
-  asked: (item, t) => t("feedback.from", { author: item.requestedBy.displayLabel }),
+  asked: (item, t) => t("feedback.from", { author: personName(item.requestedBy.displayLabel, t) }),
   rowDetail: (item) => parseFeedbackPreview(item.preview)?.text,
   agentOf(item) {
     const feedback = parseFeedbackPreview(item.preview);
