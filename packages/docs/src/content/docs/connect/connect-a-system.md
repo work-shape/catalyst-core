@@ -132,13 +132,17 @@ as `managed`.
 The managed client signs in only the Connection installed from that part, under the part's
 name, since that name's redirect URI is the one the operator registered. Any other Connection
 that names it, a second install included, is refused with `managed_client_unavailable` and
-uses its own app registration. In the install dialog, **More** keeps that choice for an admin.
-Without the client the part asks for its fields as before.
+uses its own app registration. A Connection on the managed client keeps the part's settings:
+its endpoints, base address and headers cannot be changed, since the client secret and each
+person's token go to them. In the install dialog, **More** keeps the own app registration for
+an admin. Without the client the part asks for its fields as before.
 
-When release config no longer has the client, its secret is gone from the host, or its
-`clientId` or `tenant` changes, the next start sets each connected sign-in of those
-Connections to `needs_reconnect` and deletes its token set. A Connection on a client the
-instance does not have is not configured until the client is back.
+When release config no longer has the client, or its `clientId` or `tenant` changes, the next
+start sets each connected sign-in of those Connections to `needs_reconnect` and deletes its
+token set. A secret that is missing on the host, or that the provider refuses (expired, or
+rotated there first), keeps the sign-ins: calls fail until the secret is set, and then work
+again without a new connect. A Connection on a client the instance does not have is not
+configured until the client is back.
 
 A part can declare `groups` with `id`, localized `title`, and `scopes`. When groups are
 present, every operation names one and an `identity` group is required. Installation and

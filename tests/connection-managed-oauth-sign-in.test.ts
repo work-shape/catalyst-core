@@ -10,6 +10,7 @@ import {
 } from "@work-shape/catalyst-connections";
 import { asClientInstanceId, createConnectorTypeRegistry } from "@work-shape/catalyst-core";
 import { apiOperations } from "@work-shape/catalyst-api-contract";
+import { partOffer, type CatalogueEntryOffer } from "@work-shape/catalyst-chat-ui/build-area";
 import { captureProcessOutput, dumpDatabaseText, findLeak } from "./support/test-connector";
 import {
   MANAGED_CLIENT_SECRET_NAME,
@@ -20,6 +21,7 @@ import {
   type OAuthWorld
 } from "./support/oauth-sign-in-world";
 import { withTestSql } from "./support/test-sql";
+import { required } from "./support/assertions";
 
 // MS-APP-1: a catalogue part that asks for the operator's managed OAuth client installs with
 // no field, and a person connects with the client release config names. Its secret is read
@@ -40,6 +42,15 @@ const offersSchema = z.object({
     })
   )
 });
+
+/** Settings without the consent scopes, which follow from the enabled operations. */
+function withoutScopes(settings: unknown) {
+  const parsed = z
+    .looseObject({ oauth: z.looseObject({ scopes: z.unknown().optional() }) })
+    .parse(settings);
+  const { scopes: _scopes, ...oauth } = parsed.oauth;
+  return { ...parsed, oauth };
+}
 
 let world: OAuthWorld;
 let output: { stop(): string } | undefined;
@@ -220,6 +231,7 @@ async function startWith(clients: ManagedOAuthClients) {
     clientInstanceId: instanceId,
     stores: world.instance.stores,
     connectorTypes: createConnectorTypeRegistry([createHttpApiConnectorType({}, clients)]),
+    managedClients: clients,
     logger: { info: vi.fn(), warn: vi.fn() }
   });
 }
@@ -237,6 +249,16 @@ describe("a catalogue part on the operator's managed OAuth client", () => {
     const entry = offersSchema.parse(JSON.parse(text)).entries.find((item) => item.id === ENTRY);
     expect(entry?.parts[0]).toMatchObject({ name: REST_CONNECTION, managedClient: "sample" });
     expect(text).not.toContain(MANAGED_CLIENT_SECRET_NAME);
+    // The install dialog writes the settings a managed Connection is held to; the scopes follow
+    // from the operations it enables.
+    const offered = z
+      .object({ entries: z.array(z.custom<CatalogueEntryOffer>()) })
+      .parse(JSON.parse(text))
+      .entries.find((item) => item.id === ENTRY);
+    const part = required(offered?.parts[0]);
+    expect(withoutScopes(partOffer(required(offered), part, true).settings)).toEqual(
+      installed().settings
+    );
   });
 
   it("installs with no field, and a person connects and calls with the managed client", async () => {
@@ -277,6 +299,101 @@ describe("a catalogue part on the operator's managed OAuth client", () => {
       expect(answer.statusCode, name).toBe(422);
       expect(JSON.stringify(answer.json())).toContain("managed_client_unavailable");
     }
+  });
+
+  it("keeps a managed Connection on its part's servers, address and headers", async () => {
+    // The client secret goes to the token and revocation endpoints, and a person's token to the
+    // base address: an admin who moved one of them would receive it.
+    const alice = await world.signIn("alice");
+    const moved = (settings: object, oauth: object = {}) => {
+      const config = installed();
+      return {
+        ...config,
+        settings: { ...config.settings, ...settings, oauth: { ...config.settings.oauth, ...oauth } }
+      };
+    };
+    for (const [why, config] of [
+      ["token endpoint", moved({}, { tokenUrl: `${world.sample}/oauth-rest/token/elsewhere` })],
+      [
+        "revocation endpoint",
+        moved({}, { revocationUrl: `${world.sample}/oauth-rest/api/customers` })
+      ],
+      [
+        "authorization endpoint",
+        moved({}, { authorizationUrl: `${world.sample}/oauth-rest/api/authorize` })
+      ],
+      ["token auth method", moved({}, { tokenAuthMethod: "client_secret_basic" })],
+      ["tenant", moved({}, { pathParams: { tenant: "elsewhere" } })],
+      ["base address", moved({ baseUrl: `${world.sample}/oauth-rest` })],
+      ["fixed headers", moved({ headers: { "x-extra": "1" } })],
+      // The client credentials grant would hand the admin a token of the operator's app itself.
+      ["client credentials grant", { ...installed(), authScheme: "oauth_client" }]
+    ] as const) {
+      const answer = await world.instance.call(
+        "assets.put",
+        {
+          params: { kind: "connection", name: REST_CONNECTION },
+          payload: {
+            config: { name: REST_CONNECTION, ...config },
+            expectedRevision:
+              (
+                await world.instance.stores.configAssets.getConfigAsset({
+                  clientInstanceId: instanceId,
+                  kind: "connection",
+                  name: REST_CONNECTION
+                })
+              )?.revision ?? null
+          }
+        },
+        { headers: { cookie: alice, origin: "http://localhost:5173" } }
+      );
+      answers.push(JSON.stringify(answer.json()));
+      expect(answer.statusCode, why).toBe(422);
+      expect(JSON.stringify(answer.json()), why).toContain("managed_client_unavailable");
+    }
+    // The install as the part has it still saves.
+    expect(await world.putConnection(REST_CONNECTION, installed(), alice)).toBe(200);
+  });
+
+  it("runs a personal call on the managed client through the personal model regions", async () => {
+    const alice = await world.signIn("alice");
+    await connect(alice);
+    const outcome = await world.call(REST_CONNECTION, "listCustomers", alice, "agent", [
+      { id: "outside", region: "us" }
+    ]);
+    expect(outcome.result).toMatchObject({ status: "failed" });
+    expect(JSON.stringify(outcome.result)).toContain("personal_connection_region");
+  });
+
+  it("keeps the sign-ins while the provider refuses only the managed client's secret", async () => {
+    // A secret that expired or was rotated at the provider before the host has the new one is
+    // the operator's to fix; each person's grant is still good and is not thrown away.
+    const alice = await world.signIn("alice");
+    world.oauth.controls.refuseClients = true;
+    try {
+      world.oauth.expireAccessTokens();
+      const refused = await world.call(REST_CONNECTION, "listCustomers", alice, "agent");
+      answers.push(JSON.stringify(refused.result));
+      expect(refused.result).not.toMatchObject({ status: "done" });
+      expect(await bindingOf(alice)).toMatchObject({ state: "connected", secrets: 1 });
+    } finally {
+      world.oauth.controls.refuseClients = false;
+    }
+    const outcome = await world.call(REST_CONNECTION, "listCustomers", alice, "agent");
+    expect(outcome.result).toMatchObject({ status: "done" });
+  });
+
+  it("keeps the sign-ins at a start whose host misses only the managed client's secret", async () => {
+    const alice = await world.signIn("alice");
+    const unset = await createManagedOAuthClients({
+      clients: { sample: { clientId: REST_CLIENT_ID, credentialSecret: "UNSET_SECRET" } },
+      secrets: {
+        resolve: () => Promise.reject(new Error("not set"))
+      },
+      logger: { warn: vi.fn() }
+    });
+    expect((await startWith(unset)).ended).toBe(0);
+    expect(await bindingOf(alice)).toMatchObject({ state: "connected", secrets: 1 });
   });
 
   it("revokes at the provider with the managed client when the person disconnects", async () => {

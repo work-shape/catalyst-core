@@ -12,14 +12,17 @@ import { managedClientOfSettings } from "../catalogue/catalogue";
 import { readConnections } from "../connection-reads";
 import { connectionOriginOf } from "../connector-context";
 import { bindingAuditSubject } from "../personal-bindings";
+import type { ManagedOAuthClients } from "./managed-clients";
 
 // What a change of the operator's managed OAuth clients (MS-APP-1) does to the sign-ins made
 // with them. A sign-in is bound to the client id and the endpoints it was made with (the
-// Connection's origin). Where release config no longer has the client, its secret is gone from
-// the host, or its client id or tenant changed, the sign-ins made before cannot be used: each
-// connected binding of such a Connection is set to `needs_reconnect` and its token set is
-// deleted, so the card asks the person to connect again. Run once at start; nothing is sent
-// to a provider, since its client is the one that changed.
+// Connection's origin). Where release config no longer has the client, or its client id or
+// tenant changed, the sign-ins made before cannot be used: each connected binding of such a
+// Connection is set to `needs_reconnect` and its token set is deleted, so the card asks the
+// person to connect again. Run once at start; nothing is sent to a provider, since its client
+// is the one that changed. A client release config still declares but whose secret the host
+// does not hold now keeps its sign-ins: a refresh token outlives a rotated or missing secret,
+// and they work again once the secret is back.
 
 const SYSTEM_ACTOR: AuditActor = { displayLabel: "System", roles: [] };
 
@@ -30,6 +33,8 @@ export async function endStaleManagedSignIns(deps: {
   clientInstanceId: ClientInstanceId;
   stores: PlatformStores;
   connectorTypes: ConnectorTypeRegistry;
+  /** The instance's managed clients. Left out, every client the type lacks ends its sign-ins. */
+  managedClients?: Pick<ManagedOAuthClients, "awaitingSecret">;
   logger: Pick<Logger, "info" | "warn">;
 }): Promise<{ ended: number }> {
   const { clientInstanceId, stores } = deps;
@@ -38,6 +43,7 @@ export async function endStaleManagedSignIns(deps: {
   for (const connection of await readConnections(deps)) {
     const managed = managedClientOfSettings(connection.config.settings);
     if (managed === undefined || connection.config.authScheme !== "oauth") continue;
+    if (deps.managedClients?.awaitingSecret(managed) === true) continue;
     // Nothing where the instance no longer has the client: the settings are not its type's.
     const origin = connection.type
       ? connectionOriginOf(connection.type, connection.config)

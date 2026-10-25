@@ -860,7 +860,10 @@ infrastructure:
 - `credentialSecret` names the host secret. The value is read when a token is exchanged,
   refreshed or revoked and is never copied into the Secret Store or the database.
 - A client whose secret is not set is left out with a warning that names the variable; its
-  parts ask for the customer's own app registration.
+  parts ask for the customer's own app registration, and the sign-ins made with it wait for
+  the secret.
+- Rotating the secret needs no new connect: set the new value on the host and restart. A
+  secret the provider refuses keeps the sign-ins too.
 - Removing a client, or changing its `clientId` or `tenant`, ends the sign-ins made with it at
   the next start: they need a new connect.
 - The provider app must list the redirect URI of each part's Connection,

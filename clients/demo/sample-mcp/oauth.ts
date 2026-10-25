@@ -210,6 +210,11 @@ export function createSampleOAuth(options: SampleOAuthOptions, log?: SampleOAuth
     /** Every refresh is refused with `invalid_grant`, as a provider does whose grant ended. */
     refuseRefresh: boolean;
     /**
+     * Every client is refused with `invalid_client` at the token and revocation endpoints, as
+     * a provider does whose client secret expired or was deleted. Grants stay valid.
+     */
+    refuseClients: boolean;
+    /**
      * A scope the MCP endpoints insist on beside the granted one: a token without it is
      * answered 403 `insufficient_scope` (RFC 6750 3.1).
      */
@@ -219,6 +224,7 @@ export function createSampleOAuth(options: SampleOAuthOptions, log?: SampleOAuth
   } = {
     accessTtlSeconds: DEFAULT_ACCESS_TTL_SECONDS,
     refuseRefresh: false,
+    refuseClients: false,
     requiredScope: undefined,
     challengeMetadataBase: undefined
   };
@@ -292,7 +298,7 @@ export function createSampleOAuth(options: SampleOAuthOptions, log?: SampleOAuth
     const basic = basicCredentials(request.headers.authorization);
     const clientId = basic?.id ?? form.get("client_id") ?? "";
     const client = clients.get(clientId);
-    if (!client) throw new OAuthError(401, "invalid_client");
+    if (!client || controls.refuseClients) throw new OAuthError(401, "invalid_client");
     if (client.clientSecret !== undefined) {
       const presented = basic?.secret ?? form.get("client_secret") ?? "";
       if (!sameSecret(presented, client.clientSecret)) throw new OAuthError(401, "invalid_client");

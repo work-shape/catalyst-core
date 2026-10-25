@@ -11,7 +11,8 @@ import {
   type JsonObject,
   type ConnectionCredentialMode,
   type ResultShaper,
-  type LocalizedStringConfig
+  type LocalizedStringConfig,
+  sameJson
 } from "@work-shape/catalyst-core";
 import { createResultShaperRegistry } from "../result-shapers";
 import type { ManagedOAuthClients } from "../oauth/managed-clients";
@@ -145,6 +146,17 @@ export function managedPartSettings(
   const { clientId: _clientId, ...rest } =
     typeof oauth === "object" && oauth !== null && !Array.isArray(oauth) ? oauth : {};
   return { ...settings, oauth: { ...rest, managedClient } };
+}
+
+/** Settings without the consent scopes, which follow from the enabled operations. */
+function withoutScopes(settings: unknown): unknown {
+  if (typeof settings !== "object" || settings === null || Array.isArray(settings)) return settings;
+  const oauth: unknown = Reflect.get(settings, "oauth");
+  if (typeof oauth !== "object" || oauth === null || Array.isArray(oauth)) return settings;
+  return {
+    ...settings,
+    oauth: Object.fromEntries(Object.entries(oauth).filter(([key]) => key !== "scopes"))
+  };
 }
 
 /** The part's fields, auth scheme and fixed settings: its own, or its Connector type's form. */
@@ -466,7 +478,7 @@ export function createCatalogue(input: {
     const part = entry?.parts.find(
       (candidate) => candidate.part === partName && candidate.connectorType === config.connectorType
     );
-    if (part === undefined || part.managedClient !== managed) {
+    if (part === undefined || part.managedClient !== managed || config.authScheme !== "oauth") {
       return refusal(
         "is not available to this Connection: its catalogue part does not ask for it, or this instance does not have it"
       );
@@ -474,6 +486,15 @@ export function createCatalogue(input: {
     if (config.name !== part.name) {
       return refusal(
         `signs in only the Connection '${part.name}', whose redirect URI the operator registered. A second Connection uses its own app registration`
+      );
+    }
+    // The client secret goes to the token and revocation endpoints and each person's token to
+    // the base address: on the operator's client they stay the part's, as do all its settings.
+    if (
+      !sameJson(withoutScopes(config.settings), withoutScopes(managedPartSettings(part, managed)))
+    ) {
+      return refusal(
+        "keeps the settings of its catalogue part: its endpoints, address and headers cannot be changed. A Connection with other settings uses its own app registration"
       );
     }
     return undefined;

@@ -25,6 +25,7 @@ import { scopesOf } from "./checks";
 import { bindingAuditSubject } from "../personal-bindings";
 import { clientOfSession } from "./client-registration";
 import type { ManagedOAuthClients } from "./managed-clients";
+import { managedClientOfSettings } from "../catalogue/catalogue";
 import { createOAuthFetch } from "./fetch";
 import { OAuthPortError, type OAuthPort } from "./port";
 import { createSdkOAuthPort } from "./sdk-adapter";
@@ -42,7 +43,9 @@ import { writeTokenSet, type StoredTokenSet } from "./token-set";
 // A refusal of the grant (`invalid_grant`, `invalid_client`) sets the binding to
 // `needs_reconnect` and deletes the token set: a refused refresh token is worth nothing and is
 // one thing less to leak. The call then answers `connection_needs_reconnect` and never falls
-// back to the Connection's own secret. Nothing here logs or answers a token.
+// back to the Connection's own secret. On the operator's managed client `invalid_client` refuses
+// the operator's secret, not the person's grant, and keeps the sign-in. Nothing here logs or
+// answers a token.
 
 /** How long before its expiry an access token is refreshed. */
 export const SIGN_IN_REFRESH_AHEAD_MS = 60_000;
@@ -376,6 +379,22 @@ export function createSignInTokens(deps: SignInTokensDeps): SignInTokens {
         fetch
       });
     } catch (error) {
+      // On the operator's managed client (MS-APP-1) `invalid_client` refuses the client's
+      // secret, such as one that expired or was rotated at the provider before the host has
+      // the new one. Each person's grant is still good: it is kept, and the operator is told.
+      const managedClient = managedClientOfSettings(settings.data);
+      if (
+        managedClient !== undefined &&
+        error instanceof OAuthPortError &&
+        error.failure === "invalid_client"
+      ) {
+        deps.logger.warn(
+          { module: "connections", connection: connection.config.name, oauthClient: managedClient },
+          "The provider refused the managed OAuth client. Check its secret on the host; the sign-ins are kept"
+        );
+        if (stillValid(tokenSet, now().getTime())) return tokenSet.accessToken;
+        throw connectionCallError("connection_unavailable");
+      }
       if (
         error instanceof OAuthPortError &&
         (error.failure === "invalid_grant" || error.failure === "invalid_client")

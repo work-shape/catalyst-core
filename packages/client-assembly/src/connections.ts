@@ -345,7 +345,13 @@ async function buildInstanceConnections(
       try {
         // Sign-ins made with a managed client the instance no longer has, or with its earlier
         // client id, ask for a new connect.
-        await endStaleManagedSignIns({ clientInstanceId, stores, connectorTypes, logger });
+        await endStaleManagedSignIns({
+          clientInstanceId,
+          stores,
+          connectorTypes,
+          managedClients,
+          logger
+        });
       } catch (error) {
         logger.warn(
           { module: "connections", err: error },
