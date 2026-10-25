@@ -292,7 +292,7 @@ export function useKnowledgeWorkflow() {
           name: `knowledge-base:${name}`
         });
         expect(row?.status).toBe("ready");
-        expect(row?.level).toBe(15);
+        expect(row?.level).toBe(16);
         return required(row);
       });
       const asset = required(

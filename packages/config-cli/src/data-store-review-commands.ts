@@ -17,6 +17,7 @@ export const dataStoreReviewHelpText = `Data Store review (the fields of records
   data-store review list <store> [--table <name>] [--cursor <cursor>] [--limit <n>]
   data-store review decide <store> --table <name> --key <key> --field <name> --action confirm|correct|assign [--value <json>] [--knowledge-base <id> --document <id>]
 list prints one page of candidates, each with its reason and the document and page it cites; follow nextCursor for the next page.
+A candidate's value is what its document reads; a corrected one also prints correctedValue, the person's value, with decidedBy and decidedAt.
 decide confirms a candidate, corrects it to --value (read as JSON, otherwise as text), or assigns the cited document to the object --key.
 Where the candidates of a field disagree, name the document you decide with --knowledge-base and --document. assign always needs both.
 Options: --instance <url-or-name>, --dir <working-copy>, --json, --help

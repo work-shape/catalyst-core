@@ -1,7 +1,11 @@
 import { RECORD_PROJECTION_SCHEMA } from "../../records/projection-schema";
 import { takeGrantTurn } from "../../grant-turn";
 import { KNOWLEDGE_FIELD_SCHEMA } from "./field-schema";
-import { RECORD_FIELDS_SCHEMA, RECORD_FIELDS_CONTENT_HASH } from "../../records/schema";
+import {
+  RECORD_FIELDS_SCHEMA,
+  RECORD_FIELDS_CONTENT_HASH,
+  RECORD_FIELDS_CORRECTED_VALUE
+} from "../../records/schema";
 import { SOURCE_WITHDRAWAL_SCHEMA } from "./source-withdrawal-schema";
 import { createHash } from "node:crypto";
 import { z } from "zod";
@@ -395,7 +399,8 @@ const KNOWLEDGE_STORE_MIGRATIONS: readonly KnowledgeStoreMigration[] = [
   { number: 12, name: "record_projection_frame", sql: RECORD_PROJECTION_SCHEMA },
   { number: 13, name: "workflow_ingest", sql: WORKFLOW_INGEST },
   { number: 14, name: "item_removal_hold", sql: ITEM_REMOVAL_HOLD },
-  { number: 15, name: "workflow_source_end", sql: WORKFLOW_SOURCE_END }
+  { number: 15, name: "workflow_source_end", sql: WORKFLOW_SOURCE_END },
+  { number: 16, name: "record_corrected_value", sql: RECORD_FIELDS_CORRECTED_VALUE }
 ];
 
 /** A later applied number never proves that earlier migrations were applied. */
