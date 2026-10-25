@@ -136,11 +136,24 @@ export function createAssetWrites(client: ApiClient) {
         params: { kind, name },
         body: { expectedRevision, ...scopeOf(workspaceId) }
       }),
-    /** Names the revision to publish, which is the one its caller saved. */
-    publish: ({ kind, name, workspaceId, revision }: AssetAddress & { revision: number }) =>
+    /**
+     * Names the revision to publish, which is the one its caller saved, and the confirmation of
+     * what it processes again where its publish question named one.
+     */
+    publish: ({
+      kind,
+      name,
+      workspaceId,
+      revision,
+      confirmProcessing
+    }: AssetAddress & { revision: number; confirmProcessing?: string }) =>
       client.assets.publish({
         params: { kind, name },
-        body: { revision, ...scopeOf(workspaceId) }
+        body: {
+          revision,
+          ...scopeOf(workspaceId),
+          ...(confirmProcessing ? { confirmProcessing } : {})
+        }
       }),
     revert: ({
       kind,

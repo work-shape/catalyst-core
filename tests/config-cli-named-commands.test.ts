@@ -672,6 +672,39 @@ describe("Knowledge Base source commands", () => {
     );
     expect(await required(requests[0]).json()).toEqual({ source: "folder", mode: "full" });
   });
+  it("prints a confirmation that ended at once as done and exits 0", async () => {
+    // A Workflow source's `sync --confirm` ends its own run at once: the pass is the step's.
+    const response = {
+      href: apiOperations["operations.get_run"].buildPath({ params: { runId: "oprun_confirm" } }),
+      id: "oprun_confirm",
+      operation: "knowledge.documents.sync",
+      effect: "changing",
+      actor: { kind: "user", id: "kai", label: "Kai" },
+      origin: { kind: "user" },
+      target: "live",
+      status: "done",
+      attempt: 1,
+      inputHash: "hash",
+      correlationId: "confirm",
+      createdAt: at,
+      startedAt: at,
+      finishedAt: at,
+      updatedAt: at
+    };
+    const bodies: unknown[] = [];
+    const result = await run(
+      ["knowledge-base", "sync", "documents", "--source", "workflow:import", "--confirm", "--json"],
+      {
+        fetchImpl: apiFetch(async (request) => {
+          bodies.push(await request.json());
+          return Response.json(response, { status: 202 });
+        })
+      }
+    );
+    expect(result.code, result.err).toBe(0);
+    expect(JSON.parse(result.out)).toMatchObject({ id: "oprun_confirm", status: "done" });
+    expect(bodies).toEqual([{ source: "workflow:import", confirm: true }]);
+  });
   it("queues only the requested failure code and rejects ambiguous retry selectors", async () => {
     const bodies: unknown[] = [];
     const fetchImpl = apiFetch(async (request) => {

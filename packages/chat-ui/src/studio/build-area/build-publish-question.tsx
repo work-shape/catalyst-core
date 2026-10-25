@@ -6,15 +6,24 @@ import { useTranslation } from "../../shared/i18n";
 // page loaded may be stale after a save. A Knowledge Base with a synced source names who finds
 // what in it, with which shared account (SRC-2).
 
+/**
+ * What publishing raises, and for a Knowledge Base that processes or embeds again, the
+ * confirmation of the count and cost its lines state, which the publish passes on.
+ */
+export interface PublishQuestionAnswer {
+  lines: readonly string[];
+  confirmation?: string;
+}
+
 /** The question as the dialog shows it. */
 export type PublishQuestionRead =
   | { status: "none" }
   | { status: "loading" }
   | { status: "failed" }
-  | { status: "ready"; lines: readonly string[] };
+  | ({ status: "ready" } & PublishQuestionAnswer);
 
 /** A hook: the question, read anew on each `ask`. Without `read` it asks nothing. */
-export function usePublishQuestion(read: (() => Promise<readonly string[]>) | undefined): {
+export function usePublishQuestion(read: (() => Promise<PublishQuestionAnswer>) | undefined): {
   question: PublishQuestionRead;
   ask(): void;
 } {
@@ -26,8 +35,8 @@ export function usePublishQuestion(read: (() => Promise<readonly string[]>) | un
     const number = ++asked.current;
     setQuestion({ status: "loading" });
     read().then(
-      (lines) => {
-        if (asked.current === number) setQuestion({ status: "ready", lines });
+      (answer) => {
+        if (asked.current === number) setQuestion({ status: "ready", ...answer });
       },
       () => {
         if (asked.current === number) setQuestion({ status: "failed" });

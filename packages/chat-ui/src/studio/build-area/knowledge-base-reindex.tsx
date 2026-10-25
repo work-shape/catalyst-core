@@ -196,8 +196,11 @@ function ReindexAction({
   );
 }
 
-/** What a re-index embeds, what it costs and whether the store has room, in the reader's words. */
-function ReindexStatement({
+/**
+ * What a re-index embeds, what it costs and whether the store has room, in the reader's words.
+ * A first index adds one index, a re-index a second beside the active one.
+ */
+export function ReindexStatement({
   statement,
   locale,
   first
@@ -233,7 +236,7 @@ function ReindexStatement({
       <p>{t(first ? "knowledge.embeddingFirstNote" : "knowledge.reindexKeeps")}</p>
       {statement.room ? null : (
         <FormNotice tone="error">
-          {t("knowledge.reindexNoRoom", {
+          {t(first ? "knowledge.embedNoRoom" : "knowledge.reindexNoRoom", {
             used: megabytes(statement.storeBytes),
             added: megabytes(statement.addedBytes),
             limit: megabytes(statement.limitBytes ?? 0)

@@ -319,6 +319,18 @@ describe("changing the embedding model of a Knowledge Base", () => {
     expect(refusal.message).toContain("estimated cost");
     const confirmation = z.string().parse(refusal.details.confirmation);
     expect(await generations(record)).toHaveLength(1);
+    // The draft's read states the same and names the confirmation for a publish dialog to pass,
+    // without the line that tells an API caller how.
+    const draft = await world.api.call("assets.get", {
+      params: { kind: KNOWLEDGE_BASE_ASSET_KIND, name: KB }
+    });
+    expect(draft.statusCode, draft.body).toBe(200);
+    const question = z
+      .object({ publishQuestion: z.array(z.string()), publishConfirmation: z.string() })
+      .parse(draft.json());
+    expect(question.publishConfirmation).toBe(confirmation);
+    expect(question.publishQuestion.join("\n")).toContain(`Re-embed with ${LARGE.model}`);
+    expect(question.publishQuestion.join("\n")).not.toContain("confirmProcessing");
     const wrong = await publish(world, definition(LARGE.id), "0".repeat(64));
     expect(wrong.statusCode, wrong.body).toBe(422);
 

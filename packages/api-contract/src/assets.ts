@@ -275,6 +275,15 @@ export const assetSchema = z.object({
   /** Unrecorded draft review lines naming its audience and shared source accounts. */
   publishQuestion: z.array(z.string()).optional(),
   /**
+   * Of a Knowledge Base whose publish processes or embeds documents again: the confirmation of
+   * the count and cost the publish question states, which the publish passes as
+   * `confirmProcessing`. A stale one is refused with the new statement.
+   */
+  publishConfirmation: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/u)
+    .optional(),
+  /**
    * Of an App or a Workflow, for a reader of its draft: the publish question's sentence and
    * warnings for the revision this read returns.
    */

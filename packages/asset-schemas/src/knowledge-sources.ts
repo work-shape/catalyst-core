@@ -100,16 +100,20 @@ export const knowledgeFirstPassConfirmationSchema = z.strictObject({
   bytes: countSchema,
   /** How many it fetches and indexes before it waits. */
   stop: countSchema,
-  tokens: rangeSchema,
-  passages: rangeSchema,
+  /** Estimated from the listed sizes; absent where the Knowledge Base does not search by meaning. */
+  tokens: rangeSchema.optional(),
+  passages: rangeSchema.optional(),
   /** The embedding model it embeds with; absent where the Knowledge Base does not search by meaning. */
   model: z.string().optional(),
   /** From the rate card; absent where nothing is embedded or the model has no price. */
   cost: rangeSchema.extend({ currency: z.string() }).optional(),
-  /** Whether the store's size limit holds the high estimate. */
-  room: z.boolean(),
+  /**
+   * Whether the store's size limit holds the high estimate of passages and vectors, and that
+   * estimate; absent where nothing is embedded.
+   */
+  room: z.boolean().optional(),
   storeBytes: countSchema,
-  addedBytes: countSchema,
+  addedBytes: countSchema.optional(),
   limitBytes: countSchema.optional()
 });
 

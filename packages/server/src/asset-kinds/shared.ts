@@ -104,6 +104,15 @@ export interface AddresseeNames {
  * A registered kind with what the config asset workflow asks of it. Everything the workflow
  * does differently for one kind is answered here, by that kind's registration.
  */
+/** What a publish question is asked about, for a reader in `locale`. */
+interface PublishQuestionInput {
+  assetId: string;
+  scope: AssetScope;
+  config: unknown;
+  locale: LocaleCode;
+  names: AddresseeNames;
+}
+
 export interface WorkflowAssetKind
   extends RegisteredAssetKind<ConfigAssetKind>, CapabilityAssetKindChecks {
   /**
@@ -184,13 +193,12 @@ export interface WorkflowAssetKind
    * Unrecorded draft review lines; accounts and source boundaries must never enter runs. They
    * are written in `locale`, the reader's language, and name people and workspaces by name.
    */
-  publishQuestion?(input: {
-    assetId: string;
-    scope: AssetScope;
-    config: unknown;
-    locale: LocaleCode;
-    names: AddresseeNames;
-  }): Promise<string[]>;
+  publishQuestion?(input: PublishQuestionInput): Promise<string[]>;
+  /**
+   * In place of `publishQuestion`, of a kind whose publish confirms a count and cost (a
+   * Knowledge Base): the lines, and the confirmation its publish passes as `confirmProcessing`.
+   */
+  publishReview?(input: PublishQuestionInput): Promise<{ lines: string[]; confirmation?: string }>;
   publishReach?(next: JsonObject, live: JsonObject | undefined): PublishReach;
   /**
    * The rights the accounts a publish of the asset's newest revision runs as need, by the
