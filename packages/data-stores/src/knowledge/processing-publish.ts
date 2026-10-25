@@ -31,6 +31,12 @@ import {
 import type { KnowledgeRuntime } from "./runtime";
 import { initialSyncIds } from "./builtin/source-lifecycle";
 
+/** What re-embedding the affected contents costs, as a reader words it. */
+export type KnowledgeProcessingCost =
+  | { kind: "none" }
+  | { kind: "estimate"; min: number; max: number; currency: string }
+  | { kind: "unavailable" };
+
 // Background reconciliation only: bounded metadata pages, never document text in a job.
 const PROCESSING_PAGE_CONTENTS = 100;
 const knowledgeReprocessJob = defineJobKind({
@@ -140,11 +146,24 @@ async function knowledgeProcessingReview(
   const basis = unestimated
     ? `existing passages/source byte sizes; ${unestimated} contents without size estimates use the ${KNOWLEDGE_FILE_MAX_BYTES}-byte file limit conservatively`
     : "existing passages or original byte sizes";
-  const cost = !next.methods.includes("semantic")
-    ? "0 (keyword only)"
+  // The estimate as fields, for a reader that words it in its own language (the sentence below
+  // is the API's and the CLI's).
+  const embeddingCost: KnowledgeProcessingCost = !next.methods.includes("semantic")
+    ? { kind: "none" }
     : price
-      ? `${(((tokens * price.perMillionTokens) / 1_000_000) * 0.5).toFixed(6)}–${(((conservativeTokens * price.perMillionTokens) / 1_000_000) * 2).toFixed(6)} ${price.currency} estimated from ${basis}; changed output may cost more`
-      : "embedding cost unavailable: configure the approved binding's customer rate";
+      ? {
+          kind: "estimate",
+          min: ((tokens * price.perMillionTokens) / 1_000_000) * 0.5,
+          max: ((conservativeTokens * price.perMillionTokens) / 1_000_000) * 2,
+          currency: price.currency
+        }
+      : { kind: "unavailable" };
+  const cost =
+    embeddingCost.kind === "none"
+      ? "0 (keyword only)"
+      : embeddingCost.kind === "estimate"
+        ? `${embeddingCost.min.toFixed(6)}–${embeddingCost.max.toFixed(6)} ${embeddingCost.currency} estimated from ${basis}; changed output may cost more`
+        : "embedding cost unavailable: configure the approved binding's customer rate";
   const confirmation = hash
     .update(
       JSON.stringify({
@@ -155,6 +174,7 @@ async function knowledgeProcessingReview(
     .digest("hex");
   return {
     count,
+    cost: embeddingCost,
     confirmation,
     lines: [
       `Reprocess ${count} affected contents. Built-in processing has no model cost. Re-embedding: ${cost}. Only the affected types are reprocessed.`,

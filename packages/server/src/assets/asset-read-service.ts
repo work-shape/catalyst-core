@@ -373,6 +373,7 @@ export class AssetReadWorkflow {
         ? await target.kind.publishQuestion(asking)
         : undefined);
     const publishConfirmation = review?.confirmation;
+    const publishProcessing = review?.processing;
     const appAudience =
       target.kind.kind === "app" && locale
         ? await appAudienceReview(
@@ -454,6 +455,7 @@ export class AssetReadWorkflow {
       ...(publication ? { publication } : {}),
       ...(publishQuestion?.length ? { publishQuestion } : {}),
       ...(publishConfirmation ? { publishConfirmation } : {}),
+      ...(publishProcessing ? { publishProcessing } : {}),
       ...(publishNarrative ? { publishNarrative } : {}),
       ...(appAudience ? { appAudience } : {}),
       ...(asset.name === defaultName ? { isDefault: true as const } : {}),

@@ -18,7 +18,10 @@ import { failed } from "./tool-results";
  * ran answers in the words an agent has always read for it.
  */
 export function toolResultFromOperationResult(
-  outcome: Pick<OperationOutcome, "result" | "toolResult">,
+  outcome: Pick<OperationOutcome, "result" | "toolResult"> & {
+    /** The run as stored, which says whether a call that continues has ended already. */
+    run?: Pick<OperationOutcome["run"], "status" | "error">;
+  },
   names: ToolCallNames
 ): ToolExecutionResult {
   if (outcome.toolResult) return outcome.toolResult;
@@ -32,9 +35,29 @@ export function toolResultFromOperationResult(
         ...(result.structuredResult ? { structuredResult: result.structuredResult } : {}),
         ...(result.artifacts ? { artifacts: result.artifacts } : {})
       };
-    case "running":
-      // The operation's work goes on after the call; its run says when it ended.
+    case "running": {
+      // The operation's work goes on after the call; its run says when it ended. An operation
+      // that finished at once has ended it already, and the answer says so, as the API's does.
+      const { run } = outcome;
+      if (run?.status === "done")
+        return { status: "success", output: { status: "done", operationRunId: result.runId } };
+      if (run?.status === "failed" && run.error)
+        return toolResultFromOperationResult(
+          {
+            result: {
+              status: "failed",
+              runId: result.runId,
+              error: {
+                code: run.error.code,
+                message: run.error.message,
+                ...(run.error.reason ? { details: { reason: run.error.reason } } : {})
+              }
+            }
+          },
+          names
+        );
       return { status: "success", output: { status: "running", operationRunId: result.runId } };
+    }
     case "denied":
       if (names.useRightRefusal) return failed("permission_missing", names.useRightRefusal);
       return result.reason.kind === "policy" && result.reason.reason === "confirmation_required"

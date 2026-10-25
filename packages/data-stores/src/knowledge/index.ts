@@ -4,7 +4,8 @@ import { FIELD_OUTPUT_MIN_TOKENS } from "./field-budget";
 import {
   confirmKnowledgeProcessing,
   knowledgePublishReview,
-  createKnowledgeReprocessHandler
+  createKnowledgeReprocessHandler,
+  type KnowledgeProcessingCost
 } from "./processing-publish";
 import { createKnowledgeReindexHandler } from "./reindex";
 import { sourceBoundaryKey } from "./source-boundary";
@@ -162,7 +163,16 @@ export interface KnowledgeBases {
     scope: AssetScope;
     config: unknown;
     locale?: LocaleCode;
-  }): Promise<{ lines: string[]; confirmation?: string }>;
+  }): Promise<{
+    lines: string[];
+    confirmation?: string;
+    /**
+     * Of a publish that processes contents again, the count and cost its sentence states, as
+     * fields, and the index among `lines` of that sentence, which a reader that words them
+     * in its own language replaces.
+     */
+    processing?: { count: number; line: number; cost: KnowledgeProcessingCost };
+  }>;
 }
 
 export function createKnowledgeBases(input: {
@@ -247,6 +257,16 @@ export function createKnowledgeBases(input: {
       const { sources, review } = await publishReview(question);
       return {
         lines: [...sources, ...(review?.statement ?? [])],
+        ...(review?.processing
+          ? {
+              processing: {
+                count: review.processing.count,
+                // The statement opens with the processing sentence, after the sources' lines.
+                line: sources.length,
+                cost: review.processing.cost
+              }
+            }
+          : {}),
         // One the rate card cannot price is refused whatever is passed: its lines say why.
         ...(review?.priced ? { confirmation: review.confirmation } : {})
       };

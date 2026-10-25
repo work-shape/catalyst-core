@@ -208,6 +208,7 @@ export { ReindexStatement } from "./knowledge-base-reindex";
 export {
   PublishQuestionLines,
   publishQuestionHolds,
+  type PublishProcessing,
   type PublishQuestionAnswer,
   type PublishQuestionRead
 } from "./build-publish-question";

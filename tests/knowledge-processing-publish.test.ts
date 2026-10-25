@@ -56,6 +56,22 @@ describe("confirmed, selective processing at publish (KB 80)", () => {
       const get = await world.instance.api.call("assets.get", { params });
       expect(get.statusCode, get.body).toBe(200);
       expect(get.body).toContain("Reprocess 1 affected contents");
+      // The same statement as fields, which a reader renders in its own language. The English
+      // sentence stays, and `line` names it among the lines.
+      const read = z
+        .object({
+          publishQuestion: z.array(z.string()),
+          publishProcessing: z.object({
+            count: z.number(),
+            line: z.number(),
+            cost: z.object({ kind: z.string() }).loose()
+          })
+        })
+        .parse(get.json());
+      expect(read.publishProcessing).toMatchObject({ count: 1, cost: { kind: "estimate" } });
+      expect(read.publishQuestion[read.publishProcessing.line]).toContain(
+        "Reprocess 1 affected contents"
+      );
     }
   );
   it("reads a Knowledge Base whose store is ready before its tables are made (KB-PAGE-1)", async () => {
@@ -93,6 +109,16 @@ describe("confirmed, selective processing at publish (KB 80)", () => {
     });
     expect(lines.join("\n")).toContain("Reprocess 1 affected contents");
     expect(lines.join("\n")).toContain("0.500000–2.000000 USD");
+    const review = await world.knowledge.publishReview({
+      assetId: asset.id,
+      scope: asset.scope,
+      config: asset.publishedConfig
+    });
+    expect(review.processing).toMatchObject({
+      count: 1,
+      cost: { kind: "estimate", min: 0.5, max: 2, currency: "USD" }
+    });
+    expect(review.lines[review.processing?.line ?? -1]).toContain("Reprocess 1 affected contents");
   });
   it("can confirm a failed upload with no passage or source-size estimate", async () => {
     const world = await setup();

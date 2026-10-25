@@ -284,6 +284,27 @@ export const assetSchema = z.object({
     .regex(/^[a-f0-9]{64}$/u)
     .optional(),
   /**
+   * Of a Knowledge Base whose publish processes contents again: the count and cost of the
+   * sentence at index `line` of `publishQuestion` as fields, so that a client words them in the
+   * reader's language in place of that sentence.
+   */
+  publishProcessing: z
+    .strictObject({
+      count: z.number().int().nonnegative(),
+      line: z.number().int().nonnegative(),
+      cost: z.discriminatedUnion("kind", [
+        z.strictObject({ kind: z.literal("none") }),
+        z.strictObject({
+          kind: z.literal("estimate"),
+          min: z.number().nonnegative(),
+          max: z.number().nonnegative(),
+          currency: z.string()
+        }),
+        z.strictObject({ kind: z.literal("unavailable") })
+      ])
+    })
+    .optional(),
+  /**
    * Of an App or a Workflow, for a reader of its draft: the publish question's sentence and
    * warnings for the revision this read returns.
    */

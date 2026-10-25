@@ -74,6 +74,7 @@ afterEach(() => {
 async function mount(input: {
   question: PublishQuestionAnswer;
   publish: BuildSource["writes"]["publish"];
+  locale?: "en" | "de";
 }): Promise<HTMLElement> {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   const frame: BuildSource = {
@@ -122,7 +123,7 @@ async function mount(input: {
           { mode: "light", labels: uiLabelsEn },
           createElement(
             TranslationProvider,
-            { locale: "en", children: null },
+            { locale: input.locale ?? "en", children: null },
             createElement(
               BuildAssetKindsProvider,
               { value: kinds },
@@ -165,6 +166,63 @@ async function publishFrom(page: HTMLElement): Promise<void> {
   if (!confirm) throw new Error("No confirm button");
   await act(async () => confirm.click());
 }
+
+const REPROCESS_EN =
+  "Reprocess 3 affected contents. Built-in processing has no model cost. Re-embedding: 0.500000–2.000000 USD estimated from existing passages or original byte sizes; changed output may cost more. Only the affected types are reprocessed.";
+
+/** Opens the publish dialog without confirming it. */
+async function openDialog(page: HTMLElement): Promise<string> {
+  const offered = page.querySelector<HTMLButtonElement>("[data-build-publish]");
+  if (!offered) throw new Error("No publish button");
+  await act(async () => offered.click());
+  await act(async () => undefined);
+  return document.querySelector("[data-build-publish-question=ready]")?.textContent ?? "";
+}
+
+describe("The processing line of the publish dialog", () => {
+  const question = (cost: NonNullable<PublishQuestionAnswer["processing"]>["cost"], count = 3) => ({
+    lines: ["Re-embed with text-embedding-3-large: 1,200 passages.", REPROCESS_EN],
+    confirmation: CONFIRMATION,
+    processing: { count, line: 1, cost }
+  });
+  const estimate = { kind: "estimate", min: 0.5, max: 2, currency: "USD" } as const;
+
+  it("is built from the statement's fields in English, not from the server's sentence", async () => {
+    const text = await openDialog(
+      await mount({ question: question(estimate), publish: vi.fn(async () => pointers) })
+    );
+    expect(text).toContain("Re-embed with text-embedding-3-large");
+    expect(text).toContain("3 documents are read again with the new settings.");
+    expect(text).toContain("$0.50 to $2.00");
+    expect(text).not.toContain("Reprocess");
+  });
+
+  it("is built from the statement's fields in German", async () => {
+    const text = await openDialog(
+      await mount({
+        locale: "de",
+        question: question(estimate, 1),
+        publish: vi.fn(async () => pointers)
+      })
+    );
+    expect(text).toContain("1 Dokument wird mit den neuen Einstellungen noch einmal gelesen.");
+    expect(text).toMatch(/0,50\s*\$ bis 2,00\s*\$/u);
+    expect(text).not.toContain("Reprocess");
+  });
+
+  it.each([
+    ["none", "This costs nothing, because nothing is embedded."],
+    ["unavailable", "The embedding model has no price set"]
+  ] as const)("says what a cost of %s means", async (kind, expected) => {
+    const text = await openDialog(
+      await mount({ question: question({ kind }), publish: vi.fn(async () => pointers) })
+    );
+    expect(text).toContain(expected);
+    expect(text).not.toContain("Reprocess");
+  });
+});
+
+const pointers = { draftRevision: 3, publishedRevision: 3 };
 
 describe("Publishing a Knowledge Base that embeds again", () => {
   it("shows what it embeds and passes the confirmation it read", async () => {

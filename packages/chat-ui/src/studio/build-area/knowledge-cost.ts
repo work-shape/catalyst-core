@@ -13,6 +13,24 @@ export function formatEmbeddingCost(amount: number, currency: string, locale: Lo
   }).format(amount);
 }
 
+/**
+ * An estimate between two amounts, both written alike: the lower never loses the digits the
+ * upper keeps (`0.50 to 2.00`), and a range below one unit keeps two significant digits.
+ */
+export function formatEmbeddingCostRange(
+  min: number,
+  max: number,
+  currency: string,
+  locale: LocaleCode
+): { min: string; max: string } {
+  const format = new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency,
+    ...(max >= 1 || max === 0 ? {} : { maximumSignificantDigits: 2 })
+  });
+  return { min: format.format(min), max: format.format(max) };
+}
+
 /** A size in bytes as a person reads it: megabytes, or gigabytes from one up. */
 export function formatStoreBytes(bytes: number, locale: LocaleCode): string {
   const giga = bytes >= 1_000_000_000;

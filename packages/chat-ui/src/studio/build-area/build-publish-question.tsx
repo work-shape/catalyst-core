@@ -1,6 +1,8 @@
 import { useRef, useState } from "react";
+import type { LocaleCode } from "@work-shape/catalyst-api-client";
 import { Button } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../../shared/i18n";
+import { formatEmbeddingCostRange } from "./knowledge-cost";
 
 // What publishing a saved draft raises, read when the publish dialog opens: the question the
 // page loaded may be stale after a save. A Knowledge Base with a synced source names who finds
@@ -13,6 +15,21 @@ import { useTranslation } from "../../shared/i18n";
 export interface PublishQuestionAnswer {
   lines: readonly string[];
   confirmation?: string;
+  /**
+   * What the publish processes again, as the fields of the sentence at index `line` of
+   * `lines`, which the dialog words in the reader's language in its place.
+   */
+  processing?: PublishProcessing;
+}
+
+/** The count and cost of the contents a Knowledge Base's publish processes again. */
+export interface PublishProcessing {
+  count: number;
+  line: number;
+  cost:
+    | { kind: "none" }
+    | { kind: "estimate"; min: number; max: number; currency: string }
+    | { kind: "unavailable" };
 }
 
 /** The question as the dialog shows it. */
@@ -59,7 +76,7 @@ export function PublishQuestionLines({
   question: PublishQuestionRead;
   onRetry(): void;
 }) {
-  const { t } = useTranslation();
+  const { locale, t } = useTranslation();
   if (question.status === "loading") {
     return (
       <p className="mt-3" data-build-publish-question="loading">
@@ -78,15 +95,41 @@ export function PublishQuestionLines({
     );
   }
   if (question.status !== "ready" || question.lines.length === 0) return null;
+  const { processing } = question;
+  const lines = question.lines.map((line, index) =>
+    processing && processing.line === index ? processingSentence(processing, t, locale) : line
+  );
   return (
     <ul
       aria-label={t("build.publishRaises")}
       className="mt-3 grid gap-1 text-body text-foreground"
       data-build-publish-question="ready"
     >
-      {question.lines.map((line) => (
+      {lines.map((line) => (
         <li key={line}>{line}</li>
       ))}
     </ul>
   );
+}
+
+/** What a publish processes again and what that costs, in the reader's words. */
+function processingSentence(
+  { count, cost }: PublishProcessing,
+  t: ReturnType<typeof useTranslation>["t"],
+  locale: LocaleCode
+): string {
+  const read = t(count === 1 ? "build.publishProcessingOne" : "build.publishProcessingOther", {
+    count: new Intl.NumberFormat(locale).format(count)
+  });
+  switch (cost.kind) {
+    case "none":
+      return `${read} ${t("build.publishProcessingFree")}`;
+    case "estimate":
+      return `${read} ${t(
+        "build.publishProcessingEstimate",
+        formatEmbeddingCostRange(cost.min, cost.max, cost.currency, locale)
+      )}`;
+    case "unavailable":
+      return `${read} ${t("build.publishProcessingNoPrice")}`;
+  }
 }
