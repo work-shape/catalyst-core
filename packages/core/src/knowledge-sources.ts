@@ -140,6 +140,13 @@ export function enqueueKnowledgeWorkflowSourceEnd(
   );
 }
 
+/**
+ * How many items the first pass of a source fetches and indexes before it waits for one
+ * confirmation, where it holds more (KB-ISO-1b): a connector's first sync or a Workflow's first
+ * `ingest`. A constant equal to the default of `knowledge.maxDocuments`, not a setting.
+ */
+export const KNOWLEDGE_FIRST_PASS_STOP = 10_000;
+
 /** How often the fetch of one item is attempted before it fails with `knowledge_fetch_failed`. */
 export const KNOWLEDGE_FETCH_MAX_ATTEMPTS = 3;
 
@@ -200,6 +207,7 @@ export {
   knowledgeLocateInputSchema,
   knowledgeLocateOutputSchema,
   knowledgeWorkflowSourcesOutputSchema,
+  knowledgeFirstPassConfirmationSchema,
   KNOWLEDGE_SOURCE_ITEM_SHOWN_STATES,
   type KnowledgeSyncInput,
   type KnowledgeSyncResult,
@@ -211,6 +219,7 @@ export {
   type KnowledgeLocateInput,
   type KnowledgeLocateOutput,
   type KnowledgeWorkflowSourcesOutput,
+  type KnowledgeFirstPassConfirmation,
   type KnowledgeSourceItemShownState
 } from "@work-shape/catalyst-asset-schemas";
 

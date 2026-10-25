@@ -20,6 +20,11 @@ export interface KnowledgeSourceJobsInput {
   documentFormats: readonly KnowledgeDocumentFormat[];
   maxDocuments: number;
   withdrawShareConfirm?: number;
+  /**
+   * Where a first pass stops for its confirmation: `KNOWLEDGE_FIRST_PASS_STOP` unless a test
+   * sets a smaller one to cross it with a small fixture. Release config never sets it.
+   */
+  firstPassStop?: number;
   openSource(
     connection: string,
     signal: AbortSignal

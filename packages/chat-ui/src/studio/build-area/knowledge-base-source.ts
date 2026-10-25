@@ -295,6 +295,11 @@ export interface KnowledgeBaseSource {
   ): KnowledgeRead<KnowledgeSources>;
   /** Syncs the changes of one source now; a sync that runs already is joined. */
   syncSource?(knowledgeBase: string, source: string): Promise<KnowledgeCall<unknown>>;
+  /**
+   * Lets the first import of one source that stopped at 10,000 items go on (KB-ISO-1b), as a
+   * holder of `knowledge_base.publish`.
+   */
+  confirmSource?(knowledgeBase: string, source: string): Promise<KnowledgeCall<unknown>>;
   /** Fetches and indexes again the failed items of one source that failed for `failureCode`. */
   retrySource?(
     knowledgeBase: string,
@@ -546,6 +551,18 @@ export function useKnowledgeBaseSource(): KnowledgeBaseSource {
         });
         // A sync answers its Operation Run at once, still running: only one that waits for
         // somebody's decision has not started.
+        if (outcome.status !== "done" && outcome.run.status !== "running") {
+          throw new PendingApprovalError();
+        }
+        await queryClient.invalidateQueries({ queryKey: key("sources", knowledgeBase) });
+        return outcome.status === "done" ? outcome.output : outcome.run;
+      }),
+    confirmSource: (knowledgeBase, source) =>
+      called(async () => {
+        const outcome = await client.knowledge_bases.sync({
+          params: { knowledgeBase },
+          body: { source, confirm: true }
+        });
         if (outcome.status !== "done" && outcome.run.status !== "running") {
           throw new PendingApprovalError();
         }

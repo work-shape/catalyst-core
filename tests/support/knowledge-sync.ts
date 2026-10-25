@@ -56,7 +56,14 @@ function context(signal: AbortSignal): ConnectorContext {
 }
 
 // Opt in only when a test publishes stores: migration claims otherwise add unrelated transactions.
-export function useKnowledgeSync({ withDataStoreJobs = false } = {}) {
+export function useKnowledgeSync({
+  withDataStoreJobs = false,
+  firstPassStop
+}: {
+  withDataStoreJobs?: boolean;
+  /** Where a first pass stops for its confirmation, smaller than the constant (KB-ISO-1b). */
+  firstPassStop?: number;
+} = {}) {
   const { start } = useDataStoreInstance();
   const cleanups: (() => Promise<unknown>)[] = [];
   afterEach(async () => {
@@ -291,6 +298,7 @@ export function useKnowledgeSync({ withDataStoreJobs = false } = {}) {
       files,
       documentFormats: extractor ? KNOWLEDGE_DOCUMENT_FORMATS : KNOWLEDGE_TEXT_FORMATS,
       maxDocuments: 10000,
+      ...(firstPassStop === undefined ? {} : { firstPassStop }),
       openSource
     });
     const worker = createJobWorker({

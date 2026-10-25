@@ -12,6 +12,7 @@ import {
 } from "@work-shape/catalyst-ui";
 import type { LocaleCode } from "@work-shape/catalyst-api-client";
 import { useTranslation } from "../../shared/i18n";
+import { formatEmbeddingCost } from "./knowledge-cost";
 import type {
   KnowledgeBaseSource,
   KnowledgeEmbeddingState,
@@ -225,14 +226,7 @@ function ReindexStatement({
       <p>
         {statement.cost
           ? t("knowledge.reindexCost", {
-              // Cents from one unit up; below it two significant digits, never a bare 0.
-              cost: new Intl.NumberFormat(locale, {
-                style: "currency",
-                currency: statement.cost.currency,
-                ...(statement.cost.amount >= 1 || statement.cost.amount === 0
-                  ? {}
-                  : { maximumSignificantDigits: 2 })
-              }).format(statement.cost.amount)
+              cost: formatEmbeddingCost(statement.cost.amount, statement.cost.currency, locale)
             })
           : t("knowledge.reindexNoPrice")}
       </p>

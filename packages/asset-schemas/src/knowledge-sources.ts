@@ -36,7 +36,13 @@ export const knowledgeSyncInputSchema = z.strictObject({
   /** The `id` of the source in the definition. */
   source: sourceIdSchema,
   /** `changes` unless `full`. The initial import is started by publish, not by this call. */
-  mode: z.enum(["changes", "full"]).optional()
+  mode: z.enum(["changes", "full"]).optional(),
+  /**
+   * Lets a first pass that waits for confirmation go on (KB-ISO-1b): a connector's first sync or
+   * a Workflow's first `ingest` above 10,000 items. Needs `knowledge_base.publish`; audited with
+   * the counts and the estimate.
+   */
+  confirm: z.boolean().optional()
 });
 
 export type KnowledgeSyncInput = z.infer<typeof knowledgeSyncInputSchema>;
@@ -79,6 +85,36 @@ const itemFailureCodeSchema = z.union([
   z.enum(KNOWLEDGE_DOCUMENT_FAILURE_CODES)
 ]);
 
+/** A low and a high estimate. */
+const rangeSchema = z.strictObject({ min: z.number().min(0), max: z.number().min(0) });
+
+/**
+ * A first pass that stopped at 10,000 items and waits for one confirmation (KB-ISO-1b): what the
+ * whole pass holds and what it would cost, estimated from the listed sizes with a factor per
+ * format. Counts and sizes only, never a name.
+ */
+export const knowledgeFirstPassConfirmationSchema = z.strictObject({
+  syncRunId: z.string(),
+  /** The items of the pass, listed or named, and their size in bytes. */
+  items: countSchema,
+  bytes: countSchema,
+  /** How many it fetches and indexes before it waits. */
+  stop: countSchema,
+  tokens: rangeSchema,
+  passages: rangeSchema,
+  /** The embedding model it embeds with; absent where the Knowledge Base does not search by meaning. */
+  model: z.string().optional(),
+  /** From the rate card; absent where nothing is embedded or the model has no price. */
+  cost: rangeSchema.extend({ currency: z.string() }).optional(),
+  /** Whether the store's size limit holds the high estimate. */
+  room: z.boolean(),
+  storeBytes: countSchema,
+  addedBytes: countSchema,
+  limitBytes: countSchema.optional()
+});
+
+export type KnowledgeFirstPassConfirmation = z.infer<typeof knowledgeFirstPassConfirmationSchema>;
+
 const sourceStatusSchema = z.strictObject({
   id: z.string(),
   /** The name of the Connection it reads through. */
@@ -106,6 +142,8 @@ const sourceStatusSchema = z.strictObject({
     .optional(),
   /** The last sync that ended. */
   last: knowledgeSyncResultSchema.optional(),
+  /** "Wartet auf Bestätigung": the running first pass stopped at 10,000 items. */
+  confirmation: knowledgeFirstPassConfirmationSchema.optional(),
   /** "Letzte Änderung verarbeitet". */
   lastChangeAt: z.string().optional(),
   /** "Älteste offene Änderung". */

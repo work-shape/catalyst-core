@@ -125,6 +125,8 @@ export const audit = defineTranslations({
     "audit.event.knowledge_base.files_added": "Added files to a knowledge base",
     "audit.event.knowledge_base.reindex_finished": "Finished re-indexing a knowledge base",
     "audit.event.knowledge_base.reindex_started": "Started re-indexing a knowledge base",
+    "audit.event.knowledge_base.first_pass_confirmed":
+      "Confirmed a knowledge base's large first import",
     "audit.event.knowledge_base.searched": "Searched a knowledge base",
     "audit.event.knowledge_base.source_added": "Added a source to a knowledge base",
     "audit.event.knowledge_base.source_narrowed": "Narrowed a knowledge base's source",
@@ -403,6 +405,8 @@ export const audit = defineTranslations({
     "audit.event.knowledge_base.files_added": "Dateien zu einer Wissensbasis hinzugefügt",
     "audit.event.knowledge_base.reindex_finished": "Neuindexierung einer Wissensbasis beendet",
     "audit.event.knowledge_base.reindex_started": "Neuindexierung einer Wissensbasis gestartet",
+    "audit.event.knowledge_base.first_pass_confirmed":
+      "Großen Erstimport einer Wissensbasis bestätigt",
     "audit.event.knowledge_base.searched": "Wissensbasis durchsucht",
     "audit.event.knowledge_base.source_added": "Quelle zu einer Wissensbasis hinzugefügt",
     "audit.event.knowledge_base.source_narrowed": "Quelle einer Wissensbasis eingegrenzt",

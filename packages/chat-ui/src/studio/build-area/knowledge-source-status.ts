@@ -7,15 +7,19 @@ import type { KnowledgeSourceFailureCode, KnowledgeSourceStatus } from "./knowle
 
 /** The badge a synced source shows: what its sync does now, or how the last one ended. */
 export interface SourceStateView {
-  state: "initial" | "syncing" | "current" | "unreachable" | "refused" | "failed" | "never";
+  state:
+    "initial" | "waiting" | "syncing" | "current" | "unreachable" | "refused" | "failed" | "never";
   tone: BadgeTone;
   label: TranslationKey;
 }
 
 /** How a source stands, from its running sync and its last one. */
 export function sourceStateView(
-  status: Pick<KnowledgeSourceStatus, "running" | "last">
+  status: Pick<KnowledgeSourceStatus, "running" | "last" | "confirmation">
 ): SourceStateView {
+  // A first import above 10,000 items waits for a person (KB-ISO-1b).
+  if (status.running !== undefined && status.confirmation !== undefined)
+    return { state: "waiting", tone: "warning", label: "knowledgeSources.stateWaiting" };
   if (status.running !== undefined) {
     if (status.running.mode === "ingest")
       return { state: "syncing", tone: "info", label: "knowledgeSources.stateIngesting" };

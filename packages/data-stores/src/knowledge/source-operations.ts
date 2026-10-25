@@ -1,6 +1,8 @@
 import { z } from "zod";
 import {
   AppError,
+  auditActorFromIdentity,
+  KNOWLEDGE_BASE_ACTIONS,
   isAuthenticatedServicePrincipal,
   isOperationRunId,
   KNOWLEDGE_SOURCE_OPERATIONS,
@@ -12,8 +14,11 @@ import {
   knowledgeLocateInputSchema,
   knowledgeLocateOutputSchema,
   type OperationDefinition,
+  type OperationExecutionContext,
   type OperationResource
 } from "@work-shape/catalyst-core";
+import { firstPassAuditMetadata, firstPassConfirmation } from "./first-pass-estimate";
+import type { FirstPassWaiting, KnowledgeSources } from "./source-port";
 import { initialSyncIds } from "./builtin/source-lifecycle";
 import type { KnowledgeRuntime } from "./runtime";
 import type { KnowledgeBaseDefinition } from "./definition";
@@ -48,6 +53,21 @@ export function sourceOperation(
     if (!definition.sources?.some((s) => s.id === source))
       throw new AppError("NOT_FOUND", "The Knowledge Base source is not available");
   }
+  // The estimate a first pass that waits shows (KB-ISO-1b), from what the store holds now.
+  const limitBytes = async () =>
+    (
+      await runtime.stores.dataStores.getDataStore({
+        clientInstanceId: runtime.clientInstanceId,
+        id: target.assetId
+      })
+    )?.sizeLimitBytes;
+  const estimate = (limit: number | undefined) => (waiting: FirstPassWaiting) =>
+    firstPassConfirmation({
+      ...waiting,
+      definition,
+      embedding: runtime.embedding,
+      limitBytes: limit
+    });
   switch (part) {
     case "sync":
       return {
@@ -72,6 +92,17 @@ export function sourceOperation(
         outputSchema: knowledgeSyncResultSchema,
         async execute(input, context) {
           const parsed = knowledgeSyncInputSchema.parse(input);
+          if (parsed.confirm) {
+            const confirmed = await confirmFirstPass(
+              runtime,
+              sources,
+              target,
+              parsed.source,
+              context,
+              estimate(await limitBytes())
+            );
+            if (confirmed) return {};
+          }
           requireSource(parsed.source);
           const payload = {
             ...initialSyncIds(target.assetId, parsed.source),
@@ -95,11 +126,12 @@ export function sourceOperation(
         ...base,
         inputSchema: z.strictObject({}),
         outputSchema: knowledgeSourcesOutputSchema,
-        execute: (_input, context) =>
+        execute: async (_input, context) =>
           sources.sources(
             target.assetId,
             definition.sources ?? [],
-            context.runtime.signal ?? new AbortController().signal
+            context.runtime.signal ?? new AbortController().signal,
+            estimate(await limitBytes())
           )
       };
     case "source_items":
@@ -130,4 +162,56 @@ export function sourceOperation(
           )
       };
   }
+}
+
+/**
+ * `sync({ source, confirm: true })` (KB-ISO-1b): a holder of `knowledge_base.publish` lets the
+ * first pass that stopped at 10,000 items go on. The call answers the pass: a connector's sync
+ * run it joins, or for a Workflow's `ingest`, whose run is the Workflow step's, its own run
+ * done at once. Audited with the counts and the estimate, never a name. Answers whether a pass
+ * of the source had stopped; where none had, a connector source syncs as without `confirm`.
+ */
+async function confirmFirstPass(
+  runtime: Pick<KnowledgeRuntime, "stores" | "clientInstanceId" | "now">,
+  sources: KnowledgeSources,
+  target: { assetId: string; name: string; resource: OperationResource },
+  source: string,
+  context: OperationExecutionContext,
+  estimate: (waiting: FirstPassWaiting) => ReturnType<typeof firstPassConfirmation>
+): Promise<boolean> {
+  context.access.require(KNOWLEDGE_BASE_ACTIONS.publish, target.resource);
+  const signal = context.runtime.signal ?? new AbortController().signal;
+  const waiting = await sources.confirmFirstPass(target.assetId, source, signal);
+  const workflow = source.startsWith("workflow:");
+  if (!waiting) {
+    if (!workflow) return false;
+    throw new AppError(
+      "CONFLICT",
+      "No import of this source waits for a confirmation",
+      { reason: "knowledge_nothing_to_confirm" },
+      { exposeMessage: true }
+    );
+  }
+  if (waiting.confirmedNow)
+    await context.audit.record({
+      type: "knowledge_base.first_pass_confirmed",
+      status: "success",
+      actor: auditActorFromIdentity(context.actor),
+      subject: target.assetId,
+      correlationId: context.correlationId,
+      metadata: firstPassAuditMetadata(source, estimate(waiting))
+    });
+  if (!workflow && isOperationRunId(waiting.operationRunId))
+    context.joinAsyncRun?.(waiting.operationRunId);
+  else
+    await runtime.stores.operationRuns.finish({
+      clientInstanceId: runtime.clientInstanceId,
+      id: context.runId,
+      end: {
+        status: "done",
+        finishedAt: runtime.now().toISOString(),
+        output: { value: { syncRunId: waiting.syncRunId, confirmed: true } }
+      }
+    });
+  return true;
 }

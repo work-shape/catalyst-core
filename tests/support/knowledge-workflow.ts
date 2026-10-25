@@ -40,8 +40,8 @@ export function operationRunOf(outcome: Awaited<ReturnType<typeof runOperation>>
 }
 
 /** Call inside a `describe`: it registers the cleanup of each test's world. */
-export function useKnowledgeWorkflow() {
-  const { setup } = useKnowledgeSync();
+export function useKnowledgeWorkflow(options: { firstPassStop?: number } = {}) {
+  const { setup } = useKnowledgeSync(options);
   /** `developmentAuth` names the people a test signs in as, beside the default one. */
   async function world(developmentAuth?: unknown, workflows?: true) {
     const world = await setup(
