@@ -184,10 +184,17 @@ export const knowledgeWorkflowSourceSchema = z
     kind: z.literal("workflow"),
     workflowId: z.string().regex(/^[a-z][a-z0-9_-]{0,62}$/u)
   })
-  .refine((source) => source.id === `workflow:${source.workflowId}`, {
-    path: ["id"],
-    message: "A Workflow source id is workflow:<workflowId>"
-  });
+  .refine(
+    (source) =>
+      source.id === `workflow:${source.workflowId}` ||
+      (source.id.startsWith(`workflow:${source.workflowId}@`) &&
+        /^[1-9][0-9]{0,9}$/u.test(source.id.slice(`workflow:${source.workflowId}@`.length))),
+    {
+      path: ["id"],
+      message:
+        "A Workflow source id is workflow:<workflowId>@<the revision that created the Workflow>"
+    }
+  );
 export type KnowledgeWorkflowSource = z.infer<typeof knowledgeWorkflowSourceSchema>;
 
 /** Contract inventory; completion, batch and dataset are present only where the table declares them. */

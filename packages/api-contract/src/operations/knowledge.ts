@@ -10,7 +10,8 @@ import {
   knowledgeExtractFieldsInputSchema,
   knowledgeExtractFieldsOutputSchema,
   knowledgeRetryInputSchema,
-  knowledgeRetryOutputSchema
+  knowledgeRetryOutputSchema,
+  knowledgeWorkflowSourcesOutputSchema
 } from "@work-shape/catalyst-asset-schemas";
 import {
   DATA_STORE_SCALAR_TYPES,
@@ -347,6 +348,22 @@ export const knowledgeOperations = {
     effect: "reading",
     query: knowledgeOpenDocumentQuerySchema,
     response: blob(),
+    errors: ["NOT_FOUND"],
+    rateClass: "read"
+  }),
+  "knowledge_bases.workflow_sources": defineRegisteredOperation({
+    id: "knowledge_bases.workflow_sources",
+    method: "GET",
+    path: "/api/v1/workflows/:workflow/knowledge-sources",
+    summary:
+      "Read what deleting a Workflow ends: the Knowledge Bases its sources feed and how many documents each holds there; ones the caller may not use are only counted",
+    tag: "Knowledge Bases",
+    auth: "user",
+    scope: "config_assets:read",
+    // The route checks workflow.delete on the Workflow, and knowledge_base.use per Knowledge Base.
+    requires: [],
+    effect: "reading",
+    response: json(knowledgeWorkflowSourcesOutputSchema),
     errors: ["NOT_FOUND"],
     rateClass: "read"
   }),

@@ -144,7 +144,7 @@ describe("changing the embedding model of a Knowledge Base", () => {
         clientInstanceId,
         name: `knowledge-base:${KB}`
       });
-      expect(found).toMatchObject({ status: "ready", level: 14 });
+      expect(found).toMatchObject({ status: "ready", level: 15 });
       return required(found);
     });
     return { world, record };

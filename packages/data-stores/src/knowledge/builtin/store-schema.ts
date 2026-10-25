@@ -328,6 +328,31 @@ const ITEM_REMOVAL_HOLD = `
     where removed_at is not null;
 `;
 
+// KBW-2c: a Workflow-fed source lives as long as its Workflow. Its key carries the revision
+// that created the Workflow (`workflow:<id>@<revision>`), so a Workflow created later under the
+// name starts a source of its own; `ended_at` marks the source of a deleted one, whose items
+// are withdrawn. A source made before this release keeps its key `workflow:<id>` and has no
+// revision until a pass of its Workflow adopts it: every row before this release passes the
+// new check as it stands.
+const WORKFLOW_SOURCE_END = `
+  alter table catalyst_kb.source_cursors
+    add column workflow_revision integer check (workflow_revision > 0),
+    add column ended_at timestamptz,
+    drop constraint source_kind_check,
+    add constraint source_kind_check check (
+      (kind = 'connector' and workflow_id is null and cursor is not null
+          and workflow_revision is null and ended_at is null
+          and position(':' in source_id) = 0)
+      or (kind = 'workflow' and workflow_id is not null
+          and workflow_id ~ '^[a-z][a-z0-9_-]{0,62}$' and cursor is null
+          and (source_id = 'workflow:' || workflow_id
+            or source_id = 'workflow:' || workflow_id || '@' || workflow_revision))
+    );
+  create unique index source_cursors_workflow_revision_idx
+    on catalyst_kb.source_cursors (workflow_id, workflow_revision)
+    where workflow_revision is not null;
+`;
+
 /** The tables of the store of a built-in Knowledge Base, in the order a store applies them. */
 const KNOWLEDGE_STORE_MIGRATIONS: readonly KnowledgeStoreMigration[] = [
   { number: 1, name: "documents", sql: DOCUMENTS },
@@ -368,7 +393,8 @@ const KNOWLEDGE_STORE_MIGRATIONS: readonly KnowledgeStoreMigration[] = [
   { number: 11, name: "record_content_hash_upgrade", sql: RECORD_FIELDS_CONTENT_HASH },
   { number: 12, name: "record_projection_frame", sql: RECORD_PROJECTION_SCHEMA },
   { number: 13, name: "workflow_ingest", sql: WORKFLOW_INGEST },
-  { number: 14, name: "item_removal_hold", sql: ITEM_REMOVAL_HOLD }
+  { number: 14, name: "item_removal_hold", sql: ITEM_REMOVAL_HOLD },
+  { number: 15, name: "workflow_source_end", sql: WORKFLOW_SOURCE_END }
 ];
 
 /** A later applied number never proves that earlier migrations were applied. */

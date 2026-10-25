@@ -1,4 +1,4 @@
-import type { ApiClient } from "@work-shape/catalyst-api-client";
+import { ApiError, type ApiClient } from "@work-shape/catalyst-api-client";
 import type { Asset } from "@work-shape/catalyst-api-client";
 import { WORKFLOW_ACTIONS, WORKFLOW_ASSET_KIND } from "@work-shape/catalyst-core";
 import { principalGrantRequest } from "../../admin/access/principal-grants-model";
@@ -43,7 +43,10 @@ const WORKFLOW_SUMMARY_PAGE_SIZE = 200;
 const LIST_READS_PER_PAGE = 5;
 
 /** The part of the client the Workflow screens call. */
-type WorkflowsClient = Pick<ApiClient, "workflows" | "assets" | "permissions" | "operations">;
+type WorkflowsClient = Pick<
+  ApiClient,
+  "workflows" | "assets" | "permissions" | "operations" | "knowledge_bases"
+>;
 
 /**
  * What a step's Settings offer: the operations the reader may call from a step, and the
@@ -500,6 +503,34 @@ export function createInstanceSource(client: WorkflowsClient, key: string): Work
     publishNarrative: {
       read: async (workflow, revision, signal) =>
         (await readAsset(workflow, "", signal, revision)).publishNarrative
+    },
+    // The question before a delete names what the delete ends in the Knowledge Bases; an
+    // instance without them answers none (KBW-2c).
+    removal: {
+      read: async (workflow, signal) => {
+        const [asset, sources] = await Promise.all([
+          readAsset(workflow, "", signal),
+          client.knowledge_bases
+            .workflow_sources({ params: { workflow }, signal })
+            .catch((error: unknown) => {
+              if (error instanceof ApiError && error.status === 404) return undefined;
+              throw error;
+            })
+        ]);
+        return {
+          revision: asset.revision,
+          knowledgeBases: sources?.knowledgeBases ?? [],
+          hidden: sources?.hidden ?? { knowledgeBases: 0, documents: 0 }
+        };
+      },
+      remove: async (workflow, expectedRevision) => {
+        done(
+          await client.assets.delete({
+            params: { kind: WORKFLOW_ASSET_KIND, name: workflow },
+            body: { expectedRevision, ...ownerOf(workflow) }
+          })
+        );
+      }
     },
     // A draft is published and discarded as the draft of any asset is.
     drafts: {

@@ -3,6 +3,8 @@ import {
   AppError,
   KNOWLEDGE_BASE_ACTIONS,
   KNOWLEDGE_BASE_ASSET_KIND,
+  WORKFLOW_ACTIONS,
+  WORKFLOW_ASSET_KIND,
   asConversationId,
   createAuthorizer,
   isAuthenticatedServicePrincipal,
@@ -30,7 +32,7 @@ export function knowledgeDocumentRoutes(input: {
   stores: PlatformStores;
 }): RouteRegistration {
   const { clientInstanceId, stores } = input;
-  return (routes) =>
+  return (routes) => {
     routes.operation(apiOperations["knowledge_bases.open_document"], {
       module: "knowledge",
       resource: ({ knowledgeBase }) => ({
@@ -72,6 +74,21 @@ export function knowledgeDocumentRoutes(input: {
           context.runtime.signal
         )
     });
+    // KBW-2c: the delete question of a Workflow names what its delete ends. Only who may
+    // delete it asks; a Knowledge Base the reader may not use is counted, never named.
+    routes.operation(apiOperations["knowledge_bases.workflow_sources"], {
+      module: "knowledge",
+      resource: ({ workflow }) => ({ kind: WORKFLOW_ASSET_KIND, id: workflow, name: workflow }),
+      authorize(_input, context) {
+        const decision = context.access.authorize(WORKFLOW_ACTIONS.delete, context.resource);
+        return decision.allowed
+          ? { allowed: true }
+          : { allowed: false, action: WORKFLOW_ACTIONS.delete, reason: decision.reason };
+      },
+      execute: ({ workflow }, context) =>
+        input.knowledgeBases.workflowSources(workflow, context.access, context.runtime.signal)
+    });
+  };
 }
 
 function decide(decision: AccessDecision): OperationAuthorization {

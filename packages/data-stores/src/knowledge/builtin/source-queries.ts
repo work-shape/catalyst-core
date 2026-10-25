@@ -21,6 +21,7 @@ import type { DataStoreRuntime } from "../../runtime";
 import { createSourceStore, syncResult } from "./source-store";
 import { enqueueSourceSync, sourceSyncStarted } from "./source-lifecycle";
 import { startIngest, withdrawWorkflowItems } from "./ingest";
+import { WORKFLOW_SOURCE_END_MIGRATION, workflowSourceDocuments } from "./workflow-source";
 
 // All operations use the same derived state: the item owns fetch state, the content owns indexing.
 const JOIN = `from catalyst_kb.source_items i left join catalyst_kb.documents d on d.id=i.document_id left join catalyst_kb.contents c on c.sha256=d.content_sha256`;
@@ -129,13 +130,18 @@ export function createKnowledgeSources(runtime: DataStoreRuntime): KnowledgeSour
       return store(id, signal).change(async (sql) => {
         const result = [];
         const workflows = storeReady
-          ? z
-              .array(z.object({ source_id: z.string(), workflow_id: z.string() }))
-              .parse(
-                await sql.run(
-                  "select source_id,workflow_id from catalyst_kb.source_cursors where kind='workflow' order by source_id"
-                )
+          ? z.array(z.object({ source_id: z.string(), workflow_id: z.string() })).parse(
+              await sql.run(
+                // A deleted Workflow's source has ended and is not shown (KBW-2c).
+                `select source_id,workflow_id from catalyst_kb.source_cursors where kind='workflow'${
+                  record?.migrations.some(
+                    ({ number }) => number === WORKFLOW_SOURCE_END_MIGRATION
+                  ) === true
+                    ? " and ended_at is null"
+                    : ""
+                } order by source_id`
               )
+            )
           : [];
         const listed: { id: string; connection?: string; workflowId?: string }[] = [
           ...sources,
@@ -335,6 +341,8 @@ export function createKnowledgeSources(runtime: DataStoreRuntime): KnowledgeSour
     },
     ingest: (call, signal) => startIngest(runtime, call, signal),
     withdraw: (input, signal) => withdrawWorkflowItems(runtime, input, signal),
+    workflowSources: (workflow, access, signal) =>
+      workflowSourceDocuments(runtime, workflow, access, signal),
     async retry(
       id: string,
       input: z.infer<typeof knowledgeRetryInputSchema>,

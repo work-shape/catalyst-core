@@ -69,6 +69,7 @@ export type { LiveOnceControl } from "./test-run";
 export { checkStartForm, startFormOf, startRefusalByField } from "./start-form";
 export { DraftChangeDialog } from "./workflow-draft";
 export { RightsLacking } from "./workflow-publish-rights";
+export { WorkflowRemoveKnowledge } from "./workflow-remove";
 export {
   giveFailureSentence,
   workflowAccountRefusal,

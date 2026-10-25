@@ -8,6 +8,7 @@ import {
   createActorAccess,
   createPlatformId,
   enqueueKnowledgeIndex,
+  enqueueKnowledgeWorkflowSourceEnd,
   isOperationRunId,
   isWorkflowRunEnded,
   KNOWLEDGE_BASE_ACTIONS,
@@ -30,12 +31,13 @@ import {
 } from "@work-shape/catalyst-core";
 import type { PostgresChangeStatements } from "@work-shape/catalyst-postgres-connector";
 import type { DataStoreRuntime } from "../../runtime";
-import type { KnowledgeIngestCall } from "../source-port";
+import type { KnowledgeIngestCall, KnowledgeWorkflowIncarnation } from "../source-port";
 import { SOURCE_WITHDRAWAL_APPROVAL } from "../source-withdrawal-approval";
 import { enqueueKnowledgeFileCleanup } from "../file-cleanup";
 import { releaseCopy } from "./fetch-job";
 import { enqueueSourceSync, sourceSyncStarted } from "./source-lifecycle";
 import { withdrawSourceItems } from "./source-withdrawal";
+import { resolveWorkflowSource } from "./workflow-source-key";
 import {
   createSourceStore,
   sourceItemId,
@@ -111,11 +113,6 @@ const INGEST_RUN_COLUMNS =
 
 const countSchema = z.object({ n: z.coerce.number().int() });
 const idsSchema = z.array(z.object({ id: z.string() }));
-
-/** The source a Workflow feeds. Its id never collides with a connector source's. */
-function workflowSourceId(workflowId: string): string {
-  return `workflow:${workflowId}`;
-}
 
 /** Whether a sync job's source is a Workflow's: its passes are `ingest` calls. */
 export function isWorkflowSourceId(sourceId: string): boolean {
@@ -290,7 +287,6 @@ export async function startIngest(
   call: KnowledgeIngestCall,
   signal: AbortSignal
 ): Promise<void> {
-  const sourceId = workflowSourceId(call.workflowId);
   const syncRunId = ingestSyncRunId(call.operationRunId);
   let dataset: WorkflowDatasetReference | null = null;
   if ("dataset" in call.items) {
@@ -303,61 +299,87 @@ export async function startIngest(
     dataset = call.items.dataset;
   }
   const inline = "inline" in call.items ? call.items.inline : [];
-  const payload: KnowledgeSyncJobPayload = {
-    knowledgeBaseId: call.knowledgeBaseId,
-    sourceId,
-    syncRunId,
-    operationRunId: call.operationRunId
-  };
   const progress: IngestProgress = {
     complete: false,
     offset: 0,
     counted: 0
   };
-  await createSourceStore(runtime, call.knowledgeBaseId, signal).change(async (sql) => {
-    await sql.run(
-      "insert into catalyst_kb.source_cursors (source_id,cursor,kind,workflow_id) values ($1::text,null,'workflow',$2::text) on conflict (source_id) do nothing",
-      [sourceId, call.workflowId]
-    );
-    // A repeated start of the same call finds its pass, running or waiting.
-    const known = await sql.run(
-      "select 1 from catalyst_kb.sync_runs where id=$1::text union all select 1 from catalyst_kb.ingest_waiting where sync_run_id=$1::text",
-      [syncRunId]
-    );
-    if (known.length) return;
-    const values = [
-      syncRunId,
-      sourceId,
-      call.operationRunId,
-      JSON.stringify(progress),
-      call.workflowRunId,
-      dataset === null ? null : JSON.stringify(dataset),
-      call.complete
-    ];
-    // One pass of a source runs at a time; another call of the Workflow waits for its turn.
-    const created = await sql.run(
-      `insert into catalyst_kb.sync_runs (id,source_id,mode,operation_run_id,cursor_after,workflow_run_id,dataset,complete)
+  const started = await createSourceStore(runtime, call.knowledgeBaseId, signal).change(
+    async (sql) => {
+      // The Workflow's source is made by its first call; a deleted Workflow's has ended.
+      const source = await resolveWorkflowSource(sql, call.workflow, true);
+      if (!source || "ended" in source) return "ended" as const;
+      const sourceId = source.sourceId;
+      // What a deleted namesake left there ends with the end of its source.
+      if (source.endedLegacy)
+        await runtime.stores.transaction((stores) =>
+          enqueueKnowledgeWorkflowSourceEnd(stores.jobs, {
+            clientInstanceId: runtime.clientInstanceId,
+            workflow: call.workflow.workflowId,
+            through: call.workflow.revision - 1,
+            correlationId: call.operationRunId
+          })
+        );
+      const payload: KnowledgeSyncJobPayload = {
+        knowledgeBaseId: call.knowledgeBaseId,
+        sourceId,
+        syncRunId,
+        operationRunId: call.operationRunId
+      };
+      // A repeated start of the same call finds its pass, running or waiting.
+      const known = await sql.run(
+        "select 1 from catalyst_kb.sync_runs where id=$1::text union all select 1 from catalyst_kb.ingest_waiting where sync_run_id=$1::text",
+        [syncRunId]
+      );
+      if (known.length) return "started" as const;
+      const values = [
+        syncRunId,
+        sourceId,
+        call.operationRunId,
+        JSON.stringify(progress),
+        call.workflowRunId,
+        dataset === null ? null : JSON.stringify(dataset),
+        call.complete
+      ];
+      // One pass of a source runs at a time; another call of the Workflow waits for its turn.
+      const created = await sql.run(
+        `insert into catalyst_kb.sync_runs (id,source_id,mode,operation_run_id,cursor_after,workflow_run_id,dataset,complete)
        values ($1::text,$2::text,'ingest',$3::text,$4::text,$5::text,$6::jsonb,$7::boolean)
        on conflict (source_id) where state='running' do nothing returning id`,
-      values
-    );
-    if (!created.length)
-      await sql.run(
-        `insert into catalyst_kb.ingest_waiting (sync_run_id,source_id,operation_run_id,cursor_after,workflow_run_id,dataset,complete)
-         values ($1::text,$2::text,$3::text,$4::text,$5::text,$6::jsonb,$7::boolean)`,
         values
       );
-    // Inline items keep their place; one that is no object fails as an invalid item.
-    for (let start = 0; start < inline.length; start += INGEST_PAGE_ROWS)
-      await sql.run(
-        "insert into catalyst_kb.ingest_items (sync_run_id,position,item) select $1::text, $2::int + ordinality::int - 1, value from jsonb_array_elements($3::jsonb) with ordinality",
-        [syncRunId, start, JSON.stringify(inline.slice(start, start + INGEST_PAGE_ROWS))]
-      );
-    await runtime.stores.transaction(async (stores) => {
-      await enqueueSourceSync(stores, runtime, payload);
-      if (created.length) await sourceSyncStarted(stores, runtime, payload);
-    });
-  });
+      if (!created.length)
+        await sql.run(
+          `insert into catalyst_kb.ingest_waiting (sync_run_id,source_id,operation_run_id,cursor_after,workflow_run_id,dataset,complete)
+         values ($1::text,$2::text,$3::text,$4::text,$5::text,$6::jsonb,$7::boolean)`,
+          values
+        );
+      // Inline items keep their place; one that is no object fails as an invalid item.
+      for (let start = 0; start < inline.length; start += INGEST_PAGE_ROWS)
+        await sql.run(
+          "insert into catalyst_kb.ingest_items (sync_run_id,position,item) select $1::text, $2::int + ordinality::int - 1, value from jsonb_array_elements($3::jsonb) with ordinality",
+          [syncRunId, start, JSON.stringify(inline.slice(start, start + INGEST_PAGE_ROWS))]
+        );
+      await runtime.stores.transaction(async (stores) => {
+        await enqueueSourceSync(stores, runtime, payload);
+        if (created.length) await sourceSyncStarted(stores, runtime, payload);
+      });
+      return "started" as const;
+    }
+  );
+  // Thrown outside the store's change, which answers only its own failures.
+  if (started === "ended") throw workflowSourceEnded();
+}
+
+/** A call of a run of a deleted Workflow: its source ended with it (KBW-2c). */
+function workflowSourceEnded() {
+  return new AppError(
+    "CONFLICT",
+    "The Workflow was deleted, and its source in the Knowledge Base ended with it",
+    {
+      reason: "knowledge_workflow_source_ended"
+    }
+  );
 }
 
 /**
@@ -400,10 +422,19 @@ async function startWaiting(
 /** Withdraws items of a Workflow-fed source by their ids at the Workflow. Search leaves them out at once. */
 export async function withdrawWorkflowItems(
   runtime: DataStoreRuntime,
-  input: { knowledgeBaseId: string; workflowId: string; itemIds: readonly string[] },
+  input: {
+    knowledgeBaseId: string;
+    workflow: KnowledgeWorkflowIncarnation;
+    itemIds: readonly string[];
+  },
   signal: AbortSignal
 ): Promise<number> {
-  const sourceId = workflowSourceId(input.workflowId);
+  // A withdrawal makes no source: where the Workflow fed none, or its source ended, nothing goes.
+  const source = await createSourceStore(runtime, input.knowledgeBaseId, signal).change((sql) =>
+    resolveWorkflowSource(sql, input.workflow, false)
+  );
+  if (!source || "ended" in source) return 0;
+  const sourceId = source.sourceId;
   const ids = [...new Set(input.itemIds)].map((itemId) => sourceItemId(sourceId, itemId));
   const payload = {
     knowledgeBaseId: input.knowledgeBaseId,
@@ -560,7 +591,7 @@ async function workflowRunGone(runtime: SourceJobRuntime, workflowRunId: string)
  * `knowledge_source_refused` where its account may no longer write. What it wrote stays, and a
  * complete pass withdraws nothing.
  */
-async function cancelPass(
+export async function cancelPass(
   runtime: SourceJobRuntime,
   payload: KnowledgeSyncJobPayload,
   control: JobControl,
@@ -579,7 +610,10 @@ async function cancelPass(
 }
 
 /** What a pass keeps only while it runs: its inline items and its failure rows. */
-async function forgetPassRows(sql: Pick<PostgresChangeStatements, "run">, syncRunId: string) {
+export async function forgetPassRows(
+  sql: Pick<PostgresChangeStatements, "run">,
+  syncRunId: string
+) {
   await sql.run("delete from catalyst_kb.ingest_items where sync_run_id=$1::text", [syncRunId]);
   await sql.run("delete from catalyst_kb.ingest_failures where sync_run_id=$1::text", [syncRunId]);
 }

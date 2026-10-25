@@ -1,14 +1,19 @@
+import { useState } from "react";
 import { Play } from "lucide-react";
 import { Button, PageHeader, PageLead, TabsLink, TabsNav } from "@work-shape/catalyst-ui";
 import { CopyIdItem } from "../copy-id-item";
 import { useTranslation } from "../../shared/i18n";
 import type { WorkflowEdit } from "./workflow-draft";
 import type { WorkflowView } from "./workflow-views";
+import { workflowRightsOn } from "./workflow-model";
+import { WorkflowRemoveDialog, WorkflowRemoveItem } from "./workflow-remove";
+import { useWorkflowsHost } from "./workflows-host";
 import { BackLink, TitlePlaceholder, routeLink, type OpenRoute } from "./workflows-frame";
 
 /**
  * The head of a Workflow, on its canvas, the list of its runs and its Settings: the way back,
- * the name, "Start now", "Copy ID" for whoever may change it, and the
+ * the name, "Start now", "Copy ID" for whoever may change it, "Delete" for whoever may delete
+ * it, with the question that names what the delete ends, and the
  * tabs Workflow, Runs and Settings. The tabs are addresses. Without runs on the instance, or
  * for a reader who may not read them, there is no Runs tab. The first paragraph under them
  * says what the Workflow does and whom every run acts as.
@@ -28,7 +33,9 @@ export function WorkflowHead({
   workspaceId: string;
   workflowId: string;
   /** The Workflow, once its record arrived. */
-  workflow: Pick<WorkflowView, "name" | "description" | "runsAs"> | undefined;
+  workflow:
+    | Pick<WorkflowView, "name" | "description" | "runsAs" | "allowed" | "ownerWorkspaceId">
+    | undefined;
   tab: "workflow" | "runs" | "settings";
   /** The instance runs Workflows and the reader may read this one's runs: its tab stands. */
   runsShown: boolean;
@@ -42,6 +49,10 @@ export function WorkflowHead({
   onOpenRoute: OpenRoute;
 }) {
   const { t } = useTranslation();
+  const host = useWorkflowsHost();
+  const [removing, setRemoving] = useState(false);
+  const mayDelete =
+    workflow !== undefined && host !== undefined && workflowRightsOn(host.rights, workflow).delete;
   const address = { collaborationWorkspaceId: workspaceId, workflow: workflowId };
   const lead = [
     workflow?.description,
@@ -77,8 +88,31 @@ export function WorkflowHead({
             </Button>
           ) : undefined
         }
-        menu={edit === undefined ? undefined : <CopyIdItem id={workflowId} />}
+        menu={
+          edit === undefined && !mayDelete ? undefined : (
+            <>
+              {edit === undefined ? null : <CopyIdItem id={workflowId} />}
+              {mayDelete ? (
+                <WorkflowRemoveItem
+                  separated={edit !== undefined}
+                  onSelect={() => setRemoving(true)}
+                />
+              ) : null}
+            </>
+          )
+        }
       />
+      {removing && workflow !== undefined ? (
+        <WorkflowRemoveDialog
+          workflow={workflowId}
+          name={workflow.name}
+          onClose={() => setRemoving(false)}
+          onRemoved={() => {
+            setRemoving(false);
+            onOpenRoute({ kind: "workflows", collaborationWorkspaceId: workspaceId });
+          }}
+        />
+      ) : null}
       <TabsNav label={t("workflows.tabs")} className="shrink-0 px-(--layout-gutter)">
         <TabsLink selected={tab === "workflow"} asChild>
           <a {...routeLink({ kind: "workflow", ...address }, onOpenRoute)}>

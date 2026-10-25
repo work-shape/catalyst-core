@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { defineJobKind } from "./jobs";
+import type { ClientInstanceId } from "./ids";
+import { defineJobKind, type JobsStore } from "./jobs";
 import {
   KNOWLEDGE_BASE_ACTIONS,
   KNOWLEDGE_JOB_KINDS,
@@ -99,6 +100,46 @@ export const knowledgeFetchJob = defineJobKind({
   concurrency: { global: 4 }
 });
 
+/**
+ * KBW-2c: a deleted Workflow's source ends in every Knowledge Base it fed. The delete queues
+ * this in its transaction; the job withdraws every item of each source of `workflow` whose
+ * creating revision is at most `through`, which a Workflow created later under the name never
+ * is, and of each the release before keyed without one; the purge follows on the usual
+ * deadline. `0` ends only those.
+ */
+export const knowledgeWorkflowSourceEndJob = defineJobKind({
+  kind: KNOWLEDGE_JOB_KINDS.endWorkflowSource,
+  payloadSchema: z.strictObject({
+    workflow: z.string().min(1).max(63),
+    through: z.number().int().nonnegative()
+  }),
+  maxAttempts: 10,
+  backoff: { baseMs: 30_000, maxMs: 15 * 60_000 },
+  leaseMs: 5 * 60_000,
+  concurrency: { perKey: 1 }
+});
+
+/** Queues the end of a deleted Workflow's sources, in the transaction of its delete. */
+export function enqueueKnowledgeWorkflowSourceEnd(
+  jobs: Pick<JobsStore, "enqueue">,
+  input: {
+    clientInstanceId: ClientInstanceId;
+    workflow: string;
+    through: number;
+    correlationId: string;
+  }
+): Promise<unknown> {
+  return jobs.enqueue(
+    knowledgeWorkflowSourceEndJob,
+    { workflow: input.workflow, through: input.through },
+    {
+      clientInstanceId: input.clientInstanceId,
+      concurrencyKey: `workflow:${input.workflow}`,
+      correlationId: input.correlationId
+    }
+  );
+}
+
 /** How often the fetch of one item is attempted before it fails with `knowledge_fetch_failed`. */
 export const KNOWLEDGE_FETCH_MAX_ATTEMPTS = 3;
 
@@ -158,6 +199,7 @@ export {
   knowledgeRetryOutputSchema,
   knowledgeLocateInputSchema,
   knowledgeLocateOutputSchema,
+  knowledgeWorkflowSourcesOutputSchema,
   KNOWLEDGE_SOURCE_ITEM_SHOWN_STATES,
   type KnowledgeSyncInput,
   type KnowledgeSyncResult,
@@ -168,6 +210,7 @@ export {
   type KnowledgeRetryOutput,
   type KnowledgeLocateInput,
   type KnowledgeLocateOutput,
+  type KnowledgeWorkflowSourcesOutput,
   type KnowledgeSourceItemShownState
 } from "@work-shape/catalyst-asset-schemas";
 

@@ -114,6 +114,24 @@ export interface WorkflowsSource {
   publishNarrative?: {
     read(workflow: string, revision: number, signal: AbortSignal): Promise<unknown>;
   };
+  /** The delete of a Workflow and its question. Absent where the source deletes none. */
+  removal?: WorkflowRemovalSource;
+}
+
+/**
+ * What deleting a Workflow ends (KBW-2c): the Knowledge Bases it put documents in, by title,
+ * with how many each holds; those the reader may not open only counted.
+ */
+export interface WorkflowRemovalView {
+  /** The revision the question was asked at: the delete expects it. */
+  revision: number;
+  knowledgeBases: readonly { name: string; title: string; documents: number }[];
+  hidden: { knowledgeBases: number; documents: number };
+}
+
+interface WorkflowRemovalSource {
+  read(workflow: string, signal: AbortSignal): Promise<WorkflowRemovalView>;
+  remove(workflow: string, expectedRevision: number): Promise<void>;
 }
 
 /** One page of what a step's Settings offer, and where the next read starts. */
