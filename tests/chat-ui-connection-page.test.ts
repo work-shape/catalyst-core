@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createElement } from "react";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
@@ -10,6 +11,7 @@ import {
   ConnectionEditor,
   connectionConfigToForm,
   countConnectionFormChanges,
+  listedHealth,
   personContextHeaderOf,
   resolveBuildRights,
   withConnectionForm,
@@ -23,7 +25,9 @@ import {
   type ConnectionSource,
   type ConnectionTestRun
 } from "@work-shape/catalyst-chat-ui/build-area";
+import { SettingsPageProvider } from "@work-shape/catalyst-chat-ui/settings-page-context";
 import { platformContext } from "./chat-ui-build-fixtures";
+import { buildPageSettings } from "./chat-ui-build-page-harness";
 import {
   connectionAsset,
   connectionDetail,
@@ -67,6 +71,8 @@ interface PageInput {
   subjects?: ReturnType<NonNullable<ConnectionSource["personContext"]>["useSubjects"]>;
   /** The catalogue's entries as the instance offers them. None unless it says so. */
   entries?: CatalogueEntryOffer[];
+  /** The settings page's context, which the reader's own sign-in of a personal one reads. */
+  settings?: boolean;
 }
 
 /** The page at the Connection's address, inside the frame, with fixed answers. */
@@ -164,7 +170,16 @@ function renderPage(input: PageInput = {}): string {
               href: (place) => `/build/${place.kindPath ?? ""}/${place.name ?? ""}`
             }
           },
-          createElement(BuildFrame, { source })
+          input.settings === true
+            ? createElement(
+                QueryClientProvider,
+                { client: new QueryClient({ defaultOptions: { queries: { retry: false } } }) },
+                createElement(SettingsPageProvider, {
+                  value: buildPageSettings(async () => new Response(null, { status: 404 })),
+                  children: createElement(BuildFrame, { source })
+                })
+              )
+            : createElement(BuildFrame, { source })
         )
       )
     )
@@ -983,6 +998,55 @@ describe("Connection page", () => {
     expect(renderPage({ asset: current, entries: [entry] })).not.toContain(
       "data-connection-catalogue-update"
     );
+  });
+
+  it("says of a personal Connection that each person connects, not that a key is missing", () => {
+    const personal = connectionAsset("mailbox", {
+      origin: "runtime",
+      connectorType: "http_api",
+      authScheme: "oauth",
+      credentialMode: "user",
+      secretHandle: undefined,
+      settings: {
+        baseUrl: "https://mail.example.test/v1",
+        oauth: {
+          authorizationUrl: "https://login.example.test/authorize",
+          tokenUrl: "https://login.example.test/token",
+          managedClient: "workshape"
+        }
+      }
+    });
+    // What the instance records after a save: nothing shared to use, so waiting for configuration.
+    const detail = (registration: "managed" | "preregistered") => ({
+      health: "needs_configuration" as const,
+      secret: { state: "not_set" as const },
+      sharedCredential: false,
+      oauth: { registration, providerHost: "login.example.test" }
+    });
+    const managed = renderPage({ asset: personal, detail: detail("managed"), settings: true });
+    expect(managed).toContain('data-connection-health="personal"');
+    expect(managed).toContain(">Each person connects<");
+    expect(managed).toContain("This instance brings the app registration.");
+    expect(managed).not.toContain("Not configured");
+    expect(managed).not.toContain("Enter the key under Credential");
+    // Nor a shared sign-in nobody is meant to make.
+    expect(managed).not.toContain('data-sign-in-state="none"');
+    const german = renderPage({
+      asset: personal,
+      detail: detail("managed"),
+      locale: "de",
+      settings: true
+    });
+    expect(german).toContain(">Jede Person verbindet sich<");
+    expect(german).toContain("Die App-Registrierung bringt diese Instanz mit.");
+    expect(german).not.toContain("Nicht konfiguriert");
+    const own = renderPage({ asset: personal, detail: detail("preregistered"), settings: true });
+    expect(own).toContain(">Each person connects<");
+    expect(own).toContain("There is no key to enter here.");
+    expect(own).not.toContain("This instance brings the app registration.");
+    // The list row says the same.
+    expect(listedHealth("needs_configuration", true)).toBe("personal");
+    expect(listedHealth("needs_configuration")).toBe("not_configured");
   });
 
   it("names the settings of a REST API in words, in English and in German", () => {

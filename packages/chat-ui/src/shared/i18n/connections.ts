@@ -160,6 +160,11 @@ export const connections = defineTranslations({
       "The instance may not reach this address. Its host is not among the outside addresses allowed for it.",
     "connections.healthNeverTested": "Not tested",
     "connections.healthNeverTestedText": "This connection has not been tested yet.",
+    "connections.healthPersonal": "Each person connects",
+    "connections.healthPersonalText":
+      "Each person connects their own account, in chat or under Settings > You > Connections. There is no key to enter here.",
+    "connections.healthPersonalTextManaged":
+      "This instance brings the app registration. Each person connects their own account, in chat or under Settings > You > Connections. There is nothing to enter here.",
     "connections.healthSignInNeeded": "Sign-in needed",
     "connections.healthSignInNeededText":
       "This connection signs in at its provider with OAuth, and nobody is signed in.",
@@ -434,6 +439,11 @@ export const connections = defineTranslations({
       "Die Instanz darf diese Adresse nicht erreichen. Ihr Host gehört nicht zu den externen Adressen, die für sie erlaubt sind.",
     "connections.healthNeverTested": "Nicht getestet",
     "connections.healthNeverTestedText": "Diese Verbindung wurde noch nicht getestet.",
+    "connections.healthPersonal": "Jede Person verbindet sich",
+    "connections.healthPersonalText":
+      "Jede Person verbindet ihr eigenes Konto, im Chat oder unter Einstellungen > Du > Verbindungen. Hier ist kein Schlüssel einzutragen.",
+    "connections.healthPersonalTextManaged":
+      "Die App-Registrierung bringt diese Instanz mit. Jede Person verbindet ihr eigenes Konto, im Chat oder unter Einstellungen > Du > Verbindungen. Hier ist nichts einzutragen.",
     "connections.healthSignInNeeded": "Anmeldung nötig",
     "connections.healthSignInNeededText":
       "Diese Verbindung meldet sich mit OAuth beim Anbieter an, und niemand ist angemeldet.",
