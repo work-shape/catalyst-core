@@ -43,7 +43,7 @@ A Vertex binding states `agentSelectable: false`: the adapter carries no tool ca
 
 ## Check
 
-`models check <id>` runs `instance.infrastructure.check` on the instance and prints the provider's row: whether its secret is set, and `ok` or the class of the failure (`unreachable`, `timeout`, `access_denied`, `not_found`, `rejected`, `failed`) with the product's sentence for it. What a provider answered is never shown. The check runs where the key is, on the instance; the CLI never holds the key. It needs the right of the Infrastructure page, `users.manage`. The instance runs the check at most once a minute; a call inside that minute waits for it. `--json` prints the row as JSON. The exit code is 0 for `ok` and 1 otherwise.
+`models check <id>` runs `instance.infrastructure.check` on the instance and prints the provider's row: whether its secret is set, and `ok` or the class of the failure (`unreachable`, `timeout`, `access_denied`, `not_found`, `rejected`, `failed`) with the product's sentence for it. What a provider answered is never shown. The check runs where the key is, on the instance; the CLI never holds the key. It needs the right of the Infrastructure page (`system.view`). The instance runs the check at most once a minute; a call inside that minute waits for it. `--json` prints the row as JSON. The exit code is 0 for `ok` and 1 otherwise.
 
 What `ok` shows depends on the provider: for Azure and other OpenAI-compatible endpoints, the key listed the endpoint's models; for Vertex, Google gave a token for the key; for Bedrock, Bedrock took the key. None of them calls the model. The first conversation with an agent on the binding does.
 

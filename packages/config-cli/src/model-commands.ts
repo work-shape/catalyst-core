@@ -85,8 +85,8 @@ Common options:
 
 At a terminal, add asks for what its flags leave out. A provider is added in the EU only:
 another region is refused with the reason. Who may add one is whoever may change and deploy
-the deployment repository; check asks the instance and needs the right its Infrastructure page
-needs, users.manage. Exit codes: 0 done or ok, 1 refused or the check failed, 2 usage.
+the deployment repository; check asks the instance and needs the right of the Infrastructure page
+(system.view). Exit codes: 0 done or ok, 1 refused or the check failed, 2 usage.
 `;
 
 class UsageError extends Error {}
