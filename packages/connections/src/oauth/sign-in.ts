@@ -43,6 +43,7 @@ import {
 } from "./client-registration";
 import { createOAuthFetch, type OAuthFetch } from "./fetch";
 import type { OAuthClient, OAuthPort, OAuthServerMetadata } from "./port";
+import { adminConsentUrl, asksAdminConsent } from "./admin-consent";
 import { createSdkOAuthPort } from "./sdk-adapter";
 import { checkedServer, portFailure } from "./server";
 import { signInServerOf, staticServerOf, withAuthorizationParams } from "./static-server";
@@ -103,6 +104,11 @@ export interface OAuthStartAnswer {
   providerHost: string;
   scopes: string[];
   expiresAt: string;
+  /**
+   * The link an administrator of the person's organisation approves the app with, where the
+   * Connection names one (MS-APP-2). Shown only once the provider asked for that approval.
+   */
+  adminConsentUrl?: string;
 }
 
 /** What a callback reads of its query. Untrusted: from the provider through the browser. */
@@ -110,6 +116,8 @@ export interface OAuthCallbackQuery {
   state?: string;
   code?: string;
   error?: string;
+  /** Read only for the admin-consent codes the Connection names; never shown or kept. */
+  error_description?: string;
   iss?: string;
 }
 
@@ -485,12 +493,14 @@ export function createConnectionSignIn(deps: ConnectionSignInDeps): ConnectionSi
       scopes,
       ttlMs: CONNECTION_OAUTH_SESSION_TTL_MS
     });
+    const approval = adminConsentUrl(endpoints, redirect);
     return {
       signInId: session.id,
       authorizationUrl: withAuthorizationParams(authorization.url, endpoints),
       providerHost: new URL(server.authorizationEndpoint).host,
       scopes,
-      expiresAt: session.expiresAt
+      expiresAt: session.expiresAt,
+      ...(approval === undefined ? {} : { adminConsentUrl: approval })
     };
   }
 
@@ -523,7 +533,13 @@ export function createConnectionSignIn(deps: ConnectionSignInDeps): ConnectionSi
     const { type, signIn, settings } = signInOf(connection);
     const target = await deps.egress.check(type.target(settings));
     const origin = credentialOriginOf(type, settings, target);
-    if (query.error !== undefined) throw connectionOAuthError("oauth_denied");
+    if (query.error !== undefined) {
+      throw connectionOAuthError(
+        asksAdminConsent(type.oauthEndpoints?.(settings), query)
+          ? "oauth_admin_consent_required"
+          : "oauth_denied"
+      );
+    }
     if (query.code === undefined || query.code.length === 0) {
       throw connectionOAuthError("oauth_state_invalid", "the provider sent no code");
     }

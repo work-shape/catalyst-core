@@ -5469,6 +5469,10 @@
                         },
                         "providerHost": {
                           "type": "string"
+                        },
+                        "adminConsentUrl": {
+                          "type": "string",
+                          "format": "uri"
                         }
                       },
                       "required": [
@@ -6082,6 +6086,10 @@
                     },
                     "expiresAt": {
                       "$ref": "#/components/schemas/Timestamp"
+                    },
+                    "adminConsentUrl": {
+                      "type": "string",
+                      "format": "uri"
                     }
                   },
                   "required": [

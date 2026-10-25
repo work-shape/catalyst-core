@@ -4,6 +4,7 @@ import {
   CONNECTION_ACTIONS,
   CONNECTION_ASSET_KIND,
   auditActorFromIdentity,
+  connectionAdminConsentReturnOf,
   connectionCallReasonOf,
   connectionOAuthError,
   personalConnectionBrowserError,
@@ -256,6 +257,12 @@ export function registerConnectionRoutes(route: Route, options: ChatServerOption
         actor.authenticationMethod === "session-cookie" &&
         actor.delegatedActor === undefined;
       const { name, ...query } = input;
+      // An administrator back from the admin-consent link: nothing to complete, the landing
+      // says the app is approved. People sign in afterwards as before.
+      const returned = connectionAdminConsentReturnOf(query);
+      const approved =
+        returned === undefined ? undefined : required().oauthLandingUrl(returned, name);
+      if (approved !== undefined) return { location: approved };
       const completed = await required().oauthComplete({
         connectionName: name,
         query,
@@ -276,7 +283,10 @@ export function registerConnectionRoutes(route: Route, options: ChatServerOption
         await requestDiscovery(completed.connectionName);
       return { location: completed.location };
     },
-    redirectOnError: (error) => connections?.oauthLandingUrl(...signInOutcomeOf(error))
+    // The administrator who approved has no session on the instance as a rule: the return is
+    // told by its query before the call was let in.
+    redirectOnError: (error, request) =>
+      connections?.oauthLandingUrl(...(adminConsentReturnOf(request) ?? signInOutcomeOf(error)))
   });
 
   route.operation(apiOperations["connections.disconnect"], {
@@ -360,6 +370,23 @@ function signInAudit(context: OperationExecutionContext) {
  * The outcome a refused callback lands with: its reason, never the text of an error, and the
  * Connection's name where the refusal knows it.
  */
+/** The landing of a return from the admin-consent link, read from the unchecked request. */
+function adminConsentReturnOf(request: {
+  query: unknown;
+  params: unknown;
+}): [outcome: string, connectionName?: string] | undefined {
+  const query =
+    typeof request.query === "object" && request.query !== null ? request.query : undefined;
+  if (query === undefined) return undefined;
+  const returned = connectionAdminConsentReturnOf({
+    state: Reflect.get(query, "state"),
+    error: Reflect.get(query, "error")
+  });
+  if (returned === undefined) return undefined;
+  const named = connectionNameParamsSchema.safeParse(request.params);
+  return named.success ? [returned, named.data.name] : [returned];
+}
+
 function signInOutcomeOf(error: unknown): [outcome: string, connectionName?: string] {
   const outcome =
     connectionOAuthReasonOf(error) ??

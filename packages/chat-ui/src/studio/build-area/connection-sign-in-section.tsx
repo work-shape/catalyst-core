@@ -18,6 +18,7 @@ import { useTranslation, type TranslationKey } from "../../shared/i18n";
 import type { BuildAsset } from "./build-asset-kind";
 import type { ConnectionSource } from "./connection-source";
 import {
+  AdminConsentLink,
   SignInActions,
   SignInBody,
   signInHeading,
@@ -142,6 +143,12 @@ export function ConnectionSignInSection({
           </KeyValue>
         ) : null}
       </KeyValueList>
+      {mayWrite && oauth?.adminConsentUrl ? (
+        <AdminConsentLink
+          url={oauth.adminConsentUrl}
+          hint={t("connectionSignIn.adminConsentHint")}
+        />
+      ) : null}
       {binding?.state === "connected" ? (
         <Banner layout="line" data-sign-in-shared="">
           {t("connectionSignIn.sharedConnected")}

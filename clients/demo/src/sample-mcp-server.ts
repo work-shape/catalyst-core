@@ -22,6 +22,7 @@ try {
           clientSecret: await environment.secrets.resolve(SAMPLE_OAUTH_REST_CLIENT_SECRET_NAME),
           redirectUri: oauthRestRedirectUri
         };
+  const restAdminConsent = environment.oauthRestAdminConsent;
   const server = createSampleMcpServer({
     ...(oauthIssuerBase === undefined
       ? {}
@@ -32,7 +33,7 @@ try {
             ...(oauthClientId === undefined || oauthRedirectUri === undefined
               ? {}
               : { registeredClient: { clientId: oauthClientId, redirectUri: oauthRedirectUri } }),
-            ...(restClient === undefined ? {} : { restClient })
+            ...(restClient === undefined ? {} : { restClient, restAdminConsent })
           }
         }),
     key: await environment.secrets.resolve(SAMPLE_MCP_KEY_NAME),

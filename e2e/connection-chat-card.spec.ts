@@ -52,7 +52,10 @@ test.describe.configure({ mode: "serial" });
 
 let oauthServer: ChildProcess | undefined;
 
-async function startProvider(baseURL: string | undefined): Promise<void> {
+async function startProvider(
+  baseURL: string | undefined,
+  extra: Record<string, string> = {}
+): Promise<void> {
   oauthServer = spawn(process.execPath, ["clients/demo/dist/sample-mcp-server.js"], {
     env: {
       ...process.env,
@@ -64,7 +67,8 @@ async function startProvider(baseURL: string | undefined): Promise<void> {
       SAMPLE_OAUTH_ISSUER_BASE: OAUTH_BASE,
       SAMPLE_OAUTH_REST_CLIENT_ID: CLIENT_ID,
       SAMPLE_OAUTH_REST_CLIENT_SECRET: CLIENT_SECRET,
-      SAMPLE_OAUTH_REST_REDIRECT_URI: `${baseURL}${callbackPath}`
+      SAMPLE_OAUTH_REST_REDIRECT_URI: `${baseURL}${callbackPath}`,
+      ...extra
     },
     stdio: "ignore"
   });
@@ -93,8 +97,11 @@ test.afterEach(async () => {
 });
 
 /** Plays the provider's page and the trip back to the API's callback. */
-async function routeProvider(context: BrowserContext): Promise<void> {
-  await context.route(`${OAUTH_BASE}/oauth-rest/authorize**`, async (route) => {
+async function routeProvider(
+  context: BrowserContext,
+  page: "authorize" | "adminconsent" = "authorize"
+): Promise<void> {
+  await context.route(`${OAUTH_BASE}/oauth-rest/${page}**`, async (route) => {
     const answer = await route.fetch({ maxRedirects: 0 });
     const back = new URL(answer.headers().location ?? "");
     expect(back.pathname).toBe(callbackPath);
@@ -175,6 +182,68 @@ async function removeAsset(page: Page, url: string): Promise<void> {
   expect(removed.ok(), `Delete during cleanup: ${removed.status()}`).toBe(true);
 }
 
+/** The entry's part for each person's own account, with its client secret; nobody connected. */
+async function createPersonalConnection(
+  page: Page,
+  oauth: Record<string, unknown> = {}
+): Promise<void> {
+  // An earlier spec may have deleted the entry's Connection: creating it again names the
+  // revision of that delete.
+  const created = await requestWithOrigin(page, "put", connectionUrl, {
+    data: {
+      expectedRevision: await assetBaseRevision(page, connectionUrl),
+      config: {
+        name: ENTRY,
+        displayName: TITLE,
+        service: ENTRY,
+        catalogue: { entry: ENTRY, part: "tools", version: 1 },
+        connectorType: "http_api",
+        authScheme: "oauth",
+        credentialMode: "user",
+        settings: {
+          baseUrl: `${OAUTH_BASE}/oauth-rest/api`,
+          testPath: "/customers",
+          oauth: {
+            authorizationUrl: `${OAUTH_BASE}/oauth-rest/authorize`,
+            tokenUrl: `${OAUTH_BASE}/oauth-rest/token`,
+            revocationUrl: `${OAUTH_BASE}/oauth-rest/revoke`,
+            tokenAuthMethod: "client_secret_post",
+            clientId: CLIENT_ID,
+            scopes: ["sample.identity", "sample.read"],
+            ...oauth
+          }
+        },
+        operations: [
+          {
+            name: "listCustomers",
+            description: "Read the invented customers from the sample server.",
+            effect: "reading",
+            exposure: ["agent"],
+            enabled: true,
+            method: "GET",
+            path: "/customers",
+            shaper: "sample.customers"
+          }
+        ]
+      }
+    }
+  });
+  expect(created.ok(), await created.text()).toBe(true);
+  const secret = await requestWithOrigin(
+    page,
+    "put",
+    `${apiBaseUrl}/api/v1/connections/${ENTRY}/secret`,
+    {
+      data: {
+        value: CLIENT_SECRET,
+        expectedVersion: null,
+        expectedRevision: await assetRevision(page, connectionUrl)
+      }
+    }
+  );
+  expect(secret.ok(), await secret.text()).toBe(true);
+}
+
 /** A new conversation with the agent, from its card on the Agents page. */
 async function chatWith(page: Page, name: string): Promise<void> {
   await page.goto("/");
@@ -208,60 +277,7 @@ test("de: a refused call of a personal Connection shows Connect by itself, and t
   try {
     // The entry's part, installed for each person's own account, its one reading tool given to
     // the agent. Nobody has connected.
-    // An earlier spec may have deleted the entry's Connection: creating it again names the
-    // revision of that delete.
-    const created = await requestWithOrigin(page, "put", connectionUrl, {
-      data: {
-        expectedRevision: await assetBaseRevision(page, connectionUrl),
-        config: {
-          name: ENTRY,
-          displayName: TITLE,
-          service: ENTRY,
-          catalogue: { entry: ENTRY, part: "tools", version: 1 },
-          connectorType: "http_api",
-          authScheme: "oauth",
-          credentialMode: "user",
-          settings: {
-            baseUrl: `${OAUTH_BASE}/oauth-rest/api`,
-            testPath: "/customers",
-            oauth: {
-              authorizationUrl: `${OAUTH_BASE}/oauth-rest/authorize`,
-              tokenUrl: `${OAUTH_BASE}/oauth-rest/token`,
-              revocationUrl: `${OAUTH_BASE}/oauth-rest/revoke`,
-              tokenAuthMethod: "client_secret_post",
-              clientId: CLIENT_ID,
-              scopes: ["sample.identity", "sample.read"]
-            }
-          },
-          operations: [
-            {
-              name: "listCustomers",
-              description: "Read the invented customers from the sample server.",
-              effect: "reading",
-              exposure: ["agent"],
-              enabled: true,
-              method: "GET",
-              path: "/customers",
-              shaper: "sample.customers"
-            }
-          ]
-        }
-      }
-    });
-    expect(created.ok(), await created.text()).toBe(true);
-    const secret = await requestWithOrigin(
-      page,
-      "put",
-      `${apiBaseUrl}/api/v1/connections/${ENTRY}/secret`,
-      {
-        data: {
-          value: CLIENT_SECRET,
-          expectedVersion: null,
-          expectedRevision: await assetRevision(page, connectionUrl)
-        }
-      }
-    );
-    expect(secret.ok(), await secret.text()).toBe(true);
+    await createPersonalConnection(page);
     await storeAgent(page, agent, [TOOL]);
 
     // The agent calls the tool: the card stands in place of the refusal, with Connect.
@@ -293,6 +309,96 @@ test("de: a refused call of a personal Connection shows Connect by itself, and t
     const stored = await readAsset(page, connectionUrl);
     expect(JSON.stringify(stored)).not.toContain(CLIENT_SECRET);
   } finally {
+    // The person's sign-in outlives the Connection's delete: the next test starts unconnected.
+    await requestWithOrigin(page, "post", `${apiBaseUrl}/api/v1/connections/${ENTRY}/disconnect`);
+    await removeAsset(page, agentUrl(agent));
+    await removeAsset(page, connectionUrl);
+  }
+});
+
+/** Pictures of what stands on the page now, without a reload: 1280 and 390, light. */
+async function shootInPlace(page: Page, name: string, ready: Locator): Promise<void> {
+  if (!shotsDir) return;
+  await mkdir(shotsDir, { recursive: true });
+  for (const width of [1280, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    await ready.scrollIntoViewIfNeeded();
+    await page.screenshot({
+      path: join(shotsDir, `connection-chat-card-${name}-${width}-de-light.png`),
+      animations: "disabled"
+    });
+  }
+  await page.setViewportSize({ width: 1280, height: 900 });
+}
+
+test("de: where the organisation's IT has to approve, the card offers the approval link, and the person connects once it is approved", async ({
+  page,
+  browser,
+  baseURL,
+  pageErrors: _pageErrors,
+  releaseConnections: _releaseConnections,
+  instanceAgentsChange: _instanceAgentsChange
+}) => {
+  test.setTimeout(180_000);
+  const agent = `e2e_chat_card_${randomUUID().slice(0, 8)}`;
+  // The sample provider refuses every sign-in until an administrator approved its client.
+  await startProvider(baseURL, { SAMPLE_OAUTH_REST_ADMIN_CONSENT: "required" });
+  await signIn(page, admin);
+  await routeProvider(page.context());
+  page.setDefaultTimeout(30_000);
+  const itContext = await browser.newContext({ baseURL });
+  try {
+    await createPersonalConnection(page, {
+      adminConsent: {
+        url: `${OAUTH_BASE}/oauth-rest/adminconsent`,
+        errorCodes: ["SAMPLE_ADMIN_CONSENT"]
+      }
+    });
+    await storeAgent(page, agent, [TOOL]);
+    await chatWith(page, agent);
+    await sendToolCall(page, TOOL, {});
+    const card = page.locator(`[data-connect-card][data-connection="${ENTRY}"]`);
+    await expect(card).toHaveAttribute("data-connect-card", "connect");
+
+    // Connect: the provider asks for an administrator. The card says the IT approves once and
+    // offers the link; the window stays on its page.
+    const opened = page.waitForEvent("popup");
+    await card.locator('[data-connect-card-connect="connect"]').click();
+    const provider = await opened;
+    await expect(
+      provider.locator('[data-sign-in-landing="oauth_admin_consent_required"]')
+    ).toBeVisible();
+    const refusal = card.locator('[data-sign-in-error="oauth_admin_consent_required"]');
+    await expect(refusal).toContainText("Deine IT muss diese App einmal freigeben");
+    await provider.close();
+    const link = (await card.locator("[data-admin-consent-url]").textContent()) ?? "";
+    const approval = new URL(link);
+    expect(`${approval.origin}${approval.pathname}`).toBe(`${OAUTH_BASE}/oauth-rest/adminconsent`);
+    expect(approval.searchParams.get("client_id")).toBe(CLIENT_ID);
+    expect(approval.searchParams.get("state")).toBe("admin_consent");
+    await expect(card.locator('[data-connect-card-connect="connect"]')).toHaveText(
+      "Erneut versuchen"
+    );
+    await shootInPlace(page, "admin-consent", card);
+
+    // The IT opens the link in a browser without a session on the instance and approves.
+    await routeProvider(itContext, "adminconsent");
+    const itPage = await itContext.newPage();
+    await itPage.addInitScript(() => window.localStorage.setItem("vivd-catalyst:locale", "de"));
+    await itPage.goto(link);
+    const approved = itPage.locator('[data-sign-in-landing="admin_consented"]');
+    await expect(approved).toContainText("Freigegeben");
+    await expect(approved.getByRole("button")).toHaveCount(0);
+    await shootInPlace(itPage, "admin-consented", approved);
+
+    // The same person tries again, without reloading, and connects.
+    const again = page.waitForEvent("popup");
+    await card.locator('[data-connect-card-connect="connect"]').click();
+    await (await again).waitForEvent("close", { timeout: 30_000 });
+    await expect(card).toHaveAttribute("data-connect-card", "connected");
+  } finally {
+    await itContext.close();
+    await requestWithOrigin(page, "post", `${apiBaseUrl}/api/v1/connections/${ENTRY}/disconnect`);
     await removeAsset(page, agentUrl(agent));
     await removeAsset(page, connectionUrl);
   }

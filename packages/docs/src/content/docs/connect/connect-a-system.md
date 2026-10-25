@@ -144,6 +144,34 @@ rotated there first), keeps the sign-ins: calls fail until the secret is set, an
 again without a new connect. A Connection on a client the instance does not have is not
 configured until the client is back.
 
+### Admin consent
+
+Some organisations let only an administrator approve an app that reads people's data. The
+provider then refuses a person's sign-in with an error code. `oauth.adminConsent` names where
+an administrator approves the app and which codes mean that approval is missing:
+
+```yaml
+oauth:
+  authorizationUrl: https://login.example.com/{tenant}/authorize
+  tokenUrl: https://login.example.com/{tenant}/token
+  pathParams: { tenant: organizations }
+  adminConsent:
+    url: https://login.example.com/{tenant}/adminconsent
+    errorCodes: [CODE1, CODE2]
+```
+
+The address lies on the origin of `authorizationUrl`, has no query, and may use the same path
+parameters. A code matches as the callback's `error` or as one word of its
+`error_description`. Such a refusal lands as `oauth_admin_consent_required`, and the sign-in
+step and the Connect card say that the organisation's IT has to approve once, with the link
+to copy. The link is the address with `client_id`, the Connection's current `scope`, its
+`redirect_uri` and `state=admin_consent`. It holds the public client id only. The start's
+answer and the Connection's detail carry it as `adminConsentUrl`; the Connection's page shows
+it to who may change the Connection. After the administrator approves, the provider sends
+their browser back to the same callback, which lands on `admin_consented` without a sign-in on
+the instance and changes nothing. The person then connects again. When a further group widens
+the scopes, the link names them too.
+
 A part can declare `groups` with `id`, localized `title`, and `scopes`. When groups are
 present, every operation names one and an `identity` group is required. Installation and
 later operation edits derive `settings.oauth.scopes` from identity plus all groups with an

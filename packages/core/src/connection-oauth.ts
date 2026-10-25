@@ -36,7 +36,13 @@ export const CONNECTION_OAUTH_REASONS = {
   /** The caller is no person signed in to the instance in a browser. */
   oauth_requires_person: "FORBIDDEN",
   /** The Connection was changed between the start and the callback. */
-  oauth_connection_changed: "CONFLICT"
+  oauth_connection_changed: "CONFLICT",
+  /**
+   * The provider answered that an administrator of the person's organisation has to approve
+   * the app once before anybody there can sign in. Which answers mean that is the
+   * Connection's `settings.oauth.adminConsent.errorCodes`, never a provider's code here.
+   */
+  oauth_admin_consent_required: "CONFLICT"
 } as const satisfies Record<string, AppErrorCode>;
 
 export type ConnectionOAuthReason = keyof typeof CONNECTION_OAUTH_REASONS;
@@ -56,7 +62,9 @@ const CONNECTION_OAUTH_MESSAGES: Record<ConnectionOAuthReason, string> = {
   oauth_issuer_mismatch: "the authorization server answered for another issuer",
   oauth_requires_person: "only a person signed in to the instance in a browser can connect",
   oauth_connection_changed:
-    "the Connection was changed while the sign-in was under way; start it again"
+    "the Connection was changed while the sign-in was under way; start it again",
+  oauth_admin_consent_required:
+    "an administrator of the organisation has to approve the app once at the provider; then sign in again"
 };
 
 /**
@@ -106,6 +114,30 @@ export const CONNECTION_OAUTH_LANDING_PATH = "/build/connections";
 
 /** The value of `signIn` on the landing page after a completed sign-in. */
 export const CONNECTION_OAUTH_CONNECTED = "connected";
+
+/**
+ * The `state` of the admin-consent link (MS-APP-2). That link brings an administrator of the
+ * customer's organisation back to the Connection's callback, usually without a session on the
+ * instance and never with a sign-in under way, so its state names no setup session. A random
+ * state of a sign-in is 43 characters of base64url and never equals it.
+ */
+export const CONNECTION_OAUTH_ADMIN_CONSENT_STATE = "admin_consent";
+
+/** The value of `signIn` on the landing page after an administrator approved the app. */
+export const CONNECTION_OAUTH_ADMIN_CONSENTED = "admin_consented";
+
+/**
+ * The landing outcome of a callback that is the return from the admin-consent link: approved
+ * where the provider sent no error, `oauth_denied` where it did. Nothing for any other callback.
+ * The return changes nothing on the instance: people sign in afterwards as before.
+ */
+export function connectionAdminConsentReturnOf(query: {
+  state?: unknown;
+  error?: unknown;
+}): typeof CONNECTION_OAUTH_ADMIN_CONSENTED | "oauth_denied" | undefined {
+  if (query.state !== CONNECTION_OAUTH_ADMIN_CONSENT_STATE) return undefined;
+  return query.error === undefined ? CONNECTION_OAUTH_ADMIN_CONSENTED : "oauth_denied";
+}
 
 /** How long a sign-in may take from its start to its callback. */
 export const CONNECTION_OAUTH_SESSION_TTL_MS = 15 * 60_000;

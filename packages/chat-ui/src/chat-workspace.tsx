@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState }
 import { cn, SkipLink, Spinner, UiRoot, useExit } from "@work-shape/catalyst-ui";
 import { DocsAddressProvider } from "@work-shape/catalyst-ui";
 import { DEFAULT_THEME_INPUTS } from "@work-shape/catalyst-ui/theme";
+import { CONNECTION_OAUTH_ADMIN_CONSENTED } from "@work-shape/catalyst-core";
 import { startNewAgent } from "./studio/agents/agents-model";
 import { AgentsPage } from "./studio/agents/agents-page";
 import { ApprovalRevisionHostProvider } from "./chat/approvals/approval-revision-host";
@@ -278,6 +279,18 @@ function ChatWorkspaceContent({
       onThemeModeChange?.(themeMode);
     }
   }, [onThemeModeChange, showsLogin, themeMode]);
+
+  // An administrator back from the admin-consent link is often nobody of the instance: the
+  // landing says the app is approved without a sign-in.
+  if (signInLanding?.outcome === CONNECTION_OAUTH_ADMIN_CONSENTED) {
+    return (
+      <TranslationProvider locale={model.config.activeLocale} labelOverrides={labelOverrides}>
+        <UiRoot as="main" mode={themeMode} labels={uiLabels}>
+          <ConnectionSignInLanding landing={signInLanding} onOpen={leaveSignInLanding} />
+        </UiRoot>
+      </TranslationProvider>
+    );
+  }
 
   if (showsLogin) {
     return (

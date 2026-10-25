@@ -114,7 +114,13 @@ const connectionOAuthSchema = z.object({
    */
   redirectUri: z.string().optional(),
   /** The host of the authorization server a registration was made at. */
-  providerHost: z.string().optional()
+  providerHost: z.string().optional(),
+  /**
+   * Where the Connection names one: the link an administrator of the person's organisation
+   * approves the app with, once for everyone there. It holds the public client id, never a
+   * secret.
+   */
+  adminConsentUrl: z.string().url().optional()
 });
 
 export const connectionDetailSchema = z.object({
@@ -162,7 +168,12 @@ export const connectionOAuthStartSchema = z.object({
   authorizationUrl: z.string().url(),
   providerHost: z.string(),
   scopes: z.array(z.string()),
-  expiresAt: timestampSchema
+  expiresAt: timestampSchema,
+  /**
+   * Where the Connection names one: the link an administrator approves the app with, shown
+   * once the provider answers that the organisation's approval is missing.
+   */
+  adminConsentUrl: z.string().url().optional()
 });
 
 /**

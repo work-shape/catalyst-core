@@ -1,5 +1,6 @@
 import {
   CONNECTION_NAME_PATTERN,
+  CONNECTION_OAUTH_ADMIN_CONSENTED,
   CONNECTION_OAUTH_CONNECTED,
   CONNECTION_OAUTH_LANDING_PATH,
   EGRESS_DENIED,
@@ -32,10 +33,19 @@ export type SignInFailure =
 export interface SignInError {
   failure: SignInFailure;
   host?: string;
+  /**
+   * With `oauth_admin_consent_required`: the link the person sends to their IT, where the
+   * Connection names one.
+   */
+  adminConsentUrl?: string;
 }
 
-/** The value of `signIn` on the landing page. */
-export type SignInOutcome = typeof CONNECTION_OAUTH_CONNECTED | SignInFailure;
+/**
+ * The value of `signIn` on the landing page. `admin_consented` is the landing of an
+ * administrator who approved the app with the admin-consent link, no person's sign-in.
+ */
+export type SignInOutcome =
+  typeof CONNECTION_OAUTH_CONNECTED | typeof CONNECTION_OAUTH_ADMIN_CONSENTED | SignInFailure;
 
 /** What the landing tab reads of its address: the outcome and the Connection, never more. */
 export interface SignInLanding {
@@ -65,6 +75,7 @@ function isSignInFailure(value: unknown): value is SignInFailure {
 /** An outcome from an address or a message, which nobody vouches for. */
 function outcomeOf(value: unknown): SignInOutcome {
   if (value === CONNECTION_OAUTH_CONNECTED) return CONNECTION_OAUTH_CONNECTED;
+  if (value === CONNECTION_OAUTH_ADMIN_CONSENTED) return CONNECTION_OAUTH_ADMIN_CONSENTED;
   return isSignInFailure(value) ? value : "failed";
 }
 
@@ -232,13 +243,19 @@ export async function waitForSignIn(
   const wake = new AbortController();
   const stop = calls.listen((landing) => {
     if (landing.connection !== undefined && landing.connection !== input.connection) return;
+    // An administrator's approval is no outcome of this sign-in.
+    if (landing.outcome === CONNECTION_OAUTH_ADMIN_CONSENTED) return;
     landed = landing;
     wake.abort();
   });
   try {
     for (;;) {
       if (signal.aborted) return { status: "cancelled" };
-      if (landed !== undefined && landed.outcome !== CONNECTION_OAUTH_CONNECTED) {
+      if (
+        landed !== undefined &&
+        landed.outcome !== CONNECTION_OAUTH_CONNECTED &&
+        landed.outcome !== CONNECTION_OAUTH_ADMIN_CONSENTED
+      ) {
         return { status: "failed", error: { failure: landed.outcome } };
       }
       const detail = await calls.readDetail().catch(() => undefined);

@@ -427,7 +427,16 @@ export function createRoute(app: FastifyInstance, options: RouteServerOptions): 
       ...(binding.bodyLimitBytes === undefined ? {} : { bodyLimit: binding.bodyLimitBytes }),
       handler: async (request, reply) =>
         operation.response.kind === "redirect"
-          ? answerRedirect(reply, binding.redirectOnError, () => call(request, reply))
+          ? answerRedirect(
+              reply,
+              binding.redirectOnError &&
+                ((error) =>
+                  binding.redirectOnError?.(error, {
+                    query: request.query,
+                    params: request.params
+                  })),
+              () => call(request, reply)
+            )
           : call(request, reply)
     });
     async function call(request: FastifyRequest, reply: FastifyReply): Promise<unknown> {
