@@ -30,9 +30,13 @@ const MAX_TARBALL_BYTES_BY_DIR = {
   // Standalone helper bundles and shipped skills.
   "artifact-helpers": 6_500_000,
   // Compiled components, stylesheet and Vite helpers.
-  "chat-ui": 800_000,
+  "chat-ui": 960_000,
+  // Bundled server assembly: routes, workers and built-in capabilities.
+  "client-assembly": 360_000,
+  // Domain types and logic every other package builds on.
+  core: 360_000,
   // Built documentation site.
-  docs: 2_000_000,
+  docs: 2_400_000,
   // Migrations and their snapshot history.
   "postgres-store": 850_000,
   // Pinned view runtime and released App Kit versions.
