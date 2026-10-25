@@ -333,12 +333,16 @@ function CandidateEvidence({ candidate }: { candidate: DataStoreFlaggedItem }) {
             <span className="font-medium text-foreground">
               {reviewValueText(candidate.correctedValue, locale)}
             </span>
-            {candidate.decidedBy && candidate.decidedAt ? (
+            {candidate.decidedAt ? (
               <span className="block text-caption text-muted-foreground">
-                {t("dataStores.reviewCorrectedBy", {
-                  name: candidate.decidedBy,
-                  date: formatDate(candidate.decidedAt, locale)
-                })}
+                {candidate.decidedByName
+                  ? t("dataStores.reviewCorrectedBy", {
+                      name: candidate.decidedByName,
+                      date: formatDate(candidate.decidedAt, locale)
+                    })
+                  : t("dataStores.reviewCorrectedOn", {
+                      date: formatDate(candidate.decidedAt, locale)
+                    })}
               </span>
             ) : null}
           </KeyValue>

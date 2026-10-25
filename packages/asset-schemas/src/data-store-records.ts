@@ -149,7 +149,10 @@ export const dataStoreRecordsFlaggedOutputSchema = z.strictObject({
         reason: z.enum(RECORD_FLAG_REASONS),
         // REC-2: the cited document as its chip opens it, by the Knowledge Base's name. Absent
         // where the document is no longer there to open.
-        document: z.strictObject({ knowledgeBase: name, fileName: name }).optional()
+        document: z.strictObject({ knowledgeBase: name, fileName: name }).optional(),
+        // REC-KEEP: the person who decided, by the name the instance shows for them, read when
+        // the list is. Absent where the account is gone or its deletion was requested.
+        decidedByName: z.string().min(1).optional()
       })
     )
     .max(RECORDS_FLAGGED_MAX_ITEMS_PER_PAGE),

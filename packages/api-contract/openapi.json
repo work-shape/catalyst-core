@@ -13143,6 +13143,10 @@
                               "knowledgeBase",
                               "fileName"
                             ]
+                          },
+                          "decidedByName": {
+                            "type": "string",
+                            "minLength": 1
                           }
                         },
                         "required": [
