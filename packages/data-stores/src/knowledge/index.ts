@@ -137,7 +137,7 @@ export interface KnowledgeBases {
   ): ReturnType<typeof knowledgeHitDocument>;
   /**
    * What deleting a Workflow ends: the Knowledge Bases it feeds, with their documents. The
-   * caller checks `workflow.delete`; one the reader may not use is only counted (KBW-2c).
+   * caller checks `workflow.delete`; one the reader may not open is only counted (KBW-2c).
    */
   workflowSources(
     workflow: string,

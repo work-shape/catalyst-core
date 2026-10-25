@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  AppError,
   defineJobHandler,
   isOperationRunId,
   KNOWLEDGE_BASE_ACTIONS,
@@ -56,7 +57,8 @@ function migrated(record: DataStoreRecord): boolean {
 
 /**
  * The delete question of a Workflow: the Knowledge Bases its live sources feed, with how many
- * documents each holds there. One the reader may not use is counted, never named.
+ * documents each holds there. One the reader may not open (`knowledge_base.read`) is counted,
+ * never named: who may delete the Workflow reads in its runs what it put where anyway.
  */
 export async function workflowSourceDocuments(
   runtime: DataStoreRuntime,
@@ -90,7 +92,8 @@ export async function workflowSourceDocuments(
     const visible =
       asset?.status === "active" &&
       asset.id === record.id &&
-      access.authorize(KNOWLEDGE_BASE_ACTIONS.use, {
+      // Opening a Knowledge Base and its sources' counts is `read`; `use` only queries it.
+      access.authorize(KNOWLEDGE_BASE_ACTIONS.read, {
         kind: KNOWLEDGE_BASE_ASSET_KIND,
         name,
         assetId: asset.id,
@@ -125,12 +128,22 @@ export function createWorkflowSourceEndHandler(runtime: SourceJobRuntime) {
     kind: knowledgeWorkflowSourceEndJob,
     slots: 1,
     async run(job, control) {
+      // A store not yet upgraded holds back no other: every upgraded store ends its sources
+      // first, and the job tries again, within its attempts, for those still waiting.
+      let waiting = 0;
       for await (const record of knowledgeStores(runtime.data)) {
-        // Its upgrade runs at the start of this release; the job tries again after it.
-        if (!migrated(record))
-          throw new Error("A Knowledge Base store awaits its upgrade before a source can end");
+        if (!migrated(record)) {
+          waiting++;
+          continue;
+        }
         await endInStore(runtime, control, record.id, job.payload, job.correlationId);
       }
+      if (waiting > 0)
+        throw new AppError(
+          "CONFLICT",
+          `${String(waiting)} Knowledge Base store(s) await their upgrade before a source can end`,
+          { reason: "knowledge_store_upgrade_pending" }
+        );
     }
   });
 }

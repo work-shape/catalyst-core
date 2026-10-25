@@ -30627,7 +30627,7 @@
     "/api/v1/workflows/{workflow}/knowledge-sources": {
       "get": {
         "operationId": "knowledge_bases.workflow_sources",
-        "summary": "Read what deleting a Workflow ends: the Knowledge Bases its sources feed and how many documents each holds there; ones the caller may not use are only counted",
+        "summary": "Read what deleting a Workflow ends: the Knowledge Bases its sources feed and how many documents each holds there; ones the caller may not open are only counted",
         "tags": [
           "Knowledge Bases"
         ],

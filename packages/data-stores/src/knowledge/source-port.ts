@@ -78,7 +78,7 @@ export interface KnowledgeSources {
   ): Promise<number>;
   /**
    * The delete question of a Workflow: the Knowledge Bases its live sources feed, each with its
-   * documents there; one the reader may not use is counted, never named (KBW-2c).
+   * documents there; one the reader may not open is counted, never named (KBW-2c).
    */
   workflowSources(
     workflow: string,

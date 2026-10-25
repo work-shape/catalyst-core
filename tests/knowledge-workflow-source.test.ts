@@ -340,6 +340,8 @@ describe("the Workflow-fed source (KBW-2)", { timeout: 600_000 }, () => {
     // Neither the Workflow's account nor a holder of write alone lifts the hold.
     const byAccount = await second.call("retry", { source: SOURCE, sourceItemIds: [sourceItemId] });
     expect(byAccount.result.status, JSON.stringify(byAccount.result)).not.toBe("done");
+    // Refused for want of publish: the account holds write, which the retry itself asks.
+    expect(JSON.stringify(byAccount.result)).toContain(KNOWLEDGE_BASE_ACTIONS.publish);
     const byMember = await w.instance.api.call("knowledge_bases.retry_documents", {
       params: { knowledgeBase: KB },
       payload: { source: SOURCE, sourceItemIds: [sourceItemId] },
@@ -514,6 +516,115 @@ describe("the Workflow-fed source (KBW-2)", { timeout: 600_000 }, () => {
     }
   });
 
+  it("names in the delete question only the Knowledge Bases the reader may open, counts the rest, and answers only who may delete the Workflow (check 112)", async () => {
+    const w = await world(developmentAuth, true);
+    const other = await w.addKnowledgeBase("second-kb", "Second");
+    try {
+      const run = await w.startRun();
+      await w.settle(
+        operationRunOf(await run.call("ingest", { items: [item(0), item(1), item(2)] }))
+      );
+      await w.settle(
+        operationRunOf(await run.call("ingest", { items: [item(3), item(4)] }, "second-kb"))
+      );
+      await run.end("done");
+      const conversation = await w.instance.api.call("conversations.create", {
+        payload: { title: "Member" },
+        headers: asMember
+      });
+      expect(conversation.statusCode, conversation.body).toBe(200);
+      const member = required(
+        await w.instance.stores.conversations.getConversation(
+          clientInstanceId,
+          asConversationId(z.object({ id: z.string() }).parse(conversation.json()).id)
+        )
+      ).createdByUserId;
+      const grant = (
+        action: string,
+        scope: { scopeKind: "asset"; scopeId: string } | { scopeKind: "instance" }
+      ) =>
+        w.instance.stores.access.createGrant({
+          clientInstanceId,
+          holderKind: "user",
+          holderId: member,
+          action,
+          effect: "allow",
+          ...scope,
+          grantedBy: asUserId(LEGACY_LIST_GRANTOR)
+        });
+      const ask = () =>
+        w.instance.api.call("knowledge_bases.workflow_sources", {
+          params: { workflow: WORKFLOW },
+          headers: asMember
+        });
+      // Without workflow.delete the question is not answered.
+      await grant(KNOWLEDGE_BASE_ACTIONS.read, { scopeKind: "asset", scopeId: w.kb.id });
+      expect((await ask()).statusCode).toBe(403);
+      // The member opens the first Knowledge Base, and only queries the second.
+      await grant("workflow.delete", { scopeKind: "instance" });
+      await grant(KNOWLEDGE_BASE_ACTIONS.use, { scopeKind: "asset", scopeId: other.kb.id });
+      const answer = await ask();
+      expect(answer.statusCode, answer.body).toBe(200);
+      expect(answer.json()).toEqual({
+        knowledgeBases: [{ name: KB, title: "Source", documents: 3 }],
+        hidden: { knowledgeBases: 1, documents: 2 }
+      });
+      expect(answer.body).not.toContain("second-kb");
+      expect(answer.body).not.toContain("Second");
+    } finally {
+      await other.sql.end();
+    }
+  });
+
+  it("ends the source in every upgraded store while another awaits its upgrade, and there once it has it (check 112)", async () => {
+    const w = await world(undefined, true);
+    // `knowledge-base:second-kb` is listed before the first Knowledge Base's store.
+    const other = await w.addKnowledgeBase("second-kb", "Second");
+    try {
+      const run = await w.startRun();
+      await w.settle(operationRunOf(await run.call("ingest", { items: [item(0), item(1)] })));
+      await w.settle(operationRunOf(await run.call("ingest", { items: [item(2)] }, "second-kb")));
+      await run.end("done");
+      const record = "knowledge-base:second-kb";
+      const [applied] = await w.platform`select migrations from data_stores where name=${record}`;
+      await w.platform`update data_stores set migrations=(select jsonb_agg(m) from jsonb_array_elements(migrations) m where (m->>'number')::int<>15) where name=${record}`;
+
+      const asset = required(await w.workflowAsset());
+      const deleted = await w.instance.api.call("assets.delete", {
+        params: { kind: "workflow", name: WORKFLOW },
+        payload: { expectedRevision: asset.revision }
+      });
+      expect(deleted.statusCode, deleted.body).toBe(200);
+      const open = async (sql: typeof w.sql) =>
+        (
+          await sql`select count(*)::int as n from catalyst_kb.source_items where source_id=${SOURCE} and state<>'withdrawn'`
+        )[0]?.n;
+      // Its first attempt, which is due at once; its next waits out the backoff.
+      await eventually(async () => {
+        await w.platform`update platform_jobs set run_after = now() where status = 'queued' and kind like 'knowledge_base.%' and kind <> 'knowledge_base.end_workflow_source'`;
+        await w.worker.runDue();
+        await getTestJobs(w.instance.api).runDue();
+        expect(await open(w.sql)).toBe(0);
+      }, 180_000);
+      const [job] =
+        await w.platform`select status, attempts, error_message from platform_jobs where kind='knowledge_base.end_workflow_source'`;
+      expect(job).toMatchObject({ status: "queued", attempts: 1 });
+      expect(String(job?.error_message)).toContain("await their upgrade");
+      // The store that awaits its upgrade still holds its item, and nothing of it was named.
+      expect(await open(other.sql)).toBe(1);
+
+      await w.platform`update data_stores set migrations=${JSON.stringify(applied?.migrations)}::jsonb where name=${record}`;
+      await drainUntil(w, async () => {
+        expect(await open(other.sql)).toBe(0);
+        const [job] =
+          await w.platform`select status from platform_jobs where kind='knowledge_base.end_workflow_source'`;
+        expect(job?.status).toBe("succeeded");
+      });
+    } finally {
+      await other.sql.end();
+    }
+  });
+
   it("adopts a source of the release before that only this Workflow fed, and ends one a deleted namesake fed (check 112)", async () => {
     const w = await world();
     const legacy = `workflow:${WORKFLOW}`;
@@ -521,6 +632,10 @@ describe("the Workflow-fed source (KBW-2)", { timeout: 600_000 }, () => {
       w.sql`insert into catalyst_kb.sync_runs (id, source_id, mode, operation_run_id, workflow_run_id, state, started_at, ended_at)
         values (${id}, ${legacy}, 'ingest', 'opr_legacy', 'wfr_legacy', 'done', ${startedAt}, ${startedAt})`;
     await w.sql`insert into catalyst_kb.source_cursors (source_id, cursor, kind, workflow_id) values (${legacy}, null, 'workflow', ${WORKFLOW})`;
+    // A key that names a revision holds that revision: none is no revision.
+    await expect(
+      w.sql`insert into catalyst_kb.source_cursors (source_id, cursor, kind, workflow_id) values (${`${legacy}@9`}, null, 'workflow', ${WORKFLOW})`
+    ).rejects.toThrow(/source_kind_check/u);
 
     // Every pass came after this Workflow was created: the source is its own and keeps its key.
     await pass("legacy-after", new Date(Date.now() + 1_000).toISOString());

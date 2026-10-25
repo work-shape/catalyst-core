@@ -219,7 +219,7 @@ export type KnowledgeLocateOutput = z.infer<typeof knowledgeLocateOutputSchema>;
 
 /**
  * The delete question of a Workflow (KBW-2c): the Knowledge Bases its source feeds, each with
- * how many documents it holds there, which a delete withdraws. Those the reader may not use are
+ * how many documents it holds there, which a delete withdraws. Those the reader may not open are
  * counted only, by number of Knowledge Bases and documents, and never named.
  */
 export const knowledgeWorkflowSourcesOutputSchema = z.strictObject({
