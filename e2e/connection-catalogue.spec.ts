@@ -284,6 +284,8 @@ test.describe("an OAuth entry", () => {
       expect(given?.config.toolNames).toEqual([`connection.${OAUTH_ENTRY}.listCustomers`]);
       await done.locator("[data-connection-give-done]").click();
       await expect(page).toHaveURL(new RegExp(`/build/connections/${OAUTH_ENTRY}$`, "u"));
+      // The page has read its people before the cleanup deletes the Connection under it.
+      await expect(page.locator("[data-connection-people]")).toBeVisible();
     } finally {
       const found = await page.request.get(agentPath(agent));
       if (found.ok()) {
