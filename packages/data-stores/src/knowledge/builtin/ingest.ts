@@ -661,21 +661,30 @@ async function readPass(
   // KB-ISO-1b: a Workflow's first pass above the stop takes the items up to it, then waits for
   // one confirmation. Once it stopped, the end of its run no longer ends it: the step waits, and
   // past its timeout the pass goes on after the confirmation and withdraws nothing.
+  // The passes of one run count together (KBW-1): what its earlier passes took counts toward
+  // the stop, so a run that splits its items over several calls stops as one call would.
   const at = firstPassStopOf(runtime.input);
-  const stops =
-    !progress.complete &&
-    progress.stop?.confirmed !== true &&
-    (await passItems(runtime, payload, control, run)) > at &&
-    (await isFirstPass(runtime, payload, control));
+  const first =
+    !progress.complete && progress.stop?.confirmed !== true
+      ? await firstPassBefore(runtime, payload, control, run)
+      : undefined;
+  const room =
+    first !== undefined && first + (await passItems(runtime, payload, control, run)) > at
+      ? Math.max(0, at - first)
+      : undefined;
+  const stops = room !== undefined;
   const held = () => progress.stop !== undefined;
   if (!progress.complete) {
     if (run.dataset && !datasets)
       throw new AppError("CONFLICT", "Ingestion needs the instance's dataset storage");
     while (!progress.complete) {
       control.signal.throwIfAborted();
-      if (stops && progress.offset >= at) {
+      if (room !== undefined && progress.offset >= room) {
         if (!progress.stop) {
-          progress = { ...progress, stop: await tallyPass(runtime, payload, control, run, at) };
+          progress = {
+            ...progress,
+            stop: await tallyPass(runtime, payload, control, run, at, first ?? 0)
+          };
           const next = JSON.stringify(progress);
           await createSourceStore(runtime.data, payload.knowledgeBaseId, control.signal).change(
             (sql) =>
@@ -685,11 +694,18 @@ async function readPass(
               )
           );
         }
+        // A pass that outlived its run waits only while the run's items can still be read.
+        if (await passDataGone(runtime, run)) {
+          await cancelPass(runtime, payload, control);
+          return false;
+        }
         // The confirmation wakes it; this look is only in case a wake was lost.
         await again(runtime, control, payload, PASS_WAIT_MAX_MS);
         return false;
       }
-      const limit = stops ? Math.min(INGEST_PAGE_ROWS, at - progress.offset) : INGEST_PAGE_ROWS;
+      const limit = stops
+        ? Math.min(INGEST_PAGE_ROWS, (room ?? 0) - progress.offset)
+        : INGEST_PAGE_ROWS;
       // A copy a killed worker left is found by the cleanup the fetch job queues per batch.
       await enqueueKnowledgeFileCleanup(
         {
@@ -715,16 +731,24 @@ async function readPass(
         await cancelPass(runtime, payload, control, "knowledge_source_refused");
         return false;
       }
-      const rows: unknown[] =
-        run.dataset && datasets
-          ? await datasets.read({
-              workflowRunId: run.workflow_run_id,
-              reference: run.dataset,
-              offset: progress.offset,
-              limit,
-              signal: control.signal
-            })
-          : await inlinePage(runtime, payload, control, progress.offset, limit);
+      let rows: unknown[];
+      try {
+        rows =
+          run.dataset && datasets
+            ? await datasets.read({
+                workflowRunId: run.workflow_run_id,
+                reference: run.dataset,
+                offset: progress.offset,
+                limit,
+                signal: control.signal
+              })
+            : await inlinePage(runtime, payload, control, progress.offset, limit);
+      } catch (error) {
+        // Confirmed after its run's datasets expired: nothing is left to read (KB-ISO-1b).
+        if (!held() || !isDatasetGone(error)) throw error;
+        await cancelPass(runtime, payload, control);
+        return false;
+      }
       const usable = new Set<string>();
       for (const row of rows) {
         const connection = isObject(row) && isObject(row.fetch) ? row.fetch.connection : undefined;
@@ -816,23 +840,51 @@ async function passItems(
   return row?.n ?? 0;
 }
 
-/** Whether no earlier pass of the Workflow's source ended done: this one is its first. */
-async function isFirstPass(
+/**
+ * Where this pass belongs to the source's first run: how many items the run's earlier passes
+ * took. Nothing where a pass of another run ended done, or a pass of the source was confirmed.
+ */
+async function firstPassBefore(
   runtime: SourceJobRuntime,
   payload: KnowledgeSyncJobPayload,
-  control: JobControl
-): Promise<boolean> {
-  const earlier = await createSourceStore(
-    runtime.data,
-    payload.knowledgeBaseId,
-    control.signal
-  ).change((sql) =>
-    sql.run(
-      "select 1 from catalyst_kb.sync_runs where source_id=$1::text and id<>$2::text and state='done' limit 1",
-      [payload.sourceId, payload.syncRunId]
-    )
-  );
-  return earlier.length === 0;
+  control: JobControl,
+  run: IngestRun
+): Promise<number | undefined> {
+  const [row] = z
+    .array(z.object({ later: z.boolean(), confirmed: z.boolean(), earlier: z.number().int() }))
+    .parse(
+      await createSourceStore(runtime.data, payload.knowledgeBaseId, control.signal).change((sql) =>
+        sql.run(
+          `select
+               exists(select 1 from catalyst_kb.sync_runs where source_id=$1::text and id<>$2::text and state='done' and workflow_run_id is distinct from $3::text) as later,
+               exists(select 1 from catalyst_kb.sync_runs where source_id=$1::text and id<>$2::text and mode='ingest' and cursor_after::jsonb->'stop'->>'confirmed'='true') as confirmed,
+               coalesce((select sum(accepted) from catalyst_kb.sync_runs where source_id=$1::text and id<>$2::text and workflow_run_id=$3::text),0)::int as earlier`,
+          [payload.sourceId, payload.syncRunId, run.workflow_run_id]
+        )
+      )
+    );
+  return !row || row.later || row.confirmed ? undefined : row.earlier;
+}
+
+/** A dataset the pass reads that expired or that its run may no longer read. */
+function isDatasetGone(error: unknown): boolean {
+  if (!(error instanceof AppError) || !isObject(error.details)) return false;
+  const reason = error.details.reason;
+  return reason === "dataset_expired" || reason === "FORBIDDEN";
+}
+
+/** Whether a pass whose run ended can no longer read the items it names. */
+async function passDataGone(runtime: SourceJobRuntime, run: IngestRun): Promise<boolean> {
+  const datasets = runtime.data.workflowDatasets;
+  if (!run.dataset || !datasets || !(await workflowRunGone(runtime, run.workflow_run_id)))
+    return false;
+  try {
+    await datasets.check({ workflowRunId: run.workflow_run_id, reference: run.dataset });
+    return false;
+  } catch (error) {
+    if (isDatasetGone(error)) return true;
+    throw error;
+  }
 }
 
 // A tally reads larger pages than a write: it keeps nothing but sums.
@@ -844,10 +896,13 @@ async function tallyPass(
   payload: KnowledgeSyncJobPayload,
   control: JobControl,
   run: IngestRun,
-  at: number
+  at: number,
+  earlier: number
 ): Promise<FirstPassStop> {
   const datasets = runtime.data.workflowDatasets;
   const stop = emptyFirstPassStop(at);
+  // The items its run's earlier passes took count; their bytes are spent and not estimated.
+  stop.items = earlier;
   for (let offset = 0; ; offset += TALLY_PAGE_ROWS) {
     control.signal.throwIfAborted();
     const rows: unknown[] =
