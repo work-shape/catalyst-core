@@ -378,34 +378,59 @@ describe("scheduled prompts API", () => {
     expect(edited.statusCode).toBe(422);
   });
 
-  it("records a late tick once, for the latest due time it missed", async () => {
+  // The worker's clock is set by the test, so a run never depends on the hour it runs in.
+  async function lateTick(cron: string, missed: string, now: string) {
     const { t, workspace } = await fixture();
     const start = scheduledStartSchema.parse(
       (
         await t.expectOk(t.kai.id, "scheduled_starts.create", {
-          payload: { ...fields, cron: "0 * * * *", collaborationWorkspaceId: workspace.id }
+          payload: { ...fields, cron, collaborationWorkspaceId: workspace.id }
         })
       ).json()
     );
-    // The worker was away for five hours: the queued tick is for a due time five hours ago.
-    const hour = 3_600_000;
-    const missed = new Date(Math.floor(Date.now() / hour) * hour - 5 * hour).toISOString();
     await withTestSql(async (sql) => {
       await sql`update scheduled_starts set next_run_at = ${missed} where id = ${start.id}`;
       await sql`update platform_jobs set payload = jsonb_set(payload, '{dueAt}', to_jsonb(${missed}::text)), run_after = now() where client_instance_id = ${clientInstanceId} and kind = 'scheduled_prompt.fire' and subject = ${start.id} and status = 'queued'`;
     });
-    const hourBefore = Math.floor(Date.now() / hour) * hour;
-    await getTestJobs(t.instance).runDue();
-    const hourAfter = Math.floor(Date.now() / hour) * hour;
+    await getTestJobs(t.instance, { now: () => new Date(now) }).runDue();
     const runs = await t.stores.scheduledStarts.listRuns({
       clientInstanceId,
       scheduledStartId: start.id,
       page: { limit: 10 }
     });
-    expect(runs).toHaveLength(1);
-    const recorded = Date.parse(required(runs[0]).scheduledFor);
-    expect(recorded).toBeGreaterThanOrEqual(hourBefore);
-    expect(recorded).toBeLessThanOrEqual(hourAfter);
+    const after = await t.stores.scheduledStarts.get({ clientInstanceId, id: start.id });
+    return { scheduledFor: runs.map((run) => run.scheduledFor), nextRunAt: after?.nextRunAt };
+  }
+
+  it("records a late tick once, for the latest due time it missed", async () => {
+    // The worker was away for five hours: the queued tick is for a due time five hours ago.
+    expect(
+      await lateTick("0 * * * *", "2030-01-15T05:00:00.000Z", "2030-01-15T10:20:00.000Z")
+    ).toEqual({
+      scheduledFor: ["2030-01-15T10:00:00.000Z"],
+      nextRunAt: "2030-01-15T11:00:00.000Z"
+    });
+  });
+
+  it("records a late tick in the repeated Berlin hour for the first showing of that hour", async () => {
+    // 27 October 2030: 02:00 is shown at 00:00 UTC in summer time and again at 01:00 UTC in
+    // winter time. The schedule ran for it the first time; the second is not due again.
+    expect(
+      await lateTick("0 * * * *", "2030-10-26T20:00:00.000Z", "2030-10-27T01:30:00.000Z")
+    ).toEqual({
+      scheduledFor: ["2030-10-27T00:00:00.000Z"],
+      nextRunAt: "2030-10-27T02:00:00.000Z"
+    });
+  });
+
+  it("records a late tick after the skipped Berlin hour for the time it skipped", async () => {
+    // 31 March 2030: 02:30 is skipped, so it is due at 03:00 summer time, 01:00 UTC.
+    expect(
+      await lateTick("30 2 * * *", "2030-03-30T01:30:00.000Z", "2030-03-31T01:20:00.000Z")
+    ).toEqual({
+      scheduledFor: ["2030-03-31T01:00:00.000Z"],
+      nextRunAt: "2030-04-01T00:30:00.000Z"
+    });
   });
 
   it("keeps the next tick when an edit races a tick that already advanced the start", async () => {
