@@ -11,12 +11,16 @@ import {
   KNOWLEDGE_FILE_MAX_BYTES,
   DocumentSourceError,
   KNOWLEDGE_TEXT_FORMATS,
+  modelRouteAllowedForPersonalData,
+  personalDataConversation,
   type ClientInstanceId,
-  type KnowledgeQueryEmbedder
+  type KnowledgeQueryEmbedder,
+  type PlatformStores
 } from "@work-shape/catalyst-core";
 import type { ModelGateway } from "@work-shape/catalyst-model-provider";
 import {
   getModelProviderConfigs,
+  getPersonalModelRegions,
   connectionConfigSchema,
   type ClientInstanceConfig
 } from "@work-shape/catalyst-config-schema";
@@ -72,19 +76,58 @@ export function knowledgeEmbedding(
 }
 
 /**
+ * MODEL-REGION-3: an agent's query in a conversation holding data from a personal connection
+ * may carry that data, so it is embedded only on a route in the allowed regions. Set where the
+ * Connections module is on.
+ */
+interface QueryEmbeddingPersonalData {
+  config: ClientInstanceConfig;
+  stores: Pick<PlatformStores, "conversations" | "agentRuns">;
+}
+
+/**
  * How a search embeds its query: one text through the gateway with the purpose
  * `knowledge_query`, with a binding of kind `embedding` that release config has now, behind
  * the same model and dimensions as the index it searches. A binding it no longer has, or one
  * now behind another model, answers nothing, and the search answers from full text and titles.
+ * So does a binding whose route may not carry the conversation's personal data.
  */
 function queryEmbedder(
   embedding: KnowledgeEmbedding,
   clientInstanceId: ClientInstanceId,
-  gateway: Pick<ModelGateway, "embed">
+  gateway: Pick<ModelGateway, "embed">,
+  personalData?: QueryEmbeddingPersonalData
 ): KnowledgeQueryEmbedder {
-  return async ({ bindingId, model, dimensions, text, attribution, correlationId, signal }) => {
+  return async ({
+    bindingId,
+    model,
+    dimensions,
+    text,
+    attribution,
+    agentRunId,
+    correlationId,
+    signal
+  }) => {
     const approved = embedding.models?.find((candidate) => candidate.bindingId === bindingId);
     if (approved?.model !== model || approved.dimensions !== dimensions) return undefined;
+    if (personalData && attribution.conversationId !== undefined) {
+      const { config, stores } = personalData;
+      const providerId = config.modelBindings.find(
+        (binding) => binding.id === bindingId
+      )?.providerId;
+      const route = getModelProviderConfigs(config).find((provider) => provider.id === providerId);
+      if (
+        !modelRouteAllowedForPersonalData(route ?? {}, getPersonalModelRegions(config)) &&
+        (await personalDataConversation(
+          stores,
+          clientInstanceId,
+          attribution.conversationId,
+          agentRunId
+        ))
+      ) {
+        return undefined;
+      }
+    }
     const answer = await gateway.embed({
       binding: { bindingId },
       texts: [text],
@@ -300,7 +343,14 @@ export const assembleKnowledge: ModuleSeam = (parts, earlier) => {
     operationSources: (runtime) => [
       knowledgeBases.operationSource(
         runtime.files,
-        queryEmbedder(embedding, parts.clientInstanceId, runtime.modelGateway),
+        queryEmbedder(
+          embedding,
+          parts.clientInstanceId,
+          runtime.modelGateway,
+          parts.modules.isEnabled("connections")
+            ? { config: parts.config, stores: parts.stores }
+            : undefined
+        ),
         runtime.knowledgeFieldExtractor
       )
     ],

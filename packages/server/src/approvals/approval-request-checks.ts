@@ -33,7 +33,11 @@ export async function approvalRequestChecks(
     {
       correlationId: context.correlationId,
       userId: getRuntimeSubjectUserId(context),
-      ...(input.origin ? { conversationId: input.origin.conversationId } : {}),
+      // The run lets a judge read the conversation's personal-data mark, a Workflow step's
+      // thread included (MODEL-REGION-3).
+      ...(input.origin
+        ? { conversationId: input.origin.conversationId, agentRunId: input.origin.agentRunId }
+        : {}),
       ...(context.deadline ? { deadline: context.deadline } : {}),
       ...(context.signal ? { signal: context.signal } : {})
     }

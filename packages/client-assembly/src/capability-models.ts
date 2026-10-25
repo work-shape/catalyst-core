@@ -2,6 +2,7 @@ import type { ClientInstanceCapabilityModels } from "@work-shape/catalyst-capabi
 import {
   AppError,
   asAgentRunId,
+  personalDataConversation,
   requirePersonalDataModelRoute,
   type AgentRunId,
   type ClientInstanceId,
@@ -12,7 +13,9 @@ import {
 } from "@work-shape/catalyst-core";
 import {
   type ClientInstanceConfig,
-  getModelProviderConfigs
+  getModelProviderConfigs,
+  getPersonalModelRegions,
+  resolveModuleSwitches
 } from "@work-shape/catalyst-config-schema";
 import {
   createInstanceModelGateway,
@@ -245,13 +248,32 @@ export async function createInstanceModels(input: {
   };
 }
 
-/** The models of an instance for a worker process of a capability, which has no API around it. */
+/**
+ * The models of an instance for a worker process of a capability, which has no API around it.
+ * A call there that names a conversation is held to the regions allowed for personal data, as
+ * in the API (MODEL-REGION-3): a document extraction's task is written by an agent that may
+ * have read mail.
+ */
 export async function createWorkerCapabilityModels(input: {
   config: ClientInstanceConfig;
   clientInstanceId: ClientInstanceId;
   infrastructure: InstanceInfrastructure;
-  store: Pick<PlatformStores, "usage">;
+  store: Pick<PlatformStores, "usage" | "conversations" | "agentRuns">;
   bindingIds: readonly string[];
 }): Promise<ClientInstanceCapabilityModels> {
-  return (await createInstanceModels(input)).capabilityModels;
+  const { config, clientInstanceId, store } = input;
+  return (
+    await createInstanceModels({
+      ...input,
+      ...(resolveModuleSwitches(config).connections?.enabled === true
+        ? {
+            personalData: {
+              allowed: getPersonalModelRegions(config),
+              marked: (conversationId, agentRunId) =>
+                personalDataConversation(store, clientInstanceId, conversationId, agentRunId)
+            }
+          }
+        : {})
+    })
+  ).capabilityModels;
 }

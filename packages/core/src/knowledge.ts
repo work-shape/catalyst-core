@@ -20,7 +20,7 @@ import type { ConnectionsStore } from "./connections";
 import type { DataStoreRecordsStore, DataStoreRows, DataStoreStatement } from "./data-stores";
 import { z } from "zod";
 import type { AuthenticatedIdentity } from "./identity";
-import type { ClientInstanceId, ConversationId } from "./ids";
+import type { AgentRunId, ClientInstanceId, ConversationId } from "./ids";
 import { defineJobKind, subjectDedupeKey, type JobsStore } from "./jobs";
 import type { ObjectStorage } from "./object-storage";
 import type { ActorAccess } from "./permissions";
@@ -187,6 +187,12 @@ export type KnowledgeQueryEmbedder = (call: {
     conversationId?: ConversationId;
     operationRunId: string;
   };
+  /**
+   * The agent run that searched, with `attribution.conversationId`. A query in a conversation
+   * holding data from a personal connection is embedded only on a route allowed for it
+   * (MODEL-REGION-3); elsewhere the search answers from full text and titles.
+   */
+  agentRunId?: AgentRunId;
   correlationId: string;
   signal?: AbortSignal;
 }) => Promise<number[] | undefined>;

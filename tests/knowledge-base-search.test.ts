@@ -134,7 +134,7 @@ describe("searching the documents of a Knowledge Base", () => {
     vi.restoreAllMocks();
   });
 
-  async function instanceWith(options: { embedding?: true } = {}) {
+  async function instanceWith(options: { embedding?: true; connections?: true } = {}) {
     const attachments = createManagedObjectTestAttachmentCapability();
     return start(true, undefined, developmentAuth, undefined, {
       attachments: attachments.capability,
@@ -491,6 +491,56 @@ describe("searching the documents of a Knowledge Base", () => {
         await addFiles(world, name, [file]);
       }
     }
+
+    it("MODEL-REGION-3: embeds no query of a conversation with personal data on a route outside the allowed regions", async () => {
+      // The embedding binding is on the deterministic entry, which declares no region: no
+      // route without one passes for personal data.
+      const instance = await instanceWith({ embedding: true, connections: true });
+      await publishKnowledgeBase(instance, "expose", { methods: ["semantic", "keyword"] });
+      await addFiles(instance, "expose", [
+        { filename: "Lage.txt", content: "Die Wohnung liegt ruhig am Stadtpark." }
+      ]);
+      await putAgent(instance, ["expose"], null);
+      const admin = await person(instance, "user-1", ["user", "admin", "superadmin"]);
+      const queries = async () =>
+        (await instance.stores.usage.listModelUsageEvents({ clientInstanceId })).filter(
+          (event) => event.purpose === "knowledge_query"
+        ).length;
+      let call = 0;
+      const ask = async (marked: boolean) => {
+        const conversation = await conversationOf(instance, admin);
+        if (marked) {
+          await instance.stores.conversations.markPersonalData({
+            clientInstanceId,
+            conversationId: conversation.id,
+            userId: asUserId(admin.id),
+            at: new Date().toISOString()
+          });
+        }
+        call += 1;
+        const answer = await instance.execution.localAgentRuntimeOptions.runTool(
+          {
+            toolName: KNOWLEDGE_SEARCH_TOOL_NAME,
+            toolCallId: asToolCallId(`call-region-${call}`),
+            agentRunId: asAgentRunId(`run-region-${call}`),
+            conversationId: conversation.id,
+            agentName: "berater",
+            input: { query: "Wo liegt die Wohnung am Stadtpark?" }
+          },
+          { clientInstanceId, user: admin, locale: "en", correlationId: `corr_region_${call}` }
+        );
+        expect(answer.status).toBe("success");
+        return toolOutputSchema.parse(answer.status === "success" ? answer.output : undefined);
+      };
+
+      // Unmarked, the query is embedded as before.
+      await ask(false);
+      expect(await queries()).toBe(1);
+      // Marked, the words still answer, and the query reaches no model.
+      const marked = await ask(true);
+      expect(marked.passages.map((passage) => passage.fileName)).toEqual(["Lage.txt"]);
+      expect(await queries()).toBe(1);
+    });
 
     it("is one tool over every Knowledge Base with documents; a third adds only to its description, one of tables adds knowledge.query", async () => {
       const instance = await instanceWith();
