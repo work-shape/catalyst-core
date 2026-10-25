@@ -354,18 +354,25 @@ export class AssetReadWorkflow {
     // Knowledge Base.
     const asksPublish =
       !publishedOnly &&
-      (target.kind.publishQuestion !== undefined || target.kind.publishReach !== undefined);
+      (target.kind.publishQuestion !== undefined ||
+        target.kind.publishReview !== undefined ||
+        target.kind.publishReach !== undefined);
     const locale = asksPublish ? await this.readerLocale(call) : undefined;
+    const asking = locale && {
+      assetId: asset.id,
+      scope: asset.scope,
+      config: content.config,
+      locale,
+      names: this.addresseeNames(call, locale)
+    };
+    const review =
+      asking && target.kind.publishReview ? await target.kind.publishReview(asking) : undefined;
     const publishQuestion =
-      locale && target.kind.publishQuestion
-        ? await target.kind.publishQuestion({
-            assetId: asset.id,
-            scope: asset.scope,
-            config: content.config,
-            locale,
-            names: this.addresseeNames(call, locale)
-          })
-        : undefined;
+      review?.lines ??
+      (asking && target.kind.publishQuestion
+        ? await target.kind.publishQuestion(asking)
+        : undefined);
+    const publishConfirmation = review?.confirmation;
     const appAudience =
       target.kind.kind === "app" && locale
         ? await appAudienceReview(
@@ -446,6 +453,7 @@ export class AssetReadWorkflow {
         : {}),
       ...(publication ? { publication } : {}),
       ...(publishQuestion?.length ? { publishQuestion } : {}),
+      ...(publishConfirmation ? { publishConfirmation } : {}),
       ...(publishNarrative ? { publishNarrative } : {}),
       ...(appAudience ? { appAudience } : {}),
       ...(asset.name === defaultName ? { isDefault: true as const } : {}),

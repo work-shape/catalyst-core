@@ -206,6 +206,40 @@ describe("the first import stops for a confirmation (KB-ISO-1b)", { timeout: 600
   });
 });
 
+describe("a keyword-only first import that waits (KB-ISO-1b review)", { timeout: 600_000 }, () => {
+  const { setup } = useKnowledgeSync({ firstPassStop: STOP, methods: ["keyword"] });
+
+  it("states count and size only: nothing is embedded, so no tokens, passages or room", async () => {
+    const world = await setup();
+    const text = new TextEncoder().encode("Searchable text of a synced document.");
+    for (let i = 0; i < 230; i++)
+      world.world.put({ folderId: "folder", name: `${i}.txt`, mime: "text/plain", bytes: text });
+    const run = await world.sync();
+    const waiting = await eventually(async () => {
+      await world.platform`update platform_jobs set run_after = now() where status = 'queued' and kind like 'knowledge_base.%'`;
+      await world.worker.runDue();
+      const status = await sourceStatus(world, SOURCE);
+      expect(status.confirmation).toBeDefined();
+      return required(status.confirmation);
+    }, 180_000);
+    expect(waiting).toMatchObject({ syncRunId: run, items: 230, stop: STOP });
+    for (const absent of ["tokens", "passages", "model", "cost", "room", "addedBytes"])
+      expect(waiting).not.toHaveProperty(absent);
+
+    const confirmed = await world.instance.api.call("knowledge_bases.sync", {
+      params: { knowledgeBase: KB },
+      payload: { source: SOURCE, confirm: true }
+    });
+    expect(confirmed.statusCode, confirmed.body).toBe(202);
+    await world.drain(run);
+    const [event] = (
+      await world.instance.stores.audit.listAuditEvents({ clientInstanceId, limit: 200 })
+    ).filter((each) => each.type === "knowledge_base.first_pass_confirmed");
+    expect(event?.metadata).toMatchObject({ items: 230, stop: STOP });
+    expect(event?.metadata).not.toHaveProperty("tokensMin");
+  });
+});
+
 describe(
   "a Workflow's first ingest stops for a confirmation (KB-ISO-1b)",
   { timeout: 600_000 },
@@ -246,7 +280,8 @@ describe(
         payload: { source: WORKFLOW_SOURCE, confirm: true }
       });
       expect(confirmed.statusCode, confirmed.body).toBe(202);
-      // Its own run ends at once: the pass it lets go on is the step's.
+      // Its own run ends at once, and the answer says so: the pass it lets go on is the step's.
+      expect(confirmed.json<{ status: string }>().status).toBe("done");
       expect(
         await w.instance.stores.operationRuns.get({
           clientInstanceId,

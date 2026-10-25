@@ -153,6 +153,16 @@ export interface KnowledgeBases {
     /** The reader's language. English without it. */
     locale?: LocaleCode;
   }): Promise<string[]>;
+  /**
+   * The same for a publish dialog: the lines without the one on how to confirm, and the
+   * confirmation its publish passes as `confirmProcessing`, where it asks one that can be given.
+   */
+  publishReview(input: {
+    assetId: string;
+    scope: AssetScope;
+    config: unknown;
+    locale?: LocaleCode;
+  }): Promise<{ lines: string[]; confirmation?: string }>;
 }
 
 export function createKnowledgeBases(input: {
@@ -189,6 +199,32 @@ export function createKnowledgeBases(input: {
     logger: input.logger,
     now: input.now ?? (() => new Date())
   };
+  // What publishing a draft raises: who finds what through its synced sources, and what it
+  // processes or embeds again with its count and cost.
+  const publishReview = async (question: {
+    assetId: string;
+    scope: AssetScope;
+    config: unknown;
+    locale?: LocaleCode;
+  }) => {
+    const asset = await input.stores.configAssets.getConfigAsset({
+      clientInstanceId: input.clientInstanceId,
+      kind: "knowledge_base",
+      name: knowledgeBaseDefinitionSchema.parse(question.config).name
+    });
+    const review = await knowledgePublishReview(runtime, {
+      config: question.config,
+      previous: asset?.publishedConfig,
+      assetId: question.assetId,
+      embedding: input.embedding,
+      draftOnly: true,
+      ...(question.locale ? { locale: question.locale } : {})
+    });
+    return {
+      sources: await knowledgePublishQuestion(input.stores, input.clientInstanceId, question),
+      review
+    };
+  };
   return {
     hitDocument: (files, fileId, signal) => knowledgeHitDocument(runtime, files, fileId, signal),
     workflowSources: async (workflow, access, signal) =>
@@ -204,23 +240,16 @@ export function createKnowledgeBases(input: {
       return openKnowledgeDocument(runtime, files, asset, documentId, signal);
     },
     publishQuestion: async (question) => {
-      const asset = await input.stores.configAssets.getConfigAsset({
-        clientInstanceId: input.clientInstanceId,
-        kind: "knowledge_base",
-        name: knowledgeBaseDefinitionSchema.parse(question.config).name
-      });
-      const review = await knowledgePublishReview(runtime, {
-        config: question.config,
-        previous: asset?.publishedConfig,
-        assetId: question.assetId,
-        embedding: input.embedding,
-        draftOnly: true,
-        ...(question.locale ? { locale: question.locale } : {})
-      });
-      return [
-        ...(await knowledgePublishQuestion(input.stores, input.clientInstanceId, question)),
-        ...(review?.lines ?? [])
-      ];
+      const { sources, review } = await publishReview(question);
+      return [...sources, ...(review?.lines ?? [])];
+    },
+    publishReview: async (question) => {
+      const { sources, review } = await publishReview(question);
+      return {
+        lines: [...sources, ...(review?.statement ?? [])],
+        // One the rate card cannot price is refused whatever is passed: its lines say why.
+        ...(review?.priced ? { confirmation: review.confirmation } : {})
+      };
     },
     assetKind: defineAssetKind({
       kind: KNOWLEDGE_BASE_ASSET_KIND,

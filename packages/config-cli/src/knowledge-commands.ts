@@ -152,7 +152,8 @@ export async function runKnowledgeCommand(
     }
     let exit = 0;
     if (isRecord(result) && isRecord(result.run)) {
-      exit = result.run.status === "running" ? 0 : 3;
+      // A run that goes on, or one done at once, as a confirmation of a Workflow's import is.
+      exit = result.run.status === "running" || result.run.status === "done" ? 0 : 3;
       result = result.run;
     } else if (isRecord(result) && result.status === "done") result = result.output;
     writeOutput(

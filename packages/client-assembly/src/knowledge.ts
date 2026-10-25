@@ -165,7 +165,7 @@ function workflowAssetKind(knowledgeBases: KnowledgeBases): WorkflowAssetKind {
     missingUpsertRight: () => undefined,
     assertInteractiveUpsertAllowed: () => undefined,
     assertInteractiveDeleteAllowed: () => undefined,
-    publishQuestion: (input) => knowledgeBases.publishQuestion(input),
+    publishReview: (input) => knowledgeBases.publishReview(input),
     onPublish: ({
       stores,
       actor,

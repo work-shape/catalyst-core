@@ -527,7 +527,8 @@ function FirstImportConfirmation({
     items: number(confirmation.items),
     size: formatStoreBytes(confirmation.bytes, locale)
   };
-  const { cost } = confirmation;
+  // A Knowledge Base that does not search by meaning embeds nothing: count and size alone.
+  const { cost, passages, tokens, room, addedBytes } = confirmation;
   const statement =
     confirmation.model === undefined
       ? t("knowledgeSources.confirmNoEmbedding", counts)
@@ -550,23 +551,25 @@ function FirstImportConfirmation({
       <div className="grid min-w-0 gap-2">
         <p>{statement}</p>
         <p>{t("knowledgeSources.confirmStopped", { stop: number(confirmation.stop) })}</p>
-        <KeyValueList layout="stacked">
-          <KeyValue label={t("knowledgeSources.confirmPassages")}>
-            {range(number(confirmation.passages.min), number(confirmation.passages.max))}
-          </KeyValue>
-          <KeyValue label={t("knowledgeSources.confirmTokens")}>
-            {range(number(confirmation.tokens.min), number(confirmation.tokens.max))}
-          </KeyValue>
-        </KeyValueList>
-        {confirmation.room ? null : (
+        {passages && tokens ? (
+          <KeyValueList layout="stacked">
+            <KeyValue label={t("knowledgeSources.confirmPassages")}>
+              {range(number(passages.min), number(passages.max))}
+            </KeyValue>
+            <KeyValue label={t("knowledgeSources.confirmTokens")}>
+              {range(number(tokens.min), number(tokens.max))}
+            </KeyValue>
+          </KeyValueList>
+        ) : null}
+        {room === false && addedBytes !== undefined ? (
           <p>
             {t("knowledgeSources.confirmNoRoom", {
               used: formatStoreBytes(confirmation.storeBytes, locale),
-              added: formatStoreBytes(confirmation.addedBytes, locale),
+              added: formatStoreBytes(addedBytes, locale),
               limit: formatStoreBytes(confirmation.limitBytes ?? 0, locale)
             })}
           </p>
-        )}
+        ) : null}
       </div>
     </Banner>
   );

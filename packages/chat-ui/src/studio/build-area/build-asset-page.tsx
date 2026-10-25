@@ -48,8 +48,20 @@ import {
   publishQuestionHolds,
   usePublishQuestion
 } from "./build-publish-question";
-import { readBuildRefusal, type BuildWriteOutcome } from "./build-refusals";
+import { readBuildRefusal, readRefusalDetails, type BuildWriteOutcome } from "./build-refusals";
 import { AGENT_ASSET_KIND, buildWorkspaceName, type BuildRights } from "../../shared/build-rights";
+
+/**
+ * Whether a publish was refused because what it processes or embeds again changed after the
+ * dialog read it: the confirmation it passed no longer names the count and cost.
+ */
+function confirmationOutdated(error: unknown): boolean {
+  const { reason } = readRefusalDetails(error);
+  return (
+    reason === "knowledge_processing_confirmation_required" ||
+    reason === "knowledge_reindex_confirmation_required"
+  );
+}
 
 /** How long a page opened empty waits after the reader typed before it asks about the id. */
 const NEW_NAME_CHECK_DELAY_MS = 300;
@@ -699,16 +711,24 @@ function LoadedAssetPage({
   };
   const publish = async () => {
     setPublishing(true);
+    // The count and cost the dialog showed, which a Knowledge Base's publish confirms.
+    const confirmation = question.status === "ready" ? question.confirmation : undefined;
     try {
-      const pointers = await source.writes.publish({ ...address, revision: stored.revision });
+      const pointers = await source.writes.publish({
+        ...address,
+        revision: stored.revision,
+        ...(confirmation ? { confirmProcessing: confirmation } : {})
+      });
       setStored({ ...stored, ...pointers });
       setFailure(undefined);
     } catch (error) {
       const outcome = readBuildRefusal(error, t, locale);
       setFailure(
-        outcome.ok || outcome.conflict
-          ? t("build.publishFailed")
-          : outcome.refusals.map((refusal) => refusal.message).join(" ")
+        confirmation && confirmationOutdated(error)
+          ? t("build.publishConfirmationChanged")
+          : outcome.ok || outcome.conflict
+            ? t("build.publishFailed")
+            : outcome.refusals.map((refusal) => refusal.message).join(" ")
       );
     } finally {
       setPublishing(false);

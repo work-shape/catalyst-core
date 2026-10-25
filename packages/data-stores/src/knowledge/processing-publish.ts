@@ -286,15 +286,20 @@ export async function knowledgePublishReview(
           .update(`${processing.confirmation}:${reindex.statement.confirmation}`)
           .digest("hex")
       : (processing?.confirmation ?? reindex?.statement.confirmation ?? "");
+  // The processing statement without its own line on how to confirm.
+  const statement = [
+    ...(processing ? processing.lines.slice(0, -1) : []),
+    ...(reindex ? reindexStatementLines(reindex.statement, input.locale) : [])
+  ];
   return {
     processing,
     reindex,
     confirmation,
     priced: processing?.priced ?? true,
+    /** What the publish does, for a reader who confirms it with a button. */
+    statement,
     lines: [
-      // The processing statement without its own line on how to confirm.
-      ...(processing ? processing.lines.slice(0, -1) : []),
-      ...(reindex ? reindexStatementLines(reindex.statement, input.locale) : []),
+      ...statement,
       `Confirm with assets.publish confirmProcessing: '${confirmation}' (CLI: --confirm ${confirmation}).`
     ]
   };

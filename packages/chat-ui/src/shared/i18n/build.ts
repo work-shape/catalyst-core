@@ -50,6 +50,8 @@ export const build = defineTranslations({
     "build.publishDescription":
       "The saved draft becomes the version everyone who uses it gets, from now on. Unsaved changes are not part of it.",
     "build.publishFailed": "The draft could not be published.",
+    "build.publishConfirmationChanged":
+      "What this publish processes or embeds again changed in the meantime. Publish again to see the new numbers.",
     "build.publishRaises": "What this publish changes",
     "build.publishQuestionLoading": "Reading what this publish changes …",
     "build.publishQuestionFailed":
@@ -209,6 +211,8 @@ export const build = defineTranslations({
     "build.publishDescription":
       "Der gespeicherte Entwurf wird ab jetzt die Version, die alle bekommen, die damit arbeiten. Ungespeicherte Änderungen gehören nicht dazu.",
     "build.publishFailed": "Der Entwurf konnte nicht veröffentlicht werden.",
+    "build.publishConfirmationChanged":
+      "Was diese Veröffentlichung neu verarbeitet oder einbettet, hat sich inzwischen geändert. Veröffentliche erneut, um die neuen Zahlen zu sehen.",
     "build.publishRaises": "Was diese Veröffentlichung ändert",
     "build.publishQuestionLoading": "Lese, was diese Veröffentlichung ändert …",
     "build.publishQuestionFailed":

@@ -204,9 +204,11 @@ export {
 } from "./knowledge-sources-model";
 export { sourceFailureText, sourceItemCounts, sourceStateView } from "./knowledge-source-status";
 export { KnowledgeSourcesSection } from "./knowledge-base-sources";
+export { ReindexStatement } from "./knowledge-base-reindex";
 export {
   PublishQuestionLines,
   publishQuestionHolds,
+  type PublishQuestionAnswer,
   type PublishQuestionRead
 } from "./build-publish-question";
 export {

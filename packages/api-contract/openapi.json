@@ -24418,11 +24418,7 @@
                                   "items",
                                   "bytes",
                                   "stop",
-                                  "tokens",
-                                  "passages",
-                                  "room",
-                                  "storeBytes",
-                                  "addedBytes"
+                                  "storeBytes"
                                 ]
                               },
                               "lastChangeAt": {
@@ -24796,11 +24792,7 @@
                                   "items",
                                   "bytes",
                                   "stop",
-                                  "tokens",
-                                  "passages",
-                                  "room",
-                                  "storeBytes",
-                                  "addedBytes"
+                                  "storeBytes"
                                 ]
                               },
                               "lastChangeAt": {
@@ -39048,6 +39040,10 @@
             "items": {
               "type": "string"
             }
+          },
+          "publishConfirmation": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
           },
           "publishNarrative": {
             "$ref": "#/components/schemas/PublishNarrative"

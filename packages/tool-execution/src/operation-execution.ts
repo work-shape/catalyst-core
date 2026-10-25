@@ -640,8 +640,11 @@ export async function executeAdmitted(
               : { status: "running", runId: joined.id };
         return { result, run: joined };
       }
-      // The work goes on after the call. Whoever carries it out ends the run with its result.
-      return { result: { status: "running", runId: run.id }, run };
+      // The work goes on after the call. Whoever carries it out ends the run with its result,
+      // which an operation that finished its work at once has done already: the answer shows
+      // the run as it stands.
+      const current = await deps.runs.get({ clientInstanceId: run.clientInstanceId, id: run.id });
+      return { result: { status: "running", runId: run.id }, run: current ?? run };
     }
     if (isToolOperationAnswer(answer) && answer.result.status !== "success") {
       return await endToolFailure(context, answer.result);

@@ -30,9 +30,10 @@ const PASSAGE_TOKENS = 512;
 const PASSAGE_BYTES_PER_TOKEN = 4;
 
 /**
- * What a stopped first pass shows and the confirmation's audit event carries: counts, the token
- * and passage range, the cost range where the model has a price, and whether the store's size
- * limit holds the high estimate.
+ * What a stopped first pass shows and the confirmation's audit event carries: counts and size;
+ * where the Knowledge Base searches by meaning, also the token and passage range, the cost range
+ * where the model has a price, and whether the store's size limit holds the high estimate. One
+ * that does not search by meaning embeds nothing, so it shows count and size only.
  */
 export function firstPassConfirmation(input: {
   syncRunId: string;
@@ -43,6 +44,16 @@ export function firstPassConfirmation(input: {
   limitBytes: number | undefined;
 }): KnowledgeFirstPassConfirmation {
   const { stop } = input;
+  const counts = {
+    syncRunId: input.syncRunId,
+    items: stop.items,
+    bytes: Math.round(stop.bytes),
+    stop: stop.at,
+    storeBytes: input.storeBytes,
+    ...(input.limitBytes === undefined ? {} : { limitBytes: input.limitBytes })
+  };
+  const target = input.embedding ? embeddingTarget(input.definition, input.embedding) : undefined;
+  if (!target || !input.embedding) return knowledgeFirstPassConfirmationSchema.parse(counts);
   let low = 0;
   let high = 0;
   for (const format of KNOWLEDGE_DOCUMENT_FORMATS) {
@@ -55,21 +66,15 @@ export function firstPassConfirmation(input: {
     min: Math.max(stop.items, Math.ceil(tokens.min / PASSAGE_TOKENS)),
     max: stop.items + Math.ceil(tokens.max / PASSAGE_TOKENS)
   };
-  const target = input.embedding ? embeddingTarget(input.definition, input.embedding) : undefined;
-  const rate =
-    target && input.embedding ? embeddingRate(input.embedding, target.bindingId) : undefined;
+  const rate = embeddingRate(input.embedding, target.bindingId);
   const addedBytes = Math.round(
-    tokens.max * PASSAGE_BYTES_PER_TOKEN +
-      (target ? vectorBytes(passages.max, target.dimensions) : 0)
+    tokens.max * PASSAGE_BYTES_PER_TOKEN + vectorBytes(passages.max, target.dimensions)
   );
   return knowledgeFirstPassConfirmationSchema.parse({
-    syncRunId: input.syncRunId,
-    items: stop.items,
-    bytes: Math.round(stop.bytes),
-    stop: stop.at,
+    ...counts,
     tokens,
     passages,
-    ...(target ? { model: target.model } : {}),
+    model: target.model,
     ...(rate
       ? {
           cost: {
@@ -80,9 +85,7 @@ export function firstPassConfirmation(input: {
         }
       : {}),
     room: input.limitBytes === undefined || input.storeBytes + addedBytes <= input.limitBytes,
-    storeBytes: input.storeBytes,
-    addedBytes,
-    ...(input.limitBytes === undefined ? {} : { limitBytes: input.limitBytes })
+    addedBytes
   });
 }
 
@@ -97,8 +100,9 @@ export function firstPassAuditMetadata(
     items: confirmation.items,
     bytes: confirmation.bytes,
     stop: confirmation.stop,
-    tokensMin: confirmation.tokens.min,
-    tokensMax: confirmation.tokens.max,
+    ...(confirmation.tokens
+      ? { tokensMin: confirmation.tokens.min, tokensMax: confirmation.tokens.max }
+      : {}),
     ...(confirmation.cost
       ? {
           costMin: confirmation.cost.min,

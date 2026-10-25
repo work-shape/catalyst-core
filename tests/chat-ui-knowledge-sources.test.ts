@@ -519,6 +519,28 @@ describe("a first import that waits for a confirmation (KB-ISO-1b)", () => {
     expect(html).toContain("The store may not have room");
   });
 
+  it("states only count and size where nothing is embedded (KB-ISO-1b review)", () => {
+    const { syncRunId, items, bytes, stop, storeBytes } = required(waiting.confirmation);
+    for (const locale of ["en", "de"] as const) {
+      const html = render(locale, {
+        status: {
+          sources: [
+            {
+              ...waiting,
+              confirmation: { syncRunId, items, bytes, stop, storeBytes, limitBytes: 1_000 }
+            }
+          ]
+        }
+      });
+      expect(html).toContain(
+        locale === "en" ? "does not search by meaning" : "sucht nicht nach Bedeutung"
+      );
+      expect(html).not.toMatch(/Passages \(estimated\)|Passagen \(geschätzt\)/u);
+      expect(html).not.toMatch(/Tokens \((estimated|geschätzt)\)/u);
+      expect(html).not.toMatch(/may not have room|womöglich keinen Platz/u);
+    }
+  });
+
   it("shows a source that never stopped without the confirmation", () => {
     const html = render("en", { canPublish: true });
     expect(html).not.toContain("data-knowledge-source-confirmation");

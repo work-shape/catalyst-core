@@ -22,6 +22,7 @@ import { useTranslation } from "../../shared/i18n";
 import { useSettingsPage } from "../../shared/settings-page-context";
 import { apiErrorCode } from "../../shared/workspace-utils";
 import type { BuildAsset, BuildAssetRow } from "./build-asset-kind";
+import type { PublishQuestionAnswer } from "./build-publish-question";
 import { approverNamesOf, instanceSentence, PendingApprovalError } from "./build-refusals";
 import {
   AGENT_ASSET_KIND,
@@ -137,6 +138,8 @@ interface BuildWrites {
     kind: string;
     name: string;
     revision: number;
+    /** The confirmation the publish question named, where it named one. */
+    confirmProcessing?: string;
   }): Promise<{ draftRevision: number; publishedRevision: number }>;
   revert(input: {
     kind: string;
@@ -179,7 +182,7 @@ export interface BuildSource {
    * What publishing the asset's saved `revision` raises, in the reader's language, read now.
    * Absent where the source asks nothing before a publish.
    */
-  publishQuestion?(kind: string, name: string, revision: number): Promise<readonly string[]>;
+  publishQuestion?(kind: string, name: string, revision: number): Promise<PublishQuestionAnswer>;
   writes: BuildWrites;
   /**
    * The owner Studio works in for a kind a workspace can own: lists, reads and writes of such
@@ -536,13 +539,16 @@ export function useBuildSource(): BuildSource {
         (asset) => asset,
         () => undefined
       ),
-    publishQuestion: async (kind, name, revision) =>
-      (
-        await client.assets.get({
-          params: { kind, name },
-          query: { ...inScope(kind), revision: String(revision) }
-        })
-      ).publishQuestion ?? [],
+    publishQuestion: async (kind, name, revision) => {
+      const asset = await client.assets.get({
+        params: { kind, name },
+        query: { ...inScope(kind), revision: String(revision) }
+      });
+      return {
+        lines: asset.publishQuestion ?? [],
+        ...(asset.publishConfirmation ? { confirmation: asset.publishConfirmation } : {})
+      };
+    },
     writes: {
       put: (input) =>
         made(client, writes.put({ ...input, ...inScope(input.kind) })).finally(changed(input.kind)),

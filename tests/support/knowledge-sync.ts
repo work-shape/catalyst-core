@@ -58,11 +58,14 @@ function context(signal: AbortSignal): ConnectorContext {
 // Opt in only when a test publishes stores: migration claims otherwise add unrelated transactions.
 export function useKnowledgeSync({
   withDataStoreJobs = false,
-  firstPassStop
+  firstPassStop,
+  methods = ["keyword", "semantic"]
 }: {
   withDataStoreJobs?: boolean;
   /** Where a first pass stops for its confirmation, smaller than the constant (KB-ISO-1b). */
   firstPassStop?: number;
+  /** How the Knowledge Base searches; by words and meaning unless a test says otherwise. */
+  methods?: readonly string[];
 } = {}) {
   const { start } = useDataStoreInstance();
   const cleanups: (() => Promise<unknown>)[] = [];
@@ -124,7 +127,7 @@ export function useKnowledgeSync({
       name: KB,
       title: "Source",
       description: "Synced test documents",
-      methods: ["keyword", "semantic"]
+      methods
     };
     expect(
       (

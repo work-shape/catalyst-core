@@ -108,6 +108,8 @@ export const knowledge = defineTranslations({
     "knowledge.embedStatement":
       "Every passage is embedded with {model}: {chunks} passages, about {tokens} tokens. Nothing is extracted again.",
     "knowledge.embedConfirm": "Embed",
+    "knowledge.embedNoRoom":
+      "The store has no room for the embedded passages: {used} used, about {added} more needed, a limit of {limit}. Remove documents or raise the store's limit first.",
     "knowledge.checkFailed": "The check could not be run.",
     "knowledge.tableReadable": "Readable",
     "knowledge.tableUnreadable": "Cannot be read",
@@ -389,6 +391,8 @@ export const knowledge = defineTranslations({
     "knowledge.embedStatement":
       "Jede Passage wird mit {model} eingebettet: {chunks} Passagen, etwa {tokens} Tokens. Nichts wird neu extrahiert.",
     "knowledge.embedConfirm": "Einbetten",
+    "knowledge.embedNoRoom":
+      "Der Speicher hat keinen Platz für die eingebetteten Passagen: {used} belegt, etwa {added} kämen dazu, die Grenze liegt bei {limit}. Entferne zuerst Dokumente oder erhöhe die Grenze des Speichers.",
     "knowledge.checkFailed": "Die Prüfung konnte nicht laufen.",
     "knowledge.tableReadable": "Lesbar",
     "knowledge.tableUnreadable": "Nicht lesbar",
