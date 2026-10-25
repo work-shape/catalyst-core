@@ -44,12 +44,15 @@ export interface AuditEventInput {
 }
 
 export interface AuditEventStore {
-  /** The latest retained successful publish of this asset's live revision. */
+  /**
+   * The latest retained successful publish of this asset's live revision: when, and the name
+   * and account id audit recorded of who published it.
+   */
   getAssetPublication(input: {
     clientInstanceId: ClientInstanceId;
     assetId: string;
     revision: number;
-  }): Promise<{ at: ISODateString; by?: string } | undefined>;
+  }): Promise<{ at: ISODateString; by?: string; byUserId?: string } | undefined>;
   appendAuditEvent(input: AuditEventInput): Promise<AuditEvent>;
   listAuditEvents(input: {
     clientInstanceId: ClientInstanceId;

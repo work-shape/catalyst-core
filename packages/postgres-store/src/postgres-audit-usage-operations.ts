@@ -319,7 +319,8 @@ export function createPostgresAuditStore(db: PostgresConnection): AuditEventStor
       return row
         ? {
             at: row.at.toISOString(),
-            ...(row.actor?.displayLabel ? { by: row.actor.displayLabel } : {})
+            ...(row.actor?.displayLabel ? { by: row.actor.displayLabel } : {}),
+            ...(row.actor?.userId ? { byUserId: row.actor.userId } : {})
           }
         : undefined;
     },

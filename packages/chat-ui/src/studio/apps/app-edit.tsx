@@ -49,6 +49,7 @@ import { AskedPublishDialog, askToPublish, type PublishAsk } from "./app-publish
 import { AppStoredDataFact } from "./app-publish-data";
 import { useAppsHost, type AppsWorkspace } from "./apps-host";
 import { RevisionsDrawer } from "./revisions-drawer";
+import { personName } from "../../shared/person-name";
 
 /** The sides of a draft: the App in its frame, its source files, and its named actions. */
 const APP_DRAFT_VIEWS = ["preview", "files", "actions"] as const;
@@ -570,10 +571,10 @@ export function AppEditFrame({
               {publishedRevision === undefined
                 ? t("apps.notPublishedYet")
                 : publication
-                  ? publication.by
+                  ? publication.by !== undefined
                     ? t("apps.liveSinceBy", {
                         date: formatMoment(publication.at, locale),
-                        name: publication.by
+                        name: personName(publication.by, t)
                       })
                     : t("apps.liveSince", { date: formatMoment(publication.at, locale) })
                   : t("apps.live")}

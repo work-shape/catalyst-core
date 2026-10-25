@@ -240,6 +240,18 @@ describe("an App with a draft and a published revision", () => {
     } finally {
       lookup.mockRestore();
     }
+    // Audit keeps the name of a publisher whose account is gone; the page names them as a
+    // deleted account (ERASE-ACTOR-IDS).
+    const gone = vi.spyOn(t.stores.audit, "getAssetPublication").mockResolvedValueOnce({
+      at: event?.createdAt ?? "",
+      by: "Erika Mustermann",
+      byUserId: "usr_00000000-0000-4000-8000-000000000000"
+    });
+    try {
+      expect((await read(t.admin.id)).json()).toMatchObject({ publication: { by: "" } });
+    } finally {
+      gone.mockRestore();
+    }
     expect(
       await t.stores.audit.getAssetPublication({
         clientInstanceId,

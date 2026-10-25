@@ -236,6 +236,21 @@ describe("the Guardrails list", () => {
     expect(markup).toContain("makes a new version live with their own click");
   });
 
+  // ERASE-ACTOR-IDS: the account deletion empties the name of who switched it.
+  it("names who switched it as a deleted account once their account is gone", () => {
+    const read = ready([
+      {
+        ...shipped,
+        enabled: false,
+        switchedBy: { id: "usr_gone", label: "" },
+        switchedAt: "2026-10-14T21:00:00.000Z"
+      }
+    ]);
+    expect(renderList({ read })).toContain("Switched off by Deleted account");
+    expect(renderList({ read }, "de")).toContain("Gelöschtes Konto");
+    expect(renderList({ read })).not.toContain("usr_gone");
+  });
+
   it("waits for the shipped guardrails and says when they could not be read", () => {
     expect(renderList({ read: { status: "loading" } })).not.toContain('aria-label="Guardrails"');
     const failed = renderList({
