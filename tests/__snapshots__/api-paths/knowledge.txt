@@ -14,3 +14,4 @@ knowledge_bases.source_items  GET /api/v1/knowledge-bases/:knowledgeBase/sources
 knowledge_bases.sources  GET /api/v1/knowledge-bases/:knowledgeBase/sources
 knowledge_bases.sync  POST /api/v1/knowledge-bases/:knowledgeBase/sync
 knowledge_bases.upload_file  POST /api/v1/knowledge-bases/:knowledgeBase/uploads
+knowledge_bases.workflow_sources  GET /api/v1/workflows/:workflow/knowledge-sources
