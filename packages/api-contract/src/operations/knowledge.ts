@@ -356,7 +356,7 @@ export const knowledgeOperations = {
     method: "GET",
     path: "/api/v1/workflows/:workflow/knowledge-sources",
     summary:
-      "Read what deleting a Workflow ends: the Knowledge Bases its sources feed and how many documents each holds there; ones the caller may not use are only counted",
+      "Read what deleting a Workflow ends: the Knowledge Bases its sources feed and how many documents each holds there; ones the caller may not open are only counted",
     tag: "Knowledge Bases",
     auth: "user",
     scope: "config_assets:read",

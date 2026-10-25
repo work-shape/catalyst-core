@@ -75,7 +75,7 @@ export function knowledgeDocumentRoutes(input: {
         )
     });
     // KBW-2c: the delete question of a Workflow names what its delete ends. Only who may
-    // delete it asks; a Knowledge Base the reader may not use is counted, never named.
+    // delete it asks; a Knowledge Base the reader may not open is counted, never named.
     routes.operation(apiOperations["knowledge_bases.workflow_sources"], {
       module: "knowledge",
       resource: ({ workflow }) => ({ kind: WORKFLOW_ASSET_KIND, id: workflow, name: workflow }),

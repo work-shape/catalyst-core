@@ -346,7 +346,8 @@ const WORKFLOW_SOURCE_END = `
       or (kind = 'workflow' and workflow_id is not null
           and workflow_id ~ '^[a-z][a-z0-9_-]{0,62}$' and cursor is null
           and (source_id = 'workflow:' || workflow_id
-            or source_id = 'workflow:' || workflow_id || '@' || workflow_revision))
+            or (workflow_revision is not null
+              and source_id = 'workflow:' || workflow_id || '@' || workflow_revision)))
     );
   create unique index source_cursors_workflow_revision_idx
     on catalyst_kb.source_cursors (workflow_id, workflow_revision)
