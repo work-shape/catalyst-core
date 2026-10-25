@@ -17,6 +17,7 @@ import { createSecretStore, type SecretKeyring } from "../secret-store";
 import { issuersMatch } from "./checks";
 import type { OAuthFetch } from "./fetch";
 import { OAuthPortError, type OAuthClient, type OAuthPort, type OAuthServerMetadata } from "./port";
+import { NO_MANAGED_OAUTH_CLIENTS, type ManagedOAuthClients } from "./managed-clients";
 
 // Which OAuth client a sign-in uses. A client id in the Connection's settings is one the
 // provider issued (pre-registered); its secret, if it has one, is the Connection's own secret.
@@ -25,6 +26,10 @@ import { OAuthPortError, type OAuthClient, type OAuthPort, type OAuthServerMetad
 // registration result is runtime state on `connection_state.oauth_client`; a client secret it
 // returns goes into the Connection's own secret slot, and the state notes its version so it is
 // never handed to a pre-registered client.
+//
+// A Connection on the operator's managed client (MS-APP-1) uses that client alone: its id
+// from release config and its secret read from the host for this one request. It never falls
+// back to a secret stored for the Connection, and no other Connection is handed it.
 
 /** What `connection_state.oauth_client` holds. Never a client secret. */
 const registeredClientSchema = z.object({
@@ -54,6 +59,8 @@ export interface ClientRegistrationDeps {
   credentials: ConnectionCredentialResolver;
   keyring: SecretKeyring;
   port: OAuthPort;
+  /** The operator's managed OAuth clients. Left out, none. */
+  managedClients?: ManagedOAuthClients;
 }
 
 /** The Connection's own secret for `origin` with its version, or nothing where none is set. */
@@ -83,9 +90,20 @@ export async function clientOfSession(
     origin: string;
     clientId: string;
     preregisteredId: string | undefined;
+    /** The managed client the Connection's settings name, by its id. */
+    managedClient?: string | undefined;
   }
 ): Promise<OAuthClient> {
   const { connection, origin, clientId } = input;
+  if (input.managedClient !== undefined) {
+    const managedClients = deps.managedClients ?? NO_MANAGED_OAUTH_CLIENTS;
+    const managed = managedClients.get(input.managedClient);
+    // The session or token set was made with another client than release config names now.
+    if (managed === undefined || managed.clientId !== clientId) {
+      throw connectionOAuthError("oauth_connection_changed");
+    }
+    return { clientId, clientSecret: await managedClients.secret(input.managedClient) };
+  }
   const registered = registeredClientOf(connection.state?.oauthClient);
   const secret = await ownSecret(deps, connection, origin);
   if (input.preregisteredId === clientId) {

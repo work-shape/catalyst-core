@@ -12,6 +12,7 @@ import {
   type OperationCallRuntime
 } from "@work-shape/catalyst-core";
 import { runOperation, type OperationOutcome } from "@work-shape/catalyst-tool-execution";
+import type { CatalogueEntry } from "@work-shape/catalyst-connections";
 import type { SampleOAuthOptions } from "@work-shape/catalyst-demo/sample-mcp";
 import { createSampleMcpServer } from "@work-shape/catalyst-demo/sample-mcp";
 import { createTestConfig } from "./fixtures";
@@ -182,6 +183,9 @@ function cookieOf(response: Response): string {
     .join("; ");
 }
 
+/** The variable that holds the managed client's secret, where a world declares one. */
+export const MANAGED_CLIENT_SECRET_NAME = "SAMPLE_MANAGED_CLIENT_SECRET";
+
 export async function createOAuthWorld(
   options: {
     extraPort?: number;
@@ -191,6 +195,13 @@ export async function createOAuthWorld(
      * two entries, for agents that run on either.
      */
     outsideModel?: true;
+    /**
+     * Declares the REST provider's client as the operator's managed OAuth client of this id
+     * (MS-APP-1), its secret under `MANAGED_CLIENT_SECRET_NAME` on the host.
+     */
+    managedClient?: string;
+    /** The catalogue entries the instance ships and offers, at the sample's address. */
+    catalogue?: (sampleBase: string, samplePort: number) => CatalogueEntry[];
   } = {}
 ): Promise<OAuthWorld> {
   const secrets: string[] = [];
@@ -230,6 +241,7 @@ export async function createOAuthWorld(
   if (!sampleOAuth) throw new Error("The sample serves no sign-in");
 
   const base = createTestConfig({ developmentAuth: { enabled: false } });
+  const catalogue = options.catalogue?.(sampleBase, samplePort) ?? [];
   const config = parseClientInstanceConfig({
     ...base,
     infrastructure: {
@@ -237,7 +249,17 @@ export async function createOAuthWorld(
       models: {
         local: { provider: "deterministic", region: "eu" },
         ...(options.outsideModel ? { outside: { provider: "deterministic", region: "us" } } : {})
-      }
+      },
+      ...(options.managedClient === undefined
+        ? {}
+        : {
+            oauthClients: {
+              [options.managedClient]: {
+                clientId: REST_CLIENT_ID,
+                credentialSecret: MANAGED_CLIENT_SECRET_NAME
+              }
+            }
+          })
     },
     ...(options.outsideModel
       ? {
@@ -247,6 +269,9 @@ export async function createOAuthWorld(
           ]
         }
       : {}),
+    ...(catalogue.length === 0
+      ? {}
+      : { catalogue: { entries: catalogue.map((entry) => entry.id) } }),
     auth: {
       standalone: {
         enabled: true,
@@ -351,9 +376,13 @@ export async function createOAuthWorld(
       SAMPLE_MCP_KEY: sampleKey,
       CHAT_SESSION_TOKEN_SECRET: generateTestSecret(),
       CHAT_SERVER_CREDENTIAL: serverCredential,
-      SERVICE_ACCESS_TOKEN_SECRET: generateTestSecret()
+      SERVICE_ACCESS_TOKEN_SECRET: generateTestSecret(),
+      ...(options.managedClient === undefined
+        ? {}
+        : { [MANAGED_CLIENT_SECRET_NAME]: restClientSecret })
     },
-    tools: []
+    tools: [],
+    ...(catalogue.length === 0 ? {} : { catalogue })
   };
   const instance = await createTestInstance({ ...assembly, seedAssets: false });
   const api = await listenTestInstance(instance);

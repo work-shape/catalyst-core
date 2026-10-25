@@ -21,6 +21,9 @@ tools:
     tokenUrl: http://localhost:8787/oauth-rest/token
     revocationUrl: http://localhost:8787/oauth-rest/revoke
     tokenAuthMethod: client_secret_post
+  # Where the instance declares `infrastructure.oauthClients.sample`, the install asks for no
+  # field; the client id and secret below stay for an admin's own app registration.
+  managedClient: sample
   settings:
     baseUrl: http://localhost:8787/oauth-rest/api
     testPath: /customers

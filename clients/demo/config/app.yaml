@@ -120,6 +120,14 @@ infrastructure:
       contextManagement:
         compaction:
           compactThresholdTokens: 270000
+  # The operator's managed OAuth clients (MS-APP-1). `sample` is the sample server's REST client
+  # (SAMPLE_OAUTH_REST_CLIENT_ID): with its secret set as SAMPLE_OAUTH_MANAGED_CLIENT_SECRET, the
+  # `sample-oauth` entry installs with no fields and each person just connects. Without the
+  # variable the entry asks for its client ID and secret, as before.
+  oauthClients:
+    sample:
+      clientId: demo-sample-client
+      credentialSecret: SAMPLE_OAUTH_MANAGED_CLIENT_SECRET
   mail:
     # Mails are kept in memory and listed at /api/v1/dev/captured-mail instead of being delivered.
     provider: capture

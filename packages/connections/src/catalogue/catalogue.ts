@@ -14,6 +14,7 @@ import {
   type LocalizedStringConfig
 } from "@work-shape/catalyst-core";
 import { createResultShaperRegistry } from "../result-shapers";
+import type { ManagedOAuthClients } from "../oauth/managed-clients";
 import type { EgressAllowEntry } from "../egress";
 import {
   entryParts,
@@ -65,6 +66,12 @@ export interface CataloguePartView {
   credentialModes: ConnectionCredentialMode[];
   defaultCredentialMode: ConnectionCredentialMode;
   groups?: CatalogueEntryPart["groups"];
+  /**
+   * The operator's managed OAuth client this instance has for the part (MS-APP-1), by id: the
+   * install asks for no field and the Connection names it in `settings.oauth.managedClient`.
+   * Absent where the part names none or the instance does not have it; then the fields stand.
+   */
+  managedClient?: string;
   /** Fixed settings, beside what the fields fill in. */
   settings: JsonObject;
   fields: CatalogueFieldView[];
@@ -102,8 +109,42 @@ export interface Catalogue {
    * Connection's `catalogue`: the entry must be offered and its part of the Connection's type.
    */
   linkIssue(link: ConnectionCatalogueLink, connectorType: string): string | undefined;
-  /** Apply consent scopes whenever a linked Connection's enabled operations change. */
+  /**
+   * Apply consent scopes whenever a linked Connection's enabled operations change. Refuses a
+   * Connection that names a managed OAuth client its catalogue part does not hand it.
+   */
   prepareConnection(config: Record<string, unknown>): Record<string, unknown>;
+  /**
+   * Why a Connection may not sign in with the managed OAuth client its settings name, or
+   * nothing (also where it names none). The managed client is only for a Connection installed
+   * from an offered part that asks for it, at that part's fixed name, which is the one
+   * redirect URI the operator registered.
+   */
+  managedClientIssue(config: Record<string, unknown>): string | undefined;
+}
+
+/** The managed OAuth client a Connection's settings name, as written, or nothing. */
+export function managedClientOfSettings(settings: unknown): string | undefined {
+  if (typeof settings !== "object" || settings === null) return undefined;
+  const oauth: unknown = Reflect.get(settings, "oauth");
+  if (typeof oauth !== "object" || oauth === null) return undefined;
+  const managed: unknown = Reflect.get(oauth, "managedClient");
+  return typeof managed === "string" ? managed : undefined;
+}
+
+/**
+ * The settings a part's Connection has on the operator's managed client: the part's fixed
+ * settings with the client named and no client id of its own.
+ */
+export function managedPartSettings(
+  part: Pick<CataloguePartView, "settings">,
+  managedClient: string
+): JsonObject {
+  const settings = structuredClone(part.settings);
+  const oauth = settings.oauth;
+  const { clientId: _clientId, ...rest } =
+    typeof oauth === "object" && oauth !== null && !Array.isArray(oauth) ? oauth : {};
+  return { ...settings, oauth: { ...rest, managedClient } };
 }
 
 /** The part's fields, auth scheme and fixed settings: its own, or its Connector type's form. */
@@ -309,6 +350,8 @@ export function createCatalogue(input: {
   named: readonly string[];
   connectorTypes: ConnectorTypeRegistry;
   resultShapers?: Readonly<Record<string, ResultShaper>>;
+  /** The operator's managed OAuth clients. Left out, every part asks for its own client. */
+  managedClients?: Pick<ManagedOAuthClients, "get">;
 }): Catalogue {
   const resultShapers = createResultShaperRegistry(input.resultShapers);
   const byId = new Map<string, CatalogueEntry>();
@@ -343,6 +386,20 @@ export function createCatalogue(input: {
         continue;
       const resolved = resolvePart(entry, part, definition, type);
       checkPart(entry, part, definition, type, resolved, input.connectorTypes);
+      const managedClient =
+        definition.managedClient !== undefined &&
+        input.managedClients?.get(definition.managedClient) !== undefined
+          ? definition.managedClient
+          : undefined;
+      if (managedClient !== undefined) {
+        const managed = type.settingsSchema.safeParse(managedPartSettings(resolved, managedClient));
+        if (!managed.success) {
+          refuse(
+            entry,
+            `its ${part} part on the managed OAuth client '${managedClient}': ${managed.error.issues.map((issue) => `${(issue.path ?? []).join(".")}: ${issue.message}`).join("; ")}`
+          );
+        }
+      }
       parts.push({
         part,
         connectorType: type.type,
@@ -353,6 +410,7 @@ export function createCatalogue(input: {
         credentialModes: [...definition.credentialModes],
         defaultCredentialMode: definition.defaultCredentialMode,
         ...(definition.groups === undefined ? {} : { groups: structuredClone(definition.groups) }),
+        ...(managedClient === undefined ? {} : { managedClient }),
         settings: resolved.settings,
         fields: resolved.fields,
         prerequisites: definition.prerequisites.map((line) => ({
@@ -390,10 +448,47 @@ export function createCatalogue(input: {
     });
   }
   const entries = Object.freeze(views);
+  function managedClientIssue(config: Record<string, unknown>): string | undefined {
+    const managed = managedClientOfSettings(config.settings);
+    if (managed === undefined) return undefined;
+    const refusal = (why: string) =>
+      `${CONNECTION_REFUSALS.managedClientUnavailable}: the managed OAuth client '${managed}' ${why}`;
+    const link = config.catalogue;
+    if (typeof link !== "object" || link === null) {
+      return refusal("signs in only a Connection installed from a catalogue part that asks for it");
+    }
+    const entryId: unknown = Reflect.get(link, "entry");
+    const partName: unknown = Reflect.get(link, "part");
+    const version: unknown = Reflect.get(link, "version");
+    const entry = entries.find(
+      (candidate) => candidate.id === entryId && candidate.version === version && candidate.offered
+    );
+    const part = entry?.parts.find(
+      (candidate) => candidate.part === partName && candidate.connectorType === config.connectorType
+    );
+    if (part === undefined || part.managedClient !== managed) {
+      return refusal(
+        "is not available to this Connection: its catalogue part does not ask for it, or this instance does not have it"
+      );
+    }
+    if (config.name !== part.name) {
+      return refusal(
+        `signs in only the Connection '${part.name}', whose redirect URI the operator registered. A second Connection uses its own app registration`
+      );
+    }
+    return undefined;
+  }
   return Object.freeze({
     entries,
     egress: Object.freeze(egress),
+    managedClientIssue,
     prepareConnection(config: Record<string, unknown>): Record<string, unknown> {
+      const managedIssue = managedClientIssue(config);
+      if (managedIssue !== undefined) {
+        throw new AppError("VALIDATION_FAILED", managedIssue, {
+          reason: CONNECTION_REFUSALS.managedClientUnavailable
+        });
+      }
       const parsed = connectionConfigSchema.safeParse(config);
       if (!parsed.success) return config;
       const connection = parsed.data;

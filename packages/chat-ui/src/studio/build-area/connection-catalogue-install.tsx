@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   Banner,
   Button,
+  Checkbox,
   CommandLine,
   Dialog,
   Disclosure,
@@ -70,6 +71,11 @@ import { RefusalDetail } from "./refusal-notice";
 // operations by the access they ask for; after Freigeben the shared account signs in with
 // exactly that access, or for a personal part the admin may connect their own account and
 // each person connects theirs under Settings. The order is the model's (`afterConnect`).
+//
+// A part on the operator's managed OAuth client (MS-APP-1), where the instance has one, asks
+// for no field and shows no checklist: Verbinden saves it at the part's fixed address, and
+// each person then just connects. "Use your own app registration" under More brings back the
+// client id, the secret and the checklist.
 
 /** The section of the Connection's page that names who may use it. */
 const ACCESS_SECTION = "access";
@@ -115,6 +121,8 @@ export function CatalogueInstall({
   const [mode, setMode] = useState<ConnectionCredentialMode>(() =>
     entry.parts[0] ? partModes(entry.parts[0]).initial : "shared"
   );
+  /** The admin chose their own app registration over the operator's managed client. */
+  const [ownApp, setOwnApp] = useState(false);
   const [stage, setStage] = useState<Stage>({ step: "prepare" });
   const [busy, setBusy] = useState(false);
   const [refusals, setRefusals] = useState<ApprovalRefused>();
@@ -217,6 +225,7 @@ export function CatalogueInstall({
   // The part, for the steps below: it stays the one chosen.
   const installed = part;
   const oauth = signsIn(part);
+  const managed = oauth && part.managedClient !== undefined && !ownApp;
   const scopes = scopesFor(part, approval.choice.selected);
 
   /** Goes on to the step the model names. */
@@ -283,9 +292,9 @@ export function CatalogueInstall({
   if (stage.step === "prepare") {
     return (
       <TypedConnectionCreate
-        // Another part is another form: nothing typed for one goes to the other.
-        key={part.part}
-        offer={partOffer(entry, part)}
+        // Another part, or the other client, is another form: nothing typed goes across.
+        key={`${part.part}:${managed ? "managed" : "own"}`}
+        offer={partOffer(entry, part, managed)}
         source={source}
         checkName={checkName}
         put={put}
@@ -293,7 +302,7 @@ export function CatalogueInstall({
         onClose={onClose}
         onCreated={onCreated}
         initial={{ title: offerText(part.title ?? entry.title, locale), name: part.name }}
-        defaults={partDefaults(part)}
+        defaults={managed ? {} : partDefaults(part)}
         install={{
           link: catalogueLink(entry, part.part),
           intro: (
@@ -304,6 +313,10 @@ export function CatalogueInstall({
               onPartChange={choosePart}
               onModeChange={setMode}
               recreates={recreates?.name === part.name}
+              managed={managed}
+              {...(oauth && part.managedClient !== undefined
+                ? { ownApp, onOwnAppChange: setOwnApp }
+                : {})}
             />
           ),
           // Whose account everyone reads: only where it is one account for everyone.
@@ -619,7 +632,10 @@ function CatalogueIntro({
   mode,
   onPartChange,
   onModeChange,
-  recreates
+  recreates,
+  managed,
+  ownApp,
+  onOwnAppChange
 }: {
   entry: CatalogueEntryOffer;
   part: CataloguePartOffer;
@@ -628,6 +644,11 @@ function CatalogueIntro({
   onModeChange(mode: ConnectionCredentialMode): void;
   /** A deleted Connection had the part's fixed address: the install starts it anew. */
   recreates: boolean;
+  /** The part signs in with the operator's managed client: no checklist, no field. */
+  managed: boolean;
+  /** Whether the admin uses their own app registration; offered where a managed one exists. */
+  ownApp?: boolean;
+  onOwnAppChange?(ownApp: boolean): void;
 }) {
   const { locale, t } = useTranslation();
   const title = offerText(entry.title, locale);
@@ -686,7 +707,11 @@ function CatalogueIntro({
           })}
         </ul>
       </div>
-      {part.prerequisites.length > 0 || oauth ? (
+      {managed ? (
+        <Banner layout="line" tone="success" data-catalogue-managed={part.managedClient ?? ""}>
+          {t("connectionCatalogue.managed")}
+        </Banner>
+      ) : part.prerequisites.length > 0 || oauth ? (
         <div className="grid min-w-0 gap-2" data-catalogue-checklist="">
           <span className="text-label">{t("connectionCatalogue.checklist")}</span>
           <ol className="grid min-w-0 list-decimal gap-2 pl-5 text-body">
@@ -725,6 +750,24 @@ function CatalogueIntro({
           {t("connectionCatalogue.recreates")}
         </Banner>
       ) : null}
+      {onOwnAppChange === undefined ? null : (
+        <Disclosure defaultOpen={ownApp === true}>
+          <DisclosureTrigger className="text-caption" data-catalogue-more="">
+            {t("connectionCatalogue.more")}
+          </DisclosureTrigger>
+          <DisclosureContent>
+            <div className="pt-2">
+              <Checkbox
+                checked={ownApp === true}
+                onCheckedChange={onOwnAppChange}
+                label={t("connectionCatalogue.ownApp")}
+                description={t("connectionCatalogue.ownAppHelp")}
+                data-catalogue-own-app=""
+              />
+            </div>
+          </DisclosureContent>
+        </Disclosure>
+      )}
     </div>
   );
 }

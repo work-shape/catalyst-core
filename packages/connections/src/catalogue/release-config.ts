@@ -3,65 +3,91 @@ import {
   type ReleaseConnectionConfig,
   type ReleaseConnectionInput
 } from "@work-shape/catalyst-config-schema";
-import { AppError, type JsonObject } from "@work-shape/catalyst-core";
-import { settingsWithScopes, type Catalogue, type CataloguePartView } from "./catalogue";
+import { AppError, CONNECTION_REFUSALS, type JsonObject } from "@work-shape/catalyst-core";
+import {
+  managedClientOfSettings,
+  settingsWithScopes,
+  type Catalogue,
+  type CataloguePartView
+} from "./catalogue";
 
 /** Expand references before the seed reads secrets or writes any asset. */
 export function expandReleaseConnections(
   connections: Readonly<Record<string, ReleaseConnectionInput>>,
-  catalogue?: Pick<Catalogue, "entries">
+  catalogue?: Pick<Catalogue, "entries"> & Partial<Pick<Catalogue, "managedClientIssue">>
 ): Record<string, ReleaseConnectionConfig> {
-  return Object.fromEntries(
-    Object.entries(connections).map(([name, config]) => {
-      if (!("fromEntry" in config)) return [name, config];
-      const fail: (message: string) => never = (message) => {
-        throw new AppError(
-          "VALIDATION_FAILED",
-          `connections.${name}: catalogue entry '${config.fromEntry}': ${message}`
-        );
-      };
-      const entry = catalogue?.entries.find((candidate) => candidate.id === config.fromEntry);
-      if (entry === undefined) fail("unknown entry in this release");
-      if (!entry.offered) fail("not offered; name it in catalogue.entries first");
-      const part =
-        config.part === undefined && entry.parts.length === 1
-          ? entry.parts[0]
-          : entry.parts.find((candidate) => candidate.part === config.part);
-      if (part === undefined)
-        fail(
-          config.part === undefined
-            ? "choose a part explicitly with 'part: tools' or 'part: source'"
-            : `the '${config.part}' part is not offered on this instance`
-        );
-      if (!part.credentialModes.includes("shared"))
-        fail("release Connections require shared mode; install this personal part at runtime");
-      const { fromEntry: _fromEntry, part: _part, settings, operations, ...overrides } = config;
-      return [
-        name,
-        releaseConnectionConfigSchema.parse({
-          connectorType: part.connectorType,
-          authScheme: part.authScheme,
-          service: entry.service,
-          catalogue: { entry: entry.id, part: part.part, version: entry.version },
-          ...overrides,
-          settings: settingsWithScopes(
-            part,
-            mergeSettings(defaultSettings(part), settings),
-            operations ?? part.operations
-          ),
-          // Only an explicit operator list accepts exposures. An entry grants none.
-          operations:
-            operations ??
-            part.operations.map((operation) => ({
-              ...operation.declaration,
-              name: operation.name,
-              effect: operation.effect,
-              exposure: []
-            }))
-        })
-      ];
-    })
+  const expanded = Object.fromEntries(
+    Object.entries(connections).map(([name, config]) => expandOne(name, config))
   );
+  // A release Connection, too, signs in with a managed client only where its part asks for it.
+  for (const [name, config] of Object.entries(expanded)) {
+    const issue =
+      managedClientOfSettings(config.settings) === undefined
+        ? undefined
+        : (catalogue?.managedClientIssue?.({ ...config, name }) ??
+          (catalogue?.managedClientIssue === undefined
+            ? `${CONNECTION_REFUSALS.managedClientUnavailable}: this instance has no catalogue`
+            : undefined));
+    if (issue !== undefined) {
+      throw new AppError("VALIDATION_FAILED", `connections.${name}: ${issue}`, {
+        reason: CONNECTION_REFUSALS.managedClientUnavailable
+      });
+    }
+  }
+  return expanded;
+
+  function expandOne(
+    name: string,
+    config: ReleaseConnectionInput
+  ): [string, ReleaseConnectionConfig] {
+    if (!("fromEntry" in config)) return [name, config];
+    const fail: (message: string) => never = (message) => {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        `connections.${name}: catalogue entry '${config.fromEntry}': ${message}`
+      );
+    };
+    const entry = catalogue?.entries.find((candidate) => candidate.id === config.fromEntry);
+    if (entry === undefined) fail("unknown entry in this release");
+    if (!entry.offered) fail("not offered; name it in catalogue.entries first");
+    const part =
+      config.part === undefined && entry.parts.length === 1
+        ? entry.parts[0]
+        : entry.parts.find((candidate) => candidate.part === config.part);
+    if (part === undefined)
+      fail(
+        config.part === undefined
+          ? "choose a part explicitly with 'part: tools' or 'part: source'"
+          : `the '${config.part}' part is not offered on this instance`
+      );
+    if (!part.credentialModes.includes("shared"))
+      fail("release Connections require shared mode; install this personal part at runtime");
+    const { fromEntry: _fromEntry, part: _part, settings, operations, ...overrides } = config;
+    return [
+      name,
+      releaseConnectionConfigSchema.parse({
+        connectorType: part.connectorType,
+        authScheme: part.authScheme,
+        service: entry.service,
+        catalogue: { entry: entry.id, part: part.part, version: entry.version },
+        ...overrides,
+        settings: settingsWithScopes(
+          part,
+          mergeSettings(defaultSettings(part), settings),
+          operations ?? part.operations
+        ),
+        // Only an explicit operator list accepts exposures. An entry grants none.
+        operations:
+          operations ??
+          part.operations.map((operation) => ({
+            ...operation.declaration,
+            name: operation.name,
+            effect: operation.effect,
+            exposure: []
+          }))
+      })
+    ];
+  }
 }
 
 function defaultSettings(part: CataloguePartView): JsonObject {

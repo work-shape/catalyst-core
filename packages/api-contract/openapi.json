@@ -5460,7 +5460,8 @@
                           "type": "string",
                           "enum": [
                             "dcr",
-                            "preregistered"
+                            "preregistered",
+                            "managed"
                           ]
                         },
                         "redirectUri": {
@@ -7477,6 +7478,9 @@
                                   }
                                 },
                                 "redirectUri": {
+                                  "type": "string"
+                                },
+                                "managedClient": {
                                   "type": "string"
                                 },
                                 "operations": {

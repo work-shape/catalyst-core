@@ -33,6 +33,8 @@ export const connectionSignIn = defineTranslations({
     "connectionSignIn.redirectUriMissing":
       "The instance has no public address yet, so there is no redirect URI. The team that runs this instance sets one.",
     "connectionSignIn.clientId": "Client ID",
+    "connectionSignIn.appRegistration": "App registration",
+    "connectionSignIn.appManaged": "Set up by the team that runs this instance",
     "connectionSignIn.clientSecret": "Client secret",
     "connectionSignIn.clientSecretHint":
       "Stored encrypted. Nobody can read it back. Leave empty if the provider issued none.",
@@ -120,6 +122,8 @@ export const connectionSignIn = defineTranslations({
     "connectionSignIn.redirectUriMissing":
       "Die Instanz hat noch keine öffentliche Adresse und damit keine Redirect-URI. Das Team, das diese Instanz betreibt, legt eine fest.",
     "connectionSignIn.clientId": "Client-ID",
+    "connectionSignIn.appRegistration": "App-Registrierung",
+    "connectionSignIn.appManaged": "Eingerichtet vom Team, das diese Instanz betreibt",
     "connectionSignIn.clientSecret": "Client-Secret",
     "connectionSignIn.clientSecretHint":
       "Verschlüsselt gespeichert. Niemand kann es wieder lesen. Leer lassen, wenn der Anbieter keins ausgegeben hat.",

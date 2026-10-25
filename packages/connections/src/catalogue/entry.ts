@@ -13,6 +13,7 @@ import {
   CONNECTOR_TYPE_PATTERN,
   OPERATION_EFFECTS,
   CONNECTION_CREDENTIAL_MODES,
+  MANAGED_OAUTH_CLIENT_PATTERN,
   normalizeEgressHost,
   RESULT_SHAPER_NAME_PATTERN,
   type CataloguePart,
@@ -210,6 +211,13 @@ const partSchema = z
     credentialModes: z.array(z.enum(CONNECTION_CREDENTIAL_MODES)).min(1).max(2).default(["shared"]),
     defaultCredentialMode: z.enum(CONNECTION_CREDENTIAL_MODES).optional(),
     oauth: oauthEntrySchema.optional(),
+    /**
+     * The operator's managed OAuth client the part signs in with where the instance has it
+     * (`infrastructure.oauthClients.<id>`, MS-APP-1): the install then asks for no field. The
+     * part's own fields and checklist stay for an instance without it and for an admin who
+     * uses their own app registration.
+     */
+    managedClient: z.string().regex(MANAGED_OAUTH_CLIENT_PATTERN).optional(),
     groups: z
       .array(
         z
@@ -315,6 +323,8 @@ const partSchema = z
           issue("Every OAuth host must be on the part's own egress list", ["oauth", key]);
       }
     }
+    if (part.managedClient !== undefined && part.authScheme !== "oauth")
+      issue("A managed OAuth client is for a part that signs in with OAuth", ["managedClient"]);
     if (part.groups !== undefined) {
       if (part.authScheme !== "oauth") issue("Scope groups require OAuth", ["groups"]);
       const ids = new Set(part.groups.map((group) => group.id));

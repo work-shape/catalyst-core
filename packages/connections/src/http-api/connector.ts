@@ -24,6 +24,7 @@ import { holdsCredential } from "../connector-context";
 import { egressTargetOfUrl } from "../egress";
 import { hostHeaderOf, oneRequestAgent, sendPinnedRequest } from "../pinned-request";
 import { httpApiDeclaredOperations, isDotSegment, pathPlaceholders } from "./declaration";
+import { NO_MANAGED_OAUTH_CLIENTS, type ManagedOAuthClients } from "../oauth/managed-clients";
 
 // The Connector type `http_api`, first cut (CS-5a): a REST interface reached by GET. Each
 // Connection declares its operations itself (`./declaration`). A call sends the declared path
@@ -212,18 +213,36 @@ const settingsSchema = z
 
 type HttpApiSettings = z.infer<typeof settingsSchema>;
 
-/** The authorization server of the settings, as the platform's OAuth flow reads one. */
-function oauthEndpointsOf(settings: HttpApiSettings): ConnectorOAuthEndpoints | undefined {
+/**
+ * The authorization server of the settings, as the platform's OAuth flow reads one. A managed
+ * client (MS-APP-1) gives the client id and, where it sets one, the `{tenant}` segment; the
+ * type's schema refuses settings that name a client this instance does not have.
+ */
+function oauthEndpointsOf(
+  settings: HttpApiSettings,
+  managedClients: ManagedOAuthClients
+): ConnectorOAuthEndpoints | undefined {
   const { oauth } = settings;
   if (oauth === undefined) return undefined;
-  const endpoint = (address: string) => resolveOAuthPath(address, oauth.pathParams ?? {});
+  let clientId = oauth.clientId;
+  let pathParams = oauth.pathParams ?? {};
+  if (oauth.managedClient !== undefined) {
+    const managed = managedClients.get(oauth.managedClient);
+    if (managed === undefined) throw connectionCallError("connection_not_configured");
+    clientId = managed.clientId;
+    if (managed.tenant !== undefined) pathParams = { ...pathParams, tenant: managed.tenant };
+  }
+  if (clientId === undefined) throw connectionCallError("connection_not_configured");
+  const params = pathParams;
+  const endpoint = (address: string) => resolveOAuthPath(address, params);
   return {
     ...(oauth.authorizationUrl === undefined
       ? {}
       : { authorizationUrl: endpoint(oauth.authorizationUrl) }),
     tokenUrl: endpoint(oauth.tokenUrl),
     ...(oauth.revocationUrl === undefined ? {} : { revocationUrl: endpoint(oauth.revocationUrl) }),
-    clientId: oauth.clientId,
+    clientId,
+    ...(oauth.managedClient === undefined ? {} : { managedClient: oauth.managedClient }),
     scopes: [...new Set(oauth.scopes ?? [])],
     authorizationParams: oauth.authorizationParams ?? {},
     tokenAuthMethod: oauth.tokenAuthMethod ?? "client_secret_post",
@@ -476,22 +495,38 @@ function testStatusOf(error: unknown): ConnectorTestStatus {
  * request leaves with the first test or call.
  */
 export function createHttpApiConnectorType(
-  shapers: Readonly<Record<string, ResultShaper>> = {}
+  shapers: Readonly<Record<string, ResultShaper>> = {},
+  /** The operator's managed OAuth clients. Left out, a Connection may name none. */
+  managedClients: ManagedOAuthClients = NO_MANAGED_OAUTH_CLIENTS
 ): ConnectorTypeDefinition {
   const resultShapers = createResultShaperRegistry(shapers);
+  // A managed client this instance does not have makes the settings unreadable: the
+  // Connection is not configured here, and a write that names one is refused.
+  const typeSettingsSchema = settingsSchema.superRefine((settings, context) => {
+    const managed = settings.oauth?.managedClient;
+    if (managed !== undefined && managedClients.get(managed) === undefined) {
+      context.addIssue({
+        code: "custom",
+        path: ["oauth", "managedClient"],
+        message: `${CONNECTION_REFUSALS.managedClientUnavailable}: this instance has no managed OAuth client '${managed}'. An operator declares it under 'infrastructure.oauthClients' in release config and sets its secret on the host`
+      });
+    }
+  });
+  const endpointsOf = (settings: JsonObject) =>
+    oauthEndpointsOf(settingsOf(settings), managedClients);
   return {
     type: HTTP_API_CONNECTOR_TYPE,
     description: "A REST interface over HTTPS, read by declared GET requests.",
-    settingsSchema,
+    settingsSchema: typeSettingsSchema,
     authSchemes: ["none", "bearer", "header", "oauth", "oauth_client"],
     secretFields: ["key"],
     target: (settings) => egressTargetOfUrl(settingsOf(settings).baseUrl),
-    oauthEndpoints: (settings) => oauthEndpointsOf(settingsOf(settings)),
+    oauthEndpoints: endpointsOf,
     // The sign-in reads the authorization server from the settings: no server is asked first.
     signIn: {
       resourceUrl: (settings) => settingsOf(settings).baseUrl,
       oauthSettings(settings) {
-        const endpoints = oauthEndpointsOf(settingsOf(settings));
+        const endpoints = endpointsOf(settings);
         return endpoints === undefined
           ? {}
           : { clientId: endpoints.clientId, scopes: endpoints.scopes };

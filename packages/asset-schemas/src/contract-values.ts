@@ -687,9 +687,10 @@ export type ConnectionSignInNeed = (typeof CONNECTION_SIGN_IN_NEEDS)[number];
 
 /**
  * How a Connection that signs in with OAuth has its client: registered by the platform
- * (Dynamic Client Registration) or issued by the provider and named in the settings.
+ * (Dynamic Client Registration), issued by the provider and named in the settings, or the
+ * operator's managed client of release config (`infrastructure.oauthClients`, MS-APP-1).
  */
-export const CONNECTION_OAUTH_REGISTRATIONS = ["dcr", "preregistered"] as const;
+export const CONNECTION_OAUTH_REGISTRATIONS = ["dcr", "preregistered", "managed"] as const;
 export type ConnectionOAuthRegistration = (typeof CONNECTION_OAUTH_REGISTRATIONS)[number];
 
 /**

@@ -211,7 +211,8 @@ export function createConnectionSignIn(deps: ConnectionSignInDeps): ConnectionSi
       store: deps.stores.connections,
       credentials: deps.credentials ?? NO_CREDENTIALS,
       keyring,
-      port
+      port,
+      ...(deps.managedClients === undefined ? {} : { managedClients: deps.managedClients })
     };
   }
 
@@ -311,12 +312,17 @@ export function createConnectionSignIn(deps: ConnectionSignInDeps): ConnectionSi
     ]) {
       if (address !== undefined) await deps.egress.check(egressTargetOfUrl(address));
     }
-    const client = await clientOfSession(registration(starting.keyring), {
-      connection: starting.connection,
-      origin: starting.origin,
-      clientId: endpoints.clientId,
-      preregisteredId: endpoints.clientId
-    });
+    // The authorization address names the client id only: a managed client's secret is read
+    // from the host at the code exchange, not here.
+    const client =
+      endpoints.managedClient === undefined
+        ? await clientOfSession(registration(starting.keyring), {
+            connection: starting.connection,
+            origin: starting.origin,
+            clientId: endpoints.clientId,
+            preregisteredId: endpoints.clientId
+          })
+        : { clientId: endpoints.clientId };
     return {
       server: staticServerOf(endpoints),
       scopes: [...endpoints.scopes],
@@ -554,7 +560,8 @@ export function createConnectionSignIn(deps: ConnectionSignInDeps): ConnectionSi
       connection,
       origin,
       clientId: session.clientId,
-      preregisteredId: signIn.oauthSettings(settings).clientId
+      preregisteredId: signIn.oauthSettings(settings).clientId,
+      managedClient: endpoints?.managedClient
     });
     let tokens;
     try {

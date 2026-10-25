@@ -24,6 +24,7 @@ import { createSecretStore, openSignInTokenSet, type SecretKeyring } from "../se
 import { scopesOf } from "./checks";
 import { bindingAuditSubject } from "../personal-bindings";
 import { clientOfSession } from "./client-registration";
+import type { ManagedOAuthClients } from "./managed-clients";
 import { createOAuthFetch } from "./fetch";
 import { OAuthPortError, type OAuthPort } from "./port";
 import { createSdkOAuthPort } from "./sdk-adapter";
@@ -87,6 +88,8 @@ export interface SignInTokensDeps {
   onRefused?(refusal: SignInRefusal): Promise<void>;
   /** For tests: how long a call waits for another process's refresh. */
   waitMs?: number;
+  /** The operator's managed OAuth clients (MS-APP-1). Left out, none. */
+  managedClients?: ManagedOAuthClients;
 }
 
 export interface SignInTokens {
@@ -353,13 +356,15 @@ export function createSignInTokens(deps: SignInTokensDeps): SignInTokens {
           store: stores.connections,
           credentials: deps.credentials,
           keyring,
-          port
+          port,
+          ...(deps.managedClients === undefined ? {} : { managedClients: deps.managedClients })
         },
         {
           connection,
           origin,
           clientId,
-          preregisteredId: connection.type.signIn.oauthSettings(settings.data).clientId
+          preregisteredId: connection.type.signIn.oauthSettings(settings.data).clientId,
+          managedClient: endpoints?.managedClient
         }
       );
       // A server the settings name is sent no `resource`, as at the sign-in.

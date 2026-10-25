@@ -25,6 +25,7 @@ import {
   type SecretKeyring
 } from "../secret-store";
 import { clientOfSession } from "./client-registration";
+import type { ManagedOAuthClients } from "./managed-clients";
 import { createOAuthFetch } from "./fetch";
 import type { OAuthClient, OAuthPort, OAuthTokenTypeHint } from "./port";
 import { createSdkOAuthPort } from "./sdk-adapter";
@@ -52,6 +53,8 @@ export interface SignInEndingDeps {
   logger: Logger;
   /** The OAuth port. Left out, the adapter over the MCP SDK. */
   oauth?: OAuthPort;
+  /** The operator's managed OAuth clients (MS-APP-1). Left out, none. */
+  managedClients?: ManagedOAuthClients;
 }
 
 /** What the provider is told with: read before the token set was deleted. */
@@ -160,13 +163,15 @@ export function createSignInEnding(deps: SignInEndingDeps): ConnectionSignInEndi
         store,
         credentials: createConnectionCredentialResolver({ clientInstanceId, keyring, store }),
         keyring,
-        port
+        port,
+        ...(deps.managedClients === undefined ? {} : { managedClients: deps.managedClients })
       },
       {
         connection,
         origin,
         clientId: tokenSet.clientId,
-        preregisteredId: type.signIn.oauthSettings(settings.data).clientId
+        preregisteredId: type.signIn.oauthSettings(settings.data).clientId,
+        managedClient: type.oauthEndpoints?.(settings.data)?.managedClient
       }
     );
     return {
