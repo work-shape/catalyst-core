@@ -752,6 +752,18 @@ export interface ConnectorOAuthEndpoints {
   tokenAuthMethod: ConnectorTokenAuthMethod;
   /** The issuer an RFC 9207 `iss` in the authorization answer must name. Unchecked without. */
   issuer?: string;
+  /**
+   * Where an administrator of the person's organisation approves the app once for everyone
+   * there (MS-APP-2), and the provider's error codes that say this approval is missing. The
+   * address is resolved, on the authorization address's origin, without its query.
+   */
+  adminConsent?: ConnectorOAuthAdminConsent;
+}
+
+/** The admin consent of a provider, as a Connection's settings name it. */
+export interface ConnectorOAuthAdminConsent {
+  url: string;
+  errorCodes: readonly string[];
 }
 
 /**

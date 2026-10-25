@@ -51,6 +51,7 @@ import {
   connectionOriginOf,
   openConnectorContext
 } from "./connector-context";
+import { adminConsentUrl } from "./oauth/admin-consent";
 import { registeredClientOf } from "./oauth/client-registration";
 import { createSignInEnding } from "./oauth/sign-in-ending";
 import {
@@ -115,6 +116,8 @@ export interface ConnectionOAuthView {
   redirectUri?: string;
   /** The host of the authorization server a registration was made at. */
   providerHost?: string;
+  /** The link an administrator approves the app with, where the Connection names one. */
+  adminConsentUrl?: string;
 }
 
 export interface ConnectionView {
@@ -392,6 +395,7 @@ export function createConnectionManagement(
     } catch {
       providerHost = undefined;
     }
+    const approval = adminConsentUrl(named, redirectUri);
     return {
       registration:
         named?.managedClient !== undefined
@@ -400,7 +404,8 @@ export function createConnectionManagement(
             ? "dcr"
             : "preregistered",
       ...(redirectUri === undefined ? {} : { redirectUri }),
-      ...(providerHost === undefined ? {} : { providerHost })
+      ...(providerHost === undefined ? {} : { providerHost }),
+      ...(approval === undefined ? {} : { adminConsentUrl: approval })
     };
   }
 

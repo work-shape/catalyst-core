@@ -90,7 +90,11 @@ export interface AssembledOperationBinding {
    * For an operation that answers a redirect: where a refused or failed call sends the
    * browser instead of an error body. Nothing answers the error as for any operation.
    */
-  redirectOnError?(error: unknown): string | undefined;
+  redirectOnError?(
+    error: unknown,
+    /** The request as it arrived, unchecked: also a call refused before its input was read. */
+    request: { query: unknown; params: unknown }
+  ): string | undefined;
 }
 
 export interface OperationFace {

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { ConnectionOAuthStart } from "@work-shape/catalyst-api-client";
 import {
   Banner,
@@ -170,6 +170,27 @@ export interface ConnectionSignIn {
   saveClient(): void;
 }
 
+/**
+ * Where each sign-in that outlives its view stands, by Connection, and the wait that can still
+ * be cancelled. The chat draws its Connect card anew while the person signs in: the card drawn
+ * anew shows the wait and how it ended, such as the IT's approval it still needs.
+ */
+const outliving = new Map<string, SignInPhase>();
+const outlivingWaits = new Map<string, AbortController>();
+const outlivingListeners = new Set<() => void>();
+
+function setOutliving(connection: string, state: SignInPhase) {
+  outliving.set(connection, state);
+  for (const listener of outlivingListeners) listener();
+}
+
+function subscribeOutliving(listener: () => void) {
+  outlivingListeners.add(listener);
+  return () => {
+    outlivingListeners.delete(listener);
+  };
+}
+
 /** One sign-in, started when the step first shows, or once `enabled` turns true. */
 export function useConnectionSignIn(
   calls: SignInCalls,
@@ -191,7 +212,15 @@ export function useConnectionSignIn(
 ): ConnectionSignIn {
   const enabled = options.enabled ?? true;
   const browser = options.browser ?? windowSignInBrowser;
-  const [state, setState] = useState<SignInPhase>({ phase: "starting" });
+  const outlives = options.outlivesView === true;
+  const [ownState, setOwnState] = useState<SignInPhase>({ phase: "starting" });
+  const readShared = () => (outlives ? outliving.get(calls.connection) : undefined);
+  const sharedState = useSyncExternalStore(subscribeOutliving, readShared, readShared);
+  const state = sharedState ?? ownState;
+  const setState = (next: SignInPhase) => {
+    if (outlives) setOutliving(calls.connection, next);
+    else setOwnState(next);
+  };
   const [offered, setOffered] = useState<readonly string[]>([]);
   const [ticked, setTickedSet] = useState<ReadonlySet<string>>(new Set());
   const [client, setClient] = useState({ id: "", secret: "" });
@@ -256,7 +285,14 @@ export function useConnectionSignIn(
   }, [enabled]);
   useEffect(
     () => () => {
-      if (!latest.current.outlivesView) waiting.current?.abort();
+      const { outlivesView, calls: current } = latest.current;
+      if (!outlivesView) {
+        waiting.current?.abort();
+        return;
+      }
+      // A sign-in on its way stays for the card drawn anew; one that ended goes with its view.
+      const phase = outliving.get(current.connection)?.phase;
+      if (phase !== "waiting" && phase !== "starting") outliving.delete(current.connection);
     },
     []
   );
@@ -309,6 +345,7 @@ export function useConnectionSignIn(
     const { calls: current } = latest.current;
     const controller = new AbortController();
     waiting.current = controller;
+    if (latest.current.outlivesView) outlivingWaits.set(current.connection, controller);
     setState({ phase: "waiting", start: opened });
     const outcome = await waitForSignIn(
       {
@@ -325,13 +362,21 @@ export function useConnectionSignIn(
       }
     );
     if (waiting.current === controller) waiting.current = undefined;
+    if (outlivingWaits.get(current.connection) === controller) {
+      outlivingWaits.delete(current.connection);
+    }
     switch (outcome.status) {
       case "connected":
         setState({ phase: "connected", detail: outcome.detail });
         latest.current.onConnected(outcome.detail);
         return;
       case "failed":
-        back(outcome.error);
+        back(
+          outcome.error.failure === "oauth_admin_consent_required" &&
+            opened.adminConsentUrl !== undefined
+            ? { ...outcome.error, adminConsentUrl: opened.adminConsentUrl }
+            : outcome.error
+        );
         return;
       case "cancelled":
         back();
@@ -403,7 +448,8 @@ export function useConnectionSignIn(
       setState({ phase: "starting" });
       run(connectNow(tab));
     },
-    cancel: () => waiting.current?.abort(),
+    cancel: () =>
+      (waiting.current ?? (outlives ? outlivingWaits.get(calls.connection) : undefined))?.abort(),
     retry: () => run(begin()),
     saveClient: () => run(saveClientNow())
   };
@@ -422,6 +468,7 @@ const FAILURE_TEXTS: Record<SignInFailure, TranslationKey> = {
   oauth_connection_changed: "connectionSignIn.errorChanged",
   oauth_requires_person: "connectionSignIn.errorPerson",
   oauth_client_required: "connectionSignIn.errorClient",
+  oauth_admin_consent_required: "connectionSignIn.errorAdminConsent",
   forbidden: "connectionSignIn.errorForbidden",
   tab_blocked: "connectionSignIn.errorTab",
   failed: "connectionSignIn.errorFailed"
@@ -455,6 +502,47 @@ export function signInHeading(signIn: ConnectionSignIn, t: ReturnType<typeof use
       : t("connectionSignIn.headingPending");
 }
 
+/**
+ * The link an administrator approves the app with, to copy and send to the organisation's IT
+ * (MS-APP-2). On the Connection's page for who may change it, and in a refused sign-in.
+ */
+export function AdminConsentLink({ url, hint }: { url: string; hint?: string }) {
+  const { t } = useTranslation();
+  return (
+    <KeyValueList>
+      <KeyValue label={t("connectionSignIn.adminConsentLink")} copyValue={url}>
+        <span className="grid min-w-0 gap-1">
+          <code className="font-mono text-code break-all" data-admin-consent-url="">
+            {url}
+          </code>
+          {hint ? <span className="text-caption text-muted-foreground">{hint}</span> : null}
+        </span>
+      </KeyValue>
+    </KeyValueList>
+  );
+}
+
+/** A refused sign-in: its sentence, and where the IT has to approve, the link for it. */
+function SignInRefusal({ error, host }: { error: SignInError; host?: string }) {
+  const { t } = useTranslation();
+  const failureText = useSignInFailureText();
+  if (error.failure !== "oauth_admin_consent_required") {
+    return (
+      <FormNotice tone="error" data-sign-in-error={error.failure}>
+        {failureText(error, host)}
+      </FormNotice>
+    );
+  }
+  return (
+    <div className="grid min-w-0 gap-3" data-sign-in-error={error.failure}>
+      <Banner tone="warning" title={t("connectionSignIn.adminConsentTitle")}>
+        {failureText(error, host)}
+      </Banner>
+      {error.adminConsentUrl ? <AdminConsentLink url={error.adminConsentUrl} /> : null}
+    </div>
+  );
+}
+
 /** What the step shows above its buttons. */
 export function SignInBody({ signIn }: { signIn: ConnectionSignIn }) {
   const { t } = useTranslation();
@@ -475,11 +563,7 @@ export function SignInBody({ signIn }: { signIn: ConnectionSignIn }) {
         </p>
       );
     case "failed":
-      return (
-        <FormNotice tone="error" data-sign-in-error={state.error.failure}>
-          {failureText(state.error)}
-        </FormNotice>
-      );
+      return <SignInRefusal error={state.error} />;
     case "client":
       return (
         <div className="grid min-w-0 gap-4" data-sign-in-step="client">
@@ -573,9 +657,7 @@ export function SignInBody({ signIn }: { signIn: ConnectionSignIn }) {
           ) : null}
           <SignInScopes signIn={signIn} disabled={state.opening} />
           {state.error ? (
-            <FormNotice tone="error" data-sign-in-error={state.error.failure}>
-              {failureText(state.error, state.start.providerHost)}
-            </FormNotice>
+            <SignInRefusal error={state.error} host={state.start.providerHost} />
           ) : null}
         </div>
       );

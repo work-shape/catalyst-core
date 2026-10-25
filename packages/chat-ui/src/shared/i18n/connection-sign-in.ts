@@ -68,6 +68,15 @@ export const connectionSignIn = defineTranslations({
     "connectionSignIn.errorTab":
       "The browser opened no new tab. Allow pop-ups for this page and try again.",
     "connectionSignIn.errorFailed": "The sign-in did not work.",
+    "connectionSignIn.errorAdminConsent":
+      "Your organisation lets only its IT approve apps. Send them the link below: they open it once and accept. Then try again.",
+    "connectionSignIn.adminConsentTitle": "Your IT has to approve this app once",
+    "connectionSignIn.adminConsentLink": "Approval link for IT",
+    "connectionSignIn.adminConsentHint":
+      "Only needed where an organisation lets only its IT approve apps. An administrator opens it once and accepts; then everyone there connects on their own.",
+    "connectionSignIn.landingApprovedTitle": "Approved",
+    "connectionSignIn.landingApproved":
+      "People in your organisation can connect now. You can close this tab.",
     "connectionSignIn.sectionTitle": "Sign-in",
     "connectionSignIn.sectionDescription":
       "The account at the provider that every call of this connection uses.",
@@ -162,6 +171,15 @@ export const connectionSignIn = defineTranslations({
     "connectionSignIn.errorTab":
       "Der Browser hat keinen neuen Tab geöffnet. Erlaube Pop-ups für diese Seite und versuch es noch einmal.",
     "connectionSignIn.errorFailed": "Die Anmeldung hat nicht geklappt.",
+    "connectionSignIn.errorAdminConsent":
+      "In deiner Organisation gibt nur die IT Apps frei. Schick ihr den Link unten: Sie öffnet ihn einmal und stimmt zu. Dann versuch es noch einmal.",
+    "connectionSignIn.adminConsentTitle": "Deine IT muss diese App einmal freigeben",
+    "connectionSignIn.adminConsentLink": "Freigabe-Link für die IT",
+    "connectionSignIn.adminConsentHint":
+      "Nur nötig, wo eine Organisation Apps allein von ihrer IT freigeben lässt. Eine Administratorin oder ein Administrator öffnet ihn einmal und stimmt zu; danach verbinden sich dort alle selbst.",
+    "connectionSignIn.landingApprovedTitle": "Freigegeben",
+    "connectionSignIn.landingApproved":
+      "Personen in deiner Organisation können sich jetzt verbinden. Du kannst diesen Tab schließen.",
     "connectionSignIn.sectionTitle": "Anmeldung",
     "connectionSignIn.sectionDescription":
       "Das Konto beim Anbieter, das jeder Aufruf dieser Verbindung nutzt.",

@@ -68,6 +68,41 @@ const OAUTH_EXTRA_PARAMS_MAX = 8;
 /** A scope as RFC 6749 3.3 writes one: printable, no space, quote or backslash. */
 const SCOPE_PATTERN = /^[\x21\x23-\x5B\x5D-\x7E]{1,256}$/u;
 
+function originOf(address: string | undefined): string | undefined {
+  if (address === undefined) return undefined;
+  try {
+    return new URL(address).origin;
+  } catch {
+    return undefined;
+  }
+}
+
+/** A provider's error code, matched as one word of the callback's `error` or its description. */
+const ADMIN_CONSENT_ERROR_CODE = /^[A-Za-z0-9_]{1,64}$/u;
+
+/**
+ * Where an administrator of the person's organisation approves the app once for everyone there
+ * (MS-APP-2), and the provider's error codes that say this approval is missing. The address
+ * lies on the authorization address's origin: the link is sent to a customer's IT, so it never
+ * points anywhere the sign-in itself does not go. The platform adds the client id, the scopes,
+ * the redirect URI and a fixed state to it.
+ */
+const adminConsentSchema = z
+  .object({
+    url: oauthAddressSchema.refine((value) => new URL(value).search === "", {
+      message: "must be an address without a query: the sign-in adds its parameters"
+    }),
+    errorCodes: z
+      .array(
+        z.string().regex(ADMIN_CONSENT_ERROR_CODE, {
+          message: "must be one code of letters, digits and '_'"
+        })
+      )
+      .min(1)
+      .max(16)
+  })
+  .strict();
+
 /**
  * The authorization server an `http_api` Connection names itself (CONN-OAUTH-1). Read by the
  * auth schemes `oauth` (a person signs in) and `oauth_client` (the client credentials grant).
@@ -96,22 +131,40 @@ const oauthProviderSchema = z
       )
       .optional(),
     tokenAuthMethod: z.enum(CONNECTOR_TOKEN_AUTH_METHODS).optional(),
-    issuer: oauthAddressSchema.optional()
+    issuer: oauthAddressSchema.optional(),
+    adminConsent: adminConsentSchema.optional()
   })
   .strict()
   .superRefine((oauth, context) => {
-    for (const field of ["authorizationUrl", "tokenUrl", "revocationUrl", "issuer"] as const) {
-      const address = oauth[field];
+    const addresses = [
+      ["authorizationUrl", oauth.authorizationUrl],
+      ["tokenUrl", oauth.tokenUrl],
+      ["revocationUrl", oauth.revocationUrl],
+      ["issuer", oauth.issuer],
+      ["adminConsent", oauth.adminConsent?.url]
+    ] as const;
+    for (const [field, address] of addresses) {
       if (address === undefined) continue;
       try {
         resolveOAuthPath(address, oauth.pathParams ?? {});
       } catch {
         context.addIssue({
           code: "custom",
-          path: [field],
+          path: field === "adminConsent" ? [field, "url"] : [field],
           message: "Endpoint placeholders must be bound path segments"
         });
       }
+    }
+    if (
+      oauth.adminConsent !== undefined &&
+      (originOf(oauth.adminConsent.url) === undefined ||
+        originOf(oauth.adminConsent.url) !== originOf(oauth.authorizationUrl))
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["adminConsent", "url"],
+        message: "The admin-consent address lies on the origin of the authorization address"
+      });
     }
     const params = Object.keys(oauth.authorizationParams ?? {});
     if (params.length > OAUTH_EXTRA_PARAMS_MAX) {

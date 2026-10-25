@@ -27,6 +27,9 @@ export type SampleOAuthMode = (typeof SAMPLE_OAUTH_MODES)[number];
 /** The path the REST provider's server and API are served under. */
 export const SAMPLE_OAUTH_REST_PATH = "/oauth-rest";
 
+/** The code in a refused sign-in's description while the REST client awaits admin approval. */
+const SAMPLE_ADMIN_CONSENT_ERROR_CODE = "SAMPLE_ADMIN_CONSENT";
+
 /** The one scope the sample tools need. */
 export const SAMPLE_OAUTH_SCOPE = "sample.read";
 
@@ -50,6 +53,12 @@ export interface SampleOAuthOptions {
   registeredClient?: { clientId: string; clientSecret?: string; redirectUri: string };
   /** The client of the REST provider, which always has a secret. Left out, it serves nothing. */
   restClient?: { clientId: string; clientSecret: string; redirectUri: string };
+  /**
+   * The REST provider lets only an administrator approve its client, as an organisation does
+   * that switched user consent off: a sign-in is refused with
+   * `SAMPLE_ADMIN_CONSENT_ERROR_CODE` until `/oauth-rest/adminconsent` approved the client.
+   */
+  restAdminConsent?: boolean;
   /** Changes what the metadata says. For tests of a provider that says something else. */
   adjustMetadata?: (
     mode: SampleOAuthMode,
@@ -221,12 +230,18 @@ export function createSampleOAuth(options: SampleOAuthOptions, log?: SampleOAuth
     requiredScope: string | undefined;
     /** Where the 401's challenge says the resource metadata is, in place of this server. */
     challengeMetadataBase: string | undefined;
+    /**
+     * The REST provider refuses a sign-in until an administrator approved the client at
+     * `/oauth-rest/adminconsent`, which switches this off again.
+     */
+    restAdminConsentRequired: boolean;
   } = {
     accessTtlSeconds: DEFAULT_ACCESS_TTL_SECONDS,
     refuseRefresh: false,
     refuseClients: false,
     requiredScope: undefined,
-    challengeMetadataBase: undefined
+    challengeMetadataBase: undefined,
+    restAdminConsentRequired: options.restAdminConsent === true
   };
   const counts: SampleOAuthCounts = {
     authorizationCode: 0,
@@ -334,8 +349,16 @@ export function createSampleOAuth(options: SampleOAuthOptions, log?: SampleOAuth
             : query.get("resource") !== resourceOf(mode)
               ? "invalid_target"
               : undefined;
+    const awaitsApproval =
+      refusal === undefined && mode === "rest" && controls.restAdminConsentRequired;
     if (refusal !== undefined) {
       back.searchParams.set("error", refusal);
+    } else if (awaitsApproval) {
+      back.searchParams.set("error", "access_denied");
+      back.searchParams.set(
+        "error_description",
+        `${SAMPLE_ADMIN_CONSENT_ERROR_CODE}: an administrator has to approve this app`
+      );
     } else {
       const code = opaque();
       options.onSecret?.(code);
@@ -350,7 +373,8 @@ export function createSampleOAuth(options: SampleOAuthOptions, log?: SampleOAuth
       });
       back.searchParams.set("code", code);
     }
-    log?.(`GET ${pathOf(mode)}/authorize 302${refusal === undefined ? "" : ` ${refusal}`}`);
+    const outcome = refusal ?? (awaitsApproval ? "admin_consent_required" : undefined);
+    log?.(`GET ${pathOf(mode)}/authorize 302${outcome === undefined ? "" : ` ${outcome}`}`);
     response.writeHead(302, { Location: back.href, "Cache-Control": "no-store" });
     response.end();
   }
@@ -472,6 +496,27 @@ export function createSampleOAuth(options: SampleOAuthOptions, log?: SampleOAuth
     }
   }
 
+  /**
+   * An administrator approves the REST client for everyone: the browser goes back to the
+   * client's redirect URI with `admin_consent=True` and the state it brought.
+   */
+  function adminConsent(url: URL, response: ServerResponse): void {
+    const query = url.searchParams;
+    const client = clients.get(query.get("client_id") ?? "");
+    const redirectUri = query.get("redirect_uri") ?? "";
+    if (!client || !client.redirectUris.includes(redirectUri)) {
+      throw new OAuthError(400, "invalid_request");
+    }
+    controls.restAdminConsentRequired = false;
+    const back = new URL(redirectUri);
+    back.searchParams.set("admin_consent", "True");
+    const state = query.get("state");
+    if (state !== null) back.searchParams.set("state", state);
+    log?.(`GET ${SAMPLE_OAUTH_REST_PATH}/adminconsent 302`);
+    response.writeHead(302, { Location: back.href, "Cache-Control": "no-store" });
+    response.end();
+  }
+
   /** The REST provider: its authorization, token and revocation endpoints and its one API. */
   async function handleRest(
     request: IncomingMessage,
@@ -483,6 +528,8 @@ export function createSampleOAuth(options: SampleOAuthOptions, log?: SampleOAuth
     try {
       if (route === "GET /authorize") {
         authorize("rest", url, response);
+      } else if (route === "GET /adminconsent") {
+        adminConsent(url, response);
       } else if (route === "POST /token") {
         restTokenHosts.push(request.headers.host ?? "");
         json(response, 200, await token("rest", request));

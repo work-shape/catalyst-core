@@ -246,7 +246,15 @@ function oauthEndpointsOf(
     scopes: [...new Set(oauth.scopes ?? [])],
     authorizationParams: oauth.authorizationParams ?? {},
     tokenAuthMethod: oauth.tokenAuthMethod ?? "client_secret_post",
-    ...(oauth.issuer === undefined ? {} : { issuer: endpoint(oauth.issuer) })
+    ...(oauth.issuer === undefined ? {} : { issuer: endpoint(oauth.issuer) }),
+    ...(oauth.adminConsent === undefined
+      ? {}
+      : {
+          adminConsent: {
+            url: endpoint(oauth.adminConsent.url),
+            errorCodes: [...oauth.adminConsent.errorCodes]
+          }
+        })
   };
 }
 

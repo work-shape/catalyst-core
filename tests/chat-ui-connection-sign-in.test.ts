@@ -688,3 +688,100 @@ describe("the page a sign-in lands on", () => {
     );
   });
 });
+
+describe("a sign-in the organisation's IT has to approve (MS-APP-2)", () => {
+  const LINK =
+    "https://auth.example.test/adminconsent?client_id=client-1&scope=files.read&redirect_uri=https%3A%2F%2Fchat.example.test%2Fcb&state=admin_consent";
+
+  it("says the IT has to approve once and offers the link to copy, then connects on the next try", async () => {
+    const run = testCalls({
+      starts: [() => ({ ...start(1), adminConsentUrl: LINK }), () => start(2)]
+    });
+    const tabs = testBrowser();
+    const connected = vi.fn();
+    mount(
+      createElement(OneClickHarness, {
+        calls: run.calls,
+        browser: tabs.browser,
+        onConnected: connected
+      }),
+      "de"
+    );
+    await click("[data-connect]");
+    tabs.land({ outcome: "oauth_admin_consent_required", connection: "crm" });
+    await settle();
+    expect(element("[data-sign-in-error]").getAttribute("data-sign-in-error")).toBe(
+      "oauth_admin_consent_required"
+    );
+    expect(host.textContent).toContain("Deine IT muss diese App einmal freigeben");
+    expect(host.textContent).toContain("Freigabe-Link für die IT");
+    expect(element("[data-admin-consent-url]").textContent).toBe(LINK);
+
+    // An administrator's approval in another tab is no outcome of a sign-in that waits.
+    await click("[data-connect]");
+    tabs.land({ outcome: "admin_consented", connection: "crm" });
+    await settle();
+    expect(element("[data-sign-in-step]").getAttribute("data-sign-in-step")).toBe("waiting");
+    run.signIn();
+    tabs.tick();
+    await settle();
+    expect(connected).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows the refusal and the link on the card drawn anew while the person signed in", async () => {
+    const run = testCalls({ starts: [() => ({ ...start(1), adminConsentUrl: LINK })] });
+    const calls = { ...run.calls, connection: "mail" };
+    const tabs = testBrowser();
+    const card = () =>
+      createElement(OneClickHarness, {
+        calls,
+        browser: tabs.browser,
+        onConnected: vi.fn(),
+        outlivesView: true
+      });
+    mount(card(), "de");
+    await click("[data-connect]");
+
+    // The chat draws its card anew: the new card still waits, then hears how it ended.
+    act(() => root.render(createElement("p")));
+    mount(card(), "de");
+    await settle();
+    expect(element("[data-sign-in-step]").getAttribute("data-sign-in-step")).toBe("waiting");
+    tabs.land({ outcome: "oauth_admin_consent_required", connection: "mail" });
+    await settle();
+    expect(element("[data-sign-in-error]").getAttribute("data-sign-in-error")).toBe(
+      "oauth_admin_consent_required"
+    );
+    expect(element("[data-admin-consent-url]").textContent).toBe(LINK);
+
+    // Once its view is gone, a sign-in that ended is not shown on the next card.
+    act(() => root.render(createElement("p")));
+    mount(card(), "de");
+    await settle();
+    expect(host.querySelector("[data-sign-in-error]")).toBeNull();
+  });
+
+  it("reads an administrator's approval from the landing address and says people can connect", async () => {
+    expect(
+      readSignInLanding({
+        pathname: "/build/connections",
+        search: "?signIn=admin_consented&connection=crm"
+      })
+    ).toEqual({ outcome: "admin_consented", connection: "crm" });
+    const close = vi.spyOn(window, "close").mockImplementation(() => undefined);
+    close.mockClear();
+    mount(
+      createElement(ConnectionSignInLanding, {
+        landing: { outcome: "admin_consented", connection: "crm" },
+        onOpen: vi.fn()
+      }),
+      "en"
+    );
+    await settle();
+    expect(host.textContent).toContain("Approved");
+    expect(host.textContent).toContain("People in your organisation can connect now.");
+    // The administrator is often nobody of the instance: nothing to open, and the tab stays.
+    expect(host.querySelector("button")).toBeNull();
+    expect(close).not.toHaveBeenCalled();
+  });
+});

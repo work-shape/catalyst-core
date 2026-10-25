@@ -65,6 +65,7 @@ function HostedConnectCard({
   const mine = usePersonalConnectionsQuery({ ...api, enabled: card.personal });
   const invalidate = useInvalidatePersonalConnections(api);
   const own = mine.data?.connections.find((connection) => connection.name === name);
+
   const signIn = useConnectionSignIn(
     {
       connection: name,
@@ -177,7 +178,13 @@ export function ConnectionConnectCardView({
           data-connect-card-connect={state}
           onClick={signIn.connect}
         >
-          {t(state === "connect" ? "personalConnections.connect" : "personalConnections.reconnect")}
+          {t(
+            phase === "failed"
+              ? "connectionSignIn.tryAgain"
+              : state === "connect"
+                ? "personalConnections.connect"
+                : "personalConnections.reconnect"
+          )}
         </Button>
       )
     ) : state === "setup" && onSetup ? (

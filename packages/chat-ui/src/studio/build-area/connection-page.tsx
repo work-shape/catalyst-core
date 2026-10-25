@@ -213,7 +213,13 @@ export function ConnectionPage({
                   id: "people",
                   label: t("personalConnections.peopleTitle"),
                   description: t("personalConnections.peopleDescription"),
-                  body: <ConnectionPeopleSection name={asset.name} mayWrite />
+                  body: (
+                    <ConnectionPeopleSection
+                      name={asset.name}
+                      mayWrite
+                      adminConsentUrl={detail.oauth.adminConsentUrl}
+                    />
+                  )
                 }
               ]
             : [])
