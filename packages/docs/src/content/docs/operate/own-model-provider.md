@@ -10,7 +10,7 @@ An instance calls models with your own endpoint and key: Azure OpenAI, Gemini on
 3. You deploy the release config.
 4. `catalyst models check` asks the running instance whether the provider takes the key.
 
-Whoever may change the deployment repository and deploy it may add a provider; the instance grants no right for it. The check needs an instance admin's key with `users.manage`. Every provider added this way processes data in the EU (`region: eu`); the command refuses another region. The [release config](/configure/release-config/#model-provider-configuration) describes every setting it writes, and [the command](/configure/cli/models/) every option.
+Whoever may change the deployment repository and deploy it may add a provider; the instance grants no right for it. The check needs a key with the right of the Infrastructure page (`system.view`). Every provider added this way processes data in the EU (`region: eu`); the command refuses another region. The [release config](/configure/release-config/#model-provider-configuration) describes every setting it writes, and [the command](/configure/cli/models/) every option.
 
 Prices are per million tokens in the rate card's currency. Use what the provider bills you; the prices below are examples. Under a spend budget the instance refuses a model without a price, and Bedrock needs prices above zero always.
 

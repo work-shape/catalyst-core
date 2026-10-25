@@ -13,11 +13,7 @@ import {
   loadClientInstanceConfigFromFile,
   type ClientInstanceConfig
 } from "@work-shape/catalyst-config-schema";
-import {
-  asClientInstanceId,
-  createEnvironmentSecretResolver,
-  type ModelUsageEventStore
-} from "@work-shape/catalyst-core";
+import { asClientInstanceId, createEnvironmentSecretResolver } from "@work-shape/catalyst-core";
 import { replayServiceAccountKey } from "../support/model-adapter-recordings";
 import { silentTestLogger } from "../support/model-gateway";
 
@@ -69,28 +65,12 @@ async function run(cwd: string, args: string[], options: CliRuntimeOptions = {})
   return { code, out: out.join(""), err: err.join("") };
 }
 
-/** Startup creates the gateway in front of the usage ledger and records nothing. */
-const unused = () => Promise.reject(new Error("The startup checks call no usage store"));
-const unusedUsageStore: ModelUsageEventStore = {
-  appendModelUsageEvent: unused,
-  admitModelUsageEvent: unused,
-  settleModelUsageEvent: unused,
-  listPendingModelUsageEvents: unused,
-  summarizeModelUsageHistory: unused,
-  summarizeModelUsageBudget: unused,
-  summarizeRecentModelUsage: unused,
-  reconcileModelUsage: unused,
-  readModelUsageMaintenance: unused,
-  writeModelUsageMaintenance: unused,
-  listModelUsageEvents: unused,
-  clearUserFromModelUsageEvents: unused,
-  clearWorkspaceFromModelUsageEvents: unused,
-  backfillModelUsageAttribution: unused,
-  readSpendLimits: unused,
-  listSpendLimits: unused,
-  setSpendLimit: unused,
-  readSpendCounters: unused
-};
+/** Startup creates the models and reads or records nothing: any store call fails the test. */
+const unused = () => Promise.reject(new Error("The startup checks call no store"));
+function unusedStore<T extends object>(): T {
+  const nothing: T = Object.create(null);
+  return new Proxy(nothing, { get: (_, key) => (key === "then" ? undefined : unused) });
+}
 
 /**
  * What startup does with a release config's models: it loads the file with what it extends,
@@ -112,7 +92,7 @@ async function startupAccepts(
     config,
     clientInstanceId: asClientInstanceId(config.clientInstance.id),
     infrastructure,
-    store: { usage: unusedUsageStore },
+    store: { usage: unusedStore(), conversations: unusedStore(), agentRuns: unusedStore() },
     bindingIds: config.modelBindings.map((binding) => binding.id)
   });
   return config;
@@ -795,13 +775,13 @@ describe("catalyst models check", () => {
     const refused = await run(root, ["models", "check", "azure-eu", "--instance", INSTANCE], {
       fetchImpl: apiFetch(() =>
         Response.json(
-          { error: { code: "FORBIDDEN", message: "This needs the right users.manage." } },
+          { error: { code: "FORBIDDEN", message: "This needs the right system.view." } },
           { status: 403 }
         )
       )
     });
     expect(refused.code).toBe(1);
-    expect(refused.err).toContain("users.manage");
+    expect(refused.err).toContain("system.view");
   });
 });
 
