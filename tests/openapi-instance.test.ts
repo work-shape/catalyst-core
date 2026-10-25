@@ -70,7 +70,9 @@ describe("the reference an instance serves", () => {
     const moduleRoutes = [
       `${API_VERSION_PREFIX}/data-stores`,
       `${API_VERSION_PREFIX}/app-data-sources`,
-      `${API_VERSION_PREFIX}/knowledge-bases`
+      `${API_VERSION_PREFIX}/knowledge-bases`,
+      // What deleting a Workflow ends in Knowledge Bases is the knowledge module's.
+      `${API_VERSION_PREFIX}/workflows/{workflow}/knowledge-sources`
     ];
     expect(paths).toEqual(
       Object.keys(released.paths).filter(
