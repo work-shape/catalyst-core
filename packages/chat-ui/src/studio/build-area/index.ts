@@ -45,6 +45,7 @@ export { CatalogueInstall } from "./connection-catalogue-install";
 export * from "./connection-catalogue-model";
 export * from "./connection-catalogue-oauth";
 export { CatalogueServices } from "./connection-catalogue-services";
+export * from "./connection-catalogue-update-model";
 export * from "./connection-connect";
 export { ConnectionCreateFlow } from "./connection-create-dialog";
 export { ConnectionCreateForm, createsPersonal, type CreateFields } from "./connection-create-form";

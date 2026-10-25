@@ -1,5 +1,6 @@
 import { createElement } from "react";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 import type { ConnectionDetail, LocaleCode } from "@work-shape/catalyst-api-client";
 import {
   buildAssetKinds,
@@ -16,6 +17,7 @@ import {
   type BuildAssetKind,
   type BuildAssetRead,
   type BuildSource,
+  type CatalogueEntryOffer,
   type ConnectionDetailRead,
   type ConnectionHoldersRead,
   type ConnectionSource,
@@ -30,6 +32,7 @@ import {
   testResult
 } from "./chat-ui-connection-fixtures";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
+import { mailbox } from "./chat-ui-catalogue-oauth-fixtures";
 
 // The Connection page against the answers of the contract, handed in where the instance's
 // answers will stand. Every test here fails without the page: before it, the address of a
@@ -42,6 +45,8 @@ if (!connectionKind || connectionKind.Editor === undefined) {
 const editableConnections: BuildAssetKind = connectionKind;
 
 const noop = () => undefined;
+/** The revocation address a later version of the mailbox entry names. */
+const REVOKE = "https://login.example.test/revoke";
 
 interface PageInput {
   asset?: BuildAsset;
@@ -60,6 +65,8 @@ interface PageInput {
   personContext?: boolean;
   /** Who the person context chooser lists. Two people unless it says otherwise. */
   subjects?: ReturnType<NonNullable<ConnectionSource["personContext"]>["useSubjects"]>;
+  /** The catalogue's entries as the instance offers them. None unless it says so. */
+  entries?: CatalogueEntryOffer[];
 }
 
 /** The page at the Connection's address, inside the frame, with fixed answers. */
@@ -71,6 +78,7 @@ function renderPage(input: PageInput = {}): string {
       input.detailRead ?? { status: "ready", detail: connectionDetail(name, input.detail) },
     useTest: () => ({ run: input.run ?? { status: "idle" }, start: noop }),
     useHolders: () => input.holders ?? { status: "hidden" },
+    useCatalogueEntries: () => input.entries ?? [],
     setSecret: async () => undefined,
     discover: async () => undefined,
     readDetail: async (name) => connectionDetail(name, input.detail),
@@ -920,6 +928,61 @@ describe("Connection page", () => {
     expect(german).toContain("Gib den Schlüssel unter Zugangsdaten ein. Teste danach erneut.");
     expect(german).toContain("Nutzen dürfen");
     expect(german).toContain("1 Tool freigeben");
+  });
+
+  it("offers a managed Connection set up from an earlier entry version the update, to whoever may change it (MS-APP-RELINK)", () => {
+    // The mailbox entry at version 2 on the operator's managed client; the Connection was set up
+    // from version 1, before the entry named its revocation address.
+    const entry: CatalogueEntryOffer = {
+      ...mailbox,
+      parts: mailbox.parts.map((part) => ({
+        ...part,
+        managedClient: "workshape",
+        settings: {
+          ...part.settings,
+          oauth: { ...z.looseObject({}).parse(part.settings.oauth), revocationUrl: REVOKE }
+        }
+      }))
+    };
+    const stale = connectionAsset("mailbox", {
+      origin: "runtime",
+      connectorType: "http_api",
+      authScheme: "oauth",
+      credentialMode: "user",
+      catalogue: { entry: "mailbox", part: "tools", version: 1 },
+      settings: {
+        baseUrl: "https://mail.example.test/v1",
+        oauth: {
+          authorizationUrl: "https://login.example.test/authorize",
+          tokenUrl: "https://login.example.test/token",
+          scopes: ["openid", "email"],
+          managedClient: "workshape"
+        }
+      }
+    });
+    const markup = renderPage({ asset: stale, entries: [entry] });
+    expect(markup).toContain("data-connection-catalogue-update");
+    expect(markup).toContain("Set up from an earlier version of Mailbox");
+    expect(markup).toContain(
+      "This connection was set up from version 1, and this instance has version 2."
+    );
+    expect(markup).toMatch(/data-connection-catalogue-update-apply=""[^>]*>Update to version 2</u);
+    // Which settings change stands folded under the text.
+    expect(markup).toContain("Settings that change");
+    const german = renderPage({ asset: stale, entries: [entry], locale: "de" });
+    expect(german).toContain("Mit einer früheren Version von Postfach eingerichtet");
+    expect(german).toContain("Auf Version 2 aktualisieren");
+    // A reader who may not change it, and a Connection at the current version, get no offer.
+    expect(renderPage({ asset: stale, entries: [entry], canWrite: false })).not.toContain(
+      "data-connection-catalogue-update"
+    );
+    const current = connectionAsset("mailbox", {
+      ...stale.config,
+      catalogue: { entry: "mailbox", part: "tools", version: 2 }
+    });
+    expect(renderPage({ asset: current, entries: [entry] })).not.toContain(
+      "data-connection-catalogue-update"
+    );
   });
 
   it("names the settings of a REST API in words, in English and in German", () => {

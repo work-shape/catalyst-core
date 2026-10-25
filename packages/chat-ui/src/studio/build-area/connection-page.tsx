@@ -30,6 +30,8 @@ import type {
   BuildHeadActions
 } from "./build-asset-kind";
 import { ConnectionAboutEditor } from "./connection-about";
+import { catalogueUpdateOf } from "./connection-catalogue-update-model";
+import { ConnectionCatalogueUpdate } from "./connection-catalogue-update";
 import {
   ConnectionSecretEditor,
   ConnectionSettingsEditor,
@@ -112,6 +114,9 @@ export function ConnectionPage({
   const offer = (source.useConnectorTypes?.(source.mayTest(asset)) ?? []).find(
     (type) => type.type === connectorType
   );
+  // A Connection on the managed client set up from an earlier entry version is updated first.
+  const entries = source.useCatalogueEntries?.(source.mayTest(asset));
+  const update = editing && entries ? catalogueUpdateOf(asset.config, entries) : undefined;
   const discovers = connectorType !== "http_api" && offer === undefined;
   const formEdits = offer === undefined;
   const [wait, setWait] = useState<DiscoveryWait | undefined>(() =>
@@ -436,6 +441,11 @@ export function ConnectionPage({
           <Banner layout="line" className="mb-4" data-build-read-only="">
             {t("connections.releaseNotice")}
           </Banner>
+        ) : null}
+        {editing && update ? (
+          <div className="mb-4">
+            <ConnectionCatalogueUpdate update={update} frame={editing} written={written} />
+          </div>
         ) : null}
         {sections.map((section) => (
           <Section

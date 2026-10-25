@@ -305,6 +305,11 @@ export function readBuildRefusal(
       message: details.guardrailReason ? `${blocked} ${details.guardrailReason}` : blocked
     });
   }
+  // A managed Connection set up from an earlier version of its catalogue entry: its page
+  // offers the update, which comes first.
+  if (details.reason === "catalogue_update_required") {
+    return refused({ message: t("connections.catalogueUpdateRequired") });
+  }
   if (details.reason === "person_context_app_unavailable") {
     return refused({ message: t("connections.personContextAppUnavailable") });
   }

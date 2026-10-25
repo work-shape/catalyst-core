@@ -180,7 +180,6 @@ describe("a catalogue part that asks for a managed client", () => {
     for (const refused of [
       installed(clients, { name: "second-mailbox" }),
       installed(clients, { catalogue: undefined }),
-      installed(clients, { catalogue: { entry: "sample-oauth", part: "tools", version: 2 } }),
       installed(clients, { catalogue: { entry: "other", part: "tools", version: 1 } })
     ]) {
       expect(catalogue.managedClientIssue(refused), JSON.stringify(refused)).toContain(
@@ -188,6 +187,12 @@ describe("a catalogue part that asks for a managed client", () => {
       );
       expect(() => catalogue.prepareConnection(refused)).toThrow("managed_client_unavailable");
     }
+    // Another version of its entry: refused until it is updated to this one (MS-APP-RELINK).
+    const otherVersion = installed(clients, {
+      catalogue: { entry: "sample-oauth", part: "tools", version: 2 }
+    });
+    expect(catalogue.managedClientIssue(otherVersion)).toMatch(/^catalogue_update_required: /u);
+    expect(() => catalogue.prepareConnection(otherVersion)).toThrow("catalogue_update_required");
     // A Connection with its own client id is none of this rule's business.
     const own = installed(clients, {
       name: "second-mailbox",
