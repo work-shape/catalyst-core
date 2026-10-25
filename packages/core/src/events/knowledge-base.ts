@@ -47,6 +47,12 @@ export const knowledgeBaseEvents = {
     ...LIVE_ONCE_AUDIT,
     name: "knowledge_base.reindex_finished"
   },
+  // A person let a first pass go on past 10,000 items (KB-ISO-1b): the source, the counts and the
+  // estimate, never a name.
+  "knowledge_base.first_pass_confirmed": {
+    ...LIVE_ONCE_AUDIT,
+    name: "knowledge_base.first_pass_confirmed"
+  },
   "knowledge_base.source_narrowed": { ...LIVE_ONCE_AUDIT, name: "knowledge_base.source_narrowed" },
   "knowledge_base.source_removed": { ...LIVE_ONCE_AUDIT, name: "knowledge_base.source_removed" },
   "knowledge_base.files_added": {

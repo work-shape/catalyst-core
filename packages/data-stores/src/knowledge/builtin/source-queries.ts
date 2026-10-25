@@ -1,5 +1,7 @@
 import { supersedeWaitingSource } from "./source-supersession";
-import type { KnowledgeSources, KnowledgeListingMode } from "../source-port";
+import type { FirstPassWaiting, KnowledgeSources, KnowledgeListingMode } from "../source-port";
+import { firstPassStopSchema } from "../first-pass";
+import type { PostgresChangeStatements } from "@work-shape/catalyst-postgres-connector";
 import { z } from "zod";
 import {
   AppError,
@@ -14,7 +16,10 @@ import {
   type KnowledgeSyncJobPayload,
   knowledgeFetchJob,
   knowledgeSourceKey,
-  type KnowledgeFiles
+  knowledgeSyncJob,
+  subjectDedupeKey,
+  type KnowledgeFiles,
+  type KnowledgeFirstPassConfirmation
 } from "@work-shape/catalyst-core";
 import { discardUnusableKnowledgeExtraction } from "../index-extraction";
 import type { DataStoreRuntime } from "../../runtime";
@@ -96,7 +101,8 @@ export function createKnowledgeSources(runtime: DataStoreRuntime): KnowledgeSour
     async sources(
       id: string,
       sources: readonly { id: string; connection: string }[],
-      signal: AbortSignal
+      signal: AbortSignal,
+      confirmation?: (waiting: FirstPassWaiting) => KnowledgeFirstPassConfirmation
     ) {
       signal.throwIfAborted();
       const record = await runtime.stores.dataStores.getDataStore({
@@ -180,6 +186,18 @@ export function createKnowledgeSources(runtime: DataStoreRuntime): KnowledgeSour
           const runs = rows.map(syncResult),
             running = runs.find((r) => r.state === "running"),
             last = runs.find((r) => r.state !== "running");
+          // KB-ISO-1b: a first pass that stopped at its stop waits for a confirmation.
+          const stop = running
+            ? stopOf(rows.find((row) => isRecord(row) && row.id === running.syncRunId))
+            : undefined;
+          const waiting =
+            running && stop && stop.confirmed !== true && confirmation
+              ? confirmation({
+                  syncRunId: running.syncRunId,
+                  stop,
+                  storeBytes: await storeBytes(sql)
+                })
+              : undefined;
           const elapsed = running
             ? Math.max((Date.now() - Date.parse(running.startedAt)) / 60000, 1 / 60)
             : 0;
@@ -219,7 +237,7 @@ export function createKnowledgeSources(runtime: DataStoreRuntime): KnowledgeSour
                     mode: running.mode,
                     startedAt: running.startedAt,
                     itemsPerMinute: rate,
-                    ...(rate > 0
+                    ...(rate > 0 && !waiting
                       ? {
                           estimatedEndAt: new Date(
                             Date.now() + (items.discovered / rate) * 60000
@@ -230,6 +248,7 @@ export function createKnowledgeSources(runtime: DataStoreRuntime): KnowledgeSour
                 }
               : {}),
             ...(last ? { last } : {}),
+            ...(waiting ? { confirmation: waiting } : {}),
             ...(cursor?.last_change_at
               ? { lastChangeAt: cursor.last_change_at.toISOString() }
               : {}),
@@ -239,6 +258,59 @@ export function createKnowledgeSources(runtime: DataStoreRuntime): KnowledgeSour
           });
         }
         return knowledgeSourcesOutputSchema.parse({ sources: result });
+      });
+    },
+    async confirmFirstPass(id, source, signal) {
+      return store(id, signal).change(async (sql) => {
+        const [row] = z
+          .array(
+            z.object({
+              id: z.string(),
+              operation_run_id: z.string(),
+              cursor_after: z.string().nullable()
+            })
+          )
+          .parse(
+            await sql.run(
+              "select id,operation_run_id,cursor_after from catalyst_kb.sync_runs where source_id=$1::text and state='running' for update",
+              [source]
+            )
+          );
+        const stop = stopOf(row);
+        if (!row || !stop) return undefined;
+        const confirmedNow = stop.confirmed !== true;
+        if (confirmedNow) {
+          await sql.run(
+            "update catalyst_kb.sync_runs set cursor_after=jsonb_set(cursor_after::jsonb,'{stop,confirmed}','true')::text where id=$1::text",
+            [row.id]
+          );
+          // The pass goes on now, not at its next look: a running attempt cannot swallow it.
+          await runtime.stores.transaction((stores) =>
+            stores.jobs.runAgainAfter(
+              knowledgeSyncJob,
+              {
+                knowledgeBaseId: id,
+                sourceId: source,
+                syncRunId: row.id,
+                operationRunId: row.operation_run_id
+              },
+              {
+                clientInstanceId: runtime.clientInstanceId,
+                subject: id,
+                concurrencyKey: knowledgeSourceKey(id, source),
+                dedupeKey: subjectDedupeKey(knowledgeSyncJob.kind, row.id),
+                runAfter: new Date()
+              }
+            )
+          );
+        }
+        return {
+          syncRunId: row.id,
+          operationRunId: row.operation_run_id,
+          stop,
+          storeBytes: await storeBytes(sql),
+          confirmedNow
+        };
       });
     },
     async items(
@@ -432,4 +504,34 @@ export function createKnowledgeSources(runtime: DataStoreRuntime): KnowledgeSour
       }
     }
   };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+/** The stop a run's progress keeps, a connector's or an ingest pass's alike (KB-ISO-1b). */
+function stopOf(row: unknown) {
+  if (!isRecord(row) || typeof row.cursor_after !== "string") return undefined;
+  let progress: unknown;
+  try {
+    progress = JSON.parse(row.cursor_after);
+  } catch {
+    return undefined;
+  }
+  if (!isRecord(progress)) return undefined;
+  const stop = firstPassStopSchema.safeParse(progress.stop);
+  return stop.success ? stop.data : undefined;
+}
+
+/** What the Knowledge Base's store takes now, for the room a confirmation names. */
+async function storeBytes(sql: Pick<PostgresChangeStatements, "run">) {
+  const [row] = z
+    .array(z.object({ bytes: z.coerce.number() }))
+    .parse(
+      await sql.run(
+        "select pg_catalog.pg_database_size(pg_catalog.current_database())::pg_catalog.text as bytes"
+      )
+    );
+  return row?.bytes ?? 0;
 }

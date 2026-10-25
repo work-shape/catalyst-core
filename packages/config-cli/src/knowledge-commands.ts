@@ -16,11 +16,13 @@ export const knowledgeHelpText = `Knowledge Base sources (draft changes take eff
   knowledge-base source add <kb> --source <id> --connection <name> --folder <id>... [--include <glob>...] [--exclude <glob>...]
   knowledge-base source list <kb>
   knowledge-base source remove <kb> --source <id>
-  knowledge-base sync <kb> --source <id> [--full]
+  knowledge-base sync <kb> --source <id> [--full] [--confirm]
   knowledge-base source status <kb> [--source <id>]
   knowledge-base source retry <kb> --source <id> (--item <id>... | --code <code> | --all)
   knowledge-base reindex <kb> [--confirm <token>]
 Sync answers its Operation Run immediately. Change-feed sync is not supported yet; use --full.
+A first import above 10,000 items stops there and waits; source status shows its count, size
+and estimated cost, and sync --confirm lets it go on (needs the right to publish).
 Narrowing and removal may be saved as drafts; publishing them is not supported yet.
 Reindex embeds every passage again with the model the Knowledge Base is set to. Without
 --confirm it states the passages, tokens and cost and starts nothing; search keeps answering
@@ -34,8 +36,10 @@ export async function runKnowledgeCommand(
   try {
     const source = argv[1] === "source";
     const command = source ? argv[2] : argv[1];
+    // `sync --confirm` takes no value; `reindex --confirm <token>` takes the statement's token.
+    const confirmSync = command === "sync" && argv.includes("--confirm");
     const parsed = parseArgs({
-      args: argv.slice(source ? 3 : 2),
+      args: argv.slice(source ? 3 : 2).filter((arg) => !(confirmSync && arg === "--confirm")),
       options: {
         instance: { type: "string" },
         dir: { type: "string" },
@@ -108,7 +112,11 @@ export async function runKnowledgeCommand(
     } else if (command === "sync")
       result = await call(api, apiOperations["knowledge_bases.sync"], {
         params: { knowledgeBase: name },
-        body: { source: values.source, ...(values.full ? { mode: "full" } : {}) }
+        body: {
+          source: values.source,
+          ...(values.full ? { mode: "full" } : {}),
+          ...(confirmSync ? { confirm: true } : {})
+        }
       });
     else if (command === "status") {
       const output = await call(api, apiOperations["knowledge_bases.sources"], {

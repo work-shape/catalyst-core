@@ -9,8 +9,10 @@ import type {
   KnowledgeRetryInput,
   KnowledgeWorkflowSourcesOutput,
   ActorAccess,
+  KnowledgeFirstPassConfirmation,
   WorkflowDatasetReference
 } from "@work-shape/catalyst-core";
+import type { FirstPassStop } from "./first-pass";
 export type KnowledgeListingMode = Exclude<KnowledgeSyncResult["mode"], "ingest">;
 
 /** One call of `knowledge.<id>.ingest`: who called, and what it hands in (KBW-1). */
@@ -36,6 +38,13 @@ export interface KnowledgeIngestCall {
   complete: boolean;
 }
 
+/** A first pass that stopped at its stop, with what the store holds now. */
+export interface FirstPassWaiting {
+  syncRunId: string;
+  stop: FirstPassStop;
+  storeBytes: number;
+}
+
 /** The source engine port used by operations, on the owned database's pools. */
 export interface KnowledgeSources {
   start(
@@ -47,8 +56,20 @@ export interface KnowledgeSources {
   sources(
     id: string,
     sources: readonly { id: string; connection: string }[],
-    signal: AbortSignal
+    signal: AbortSignal,
+    /** The estimate a first pass that waits for confirmation shows (KB-ISO-1b). */
+    confirmation?: (waiting: FirstPassWaiting) => KnowledgeFirstPassConfirmation
   ): Promise<KnowledgeSourcesOutput>;
+  /**
+   * Lets the running first pass of a source that stopped at 10,000 items go on, and wakes it
+   * (KB-ISO-1b). Answers the pass, whether this call confirmed it, and what it holds; nothing
+   * where no pass of the source stopped.
+   */
+  confirmFirstPass(
+    id: string,
+    source: string,
+    signal: AbortSignal
+  ): Promise<(FirstPassWaiting & { operationRunId: string; confirmedNow: boolean }) | undefined>;
   items(
     id: string,
     input: KnowledgeSourceItemsInput,

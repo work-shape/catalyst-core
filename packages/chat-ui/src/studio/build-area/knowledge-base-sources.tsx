@@ -1,7 +1,8 @@
-import { FolderSync, Plug, RefreshCw, RotateCcw, Trash2 } from "lucide-react";
+import { FolderSync, Play, Plug, RefreshCw, RotateCcw, Trash2 } from "lucide-react";
 import { useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import {
   Badge,
+  Banner,
   Button,
   Chip,
   EmptyState,
@@ -33,6 +34,7 @@ import { offerText } from "./connection-typed-model";
 import type { PagedItems } from "./paged-items";
 import { DataFlowRow, type DataFlowPage } from "./data-flows";
 import type { DataFlowRef } from "./data-flows-model";
+import { formatEmbeddingCost, formatStoreBytes } from "./knowledge-cost";
 
 // The synced sources of a Knowledge Base of documents (SRC-2): each reads the folders it names
 // through a Connection whose type is a document source. The list is part of the draft: a source
@@ -153,6 +155,7 @@ export function KnowledgeSourcesSection({
                   sourceId={entry.id}
                   status={statusOf(entry.id)}
                   canWrite={canWrite}
+                  canConfirm={canPublish}
                 />
               )}
             </SourceItem>
@@ -272,7 +275,8 @@ function SourceStatus({
   status,
   canWrite,
   fedByWorkflow = false,
-  canRelease = false
+  canRelease = false,
+  canConfirm = false
 }: {
   source: KnowledgeBaseSource;
   knowledgeBase: string;
@@ -284,9 +288,11 @@ function SourceStatus({
   fedByWorkflow?: boolean;
   /** The reader may let a Workflow bring back the items a person removed by hand. */
   canRelease?: boolean;
+  /** The reader may let a first import that waits at 10,000 items go on (KB-ISO-1b). */
+  canConfirm?: boolean;
 }) {
   const { locale, t } = useTranslation();
-  const [busy, setBusy] = useState<"sync" | KnowledgeSourceFailureCode>();
+  const [busy, setBusy] = useState<"sync" | "confirm" | KnowledgeSourceFailureCode>();
   const [notice, setNotice] = useState<ActionNotice>();
   if (status === undefined) return null;
   const view = sourceStateView(status);
@@ -306,6 +312,23 @@ function SourceStatus({
             text: answer.refused
               ? t("knowledgeSources.refused")
               : (answer.message ?? t("knowledgeSources.syncFailed"))
+          }
+    );
+  };
+  const confirm = async () => {
+    if (!source.confirmSource) return;
+    setBusy("confirm");
+    setNotice(undefined);
+    const answer = await source.confirmSource(knowledgeBase, sourceId);
+    setBusy(undefined);
+    setNotice(
+      answer.ok
+        ? { tone: "success", text: t("knowledgeSources.confirmed") }
+        : {
+            tone: "error",
+            text: answer.refused
+              ? t("knowledgeSources.confirmRefused")
+              : (answer.message ?? t("knowledgeSources.confirmFailed"))
           }
     );
   };
@@ -349,6 +372,27 @@ function SourceStatus({
           </Chip>
         ) : null}
       </div>
+      {status.confirmation ? (
+        <FirstImportConfirmation
+          confirmation={status.confirmation}
+          action={
+            canConfirm && source.confirmSource ? (
+              <Button
+                size="sm"
+                loading={busy === "confirm"}
+                disabled={busy !== undefined}
+                data-knowledge-source-confirm=""
+                onClick={() => {
+                  confirm().catch(() => setBusy(undefined));
+                }}
+              >
+                <Play aria-hidden="true" />
+                {t("knowledgeSources.confirm")}
+              </Button>
+            ) : undefined
+          }
+        />
+      ) : null}
       {fedByWorkflow && status.last?.endedAt ? (
         <p className="text-caption text-muted-foreground" data-knowledge-source-freshness="">
           {t("knowledgeSources.workflowFreshness", {
@@ -461,6 +505,73 @@ function SourceStatus({
   );
 }
 
+type FirstPassConfirmation = NonNullable<KnowledgeSourceStatus["confirmation"]>;
+
+/**
+ * A first import that stopped at 10,000 items (KB-ISO-1b): what the whole source holds and what
+ * embedding it would cost, estimated from the listed sizes, and for who may publish, one button
+ * that lets it go on. Who may only read sees the same without the button.
+ */
+function FirstImportConfirmation({
+  confirmation,
+  action
+}: {
+  confirmation: FirstPassConfirmation;
+  action: ReactNode;
+}) {
+  const { locale, t } = useTranslation();
+  const number = (value: number) => new Intl.NumberFormat(locale).format(value);
+  const range = (min: string, max: string) =>
+    min === max ? min : t("knowledgeSources.confirmRange", { min, max });
+  const counts = {
+    items: number(confirmation.items),
+    size: formatStoreBytes(confirmation.bytes, locale)
+  };
+  const { cost } = confirmation;
+  const statement =
+    confirmation.model === undefined
+      ? t("knowledgeSources.confirmNoEmbedding", counts)
+      : cost
+        ? t("knowledgeSources.confirmStatement", {
+            ...counts,
+            cost: range(
+              formatEmbeddingCost(cost.min, cost.currency, locale),
+              formatEmbeddingCost(cost.max, cost.currency, locale)
+            )
+          })
+        : t("knowledgeSources.confirmNoPrice", counts);
+  return (
+    <Banner
+      tone="warning"
+      title={t("knowledgeSources.confirmTitle")}
+      action={action}
+      data-knowledge-source-confirmation=""
+    >
+      <div className="grid min-w-0 gap-2">
+        <p>{statement}</p>
+        <p>{t("knowledgeSources.confirmStopped", { stop: number(confirmation.stop) })}</p>
+        <KeyValueList layout="stacked">
+          <KeyValue label={t("knowledgeSources.confirmPassages")}>
+            {range(number(confirmation.passages.min), number(confirmation.passages.max))}
+          </KeyValue>
+          <KeyValue label={t("knowledgeSources.confirmTokens")}>
+            {range(number(confirmation.tokens.min), number(confirmation.tokens.max))}
+          </KeyValue>
+        </KeyValueList>
+        {confirmation.room ? null : (
+          <p>
+            {t("knowledgeSources.confirmNoRoom", {
+              used: formatStoreBytes(confirmation.storeBytes, locale),
+              added: formatStoreBytes(confirmation.addedBytes, locale),
+              limit: formatStoreBytes(confirmation.limitBytes ?? 0, locale)
+            })}
+          </p>
+        )}
+      </div>
+    </Banner>
+  );
+}
+
 type WorkflowSourceStatus = Extract<KnowledgeSourceStatus, { workflowId: string }>;
 
 /**
@@ -505,6 +616,7 @@ function WorkflowSourceItem({
         canWrite={false}
         fedByWorkflow
         canRelease={canPublish}
+        canConfirm={canPublish}
       />
       <p className="text-caption text-muted-foreground">{t("knowledgeSources.workflowNote")}</p>
     </li>

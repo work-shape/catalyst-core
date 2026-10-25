@@ -46,6 +46,13 @@ import {
   type SourceItem
 } from "./source-store";
 import type { SourceJobRuntime } from "./source-runtime";
+import {
+  emptyFirstPassStop,
+  firstPassStopOf,
+  firstPassStopSchema,
+  tallyFirstPass,
+  type FirstPassStop
+} from "../first-pass";
 
 // KBW-1: a Workflow puts documents into a Knowledge Base. One call of `knowledge.<id>.ingest`
 // is one sync run of mode `ingest` of the source `workflow:<workflow>`, and one job walks it:
@@ -90,7 +97,9 @@ const progressSchema = z.object({
   complete: z.boolean(),
   offset: z.number().int().min(0),
   /** The rows up to which the run's counts were added, so a page read again adds none. */
-  counted: z.number().int().min(0)
+  counted: z.number().int().min(0),
+  /** A first pass above the stop waits here for one confirmation (KB-ISO-1b). */
+  stop: firstPassStopSchema.optional()
 });
 type IngestProgress = z.infer<typeof progressSchema>;
 
@@ -623,7 +632,8 @@ async function inlinePage(
   runtime: SourceJobRuntime,
   payload: KnowledgeSyncJobPayload,
   control: JobControl,
-  offset: number
+  offset: number,
+  limit = INGEST_PAGE_ROWS
 ): Promise<unknown[]> {
   const rows = z
     .array(z.object({ item: z.json() }))
@@ -631,7 +641,7 @@ async function inlinePage(
       await createSourceStore(runtime.data, payload.knowledgeBaseId, control.signal).change((sql) =>
         sql.run(
           "select item from catalyst_kb.ingest_items where sync_run_id=$1::text and position>=$2::int order by position limit $3::int",
-          [payload.syncRunId, offset, INGEST_PAGE_ROWS]
+          [payload.syncRunId, offset, limit]
         )
       )
     );
@@ -648,11 +658,38 @@ async function readPass(
   const { payload } = job;
   const datasets = runtime.data.workflowDatasets;
   let progress = progressOf(run);
+  // KB-ISO-1b: a Workflow's first pass above the stop takes the items up to it, then waits for
+  // one confirmation. Once it stopped, the end of its run no longer ends it: the step waits, and
+  // past its timeout the pass goes on after the confirmation and withdraws nothing.
+  const at = firstPassStopOf(runtime.input);
+  const stops =
+    !progress.complete &&
+    progress.stop?.confirmed !== true &&
+    (await passItems(runtime, payload, control, run)) > at &&
+    (await isFirstPass(runtime, payload, control));
+  const held = () => progress.stop !== undefined;
   if (!progress.complete) {
     if (run.dataset && !datasets)
       throw new AppError("CONFLICT", "Ingestion needs the instance's dataset storage");
     while (!progress.complete) {
       control.signal.throwIfAborted();
+      if (stops && progress.offset >= at) {
+        if (!progress.stop) {
+          progress = { ...progress, stop: await tallyPass(runtime, payload, control, run, at) };
+          const next = JSON.stringify(progress);
+          await createSourceStore(runtime.data, payload.knowledgeBaseId, control.signal).change(
+            (sql) =>
+              sql.run(
+                "update catalyst_kb.sync_runs set cursor_after=$2::text where id=$1::text and state='running'",
+                [payload.syncRunId, next]
+              )
+          );
+        }
+        // The confirmation wakes it; this look is only in case a wake was lost.
+        await again(runtime, control, payload, PASS_WAIT_MAX_MS);
+        return false;
+      }
+      const limit = stops ? Math.min(INGEST_PAGE_ROWS, at - progress.offset) : INGEST_PAGE_ROWS;
       // A copy a killed worker left is found by the cleanup the fetch job queues per batch.
       await enqueueKnowledgeFileCleanup(
         {
@@ -667,7 +704,7 @@ async function readPass(
           methods: []
         }
       );
-      if (await workflowRunGone(runtime, run.workflow_run_id)) {
+      if (!held() && (await workflowRunGone(runtime, run.workflow_run_id))) {
         await cancelPass(runtime, payload, control);
         return false;
       }
@@ -684,10 +721,10 @@ async function readPass(
               workflowRunId: run.workflow_run_id,
               reference: run.dataset,
               offset: progress.offset,
-              limit: INGEST_PAGE_ROWS,
+              limit,
               signal: control.signal
             })
-          : await inlinePage(runtime, payload, control, progress.offset);
+          : await inlinePage(runtime, payload, control, progress.offset, limit);
       const usable = new Set<string>();
       for (const row of rows) {
         const connection = isObject(row) && isObject(row.fetch) ? row.fetch.connection : undefined;
@@ -707,8 +744,7 @@ async function readPass(
         counted: Math.max(progress.counted, end),
         // A dataset is read to its row count, never to a short page: a pass that took a short
         // read for the end would withdraw what it never read.
-        complete:
-          run.dataset !== null ? end >= run.dataset.rowCount : rows.length < INGEST_PAGE_ROWS
+        complete: run.dataset !== null ? end >= run.dataset.rowCount : rows.length < limit
       };
       if (run.dataset !== null && rows.length === 0 && !progress.complete)
         throw new AppError("CONFLICT", "The dataset ended before its row count", {
@@ -730,7 +766,7 @@ async function readPass(
       );
     }
   }
-  if (await workflowRunGone(runtime, run.workflow_run_id)) {
+  if (!held() && (await workflowRunGone(runtime, run.workflow_run_id))) {
     await cancelPass(runtime, payload, control);
     return false;
   }
@@ -757,6 +793,80 @@ async function readPass(
     return false;
   }
   return finishPass(runtime, payload, control);
+}
+
+/** How many items the pass names: its dataset's rows, or the items the call named inline. */
+async function passItems(
+  runtime: SourceJobRuntime,
+  payload: KnowledgeSyncJobPayload,
+  control: JobControl,
+  run: IngestRun
+): Promise<number> {
+  if (run.dataset) return run.dataset.rowCount;
+  const [row] = z
+    .array(countSchema)
+    .parse(
+      await createSourceStore(runtime.data, payload.knowledgeBaseId, control.signal).change((sql) =>
+        sql.run(
+          "select count(*)::int as n from catalyst_kb.ingest_items where sync_run_id=$1::text",
+          [payload.syncRunId]
+        )
+      )
+    );
+  return row?.n ?? 0;
+}
+
+/** Whether no earlier pass of the Workflow's source ended done: this one is its first. */
+async function isFirstPass(
+  runtime: SourceJobRuntime,
+  payload: KnowledgeSyncJobPayload,
+  control: JobControl
+): Promise<boolean> {
+  const earlier = await createSourceStore(
+    runtime.data,
+    payload.knowledgeBaseId,
+    control.signal
+  ).change((sql) =>
+    sql.run(
+      "select 1 from catalyst_kb.sync_runs where source_id=$1::text and id<>$2::text and state='done' limit 1",
+      [payload.sourceId, payload.syncRunId]
+    )
+  );
+  return earlier.length === 0;
+}
+
+// A tally reads larger pages than a write: it keeps nothing but sums.
+const TALLY_PAGE_ROWS = 1_000;
+
+/** What the whole pass holds, read once where it stops: its items and their text's bytes. */
+async function tallyPass(
+  runtime: SourceJobRuntime,
+  payload: KnowledgeSyncJobPayload,
+  control: JobControl,
+  run: IngestRun,
+  at: number
+): Promise<FirstPassStop> {
+  const datasets = runtime.data.workflowDatasets;
+  const stop = emptyFirstPassStop(at);
+  for (let offset = 0; ; offset += TALLY_PAGE_ROWS) {
+    control.signal.throwIfAborted();
+    const rows: unknown[] =
+      run.dataset && datasets
+        ? await datasets.read({
+            workflowRunId: run.workflow_run_id,
+            reference: run.dataset,
+            offset,
+            limit: TALLY_PAGE_ROWS,
+            signal: control.signal
+          })
+        : await inlinePage(runtime, payload, control, offset, TALLY_PAGE_ROWS);
+    for (const row of rows) {
+      const name = isObject(row) && typeof row.name === "string" ? row.name : "";
+      const text = isObject(row) && typeof row.text === "string" ? row.text : "";
+      tallyFirstPass(stop, textFormat(name).format, Buffer.byteLength(text));
+    }
+    if (rows.length < TALLY_PAGE_ROWS) return stop;
+  }
 }
 
 type Written = { item: SourceItem; text: string; format: KnowledgeDocumentFormat };
@@ -1151,14 +1261,23 @@ async function finishPass(
     await cancelPass(runtime, payload, control);
     return false;
   }
-  const failures = await datasets.write({
-    workflowRunId: call.origin.workflowRunId,
-    stepRunId: call.origin.stepRunId,
-    field: `knowledge.ingest.failures.${payload.syncRunId}`,
-    rowSchema: failureRowSchema,
-    rows: failureRows(runtime, payload, control.signal),
-    signal: control.signal
+  // A first pass that went on after its confirmation can outlive its Workflow run (KB-ISO-1b):
+  // its step has ended, so its failures have no step to become a dataset of, only a count.
+  const workflowRun = await runtime.data.stores.workflowRuns.readRun({
+    clientInstanceId: runtime.data.clientInstanceId,
+    id: call.origin.workflowRunId
   });
+  const failures =
+    workflowRun && !isWorkflowRunEnded(workflowRun.status)
+      ? await datasets.write({
+          workflowRunId: call.origin.workflowRunId,
+          stepRunId: call.origin.stepRunId,
+          field: `knowledge.ingest.failures.${payload.syncRunId}`,
+          rowSchema: failureRowSchema,
+          rows: failureRows(runtime, payload, control.signal),
+          signal: control.signal
+        })
+      : { rowCount: await countRows(failureRows(runtime, payload, control.signal)) };
   return sourceTransaction(runtime.data, payload, control, (store, stores) =>
     store.change(async (sql) => {
       const held = await readIngestRun(sql, payload.syncRunId, true);
@@ -1187,11 +1306,11 @@ async function finishPass(
       if (!ended) return false;
       // Its failures are the step's dataset now, and every item has been read.
       await forgetPassRows(sql, payload.syncRunId);
-      const output: KnowledgeIngestOutput = {
+      const output: EndedIngestOutput = {
         accepted: held.accepted,
         done: done?.n ?? 0,
         failed: failures.rowCount,
-        failures,
+        ...("$dataset" in failures ? { failures } : {}),
         withdrawn
       };
       await settleIngest(stores, runtime, payload, output, syncResult(ended));
@@ -1200,11 +1319,21 @@ async function finishPass(
   );
 }
 
+/** An ingest's output, without its failures' dataset where its Workflow run ended first. */
+type EndedIngestOutput = Omit<KnowledgeIngestOutput, "failures"> &
+  Partial<Pick<KnowledgeIngestOutput, "failures">>;
+
+async function countRows(rows: AsyncIterable<unknown>): Promise<number> {
+  let n = 0;
+  for await (const _ of rows) n += 1;
+  return n;
+}
+
 async function settleIngest(
   stores: PlatformStores,
   runtime: SourceJobRuntime,
   payload: KnowledgeSyncJobPayload,
-  output: KnowledgeIngestOutput,
+  output: EndedIngestOutput,
   result: ReturnType<typeof syncResult>
 ) {
   if (!isOperationRunId(payload.operationRunId)) return;

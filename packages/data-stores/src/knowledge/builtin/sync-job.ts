@@ -23,6 +23,7 @@ import {
 import { createSourceStore, sourceTransaction } from "./source-store";
 import { sourceTarget, type SourceJobRuntime } from "./source-runtime";
 import { dropExhaustedPass, isWorkflowSourceId, runIngestPass } from "./ingest";
+import { firstPassStopOf } from "../first-pass";
 
 // 100 ids keep queue rows bounded and limit the work lost with one lease to one batch.
 const KNOWLEDGE_FETCH_BATCH_ITEMS = 100;
@@ -129,6 +130,16 @@ export function createKnowledgeSyncHandler(runtime: SourceJobRuntime): Registere
         );
         return;
       }
+      // KB-ISO-1b: a first sync fetches up to the stop until a person confirms the rest. The
+      // listing goes on, so the confirmation knows what the whole source holds.
+      const at = firstPassStopOf(runtime.input);
+      const stops = run.mode === "initial" && run.progress?.stop?.confirmed !== true;
+      let budget = stops ? Math.max(0, at - (await store.enqueuedCount(payload))) : Infinity;
+      const queue = async (ids: string[]) => {
+        const now = ids.slice(0, budget);
+        budget -= now.length;
+        if (now.length) await queueFetches(runtime, control, payload, now);
+      };
       try {
         const authorizedRuntime = {
           ...runtime,
@@ -145,10 +156,10 @@ export function createKnowledgeSyncHandler(runtime: SourceJobRuntime): Registere
           // A crash between the owned page commit and the platform queue commit is recovered
           // here. Keyset pages never load a source's full inventory into the process.
           let after = "";
-          for (;;) {
+          while (budget > 0) {
             const ids = await store.pending(payload, after, KNOWLEDGE_FETCH_BATCH_ITEMS);
             if (!ids.length) break;
-            await queueFetches(runtime, control, payload, ids);
+            await queue(ids);
             after = ids.at(-1) ?? after;
           }
         }
@@ -160,7 +171,7 @@ export function createKnowledgeSyncHandler(runtime: SourceJobRuntime): Registere
             found.source,
             run.mode,
             run.progress,
-            (ids) => queueFetches(runtime, control, payload, ids)
+            queue
           );
         } catch (error) {
           if (documentSourceErrorCodeOf(error) !== "cursor_expired") throw error;
@@ -179,9 +190,14 @@ export function createKnowledgeSyncHandler(runtime: SourceJobRuntime): Registere
             found.source,
             "full",
             undefined,
-            (ids) => queueFetches(runtime, control, payload, ids)
+            queue
           );
         }
+        // Listed to the end with items left at the stop: the run waits for a confirmation.
+        if (stops)
+          await sourceTransaction(runtime.data, payload, control, (store) =>
+            store.stopFirstPass(payload, at)
+          );
       } catch (error) {
         control.signal.throwIfAborted();
         const code =

@@ -23,6 +23,7 @@ import {
 import type { PostgresChangeStatements } from "@work-shape/catalyst-postgres-connector";
 import { settleSourceSync } from "./source-lifecycle";
 import type { DataStoreRuntime } from "../../runtime";
+import { emptyFirstPassStop, firstPassStopSchema, tallyFirstPass } from "../first-pass";
 
 // Source writes use the executor's job lease and the owned store transaction together.
 // No outside request runs inside either transaction.
@@ -32,7 +33,9 @@ const progressSchema = z.object({
   complete: z.boolean(),
   feedCursor: z.string().optional(),
   reconciled: z.boolean().optional(),
-  listing: z.boolean().optional()
+  listing: z.boolean().optional(),
+  /** A first sync above the stop waits here for one confirmation (KB-ISO-1b). */
+  stop: firstPassStopSchema.optional()
 });
 export type SourceProgress = z.infer<typeof progressSchema>;
 const runSchema = z.object({
@@ -292,6 +295,74 @@ export function createSourceStore(
           )
           .map((row) => row.id)
       );
+    },
+    /** How many items this run has queued for fetching. */
+    async enqueuedCount(payload: KnowledgeSyncJobPayload) {
+      return change(async (sql) => {
+        const [row] = z
+          .array(z.object({ n: z.number().int() }))
+          .parse(
+            await sql.run(
+              "select count(*)::int as n from catalyst_kb.source_items where source_id=$1::text and enqueued_run_id=$2::text",
+              [payload.sourceId, payload.syncRunId]
+            )
+          );
+        return row?.n ?? 0;
+      });
+    },
+    /**
+     * A first sync whose listing is complete and that left items unqueued at the stop waits
+     * for one confirmation (KB-ISO-1b): it keeps what the whole pass holds, its items and their
+     * listed bytes by format, as `stop` of its progress. Answers whether it stopped now.
+     */
+    async stopFirstPass(payload: KnowledgeSyncJobPayload, at: number) {
+      return change(async (sql) => {
+        const [run] = z
+          .array(z.object({ mode: z.string(), cursor_after: z.string().nullable() }))
+          .parse(
+            await sql.run(
+              "select mode,cursor_after from catalyst_kb.sync_runs where id=$1::text and state='running' for update",
+              [payload.syncRunId]
+            )
+          );
+        if (!run || run.mode !== "initial" || run.cursor_after === null) return false;
+        const progress = progressSchema.parse(JSON.parse(run.cursor_after));
+        const listed =
+          progress.complete && (progress.listing !== true || progress.reconciled === true);
+        if (!listed || progress.stop) return false;
+        const left = await sql.run(
+          "select 1 from catalyst_kb.source_items where source_id=$1::text and state='discovered' and enqueued_run_id is distinct from $2::text limit 1",
+          [payload.sourceId, payload.syncRunId]
+        );
+        if (!left.length) return false;
+        // Few groups however large the source: a format follows from MIME type and extension.
+        const groups = z
+          .array(
+            z.object({
+              mime: z.string(),
+              ext: z.string().nullable(),
+              n: z.number().int(),
+              bytes: z.coerce.number()
+            })
+          )
+          .parse(
+            await sql.run(
+              "select mime,lower(substring(name from '\\.([^.]*)$')) as ext,count(*)::int as n,coalesce(sum(size),0)::text as bytes from catalyst_kb.source_items where source_id=$1::text and seen_run_id=$2::text and state in ('discovered','fetched') group by 1,2",
+              [payload.sourceId, payload.syncRunId]
+            )
+          );
+        const stop = emptyFirstPassStop(at);
+        for (const group of groups) {
+          const format = sourceFormat({ name: `item.${group.ext ?? ""}`, mime: group.mime });
+          if (!format) continue;
+          tallyFirstPass(stop, format, group.bytes, group.n);
+        }
+        await sql.run("update catalyst_kb.sync_runs set cursor_after=$2::text where id=$1::text", [
+          payload.syncRunId,
+          JSON.stringify({ ...progress, stop })
+        ]);
+        return true;
+      });
     },
     async queued(payload: KnowledgeSyncJobPayload, ids: string[]) {
       return change(async (sql) => {

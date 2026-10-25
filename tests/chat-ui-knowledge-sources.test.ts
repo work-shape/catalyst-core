@@ -19,6 +19,7 @@ import {
   type PublishQuestionRead
 } from "@work-shape/catalyst-chat-ui/build-area";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
+import { required } from "./support/assertions";
 
 // The synced sources on the page of a Knowledge Base of documents (SRC-2): the list the draft
 // holds, written back with what the page does not show, the state of each published source in
@@ -89,7 +90,8 @@ function sourceWith(
         }),
     useSources: () => ready(sources),
     syncSource: async () => ({ ok: true, data: {} }),
-    retrySource: async () => ({ ok: true, data: { queued: 2 } })
+    retrySource: async () => ({ ok: true, data: { queued: 2 } }),
+    confirmSource: async () => ({ ok: true, data: {} })
   };
 }
 
@@ -449,5 +451,76 @@ describe("a source a Workflow fills (KBW-1)", () => {
         }
       })
     ).toMatchObject({ state: "failed", label: "knowledgeSources.stateRunEnded" });
+  });
+});
+
+describe("a first import that waits for a confirmation (KB-ISO-1b)", () => {
+  const waiting: KnowledgeSourceStatus = {
+    ...running,
+    running: { syncRunId: "sync_1", mode: "initial", startedAt: "2026-10-21T08:00:00.000Z" },
+    confirmation: {
+      syncRunId: "sync_1",
+      items: 12_000,
+      bytes: 318_000_000_000,
+      stop: 10_000,
+      tokens: { min: 63_600_000, max: 95_400_000 },
+      passages: { min: 124_219, max: 186_329 },
+      model: "text-embedding-3-small",
+      cost: { min: 250, max: 380, currency: "EUR" },
+      room: true,
+      storeBytes: 1_000_000,
+      addedBytes: 1_200_000_000
+    }
+  };
+
+  it("is its own state, ahead of the running import", () => {
+    expect(sourceStateView(waiting)).toMatchObject({
+      state: "waiting",
+      label: "knowledgeSources.stateWaiting"
+    });
+  });
+
+  it("states count, size and cost in German, with the button for who may publish", () => {
+    const html = render("de", { status: { sources: [waiting] }, canPublish: true });
+    expect(html).toContain("Wartet auf Bestätigung");
+    expect(html).toMatch(/12\.000 Dateien, 318\sGB, geschätzte Kosten der Einbettung/u);
+    expect(html).toMatch(/250,00\s€ bis 380,00\s€/u);
+    expect(html).toContain("Die ersten 10.000 werden eingelesen.");
+    expect(html).toContain('data-knowledge-source-confirm=""');
+    expect(html).toContain("Import fortsetzen");
+  });
+
+  it("shows a reader who may not publish the same, without the button", () => {
+    for (const canPublish of [false, undefined]) {
+      const html = render("en", {
+        status: { sources: [waiting] },
+        ...(canPublish === undefined ? {} : { canPublish })
+      });
+      expect(html).toContain("Waiting for confirmation");
+      expect(html).toMatch(/12,000 files, 318\sGB, estimated embedding cost/u);
+      expect(html).toContain("data-knowledge-source-confirmation");
+      expect(html).not.toContain('data-knowledge-source-confirm=""');
+    }
+  });
+
+  it("says where the model has no price, and where the store may run out of room", () => {
+    const { cost: _cost, ...unpriced } = required(waiting.confirmation);
+    const html = render("en", {
+      status: {
+        sources: [
+          {
+            ...waiting,
+            confirmation: { ...unpriced, room: false, limitBytes: 1_000_000_000 }
+          }
+        ]
+      }
+    });
+    expect(html).toContain("The embedding model has no price");
+    expect(html).toContain("The store may not have room");
+  });
+
+  it("shows a source that never stopped without the confirmation", () => {
+    const html = render("en", { canPublish: true });
+    expect(html).not.toContain("data-knowledge-source-confirmation");
   });
 });

@@ -87,6 +87,27 @@ const REINDEX_TIMEOUT_MS = 60_000;
  */
 const VECTOR_ROW_OVERHEAD_BYTES = 200;
 
+/** About how many bytes the vectors of `chunks` passages take in the store. */
+export function vectorBytes(chunks: number, dimensions: number): number {
+  return chunks * (dimensions * 2 + VECTOR_ROW_OVERHEAD_BYTES);
+}
+
+/** The customer rate of an embedding binding, where the rate card has one. */
+export function embeddingRate(
+  embedding: KnowledgeEmbedding,
+  bindingId: string
+): { currency: string; perMillionTokens: number } | undefined {
+  return embedding.processingPrices?.find((price) => price.bindingId === bindingId);
+}
+
+/** What `tokens` cost at `rate`. */
+export function embeddingCost(
+  tokens: number,
+  rate: { currency: string; perMillionTokens: number }
+): { amount: number; currency: string } {
+  return { amount: (tokens * rate.perMillionTokens) / 1_000_000, currency: rate.currency };
+}
+
 const reindexOnlyPayloadSchema = z.strictObject({
   knowledgeBaseId: z.string().min(1).max(200),
   /** The binding the re-index embeds with: a later change of it supersedes this job. */
@@ -227,8 +248,8 @@ async function reindexStatement(
     ),
     input.records.getDataStore({ clientInstanceId: runtime.clientInstanceId, id: input.assetId })
   ]);
-  const rate = embedding.processingPrices?.find((price) => price.bindingId === target.bindingId);
-  const addedBytes = estimate.chunks * (target.dimensions * 2 + VECTOR_ROW_OVERHEAD_BYTES);
+  const rate = embeddingRate(embedding, target.bindingId);
+  const addedBytes = vectorBytes(estimate.chunks, target.dimensions);
   const limitBytes = record?.sizeLimitBytes;
   // The confirmation names what is decided: the Knowledge Base, the model it moves from and to,
   // and the rate. Documents added meanwhile are embedded anyway and do not ask again.
@@ -250,14 +271,7 @@ async function reindexStatement(
     ...target,
     chunks: estimate.chunks,
     tokens: estimate.tokens,
-    ...(rate
-      ? {
-          cost: {
-            amount: (estimate.tokens * rate.perMillionTokens) / 1_000_000,
-            currency: rate.currency
-          }
-        }
-      : {}),
+    ...(rate ? { cost: embeddingCost(estimate.tokens, rate) } : {}),
     room: limitBytes === undefined || estimate.storeBytes + addedBytes <= limitBytes,
     storeBytes: estimate.storeBytes,
     addedBytes,
