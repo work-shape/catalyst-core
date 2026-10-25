@@ -1,5 +1,0 @@
----
-section: Added
----
-
-- **Connections:** An OAuth Connection can name `oauth.adminConsent`: the provider's admin-consent address, on the origin of its authorization address, and the error codes that mean an administrator of the person's organisation has to approve the app first. A sign-in refused with one of them lands as `oauth_admin_consent_required`, and the Connect card and the sign-in step say that the organisation's IT has to approve once, with the approval link to copy. The link carries the client id, the Connection's scopes, its redirect URI and `state=admin_consent`, never a secret; the start's answer and the Connection's detail carry it as `adminConsentUrl`, and the Connection's page shows it to who may change the Connection. The administrator comes back to the same callback, which lands on `admin_consented` without a sign-in on the instance and changes nothing; the person then connects again. The demo's sample OAuth entry names the sample server's admin consent, which `SAMPLE_OAUTH_REST_ADMIN_CONSENT=required` switches on.

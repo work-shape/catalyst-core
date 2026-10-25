@@ -1,5 +1,0 @@
----
-section: Database
----
-
-- **Data Stores:** `catalyst.record_fields` in every store gets `corrected_value jsonb`, with a check that it is set exactly while the state is `corrected`: owned-store migration 16 `record_corrected_value` for a Knowledge Base's store, and the same step in every other store's schema setup at its next job. No platform migration. A field corrected before the upgrade had the person's value written over the value read, which is lost: that value is copied to `corrected_value`, so the customer's table keeps it, and the candidate's evidence is marked `value_not_parsed`, so it never counts as read once the decision is replaced. A store that has not taken the step refuses `records.propose`, `.decide` and `.flagged` with `record_store_upgrade_required` until it has. A rollback leaves the column and check in place: an older release's correction or replaced decision then fails on the check, and an object it projects again writes the value read, not the person's, into a corrected field until this release or a later one projects that object again. Decide fields only on this release or later.
