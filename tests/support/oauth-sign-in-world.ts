@@ -183,7 +183,15 @@ function cookieOf(response: Response): string {
 }
 
 export async function createOAuthWorld(
-  options: { extraPort?: number; personalModelRegions?: string[] } = {}
+  options: {
+    extraPort?: number;
+    personalModelRegions?: string[];
+    /**
+     * A second deterministic entry in region `us`, and the bindings `eu` and `outside` on the
+     * two entries, for agents that run on either.
+     */
+    outsideModel?: true;
+  } = {}
 ): Promise<OAuthWorld> {
   const secrets: string[] = [];
   const provider: OAuthWorld["provider"] = {};
@@ -226,8 +234,19 @@ export async function createOAuthWorld(
     ...base,
     infrastructure: {
       ...base.infrastructure,
-      models: { local: { provider: "deterministic", region: "eu" } }
+      models: {
+        local: { provider: "deterministic", region: "eu" },
+        ...(options.outsideModel ? { outside: { provider: "deterministic", region: "us" } } : {})
+      }
     },
+    ...(options.outsideModel
+      ? {
+          modelBindings: [
+            { id: "eu", providerId: "local" },
+            { id: "outside", providerId: "outside" }
+          ]
+        }
+      : {}),
     auth: {
       standalone: {
         enabled: true,

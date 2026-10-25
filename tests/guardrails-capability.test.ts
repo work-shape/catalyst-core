@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { defineCapability } from "@work-shape/catalyst-capability-sdk";
-import { guardrailsModule } from "@work-shape/catalyst-client-assembly";
+import {
+  createInstanceInfrastructure,
+  createWorkerCapabilityModels,
+  guardrailsModule
+} from "@work-shape/catalyst-client-assembly";
 import { parseClientInstanceConfig } from "@work-shape/catalyst-config-schema";
 import {
   asAgentRunId,
@@ -19,6 +23,7 @@ import {
   type ModelCompletion
 } from "@work-shape/catalyst-model-provider";
 import { createTestConfig } from "./support/fixtures";
+import { silentTestLogger } from "./support/model-gateway";
 import { errorOf, fixture } from "./support/operation-approval";
 import {
   createTestInstance,
@@ -272,7 +277,7 @@ describe("the guardrails capability", () => {
       reason: {
         kind: "guardrail",
         guardrailId: "no_names",
-        guardrailReason: "Check 'no_names' could not be evaluated. Try again later."
+        guardrailReason: "Check 'no_names' could not be evaluated."
       }
     });
     expect(JSON.stringify(marked)).not.toMatch(/abroad|"us"|Ada Lovelace/u);
@@ -287,6 +292,55 @@ describe("the guardrails capability", () => {
       reason: { kind: "guardrail", guardrailReason: "Names a person." }
     });
     expect(execute).not.toHaveBeenCalled();
+
+    // A worker process of a capability, such as the document worker, holds its calls that name
+    // a conversation to the same rule: an extraction's task is an agent's text.
+    const config = getTestConfig(t.app);
+    const workerModels = await createWorkerCapabilityModels({
+      config,
+      clientInstanceId: t.clientInstanceId,
+      infrastructure: await createInstanceInfrastructure({
+        config,
+        env: {},
+        logger: silentTestLogger,
+        providers: judge.capability.providers ?? []
+      }),
+      store: stores,
+      bindingIds: ["judge"]
+    });
+    const extract = async (marked: boolean) => {
+      const conversation = await stores.conversations.createConversation({
+        clientInstanceId: t.clientInstanceId,
+        collaborationWorkspaceId,
+        createdByUserId: userId,
+        createdByExternalUserId: "requester",
+        visibility: "private",
+        title: "Extraction",
+        retainedUntil: "2099-01-01T00:00:00.000Z"
+      });
+      if (marked) {
+        await stores.conversations.markPersonalData({
+          clientInstanceId: t.clientInstanceId,
+          conversationId: conversation.id,
+          userId,
+          at: new Date().toISOString()
+        });
+      }
+      return workerModels.complete({
+        bindingId: "judge",
+        purpose: "document_extraction",
+        content: [{ type: "text", text: "Ada Lovelace" }],
+        conversationId: conversation.id,
+        correlationId: `corr_extract_${conversation.id}`
+      });
+    };
+    const asked = judge.requests.length;
+    await expect(extract(true)).rejects.toMatchObject({
+      details: { reason: "personal_data_model_region" }
+    });
+    expect(judge.requests).toHaveLength(asked);
+    await extract(false);
+    expect(judge.requests).toHaveLength(asked + 1);
     await worker.close();
     await t.app.close();
   });

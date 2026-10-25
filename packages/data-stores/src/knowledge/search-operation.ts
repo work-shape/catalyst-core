@@ -146,6 +146,7 @@ function queryEmbedding(
         ...(origin.kind === "agent" ? { conversationId: origin.conversationId } : {}),
         operationRunId: runId
       },
+      ...(origin.kind === "agent" ? { agentRunId: origin.agentRunId } : {}),
       correlationId,
       ...(context.runtime.signal ? { signal: context.runtime.signal } : {})
     });

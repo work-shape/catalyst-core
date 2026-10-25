@@ -4,6 +4,7 @@ import {
   GUARDRAIL_CHECKABLE_FIELDS,
   isAppError,
   isModelUsageLimitReached,
+  PERSONAL_DATA_MODEL_REGION_REASON,
   type ApprovalCheckResult,
   type AssetScope,
   type BeforeActionCallContext,
@@ -515,6 +516,7 @@ export class GuardrailRunner implements BeforeActionCheck {
         Date.now() >= ownDeadline.getTime();
       // The agent reads this reason. A refusal by a usage limit names the limit as the cause,
       // so nobody looks for a fault in the rule or its model.
+      // A judge refused for the conversation's personal data stays refused there: no retry.
       return unchecked(
         entry,
         isModelUsageLimitReached(error)
@@ -522,10 +524,22 @@ export class GuardrailRunner implements BeforeActionCheck {
           : ranOutOfItsOwnTime
             ? GUARDRAIL_CHECK_TIMEOUT_MESSAGE
             : "could not be evaluated",
-        "temporary"
+        refusedForPersonalData(error) ? undefined : "temporary"
       );
     }
   }
+}
+
+/** A judge's model call refused because its route may not carry the conversation's data. */
+function refusedForPersonalData(error: unknown): boolean {
+  if (!isAppError(error)) return false;
+  const { details } = error;
+  return (
+    typeof details === "object" &&
+    details !== null &&
+    "reason" in details &&
+    details.reason === PERSONAL_DATA_MODEL_REGION_REASON
+  );
 }
 
 /** A workspace guardrail reaches the events of its workspace and no other. */

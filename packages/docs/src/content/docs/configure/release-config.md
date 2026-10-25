@@ -1152,8 +1152,12 @@ from personal connections" ("Nicht für Unterhaltungen mit Daten aus persönlich
 freigegeben"), and a run start or queued message that names one, or falls back to one, is
 refused with `personal_data_model_region`. A request refused mid-run ends the run with the same
 code. A blocked judge counts as a check that could not be evaluated, so a blocking guardrail
-stops the call. Workflow runs and conversations without personal data are not affected. An empty list, an entry that is not a string or an
-entry longer than 32 characters stops startup, and the message names the field. There is no
+stops the call. A document extraction in the conversation is refused the same way, and a
+Knowledge Base search in it embeds no query on such a route: it answers from words and titles.
+Workflow runs and conversations without personal data are not affected.
+
+An empty list, an entry that is not a string or an entry longer than 32 characters stops
+startup, and the message names the field. There is no
 switch for it in the interface and no right: the list changes only with a release.
 Instance › Infrastructure shows the list under Models, read-only.
 
