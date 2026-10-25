@@ -138,27 +138,30 @@ describe("the local agent's first minute (ADISC-1)", () => {
     }
   });
 
-  it.each(["0.8.0-rc.10", "0.8.0", "1.0.0-beta.1"])(
-    "check 73: %s prints an update on stderr, preserving JSON stdout",
-    async (version) => {
-      const c = await computer(version);
-      try {
-        for (const flags of [[], ["--json"]]) {
-          const result = await c.run("context", ...flags);
-          expect(result.code, result.err).toBe(0);
-          expect(result.err).toBe(
-            `This CLI is ${RELEASE_VERSION}; the instance names ${version}: npm install --global @work-shape/catalyst-cli@${version}\n`
+  // Newer than whatever this build is, so a cut to any version keeps the cases newer.
+  const [major, minor, patch] = RELEASE_VERSION.split(/[.+-]/u).map(Number);
+  it.each([
+    `${major}.${minor}.${patch + 1}`,
+    `${major}.${minor + 1}.0-rc.1`,
+    `${major + 1}.0.0-beta.1`
+  ])("check 73: %s prints an update on stderr, preserving JSON stdout", async (version) => {
+    const c = await computer(version);
+    try {
+      for (const flags of [[], ["--json"]]) {
+        const result = await c.run("context", ...flags);
+        expect(result.code, result.err).toBe(0);
+        expect(result.err).toBe(
+          `This CLI is ${RELEASE_VERSION}; the instance names ${version}: npm install --global @work-shape/catalyst-cli@${version}\n`
+        );
+        if (flags.length)
+          expect(platformContextSchema.parse(JSON.parse(result.out)).release.cliVersion).toBe(
+            version
           );
-          if (flags.length)
-            expect(platformContextSchema.parse(JSON.parse(result.out)).release.cliVersion).toBe(
-              version
-            );
-        }
-      } finally {
-        await c.close();
       }
+    } finally {
+      await c.close();
     }
-  );
+  });
 
   it.each([
     undefined,

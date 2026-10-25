@@ -413,7 +413,7 @@ test("the roles of the instance: built-in first, superadmin read-only, a custom 
     await expect(create).toHaveCount(0);
     await expect(rolePage.getByRole("heading", { name: roleName })).toBeVisible();
 
-    // Its rights are edited by area: a right the admin holds is given, a superadmin's is not.
+    // Its rights are edited by area: a superadmin's right is not given, a right the admin holds is.
     const administration = rolePage.locator('[data-area="administration"]');
     await expect(administration).toContainText("No right in this area.");
     await rolePage.getByRole("button", { name: "Edit the rights for Administration" }).click();
@@ -421,10 +421,16 @@ test("the roles of the instance: built-in first, superadmin read-only, a custom 
       name: `Administration in ${roleName}`
     });
     await expect(area.getByRole("checkbox", { name: /^Manage API access/u })).toBeDisabled();
-    await area.getByRole("checkbox", { name: /^View usage/u }).check();
-    await area.getByRole("button", { name: "Save rights" }).click();
+    await area.getByRole("button", { name: "Cancel" }).click();
     await expect(area).toHaveCount(0);
-    await expect(administration).not.toContainText("No right in this area.");
+    const usage = rolePage.locator('[data-area="usage"]');
+    await expect(usage).toContainText("No right in this area.");
+    await rolePage.getByRole("button", { name: "Edit the rights for Usage" }).click();
+    const usageArea = page.getByRole("dialog", { name: `Usage in ${roleName}` });
+    await usageArea.getByRole("checkbox", { name: "View usage", exact: true }).check();
+    await usageArea.getByRole("button", { name: "Save rights" }).click();
+    await expect(usageArea).toHaveCount(0);
+    await expect(usage).not.toContainText("No right in this area.");
 
     // Renamed and deleted from its menu.
     await rolePage.getByRole("button", { name: `Actions for ${roleName}` }).click();

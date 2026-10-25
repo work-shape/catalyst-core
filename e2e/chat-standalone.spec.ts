@@ -783,7 +783,11 @@ test.describe("admin widget", () => {
 
     await settingsGear(page).click();
     await expect(settingsPages(page)).toBeVisible();
-    await settingsPages(page).getByRole("button", { name: "Usage", exact: true }).click();
+    // You and Instance each have a Usage page; the budget and safeguards are the instance's.
+    await settingsPages(page)
+      .getByRole("group", { name: "Instance", exact: true })
+      .getByRole("button", { name: "Usage", exact: true })
+      .click();
     await expect(page.getByTestId("usage-month-budget")).toBeVisible();
     await expect(page.getByText("Billable today")).toBeVisible();
     await expect(page.getByTestId("daily-usage")).toBeVisible();
@@ -794,6 +798,8 @@ test.describe("admin widget", () => {
     const configuredSafeguards = page.getByTestId("configured-safeguards");
     await expect(configuredSafeguards).toContainText("500");
     await expect(configuredSafeguards).toContainText("25,000");
+    // The calls themselves are on their own tab.
+    await page.getByRole("tab", { name: "Recent calls", exact: true }).click();
     await expect(page.getByText("Recent model usage")).toBeVisible();
     await expect(page.getByText("deterministic-local").first()).toBeVisible();
     await expect(page.getByText("No usage reported").first()).toBeVisible();
