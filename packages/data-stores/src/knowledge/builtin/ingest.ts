@@ -773,15 +773,29 @@ async function writePage(
               version: z.string(),
               state: z.string(),
               document_id: z.string().nullable(),
-              content_state: z.string().nullable()
+              content_state: z.string().nullable(),
+              removed: z.boolean()
             })
           )
           .parse(
             await sql.run(
-              "select i.version,i.state,i.document_id,c.state as content_state from catalyst_kb.source_items i left join catalyst_kb.documents d on d.id=i.document_id left join catalyst_kb.contents c on c.sha256=d.content_sha256 where i.id=$1::text",
+              "select i.version,i.state,i.document_id,c.state as content_state,i.removed_at is not null as removed from catalyst_kb.source_items i left join catalyst_kb.documents d on d.id=i.document_id left join catalyst_kb.contents c on c.sha256=d.content_sha256 where i.id=$1::text",
               [id]
             )
           );
+        // KBW-2b: a person removed it by hand. The pass leaves it out until a publisher lifts
+        // the hold; it is withdrawn already, so a complete pass does not count it as unnamed.
+        if (old?.removed) {
+          failures.push({
+            position,
+            failure: {
+              item: identityOf(item),
+              code: "knowledge_item_removed",
+              message: "knowledge_item_removed: itemId"
+            }
+          });
+          continue;
+        }
         const fresh = !old || old.state === "withdrawn";
         if (fresh && held >= runtime.input.maxDocuments) {
           failures.push({

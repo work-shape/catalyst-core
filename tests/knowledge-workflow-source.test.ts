@@ -1,18 +1,48 @@
 import { describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 import {
+  asConversationId,
   asUserId,
+  KNOWLEDGE_BASE_ACTIONS,
   knowledgeIngestOutputSchema,
   LEGACY_LIST_GRANTOR
 } from "@work-shape/catalyst-core";
 import { clientInstanceId } from "./support/data-store-instance";
 import { eventually, required } from "./support/assertions";
-import { item, operationRunOf, SOURCE, useKnowledgeWorkflow } from "./support/knowledge-workflow";
+import { asMember, developmentAuth } from "./support/knowledge-files";
+import {
+  item,
+  KB,
+  operationRunOf,
+  SOURCE,
+  useKnowledgeWorkflow
+} from "./support/knowledge-workflow";
 
 // KBW-2: the Workflow-fed source after KBW-1's review. A pass asks its account afresh before
-// every page (KB check 110).
+// every page (KB check 110); a document a person removes stays out until a publisher lets it
+// back (111).
 
 describe("the Workflow-fed source (KBW-2)", { timeout: 600_000 }, () => {
   const { world } = useKnowledgeWorkflow();
+
+  /** The failures a pass reported, from its output's dataset. */
+  async function failuresOf(
+    w: Awaited<ReturnType<typeof world>>,
+    runId: string,
+    output: unknown
+  ): Promise<unknown[]> {
+    const parsed = knowledgeIngestOutputSchema.parse(output);
+    const rows = [];
+    for await (const row of (
+      await w.datasets.reader({
+        id: parsed.failures.$dataset,
+        runId,
+        reference: parsed.failures
+      })
+    ).rows)
+      rows.push(row);
+    return rows;
+  }
 
   /** Takes the account's grant away once the pass has written its first page. */
   function revokeAfterFirstPage(
@@ -186,5 +216,164 @@ describe("the Workflow-fed source (KBW-2)", { timeout: 600_000 }, () => {
         item: expect.objectContaining({ itemId: "fetch-2" })
       })
     ]);
+  });
+
+  it("holds a Workflow-fed document a person removed out of every later pass until a publisher lets it back (check 111)", async () => {
+    const w = await world(developmentAuth);
+    const first = await w.startRun();
+    await w.settle(
+      operationRunOf(
+        await first.call("ingest", { items: [item(0), item(1), item(2)], complete: true })
+      )
+    );
+    await first.end("done");
+    await w.settlePasses();
+    const search = async (marker: number) => {
+      const answer = await w.instance.api.call("knowledge_bases.search", {
+        params: { knowledgeBase: KB },
+        payload: { query: `zq${marker}x` }
+      });
+      expect(answer.statusCode, answer.body).toBe(200);
+      return JSON.stringify(answer.json());
+    };
+    await eventually(async () => {
+      await w.worker.runDue();
+      expect(await search(1)).toContain(item(1).name);
+    }, 60_000);
+    const [removedRow] =
+      await w.sql`select d.id as document_id, i.id as item from catalyst_kb.documents d join catalyst_kb.source_items i on i.id=d.source_item_id where i.item_id=${item(1).itemId}`;
+    const { document_id: documentId, item: sourceItemId } = z
+      .object({ document_id: z.string(), item: z.string() })
+      .parse(removedRow);
+
+    // A member who holds knowledge_base.write, and not publish.
+    const conversation = await w.instance.api.call("conversations.create", {
+      payload: { title: "Member" },
+      headers: asMember
+    });
+    expect(conversation.statusCode, conversation.body).toBe(200);
+    const member = required(
+      await w.instance.stores.conversations.getConversation(
+        clientInstanceId,
+        asConversationId(z.object({ id: z.string() }).parse(conversation.json()).id)
+      )
+    ).createdByUserId;
+    await w.instance.stores.access.createGrant({
+      clientInstanceId,
+      holderKind: "user",
+      holderId: member,
+      action: KNOWLEDGE_BASE_ACTIONS.write,
+      effect: "allow",
+      scopeKind: "asset",
+      scopeId: w.kb.id,
+      grantedBy: asUserId(LEGACY_LIST_GRANTOR)
+    });
+
+    const removed = await w.instance.api.call("knowledge_bases.remove_documents", {
+      params: { knowledgeBase: KB },
+      payload: { documentIds: [documentId] },
+      headers: asMember
+    });
+    expect(removed.statusCode, removed.body).toBe(200);
+    expect(removed.json()).toEqual({ removed: 1 });
+    // Search leaves it out at once; locate shows it removed.
+    expect(await search(1)).not.toContain(item(1).name);
+    const located = await w.instance.api.call("knowledge_bases.locate", {
+      params: { knowledgeBase: KB },
+      query: { sourceItemId }
+    });
+    expect(located.statusCode, located.body).toBe(200);
+    expect(located.json()).toMatchObject({
+      source: SOURCE,
+      state: "withdrawn",
+      removedAt: expect.any(String)
+    });
+    // The audit event holds the source and the count, and no name.
+    const removal = (
+      await w.instance.stores.audit.listAuditEvents({
+        clientInstanceId,
+        type: "knowledge_base.documents_removed",
+        page: { limit: 10 }
+      })
+    ).at(0);
+    expect(removal?.metadata).toEqual({
+      documentIds: [documentId],
+      documents: 1,
+      held: [{ source: SOURCE, count: 1 }],
+      operationRunId: expect.any(String)
+    });
+    expect(JSON.stringify(removal)).not.toContain(item(1).name);
+
+    // The next complete pass names it at a new version: it is reported and left out, and not
+    // withdrawn again as unnamed.
+    const second = await w.startRun();
+    const operationRunId = operationRunOf(
+      await second.call("ingest", {
+        items: [item(0), item(1, "2"), item(2)],
+        complete: true
+      })
+    );
+    const ended = await w.settle(operationRunId);
+    await second.endStep(second.lastStep());
+    expect(await failuresOf(w, second.runId, ended.output?.value)).toEqual([
+      expect.objectContaining({
+        code: "knowledge_item_removed",
+        item: expect.objectContaining({ itemId: item(1).itemId })
+      })
+    ]);
+    await second.end("done");
+    await w.settlePasses();
+    expect(await w.states()).toEqual({ fetched: 2, withdrawn: 1 });
+    const [pass] =
+      await w.sql`select withdrawn from catalyst_kb.sync_runs where workflow_run_id=${second.runId}`;
+    expect(pass?.withdrawn).toBe(0);
+    expect(await search(1)).not.toContain(item(1).name);
+    const status = await w.instance.api.call("knowledge_bases.sources", {
+      params: { knowledgeBase: KB }
+    });
+    expect(status.statusCode, status.body).toBe(200);
+    expect(JSON.stringify(status.json())).toContain('"code":"knowledge_item_removed","count":1');
+
+    // Neither the Workflow's account nor a holder of write alone lifts the hold.
+    const byAccount = await second.call("retry", { source: SOURCE, sourceItemIds: [sourceItemId] });
+    expect(byAccount.result.status, JSON.stringify(byAccount.result)).not.toBe("done");
+    const byMember = await w.instance.api.call("knowledge_bases.retry_documents", {
+      params: { knowledgeBase: KB },
+      payload: { source: SOURCE, sourceItemIds: [sourceItemId] },
+      headers: asMember
+    });
+    expect(byMember.statusCode, byMember.body).toBe(403);
+    const third = await w.startRun();
+    await w.settle(operationRunOf(await third.call("ingest", { items: [item(1, "3")] })));
+    await third.end("done");
+    expect(await w.states()).toEqual({ fetched: 2, withdrawn: 1 });
+
+    // A holder of knowledge_base.publish lifts it, and the next pass takes the item.
+    const lifted = await w.instance.api.call("knowledge_bases.retry_documents", {
+      params: { knowledgeBase: KB },
+      payload: { source: SOURCE, failureCode: "knowledge_item_removed" }
+    });
+    expect(lifted.statusCode, lifted.body).toBe(200);
+    expect(lifted.json()).toEqual({ queued: 0, released: 1 });
+    const liftedEvent = (
+      await w.instance.stores.audit.listAuditEvents({
+        clientInstanceId,
+        type: "knowledge_base.removal_hold_lifted",
+        page: { limit: 10 }
+      })
+    ).at(0);
+    expect(liftedEvent?.metadata).toEqual({
+      source: SOURCE,
+      count: 1,
+      operationRunId: expect.any(String)
+    });
+    const fourth = await w.startRun();
+    await w.settle(operationRunOf(await fourth.call("ingest", { items: [item(1, "4")] })));
+    await fourth.end("done");
+    expect(await w.states()).toEqual({ fetched: 3 });
+    await eventually(async () => {
+      await w.worker.runDue();
+      expect(await search(1)).toContain(item(1).name);
+    }, 60_000);
   });
 });

@@ -838,7 +838,9 @@ export const KNOWLEDGE_SOURCE_FAILURE_CODES = [
   "knowledge_item_invalid",
   "knowledge_fetch_not_allowed",
   // The Workflow run that called `ingest` ended before the pass did; what it wrote stays.
-  "knowledge_ingest_cancelled"
+  "knowledge_ingest_cancelled",
+  // A person removed the item by hand: no pass puts it back until a publisher lifts the hold.
+  "knowledge_item_removed"
 ] as const;
 export type KnowledgeSourceFailureCode = (typeof KNOWLEDGE_SOURCE_FAILURE_CODES)[number];
 

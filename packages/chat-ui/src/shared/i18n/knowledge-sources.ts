@@ -63,6 +63,11 @@ export const knowledgeSources = defineTranslations({
     "knowledgeSources.failureItemInvalid": "The source described the item in a way it cannot read.",
     "knowledgeSources.failureNotAllowed": "The source does not allow the file to be downloaded.",
     "knowledgeSources.failureIngestCancelled": "The workflow's run ended before it was taken in.",
+    "knowledgeSources.failureItemRemoved": "Removed by hand. The workflow does not bring it back.",
+    "knowledgeSources.release": "Allow again",
+    "knowledgeSources.releaseLabel": "Let the workflow's next run bring the removed items back",
+    "knowledgeSources.released":
+      "{count} items are allowed again. The workflow's next run brings them back.",
     "knowledgeSources.workflowSources": "Filled by workflows",
     "knowledgeSources.workflow": "Workflow",
     "knowledgeSources.stateIngesting": "Taking documents in",
@@ -70,7 +75,7 @@ export const knowledgeSources = defineTranslations({
     "knowledgeSources.lastRun": "Last run",
     "knowledgeSources.workflowFreshness": "As of the last run {elapsed} ago",
     "knowledgeSources.workflowNote":
-      "The workflow's runs decide what this source holds: a complete run removes what it no longer names. To delete documents, change the workflow or its schedule."
+      "The workflow's runs decide what this source holds: a complete run removes what it no longer names. To keep a document out, remove it under Documents: no run brings it back."
   },
   de: {
     "knowledgeSources.title": "Synchronisierte Quellen",
@@ -137,6 +142,13 @@ export const knowledgeSources = defineTranslations({
     "knowledgeSources.failureNotAllowed": "Die Quelle erlaubt nicht, die Datei herunterzuladen.",
     "knowledgeSources.failureIngestCancelled":
       "Der Lauf des Workflows endete, bevor es übernommen wurde.",
+    "knowledgeSources.failureItemRemoved":
+      "Von Hand entfernt. Der Workflow bringt es nicht zurück.",
+    "knowledgeSources.release": "Wieder zulassen",
+    "knowledgeSources.releaseLabel":
+      "Der nächste Lauf des Workflows darf die entfernten Elemente zurückbringen",
+    "knowledgeSources.released":
+      "{count} Elemente sind wieder zugelassen. Der nächste Lauf des Workflows bringt sie zurück.",
     "knowledgeSources.workflowSources": "Von Workflows gefüllt",
     "knowledgeSources.workflow": "Workflow",
     "knowledgeSources.stateIngesting": "Übernahme läuft",
@@ -144,6 +156,6 @@ export const knowledgeSources = defineTranslations({
     "knowledgeSources.lastRun": "Letzter Lauf",
     "knowledgeSources.workflowFreshness": "Stand: letzter Lauf vor {elapsed}",
     "knowledgeSources.workflowNote":
-      "Was diese Quelle enthält, bestimmen die Läufe des Workflows: Ein vollständiger Lauf entfernt, was er nicht mehr nennt. Um Dokumente zu löschen, ändere den Workflow oder seinen Zeitplan."
+      "Was diese Quelle enthält, bestimmen die Läufe des Workflows: Ein vollständiger Lauf entfernt, was er nicht mehr nennt. Um ein Dokument herauszuhalten, entferne es unter Dokumente: Kein Lauf bringt es zurück."
   }
 });

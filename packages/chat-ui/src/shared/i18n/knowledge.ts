@@ -209,6 +209,8 @@ export const knowledge = defineTranslations({
     "knowledge.removeTitle": "Remove the document {name}?",
     "knowledge.removeDescription":
       "Nobody finds it in this knowledge base any more, and its copy is deleted. A file added from a conversation stays there.",
+    "knowledge.removeWorkflowDescription":
+      "Nobody finds it in this knowledge base any more, and its copy is deleted. The workflow that brought it does not bring it back: only someone who may publish this knowledge base can allow it again.",
     "knowledge.removeFailed": "The document could not be removed.",
     "knowledge.removeSyncedRefused":
       "This document comes from a source and cannot be removed here. Remove it in the source, or narrow what the source brings in.",
@@ -489,6 +491,8 @@ export const knowledge = defineTranslations({
     "knowledge.removeTitle": "Dokument {name} entfernen?",
     "knowledge.removeDescription":
       "Niemand findet es danach mehr in dieser Wissensbasis, und ihre Kopie wird gelöscht. Eine Datei aus einer Unterhaltung bleibt dort.",
+    "knowledge.removeWorkflowDescription":
+      "Niemand findet es danach mehr in dieser Wissensbasis, und seine Kopie wird gelöscht. Der Workflow, der es gebracht hat, bringt es nicht zurück: Nur wer diese Wissensbasis veröffentlichen darf, kann es wieder zulassen.",
     "knowledge.removeFailed": "Das Dokument konnte nicht entfernt werden.",
     "knowledge.removeSyncedRefused":
       "Dieses Dokument kommt aus einer Quelle und lässt sich hier nicht entfernen. Entferne es in der Quelle, oder grenze ein, was die Quelle übernimmt.",

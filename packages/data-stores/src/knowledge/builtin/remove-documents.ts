@@ -8,6 +8,7 @@ import {
 } from "@work-shape/catalyst-core";
 import type { PostgresChangeStatements } from "@work-shape/catalyst-postgres-connector";
 import { databaseFailureError } from "../../failures";
+import { refreshSourceFreshness } from "./source-withdrawal";
 import type { DataStoreRuntime } from "../../runtime";
 
 /**
@@ -79,14 +80,32 @@ export function createDocumentRemoval(
   return {
     async withdrawDocuments(documentIds, queue, signal) {
       const removed = await change(signal, async (sql) => {
-        // A local removal has no durable exclusion in the source definition. Refuse the
-        // whole batch: otherwise the next full pass either resurrects it or leaves a
-        // fetched item pointing at a purged document. Source withdrawal owns this path.
-        const synced = await sql.run(
-          "select id from catalyst_kb.documents where id=any($1::text[]) and source_item_id is not null limit 1",
-          [[...documentIds]]
+        // A connector source's boundary is its lasting exclusion: removing one of its
+        // documents here would be undone by its next full pass, or leave a fetched item
+        // pointing at a purged document. Refuse the whole batch; source withdrawal owns it.
+        const items = z
+          .array(z.object({ id: z.string(), source_id: z.string() }))
+          .parse(
+            await sql.run(
+              "select i.id,i.source_id from catalyst_kb.documents d join catalyst_kb.source_items i on i.id=d.source_item_id where d.id=any($1::text[]) and d.withdrawn_at is null order by i.id",
+              [[...documentIds]]
+            )
+          );
+        if (items.some((item) => !item.source_id.startsWith("workflow:"))) return undefined;
+        // KBW-2b: a Workflow-fed document's item is withdrawn and held out of every later
+        // pass. Index completion takes the content before the item; this takes that order.
+        const itemIds = items.map((item) => item.id);
+        await sql.run(
+          "select c.sha256 from catalyst_kb.contents c join catalyst_kb.documents d on d.content_sha256=c.sha256 where d.source_item_id=any($1::text[]) order by c.sha256 for share of c",
+          [itemIds]
         );
-        if (synced.length) return undefined;
+        const held = z.array(z.object({ source_id: z.string() })).parse(
+          await sql.run(
+            `update catalyst_kb.source_items set state='withdrawn',failure_code=null,fetch_job_id=null,
+              withdrawn_at=now(),changed_at=now(),removed_at=now() where id=any($1::text[]) returning source_id`,
+            [itemIds]
+          )
+        );
         const rows = await sql.run(
           `update catalyst_kb.documents set withdrawn_at = now()
           where id = any($1::pg_catalog.text[]) and withdrawn_at is null returning id`,
@@ -95,7 +114,13 @@ export function createDocumentRemoval(
         // Queue durably before committing withdrawal. The worker takes this same lock, so it
         // cannot observe a half-finished withdrawal. If enqueue fails, withdrawal rolls back.
         if (rows.length > 0) await queue();
-        return rows.length;
+        const counts = new Map<string, number>();
+        for (const { source_id } of held) counts.set(source_id, (counts.get(source_id) ?? 0) + 1);
+        for (const source of counts.keys()) await refreshSourceFreshness(sql, source, true);
+        return {
+          removed: rows.length,
+          held: [...counts].map(([source, count]) => ({ source, count }))
+        };
       });
       if (removed === undefined)
         throw new AppError(

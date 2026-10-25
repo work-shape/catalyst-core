@@ -191,8 +191,10 @@ export function KnowledgeDocuments({
                           : undefined
                       }
                       onRemove={
-                        // A synced document leaves when its source withdraws it, not by hand.
-                        canWrite && document.sourceId === undefined
+                        // A connector-synced document leaves when its source withdraws it, not
+                        // by hand; a Workflow-fed one is removed here and held out (KBW-2b).
+                        canWrite &&
+                        (document.sourceId === undefined || isWorkflowSource(document.sourceId))
                           ? () => {
                               setRemoved(undefined);
                               setRemoveFailure(undefined);
@@ -228,7 +230,13 @@ export function KnowledgeDocuments({
         }}
       >
         <div className="grid gap-3" data-knowledge-remove-dialog="">
-          <p>{t("knowledge.removeDescription")}</p>
+          <p>
+            {t(
+              removing?.sourceId !== undefined && isWorkflowSource(removing.sourceId)
+                ? "knowledge.removeWorkflowDescription"
+                : "knowledge.removeDescription"
+            )}
+          </p>
           {removeFailure ? <FormNotice tone="error">{removeFailure}</FormNotice> : null}
         </div>
       </ConfirmDialog>
@@ -262,7 +270,7 @@ function DocumentRow({
   retrying: boolean;
   /** Present where the reader may retry the document: a failed one, for whoever may change. */
   onRetry: (() => void) | undefined;
-  /** Present where the reader may remove the document: whoever may change, unless it is synced. */
+  /** Present where the reader may remove the document: whoever may change, unless a connector syncs it. */
   onRemove: (() => void) | undefined;
 }) {
   const { locale, t } = useTranslation();
@@ -519,4 +527,9 @@ export function KnowledgeAddDialog({
       </div>
     </Dialog>
   );
+}
+
+/** A Workflow fills the source through `ingest`; its documents are removed by hand. */
+function isWorkflowSource(sourceId: string): boolean {
+  return sourceId.startsWith("workflow:");
 }

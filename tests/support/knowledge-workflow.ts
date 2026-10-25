@@ -36,8 +36,9 @@ export function operationRunOf(outcome: Awaited<ReturnType<typeof runOperation>>
 /** Call inside a `describe`: it registers the cleanup of each test's world. */
 export function useKnowledgeWorkflow() {
   const { setup } = useKnowledgeSync();
-  async function world() {
-    const world = await setup();
+  /** `developmentAuth` names the people a test signs in as, beside the default one. */
+  async function world(developmentAuth?: unknown) {
+    const world = await setup(undefined, undefined, false, developmentAuth);
     const { instance } = world;
     const stores = instance.stores;
     const kb = required(
@@ -164,7 +165,7 @@ export function useKnowledgeWorkflow() {
         await endStep(id);
         return reference;
       }
-      async function call(operation: "ingest" | "withdraw", input: unknown) {
+      async function call(operation: "ingest" | "withdraw" | "retry", input: unknown) {
         const stepRunId = await stepRun(operation);
         last = stepRunId;
         return runOperation(

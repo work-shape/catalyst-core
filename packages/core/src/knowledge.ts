@@ -888,12 +888,13 @@ export interface KnowledgeDocumentStore {
     signal?: AbortSignal
   ): Promise<KnowledgeProcessingContent[]>;
   /** Withdraws the named documents in one statement. Queues cleanup before commit while
-   * holding the documents lock; a rolled-back withdrawal leaves a harmless cleanup job. */
+   * holding the documents lock; a rolled-back withdrawal leaves a harmless cleanup job. A
+   * Workflow-fed document's item is held out of later passes; `held` counts them by source. */
   withdrawDocuments(
     documentIds: readonly string[],
     queue: () => Promise<void>,
     signal?: AbortSignal
-  ): Promise<number>;
+  ): Promise<{ removed: number; held: { source: string; count: number }[] }>;
   /**
    * Deletes one page of withdrawn documents among `documentIds` (of every document, then of
    * every content no document holds, on retirement), at most `limit`, after `after`, in a

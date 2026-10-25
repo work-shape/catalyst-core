@@ -105,18 +105,19 @@ export function removeDocumentsOperation(
     resource: () => knowledgeBase.resource,
     async execute(input, context) {
       const documentIds = [...new Set(inputSchema.parse(input).documentIds)];
-      const removed = await knowledgeBase.store.withdrawDocuments(
+      const { removed, held } = await knowledgeBase.store.withdrawDocuments(
         documentIds,
         () => enqueueKnowledgeRemoval(runtime.stores, runtime, target, documentIds),
         context.runtime.signal
       );
+      // Workflow-fed items now held out of later passes, by source and count; never a name.
       await context.audit.record({
         type: "knowledge_base.documents_removed",
         status: "success",
         actor: auditActorFromIdentity(context.actor),
         subject: target.assetId,
         correlationId: context.correlationId,
-        metadata: { documentIds, documents: removed }
+        metadata: { documentIds, documents: removed, ...(held.length ? { held } : {}) }
       });
       return { removed };
     }

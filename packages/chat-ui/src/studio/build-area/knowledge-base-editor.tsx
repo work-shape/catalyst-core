@@ -303,6 +303,7 @@ export function KnowledgeBaseEditor({
                   owner={frame.owner}
                   sources={form.sources}
                   canWrite={canWrite}
+                  canPublish={frame.draft?.canPublish === true}
                   workflows={dataFlows?.fills}
                   workflowPage={workflowPage}
                   onChange={(sources) => update({ sources })}
