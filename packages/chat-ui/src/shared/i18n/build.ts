@@ -52,6 +52,13 @@ export const build = defineTranslations({
     "build.publishFailed": "The draft could not be published.",
     "build.publishConfirmationChanged":
       "What this publish processes or embeds again changed in the meantime. Publish again to see the new numbers.",
+    "build.publishProcessingOne": "1 document is read again with the new settings.",
+    "build.publishProcessingOther": "{count} documents are read again with the new settings.",
+    "build.publishProcessingFree": "This costs nothing, because nothing is embedded.",
+    "build.publishProcessingEstimate":
+      "Reading them is free. Embedding the results costs an estimated {min} to {max}, possibly more.",
+    "build.publishProcessingNoPrice":
+      "The embedding model has no price set, so the cost is unknown and this cannot be published yet.",
     "build.publishRaises": "What this publish changes",
     "build.publishQuestionLoading": "Reading what this publish changes …",
     "build.publishQuestionFailed":
@@ -213,6 +220,15 @@ export const build = defineTranslations({
     "build.publishFailed": "Der Entwurf konnte nicht veröffentlicht werden.",
     "build.publishConfirmationChanged":
       "Was diese Veröffentlichung neu verarbeitet oder einbettet, hat sich inzwischen geändert. Veröffentliche erneut, um die neuen Zahlen zu sehen.",
+    "build.publishProcessingOne":
+      "1 Dokument wird mit den neuen Einstellungen noch einmal gelesen.",
+    "build.publishProcessingOther":
+      "{count} Dokumente werden mit den neuen Einstellungen noch einmal gelesen.",
+    "build.publishProcessingFree": "Das kostet nichts, weil nichts eingebettet wird.",
+    "build.publishProcessingEstimate":
+      "Das Lesen ist kostenlos. Das Einbetten der Ergebnisse kostet geschätzt {min} bis {max}, möglicherweise mehr.",
+    "build.publishProcessingNoPrice":
+      "Für das Einbettungsmodell ist kein Preis hinterlegt, darum sind die Kosten unbekannt und die Veröffentlichung ist noch nicht möglich.",
     "build.publishRaises": "Was diese Veröffentlichung ändert",
     "build.publishQuestionLoading": "Lese, was diese Veröffentlichung ändert …",
     "build.publishQuestionFailed":

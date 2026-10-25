@@ -546,7 +546,8 @@ export function useBuildSource(): BuildSource {
       });
       return {
         lines: asset.publishQuestion ?? [],
-        ...(asset.publishConfirmation ? { confirmation: asset.publishConfirmation } : {})
+        ...(asset.publishConfirmation ? { confirmation: asset.publishConfirmation } : {}),
+        ...(asset.publishProcessing ? { processing: asset.publishProcessing } : {})
       };
     },
     writes: {

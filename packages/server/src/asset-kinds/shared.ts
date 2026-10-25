@@ -198,7 +198,22 @@ export interface WorkflowAssetKind
    * In place of `publishQuestion`, of a kind whose publish confirms a count and cost (a
    * Knowledge Base): the lines, and the confirmation its publish passes as `confirmProcessing`.
    */
-  publishReview?(input: PublishQuestionInput): Promise<{ lines: string[]; confirmation?: string }>;
+  publishReview?(input: PublishQuestionInput): Promise<{
+    lines: string[];
+    confirmation?: string;
+    /**
+     * Of a publish that processes contents again: the count and cost of the sentence at
+     * index `line` of `lines`, as fields a client words in the reader's language.
+     */
+    processing?: {
+      count: number;
+      line: number;
+      cost:
+        | { kind: "none" }
+        | { kind: "estimate"; min: number; max: number; currency: string }
+        | { kind: "unavailable" };
+    };
+  }>;
   publishReach?(next: JsonObject, live: JsonObject | undefined): PublishReach;
   /**
    * The rights the accounts a publish of the asset's newest revision runs as need, by the

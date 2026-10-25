@@ -193,6 +193,37 @@ describe("an agent's tool call as an operation", () => {
           }
     );
   });
+  it("answers a run that ended at once as it ended, not as running", () => {
+    const runId = createPlatformId<"OperationRunId">("oprun");
+    const names = { toolName: "demo.echo", agentName: "test_agent", correlationId: "corr_test" };
+    const running = { status: "running", runId } as const;
+    const stored = (run: {
+      status: "running" | "done" | "failed";
+      error?: { code: string; message: string };
+    }) => ({ result: running, run });
+    // The operation carries its work out after the call, so the call says running; a run the
+    // operation already ended is read back as stored.
+    expect(toolResultFromOperationResult(stored({ status: "running" }), names)).toEqual({
+      status: "success",
+      output: { status: "running", operationRunId: runId }
+    });
+    expect(toolResultFromOperationResult(stored({ status: "done" }), names)).toEqual({
+      status: "success",
+      output: { status: "done", operationRunId: runId }
+    });
+    expect(
+      toolResultFromOperationResult(
+        stored({
+          status: "failed",
+          error: { code: "CONFLICT", message: "Ended badly" }
+        }),
+        names
+      )
+    ).toMatchObject({
+      status: "failed",
+      error: { code: "handler_failed", message: "Ended badly" }
+    });
+  });
   it("runs the tool, answers its result and records one run that the tool is told of", async () => {
     const { runTool, runs, auditEvents } = setup();
     const call = request("demo.echo", { text: "hello" });
