@@ -7,15 +7,27 @@ import type {
   KnowledgeSourceItemsOutput,
   KnowledgeLocateOutput,
   KnowledgeRetryInput,
+  KnowledgeWorkflowSourcesOutput,
+  ActorAccess,
   WorkflowDatasetReference
 } from "@work-shape/catalyst-core";
 export type KnowledgeListingMode = Exclude<KnowledgeSyncResult["mode"], "ingest">;
 
 /** One call of `knowledge.<id>.ingest`: who called, and what it hands in (KBW-1). */
+/** A Workflow by the revision that created it, after its last delete, and when that was. */
+export interface KnowledgeWorkflowIncarnation {
+  workflowId: string;
+  revision: number;
+  createdAt: string;
+}
+
 export interface KnowledgeIngestCall {
   knowledgeBaseId: string;
-  /** The calling Workflow; its source is `workflow:<workflowId>`. */
-  workflowId: string;
+  /**
+   * The calling Workflow, by the revision that created it: its source is
+   * `workflow:<workflowId>@<revision>` (KBW-2c).
+   */
+  workflow: KnowledgeWorkflowIncarnation;
   workflowRunId: string;
   stepRunId: string;
   operationRunId: string;
@@ -48,7 +60,11 @@ export interface KnowledgeSources {
   ingest(call: KnowledgeIngestCall, signal: AbortSignal): Promise<void>;
   /** Withdraws items of a Workflow-fed source by their ids at the Workflow; answers how many. */
   withdraw(
-    input: { knowledgeBaseId: string; workflowId: string; itemIds: readonly string[] },
+    input: {
+      knowledgeBaseId: string;
+      workflow: KnowledgeWorkflowIncarnation;
+      itemIds: readonly string[];
+    },
     signal: AbortSignal
   ): Promise<number>;
   /**
@@ -60,6 +76,15 @@ export interface KnowledgeSources {
     input: { source: string; sourceItemIds?: readonly string[] },
     signal: AbortSignal
   ): Promise<number>;
+  /**
+   * The delete question of a Workflow: the Knowledge Bases its live sources feed, each with its
+   * documents there; one the reader may not use is counted, never named (KBW-2c).
+   */
+  workflowSources(
+    workflow: string,
+    access: ActorAccess,
+    signal: AbortSignal
+  ): Promise<KnowledgeWorkflowSourcesOutput>;
   retry(
     id: string,
     input: KnowledgeRetryInput,

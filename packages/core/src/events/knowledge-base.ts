@@ -95,6 +95,24 @@ export const knowledgeBaseEvents = {
     phases: ["after"],
     payload: HELD_ITEMS
   },
+  // A deleted Workflow's source ended in this Knowledge Base (KBW-2c): the source and how
+  // many of its items were withdrawn, never a name. The purge follows as usual.
+  "knowledge_base.workflow_source_ended": {
+    name: "knowledge_base.workflow_source_ended",
+    subject: "config_asset",
+    legacy: false,
+    audited: true,
+    phases: ["after"],
+    payload: {
+      type: "object",
+      additionalProperties: false,
+      required: ["source", "items"],
+      properties: {
+        source: { type: "string" },
+        items: { type: "integer", minimum: 0 }
+      }
+    }
+  },
   "knowledge_base.documents_purged": {
     ...KNOWLEDGE_PURGE_AUDIT,
     name: "knowledge_base.documents_purged"

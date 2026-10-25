@@ -429,6 +429,39 @@ export function useWorkflowWrites(): WorkflowWrites {
 }
 
 /**
+ * The delete of a Workflow, for its question: what it ends, read when the question opens, and
+ * the delete itself, after which every read of the Workflow's asset is stale. None is read
+ * again here: the open page of the deleted Workflow would ask for it and get a 404; the page
+ * the reader goes to next reads afresh.
+ */
+export function useWorkflowRemoval(workflow: string, open: boolean) {
+  const source = useWorkflowsSource();
+  const removal = source.removal;
+  const queryClient = useQueryClient();
+  const keys = useWorkflowKeys();
+  const question = useQuery({
+    queryKey: ["workflow-removal", source.key, workflow],
+    queryFn: ({ signal }) => removalOf(removal).read(workflow, signal),
+    enabled: open && removal !== undefined,
+    staleTime: 0,
+    gcTime: 0,
+    retry: false
+  });
+  return {
+    question,
+    remove: (expectedRevision: number) =>
+      removalOf(removal)
+        .remove(workflow, expectedRevision)
+        .then(() => queryClient.invalidateQueries({ queryKey: keys.assets, refetchType: "none" }))
+  };
+}
+
+function removalOf<Removal>(removal: Removal | undefined): Removal {
+  if (removal === undefined) throw new Error("The source deletes no Workflow");
+  return removal;
+}
+
+/**
  * The reader's own "Run live once" switches on the draft of one Workflow. A test run uses
  * them, so they are read again when the run the page shows has ended (`runEnded` is part of
  * the key). Nothing is read where `enabled` is false.

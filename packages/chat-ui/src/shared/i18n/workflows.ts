@@ -565,6 +565,20 @@ export const workflows = defineTranslations({
       "Choose a time, and on a weekly schedule at least one day.",
     "workflows.workflowSettings.starts": "Starts",
     "workflows.workflowSettings.startsHint": "At least one way to start stays on.",
+    "workflows.remove.body": "The workflow disappears with its draft and its published version.",
+    "workflows.remove.confirm": "Delete",
+    "workflows.remove.document": "1 document",
+    "workflows.remove.documents": "{count} documents",
+    "workflows.remove.failed": "The workflow could not be deleted.",
+    "workflows.remove.hiddenMany": "{count} knowledge bases you cannot open",
+    "workflows.remove.hiddenOne": "A knowledge base you cannot open",
+    "workflows.remove.knowledgeLabel": "Knowledge bases it fed",
+    "workflows.remove.knowledgeLead":
+      "It put documents into these knowledge bases. They leave search at once and are then deleted for good. A workflow created later under the same name starts without them.",
+    "workflows.remove.menu": "Delete",
+    "workflows.remove.readFailed":
+      "Which knowledge bases it fed could not be checked. Try again before deleting it.",
+    "workflows.remove.title": "Delete “{name}”?",
     "workflows.delete.blockedTitle": "“{name}” cannot be deleted",
     "workflows.delete.body":
       "The step is taken out of the draft. What is published runs on until you publish.",
@@ -1251,6 +1265,21 @@ export const workflows = defineTranslations({
       "Wähle eine Uhrzeit, bei einem wöchentlichen Zeitplan auch mindestens einen Tag.",
     "workflows.workflowSettings.starts": "Startet",
     "workflows.workflowSettings.startsHint": "Mindestens eine Art zu starten bleibt an.",
+    "workflows.remove.body":
+      "Der Workflow verschwindet mit seinem Entwurf und seiner veröffentlichten Version.",
+    "workflows.remove.confirm": "Löschen",
+    "workflows.remove.document": "1 Dokument",
+    "workflows.remove.documents": "{count} Dokumente",
+    "workflows.remove.failed": "Der Workflow konnte nicht gelöscht werden.",
+    "workflows.remove.hiddenMany": "{count} Wissensbasen, die du nicht öffnen kannst",
+    "workflows.remove.hiddenOne": "Eine Wissensbasis, die du nicht öffnen kannst",
+    "workflows.remove.knowledgeLabel": "Wissensbasen, die er befüllt hat",
+    "workflows.remove.knowledgeLead":
+      "Er hat Dokumente in diese Wissensbasen gelegt. Sie verschwinden sofort aus der Suche und werden danach endgültig gelöscht. Ein Workflow, der später unter demselben Namen entsteht, beginnt ohne sie.",
+    "workflows.remove.menu": "Löschen",
+    "workflows.remove.readFailed":
+      "Es ließ sich nicht prüfen, welche Wissensbasen er befüllt hat. Versuche es erneut, bevor du ihn löschst.",
+    "workflows.remove.title": "„{name}“ löschen?",
     "workflows.delete.blockedTitle": "„{name}“ kann nicht gelöscht werden",
     "workflows.delete.body":
       "Der Schritt wird aus dem Entwurf genommen. Die veröffentlichte Version läuft weiter, bis du veröffentlichst.",

@@ -542,7 +542,8 @@ export const KNOWLEDGE_JOB_KINDS = {
   deleteOriginals: "knowledge_base.delete_originals",
   reconcileSources: "knowledge_base.reconcile_sources",
   reprocess: "knowledge_base.reprocess",
-  reindex: "knowledge_base.reindex"
+  reindex: "knowledge_base.reindex",
+  endWorkflowSource: "knowledge_base.end_workflow_source"
 } as const;
 
 /** Chunks and optionally embeds a content in the configured ingestion process. */

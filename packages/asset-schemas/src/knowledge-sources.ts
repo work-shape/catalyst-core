@@ -14,7 +14,11 @@ const sourceIdSchema = z.union([
     .string()
     .regex(/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/u)
     .max(63),
-  knowledgeWorkflowSourceSchema.shape.id.regex(/^workflow:[a-z][a-z0-9_-]{0,62}$/u)
+  // KBW-2c: a Workflow's source carries the revision that created the Workflow; one made
+  // before that release carries none.
+  knowledgeWorkflowSourceSchema.shape.id.regex(
+    /^workflow:[a-z][a-z0-9_-]{0,62}(?:@[1-9][0-9]{0,9})?$/u
+  )
 ]);
 const countSchema = z.number().int().min(0);
 /** What a sync run counts (`KNOWLEDGE_SYNC_COUNTS`). */
@@ -212,3 +216,17 @@ export const knowledgeLocateOutputSchema = z.strictObject({
 });
 
 export type KnowledgeLocateOutput = z.infer<typeof knowledgeLocateOutputSchema>;
+
+/**
+ * The delete question of a Workflow (KBW-2c): the Knowledge Bases its source feeds, each with
+ * how many documents it holds there, which a delete withdraws. Those the reader may not use are
+ * counted only, by number of Knowledge Bases and documents, and never named.
+ */
+export const knowledgeWorkflowSourcesOutputSchema = z.strictObject({
+  knowledgeBases: z.array(
+    z.strictObject({ name: z.string(), title: z.string(), documents: countSchema })
+  ),
+  hidden: z.strictObject({ knowledgeBases: countSchema, documents: countSchema })
+});
+
+export type KnowledgeWorkflowSourcesOutput = z.infer<typeof knowledgeWorkflowSourcesOutputSchema>;

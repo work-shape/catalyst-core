@@ -32,6 +32,7 @@ import {
   WORKFLOW_ACTIONS,
   WORKFLOW_ASSET_KIND,
   defineAssetKind,
+  enqueueKnowledgeWorkflowSourceEnd,
   parseConnectionOperationName,
   type ClientInstanceId,
   type ConfigAssetRecord,
@@ -160,6 +161,11 @@ export function createWorkflowAssetKind(
      * workspace cancels its open runs there. None in a process without an engine.
      */
     runs?: () => Pick<WorkflowEngine, "cancelOpenRuns"> | undefined;
+    /**
+     * Whether the instance has Knowledge Bases a Workflow may feed: a delete then ends the
+     * Workflow's source in each, in its transaction (KBW-2c).
+     */
+    knowledgeSources?: boolean;
   }
 ): WorkflowAssetKind {
   const { clientInstanceId, timeZone = "UTC", now = () => new Date(), limits } = options;
@@ -193,6 +199,24 @@ export function createWorkflowAssetKind(
       }
     );
   };
+  /**
+   * Queues the end of the deleted Workflow's sources in every Knowledge Base it fed: those of
+   * the revisions up to its last, and none of a Workflow created later under its name.
+   */
+  async function endKnowledgeSources(
+    stores: PlatformStores,
+    workflow: string,
+    through: number,
+    correlationId: string
+  ): Promise<void> {
+    if (!options.knowledgeSources) return;
+    await enqueueKnowledgeWorkflowSourceEnd(stores.jobs, {
+      clientInstanceId,
+      workflow,
+      through,
+      correlationId
+    });
+  }
   /** Retires the Workflow's principal with its grants: a Workflow that is not live acts as nobody. */
   async function retirePrincipal(stores: PlatformStores, assetId: string): Promise<void> {
     const principal = await stores.apiAccess.findServicePrincipalByOwner({
@@ -436,9 +460,12 @@ export function createWorkflowAssetKind(
       await reschedule(stores, replaced, config);
     },
     // Account revocation is part of the delete, never a best-effort after-write task.
-    async withinWrite({ stores, assetId, config }) {
+    // So is the end of its sources in the Knowledge Bases it fed (KBW-2c).
+    async withinWrite({ stores, assetId, config, name, previousRevision, correlationId }) {
       if (config !== undefined || assetId === undefined) return undefined;
       await retirePrincipal(stores, assetId);
+      if (previousRevision !== undefined)
+        await endKnowledgeSources(stores, name, previousRevision, correlationId);
       return undefined;
     },
     // The live Apps that start it stop working without it: an unpublish and a delete say so.
@@ -490,6 +517,7 @@ export function createWorkflowAssetKind(
         });
         for (const asset of current) {
           await retirePrincipal(tx, asset.id);
+          await endKnowledgeSources(tx, asset.name, asset.revision, correlationId);
           await releaseDatasets(tx, asset.name);
           await reschedule(tx, asset.publishedConfig, undefined);
           await tx.audit.appendAuditEvent({

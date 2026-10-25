@@ -20,6 +20,7 @@ import {
   KNOWLEDGE_BASE_ACTIONS,
   KNOWLEDGE_BASE_ASSET_KIND,
   type ActorAccess,
+  type KnowledgeWorkflowSourcesOutput,
   type AuditRecorder,
   type AuthenticatedIdentity,
   type AssetScope,
@@ -134,6 +135,15 @@ export interface KnowledgeBases {
     fileId: string,
     signal?: AbortSignal
   ): ReturnType<typeof knowledgeHitDocument>;
+  /**
+   * What deleting a Workflow ends: the Knowledge Bases it feeds, with their documents. The
+   * caller checks `workflow.delete`; one the reader may not use is only counted (KBW-2c).
+   */
+  workflowSources(
+    workflow: string,
+    access: ActorAccess,
+    signal?: AbortSignal
+  ): Promise<KnowledgeWorkflowSourcesOutput>;
   /** Describes the one knowledge tool to an agent that lists Knowledge Bases. */
   readonly toolSource: DataToolSource;
   publishQuestion(input: {
@@ -181,6 +191,10 @@ export function createKnowledgeBases(input: {
   };
   return {
     hitDocument: (files, fileId, signal) => knowledgeHitDocument(runtime, files, fileId, signal),
+    workflowSources: async (workflow, access, signal) =>
+      input.sources
+        ? input.sources.workflowSources(workflow, access, signal ?? new AbortController().signal)
+        : { knowledgeBases: [], hidden: { knowledgeBases: 0, documents: 0 } },
     async openDocument(files, knowledgeBase, documentId, signal) {
       const asset = await input.stores.configAssets.getConfigAsset({
         clientInstanceId: input.clientInstanceId,

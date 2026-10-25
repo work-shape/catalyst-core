@@ -69,7 +69,9 @@ export function useKnowledgeSync({ withDataStoreJobs = false } = {}) {
     withFileRoute = false,
     developmentAuth?: unknown,
     fieldExtractor?: import("@work-shape/catalyst-core").KnowledgeFieldExtractor,
-    defaultLocale: LocaleCode = "de"
+    defaultLocale: LocaleCode = "de",
+    /** The Workflows module on: a Workflow's delete then runs through its kind. */
+    workflows?: true
   ) {
     const logs: unknown[] = [];
     const logger: Logger = {
@@ -87,23 +89,30 @@ export function useKnowledgeSync({ withDataStoreJobs = false } = {}) {
       },
       child: () => logger
     };
-    const instance = await start(true, undefined, developmentAuth, undefined, {
-      embedding: true,
-      defaultLocale,
-      apiAccess: true,
-      ...(extractor ? { documents: true as const } : {}),
-      ...(fieldExtractor
-        ? {
-            attachments: {
-              name: "fake-field-binding",
-              create: () => ({ knowledgeFieldExtractor: fieldExtractor })
+    const instance = await start(
+      true,
+      undefined,
+      developmentAuth,
+      undefined,
+      {
+        embedding: true,
+        defaultLocale,
+        apiAccess: true,
+        ...(extractor ? { documents: true as const } : {}),
+        ...(fieldExtractor
+          ? {
+              attachments: {
+                name: "fake-field-binding",
+                create: () => ({ knowledgeFieldExtractor: fieldExtractor })
+              }
             }
-          }
-        : {}),
-      ...(withFileRoute
-        ? { attachments: createManagedObjectTestAttachmentCapability().capability }
-        : {})
-    });
+          : {}),
+        ...(withFileRoute
+          ? { attachments: createManagedObjectTestAttachmentCapability().capability }
+          : {})
+      },
+      workflows
+    );
     const definition = {
       name: KB,
       title: "Source",
@@ -134,7 +143,7 @@ export function useKnowledgeSync({ withDataStoreJobs = false } = {}) {
         name: `knowledge-base:${KB}`
       });
       expect(row?.status).toBe("ready");
-      expect(row?.level).toBe(14);
+      expect(row?.level).toBe(15);
       return required(row);
     });
     const url = new URL(await fileTestDatabaseUrl());

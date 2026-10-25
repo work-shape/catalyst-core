@@ -3,6 +3,7 @@ import {
   AppError,
   KNOWLEDGE_WRITE_OPERATIONS,
   knowledgeWorkflowSourceSchema,
+  WORKFLOW_ASSET_KIND,
   workflowDatasetReferenceSchema,
   type OperationDefinition,
   type OperationExecutionContext,
@@ -67,7 +68,54 @@ async function callingWorkflow(
     throw new AppError("VALIDATION_FAILED", "The Workflow's id cannot name a source", {
       reason: "knowledge_workflow_source_invalid"
     });
-  return { run, origin, workflowId: run.workflow };
+  return {
+    run,
+    origin,
+    workflow: await creatingRevision(runtime, run.workflow, run.definitionRevisionId)
+  };
+}
+
+/** Bounds one read of a Workflow's revisions while its creating one is looked for. */
+const REVISION_PAGE = 100;
+
+/**
+ * KBW-2c: the Workflow the run belongs to, by the revision that created it: the oldest of the
+ * revisions since its last delete up to the one the run started on. A Workflow created again
+ * under a deleted one's name has another, so it never feeds the deleted one's source.
+ */
+async function creatingRevision(
+  runtime: KnowledgeRuntime,
+  name: string,
+  revisionId: string
+): Promise<{ workflowId: string; revision: number; createdAt: string }> {
+  const scope = { clientInstanceId: runtime.clientInstanceId, kind: WORKFLOW_ASSET_KIND, name };
+  const started = await runtime.stores.configAssets.getConfigAssetRevisionById({
+    ...scope,
+    revisionId
+  });
+  if (!started || started.operation === "delete")
+    throw new AppError("CONFLICT", "The Workflow of this run is no longer there", {
+      reason: "knowledge_workflow_source_ended"
+    });
+  let created = started;
+  for (let after = started.revision; ;) {
+    const page = await runtime.stores.configAssets.listConfigAssetRevisions({
+      ...scope,
+      newestFirst: true,
+      page: { limit: REVISION_PAGE, after: [after] }
+    });
+    for (const revision of page) {
+      if (revision.operation === "delete") return incarnation(name, created);
+      created = revision;
+    }
+    const last = page.at(-1);
+    if (page.length < REVISION_PAGE || !last) return incarnation(name, created);
+    after = last.revision;
+  }
+}
+
+function incarnation(name: string, created: { revision: number; createdAt: string }) {
+  return { workflowId: name, revision: created.revision, createdAt: created.createdAt };
 }
 
 /** The operations a Workflow writes to a Knowledge Base with. */
@@ -101,10 +149,10 @@ export function writeOperation(
       inputSchema: KNOWLEDGE_WRITE_OPERATIONS.withdraw.inputSchema,
       outputSchema: KNOWLEDGE_WRITE_OPERATIONS.withdraw.outputSchema,
       async execute(input, context) {
-        const { workflowId } = await callingWorkflow(runtime, context, name);
+        const { workflow } = await callingWorkflow(runtime, context, name);
         const { itemIds } = KNOWLEDGE_WRITE_OPERATIONS.withdraw.inputSchema.parse(input);
         const withdrawn = await sources.withdraw(
-          { knowledgeBaseId: target.assetId, workflowId, itemIds },
+          { knowledgeBaseId: target.assetId, workflow, itemIds },
           context.runtime.signal ?? new AbortController().signal
         );
         return { withdrawn };
@@ -124,12 +172,12 @@ export function writeOperation(
     inputSchema: ingestInputSchema,
     outputSchema: KNOWLEDGE_WRITE_OPERATIONS.ingest.outputSchema,
     async execute(input, context) {
-      const { run, origin, workflowId } = await callingWorkflow(runtime, context, name);
+      const { run, origin, workflow } = await callingWorkflow(runtime, context, name);
       const parsed = ingestInputSchema.parse(input);
       await sources.ingest(
         {
           knowledgeBaseId: target.assetId,
-          workflowId,
+          workflow,
           workflowRunId: run.id,
           stepRunId: origin.stepRunId,
           operationRunId: context.runId,

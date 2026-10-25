@@ -15,12 +15,15 @@ import {
   KB,
   operationRunOf,
   SOURCE,
-  useKnowledgeWorkflow
+  useKnowledgeWorkflow,
+  WORKFLOW
 } from "./support/knowledge-workflow";
+import { getTestJobs } from "./support/test-instance";
 
 // KBW-2: the Workflow-fed source after KBW-1's review. A pass asks its account afresh before
 // every page (KB check 110); a document a person removes stays out until a publisher lets it
-// back (111).
+// back (111). Deleting the Workflow ends its source in every Knowledge Base it fed, and a
+// Workflow created again under its name starts with an empty one (112).
 
 describe("the Workflow-fed source (KBW-2)", { timeout: 600_000 }, () => {
   const { world } = useKnowledgeWorkflow();
@@ -375,5 +378,178 @@ describe("the Workflow-fed source (KBW-2)", { timeout: 600_000 }, () => {
       await w.worker.runDue();
       expect(await search(1)).toContain(item(1).name);
     }, 60_000);
+  });
+
+  /** Runs every due job of the instance and of the source engine until `check` holds. */
+  async function drainUntil(w: Awaited<ReturnType<typeof world>>, check: () => Promise<void>) {
+    await eventually(async () => {
+      await w.platform`update platform_jobs set run_after = now() where status = 'queued' and kind like 'knowledge_base.%'`;
+      await w.worker.runDue();
+      await getTestJobs(w.instance.api).runDue();
+      await check();
+    }, 180_000);
+  }
+
+  it("ends a deleted Workflow's source in both Knowledge Bases it fed, names both in the delete question, and starts a Workflow created again under its name empty (check 112)", async () => {
+    const w = await world(undefined, true);
+    const other = await w.addKnowledgeBase("second-kb", "Second");
+    try {
+      const first = await w.startRun();
+      await w.settle(
+        operationRunOf(await first.call("ingest", { items: [item(0), item(1), item(2)] }))
+      );
+      await w.settle(
+        operationRunOf(await first.call("ingest", { items: [item(3), item(4)] }, "second-kb"))
+      );
+      await first.end("done");
+      const documentsOf = async (sql: typeof w.sql) =>
+        (
+          await sql`select d.id from catalyst_kb.documents d join catalyst_kb.source_items i on i.id=d.source_item_id where i.source_id=${SOURCE}`
+        ).map((row) => String(row.id));
+      const old = { first: await documentsOf(w.sql), second: await documentsOf(other.sql) };
+      expect([old.first.length, old.second.length]).toEqual([3, 2]);
+
+      // The delete question names both Knowledge Bases with their documents.
+      const question = await w.instance.api.call("knowledge_bases.workflow_sources", {
+        params: { workflow: WORKFLOW }
+      });
+      expect(question.statusCode, question.body).toBe(200);
+      expect(question.json()).toEqual({
+        knowledgeBases: expect.arrayContaining([
+          { name: KB, title: "Source", documents: 3 },
+          { name: "second-kb", title: "Second", documents: 2 }
+        ]),
+        hidden: { knowledgeBases: 0, documents: 0 }
+      });
+      expect(
+        z.object({ knowledgeBases: z.array(z.unknown()) }).parse(question.json()).knowledgeBases
+      ).toHaveLength(2);
+
+      // A run of the Workflow that is still going when it is deleted.
+      const late = await w.startRun();
+      const asset = required(await w.workflowAsset());
+      const deleted = await w.instance.api.call("assets.delete", {
+        params: { kind: "workflow", name: WORKFLOW },
+        payload: { expectedRevision: asset.revision }
+      });
+      expect(deleted.statusCode, deleted.body).toBe(200);
+      const [queued] =
+        await w.platform`select payload from platform_jobs where kind='knowledge_base.end_workflow_source'`;
+      expect(queued?.payload).toEqual({ workflow: WORKFLOW, through: asset.revision });
+
+      // Created again under the same name before the old source has ended: its first item
+      // shares an item id with the deleted one's.
+      const revision = await w.writeWorkflow();
+      expect(revision).toBeGreaterThan(asset.revision);
+      const again = await w.startRun();
+      await w.settle(operationRunOf(await again.call("ingest", { items: [item(1, "9")] })));
+      await again.end("done");
+      const fresh = `workflow:${WORKFLOW}@${String(revision)}`;
+
+      // Both old sources end at once: every item withdrawn, every document purged.
+      await drainUntil(w, async () => {
+        for (const [sql, ids] of [
+          [w.sql, old.first],
+          [other.sql, old.second]
+        ] as const) {
+          const [open] =
+            await sql`select count(*)::int as n from catalyst_kb.source_items where source_id=${SOURCE} and state<>'withdrawn'`;
+          expect(open?.n).toBe(0);
+          const [left] =
+            await sql`select count(*)::int as n from catalyst_kb.documents where id = any(${ids})`;
+          expect(left?.n).toBe(0);
+        }
+      });
+      for (const sql of [w.sql, other.sql]) {
+        const [ended] =
+          await sql`select ended_at is not null as ended from catalyst_kb.source_cursors where source_id=${SOURCE}`;
+        expect(ended?.ended).toBe(true);
+      }
+      const events = await w.instance.stores.audit.listAuditEvents({
+        clientInstanceId,
+        type: "knowledge_base.workflow_source_ended",
+        page: { limit: 10 }
+      });
+      expect(events.map((event) => [event.subject, event.metadata])).toEqual(
+        expect.arrayContaining([
+          [w.kb.id, { source: SOURCE, items: 3 }],
+          [other.kb.id, { source: SOURCE, items: 2 }]
+        ])
+      );
+      expect(events).toHaveLength(2);
+
+      // The new Workflow's source holds its own item, and none of the old ones came back.
+      const items =
+        await w.sql`select source_id, item_id, state from catalyst_kb.source_items where state<>'withdrawn' order by source_id, item_id`;
+      expect(items.map((row) => [row.source_id, row.item_id])).toEqual([[fresh, item(1).itemId]]);
+      const [fromOld] =
+        await other.sql`select count(*)::int as n from catalyst_kb.source_items where state<>'withdrawn'`;
+      expect(fromOld?.n).toBe(0);
+      const sources = await w.instance.api.call("knowledge_bases.sources", {
+        params: { knowledgeBase: KB }
+      });
+      expect(sources.statusCode, sources.body).toBe(200);
+      const listed = JSON.stringify(sources.json());
+      expect(listed).toContain(fresh);
+      expect(listed).not.toContain(`"${SOURCE}"`);
+
+      // The run that outlived the deleted Workflow puts nothing in.
+      const refused = await late.call("ingest", { items: [item(7)] });
+      expect(refused.result.status, JSON.stringify(refused.result)).not.toBe("running");
+      expect(JSON.stringify(refused.result)).toContain("knowledge_workflow_source_ended");
+      const [seven] =
+        await w.sql`select count(*)::int as n from catalyst_kb.source_items where item_id=${item(7).itemId}`;
+      expect(seven?.n).toBe(0);
+
+      // Asked again, the question names only what the new Workflow fed.
+      const now = await w.instance.api.call("knowledge_bases.workflow_sources", {
+        params: { workflow: WORKFLOW }
+      });
+      expect(now.json()).toEqual({
+        knowledgeBases: [{ name: KB, title: "Source", documents: 1 }],
+        hidden: { knowledgeBases: 0, documents: 0 }
+      });
+    } finally {
+      await other.sql.end();
+    }
+  });
+
+  it("adopts a source of the release before that only this Workflow fed, and ends one a deleted namesake fed (check 112)", async () => {
+    const w = await world();
+    const legacy = `workflow:${WORKFLOW}`;
+    const pass = async (id: string, startedAt: string) =>
+      w.sql`insert into catalyst_kb.sync_runs (id, source_id, mode, operation_run_id, workflow_run_id, state, started_at, ended_at)
+        values (${id}, ${legacy}, 'ingest', 'opr_legacy', 'wfr_legacy', 'done', ${startedAt}, ${startedAt})`;
+    await w.sql`insert into catalyst_kb.source_cursors (source_id, cursor, kind, workflow_id) values (${legacy}, null, 'workflow', ${WORKFLOW})`;
+
+    // Every pass came after this Workflow was created: the source is its own and keeps its key.
+    await pass("legacy-after", new Date(Date.now() + 1_000).toISOString());
+    const first = await w.startRun();
+    await w.settle(operationRunOf(await first.call("ingest", { items: [item(0)] })));
+    await first.end("done");
+    expect(
+      await w.sql`select source_id, workflow_revision, ended_at from catalyst_kb.source_cursors where kind='workflow'`
+    ).toEqual([{ source_id: legacy, workflow_revision: 1, ended_at: null }]);
+
+    // A pass before its creation: a deleted Workflow of the same name fed it, and it ends.
+    await w.sql`update catalyst_kb.source_cursors set workflow_revision=null where source_id=${legacy}`;
+    await pass("legacy-before", "2020-01-01T00:00:00Z");
+    const second = await w.startRun();
+    await w.settle(operationRunOf(await second.call("ingest", { items: [item(1)] })));
+    await second.end("done");
+    await drainUntil(w, async () => {
+      const [open] =
+        await w.sql`select count(*)::int as n from catalyst_kb.source_items where source_id=${legacy} and state<>'withdrawn'`;
+      expect(open?.n).toBe(0);
+    });
+    expect(
+      await w.sql`select source_id, workflow_revision, ended_at is not null as ended from catalyst_kb.source_cursors where kind='workflow' order by source_id`
+    ).toEqual([
+      { source_id: legacy, workflow_revision: null, ended: true },
+      { source_id: SOURCE, workflow_revision: 1, ended: false }
+    ]);
+    expect(
+      await w.sql`select source_id, item_id from catalyst_kb.source_items where state<>'withdrawn'`
+    ).toEqual([{ source_id: SOURCE, item_id: item(1).itemId }]);
   });
 });

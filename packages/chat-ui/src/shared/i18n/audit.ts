@@ -120,6 +120,8 @@ export const audit = defineTranslations({
     "audit.event.knowledge_base.documents_removed": "Removed documents from a knowledge base",
     "audit.event.knowledge_base.removal_hold_lifted":
       "Allowed removed documents back into a knowledge base",
+    "audit.event.knowledge_base.workflow_source_ended":
+      "Ended a deleted workflow's source in a knowledge base",
     "audit.event.knowledge_base.files_added": "Added files to a knowledge base",
     "audit.event.knowledge_base.reindex_finished": "Finished re-indexing a knowledge base",
     "audit.event.knowledge_base.reindex_started": "Started re-indexing a knowledge base",
@@ -396,6 +398,8 @@ export const audit = defineTranslations({
     "audit.event.knowledge_base.documents_removed": "Dokumente aus einer Wissensbasis entfernt",
     "audit.event.knowledge_base.removal_hold_lifted":
       "Entfernte Dokumente wieder in eine Wissensbasis zugelassen",
+    "audit.event.knowledge_base.workflow_source_ended":
+      "Quelle eines gelöschten Workflows in einer Wissensbasis beendet",
     "audit.event.knowledge_base.files_added": "Dateien zu einer Wissensbasis hinzugefügt",
     "audit.event.knowledge_base.reindex_finished": "Neuindexierung einer Wissensbasis beendet",
     "audit.event.knowledge_base.reindex_started": "Neuindexierung einer Wissensbasis gestartet",

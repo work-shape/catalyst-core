@@ -63,21 +63,29 @@ export async function withdrawSourceItems(
 }
 
 /** Freshness is indexed work still open, rather than the last poll's wall clock. A
- * Workflow-fed source's row (`workflow:<id>`) keeps its kind and has no cursor. */
+ * Workflow-fed source's row is made by its first `ingest` call and never here: its key names the
+ * revision that created the Workflow (KBW-2c), which only that call knows. */
 export async function refreshSourceFreshness(
   sql: PostgresChangeStatements,
   sourceId: string,
   changed: boolean
 ) {
+  const oldest =
+    "(select min(i.open_change_at) from catalyst_kb.source_items i where i.source_id=$1::text and i.open_change_at is not null)";
+  if (sourceId.startsWith("workflow:")) {
+    await sql.run(
+      `update catalyst_kb.source_cursors set last_change_at=case when $2::boolean then now() else last_change_at end,
+        oldest_open_change_at=${oldest} where source_id=$1::text`,
+      [sourceId, changed]
+    );
+    return;
+  }
   await sql.run(
-    `insert into catalyst_kb.source_cursors(source_id,cursor,kind,workflow_id,last_change_at,oldest_open_change_at)
-    select $1::text,case when $1::text like 'workflow:%' then null else '' end,
-      case when $1::text like 'workflow:%' then 'workflow' else 'connector' end,
-      case when $1::text like 'workflow:%' then substr($1::text,10) end,
-      case when $2::boolean then now() end,(select min(open_change_at) from catalyst_kb.source_items where source_id=$1::text and open_change_at is not null) where $2::boolean or exists(select 1 from catalyst_kb.source_cursors where source_id=$1::text)
+    `insert into catalyst_kb.source_cursors(source_id,cursor,kind,last_change_at,oldest_open_change_at)
+    select $1::text,'','connector',case when $2::boolean then now() end,${oldest}
+    where $2::boolean or exists(select 1 from catalyst_kb.source_cursors where source_id=$1::text)
     on conflict(source_id) do update set last_change_at=case when $2::boolean then now() else source_cursors.last_change_at end,
-      oldest_open_change_at=(select min(i.open_change_at) from catalyst_kb.source_items i
-       where i.source_id=$1::text and i.open_change_at is not null)`,
+      oldest_open_change_at=${oldest}`,
     [sourceId, changed]
   );
 }

@@ -325,6 +325,7 @@ export const assembleWorkflows: ModuleSeam = ({ config, modules, clientInstanceI
               ...zone,
               registry: () => registry,
               runs: () => runs,
+              knowledgeSources: modules.isEnabled("knowledge"),
               mailSend: {
                 registered: outboundMailOf(config) !== undefined,
                 recipientDomains: outboundMailOf(config)?.outbound.recipientDomains ?? []

@@ -138,6 +138,7 @@ export const knowledgeModule = defineModule({
     "knowledge_bases.locate",
     "knowledge_bases.get",
     "knowledge_bases.open_document",
+    "knowledge_bases.workflow_sources",
     "knowledge_bases.check",
     "knowledge_bases.query",
     "knowledge_bases.add_files",
