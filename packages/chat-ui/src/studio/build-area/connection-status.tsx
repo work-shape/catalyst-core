@@ -28,6 +28,8 @@ type HealthView =
   | "secret_unreadable"
   /** The Connection signs in with OAuth, and its calls have no sign-in to use. */
   | "sign_in_needed"
+  /** The Connection signs in with each person's own account: nobody configures it here. */
+  | "personal"
   | "never_tested";
 
 export const HEALTH_VIEWS: Record<
@@ -93,6 +95,11 @@ export const HEALTH_VIEWS: Record<
     text: "connections.healthSignInNeededText",
     next: "connections.healthSignInNeededNext"
   },
+  personal: {
+    tone: "neutral",
+    label: "connections.healthPersonal",
+    text: "connections.healthPersonalText"
+  },
   never_tested: {
     tone: "neutral",
     label: "connections.healthNeverTested",
@@ -132,7 +139,11 @@ const TEST_RESULTS: Record<ConnectionTestResult["status"], HealthView> = {
 export function recordedHealth(detail: ConnectionDetail): HealthView {
   switch (detail.health) {
     case "needs_configuration":
-      return needsSignIn(detail) ? "sign_in_needed" : "not_configured";
+      return needsSignIn(detail)
+        ? "sign_in_needed"
+        : signsInEachPerson(detail)
+          ? "personal"
+          : "not_configured";
     case "secret_unreadable":
       return "secret_unreadable";
     case "ok":
@@ -142,6 +153,15 @@ export function recordedHealth(detail: ConnectionDetail): HealthView {
     case "unknown":
       return "never_tested";
   }
+}
+
+/**
+ * A Connection that signs in with each person's own account. It holds no key and no shared
+ * sign-in, so the instance records it as waiting for configuration: what it waits for is
+ * each person, who connects in chat.
+ */
+function signsInEachPerson(detail: Pick<ConnectionDetail, "oauth" | "sharedCredential">) {
+  return detail.oauth !== undefined && !detail.sharedCredential;
 }
 
 /** The health a list row names, as `attributes.health`, in the words of the page. */
@@ -157,7 +177,8 @@ const LISTED_HEALTH = new Map<string, HealthView>([
  * The status a list row shows for the health the instance names beside a Connection, or
  * nothing where it names none or one this interface does not know.
  */
-export function listedHealth(health: unknown): HealthView | undefined {
+export function listedHealth(health: unknown, personal = false): HealthView | undefined {
+  if (personal && health === "needs_configuration") return "personal";
   return typeof health === "string" ? LISTED_HEALTH.get(health) : undefined;
 }
 
@@ -231,7 +252,9 @@ export function ConnectionStatus({
               // It sends no credential, so the server refused none: it wants one.
               view === "unauthorized" && !needsCredential
                 ? "connections.healthUnauthorizedTextNoKey"
-                : health.text
+                : view === "personal" && detail.oauth?.registration === "managed"
+                  ? "connections.healthPersonalTextManaged"
+                  : health.text
             )}
           </p>
           {health.next ? (
@@ -271,56 +294,59 @@ export function ConnectionStatus({
           {t("connections.testNotAllowed")}
         </Banner>
       )}
-      <KeyValueList>
-        {detail.oauth ? (
-          <KeyValue label={t("connectionSignIn.sectionTitle")}>
-            <SignInStateBadge binding={detail.binding} />
-          </KeyValue>
-        ) : (
-          <KeyValue label={t("connections.credential")}>
-            <div className="grid justify-items-start gap-1">
-              {needsCredential ? (
-                <>
-                  <Badge
-                    data-connection-credential={secret.state}
-                    tone={
-                      secret.state === "set"
-                        ? "success"
-                        : secret.state === "unreadable"
-                          ? "danger"
-                          : "neutral"
-                    }
-                  >
-                    {/* The version of the credential is for whoever may change the Connection. */}
-                    {secret.state === "set"
-                      ? secret.version === undefined || !mayTest
-                        ? t("connections.credentialSet")
-                        : t("connections.credentialSetVersion", { version: secret.version })
-                      : t(
-                          secret.state === "unreadable"
-                            ? "connections.credentialUnreadable"
-                            : "connections.credentialNotSet"
-                        )}
-                  </Badge>
-                  <span className="text-caption text-muted-foreground">
-                    {t("connections.credentialNeverShown")}
-                  </span>
-                  {credentialEditor?.(mayTest ? start : undefined)}
-                </>
-              ) : (
-                <>
-                  <Badge data-connection-credential="none_needed" tone="neutral">
-                    {t("connections.credentialNoneNeeded")}
-                  </Badge>
-                  <span className="text-caption text-muted-foreground">
-                    {t("connections.credentialNoneNeededText")}
-                  </span>
-                </>
-              )}
-            </div>
-          </KeyValue>
-        )}
-      </KeyValueList>
+      {/* A personal one has no shared sign-in: the reader's own is under Sign-in. */}
+      {signsInEachPerson(detail) ? null : (
+        <KeyValueList>
+          {detail.oauth ? (
+            <KeyValue label={t("connectionSignIn.sectionTitle")}>
+              <SignInStateBadge binding={detail.binding} />
+            </KeyValue>
+          ) : (
+            <KeyValue label={t("connections.credential")}>
+              <div className="grid justify-items-start gap-1">
+                {needsCredential ? (
+                  <>
+                    <Badge
+                      data-connection-credential={secret.state}
+                      tone={
+                        secret.state === "set"
+                          ? "success"
+                          : secret.state === "unreadable"
+                            ? "danger"
+                            : "neutral"
+                      }
+                    >
+                      {/* The version of the credential is for whoever may change the Connection. */}
+                      {secret.state === "set"
+                        ? secret.version === undefined || !mayTest
+                          ? t("connections.credentialSet")
+                          : t("connections.credentialSetVersion", { version: secret.version })
+                        : t(
+                            secret.state === "unreadable"
+                              ? "connections.credentialUnreadable"
+                              : "connections.credentialNotSet"
+                          )}
+                    </Badge>
+                    <span className="text-caption text-muted-foreground">
+                      {t("connections.credentialNeverShown")}
+                    </span>
+                    {credentialEditor?.(mayTest ? start : undefined)}
+                  </>
+                ) : (
+                  <>
+                    <Badge data-connection-credential="none_needed" tone="neutral">
+                      {t("connections.credentialNoneNeeded")}
+                    </Badge>
+                    <span className="text-caption text-muted-foreground">
+                      {t("connections.credentialNoneNeededText")}
+                    </span>
+                  </>
+                )}
+              </div>
+            </KeyValue>
+          )}
+        </KeyValueList>
+      )}
       {needsCredential && !detail.oauth && detail.sharedCredential ? (
         <Banner layout="line" title={t("connections.sharedAccountTitle")} data-connection-shared="">
           {t("connections.sharedAccountText")}

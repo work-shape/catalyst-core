@@ -398,6 +398,10 @@ export function createConnectionAssetKind(options: ConnectionAssetKindOptions): 
           enabled: connection.enabled,
           // Only picks the icon a list shows.
           ...(connection.service === undefined ? {} : { service: connection.service }),
+          // Each person signs in with their own account: no key or shared sign-in to set.
+          ...(connection.authScheme === AUTH_SCHEME_OAUTH && connection.credentialMode === "user"
+            ? { personalSignIn: true }
+            : {}),
           // The catalogue entry it was installed from, by id.
           ...(connection.catalogue === undefined
             ? {}

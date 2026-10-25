@@ -62,8 +62,8 @@ export const connectionKind: BuildAssetKind = {
   // An enabled Connection shows its health in the words of its page; a list of an instance
   // that names no health shows that it is on.
   badges: (asset, t) => {
-    const { connectorType, enabled, health } = asset.attributes ?? {};
-    const listed = enabled === false ? undefined : listedHealth(health);
+    const { connectorType, enabled, health, personalSignIn } = asset.attributes ?? {};
+    const listed = enabled === false ? undefined : listedHealth(health, personalSignIn === true);
     return (
       <>
         {typeof connectorType === "string" ? (

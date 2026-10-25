@@ -274,3 +274,40 @@ describe("a managed Connection installed from an earlier entry version", () => {
     expect(ended.secrets).toBe(0);
   });
 });
+
+describe("the relink takes only the current version", () => {
+  it("refuses a write that names another version, and a revert to the revision before it", async () => {
+    const alice = await world.signIn("alice");
+    expect(await world.putConnection(REST_CONNECTION, installed(), alice)).toBe(200);
+    await storedAsVersion1(`${world.sample}/oauth-rest/revoke`);
+    const before = (await stored()).revision;
+    const update = await offeredUpdate(alice);
+    expect((await put(update.config, alice)).status).toBe(200);
+
+    // The current settings under an earlier or a later version's link: refused either way.
+    for (const version of [1, 3]) {
+      const forged = await put(
+        { ...update.config, catalogue: { entry: ENTRY, part: "tools", version } },
+        alice
+      );
+      expect(forged.status, forged.body).toBe(422);
+      expect(storedSchema.parse((await stored()).config).catalogue.version).toBe(2);
+    }
+    // The revision of version 1 cannot come back by a revert either.
+    const reverted = await world.instance.call(
+      "assets.revert",
+      {
+        params: { kind: "connection", name: REST_CONNECTION },
+        payload: { revision: before, expectedRevision: (await stored()).revision }
+      },
+      { headers: { cookie: alice, origin: "http://localhost:5173" } }
+    );
+    expect(reverted.statusCode, JSON.stringify(reverted.json())).toBe(422);
+    expect(JSON.stringify(reverted.json())).toMatch(
+      /catalogue_entry_not_offered|catalogue_update_required/u
+    );
+    // No refusal names the entry's settings.
+    expect(JSON.stringify(reverted.json())).not.toContain("oauth-rest");
+    expect(storedSchema.parse((await stored()).config).catalogue.version).toBe(2);
+  });
+});
