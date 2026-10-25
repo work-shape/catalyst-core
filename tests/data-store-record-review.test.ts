@@ -546,6 +546,60 @@ describe("REC-2 records review through the public operation source", () => {
       expectNoField(output, 1_250_000, 1_205_000);
     });
 
+    it("names the person who corrected by the name the instance shows, and no one once their deletion is requested", async () => {
+      const w = await world("keep-named");
+      const person = await db.store.users.createUser({
+        clientInstanceId: asClientInstanceId(w.clientInstanceId),
+        displayLabel: "Rita Reviewer",
+        roles: ["admin"]
+      });
+      const actor: AuthenticatedUser = {
+        ...recordsActorOf(w.clientInstanceId),
+        id: person.id,
+        externalUserId: person.id,
+        displayLabel: person.displayLabel
+      };
+      await call(w, "records.propose", {
+        table: "objekt",
+        items: [
+          await w.item("a14", "kaufvertrag", { kaufpreis: 1_250_000 }),
+          await w.item("b14", "kaufvertrag", { kaufpreis: 1_300_000 })
+        ]
+      });
+      await callAs(w, actor, "records.decide", {
+        table: "objekt",
+        key: 1402,
+        field: "kaufpreis",
+        action: "correct",
+        value: 1_205_000,
+        knowledgeBaseId: w.kbId,
+        documentId: "a14"
+      });
+      // A second pinned candidate that disagrees keeps the field in "Prüfen".
+      await w.target`update catalyst.record_fields
+        set state = 'confirmed', decided_by = 'records-other', decided_at = now()
+        where document_id = 'b14'`;
+      await call(w, "records.propose", {
+        table: "objekt",
+        items: [await w.item("c14", "kaufvertrag", { kaufpreis: 1_400_000 })]
+      });
+      const named = (await flagged(w)).items;
+      expect(named.find((item) => item.documentId === "a14")).toMatchObject({
+        state: "corrected",
+        decidedBy: person.id,
+        decidedByName: "Rita Reviewer"
+      });
+      // An account id with no account behind it has no name to show.
+      expect(named.find((item) => item.documentId === "b14")).not.toHaveProperty("decidedByName");
+      await db.store.users.markUserDeletionRequested({
+        clientInstanceId: asClientInstanceId(w.clientInstanceId),
+        userId: person.id
+      });
+      const after = (await flagged(w)).items.find((item) => item.documentId === "a14");
+      expect(after).toMatchObject({ state: "corrected", correctedValue: 1_205_000 });
+      expect(after).not.toHaveProperty("decidedByName");
+    });
+
     it("leaves both values with the candidate's row: a withdrawn document shows neither, and its purge leaves no copy", async () => {
       const { w, pin } = await corrected("keep-withdrawn", 1_300_000);
       await pin();

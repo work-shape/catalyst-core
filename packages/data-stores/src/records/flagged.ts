@@ -5,6 +5,7 @@ import {
   KNOWLEDGE_BASE_ACTIONS,
   RECORD_FIELD_STATES,
   RECORD_FLAG_REASONS,
+  asUserId,
   dataStoreRecordsFlaggedInputSchema,
   recordEvidenceResultSchema,
   type ActorAccess,
@@ -252,6 +253,25 @@ async function readCitations(
   return shown;
 }
 
+/**
+ * The names of the people who decided, by account id, as the instance shows them now: none for
+ * an account that is gone or whose deletion was requested.
+ */
+async function deciderNames(
+  runtime: DataStoreRuntime,
+  ids: ReadonlySet<string>
+): Promise<Map<string, string>> {
+  const names = new Map<string, string>();
+  for (const id of ids) {
+    const user = await runtime.stores.users.getUser({
+      clientInstanceId: runtime.clientInstanceId,
+      userId: asUserId(id)
+    });
+    if (user && user.status !== "deleting" && user.displayLabel) names.set(id, user.displayLabel);
+  }
+  return names;
+}
+
 /** How many cited documents one reading of a Knowledge Base's candidates takes at most. */
 const COUNT_DOCUMENT_PAGE = 500;
 
@@ -403,6 +423,10 @@ export const recordsFlagged: StoreVerb = {
     const citations = context
       ? await readCitations(runtime, context.access, wanted, target.signal)
       : new Map<string, { knowledgeBase: string; files: Map<string, string> }>();
+    const names = await deciderNames(
+      runtime,
+      new Set(page.flatMap((row) => (row.decided_by === null ? [] : [row.decided_by])))
+    );
     const items = page.flatMap((row): FlaggedItem[] => {
       const citation = citations.get(row.knowledge_base_id);
       // A quote is the document's text: none of a document the reader could not open.
@@ -427,7 +451,10 @@ export const recordsFlagged: StoreVerb = {
           decidedBy: row.decided_by,
           decidedAt: row.decided_at,
           reason: row.reason,
-          document: { knowledgeBase: citation.knowledgeBase, fileName }
+          document: { knowledgeBase: citation.knowledgeBase, fileName },
+          ...(row.decided_by !== null && names.has(row.decided_by)
+            ? { decidedByName: names.get(row.decided_by) }
+            : {})
         }
       ];
     });

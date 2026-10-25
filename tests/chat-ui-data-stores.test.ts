@@ -1359,6 +1359,7 @@ describe("Prüfen: the records of a Data Store that wait for a person (REC-2)", 
         correctedValue: 1205000,
         state: "corrected",
         decidedBy: "records-admin",
+        decidedByName: "Rita Reviewer",
         decidedAt: "2026-10-25T09:30:00.000Z"
       }),
       candidate("b1", { value: 1300000, state: "confirmed" }),
@@ -1374,8 +1375,9 @@ describe("Prüfen: the records of a Data Store that wait for a person (REC-2)", 
     expect(english).toMatch(/<dt[^>]*>Corrected<\/dt>/u);
     expect(english).toContain(">1,205,000<");
     expect(english).toContain(
-      `By records-admin on ${new Date("2026-10-25T09:30:00.000Z").toLocaleDateString("en")}`
+      `By Rita Reviewer on ${new Date("2026-10-25T09:30:00.000Z").toLocaleDateString("en")}`
     );
+    expect(english).not.toContain("records-admin");
     // The field's summary names the value each candidate stands for.
     expect(english).toContain("1,205,000 · 1,300,000 · 1,300,000");
     const german = render(
@@ -1387,8 +1389,21 @@ describe("Prüfen: the records of a Data Store that wait for a person (REC-2)", 
     expect(german).toMatch(/<dt[^>]*>Korrigiert<\/dt>/u);
     expect(german).toContain(">1.205.000<");
     expect(german).toContain(
-      `Von records-admin am ${new Date("2026-10-25T09:30:00.000Z").toLocaleDateString("de")}`
+      `Von Rita Reviewer am ${new Date("2026-10-25T09:30:00.000Z").toLocaleDateString("de")}`
     );
+    // Without a name to show (an account gone), the date stands alone, never the account id.
+    const unnamed = render(
+      { kindPath: "data-stores", name: "objects" },
+      {
+        records: true,
+        review: review(corrected.map(({ decidedByName: _, ...rest }) => rest)),
+        locale: "de"
+      }
+    );
+    expect(unnamed).toContain(
+      `>Am ${new Date("2026-10-25T09:30:00.000Z").toLocaleDateString("de")}<`
+    );
+    expect(unnamed).not.toContain("records-admin");
   });
 
   it("has no section without a records rule, nor for a reader who may not decide, and says when nothing waits", () => {
