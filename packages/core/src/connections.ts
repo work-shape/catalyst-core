@@ -978,7 +978,13 @@ export const CONNECTION_REFUSALS = {
    * that the catalogue part it was installed from does not ask for, or at another address than
    * the part's fixed one.
    */
-  managedClientUnavailable: "managed_client_unavailable"
+  managedClientUnavailable: "managed_client_unavailable",
+  /**
+   * A Connection on a managed OAuth client names another version of its catalogue entry than
+   * the one this instance ships: it keeps the settings of the entry's current version only, so
+   * it is updated to that version (relinked) before any other change.
+   */
+  catalogueUpdateRequired: "catalogue_update_required"
 } as const;
 
 /** What a person is told where App exposure and a person context header meet. */

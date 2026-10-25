@@ -7,6 +7,8 @@ export const connections = defineTranslations({
       "Person context is not available in Apps yet. Remove App exposure or the person context header.",
     "connections.description":
       "Connections give agents, apps and workflows access to outside systems. Those that come with the instance's setup are read-only here.",
+    "connections.catalogueUpdateRequired":
+      "This connection was set up from an earlier version of its catalogue entry. Update it to the current version at the top of this page first.",
     "connections.releaseNotice":
       "This connection comes with the instance's setup. The team that runs this instance changes it there; it cannot be changed here.",
     "connections.new": "New connection",
@@ -273,6 +275,8 @@ export const connections = defineTranslations({
       "Personenkontext ist in Apps noch nicht verfügbar. Entfernen Sie die App-Freigabe oder den Header für den Personenkontext.",
     "connections.description":
       "Verbindungen geben Agenten, Apps und Workflows Zugang zu externen Systemen. Die aus der Einrichtung der Instanz sind hier schreibgeschützt.",
+    "connections.catalogueUpdateRequired":
+      "Diese Verbindung wurde mit einer früheren Version ihres Katalogeintrags eingerichtet. Aktualisiere sie zuerst oben auf dieser Seite auf die aktuelle Version.",
     "connections.releaseNotice":
       "Diese Verbindung gehört zur Einrichtung der Instanz. Das Team, das diese Instanz betreibt, ändert sie dort; hier lässt sie sich nicht ändern.",
     "connections.new": "Neue Verbindung",

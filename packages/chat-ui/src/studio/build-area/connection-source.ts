@@ -143,10 +143,11 @@ export interface ConnectionSource {
    */
   useConnectorTypes?(mayChange?: boolean): readonly ConnectorTypeOffer[] | undefined;
   /**
-   * A hook: the catalogue's entries, for the "Dienste" group of the New connection dialog,
-   * read with the Connector types. Nothing until they are read; a failed read offers none.
+   * A hook: the catalogue's entries, for the "Dienste" group of the New connection dialog and
+   * a Connection's update to its entry's current version, read with the Connector types and
+   * offered as they are. Nothing until they are read; a failed read offers none.
    */
-  useCatalogueEntries?(): readonly CatalogueEntryOffer[] | undefined;
+  useCatalogueEntries?(mayChange?: boolean): readonly CatalogueEntryOffer[] | undefined;
   /** Reads the Connection's state now, beside the hook, as the New connection dialog waits. */
   readDetail(name: string): Promise<ConnectionDetail>;
   /**
@@ -387,8 +388,8 @@ export function useConnectionSource(): ConnectionSource {
       const query = useConnectorTypeOffers(mayChange);
       return query.isError ? [] : query.data?.types;
     },
-    useCatalogueEntries() {
-      const query = useConnectorTypeOffers();
+    useCatalogueEntries(mayChange) {
+      const query = useConnectorTypeOffers(mayChange);
       return query.isError ? [] : query.data?.entries;
     },
     async oauthStart(name) {

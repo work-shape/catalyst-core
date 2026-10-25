@@ -472,13 +472,27 @@ export function createCatalogue(input: {
     const entryId: unknown = Reflect.get(link, "entry");
     const partName: unknown = Reflect.get(link, "part");
     const version: unknown = Reflect.get(link, "version");
-    const entry = entries.find(
-      (candidate) => candidate.id === entryId && candidate.version === version && candidate.offered
-    );
-    const part = entry?.parts.find(
+    const offered = entries.find((candidate) => candidate.id === entryId && candidate.offered);
+    const part = offered?.parts.find(
       (candidate) => candidate.part === partName && candidate.connectorType === config.connectorType
     );
-    if (part === undefined || part.managedClient !== managed || config.authScheme !== "oauth") {
+    // Installed from another version of a part that still asks for this client: the instance
+    // knows only the current version's settings, so the Connection is relinked to it first.
+    if (
+      offered !== undefined &&
+      typeof version === "number" &&
+      offered.version !== version &&
+      part?.managedClient === managed &&
+      config.authScheme === "oauth"
+    ) {
+      return `${CONNECTION_REFUSALS.catalogueUpdateRequired}: the Connection was installed from version ${version} of the catalogue entry '${offered.id}', and this instance has version ${offered.version}. Update it to version ${offered.version} first: its settings are then the entry's, and its sign-ins stay where the entry's addresses did not change`;
+    }
+    if (
+      offered?.version !== version ||
+      part === undefined ||
+      part.managedClient !== managed ||
+      config.authScheme !== "oauth"
+    ) {
       return refusal(
         "is not available to this Connection: its catalogue part does not ask for it, or this instance does not have it"
       );
@@ -507,7 +521,9 @@ export function createCatalogue(input: {
       const managedIssue = managedClientIssue(config);
       if (managedIssue !== undefined) {
         throw new AppError("VALIDATION_FAILED", managedIssue, {
-          reason: CONNECTION_REFUSALS.managedClientUnavailable
+          reason: managedIssue.startsWith(`${CONNECTION_REFUSALS.catalogueUpdateRequired}:`)
+            ? CONNECTION_REFUSALS.catalogueUpdateRequired
+            : CONNECTION_REFUSALS.managedClientUnavailable
         });
       }
       const parsed = connectionConfigSchema.safeParse(config);

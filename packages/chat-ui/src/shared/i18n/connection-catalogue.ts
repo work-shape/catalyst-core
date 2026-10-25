@@ -43,7 +43,14 @@ export const connectionCatalogue = defineTranslations({
     "connectionCatalogue.more": "More",
     "connectionCatalogue.ownApp": "Use your own app registration",
     "connectionCatalogue.ownAppHelp":
-      "For an app you registered with the provider yourself. You enter its client ID and secret."
+      "For an app you registered with the provider yourself. You enter its client ID and secret.",
+    "connectionCatalogue.updateTitle": "Set up from an earlier version of {title}",
+    "connectionCatalogue.updateText":
+      "This connection was set up from version {from}, and this instance has version {to}. Until you update it, changes to it can't be saved.",
+    "connectionCatalogue.updateKeeps":
+      "The update takes the settings of version {to}. The tools stay as they are. Everyone stays signed in, unless version {to} signs in at other addresses: then each person connects again.",
+    "connectionCatalogue.updateApply": "Update to version {version}",
+    "connectionCatalogue.updateChanges": "Settings that change"
   },
   de: {
     "connectionCatalogue.services": "Dienste",
@@ -86,6 +93,13 @@ export const connectionCatalogue = defineTranslations({
     "connectionCatalogue.more": "Mehr",
     "connectionCatalogue.ownApp": "Eigene App-Registrierung verwenden",
     "connectionCatalogue.ownAppHelp":
-      "Für eine App, die du selbst beim Anbieter registriert hast. Du gibst ihre Client-ID und ihr Client-Secret ein."
+      "Für eine App, die du selbst beim Anbieter registriert hast. Du gibst ihre Client-ID und ihr Client-Secret ein.",
+    "connectionCatalogue.updateTitle": "Mit einer früheren Version von {title} eingerichtet",
+    "connectionCatalogue.updateText":
+      "Diese Verbindung wurde mit Version {from} eingerichtet, diese Instanz hat Version {to}. Bis du sie aktualisierst, lassen sich Änderungen an ihr nicht speichern.",
+    "connectionCatalogue.updateKeeps":
+      "Die Aktualisierung übernimmt die Einstellungen von Version {to}. Die Tools bleiben, wie sie sind. Alle bleiben angemeldet, außer Version {to} meldet über andere Adressen an: Dann verbindet sich jede Person neu.",
+    "connectionCatalogue.updateApply": "Auf Version {version} aktualisieren",
+    "connectionCatalogue.updateChanges": "Einstellungen, die sich ändern"
   }
 });
