@@ -421,7 +421,7 @@ export class AssetReadWorkflow {
     const allowed = allowedOn(target.kind, call, target.resource);
     const saveApproval = await this.saveApproval(call, target);
     // The draft header names the publish, which can be by someone other than its author.
-    const publication =
+    const recorded =
       target.kind.kind === "app" && !publishedOnly && asset.publishedRevision !== undefined
         ? await this.options.stores.audit
             .getAssetPublication({
@@ -431,6 +431,21 @@ export class AssetReadWorkflow {
             })
             .catch(() => undefined)
         : undefined;
+    // Audit keeps the publisher's name until it is pruned. The page names them as their account
+    // is now: a deleted account's name is empty, which the interface shows as "Deleted account".
+    const publication = recorded && {
+      at: recorded.at,
+      ...(recorded.byUserId === undefined
+        ? recorded.by === undefined
+          ? {}
+          : { by: recorded.by }
+        : {
+            by: await createPersonLabelLookup(
+              this.options.stores.users,
+              this.options.clientInstanceId
+            )(recorded.byUserId, recorded.by ?? "")
+          })
+    };
     return {
       ...(saveApproval ? { saveApproval } : {}),
       ...(agentStatus ?? {}),

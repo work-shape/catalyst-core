@@ -11,14 +11,14 @@ const schemaDirectory = join(
 );
 
 /**
- * The jsonb columns whose declared type holds an actor or a decision, read from the schema's
- * source: `<column>: jsonb("<name>").$type<...Actor...>()`.
+ * The jsonb columns whose declared type holds an actor, a decision or how a person was signed
+ * in, read from the schema's source: `<column>: jsonb("<name>").$type<...Actor...>()`.
  */
 function actorTypedColumns(source: string): Set<string> {
   const columns = new Set<string>();
   for (const match of source.matchAll(/jsonb\("(\w+)"\)\s*\.\$type<([\s\S]*?)>\(\)/gu)) {
     const [, name, type] = match;
-    if (name && type && /Actor|requestedBy|decision/iu.test(type)) columns.add(name);
+    if (name && type && /Actor|requestedBy|decision|authoriz/iu.test(type)) columns.add(name);
   }
   return columns;
 }
@@ -49,7 +49,7 @@ describe("the account deletion's list of stored person copies (ERASE-ACTOR-IDS)"
    * Every column of the migrated database that copies a person's label or actor and is neither
    * emptied by the account deletion nor kept for a stated reason: a column ending in `_label`, a
    * jsonb column named `actor` or ending in `_by`, or a jsonb column whose declared type holds an
-   * actor or a decision.
+   * actor, a decision or a sign-in.
    */
   async function unlistedPersonColumns(actorTyped: ReadonlySet<string>) {
     const listed = new Set<string>([...ERASED_PERSON_COPIES, ...Object.keys(KEPT_LABEL_COLUMNS)]);

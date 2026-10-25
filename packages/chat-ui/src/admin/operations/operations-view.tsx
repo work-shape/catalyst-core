@@ -316,7 +316,8 @@ export function OperationRunDetail({
         <Fact name="decision" label={t("operations.decision")}>
           {t(operationDecisionLabelKey(decision))}
           <Detail>
-            {decision.byLabel === undefined ? decision.by : personName(decision.byLabel, t)},{" "}
+            {/* A decision without a name is the caller's own: their call was the confirmation. */}
+            {personName(decision.byLabel ?? run.actor.label, t)},{" "}
             {formatDateTime(decision.at, locale)}
           </Detail>
         </Fact>

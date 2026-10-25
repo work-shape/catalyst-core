@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import type { ShippedGuardrailView } from "@work-shape/catalyst-api-client";
 import { Badge, Chip, ConfirmDialog, InlineError, Switch } from "@work-shape/catalyst-ui";
 import { formatMomentShort } from "../../shared/locale-format";
+import { personName } from "../../shared/person-name";
 import { useTranslation, type TranslationKey } from "../../shared/i18n";
 import type { BuildListLead, BuildListLeadFilter, BuildListLeadRow } from "./build-asset-kind";
 import { GUARDRAIL_OUTCOME_VIEWS, readOutcome } from "./guardrail-model";
@@ -61,7 +62,7 @@ export function ShippedGuardrailsLead({
     const outcome = GUARDRAIL_OUTCOME_VIEWS[readOutcome(guardrail.outcome)];
     const state = guardrail.switchedBy
       ? t(guardrail.enabled ? "guardrails.shippedOnBy" : "guardrails.shippedOffBy", {
-          name: guardrail.switchedBy.label,
+          name: personName(guardrail.switchedBy.label, t),
           when: guardrail.switchedAt ? formatMomentShort(guardrail.switchedAt, locale) : ""
         })
       : t("guardrails.shippedAsShipped");

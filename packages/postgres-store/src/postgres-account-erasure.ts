@@ -4,13 +4,15 @@ import {
   readApprovalDecisionMetadata,
   type ClientInstanceId
 } from "@work-shape/catalyst-core";
-import { and, eq, or, sql } from "drizzle-orm";
+import { and, eq, or, sql, type AnyColumn } from "drizzle-orm";
 import { isLockNotAvailable } from "./postgres-approval-request-operations";
 import type { PostgresTransaction } from "./postgres-database";
 import {
+  agentRuns,
   approvalRequests,
   configAssetRevisions,
   connectionBindings,
+  conversationFollowUps,
   conversations,
   feedback,
   liveOnceRuns,
@@ -33,6 +35,8 @@ export const ERASED_PERSON_COPIES = [
   "approval_requests.payload",
   "messages.metadata",
   "messages.text",
+  "agent_runs.authorization_context",
+  "conversation_follow_ups.authorization_context",
   "operation_runs.actor",
   "operation_runs.decision",
   "workflow_runs.started_by",
@@ -182,6 +186,40 @@ export async function eraseStoredPersonCopies(
       })
       .where(eq(messages.id, row.id));
   }
+
+  // A run the person started, in a Conversation that outlives the account, and a message they
+  // queued behind one, keep how the person was signed in: the principal's name and
+  // identity-provider id go, its id stays.
+  const signedIn = (column: AnyColumn) => ({
+    emptied: sql`jsonb_set(${column}, '{principal}',
+      ((${column}->'principal') - 'externalUserId') || '{"displayLabel": ""}'::jsonb)`,
+    holdsCopy: sql`(${column}->'principal'->>'kind' = 'user'
+      and ${column}->'principal'->>'id' = ${userId}
+      and (${column}->'principal'->>'displayLabel' <> ''
+        or ${column}->'principal' ? 'externalUserId'))`
+  });
+  const runAuthorization = signedIn(agentRuns.authorizationContext);
+  await tx
+    .update(agentRuns)
+    .set({ authorizationContext: runAuthorization.emptied })
+    .where(
+      and(
+        eq(agentRuns.clientInstanceId, clientInstanceId),
+        eq(agentRuns.ownerUserId, userId),
+        runAuthorization.holdsCopy
+      )
+    );
+  const followUpAuthorization = signedIn(conversationFollowUps.authorizationContext);
+  await tx
+    .update(conversationFollowUps)
+    .set({ authorizationContext: followUpAuthorization.emptied })
+    .where(
+      and(
+        eq(conversationFollowUps.clientInstanceId, clientInstanceId),
+        eq(conversationFollowUps.authorUserId, userId),
+        followUpAuthorization.holdsCopy
+      )
+    );
 
   await tx
     .update(operationRuns)

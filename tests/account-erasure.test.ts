@@ -65,7 +65,10 @@ describe("deleting an account empties the stored copies of the person (ERASE-ACT
       agent: createPlatformId("asset"),
       connection: createPlatformId("asset"),
       revision: createPlatformId("rev"),
-      feedback: createPlatformId("fb")
+      feedback: createPlatformId("fb"),
+      agentRun: createPlatformId("run"),
+      followUp: createPlatformId("fup"),
+      input: createPlatformId("msg")
     };
     const actor = { id: uid, label: NAME, externalUserId: IDP };
     // A request the person made, and one of a colleague they decided and then reverted.
@@ -110,6 +113,36 @@ describe("deleting an account empties the stored copies of the person (ERASE-ACT
       insert into messages (id, client_instance_id, conversation_id, role, text, created_at, metadata)
       values (${message.id}, ${clientInstanceId}, ${conversationId}, 'system', ${message.text},
         now(), ${db.sql.json({ agentRuntime: { ...agentRuntime } })})`;
+    // A run the person started in the Conversation, and a message they queued behind it, keep
+    // how the person was signed in.
+    const authorization = {
+      principal: {
+        kind: "user",
+        id: uid,
+        displayLabel: NAME,
+        clientInstanceId,
+        authSource: "oidc",
+        externalUserId: IDP
+      },
+      subjectUserId: uid,
+      scopes: []
+    };
+    await db.sql`
+      insert into messages (id, client_instance_id, conversation_id, role, text, created_at, metadata)
+      values (${ids.input}, ${clientInstanceId}, ${conversationId}, 'user', 'hello', now(),
+        '{}'::jsonb)`;
+    await db.sql`
+      insert into agent_runs (id, client_instance_id, conversation_id, owner_user_id,
+        input_message_id, agent_name, authorization_context, status, started_at, updated_at,
+        correlation_id)
+      values (${ids.agentRun}, ${clientInstanceId}, ${conversationId}, ${uid}, ${ids.input},
+        'helper', ${db.sql.json(authorization)}, 'completed', ${at}, ${at}, 'corr')`;
+    await db.sql`
+      insert into conversation_follow_ups (id, client_instance_id, conversation_id, author_user_id,
+        text, mode, status, position, agent_name, authorization_context, created_at, updated_at,
+        dispatched_run_id)
+      values (${ids.followUp}, ${clientInstanceId}, ${conversationId}, ${uid}, 'and then', 'queue',
+        'consumed', 1, 'helper', ${db.sql.json(authorization)}, ${at}, ${at}, ${ids.agentRun})`;
     await db.sql`
       insert into operation_runs (id, client_instance_id, operation, effect, actor_kind, actor_id,
         actor, origin_kind, origin, input_hash, status, decision, correlation_id, created_at,
@@ -238,6 +271,25 @@ describe("deleting an account empties the stored copies of the person (ERASE-ACT
         decision: { mode: "approval", by: uid, byLabel: "", at: "2026-10-20T10:00:00.000Z" }
       }
     ]);
+    const signedIn = {
+      principal: {
+        kind: "user",
+        id: uid,
+        displayLabel: "",
+        clientInstanceId: shared.clientInstanceId,
+        authSource: "oidc"
+      },
+      subjectUserId: uid,
+      scopes: []
+    };
+    await expect(
+      db.sql`select owner_user_id, authorization_context from agent_runs
+        where id = ${seeded.agentRun}`
+    ).resolves.toEqual([{ owner_user_id: uid, authorization_context: signedIn }]);
+    await expect(
+      db.sql`select author_user_id, authorization_context from conversation_follow_ups
+        where id = ${seeded.followUp}`
+    ).resolves.toEqual([{ author_user_id: uid, authorization_context: signedIn }]);
     await expect(
       db.sql`select started_by from workflow_runs where id = ${seeded.workflowRun}`
     ).resolves.toEqual([{ started_by: { kind: "user", id: uid, label: "" } }]);
@@ -283,9 +335,11 @@ describe("deleting an account empties the stored copies of the person (ERASE-ACT
     const { t, leaving } = arranged;
     await expect(rowsNamingThePerson()).resolves.toEqual(
       expect.arrayContaining([
+        "agent_runs",
         "approval_requests",
         "config_asset_revisions",
         "connection_bindings",
+        "conversation_follow_ups",
         "conversations",
         "feedback",
         "live_once_runs",

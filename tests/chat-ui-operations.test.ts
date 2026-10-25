@@ -350,7 +350,7 @@ describe("operation run detail", () => {
     expect(markup).toContain('aria-label="Copy"');
   });
 
-  it("leaves out what a run does not have and names the decider by id without a name", () => {
+  it("leaves out what a run does not have and names the caller as the decider of their own call", () => {
     const markup = detail(
       run({
         origin: { kind: "cli" },
@@ -370,7 +370,20 @@ describe("operation run detail", () => {
     }
     expect(markup).not.toContain('data-field="origin.');
     expect(markup).toContain("The caller&#x27;s own call");
-    expect(markup).toContain("user-anna");
+    expect(markup).toContain("Anna Beispiel, ");
+    expect(markup).not.toContain("user-anna");
+  });
+
+  // ERASE-ACTOR-IDS: a caller whose account is gone is named as one, never by the account id.
+  it("names a caller whose account is gone as a deleted account, never by the id", () => {
+    const markup = detail(
+      run({
+        actor: { kind: "user", id: "user-anna", label: "" },
+        decision: { mode: "direct", by: "user-anna", at: "2026-10-05T08:00:00.000Z" }
+      })
+    );
+    expect(markup).toContain("Deleted account, ");
+    expect(markup).not.toContain("user-anna");
   });
 
   it("uses the spec's words in German", () => {
