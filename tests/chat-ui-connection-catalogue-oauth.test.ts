@@ -8,6 +8,7 @@ import {
   afterSignIn,
   partCandidates,
   partModes,
+  partOffer,
   reviewGroups,
   askedGroups,
   scopesFor,
@@ -250,6 +251,29 @@ describe("the OAuth install's first step", () => {
     expect(markup).toContain("Each person connects their own account.");
     expect(markup).toContain('data-catalogue-redirect-uri=""');
     expect(markup).toContain("cannot name its redirect URI");
+  });
+
+  it("asks for no field on the operator's managed client, and keeps the own app under More", () => {
+    const managed = { ...part, managedClient: "mail" };
+    const markup = render({ ...mailbox, parts: [managed] }, "en");
+    expect(markup).toContain("data-catalogue-managed");
+    expect(markup).toContain("No app registration needed.");
+    expect(markup).not.toContain('data-connection-field="oauth.clientId"');
+    expect(markup).not.toContain('data-connection-field="secret"');
+    expect(markup).not.toContain("data-catalogue-redirect-uri");
+    expect(markup).toContain("data-catalogue-more");
+    expect(render({ ...mailbox, parts: [managed] })).toContain("Keine App-Registrierung nötig.");
+    // The managed definition names the client and holds no client id; the own app asks again.
+    const offer = partOffer(mailbox, managed, true);
+    expect(offer.fields).toEqual([]);
+    expect(offer.settings).toMatchObject({ oauth: { managedClient: "mail" } });
+    expect(JSON.stringify(offer.settings)).not.toContain("clientId");
+    expect(partOffer(mailbox, managed).fields.map((field) => field.setting ?? "secret")).toEqual([
+      "oauth.clientId",
+      "secret"
+    ]);
+    // A part the instance has no managed client for keeps its fields, whatever is asked.
+    expect(partOffer(mailbox, part, true).fields).toHaveLength(2);
   });
 });
 

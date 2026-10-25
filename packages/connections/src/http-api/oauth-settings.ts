@@ -1,4 +1,7 @@
-import { CONNECTOR_TOKEN_AUTH_METHODS } from "@work-shape/catalyst-core";
+import {
+  CONNECTOR_TOKEN_AUTH_METHODS,
+  MANAGED_OAUTH_CLIENT_PATTERN
+} from "@work-shape/catalyst-core";
 import { z } from "zod";
 
 const HTTP_API_URL_MAX_CHARS = 2_048;
@@ -133,12 +136,41 @@ export const oauthScopesSchema = z
   .array(z.string().regex(SCOPE_PATTERN, { message: "must be one scope without spaces" }))
   .max(64);
 
-export const oauthSettingsSchema = oauthProviderSchema.safeExtend({
-  clientId: z.string().min(1).max(512).regex(HEADER_VALUE_PATTERN, {
-    message: "must be printable text on one line"
-  }),
-  scopes: oauthScopesSchema.optional()
-});
+/**
+ * The client a sign-in uses: the one the provider issued, by its id, or the operator's managed
+ * client of release config by its id (MS-APP-1), whose client id and secret the instance reads
+ * from release config and the host. One of the two.
+ */
+export const oauthSettingsSchema = oauthProviderSchema
+  .safeExtend({
+    clientId: z
+      .string()
+      .min(1)
+      .max(512)
+      .regex(HEADER_VALUE_PATTERN, {
+        message: "must be printable text on one line"
+      })
+      .optional(),
+    managedClient: z
+      .string()
+      .regex(MANAGED_OAUTH_CLIENT_PATTERN, {
+        message: "must name a managed OAuth client of release config, such as microsoft"
+      })
+      .optional(),
+    scopes: oauthScopesSchema.optional()
+  })
+  .superRefine((oauth, context) => {
+    if ((oauth.clientId === undefined) === (oauth.managedClient === undefined)) {
+      context.addIssue({
+        code: "custom",
+        path: oauth.clientId === undefined ? ["clientId"] : ["managedClient"],
+        message:
+          oauth.clientId === undefined
+            ? "Required: the client id the provider issued, or 'managedClient'"
+            : "A Connection names its own client id or a managed client, not both"
+      });
+    }
+  });
 
 export const oauthEntrySchema = oauthProviderSchema.safeExtend({
   authorizationUrl: oauthAddressSchema

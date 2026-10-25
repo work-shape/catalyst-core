@@ -37,7 +37,13 @@ export const connectionCatalogue = defineTranslations({
     "connectionCatalogue.ownAccessLink": "Give it under use rights",
     "connectionCatalogue.scopesFromReview": "They follow from the tools you just approved.",
     "connectionCatalogue.recreates":
-      "A deleted connection had this address. This installs it anew, with none of its earlier access."
+      "A deleted connection had this address. This installs it anew, with none of its earlier access.",
+    "connectionCatalogue.managed":
+      "No app registration needed. People sign in through the app the team that runs this instance set up.",
+    "connectionCatalogue.more": "More",
+    "connectionCatalogue.ownApp": "Use your own app registration",
+    "connectionCatalogue.ownAppHelp":
+      "For an app you registered with the provider yourself. You enter its client ID and secret."
   },
   de: {
     "connectionCatalogue.services": "Dienste",
@@ -74,6 +80,12 @@ export const connectionCatalogue = defineTranslations({
     "connectionCatalogue.scopesFromReview":
       "Sie ergeben sich aus den Tools, die du gerade freigegeben hast.",
     "connectionCatalogue.recreates":
-      "Eine gelöschte Verbindung hatte diese Adresse. Diese Einrichtung legt sie neu an, ohne ihre früheren Rechte."
+      "Eine gelöschte Verbindung hatte diese Adresse. Diese Einrichtung legt sie neu an, ohne ihre früheren Rechte.",
+    "connectionCatalogue.managed":
+      "Keine App-Registrierung nötig. Alle melden sich über die App an, die das Team dieser Instanz eingerichtet hat.",
+    "connectionCatalogue.more": "Mehr",
+    "connectionCatalogue.ownApp": "Eigene App-Registrierung verwenden",
+    "connectionCatalogue.ownAppHelp":
+      "Für eine App, die du selbst beim Anbieter registriert hast. Du gibst ihre Client-ID und ihr Client-Secret ein."
   }
 });

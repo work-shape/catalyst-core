@@ -8,8 +8,10 @@ import {
   OPENAI_COMPATIBLE_APIS
 } from "@work-shape/catalyst-asset-schemas";
 import {
+  MANAGED_OAUTH_CLIENT_PATTERN,
   PROVIDER_REGIONS,
   REASONING_EFFORTS,
+  secretRef,
   type ModelProviderConfig
 } from "@work-shape/catalyst-core";
 import { z } from "zod";
@@ -131,6 +133,33 @@ const mailEntrySchema = z.looseObject({
 });
 
 /**
+ * One managed OAuth client of the operator (MS-APP-1): an app the operator registered once at
+ * a provider, which a catalogue part that names it (`managedClient`) signs people in with, so
+ * the install asks for no client of its own. `credentialSecret` is the name of the host secret
+ * that holds the client secret, never its value: it is read from the host when a token is
+ * exchanged, refreshed or revoked and is never copied into the Secret Store or the database.
+ * `tenant` fills the `{tenant}` path segment of the part's endpoints, such as the customer's
+ * directory id; left out, the part's own value stands.
+ */
+export const managedOAuthClientSchema = z.strictObject({
+  clientId: z
+    .string()
+    .trim()
+    .min(1)
+    .max(512)
+    .regex(/^[\x21-\x7e]+$/u, { message: "must be the client id, printable text without spaces" }),
+  credentialSecret: secretRef(),
+  tenant: z
+    .string()
+    .regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,252}$/u, {
+      message: "must be one path segment, such as organizations or a directory id"
+    })
+    .optional()
+});
+
+export type ManagedOAuthClientConfig = z.infer<typeof managedOAuthClientSchema>;
+
+/**
  * What an instance runs on: one provider per port. `models` holds named entries because an
  * instance has several, `objectStorage` holds the two fixed stores, the other ports hold one
  * provider. An instance without mail, without a store or without a sandbox leaves that key out.
@@ -189,7 +218,16 @@ export const infrastructureConfigSchema = z.strictObject(
         workspaces: providerEntrySchema.optional()
       })
       .default({}),
-    sandbox: providerEntrySchema.optional()
+    sandbox: providerEntrySchema.optional(),
+    /** The operator's managed OAuth clients by id, such as `microsoft`. */
+    oauthClients: z
+      .record(
+        z.string().regex(MANAGED_OAUTH_CLIENT_PATTERN, {
+          message: "must be a lower-case id such as microsoft"
+        }),
+        managedOAuthClientSchema
+      )
+      .default({})
   },
   {
     error: (issue) =>

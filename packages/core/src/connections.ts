@@ -719,6 +719,12 @@ export const CONNECTION_AUTH_SCHEME_OAUTH = "oauth";
 /** The auth scheme of a Connection that obtains its token by the client credentials grant. */
 export const CONNECTION_AUTH_SCHEME_OAUTH_CLIENT = "oauth_client";
 
+/**
+ * The id of a managed OAuth client: a key of `infrastructure.oauthClients` in release config,
+ * named by a catalogue part's `managedClient` and a Connection's `settings.oauth.managedClient`.
+ */
+export const MANAGED_OAUTH_CLIENT_PATTERN = /^[a-z][a-z0-9-]{0,31}$/u;
+
 /** How a client authenticates at a token endpoint the Connection names itself. */
 export const CONNECTOR_TOKEN_AUTH_METHODS = ["client_secret_post", "client_secret_basic"] as const;
 export type ConnectorTokenAuthMethod = (typeof CONNECTOR_TOKEN_AUTH_METHODS)[number];
@@ -735,6 +741,11 @@ export interface ConnectorOAuthEndpoints {
   tokenUrl: string;
   revocationUrl?: string;
   clientId: string;
+  /**
+   * The operator's managed client the client id is read from (MS-APP-1), by its id. Its secret
+   * is read from the host when a token is exchanged, refreshed or revoked, and never stored.
+   */
+  managedClient?: string;
   scopes: readonly string[];
   /** Fixed extra parameters of the authorization request. Never a protocol parameter. */
   authorizationParams: Readonly<Record<string, string>>;
@@ -949,7 +960,13 @@ export const CONNECTION_REFUSALS = {
    * A Connection names a catalogue entry, or a part of one, that this instance does not offer:
    * the entry is not in `catalogue.entries`, it has no such part, or the part is of another type.
    */
-  catalogueEntryNotOffered: "catalogue_entry_not_offered"
+  catalogueEntryNotOffered: "catalogue_entry_not_offered",
+  /**
+   * A Connection names a managed OAuth client (MS-APP-1) this instance does not have, or one
+   * that the catalogue part it was installed from does not ask for, or at another address than
+   * the part's fixed one.
+   */
+  managedClientUnavailable: "managed_client_unavailable"
 } as const;
 
 /** What a person is told where App exposure and a person context header meet. */
@@ -1048,6 +1065,17 @@ function oauthSchemeIssues(
       {
         message: `'settings.oauth' is read only with the auth schemes '${CONNECTION_AUTH_SCHEME_OAUTH}' and '${CONNECTION_AUTH_SCHEME_OAUTH_CLIENT}'`,
         path: ["settings", "oauth"]
+      }
+    ];
+  }
+  if (
+    authScheme === CONNECTION_AUTH_SCHEME_OAUTH_CLIENT &&
+    endpoints?.managedClient !== undefined
+  ) {
+    return [
+      {
+        message: `${CONNECTION_REFUSALS.managedClientUnavailable}: a managed OAuth client signs people in; the client credentials grant uses the Connection's own client`,
+        path: ["settings", "oauth", "managedClient"]
       }
     ];
   }

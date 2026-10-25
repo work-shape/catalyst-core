@@ -3,6 +3,7 @@ import {
   declaredCandidate,
   operationTitle,
   readingNames,
+  recordOf,
   type ApprovalCandidate
 } from "./connection-approval-model";
 import type { ConnectorTypeOffer, TypedValues } from "./connection-typed-model";
@@ -35,11 +36,41 @@ export function entriesToShow(entries: readonly CatalogueEntryOffer[]): Catalogu
   return [...shown.filter((entry) => entry.offered), ...shown.filter((entry) => !entry.offered)];
 }
 
-/** The part as a form of its type: the entry's title and service, the part's fields. */
+/**
+ * The settings of a part's Connection on the operator's managed OAuth client (MS-APP-1): the
+ * part's fixed settings with the client named and no client id of its own.
+ */
+export function managedSettings(
+  settings: Record<string, unknown>,
+  managedClient: string
+): Record<string, unknown> {
+  const copy = structuredClone(settings);
+  const { clientId: _clientId, ...oauth } = recordOf(copy.oauth) ?? {};
+  return { ...copy, oauth: { ...oauth, managedClient } };
+}
+
+/**
+ * The part as a form of its type: the entry's title and service, the part's fields. On the
+ * operator's managed client (`managed`, where the instance has one for the part) it asks for
+ * no field: the client id, the secret and the tenant come from the operator.
+ */
 export function partOffer(
   entry: CatalogueEntryOffer,
-  part: CataloguePartOffer
+  part: CataloguePartOffer,
+  managed = false
 ): ConnectorTypeOffer {
+  if (managed && part.managedClient !== undefined) {
+    return {
+      type: part.connectorType,
+      title: entry.title,
+      description: part.description,
+      service: entry.service,
+      documentSource: part.documentSource,
+      authScheme: part.authScheme,
+      settings: managedSettings(part.settings, part.managedClient),
+      fields: []
+    };
+  }
   return {
     type: part.connectorType,
     title: entry.title,

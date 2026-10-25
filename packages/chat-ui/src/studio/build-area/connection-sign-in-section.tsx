@@ -126,6 +126,11 @@ export function ConnectionSignInSection({
             </KeyValue>
           </>
         ) : null}
+        {oauth?.registration === "managed" ? (
+          <KeyValue label={t("connectionSignIn.appRegistration")}>
+            <span data-sign-in-managed="">{t("connectionSignIn.appManaged")}</span>
+          </KeyValue>
+        ) : null}
         {preregistered && typeof clientId === "string" ? (
           <KeyValue label={t("connectionSignIn.clientId")} copyValue={clientId}>
             <code className="font-mono text-code break-all">{clientId}</code>

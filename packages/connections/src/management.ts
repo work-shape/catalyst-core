@@ -340,7 +340,8 @@ export function createConnectionManagement(
           keyring: deps.keyring,
           audit: deps.stores.audit,
           logger: deps.logger,
-          ...(deps.oauth === undefined ? {} : { oauth: deps.oauth })
+          ...(deps.oauth === undefined ? {} : { oauth: deps.oauth }),
+          ...(deps.managedClients === undefined ? {} : { managedClients: deps.managedClients })
         });
 
   /** The binding of the Connection's address, as its page shows it. */
@@ -392,7 +393,12 @@ export function createConnectionManagement(
       providerHost = undefined;
     }
     return {
-      registration: chosen.clientId === undefined ? "dcr" : "preregistered",
+      registration:
+        named?.managedClient !== undefined
+          ? "managed"
+          : chosen.clientId === undefined
+            ? "dcr"
+            : "preregistered",
       ...(redirectUri === undefined ? {} : { redirectUri }),
       ...(providerHost === undefined ? {} : { providerHost })
     };

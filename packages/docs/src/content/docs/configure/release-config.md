@@ -842,6 +842,30 @@ requests always get the same answer, whether or not an account exists. At most t
 mails an hour go to one mailbox, and at most 200 an hour are sent for requests from one client
 address.
 
+## Managed OAuth clients
+
+An operator can register one app at a provider and let every catalogue part that asks for it
+sign people in with it, so the install asks for no client id or secret:
+
+```yaml
+infrastructure:
+  oauthClients:
+    microsoft:
+      clientId: 00000000-0000-0000-0000-000000000000
+      credentialSecret: MICROSOFT_OAUTH_CLIENT_SECRET # the name of the host secret
+      tenant: organizations # optional: fills the {tenant} segment of the part's endpoints
+```
+
+- The key is the id a catalogue part names in `managedClient`: lower case, up to 32 characters.
+- `credentialSecret` names the host secret. The value is read when a token is exchanged,
+  refreshed or revoked and is never copied into the Secret Store or the database.
+- A client whose secret is not set is left out with a warning that names the variable; its
+  parts ask for the customer's own app registration.
+- Removing a client, or changing its `clientId` or `tenant`, ends the sign-ins made with it at
+  the next start: they need a new connect.
+- The provider app must list the redirect URI of each part's Connection,
+  `<publicUrl>/api/v1/connections/<part name>/oauth/callback`.
+
 ## Rate limits
 
 The API limits how often one caller may call one operation. The limits are there to stop

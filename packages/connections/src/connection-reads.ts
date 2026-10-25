@@ -16,6 +16,7 @@ import {
 } from "@work-shape/catalyst-core";
 import { readConnectionCatalog } from "./catalog";
 import type { OutsideSchemaChecker } from "./schema-check";
+import type { ManagedOAuthClients } from "./oauth/managed-clients";
 
 // How the operation source, a call and the Connection's page read a Connection: the active
 // revision of the asset, its runtime state and its Connector type. One Connection is two point
@@ -41,6 +42,8 @@ export interface ConnectionOperationSourceDeps {
    * `modules.connections.personalModelRegions`. Left out, only `eu` passes.
    */
   personalModelRegions?: readonly string[];
+  /** The operator's managed OAuth clients (MS-APP-1). Left out, none. */
+  managedClients?: ManagedOAuthClients;
 }
 
 /** One stored Connection as a reader of this package sees it. */

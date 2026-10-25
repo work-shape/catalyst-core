@@ -313,6 +313,12 @@ export const connectorTypeOffersSchema = z.object({
              * register at the provider. Missing while release config sets no public address.
              */
             redirectUri: z.string().optional(),
+            /**
+             * The operator's managed OAuth client this instance has for the part, by id
+             * (MS-APP-1): the install asks for no field, and the admin may still use their own
+             * app registration with `fields`. Never the client's secret or where it is kept.
+             */
+            managedClient: z.string().optional(),
             operations: z.array(
               z.object({
                 name: z.string(),

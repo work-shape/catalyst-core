@@ -14,8 +14,10 @@ import {
   createResultShaperRegistry,
   createEgressChecker,
   createHttpApiConnectorType,
+  createManagedOAuthClients,
   createMcpConnectorType,
   discoverConnection,
+  endStaleManagedSignIns,
   expandReleaseConnections,
   loadSecretKeyring,
   platformStoreTargetsOf,
@@ -192,9 +194,16 @@ async function buildInstanceConnections(
     }
     return undefined;
   }
+  // The operator's managed OAuth clients (MS-APP-1). Only their public ids go further; each
+  // secret is read from the host when a token is exchanged, refreshed or revoked.
+  const managedClients = await createManagedOAuthClients({
+    clients: config.infrastructure.oauthClients,
+    secrets,
+    logger
+  });
   const connectorTypes = createConnectorTypeRegistry([
     createMcpConnectorType({ logger }),
-    createHttpApiConnectorType(resultShapers),
+    createHttpApiConnectorType(resultShapers, managedClients),
     ...types
   ]);
   // Every shipped entry is checked now, so a broken one stops the start; an entry that
@@ -203,7 +212,8 @@ async function buildInstanceConnections(
     entries: catalogueEntries,
     named: config.catalogue.entries,
     resultShapers,
-    connectorTypes
+    connectorTypes,
+    managedClients
   });
   const releaseConnections = expandReleaseConnections(config.connections, catalogue);
   // Named keys are needed: a release Connection's secret or one entered on the instance is
@@ -263,6 +273,7 @@ async function buildInstanceConnections(
           keyring,
           credentials: ownSecrets,
           logger,
+          managedClients,
           onRefused: (refusal) => fileConnectionReconnectNotice(notices, refusal)
         })
       : undefined;
@@ -275,7 +286,8 @@ async function buildInstanceConnections(
         egress,
         keyring,
         audit: stores.audit,
-        logger
+        logger,
+        managedClients
       })
     : undefined;
   const operations = {
@@ -285,7 +297,8 @@ async function buildInstanceConnections(
     egress,
     credentials,
     logger,
-    personalModelRegions: getPersonalModelRegions(config)
+    personalModelRegions: getPersonalModelRegions(config),
+    managedClients
   };
   const slots = new ConnectionCallSlots();
   return {
@@ -328,6 +341,16 @@ async function buildInstanceConnections(
       if (changed > 0 || result.needsConfiguration.length > 0) {
         // Names and versions only. No setting and no value of a Connection is logged.
         logger.info({ connections: result }, "Release Connections reconciled");
+      }
+      try {
+        // Sign-ins made with a managed client the instance no longer has, or with its earlier
+        // client id, ask for a new connect.
+        await endStaleManagedSignIns({ clientInstanceId, stores, connectorTypes, logger });
+      } catch (error) {
+        logger.warn(
+          { module: "connections", err: error },
+          "The sign-ins of managed OAuth clients could not be checked. They are checked again at the next start"
+        );
       }
       await enqueueDiscoveries(operations);
       return result;

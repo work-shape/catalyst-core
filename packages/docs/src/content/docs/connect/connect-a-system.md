@@ -118,6 +118,28 @@ A catalogue tools part may declare `authScheme: oauth`, the provider endpoints u
 An entry never contains that secret. A source part always uses shared credentials.
 Every OAuth endpoint and issuer must appear on the part's own `egress` list.
 
+### Managed OAuth clients
+
+A part may name `managedClient`, the id of an app the operator registered once at the provider
+and declared under `infrastructure.oauthClients` in release config. Where the instance has
+that client and its secret is set on the host, the install asks for no field: the Connection
+stores `settings.oauth.managedClient` and no client id, and each person just connects. The
+client id comes from release config and the client secret from the host each time a token is
+exchanged, refreshed or revoked. It is never stored in the Secret Store or the database, and
+no answer, log line or audit record carries it. The connection's detail shows the registration
+as `managed`.
+
+The managed client signs in only the Connection installed from that part, under the part's
+name, since that name's redirect URI is the one the operator registered. Any other Connection
+that names it, a second install included, is refused with `managed_client_unavailable` and
+uses its own app registration. In the install dialog, **More** keeps that choice for an admin.
+Without the client the part asks for its fields as before.
+
+When release config no longer has the client, its secret is gone from the host, or its
+`clientId` or `tenant` changes, the next start sets each connected sign-in of those
+Connections to `needs_reconnect` and deletes its token set. A Connection on a client the
+instance does not have is not configured until the client is back.
+
 A part can declare `groups` with `id`, localized `title`, and `scopes`. When groups are
 present, every operation names one and an `identity` group is required. Installation and
 later operation edits derive `settings.oauth.scopes` from identity plus all groups with an
