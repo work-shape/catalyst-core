@@ -10,6 +10,8 @@ export const accessKnowledgeBase = defineTranslations({
       "Get answers from its documents: in chat through an agent that has it, and with a test search. This person needs no further right for that.",
     "access.actionWriteKnowledgeBaseDescription":
       "Change the draft of the Knowledge Base. A draft answers nobody until it is published.",
+    "access.actionIngestKnowledgeBaseDescription":
+      "Publish a workflow that puts documents into the Knowledge Base and takes back its own. It does not allow changing the draft or removing anyone else's files.",
     "access.actionPublishKnowledgeBaseDescription":
       "Make a draft the version that answers. Publishing also needs the right to read the Data Store behind it.",
     "access.scopeKnowledgeBase": "Knowledge Base {name}",
@@ -31,6 +33,8 @@ export const accessKnowledgeBase = defineTranslations({
       "Antworten aus ihren Dokumenten bekommen: im Chat über einen Agenten, der sie hat, und mit einer Testsuche. Dafür braucht die Person kein weiteres Recht.",
     "access.actionWriteKnowledgeBaseDescription":
       "Den Entwurf der Wissensbasis ändern. Ein Entwurf antwortet niemandem, bis er veröffentlicht ist.",
+    "access.actionIngestKnowledgeBaseDescription":
+      "Einen Workflow veröffentlichen, der Dokumente in die Wissensbasis einspielt und seine eigenen wieder herausnimmt. Den Entwurf ändern oder fremde Dateien entfernen erlaubt das nicht.",
     "access.actionPublishKnowledgeBaseDescription":
       "Einen Entwurf zu der Version machen, die antwortet. Veröffentlichen braucht zusätzlich das Recht, den Datenspeicher dahinter zu lesen.",
     "access.scopeKnowledgeBase": "Wissensbasis {name}",

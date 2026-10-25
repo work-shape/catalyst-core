@@ -1,0 +1,7 @@
+---
+section: Added
+---
+
+- **Knowledge Bases:** New right `knowledge_base.ingest` ("Put documents into knowledge bases from workflows" / "Dokumente aus Workflows in Wissensbasen einspielen") on one Knowledge Base or on all of them (KBW-3). It lets a Workflow put documents in and take back its own: `ingest`, `withdraw` and `put_processed` need it, and nothing else does. It is not `knowledge_base.write`, and neither gives the other. `admin` holds it by default, the Access page offers it like the Knowledge Base's other rights, and a personal key carries it at the use level.
+- **Workflows:** Publishing a data Workflow with an `ingest`, `withdraw` or `put_processed` step gives its own account `knowledge_base.ingest` on that Knowledge Base, and needs the publisher to hold it there. A refusal names the right. The publish question's account line says so: "Runs as its own account “…” and may put documents into …" / "Läuft unter einem eigenen Konto „…“ und darf Dokumente in … einspielen". A revision without the step takes the grant away at its publish. A step that needs `knowledge_base.write`, such as `remove_documents` or `sync`, is still refused at publish with `action_not_grantable_to_principal`.
+- **API access:** A service principal can be granted `knowledge_base.ingest` and `knowledge_base.read` on one named Knowledge Base. `knowledge_base.write`, `publish` and `delete` stay refused with `action_not_grantable_to_principal`.

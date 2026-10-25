@@ -85,7 +85,7 @@ describe("KBW-0 write contracts", () => {
       const contract = KNOWLEDGE_WRITE_OPERATIONS[part];
       expect(knowledgeWriteContracts[part]).toBe(contract);
       expect(contract.right).toBe(
-        contract.effect === "changing" ? "knowledge_base.write" : "knowledge_base.read"
+        contract.effect === "changing" ? "knowledge_base.ingest" : "knowledge_base.read"
       );
       expect(contract.keyLevel).toBe(contract.effect === "changing" ? "write" : "read");
     }

@@ -262,6 +262,19 @@ describe("the publish question of a Workflow that runs as its own account", () =
     ]);
   });
 
+  it("says the account may put documents into a Knowledge Base and read one (KBW-3)", async () => {
+    const rights = [
+      right("knowledge_base.ingest", "knowledge_base", "Property files"),
+      right("knowledge_base.read", "knowledge_base", "Contracts")
+    ];
+    expect(await ask("en", rights)).toEqual([
+      "Runs as its own account “Monthly check” and may put documents into Property files and read Contracts."
+    ]);
+    expect(await ask("de", rights)).toEqual([
+      "Läuft unter einem eigenen Konto „Monthly check“ und darf Dokumente in Property files einspielen und Contracts lesen."
+    ]);
+  });
+
   it("words an action named like an Object property as using, and shows no code", async () => {
     for (const action of ["constructor", "toString", "__proto__", "hasOwnProperty"]) {
       const lines = await ask("en", [right(action, "connection", "Exampledata")]);

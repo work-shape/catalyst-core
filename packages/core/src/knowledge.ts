@@ -67,14 +67,20 @@ import type { ISODateString } from "./time";
  */
 export const KNOWLEDGE_BASE_ASSET_KIND = "knowledge_base";
 
-/** The rights of the kind. `use` queries the published revision. */
+/**
+ * The rights of the kind. `use` queries the published revision. `ingest` puts documents in
+ * from a Workflow and takes back its own (`ingest`, `withdraw`, `put_processed`); it is not
+ * `write`, which changes the draft and adds and removes files by hand, and neither gives the
+ * other, as `data_store.insert` stands beside `data_store.write` (KBW-3).
+ */
 export const KNOWLEDGE_BASE_ACTIONS = {
   read: "knowledge_base.read",
   write: "knowledge_base.write",
   publish: "knowledge_base.publish",
   delete: "knowledge_base.delete",
-  use: "knowledge_base.use"
-} as const satisfies AssetKindActions;
+  use: "knowledge_base.use",
+  ingest: "knowledge_base.ingest"
+} as const satisfies AssetKindActions & { ingest: string };
 
 /**
  * The prefix of every operation of one Knowledge Base: `knowledge.<id>.<part>`. Rights, policy

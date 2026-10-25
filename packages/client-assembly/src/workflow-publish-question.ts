@@ -22,12 +22,14 @@ type LimitRaise = ReturnType<typeof workflowLimitRaises>[number];
 type NotifyChannel = (typeof NOTIFY_CHANNELS)[number];
 
 /** What the own account may do with an asset, as the question words it. */
-type AccountDoes = "use" | "addRows" | "changeRows" | "start";
+type AccountDoes = "use" | "read" | "ingest" | "addRows" | "changeRows" | "start";
 
 /** By the right a step needs; any other right is worded as using the asset. */
 const ACCOUNT_DOES: ReadonlyMap<string, AccountDoes> = new Map([
   ["connection.use", "use"],
   ["knowledge_base.use", "use"],
+  ["knowledge_base.read", "read"],
+  ["knowledge_base.ingest", "ingest"],
   ["data_store.insert", "addRows"],
   ["data_store.execute", "changeRows"],
   ["workflow.use", "start"]
@@ -70,6 +72,8 @@ const COPY: Record<LocaleCode, QuestionCopy> = {
     ownAccountMay: (workflow, does) => `Runs as its own account “${workflow}” and may ${does}.`,
     accountDoes: {
       use: (assets) => `use ${assets}`,
+      read: (assets) => `read ${assets}`,
+      ingest: (assets) => `put documents into ${assets}`,
       addRows: (assets) => `add rows to ${assets}`,
       changeRows: (assets) => `change and delete rows in ${assets}`,
       start: (assets) => `start ${assets}`
@@ -97,6 +101,8 @@ const COPY: Record<LocaleCode, QuestionCopy> = {
       `Läuft unter einem eigenen Konto „${workflow}“ und darf ${does}.`,
     accountDoes: {
       use: (assets) => `${assets} nutzen`,
+      read: (assets) => `${assets} lesen`,
+      ingest: (assets) => `Dokumente in ${assets} einspielen`,
       addRows: (assets) => `Datensätze zu ${assets} hinzufügen`,
       changeRows: (assets) => `Datensätze in ${assets} ändern und löschen`,
       start: (assets) => `${assets} starten`

@@ -165,6 +165,10 @@ const OWN_ACTION_WORDS: Record<OwnWordAction, Words> = {
     en: "review extracted fields in data stores",
     de: "Extrahierte Felder in Datenspeichern prüfen"
   },
+  "knowledge_base.ingest": {
+    en: "put documents into knowledge bases from workflows",
+    de: "Dokumente aus Workflows in Wissensbasen einspielen"
+  },
   "mail_sender.use": {
     en: "send e-mail as a sender of the instance",
     de: "E-Mails als Absender der Instanz senden"
