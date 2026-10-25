@@ -6,6 +6,7 @@ import {
   type ApprovalExecution
 } from "@work-shape/catalyst-core";
 import type { TranslationContextValue, TranslationKey } from "../../shared/i18n";
+import { personName } from "../../shared/person-name";
 
 /** Display kind a tool result carries to render its Approval Request inline in the thread. */
 export const APPROVAL_REQUEST_DISPLAY_KIND = "catalyst.approval_request";
@@ -302,7 +303,7 @@ export function approvalActionFailureText(
   }
   if (failure === "already_decided") {
     return request.decision
-      ? t("approvalAlreadyDecidedBy", { name: request.decision.decidedByLabel })
+      ? t("approvalAlreadyDecidedBy", { name: personName(request.decision.decidedByLabel, t) })
       : t("approvalNoLongerOpen");
   }
   return t("approvalActionFailed");

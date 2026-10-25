@@ -42,6 +42,7 @@ import {
   type OperationRunAppFacts,
   type OperationRunFilter
 } from "../../shared/operations-model";
+import { personName } from "../../shared/person-name";
 
 /** What a cell shows where the run has no value for it. */
 const NO_VALUE = "–";
@@ -198,7 +199,7 @@ export function OperationRunsTable({
                 </Button>
               </TableCell>
               <TableCell>
-                {run.actor.label}
+                {personName(run.actor.label, t)}
                 <TableCellDetail
                   data-origin={run.origin.kind}
                   data-origin-app={app ? (app.deleted ? "deleted" : "active") : undefined}
@@ -276,7 +277,7 @@ export function OperationRunDetail({
         {t(run.effect === "reading" ? "operations.effectReading" : "operations.effectChanging")}
       </Fact>
       <Fact name="actor" label={t("operations.actor")}>
-        {run.actor.label}
+        {personName(run.actor.label, t)}
         <Detail>
           {t(
             run.actor.kind === "user" ? "operations.actorUser" : "operations.actorServicePrincipal"
@@ -315,7 +316,8 @@ export function OperationRunDetail({
         <Fact name="decision" label={t("operations.decision")}>
           {t(operationDecisionLabelKey(decision))}
           <Detail>
-            {decision.byLabel ?? decision.by}, {formatDateTime(decision.at, locale)}
+            {decision.byLabel === undefined ? decision.by : personName(decision.byLabel, t)},{" "}
+            {formatDateTime(decision.at, locale)}
           </Detail>
         </Fact>
       ) : null}

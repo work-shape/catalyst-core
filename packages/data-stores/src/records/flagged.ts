@@ -5,7 +5,7 @@ import {
   KNOWLEDGE_BASE_ACTIONS,
   RECORD_FIELD_STATES,
   RECORD_FLAG_REASONS,
-  asUserId,
+  createPersonLabelLookup,
   dataStoreRecordsFlaggedInputSchema,
   recordEvidenceResultSchema,
   type ActorAccess,
@@ -262,12 +262,11 @@ async function deciderNames(
   ids: ReadonlySet<string>
 ): Promise<Map<string, string>> {
   const names = new Map<string, string>();
+  const labelOf = createPersonLabelLookup(runtime.stores.users, runtime.clientInstanceId);
   for (const id of ids) {
-    const user = await runtime.stores.users.getUser({
-      clientInstanceId: runtime.clientInstanceId,
-      userId: asUserId(id)
-    });
-    if (user && user.status !== "deleting" && user.displayLabel) names.set(id, user.displayLabel);
+    // A deleted account has no name: the list shows it as "Deleted account".
+    const name = await labelOf(id, "");
+    if (name) names.set(id, name);
   }
   return names;
 }

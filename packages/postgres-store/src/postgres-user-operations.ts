@@ -50,6 +50,7 @@ import { withdrawQueuedJobs } from "./jobs/store";
 import { ensurePersonalWorkspaceInTransaction } from "./postgres-collaboration-workspace-operations";
 import { lockRights, lockRightsOfUsableUser } from "./rights-lock";
 import { appendAuditEvent as appendPostgresAuditEvent } from "./postgres-audit-usage-operations";
+import { eraseStoredPersonCopies } from "./postgres-account-erasure";
 
 /**
  * Every sign-in replaces the person's stored groups with the ones it carries
@@ -583,6 +584,9 @@ async function deleteUser(db: PostgresConnection, input: DeleteUserInput): Promi
   const rows = await db.transaction(async (tx) => {
     await lockRights(tx, input);
     await revokePersonalSignIns(tx, input);
+    // What other records keep of the person is their id: the copies of their name, address
+    // and identity-provider id go before the row does (ERASE-ACTOR-IDS).
+    await eraseStoredPersonCopies(tx, input);
     await tx
       .delete(permissionGrants)
       .where(

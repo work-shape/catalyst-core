@@ -427,6 +427,40 @@ describe("approval routes and generated instance client", () => {
 
   // An instance always has the kind a held operation call is decided on, so a person with
   // `operations.approve` has a queue to read where the assembly brings no kind of its own.
+  // ERASE-ACTOR-IDS. Fails without the change: the view echoed the names stored with the
+  // request, a gone account's included.
+  it("names each person as their account is now, and a gone account by no name", async () => {
+    const f = await fixture();
+    const clientInstanceId = asClientInstanceId(getTestConfig(f.app).clientInstance.id);
+    const requesterId = (await f.requester.me.get()).id;
+    const gone = "usr_5d0c7f7a-0f43-4a39-9d5e-6b1f3c2a8e11";
+    const stale = await f.app.stores.approvals.createApprovalRequest({
+      clientInstanceId,
+      kind: "fake",
+      summary: "Asked under an old name",
+      requestedBy: { id: requesterId, displayLabel: "Requester Before Rename" },
+      payload: { value: "new" }
+    });
+    const orphan = await f.app.stores.approvals.createApprovalRequest({
+      clientInstanceId,
+      kind: "fake",
+      summary: "Asked by an account that is gone",
+      requestedBy: { id: gone, displayLabel: "Erika Mustermann" },
+      payload: { value: "new" }
+    });
+    await expect(
+      f.reviewer.approval_requests.get({ params: { requestId: stale.id } })
+    ).resolves.toMatchObject({ requestedBy: { id: requesterId, displayLabel: "Requester" } });
+    const read = await f.reviewer.approval_requests.get({ params: { requestId: orphan.id } });
+    expect(read.requestedBy).toEqual({ id: gone, displayLabel: "" });
+    const listed = await f.reviewer.approval_requests.list({ query: {} });
+    expect(listed.items.find((item) => item.id === orphan.id)?.requestedBy).toEqual({
+      id: gone,
+      displayLabel: ""
+    });
+    expect(JSON.stringify(listed)).not.toContain("Erika Mustermann");
+  });
+
   it("assembles and registers the routes with no handlers of the assembly", async () => {
     const f = await fixture(true);
     try {

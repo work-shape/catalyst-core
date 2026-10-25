@@ -8,6 +8,7 @@ import {
   type ApprovalDecisionEvent,
   type ApprovalDecisionStatus
 } from "./approval-request-model";
+import { personName } from "../../shared/person-name";
 
 const DECISION_ICON: Record<
   ApprovalDecisionStatus,
@@ -62,7 +63,9 @@ export function ApprovalDecisionLine({
       />
       <p className="min-w-0">
         <span className="font-medium text-foreground">
-          {t(approvalDecisionLineLabelKey(decision), { name: decision.decidedByLabel })}
+          {t(approvalDecisionLineLabelKey(decision), {
+            name: personName(decision.decidedByLabel, t)
+          })}
         </span>
         <span aria-hidden="true"> · </span>
         <time dateTime={decision.decidedAt}>{formatApprovalDate(decision.decidedAt, locale)}</time>

@@ -95,6 +95,7 @@ export interface PostgresStores extends PlatformStores {
 export { createPostgresJobWorker, type CreatePostgresJobWorkerInput } from "./jobs/worker";
 export { DatabaseBehindError, migrateDatabase, type MigrateDatabaseInput } from "./migrations";
 export { READINESS_DATABASE_TIMEOUT_MS } from "./readiness";
+export { ERASED_PERSON_COPIES, KEPT_LABEL_COLUMNS } from "./postgres-account-erasure";
 
 function handlePostgresNotice(notice: Notice, logger?: Logger): void {
   if (

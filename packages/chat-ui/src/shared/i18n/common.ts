@@ -3,6 +3,7 @@ import { defineTranslations } from "./translation-area";
 export const common = defineTranslations({
   en: {
     allStatuses: "All statuses",
+    deletedAccount: "Deleted account",
     cancel: "Cancel",
     close: "Close",
     copy: "Copy",
@@ -42,6 +43,7 @@ export const common = defineTranslations({
   },
   de: {
     allStatuses: "Alle Status",
+    deletedAccount: "Gelöschtes Konto",
     cancel: "Abbrechen",
     close: "Schließen",
     copy: "Kopieren",

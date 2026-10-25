@@ -9,3 +9,4 @@ export {
   WorkflowsHostWithRecipients
 } from "../../../packages/chat-ui/src/studio/workflows/workflows-host";
 export { useWorkflowList } from "../../../packages/chat-ui/src/studio/workflows/workflow-data";
+export { startedByText } from "../../../packages/chat-ui/src/studio/workflows/runs-list";

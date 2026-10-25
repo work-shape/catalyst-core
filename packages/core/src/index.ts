@@ -58,6 +58,7 @@ export * from "./operations";
 export * from "./origins";
 export * from "./pages";
 export * from "./paging";
+export * from "./person-labels";
 export * from "./personal-connection-context";
 export { personalWorkspaceOwnerName } from "./personal-workspace-name";
 export * from "./providers";

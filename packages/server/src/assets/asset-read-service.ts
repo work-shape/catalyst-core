@@ -12,6 +12,7 @@ import {
   AppError,
   asCollaborationWorkspaceId,
   asUserId,
+  createPersonLabelLookup,
   getSubjectUserId,
   isAppError,
   isAuthenticatedServicePrincipal,
@@ -577,12 +578,28 @@ export class AssetReadWorkflow {
       page,
       newestFirst: true
     });
-    return revisions.map((revision) => ({
+    // Who wrote each revision is named as the account is now: a deleted account's name is
+    // empty, which the interface shows as "Deleted account".
+    const labelOf = createPersonLabelLookup(
+      this.options.stores.users,
+      this.options.clientInstanceId
+    );
+    const named = await Promise.all(
+      revisions.map(async ({ actor }) => {
+        if (actor?.userId === undefined) return actor;
+        const displayLabel = await labelOf(actor.userId, actor.displayLabel);
+        if (displayLabel) return { ...actor, displayLabel };
+        // Nor does it name the account at the identity provider.
+        const { externalUserId: _externalUserId, ...gone } = actor;
+        return { ...gone, displayLabel };
+      })
+    );
+    return revisions.map((revision, index) => ({
       assetId: revision.assetId,
       revision: revision.revision,
       operation: revision.operation,
       config: revision.config,
-      actor: revision.actor,
+      actor: named[index] ?? revision.actor,
       origin: revision.origin,
       globalVersion: revision.globalVersion,
       createdAt: revision.createdAt

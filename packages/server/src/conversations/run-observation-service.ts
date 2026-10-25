@@ -1,8 +1,12 @@
 import {
   ACTIVE_AGENT_RUN_STATUSES,
   AppError,
+  approvalDecisionNote,
   auditActorFromUser,
+  createPersonLabelLookup,
   getSubjectUserId,
+  isJsonObject,
+  readApprovalDecisionMetadata,
   projectAgentRun,
   personalDataConversation,
   readAssistantFinalMetadata,
@@ -45,7 +49,9 @@ export class RunObservationWorkflow {
       clientInstanceId: this.options.clientInstanceId,
       conversationId
     });
-    return messages.map(toPublicChatMessage);
+    return (
+      await withDecidersNamedNow(this.options.stores, this.options.clientInstanceId, messages)
+    ).map(toPublicChatMessage);
   }
 
   /**
@@ -94,7 +100,9 @@ export class RunObservationWorkflow {
         personalData: await personalDataConversation(stores, clientInstanceId, conversationId),
         conversation,
         followUps: await stores.followUps.listPending({ clientInstanceId, conversationId }),
-        messages: messages.map(toPublicChatMessage),
+        messages: (await withDecidersNamedNow(stores, clientInstanceId, messages)).map(
+          toPublicChatMessage
+        ),
         ...(Object.keys(completedRunProjections).length > 0 ? { completedRunProjections } : {}),
         ...(runForSnapshot
           ? {
@@ -419,4 +427,35 @@ function toActiveRunSummary(run: AgentRun): ActiveRunSummary {
     updatedAt: run.updatedAt,
     lastSequence: run.lastSequence
   };
+}
+
+/**
+ * The messages with the name of who decided each approval as the account is now: a deleted
+ * account's is empty, which the interface shows as "Deleted account".
+ */
+async function withDecidersNamedNow(
+  stores: Pick<PlatformStores, "users">,
+  clientInstanceId: ChatServerOptions["clientInstanceId"],
+  messages: ChatMessage[]
+): Promise<ChatMessage[]> {
+  if (!messages.some((message) => readApprovalDecisionMetadata(message.metadata))) return messages;
+  const labelOf = createPersonLabelLookup(stores.users, clientInstanceId);
+  return Promise.all(
+    messages.map(async (message) => {
+      const decision = readApprovalDecisionMetadata(message.metadata);
+      if (!decision || !message.metadata) return message;
+      const decidedByLabel = await labelOf(decision.decidedBy, decision.decidedByLabel);
+      if (decidedByLabel === decision.decidedByLabel) return message;
+      const runtime = message.metadata.agentRuntime;
+      // The note the message carries names the person too: it is written again.
+      return {
+        ...message,
+        text: approvalDecisionNote({ ...decision, decidedByLabel }),
+        metadata: {
+          ...message.metadata,
+          agentRuntime: { ...(isJsonObject(runtime) ? runtime : {}), decidedByLabel }
+        }
+      };
+    })
+  );
 }

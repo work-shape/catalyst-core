@@ -13,6 +13,7 @@ import {
 import { formatDateTime } from "../../shared/locale-format";
 import { useTranslation } from "../../shared/i18n";
 import type { AppRevisionPage } from "./app-data";
+import { personName } from "../../shared/person-name";
 
 /**
  * The revisions of one App beside its draft: who saved each and when, the newest first and
@@ -189,7 +190,7 @@ export function RevisionsDrawerView({
                     </>
                   }
                   description={[
-                    ...(revision.actor ? [revision.actor.displayLabel] : []),
+                    ...(revision.actor ? [personName(revision.actor.displayLabel, t)] : []),
                     formatDateTime(revision.createdAt, locale)
                   ].join(" · ")}
                   descriptionWraps

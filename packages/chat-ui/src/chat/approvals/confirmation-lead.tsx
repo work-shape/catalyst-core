@@ -3,6 +3,7 @@ import { useTranslation, type TranslationKey } from "../../shared/i18n";
 import { useApprovalRevisionHost } from "./approval-revision-host";
 import type { OperationCallPreview } from "./operation-call-preview";
 import { publishKindPhrase } from "./publish-review";
+import { personName } from "../../shared/person-name";
 
 /** Who asks and what for, by where the call came from: an agent, a publish, another call. */
 type Asker = "agent" | "publish" | "call";
@@ -29,7 +30,9 @@ export function ConfirmationLead({ call }: { call: OperationCallPreview }) {
   const host = useApprovalRevisionHost();
   const asker: Asker = call.review ? "publish" : call.origin.kind === "agent" ? "agent" : "call";
   const agentName = call.origin.agentName;
-  const agent = agentName ? (host?.agentDisplayName(agentName) ?? agentName) : call.actor.label;
+  const agent = agentName
+    ? (host?.agentDisplayName(agentName) ?? agentName)
+    : personName(call.actor.label, t);
   const changing = call.effect === "changing";
 
   return (

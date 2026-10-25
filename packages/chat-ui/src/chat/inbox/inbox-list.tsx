@@ -17,6 +17,7 @@ import { useTranslation } from "../../shared/i18n";
 import { useInboxItemKindLookup } from "./inbox-item-kinds";
 import { formatMomentShort } from "../../shared/locale-format";
 import { formatInboxAge, inboxRowsAlike, inboxTabEmptyKeys, type InboxTab } from "./inbox-model";
+import { personName } from "../../shared/person-name";
 
 /** How a list stands on the page. */
 export type InboxListState =
@@ -91,7 +92,7 @@ export function InboxList({
         const kind = kindOf(item.kind);
         const KindIcon = kind?.itemIcon?.(item) ?? kind?.icon ?? CircleHelp;
         const agentName = item.origin?.agentName;
-        const requester = item.requestedBy.displayLabel;
+        const requester = personName(item.requestedBy.displayLabel, t);
         const agentLabel = agentName ? (agentDisplayName?.(agentName) ?? agentName) : undefined;
         const asked =
           kind?.asked?.(item, t, agentLabel) ??

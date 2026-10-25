@@ -23,6 +23,7 @@ import type {
   WorkflowStepRunView,
   WorkflowStepView
 } from "./workflow-views";
+import { personName } from "../../shared/person-name";
 
 // The drawing of a Workflow: its step list with nested blocks, turned into the nodes, groups
 // and edges the canvas lays out. The file has no edges and no positions, so every edge here
@@ -415,7 +416,7 @@ export function workflowGraph(
         title:
           run.run.startedBy === undefined
             ? t("workflows.run.startStepSchedule")
-            : t("workflows.run.startStepPerson", { person: run.run.startedBy.name }),
+            : t("workflows.run.startStepPerson", { person: personName(run.run.startedBy.name, t) }),
         footer: formatMoment(stepRun.startedAt ?? run.run.startedAt ?? run.run.createdAt, locale)
       };
     }

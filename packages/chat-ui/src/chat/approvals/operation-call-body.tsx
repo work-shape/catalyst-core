@@ -41,6 +41,7 @@ import {
 import { PublishReviewBody } from "./publish-review";
 import { SkillChangeBody, type SkillChangeLabels } from "./skill-change-body";
 import { parseSkillChangePreview } from "./skill-change-preview";
+import { personName } from "../../shared/person-name";
 
 type OutcomeTone = "info" | "success" | "danger" | "warning";
 
@@ -174,7 +175,7 @@ export function OperationCallBody({
   // A person's own confirmation, which only they see: it leads with who asks for them.
   const confirmation = isInboxConfirmation(request);
   const { asset } = call;
-  const actor = call.actor.label;
+  const actor = personName(call.actor.label, t);
   // The reader who asked is told what they can do; anyone else is told what the asker can.
   const ownRequest = host !== undefined && host.currentUserId === call.actor.id;
   const outcome = pending

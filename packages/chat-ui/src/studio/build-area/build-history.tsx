@@ -16,6 +16,7 @@ import { formatDateTime } from "../../shared/locale-format";
 import { useTranslation, type TranslationKey } from "../../shared/i18n";
 import type { BuildRevisionPage } from "./build-data";
 import { instanceSentence, refusalsOf, type BuildWriteOutcome } from "./build-refusals";
+import { personName } from "../../shared/person-name";
 
 const OPERATION_LABELS: Record<ConfigAssetRevision["operation"], TranslationKey> = {
   create: "configRevisionCreate",
@@ -175,7 +176,7 @@ export function BuildHistory({
                   }
                   description={[
                     formatDateTime(revision.createdAt, locale),
-                    ...(revision.actor ? [revision.actor.displayLabel] : [])
+                    ...(revision.actor ? [personName(revision.actor.displayLabel, t)] : [])
                   ].join(" · ")}
                   descriptionWraps
                   actionsVisible
