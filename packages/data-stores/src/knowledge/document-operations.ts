@@ -3,6 +3,7 @@ import type { KnowledgeBaseDefinition } from "./definition";
 import { z } from "zod";
 import {
   AppError,
+  auditActorFromIdentity,
   MANAGED_FILE_STATUSES,
   enqueueKnowledgeIndex,
   KNOWLEDGE_BASE_ACTIONS,
@@ -17,6 +18,9 @@ import {
   knowledgeRetryOutputSchema,
   type KnowledgeDocumentStore,
   type KnowledgeFiles,
+  type KnowledgeRetryInput,
+  type KnowledgeRetryOutput,
+  type OperationExecutionContext,
   type OperationDefinition,
   type OperationResource
 } from "@work-shape/catalyst-core";
@@ -35,6 +39,8 @@ import type { KnowledgeRuntime } from "./runtime";
 // that was lost; an indexed one is left as it is. A failed PDF or DOCX is extracted afresh:
 // before the contents go back to `pending`, the stored failure or empty result an index job
 // left is deleted, while a result with text is kept. Its run keeps document ids and counts.
+// On a Workflow-fed source it lifts the hold of a removal by hand instead, for a holder of
+// `knowledge_base.publish` only (KBW-2b).
 
 /** How many documents one page of the list holds by default, and at most. */
 const LIST_DEFAULT = 50;
@@ -173,6 +179,8 @@ export function retryDocumentsOperation(
     timeoutMs: RETRY_TIMEOUT_MS,
     async execute(input, context) {
       const parsed = knowledgeRetryInputSchema.parse(input);
+      if ("source" in parsed && parsed.source.startsWith("workflow:"))
+        return releaseRemoved(runtime, knowledgeBase, parsed, context);
       const definitions = knowledgeBase.definition?.sources ?? [];
       if ("source" in parsed && !definitions.some((source) => source.id === parsed.source))
         throw new AppError("NOT_FOUND", "The Knowledge Base source is not available");
@@ -259,4 +267,41 @@ export function retryDocumentsOperation(
       };
     }
   };
+}
+
+/**
+ * Retry on a Workflow-fed source lifts the hold a removal by hand put on its items (KBW-2b).
+ * Only a holder of `knowledge_base.publish` may: the Workflow's own account holds `write`, and
+ * must not undo a person's removal. Nothing is fetched here; the next pass that names an item
+ * takes it again. A failure of another code is fixed by the Workflow naming the item again.
+ */
+async function releaseRemoved(
+  runtime: KnowledgeRuntime,
+  knowledgeBase: DocumentsTarget,
+  input: Extract<KnowledgeRetryInput, { source: string }>,
+  context: OperationExecutionContext
+): Promise<KnowledgeRetryOutput> {
+  context.access.require(KNOWLEDGE_BASE_ACTIONS.publish, knowledgeBase.resource);
+  if (!runtime.sources)
+    throw new AppError("NOT_FOUND", "The Knowledge Base source is not available");
+  if ("failureCode" in input && input.failureCode !== "knowledge_item_removed")
+    return { queued: 0, released: 0 };
+  const released = await runtime.sources.release(
+    knowledgeBase.assetId,
+    {
+      source: input.source,
+      ...("sourceItemIds" in input ? { sourceItemIds: input.sourceItemIds } : {})
+    },
+    context.runtime.signal ?? new AbortController().signal
+  );
+  if (released > 0)
+    await context.audit.record({
+      type: "knowledge_base.removal_hold_lifted",
+      status: "success",
+      actor: auditActorFromIdentity(context.actor),
+      subject: knowledgeBase.assetId,
+      correlationId: context.correlationId,
+      metadata: { source: input.source, count: released }
+    });
+  return { queued: 0, released };
 }

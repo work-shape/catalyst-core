@@ -1,3 +1,4 @@
+import type { JsonObject } from "../json";
 import { LIVE_ONCE_AUDIT, type PlatformEventDefinition } from "./definition";
 
 // Counts of the physical cleanup, shared by document removal and Knowledge Base deletion.
@@ -18,6 +19,17 @@ const KNOWLEDGE_PURGE_AUDIT: Omit<PlatformEventDefinition, "name"> = {
       objects: { type: "integer", minimum: 0 },
       extractionResults: { type: "integer", minimum: 0 }
     }
+  }
+};
+
+// Items of one Workflow-fed source a removal by hand holds out of later passes, or releases.
+const HELD_ITEMS: JsonObject = {
+  type: "object",
+  additionalProperties: false,
+  required: ["source", "count"],
+  properties: {
+    source: { type: "string" },
+    count: { type: "integer", minimum: 0 }
   }
 };
 
@@ -68,9 +80,20 @@ export const knowledgeBaseEvents = {
       required: ["documentIds", "documents"],
       properties: {
         documentIds: { type: "array", items: { type: "string" } },
-        documents: { type: "integer", minimum: 0 }
+        documents: { type: "integer", minimum: 0 },
+        // Workflow-fed items now held out of later passes (KBW-2b), by source and count.
+        held: { type: "array", items: HELD_ITEMS }
       }
     }
+  },
+  // A publisher lifted the hold a removal by hand put on Workflow-fed items: source and count.
+  "knowledge_base.removal_hold_lifted": {
+    name: "knowledge_base.removal_hold_lifted",
+    subject: "config_asset",
+    legacy: false,
+    audited: true,
+    phases: ["after"],
+    payload: HELD_ITEMS
   },
   "knowledge_base.documents_purged": {
     ...KNOWLEDGE_PURGE_AUDIT,

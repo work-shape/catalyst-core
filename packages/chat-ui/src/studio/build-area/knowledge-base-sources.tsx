@@ -42,7 +42,8 @@ import type { DataFlowRef } from "./data-flows-model";
 // A Workflow that calls `ingest` is a source of its own (KBW-1): it is never authored in the
 // draft, so it is listed from the published state alone, with its Workflow, its last run and
 // how fresh that makes it. Its Workflow's runs decide what it holds, so it has no Sync now and
-// no Try again here.
+// no Try again here. A document a person removed by hand stays out of every later run; only
+// who may publish the Knowledge Base lets it back in, with Allow again (KBW-2b).
 
 /** The search of the Connection chooser before the reader types. */
 const NO_SEARCH = "";
@@ -54,6 +55,7 @@ export function KnowledgeSourcesSection({
   owner,
   sources,
   canWrite,
+  canPublish = false,
   workflows,
   workflowPage,
   onChange
@@ -67,6 +69,8 @@ export function KnowledgeSourcesSection({
   owner: string | undefined;
   sources: readonly KnowledgeSourceForm[];
   canWrite: boolean;
+  /** Who may publish lifts the hold on Workflow-fed documents removed by hand. */
+  canPublish?: boolean;
   /** The Workflows that fill the Knowledge Base, by which a Workflow-fed source is titled. */
   workflows?: readonly DataFlowRef[];
   workflowPage?: DataFlowPage;
@@ -108,6 +112,7 @@ export function KnowledgeSourcesSection({
               status={entry}
               workflow={workflows?.find((flow) => flow.name === entry.workflowId)}
               page={workflowPage?.(entry.workflowId)}
+              canPublish={canPublish}
             />
           ))}
         </ul>
@@ -266,7 +271,8 @@ function SourceStatus({
   sourceId,
   status,
   canWrite,
-  fedByWorkflow = false
+  fedByWorkflow = false,
+  canRelease = false
 }: {
   source: KnowledgeBaseSource;
   knowledgeBase: string;
@@ -276,6 +282,8 @@ function SourceStatus({
   canWrite: boolean;
   /** A Workflow-fed source: its runs decide what it holds, so it has no Sync now or Try again. */
   fedByWorkflow?: boolean;
+  /** The reader may let a Workflow bring back the items a person removed by hand. */
+  canRelease?: boolean;
 }) {
   const { locale, t } = useTranslation();
   const [busy, setBusy] = useState<"sync" | KnowledgeSourceFailureCode>();
@@ -311,7 +319,9 @@ function SourceStatus({
       answer.ok
         ? {
             tone: "success",
-            text: t("knowledgeSources.retried", { count: number(queuedOf(answer.data)) })
+            text: fedByWorkflow
+              ? t("knowledgeSources.released", { count: number(releasedOf(answer.data)) })
+              : t("knowledgeSources.retried", { count: number(queuedOf(answer.data)) })
           }
         : {
             tone: "error",
@@ -406,6 +416,24 @@ function SourceStatus({
                   <RotateCcw aria-hidden="true" />
                   {t("knowledgeSources.retry")}
                 </Button>
+              ) : canRelease &&
+                fedByWorkflow &&
+                failure.code === "knowledge_item_removed" &&
+                source.retrySource ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  title={t("knowledgeSources.releaseLabel")}
+                  loading={busy === failure.code}
+                  disabled={busy !== undefined}
+                  data-knowledge-source-release=""
+                  onClick={() => {
+                    retry(failure.code).catch(() => setBusy(undefined));
+                  }}
+                >
+                  <RotateCcw aria-hidden="true" />
+                  {t("knowledgeSources.release")}
+                </Button>
               ) : null}
             </li>
           ))}
@@ -444,11 +472,13 @@ function WorkflowSourceItem({
   knowledgeBase,
   status,
   workflow,
-  page
+  page,
+  canPublish
 }: {
   source: KnowledgeBaseSource;
   knowledgeBase: string;
   status: WorkflowSourceStatus;
+  canPublish: boolean;
   /** The Workflow as the state names it; absent where the reader may not read it. */
   workflow: DataFlowRef | undefined;
   page: ReturnType<DataFlowPage> | undefined;
@@ -474,6 +504,7 @@ function WorkflowSourceItem({
         status={status}
         canWrite={false}
         fedByWorkflow
+        canRelease={canPublish}
       />
       <p className="text-caption text-muted-foreground">{t("knowledgeSources.workflowNote")}</p>
     </li>
@@ -485,6 +516,15 @@ function queuedOf(answer: unknown): number {
   const queued =
     answer !== null && typeof answer === "object" && "queued" in answer ? answer.queued : undefined;
   return typeof queued === "number" ? queued : 0;
+}
+
+/** How many removed items a Workflow may bring back again, as the instance answered it. */
+function releasedOf(answer: unknown): number {
+  const released =
+    answer !== null && typeof answer === "object" && "released" in answer
+      ? answer.released
+      : undefined;
+  return typeof released === "number" ? released : 0;
 }
 
 /**

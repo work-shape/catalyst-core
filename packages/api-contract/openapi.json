@@ -22408,6 +22408,7 @@
                               "knowledge_item_invalid",
                               "knowledge_fetch_not_allowed",
                               "knowledge_ingest_cancelled",
+                              "knowledge_item_removed",
                               "knowledge_file_over_limit",
                               "knowledge_file_format_unsupported"
                             ]
@@ -22509,6 +22510,11 @@
                       }
                     },
                     "queued": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "released": {
                       "type": "integer",
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
@@ -23132,6 +23138,9 @@
                       "type": "string"
                     },
                     "purgedAt": {
+                      "type": "string"
+                    },
+                    "removedAt": {
                       "type": "string"
                     }
                   },
@@ -24098,6 +24107,7 @@
                                             "knowledge_item_invalid",
                                             "knowledge_fetch_not_allowed",
                                             "knowledge_ingest_cancelled",
+                                            "knowledge_item_removed",
                                             "knowledge_file_over_limit",
                                             "knowledge_file_format_unsupported"
                                           ]
@@ -24261,7 +24271,8 @@
                                       "knowledge_source_limit_reached",
                                       "knowledge_item_invalid",
                                       "knowledge_fetch_not_allowed",
-                                      "knowledge_ingest_cancelled"
+                                      "knowledge_ingest_cancelled",
+                                      "knowledge_item_removed"
                                     ]
                                   },
                                   "startedAt": {
@@ -24364,6 +24375,7 @@
                                             "knowledge_item_invalid",
                                             "knowledge_fetch_not_allowed",
                                             "knowledge_ingest_cancelled",
+                                            "knowledge_item_removed",
                                             "knowledge_file_over_limit",
                                             "knowledge_file_format_unsupported"
                                           ]
@@ -24527,7 +24539,8 @@
                                       "knowledge_source_limit_reached",
                                       "knowledge_item_invalid",
                                       "knowledge_fetch_not_allowed",
-                                      "knowledge_ingest_cancelled"
+                                      "knowledge_ingest_cancelled",
+                                      "knowledge_item_removed"
                                     ]
                                   },
                                   "startedAt": {
@@ -24682,6 +24695,7 @@
                     "knowledge_item_invalid",
                     "knowledge_fetch_not_allowed",
                     "knowledge_ingest_cancelled",
+                    "knowledge_item_removed",
                     "knowledge_file_over_limit",
                     "knowledge_file_format_unsupported"
                   ]
@@ -24774,6 +24788,7 @@
                                   "knowledge_item_invalid",
                                   "knowledge_fetch_not_allowed",
                                   "knowledge_ingest_cancelled",
+                                  "knowledge_item_removed",
                                   "knowledge_file_over_limit",
                                   "knowledge_file_format_unsupported"
                                 ]
@@ -25065,7 +25080,8 @@
                         "knowledge_source_limit_reached",
                         "knowledge_item_invalid",
                         "knowledge_fetch_not_allowed",
-                        "knowledge_ingest_cancelled"
+                        "knowledge_ingest_cancelled",
+                        "knowledge_item_removed"
                       ]
                     },
                     "startedAt": {

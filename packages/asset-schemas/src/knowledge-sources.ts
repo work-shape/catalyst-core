@@ -180,7 +180,12 @@ export const knowledgeRetryOutputSchema = z.strictObject({
     .array(z.strictObject({ id: z.string(), state: z.enum(KNOWLEDGE_DOCUMENT_STATES) }))
     .optional(),
   /** How many contents or items were queued again. */
-  queued: z.number().int()
+  queued: z.number().int(),
+  /**
+   * For a Workflow-fed source: how many items removed by hand were allowed back. Its next pass
+   * that names one takes it again (KBW-2b).
+   */
+  released: z.number().int().optional()
 });
 
 export type KnowledgeRetryOutput = z.infer<typeof knowledgeRetryOutputSchema>;
@@ -201,7 +206,9 @@ export const knowledgeLocateOutputSchema = z.strictObject({
   discoveredAt: z.string(),
   fetchedAt: z.string().optional(),
   withdrawnAt: z.string().optional(),
-  purgedAt: z.string().optional()
+  purgedAt: z.string().optional(),
+  /** A person removed it by hand; a pass leaves it out until a publisher lifts the hold. */
+  removedAt: z.string().optional()
 });
 
 export type KnowledgeLocateOutput = z.infer<typeof knowledgeLocateOutputSchema>;

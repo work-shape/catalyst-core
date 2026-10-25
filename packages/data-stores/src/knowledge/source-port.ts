@@ -51,6 +51,15 @@ export interface KnowledgeSources {
     input: { knowledgeBaseId: string; workflowId: string; itemIds: readonly string[] },
     signal: AbortSignal
   ): Promise<number>;
+  /**
+   * Lifts the hold on items of a Workflow-fed source a person removed by hand: by their ids,
+   * or every held item. Answers how many; the next pass that names one takes it (KBW-2b).
+   */
+  release(
+    id: string,
+    input: { source: string; sourceItemIds?: readonly string[] },
+    signal: AbortSignal
+  ): Promise<number>;
   retry(
     id: string,
     input: KnowledgeRetryInput,

@@ -25,7 +25,7 @@ import { startIngest, withdrawWorkflowItems } from "./ingest";
 // All operations use the same derived state: the item owns fetch state, the content owns indexing.
 const JOIN = `from catalyst_kb.source_items i left join catalyst_kb.documents d on d.id=i.document_id left join catalyst_kb.contents c on c.sha256=d.content_sha256`;
 const STATE = `case when i.state='fetched' then case c.state when 'extracted' then 'indexed' when 'failed' then 'failed' else 'fetched' end else i.state end`;
-const FAILURE = `case when i.state='failed' then i.failure_code when i.state='fetched' and c.state='failed' then c.failure_code end`;
+const FAILURE = `case when i.state='failed' then i.failure_code when i.state='fetched' and c.state='failed' then c.failure_code when i.removed_at is not null then 'knowledge_item_removed' end`;
 const rowSchema = z.object({
   id: z.string(),
   item_id: z.string(),
@@ -40,9 +40,10 @@ const rowSchema = z.object({
   discovered_at: z.coerce.date(),
   fetched_at: z.coerce.date().nullable(),
   withdrawn_at: z.coerce.date().nullable(),
-  purged_at: z.coerce.date().nullable()
+  purged_at: z.coerce.date().nullable(),
+  removed_at: z.coerce.date().nullable()
 });
-const SELECT = `select i.id,i.item_id,i.source_id,i.name,i.path,i.document_id,i.origin_link,i.changed_at,i.discovered_at,i.fetched_at,i.withdrawn_at,i.purged_at,${STATE} as state,${FAILURE} as failure_code ${JOIN}`;
+const SELECT = `select i.id,i.item_id,i.source_id,i.name,i.path,i.document_id,i.origin_link,i.changed_at,i.discovered_at,i.fetched_at,i.withdrawn_at,i.purged_at,i.removed_at,${STATE} as state,${FAILURE} as failure_code ${JOIN}`;
 // The owned-store migration that gave a source its kind (`workflow_sources`).
 const WORKFLOW_SOURCES_MIGRATION = 6;
 // Keep a bounded page in memory. A retry by code walks every matching item in pages.
@@ -149,6 +150,18 @@ export function createKnowledgeSources(runtime: DataStoreRuntime): KnowledgeSour
                 [source.id]
               )
             );
+          // Items a person removed by hand are withdrawn, and held out of the next pass.
+          const [held] =
+            source.workflowId === undefined
+              ? []
+              : z
+                  .array(z.object({ n: z.number() }))
+                  .parse(
+                    await sql.run(
+                      "select count(*)::int as n from catalyst_kb.source_items where source_id=$1::text and removed_at is not null",
+                      [source.id]
+                    )
+                  );
           const items = { discovered: 0, fetched: 0, indexed: 0, failed: 0, withdrawn: 0 };
           for (const state of Object.keys(items)) {
             const key = z.enum(KNOWLEDGE_SOURCE_ITEM_SHOWN_STATES).parse(state);
@@ -187,9 +200,12 @@ export function createKnowledgeSources(runtime: DataStoreRuntime): KnowledgeSour
               ? { connection: source.connection }
               : { kind: "workflow", workflowId: source.workflowId }),
             items,
-            failures: groups
-              .filter((g) => g.state === "failed" && g.code)
-              .map((g) => ({ code: g.code, count: g.n })),
+            failures: [
+              ...groups
+                .filter((g) => g.state === "failed" && g.code)
+                .map((g) => ({ code: g.code, count: g.n })),
+              ...(held?.n ? [{ code: "knowledge_item_removed", count: held.n }] : [])
+            ],
             ...(running
               ? {
                   running: {
@@ -288,7 +304,8 @@ export function createKnowledgeSources(runtime: DataStoreRuntime): KnowledgeSour
           discoveredAt: row.discovered_at.toISOString(),
           ...(row.fetched_at ? { fetchedAt: row.fetched_at.toISOString() } : {}),
           ...(row.withdrawn_at ? { withdrawnAt: row.withdrawn_at.toISOString() } : {}),
-          ...(row.purged_at ? { purgedAt: row.purged_at.toISOString() } : {})
+          ...(row.purged_at ? { purgedAt: row.purged_at.toISOString() } : {}),
+          ...(row.removed_at ? { removedAt: row.removed_at.toISOString() } : {})
         });
       });
     },
@@ -306,6 +323,15 @@ export function createKnowledgeSources(runtime: DataStoreRuntime): KnowledgeSour
           )
           .map((row) => row.id)
       );
+    },
+    async release(id, input, signal) {
+      return store(id, signal).change(async (sql) => {
+        const rows = await sql.run(
+          "update catalyst_kb.source_items set removed_at=null,changed_at=now() where source_id=$1::text and removed_at is not null and ($2::text[] is null or id=any($2::text[])) returning id",
+          [input.source, input.sourceItemIds ? [...input.sourceItemIds] : null]
+        );
+        return rows.length;
+      });
     },
     ingest: (call, signal) => startIngest(runtime, call, signal),
     withdraw: (input, signal) => withdrawWorkflowItems(runtime, input, signal),

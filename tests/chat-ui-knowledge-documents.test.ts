@@ -586,6 +586,27 @@ describe("the Documents section", () => {
     expect(removeButton("vertrag")).not.toBeNull();
   });
 
+  it("offers Remove for a Workflow-fed document and says no run brings it back (KBW-2b)", async () => {
+    const fed = document_("nachtimport", "indexed", { sourceId: "workflow:nightly-import" });
+    show(
+      createElement(KnowledgeDocuments, {
+        source: plantedSource({ useDocuments: () => ready({ documents: [fed, ...documents] }) }),
+        knowledgeBase: "objektunterlagen",
+        publishedRevision: 1,
+        canWrite: true
+      }),
+      "de"
+    );
+
+    await act(async () => removeButton("nachtimport")?.click());
+    const dialog = removeDialog();
+    if (!dialog) throw new Error("no confirmation");
+    expect(dialog.textContent).toContain(
+      "Der Workflow, der es gebracht hat, bringt es nicht zurück"
+    );
+    expect(dialog.textContent).toContain("Nur wer diese Wissensbasis veröffentlichen darf");
+  });
+
   it("says in German why a synced document was refused, not the instance's English", async () => {
     const source = plantedSource({
       remove: async () => ({

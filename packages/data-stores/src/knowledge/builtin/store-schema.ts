@@ -317,6 +317,17 @@ const WORKFLOW_INGEST = `
   );
 `;
 
+// KBW-2b: a Workflow-fed item a person removed by hand stays withdrawn: `removed_at` holds it
+// out of every later pass until a holder of `knowledge_base.publish` lifts the hold. Every row
+// before this release has none, so the check holds on them as they are.
+const ITEM_REMOVAL_HOLD = `
+  alter table catalyst_kb.source_items
+    add column removed_at timestamptz,
+    add constraint source_items_removed_check check (removed_at is null or state = 'withdrawn');
+  create index source_items_removed_idx on catalyst_kb.source_items (source_id)
+    where removed_at is not null;
+`;
+
 /** The tables of the store of a built-in Knowledge Base, in the order a store applies them. */
 const KNOWLEDGE_STORE_MIGRATIONS: readonly KnowledgeStoreMigration[] = [
   { number: 1, name: "documents", sql: DOCUMENTS },
@@ -356,7 +367,8 @@ const KNOWLEDGE_STORE_MIGRATIONS: readonly KnowledgeStoreMigration[] = [
   { number: 10, name: "field_extraction_budget", sql: KNOWLEDGE_FIELD_SCHEMA },
   { number: 11, name: "record_content_hash_upgrade", sql: RECORD_FIELDS_CONTENT_HASH },
   { number: 12, name: "record_projection_frame", sql: RECORD_PROJECTION_SCHEMA },
-  { number: 13, name: "workflow_ingest", sql: WORKFLOW_INGEST }
+  { number: 13, name: "workflow_ingest", sql: WORKFLOW_INGEST },
+  { number: 14, name: "item_removal_hold", sql: ITEM_REMOVAL_HOLD }
 ];
 
 /** A later applied number never proves that earlier migrations were applied. */

@@ -103,7 +103,8 @@ function render(
     connections = [{ name: "handbook-folders", title: "Handbook folders" }],
     sourceTypes,
     inBuild = false,
-    workflows
+    workflows,
+    canPublish
   }: {
     canWrite?: boolean;
     /** No revision is published yet. */
@@ -118,6 +119,8 @@ function render(
     inBuild?: boolean;
     /** The Workflows that fill the Knowledge Base, as its state names them. */
     workflows?: readonly { id: string; name: string; title: string }[];
+    /** The reader may publish the Knowledge Base. */
+    canPublish?: boolean;
   } = {}
 ): string {
   const section = createElement(KnowledgeSourcesSection, {
@@ -128,6 +131,7 @@ function render(
     sources,
     canWrite,
     ...(workflows ? { workflows } : {}),
+    ...(canPublish === undefined ? {} : { canPublish }),
     onChange: () => undefined
   });
   return renderToStaticMarkup(
@@ -395,6 +399,30 @@ describe("a source a Workflow fills (KBW-1)", () => {
       expect(html).not.toContain(locale === "de" ? "Erneut versuchen" : "Try again");
       // A Workflow-fed source alone is no empty list of synced sources.
       expect(html).not.toContain(locale === "de" ? "Noch keine Quelle." : "No source yet.");
+    }
+  );
+
+  it.each([
+    ["de", "Von Hand entfernt. Der Workflow bringt es nicht zurück.", "Wieder zulassen"],
+    ["en", "Removed by hand. The workflow does not bring it back.", "Allow again"]
+  ] as const)(
+    "offers Allow again on documents removed by hand only to who may publish, in %s (KBW-2b)",
+    (locale, reason, allow) => {
+      const held = {
+        ...fed(new Date().toISOString()),
+        failures: [{ code: "knowledge_item_removed", count: 3 }]
+      } satisfies KnowledgeSourceStatus;
+      const publisher = render(locale, {
+        sources: [],
+        status: { sources: [held] },
+        canPublish: true
+      });
+      expect(publisher).toContain(reason);
+      expect(publisher).toContain("data-knowledge-source-release");
+      expect(publisher).toContain(allow);
+      const writer = render(locale, { sources: [], status: { sources: [held] } });
+      expect(writer).toContain(reason);
+      expect(writer).not.toContain("data-knowledge-source-release");
     }
   );
 

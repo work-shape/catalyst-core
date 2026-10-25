@@ -72,6 +72,8 @@ export function sourceFailureText(code: KnowledgeSourceFailureCode): Translation
       return "knowledgeSources.failureNotAllowed";
     case "knowledge_ingest_cancelled":
       return "knowledgeSources.failureIngestCancelled";
+    case "knowledge_item_removed":
+      return "knowledgeSources.failureItemRemoved";
     default:
       return KNOWLEDGE_DOCUMENT_FAILURES[code];
   }
