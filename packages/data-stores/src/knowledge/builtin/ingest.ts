@@ -67,7 +67,7 @@ import type { SourceJobRuntime } from "./source-runtime";
 //
 // The Workflow's account is asked afresh before every page and before a complete pass
 // withdraws (KBW-2a), as a connector sync asks for `connection.use` per batch: a pass whose
-// account lost `knowledge_base.write` ends `failed` with `knowledge_source_refused`, what it
+// account lost `knowledge_base.ingest` ends `failed` with `knowledge_source_refused`, what it
 // wrote stays, and it withdraws nothing. A `fetch` item's Connection is asked on its page.
 //
 // Content is never audit data or a failure message: a failure row keeps the item's identity
@@ -200,8 +200,8 @@ function classify(row: unknown, position: number, connections: readonly string[]
 }
 
 /**
- * What the account of the pass's Workflow run may do now, read afresh from its grants: write
- * the Knowledge Base, and use which Connections (asked only where a page names one). An
+ * What the account of the pass's Workflow run may do now, read afresh from its grants: feed
+ * the Knowledge Base (`knowledge_base.ingest`), and use which Connections (asked only where a page names one). An
  * account that is gone, disabled or no longer the run's may do nothing, and neither may any
  * account on a Knowledge Base that is no longer published.
  */
@@ -209,8 +209,8 @@ async function workflowAccount(
   runtime: SourceJobRuntime,
   payload: KnowledgeSyncJobPayload,
   workflowRunId: string
-): Promise<{ write: boolean; uses(connection: string): Promise<boolean> }> {
-  const nothing = { write: false, uses: () => Promise.resolve(false) };
+): Promise<{ ingests: boolean; uses(connection: string): Promise<boolean> }> {
+  const nothing = { ingests: false, uses: () => Promise.resolve(false) };
   const { stores, clientInstanceId } = runtime.data;
   const run = await stores.workflowRuns.readRun({ clientInstanceId, id: workflowRunId });
   if (!run) return nothing;
@@ -238,7 +238,7 @@ async function workflowAccount(
       workspaceId: workspaceId ?? null
     })
   );
-  const write = access.authorize(KNOWLEDGE_BASE_ACTIONS.write, {
+  const ingests = access.authorize(KNOWLEDGE_BASE_ACTIONS.ingest, {
     kind: KNOWLEDGE_BASE_ASSET_KIND,
     assetId: knowledgeBase.id,
     name: knowledgeBase.name,
@@ -246,7 +246,7 @@ async function workflowAccount(
   }).allowed;
   let usable: Promise<Set<string>> | undefined;
   return {
-    write,
+    ingests,
     async uses(connection) {
       usable ??= stores.configAssets
         .listActiveConfigAssets({ clientInstanceId, kind: CONNECTION_ASSET_KIND })
@@ -588,7 +588,7 @@ async function workflowRunGone(runtime: SourceJobRuntime, workflowRunId: string)
 
 /**
  * Ends a running pass `failed`: `knowledge_ingest_cancelled` where its run ended first,
- * `knowledge_source_refused` where its account may no longer write. What it wrote stays, and a
+ * `knowledge_source_refused` where its account may no longer feed it. What it wrote stays, and a
  * complete pass withdraws nothing.
  */
 export async function cancelPass(
@@ -674,7 +674,7 @@ async function readPass(
       // The account is asked before every page, the first among them: a right taken away
       // stops the pass at the next page.
       const account = await workflowAccount(runtime, payload, run.workflow_run_id);
-      if (!account.write) {
+      if (!account.ingests) {
         await cancelPass(runtime, payload, control, "knowledge_source_refused");
         return false;
       }
@@ -1370,9 +1370,9 @@ async function completePass(
     return;
   }
   for (;;) {
-    // The account still writes the Knowledge Base, or the pass withdraws nothing more: a
+    // The account still feeds the Knowledge Base, or the pass withdraws nothing more: a
     // Workflow whose right was taken away keeps its documents until a person removes them.
-    if (!(await workflowAccount(runtime, payload, run.workflow_run_id)).write) {
+    if (!(await workflowAccount(runtime, payload, run.workflow_run_id)).ingests) {
       await setPass(runtime, payload, control, "dropped");
       return;
     }

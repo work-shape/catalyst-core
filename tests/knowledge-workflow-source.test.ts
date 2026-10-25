@@ -69,7 +69,7 @@ describe("the Workflow-fed source (KBW-2)", { timeout: 600_000 }, () => {
     });
   }
 
-  it("stops a pass whose account loses knowledge_base.write after its first page, and withdraws nothing (check 110)", async () => {
+  it("stops a pass whose account loses knowledge_base.ingest after its first page, and withdraws nothing (check 110)", async () => {
     const w = await world();
     const first = await w.startRun();
     await w.settle(
@@ -340,8 +340,9 @@ describe("the Workflow-fed source (KBW-2)", { timeout: 600_000 }, () => {
     // Neither the Workflow's account nor a holder of write alone lifts the hold.
     const byAccount = await second.call("retry", { source: SOURCE, sourceItemIds: [sourceItemId] });
     expect(byAccount.result.status, JSON.stringify(byAccount.result)).not.toBe("done");
-    // Refused for want of publish: the account holds write, which the retry itself asks.
-    expect(JSON.stringify(byAccount.result)).toContain(KNOWLEDGE_BASE_ACTIONS.publish);
+    // Refused already for want of write, which the retry itself asks: the account holds
+    // ingest alone (KBW-3), and lifting a hold asks publish on top.
+    expect(JSON.stringify(byAccount.result)).toContain(KNOWLEDGE_BASE_ACTIONS.write);
     const byMember = await w.instance.api.call("knowledge_bases.retry_documents", {
       params: { knowledgeBase: KB },
       payload: { source: SOURCE, sourceItemIds: [sourceItemId] },

@@ -49,14 +49,16 @@ async function auditOf(t: ConnectionOperationsFixture, type: string, principalId
 }
 
 describe("the rights a service principal can be granted", () => {
-  it("are eight use rights in one list, each a registered action and none that changes or manages", () => {
+  it("are ten use rights in one list, each a registered action and none that changes or manages", () => {
     expect(PRINCIPAL_GRANTABLE_ACTIONS).toEqual([
       "connection.use",
       "data_store.read",
       "data_store.insert",
       "data_store.execute",
       "data_store.records",
+      "knowledge_base.read",
       "knowledge_base.use",
+      "knowledge_base.ingest",
       "mail_sender.use",
       "workflow.use"
     ]);
@@ -509,7 +511,11 @@ describe("what a service principal's grant row may give", () => {
       "workflow.read_run_data",
       "data_store.write",
       "data_store.publish",
+      // KBW-3: a principal feeds and reads a Knowledge Base, and never changes, publishes or
+      // deletes it.
       "knowledge_base.write",
+      "knowledge_base.publish",
+      "knowledge_base.delete",
       "operations.approve",
       "users.manage",
       "api_access.manage",
@@ -557,7 +563,9 @@ describe("what a service principal's grant row may give", () => {
       "data_store.insert": "dataStores",
       "data_store.execute": "dataStores",
       "data_store.records": "dataStores",
+      "knowledge_base.read": "knowledge",
       "knowledge_base.use": "knowledge",
+      "knowledge_base.ingest": "knowledge",
       "workflow.use": "workflows"
     };
     // Every right of the list but a Connection's and a mail sender's belongs to one of them.

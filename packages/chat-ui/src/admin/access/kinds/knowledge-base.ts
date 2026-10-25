@@ -16,6 +16,7 @@ export const knowledgeBaseKind: GrantKindEntry<"knowledge_base"> = {
     "knowledge_base.read": "access.actionReadKnowledgeBaseDescription",
     "knowledge_base.use": "access.actionUseKnowledgeBaseDescription",
     "knowledge_base.write": "access.actionWriteKnowledgeBaseDescription",
+    "knowledge_base.ingest": "access.actionIngestKnowledgeBaseDescription",
     "knowledge_base.publish": "access.actionPublishKnowledgeBaseDescription",
     "knowledge_base.delete": "access.actionDeleteKnowledgeBaseDescription"
   }

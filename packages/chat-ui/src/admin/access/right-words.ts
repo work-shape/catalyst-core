@@ -44,6 +44,7 @@ const ownActionKeys: Record<Exclude<PlatformAction, VerbAction>, TranslationKey>
   "data_store.insert": "rights.actionDataStoreInsert",
   "data_store.execute": "rights.actionDataStoreExecute",
   "data_store.records": "rights.actionDataStoreRecords",
+  "knowledge_base.ingest": "rights.actionKnowledgeBaseIngest",
   "mail_sender.use": "rights.actionMailSenderUse",
   "operations.approve": "rights.actionOperationsApprove",
   "feedback.review": "rights.actionFeedbackReview",

@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { knowledgeIngestOutputSchema } from "@work-shape/catalyst-core";
+import {
+  asUserId,
+  knowledgeIngestOutputSchema,
+  LEGACY_LIST_GRANTOR
+} from "@work-shape/catalyst-core";
 import { runOperation } from "@work-shape/catalyst-tool-execution";
 import { clientInstanceId } from "./support/data-store-instance";
 import { eventually, required } from "./support/assertions";
@@ -253,19 +257,30 @@ describe("a Workflow puts documents into a Knowledge Base (KBW-1)", { timeout: 6
     expect(await w.states()).toEqual({ fetched: 1 });
   });
 
-  it("refuses a Workflow whose account may not write the Knowledge Base", async () => {
+  it("refuses a Workflow whose account may not feed the Knowledge Base, even holding write (KBW-3)", async () => {
     const w = await world();
     await w.instance.stores.access.deleteGrant({ clientInstanceId, grantId: w.grant.id });
+    // `write` changes the draft and adds files by hand; it never stands for `ingest`.
+    await w.instance.stores.access.createGrant({
+      clientInstanceId,
+      holderKind: "service_principal",
+      holderId: w.principal.id,
+      action: "knowledge_base.write",
+      effect: "allow",
+      scopeKind: "asset",
+      scopeId: w.kb.id,
+      grantedBy: asUserId(LEGACY_LIST_GRANTOR)
+    });
     const run = await w.startRun();
     const ingest = await run.call("ingest", { items: [item(1)] });
     expect(ingest.result, JSON.stringify(ingest.result)).toMatchObject({
       status: "denied",
-      reason: { action: "knowledge_base.write" }
+      reason: { action: "knowledge_base.ingest" }
     });
     const withdraw = await run.call("withdraw", { itemIds: [item(1).itemId] });
     expect(withdraw.result, JSON.stringify(withdraw.result)).toMatchObject({
       status: "denied",
-      reason: { action: "knowledge_base.write" }
+      reason: { action: "knowledge_base.ingest" }
     });
     expect(await w.sql`select id from catalyst_kb.sync_runs where source_id=${SOURCE}`).toEqual([]);
   });

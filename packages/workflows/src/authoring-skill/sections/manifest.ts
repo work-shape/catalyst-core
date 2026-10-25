@@ -21,7 +21,7 @@ export const manifestSection = `## What a manifest is
   name. Never use an integration, CLI or release account. Keep a \`runAs\` a definition already
   has unless the person asks to change it: a publish checks whether its publisher may let a
   Workflow act as that account.
-- \`kind\`: \`process\` unless set. Use \`data\` for a Workflow that fills or processes a Knowledge Base or Data Store. Publishing Knowledge Base \`ingest\`, \`withdraw\`, \`put_processed\` or Data Store \`records.propose\` from a process Workflow is refused with \`process_workflow_write_operation\`. A copied data template keeps \`kind: data\`.
+- \`kind\`: \`process\` unless set. Use \`data\` for a Workflow that fills or processes a Knowledge Base or Data Store. Publishing Knowledge Base \`ingest\`, \`withdraw\`, \`put_processed\` or Data Store \`records.propose\` from a process Workflow is refused with \`process_workflow_write_operation\`. Publishing \`ingest\`, \`withdraw\` or \`put_processed\` needs \`knowledge_base.ingest\` on that Knowledge Base, which the Workflow's account then holds; \`knowledge_base.write\` does not stand for it. A copied data template keeps \`kind: data\`.
 - \`labels\`: optional mapping of names to text or numbers, as literals such as
   \`client: { value: acme }\` or references such as \`client: { ref: { step: start, path: input.client } }\`.
   A reference must name the trigger. Labels are evaluated once at the start and kept by every successor.

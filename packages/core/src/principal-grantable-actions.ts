@@ -2,8 +2,10 @@ import type { PlatformAction } from "@work-shape/catalyst-asset-schemas";
 
 /**
  * The rights a grant row can give a service principal: the use rights of a resource and
- * nothing else. No right that writes, publishes, deletes or manages is here, and none over
- * users, access or API access. A kind adds its use right when it brings one; the grant write
+ * nothing else. No right that changes a definition, publishes, deletes or manages is here,
+ * and none over users, access or API access. `knowledge_base.ingest` puts documents into one
+ * Knowledge Base from a Workflow and takes back its own, and never edits its draft or removes a
+ * person's file (KBW-3). A kind adds its use right when it brings one; the grant write
  * hands out only those of them a kind of the instance registers. The list limits what the
  * grant operation writes; the evaluator answers from whatever rows the table holds.
  */
@@ -13,7 +15,9 @@ export const PRINCIPAL_GRANTABLE_ACTIONS = [
   "data_store.insert",
   "data_store.execute",
   "data_store.records",
+  "knowledge_base.read",
   "knowledge_base.use",
+  "knowledge_base.ingest",
   // On the sender `system` only (MAIL-SEND): a Connection sender asks `connection.use`.
   "mail_sender.use",
   "workflow.use"

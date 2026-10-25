@@ -205,7 +205,7 @@ export const knowledgeWriteContracts = {
     inputSchema: knowledgeIngestInputSchema,
     outputSchema: knowledgeIngestOutputSchema,
     effect: "changing",
-    right: "knowledge_base.write",
+    right: "knowledge_base.ingest",
     keyLevel: "write",
     completion: "async",
     batch: true
@@ -216,7 +216,7 @@ export const knowledgeWriteContracts = {
     inputSchema: knowledgeWithdrawInputSchema,
     outputSchema: knowledgeWithdrawOutputSchema,
     effect: "changing",
-    right: "knowledge_base.write",
+    right: "knowledge_base.ingest",
     keyLevel: "write"
   },
   pending: {
@@ -236,7 +236,7 @@ export const knowledgeWriteContracts = {
     inputSchema: knowledgePutProcessedInputSchema,
     outputSchema: operationBatchResultSchema,
     effect: "changing",
-    right: "knowledge_base.write",
+    right: "knowledge_base.ingest",
     keyLevel: "write",
     batch: true
   },
