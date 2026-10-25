@@ -24,12 +24,18 @@ export interface ManagedOAuthClients {
   get(id: string): ManagedOAuthClient | undefined;
   /** The client secret of `id`, read from the host now. The caller keeps it for one request. */
   secret(id: string): Promise<string>;
+  /**
+   * Whether release config declares the client of `id` but the host does not hold its secret:
+   * the sign-ins made with it wait for the secret instead of ending.
+   */
+  awaitingSecret(id: string): boolean;
 }
 
 /** An instance without managed clients: every part installs with the customer's own app. */
 export const NO_MANAGED_OAUTH_CLIENTS: ManagedOAuthClients = Object.freeze({
   get: () => undefined,
-  secret: () => Promise.reject(unavailable())
+  secret: () => Promise.reject(unavailable()),
+  awaitingSecret: () => false
 });
 
 function unavailable(): Error {
@@ -58,10 +64,12 @@ export async function createManagedOAuthClients(input: {
   logger: Pick<Logger, "warn">;
 }): Promise<ManagedOAuthClients> {
   const usable = new Map<string, ManagedOAuthClient & { secretName: string }>();
+  const awaiting = new Set<string>();
   for (const [id, declared] of Object.entries(input.clients)) {
     try {
       await input.secrets.resolve(declared.credentialSecret);
     } catch {
+      awaiting.add(id);
       input.logger.warn(
         { module: "connections", oauthClient: id, secretName: declared.credentialSecret },
         "The secret of a managed OAuth client is not set on the host. Its catalogue parts ask for the customer's own app registration"
@@ -93,6 +101,7 @@ export async function createManagedOAuthClients(input: {
       } catch {
         throw unavailable();
       }
-    }
+    },
+    awaitingSecret: (id: string): boolean => awaiting.has(id)
   });
 }
