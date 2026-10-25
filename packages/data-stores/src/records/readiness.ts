@@ -13,6 +13,9 @@ export async function requireRecordsUpgrade(
     exists(select 1 from pg_catalog.pg_attribute
       where attrelid=pg_catalog.to_regclass('catalyst.record_fields')
         and attname='content_sha256' and not attisdropped) and
+    exists(select 1 from pg_catalog.pg_attribute
+      where attrelid=pg_catalog.to_regclass('catalyst.record_fields')
+        and attname='corrected_value' and not attisdropped) and
     exists(select 1 from pg_catalog.pg_proc
       where oid=pg_catalog.to_regprocedure('catalyst.project_record(text,jsonb)')
         and proowner=(select oid from pg_catalog.pg_roles where rolname=$1::text)

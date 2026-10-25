@@ -27,9 +27,11 @@ import { requireRecordsUpgrade } from "./readiness";
 // A person's decision in "Prüfen": confirm a candidate, correct it with the value the cited
 // page holds, or assign a document whose object was not known to one. A confirmed or corrected
 // candidate is pinned: it wins the field, and a later extraction of the same document leaves
-// it as it is. A new decision on a field replaces the one before. The object is then computed
-// again and written into the customer's table in the same transaction, as a proposal is. The
-// audit names the table, the field and the action, never a value or a key.
+// it as it is. A correction stands beside the value read, in `corrected_value`: the candidate's
+// value, page, quote and evidence stay what its document reads. A new decision on a field
+// replaces the one before. The object is then computed again and written into the customer's
+// table in the same transaction, as a proposal is. The audit names the table, the field and the
+// action, never a value or a key.
 
 const candidate = z.object({
   knowledge_base_id: z.string(),
@@ -174,13 +176,11 @@ async function decideField(
   // Every candidate the decision pins comes from a Knowledge Base the person may use, cited or not.
   for (const knowledgeBaseId of new Set(chosen.map((row) => row.knowledge_base_id)))
     await requireUse(knowledgeBaseId);
-  // A new decision replaces the one before. A correction wrote the person's value over the
-  // candidate's, so the candidate no longer holds what its page says: it stays as evidence that
-  // does not hold, never counted as read from the document, until the document is read again.
+  // A new decision replaces the one before: a corrected candidate drops the person's value and
+  // counts again as what its document reads, with its evidence as checked.
   await sql.run(
-    `update catalyst.record_fields set state = 'extracted', decided_by = null, decided_at = null,
-       evidence = case when state = 'corrected'
-         then '{"status":"failed","reason":"value_not_parsed"}'::jsonb else evidence end
+    `update catalyst.record_fields set state = 'extracted', corrected_value = null,
+       decided_by = null, decided_at = null
      where table_name = $1::text and record_key = $2::jsonb and field_name = $3::text
        and state in ('confirmed', 'corrected')`,
     [input.table, encodedKey, input.field]
@@ -188,7 +188,7 @@ async function decideField(
   for (const row of chosen)
     await sql.run(
       `update catalyst.record_fields
-       set state = $6::text, value = coalesce($7::jsonb, value), decided_by = $8::text, decided_at = now()
+       set state = $6::text, corrected_value = $7::jsonb, decided_by = $8::text, decided_at = now()
        where table_name = $1::text and record_key = $2::jsonb and field_name = $3::text
          and knowledge_base_id = $4::text and document_id = $5::text`,
       [

@@ -174,7 +174,9 @@ Knowledge Base/document/content hash, page, quote, evidence result and date. Mis
 remain SQL NULL for assignment. Eligible fields merge by evidence precedence and then the
 document's date; an equal-rank/date disagreement clears the projected field and marks it
 `conflict`. Failed evidence and `review.always` fields are withheld. Existing confirmed and
-corrected candidates are preserved. Withdrawal and correction changes belong to REC-1b.
+corrected candidates are preserved. A corrected candidate keeps what its document reads in
+`value` and the person's value in `corrected_value` (REC-KEEP); it wins, and is compared with
+other pinned candidates, by the person's value. Withdrawal changes belong to REC-1b.
 
 The customer row uses the same SQL builder as `load`, with one key and `onConflict: update`.
 The provenance and the customer row commit together. The app role's privileges, table and

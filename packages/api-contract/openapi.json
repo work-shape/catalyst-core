@@ -12982,6 +12982,16 @@
                             "type": "string",
                             "minLength": 1
                           },
+                          "correctedValue": {
+                            "anyOf": [
+                              {
+                                "$ref": "#/components/schemas/KnowledgeFieldValue"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
                           "table": {
                             "type": "string",
                             "minLength": 1
@@ -13140,6 +13150,7 @@
                           "page",
                           "quote",
                           "name",
+                          "correctedValue",
                           "table",
                           "key",
                           "knowledgeBaseId",

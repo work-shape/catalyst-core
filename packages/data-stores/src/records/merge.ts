@@ -8,7 +8,10 @@ import type {
 } from "@work-shape/catalyst-core";
 
 export interface Candidate {
+  /** What the document reads. */
   value: JsonValue;
+  /** A person's value, held exactly while the candidate is `corrected`. */
+  correctedValue: JsonValue;
   kind: string;
   documentDate: string | null;
   state: DataStoreRecordField["state"];
@@ -62,7 +65,15 @@ export function coerceRecordKey(
   return typeof value === "string" && value !== "" ? value : null;
 }
 
-/** Equal rank/date disagreement has no winner, independently of arrival order. */
+/** The value a candidate stands for: a person's correction, or what its document reads. */
+function standing(candidate: Candidate): JsonValue {
+  return candidate.state === "corrected" ? candidate.correctedValue : candidate.value;
+}
+
+/**
+ * Equal rank/date disagreement has no winner, independently of arrival order. A corrected
+ * candidate wins, and is compared with its pinned peers, by the person's value.
+ */
 export function mergeField(
   rule: DataStoreRecordsRule,
   field: string,
@@ -92,8 +103,9 @@ export function mergeField(
         (candidate) =>
           rank(candidate) === rank(first) && candidate.documentDate === first.documentDate
       );
+  const winning = standing(first);
   const conflict = peers.some(
-    (candidate) => JSON.stringify(candidate.value) !== JSON.stringify(first.value)
+    (candidate) => JSON.stringify(standing(candidate)) !== JSON.stringify(winning)
   );
-  return { value: conflict ? null : first.value, conflict };
+  return { value: conflict ? null : winning, conflict };
 }

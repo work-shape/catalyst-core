@@ -1267,6 +1267,7 @@ describe("Prüfen: the records of a Data Store that wait for a person (REC-2)", 
     key: 1402,
     name: "kaufpreis",
     value: 485000,
+    correctedValue: null,
     page: 3,
     quote: "Kaufpreis 100",
     knowledgeBaseId: "kb_1",
@@ -1349,6 +1350,45 @@ describe("Prüfen: the records of a Data Store that wait for a person (REC-2)", 
     ]) {
       expect(german, said).toContain(said);
     }
+  });
+
+  it("shows a corrected candidate's value read beside the person's, with who and when (REC-KEEP)", () => {
+    const corrected = [
+      candidate("a1", {
+        value: 1250000,
+        correctedValue: 1205000,
+        state: "corrected",
+        decidedBy: "records-admin",
+        decidedAt: "2026-10-25T09:30:00.000Z"
+      }),
+      candidate("b1", { value: 1300000, state: "confirmed" }),
+      candidate("c1", { value: 1300000 })
+    ];
+    const english = render(
+      { kindPath: "data-stores", name: "objects" },
+      { records: true, review: review(corrected) }
+    );
+    expect(english).toContain('data-review-corrected=""');
+    expect(english).toMatch(/<dt[^>]*>Read<\/dt>/u);
+    expect(english).toContain("1,250,000");
+    expect(english).toMatch(/<dt[^>]*>Corrected<\/dt>/u);
+    expect(english).toContain(">1,205,000<");
+    expect(english).toContain(
+      `By records-admin on ${new Date("2026-10-25T09:30:00.000Z").toLocaleDateString("en")}`
+    );
+    // The field's summary names the value each candidate stands for.
+    expect(english).toContain("1,205,000 · 1,300,000 · 1,300,000");
+    const german = render(
+      { kindPath: "data-stores", name: "objects" },
+      { records: true, review: review(corrected), locale: "de" }
+    );
+    expect(german).toMatch(/<dt[^>]*>Gelesen<\/dt>/u);
+    expect(german).toContain("1.250.000");
+    expect(german).toMatch(/<dt[^>]*>Korrigiert<\/dt>/u);
+    expect(german).toContain(">1.205.000<");
+    expect(german).toContain(
+      `Von records-admin am ${new Date("2026-10-25T09:30:00.000Z").toLocaleDateString("de")}`
+    );
   });
 
   it("has no section without a records rule, nor for a reader who may not decide, and says when nothing waits", () => {

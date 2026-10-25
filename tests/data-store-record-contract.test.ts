@@ -243,6 +243,7 @@ describe("REC-0 frozen records contracts", () => {
         extractedAt: "2026-10-18T00:00:00Z",
         evidence: { status: "passed" },
         state: "extracted",
+        correctedValue: null,
         decidedBy: null,
         decidedAt: null
       }).key

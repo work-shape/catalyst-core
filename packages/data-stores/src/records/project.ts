@@ -18,6 +18,7 @@ import { recordProjection } from "./projection";
 const candidateRow = z.object({
   field_name: z.string(),
   value: z.json(),
+  corrected_value: z.json(),
   kind: z.string(),
   document_date: z.string().nullable(),
   state: z.enum(RECORD_FIELD_STATES),
@@ -57,7 +58,7 @@ export async function projectRecords(
     const key: unknown = JSON.parse(encodedKey);
     const candidates = z.array(candidateRow).parse(
       await sql.run(
-        `select field_name,value,kind,document_date::text,state,evidence from catalyst.record_fields
+        `select field_name,value,corrected_value,kind,document_date::text,state,evidence from catalyst.record_fields
               where table_name=$1::text and record_key=$2::jsonb`,
         [table.name, encodedKey]
       )
@@ -72,7 +73,11 @@ export async function projectRecords(
         name,
         candidates
           .filter((candidate) => candidate.field_name === name)
-          .map((candidate) => ({ ...candidate, documentDate: candidate.document_date }))
+          .map((candidate) => ({
+            ...candidate,
+            correctedValue: candidate.corrected_value,
+            documentDate: candidate.document_date
+          }))
       );
       fields.push([name, merged.value]);
       await sql.run(

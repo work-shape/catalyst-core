@@ -7,6 +7,8 @@ import {
   Field,
   InlineError,
   Input,
+  KeyValue,
+  KeyValueList,
   List,
   ListRow,
   LoadMore,
@@ -215,7 +217,7 @@ function ReviewObjectGroup({
             defaultExpanded={open}
             title={<code className="font-mono text-code">{field.name}</code>}
             description={field.candidates
-              .map((candidate) => reviewValueText(candidate.value, locale))
+              .map((candidate) => reviewValueText(standingValue(candidate), locale))
               .join(" · ")}
             chips={
               <Badge tone={REASON_VIEWS[field.reason].tone} size="sm">
@@ -288,30 +290,60 @@ function ReviewCandidates({
   );
 }
 
-/** What a candidate says, from which document and page, and whether its quote stands there. */
+/** The value a candidate stands for: a person's correction, or what its document reads. */
+function standingValue(candidate: DataStoreFlaggedItem): unknown {
+  return candidate.state === "corrected" ? candidate.correctedValue : candidate.value;
+}
+
+/**
+ * What a candidate says, from which document and page, and whether its quote stands there. A
+ * corrected one shows what its document reads beside the person's value, with who and when.
+ */
 function CandidateEvidence({ candidate }: { candidate: DataStoreFlaggedItem }) {
   const { locale, t } = useTranslation();
+  const corrected = candidate.state === "corrected";
+  const failed = candidate.evidence.status === "failed";
   return (
     <>
-      <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
-        <span className="min-w-0 text-body font-medium break-words text-foreground">
-          {reviewValueText(candidate.value, locale)}
-        </span>
-        {candidate.state === "confirmed" || candidate.state === "corrected" ? (
-          <Badge tone="success" size="sm">
-            {t(
-              candidate.state === "confirmed"
-                ? "dataStores.reviewConfirmed"
-                : "dataStores.reviewCorrected"
-            )}
-          </Badge>
-        ) : null}
-        {candidate.evidence.status === "failed" ? (
-          <Badge tone="warning" size="sm">
-            {t("dataStores.reviewQuoteNotFound")}
-          </Badge>
-        ) : null}
-      </div>
+      {corrected && !failed ? null : (
+        <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
+          {corrected ? null : (
+            <span className="min-w-0 text-body font-medium break-words text-foreground">
+              {reviewValueText(candidate.value, locale)}
+            </span>
+          )}
+          {candidate.state === "confirmed" ? (
+            <Badge tone="success" size="sm">
+              {t("dataStores.reviewConfirmed")}
+            </Badge>
+          ) : null}
+          {failed ? (
+            <Badge tone="warning" size="sm">
+              {t("dataStores.reviewQuoteNotFound")}
+            </Badge>
+          ) : null}
+        </div>
+      )}
+      {corrected ? (
+        <KeyValueList data-review-corrected="">
+          <KeyValue label={t("dataStores.reviewRead")} data-review-read="">
+            {reviewValueText(candidate.value, locale)}
+          </KeyValue>
+          <KeyValue label={t("dataStores.reviewCorrected")} data-review-corrected-value="">
+            <span className="font-medium text-foreground">
+              {reviewValueText(candidate.correctedValue, locale)}
+            </span>
+            {candidate.decidedBy && candidate.decidedAt ? (
+              <span className="block text-caption text-muted-foreground">
+                {t("dataStores.reviewCorrectedBy", {
+                  name: candidate.decidedBy,
+                  date: formatDate(candidate.decidedAt, locale)
+                })}
+              </span>
+            ) : null}
+          </KeyValue>
+        </KeyValueList>
+      ) : null}
       <span className="text-caption text-muted-foreground">
         {candidate.documentDate
           ? t("dataStores.reviewKindOf", {
@@ -424,7 +456,9 @@ function CorrectDialog({
 }) {
   const { locale, t } = useTranslation();
   const input = useRef<HTMLInputElement>(null);
-  const [text, setText] = useState(reviewValueText(candidate.value, locale, { grouping: false }));
+  const [text, setText] = useState(
+    reviewValueText(standingValue(candidate), locale, { grouping: false })
+  );
   const [error, setError] = useState<string | undefined>(undefined);
   const [saving, setSaving] = useState(false);
   const submit = async (event: FormEvent) => {

@@ -1,6 +1,10 @@
 import { takeGrantTurn } from "./grant-turn";
 import { RECORD_PROJECTION_SCHEMA } from "./records/projection-schema";
-import { RECORD_FIELDS_SCHEMA, RECORD_FIELDS_CONTENT_HASH } from "./records/schema";
+import {
+  RECORD_FIELDS_SCHEMA,
+  RECORD_FIELDS_CONTENT_HASH,
+  RECORD_FIELDS_CORRECTED_VALUE
+} from "./records/schema";
 import { callRecordsSetup } from "./calls";
 import { z } from "zod";
 import type {
@@ -156,6 +160,7 @@ export async function ensureStoreSchema(
          ${callRecordsSetup(record.roles.app)};
          ${RECORD_FIELDS_SCHEMA}
          ${RECORD_FIELDS_CONTENT_HASH}
+         ${RECORD_FIELDS_CORRECTED_VALUE}
          ${RECORD_PROJECTION_SCHEMA}`
       );
     }

@@ -387,40 +387,182 @@ describe("REC-2 records review through the public operation source", () => {
       expect(JSON.stringify(after)).not.toContain(left);
   });
 
-  it("never counts a correction that a later decision replaced as read from its document", async () => {
+  it("check 114: replacing a correction leaves the candidate as its document reads it, evidence passed, and counted as read again", async () => {
     const w = await world("replaced");
     await call(w, "records.propose", {
       table: "objekt",
       items: [
-        await w.item("a10", "kaufvertrag", { kaufpreis: 100 }),
-        await w.item("b10", "kaufvertrag", { kaufpreis: 200 })
+        await w.item("a10", "kaufvertrag", { kaufpreis: 1_210_000 }),
+        await w.item("b10", "kaufvertrag", { kaufpreis: 1_250_000 })
       ]
     });
     const base = { table: "objekt", key: 1402, field: "kaufpreis", knowledgeBaseId: w.kbId };
-    await call(w, "records.decide", { ...base, action: "correct", value: 150, documentId: "b10" });
+    await call(w, "records.decide", {
+      ...base,
+      action: "correct",
+      value: 1_205_000,
+      documentId: "b10"
+    });
     await call(w, "records.decide", { ...base, action: "confirm", documentId: "a10" });
-    expect(await w.target`select kaufpreis::float8 from objekt`).toEqual([{ kaufpreis: 100 }]);
+    expect(await w.target`select kaufpreis::float8 from objekt`).toEqual([
+      { kaufpreis: 1_210_000 }
+    ]);
     expect(
-      await w.target`select document_id, value, state, evidence from catalyst.record_fields order by document_id`
+      await w.target`select document_id, value, corrected_value, state, evidence from catalyst.record_fields order by document_id`
     ).toEqual([
-      { document_id: "a10", value: 100, state: "confirmed", evidence: { status: "passed" } },
+      {
+        document_id: "a10",
+        value: 1_210_000,
+        corrected_value: null,
+        state: "confirmed",
+        evidence: { status: "passed" }
+      },
       {
         document_id: "b10",
-        value: 150,
+        value: 1_250_000,
+        corrected_value: null,
         state: "extracted",
-        evidence: { status: "failed", reason: "value_not_parsed" }
+        evidence: { status: "passed" }
       }
     ]);
-    // Without the confirmed candidate, the person's old value is not written as read from b10.
+    // Without the confirmed candidate, b10 is what its document reads, and wins as such.
     await w.target`delete from catalyst.record_fields where document_id = 'a10'`;
     await call(w, "records.propose", {
       table: "objekt",
       items: [await w.item("c10", "expose", { baujahr: 1990 })]
     });
-    expect(await w.target`select kaufpreis from objekt`).toEqual([{ kaufpreis: null }]);
-    expect(
-      (await flagged(w)).items.map(({ documentId, reason }) => ({ documentId, reason }))
-    ).toEqual([{ documentId: "b10", reason: "not_evidenced" }]);
+    expect(await w.target`select kaufpreis::float8 from objekt`).toEqual([
+      { kaufpreis: 1_250_000 }
+    ]);
+    expect((await flagged(w)).items).toEqual([]);
+  });
+
+  describe("check 114: a correction keeps the value its document reads", () => {
+    /**
+     * a12 reads 1.250.000 and a person corrects it to 1.205.000. b12 is pinned beside it by hand,
+     * at `pinned`, standing for a second decided candidate, and c12 is one more proposal, so the
+     * field is projected again with both pinned candidates as peers.
+     */
+    async function corrected(label: string, pinned: number) {
+      const w = await world(label);
+      await call(w, "records.propose", {
+        table: "objekt",
+        items: [await w.item("a12", "kaufvertrag", { kaufpreis: 1_250_000 })]
+      });
+      const actor = recordsActorOf(w.clientInstanceId);
+      const { events } = await callAs(w, actor, "records.decide", {
+        table: "objekt",
+        key: 1402,
+        field: "kaufpreis",
+        action: "correct",
+        value: 1_205_000,
+        knowledgeBaseId: w.kbId,
+        documentId: "a12"
+      });
+      const pin = async () => {
+        await call(w, "records.propose", {
+          table: "objekt",
+          items: [await w.item("b12", "kaufvertrag", { kaufpreis: pinned })]
+        });
+        await w.target`update catalyst.record_fields
+          set state = 'confirmed', decided_by = 'records-other', decided_at = now()
+          where document_id = 'b12'`;
+        await call(w, "records.propose", {
+          table: "objekt",
+          items: [await w.item("c12", "kaufvertrag", { kaufpreis: 1_300_000 })]
+        });
+      };
+      return { w, actor, events, pin };
+    }
+
+    it("projects the corrected value, keeps the value read with its evidence, and audits neither", async () => {
+      const { w, actor, events } = await corrected("keep-projected", 1_205_000);
+      expect(await w.target`select kaufpreis::float8 from objekt`).toEqual([
+        { kaufpreis: 1_205_000 }
+      ]);
+      expect(
+        await w.target`select value, corrected_value, evidence, state, decided_by from catalyst.record_fields`
+      ).toEqual([
+        {
+          value: 1_250_000,
+          corrected_value: 1_205_000,
+          evidence: { status: "passed" },
+          state: "corrected",
+          decided_by: actor.id
+        }
+      ]);
+      const decided = events.find((event) => event.type === "data_store.record_decided");
+      expect(decided).toMatchObject({
+        metadata: { store: "findings", table: "objekt", field: "kaufpreis", action: "correct" }
+      });
+      expectNoField(decided, 1_250_000, 1_205_000, 1402);
+      // A re-sync of the document leaves both values as they are.
+      await call(w, "records.propose", {
+        table: "objekt",
+        items: [await w.item("a12", "kaufvertrag", { kaufpreis: 1_250_000 })]
+      });
+      expect(
+        await w.target`select value, corrected_value, state from catalyst.record_fields`
+      ).toEqual([{ value: 1_250_000, corrected_value: 1_205_000, state: "corrected" }]);
+    });
+
+    it("compares pinned peers by the corrected value, not the value read", async () => {
+      // b12 says 1.205.000, as a12 was corrected to: they agree, though a12 reads 1.250.000.
+      const agreeing = await corrected("keep-agree", 1_205_000);
+      await agreeing.pin();
+      expect(await agreeing.w.target`select kaufpreis::float8 from objekt`).toEqual([
+        { kaufpreis: 1_205_000 }
+      ]);
+      expect((await flagged(agreeing.w)).items).toEqual([]);
+      // b12 says 1.250.000, as a12 reads: it disagrees with the correction.
+      const disagreeing = await corrected("keep-disagree", 1_250_000);
+      await disagreeing.pin();
+      expect(await disagreeing.w.target`select kaufpreis from objekt`).toEqual([
+        { kaufpreis: null }
+      ]);
+    });
+
+    it("shows both values in Prüfen with who corrected and when, to a reader who may use the Knowledge Base and to no other", async () => {
+      const { w, actor, pin } = await corrected("keep-shown", 1_300_000);
+      await pin();
+      const { items } = await flagged(w);
+      expect(items.map(({ documentId, reason }) => ({ documentId, reason }))).toEqual([
+        { documentId: "a12", reason: "conflict" },
+        { documentId: "b12", reason: "conflict" },
+        { documentId: "c12", reason: "conflict" }
+      ]);
+      expect(items[0]).toMatchObject({
+        value: 1_250_000,
+        correctedValue: 1_205_000,
+        quote: "1250000",
+        evidence: { status: "passed" },
+        state: "corrected",
+        decidedBy: actor.id,
+        decidedAt: expect.any(String)
+      });
+      expect(items[1]).toMatchObject({ value: 1_300_000, correctedValue: null });
+      const { output } = await callAs(w, reviewerOf(w), "records.flagged", { limit: 100 });
+      expect(output).toEqual({ items: [] });
+      expectNoField(output, 1_250_000, 1_205_000);
+    });
+
+    it("leaves both values with the candidate's row: a withdrawn document shows neither, and its purge leaves no copy", async () => {
+      const { w, pin } = await corrected("keep-withdrawn", 1_300_000);
+      await pin();
+      await w.source`update catalyst_kb.documents set withdrawn_at = now() where id = 'a12'`;
+      const after = await flagged(w);
+      expect(after.items.map((item) => item.documentId)).toEqual(["b12", "c12"]);
+      expectNoField(after, 1_250_000, 1_205_000);
+      // The purge deletes the candidate's row: no other row of the store's own schema holds
+      // either value.
+      await w.target`delete from catalyst.record_fields where document_id = 'a12'`;
+      expect(
+        await w.target`select count(*)::int as n from catalyst.record_fields
+          where value::text in ('1250000', '1205000') or corrected_value::text in ('1250000', '1205000')`
+      ).toEqual([{ n: 0 }]);
+      for (const row of await w.target`select * from catalyst.loads`)
+        expectNoField(row, 1_250_000, 1_205_000);
+    });
   });
 
   it("files one Inbox notice per store whose count is what waits now, not one per field or proposal", async () => {

@@ -735,6 +735,35 @@ describe("data-store review", () => {
     expect(Object.fromEntries(url.searchParams)).toEqual({ table: "objekt", limit: "20" });
   });
 
+  it("prints a corrected candidate's value read beside the person's (REC-KEEP)", async () => {
+    const item = {
+      table: "objekt",
+      key: 1402,
+      name: "kaufpreis",
+      value: 1250000,
+      correctedValue: 1205000,
+      page: 1,
+      quote: "1250000",
+      knowledgeBaseId: "kb-1",
+      documentId: "doc-1",
+      kind: "kaufvertrag",
+      documentDate: "2026-10-17",
+      extractedAt: "2026-10-18T10:00:00.000Z",
+      evidence: { status: "passed" },
+      state: "corrected",
+      decidedBy: "records-admin",
+      decidedAt: "2026-10-25T09:30:00.000Z",
+      reason: "conflict"
+    };
+    const result = await run(["data-store", "review", "list", "findings"], {
+      fetchImpl: apiFetch(() => Response.json({ items: [item] }))
+    });
+    expect(result.code, result.err).toBe(0);
+    expect(result.out).toContain("value: 1250000");
+    expect(result.out).toContain("correctedValue: 1205000");
+    expect(result.out).toContain("decidedBy: records-admin");
+  });
+
   it("sends a correction with its JSON value and citation, and refuses an incomplete one offline", async () => {
     const bodies: unknown[] = [];
     const fetchImpl = apiFetch(async (request) => {

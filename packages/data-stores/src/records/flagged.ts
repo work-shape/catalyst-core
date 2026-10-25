@@ -105,6 +105,7 @@ const candidateRow = z.object({
   document_id: z.string(),
   kind: z.string(),
   value: z.json(),
+  corrected_value: z.json(),
   page: z.number().int(),
   quote: z.string(),
   document_date: z.string().nullable(),
@@ -370,7 +371,7 @@ export const recordsFlagged: StoreVerb = {
       limits: { ...target.limits, maxRows: input.limit + 1 },
       sql: `with ${CANDIDATES}
         select table_name, record_key, field_name, knowledge_base_id, document_id, kind, value,
-          page, quote, document_date::text as document_date,
+          corrected_value, page, quote, document_date::text as document_date,
           to_json(extracted_at) #>> '{}' as extracted_at, evidence, state, decided_by,
           to_json(decided_at) #>> '{}' as decided_at, reason
         from candidates
@@ -413,6 +414,7 @@ export const recordsFlagged: StoreVerb = {
           key: row.record_key,
           name: row.field_name,
           value: row.value,
+          correctedValue: row.corrected_value,
           page: row.page,
           quote: row.quote,
           knowledgeBaseId: row.knowledge_base_id,

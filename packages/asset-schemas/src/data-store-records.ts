@@ -123,6 +123,9 @@ export const dataStoreRecordsFlaggedInputSchema = z.strictObject({
     )
 });
 export const dataStoreRecordFieldSchema = fieldSchema.extend({
+  // `value` is what the document reads; a person's correction stands beside it, held exactly
+  // while the state is `corrected` (REC-KEEP).
+  correctedValue: knowledgeFieldValueSchema.nullable(),
   table: name,
   // Unresolved keys go to review, without writing a customer row.
   key: key.nullable(),

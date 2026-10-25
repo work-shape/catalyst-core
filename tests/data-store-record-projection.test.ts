@@ -84,8 +84,81 @@ describe("REC-1a records projection through the public operation source", () => 
       ).toEqual([{ n: 1 }]);
       if (kind === "owned")
         expect(await sql`select number from catalyst_kb.migrations order by number`).toHaveLength(
-          15
+          16
         );
+    }
+  );
+
+  it.each(["customer", "owned"] as const)(
+    "check 114: a %s store upgraded from before keeps its corrected fields' winning values",
+    async (kind) => {
+      const w = await world(`keep-upgrade-${kind}`);
+      const record = kind === "owned" ? await recordOf(w, w.kbId) : w.record;
+      const sql = connect(record.location.database);
+      // Rows as a store before the release holds them: a correction wrote the person's value
+      // over the value read, and its evidence stayed as checked.
+      await sql`alter table catalyst.record_fields
+        drop constraint record_fields_corrected_value_check, drop column corrected_value`;
+      await sql`insert into catalyst.record_fields
+        (table_name, record_key, field_name, knowledge_base_id, document_id, kind, value, page,
+         quote, extracted_at, evidence, state, decided_by, decided_at)
+        values
+        ('objekt', '1402', 'kaufpreis', ${w.kbId}, 'a13', 'kaufvertrag', '1205000', 1, '1250000',
+         now(), '{"status":"passed"}', 'corrected', 'records-admin', now()),
+        ('objekt', '1402', 'baujahr', ${w.kbId}, 'a13', 'kaufvertrag', '1990', 1, '1990',
+         now(), '{"status":"passed"}', 'confirmed', 'records-admin', now()),
+        ('objekt', '1402', 'wohnflaeche', ${w.kbId}, 'a13', 'kaufvertrag', '80', 1, '80',
+         now(), '{"status":"passed"}', 'extracted', null, null)`;
+      if (kind === "owned") {
+        await sql`delete from catalyst_kb.migrations where number = 16`;
+        await db.store.dataStores.putDataStore({
+          ...record,
+          level: 15,
+          migrations: record.migrations.filter(({ number }) => number !== 16)
+        });
+      }
+      await migrateTogether(w, record.id);
+      expect(
+        await sql`select field_name, value, corrected_value, evidence, state
+          from catalyst.record_fields order by field_name`
+      ).toEqual([
+        {
+          field_name: "baujahr",
+          value: 1990,
+          corrected_value: null,
+          evidence: { status: "passed" },
+          state: "confirmed"
+        },
+        {
+          // The value read is lost: the person's value stands in for it, never counted as read.
+          field_name: "kaufpreis",
+          value: 1_205_000,
+          corrected_value: 1_205_000,
+          evidence: { status: "failed", reason: "value_not_parsed" },
+          state: "corrected"
+        },
+        {
+          field_name: "wohnflaeche",
+          value: 80,
+          corrected_value: null,
+          evidence: { status: "passed" },
+          state: "extracted"
+        }
+      ]);
+      if (kind === "owned") {
+        expect(await sql`select number from catalyst_kb.migrations where number = 16`).toEqual([
+          { number: 16 }
+        ]);
+        return;
+      }
+      // Projected again, the corrected field keeps the person's value.
+      await call(w, "records.propose", {
+        table: "objekt",
+        items: [await w.item("b13", "expose", { adresse: "Teststraße" })]
+      });
+      expect(
+        await w.target`select adresse, baujahr, kaufpreis::float8, wohnflaeche::float8 from objekt`
+      ).toEqual([{ adresse: "Teststraße", baujahr: 1990, kaufpreis: 1_205_000, wohnflaeche: 80 }]);
     }
   );
 

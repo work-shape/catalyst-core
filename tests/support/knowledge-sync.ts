@@ -143,7 +143,7 @@ export function useKnowledgeSync({ withDataStoreJobs = false } = {}) {
         name: `knowledge-base:${KB}`
       });
       expect(row?.status).toBe("ready");
-      expect(row?.level).toBe(15);
+      expect(row?.level).toBe(16);
       return required(row);
     });
     const url = new URL(await fileTestDatabaseUrl());
