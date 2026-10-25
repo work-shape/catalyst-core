@@ -139,7 +139,7 @@ describe("the local agent's first minute (ADISC-1)", () => {
   });
 
   // Newer than whatever this build is, so a cut to any version keeps the cases newer.
-  const [major, minor, patch] = RELEASE_VERSION.split(/[.+-]/u).map(Number);
+  const [major = 0, minor = 0, patch = 0] = RELEASE_VERSION.split(/[.+-]/u).map(Number);
   it.each([
     `${major}.${minor}.${patch + 1}`,
     `${major}.${minor + 1}.0-rc.1`,
