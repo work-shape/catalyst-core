@@ -10,7 +10,6 @@ import {
   createAssetRepoJobs,
   createPageBuildClient,
   createPageBundleJobs,
-  createSandboxAssetRepo,
   createSandboxPageBuild,
   deriveAppContentKey,
   storePageFileSet,
@@ -37,7 +36,7 @@ import {
 } from "./access-instance";
 import { MemoryObjectStorage } from "./memory-object-storage";
 import type { TestCallInput } from "./operations";
-import { assetRepoCommandFromSource } from "./asset-repo";
+import { localAssetRepoCommit } from "./asset-repo";
 import { pageBuildCommandFromSource } from "./page-build";
 import { callTestPath, type TestServerOptions } from "./test-instance";
 
@@ -256,13 +255,7 @@ export async function setupAppInstance(options: AppInstanceOptions = {}): Promis
         objects,
         workspaceObjects: undefined,
         logger: silent,
-        commit:
-          options.commits ??
-          createSandboxAssetRepo({
-            sandbox: new LocalWorkspaceCommandProcessExecutor(),
-            tempRoot: join(scratch, "commits"),
-            command: `'${process.execPath}' '${await assetRepoCommandFromSource()}'`
-          })
+        commit: options.commits ?? (await localAssetRepoCommit(join(scratch, "commits")))
       }).handlers
     });
     committer.start();

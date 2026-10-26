@@ -3,5 +3,6 @@
 export {
   checkStorableTexts,
   isStorableText,
-  readYamlData
+  readYamlData,
+  writeYamlData
 } from "@work-shape/catalyst-asset-schemas";

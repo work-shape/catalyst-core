@@ -1,3 +1,6 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { createClientInstanceExecutionAssembly } from "../../packages/client-assembly/src/app";
 import { inject, afterAll, afterEach, beforeEach } from "vitest";
 import {
@@ -11,6 +14,7 @@ import {
 import {
   createChatServer,
   createAgentAssetKind,
+  createAssetRepoJobs,
   createChatServerJobs,
   createOperationCalls,
   createSkillAssetKind,
@@ -30,9 +34,12 @@ import {
   SecretNotResolvedError,
   type HttpRuntime,
   type JobWorker,
+  type Logger,
   type PlatformStores
 } from "@work-shape/catalyst-core";
+import { createFilesystemObjectStorage } from "@work-shape/catalyst-object-storage";
 import { createStaticConfigAssetSource } from "./static-config-asset-source";
+import { localAssetRepoCommit } from "./asset-repo";
 import { createPostgresStores, type PostgresStores } from "@work-shape/catalyst-postgres-store";
 import { fileTestDatabaseUrl, closeFileTestDatabase, resetFileTestDatabase } from "./test-database";
 import { addTestStoreHelpers, type TestStore } from "./test-store";
@@ -355,11 +362,14 @@ async function createConfiguredInstance(
       DATABASE_URL: await fileTestDatabaseUrl(input.fixtureFile)
     }
   });
+  let commits: { stop(): Promise<void> } | undefined;
   try {
     if (input.seedAssets !== false) await seedTestAssets(app);
     // Runs execute as jobs of this worker, as they do behind `listen`. The API's other jobs
     // stay with `getTestJobs`, so a test still decides when those run.
     if (input.startAgentRunJobs !== false) app.agentRunJobs?.start();
+    commits = await startWorkflowCommits(app, input.capabilities ?? []);
+    const served = commits;
     return bindInstance(app.store, {
       server: testFramework(app).app,
       runtime: app,
@@ -367,12 +377,67 @@ async function createConfiguredInstance(
       agentRunJobs: app.agentRunJobs,
       config: app.config,
       closed: false,
-      cleanup: () => app.close()
+      async cleanup() {
+        try {
+          await served?.stop();
+        } finally {
+          await app.close();
+        }
+      }
     });
   } catch (error) {
+    await commits?.stop();
     await app.close();
     throw error;
   }
+}
+
+const silentLogger: Logger = {
+  debug() {},
+  info() {},
+  warn() {},
+  error() {},
+  child: () => silentLogger
+};
+
+/**
+ * The commits of an instance whose Workflow saves are commits (WF-GIT-1): a deployment makes
+ * them on its workspace command worker, and the test instance beside its API, with the git of
+ * this machine. Nothing for an instance without Workflows or without a `files` store.
+ */
+async function startWorkflowCommits(
+  app: Awaited<ReturnType<typeof createClientInstanceApp>>,
+  capabilities: NonNullable<TestAppInput["capabilities"]>
+): Promise<{ stop(): Promise<void> } | undefined> {
+  const files = app.config.infrastructure.objectStorage.files;
+  const modules = resolveInstanceModules(app.config, capabilities).snapshot;
+  const root = files?.provider === "filesystem" ? files.root : undefined;
+  if (typeof root !== "string" || !modules.isEnabled("workflows")) return undefined;
+  const tempRoot = await mkdtemp(join(tmpdir(), "test-instance-commits-"));
+  const worker = createJobWorker({
+    stores: app.store,
+    clientInstanceId: asClientInstanceId(app.config.clientInstance.id),
+    logger: silentLogger,
+    modules,
+    handlers: createAssetRepoJobs({
+      clientInstanceId: asClientInstanceId(app.config.clientInstance.id),
+      stores: app.store,
+      objects: createFilesystemObjectStorage(root),
+      workspaceObjects: undefined,
+      logger: silentLogger,
+      commit: await localAssetRepoCommit(tempRoot)
+    }).handlers
+  });
+  worker.start();
+  return {
+    async stop() {
+      try {
+        await worker.stop();
+      } finally {
+        await rm(tempRoot, { recursive: true, force: true });
+      }
+    }
+  };
 }
 
 const providerOfNoAnswers: ScriptedModelProvider = {

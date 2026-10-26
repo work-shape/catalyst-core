@@ -83,7 +83,9 @@ export interface ModuleSnapshot {
   isEnabled(name: ModuleName): boolean;
   /**
    * The module that owns the named contribution, when that module is off. Nothing for a
-   * contribution of a module that is on and for one no module owns, which is core.
+   * contribution of a module that is on and for one no module owns, which is core. A
+   * contribution two modules list, such as the commits of asset repositories that Apps and
+   * Workflows both make, is on while either module is.
    */
   offModuleOf(contribution: ModuleContribution, name: string): ModuleName | undefined;
 }
@@ -184,6 +186,12 @@ export function createModuleRegistry(definitions: readonly ModuleDefinition[]): 
         }
       }
       const off = modules.filter((definition) => !enabled.has(definition.name));
+      const on = modules.filter((definition) => enabled.has(definition.name));
+      const lists = (
+        definition: ModuleDefinition,
+        contribution: ModuleContribution,
+        name: string
+      ) => definition[contributionLists[contribution]]?.includes(name) === true;
       return Object.freeze({
         modules: Object.freeze(
           MODULE_NAMES.map((name) =>
@@ -192,8 +200,9 @@ export function createModuleRegistry(definitions: readonly ModuleDefinition[]): 
         ),
         isEnabled: (name: ModuleName) => enabled.has(name),
         offModuleOf: (contribution: ModuleContribution, name: string) =>
-          off.find((definition) => definition[contributionLists[contribution]]?.includes(name))
-            ?.name
+          on.some((definition) => lists(definition, contribution, name))
+            ? undefined
+            : off.find((definition) => lists(definition, contribution, name))?.name
       });
     }
   });

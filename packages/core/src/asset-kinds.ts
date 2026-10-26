@@ -122,8 +122,9 @@ export type AssetLifecycle = (typeof ASSET_LIFECYCLES)[number];
 /** What a revision holds: its config alone, or a config with an immutable file set. */
 export type AssetRepresentation = (typeof ASSET_REPRESENTATIONS)[number];
 /**
- * Where the files of a revision of a `files` kind are kept: as a file set, or as a commit of
- * the repository of the asset, with the ledger of its bundles.
+ * Where the files of a revision are kept: as a file set, or as a commit of the repository of
+ * the asset beside its file set, with the ledger of its bundles. A `config` kind whose folder
+ * sits beside its config names `repository` alone; a `files` kind names either.
  */
 export type AssetContent = "file_set" | "repository";
 
@@ -164,7 +165,10 @@ export interface AssetKindDefinition<Definition, Kind extends string = string> {
   representation?: AssetRepresentation;
   /** The file of a `files` kind that holds its manifest, such as `app.yaml`. */
   manifestFile?: string;
-  /** How a `files` kind keeps the files of a revision. `file_set` when left out. */
+  /**
+   * How a kind keeps the files of a revision. `file_set` when left out for a `files` kind; a
+   * `config` kind names `repository` where every write of its folder is a commit.
+   */
   content?: AssetContent;
   /** Who may own an asset of the kind. The instance alone when left out. */
   owners?: readonly AssetScope["kind"][];
@@ -231,7 +235,7 @@ export interface RegisteredAssetKind<Kind extends string = string> {
   readonly actions: Readonly<AssetKindActions>;
   readonly lifecycle: AssetLifecycle;
   readonly representation: AssetRepresentation;
-  /** Set for a `files` kind alone. */
+  /** Set for every `files` kind, and for a `config` kind whose folder is a repository. */
   readonly content?: AssetContent;
   readonly manifestFile?: string;
   readonly owners: readonly AssetScope["kind"][];
@@ -295,7 +299,8 @@ export function defineAssetKind<Definition, Kind extends string>(
       `Asset kind '${definition.kind}' calls operations from a draft and has no draft`
     );
   }
-  if (definition.content !== undefined && representation !== "files") {
+  // A config kind holds no file set of its own to name: its folder is a repository or nothing.
+  if (definition.content === "file_set" && representation !== "files") {
     throw new AppError(
       "VALIDATION_FAILED",
       `Asset kind '${definition.kind}' names how its files are kept and holds no files`
@@ -310,7 +315,11 @@ export function defineAssetKind<Definition, Kind extends string>(
     lifecycle,
     representation,
     ...(definition.manifestFile === undefined ? {} : { manifestFile: definition.manifestFile }),
-    ...(representation === "files" ? { content: definition.content ?? "file_set" } : {}),
+    ...(representation === "files"
+      ? { content: definition.content ?? "file_set" }
+      : definition.content === undefined
+        ? {}
+        : { content: definition.content }),
     owners: Object.freeze([...(definition.owners ?? ["instance"])]),
     draftCalls: definition.draftCalls === true,
     read(inputs: readonly unknown[]): AssetKindReading {
@@ -421,6 +430,18 @@ export function createAssetKindRegistry<Kind extends RegisteredAssetKind>(
       throw new AppError(
         "VALIDATION_FAILED",
         `Asset kind '${kind.kind}' checks who makes a revision live and has no published revision: only a kind with the lifecycle 'draft_published' may set 'authorizeLive'`
+      );
+    }
+    // A config kind whose writes are commits commits its folder: only a kind that reads and
+    // writes its config as a folder has one (`revisionFiles`).
+    if (
+      kind.representation === "config" &&
+      kind.content === "repository" &&
+      !("revisionFiles" in kind && kind.revisionFiles !== undefined)
+    ) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        `Asset kind '${kind.kind}' keeps its config in a repository and has no folder to commit: only a kind with 'revisionFiles' may name the content 'repository'`
       );
     }
     byKind.set(kind.kind, kind);

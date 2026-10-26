@@ -189,16 +189,16 @@ export function putCalls(
           { ...call, buildConversationId: conversation.id },
           write
         );
+        const publishedRevision =
+          "publishedRevision" in written && typeof written.publishedRevision === "number"
+            ? written.publishedRevision
+            : undefined;
         return proposes
           ? {
               saved: true,
-              revision:
-                "publishedRevision" in written
-                  ? (written.publishedRevision ?? written.revision)
-                  : written.revision,
+              revision: publishedRevision ?? written.revision,
               draftRevision: written.revision,
-              publishedRevision:
-                "publishedRevision" in written ? written.publishedRevision : undefined
+              publishedRevision
             }
           : { saved: true, revision: written.revision };
       } catch (error) {

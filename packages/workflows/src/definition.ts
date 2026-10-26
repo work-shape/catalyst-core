@@ -1,4 +1,5 @@
 import {
+  AppError,
   AGENTS_RUN_OPERATION,
   RUN_AGENT_TOOL_NAME,
   WORKFLOW_KINDS,
@@ -8,6 +9,7 @@ import {
   WORKFLOW_START_KEY_INPUT,
   WORKFLOW_STEP_TYPES,
   readYamlData,
+  writeYamlData,
   workflowBlockIssues,
   workflowLimitsSchema,
   workflowLiteralOrReferenceSchema,
@@ -359,6 +361,60 @@ export function readWorkflowManifest(text: string): WorkflowDefinitionResult {
   return read.ok
     ? parseWorkflowManifest(read.value)
     : { ok: false, issues: [{ path: "", message: read.issue.message }] };
+}
+
+/**
+ * `workflow.yaml` as the server writes it from a stored definition, which jsonb keeps in no
+ * order of its own: the value as it is, with the keys of each object in the order of the
+ * definition schema and every key the schema does not place after them in byte order. The same
+ * definition gives the same bytes, however its keys were sent. A value nested deeper than a
+ * file may be is refused as a save refuses it.
+ */
+export function writeWorkflowManifest(manifest: unknown): string {
+  if (!withinNesting(manifest)) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      `workflow.yaml is nested deeper than ${WORKFLOW_MANIFEST_MAX_NESTING} levels`,
+      { reason: "definition_invalid" }
+    );
+  }
+  const sorted = withSortedKeys(manifest);
+  // The schema answers its own keys in the order it names them, and a refused value none.
+  const parsed = manifestSchema.safeParse(sorted);
+  return writeYamlData(parsed.success ? orderedLike(sorted, parsed.data) : sorted);
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function withSortedKeys(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(withSortedKeys);
+  if (!isPlainObject(value)) return value;
+  return Object.fromEntries(
+    Object.keys(value)
+      .sort()
+      .map((key) => [key, withSortedKeys(value[key])])
+  );
+}
+
+/** `value` with the keys of each object in the order `template` holds them, where it does. */
+function orderedLike(value: unknown, template: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item, index) =>
+      orderedLike(item, Array.isArray(template) ? template[index] : undefined)
+    );
+  }
+  if (!isPlainObject(value)) return value;
+  const placed = isPlainObject(template) ? Object.keys(template).filter((key) => key in value) : [];
+  const known = new Set(placed);
+  const rest = Object.keys(value).filter((key) => !known.has(key));
+  return Object.fromEntries(
+    [...placed, ...rest].map((key) => [
+      key,
+      orderedLike(value[key], isPlainObject(template) ? template[key] : undefined)
+    ])
+  );
 }
 
 function canonical(value: JsonValue): JsonValue {

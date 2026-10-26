@@ -257,8 +257,9 @@ function planItems(options: AssetWorkflowOptions, input: AssetSyncInput): Planne
     if (!kind) {
       return refuse(`Asset kind '${item.kind}' is not registered`);
     }
-    if (kind.representation === "files") {
-      // Its revision is a set of files that is built and stored per write, which no batch is.
+    if (kind.representation === "files" || kind.content === "repository") {
+      // Its revision is a set of files that is built and stored, and committed, per write,
+      // which no batch is.
       return refuse(
         `A ${kind.kind} holds files: it is written with 'assets.put' and deleted with 'assets.delete', one at a time`
       );

@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { chmod, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
@@ -15,6 +16,13 @@ import {
   type CommitFolderResult,
   type MaterialiseResult
 } from "@work-shape/catalyst-asset-repo";
+import {
+  readObjectBytes,
+  type AssetRepoBundle,
+  type ObjectStorage
+} from "@work-shape/catalyst-core";
+import { createSandboxAssetRepo, type AssetRepoCommitRunner } from "@work-shape/catalyst-server";
+import { LocalWorkspaceCommandProcessExecutor } from "@work-shape/catalyst-tool-execution";
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../packages/asset-repo");
 const run = promisify(execFile);
@@ -254,4 +262,64 @@ export async function writeExecutable(path: string, content: string): Promise<vo
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, content);
   await chmod(path, 0o755);
+}
+
+/** What makes the commits of a test instance: the command of this checkout, with the git of this machine. */
+export async function localAssetRepoCommit(tempRoot: string): Promise<AssetRepoCommitRunner> {
+  return createSandboxAssetRepo({
+    sandbox: new LocalWorkspaceCommandProcessExecutor(),
+    tempRoot,
+    command: `'${process.execPath}' '${await assetRepoCommandFromSource()}'`
+  });
+}
+
+/** One commit of an asset's repository, read with git from the bundles of its ledger. */
+export async function readRepoCommit(
+  objects: ObjectStorage,
+  bundles: readonly AssetRepoBundle[],
+  commit: string
+): Promise<{
+  /** Each file of the commit's tree by its path, as text. */
+  files: Record<string, string>;
+  /** How many commits lead to it, itself included. */
+  commits: number;
+  parent?: string;
+  author: string;
+  tree: string;
+}> {
+  const scratch = await mkdtemp(join(tmpdir(), "asset-repo-read-"));
+  try {
+    const repository = join(scratch, "repo.git");
+    await mkdir(repository);
+    await testGit(repository, ["init", "--bare", "--quiet"]);
+    for (const [index, bundle] of bundles.entries()) {
+      const file = join(scratch, `${index}.bundle`);
+      await writeFile(file, await readObjectBytes(objects, bundle.objectKey));
+      await testGit(repository, ["bundle", "unbundle", file]);
+    }
+    const paths = (await testGit(repository, ["ls-tree", "-r", "--name-only", commit]))
+      .split("\n")
+      .filter((path) => path !== "");
+    const files: Record<string, string> = {};
+    for (const path of paths) {
+      // Not trimmed, as `testGit` answers: the bytes of the file as they are.
+      const { stdout } = await run("git", ["cat-file", "blob", `${commit}:${path}`], {
+        env: { PATH: process.env.PATH ?? "", GIT_DIR: repository },
+        encoding: "utf8"
+      });
+      files[path] = stdout;
+    }
+    const parents = (await testGit(repository, ["rev-list", "--parents", "-n", "1", commit]))
+      .split(" ")
+      .slice(1);
+    return {
+      files,
+      commits: Number(await testGit(repository, ["rev-list", "--count", commit])),
+      ...(parents[0] === undefined ? {} : { parent: parents[0] }),
+      author: await testGit(repository, ["log", "-1", "--format=%an", commit]),
+      tree: await testGit(repository, ["rev-parse", `${commit}^{tree}`])
+    };
+  } finally {
+    await rm(scratch, { recursive: true, force: true });
+  }
 }
