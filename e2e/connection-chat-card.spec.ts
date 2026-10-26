@@ -287,7 +287,7 @@ test("de: a refused call of a personal Connection shows Connect by itself, and t
     await expect(card).toHaveAttribute("data-connect-card", "connect");
     await expect(card).toContainText(`${TITLE} verbinden`);
     // The agent read the refusal's own code, and that the person connects from this card.
-    await expect(page.getByText(/"code": "connection_not_connected"/u)).toBeVisible();
+    await expect(page.getByText(/"code": ?"connection_not_connected"/u)).toBeVisible();
     await expect(page.getByText(/Karte zum Verbinden|Connect card in this chat/u)).toBeVisible();
     await expect(card.locator('[data-connect-card-connect="connect"]')).toHaveText("Verbinden");
     await expect(card).not.toContainText("@");
