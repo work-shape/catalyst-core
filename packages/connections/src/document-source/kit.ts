@@ -23,7 +23,7 @@ export const DOCUMENT_SOURCE_KIT_RULES = [
   "stable_ids",
   /** An item whose bytes changed is listed with another version. */
   "version_changes_with_bytes",
-  /** A fetch under the cap answers the listed size in bytes. */
+  /** A fetch under the cap answers the listed size in bytes, where the source lists one. */
   "fetch_bytes",
   /** A fetch of an item over the cap ends with `over_limit`, and no byte past the cap. */
   "size_cap",
@@ -225,12 +225,16 @@ export async function verifyDocumentSource(
     }
   }
   const files = first.filter((item) => item.id !== harness.oversizedItemId);
-  const [smallest] = [...files].sort((a, b) => a.size - b.size);
+  const [smallest] = [...files].sort((a, b) => (a.size ?? 0) - (b.size ?? 0));
   if (smallest) {
-    const whole = await fetchBytes(smallest, Math.max(harness.maxBytes, smallest.size), context);
+    const whole = await fetchBytes(
+      smallest,
+      Math.max(harness.maxBytes, smallest.size ?? 0),
+      context
+    );
     if (whole.code !== undefined) {
       report("fetch_bytes", `a fetch under the cap failed with ${whole.code}`);
-    } else if (whole.bytes !== smallest.size) {
+    } else if (smallest.size !== undefined && whole.bytes !== smallest.size) {
       report(
         "fetch_bytes",
         `a fetch answered ${whole.bytes} bytes for a listed size of ${smallest.size}`

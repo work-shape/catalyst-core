@@ -226,6 +226,27 @@ describe("the catalogue of an instance", () => {
     expect(none.entries.every((view) => !view.offered)).toBe(true);
   });
 
+  it("opens a host two parts of one entry share once", () => {
+    const source = required(loadCatalogueEntries(SUITE)[0]).source;
+    const shared = required(source?.egress[0]);
+    const both = createCatalogue({
+      entries: [
+        parsed(
+          entry(
+            { source },
+            { egress: [{ protocol: "https", host: "ledger.example.test", port: 443 }, shared] }
+          )
+        )
+      ],
+      named: ["ledger"],
+      connectorTypes: registry()
+    });
+    expect(both.egress.map((host) => `${host.host}:${host.port}`)).toEqual([
+      "ledger.example.test:443",
+      `${shared.host}:${shared.port}`
+    ]);
+  });
+
   it("ticks only reading operations the entry recommends, and enables nothing", () => {
     const tools = required(
       required(catalogueOf(shipped(), ["sample-accounting"]).entries[0]).parts[0]

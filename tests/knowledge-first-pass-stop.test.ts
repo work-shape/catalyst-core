@@ -181,6 +181,39 @@ describe("the first import stops for a confirmation (KB-ISO-1b)", { timeout: 600
     ]);
   });
 
+  it("assumes a size per format for a source that lists none, and indexes the bytes it fetches (CS-16)", async () => {
+    const world = await setup((source) => ({
+      ...source,
+      async list(input, context) {
+        const page = await source.list(input, context);
+        return { ...page, items: page.items.map(({ size: _size, ...item }) => item) };
+      }
+    }));
+    const text = new TextEncoder().encode("Searchable text of an unsized document.");
+    for (let i = 0; i < STOP + 10; i++)
+      world.world.put({ folderId: "folder", name: `${i}.txt`, mime: "text/plain", bytes: text });
+    await world.sync();
+    const waiting = await eventually(async () => {
+      await world.platform`update platform_jobs set run_after = now() where status = 'queued' and kind like 'knowledge_base.%'`;
+      await world.worker.runDue();
+      const [fetched] =
+        await world.sql`select count(*)::int as n from catalyst_kb.source_items where state = 'fetched'`;
+      expect(fetched?.n).toBe(STOP);
+      const status = await sourceStatus(world, SOURCE);
+      expect(status.confirmation).toBeDefined();
+      return status;
+    }, 180_000);
+    // 8,000 bytes is the assumed size of a text file (UNSIZED_ITEM_BYTES).
+    expect(waiting.confirmation).toMatchObject({ items: STOP + 10, bytes: (STOP + 10) * 8_000 });
+    expect(
+      await world.sql`select count(*)::int as n from catalyst_kb.source_items where size = 0`
+    ).toEqual([{ n: STOP + 10 }]);
+    // The fetched bytes are indexed whatever the listing said.
+    expect(await world.sql`select count(*)::int as n from catalyst_kb.documents`).toEqual([
+      { n: STOP }
+    ]);
+  });
+
   it("never stops a first import at or below the stop", async () => {
     const world = await setup();
     for (let i = 0; i < STOP; i++)

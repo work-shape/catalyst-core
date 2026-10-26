@@ -434,7 +434,18 @@ export function createCatalogue(input: {
         sharedAccountNote: definition.sharedAccountNote,
         documentSource: type.documentSource !== undefined
       });
-      if (offered) egress.push(...definition.egress);
+      // An entry's parts may share a host; it joins the list once.
+      if (offered)
+        for (const host of definition.egress)
+          if (
+            !egress.some(
+              (known) =>
+                known.protocol === host.protocol &&
+                known.host === host.host &&
+                known.port === host.port
+            )
+          )
+            egress.push(host);
     }
     if (offered && parts.length === 0) {
       throw new AppError(
