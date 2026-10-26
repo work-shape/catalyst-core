@@ -1,6 +1,9 @@
 import { useState } from "react";
+import { Banner, Button, RegistryIcon } from "@work-shape/catalyst-ui";
+import { useTranslation, type TranslationContextValue } from "../../shared/i18n";
 import { useAppFromPage, type AppFromPage, type AppLinkCandidate } from "./app-data";
 import { useAppsHost, type AppsHost } from "./apps-host";
+import { PageHeaderAction } from "./page-header-action";
 import { SaveAsAppAction } from "./save-as-app-dialog";
 import { UpdateAppAction, UpdateAppDialog } from "./update-app-dialog";
 
@@ -26,43 +29,148 @@ export function pageAppChoice(
   return host.rights.write ? { kind: "save" } : { kind: "none" };
 }
 
-interface PageAppActionProps {
+/**
+ * What a preview is (PREVIEW-1): a folder no App holds, or the checkout of an App, which looks
+ * like the App but reaches no Data Store and runs no Workflow of it. `unknown` until the
+ * instance said, and where no Apps are offered.
+ */
+type PreviewStanding =
+  { kind: "unknown" } | { kind: "unsaved" } | { kind: "app"; app: AppFromPage };
+
+export function previewStanding(
+  host: Pick<AppsHost, "enabled" | "workspace"> | undefined,
+  read: { app: AppFromPage | undefined; settled: boolean }
+): PreviewStanding {
+  if (!host?.enabled || !host.workspace || !read.settled) {
+    return { kind: "unknown" };
+  }
+  return read.app ? { kind: "app", app: read.app } : { kind: "unsaved" };
+}
+
+/** The line under the name of a preview that says what it is, by its standing. */
+export function previewStateLine(
+  standing: PreviewStanding,
+  t: TranslationContextValue["t"]
+): string | undefined {
+  return standing.kind === "app"
+    ? t("pages.stateOfApp", { app: standing.app.title })
+    : standing.kind === "unsaved"
+      ? t("pages.stateUnsaved")
+      : undefined;
+}
+
+/** The Page of a conversation that a preview shows. */
+interface PreviewOfPage {
   conversationId: string;
   pageId: string;
+}
+
+/**
+ * The standing of a preview and the way to its App: the App's draft page with this
+ * conversation in the dock. Asks the instance only where Apps are offered; the header, its
+ * state line and the notice share the one request.
+ */
+function usePreviewStanding({ conversationId, pageId }: PreviewOfPage) {
+  const host = useAppsHost();
+  const read = useAppFromPage(conversationId, pageId, appsOffered(host));
+  const standing = previewStanding(host, read);
+  const openApp = (app: Pick<AppFromPage, "name" | "workspaceId">) =>
+    host?.showRoute(
+      { kind: "app-edit", collaborationWorkspaceId: app.workspaceId, app: app.name },
+      { chat: conversationId }
+    );
+  return { host, read, standing, openApp };
+}
+
+/** Apps are offered where the preview is shown: the module is on and a workspace is open. */
+function appsOffered(host: AppsHost | undefined): boolean {
+  return host?.enabled === true && host.workspace !== undefined;
+}
+
+/** The state line of a preview, under its name in the head of the surface. */
+export function PreviewStateLine(props: PreviewOfPage) {
+  return appsOffered(useAppsHost()) ? <PreviewStateLineOf {...props} /> : null;
+}
+
+function PreviewStateLineOf(props: PreviewOfPage) {
+  const { t } = useTranslation();
+  const { standing } = usePreviewStanding(props);
+  const line = previewStateLine(standing, t);
+  // Until the instance answered, the line keeps its room, so the name does not move.
+  return (
+    <span title={line} data-testid="preview-state" data-standing={standing.kind}>
+      {line ?? "\u00a0"}
+    </span>
+  );
+}
+
+/**
+ * Under the head of a preview, after one of its calls was refused because the preview is no
+ * App: where to test with real data. For an App's checkout, the way to the App.
+ */
+export function PreviewNeedsAppNotice(props: PreviewOfPage) {
+  return appsOffered(useAppsHost()) ? <PreviewNeedsAppNoticeOf {...props} /> : null;
+}
+
+function PreviewNeedsAppNoticeOf(props: PreviewOfPage) {
+  const { t } = useTranslation();
+  const { standing, openApp } = usePreviewStanding(props);
+  return (
+    <Banner
+      layout="page"
+      className="shrink-0"
+      data-testid="preview-needs-app"
+      action={
+        standing.kind === "app" ? (
+          <Button variant="outline" size="sm" onClick={() => openApp(standing.app)}>
+            {t("apps.openApp")}
+          </Button>
+        ) : undefined
+      }
+    >
+      {t(standing.kind === "app" ? "pages.needsApp" : "pages.needsAppUnsaved")}
+    </Banner>
+  );
+}
+
+interface PageAppActionProps extends PreviewOfPage {
   /** The name the Page is read by, which Save as app proposes. */
   pageName: string;
 }
 
 /**
- * The action about Apps in the header of a Page: Update app where the Page was saved as an App
- * the reader may write, and Save as app everywhere else. Without the Apps of a workspace it is
- * nothing and asks the instance nothing.
+ * The actions about Apps in the header of a Page. Where the Page is an App's checkout: Open
+ * app, the header's main action, and Save to draft beside it. Everywhere else Save as app.
+ * Without the Apps of a workspace it is nothing and asks the instance nothing.
  */
 export function PageAppAction(props: PageAppActionProps) {
-  const host = useAppsHost();
-  return host?.enabled && host.workspace ? <PageAppActionOf host={host} {...props} /> : null;
+  return appsOffered(useAppsHost()) ? <PageAppActionOf {...props} /> : null;
 }
 
-function PageAppActionOf({
-  host,
-  conversationId,
-  pageId,
-  pageName
-}: PageAppActionProps & { host: AppsHost }) {
-  const read = useAppFromPage(conversationId, pageId, true);
+function PageAppActionOf({ conversationId, pageId, pageName }: PageAppActionProps) {
+  const { t } = useTranslation();
+  const { host, read, openApp } = usePreviewStanding({ conversationId, pageId });
   const choice = pageAppChoice(host, read);
   // The App the reader chose to put the Page into. Its dialog is held here: once the Page is
-  // that App's, the header changes from Save as app to Update app under it.
+  // that App's, the header changes from Save as app to Save to draft under it.
   const [linking, setLinking] = useState<AppLinkCandidate>();
   return (
     <>
       {choice.kind === "update" ? (
-        <UpdateAppAction
-          conversationId={conversationId}
-          pageId={pageId}
-          pageName={pageName}
-          app={choice.app}
-        />
+        <>
+          <PageHeaderAction
+            primary
+            label={t("apps.openApp")}
+            icon={<RegistryIcon name="app" />}
+            onClick={() => openApp(choice.app)}
+          />
+          <UpdateAppAction
+            conversationId={conversationId}
+            pageId={pageId}
+            pageName={pageName}
+            app={choice.app}
+          />
+        </>
       ) : choice.kind === "save" ? (
         <SaveAsAppAction
           conversationId={conversationId}

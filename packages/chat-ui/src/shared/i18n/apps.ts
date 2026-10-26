@@ -162,15 +162,16 @@ export const apps = defineTranslations({
       "The current draft of this app is replaced by this preview as it is now. The published version does not change until someone publishes the draft.",
     "apps.linkMoved":
       "The draft of this app was changed just now. If you replace it, that change is lost.",
-    "apps.linkOffer": "Update this app",
+    "apps.linkOffer": "Save to this app's draft",
     "apps.linkOtherConversation":
-      "This app was last updated from a preview in another conversation. That preview will no longer show “Update app” for it.",
+      "This app was last saved from a preview in another conversation. That preview will no longer show “Save to draft” for it.",
     "apps.linkOtherPage":
-      "This app was last updated from another preview of this conversation. That preview will no longer show “Update app” for it.",
-    "apps.linkTitle": "Update “{name}” from this preview?",
+      "This app was last saved from another preview of this conversation. That preview will no longer show “Save to draft” for it.",
+    "apps.linkTitle": "Save this preview to the draft of “{name}”?",
     "apps.listFailed": "The apps could not be loaded.",
     "apps.notPublished": "This app has not been published yet.",
     "apps.open": "Open",
+    "apps.openApp": "Open app",
     "apps.openNamed": "Open {name}",
     "apps.openDraft": "Open the draft",
     "apps.previewOf": "App {name}",
@@ -255,24 +256,24 @@ export const apps = defineTranslations({
     "apps.saveName": "Name",
     "apps.saveNameTaken": "This name is already taken. Choose another name.",
     "apps.saveNameTakenWritable":
-      "This name is already taken by the app “{name}”. Choose another name, or update the app.",
+      "This name is already taken by the app “{name}”. Choose another name, or save to its draft.",
     "apps.showMore": "Show more",
     "apps.starting": "The app is starting",
     "apps.title": "Apps",
     "apps.unavailable": "This app is not available to you.",
     "apps.unpublishedChanges": "Unpublished changes",
-    "apps.update": "Update app",
+    "apps.update": "Save to draft",
     "apps.updateBody":
-      "This preview as it is now becomes the draft of this app. People who use the app see the change only once the draft is published.",
+      "This preview as it is now becomes the draft of the app. Nothing is published.",
     "apps.updateChanged":
-      "The draft of this app was changed somewhere else since it was last updated from this preview. Updating replaces those changes.",
-    "apps.updateConfirm": "Update draft",
-    "apps.updateDone": "Open the draft to check and publish it.",
-    "apps.updateDoneTitle": "The draft of “{name}” is updated",
-    "apps.updateFailed": "The app could not be updated.",
+      "The draft of this app was changed somewhere else since this preview last saved to it. Saving replaces those changes.",
+    "apps.updateConfirm": "Save to draft",
+    "apps.updateDone": "Not published yet. Others see the change only once you publish.",
+    "apps.updateDoneTitle": "Saved to the draft",
+    "apps.updateFailed": "The draft could not be saved.",
     "apps.updateKeptName": "The app keeps its name “{name}”. The preview is called “{page}”.",
     "apps.updateReplace": "Replace draft",
-    "apps.updateTitle": "Update “{name}”?"
+    "apps.updateTitle": "Save to the draft of “{name}”?"
   },
   de: {
     "apps.actionCalls": "Ruft auf",
@@ -438,15 +439,16 @@ export const apps = defineTranslations({
       "Der aktuelle Entwurf dieser App wird durch diese Vorschau ersetzt, so wie sie jetzt ist. Die veröffentlichte Version ändert sich erst, wenn jemand den Entwurf veröffentlicht.",
     "apps.linkMoved":
       "Der Entwurf dieser App wurde gerade geändert. Beim Ersetzen geht auch diese Änderung verloren.",
-    "apps.linkOffer": "Diese App aktualisieren",
+    "apps.linkOffer": "Im Entwurf dieser App speichern",
     "apps.linkOtherConversation":
-      "Diese App wurde zuletzt aus einer Vorschau in einer anderen Unterhaltung aktualisiert. Jene Vorschau zeigt für sie dann nicht mehr „App aktualisieren“.",
+      "Diese App wurde zuletzt aus einer Vorschau in einer anderen Unterhaltung gespeichert. Jene Vorschau zeigt für sie dann nicht mehr „Im Entwurf speichern“.",
     "apps.linkOtherPage":
-      "Diese App wurde zuletzt aus einer anderen Vorschau dieser Unterhaltung aktualisiert. Jene Vorschau zeigt für sie dann nicht mehr „App aktualisieren“.",
-    "apps.linkTitle": "„{name}“ aus dieser Vorschau aktualisieren?",
+      "Diese App wurde zuletzt aus einer anderen Vorschau dieser Unterhaltung gespeichert. Jene Vorschau zeigt für sie dann nicht mehr „Im Entwurf speichern“.",
+    "apps.linkTitle": "Diese Vorschau in den Entwurf von „{name}“ speichern?",
     "apps.listFailed": "Die Apps konnten nicht geladen werden.",
     "apps.notPublished": "Diese App wurde noch nicht veröffentlicht.",
     "apps.open": "Öffnen",
+    "apps.openApp": "App öffnen",
     "apps.openNamed": "{name} öffnen",
     "apps.openDraft": "Entwurf öffnen",
     "apps.previewOf": "App {name}",
@@ -532,23 +534,24 @@ export const apps = defineTranslations({
     "apps.saveName": "Name",
     "apps.saveNameTaken": "Dieser Name ist schon vergeben. Wähle einen anderen Namen.",
     "apps.saveNameTakenWritable":
-      "Dieser Name ist schon an die App „{name}“ vergeben. Wähle einen anderen Namen, oder aktualisiere die App.",
+      "Dieser Name ist schon an die App „{name}“ vergeben. Wähle einen anderen Namen, oder speichere im Entwurf dieser App.",
     "apps.showMore": "Mehr anzeigen",
     "apps.starting": "Die App wird gestartet",
     "apps.title": "Apps",
     "apps.unavailable": "Diese App ist für dich nicht verfügbar.",
     "apps.unpublishedChanges": "Unveröffentlichte Änderungen",
-    "apps.update": "App aktualisieren",
+    "apps.update": "Im Entwurf speichern",
     "apps.updateBody":
-      "Diese Vorschau wird so, wie sie jetzt ist, zum Entwurf dieser App. Wer die App nutzt, sieht die Änderung erst, wenn der Entwurf veröffentlicht ist.",
+      "Diese Vorschau wird so, wie sie jetzt ist, zum Entwurf der App. Veröffentlicht wird dabei nichts.",
     "apps.updateChanged":
-      "Der Entwurf dieser App wurde an anderer Stelle geändert, seit er zuletzt aus dieser Vorschau aktualisiert wurde. Beim Aktualisieren werden diese Änderungen ersetzt.",
-    "apps.updateConfirm": "Entwurf aktualisieren",
-    "apps.updateDone": "Öffne den Entwurf, um ihn zu prüfen und zu veröffentlichen.",
-    "apps.updateDoneTitle": "Der Entwurf von „{name}“ ist aktualisiert",
-    "apps.updateFailed": "Die App konnte nicht aktualisiert werden.",
+      "Der Entwurf dieser App wurde an anderer Stelle geändert, seit diese Vorschau zuletzt darin gespeichert hat. Beim Speichern werden diese Änderungen ersetzt.",
+    "apps.updateConfirm": "Im Entwurf speichern",
+    "apps.updateDone":
+      "Noch nicht veröffentlicht. Andere sehen die Änderung erst, wenn du veröffentlichst.",
+    "apps.updateDoneTitle": "Im Entwurf gespeichert",
+    "apps.updateFailed": "Der Entwurf konnte nicht gespeichert werden.",
     "apps.updateKeptName": "Die App behält ihren Namen „{name}“. Die Vorschau heißt „{page}“.",
     "apps.updateReplace": "Entwurf ersetzen",
-    "apps.updateTitle": "„{name}“ aktualisieren?"
+    "apps.updateTitle": "In den Entwurf von „{name}“ speichern?"
   }
 });

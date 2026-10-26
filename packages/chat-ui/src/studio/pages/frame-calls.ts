@@ -140,6 +140,18 @@ export function frameCallFailure(
   };
 }
 
+/**
+ * The refusals that say the frame is a preview of a conversation and no App: only an App's
+ * manifest binds a Data Store. The surface tells the person where to test with real data.
+ */
+const PREVIEW_IS_NO_APP_REFUSALS: readonly string[] = ["data_store_needs_app"];
+
+/** What the surface of a frame hears of its calls, beside what the frame is answered. */
+export interface FrameCallHooks {
+  /** A call was refused because the preview is no App (PREVIEW-1). */
+  onPreviewIsNoApp?(): void;
+}
+
 /** What the calls of a frame use of the API client: the calls of a page session. */
 export interface FrameCallClient {
   apps: Pick<ApiClient["apps"], "sessions">;
@@ -149,7 +161,8 @@ export interface FrameCallClient {
 export function createFrameCalls(
   client: FrameCallClient,
   address: FrameAddress,
-  texts?: FrameCallTexts
+  texts?: FrameCallTexts,
+  hooks?: FrameCallHooks
 ): FrameCalls | undefined {
   const proof = frameSessionProof(address);
   if (!proof) {
@@ -191,7 +204,9 @@ export function createFrameCalls(
                 }
         };
       } catch (error) {
-        return { ok: false, error: frameCallFailure(error, texts) };
+        const failure = frameCallFailure(error, texts);
+        if (PREVIEW_IS_NO_APP_REFUSALS.includes(failure.code)) hooks?.onPreviewIsNoApp?.();
+        return { ok: false, error: failure };
       }
     },
     async workflowRun(runId) {

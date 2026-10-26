@@ -286,7 +286,7 @@ describe("app.save in a conversation", () => {
       name: "relinked",
       title: "Relinked"
     });
-    // Someone puts another preview into the App with "Update app".
+    // Someone puts another preview into the App with "Save to draft".
     const otherPage = await t.storePage("from elsewhere");
     expectStatus(
       await t.call(t.admin.id, "apps.update_from_page", {
