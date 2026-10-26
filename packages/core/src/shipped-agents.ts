@@ -1,3 +1,4 @@
+import { isRecord } from "./json";
 import type { AgentConfig } from "./config";
 
 /**
@@ -88,8 +89,4 @@ function names(value: unknown): string[] {
   return Array.isArray(value)
     ? value.filter((name): name is string => typeof name === "string")
     : [];
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

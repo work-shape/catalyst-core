@@ -1,3 +1,4 @@
+import { isRecord } from "@work-shape/catalyst-core";
 import { randomUUID } from "node:crypto";
 import type { ModelAdapterRequest, ModelCompletion, ModelContent, ModelToolCall } from "../types";
 import { isModelFunctionTool } from "../types";
@@ -248,8 +249,4 @@ export function toVertexModelUsage(
     source: "provider_reported",
     webSearchCallCount: 0
   };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
 }

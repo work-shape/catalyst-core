@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { MODEL_CALL_RESERVED_OUTPUT_TOKENS } from "@work-shape/catalyst-core";
+import { isRecord, MODEL_CALL_RESERVED_OUTPUT_TOKENS } from "@work-shape/catalyst-core";
 import { createProviderToolMetadata, type ProviderToolNames } from "../openai-compatible-mapping";
 import type { ModelAdapterRequest, ModelCompletion, ModelContent, ModelToolCall } from "../types";
 import { assertBedrockDocuments, toBedrockDocumentBlock } from "./bedrock-documents";
@@ -324,8 +324,4 @@ export function toBedrockModelUsage(usage: BedrockUsage | undefined): ModelCompl
     source: "provider_reported",
     webSearchCallCount: 0
   };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
 }

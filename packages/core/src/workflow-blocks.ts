@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { JsonValue } from "./json";
+import { isRecord, type JsonValue } from "./json";
 import { WORKFLOW_ERROR_CODES, WORKFLOW_STEP_TYPES, type WorkflowStep } from "./workflows";
 
 /** The step types that are reserved and that no engine of this release runs. */
@@ -66,9 +66,6 @@ export interface WorkflowBlockIssue {
  * type no release knows and a field that is missing must be answered and never thrown on.
  */
 type ReadStep = { id: string; type: string } & Readonly<Record<string, unknown>>;
-
-const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 const stepsOf = (value: unknown): ReadStep[] =>
   Array.isArray(value)

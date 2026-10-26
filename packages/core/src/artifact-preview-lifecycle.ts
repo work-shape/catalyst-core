@@ -12,7 +12,7 @@ import {
   type SupportedImageMimeType
 } from "./types";
 import { asManagedArtifactId, type ClientInstanceId, type ManagedArtifactId } from "./ids";
-import type { JsonObject } from "./json";
+import { isRecord, type JsonObject } from "./json";
 
 export type ArtifactPreviewLifecycleState =
   | {
@@ -227,10 +227,6 @@ function readShortString(value: unknown, maxLength: number): string | undefined 
 
 function readPositiveInteger(value: unknown): number | undefined {
   return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : undefined;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
 
 function isDefined<Value>(value: Value | undefined): value is Value {

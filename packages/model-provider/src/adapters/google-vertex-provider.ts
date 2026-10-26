@@ -1,4 +1,4 @@
-import { AppError, PROVIDER_REGIONS } from "@work-shape/catalyst-core";
+import { isRecord, AppError, PROVIDER_REGIONS } from "@work-shape/catalyst-core";
 import type { GoogleAccessTokenSource } from "./google-vertex-auth";
 import {
   isVertexAnswerMissing,
@@ -253,8 +253,4 @@ function parseStreamPiece(data: string): VertexGenerateContentResponse {
 /** Only a bounded identifier of a known field crosses the provider boundary. */
 function identifier(value: unknown): string | undefined {
   return typeof value === "string" && /^[a-zA-Z0-9_.:-]{1,128}$/u.test(value) ? value : undefined;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
 }

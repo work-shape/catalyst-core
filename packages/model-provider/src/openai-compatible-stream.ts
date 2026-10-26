@@ -1,4 +1,4 @@
-import { AppError } from "@work-shape/catalyst-core";
+import { isRecord, AppError } from "@work-shape/catalyst-core";
 import type {
   ModelAdapterStreamEvent,
   ModelCompletionStreamEvent,
@@ -477,10 +477,6 @@ function parseResponsesStreamEvent(data: string): OpenAiResponsesStreamEvent {
   } catch {
     throw new AppError("INTERNAL", "Model provider returned invalid Responses stream JSON");
   }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 /** The `data` of each server-sent event of a response body, read under the idle limit. */
