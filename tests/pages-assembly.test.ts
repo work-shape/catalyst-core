@@ -3,11 +3,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { storePageFileSet } from "@work-shape/catalyst-server";
+import { createClientInstanceAgentRunWorker } from "@work-shape/catalyst-client-assembly";
 import { parseClientInstanceConfig } from "@work-shape/catalyst-config-schema";
 import { asClientInstanceId, asConversationId } from "@work-shape/catalyst-core";
 import { createFilesystemObjectStorage } from "@work-shape/catalyst-object-storage";
 import { createTestConfig, workspaceInfrastructure } from "./support/fixtures";
 import { createTestInstance } from "./support/test-instance";
+import { fileTestDatabaseUrl } from "./support/test-database";
 
 // What an instance assembled from its configuration does with Pages: what it needs to start
 // with the apps module on, what it still does for the Pages it holds with the module off, and
@@ -92,6 +94,17 @@ describe("an assembled instance with the apps module on", () => {
     await expect(
       createTestInstance({ config: config(true), env: { BETTER_AUTH_SECRET: "short" }, tools: [] })
     ).rejects.toThrow(/at least 32 characters/u);
+  });
+
+  it("starts an Agent Run worker without either secret, which only the API signs with", async () => {
+    // The worker serves no Page and checks no frame, so it is not given the API's secrets.
+    const worker = await createClientInstanceAgentRunWorker({
+      config: config(true),
+      env: { DATABASE_URL: await fileTestDatabaseUrl() },
+      tools: [],
+      capabilities: []
+    });
+    await worker.close();
   });
 
   it("starts with both and answers the Pages of a conversation", async () => {

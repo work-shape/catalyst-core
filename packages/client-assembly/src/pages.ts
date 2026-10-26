@@ -53,11 +53,15 @@ const APP_CONTENT_SECRET_MIN_CHARS = 32;
  * the missing piece named when the `files` store or a secret is absent. With the module off no
  * secret is read, and the `files` store, where the instance has one, is still handed on: a
  * conversation that is deleted takes the Pages of an earlier time with it.
+ *
+ * Only the process that serves Pages, the API, signs and checks their content tokens. A worker
+ * gets the `files` store without the key, so it needs neither secret.
  */
 export async function createInstancePages(input: {
   config: ClientInstanceConfig;
   modules: ModuleSnapshot;
   infrastructure: InstanceInfrastructure;
+  servesContent: boolean;
 }): Promise<ChatServerOptions["pages"]> {
   const hasFilesStore = input.config.infrastructure.objectStorage.files !== undefined;
   if (!input.modules.isEnabled("apps")) {
@@ -71,6 +75,9 @@ export async function createInstancePages(input: {
       "VALIDATION_FAILED",
       "'modules.apps.enabled' is true, but 'executionWorkspaces.enabled' is not. An App is opened from a folder of an Execution Workspace and built in its sandbox by the workspace command worker. Enable Execution Workspaces and run that worker, or turn the module off"
     );
+  }
+  if (!input.servesContent) {
+    return { objects: await createFilesStore(input.config, input.infrastructure.context) };
   }
   let secret: string | undefined;
   for (const name of APP_CONTENT_SECRET_NAMES) {

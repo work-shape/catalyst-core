@@ -378,7 +378,12 @@ export async function createClientInstanceExecutionAssembly(
   const workspaceObjectStore = config.executionWorkspaces.enabled
     ? await createWorkspacesStore(config, infrastructure.context)
     : undefined;
-  const pages = await createInstancePages({ config, modules, infrastructure });
+  const pages = await createInstancePages({
+    config,
+    modules,
+    infrastructure,
+    servesContent: processOptions.process === "api"
+  });
   const modelProviders = getModelProviderConfigs(config);
   // Before the capabilities: one of them may call a model, and asks at startup what the model
   // of its binding can do.
