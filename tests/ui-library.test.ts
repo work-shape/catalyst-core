@@ -763,3 +763,28 @@ describe("scrollEdgeFadeStyle", () => {
     expect(scrollEdgeFadeStyle({ above: false, below: false }, "x")).toBeUndefined();
   });
 });
+
+describe("QrCode", () => {
+  it("draws the code in the page as one SVG path, named for a screen reader, with no outside address", () => {
+    const value = "otpauth://totp/Catalyst:anna%40example.test?secret=JBSWY3DPEHPK3PXP";
+    const html = renderToStaticMarkup(
+      createElement(library.QrCode, { value, label: "Authenticator code" })
+    );
+    expect(html).toMatch(/^<svg role="img" aria-label="Authenticator code"/u);
+    expect(html).not.toContain("<img");
+    expect(html).not.toContain("http");
+    expect(html).not.toContain("JBSWY3DPEHPK3PXP");
+    // A version's side is 17 plus four modules a version, inside a quiet zone of four.
+    const side = Number(/viewBox="0 0 (\d+) \1"/u.exec(html)?.[1]) - 8;
+    expect(side).toBeGreaterThanOrEqual(21);
+    expect((side - 17) % 4).toBe(0);
+    expect(html.match(/<path /gu)).toHaveLength(1);
+  });
+
+  it("draws a different code for a different value, and the same for the same", () => {
+    const draw = (value: string) =>
+      renderToStaticMarkup(createElement(library.QrCode, { value, label: "Code" }));
+    expect(draw("first value")).not.toBe(draw("second value"));
+    expect(draw("same value")).toBe(draw("same value"));
+  });
+});
