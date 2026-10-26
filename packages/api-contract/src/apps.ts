@@ -20,21 +20,7 @@ export const appModeSchema = z.enum(APP_MODES);
 
 export type AppMode = z.infer<typeof appModeSchema>;
 
-/**
- * The path of the interface route that shows one App to a signed-in person: the published
- * revision under `/apps/`, or the draft under `/app-drafts/`. Every path below the published
- * one is the App's own, so the draft stands outside it: an App may have any route, `/edit`
- * among them. The server answers it from `apps.preview` and the interface builds its routes
- * from it, so the two never disagree.
- */
-export function appInterfacePath(input: {
-  workspaceId: string;
-  app: string;
-  mode: AppMode;
-}): string {
-  const area = input.mode === "draft" ? "app-drafts" : "apps";
-  return `/w/${encodeURIComponent(input.workspaceId)}/${area}/${encodeURIComponent(input.app)}`;
-}
+export { appInterfacePath } from "@work-shape/catalyst-asset-schemas";
 
 export const createAppFromPageRequestSchema = z
   .object({
@@ -291,6 +277,8 @@ const appPublishReviewItemSchema = z.object({
   narrative: publishNarrativeSchema.optional(),
   /** Who wrote the draft revision, as people read their name. */
   lastChangedBy: z.string().optional(),
+  /** The path of the page where the person works on it. Only on an entry the reader may read. */
+  href: z.string().optional(),
   refusals: z.array(appPublishRefusalSchema)
 });
 

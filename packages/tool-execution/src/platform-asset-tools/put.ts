@@ -14,7 +14,9 @@ import {
   draftConflictDetailsSchema,
   issueSchema,
   kindSchema,
+  LINK_THE_PAGE,
   nameSchema,
+  withPageHref,
   type PlatformAssetFile,
   type PlatformAssetWrite
 } from "./shapes";
@@ -80,7 +82,8 @@ const putOutputSchema = z.union([
     name: z.string().optional(),
     title: z.string().optional(),
     workspaceId: z.string().optional(),
-    besideSubject: z.literal(true).optional()
+    besideSubject: z.literal(true).optional(),
+    href: z.string().optional()
   }),
   z.object({ saved: z.literal(false), issues: z.array(issueSchema) }),
   z.object({
@@ -109,7 +112,8 @@ export function createPutAssetTool(calls: PlatformAssetPutCalls): AnyToolDefinit
       "Send the whole config with the 'revision' you read as 'expectedRevision'; for an existing agent also its 'draftRevision' as 'expectedDraftRevision' (null when none is pending), since every author shares one draft. A kind written as files, such as a Data Store, sends 'files' instead: every file, its manifest among them. Answers the new revision; or the issues, with nothing saved; or REVISION_CONFLICT: read again, apply your change to what is there now and save with the new revision.",
       `To create, leave 'expectedRevision' out and name 'kind' and 'name'. Where you do not know the shape of the kind's config, read a similar asset with ${PLATFORM_ASSET_TOOLS.get.name} first. An existing skill is refused: say what you would change.`,
       "In a conversation about another asset you may create what it needs, such as the Workflow or Data Store of an App: say first what you create and why, such as \"Dafür legen wir zuerst den Workflow an.\" The answer has 'besideSubject', and the conversation stays about its asset. Build what an App needs first and the App last.",
-      `Without 'kind' and 'name' the save works on the asset this conversation is about: open one that existed before with ${PLATFORM_ASSET_TOOLS.open.name} first. With them and 'expectedRevision' it saves a draft this conversation created; any other asset is refused.`
+      `Without 'kind' and 'name' the save works on the asset this conversation is about: open one that existed before with ${PLATFORM_ASSET_TOOLS.open.name} first. With them and 'expectedRevision' it saves a draft this conversation created; any other asset is refused.`,
+      `For a created asset: ${LINK_THE_PAGE}`
     ].join(" "),
     inputSchema: z
       .object({
@@ -161,7 +165,7 @@ export function createPutAssetTool(calls: PlatformAssetPutCalls): AnyToolDefinit
     beforeEvents: (input, { conversationId }) => calls.putBeforeEvents(conversationId, input),
     async execute(input, context) {
       const written = await calls.put(context, input);
-      return toolSuccess(written, {
+      return toolSuccess(written.saved && written.created ? withPageHref(written) : written, {
         auditSummary: {
           action: put.name,
           ...(written.saved && written.created ? { subject: written.name } : {}),

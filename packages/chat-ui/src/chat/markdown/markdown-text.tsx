@@ -4,15 +4,26 @@ import {
 } from "@assistant-ui/react-streamdown";
 import { mermaid } from "@streamdown/mermaid";
 import { createContext, useContext, useMemo, type ReactNode } from "react";
-import { Streamdown, type ControlsConfig, type StreamdownTranslations } from "streamdown";
+import {
+  Streamdown,
+  type Components as StreamdownComponents,
+  type ControlsConfig,
+  type StreamdownTranslations
+} from "streamdown";
 import { CODE_THEMES, codeHighlighter } from "../../shared/code-highlight";
 import { useTranslation } from "../../shared/i18n";
-import { markdownRehypePlugins, type MarkdownLinkPolicy } from "./markdown-security";
+import {
+  markdownRehypePlugins,
+  type MarkdownLinkPolicy,
+  type MarkdownPageLinks
+} from "./markdown-security";
 import { MarkdownTable } from "./markdown-table";
+import { PAGE_LINK_TAG, PageLink, pageLinkPath, usePageLinks } from "./page-link";
 
 const plugins = { code: codeHighlighter, mermaid };
-// A table draws its own frame and copy menu.
-const components = { table: MarkdownTable };
+// A table draws its own frame and copy menu; a link to a page of the app opens it in place.
+// Streamdown's components are typed by HTML's tags; the page link is an element of its own.
+const components = { table: MarkdownTable, [PAGE_LINK_TAG]: PageLink } as StreamdownComponents;
 const controls: ControlsConfig = {
   code: { copy: true, download: false },
   table: false,
@@ -62,14 +73,24 @@ function useMarkdownRehypePlugins() {
   const { t } = useTranslation();
   const imageWithDescription = t("markdownImageNotLoaded", { description: "{description}" });
   const image = t("markdownImageNotLoadedNoDescription");
+  // Links open pages in place only where something opens them: in a conversation.
+  const inPlace = usePageLinks() !== undefined;
   return useMemo(
     () =>
-      markdownRehypePlugins(policy ?? { allowedLinkHosts: [], ownOrigins: pageOrigin() }, {
-        imageWithDescription,
-        image
-      }),
-    [policy, imageWithDescription, image]
+      markdownRehypePlugins(
+        policy ?? { allowedLinkHosts: [], ownOrigins: pageOrigin() },
+        { imageWithDescription, image },
+        inPlace ? pageLinksOfPage() : undefined
+      ),
+    [policy, imageWithDescription, image, inPlace]
   );
+}
+
+/** Links to the pages of this app, on the origin the page itself is served from. */
+function pageLinksOfPage(): MarkdownPageLinks | undefined {
+  if (typeof window === "undefined") return undefined;
+  const origin = window.location.origin;
+  return { tag: PAGE_LINK_TAG, pathOf: (href) => pageLinkPath(href, origin) };
 }
 
 function pageOrigin(): string[] {

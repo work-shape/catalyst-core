@@ -43,7 +43,8 @@ export function createAppTryTools(): AnyToolDefinition[] {
       effect: "reading",
       description: [
         "Read what publishing an App's draft comes to, changing nothing: the App, each Workflow its actions call, children first, and each Data Store it binds with a pending draft and the migrations that would apply, whether each has a pending draft, the sentence its publish question leads with, and what would refuse each publish now. The conversation's subject App or one this conversation created.",
-        "When the person wants it live and ready is true, call assets.publish with the App's draftRevision and each pending Workflow in workflows. Name every refusal and who can resolve it; never claim anything is live."
+        "When the person wants it live and ready is true, call assets.publish with the App's draftRevision and each pending Workflow in workflows. Name every refusal and who can resolve it; never claim anything is live.",
+        "Each entry has 'href', the path of its page. Link the place with its href when the person must act there, as [its title](href), and never build a path yourself."
       ].join(" "),
       inputSchema: z.object({ app }),
       execute

@@ -29,21 +29,32 @@ const BLOCKED_LINK_CLASS = "chat-markdown-blocked-link";
 const BLOCKED_IMAGE_CLASS = "chat-markdown-blocked-image";
 
 /**
+ * Where a link to a page of the app opens in place: the path of that page for an address that
+ * names one, else nothing. Such a link becomes the element `pageLinkTag`, with that path alone.
+ */
+export interface MarkdownPageLinks {
+  pathOf(href: string): string | undefined;
+  tag: string;
+}
+
+/**
  * The one set of rehype plugins every Markdown reply and Markdown file preview renders with.
  * Raw HTML is parsed and sanitized as Streamdown does by default. Then no image loads, neither
  * remote, nor relative, nor `data:`, and a link to a host outside the policy becomes text that
- * shows its address. `rehype-harden` runs last as a second line; it finds nothing left to block.
+ * shows its address. With `pageLinks`, an allowed link to a page of the app becomes its element.
+ * `rehype-harden` runs last as a second line; it finds nothing left to block.
  */
 export function markdownRehypePlugins(
   policy: MarkdownLinkPolicy,
-  labels: MarkdownBlockedLabels
+  labels: MarkdownBlockedLabels,
+  pageLinks?: MarkdownPageLinks
 ): RehypePlugins {
   const parsing = Object.entries(defaultRehypePlugins)
     .filter(([name]) => name !== "harden")
     .map(([, plugin]) => plugin);
   return [
     ...parsing,
-    [restrictRemoteContent, { policy, labels }],
+    [restrictRemoteContent, { policy, labels, pageLinks }],
     [
       harden,
       {
@@ -112,6 +123,7 @@ interface MarkdownNode {
 interface RestrictOptions {
   policy: MarkdownLinkPolicy;
   labels: MarkdownBlockedLabels;
+  pageLinks: MarkdownPageLinks | undefined;
 }
 
 function restrictRemoteContent(options: RestrictOptions) {
@@ -141,10 +153,23 @@ function restrictChildren(parent: MarkdownNode, options: RestrictOptions): void 
     }
     const href = child.properties?.href;
     if (typeof href === "string" && isAllowedMarkdownLink(href, options.policy)) {
-      return child;
+      return options.pageLinks ? asPageLink(child, href, options.pageLinks) : child;
     }
     return linkAsText(child, typeof href === "string" ? href : "");
   });
+}
+
+/** A link to a page of the app as its own element with that page's path, else as it is. */
+function asPageLink(link: MarkdownNode, href: string, pageLinks: MarkdownPageLinks): MarkdownNode {
+  const page = pageLinks.pathOf(href);
+  return page === undefined
+    ? link
+    : {
+        type: "element",
+        tagName: pageLinks.tag,
+        properties: { href: page },
+        children: link.children ?? []
+      };
 }
 
 /** An image is never loaded; its description is shown in its place. */

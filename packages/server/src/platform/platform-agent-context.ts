@@ -1,6 +1,7 @@
 import { resolveConfigLocale, resolveLocalizedString } from "@work-shape/catalyst-config-schema";
 import {
   AppError,
+  assetPagePath,
   asUserId,
   type Conversation,
   type ToolExecutionContext
@@ -166,13 +167,17 @@ export async function listAgentVisibleAssets(
         },
         { limit: room + 1 }
       );
-      for (const asset of listed.slice(0, room))
+      for (const asset of listed.slice(0, room)) {
+        // The owner is the one listed: the instance, or the conversation's workspace.
+        const href = assetPagePath({ kind: asset.kind, name: asset.name, workspaceId });
         assets.push({
           kind: asset.kind,
           name: asset.name,
           title: asset.title,
-          ...(asset.description === undefined ? {} : { description: asset.description })
+          ...(asset.description === undefined ? {} : { description: asset.description }),
+          ...(href === undefined ? {} : { href })
         });
+      }
       if (listed.length > room) return { assets, truncated: true };
     }
   }

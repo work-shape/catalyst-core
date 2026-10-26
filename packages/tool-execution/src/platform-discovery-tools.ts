@@ -13,6 +13,7 @@ import {
   type ToolExecutionContext
 } from "@work-shape/catalyst-core";
 import { defineTool, toolSuccess, type AnyToolDefinition } from "@work-shape/catalyst-tool-sdk";
+import { LINK_THE_PAGE } from "./platform-asset-tools/shapes";
 
 // The tools an agent finds what is on the platform with, in every conversation. Each is a
 // projection of an operation of the API, carried out for the person the agent acts for with
@@ -124,6 +125,8 @@ export interface PlatformAssetFound {
   name: string;
   title: string;
   description?: string;
+  /** The path of the page where the person works on it, where its kind has one. */
+  href?: string;
 }
 
 /** One Page or file a search found, and the conversation it lives in. */
@@ -257,7 +260,8 @@ const listAssetsOutputSchema = z.object({
       kind: z.string(),
       name: z.string(),
       title: z.string(),
-      description: z.string().optional()
+      description: z.string().optional(),
+      href: z.string().optional()
     })
   ),
   truncated: z.boolean()
@@ -362,7 +366,8 @@ export function createPlatformDiscoveryTools(
       effect: listAssets.effect,
       description: [
         "Find the assets the user may see: agents, skills, Workflows, Apps, Data Stores, Knowledge Bases and Connections, with kind, name, title and description, never their content. What the user may not see is not listed: say you know none of that name.",
-        `At most ${PLATFORM_ASSET_LIST_MAX}; 'truncated' says there are more, so search narrower. Pages and files are no assets: ${listFiles.name} finds them.`
+        `At most ${PLATFORM_ASSET_LIST_MAX}; 'truncated' says there are more, so search narrower. Pages and files are no assets: ${listFiles.name} finds them.`,
+        LINK_THE_PAGE
       ].join(" "),
       inputSchema: z.object({
         kind: searchText(100)

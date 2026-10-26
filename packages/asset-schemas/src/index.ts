@@ -2,6 +2,7 @@ export * from "./asset-types";
 export * from "./bedrock-profiles";
 export * from "./config-merge";
 export * from "./contract-values";
+export * from "./interface-paths";
 export * from "./schemas";
 export * from "./secret-names";
 export * from "./skill-markdown";

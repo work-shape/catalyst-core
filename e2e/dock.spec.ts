@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Page } from "@playwright/test";
 import { z } from "zod";
-import { requestWithOrigin } from "./request-with-origin";
+import { assetRevision, requestWithOrigin } from "./request-with-origin";
 import { expect, test } from "./test";
 
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
@@ -241,5 +241,66 @@ test("Chat opens the dock from a list, and brings its conversation back after a 
     expect(studioConversationOf(page)).not.toBe(conversation);
   } finally {
     await requestWithOrigin(page, "delete", `${apiBaseUrl}/api/v1/workspaces/${workspaceId}`);
+  }
+});
+
+// CHAT-LINK-1: the agent named the way to a page as text, and the person clicked through the
+// interface to find it. A link in its answer to a page of the app now opens that page in place,
+// with the same conversation in the dock.
+test("a link in an answer opens the Data Store's page in place, the conversation docked beside it", async ({
+  page
+}) => {
+  test.setTimeout(120_000);
+  await page.setViewportSize(WIDE);
+  await page.goto("/");
+  await signInStudio(page);
+  const suffix = randomUUID().slice(0, 8);
+  const store = `e2e-link-orders-${suffix}`;
+  const title = `Orders ${suffix}`;
+  const written = await requestWithOrigin(
+    page,
+    "put",
+    `${apiBaseUrl}/api/v1/assets/data_store/${store}`,
+    {
+      data: {
+        expectedRevision: null,
+        files: [
+          { path: "store.yaml", text: `id: ${store}\nname: ${title}\n` },
+          {
+            path: "migrations/0001_init.sql",
+            text: "create table orders (id text primary key);\n"
+          }
+        ]
+      }
+    }
+  );
+  expect(written.ok(), await written.text()).toBe(true);
+  try {
+    const conversation = await createListedConversation(
+      page,
+      `Link ${suffix}`,
+      `Publish it on [${title}](/build/data-stores/${store}?chat=conv_other).`
+    );
+    await page.goto(
+      `/w/${encodeURIComponent(conversation.collaborationWorkspaceId)}/c/${conversation.id}`
+    );
+    const link = chatColumn(page).locator("a[data-page-link]").last();
+    await expect(link).toHaveText(title);
+    // The address a copy or a new tab takes is the page's own, with no conversation.
+    await expect(link).toHaveAttribute("href", `/build/data-stores/${store}`);
+
+    await link.click();
+    await expect(page).toHaveURL(
+      new RegExp(`/build/data-stores/${store}\\?chat=${conversation.id}$`, "u")
+    );
+    await expect(page.getByRole("heading", { name: title, level: 1 })).toBeVisible();
+    await expect(chatColumn(page)).toHaveAttribute("data-chat-mode", "dock");
+    await expect(chatColumn(page)).toContainText("Local agent response");
+  } finally {
+    const storeUrl = `${apiBaseUrl}/api/v1/assets/data_store/${store}`;
+    const deleted = await requestWithOrigin(page, "post", `${storeUrl}/delete`, {
+      data: { expectedRevision: await assetRevision(page, storeUrl) }
+    });
+    expect(deleted.ok()).toBe(true);
   }
 });
