@@ -258,10 +258,21 @@ async function attachWorkflowFiles(
 ): Promise<AttachmentManifest> {
   const { run, signal } = input;
   const { clientInstanceId, conversationId } = run;
+  const step = run.workflowStepRunId
+    ? await store.workflowRuns.getStepRun({ clientInstanceId, id: run.workflowStepRunId })
+    : undefined;
+  if (!step) throw new AppError("NOT_FOUND", "Workflow agent step is unavailable");
   const attachmentIds = new Set<string>();
+  const fileCopies: Record<string, string> = {};
   for (const fileId of new Set(input.fileIds)) {
     const read = await runFiles.read(fileId);
     if (!read) continue;
+    if (
+      read.file.owner?.kind !== "workflow_run" ||
+      read.file.owner.id !== step.runId ||
+      read.file.ownerUserId !== (run.ownerUserId ?? run.principalId)
+    )
+      throw new AppError("NOT_FOUND", "The file is not available to this Workflow agent step");
     let attachment;
     try {
       ({ attachment } = await attachments.uploadDraftAttachment({
@@ -278,6 +289,7 @@ async function attachWorkflowFiles(
       throw error;
     }
     attachmentIds.add(attachment.id);
+    fileCopies[fileId] = attachment.fileId;
   }
   const listed = async () =>
     (await attachments.listDraftAttachments(conversationId)).filter((attachment) =>
@@ -303,6 +315,7 @@ async function attachWorkflowFiles(
     clientInstanceId,
     runId: run.id,
     attachmentManifest,
+    fileCopies,
     claimedAt: new Date().toISOString()
   });
   return attachmentManifest;

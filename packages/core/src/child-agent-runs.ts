@@ -129,6 +129,8 @@ export interface ChildAgentRunStore {
     clientInstanceId: ClientInstanceId;
     runId: AgentRunId;
     attachmentManifest: AttachmentManifest;
+    /** Run file ids mapped to their copies claimed by this task, for thread-scoped reads. */
+    fileCopies?: Readonly<Record<string, string>>;
     claimedAt: ISODateString;
   }): Promise<void>;
   cancelWorkflowAgentRuns(input: {
