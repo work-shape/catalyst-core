@@ -11,6 +11,7 @@ import {
 import { approvalRequestViewSchema, operationRunSchema } from "@work-shape/catalyst-api-contract";
 import { createGuardrailAssetKind } from "@work-shape/catalyst-server";
 import { runCli } from "@work-shape/catalyst-cli";
+import { asApiCredentialId } from "@work-shape/catalyst-core";
 import { testOperations } from "./support/operations";
 import {
   clientInstanceId,
@@ -91,7 +92,9 @@ async function fixture() {
     const issued = await t.expectOk(userId, "me.api_keys.create", {
       payload: { name: "CLI", scopes, expiresAt: inDays(30) }
     });
-    const { secret } = z.object({ secret: z.string() }).parse(issued.json());
+    const { secret, key: issuedKey } = z
+      .object({ secret: z.string(), key: z.object({ id: z.string() }) })
+      .parse(issued.json());
     const exchanged = await t.instance.call("access_tokens.exchange", {
       headers: { authorization: `Bearer ${secret}` }
     });
@@ -100,6 +103,7 @@ async function fixture() {
     const headers = { authorization: `Bearer ${accessToken}` };
     return {
       headers,
+      id: issuedKey.id,
       async cli(...args: string[]) {
         const out: string[] = [];
         const err: string[] = [];
@@ -153,6 +157,39 @@ describe("personal keys following their calls and requests", () => {
     expect(finished.out).toContain("Decision: approved");
     expect(finished.out).toContain("Approved for publication");
     expect((await key.cli("requests")).out).toContain("approved");
+  });
+
+  it("does not run a key's held call that another person approves after the key was revoked", async () => {
+    const t = await fixture();
+    const key = await t.key(["guardrail.read", "guardrail.write", "guardrail.publish"]);
+    const published = await key.cli("guardrail", "publish", "review", "--revision", "1", "--json");
+    expect(published.code, published.err).toBe(3);
+    const { run } = z.object({ run: operationRunSchema }).parse(JSON.parse(published.out));
+    const [request] = mineSchema.parse(
+      (await t.expectOk(t.admin.id, "approval_requests.list_mine", { query: {} })).json()
+    ).items;
+    if (!request) throw new Error("Publish must file a request");
+    await t.stores.personalApiKeys.revokePersonalApiKey({
+      clientInstanceId,
+      keyId: asApiCredentialId(key.id)
+    });
+    await t.expectOk(t.root.id, "approval_requests.decide", {
+      params: { requestId: request.id },
+      payload: { decision: "approve" }
+    });
+    await getTestJobs(t.instance).runDue();
+    const after = await t.call(t.admin.id, "operations.get_run", { params: { runId: run.id } });
+    expect(after.statusCode, after.body).toBe(200);
+    expect(operationRunSchema.parse(after.json())).toMatchObject({
+      status: "denied",
+      error: { code: "FORBIDDEN" }
+    });
+    const guardrail = await t.stores.configAssets.getConfigAsset({
+      clientInstanceId,
+      kind: "guardrail",
+      name: "review"
+    });
+    expect(guardrail?.publishedRevisionId).toBeUndefined();
   });
 
   it("reads the owner's browser call with a read-only key and hides another person's run", async () => {

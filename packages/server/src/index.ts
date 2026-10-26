@@ -384,7 +384,7 @@ export type {
   WorkflowListEntry,
   WorkflowRunsPort
 } from "./workflows/workflow-runs-port";
-export { createWorkflowRoutes } from "./routes/workflow-routes";
+export { createWorkflowRoutes, noWorkflowDraftError } from "./routes/workflow-routes";
 export { kindOfAction, maySeeAsset, seeAssetAction } from "./access/principal-grant";
 export { decideAssetActions, decideHeldRights } from "./access/effective-rights";
 export type {

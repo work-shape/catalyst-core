@@ -38,7 +38,11 @@ export const WORKFLOW_TEST_RUN_ERRORS = {
   /** The person testing does not hold a right a step needs, whether the principal does or not. */
   testerMissingRight: "tester_missing_right",
   /** The personal API key that started the test run was revoked or expired since. */
-  testerKeyUnusable: "tester_key_unusable"
+  testerKeyUnusable: "tester_key_unusable",
+  /** The person holds a right a step needs, and the key that started the test run does not name it. */
+  testerKeyScope: "tester_key_scope",
+  /** A step needs a right no personal API key can name, such as `mail_sender.use`. */
+  testerKeyCannotCarry: "tester_key_cannot_carry"
 } as const;
 
 type TestRunStores = Pick<

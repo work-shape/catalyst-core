@@ -94,7 +94,8 @@ export async function setupCommand(options: SetupOptions): Promise<number> {
         url,
         `${tool.label} on ${hostname()}`,
         options.openUrl ?? openInstanceAddress(url),
-        // The key a local agent gets publishes what its person may publish (CLI-PUBLISH-USE).
+        // The key a local agent gets publishes what its person may publish (CLI-PUBLISH-USE);
+        // connection.use, which copies Connection results to this computer, is ticked by hand.
         true
       );
       if (key === undefined) {

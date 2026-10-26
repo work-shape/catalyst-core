@@ -241,7 +241,7 @@ function ConnectCli({
   onConfirm
 }: {
   initialCode: string;
-  /** The CLI's `setup` sent the person here: its key starts with the use level. */
+  /** The CLI's `setup` sent the person here: its key starts as `setupKeyActions` says. */
   asksUseLevel: boolean;
   offer: KeyOffer;
   confirming: boolean;
@@ -347,7 +347,7 @@ export function ConnectCodeConfirm({
   offer: KeyOffer;
   /**
    * Start as `catalyst setup` asks: the person's reading, writing and publishing rights and
-   * the use level ticked.
+   * the use level ticked, except `connection.use` (`setupKeyActions`).
    */
   asksUseLevel?: boolean;
   pending: boolean;
