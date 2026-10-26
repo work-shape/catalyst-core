@@ -22,6 +22,9 @@ import {
   type WorkflowStepRunView
 } from "@work-shape/catalyst-core";
 import { paginate, pageScope, readablePage, storePage } from "../http/paging";
+
+/** The trigger kind of a run an outside client started (`@work-shape/catalyst-workflows`). */
+const WORKFLOW_OUTSIDE_TRIGGER = "outside";
 import { decide } from "../assets/asset-access";
 import type { ModuleRoutes, RouteRegistration } from "../http/route";
 import { listedWorkflowActions, workflowOf } from "../workflows/workflow-listing";
@@ -173,20 +176,44 @@ function registerWorkflowRoutes(
   /**
    * Whether the run's data may answer this caller, where its other rights let it read the run:
    * its result, its steps' outputs and logs, and the labels, run key and loop item label that
-   * a step read. An outside client (an API credential, or a call made for one) reads them for
-   * a run it started itself and for other runs only with `workflow.read_run_data`. A person
-   * in the interface reads them as before.
+   * a step read. An outside client (an API credential, or a call made for one) reads them only
+   * of a run that may answer outside (`answersOutside`): for a run it started itself, and for
+   * other runs with `workflow.read_run_data`. A person in the interface reads them as before.
    */
   function runDataReadable(
     run: WorkflowRunView,
     caller: { actor: AuthenticatedIdentity; origin: OperationOrigin },
     readRunData: boolean
   ): boolean {
+    if (!isOutsideCall(caller.actor, caller.origin)) return true;
     return (
-      !isOutsideCall(caller.actor, caller.origin) ||
-      readRunData ||
-      startedByThisCredential(run, caller.actor)
+      answersOutside(run, caller.actor) &&
+      (readRunData || startedByThisCredential(run, caller.actor))
     );
+  }
+
+  /**
+   * Refuses an outside client the data of a run that answers none, where the call reads it.
+   * The check of the call decides on the run where it can, and on the kind where it cannot;
+   * this one holds whatever the kind let through.
+   */
+  async function requireAnswersOutside(
+    runId: string,
+    caller: { actor: AuthenticatedIdentity; origin: OperationOrigin }
+  ): Promise<void> {
+    if (!isOutsideCall(caller.actor, caller.origin)) return;
+    const run = await required().readRun(runId);
+    if (run && !answersOutside(run, caller.actor)) {
+      throw new AppError(
+        "FORBIDDEN",
+        OUTSIDE_REFUSAL_MESSAGE,
+        {
+          reason: "no_grant",
+          action: OUTSIDE_REFUSAL_ACTION
+        },
+        { exposeMessage: true }
+      );
+    }
   }
 
   /**
@@ -222,7 +249,8 @@ function registerWorkflowRoutes(
     // of the asset shows it. A Workflow that cannot be started is listed all the same. Each
     // names what this caller may do with it, so a page offers a start only where one is let
     // through: the right on this Workflow and a credential whose scope reaches the call.
-    execute: async (input, { access, actor }) => {
+    execute: async (input, context) => {
+      const { access, actor } = context;
       const scope = pageScope("workflows.list", {}, input);
       const rows = await readablePage(
         storePage(input, ["id"], scope),
@@ -232,9 +260,26 @@ function registerWorkflowRoutes(
         (workflow) => [workflow.id]
       );
       const page = paginate(rows, input, ["id"], false, scope);
+      const outside = isOutsideCall(actor, context.origin);
       return {
         ...page,
-        items: page.items.flatMap(({ asset, ...workflow }) => {
+        items: page.items.flatMap(({ asset, ...listed }) => {
+          // An outside client is told which Workflows it cannot start: those whose trigger does
+          // not name `outside`. Whether their Connections answer outside is asked at the start.
+          const workflow =
+            outside && listed.triggers?.includes(WORKFLOW_OUTSIDE_TRIGGER) !== true
+              ? {
+                  ...listed,
+                  runnable: false,
+                  reasons: [
+                    ...listed.reasons,
+                    {
+                      code: "no_outside_trigger",
+                      message: `The Workflow '${listed.id}' is not started from outside`
+                    }
+                  ]
+                }
+              : listed;
           const actions = listedWorkflowActions(access, actor, workflowOf(workflow.id, asset));
           // The workspace that owns it, so a page names the owner (WS-OWN-1b).
           const owner =
@@ -258,7 +303,10 @@ function registerWorkflowRoutes(
           ...(input.key === undefined ? {} : { key: input.key }),
           startedBy: context.actor,
           operationRunId: context.runId,
-          correlationId: context.correlationId
+          correlationId: context.correlationId,
+          // An outside client starts only a Workflow exposed to it (connections-and-secrets.md,
+          // Exposure to outside clients). Asked here, where the call runs, after any wait.
+          outside: isOutsideCall(context.actor, context.origin)
         }),
         context,
         () => appWorkflowRefusalError("workflow_unavailable", input.workflow)
@@ -433,16 +481,23 @@ function registerWorkflowRoutes(
 
   route.operation(apiOperations["workflows.download_dataset"], {
     authorize: (input, { access, actor, origin }) =>
-      authorizeOnRun(input.runId, (run, resource) =>
-        run &&
-        (isOutsideCall(actor, origin) ? startedByThisCredential(run, actor) : startedBy(run, actor))
+      authorizeOnRun(input.runId, (run, resource) => {
+        if (!isOutsideCall(actor, origin)) {
+          return run && startedBy(run, actor)
+            ? { allowed: true }
+            : decide(access, WORKFLOW_ACTIONS.readRunData, resource);
+        }
+        // An outside client reads the rows of a run that may answer outside, and no other.
+        if (run && !answersOutside(run, actor)) return OUTSIDE_REFUSAL;
+        return run && startedByThisCredential(run, actor)
           ? { allowed: true }
-          : decide(access, WORKFLOW_ACTIONS.readRunData, resource)
-      ),
+          : decide(access, WORKFLOW_ACTIONS.readRunData, resource);
+      }),
     resource: runResource,
     module: WORKFLOWS_MODULE,
     recordsEveryCall: true,
     execute: async (input, context) => {
+      await requireAnswersOutside(input.runId, context);
       const download = required().downloadDataset;
       if (!download) throw new AppError("NOT_FOUND", "Dataset downloads are not available");
       return download({
@@ -458,13 +513,16 @@ function registerWorkflowRoutes(
   // An agent step's transcript is the run's data: only a holder of `workflow.read_run_data`
   // reads it, one step at a time and bounded (CR-2, check 99).
   route.operation(apiOperations["workflows.get_step_transcript"], {
-    authorize: (input, { access }) =>
-      authorizeOnRun(input.runId, (_run, resource) =>
-        decide(access, WORKFLOW_ACTIONS.readRunData, resource)
+    authorize: (input, { access, actor, origin }) =>
+      authorizeOnRun(input.runId, (run, resource) =>
+        run && isOutsideCall(actor, origin) && !answersOutside(run, actor)
+          ? OUTSIDE_REFUSAL
+          : decide(access, WORKFLOW_ACTIONS.readRunData, resource)
       ),
     resource: runResource,
     module: WORKFLOWS_MODULE,
-    execute: async (input) => {
+    execute: async (input, context) => {
+      await requireAnswersOutside(input.runId, context);
       const transcript = await required().readStepTranscript(input);
       if (!transcript) throw new AppError("NOT_FOUND", "There is no such agent step run");
       return transcript;
@@ -588,6 +646,29 @@ function registerWorkflowRoutes(
 export function noWorkflowDraftError(workflow: string): AppError {
   return new AppError("NOT_FOUND", `There is no Workflow '${workflow}'`);
 }
+
+/**
+ * Whether a run's data may answer an outside client at all: a run an outside client started,
+ * whose start asked that every Connection operation it may call is exposed to `outside`, or a
+ * test run of a draft this very credential started, whose steps were each asked what the key
+ * may carry. A run started any other way, by a person, a schedule, an App or a parent, acted
+ * under exposure `workflow` alone and answers no outside client, whatever its reader's rights.
+ */
+function answersOutside(run: WorkflowRunView, actor: AuthenticatedIdentity): boolean {
+  if (run.mode === "test") return startedByThisCredential(run, actor);
+  return run.trigger === WORKFLOW_OUTSIDE_TRIGGER;
+}
+
+const OUTSIDE_REFUSAL_ACTION = "connection_exposure:outside";
+const OUTSIDE_REFUSAL_MESSAGE = "This run's data is not exposed to outside clients";
+
+/** The refusal of a read of run data by an outside client of a run that answers none. */
+const OUTSIDE_REFUSAL: OperationAuthorization = {
+  allowed: false,
+  action: OUTSIDE_REFUSAL_ACTION,
+  reason: "no_grant",
+  message: OUTSIDE_REFUSAL_MESSAGE
+};
 
 function startedBy(run: WorkflowRunView, actor: AuthenticatedIdentity): boolean {
   const kind = isAuthenticatedServicePrincipal(actor) ? "service_principal" : "user";

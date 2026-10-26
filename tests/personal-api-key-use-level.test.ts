@@ -184,6 +184,12 @@ describe("the use level of a personal key", () => {
       action: "workflow.use",
       reason: "outside_key_scope"
     });
-    expect((await start([...AUTHORING, "workflow.use"])).statusCode).toBe(200);
+    // With the level the key passes its scope; this Workflow is not turned on for outside
+    // clients, so the start ends at that rule and not at the key's scope.
+    const withUse = await start([...AUTHORING, "workflow.use"]);
+    expect(withUse.statusCode, withUse.body).toBe(409);
+    expect(errorSchema.parse(withUse.json()).error.details).toEqual({
+      reason: "no_outside_trigger"
+    });
   });
 });

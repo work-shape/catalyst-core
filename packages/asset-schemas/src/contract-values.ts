@@ -941,7 +941,7 @@ export const WORKFLOW_RESERVED_STEP_TYPES = [
 ] as const;
 export type WorkflowReservedStepType = (typeof WORKFLOW_RESERVED_STEP_TYPES)[number];
 
-export const WORKFLOW_TRIGGER_KINDS = ["manual", "schedule", "parent"] as const;
+export const WORKFLOW_TRIGGER_KINDS = ["manual", "schedule", "parent", "outside"] as const;
 export type WorkflowTriggerKind = (typeof WORKFLOW_TRIGGER_KINDS)[number];
 
 export const NOTIFY_CHANNELS = ["inbox", "mail"] as const;

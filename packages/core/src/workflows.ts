@@ -67,7 +67,14 @@ export type WorkflowTrigger =
    * A `workflow` step of another Workflow may start this one as its child run. A Workflow
    * whose only trigger this is, is started by a parent and by nothing else.
    */
-  | { kind: "parent" };
+  | { kind: "parent" }
+  /**
+   * An outside client may start it: a personal API key, a Service Principal's credential, the
+   * CLI or the platform MCP server. Off unless the definition names it, and a start from
+   * outside also needs every Connection operation the run may call to be exposed to `outside`
+   * (connections-and-secrets.md, Exposure to outside clients).
+   */
+  | { kind: "outside" };
 
 /**
  * The output of a trigger step, fixed by the engine: the run's input, when the run started as

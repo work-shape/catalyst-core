@@ -174,3 +174,10 @@ export { resolveWorkflowNeededRights } from "./needed-rights";
 export { testRunCall } from "./test-run";
 export { agentOutputError } from "./agent-step";
 export { createWorkflowRunFiles, runFilesOwner, type WorkflowRunFiles } from "./run-files";
+export {
+  WORKFLOW_OUTSIDE_TRIGGER,
+  startsFromOutside,
+  workflowOutsideBlockers,
+  type WorkflowOutsideBlocker
+} from "./outside-reach";
+export { workflowOutsideIssues } from "./outside-reach";

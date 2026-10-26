@@ -57,6 +57,7 @@ import {
   nextDueAfter,
   stepFileBytes,
   workflowDefinitionRefusal,
+  workflowOutsideIssues,
   workflowStepFileIssues,
   workflowStepFilesRefusal,
   workflowKindIssues,
@@ -467,6 +468,17 @@ export function createWorkflowAssetKind(
         result.manifest,
         createWorkflowAssetDefinitions({ clientInstanceId, configAssets: stores.configAssets })
       );
+      // Started from outside, it may read only what is exposed to outside (named here; asked
+      // again at every start, since a Connection or a child changes after this publish).
+      const outside = await workflowOutsideIssues(result.manifest, {
+        clientInstanceId,
+        configAssets: stores.configAssets,
+        definitions: createWorkflowAssetDefinitions({
+          clientInstanceId,
+          configAssets: stores.configAssets
+        })
+      });
+      if (outside.length > 0) throw workflowDefinitionRefusal(result.manifest.id, outside);
       await reschedule(stores, replaced, config);
     },
     // Account revocation is part of the delete, never a best-effort after-write task.

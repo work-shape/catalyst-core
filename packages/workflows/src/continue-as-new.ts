@@ -21,6 +21,13 @@ import type { WorkflowDefinitionSource } from "./definition-source";
 import type { PreparedStart } from "./run-start";
 import type { createRunOpening } from "./run-open";
 import { principalActor } from "./run-identity";
+import {
+  WORKFLOW_OUTSIDE_TRIGGER,
+  startsFromOutside,
+  workflowNotOutsideRefusal,
+  workflowOutsideBlockers,
+  workflowOutsideRefusal
+} from "./outside-reach";
 
 type Loop = Extract<WorkflowStep, { type: "loop" }>;
 const inputIssues = z.object({
@@ -141,6 +148,21 @@ export function createContinuation(options: {
         return true;
       }
       if (!published) throw new AppError("NOT_FOUND", "The Workflow is no longer published");
+      // A history an outside client started goes on only on a revision that still answers one.
+      const root =
+        run.rootRunId === run.id
+          ? run
+          : await tx.workflowRuns.readRun({ clientInstanceId, id: run.rootRunId });
+      if (run.mode === "live" && root?.trigger === WORKFLOW_OUTSIDE_TRIGGER) {
+        if (run.id === root.id && !startsFromOutside(published.manifest))
+          throw workflowNotOutsideRefusal(published.manifest.id);
+        const blockers = await workflowOutsideBlockers(published.manifest, {
+          clientInstanceId,
+          configAssets: tx.configAssets,
+          definitions: options.definitions
+        });
+        if (blockers.length > 0) throw workflowOutsideRefusal(published.manifest.id);
+      }
       if (!completePage) {
         const index = indexWorkflowSteps(published.manifest);
         if (

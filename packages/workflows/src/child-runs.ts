@@ -14,6 +14,7 @@ import {
   type OperationResolutionStores,
   type OperationSource,
   type PlatformStores,
+  type WorkflowManifest,
   type WorkflowRun,
   type WorkflowStepRun
 } from "@work-shape/catalyst-core";
@@ -26,6 +27,11 @@ import type { RunOrigin } from "./scheduled-start";
 import { assertRunLinkIsAcyclic } from "./child-run-links";
 import { workflowResource } from "./workflow-resource";
 import { childDefinition } from "./child-definition";
+import {
+  WORKFLOW_OUTSIDE_TRIGGER,
+  workflowOutsideBlockers,
+  workflowOutsideRefusal
+} from "./outside-reach";
 
 /** A start must record its durable run promptly; overdue Operation Runs can be recovered. */
 const WORKFLOW_START_OPERATION_TIMEOUT_MS = 30_000;
@@ -88,6 +94,28 @@ export function createWorkflowStartSource(options: {
   ): Promise<boolean>;
 }): OperationSource {
   const { clientInstanceId, stores, definitions } = options;
+  /**
+   * A live run an outside client started asks its child again at the child's start: the child
+   * may have been published, or a Connection's exposure changed, since the root was started.
+   */
+  async function requireOutsideChild(
+    parentRunId: string,
+    child: Pick<WorkflowManifest, "id" | "steps" | "tools">
+  ): Promise<void> {
+    const parent = await stores.workflowRuns.readRun({ clientInstanceId, id: parentRunId });
+    if (!parent || parent.mode !== "live") return;
+    const root =
+      parent.rootRunId === parent.id
+        ? parent
+        : await stores.workflowRuns.readRun({ clientInstanceId, id: parent.rootRunId });
+    if (root?.trigger !== WORKFLOW_OUTSIDE_TRIGGER) return;
+    const blockers = await workflowOutsideBlockers(child, {
+      clientInstanceId,
+      configAssets: stores.configAssets,
+      definitions
+    });
+    if (blockers.length > 0) throw workflowOutsideRefusal(child.id);
+  }
   async function resolve(name: string, readers?: OperationResolutionStores) {
     const match = /^workflow\.([a-z][a-z0-9_-]{0,62})\.start$/u.exec(name);
     const workflow = match?.[1];
@@ -195,6 +223,7 @@ export function createWorkflowStartSource(options: {
             reason: "no_parent_trigger"
           });
         }
+        await requireOutsideChild(step.runId, revision.manifest);
         const prepared = await options.prepare(revision, inputs);
         const run = await stores.transaction(async (tx) => {
           // Keyed starts may link existing runs. Serialize their guard reads through the

@@ -16,7 +16,13 @@ import { clientInstanceId, errorSchema, type AccessInstance } from "./support/ac
 import { setupAppActions, type AppActionsInstance } from "./support/app-actions";
 import { operationOf } from "./support/connection-operations";
 import { issuePersonalKey, personalKeyServer, personalKeyToken } from "./support/personal-api-keys";
-import { runSchema, stepRunsSchema, type WorkflowFixture } from "./support/workflow-instance";
+import {
+  publishedDefinitions,
+  runSchema,
+  stepRunsSchema,
+  type WorkflowFixture
+} from "./support/workflow-instance";
+import type { WorkflowDefinitionSource } from "@work-shape/catalyst-workflows";
 import { NOTE, notifyClients, readyWorkflows } from "./support/workflow-runs";
 
 // An outside client, a personal API key over the CLI, reaches a Connection's data only through
@@ -94,7 +100,10 @@ describe("a Workflow run read or started with a key", () => {
   });
 
   const ready = async (
-    options: { definitions?: "assets"; operationSources?: readonly OperationSource[] } = {}
+    options: {
+      definitions?: "assets" | WorkflowDefinitionSource;
+      operationSources?: readonly OperationSource[];
+    } = {}
   ) => {
     const t = await readyWorkflows(
       (fixture) => {
@@ -300,7 +309,8 @@ describe("a Workflow run read or started with a key", () => {
     });
     expect(byRunKey.statusCode, byRunKey.body).toBe(200);
     expect(runsSchema.parse(byRunKey.json()).items).toEqual([]);
-    // A start with a key that the admin's run holds answers that run, without its result.
+    // A start with a key that the admin's run holds is refused: the Workflow does not start
+    // from outside, and the answer names neither the run nor its key.
     for (const action of ["workflow.write", "workflow.use"]) await allow(t, tim.id, action);
     const starter = await keyOf(t, tim.id, ["workflow.read", "workflow.write", "workflow.use"]);
     const again = await t.call(tim.id, "workflows.start", {
@@ -308,9 +318,8 @@ describe("a Workflow run read or started with a key", () => {
       payload: { input: { note: NOTE }, key: "2026-10/anna" },
       headers: starter
     });
-    expect(again.statusCode, again.body).toBe(200);
-    expect(runSchema.parse(again.json())).toMatchObject({ id: run.id });
-    expect(runSchema.parse(again.json()).outputPreview).toBeUndefined();
+    expect(again.statusCode, again.body).toBe(409);
+    expect(again.body).not.toContain(run.id);
     expect(again.body).not.toContain("2026-10/anna");
 
     // Tim signed in to the app reads them as before.
@@ -373,7 +382,21 @@ describe("a Workflow run read or started with a key", () => {
   });
 
   it("gives a key the result and step outputs of a published run it started, and another key neither", async () => {
-    const { t, tim } = await ready();
+    // Started from outside: its trigger names `outside` and crm's operations are exposed to it.
+    const definitions = publishedDefinitions();
+    const opened = notifyClients();
+    const [trigger, ...rest] = opened.steps;
+    definitions.publish({
+      ...opened,
+      steps: [{ ...trigger, triggers: [{ kind: "manual" }, { kind: "outside" }] }, ...rest]
+    });
+    const { t, tim } = await ready({ definitions: definitions.source });
+    await t.seed("crm", {
+      operations: [
+        operationOf("echo", { exposure: ["workflow", "outside"] }),
+        operationOf("write", { effect: "changing", exposure: ["workflow", "outside"] })
+      ]
+    });
     for (const action of ["workflow.read", "workflow.write", "workflow.use"]) {
       await allow(t, tim.id, action);
     }

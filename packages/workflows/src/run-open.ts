@@ -56,6 +56,12 @@ export interface StartWorkflowRunInput {
   correlationId: string;
   /** Trusted Workflow call origin, never read from a start request body. */
   datasetInputRunId?: WorkflowRunId;
+  /**
+   * The start came from an outside client (an API credential, or a call made for one): the
+   * trigger must name `outside` and the run records it as its trigger. Set by the route from
+   * how the call was authenticated, never from what the caller sends.
+   */
+  outside?: boolean;
 }
 
 /**
@@ -294,7 +300,7 @@ export function createRunOpening(options: {
           tx,
           prepared,
           {
-            trigger: "manual",
+            trigger: input.outside === true ? "outside" : "manual",
             startedBy: {
               kind: isAuthenticatedServicePrincipal(startedBy) ? "service_principal" : "user",
               id: startedBy.id,

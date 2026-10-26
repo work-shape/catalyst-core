@@ -279,7 +279,9 @@ export function toWorkflowRun(run: WorkflowRunResource): WorkflowRunView {
     stopping: run.cancelledAt !== undefined && !workflowRunEnded(run.status),
     // A run its schedule or another run started names no person.
     startedBy:
-      run.trigger === "manual" ? { id: run.startedBy.id, name: run.startedBy.label } : undefined,
+      run.trigger === "manual" || run.trigger === "outside"
+        ? { id: run.startedBy.id, name: run.startedBy.label }
+        : undefined,
     ...(run.principal === undefined ? {} : { runsAs: run.principal.displayLabel }),
     ...times(run),
     ...toFailure(run.error),

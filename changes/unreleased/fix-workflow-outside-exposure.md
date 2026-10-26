@@ -1,0 +1,5 @@
+---
+section: Changed
+---
+
+- A Workflow no longer hands an outside client data a Connection keeps from outside clients. An API key, a Service Principal's credential, the CLI or the platform MCP server starts a Workflow only when its trigger names `outside` ("By outside clients (CLI, MCP)" in its Settings, off for every Workflow), and only while every Connection operation the run calls, in its child Workflows too, is exposed to `outside`, and it reads no Knowledge Base filled from a Connection. Publishing such a revision is refused with `outside_not_exposed`, naming the Connections; a start is refused with `no_outside_trigger` or `connection_exposure:outside`, asked again at every start, child start and continuation. A run an outside client started records the trigger `outside`; an outside client reads the result, step outputs, datasets and transcripts only of such runs and of its own test runs. A person, an agent in the chat and an App start Workflows as before. Keys that start Workflows today need the Workflow's switch turned on and published.
