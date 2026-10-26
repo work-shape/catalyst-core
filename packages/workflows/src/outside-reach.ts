@@ -1,6 +1,7 @@
 import {
   AppError,
   CONNECTION_ASSET_KIND,
+  DATA_STORE_OPERATION_PREFIX,
   KNOWLEDGE_BASE_ASSET_KIND,
   KNOWLEDGE_OPERATION_PREFIX,
   WORKFLOW_OPERATION_PREFIX,
@@ -40,14 +41,23 @@ export function startsFromOutside(manifest: Pick<WorkflowManifest, "steps">): bo
 
 /**
  * What keeps a run of the definition from answering an outside client: a Connection whose
- * operation it calls is not exposed to `outside`, a Knowledge Base it reads is filled from a
- * Connection (its sources are never exposed to anyone), an App's action it calls, or a child
- * Workflow that is not published. Each is named once.
+ * operation it calls is not exposed to `outside`, a Knowledge Base it reads that is filled from
+ * a source (a Connection's or a Workflow's; its sources are exposed to nobody), a child Workflow
+ * that is not published, or any other operation it calls. Each is named once.
  */
 export interface WorkflowOutsideBlocker {
-  kind: "connection" | "workflow" | "app";
+  kind: "connection" | "knowledge_base" | "workflow" | "operation";
   name: string;
 }
+
+/**
+ * The operations a run started from outside may call besides Connection operations, Knowledge
+ * Base reads and child starts, each asked below: a Data Store's (the publisher's data, under the
+ * switch the publisher turns on) and sending mail (nothing comes back). Every other name is
+ * closed, so an operation added later is closed until it is named here.
+ */
+const OPEN_OPERATION_PREFIXES = [DATA_STORE_OPERATION_PREFIX] as const;
+const OPEN_OPERATIONS = new Set(["mail.send"]);
 
 const connectionExposureSchema = z.object({
   operations: z.array(z.object({ name: z.string(), exposure: z.array(z.string()) }))
@@ -62,11 +72,11 @@ function startedWorkflow(name: string): string | undefined {
   return name.startsWith(WORKFLOW_OPERATION_PREFIX) ? match?.[1] : undefined;
 }
 
-/** `knowledge.<id>.search` or `.query`: the Knowledge Base a read names. */
-function readKnowledgeBase(name: string): string | undefined {
+/** `knowledge.<id>.<operation>`: the Knowledge Base any of its operations names. */
+function knowledgeBaseOf(name: string): string | undefined {
   if (!name.startsWith(KNOWLEDGE_OPERATION_PREFIX)) return undefined;
-  const [, knowledgeBase, part] = name.split(".");
-  return part === "search" || part === "query" ? knowledgeBase : undefined;
+  const [, knowledgeBase] = name.split(".");
+  return knowledgeBase || undefined;
 }
 
 /**
@@ -129,21 +139,35 @@ export async function workflowOutsideBlockers(
         if (!exposure?.includes("outside")) block("connection", operation.connection);
         continue;
       }
-      const knowledgeBase = readKnowledgeBase(name);
+      const knowledgeBase = knowledgeBaseOf(name);
       if (knowledgeBase !== undefined) {
+        // Every operation of a Knowledge Base filled from a source reads that source's text or
+        // names; one that cannot be read counts as filled.
         const asset = await deps.configAssets.getConfigAsset({
           clientInstanceId: deps.clientInstanceId,
           kind: KNOWLEDGE_BASE_ASSET_KIND,
           name: knowledgeBase
         });
         const parsed = knowledgeSourcesSchema.safeParse(asset?.publishedConfig ?? asset?.config);
-        for (const source of parsed.data?.sources ?? []) {
+        if (!asset || !parsed.success) {
+          block("knowledge_base", knowledgeBase);
+          continue;
+        }
+        for (const source of parsed.data.sources ?? []) {
           if (source.connection !== undefined) block("connection", source.connection);
+          else block("knowledge_base", knowledgeBase);
         }
         continue;
       }
-      // An App's action calls its Connections under `bridge`, which outside never reaches.
-      if (name.startsWith("app.") || name.startsWith("page_action.")) block("app", name);
+      if (
+        OPEN_OPERATIONS.has(name) ||
+        OPEN_OPERATION_PREFIXES.some((prefix) => name.startsWith(prefix))
+      ) {
+        continue;
+      }
+      // An App's action (under `bridge`), an API operation that reads runs or sources as the
+      // Workflow's account, a tool of the release: none is asked of `outside`, so all are closed.
+      block("operation", name);
     }
     for (const child of children) {
       const revision = await deps.definitions.read(child, deps.configAssets);
@@ -167,6 +191,16 @@ export function workflowOutsideRefusal(workflow: string): AppError {
   return new AppError(
     "FORBIDDEN",
     `The Workflow '${workflow}' reads data that is not exposed to outside clients, so it is not started from outside`,
+    { reason: "no_grant", action: "connection_exposure:outside" },
+    { exposeMessage: true }
+  );
+}
+
+/** The refusal of a dataset input from outside whose run answers no outside client. */
+export function workflowOutsideDatasetRefusal(): AppError {
+  return new AppError(
+    "FORBIDDEN",
+    "The dataset comes from a run whose data is not exposed to outside clients",
     { reason: "no_grant", action: "connection_exposure:outside" },
     { exposeMessage: true }
   );
@@ -203,8 +237,9 @@ export async function workflowOutsideIssues(
   };
   const parts = [
     ...named("connection", "the Connection", "the Connections"),
+    ...named("knowledge_base", "the Knowledge Base", "the Knowledge Bases"),
     ...named("workflow", "the unpublished child Workflow", "the unpublished child Workflows"),
-    ...named("app", "the App action", "the App actions")
+    ...named("operation", "the operation", "the operations")
   ];
   const [trigger] = manifest.steps;
   return [

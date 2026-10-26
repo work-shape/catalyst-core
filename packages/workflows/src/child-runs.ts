@@ -98,17 +98,24 @@ export function createWorkflowStartSource(options: {
    * A live run an outside client started asks its child again at the child's start: the child
    * may have been published, or a Connection's exposure changed, since the root was started.
    */
+  /** Whether a live run's root is a run an outside client started. */
+  async function startedFromOutside(
+    readers: Pick<PlatformStores, "workflowRuns">,
+    run: Pick<WorkflowRun, "id" | "rootRunId" | "mode" | "trigger">
+  ): Promise<boolean> {
+    if (run.mode !== "live") return false;
+    const root =
+      run.rootRunId === run.id
+        ? run
+        : await readers.workflowRuns.readRun({ clientInstanceId, id: run.rootRunId });
+    return root?.trigger === WORKFLOW_OUTSIDE_TRIGGER;
+  }
   async function requireOutsideChild(
     parentRunId: string,
     child: Pick<WorkflowManifest, "id" | "steps" | "tools">
   ): Promise<void> {
     const parent = await stores.workflowRuns.readRun({ clientInstanceId, id: parentRunId });
-    if (!parent || parent.mode !== "live") return;
-    const root =
-      parent.rootRunId === parent.id
-        ? parent
-        : await stores.workflowRuns.readRun({ clientInstanceId, id: parent.rootRunId });
-    if (root?.trigger !== WORKFLOW_OUTSIDE_TRIGGER) return;
+    if (!parent || !(await startedFromOutside(stores, parent))) return;
     const blockers = await workflowOutsideBlockers(child, {
       clientInstanceId,
       configAssets: stores.configAssets,
@@ -280,6 +287,11 @@ export function createWorkflowStartSource(options: {
           // A run of another step or start holds the key: the step links to it and does not
           // own it. The holder is locked, so its end comes after this link and wakes the step.
           if (run && run.parentStepRunId !== step.id) {
+            // A run another start holds answers a run an outside client started only where
+            // an outside client started it too: another run read under `workflow` alone.
+            if ((await startedFromOutside(tx, parent)) && !(await startedFromOutside(tx, run))) {
+              throw workflowOutsideRefusal(revision.manifest.id);
+            }
             await assertRunLinkIsAcyclic(tx.workflowRuns, parent, run);
             await tx.workflowRuns.linkStepRun({
               clientInstanceId,

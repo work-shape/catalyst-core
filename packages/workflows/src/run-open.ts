@@ -30,6 +30,7 @@ import { workflowRunBounds, type WorkflowLimitContext } from "./run-limits";
 import type { PreparedStart } from "./run-start";
 import type { RunOrigin } from "./scheduled-start";
 import { workflowResource } from "./workflow-resource";
+import { WORKFLOW_OUTSIDE_TRIGGER, workflowOutsideDatasetRefusal } from "./outside-reach";
 
 // How a run comes to exist: its row, the step run of its trigger and the audit of its start,
 // in one transaction. A start by hand, a test run of a draft and a due time of a schedule all
@@ -115,7 +116,7 @@ export function createRunOpening(options: {
     prepared: PreparedStart,
     started: RunOrigin,
     mode: WorkflowRunMode = "live",
-    datasetAccess?: { access?: ActorAccess; sourceRunId?: WorkflowRunId }
+    datasetAccess?: { access?: ActorAccess; sourceRunId?: WorkflowRunId; outside?: boolean }
   ): Promise<WorkflowRun | undefined> {
     const { runKey } = started;
     for (let attempt = 1; attempt <= KEYED_START_ATTEMPTS; attempt += 1) {
@@ -137,7 +138,7 @@ export function createRunOpening(options: {
     prepared: PreparedStart,
     started: RunOrigin,
     mode: WorkflowRunMode,
-    datasetAccess?: { access?: ActorAccess; sourceRunId?: WorkflowRunId }
+    datasetAccess?: { access?: ActorAccess; sourceRunId?: WorkflowRunId; outside?: boolean }
   ): Promise<WorkflowRun | undefined> {
     const { published, trigger, input, principal } = prepared;
     const { actor, parentLimits, ...origin } = started;
@@ -204,6 +205,16 @@ export function createRunOpening(options: {
           "workflow.read_run_data",
           workflowResource(source.workflow, asset)
         );
+        // An outside client hands on only a dataset of a run that answers it: a live run an
+        // outside client started. Another run read under `workflow` alone.
+        if (datasetAccess.outside === true) {
+          const root =
+            source.rootRunId === source.id
+              ? source
+              : await tx.workflowRuns.readRun({ clientInstanceId, id: source.rootRunId });
+          if (root?.mode !== "live" || root.trigger !== WORKFLOW_OUTSIDE_TRIGGER)
+            throw workflowOutsideDatasetRefusal();
+        }
       }
       const offset = ref.offset ?? 0;
       const matchesRows =
@@ -320,7 +331,8 @@ export function createRunOpening(options: {
           mode,
           {
             ...(access ? { access } : {}),
-            ...(input.datasetInputRunId ? { sourceRunId: input.datasetInputRunId } : {})
+            ...(input.datasetInputRunId ? { sourceRunId: input.datasetInputRunId } : {}),
+            ...(input.outside === true ? { outside: true } : {})
           }
         )) ??
         (input.operationRunId
