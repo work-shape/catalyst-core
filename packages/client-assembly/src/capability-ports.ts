@@ -18,7 +18,7 @@ export function capabilityStoresOf(input: {
   clientInstanceId: ClientInstanceId;
   capability: string;
   store: Pick<PlatformStores, "capabilityRecords" | "operationRuns">;
-  /** The operations the capability contributes, known once it is created. */
+  /** The capability's async operations, known once it is created. */
   operations: () => ReadonlySet<string>;
 }): Pick<ClientInstanceCapabilityPlatformStores, "records" | "operationRuns"> {
   const { clientInstanceId, capability, store } = input;
@@ -40,6 +40,9 @@ export function capabilityStoresOf(input: {
     operationRuns: {
       get: ownRun,
       async finish({ id, end }) {
+        if (end.status !== "done" && end.status !== "failed") {
+          throw new AppError("VALIDATION_FAILED", "A capability ends its runs as done or failed");
+        }
         const run = await ownRun(id);
         if (!run) {
           throw new AppError("NOT_FOUND", "No run of this capability's operations has this id");

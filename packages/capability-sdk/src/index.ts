@@ -175,9 +175,13 @@ export interface ClientInstanceCapabilityOperationRuns {
   /**
    * Ends a run of one of the capability's own operations with `completion: async` that is
    * still `running`. The transaction that ends it queues every Workflow step that waits for
-   * it. `undefined` when it is not running any more. A run of another operation is refused.
+   * it. `undefined` when it is not running any more. A run of another operation is refused,
+   * and so is any end but `done` or `failed`.
    */
-  finish(input: { id: OperationRunId; end: OperationRunEnd }): Promise<OperationRun | undefined>;
+  finish(input: {
+    id: OperationRunId;
+    end: Extract<OperationRunEnd, { status: "done" | "failed" }>;
+  }): Promise<OperationRun | undefined>;
 }
 
 /**

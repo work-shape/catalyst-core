@@ -858,13 +858,22 @@ async function createCapabilityContributions(
   const { scoped, operationNames, ...shared } = context;
   const contributions: ClientInstanceCapabilityContribution[] = [];
   for (const capability of capabilities) {
+    // The name scopes the capability's records and runs, so two of one name would share them.
+    if (operationNames.has(capability.name)) {
+      throw new AppError("INTERNAL", `Two capabilities are named '${capability.name}'`);
+    }
     const contribution = await capability.create({
       ...shared,
       stores: { ...shared.stores, ...scoped(capability.name) }
     });
     operationNames.set(
       capability.name,
-      new Set((contribution.operations ?? []).map((operation) => operation.name))
+      // Only its async operations: those are the runs a capability ends itself.
+      new Set(
+        (contribution.operations ?? [])
+          .filter((operation) => operation.completion !== undefined)
+          .map((operation) => operation.name)
+      )
     );
     contributions.push(contribution);
   }

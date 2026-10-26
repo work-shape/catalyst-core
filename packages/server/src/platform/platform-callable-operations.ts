@@ -52,9 +52,14 @@ const CALLABLE_NAMES: Readonly<Record<PlatformOperationsAudience, readonly strin
   app: []
 };
 
-/** Whether the audience names an operation of this name at all. */
-function callableByAudience(name: string, audience: PlatformOperationsAudience): boolean {
+/** Whether the audience names this operation at all. */
+function callableByAudience(
+  definition: Pick<OperationDefinition, "name" | "workflowStep">,
+  audience: PlatformOperationsAudience
+): boolean {
+  const { name } = definition;
   return (
+    (audience === "workflow" && definition.workflowStep === true) ||
     CALLABLE_NAMES[audience].includes(name) ||
     CALLABLE_PREFIXES[audience].some((prefix) => name.startsWith(prefix))
   );
@@ -116,7 +121,7 @@ export async function listCallableOperations(
   const candidates = (listing?.operations ?? [])
     .filter(
       (definition) =>
-        callableByAudience(definition.name, audience.for) &&
+        callableByAudience(definition, audience.for) &&
         (input.name === undefined || definition.name === input.name) &&
         (input.prefix === undefined || definition.name.startsWith(input.prefix)) &&
         (typeof after !== "string" ||
