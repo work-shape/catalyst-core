@@ -4,6 +4,7 @@ import type {
   JsonObject,
   JsonValue,
   OperationBeforeEvent,
+  OperationAuth,
   OperationAuthorization,
   OperationChangeClass,
   OperationAuthorizeContext,
@@ -39,6 +40,12 @@ export interface ToolDefinition<TInput = unknown, TOutput = unknown> extends Too
   outputSchema?: z.ZodType<TOutput>;
   inputJsonSchema?: JsonObject;
   permission?: ToolPermissionPolicy;
+  /**
+   * Who may call the tool. `user`, the default: a person only, so a run whose principal is a
+   * service principal is refused it. `principal`: a service principal too, for a tool that
+   * reaches only what the run's own thread holds, such as its attachments.
+   */
+  auth?: OperationAuth;
   /**
    * Checks the exact parsed call before policy, guardrails and confirmation. May run again
    * when a held call resumes or for a bound principal; it must have no side effects.

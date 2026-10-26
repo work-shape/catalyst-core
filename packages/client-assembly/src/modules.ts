@@ -1,6 +1,7 @@
 import {
   AppError,
   createModuleRegistry,
+  isModuleName,
   moduleConfigKey,
   type KnowledgeHitDocuments,
   type ModuleRegistry,
@@ -110,7 +111,15 @@ export interface InstanceModules {
  */
 export function resolveInstanceModules(
   config: ClientInstanceConfig,
-  capabilities: readonly ClientInstanceCapability[]
+  capabilities: readonly ClientInstanceCapability[],
+  options: {
+    /**
+     * For a process that serves part of the instance, such as a worker of one capability: a
+     * module switched on that this build does not ship is left out, not refused. The processes
+     * that ship it check it.
+     */
+    shippedOnly?: boolean;
+  } = {}
 ): InstanceModules {
   const registry = createModuleRegistry([
     ...platformModules,
@@ -119,7 +128,19 @@ export function resolveInstanceModules(
       (capability) => capability.modules ?? []
     )
   ]);
-  return { registry, snapshot: registry.snapshot(resolveModuleSwitches(config)) };
+  const switches = resolveModuleSwitches(config);
+  return {
+    registry,
+    snapshot: registry.snapshot(
+      options.shippedOnly
+        ? Object.fromEntries(
+            Object.entries(switches).filter(
+              ([name]) => isModuleName(name) && registry.get(name) !== undefined
+            )
+          )
+        : switches
+    )
+  };
 }
 
 /** What a resolve-only run prints before it ends. The release gate looks for this line. */

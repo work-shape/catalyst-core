@@ -246,8 +246,9 @@ type WorkflowFileAttachments = Pick<
  * where they keep their files. The run waits until each is ready or refused, and their
  * manifest is stored on the task message. A copy has the run file's checksum, so a run that
  * starts again finds the copies it made. A file that is gone since the step checked it is left
- * out, and so are one no handler takes and one still preparing at the end of the wait: the
- * agent starts with what is ready.
+ * out, and so is one no handler takes, such as a spreadsheet, which the agent knows by name
+ * only. One still preparing at the end of the wait fails the run: the agent never starts
+ * without a document its task names.
  */
 async function attachWorkflowFiles(
   store: PlatformStores,
@@ -287,6 +288,15 @@ async function attachWorkflowFiles(
   while (current.some((attachment) => PREPARING.has(attachment.status)) && Date.now() < deadline) {
     await delay(WORKFLOW_FILES_POLL_MS, undefined, { signal });
     current = await listed();
+  }
+  if (current.some((attachment) => PREPARING.has(attachment.status))) {
+    throw new AppError(
+      "CONFLICT",
+      "A file of the step was still being prepared when the wait ended",
+      {
+        reason: "files_unavailable"
+      }
+    );
   }
   const attachmentManifest = attachments.createAttachmentManifest(current);
   await store.childAgentRuns.attachWorkflowAgentFiles({

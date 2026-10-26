@@ -129,6 +129,9 @@ export type OperationSimulationContext = Pick<
   "runId" | "actor" | "origin" | "workspaceId" | "correlationId" | "runtime" | "audit" | "target"
 >;
 
+/** Who may call an operation: `user` a person only, `principal` a service principal too. */
+export type OperationAuth = "user" | "principal";
+
 /** What an operation's own check of the caller's right answers. A refusal names the right. */
 export type OperationAuthorization =
   | { allowed: true }
@@ -370,7 +373,7 @@ interface OperationDefinitionBase<Input, Output> {
   /** The scope a credential must carry; `null` asks for none. Checked where a credential arrives. */
   scope: OperationScope | null;
   /** `user` refuses service principals. */
-  auth: "user" | "principal";
+  auth: OperationAuth;
   inputSchema: z.ZodType<Input>;
   outputSchema: z.ZodType;
   /**
