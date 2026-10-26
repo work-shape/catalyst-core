@@ -1,3 +1,4 @@
+import { setTimeout } from "node:timers/promises";
 import {
   AppError,
   JOB_WORKER_SILENT_MS,
@@ -110,7 +111,7 @@ async function createKnowledgeService(input: CreateClientInstanceKnowledgeWorker
         });
         const seen = activity.report && Date.parse(activity.report.seenAt);
         if (seen !== undefined && seen >= since && Date.now() - seen < JOB_WORKER_SILENT_MS) return;
-        await new Promise<void>((resolve) => setTimeout(resolve, READY_POLL_MS));
+        await setTimeout(READY_POLL_MS);
       } while (Date.now() < deadline);
       throw new AppError(
         "INTERNAL",

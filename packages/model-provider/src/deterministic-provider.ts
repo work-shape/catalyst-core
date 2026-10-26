@@ -1,3 +1,4 @@
+import { setTimeout as delay } from "node:timers/promises";
 import { AppError, createPlatformId } from "@work-shape/catalyst-core";
 import {
   isModelFunctionTool,
@@ -197,10 +198,4 @@ function retryAfterSignIn(
 
 function chunkText(text: string): string[] {
   return text.match(/\S+\s*/gu) ?? [text];
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
 }

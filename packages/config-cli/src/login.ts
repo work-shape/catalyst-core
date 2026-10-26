@@ -1,3 +1,4 @@
+import { setTimeout as defaultSleep } from "node:timers/promises";
 import { hostname } from "node:os";
 import { createApiClient } from "@work-shape/catalyst-api-client";
 import { assertSafeApiKeyExchangeUrl, instanceFetch, toConfigApiError } from "./api";
@@ -162,8 +163,4 @@ async function call<Output>(request: () => Promise<Output>): Promise<Output> {
 
 export function formatTime(iso: string): string {
   return new Date(iso).toLocaleString();
-}
-
-function defaultSleep(milliseconds: number): Promise<void> {
-  return new Promise((resolveSleep) => setTimeout(resolveSleep, milliseconds));
 }

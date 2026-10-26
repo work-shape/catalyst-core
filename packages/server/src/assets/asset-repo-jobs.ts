@@ -1,3 +1,4 @@
+import { setTimeout } from "node:timers/promises";
 import { createHash } from "node:crypto";
 import {
   assetRepoMib,
@@ -571,7 +572,7 @@ export function createAssetRepoCommitClient(
           }
           continue;
         }
-        await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+        await setTimeout(pollIntervalMs);
       }
     }
   };

@@ -1,3 +1,4 @@
+import { setTimeout } from "node:timers/promises";
 import {
   AppError,
   DATA_STORE_OPERATION_PREFIX,
@@ -526,7 +527,7 @@ export async function endHeldOperationCalls(
       // The decision that holds the request is over in a moment. If it took the call, the
       // request is no longer open; if it failed, the request is open again and is ended now.
       waits += 1;
-      await new Promise((resolve) => setTimeout(resolve, HELD_CALLS_LOCKED_RETRY_MS));
+      await setTimeout(HELD_CALLS_LOCKED_RETRY_MS);
       continue;
     }
     // A page that ended nothing would be read again as it is.

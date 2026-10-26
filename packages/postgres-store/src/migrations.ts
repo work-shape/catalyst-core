@@ -1,3 +1,4 @@
+import { setTimeout } from "node:timers/promises";
 import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -177,7 +178,7 @@ async function takeMigrationLock(
       );
       nextLogAt = now + MIGRATION_LOCK_WAIT_LOG_MS;
     }
-    await new Promise((resolve) => setTimeout(resolve, MIGRATION_LOCK_RETRY_MS));
+    await setTimeout(MIGRATION_LOCK_RETRY_MS);
   }
 }
 

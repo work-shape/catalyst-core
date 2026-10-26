@@ -70,6 +70,7 @@ export type { RateLimiter } from "./rate-limiter";
 export type { RateLimitRule } from "./rate-limiter";
 export * from "./record-evidence";
 export * from "./result-shaper";
+export * from "./retry-after";
 export { RIGHT_VERB_WORDS } from "./right-words";
 export type { CronExpression } from "./schedule-cron";
 export { isTimeZone } from "./schedule-cron";

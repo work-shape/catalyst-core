@@ -56,6 +56,30 @@ describe("provider error boundary", () => {
     }
   });
 
+  it.each([
+    "2026-10-09T12:00:45Z",
+    "Fri, 09 Oct 2026 12:00:45 UTC",
+    "Friday, 09-Oct-26 12:00:45 GMT",
+    "Fri Oct 09 12:00:45 2026",
+    "-1",
+    "1.5",
+    "1".repeat(129)
+  ])("discards malformed Retry-After advice %s", (value) => {
+    expect(
+      readProviderErrorMetadata(undefined, new Headers({ "retry-after": value }))
+    ).not.toHaveProperty("retryAfterMs");
+  });
+
+  it("discards an oversized Retry-After header before parsing it", () => {
+    const headers = new Headers();
+    vi.spyOn(headers, "get").mockImplementation((name) =>
+      name === "retry-after" ? "Fri, 09 Oct 2026 12:00:45 GMT".padEnd(129) : null
+    );
+    const parse = vi.spyOn(Date, "parse");
+    expect(readProviderErrorMetadata(undefined, headers)).not.toHaveProperty("retryAfterMs");
+    expect(parse).not.toHaveBeenCalled();
+  });
+
   it("allowlists only bounded type/code fields and request-id headers", () => {
     expect(
       readProviderErrorMetadata(
