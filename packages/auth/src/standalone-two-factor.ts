@@ -55,7 +55,7 @@ interface TwoFactorSubject {
   /** Whether the call reached the library with a session, not with a sign-in challenge. */
   signedIn: boolean;
   enabled: boolean;
-  lockedUntil?: Date;
+  lockedUntil?: Date | undefined;
 }
 
 /** What one call to the library learns on its way in and hands out at its end. */
@@ -64,6 +64,8 @@ interface TwoFactorRequestState {
   trustExpiresAt?: Date;
   subject?: TwoFactorSubject;
   events: StandaloneTwoFactorEvent[];
+  /** Lets the next code check of the same person run. */
+  release?: () => void;
 }
 
 const requestState = new AsyncLocalStorage<TwoFactorRequestState>();
@@ -73,8 +75,41 @@ export async function withTwoFactorEvents(
   call: () => Promise<Response>
 ): Promise<{ response: Response; events: StandaloneTwoFactorEvent[] }> {
   const state: TwoFactorRequestState = { events: [] };
-  const response = await requestState.run(state, call);
-  return { response, events: state.events };
+  try {
+    const response = await requestState.run(state, call);
+    return { response, events: state.events };
+  } finally {
+    state.release?.();
+  }
+}
+
+/** The routes that check a code against a person's failure count and lock. */
+const CODE_CHECK_PATHS = new Set(["/two-factor/verify-totp", "/two-factor/verify-backup-code"]);
+
+/** The code check of each person running now, and those waiting behind it. */
+const codeChecks = new Map<string, Promise<void>>();
+
+/**
+ * One code check at a time per person in this process. The library reads the lock before it
+ * checks a code and writes it after the tenth failure, so checks sent side by side over several
+ * sign-in challenges would all pass the lock before any failure is written. In turn, the
+ * eleventh check finds the lock. Returns the release.
+ */
+async function serializeCodeCheck(authUserId: string): Promise<() => void> {
+  const previous = codeChecks.get(authUserId) ?? Promise.resolve();
+  let release: () => void = () => undefined;
+  const current = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const tail = previous.then(() => current);
+  codeChecks.set(authUserId, tail);
+  await previous;
+  return () => {
+    release();
+    if (codeChecks.get(authUserId) === tail) {
+      codeChecks.delete(authUserId);
+    }
+  };
 }
 
 /**
@@ -158,6 +193,12 @@ function twoFactorGuard(deleteTrustedBrowsers: (authUserId: string) => Promise<v
             const state = requestState.getStore();
             if (state && subject) {
               state.subject = subject;
+            }
+            if (state && subject && CODE_CHECK_PATHS.has(ctx.path)) {
+              state.release = await serializeCodeCheck(subject.authUserId);
+              // Read again once it is this call's turn: the call before may have locked it.
+              const row = await findTwoFactorRow(ctx.context.adapter, subject.authUserId);
+              subject.lockedUntil = row?.lockedUntil ? new Date(row.lockedUntil) : undefined;
             }
             if (ctx.path === "/two-factor/enable" && subject) {
               await guardEnable(ctx.context.adapter, subject);
@@ -261,6 +302,7 @@ async function twoFactorEventOf(
       }
       // A browser trusted before must not skip the code of the new factor.
       await deleteTrustedBrowsers(authUserId);
+      await endOtherSessions(ctx, authUserId);
       return { type: "enabled", authUserId };
     case "/two-factor/verify-backup-code": {
       if (!succeeded) {
@@ -284,6 +326,20 @@ async function twoFactorEventOf(
       return succeeded ? { type: "backup_codes_regenerated", authUserId } : undefined;
     default:
       return undefined;
+  }
+}
+
+/**
+ * The first code of a setup turns on the factor for the whole account. Every session opened
+ * with the password alone before it ends here, so only the session that entered the code (the
+ * library has just replaced it) carries on without a new sign-in.
+ */
+async function endOtherSessions(ctx: AuthHookContext, authUserId: string): Promise<void> {
+  const kept = ctx.context.newSession?.session.token;
+  const sessions = await ctx.context.internalAdapter.listSessions(authUserId);
+  const ended = sessions.map((session) => session.token).filter((token) => token !== kept);
+  if (ended.length > 0) {
+    await ctx.context.internalAdapter.deleteSessions(ended);
   }
 }
 
