@@ -197,6 +197,13 @@ export function AgentEditor({
     canEditMaxSteps || Boolean(form.maxSteps) || proposed.fields.includes("maxSteps");
   const fastModeModelBindingIds = references?.fastModeModelBindingIds ?? [];
   const showFastMode = form.fastMode || fastModeModelBindingIds.includes(form.modelBindingId);
+  // Shown where a model of the agent has a fallback, and where the agent turned it off.
+  const agentBindingIds = new Set([form.modelBindingId, ...form.userSelectableModelBindingIds]);
+  const showModelFallback =
+    !form.useModelFallback ||
+    modelBindings.some(
+      (binding) => agentBindingIds.has(binding.id) && "fallback" in binding && binding.fallback
+    );
 
   const update = (patch: Partial<AgentFormState>) => setForm((value) => ({ ...value, ...patch }));
   // An agent the platform ships says under each field where the form differs from it.
@@ -484,6 +491,19 @@ export function AgentEditor({
                       checked={form.fastMode}
                       disabled={!canEditModel}
                       onCheckedChange={(fastMode) => update({ fastMode })}
+                    />
+                  </Field>
+                ) : null}
+                {showModelFallback ? (
+                  <Field
+                    layout="inline"
+                    label={t("configModelFallback")}
+                    hint={t("configModelFallbackHint")}
+                  >
+                    <Switch
+                      checked={form.useModelFallback}
+                      disabled={!canEditModel}
+                      onCheckedChange={(useModelFallback) => update({ useModelFallback })}
                     />
                   </Field>
                 ) : null}

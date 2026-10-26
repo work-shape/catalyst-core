@@ -7,6 +7,7 @@ export type { ToolInputParseErrorCode } from "@work-shape/catalyst-asset-schemas
 
 import type { OperationRunId, ToolCallId } from "./ids";
 import type { JsonValue } from "./json";
+import type { StoredModelFallback } from "./model-fallback";
 import type { StartedSubagent } from "./subagents";
 import type { ISODateString } from "./time";
 
@@ -124,6 +125,11 @@ export interface AgentRunResumeState {
    * subagents keeps them here and, once all ended, answers each `run_agent` call with its outcome.
    */
   subagents?: StartedSubagent[];
+  /**
+   * The run had switched to its binding's fallback before it paused: it goes on on the
+   * fallback, where that is still one it may use.
+   */
+  modelFallback?: StoredModelFallback;
 }
 
 /** What a run that resumes starts from, beside its input. */

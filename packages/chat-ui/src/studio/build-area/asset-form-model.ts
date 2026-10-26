@@ -22,6 +22,8 @@ export interface AgentFormState {
   modelBindingId: string;
   reasoningEffort: string;
   fastMode: boolean;
+  /** Off only where the agent turns its model's fallback off; unset is on. */
+  useModelFallback: boolean;
   userSelectableModelBindingIds: string[];
   /**
    * Efforts of the rows that are not the default, by binding id ("" for the instance default).
@@ -141,6 +143,7 @@ export function agentConfigToForm(config: Record<string, unknown>): AgentFormSta
     modelBindingId,
     reasoningEffort: typeof config.reasoningEffort === "string" ? config.reasoningEffort : "",
     fastMode: config.fastMode === true,
+    useModelFallback: config.useModelFallback !== false,
     userSelectableModelBindingIds: stringArray(config.userSelectableModelBindingIds),
     modelReasoningEfforts: stringRecord(config.modelReasoningEfforts),
     maxSteps: typeof config.maxSteps === "number" ? String(config.maxSteps) : "",
@@ -224,6 +227,7 @@ export function agentFormToConfig(
         : {}),
     ...(form.reasoningEffort ? { reasoningEffort: form.reasoningEffort } : {}),
     ...(form.fastMode ? { fastMode: true } : {}),
+    ...(form.useModelFallback ? {} : { useModelFallback: false }),
     ...(userSelectableModelBindingIds.length ? { userSelectableModelBindingIds } : {}),
     ...(Object.keys(modelReasoningEfforts).length ? { modelReasoningEfforts } : {}),
     ...(maxSteps === undefined ? {} : { maxSteps }),
@@ -361,6 +365,7 @@ export function emptyAgentForm(): AgentFormState {
     modelBindingId: "",
     reasoningEffort: "",
     fastMode: false,
+    useModelFallback: true,
     userSelectableModelBindingIds: [],
     modelReasoningEfforts: {},
     maxSteps: "",

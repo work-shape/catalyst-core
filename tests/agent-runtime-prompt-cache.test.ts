@@ -10,6 +10,7 @@ import {
 } from "@work-shape/catalyst-core";
 import { LocalAgentRuntime } from "@work-shape/catalyst-agent-runtime";
 import {
+  ModelProviderError,
   modelContentText,
   type ModelCompletion,
   type ModelCompletionRequest
@@ -344,6 +345,103 @@ describe("model requests of a conversation", () => {
 
     await store.conversations.deleteModelProviderContinuation(key);
 
+    expect(await store.conversations.getModelProviderTurnContinuation(key)).toBeUndefined();
+  });
+
+  it("drops only refused reasoning and goes on from the compaction checkpoint, which it keeps", async () => {
+    const store = (await createTestInstance()).stores;
+    const conversation = await store.createConversationForTesting({
+      clientInstanceId,
+      createdByUserId: "user-1",
+      createdByExternalUserId: "user-1",
+      title: "Reasoning refused",
+      retainedUntil: new Date(Date.now() + 86_400_000).toISOString()
+    });
+    const at = { clientInstanceId, conversationId: conversation.id };
+    await store.conversations.appendMessage({ ...at, role: "user", text: "Before the checkpoint" });
+    await store.conversations.appendAssistantMessage({
+      ...at,
+      text: "Compacted.",
+      providerContinuation: { providerId: "test-provider", state: { kind: "checkpoint" } }
+    });
+    await store.conversations.appendMessage({ ...at, role: "user", text: "After the checkpoint" });
+    await store.conversations.appendAssistantMessage({
+      ...at,
+      text: "Answered.",
+      turnContinuation: {
+        providerId: "test-provider",
+        model: "model-a",
+        state: { kind: "reasoning" }
+      }
+    });
+    const requests: ModelCompletionRequest[] = [];
+    const provider: ModelProviderConfig = {
+      id: "test-provider",
+      type: "deterministic",
+      model: "model-a",
+      contextManagement: { compaction: { compactThresholdTokens: 200_000 } }
+    };
+    const tools = new ToolRegistry({ tools: [] });
+    const runtime = new LocalAgentRuntime(
+      withTestModelGateway({
+        assetSource: createStaticConfigAssetSource({
+          agents: [
+            {
+              skillNames: [],
+              name: "lookup_agent",
+              displayName: "Lookup Agent",
+              instructions: "Answer.",
+              modelProviderId: "test-provider",
+              toolNames: [],
+              initialPrompts: []
+            }
+          ]
+        }),
+        modelProviders: [provider],
+        defaultModelProvider: provider,
+        conversationHistory: store.conversations,
+        modelProviderContinuationStore: store.conversations,
+        agentRunStore: store.agentRuns,
+        runObservationStore: store.agentRuns,
+        modelProvider: {
+          id: "test-provider",
+          async complete(request) {
+            requests.push(request);
+            if (JSON.stringify(request.continuation?.state) === '{"kind":"reasoning"}') {
+              throw new ModelProviderError({
+                kind: "continuation_rejected",
+                message: "The model provider refused the continuation",
+                status: 400,
+                providerCode: "invalid_encrypted_content"
+              });
+            }
+            return { text: "Done.", toolCalls: [], usage };
+          }
+        },
+        toolRegistry: tools,
+        runTool: createTestToolRunner({ registry: tools, getAgentToolNames: () => [] }),
+        usageGovernance: new ModelUsageGovernance({
+          store: store.usage,
+          budget: {},
+          safeguards: {}
+        })
+      })
+    );
+
+    await turn(store, runtime, conversation.id, "Now");
+
+    expect(requests.map((request) => request.continuation?.state)).toEqual([
+      { kind: "reasoning" },
+      { kind: "checkpoint" }
+    ]);
+    // Sent again from the checkpoint on: what came before it stays in the checkpoint.
+    const sent = requests[1]?.messages.map((message) => modelContentText(message.content));
+    expect(sent).not.toContain("Before the checkpoint");
+    expect(sent).toContain("After the checkpoint");
+    const key = { ...at, providerId: "test-provider" };
+    expect(await store.conversations.getModelProviderContinuation(key)).toMatchObject({
+      state: { kind: "checkpoint" }
+    });
     expect(await store.conversations.getModelProviderTurnContinuation(key)).toBeUndefined();
   });
 });

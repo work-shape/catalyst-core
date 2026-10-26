@@ -62,6 +62,7 @@ const agentEdits = {
   modelBindingId: "other",
   reasoningEffort: "low",
   fastMode: true,
+  useModelFallback: false,
   userSelectableModelBindingIds: ["other"],
   modelReasoningEfforts: { primary: "low" },
   maxSteps: 9,

@@ -9,6 +9,7 @@ import {
   type AgentConfig,
   type AgentRunId,
   type ChatMessage,
+  type ModelBindingConfig,
   type ModelProviderConfig,
   type ReasoningEffortConfig,
   type RuntimeAssetSnapshot,
@@ -47,6 +48,19 @@ const DEFAULT_MODEL_CONTEXT: ModelContextProjectionOptions = {
   }
 };
 
+/** The model a run's calls go to, and what the run asks of it. */
+export interface ModelSelection {
+  binding: ModelBindingRef;
+  provider: ModelProviderConfig;
+  /** The model the provider is asked for. */
+  model: string;
+  /** The name release config gives the binding's model, where it gives one. */
+  label?: string;
+  capabilities: ModelCapabilities;
+  reasoningEffort?: ReasoningEffortConfig;
+  fastMode: boolean;
+}
+
 export class ModelInput {
   constructor(private readonly options: LocalAgentRuntimeOptions) {}
 
@@ -54,15 +68,7 @@ export class ModelInput {
     agent: AgentConfig,
     userSelectedBindingId?: string,
     userSelectedReasoningEffort?: ReasoningEffortConfig
-  ): {
-    binding: ModelBindingRef;
-    provider: ModelProviderConfig;
-    /** The model the provider is asked for. */
-    model: string;
-    capabilities: ModelCapabilities;
-    reasoningEffort?: ReasoningEffortConfig;
-    fastMode: boolean;
-  } {
+  ): ModelSelection {
     const bindingId = userSelectedBindingId ?? agent.modelBindingId;
     if (bindingId) {
       const binding = this.options.modelBindings?.find((candidate) => candidate.id === bindingId);
@@ -82,30 +88,7 @@ export class ModelInput {
           `Model binding '${bindingId}' is not available for user selection with agent '${agent.name}'`
         );
       }
-      const provider = this.getModelProvider(binding.providerId);
-      const capabilities = this.options.modelGateway.capabilities({ bindingId });
-      const configuredEffort =
-        defaultReasoningEffortForAgentBinding(agent, binding) ??
-        (capabilities.reasoningEfforts.length > 0 ? provider.reasoningEffort : undefined);
-      return {
-        binding: { bindingId },
-        provider,
-        model: binding.model ?? provider.model,
-        capabilities,
-        // An effort the user picked wins while the binding still offers it; a pick the binding
-        // no longer offers falls back to the configured effort instead of failing the run.
-        reasoningEffort:
-          userSelectedReasoningEffort &&
-          reasoningEffortChoiceForBinding(
-            binding,
-            capabilities.reasoningEfforts,
-            configuredEffort
-          ).selectable.includes(userSelectedReasoningEffort)
-            ? userSelectedReasoningEffort
-            : configuredEffort,
-        // A user-selected binding gets fast mode only when that binding supports it.
-        fastMode: agent.fastMode === true && binding.supportsFastMode === true
-      };
+      return this.selectionForBinding(agent, binding, userSelectedReasoningEffort);
     }
 
     const provider = this.getModelProvider(
@@ -121,6 +104,59 @@ export class ModelInput {
         agent.reasoningEffort ??
         (capabilities.reasoningEfforts.length > 0 ? provider.reasoningEffort : undefined),
       fastMode: false
+    };
+  }
+
+  /**
+   * The binding a run switches to when its own binding's route fails: the `fallback` its binding
+   * names, where the agent keeps fallback on and the fallback is a chat binding in the binding's
+   * region. Effort, fast mode and capabilities are the fallback's, as the agent sets them for it;
+   * an effort the person picked for the binding does not carry over. Whether the agent's
+   * workspace allows the fallback is the caller's question.
+   */
+  getFallbackSelection(agent: AgentConfig, selection: ModelSelection): ModelSelection | undefined {
+    if (agent.useModelFallback === false || !("bindingId" in selection.binding)) return undefined;
+    const bindings = this.options.modelBindings ?? [];
+    const { bindingId } = selection.binding;
+    const fallbackId = bindings.find((candidate) => candidate.id === bindingId)?.fallback;
+    const fallback = bindings.find((candidate) => candidate.id === fallbackId);
+    if (!fallback || fallback.id === bindingId || fallback.kind === "embedding") return undefined;
+    const provider = this.options.modelProviders.find(
+      (candidate) => candidate.id === fallback.providerId
+    );
+    if (!provider || provider.region !== selection.provider.region) return undefined;
+    return this.selectionForBinding(agent, fallback);
+  }
+
+  private selectionForBinding(
+    agent: AgentConfig,
+    binding: ModelBindingConfig,
+    userSelectedReasoningEffort?: ReasoningEffortConfig
+  ): ModelSelection {
+    const provider = this.getModelProvider(binding.providerId);
+    const capabilities = this.options.modelGateway.capabilities({ bindingId: binding.id });
+    const configuredEffort =
+      defaultReasoningEffortForAgentBinding(agent, binding) ??
+      (capabilities.reasoningEfforts.length > 0 ? provider.reasoningEffort : undefined);
+    return {
+      binding: { bindingId: binding.id },
+      provider,
+      model: binding.model ?? provider.model,
+      ...(binding.label === undefined ? {} : { label: binding.label }),
+      capabilities,
+      // An effort the user picked wins while the binding still offers it; a pick the binding
+      // no longer offers falls back to the configured effort instead of failing the run.
+      reasoningEffort:
+        userSelectedReasoningEffort &&
+        reasoningEffortChoiceForBinding(
+          binding,
+          capabilities.reasoningEfforts,
+          configuredEffort
+        ).selectable.includes(userSelectedReasoningEffort)
+          ? userSelectedReasoningEffort
+          : configuredEffort,
+      // A user-selected binding gets fast mode only when that binding supports it.
+      fastMode: agent.fastMode === true && binding.supportsFastMode === true
     };
   }
 
@@ -148,6 +184,8 @@ export class ModelInput {
   ): Promise<{
     messages: ModelMessage[];
     providerContinuation?: ModelCompletion["continuation"];
+    /** The continuation is the last run's reasoning on the model, not the compaction checkpoint. */
+    fromTurn?: true;
   }> {
     const persistedMessages = await this.options.conversationHistory.listMessages({
       clientInstanceId: context.clientInstanceId,
@@ -212,10 +250,10 @@ export class ModelInput {
       turn && turn.model === options.model
         ? history.findIndex((message) => message.id === turn.sourceMessageId)
         : -1;
-    const checkpoint =
-      turn && turnIndex >= 0 && turnIndex >= checkpointIndex
-        ? { providerId: turn.providerId, state: turn.state }
-        : compactionCheckpoint;
+    const fromTurn = turn !== undefined && turnIndex >= 0 && turnIndex >= checkpointIndex;
+    const checkpoint = fromTurn
+      ? { providerId: turn.providerId, state: turn.state }
+      : compactionCheckpoint;
     const activeHistory = compactionEnabled
       ? history.slice(Math.max(checkpointIndex, 0))
       : selectRecentCompleteHistory(
@@ -229,7 +267,8 @@ export class ModelInput {
             providerContinuation: {
               providerId: checkpoint.providerId,
               state: checkpoint.state
-            }
+            },
+            ...(fromTurn ? { fromTurn: true as const } : {})
           }
         : {})
     };
@@ -278,11 +317,13 @@ export class ModelInput {
     input: StartAgentRunInput,
     context: RuntimeCallContext,
     messages: ModelMessage[],
-    modelSelection: ReturnType<ModelInput["getModelSelectionForAgent"]>,
+    modelSelection: ModelSelection,
     tools: ModelTool[],
     providerContinuation: ModelCompletion["continuation"],
     state: RunState,
-    runEvents: RunEvents
+    runEvents: RunEvents,
+    /** The run switches to another model when this one's route fails (`ModelCall.hasFallback`). */
+    hasFallback = false
   ) {
     const { capabilities } = modelSelection;
     // MODEL-REGION-3: a conversation with personal data keeps every request on an allowed
@@ -336,6 +377,7 @@ export class ModelInput {
           fastTier: modelSelection.fastMode && capabilities.fastTier,
           continuation: capabilities.continuation ? providerContinuation : undefined,
           cacheKey: modelCacheKeyOf(input),
+          ...(hasFallback ? { hasFallback: true } : {}),
           attribution: {
             kind: input.workflowAgent ? "workflow_step" : "agent_run",
             ...(input.workflowAgent ? { workflowRunId: input.workflowAgent.workflowRunId } : {}),

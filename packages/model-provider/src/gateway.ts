@@ -15,7 +15,12 @@ import {
   type SystemModelAttribution
 } from "@work-shape/catalyst-core";
 import { deadlinePassed, limitModelCall, stopOf, type ModelCallLimit } from "./model-call-limit";
-import { ModelProviderError, normalizeModelAdapterError } from "./model-provider-error";
+import {
+  ModelProviderError,
+  ModelRouteFailedError,
+  isModelRouteFailure,
+  normalizeModelAdapterError
+} from "./model-provider-error";
 import { createModelRetryPolicy, modelCallFailureFor, type ModelRetryPolicy } from "./retry";
 import {
   WEB_SEARCH_MODEL_TOOL_NAME,
@@ -64,6 +69,13 @@ export interface ModelCall {
    * adapter whose provider takes no such key leaves it out.
    */
   cacheKey?: string;
+  /**
+   * The caller sends the call to another model when this one's route fails. A rate limit then
+   * fails the call at once, without the wait; a server error, a timeout or a lost connection
+   * after the call's retries. Either fails it as `ModelRouteFailedError`, and only while the
+   * call has given the caller nothing; otherwise the call fails as it would without.
+   */
+  hasFallback?: boolean;
   attribution: ModelAttribution;
   clientInstanceId: ClientInstanceId;
   /** Ties the usage event to the request that caused the call. */
@@ -320,7 +332,19 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
           // The provider counted an answer it then refused: the call is settled with that.
           if (error.usage) seen.reportedUsage = error.usage;
         }
-        const waitMs = policy.waitBeforeRetryMs(error, attempt);
+        let waitMs: number;
+        try {
+          waitMs = policy.waitBeforeRetryMs(error, attempt);
+        } catch (failure) {
+          // The route failed before the caller got anything: its fallback answers instead.
+          if (!call.hasFallback || !attempt.retrySafe || !isModelRouteFailure(error)) {
+            throw failure;
+          }
+          for (const toolCallId of preparingToolCallIds) {
+            yield { type: "tool_call_preparation_cancelled", toolCallId };
+          }
+          throw new ModelRouteFailedError(error);
+        }
         for (const toolCallId of preparingToolCallIds) {
           yield { type: "tool_call_preparation_cancelled", toolCallId };
         }
@@ -346,7 +370,11 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
     const target = resolve(call.binding);
     assertKind(target, "chat");
     assertWithinCapabilities(call, target, streaming);
-    const policy = createModelRetryPolicy({ signal: call.signal, deadline: call.deadline });
+    const policy = createModelRetryPolicy({
+      signal: call.signal,
+      deadline: call.deadline,
+      waitOnRateLimit: call.hasFallback !== true
+    });
     policy.assertAttemptMayStart();
     const inputCharacters = requestCharacters(call, (text) => text.length);
     const admitted = await governance.admitModelCall({

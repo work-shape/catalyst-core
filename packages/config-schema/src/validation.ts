@@ -167,6 +167,7 @@ function assertConfigReferences(config: ClientInstanceConfig): void {
       );
     }
   }
+  assertModelFallbacks(config);
 
   if (
     config.conversationTitles.enabled &&
@@ -199,6 +200,40 @@ function assertConfigReferences(config: ClientInstanceConfig): void {
       "VALIDATION_FAILED",
       `Conversation title generation references missing model binding '${config.conversationTitles.modelBindingId}'`
     );
+  }
+}
+
+/**
+ * A binding's `fallback` names another chat binding on a provider of the same region: a run that
+ * switches to it keeps its data where the binding's route keeps it. Bindings may name each other.
+ */
+function assertModelFallbacks(config: ClientInstanceConfig): void {
+  const providers = getModelProviderConfigs(config);
+  const regionOf = (providerId: string) =>
+    providers.find((provider) => provider.id === providerId)?.region;
+  for (const binding of config.modelBindings) {
+    if (binding.fallback === undefined) continue;
+    const fallback = config.modelBindings.find((candidate) => candidate.id === binding.fallback);
+    if (!fallback) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        `Model binding '${binding.id}' names missing model binding '${binding.fallback}' as its fallback`
+      );
+    }
+    if (fallback.kind === "embedding") {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        `Model binding '${binding.id}' names embedding binding '${fallback.id}' as its fallback; a fallback answers chat calls`
+      );
+    }
+    const region = regionOf(binding.providerId);
+    const fallbackRegion = regionOf(fallback.providerId);
+    if (region !== fallbackRegion) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        `Model binding '${binding.id}' runs in region '${region ?? "unset"}', but its fallback '${fallback.id}' runs in region '${fallbackRegion ?? "unset"}'; a fallback runs in the binding's region`
+      );
+    }
   }
 }
 

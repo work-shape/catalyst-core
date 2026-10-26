@@ -46,6 +46,7 @@ const AGENT_FIELD: Record<string, TranslationKey> = {
   userSelectableModelBindingIds: "operations.agentField.userSelectableModelBindingIds",
   reasoningEffort: "operations.agentField.reasoningEffort",
   fastMode: "operations.agentField.fastMode",
+  useModelFallback: "operations.agentField.useModelFallback",
   maxSteps: "operations.agentField.maxSteps",
   toolNames: "operations.agentField.toolNames",
   skillNames: "operations.agentField.skillNames",

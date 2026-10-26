@@ -29,9 +29,21 @@ export const modelBindingConfigSchema = z
     label: z.string().trim().min(1).optional(),
     vendor: z.string().min(1).optional(),
     usageTier: z.enum(MODEL_USAGE_TIERS).optional(),
-    userSelectableReasoningEfforts: z.array(z.enum(REASONING_EFFORTS)).optional()
+    userSelectableReasoningEfforts: z.array(z.enum(REASONING_EFFORTS)).optional(),
+    /**
+     * The chat binding that answers when this one is rate-limited or down. Validated against
+     * the other bindings and their providers with the whole config.
+     */
+    fallback: z.string().min(1).optional()
   })
   .superRefine((binding, context) => {
+    if (binding.fallback === binding.id) {
+      context.addIssue({
+        code: "custom",
+        path: ["fallback"],
+        message: `Model binding '${binding.id}' names itself as its fallback`
+      });
+    }
     if (binding.kind !== "embedding") {
       if (binding.dimensions !== undefined) {
         context.addIssue({
@@ -47,6 +59,13 @@ export const modelBindingConfigSchema = z
         code: "custom",
         path: ["dimensions"],
         message: `Embedding binding '${binding.id}' needs 'dimensions', the length of the vectors it returns`
+      });
+    }
+    if (binding.fallback !== undefined) {
+      context.addIssue({
+        code: "custom",
+        path: ["fallback"],
+        message: `Embedding binding '${binding.id}' takes no fallback: another model's vectors do not fit its index`
       });
     }
     if (binding.agentSelectable === true) {

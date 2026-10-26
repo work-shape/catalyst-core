@@ -55,15 +55,17 @@ export async function deleteModelProviderContinuation(
   input: Parameters<ModelProviderContinuationStore["deleteModelProviderContinuation"]>[0]
 ): Promise<void> {
   const remove = async (tx: PostgresConnection) => {
-    await tx
-      .delete(modelProviderContinuations)
-      .where(
-        and(
-          eq(modelProviderContinuations.clientInstanceId, input.clientInstanceId),
-          eq(modelProviderContinuations.conversationId, input.conversationId),
-          eq(modelProviderContinuations.providerId, input.providerId)
-        )
-      );
+    if (!input.keepCheckpoint) {
+      await tx
+        .delete(modelProviderContinuations)
+        .where(
+          and(
+            eq(modelProviderContinuations.clientInstanceId, input.clientInstanceId),
+            eq(modelProviderContinuations.conversationId, input.conversationId),
+            eq(modelProviderContinuations.providerId, input.providerId)
+          )
+        );
+    }
     await tx
       .delete(modelProviderTurnContinuations)
       .where(

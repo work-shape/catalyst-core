@@ -47,6 +47,7 @@ export * from "./localization";
 export { LOG_REDACTION } from "./logger";
 export type { Logger } from "./logger";
 export * from "./mail-send";
+export * from "./model-fallback";
 export * from "./modules";
 export * from "./object-storage";
 export * from "./operation-denial";

@@ -1,0 +1,9 @@
+---
+section: Added
+---
+
+- **Models:** A chat binding may name a fallback in release config (`modelBindings[].fallback`): another chat binding of the same region that answers when the binding's model is overloaded or cannot be reached. A rate limit switches the run at once instead of waiting up to a minute; a server error, timeout or lost connection switches after the two short retries. A run switches only while the failed call has shown nothing, at most once, and stays on the fallback to its end; the next run starts on its own binding. It covers chat runs, subagents and Workflow agent steps, not system calls or embeddings. Usage is admitted and recorded on the binding that answered. Startup refuses a fallback that names its own binding, a missing or embedding binding, or one in another region.
+- **Models:** Under an answer from a fallback, one line names both models, such as "Answered with GPT-6.1 Sol, GPT-5.6 Sol was overloaded", from the message's new `modelFallback` metadata. The log gets a `model_fallback` warning.
+- **Agents:** "Use fallback model" (`useModelFallback`, on by default) turns the fallback off for one agent. It shows in the agent editor where one of the agent's models has a fallback, and is a model setting under `agent_models.manage`. A Shared Workspace whose model list leaves out the fallback gets no switch.
+- **CLI:** `catalyst models add --fallback <binding>` writes the new binding's fallback, refusing a binding that is missing, an embedding binding or one outside `eu`.
+- **Models:** When a provider refuses the reasoning stored from the last run (`invalid_encrypted_content`), only that reasoning is dropped: the request goes on from the conversation's compaction checkpoint instead of its whole history. A refused checkpoint is dropped after it. Reasoning a run stores after a fallback is kept for the model that answered.

@@ -70,6 +70,8 @@ Options of add:
   --auth <bearer|api-key>   openai-compatible: how the key is sent (default bearer)
   --label <name>            The name people read for the model (required for bedrock)
   --vendor <name>           Who makes the model, for its logo
+  --fallback <binding>      The chat binding that answers when this model is overloaded or
+                            cannot be reached; it must be on a provider with region eu
   --secret <NAME>           The name of the secret that holds the key. Never the key
   --region eu               The only region this command writes
   --input-price <n>         Price of a million uncached input tokens
@@ -116,6 +118,7 @@ export async function runModelsCommand(argv: readonly string[], base: Options): 
           auth: { type: "string" },
           label: { type: "string" },
           vendor: { type: "string" },
+          fallback: { type: "string" },
           secret: { type: "string" },
           region: { type: "string" },
           "input-price": { type: "string" },
@@ -271,6 +274,10 @@ async function addProvider(
     throw new ReleaseConfigError(
       `The release config already has a model binding '${bindingId}'. Choose another --binding.`
     );
+  if (values.fallback !== undefined) {
+    const refusal = fallbackRefusal(values.fallback, bindings, models);
+    if (refusal) throw new ReleaseConfigError(refusal);
+  }
 
   const secret = values.secret ?? defaultSecret(kind, id, config);
   if (secret === undefined)
@@ -285,7 +292,8 @@ async function addProvider(
     ...((values.vendor ?? spec.vendor) === undefined
       ? {}
       : { vendor: values.vendor ?? spec.vendor }),
-    ...(spec.agentSelectable ? {} : { agentSelectable: false })
+    ...(spec.agentSelectable ? {} : { agentSelectable: false }),
+    ...(values.fallback === undefined ? {} : { fallback: values.fallback })
   };
   const price = {
     providerId: id,
@@ -343,7 +351,10 @@ async function addProvider(
   out(`Added model provider '${id}' to ${shown}:`);
   const written: [string, string][] = [
     [`infrastructure.models.${id}`, `${spec.provider}, region eu`],
-    [BINDINGS.join("."), `'${bindingId}'${spec.agentSelectable ? "" : ", not offered to agents"}`],
+    [
+      BINDINGS.join("."),
+      `'${bindingId}'${spec.agentSelectable ? "" : ", not offered to agents"}${values.fallback === undefined ? "" : `, falls back to '${values.fallback}'`}`
+    ],
     [
       PRICES.join("."),
       `${price.uncachedInputPricePerMillionTokens} input, ${price.cachedInputPricePerMillionTokens} cached input, ${price.outputPricePerMillionTokens} output per million tokens (${currency})`
@@ -370,6 +381,32 @@ async function addProvider(
   out(`  2. Deploy the release config.`);
   out(`  3. catalyst models check ${id} --instance <url>`);
   return 0;
+}
+
+/**
+ * Why `--fallback` cannot name this binding: a fallback is another chat binding of the release
+ * config, on a provider of the new one's region, eu. `undefined` where it can.
+ */
+function fallbackRefusal(
+  fallbackId: string,
+  bindings: unknown,
+  models: unknown
+): string | undefined {
+  const fallback = Array.isArray(bindings)
+    ? bindings.find((binding) => isRecord(binding) && binding.id === fallbackId)
+    : undefined;
+  if (!isRecord(fallback))
+    return `The release config has no model binding '${fallbackId}' to fall back to. Name one of its chat bindings with --fallback.`;
+  if (fallback.kind === "embedding")
+    return `'${fallbackId}' is an embedding binding; a fallback answers chat calls. Name a chat binding with --fallback.`;
+  const entry =
+    isPlainConfigObject(models) && typeof fallback.providerId === "string"
+      ? models[fallback.providerId]
+      : undefined;
+  const region = isPlainConfigObject(entry) ? entry.region : undefined;
+  if (region !== "eu")
+    return `'${fallbackId}' runs on a provider with region '${typeof region === "string" ? region : "unset"}', and this provider runs in eu; a fallback runs in the binding's region.`;
+  return undefined;
 }
 
 /** The provider's own default secret, or one named after the id where another entry uses that. */
