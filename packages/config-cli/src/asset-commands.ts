@@ -3,11 +3,12 @@ import { parseArgs, type ParseArgsConfig } from "node:util";
 import { ConfigApiError } from "./api";
 import {
   APP_VERBS,
-  AppUsageError,
-  isAppVerb,
-  runAppCommand,
-  type AppCommandOptions
+  RepositoryUsageError,
+  isRepositoryVerb,
+  runRepositoryCommand,
+  type RepositoryCommandOptions
 } from "./app-commands";
+import { REPOSITORY_KINDS } from "./app-folder";
 import { runFollowCommand } from "./follow-commands";
 import {
   formatContext,
@@ -83,7 +84,7 @@ const INSTANCE_COMMANDS = [
 /** Runs `catalyst <argv>` for every command but `config`. */
 export async function runAssetCommand(
   argv: readonly string[],
-  base: Omit<AppCommandOptions, "dir" | "instance">
+  base: Omit<RepositoryCommandOptions, "dir" | "instance">
 ): Promise<number> {
   const [noun = "", ...rest] = argv;
   let values: Values;
@@ -97,7 +98,7 @@ export async function runAssetCommand(
     );
     return EXIT.usage;
   }
-  const options: AppCommandOptions = {
+  const options: RepositoryCommandOptions = {
     ...base,
     ...(values.dir === undefined ? {} : { dir: values.dir }),
     ...(values.instance === undefined ? {} : { instance: values.instance })
@@ -153,9 +154,22 @@ export async function runAssetCommand(
         instanceCommand === "docs" ? verbName : name
       );
     }
-    if ((noun === "app" || noun === "apps") && isAppVerb(verbName)) {
+    const repository = Object.values(REPOSITORY_KINDS).find(
+      (kind) => noun === kind.kind || noun === `${kind.kind}s`
+    );
+    if (
+      repository &&
+      isRepositoryVerb(verbName) &&
+      (verbName !== "publish" || repository.kind === "app")
+    ) {
       refuseFlags(values, [...COMMON_FLAGS, ...APP_FLAGS[verbName]], verbName);
-      return await runAppCommand(verbName, positionals.slice(1), values, options);
+      return await runRepositoryCommand(
+        verbName,
+        positionals.slice(1),
+        values,
+        options,
+        repository
+      );
     }
     const verb = VERBS[verbName];
     if (verb === undefined) throw new UsageError(`Unknown command '${noun} ${verbName}'.`);
@@ -180,7 +194,7 @@ export async function runAssetCommand(
       options
     });
   } catch (error) {
-    if (error instanceof UsageError || error instanceof AppUsageError) {
+    if (error instanceof UsageError || error instanceof RepositoryUsageError) {
       writeError(options, error.message);
       return EXIT.usage;
     }

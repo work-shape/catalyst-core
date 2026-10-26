@@ -1,9 +1,12 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import { commitsAssetRepos, platformModules } from "@work-shape/catalyst-client-assembly";
+import { runCli } from "@work-shape/catalyst-cli";
+import { createTestFetch } from "./support/test-instance";
+import { testOperations } from "./support/operations";
 import { workflowConfigSchema } from "@work-shape/catalyst-config-schema";
 import {
   WORKFLOW_ASSET_KIND,
@@ -191,7 +194,146 @@ async function ready(options: { files?: false } = {}) {
   };
 }
 
+/** Folder commands through the same authenticated HTTP path as an installed CLI. */
+function cli(t: WorkflowFixture, cwd: string, workspaceId: string) {
+  const serverFetch = createTestFetch(t.instance, { "x-test-user": t.admin.id });
+  const fetchImpl: typeof fetch = async (input, init) => {
+    const request = input instanceof Request ? input : new Request(input, init);
+    if (new URL(request.url).pathname === testOperations["access_tokens.exchange"].path) {
+      return Response.json({
+        accessToken: "access-token",
+        expiresAt: new Date(Date.now() + 60_000).toISOString()
+      });
+    }
+    // The fixture authenticates its recorded user; token exchange is exercised above.
+    request.headers.delete("authorization");
+    return serverFetch(request);
+  };
+  return async (...args: string[]) => {
+    const out: string[] = [];
+    const err: string[] = [];
+    const code = await runCli(
+      ["workflow", ...args, "--instance", "https://catalyst.test", "--workspace", workspaceId],
+      {
+        cwd,
+        env: { CATALYST_API_KEY: "cat_personal" },
+        fetchImpl,
+        stdout: (text) => out.push(text),
+        stderr: (text) => err.push(text)
+      }
+    );
+    return { code, out: out.join(""), err: err.join("") };
+  };
+}
+
 describe("a Workflow whose writes are commits", () => {
+  it("round-trips a CLI folder without a revision, commits an edited script once and refuses stale folders", async () => {
+    const { t, stored, ledger, commitOf } = await ready();
+    const cwd = await mkdtemp(join(tmpdir(), "workflow-folder-test-"));
+    directories.push(cwd);
+    const workspaceId = await t.sharedWorkspace("Workflow folders");
+    const run = cli(t, cwd, workspaceId);
+    await mkdir(join(cwd, "source/steps"), { recursive: true });
+    const manifest = `# Keep this comment.\n${writeWorkflowManifest(definition())}`;
+    await writeFile(join(cwd, "source/workflow.yaml"), manifest);
+    await writeFile(join(cwd, "source/steps/double.py"), script(2));
+    const created = await run("push", "source");
+    expect(created, created.err).toMatchObject({ code: 0 });
+    expect(created.out).toContain("catalyst workflow publish double --revision 1");
+    const original = await stored();
+    expect(original.revision).toBe(1);
+    expect(await ledger()).toHaveLength(1);
+    expect(await run("pull", WORKFLOW, "copy")).toMatchObject({ code: 0 });
+    expect(await readFile(join(cwd, "copy/workflow.yaml"), "utf8")).toBe(manifest);
+    const state = await readFile(join(cwd, "copy/.catalyst-app.json"), "utf8");
+    expect(JSON.parse(state)).toMatchObject({ workflow: WORKFLOW, revision: 1 });
+    const unchanged = await run("push", "copy", "--json");
+    expect(unchanged, unchanged.err).toMatchObject({ code: 0 });
+    expect(JSON.parse(unchanged.out)).toMatchObject({ revision: 1, unchanged: true });
+    expect((await stored()).commit).toBe(original.commit);
+    expect(await ledger()).toHaveLength(1);
+
+    await writeFile(join(cwd, "copy/steps/double.py"), script(3));
+    const status = await run("status", WORKFLOW, "copy", "--json");
+    expect(JSON.parse(status.out)).toMatchObject({
+      workflow: WORKFLOW,
+      draftRevision: 1,
+      local: { changed: ["steps/double.py"] }
+    });
+    const overwrite = await run("pull", WORKFLOW, "copy");
+    expect(overwrite).toMatchObject({ code: 2 });
+    expect(overwrite.err).toContain("has local changes a pull would overwrite");
+    const edited = await run("push", "copy");
+    expect(edited, edited.err).toMatchObject({ code: 0 });
+    const after = await stored();
+    expect(after.revision).toBe(2);
+    expect(await ledger()).toHaveLength(2);
+    expect(await commitOf(after.commit ?? "")).toMatchObject({
+      commits: 2,
+      parent: original.commit,
+      files: { "workflow.yaml": manifest, "steps/double.py": script(3) }
+    });
+    // An unchanged stale folder is refused too, rather than skipped as a no-op.
+    for (const changed of [false, true]) {
+      if (changed) await writeFile(join(cwd, "source/steps/double.py"), script(4));
+      const stale = await run("push", "source");
+      expect(stale.code).toBe(1);
+      expect(stale.err).toContain("REVISION_CONFLICT");
+      expect(stale.err).toContain(
+        "The draft moved since revision 1 was pulled. Nothing was written. Pull the Workflow into another folder"
+      );
+    }
+    expect((await stored()).revision).toBe(2);
+    expect(await ledger()).toHaveLength(2);
+
+    expect(await run("pull", WORKFLOW, "older", "--revision", "1")).toMatchObject({ code: 0 });
+    expect(await readFile(join(cwd, "older/steps/double.py"), "utf8")).toBe(script(2));
+    expect((await run("push", "older")).code).toBe(1);
+    await t.expectOk(t.root.id, "assets.publish", {
+      params: address,
+      payload: { revision: 2, workspaceId }
+    });
+    expect(await run("pull", WORKFLOW, "live", "--published")).toMatchObject({ code: 0 });
+    expect(await readFile(join(cwd, "live/steps/double.py"), "utf8")).toBe(script(3));
+    await writeFile(join(cwd, "copy/steps/double.py"), script(4));
+    expect(await run("push", "copy")).toMatchObject({ code: 0 });
+    expect((await stored()).revision).toBe(3);
+    const publishedBehindDraft = await run("push", "live");
+    expect(publishedBehindDraft.code).toBe(1);
+    expect(publishedBehindDraft.err).toContain("The draft moved since revision 2 was pulled.");
+    expect(await ledger()).toHaveLength(3);
+    // Existing files without a baseline are never taken over by pull.
+    const foreign = await run("pull", WORKFLOW, ".");
+    expect(foreign).toMatchObject({ code: 2 });
+    expect(foreign.err).toContain("Pull into an empty or new folder");
+    expect(await run("history", WORKFLOW, "--json")).toMatchObject({ code: 0 });
+    // The generic publish verb still requires an explicit revision, unlike App publish.
+    const publish = await run("publish", WORKFLOW);
+    expect(publish.code).toBe(2);
+    expect(publish.err).toContain("--revision <n>");
+  }, 120_000);
+
+  it("writes a CLI file holding a key-like string with the skill warning and no secret in the output", async () => {
+    const { t, stored, ledger, commitOf } = await ready();
+    const cwd = await mkdtemp(join(tmpdir(), "workflow-folder-warning-"));
+    directories.push(cwd);
+    const run = cli(t, cwd, await t.sharedWorkspace("Workflow warnings"));
+    await mkdir(join(cwd, "steps"));
+    await writeFile(join(cwd, "workflow.yaml"), writeWorkflowManifest(definition()));
+    const key = "sk-" + "test_value_".repeat(3);
+    const content = `# ${key}\n${script(2)}`;
+    await writeFile(join(cwd, "steps/double.py"), content);
+    const result = await run("push");
+    expect(result, result.err).toMatchObject({ code: 0 });
+    expect(result.out).toContain("Warning: Possible secret");
+    expect(result.out).toContain("Possible secret in 'steps/double.py' at line 1.");
+    expect(result.out + result.err).not.toContain(key);
+    expect(await ledger()).toHaveLength(1);
+    expect(await commitOf((await stored()).commit ?? "")).toMatchObject({
+      files: { "steps/double.py": content }
+    });
+  }, 120_000);
+
   // Fails where the API commits on a files store alone: an instance without Execution
   // Workspaces runs no command worker, and every new Workflow waited for one in vain.
   it("is committed where the instance keeps files and runs the worker that commits, and only there", () => {

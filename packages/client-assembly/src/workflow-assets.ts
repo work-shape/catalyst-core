@@ -14,6 +14,7 @@ import { checkPublishedChildren } from "./workflow-child-assets";
 import { workflowAccountRights } from "./workflow-account-rights";
 import {
   createWorkflowLiveCheck,
+  skillSecretWarnings,
   mailSendStepRefusal,
   workflowLiveCallerWarnings,
   type PublishReach,
@@ -492,6 +493,7 @@ export function createWorkflowAssetKind(
     },
     // Written as its config or as its whole folder, read as either (WF-GIT-1).
     ...(options.repository ? { revisionFiles: WORKFLOW_REVISION_FILES } : {}),
+    writeWarnings: (_definition, files) => skillSecretWarnings(files ?? []),
     // The live Apps that start it stop working without it: an unpublish and a delete say so.
     liveCallerWarnings: workflowLiveCallerWarnings,
     async onUnpublish({ stores, assetId, published }) {

@@ -1,3 +1,4 @@
+export { skillSecretWarnings } from "./asset-kinds/skill-secret-warnings";
 import { registerWorkflowUnpublishRoute } from "./workflows/workflow-unpublish";
 import { registerScheduledStartRoutes } from "./routes/scheduled-start-routes";
 export { SKILL_MAX_BYTES } from "./asset-kinds/skill-files";
