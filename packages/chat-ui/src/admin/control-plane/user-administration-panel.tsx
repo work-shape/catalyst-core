@@ -71,6 +71,10 @@ interface UserAdministrationPanelProps {
   ): Promise<AdministeredUser>;
   onDeleteIdentity(userId: string, identity: AdministeredUserIdentity): Promise<AdministeredUser>;
   onResetPassword(userId: string, password: string): Promise<unknown>;
+  /** The signed-in person: nobody resets their own two-factor sign-in. */
+  viewerId?: string;
+  /** Resets a person's two-factor sign-in; absent where the page offers no reset. */
+  onResetTwoFactor?(userId: string): Promise<unknown>;
   /** Absent while invitation emails are unavailable for this client instance. */
   onSendInvitation?(userId: string): Promise<unknown>;
   /** The effective rights of one person, shown read-only on the person's page. */
@@ -90,6 +94,8 @@ export function UserAdministrationPanel({
   onUpsertIdentity,
   onDeleteIdentity,
   onResetPassword,
+  viewerId,
+  onResetTwoFactor,
   onSendInvitation,
   userRights
 }: UserAdministrationPanelProps) {
@@ -131,6 +137,7 @@ export function UserAdministrationPanel({
         onUpsertIdentity={onUpsertIdentity}
         onDeleteIdentity={onDeleteIdentity}
         onResetPassword={onResetPassword}
+        onResetTwoFactor={selectedUser.id === viewerId ? undefined : onResetTwoFactor}
         onSendInvitation={onSendInvitation}
         rights={userRights?.(selectedUser.id)}
       />

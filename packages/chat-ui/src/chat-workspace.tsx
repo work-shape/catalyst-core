@@ -43,6 +43,7 @@ import { useRailApps } from "./studio/apps/rail-apps";
 import { InboxArea } from "./chat/inbox";
 import { ScheduledPage } from "./chat/scheduled/scheduled-page";
 import { LoginPanel } from "./chat/login-panel";
+import { TwoFactorSetupScreen } from "./chat/two-factor-setup-screen";
 import { operationRunHref, operationRunsHref } from "./shared/operations-model";
 import { PageHostProvider } from "./studio/pages/page-host";
 import {
@@ -262,6 +263,26 @@ function ChatWorkspaceContent({
     }
   }, [resourcesInset]);
   const showsLogin = model.auth.loginRequired || Boolean(passwordSetupToken);
+  // The setup screen stays until the person confirms the backup codes are saved: the first code
+  // already turns the factor on, and a refetch of the account must not take the codes away.
+  // `twoFactorSetupConfirmed` covers the moment between that confirmation and the account's
+  // next answer.
+  const [twoFactorSetupOpen, setTwoFactorSetupOpen] = useState(false);
+  const [twoFactorSetupConfirmed, setTwoFactorSetupConfirmed] = useState(false);
+  const twoFactorSetupRequired = model.auth.twoFactorSetupRequired;
+  const signedIn = Boolean(model.auth.user);
+  useEffect(() => {
+    if (!signedIn) {
+      setTwoFactorSetupOpen(false);
+    }
+    if (!twoFactorSetupRequired) {
+      setTwoFactorSetupConfirmed(false);
+    } else if (!twoFactorSetupConfirmed) {
+      setTwoFactorSetupOpen(true);
+    }
+  }, [signedIn, twoFactorSetupConfirmed, twoFactorSetupRequired]);
+  const showsTwoFactorSetup =
+    signedIn && ((twoFactorSetupRequired && !twoFactorSetupConfirmed) || twoFactorSetupOpen);
   const themeMode = model.config.resolvedThemeMode;
   const uiLabels = uiLabelsFor(model.config.activeLocale);
   // This component sets the translations up for what it renders, so it reads them directly.
@@ -323,6 +344,29 @@ function ChatWorkspaceContent({
             signingOut={model.auth.signingOut}
             onRetry={model.auth.retryCurrentUser}
             onSignOut={model.auth.signOut}
+          />
+        </UiRoot>
+      </TranslationProvider>
+    );
+  }
+
+  if (showsTwoFactorSetup && model.auth.user) {
+    return (
+      <TranslationProvider locale={model.config.activeLocale} labelOverrides={labelOverrides}>
+        <UiRoot as="main" mode={themeMode} labels={uiLabels}>
+          <TwoFactorSetupScreen
+            apiBaseUrl={model.auth.apiBaseUrl}
+            accountName={model.auth.user.email ?? model.auth.user.displayLabel}
+            signingOut={model.auth.signingOut}
+            onDone={() => {
+              setTwoFactorSetupConfirmed(true);
+              setTwoFactorSetupOpen(false);
+              model.auth.invalidateCurrentUser();
+            }}
+            onSignOut={() => {
+              setTwoFactorSetupOpen(false);
+              model.auth.signOut();
+            }}
           />
         </UiRoot>
       </TranslationProvider>

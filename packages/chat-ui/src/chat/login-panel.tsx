@@ -2,7 +2,9 @@ import { useQuery } from "@tanstack/react-query";
 import {
   createApiClient,
   signInWithEmail,
+  verifySecondFactor,
   type AuthResult,
+  type SecondFactorKind,
   type LocaleCode
 } from "@work-shape/catalyst-api-client";
 import { localeCodes } from "@work-shape/catalyst-core";
@@ -12,6 +14,7 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
+  Checkbox,
   cn,
   Input,
   UiRoot
@@ -26,11 +29,13 @@ import {
 } from "../shared/theme";
 import { uiLabelsFor } from "../shared/ui-labels";
 import { createEnvironmentDocumentTitle } from "../shared/workspace-utils";
+import { twoFactorRefusal } from "../shared/two-factor/two-factor-setup";
 import { LocaleSelector } from "./locale-selector";
 
 const DEFAULT_LOGIN_LOCALES: LocaleCode[] = [...localeCodes];
 
-type LoginMode = "signIn" | "requestReset" | "setPassword";
+/** `secondFactor`: the password was right and the account asks for a code (TWO-FACTOR-1). */
+type LoginMode = "signIn" | "requestReset" | "setPassword" | "secondFactor";
 
 /**
  * What a refused sign-in says. A wrong password and an account without one read alike, so no
@@ -71,6 +76,9 @@ export function LoginPanel({
   const [error, setError] = useState<string | undefined>();
   const [notice, setNotice] = useState<string | undefined>();
   const [pending, setPending] = useState(false);
+  const [code, setCode] = useState("");
+  const [codeKind, setCodeKind] = useState<SecondFactorKind>("app");
+  const [trustBrowser, setTrustBrowser] = useState(false);
   const [systemThemeMode, setSystemThemeMode] = useState(() => readSystemThemeMode());
   const client = useMemo(() => createApiClient({ baseUrl: apiBaseUrl }), [apiBaseUrl]);
   const brandingQuery = useQuery({
@@ -139,12 +147,37 @@ export function LoginPanel({
       setError(signInRefusal(result, t));
       return;
     }
+    if (result.secondFactor) {
+      showMode("secondFactor");
+      return;
+    }
     onSignedIn();
+  }
+
+  async function onVerifyCode(event: FormEvent) {
+    event.preventDefault();
+    setPending(true);
+    setError(undefined);
+    const result = await verifySecondFactor({ apiBaseUrl, code, kind: codeKind, trustBrowser });
+    setPending(false);
+    if (!result.ok) {
+      setError(twoFactorRefusal(result, codeKind, t));
+      return;
+    }
+    onSignedIn();
+  }
+
+  function showCodeKind(kind: SecondFactorKind) {
+    setCodeKind(kind);
+    setCode("");
+    setError(undefined);
   }
 
   function showMode(nextMode: LoginMode) {
     setMode(nextMode);
     setPassword("");
+    setCode("");
+    setCodeKind("app");
     setError(undefined);
     setNotice(undefined);
   }
@@ -188,13 +221,17 @@ export function LoginPanel({
   }
 
   const title =
-    mode === "setPassword"
-      ? t("passwordSetupTitle")
-      : mode === "requestReset"
-        ? t("passwordResetTitle")
-        : clientName
-          ? t("signInTo", { clientName })
-          : t("signIn");
+    mode === "secondFactor"
+      ? codeKind === "app"
+        ? t("twoFactor.signInCodeTitle")
+        : t("twoFactor.backupCodeTitle")
+      : mode === "setPassword"
+        ? t("passwordSetupTitle")
+        : mode === "requestReset"
+          ? t("passwordResetTitle")
+          : clientName
+            ? t("signInTo", { clientName })
+            : t("signIn");
 
   return (
     <UiRoot
@@ -248,13 +285,40 @@ export function LoginPanel({
           <form
             className="grid gap-4"
             onSubmit={
-              mode === "setPassword"
-                ? onSetPassword
-                : mode === "requestReset"
-                  ? onRequestReset
-                  : onSubmit
+              mode === "secondFactor"
+                ? onVerifyCode
+                : mode === "setPassword"
+                  ? onSetPassword
+                  : mode === "requestReset"
+                    ? onRequestReset
+                    : onSubmit
             }
           >
+            {mode === "secondFactor" ? (
+              <>
+                <label className="grid gap-1.5 text-sm font-medium">
+                  <span>
+                    {codeKind === "app" ? t("twoFactor.code") : t("twoFactor.backupCode")}
+                  </span>
+                  <Input
+                    autoComplete="one-time-code"
+                    inputMode={codeKind === "app" ? "numeric" : "text"}
+                    autoFocus
+                    value={code}
+                    onChange={(event) => {
+                      setCode(event.target.value);
+                      setError(undefined);
+                    }}
+                  />
+                </label>
+                <Checkbox
+                  checked={trustBrowser}
+                  onCheckedChange={setTrustBrowser}
+                  label={t("twoFactor.trustBrowser")}
+                  description={t("twoFactor.trustBrowserHint")}
+                />
+              </>
+            ) : null}
             {mode === "requestReset" ? (
               <p className="text-sm text-muted-foreground">{t("passwordResetDescription")}</p>
             ) : null}
@@ -263,7 +327,7 @@ export function LoginPanel({
                 {notice}
               </p>
             ) : null}
-            {mode !== "setPassword" ? (
+            {mode !== "setPassword" && mode !== "secondFactor" ? (
               <label className="grid gap-1.5 text-sm font-medium">
                 <span>{t("email")}</span>
                 <Input
@@ -274,7 +338,7 @@ export function LoginPanel({
                 />
               </label>
             ) : null}
-            {mode !== "requestReset" ? (
+            {mode !== "requestReset" && mode !== "secondFactor" ? (
               <label className="grid gap-1.5 text-sm font-medium">
                 <span>{mode === "setPassword" ? t("newPassword") : t("password")}</span>
                 <Input
@@ -293,7 +357,20 @@ export function LoginPanel({
                 {error}
               </p>
             ) : null}
-            {mode === "setPassword" ? (
+            {mode === "secondFactor" ? (
+              <>
+                <Button type="submit" disabled={pending || code.trim().length === 0}>
+                  {pending ? t("signingIn") : t("twoFactor.verify")}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => showCodeKind(codeKind === "app" ? "backup" : "app")}
+                >
+                  {codeKind === "app" ? t("twoFactor.useBackupCode") : t("twoFactor.useAppCode")}
+                </Button>
+              </>
+            ) : mode === "setPassword" ? (
               <Button type="submit" disabled={pending || password.length < 8}>
                 {pending ? t("saving") : t("passwordSetupSubmit")}
               </Button>

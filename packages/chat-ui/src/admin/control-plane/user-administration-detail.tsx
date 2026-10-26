@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
-import { ArrowLeft, KeyRound, Link2, Mail, Plus, Save, Trash2 } from "lucide-react";
+import { ArrowLeft, KeyRound, Link2, Mail, Plus, Save, ShieldCheck, Trash2 } from "lucide-react";
 import type {
   AdministeredUser,
   UserDeletionState,
@@ -52,6 +52,7 @@ export function UserDetail({
   onUpsertIdentity,
   onDeleteIdentity,
   onResetPassword,
+  onResetTwoFactor,
   onSendInvitation,
   rights
 }: {
@@ -71,6 +72,8 @@ export function UserDetail({
   ): Promise<AdministeredUser>;
   onDeleteIdentity(userId: string, identity: AdministeredUserIdentity): Promise<AdministeredUser>;
   onResetPassword(userId: string, password: string): Promise<unknown>;
+  /** Absent on one's own account: nobody resets their own two-factor sign-in. */
+  onResetTwoFactor?(userId: string): Promise<unknown>;
   onSendInvitation?(userId: string): Promise<unknown>;
 }) {
   const { t } = useTranslation();
@@ -138,6 +141,14 @@ export function UserDetail({
             onResetPassword={onResetPassword}
             onSendInvitation={onSendInvitation}
           />
+          {onResetTwoFactor ? (
+            <TwoFactorCard
+              user={user}
+              disabledReason={managementDisabledReason}
+              mutating={mutating}
+              onResetTwoFactor={onResetTwoFactor}
+            />
+          ) : null}
           <DeleteUserCard
             user={user}
             canDeleteUser={canDeleteUser && canManageUser}
@@ -547,6 +558,122 @@ function PasswordCard({
           ) : null}
           <FormNotice notice={notice} />
         </form>
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * TWO-FACTOR-1: whether the person set up two-factor sign-in, and the reset for someone who lost
+ * both their phone and their backup codes. The dialog asks to confirm who is asking first.
+ */
+function TwoFactorCard({
+  user,
+  disabledReason,
+  mutating,
+  onResetTwoFactor
+}: {
+  user: AdministeredUser;
+  disabledReason?: string;
+  mutating: boolean;
+  onResetTwoFactor(userId: string): Promise<unknown>;
+}) {
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
+  const [notice, setNotice] = useState<FormNoticeState>();
+  const hasPasswordIdentity = user.identities.some(
+    (identity) => identity.authSource === STANDALONE_AUTH_SOURCE
+  );
+
+  useEffect(() => {
+    setOpen(false);
+    setNotice(undefined);
+  }, [user.id]);
+
+  if (!hasPasswordIdentity) {
+    return null;
+  }
+
+  async function reset() {
+    setNotice(undefined);
+    try {
+      await onResetTwoFactor(user.id);
+      setOpen(false);
+      setNotice({
+        kind: "success",
+        text: t("twoFactor.resetDone", { name: user.displayLabel })
+      });
+    } catch (error) {
+      setNotice({ kind: "error", text: errorMessage(error, t("settings.requestFailed")) });
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader className="p-4 pb-2">
+        <CardTitle className="flex items-center justify-between gap-2 text-base">
+          <span className="flex items-center gap-2">
+            <ShieldCheck size={17} aria-hidden="true" />
+            {t("twoFactor.title")}
+          </span>
+          <Badge tone={user.twoFactorEnabled ? "success" : "neutral"} dot>
+            {user.twoFactorEnabled ? t("twoFactor.adminSetUp") : t("twoFactor.adminNotSetUp")}
+          </Badge>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="grid gap-3 p-4 pt-2">
+        <p className="text-sm text-muted-foreground">{t("twoFactor.adminDescription")}</p>
+        {disabledReason ? <p className="text-sm text-muted-foreground">{disabledReason}</p> : null}
+        <Button
+          type="button"
+          variant="outline"
+          className="w-fit"
+          disabled={mutating || Boolean(disabledReason) || !user.twoFactorEnabled}
+          onClick={() => {
+            setNotice(undefined);
+            setOpen(true);
+          }}
+        >
+          {t("twoFactor.reset")}
+        </Button>
+        <FormNotice notice={open ? undefined : notice} />
+        <Dialog
+          open={open}
+          title={t("twoFactor.resetDialogTitle", { name: user.displayLabel })}
+          onClose={() => {
+            if (!mutating) {
+              setOpen(false);
+            }
+          }}
+        >
+          <div className="grid gap-4">
+            <div className="grid gap-2 text-sm text-muted-foreground">
+              <p className="text-foreground">{t("twoFactor.resetDialogIdentity")}</p>
+              <p>{t("twoFactor.resetDialogEffect")}</p>
+            </div>
+            <FormNotice notice={notice} />
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={mutating}
+                onClick={() => setOpen(false)}
+              >
+                {t("cancel")}
+              </Button>
+              <Button
+                type="button"
+                variant="danger"
+                disabled={mutating}
+                onClick={() => {
+                  reset().catch(() => undefined);
+                }}
+              >
+                {mutating ? t("twoFactor.resetting") : t("twoFactor.resetConfirm")}
+              </Button>
+            </div>
+          </div>
+        </Dialog>
       </CardContent>
     </Card>
   );

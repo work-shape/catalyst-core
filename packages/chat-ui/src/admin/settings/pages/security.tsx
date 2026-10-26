@@ -4,6 +4,7 @@ import { Button, Field, FormNotice, Input, PageHeader, Section } from "@work-sha
 import { useChangeCurrentUserPasswordMutation } from "../../../shared/api/workspace-mutations";
 import { useTranslation } from "../../../shared/i18n";
 import { useSettingsPage } from "../../../shared/settings-page-context";
+import { TwoFactorSection } from "./two-factor-section";
 
 /** The shortest password this form sends on. The server holds the rule; this spares a round trip. */
 const MIN_PASSWORD_LENGTH_CHARS = 8;
@@ -84,6 +85,7 @@ export function SecurityPage() {
           </div>
         </form>
       </Section>
+      <TwoFactorSection />
     </>
   );
 }

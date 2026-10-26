@@ -71,7 +71,7 @@ async function fill(label: string, value: string, within: ParentNode = document)
   });
 }
 
-async function usersPage(roles: string[], users = [account]) {
+async function usersPage(roles: string[], users = [account], viewerId = "user_1") {
   const requests: { method: string; path: string; body?: unknown }[] = [];
   let rows = users;
   const client = createApiClient({
@@ -102,8 +102,14 @@ async function usersPage(roles: string[], users = [account]) {
               { status: 404 }
             );
       }
-      const body: unknown = request.method === "DELETE" ? undefined : await request.json();
+      const twoFactorReset = path.endsWith("/two-factor/reset");
+      const body: unknown =
+        request.method === "DELETE" || twoFactorReset ? undefined : await request.json();
       requests.push({ method: request.method, path, body });
+      if (twoFactorReset) {
+        rows = rows.map((row) => ({ ...row, twoFactorEnabled: false }));
+        return Response.json({ ok: true, hadFactor: true });
+      }
       if (request.method === "DELETE") {
         rows = [];
         return Response.json({ state: "deleted" });
@@ -115,7 +121,7 @@ async function usersPage(roles: string[], users = [account]) {
   });
   const page = required(administration.pages?.find((item) => item.id === "users"));
   const mounted = await mountPage(
-    settingsPageContext(client, settingsUser({ roles })),
+    settingsPageContext(client, settingsUser({ roles, id: viewerId })),
     "en",
     createElement(page.component)
   );
@@ -142,7 +148,7 @@ describe("the Users page", () => {
     const mounted = await usersPage(["user", "admin"]);
     try {
       await act(async () => button("New user").click());
-      const dialog = required(document.querySelector('dialog, [role="dialog"]'));
+      const dialog = required(document.querySelector('dialog[open], [role="dialog"]'));
       expect(dialog.textContent).toContain("New user");
       const roleLabel = required(
         [...dialog.querySelectorAll("label")].find(
@@ -210,12 +216,47 @@ describe("the Users page", () => {
     }
   });
 
+  it("resets a person's two-factor sign-in after the dialog asks who is asking, and never one's own", async () => {
+    const mounted = await usersPage(["superadmin"], [{ ...account, twoFactorEnabled: true }]);
+    try {
+      await act(async () => rowButton("Managed person", "managed@example.test").click());
+      expect(mounted.container.textContent).toContain("Two-factor sign-in");
+      await act(async () => button("Reset two-factor sign-in").click());
+      const dialog = required(document.querySelector('dialog[open], [role="dialog"]'));
+      expect(dialog.textContent).toContain("Reset two-factor sign-in of Managed person?");
+      expect(dialog.textContent).toContain("outside this instance");
+      expect(mounted.requests).toEqual([]);
+      await act(async () => button("Reset", dialog).click());
+      await waitForText(mounted.container, "sets up two-factor sign-in again");
+      expect(mounted.requests).toEqual([
+        {
+          method: "POST",
+          path: apiOperations["users.two_factor.reset"].buildPath({
+            params: { userId: account.id }
+          }),
+          body: undefined
+        }
+      ]);
+    } finally {
+      await mounted.unmount();
+    }
+
+    const own = await usersPage(["superadmin"], [{ ...account, twoFactorEnabled: true }], account.id);
+    try {
+      await act(async () => rowButton("Managed person", "managed@example.test").click());
+      expect(own.container.textContent).toContain("Delete user");
+      expect(own.container.textContent).not.toContain("Reset two-factor sign-in");
+    } finally {
+      await own.unmount();
+    }
+  });
+
   it("requires the person's exact email before deleting and returns to the list without that person", async () => {
     const mounted = await usersPage(["superadmin"]);
     try {
       await act(async () => rowButton("Managed person", "managed@example.test").click());
       await act(async () => button("Delete user").click());
-      const dialog = required(document.querySelector('dialog, [role="dialog"]'));
+      const dialog = required(document.querySelector('dialog[open], [role="dialog"]'));
       expect(dialog.textContent).toContain("Delete Managed person?");
       const confirm = button("Permanently delete user", dialog);
       expect(confirm.disabled).toBe(true);

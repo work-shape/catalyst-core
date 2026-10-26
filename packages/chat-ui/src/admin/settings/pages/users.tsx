@@ -51,6 +51,8 @@ export function UsersPage() {
       onResetPassword={(userId, password) =>
         userMutations.resetUserPassword.mutateAsync({ userId, password })
       }
+      viewerId={user.id}
+      onResetTwoFactor={(userId) => userMutations.resetUserTwoFactor.mutateAsync(userId)}
       onSendInvitation={
         config.features.userInvitations.enabled
           ? (userId) => userMutations.sendUserInvitation.mutateAsync(userId)

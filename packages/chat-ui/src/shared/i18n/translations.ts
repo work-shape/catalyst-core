@@ -62,6 +62,7 @@ import { skillFiles } from "./skill-files";
 import { skillImport } from "./skill-import";
 import { subagents } from "./subagents";
 import { tools } from "./tools";
+import { twoFactor } from "./two-factor";
 import { workflowDraft } from "./workflow-draft";
 import { workflowRights } from "./workflow-rights";
 import { workflows } from "./workflows";
@@ -136,6 +137,7 @@ export const translations = combineTranslations(common)
   .and(skillImport)
   .and(subagents)
   .and(tools)
+  .and(twoFactor)
   .and(workflowRights)
   .and(workflowDraft)
   .and(workflows)
