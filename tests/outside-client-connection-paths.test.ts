@@ -332,7 +332,21 @@ describe("a Workflow run read or started with a key", () => {
   });
 
   it("answers a key that may start a Workflow and not read it what a missing Workflow answers for another person's run key", async () => {
-    const { t, tim } = await ready();
+    // A Workflow outside clients may start, over crm exposed to them.
+    const definitions = publishedDefinitions();
+    const opened = notifyClients();
+    const [trigger, ...rest] = opened.steps;
+    definitions.publish({
+      ...opened,
+      steps: [{ ...trigger, triggers: [{ kind: "manual" }, { kind: "outside" }] }, ...rest]
+    });
+    const { t, tim } = await ready({ definitions: definitions.source });
+    await t.seed("crm", {
+      operations: [
+        operationOf("echo", { exposure: ["workflow", "outside"] }),
+        operationOf("write", { effect: "changing", exposure: ["workflow", "outside"] })
+      ]
+    });
     const started = await t.expectOk(t.root.id, "workflows.start", {
       params: { workflow: "notify-clients" },
       payload: { input: { note: NOTE }, key: "2026-10/anna" }
