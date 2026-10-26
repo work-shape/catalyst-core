@@ -1,0 +1,49 @@
+{
+  "routes": [
+    "/",
+    "/build/agents",
+    "/build/connections",
+    "/build/data-stores",
+    "/build/guardrails",
+    "/build/knowledge-bases",
+    "/build/skills",
+    "/inbox",
+    "/settings/instance/access",
+    "/settings/instance/api-access",
+    "/settings/instance/audit",
+    "/settings/instance/infrastructure",
+    "/settings/instance/jobs",
+    "/settings/instance/limits",
+    "/settings/instance/modules",
+    "/settings/instance/operations",
+    "/settings/instance/usage",
+    "/settings/instance/users",
+    "/settings/instance/workspaces",
+    "/settings/workspace/general",
+    "/settings/workspace/members",
+    "/settings/workspace/usage",
+    "/settings/you/api-keys",
+    "/settings/you/confirmations",
+    "/settings/you/connect",
+    "/settings/you/connections",
+    "/settings/you/language-appearance",
+    "/settings/you/profile",
+    "/settings/you/security",
+    "/settings/you/usage",
+    "/w/{workspace}/agents",
+    "/w/{workspace}/apps",
+    "/w/{workspace}/workflows"
+  ],
+  "required": [],
+  "states": [
+    {
+      "name": "app-publish-refusal",
+      "setup": "/tmp/catalyst-refuse-1/checked-refusal-state.mjs"
+    }
+  ],
+  "modules": [],
+  "pr": 75,
+  "head": "0371a9e65c688961a6a3fbb1b730af481ca3771c",
+  "base": "d3eb648f5cd129c8d7f7125e3d9d89ea567c93cd",
+  "tested": "ddac8757d80a40e6a1c428b854520d42c65144f7"
+}
