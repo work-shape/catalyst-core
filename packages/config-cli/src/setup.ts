@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { sha256Hex as sha256 } from "@work-shape/catalyst-core/sha256";
 import { lstat, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { homedir, hostname } from "node:os";
 import { dirname, join } from "node:path";
@@ -44,10 +44,6 @@ const SHIPPED_SKILL = new URL("../skills/catalyst/SKILL.md", import.meta.url);
 /** The last line of a skill `catalyst setup` wrote: the CLI version and the hash of the text. */
 const MARK =
   /\n<!-- Written by catalyst setup \(@work-shape\/catalyst-cli [^,]+, sha256 ([0-9a-f]{64})\)\. -->\n$/u;
-
-function sha256(text: string): string {
-  return createHash("sha256").update(text).digest("hex");
-}
 
 /** The skill file this CLI writes: the shipped skill with a mark of who wrote it. */
 export async function renderCatalystSkill(): Promise<string> {

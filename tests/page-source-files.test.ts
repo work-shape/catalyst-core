@@ -74,6 +74,28 @@ describe("pages.files.list", () => {
     const listed = await started.instance.call("pages.files.list", { params }, "user-1");
 
     expect(listed.statusCode).toBe(200);
+    expect(listed.json<{ files: object[] }>().files).toMatchInlineSnapshot(`
+      [
+        {
+          "bytes": 12,
+          "contentType": "text/yaml; charset=utf-8",
+          "path": "app.yaml",
+          "sha256": "5fc4d0c6b07315cd736ef64bb08df0b2389cdc2c4e1548a7dcdfaf38a3bb20b8",
+        },
+        {
+          "bytes": 38,
+          "contentType": "text/plain; charset=utf-8",
+          "path": "src/main.ts",
+          "sha256": "ff12d07e2d419e919017a5f32ceeaffb31d0595dc05ab80bd406c2d98613e9fe",
+        },
+        {
+          "bytes": 24,
+          "contentType": "text/plain; charset=utf-8",
+          "path": "src/routes/index.tsx",
+          "sha256": "b4fab2f314ec81a05288520a5aaacf549e8538ae91efb3623b6412ca6b84efa7",
+        },
+      ]
+    `);
     expect(listed.json<{ files: object[] }>().files).toEqual(
       ["app.yaml", "src/main.ts", "src/routes/index.tsx"].map((path) => {
         const source = sourceFiles.find((file) => file.path === path);

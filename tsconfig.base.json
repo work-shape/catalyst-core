@@ -88,6 +88,7 @@
       "@work-shape/catalyst-config-schema": ["packages/config-schema/src/index.ts"],
       "@work-shape/catalyst-connections": ["packages/connections/src/index.ts"],
       "@work-shape/catalyst-core": ["packages/core/src/index.ts"],
+      "@work-shape/catalyst-core/sha256": ["packages/core/src/sha256.ts"],
       "@work-shape/catalyst-data-stores": ["packages/data-stores/src/index.ts"],
       "@work-shape/catalyst-demo/result-shapers": ["clients/demo/src/result-shapers.ts"],
       "@work-shape/catalyst-demo/sample-mcp": ["clients/demo/sample-mcp/index.ts"],

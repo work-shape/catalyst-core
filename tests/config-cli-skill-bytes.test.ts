@@ -22,6 +22,15 @@ describe("CLI skill folder bytes", () => {
     for (const [path, bytes] of Object.entries(content))
       expect(hash(await readFile(join(target, "skills/form", path)))).toBe(hash(bytes));
     const state = JSON.parse(await readFile(join(target, ".catalyst-state.json"), "utf8"));
+    expect(state.instances.local.assets["skill:form"].files).toMatchInlineSnapshot(`
+      {
+        "SKILL.md": "282480d3888adc7e6349298093040f941e9ee646de6f5e3f6f225661cf98b53e",
+        "assets/logo.png": "ffdb519b788f33bddc8647611c3a24cc5e1a9ef5780c1f6f828a637c309ad8f1",
+        "assets/template.pdf": "3b2cdcec27c018687f822c4d1a0a3eeb2725e397638e05faf671b94ebecbc9e2",
+        "references/r.md": "601b40061a9410b6b18d0828f574ca18949f0cf4e9bbb81a77a1a567e8fad31b",
+        "scripts/fill_form.py": "52282584fac65eee263b81a3f2fc23f49090827af5c610b1789ff4de620a6533",
+      }
+    `);
     expect(state.instances.local.assets["skill:form"].files).toEqual(
       Object.fromEntries(Object.entries(content).map(([path, bytes]) => [path, hash(bytes)]))
     );

@@ -48,6 +48,33 @@ describe("a changing call of a Data Store that carries an idempotency key", () =
       { key: string; operation: string; input_hash: string; outcome: JsonObject }[]
     >`select key, operation, input_hash, outcome from catalyst.calls order by made_at`;
 
+  it("preserves stored caller and input hashes from earlier releases", async () => {
+    const world = await published("hash-format");
+    await call(
+      world,
+      "insert",
+      {
+        table: "findings",
+        rows: [finding(0, { details: { "2": 2, "10": 10, z: [null, "Grüße 🧪"], a: {} } })]
+      },
+      "hash-golden"
+    );
+    expect(await records(world)).toMatchInlineSnapshot(`
+      Result [
+        {
+          "input_hash": "aba45ecd564f21254fd47f09d99162ecd1ebda499e65c8336d8e25b65c561477",
+          "key": "99e1a0a4f7da052ee5921dc4ee0a6f1f7c43e4f4cddc115b1348d27cdbdf2603",
+          "operation": "data_store.findings.insert",
+          "outcome": {
+            "inserted": 1,
+            "skipped": 0,
+            "table": "findings",
+          },
+        },
+      ]
+    `);
+  });
+
   it("changes nothing a second time under the same key and input, and answers what the first call was answered", async () => {
     const world = await published("again");
 

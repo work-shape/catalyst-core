@@ -1,5 +1,5 @@
 import { takeGrantTurn } from "./grant-turn";
-import { createHash } from "node:crypto";
+import { sha256Hex as sha256 } from "@work-shape/catalyst-core/sha256";
 import type {
   PostgresChangeStatements,
   PostgresTarget
@@ -112,6 +112,7 @@ export interface KeyedCall {
   inputHash: string;
 }
 
+// Stored call hashes omit undefined fields and encode non-finite numbers as null, unlike core normalization.
 function canonicalJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
   if (typeof value === "object" && value !== null) {
@@ -123,8 +124,6 @@ function canonicalJson(value: unknown): string {
   }
   return JSON.stringify(value ?? null);
 }
-
-const sha256 = (text: string) => createHash("sha256").update(text).digest("hex");
 
 /** The call as the store records it, from who made it, under which key, and with what. */
 export function keyedCall(

@@ -32,7 +32,7 @@ import { repoRoot } from "./package-metadata.mjs";
 export const PUBLIC_TOOL_DIR = "config-cli";
 /**
  * The package folders whose source may be bundled into the public tool. The same three are
- * named in packages/config-cli/tsup.config.ts. Every other package of the workspace is private.
+ * named in packages/config-cli/tsup.config.ts, alongside core's standalone sha256 entry.
  */
 export const BUNDLED_SOURCE_DIRS = ["asset-schemas", "api-contract", "api-client"];
 /** Package scopes of this workspace. No file of the tarball may import from one. */
@@ -158,9 +158,11 @@ export function inspectPublicPackage(root) {
     // The bundler writes the source path of every module it bundled as a comment of its own.
     for (const [, modulePath] of text.matchAll(/^\/\/ (\S+\.[cm]?[jt]sx?)$/gmu)) {
       const fromPackage = posix.normalize(posix.join("packages", PUBLIC_TOOL_DIR, modulePath));
-      const allowed = [PUBLIC_TOOL_DIR, ...BUNDLED_SOURCE_DIRS].some((dir) =>
-        fromPackage.startsWith(`packages/${dir}/src/`)
-      );
+      const allowed =
+        fromPackage === "packages/core/src/sha256.ts" ||
+        [PUBLIC_TOOL_DIR, ...BUNDLED_SOURCE_DIRS].some((dir) =>
+          fromPackage.startsWith(`packages/${dir}/src/`)
+        );
       if (!allowed) {
         problems.push(`${file}: bundles ${modulePath}, which is outside the public packages`);
       }

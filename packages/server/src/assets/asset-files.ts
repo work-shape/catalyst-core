@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { sha256Hex as sha256 } from "@work-shape/catalyst-core/sha256";
 import {
   AppError,
   ASSET_GET_FILES_MAX_BYTES,
@@ -95,10 +95,6 @@ export function decodeAssetFiles(files: readonly AssetFileInput[]): PageFileInpu
 function base64ByteLength(text: string): number {
   const padding = text.endsWith("==") ? 2 : text.endsWith("=") ? 1 : 0;
   return Math.max(0, Math.floor((text.length * 3) / 4) - padding);
-}
-
-function sha256(bytes: Uint8Array): string {
-  return createHash("sha256").update(bytes).digest("hex");
 }
 
 function assetOwner(assetId: string): FileSetOwner {

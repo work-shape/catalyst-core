@@ -545,6 +545,18 @@ describe("the publish review of an App", () => {
     updatedAt: "2026-10-13T00:00:00.000Z"
   });
 
+  it("compares unknown action values as null without omitting their fields", () => {
+    const live = app(1, {
+      actions: [{ name: "send", effect: "changing", input: [null], optional: null }]
+    });
+    const candidate = app(2, {
+      actions: [{ optional: undefined, input: [undefined], effect: "changing", name: "send" }]
+    });
+    expect(publishReview(candidate, live).changingActions).toEqual([
+      { name: "send", change: "unchanged" }
+    ]);
+  });
+
   it("marks the changing actions new or changed and the hosts and stores added", () => {
     const live = app(1, {
       externalHosts: ["kept.example.org"],

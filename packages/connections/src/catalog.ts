@@ -2,6 +2,7 @@ import {
   CONNECTION_OPERATION_NAME_MAX_LENGTH,
   CONNECTION_OPERATION_NAME_PATTERN,
   OPERATION_EFFECTS,
+  canonicalJson,
   type ConnectionCatalog,
   type ConnectionCatalogEntry,
   type ConnectionOperationConfig,
@@ -12,7 +13,7 @@ import {
   type JsonObject,
   type JsonValue
 } from "@work-shape/catalyst-core";
-import { createHash } from "node:crypto";
+import { sha256Hex } from "@work-shape/catalyst-core/sha256";
 import { z } from "zod";
 import {
   compileJsonSchema,
@@ -24,17 +25,6 @@ import {
 // What a discovery leaves behind and what it makes callable. Pure: nothing here reads or
 // writes a store or opens a connection. A discovery never widens anything: a tool is callable
 // only while the Connection's accepted list names it and its descriptor is the accepted one.
-
-function canonicalJson(value: JsonValue): string {
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
-  if (typeof value === "object" && value !== null) {
-    return `{${Object.keys(value)
-      .sort()
-      .map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key] ?? null)}`)
-      .join(",")}}`;
-  }
-  return JSON.stringify(value);
-}
 
 /**
  * Whether the schemas of a descriptor are ones the platform compiles: within the bounds of a
@@ -63,7 +53,7 @@ export function fingerprintOperation(descriptor: ConnectorOperationDescriptor): 
     proposedEffect: descriptor.proposedEffect
   };
   if (descriptor.outputSchema !== undefined) fingerprinted.outputSchema = descriptor.outputSchema;
-  return createHash("sha256").update(canonicalJson(fingerprinted)).digest("hex");
+  return sha256Hex(canonicalJson(fingerprinted));
 }
 
 const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>

@@ -127,7 +127,14 @@ console.log(JSON.stringify(checkInstall(process.argv[1], process.argv[2], proces
     expect(result.output).toContain(`the manifest depends on the workspace package ${name}`);
   });
 
-  it("fails a bundle that holds source of a private package", () => {
+  it("allows core's standalone hash helper", () => {
+    const result = check(
+      unpacked({ "dist/index.js": "// ../core/src/sha256.ts\nexport const hash = 1;\n" })
+    );
+    expect(result.status).toBe(0);
+  });
+
+  it("fails a bundle that holds source outside the allowed entries", () => {
     const result = check(
       unpacked({ "dist/index.js": "// ../core/src/secrets.ts\nexport const resolver = 1;\n" })
     );

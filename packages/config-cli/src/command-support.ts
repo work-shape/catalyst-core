@@ -10,7 +10,7 @@ import {
   type AgentConfig,
   type SkillConfig
 } from "@work-shape/catalyst-asset-schemas";
-import { createHash } from "node:crypto";
+import { sha256Hex as assetHash } from "@work-shape/catalyst-core/sha256";
 import { mkdir, mkdtemp, rename, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { ConfigApiError, createConfigApi, type ConfigApi } from "./api";
@@ -445,6 +445,7 @@ function skillExtraHashes(asset: AssetDefinition): Record<string, string> | unde
 }
 
 /** The value with the keys of every object in it sorted, so the order of a file is no edit. */
+// Baseline JSON.stringify orders numeric keys numerically and omits undefined fields; core canonicalJson does neither.
 function sortKeys(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(sortKeys);
   if (!isRecord(value)) return value;
@@ -645,9 +646,7 @@ export async function openInstance(
   };
 }
 
-export function assetHash(contents: string): string {
-  return createHash("sha256").update(contents).digest("hex");
-}
+export { assetHash };
 
 export interface RecordedRevision {
   id: string;
