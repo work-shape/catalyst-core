@@ -93,6 +93,50 @@ describe("containers a killed worker left", () => {
   });
 });
 
+describe("a runner container that could not be started", () => {
+  const execute = (result: ProcessResult) =>
+    new DockerWorkspaceCommandProcessExecutor({
+      image: "runner:test",
+      commandClient: new FakeDockerCommandClient(async () => result),
+      runnerUser: { uid: RUNNER_USER_ID, gid: RUNNER_GROUP_ID, receivesWorkspace: false }
+    }).execute(dockerProcessInput());
+
+  it("is a start failure of the sandbox when the image cannot be pulled", async () => {
+    const result = await execute(
+      processResult({
+        exitCode: 125,
+        stderrPreview:
+          "Unable to find image 'registry.example.test/runner:1.0' locally\n" +
+          'docker: Error response from daemon: Head "https://registry.example.test/v2/runner/manifests/1.0": unauthorized.\n'
+      })
+    );
+
+    expect(result.spawnError?.message).toMatch(
+      /^The runner container could not be started: Unable to find image/u
+    );
+  });
+
+  it("is a start failure of the sandbox when the engine refuses the container", async () => {
+    const result = await execute(
+      processResult({
+        exitCode: 125,
+        stderrPreview: "docker: Error response from daemon: conflict.\n"
+      })
+    );
+
+    expect(result.spawnError).toBeInstanceOf(Error);
+  });
+
+  it("is the command's own exit when a script exits 125 itself", async () => {
+    const result = await execute(
+      processResult({ exitCode: 125, stderrPreview: "my script gave up\n" })
+    );
+
+    expect(result.spawnError).toBeUndefined();
+    expect(result.exitCode).toBe(125);
+  });
+});
+
 describe("docker workspace command runner", () => {
   it("builds sandboxed docker run arguments without inherited secrets or Docker socket mounts", () => {
     const invocation = createDockerRunInvocation(

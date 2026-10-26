@@ -205,12 +205,14 @@ export class DockerWorkspaceCommandProcessExecutor implements WorkspaceCommandPr
         };
       }
     }
-    const result = await this.options.commandClient.run({
-      args: invocation.args,
-      containerName: invocation.containerName,
-      command: input.command,
-      signal: input.signal
-    });
+    const result = dockerStartFailure(
+      await this.options.commandClient.run({
+        args: invocation.args,
+        containerName: invocation.containerName,
+        command: input.command,
+        signal: input.signal
+      })
+    );
     if (!input.sandboxLimits) {
       if (result.cancelled || result.timeoutKind) {
         await this.options.commandClient.removeContainer?.(invocation.containerName);
@@ -257,6 +259,36 @@ export class DockerWorkspaceCommandProcessExecutor implements WorkspaceCommandPr
     }
     return removed;
   }
+}
+
+/** What `docker run` exits with when it failed itself and no container ran. */
+const DOCKER_RUN_FAILED_EXIT_CODE = 125;
+// The Docker client's own lines, which a failed start writes to the error stream: a missing
+// or refused image, a daemon that refused the container, an option it did not take.
+const DOCKER_CLIENT_ERROR = /^(?:docker: |Unable to find image |Error response from daemon)/mu;
+const DOCKER_START_FAILURE_DETAIL_LENGTH = 500;
+
+/**
+ * A `docker run` that exited 125 with the Docker client's own error never started the command:
+ * the image could not be pulled, or the engine refused the container. That is the sandbox
+ * failing to start, not the command failing, so it comes back as a `spawnError`. A script
+ * that exits 125 itself writes no such line and keeps its exit code.
+ */
+export function dockerStartFailure(result: ProcessResult): ProcessResult {
+  if (
+    result.exitCode !== DOCKER_RUN_FAILED_EXIT_CODE ||
+    result.spawnError ||
+    result.cancelled ||
+    result.timeoutKind ||
+    !DOCKER_CLIENT_ERROR.test(result.stderrPreview)
+  ) {
+    return result;
+  }
+  const detail = result.stderrPreview.trim().slice(0, DOCKER_START_FAILURE_DETAIL_LENGTH);
+  return {
+    ...result,
+    spawnError: new Error(`The runner container could not be started: ${detail}`)
+  };
 }
 
 export function createDockerRunInvocation(

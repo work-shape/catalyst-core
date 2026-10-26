@@ -15,6 +15,20 @@ describe("system instructions", () => {
     expect(content).toContain("Do not substitute HTTP or YAML dumps");
     expect(content).toContain("Never ask for keys or passwords in chat");
   });
+  it("puts a platform failure on the platform's operator, never on the person or a named contact", () => {
+    expect(CATALYST_INTERNAL_AGENT_PROMPT).toContain(
+      "When a tool fails for a platform reason (a sandbox or runner that cannot start"
+    );
+    expect(CATALYST_INTERNAL_AGENT_PROMPT).toContain("not something the person did or has to fix");
+    expect(CATALYST_INTERNAL_AGENT_PROMPT).toContain(
+      "Never name a person, an administrator or a contact as the one to fix it"
+    );
+    expect(CATALYST_INTERNAL_AGENT_PROMPT).toContain("give the time and the run or command id");
+    // The help contact is for a missing right only.
+    expect(CATALYST_INTERNAL_AGENT_PROMPT).toContain(
+      "For a missing right, name the administrator supplied by the tool result"
+    );
+  });
   it("keeps technical ids in agent handoffs and out of replies the person reads", () => {
     const content = createSystemInstructions("Help.", "en");
     expect(content).toContain("In text the person reads, never repeat");

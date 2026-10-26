@@ -13,7 +13,6 @@ import {
 } from "@work-shape/catalyst-core";
 import {
   LocalWorkspaceCommandRunner,
-  WORKSPACE_COMMAND_NO_WORKER_MESSAGE,
   shapeWorkspaceCommandOutput,
   type WorkspaceCommandTelemetry
 } from "@work-shape/catalyst-tool-execution";
@@ -468,8 +467,18 @@ describe("workspace tools", () => {
       // A result the agent reads, not a call that hangs or throws.
       expect(result).toMatchObject({
         status: "failed",
-        error: { code: "handler_failed", message: WORKSPACE_COMMAND_NO_WORKER_MESSAGE }
+        error: {
+          code: "handler_failed",
+          message: expect.stringContaining(
+            "code execution is unavailable on the platform right now"
+          ),
+          details: { reason: "no_worker" }
+        }
       });
+      if (result.status === "failed") {
+        expect(result.error.message).toContain("not something the person did or has to fix");
+        expect(result.error.message).not.toMatch(/administrator has to/iu);
+      }
       expect(Date.now() - startedAt).toBeGreaterThanOrEqual(JOB_UNCLAIMED_MS);
       expect(Date.now() - startedAt).toBeLessThan(AGENT_RUN_IDLE_LIMIT_MS);
     } finally {
@@ -487,6 +496,60 @@ describe("workspace tools", () => {
         conversationId: harness.conversation.id
       })
     ).resolves.toMatchObject({ total: 0 });
+  });
+
+  it("tells the agent that a sandbox which could not start is the platform's failure, without its cause", async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), "workspace-tools-sandbox-"));
+    const harness = await createWorkspaceHarness({
+      execResultWaitMs: 5000,
+      execResultPollIntervalMs: 10
+    });
+    const runner = new LocalWorkspaceCommandRunner({
+      store: harness.store,
+      byteStore: harness.objectStore,
+      tempRootDirectory: tempRoot,
+      processExecutor: {
+        execute: async () => ({
+          exitCode: 125,
+          stdoutPreview: "",
+          stderrPreview: "docker: Error response from daemon: unauthorized.",
+          truncated: { stdout: false, stderr: false },
+          durationMs: 5,
+          spawnError: new Error(
+            "The runner container could not be started: docker: Error response from daemon: unauthorized."
+          )
+        })
+      }
+    });
+    const worker = createCommandWorker(harness.store, harness.clientInstanceId, { runner });
+    worker.start();
+
+    try {
+      const result = await harness.runTool("workspace.exec", { command: "ls" });
+
+      expect(result).toMatchObject({
+        status: "failed",
+        error: {
+          code: "handler_failed",
+          details: { reason: "sandbox_unavailable", commandId: expect.any(String) }
+        }
+      });
+      if (result.status !== "failed") throw new Error("Expected a failed result");
+      const details = jsonObject(result.error.details);
+      const message = result.error.message;
+      expect(message).toContain("the platform's sandbox for commands could not start");
+      expect(message).toContain("not something the person did or has to fix");
+      expect(message).toContain("the operator of the platform has to look into it");
+      expect(message).toContain(`the command id (${text(details.commandId)})`);
+      expect(message).toContain(`the time (${text(details.at)})`);
+      expect(message).toContain("Do not name any person, administrator or contact");
+      expect(message).toContain("Offer to try again later");
+      // The worker's cause names images, registries and hosts, and stays with the operator.
+      expect(JSON.stringify(result)).not.toMatch(/docker|unauthorized|registry/iu);
+    } finally {
+      await worker.stop();
+      await rm(tempRoot, { recursive: true, force: true });
+    }
   });
 
   it("does not consume the execution timeout while a command is queued", async () => {

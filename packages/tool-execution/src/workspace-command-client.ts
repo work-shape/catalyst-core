@@ -20,7 +20,7 @@ const NO_WORKER_REASON = "No worker took the workspace command";
  * commands. The agent reads it and tells the person; the run goes on.
  */
 export const WORKSPACE_COMMAND_NO_WORKER_MESSAGE =
-  "Code execution is unavailable right now, so the command was not run. Tell the person that code execution is unavailable at the moment and that an administrator has to look into it. Do not repeat the command in this reply.";
+  "Code execution is unavailable on the platform right now, so the command was not run. This is a technical problem of the platform, not something the person did or has to fix; the operator of the platform has to look into it. Do not repeat the command in this reply.";
 
 /** A command to queue. The client sets its workspace id and the time it was queued. */
 export type WorkspaceCommandRequest = Omit<

@@ -397,11 +397,10 @@ describe("local workspace command runner", () => {
       command: "true"
     });
 
+    // A workspace the worker could not fill is the platform's failure, not the command's.
     expect(failed).toMatchObject({
-      status: "success",
-      output: {
-        status: "failed"
-      }
+      status: "failed",
+      error: { code: "handler_failed", details: { reason: "platform_error" } }
     });
     await expect(harness.commandExecutionDirectories()).resolves.toEqual([]);
   });
