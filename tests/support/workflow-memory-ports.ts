@@ -184,6 +184,9 @@ export const unusedPlatformStores: PlatformStores = {
   get liveOnceSwitches() {
     return unsupported();
   },
+  get capabilityRecords() {
+    return unsupported();
+  },
   get infrastructureChecks() {
     return unsupported();
   },

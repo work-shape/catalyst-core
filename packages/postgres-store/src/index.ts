@@ -62,6 +62,7 @@ import { createPostgresStructuredDataStore } from "./postgres-structured-data-op
 import { createPostgresJobsStore, notifyJobsEnqueued } from "./jobs/store";
 import { createPostgresOperationRunsStore } from "./postgres-operation-run-operations";
 import { createPostgresLiveOnceSwitchesStore } from "./postgres-live-once-switch-operations";
+import { createPostgresCapabilityRecordStore } from "./postgres-capability-record-operations";
 import { createPostgresUserOperationSettingsStore } from "./postgres-user-operation-settings";
 import { createPostgresAgentProposalStore } from "./postgres-agent-proposal-operations";
 import { createPostgresAgentTryConversationStore } from "./postgres-agent-try-conversation-operations";
@@ -183,6 +184,7 @@ function bindStores(
     jobs: createPostgresJobsStore(db, enqueued),
     operationRuns: createPostgresOperationRunsStore(db, enqueued),
     liveOnceSwitches: createPostgresLiveOnceSwitchesStore(db),
+    capabilityRecords: createPostgresCapabilityRecordStore(db),
     infrastructureChecks: createPostgresInfrastructureChecksStore(db),
     pages: createPostgresPagesStore(db),
     connections: createPostgresConnectionsStore(db),

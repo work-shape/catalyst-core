@@ -33,6 +33,7 @@ import type { AccessAdministrationStore } from "./access-administration-store";
 import type { RoleStore } from "./roles";
 import type { JobsStore } from "./jobs";
 import type { LiveOnceSwitchStore } from "./draft-calls";
+import type { CapabilityRecordStore } from "./capability-records";
 import type { OperationRunStore } from "./operation-runs";
 import type { InfrastructureCheckStore } from "./infrastructure-checks";
 import type { PagesStore } from "./pages";
@@ -103,6 +104,7 @@ export interface PlatformStores {
   jobs: JobsStore;
   operationRuns: OperationRunStore;
   liveOnceSwitches: LiveOnceSwitchStore;
+  capabilityRecords: CapabilityRecordStore;
   infrastructureChecks: InfrastructureCheckStore;
   pages: PagesStore;
   connections: ConnectionsStore;

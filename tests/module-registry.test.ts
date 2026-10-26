@@ -408,7 +408,8 @@ describe("the snapshot in a running instance", () => {
       // It ships Workshaper, offered nowhere until an admin offers it.
       workshaper: { enabled: true },
       // Without a switch, guardrails stay on for one transition release.
-      guardrails: { enabled: true }
+      guardrails: { enabled: true },
+      outsideForms: { enabled: false }
     });
     expect(safe.features).toEqual({
       attachments: { enabled: false, accept: "" },
@@ -463,7 +464,8 @@ describe("the snapshot in a running instance", () => {
         personalApiKeys: { enabled: false },
         feedback: { enabled: false },
         workshaper: { enabled: false },
-        guardrails: { enabled: true }
+        guardrails: { enabled: true },
+        outsideForms: { enabled: false }
       });
       expect(answer.features.resources).toEqual({ enabled: false });
     } finally {
