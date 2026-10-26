@@ -2,7 +2,6 @@ import {
   AppError,
   CONNECTION_ASSET_KIND,
   DATA_STORE_OPERATION_PREFIX,
-  KNOWLEDGE_BASE_ASSET_KIND,
   KNOWLEDGE_OPERATION_PREFIX,
   WORKFLOW_OPERATION_PREFIX,
   parseConnectionOperationName,
@@ -41,9 +40,9 @@ export function startsFromOutside(manifest: Pick<WorkflowManifest, "steps">): bo
 
 /**
  * What keeps a run of the definition from answering an outside client: a Connection whose
- * operation it calls is not exposed to `outside`, a Knowledge Base it reads that is filled from
- * a source (a Connection's or a Workflow's; its sources are exposed to nobody), a child Workflow
- * that is not published, or any other operation it calls. Each is named once.
+ * operation it calls is not exposed to `outside`, a Knowledge Base it reads (its documents may
+ * come from a Connection, directly or through a Workflow), a child Workflow that is not
+ * published, or any other operation it calls. Each is named once.
  */
 export interface WorkflowOutsideBlocker {
   kind: "connection" | "knowledge_base" | "workflow" | "operation";
@@ -51,8 +50,8 @@ export interface WorkflowOutsideBlocker {
 }
 
 /**
- * The operations a run started from outside may call besides Connection operations, Knowledge
- * Base reads and child starts, each asked below: a Data Store's (the publisher's data, under the
+ * The operations a run started from outside may call besides Connection operations and child
+ * starts, each asked below: a Data Store's (the publisher's data, under the
  * switch the publisher turns on) and sending mail (nothing comes back). Every other name is
  * closed, so an operation added later is closed until it is named here.
  */
@@ -61,9 +60,6 @@ const OPEN_OPERATIONS = new Set(["mail.send"]);
 
 const connectionExposureSchema = z.object({
   operations: z.array(z.object({ name: z.string(), exposure: z.array(z.string()) }))
-});
-const knowledgeSourcesSchema = z.object({
-  sources: z.array(z.object({ connection: z.string().optional() })).optional()
 });
 
 /** `workflow.<id>.start`: the id of the Workflow it starts, or nothing for any other name. */
@@ -141,22 +137,10 @@ export async function workflowOutsideBlockers(
       }
       const knowledgeBase = knowledgeBaseOf(name);
       if (knowledgeBase !== undefined) {
-        // Every operation of a Knowledge Base filled from a source reads that source's text or
-        // names; one that cannot be read counts as filled.
-        const asset = await deps.configAssets.getConfigAsset({
-          clientInstanceId: deps.clientInstanceId,
-          kind: KNOWLEDGE_BASE_ASSET_KIND,
-          name: knowledgeBase
-        });
-        const parsed = knowledgeSourcesSchema.safeParse(asset?.publishedConfig ?? asset?.config);
-        if (!asset || !parsed.success) {
-          block("knowledge_base", knowledgeBase);
-          continue;
-        }
-        for (const source of parsed.data.sources ?? []) {
-          if (source.connection !== undefined) block("connection", source.connection);
-          else block("knowledge_base", knowledgeBase);
-        }
+        // A Knowledge Base's documents may come from a Connection's source or from a Workflow
+        // that read one, kept in the Knowledge Base's own store where its definition does not
+        // say: every operation of one is closed.
+        block("knowledge_base", knowledgeBase);
         continue;
       }
       if (
