@@ -2,6 +2,8 @@ import { createElement } from "react";
 import { describe, expect, it } from "vitest";
 import {
   BuildNavigationProvider,
+  KnowledgeSourceChoice,
+  KnowledgeSourceFolderPicker,
   KnowledgeSourcesSection,
   PublishQuestionLines,
   knowledgeBaseConfigToForm,
@@ -53,9 +55,28 @@ const running: KnowledgeSourceStatus = {
   oldestOpenChangeAt: "2026-10-21T08:05:00.000Z"
 };
 
+/** What a source's folders read answers: the folder at `/Objekte/<id>`, holding two folders. */
+function foldersOf(_connection: string, parent: string | undefined) {
+  return ready({
+    folder:
+      parent === undefined
+        ? { id: "0", name: "All files", path: "/" }
+        : { id: parent, name: `Folder ${parent}`, path: `/Objekte/${parent}` },
+    folders: [
+      { id: "201", name: "Verträge" },
+      { id: "202", name: "Grundrisse" }
+    ]
+  });
+}
+
 function sourceWith(
   sources: KnowledgeSources,
-  connections: readonly { name: string; title: string }[],
+  connections: readonly {
+    name: string;
+    title: string;
+    connectorType?: string;
+    browsesFolders?: true;
+  }[],
   sourceTypes: readonly string[] | undefined
 ): KnowledgeBaseSource {
   const failed = { ok: false as const, refused: false, message: undefined };
@@ -74,6 +95,7 @@ function sourceWith(
     uploadFile: async () => ({ ok: true, data: { count: 0 } }),
     useOpenableFiles: () => ready({ items: [] }),
     useSourceConnections: () => ready({ items: [...connections] }),
+    useSourceFolders: foldersOf,
     ...(sourceTypes === undefined
       ? {}
       : {
@@ -114,7 +136,12 @@ function render(
     sources?: KnowledgeSourceForm[];
     status?: KnowledgeSources;
     /** The Connections the reader may choose for a source. */
-    connections?: readonly { name: string; title: string }[];
+    connections?: readonly {
+      name: string;
+      title: string;
+      connectorType?: string;
+      browsesFolders?: true;
+    }[];
     /** The titles of the Connector types the instance can sync documents from. */
     sourceTypes?: readonly string[];
     /** The section sits in Studio, which can open the New connection dialog. */
@@ -544,5 +571,81 @@ describe("a first import that waits for a confirmation (KB-ISO-1b)", () => {
   it("shows a source that never stopped without the confirmation", () => {
     const html = render("en", { canPublish: true });
     expect(html).not.toContain("data-knowledge-source-confirmation");
+  });
+});
+
+describe("folders chosen by name (KB-FOLDERS-1)", () => {
+  const browsing = [
+    {
+      name: "handbook-folders",
+      title: "Box Objekte",
+      connectorType: "box",
+      browsesFolders: true as const
+    }
+  ];
+
+  it("shows the folders by their paths, with a button to choose them and ids under Advanced", () => {
+    const page = render("en", { connections: browsing });
+    expect(page).toContain("Box Objekte");
+    expect(page).toContain('data-knowledge-source-folder="100"');
+    expect(page).toContain("/Objekte/100");
+    expect(page).toContain("Choose folders");
+    expect(page).toContain("Advanced settings");
+    // The ids and the patterns wait under Advanced settings, closed.
+    expect(page).not.toContain('data-knowledge-source-field="folders"');
+  });
+
+  it("keeps the folder ids in view where the Connection cannot list its folders", () => {
+    const page = render("de");
+    expect(page).toContain('data-knowledge-source-field="folders"');
+    expect(page).not.toContain("Ordner wählen");
+  });
+
+  it("lists the folders inside one folder, each to tick or to open", () => {
+    const page = renderToStaticMarkup(
+      createElement(
+        TranslationProvider,
+        { children: null, locale: "de" },
+        createElement(KnowledgeSourceFolderPicker, {
+          source: sourceWith({ sources: [] }, browsing, undefined),
+          connection: "handbook-folders",
+          connectionTitle: "Box Objekte",
+          chosen: ["202"],
+          onClose: () => undefined,
+          onChoose: () => undefined
+        })
+      )
+    );
+    expect(page).toContain("Ordner wählen");
+    expect(page).toContain("Box Objekte");
+    expect(page).toContain('data-knowledge-folder="201"');
+    expect(page).toContain("Verträge öffnen");
+    expect(page).toContain("1 gewählt");
+    expect(page).toContain("Diese Ordner übernehmen");
+  });
+
+  it("asks a new Knowledge Base where its knowledge comes from, a connected source among them", () => {
+    const page = renderToStaticMarkup(
+      createElement(
+        TranslationProvider,
+        { children: null, locale: "de" },
+        createElement(KnowledgeSourceChoice, {
+          source: sourceWith({ sources: [] }, browsing, ["Box", "Dropbox"]),
+          owner: undefined,
+          form: knowledgeBaseConfigToForm({ name: "objekte", title: "Objekte" }),
+          canWrite: true,
+          uploadDescription: "PDF und Word",
+          update: () => undefined
+        })
+      )
+    );
+    expect(page).toContain("Woher kommt ihr Wissen?");
+    expect(page).toContain("Dateien hochladen");
+    expect(page).toContain("Box Objekte");
+    expect(page).toContain("Verbunden");
+    expect(page).toContain("Ordner aus Box");
+    expect(page).toContain("Tabellen eines Datenspeichers");
+    // Box has a Connection; Dropbox has none yet.
+    expect(page).toContain("Noch nicht verbunden: Dropbox.");
   });
 });

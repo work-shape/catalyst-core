@@ -478,7 +478,7 @@ describe("Knowledge Bases of documents", () => {
     expect(empty).not.toContain("data-knowledge-reindex");
   });
 
-  it("starts a new Knowledge Base with the choice of documents or tables, documents chosen", () => {
+  it("starts a new Knowledge Base by asking where its knowledge comes from, upload chosen", () => {
     try {
       requestBuildStart("knowledge-bases", { name: "contracts-kb", title: "Contracts" });
       const page = render(documentsKnowledgeBase(), { newAsset: true });
@@ -487,7 +487,8 @@ describe("Knowledge Bases of documents", () => {
       const checked = /<button[^>]*role="radio"[^>]*aria-checked="true"[^>]*>/u.exec(page)?.[0];
       const label = checked ? /aria-labelledby="([^"]+)"/u.exec(checked)?.[1] : undefined;
       expect(label).toBeDefined();
-      expect(page).toContain(`id="${label}" class="text-label">Documents<`);
+      expect(page).toContain("Where does its knowledge come from?");
+      expect(page).toMatch(new RegExp(`id="${label}" class="text-label">.*?Upload files<`, "u"));
       expect(page).toContain("Tables of a data store");
       expect(page).not.toContain("Choose a data store");
       // It goes live on create: no section waits for a publish, and the save bar says so.

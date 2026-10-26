@@ -124,6 +124,8 @@ const OPENABLE_FILES_PAGE_SIZE = 50;
 const DATA_STORE_CHOICE_PAGE_SIZE = 50;
 /** How many Connections of each owner one page of the source chooser asks the instance for. */
 const CONNECTION_CHOICE_PAGE_SIZE = 50;
+/** How long the folders of a source read once count as current while a person chooses. */
+const SOURCE_FOLDERS_STALE_MS = 60_000;
 /** How many Knowledge Bases of each owner one page of an agent's chooser asks the instance for. */
 const KNOWLEDGE_BASE_CHOICE_PAGE_SIZE = 50;
 
@@ -143,6 +145,24 @@ export interface KnowledgeChoice {
   description?: string;
   /** A Knowledge Base that has no published revision yet, and so does not answer. */
   unpublished?: true;
+  /** For a Connection: its Connector type, such as `box`. */
+  connectorType?: string;
+  /** For a Connection: a person can choose its folders by name. */
+  browsesFolders?: true;
+}
+
+/** One folder of a source, as a person chooses it. */
+interface KnowledgeSourceFolder {
+  id: string;
+  name: string;
+}
+
+/** The folders inside one folder of a source, read so far, and the way to the rest. */
+interface KnowledgeSourceFolders {
+  /** The folder listed, with its path from the top; `/` for the top. */
+  folder: KnowledgeSourceFolder & { path: string };
+  folders: readonly KnowledgeSourceFolder[];
+  more?: MoreRead;
 }
 
 /**
@@ -284,6 +304,15 @@ export interface KnowledgeBaseSource {
     search: string,
     owner: string | undefined
   ): KnowledgeRead<PagedItems<KnowledgeChoice>>;
+  /**
+   * A hook: the folders inside one folder of a Connection whose type lets a person choose them,
+   * the top where `parent` is absent. It reads nothing while `enabled` is false.
+   */
+  useSourceFolders?(
+    connection: string,
+    parent: string | undefined,
+    enabled: boolean
+  ): KnowledgeRead<KnowledgeSourceFolders>;
   /**
    * A hook: the state of each synced source of the published revision, read again every few
    * seconds while one syncs, and anew once another revision is published. Without a published
@@ -523,7 +552,7 @@ export function useKnowledgeBaseSource(): KnowledgeBaseSource {
           client,
           key("choice", "connection", owner ?? "", search),
           { kind: "connection", owner, search, limit: CONNECTION_CHOICE_PAGE_SIZE },
-          (asset) => (asset.attributes?.documentSource === true ? toKnowledgeChoice(asset) : null)
+          (asset) => (asset.attributes?.documentSource === true ? toSourceChoice(asset) : null)
         )
       );
       // Only a Connection whose type is a document source can be one.
@@ -536,6 +565,37 @@ export function useKnowledgeBaseSource(): KnowledgeBaseSource {
             }
           }
         : read;
+    },
+    useSourceFolders: (connection, parent, enabled) => {
+      const query = useInfiniteQuery({
+        queryKey: ["source-folders", apiBaseUrl, authScope, connection, parent ?? ""],
+        queryFn: ({ pageParam, signal }) =>
+          client.connections.source_folders({
+            params: { name: connection },
+            query: {
+              ...(parent === undefined ? {} : { parent }),
+              ...(pageParam ? { pageToken: pageParam } : {})
+            },
+            signal
+          }),
+        initialPageParam: "",
+        getNextPageParam: (page) => page.nextPageToken,
+        enabled,
+        retry: false,
+        // Folders change rarely while a person chooses: going back shows them at once.
+        staleTime: SOURCE_FOLDERS_STALE_MS
+      });
+      const first = query.data?.pages[0];
+      return readStateOf(
+        first === undefined
+          ? undefined
+          : {
+              folder: first.folder,
+              folders: query.data?.pages.flatMap((page) => page.folders) ?? [],
+              ...(query.hasNextPage ? { more: moreOf(query) } : {})
+            },
+        query
+      );
     },
     useSources: (knowledgeBase, publishedRevision) =>
       useRead(
@@ -696,6 +756,21 @@ async function readOpenableFiles(
       conversationTitle: file.conversation.title
     })),
     nextCursor: page.nextCursor
+  };
+}
+
+/** A Connection a source can read through, with what its list says of its type. */
+function toSourceChoice(asset: {
+  name: string;
+  title: string;
+  description?: string;
+  attributes?: Record<string, unknown>;
+}): KnowledgeChoice {
+  const connectorType = asset.attributes?.connectorType;
+  return {
+    ...toKnowledgeChoice(asset),
+    ...(typeof connectorType === "string" ? { connectorType } : {}),
+    ...(asset.attributes?.browsesFolders === true ? { browsesFolders: true as const } : {})
   };
 }
 

@@ -17,6 +17,8 @@ import type {
   AuditRecorder,
   ConnectionProviderRevocation,
   ConnectionCredentialMode,
+  DocumentSourceFolderPage,
+  DocumentSourceFoldersInput,
   OperationResource,
   PlatformStores
 } from "@work-shape/catalyst-core";
@@ -68,7 +70,8 @@ interface ConnectionDiscoveryAttempt {
 
 /**
  * What the server asks of the instance's Connections. The assembly brings it where the module
- * `connections` is on. It answers no secret, no handle and no data of an outside system.
+ * `connections` is on. It answers no secret, no handle and no data of an outside system but the
+ * folder names of `sourceFolders`.
  */
 export interface ConnectionManagementPort {
   credentialMode(name: string): Promise<ConnectionCredentialMode>;
@@ -112,6 +115,17 @@ export interface ConnectionManagementPort {
   listTools(readable: (resource: AccessResource) => boolean): Promise<ConnectionTools>;
   /** The Connector types of the build that the New connection dialog offers with a form. */
   connectorTypes(): ConnectorTypeOffers;
+  /**
+   * The folders inside one folder of a Connection whose type lets a person choose a Knowledge
+   * Base's folders, through the Connection's credential, egress and limits. Its folder names are
+   * the one answer of the port that holds data of the outside system. Missing where the
+   * assembly opens no document source.
+   */
+  sourceFolders?(
+    name: string,
+    input: DocumentSourceFoldersInput,
+    signal: AbortSignal
+  ): Promise<DocumentSourceFolderPage>;
   /**
    * Stores the shared secret of a Connection made on the instance as its next version, after
    * the version the writer saw, on the revision of the Connection the writer read. The value is

@@ -162,6 +162,12 @@ export const knowledge = defineTranslations({
     "knowledge.agentNoteInstance":
       "Lists the instance's knowledge bases. One that a workspace owns is not offered here.",
     "knowledge.agentUnpublished": "Not published yet: it answers once it is published",
+    "knowledge.fromLabel": "Where does its knowledge come from?",
+    "knowledge.fromUpload": "Upload files",
+    "knowledge.fromConnected": "Connected",
+    "knowledge.fromConnectionDescription":
+      "Folders from {type}, kept up to date automatically. You choose the folders next.",
+    "knowledge.fromNotConnected": "Not connected yet: {types}.",
     "knowledge.holdsLabel": "What it answers from",
     "knowledge.holdsDocuments": "Documents",
     "knowledge.holdsDocumentsDescription":
@@ -446,6 +452,12 @@ export const knowledge = defineTranslations({
       "Hier stehen die Wissensbasen der Instanz. Eine, die einem Arbeitsbereich gehört, steht hier nicht zur Wahl.",
     "knowledge.agentUnpublished":
       "Noch nicht veröffentlicht: Sie antwortet, sobald sie veröffentlicht ist",
+    "knowledge.fromLabel": "Woher kommt ihr Wissen?",
+    "knowledge.fromUpload": "Dateien hochladen",
+    "knowledge.fromConnected": "Verbunden",
+    "knowledge.fromConnectionDescription":
+      "Ordner aus {type}, automatisch aktuell gehalten. Die Ordner wählst du als Nächstes.",
+    "knowledge.fromNotConnected": "Noch nicht verbunden: {types}.",
     "knowledge.holdsLabel": "Woraus sie antwortet",
     "knowledge.holdsDocuments": "Dokumente",
     "knowledge.holdsDocumentsDescription":

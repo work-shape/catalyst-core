@@ -8,8 +8,9 @@ import { ConnectionCallSlots, connectionCallLimits } from "../call";
 import { readConnection, type ConnectionOperationSourceDeps } from "../connection-reads";
 import { NO_CREDENTIALS, openConnectorContext } from "../connector-context";
 
-/** Opens the source of an already-authorized ingestion job, through the Connection's
- * credential, egress and call limits. The publishing principal is SRC-1b's gate. */
+/** Opens the source of an already-authorized ingestion job, or of a person choosing folders,
+ * through the Connection's credential, egress and call limits. The publishing principal is
+ * SRC-1b's gate; `connection.use` is the folder chooser's. */
 export function createDocumentSourceOpener(
   deps: ConnectionOperationSourceDeps,
   slots: ConnectionCallSlots
@@ -88,9 +89,11 @@ export function createDocumentSourceOpener(
         await release?.();
       }
     }
+    const folders = source.folders?.bind(source);
     const capability: DocumentSourceCapability = {
       list: (input, ctx) => request(() => source.list(input, ctx)),
       changes: (input, ctx) => request(() => source.changes(input, ctx)),
+      ...(folders ? { folders: (input, ctx) => request(() => folders(input, ctx)) } : {}),
       async *fetch(input, ctx) {
         const { release: releaseLocal } = await slots.acquire(connectionAssetId, limits, signal);
         let release: (() => Promise<void>) | undefined;

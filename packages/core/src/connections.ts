@@ -37,6 +37,8 @@ import type {
   DocumentSourceChanges,
   DocumentSourceChangesInput,
   DocumentSourceFetchInput,
+  DocumentSourceFolderPage,
+  DocumentSourceFoldersInput,
   DocumentSourceListInput,
   DocumentSourceListPage
 } from "./document-source";
@@ -841,7 +843,8 @@ interface ConnectorTypeBase {
   /**
    * The type holds documents a Knowledge Base can sync: `list`, `changes` and `fetch` over a
    * boundary of folder ids (`document-source.ts`). Its calls are no catalogue operations; only
-   * the platform's sync calls them, as a Knowledge Base's ingestion principal.
+   * the platform's sync calls them, as a Knowledge Base's ingestion principal, except `folders`,
+   * which a person choosing folders calls.
    */
   documentSource?: DocumentSourceCapability;
   /** The type's card and form in the New connection dialog. */
@@ -868,6 +871,15 @@ export interface DocumentSourceCapability {
    * and redirect passes `context.checkEgress` before a byte is read.
    */
   fetch(input: DocumentSourceFetchInput, context: ConnectorContext): AsyncIterable<Uint8Array>;
+  /**
+   * The folders inside one folder, so a person can choose a source's folders by name instead of
+   * typing ids. Optional: without it the page asks for folder ids. Unlike the calls above, a
+   * person with `connection.use` on the Connection calls it; it answers names and ids only.
+   */
+  folders?(
+    input: DocumentSourceFoldersInput,
+    context: ConnectorContext
+  ): Promise<DocumentSourceFolderPage>;
 }
 
 /**

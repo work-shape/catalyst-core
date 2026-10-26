@@ -841,5 +841,26 @@ describe("a Connection a Knowledge Base can sync documents through", () => {
       documentSource: true
     });
     expect(summary({}).attributes).not.toHaveProperty("documentSource");
+    expect(summary({ connectorType: "folders" }).attributes).not.toHaveProperty("browsesFolders");
+  });
+
+  it("says whether a person can choose its folders by name", () => {
+    const capability = createFixtureDocumentSource({ secret: "test" }).capability;
+    const browsing: ConnectorTypeDefinition = {
+      ...fixtureConnectorType,
+      type: "browsing",
+      documentSource: {
+        ...capability,
+        folders: async () => ({ folder: { id: "0", name: "Top", path: "/" }, folders: [] })
+      }
+    };
+    const kind = createConnectionAssetKind({
+      connectorTypes: createConnectorTypeRegistry([fixtureConnectorType, browsing]),
+      egress: createEgressChecker({ allow: [], resolve: () => Promise.resolve([]) })
+    });
+    const attributes = kind.summarize(
+      connectionConfigSchema.parse(connection("handbook", { connectorType: "browsing" }))
+    ).attributes;
+    expect(attributes).toMatchObject({ documentSource: true, browsesFolders: true });
   });
 });
