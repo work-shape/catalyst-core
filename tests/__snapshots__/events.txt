@@ -151,6 +151,12 @@
 {"name":"user.password_reset_requested","legacy":true,"audited":true,"phases":["after"]}
 {"name":"user.password_sign_in_created","legacy":true,"audited":true,"phases":["after"]}
 {"name":"user.profile_updated","legacy":true,"audited":true,"phases":["after"]}
+{"name":"user.two_factor_backup_code_used","legacy":false,"audited":true,"phases":["after"]}
+{"name":"user.two_factor_backup_codes_regenerated","legacy":false,"audited":true,"phases":["after"]}
+{"name":"user.two_factor_disabled","legacy":false,"audited":true,"phases":["after"]}
+{"name":"user.two_factor_enabled","legacy":false,"audited":true,"phases":["after"]}
+{"name":"user.two_factor_locked","legacy":false,"audited":true,"phases":["after"]}
+{"name":"user.two_factor_reset","legacy":false,"audited":true,"phases":["after"]}
 {"name":"user.updated","legacy":true,"audited":true,"phases":["after"]}
 {"name":"workflow.before_publish","legacy":false,"audited":false,"phases":["before"]}
 {"name":"workflow.unpublished","legacy":false,"audited":true,"phases":["after"]}

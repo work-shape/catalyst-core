@@ -39,6 +39,7 @@ describe("standalone auth client", () => {
       })
     ).resolves.toEqual({
       ok: false,
+      status: 401,
       code: "INVALID_EMAIL_OR_PASSWORD",
       message: "Invalid email or password"
     });
