@@ -51,7 +51,7 @@ An App publish first asks who may use it: only its builder, its owning workspace
 
 Use `catalyst app pull <app> [dir]` or `catalyst workflow pull <workflow> [dir]` to pull a draft into an empty or new folder; `--published` or `--revision <n>` selects another revision. An App starts with `app.yaml`; a Workflow starts with `workflow.yaml` and its scripts in `steps/`. Both keep `.catalyst-app.json` as their local baseline: leave it in place and never edit or send it.
 
-After editing, use `catalyst <kind> status <name> <dir>` to inspect the changes and `catalyst <kind> push [dir]` to save them as a draft. An unchanged Workflow push writes no revision. A stale folder is refused: pull into another folder, carry your changes over and push there. A warning about a possible secret names only its file and line; remove the credential from the source and use a Connection for it. Publish only when asked, through `catalyst workflow publish <workflow> --revision <n>` or the App publish above. Workflows are not part of `catalyst config pull|push`.
+After editing, use `catalyst workflow status <workflow> <dir>` or `catalyst app status <app> <dir>` to inspect the changes. Save them as a draft with `catalyst workflow push [dir]` or `catalyst app push [dir]`. An unchanged Workflow push writes no revision. A stale folder is refused: pull into another folder, carry your changes over and push there. A warning about a possible secret names only its file and line; remove the credential from the source and use a Connection for it. Publish only when asked, through `catalyst workflow publish <workflow> --revision <n>` or the App publish above. Workflows are not part of `catalyst config pull` or `catalyst config push`.
 
 ## A working copy of agents, skills and guardrails
 

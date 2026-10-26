@@ -70,7 +70,7 @@ describe("stored hash formats", () => {
   it("keeps setup's persisted content marker", async () => {
     const rendered = await renderCatalystSkill();
     expect(rendered.match(/sha256 ([0-9a-f]{64})/u)?.[1]).toMatchInlineSnapshot(
-      `"cf34cf897c7605e99a3ab58f5b6b447ac505d4678d1fcf43cd5aafed6e8ca72d"`
+      `"da6ceed96b607c03b938af09b2834ef656c07db455a11ac052ecad1cde929d47"`
     );
   });
 });
