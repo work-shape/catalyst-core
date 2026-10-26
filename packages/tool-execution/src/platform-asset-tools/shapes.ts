@@ -1,4 +1,9 @@
-import { APP_MODES, type ConversationSubject, type JsonObject } from "@work-shape/catalyst-core";
+import {
+  APP_MODES,
+  assetPagePath,
+  type ConversationSubject,
+  type JsonObject
+} from "@work-shape/catalyst-core";
 import { z } from "zod";
 import { PLATFORM_ASSET_TOOLS } from "./names";
 
@@ -120,8 +125,24 @@ export const readOutputSchema = z.object({
   publishedRevision: z.number().int().optional(),
   draftRevision: z.number().int().nullable().optional(),
   shows: z.enum(APP_MODES),
-  workspaceId: z.string().optional()
+  workspaceId: z.string().optional(),
+  href: z.string().optional()
 });
+
+/** What an answer says of the page of an asset: the path of the page where the person acts on it. */
+export const LINK_THE_PAGE =
+  "'href' is the path of its page. Link the place with its href when the person must act there, as [its title](href), and never build a path yourself.";
+
+/**
+ * An asset of an answer with `href`, the path of its page, where it has one. It names only what
+ * the answer already holds: kind, name and owner.
+ */
+export function withPageHref<T extends { kind: string; name: string; workspaceId?: string }>(
+  asset: T
+): T & { href?: string } {
+  const href = assetPagePath(asset);
+  return href === undefined ? asset : { ...asset, href };
+}
 
 export const BOUND = `Without 'kind' and 'name' it works on the asset this conversation is about (open one with ${PLATFORM_ASSET_TOOLS.open.name} first); with them, on a draft this conversation created, and on no other asset.`;
 

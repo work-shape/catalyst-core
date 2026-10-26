@@ -916,8 +916,13 @@ describe("a conversation about a Workflow", () => {
         });
       }
 
-      const first = readSchema.parse(await t.call(id, "platform.assets.open", owned("team-close")));
+      const opened = await t.call(id, "platform.assets.open", owned("team-close"));
+      const first = readSchema.parse(opened);
       expect(first.config.name).toBe("team-close");
+      // CHAT-LINK-1: the answer names the page the person acts on, under the owner's address.
+      expect(z.object({ href: z.string() }).parse(opened).href).toBe(
+        `/w/${created.collaborationWorkspaceId}/workflows/team-close`
+      );
       expect(await subjectOf()).toEqual(owned("team-close"));
       const second = readSchema.parse(await t.call(id, "platform.assets.open", owned("team-open")));
       expect(second.config.name).toBe("team-open");

@@ -38275,6 +38275,9 @@
               "lastChangedBy": {
                 "type": "string"
               },
+              "href": {
+                "type": "string"
+              },
               "refusals": {
                 "type": "array",
                 "items": {
@@ -38318,6 +38321,9 @@
                   "$ref": "#/components/schemas/PublishNarrative"
                 },
                 "lastChangedBy": {
+                  "type": "string"
+                },
+                "href": {
                   "type": "string"
                 },
                 "refusals": {
@@ -38401,6 +38407,9 @@
                   "$ref": "#/components/schemas/PublishNarrative"
                 },
                 "lastChangedBy": {
+                  "type": "string"
+                },
+                "href": {
                   "type": "string"
                 },
                 "refusals": {

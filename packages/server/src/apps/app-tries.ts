@@ -11,6 +11,7 @@ import {
   WORKFLOW_ACTIONS,
   appReachesDataStore,
   appWorkflowRefusalError,
+  assetPagePath,
   dataStoreRefusalError,
   isAppError,
   isAuthenticatedServicePrincipal,
@@ -51,6 +52,14 @@ const KIND_NOUNS: Readonly<Record<string, string>> = {
   [APP_ASSET_KIND]: "App",
   [DATA_STORE_ASSET_KIND]: "Data Store"
 };
+
+/** The path of an asset's page, as an entry of the review names it. */
+function withHref(asset: { kind: string; name: string; workspaceId?: string }): {
+  href?: string;
+} {
+  const href = assetPagePath(asset);
+  return href === undefined ? {} : { href };
+}
 
 /** How many of a Workflow's newest runs the review looks through for its last test run. */
 const RECENT_RUNS_READ = 50;
@@ -356,6 +365,8 @@ export class AppDraftTries {
         pending,
         ...(read.publishNarrative ? { narrative: read.publishNarrative } : {}),
         ...(lastChangedBy ? { lastChangedBy } : {}),
+        // Only an entry the reader may read names its page, so no owner leaks with it.
+        ...withHref(address),
         refusals
       },
       config: read.config

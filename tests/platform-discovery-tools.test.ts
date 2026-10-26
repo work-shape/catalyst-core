@@ -60,7 +60,8 @@ const foundSchema = z.object({
       kind: z.string(),
       name: z.string(),
       title: z.string(),
-      description: z.string().optional()
+      description: z.string().optional(),
+      href: z.string().optional()
     })
   ),
   truncated: z.boolean()
@@ -409,6 +410,9 @@ describe("the tools that find what is on the platform", () => {
     const initiallyEveryKind = foundSchema.parse((await owner("platform.assets.list", {})).answer);
     expect(initiallyEveryKind.truncated).toBe(false);
     expect(initiallyEveryKind.assets.map(({ kind }) => kind)).not.toContain("workflow");
+    // CHAT-LINK-1: an asset with a page names it, so the agent links the place to act.
+    const agent = initiallyEveryKind.assets.find(({ kind }) => kind === "agent");
+    expect(agent?.href).toBe(`/build/agents/${agent?.name}`);
     const written = await t.app.call("assets.put", {
       params: { kind: WORKFLOW_ASSET_KIND, name: WORKFLOW },
       payload: { config: workflowConfig, expectedRevision: null }

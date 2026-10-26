@@ -44,6 +44,11 @@ export interface AgentOpens {
   goTo(open: AssetOpen): Promise<void>;
   /** The page of an asset the agent opened, for the link of its line. */
   pageOf(open: AssetOpen): WorkspaceRoute | undefined;
+  /**
+   * Takes the person to a page a link in the conversation names, the conversation docked
+   * beside it. The page reads the asset with the person's rights, as any visit does.
+   */
+  goToPage(page: WorkspaceRoute): void;
   /** Notes a run this tab started: only such a run takes the person anywhere. */
   sent(runId: string): void;
   /**
@@ -255,6 +260,13 @@ export function useAgentOpens(input: {
     [client, conversationId, onError, onSubjectChanged, openPage, storedSubject, workspaceId]
   );
 
+  const goToPage = useCallback(
+    (page: WorkspaceRoute) => {
+      if (conversationId !== undefined) openPage(page, conversationId);
+    },
+    [conversationId, openPage]
+  );
+
   // The offer stands for the last run, also one this tab only reads: in a second tab, after a
   // reload, or once the thread was read again after the run.
   const lastParts = lastRunParts({ activeRun, messages, completedRunProjections });
@@ -263,7 +275,7 @@ export function useAgentOpens(input: {
       ? undefined
       : pendingOpen({ opens: opensInRun(lastParts), storedSubject, workspaceId, here: route });
 
-  return { pending, goTo, pageOf, sent, startedFrom };
+  return { pending, goTo, pageOf, goToPage, sent, startedFrom };
 }
 
 /**

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   AppError,
+  inboxItemPath,
   isJsonObject,
   unknownToJsonValue,
   type AgentSkillChangesPolicy,
@@ -53,7 +54,7 @@ export function createProposeSkillChangeTool(options: {
     icon: "skill",
     effect: "changing",
     description:
-      "Propose one small, exact skill change per call, to one of this agent's own skills or as a new skill. Read the skill with read_skill first; any other skill is read with platform.assets.get, where this agent holds it, and cannot be changed by a proposal. A new skill is one create_skill operation, optionally followed by create_resource operations for its supporting files, for example references/checklist.md. Never include personal or customer-specific data: skills are shared by all users. Tell the user in your reply what would change and that it needs a person's approval; it is not active until approved.",
+      "Propose one small, exact skill change per call, to one of this agent's own skills or as a new skill. Read the skill with read_skill first; any other skill is read with platform.assets.get, where this agent holds it, and cannot be changed by a proposal. A new skill is one create_skill operation, optionally followed by create_resource operations for its supporting files, for example references/checklist.md. Never include personal or customer-specific data: skills are shared by all users. Tell the user in your reply what would change and that it needs a person's approval; it is not active until approved. The answer's 'href' is the path of the request in the Inbox: link it as [the request](href) when the person must act there, and never build a path yourself.",
     permission: { mode: "allow" },
     inputSchema: proposeSkillChangeInputSchema,
     // The guardrails on asset writes answer the skill as the change would write it, as they
@@ -126,7 +127,8 @@ export function createProposeSkillChangeTool(options: {
           {
             requestId: request.id,
             status: "pending",
-            message: "The skill change is NOT active until a person approves it."
+            message: "The skill change is NOT active until a person approves it.",
+            href: inboxItemPath(request.id)
           },
           {
             display: {

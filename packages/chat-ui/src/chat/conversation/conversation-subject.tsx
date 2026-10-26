@@ -1,4 +1,11 @@
-import { createContext, useContext, useState, type MouseEvent } from "react";
+import {
+  createContext,
+  useContext,
+  useMemo,
+  useState,
+  type MouseEvent,
+  type ReactNode
+} from "react";
 import { ArrowRight, FileText } from "lucide-react";
 import { APP_ASSET_KIND } from "@work-shape/catalyst-api-client";
 import { DATA_STORE_ASSET_KIND, WORKFLOW_ASSET_KIND } from "@work-shape/catalyst-core";
@@ -14,6 +21,7 @@ import { AGENT_ASSET_KIND } from "../../shared/build-rights";
 import { useTranslation } from "../../shared/i18n";
 import { workspaceRoutePath, type WorkspaceRoute } from "../../shared/routes";
 import { routeLink } from "../../studio/workflows/workflows-frame";
+import { PageLinksProvider, type PageLinks } from "../markdown/page-link";
 import { assetPageRoute, type AssetOpen } from "./subject-run";
 import type { AgentOpens } from "./use-agent-opens";
 
@@ -152,8 +160,25 @@ const NAME_MARK = "\u0000";
 
 const AgentOpensContext = createContext<AgentOpens | undefined>(undefined);
 
-/** Gives the lines of the thread the way to the pages of the assets the agent opened. */
-export const AgentOpensProvider = AgentOpensContext.Provider;
+/**
+ * Gives the lines of the thread the way to the pages of the assets the agent opened, and the
+ * links of its answers the way to the pages they name, each with the conversation docked.
+ */
+export function AgentOpensProvider({
+  value,
+  children
+}: {
+  value: AgentOpens;
+  children: ReactNode;
+}) {
+  const { goToPage } = value;
+  const pageLinks = useMemo<PageLinks>(() => ({ open: goToPage }), [goToPage]);
+  return (
+    <AgentOpensContext.Provider value={value}>
+      <PageLinksProvider value={pageLinks}>{children}</PageLinksProvider>
+    </AgentOpensContext.Provider>
+  );
+}
 
 /** What the created line says, by the kind of the asset the agent created. */
 function createdKeyOf(kind: string) {

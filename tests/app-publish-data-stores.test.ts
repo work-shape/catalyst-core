@@ -133,9 +133,12 @@ describe("GOLIVE-1: an App's Publish carries the Data Stores it binds", () => {
         liveLevel: 1,
         minSchema: 2,
         pendingMigrations: ["add_note"],
+        // CHAT-LINK-1: each entry names its page, so the agent links the place to act.
+        href: "/build/data-stores/golive-review",
         refusals: []
       })
     ]);
+    expect(read.app.href).toBe(`/w/${t.workspaceId}/app-drafts/golive-review-app`);
     expect(read.ready).toBe(true);
   });
 
