@@ -14,6 +14,7 @@ import {
 } from "../../studio/build-area/connection-give-card";
 import { readToolDisplayPayloadFromToolResult } from "../../shared/domain-ui-widgets";
 import { appSavedByCall, standingAssetOpen } from "../conversation/subject-run";
+import { NO_FOLDED_CARDS, type FoldedCard } from "../conversation/card-fold";
 import { isOpenToolName, readPageSave } from "../../studio/pages/page-save";
 import {
   isWorkspacePromotedArtifactsData,
@@ -33,10 +34,15 @@ export type AssistantWorkTimelineItem =
   | { type: "tool-group"; indices: number[] }
   | { type: "source-group"; indices: number[] };
 
-export function createAssistantMessageGroupBy(): (
-  part: PartState,
-  context: GroupByContext
-) => readonly AssistantWorkGroupKey[] {
+/**
+ * The cards of the conversation that fold to a line in the run's work (APPCARD-1): an earlier
+ * save of an App and an earlier preview of a folder, by call id.
+ */
+type Folds = ReadonlyMap<string, FoldedCard>;
+
+export function createAssistantMessageGroupBy(
+  folded: Folds = NO_FOLDED_CARDS
+): (part: PartState, context: GroupByContext) => readonly AssistantWorkGroupKey[] {
   const byType = groupPartByType({
     "tool-call": [ASSISTANT_WORK_GROUP],
     "standalone-tool-call": []
@@ -45,9 +51,13 @@ export function createAssistantMessageGroupBy(): (
   // run goes on and does not fold into the count of tool calls. An open of an asset stands
   // there too: a change of what the conversation is about is always seen. So does a subagent's
   // card, which is how the person follows and stops it, and the Connect card of a call refused
-  // for a missing sign-in, which is how the person connects.
+  // for a missing sign-in, which is how the person connects. So does an App's card. A preview
+  // or a save that a newer card stands for folds into the work.
   return (part, context) =>
-    isPageSaveCall(part) || isStandingOpen(part) || isSubagentCall(part) || isConnectCall(part)
+    ((isPageSaveCall(part) || isAppSavedLine(part)) && !isFolded(part, folded)) ||
+    isStandingOpen(part) ||
+    isSubagentCall(part) ||
+    isConnectCall(part)
       ? []
       : byType(part, context);
 }
@@ -55,7 +65,8 @@ export function createAssistantMessageGroupBy(): (
 export function createAssistantWorkTimelineItems(
   parts: readonly PartState[],
   indices: readonly number[],
-  context: GroupByContext = {}
+  context: GroupByContext = {},
+  folded: Folds = NO_FOLDED_CARDS
 ): AssistantWorkTimelineItem[] {
   const items: AssistantWorkTimelineItem[] = [];
   let currentToolGroup: number[] = [];
@@ -85,7 +96,7 @@ export function createAssistantWorkTimelineItems(
     if (part.type === "reasoning") {
       continue;
     }
-    if (isAssistantToolWorkPart(part, context)) {
+    if (isAssistantToolWorkPart(part, context, folded)) {
       flushSourceGroup();
       currentToolGroup.push(index);
       continue;
@@ -136,6 +147,7 @@ export function createRenderableAssistantToolGroupIndices(
 
 interface AssistantPartOutline {
   type: string;
+  toolCallId?: string;
   data?: unknown;
   name?: string;
   result?: unknown;
@@ -148,13 +160,14 @@ interface AssistantPartOutline {
 
 export function createCompletedAssistantWorkIndices(
   parts: readonly AssistantPartOutline[],
-  finalTextIndex: number
+  finalTextIndex: number,
+  folded: Folds = NO_FOLDED_CARDS
 ): number[] {
   if (finalTextIndex < 0) {
     return [];
   }
   return parts.flatMap((_part, index) =>
-    staysVisibleAfterRun(parts, index, finalTextIndex) ? [] : [index]
+    staysVisibleAfterRun(parts, index, finalTextIndex, folded) ? [] : [index]
   );
 }
 
@@ -165,7 +178,8 @@ export function createCompletedAssistantWorkIndices(
  */
 export function createVisibleFinalAssistantPartIndices(
   parts: readonly AssistantPartOutline[],
-  finalTextIndex: number
+  finalTextIndex: number,
+  folded: Folds = NO_FOLDED_CARDS
 ): number[] {
   if (finalTextIndex < 0) {
     return [];
@@ -173,7 +187,9 @@ export function createVisibleFinalAssistantPartIndices(
   return [
     finalTextIndex,
     ...parts.flatMap((_part, index) =>
-      index !== finalTextIndex && staysVisibleAfterRun(parts, index, finalTextIndex) ? [index] : []
+      index !== finalTextIndex && staysVisibleAfterRun(parts, index, finalTextIndex, folded)
+        ? [index]
+        : []
     )
   ];
 }
@@ -181,10 +197,15 @@ export function createVisibleFinalAssistantPartIndices(
 function staysVisibleAfterRun(
   parts: readonly AssistantPartOutline[],
   index: number,
-  finalTextIndex: number
+  finalTextIndex: number,
+  folded: Folds
 ): boolean {
   const part = parts[index];
   if (!part) {
+    return false;
+  }
+  // An earlier save or preview that a newer card stands for is a step of the run.
+  if (isFolded(part, folded)) {
     return false;
   }
   return (
@@ -269,6 +290,11 @@ function isSubagentCall(part: { type: string; toolName?: string; isError?: boole
   );
 }
 
+/** A call whose card a newer card of the conversation stands for (APPCARD-1). */
+function isFolded(part: { type: string; toolCallId?: string }, folded: Folds): boolean {
+  return part.type === "tool-call" && part.toolCallId !== undefined && folded.has(part.toolCallId);
+}
+
 function isPageSaveCall(part: { type: string; toolName?: string } | undefined): boolean {
   return part?.type === "tool-call" && isOpenToolName(part.toolName);
 }
@@ -285,7 +311,7 @@ function isStandingOpen(
   );
 }
 
-/** The first save of an App: its line says who can use it now and offers "Share". */
+/** A save of an App: the newest of each App is its card, with "Open" and "Publish". */
 function isAppSavedLine(
   part: { type: string; toolName?: string; result?: unknown; isError?: boolean } | undefined
 ): boolean {
@@ -311,13 +337,14 @@ export function findFinalAssistantTextPartIndex(
 
 function isAssistantToolWorkPart(
   part: PartState | undefined,
-  context: GroupByContext = {}
+  context: GroupByContext,
+  folded: Folds
 ): boolean {
   if (!part) {
     return false;
   }
   if (part.type === "tool-call") {
-    return !isStandaloneToolCall(part, context);
+    return isFolded(part, folded) || !isStandaloneToolCall(part, context);
   }
   return false;
 }

@@ -28,13 +28,14 @@ import {
   readConnectionOffer
 } from "../../studio/build-area/connection-give-card";
 import { PageSaveCard } from "../../studio/pages/page-card";
-import { isOpenToolName } from "../../studio/pages/page-save";
+import { builtPageName, isOpenToolName, readPageSave } from "../../studio/pages/page-save";
 import { ApprovalRequestCard } from "../approvals/approval-request-card";
 import { readApprovalRequestDisplay } from "../approvals/approval-request-model";
 import { useConnectionToolSubject } from "../assistant/tool-subjects";
 import { AssetOpenedLine } from "../conversation/conversation-subject";
 import { appSavedByCall, standingAssetOpen } from "../conversation/subject-run";
-import { AppSavedLine } from "../../studio/apps/app-saved-line";
+import { AppCard } from "../../studio/apps/app-card";
+import { useFoldedCard } from "../conversation/card-fold-context";
 import { ToolArtifactList } from "../files/artifact-download-card";
 import {
   readSurfacedToolArtifactRefs,
@@ -133,7 +134,17 @@ export function ToolCallPart({
   const hasDisplay = hasRenderedNode(renderedDisplay) || hasRenderedNode(builtInDisplay);
   const displayMode = readDisplayMode(display);
   const workspaceProjection = projectWorkspaceToolDisplay({ args, result, toolName });
-  const toolDisplay = readToolDisplayProjection({ args, result, toolName, locale });
+  // An earlier save of an App or preview of a folder: the newest one is the card, and this one
+  // is a line in the run's work that says what it did (APPCARD-1).
+  const folded = useFoldedCard(toolCallId);
+  const projected = readToolDisplayProjection({ args, result, toolName, locale });
+  const toolDisplay = folded
+    ? {
+        ...projected,
+        title: t(folded === "app_draft" ? "apps.cardFoldedDraft" : "pages.cardFoldedPreview")
+      }
+    : projected;
+  const foldedName = folded ? foldedCardName({ toolName, args, result, isError }, t) : undefined;
   const subject = useConnectionToolSubject(toolName);
   const detailSections = [
     // The line of the call says what was touched in words. The name the agent called stays
@@ -157,7 +168,7 @@ export function ToolCallPart({
     getToolSummary(result, t) ??
     (state === "failed" ? readToolErrorSentence(result) : undefined);
   const statusLabel = toolStatusLabel(state, t);
-  const actionLabel = workspaceProjection?.actionLabel ?? toolDisplay.actionLabel;
+  const actionLabel = foldedName ?? workspaceProjection?.actionLabel ?? toolDisplay.actionLabel;
 
   // The run waits for a decision on this call, or took one and the call has not answered yet.
   if (decision && state === "running") {
@@ -179,14 +190,14 @@ export function ToolCallPart({
     );
   }
 
-  if (isOpenToolName(toolName)) {
+  if (isOpenToolName(toolName) && !folded) {
     return <PageSaveCard args={args} result={result} failed={state === "failed"} />;
   }
 
-  // The first save of an App says who can use it now, with "Share" (SHARE-1).
-  const appSaved = appSavedByCall({ toolName, result, isError });
+  // The newest save of an App is its card, with "Open" and "Publish" (APPCARD-1).
+  const appSaved = folded ? undefined : appSavedByCall({ toolName, result, isError });
   if (appSaved) {
-    return <AppSavedLine saved={appSaved} />;
+    return <AppCard saved={appSaved} />;
   }
 
   const opened = standingAssetOpen({ toolName, toolCallId, result, isError });
@@ -311,6 +322,21 @@ export function ToolCallPart({
       result={result}
     />
   );
+}
+
+/** The App or the preview a folded card's line names. */
+function foldedCardName(
+  call: { toolName: string; args: unknown; result: unknown; isError?: boolean | undefined },
+  t: ReturnType<typeof useTranslation>["t"]
+): string | undefined {
+  const saved = appSavedByCall({
+    toolName: call.toolName,
+    result: call.result,
+    ...(call.isError === undefined ? {} : { isError: call.isError })
+  });
+  if (saved) return saved.title;
+  const save = readPageSave({ args: call.args, result: call.result });
+  return save.state === "built" ? builtPageName(save, t) : undefined;
 }
 
 export function DataPart({

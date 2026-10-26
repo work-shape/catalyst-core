@@ -9,12 +9,8 @@ import {
   AppPublishConfirmationView,
   appPublishDataRead,
   appPublishMaySend,
-  AppSavedLine,
-  AppsHostProvider,
-  PublishDialog,
-  type AppsHost
+  PublishDialog
 } from "@work-shape/catalyst-chat-ui/apps";
-import { appSavedByCall } from "@work-shape/catalyst-chat-ui/subject-run";
 import {
   ToolDecisionCardView,
   type ToolDecisionAnswer
@@ -27,7 +23,7 @@ import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harn
 // SHARE-1 in the interface: an App's Publish dialog opens with "For whom?", offers the whole
 // instance only where the instance does, and names the people chosen in its sentence and in
 // the line on who sees which stored data. A held publish's Inbox item names the audience the
-// requester chose; the first save of an App says who can use it now, with "Share".
+// requester chose. The App's card in the conversation is tested in chat-ui-app-card.test.ts.
 
 type Audience = (typeof appAudienceSchema.options)[number];
 
@@ -295,105 +291,6 @@ describe("check 80: the Inbox item of a held App publish names the chosen audien
     expect(item({ selected: "everyone", label: "Everyone" })).not.toContain(
       'data-testid="publish-review-audience"'
     );
-  });
-});
-
-describe("the line the first save of an App leaves", () => {
-  const save = (result: unknown, isError = false) =>
-    appSavedByCall({ toolName: "app.save", result, isError });
-
-  it("names a save that made the App and a later save of its draft, never a refused one", () => {
-    expect(
-      save({
-        kind: "app",
-        name: "findings",
-        title: "Findings",
-        saved: true,
-        created: true,
-        revision: 1
-      })
-    ).toEqual({ name: "findings", title: "Findings", created: true });
-    expect(
-      save({
-        kind: "app",
-        name: "findings",
-        title: "Findings",
-        saved: true,
-        created: false,
-        revision: 2
-      })
-    ).toEqual({ name: "findings", title: "Findings", created: false });
-    expect(
-      save({ kind: "app", name: "findings", title: "Findings", saved: false, message: "x" })
-    ).toBeUndefined();
-    expect(save(undefined)).toBeUndefined();
-    expect(save({ name: "findings", saved: true, created: true }, true)).toBeUndefined();
-    expect(
-      appSavedByCall({
-        toolName: "platform.assets.put",
-        result: { name: "findings", saved: true, created: true }
-      })
-    ).toBeUndefined();
-  });
-
-  const host = (publish: boolean): AppsHost => ({
-    enabled: true,
-    rights: { read: true, write: true, publish, delete: false },
-    workspace,
-    showRoute: noop,
-    startChat: noop
-  });
-  const line = (value: AppsHost | undefined, locale: "en" | "de" = "en", created = true) => {
-    const node = createElement(AppSavedLine, {
-      saved: { name: "findings", title: "Findings", created }
-    });
-    return render(
-      value ? createElement(AppsHostProvider, { value, children: node }) : node,
-      locale
-    );
-  };
-
-  it("says the builder can use it now, with Share for a reader who may publish", () => {
-    const markup = line(host(true));
-    expect(markup).toContain(
-      "Saved as the app Findings. You can use it now; others can once you share it."
-    );
-    expect(markup).toMatch(/data-testid="app-saved-share"[^>]*>Share<\/button>/u);
-    expect(line(host(true), "de")).toContain(
-      "Als App Findings gespeichert. Du kannst sie jetzt nutzen, andere, sobald du sie teilst."
-    );
-    expect(line(host(true), "de")).toContain(">Teilen</button>");
-  });
-
-  it("words a later save as the saved draft, never as an App nobody else may use", () => {
-    const markup = line(host(true), "en", false);
-    expect(markup).toContain(
-      "Saved to the draft of Findings. You can use it now; others see the change once you share it."
-    );
-    expect(markup).not.toContain("others can once you share it");
-    expect(markup).toContain(">Share</button>");
-    expect(line(host(true), "de", false)).toContain(
-      "Im Entwurf von Findings gespeichert. Du kannst ihn jetzt nutzen; andere sehen die Änderung, sobald du ihn teilst."
-    );
-  });
-
-  it("offers no Share to a reader who may not publish, or outside a workspace", () => {
-    expect(line(host(false))).not.toContain('data-testid="app-saved-share"');
-    expect(line(undefined)).not.toContain('data-testid="app-saved-share"');
-  });
-
-  // DAILY-WINS 8: the line leads its builder to the draft, beside Share.
-  it("opens the draft for a reader who may write Apps, beside Share", () => {
-    const open = new RegExp(
-      `<a[^>]*data-testid="app-saved-open"[^>]*href="/w/${workspace.id}/app-drafts/findings"[^>]*>Open</a>`,
-      "u"
-    );
-    expect(line(host(true))).toMatch(open);
-    expect(line(host(false))).toMatch(open);
-    expect(line(host(true), "de")).toMatch(/<a[^>]*data-testid="app-saved-open"[^>]*>Öffnen<\/a>/u);
-    const reader: AppsHost = { ...host(false), rights: { ...host(false).rights, write: false } };
-    expect(line(reader)).not.toContain("app-saved-open");
-    expect(line(undefined)).not.toContain("app-saved-open");
   });
 });
 

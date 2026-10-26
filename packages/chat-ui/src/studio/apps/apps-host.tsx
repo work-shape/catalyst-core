@@ -37,6 +37,12 @@ export interface AppsHost {
    */
   editWithAgent?(app: string, options?: { fresh: boolean }): Promise<void>;
   /**
+   * Sends the person's message to the conversation on screen, queued behind a run that goes
+   * (CHAT-CONN-1): an App published from its card there tells the agent, which carries on
+   * (APPCARD-1). Absent without a conversation.
+   */
+  tellConversation?(text: string): Promise<void>;
+  /**
    * Where the runs of calls are read, Instance > Operations, and where one run is, for a
    * reader who may open that place. Absent for everybody else: nothing links to a page its
    * reader is not shown.

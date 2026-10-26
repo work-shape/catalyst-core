@@ -93,7 +93,15 @@ interface PublishAudienceAsk {
  * first publish or an older revision from the revisions drawer. A publish held for approval
  * says so in the dialog, and Close leaves it.
  */
-export function AskedPublishDialog({ app, ...props }: PublishDialogProps & { app: string }) {
+export function AskedPublishDialog({
+  app,
+  onPublished,
+  ...props
+}: PublishDialogProps & {
+  app: string;
+  /** The draft went live, not held for an approval: the card it was asked from says so. */
+  onPublished?(): void;
+}) {
   const [chosen, setChosen] = useState<AppAudience>();
   const question = useAppPublishNarrative(props.workspace.id, app, props.ask.revision, chosen);
   const publishing = useAppPublishSend(props.workspace.id, app);
@@ -120,10 +128,7 @@ export function AskedPublishDialog({ app, ...props }: PublishDialogProps & { app
           question.audience === undefined ? undefined : selected,
           appPublishTogetherNamed(together)
         )
-        .then((outcome) => {
-          // A held publish stays in the dialog, which says it waits; Close leaves it.
-          if (outcome === "published") props.onClose();
-        })
+        .then((outcome) => afterPublishSend(outcome, { ...props, onPublished }))
         .catch(() => undefined);
     }
   };
@@ -134,6 +139,20 @@ export function AskedPublishDialog({ app, ...props }: PublishDialogProps & { app
   );
 }
 
+/**
+ * What follows a sent publish: one that went live closes the dialog and tells whoever asked
+ * for it. A held publish stays in the dialog, which says it waits; Close leaves it. A refused
+ * one stays with its refusal.
+ */
+export function afterPublishSend(
+  outcome: "published" | "waits" | "failed",
+  then: { onClose(): void; onPublished?: (() => void) | undefined }
+): void {
+  if (outcome !== "published") return;
+  then.onPublished?.();
+  then.onClose();
+}
+
 function PublishDialogWithData({
   app,
   ...props
@@ -142,11 +161,20 @@ function PublishDialogWithData({
 }
 
 /**
- * Publish of an App's draft from outside its page, as "Share" on the line a save leaves in the
+ * Publish of an App's draft from outside its page, as "Publish" on the App's card in the
  * conversation: the same dialog, once the draft is read, for a reader who may publish. It also
  * asks where the draft is what is live, so only who it is for can change.
  */
-export function SharePublishDialog({ app, onClose }: { app: string; onClose(): void }) {
+export function SharePublishDialog({
+  app,
+  onClose,
+  onPublished
+}: {
+  app: string;
+  onClose(): void;
+  /** The draft went live from this dialog. */
+  onPublished?(): void;
+}) {
   const share = useSharePublishQuestion(app, onClose);
   return share ? (
     <AskedPublishDialog
@@ -156,6 +184,7 @@ export function SharePublishDialog({ app, onClose }: { app: string; onClose(): v
       error={undefined}
       onConfirm={() => undefined}
       onClose={onClose}
+      {...(onPublished ? { onPublished } : {})}
     />
   ) : null;
 }

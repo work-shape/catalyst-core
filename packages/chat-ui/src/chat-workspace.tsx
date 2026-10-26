@@ -513,6 +513,14 @@ function ChatWorkspaceContent({
     theme: model.config.theme ?? DEFAULT_THEME_INPUTS[themeMode],
     mode: themeMode
   };
+  // The conversation on screen and its agent: what a card in it tells, as the person.
+  const cardConversation =
+    chat.selectedConversationId === undefined
+      ? undefined
+      : {
+          conversationId: chat.selectedConversationId,
+          ...(chat.selectedAgentName === undefined ? {} : { agentName: chat.selectedAgentName })
+        };
   const appsHost: AppsHost = {
     enabled: model.apps.enabled,
     rights: model.apps.rights,
@@ -528,6 +536,10 @@ function ChatWorkspaceContent({
     startChat: model.apps.startChat,
     editWithAgent: model.apps.editWithAgent,
     ...(model.apps.startNew ? { startNew: model.apps.startNew } : {}),
+    // An App's card stands in the conversation on screen: a publish from it tells its agent.
+    ...(cardConversation === undefined
+      ? {}
+      : { tellConversation: (text: string) => chat.tellConversation(cardConversation, text) }),
     // The Operations page is a System page (RIGHTS-1e): linked for who may open it.
     ...(model.controlPlane.viewsSystem
       ? { operations: { href: operationRunsHref(), runHref: operationRunHref } }
@@ -550,14 +562,6 @@ function ChatWorkspaceContent({
           brand: mailBrandFrom(model.config.config)
         }
       : undefined;
-  // The conversation on screen and its agent: what a card in it tells, as the person.
-  const cardConversation =
-    chat.selectedConversationId === undefined
-      ? undefined
-      : {
-          conversationId: chat.selectedConversationId,
-          ...(chat.selectedAgentName === undefined ? {} : { agentName: chat.selectedAgentName })
-        };
   const connectionDraft = connectionDraftHost({
     client: chat.client,
     apiBaseUrl: model.auth.apiBaseUrl,

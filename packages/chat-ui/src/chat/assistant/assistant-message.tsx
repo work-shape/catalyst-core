@@ -40,14 +40,13 @@ import {
   rememberRecentlyActiveAssistantRunId
 } from "./recently-active-runs";
 import { isWorkspacePromotedSurfacesData } from "../tools/tool-surfaces";
+import { useFoldedCards } from "../conversation/card-fold-context";
 import {
   MessageFeedbackAction,
   MessageFeedbackPanel,
   useMessageFeedback,
   type MessageFeedbackSetup
 } from "../feedback/message-feedback";
-
-const chronologicalAssistantMessageGroupBy = createAssistantMessageGroupBy();
 
 export function ThreadMessage({
   conversationRunning,
@@ -156,17 +155,21 @@ function AssistantMessage({
   // Only a finished run's answer takes feedback: it names the run the comment is about.
   const messageFeedback = useMessageFeedback(feedback, messageRunning ? undefined : completedRunId);
   const toolUIs = useAuiState((state) => state.tools.toolUIs);
+  // An earlier save of an App or preview of a folder, in this or another message, is a line in
+  // the run's work: the newest one is the card (APPCARD-1).
+  const folded = useFoldedCards();
+  const groupBy = useMemo(() => createAssistantMessageGroupBy(folded), [folded]);
   const completedWorkIndices = useMemo(
-    () => createCompletedAssistantWorkIndices(messageParts, finalTextIndex),
-    [finalTextIndex, messageParts]
+    () => createCompletedAssistantWorkIndices(messageParts, finalTextIndex, folded),
+    [finalTextIndex, folded, messageParts]
   );
   const visibleFinalPartIndices = useMemo(
-    () => createVisibleFinalAssistantPartIndices(messageParts, finalTextIndex),
-    [finalTextIndex, messageParts]
+    () => createVisibleFinalAssistantPartIndices(messageParts, finalTextIndex, folded),
+    [finalTextIndex, folded, messageParts]
   );
   const completedWorkTimelineItems = useMemo(
-    () => createAssistantWorkTimelineItems(messageParts, completedWorkIndices, { toolUIs }),
-    [completedWorkIndices, messageParts, toolUIs]
+    () => createAssistantWorkTimelineItems(messageParts, completedWorkIndices, { toolUIs }, folded),
+    [completedWorkIndices, folded, messageParts, toolUIs]
   );
   const completedWorkStepCount = useMemo(
     () => countAssistantWorkTimelineSteps(completedWorkTimelineItems),
@@ -241,7 +244,7 @@ function AssistantMessage({
             ))}
           </>
         ) : (
-          <MessagePrimitive.GroupedParts groupBy={chronologicalAssistantMessageGroupBy}>
+          <MessagePrimitive.GroupedParts groupBy={groupBy}>
             {({ part, children }) =>
               renderAssistantGroupedPart({
                 part,

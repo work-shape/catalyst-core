@@ -36,6 +36,7 @@ import type { SendBlock } from "./send-block";
 import { useMoveWithPanels } from "../surface/panel-move";
 import { findRunActivity, shouldShowRunActivity } from "./thread-activity";
 import { ToolSubjectsProvider } from "./tool-subjects";
+import { FoldedCardsProvider } from "../conversation/card-fold-context";
 import { messageFeedbackSetup } from "../feedback/message-feedback";
 import { startGreeting, startStarters, type ConversationStart } from "../dock/subject-starters";
 import { creationTargetLine } from "../dock/creation-target";
@@ -266,19 +267,21 @@ export function AssistantThread({
                     conversationRunning={conversationRunning}
                     optimisticPending={optimisticPending}
                   >
-                    <ThreadPrimitive.Messages>
-                      {() => (
-                        <>
-                          <MessageDayMarker />
-                          <MessageTryRunLine />
-                          <ThreadMessage
-                            conversationRunning={conversationRunning}
-                            activeRunId={activeRunId}
-                            feedback={messageFeedbackSetup(config, conversationId)}
-                          />
-                        </>
-                      )}
-                    </ThreadPrimitive.Messages>
+                    <FoldedCardsProvider>
+                      <ThreadPrimitive.Messages>
+                        {() => (
+                          <>
+                            <MessageDayMarker />
+                            <MessageTryRunLine />
+                            <ThreadMessage
+                              conversationRunning={conversationRunning}
+                              activeRunId={activeRunId}
+                              feedback={messageFeedbackSetup(config, conversationId)}
+                            />
+                          </>
+                        )}
+                      </ThreadPrimitive.Messages>
+                    </FoldedCardsProvider>
                   </DayMarkersProvider>
                 </ToolSubjectsProvider>
                 <RunActivityRow
