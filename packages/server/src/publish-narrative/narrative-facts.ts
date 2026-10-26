@@ -41,6 +41,7 @@ export type WorkflowTriggerFact =
   | { kind: "schedule"; cron: string; timeZone?: string }
   | { kind: "manual" }
   | { kind: "parent" }
+  | { kind: "outside" }
   /** A trigger kind this release does not word. */
   | { kind: "other"; name: string };
 
@@ -173,7 +174,7 @@ export function workflowFacts(config: unknown, name: string): WorkflowFacts | un
           if (kind === "schedule" && cron !== undefined) {
             return [{ kind, cron, ...(timeZone === undefined ? {} : { timeZone }) }];
           }
-          if (kind === "manual" || kind === "parent") return [{ kind }];
+          if (kind === "manual" || kind === "parent" || kind === "outside") return [{ kind }];
           return [{ kind: "other", name: kind }];
         })
       : [];

@@ -29389,7 +29389,8 @@
                       "enum": [
                         "manual",
                         "schedule",
-                        "parent"
+                        "parent",
+                        "outside"
                       ]
                     },
                     "status": {
@@ -29806,7 +29807,8 @@
                       "enum": [
                         "manual",
                         "schedule",
-                        "parent"
+                        "parent",
+                        "outside"
                       ]
                     },
                     "status": {
@@ -31582,7 +31584,8 @@
                             "enum": [
                               "manual",
                               "schedule",
-                              "parent"
+                              "parent",
+                              "outside"
                             ]
                           },
                           "status": {
@@ -32027,7 +32030,8 @@
                       "enum": [
                         "manual",
                         "schedule",
-                        "parent"
+                        "parent",
+                        "outside"
                       ]
                     },
                     "status": {
@@ -32495,7 +32499,8 @@
                       "enum": [
                         "manual",
                         "schedule",
-                        "parent"
+                        "parent",
+                        "outside"
                       ]
                     },
                     "status": {

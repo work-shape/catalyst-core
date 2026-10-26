@@ -22,7 +22,8 @@ export const triggerStep = {
                 .optional(),
               ...workflowScheduleOptionsSchema.shape
             }),
-            z.strictObject({ kind: z.literal("parent") })
+            z.strictObject({ kind: z.literal("parent") }),
+            z.strictObject({ kind: z.literal("outside") })
           ])
         )
         .min(1)

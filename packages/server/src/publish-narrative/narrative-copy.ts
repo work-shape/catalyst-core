@@ -131,6 +131,8 @@ interface Copy {
   /** These three are clauses of their own. */
   manual: string;
   parent: string;
+  /** Started by an outside tool with an API key: a widening the approver reads. */
+  outside: string;
   noTrigger: string;
   otherTrigger(name: string): string;
   /** The sentence: who runs when, as which account, then everything it does, joined by "and". */
@@ -212,6 +214,7 @@ const EN: Copy = {
   clock: { hour: "numeric", minute: "2-digit" },
   manual: "when someone starts it",
   parent: "when another Workflow starts it",
+  outside: "when a tool outside the instance starts it with an API key and reads its result",
   noTrigger: "when it is started",
   otherTrigger: (name) => `on the trigger “${name}”`,
   // The account comes before "when …": after it, it would read as part of that clause.
@@ -324,6 +327,8 @@ const DE: Copy = {
   clock: { hour: "2-digit", minute: "2-digit" },
   manual: "wenn jemand ihn startet",
   parent: "wenn ein anderer Workflow ihn startet",
+  outside:
+    "wenn ein Werkzeug außerhalb der Instanz ihn mit einem API-Schlüssel startet und sein Ergebnis liest",
   noTrigger: "wenn er gestartet wird",
   otherTrigger: (name) => `beim Auslöser „${name}“`,
   runs: (title, when, account, doing) => {
@@ -542,7 +547,9 @@ export function workflowSummary(input: WorkflowSentence, locale: LocaleCode): st
               ? { words: copy.manual, clause: true }
               : trigger.kind === "parent"
                 ? { words: copy.parent, clause: true }
-                : { words: copy.otherTrigger(oneLine(trigger.name)), clause: false }
+                : trigger.kind === "outside"
+                  ? { words: copy.outside, clause: true }
+                  : { words: copy.otherTrigger(oneLine(trigger.name)), clause: false }
         );
   const when: When = {
     words: or.format(triggers.map((trigger) => trigger.words)),

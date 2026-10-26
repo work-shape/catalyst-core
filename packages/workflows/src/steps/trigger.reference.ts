@@ -5,6 +5,6 @@ export const triggerReference = {
   does: "Starts the run. It is always the first step, and a definition has exactly one. Its output is { input, startedAt, trigger, scheduledFor }, where `input` is the run's input, checked against the definition's `inputs`.",
   fields: {
     triggers:
-      'A nonempty list of { kind: manual } (a person or a call starts it), { kind: schedule, cron: "<five fields>", timeZone: "<IANA zone>" } (a wall-clock time in that zone), or { kind: parent } (a workflow step starts it). With parent alone, only another Workflow starts it. Values of missed and overlap other than last and skip are not run yet.'
+      'A nonempty list of { kind: manual } (a person, an agent or an App starts it), { kind: schedule, cron: "<five fields>", timeZone: "<IANA zone>" } (a wall-clock time in that zone), { kind: parent } (a workflow step starts it), or { kind: outside } (an API key, the CLI or the platform MCP server starts it and reads its result; off unless named, and refused while any Connection operation the run calls, in child Workflows too, is not exposed to outside). With parent alone, only another Workflow starts it. Values of missed and overlap other than last and skip are not run yet.'
   }
 } satisfies StepReference<"trigger">;

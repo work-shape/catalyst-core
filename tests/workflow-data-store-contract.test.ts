@@ -214,7 +214,7 @@ describe("the names of a Workflow", () => {
       "notify",
       "workflow"
     ]);
-    expect(WORKFLOW_TRIGGER_KINDS).toEqual(["manual", "schedule", "parent"]);
+    expect(WORKFLOW_TRIGGER_KINDS).toEqual(["manual", "schedule", "parent", "outside"]);
     // The reserved block types have a shape and are in no list of what a definition may name.
     expectTypeOf<
       Exclude<WorkflowStep["type"], (typeof WORKFLOW_RESERVED_STEP_TYPES)[number]>

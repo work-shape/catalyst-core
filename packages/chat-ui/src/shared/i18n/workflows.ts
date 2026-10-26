@@ -528,6 +528,9 @@ export const workflows = defineTranslations({
     "workflows.workflowSettings.byParent": "By another workflow",
     "workflows.workflowSettings.byParentHint":
       "A step of another workflow starts it and waits for its result.",
+    "workflows.workflowSettings.byOutside": "By outside clients (CLI, MCP)",
+    "workflows.workflowSettings.byOutsideHint":
+      "A tool such as Claude Code starts it with an API key, and its result is copied to that computer. It then reads only Connections open to outside clients.",
     "workflows.workflowSettings.calledBy": "Called by",
     "workflows.workflowSettings.description": "What it does",
     "workflows.workflowSettings.limitConcurrency": "Up to {count} steps at the same time",
@@ -1225,6 +1228,9 @@ export const workflows = defineTranslations({
     "workflows.workflowSettings.byParent": "Durch einen anderen Workflow",
     "workflows.workflowSettings.byParentHint":
       "Ein Schritt eines anderen Workflows startet ihn und wartet auf sein Ergebnis.",
+    "workflows.workflowSettings.byOutside": "Durch externe Clients (CLI, MCP)",
+    "workflows.workflowSettings.byOutsideHint":
+      "Ein Werkzeug wie Claude Code startet ihn mit einem API-Schlüssel, und sein Ergebnis wird auf diesen Rechner kopiert. Er liest dann nur Verbindungen, die für externe Clients freigegeben sind.",
     "workflows.workflowSettings.calledBy": "Aufgerufen von",
     "workflows.workflowSettings.description": "Was er tut",
     "workflows.workflowSettings.limitConcurrency": "Bis zu {count} Schritte gleichzeitig",

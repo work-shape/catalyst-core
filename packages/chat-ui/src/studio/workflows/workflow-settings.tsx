@@ -324,7 +324,7 @@ export function WorkflowSettingsForm({
       { kind: "schedule", cron: scheduleCron(value) ?? "", timeZone: value.zone }
     ]);
   };
-  const onCount = ["schedule", "manual", "parent"].filter(has).length;
+  const onCount = ["schedule", "manual", "parent", "outside"].filter(has).length;
   // At least one way to start stays on: the last one cannot be turned off here.
   const lastOn = (kind: string) => onCount === 1 && has(kind);
   const changeWithAgent =
@@ -431,6 +431,11 @@ export function WorkflowSettingsForm({
           "parent",
           t("workflows.workflowSettings.byParent"),
           t("workflows.workflowSettings.byParentHint")
+        )}
+        {switchRow(
+          "outside",
+          t("workflows.workflowSettings.byOutside"),
+          t("workflows.workflowSettings.byOutsideHint")
         )}
         <WorkflowCallers
           workspaceId={workspaceId}

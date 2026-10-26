@@ -50,6 +50,12 @@ A Workflow runs with its own account, not with yours, so it can read and change 
 
 Click **Start now** ("Jetzt starten") on a published Workflow, fill in what it asks for, and click **Start** ("Starten"). The run appears under **Runs**. On a run's page, **Run again** ("Erneut starten") starts the published version once more.
 
+## Start it from a tool outside the instance
+
+A tool on your computer, such as Claude Code with an API key, starts a Workflow only when its **Settings** tab has **By outside clients (CLI, MCP)** ("Durch externe Clients (CLI, MCP)") turned on. It is off for every Workflow until someone who may publish it turns it on and publishes. A person, an agent in the chat and an App start it as before.
+
+The Workflow runs with its own account, which may read what you cannot, and its result is copied to that computer. So a tool may start it only while every Connection the Workflow reads, through another Workflow too, allows outside clients on the Connection's page. Publishing with the switch on is refused while one does not, and names it; a start is refused if one stops allowing it later. A Knowledge Base filled from a Connection never allows it. A tool reads the result of a run only when a tool started that run, not of runs a person, a schedule or an App started.
+
 ## Who may do what
 
 An administrator gives these rights under **Settings > Instance > Access** ("Einstellungen › Instanz › Zugriff"), for one Workflow:

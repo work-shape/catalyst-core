@@ -40,6 +40,12 @@ export interface WorkflowRunsPort {
     startedBy: AuthenticatedIdentity;
     operationRunId?: OperationRunId;
     correlationId: string;
+    /**
+     * An outside client starts it: the trigger must name `outside`, and every Connection
+     * operation the run may call must be exposed to `outside`. Decided by the route from how
+     * the call was authenticated.
+     */
+    outside?: boolean;
   }): Promise<WorkflowRunView>;
   /**
    * Starts a test run of the Workflow's draft, as the person who starts it bounded by the

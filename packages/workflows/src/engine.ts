@@ -81,6 +81,12 @@ import { createStepExecutor, type StepEnd, type WorkflowCodeRunner } from "./ste
 import { stepJobConcurrency, workflowCodeJobKind, workflowStepJobKind } from "./step-job";
 import { workflowLimitIssues, type WorkflowLimitContext } from "./run-limits";
 import { workflowContinuationIssues } from "./continuation-rules";
+import {
+  startsFromOutside,
+  workflowNotOutsideRefusal,
+  workflowOutsideBlockers,
+  workflowOutsideRefusal
+} from "./outside-reach";
 import { createRunWaiting } from "./run-waiting";
 
 // The engine of Workflow Runs. A run is a row, each step it reaches is a step run, and each
@@ -825,6 +831,19 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       const published = await definitions.read(input.workflow);
       // A live App whose Workflow was unpublished since names it with the reason (DP-0).
       if (!published) throw appWorkflowRefusalError("workflow_unavailable", input.workflow);
+      if (input.outside === true) {
+        // An outside client starts what its trigger admits, and only while every Connection
+        // operation the run may call is exposed to `outside`, asked now (outside-reach.ts).
+        if (!startsFromOutside(published.manifest))
+          throw workflowNotOutsideRefusal(published.manifest.id);
+        const blockers = await workflowOutsideBlockers(published.manifest, {
+          clientInstanceId,
+          configAssets: stores.configAssets,
+          definitions
+        });
+        if (blockers.length > 0) throw workflowOutsideRefusal(published.manifest.id);
+        return startByHand(published, input, "live");
+      }
       const [trigger] = published.manifest.steps;
       if (trigger?.type !== "trigger" || !trigger.triggers.some(({ kind }) => kind === "manual")) {
         throw new AppError(
