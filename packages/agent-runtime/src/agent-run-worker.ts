@@ -16,6 +16,7 @@ import {
   getSubjectUserId,
   readAssistantFinalMetadata,
   readUserMessageMetadata,
+  readWorkflowAgentFiles,
   runFailureCodeOf,
   type AgentRun,
   type AgentRunError,
@@ -25,6 +26,7 @@ import {
   type AgentRuntimeEvent,
   type AppendAssistantMessageInput,
   type AppendClaimedAgentRunEndInput,
+  type AttachmentManifest,
   type AuthenticatedUser,
   type ChatMessage,
   type ClientInstanceId,
@@ -99,6 +101,16 @@ export interface AgentRunJobsOptions {
   loadCurrentUser(run: AgentRun): Promise<AuthenticatedUser>;
   /** A Workflow agent step's run: its agent, from the step of its run's pinned definition. */
   loadWorkflowAgent?(run: AgentRun): Promise<NonNullable<StartAgentRunInput["workflowAgent"]>>;
+  /**
+   * A Workflow agent step's run whose task names files of the run: attaches them to its thread,
+   * waits until each is ready or refused, stores their manifest on the task message and answers
+   * it. Absent where the process keeps no files: such a run fails.
+   */
+  attachWorkflowFiles?(input: {
+    run: AgentRun;
+    fileIds: readonly string[];
+    signal: AbortSignal;
+  }): Promise<AttachmentManifest>;
   /** A Workflow agent step's run in a draft test: the draft its calls carry. */
   loadWorkflowAgentDraft?(run: AgentRun): Promise<OperationDraftContext | undefined>;
   execute: ExecuteAgentRun;
@@ -476,7 +488,7 @@ async function executeClaimedRun(
 
   try {
     try {
-      const input = await reconstructInput(options, run, resumeState);
+      const input = await reconstructInput(options, run, resumeState, controller.signal);
       const scheduled = await options.stores.scheduledStarts.isScheduledAgentRun({
         clientInstanceId: run.clientInstanceId,
         runId: run.id
@@ -569,7 +581,8 @@ async function executeClaimedRun(
 async function reconstructInput(
   options: AgentRunJobsOptions,
   run: AgentRun,
-  resumeState: AgentRunResumeState | undefined
+  resumeState: AgentRunResumeState | undefined,
+  signal?: AbortSignal
 ): Promise<StartAgentRunInput> {
   const messages = await options.stores.conversations.listMessages({
     clientInstanceId: run.clientInstanceId,
@@ -592,7 +605,22 @@ async function reconstructInput(
       "VALIDATION_FAILED",
       "The preview snapshot is not available. Send the message again in Try."
     );
-  const attachmentManifest = readUserAttachmentManifest(message.metadata);
+  let attachmentManifest = readUserAttachmentManifest(message.metadata);
+  // A Workflow step's task names the run's files: they are attached before the first turn.
+  const workflowFiles = run.workflowStepRunId
+    ? readWorkflowAgentFiles(message.metadata)
+    : undefined;
+  if (workflowFiles && !attachmentManifest && signal) {
+    if (!options.attachWorkflowFiles)
+      throw new AppError(
+        "CONFLICT",
+        "This instance keeps no files, so the agent cannot read the files of its task",
+        {
+          reason: "files_unavailable"
+        }
+      );
+    attachmentManifest = await options.attachWorkflowFiles({ run, fileIds: workflowFiles, signal });
+  }
   const workflowAgent = run.workflowStepRunId ? await workflowAgentOf(options, run) : undefined;
   const above = run.parentRunId ? await ancestorsOf(options, run.parentRunId) : undefined;
   return {

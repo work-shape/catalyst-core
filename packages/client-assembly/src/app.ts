@@ -1,3 +1,4 @@
+import { createWorkflowRunFiles, type WorkflowRunFiles } from "@work-shape/catalyst-workflows";
 import type { ResultShaper } from "@work-shape/catalyst-core";
 import type { CatalogueEntry } from "@work-shape/catalyst-connections";
 import { createLogger } from "./logger";
@@ -409,6 +410,10 @@ export async function createClientInstanceExecutionAssembly(
   // The mailer is made after the capabilities; their port sends through it once it is.
   let capabilityMailer: ChatServerOptions["mail"];
   const capabilityOperationNames = new Map<string, Set<string>>();
+  // The files of Workflow runs live in the store of files, made after the capabilities.
+  const keepsRunFiles =
+    modules.isEnabled("workflows") && config.infrastructure.objectStorage.files !== undefined;
+  let capabilityRunFiles: WorkflowRunFiles | undefined;
   const capabilityContributions = await createCapabilityContributions(capabilities, {
     process: processOptions.process ?? "worker",
     mail: createCapabilityMail({
@@ -422,7 +427,8 @@ export async function createClientInstanceExecutionAssembly(
         clientInstanceId,
         capability,
         store,
-        operations: () => capabilityOperationNames.get(capability) ?? new Set<string>()
+        operations: () => capabilityOperationNames.get(capability) ?? new Set<string>(),
+        ...(keepsRunFiles ? { runFiles: () => capabilityRunFiles } : {})
       }),
     operationNames: capabilityOperationNames,
     logger,
@@ -704,6 +710,17 @@ export async function createClientInstanceExecutionAssembly(
   for (const contribution of capabilityContributions)
     for (const operation of contribution.operations ?? [])
       operationCalls.registry.register(operation);
+  const filesObjects =
+    config.infrastructure.objectStorage.files === undefined
+      ? undefined
+      : await createFilesStore(config, infrastructure.context);
+  if (keepsRunFiles && filesObjects)
+    capabilityRunFiles = createWorkflowRunFiles({
+      clientInstanceId,
+      stores: store,
+      objects: filesObjects,
+      now: () => new Date()
+    });
   const modulesStarted = await moduleAssembly.start({
     knowledgeFieldExtractor: capabilityContributions.find((part) => part.knowledgeFieldExtractor)
       ?.knowledgeFieldExtractor,
@@ -713,16 +730,28 @@ export async function createClientInstanceExecutionAssembly(
     auditRecorder,
     modelGateway,
     tools: toolRegistry,
-    ...(config.infrastructure.objectStorage.files === undefined
-      ? {}
-      : {
+    ...(filesObjects
+      ? {
           files: createKnowledgeFiles({
             clientInstanceId,
             stores: store,
             attachments,
-            objects: await createFilesStore(config, infrastructure.context)
+            objects: filesObjects
           })
-        })
+        }
+      : {}),
+    ...(attachments
+      ? {
+          // The handlers delete what they keep of a conversation's attachments, as when it is
+          // deleted: a run thread stays, its attachments do not.
+          releaseConversationAttachments: async (conversationId) => {
+            await attachments.deleteConversationAttachments({
+              conversationId,
+              deletedAt: new Date().toISOString()
+            });
+          }
+        }
+      : {})
   });
   const { dataToolSources } = modulesStarted;
   knowledgeDocuments = modulesStarted.knowledgeDocuments;
@@ -819,6 +848,7 @@ export async function createClientInstanceExecutionAssembly(
     shippedSkills,
     shippedAgents,
     attachments,
+    ...(capabilityRunFiles ? { runFiles: capabilityRunFiles } : {}),
     managedObjects,
     jobRetries: [...jobRetries, ...modulesStarted.jobRetries],
     workspaceObjectStore,
@@ -872,11 +902,11 @@ function assertGuardrailsCheck(
 async function createCapabilityContributions(
   capabilities: readonly ClientInstanceCapability[],
   context: Omit<Parameters<ClientInstanceCapability["create"]>[0], "stores"> & {
-    stores: Omit<ClientInstanceCapabilityPlatformStores, "records" | "operationRuns">;
+    stores: Omit<ClientInstanceCapabilityPlatformStores, "records" | "operationRuns" | "runFiles">;
     /** The stores bound to one capability (ADR-0033). */
     scoped: (
       capability: string
-    ) => Pick<ClientInstanceCapabilityPlatformStores, "records" | "operationRuns">;
+    ) => Pick<ClientInstanceCapabilityPlatformStores, "records" | "operationRuns" | "runFiles">;
     /** Filled with the operations each capability contributes, by capability name. */
     operationNames: Map<string, Set<string>>;
   }

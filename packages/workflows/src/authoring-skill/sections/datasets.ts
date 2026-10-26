@@ -11,6 +11,8 @@ A loop may read a dataset as \`items\`, under the loop's item limit. With \`onIt
 
 Workflow inputs and outputs, including child inputs and results, may contain dataset references. A run reads only datasets it wrote, received as input or got from a child. A person passing a dataset into a root run needs \`workflow.read_run_data\` on its source Workflow. Dataset rows never reach an \`agent\` step in this release (EW-14b).
 
+A step may answer files of its run as \`{ $file, name, mimeType, bytes }\`, such as the documents a person sent with an outside form. Map such a value on as it is: an \`agent\` step whose input holds one gets the file as an attachment of its task and reads it like an upload. Only steps of the same run use a file; never invent a \`$file\` or write one as a literal. The files go with the run's values.
+
 A \`code\` step reads and writes datasets as files; its container still has no network. A dataset in its \`inputSchema\` reaches the script as \`{ "path": "/work/in/<field>.jsonl", "rowCount": <n> }\`: a read-only file of JSON Lines, one row per line. Read it line by line and never load it whole. To write a dataset, declare it in \`outputSchema\` as \`{ type: dataset, row: ... }\`, write one JSON object per line to a file directly in \`/work/out/\` and name that file in the result as \`{ "path": "/work/out/findings.jsonl" }\`. Write findings that way, not as a list in the result, which stays small:
 
 \`\`\`python

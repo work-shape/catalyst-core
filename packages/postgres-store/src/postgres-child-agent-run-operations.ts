@@ -5,6 +5,7 @@ import {
   SUBAGENTS_PER_RUN,
   SUBAGENT_ANSWER_MAX_LENGTH,
   SUBAGENT_FILES_MAX,
+  WORKFLOW_AGENT_FILES_METADATA_KEY,
   WORKFLOW_STEP_TRANSCRIPT_MAX_MESSAGES,
   WORKFLOW_STEP_TRANSCRIPT_TEXT_MAX_CHARS,
   WORKFLOW_STEP_TRANSCRIPT_TOOL_INPUT_MAX_CHARS,
@@ -13,6 +14,7 @@ import {
   asConversationId,
   asToolCallId,
   createPlatformId,
+  createUserMessageMetadata,
   executeAgentRunJob,
   type AgentRunError,
   type ChildAgentRunStore,
@@ -23,7 +25,7 @@ import {
   type SubagentSummary,
   type WorkflowAgentRunData
 } from "@work-shape/catalyst-core";
-import { and, asc, count, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { requestAgentRunCancellation } from "./postgres-agent-run-cancellation";
 import { enqueueJob } from "./jobs/store";
 import { enqueueSubagentWake, hasOpenChildren } from "./postgres-agent-run-lineage";
@@ -33,6 +35,7 @@ import type { PostgresConnection } from "./postgres-database";
 import { mapAgentRun } from "./rows";
 import {
   agentRuns,
+  conversationAttachments,
   conversations,
   managedArtifacts,
   messages,
@@ -159,7 +162,10 @@ export function createPostgresChildAgentRunStore(
         conversationId: threadId,
         role: "user",
         text: input.task,
-        metadata: {},
+        // The files of the run the agent gets: its worker attaches them before the first turn.
+        metadata: input.files?.length
+          ? { [WORKFLOW_AGENT_FILES_METADATA_KEY]: { fileIds: [...input.files] } }
+          : {},
         createdAt: at
       });
       const [row] = await db
@@ -203,6 +209,80 @@ export function createPostgresChildAgentRunStore(
       await enqueueJob(db, executeAgentRunJob, { runId: run.id }, agentRunJobOptions(run));
       enqueued();
       return run;
+    },
+    async attachWorkflowAgentFiles(input) {
+      await db.transaction(async (tx) => {
+        const [run] = await tx
+          .select({ conversationId: agentRuns.conversationId, messageId: agentRuns.inputMessageId })
+          .from(agentRuns)
+          .where(
+            and(
+              eq(agentRuns.clientInstanceId, input.clientInstanceId),
+              eq(agentRuns.id, input.runId)
+            )
+          )
+          .limit(1);
+        if (!run?.messageId) throw new AppError("NOT_FOUND", "Agent run is not available");
+        const [message] = await tx
+          .select({ metadata: messages.metadata })
+          .from(messages)
+          .where(
+            and(
+              eq(messages.clientInstanceId, input.clientInstanceId),
+              eq(messages.id, run.messageId)
+            )
+          )
+          .for("update")
+          .limit(1);
+        if (!message) throw new AppError("NOT_FOUND", "Agent run input message is not available");
+        const fileIds = new Set(input.attachmentManifest.attachments.map((entry) => entry.fileId));
+        if (fileIds.size > 0)
+          await tx
+            .update(conversationAttachments)
+            .set({ messageId: run.messageId, updatedAt: new Date(input.claimedAt) })
+            .where(
+              and(
+                eq(conversationAttachments.clientInstanceId, input.clientInstanceId),
+                eq(conversationAttachments.conversationId, run.conversationId),
+                eq(conversationAttachments.status, "ready"),
+                inArray(conversationAttachments.fileId, [...fileIds]),
+                isNull(conversationAttachments.messageId)
+              )
+            );
+        await tx
+          .update(messages)
+          .set({
+            metadata: {
+              ...createUserMessageMetadata({ attachmentManifest: input.attachmentManifest }),
+              ...(message.metadata[WORKFLOW_AGENT_FILES_METADATA_KEY] === undefined
+                ? {}
+                : {
+                    [WORKFLOW_AGENT_FILES_METADATA_KEY]:
+                      message.metadata[WORKFLOW_AGENT_FILES_METADATA_KEY]
+                  })
+            }
+          })
+          .where(
+            and(
+              eq(messages.clientInstanceId, input.clientInstanceId),
+              eq(messages.id, run.messageId)
+            )
+          );
+      });
+    },
+    async listWorkflowRunThreadIds(input) {
+      const rows = await db
+        .select({ id: conversations.id })
+        .from(conversations)
+        .where(
+          and(
+            eq(conversations.clientInstanceId, input.clientInstanceId),
+            eq(conversations.workflowRunId, input.runId),
+            eq(conversations.kind, "run_thread")
+          )
+        )
+        .orderBy(asc(conversations.id));
+      return rows.map((row) => asConversationId(row.id));
     },
     async cancelWorkflowAgentRuns(input) {
       const rows = await db

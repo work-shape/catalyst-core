@@ -167,3 +167,4 @@ export { workflowContinuationIssues } from "./continuation-rules";
 export { resolveWorkflowNeededRights } from "./needed-rights";
 export { testRunCall } from "./test-run";
 export { agentOutputError } from "./agent-step";
+export { createWorkflowRunFiles, runFilesOwner, type WorkflowRunFiles } from "./run-files";

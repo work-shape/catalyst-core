@@ -125,6 +125,8 @@
 {"name":"operation.failed","legacy":false,"audited":true,"phases":["after"]}
 {"name":"operation.simulated","legacy":false,"audited":true,"phases":["after"]}
 {"name":"operation.started","legacy":false,"audited":true,"phases":["after"]}
+{"name":"outside_form.mail_failed","legacy":false,"audited":true,"phases":["after"]}
+{"name":"outside_form.requested","legacy":false,"audited":true,"phases":["after"]}
 {"name":"permission.granted","legacy":true,"audited":true,"phases":["after"]}
 {"name":"permission.revoked","legacy":true,"audited":true,"phases":["after"]}
 {"name":"role.created","legacy":true,"audited":true,"phases":["after"]}
@@ -166,6 +168,7 @@
 {"name":"workflow_run.dataset_downloaded","legacy":false,"audited":true,"phases":["after"]}
 {"name":"workflow_run.dataset_loaded","legacy":false,"audited":true,"phases":["after"]}
 {"name":"workflow_run.ended","legacy":true,"audited":true,"phases":["after"]}
+{"name":"workflow_run.file_kept","legacy":false,"audited":true,"phases":["after"]}
 {"name":"workflow_run.started","legacy":true,"audited":true,"phases":["after"]}
 {"name":"workflow_run.tick_skipped","legacy":true,"audited":true,"phases":["after"]}
 {"name":"workspace_command.cancelled","legacy":true,"audited":true,"phases":["after"]}

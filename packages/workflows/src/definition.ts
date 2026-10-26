@@ -3,6 +3,7 @@ import {
   RUN_AGENT_TOOL_NAME,
   WORKFLOW_KINDS,
   WORKFLOW_DATASET_KEY,
+  WORKFLOW_FILE_KEY,
   WORKFLOW_EXECUTED_STEP_TYPES,
   WORKFLOW_START_KEY_INPUT,
   WORKFLOW_STEP_TYPES,
@@ -21,7 +22,12 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 import { workflowValueSchema } from "./dataset-schema";
 import { sourceReferences } from "./text-join";
-import { holdsBrokenDatasetReference, jsonObjectSchema, jsonValueSchema } from "./json";
+import {
+  holdsBrokenDatasetReference,
+  holdsFileKey,
+  jsonObjectSchema,
+  jsonValueSchema
+} from "./json";
 import { stepStructuralIssues, stepUnsupportedIssues, workflowStepSchema } from "./steps";
 import { notSupported } from "./steps/module";
 import type { WorkflowDefinitionIssue } from "./definition-issue";
@@ -154,14 +160,15 @@ export function workflowLoopTailSteps(index: WorkflowStepIndex, loopId: string):
   return total;
 }
 
-/** The schema's properties that are named like the key that marks a dataset in step data. */
+/** The schema's properties that are named like a key that marks a dataset or a file in step data. */
 function datasetKeyIssues(manifest: WorkflowManifest): WorkflowDefinitionIssue[] {
   const properties = z.object({ properties: z.record(z.string(), z.unknown()) });
   const issues: WorkflowDefinitionIssue[] = (["inputs", "outputs"] as const).flatMap((field) => {
     const read = properties.safeParse(manifest[field]);
-    return read.success && Object.hasOwn(read.data.properties, WORKFLOW_DATASET_KEY)
-      ? [{ path: field, message: `No field of '${field}' is named '${WORKFLOW_DATASET_KEY}'` }]
-      : [];
+    if (!read.success) return [];
+    return [WORKFLOW_DATASET_KEY, WORKFLOW_FILE_KEY]
+      .filter((key) => Object.hasOwn(read.data.properties, key))
+      .map((key) => ({ path: field, message: `No field of '${field}' is named '${key}'` }));
   });
   // The start takes the run key beside the inputs under this name, so no input has it.
   const inputs = properties.safeParse(manifest.inputs);
@@ -223,6 +230,13 @@ function structuralIssues(manifest: WorkflowManifest): WorkflowDefinitionIssue[]
         issues.push({
           path: `steps.${id}.input.${field}`,
           message: `The literal of '${field}' holds '${WORKFLOW_DATASET_KEY}' and is no reference to a dataset`
+        });
+      }
+      // A file belongs to one run, so no definition names one.
+      if (source.value !== undefined && holdsFileKey(source.value)) {
+        issues.push({
+          path: `steps.${id}.input.${field}`,
+          message: `The literal of '${field}' holds '${WORKFLOW_FILE_KEY}': a file of a run comes from a step, never from the definition`
         });
       }
     }

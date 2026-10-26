@@ -2,7 +2,8 @@ import type { NoticeRecipients } from "./notice-address";
 import type { WorkflowKind } from "@work-shape/catalyst-asset-schemas";
 import {
   WORKFLOW_TEXT_MAX_PARTS,
-  workflowDatasetReferenceSchema
+  workflowDatasetReferenceSchema,
+  workflowFileReferenceSchema
 } from "@work-shape/catalyst-asset-schemas";
 import {
   NOTIFY_CHANNELS,
@@ -526,6 +527,37 @@ export const WORKFLOW_DATASET_KEY = "$dataset";
 export { workflowDatasetReferenceSchema } from "@work-shape/catalyst-asset-schemas";
 
 export type WorkflowDatasetReference = z.infer<typeof workflowDatasetReferenceSchema>;
+
+/**
+ * The key that marks a file of the run in step data, as `$dataset` marks a dataset. No field of
+ * an input or an output a definition declares may be named so.
+ */
+export const WORKFLOW_FILE_KEY = "$file";
+
+/** A file of the run as a step record holds it: its id, name, type and size. */
+export { workflowFileReferenceSchema } from "@work-shape/catalyst-asset-schemas";
+
+export type WorkflowFileReference = z.infer<typeof workflowFileReferenceSchema>;
+
+/**
+ * The JSON Schema of one file reference, for a step schema that takes or gives files. It is
+ * plain JSON Schema: a definition writes `{ "type": "array", "items": <this> }` for a list.
+ */
+export const WORKFLOW_FILE_REFERENCE_JSON_SCHEMA = {
+  type: "object",
+  properties: {
+    $file: { type: "string", minLength: 1 },
+    name: { type: "string", minLength: 1, maxLength: 200 },
+    mimeType: { type: "string", minLength: 1, maxLength: 200 },
+    bytes: { type: "integer", minimum: 1 }
+  },
+  required: ["$file", "name", "mimeType", "bytes"],
+  additionalProperties: false
+} as const satisfies JsonObject;
+
+/** The largest file a run keeps, and the most bytes of files one run keeps together. */
+export const WORKFLOW_RUN_FILE_MAX_BYTES = 25 * 1024 * 1024;
+export const WORKFLOW_RUN_FILES_MAX_BYTES = 200 * 1024 * 1024;
 
 /** `retention` of a manifest: for how many days the datasets of a run's result are kept. */
 export const workflowRetentionSchema = z.strictObject({

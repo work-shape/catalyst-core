@@ -7,7 +7,8 @@ import {
   type ClientInstanceId,
   type JobSchedule,
   type PlatformStores,
-  type RegisteredJobHandler
+  type RegisteredJobHandler,
+  type WorkflowRunId
 } from "@work-shape/catalyst-core";
 
 // Run data is bounded. A run and its step runs stay as long as the instance keeps its audit
@@ -56,6 +57,11 @@ export interface WorkflowDataPruningOptions {
   now(): Date;
   /** Dataset retention is swept on this same daily tick. */
   pruneDatasets?(signal?: AbortSignal): Promise<void>;
+  /**
+   * Deletes the files of one run before its values are marked pruned. Answers false where it
+   * stopped for the signal; the run is found again on the next tick.
+   */
+  pruneRunFiles?(runId: WorkflowRunId, signal?: AbortSignal): Promise<boolean>;
 }
 
 export interface WorkflowDataPruning {
@@ -102,6 +108,8 @@ export function createWorkflowDataPruning(
           done.stepRuns += pruned;
           done.batches += 1;
         }
+        // The run's files go with its values, before the run is marked.
+        if (options.pruneRunFiles && !(await options.pruneRunFiles(id, signal))) return done;
         // Last, so a run whose step runs are not all done is found again.
         const marked = await stores.workflowRuns.markRunDataPruned({
           clientInstanceId,

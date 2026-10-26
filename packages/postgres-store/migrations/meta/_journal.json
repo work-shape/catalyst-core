@@ -1086,6 +1086,13 @@
       "when": 1793021970495,
       "tag": "0154_capability_records_row_security",
       "breakpoints": true
+    },
+    {
+      "idx": 155,
+      "version": "7",
+      "when": 1793032189786,
+      "tag": "0155_managed_file_owner_index",
+      "breakpoints": true
     }
   ]
 }

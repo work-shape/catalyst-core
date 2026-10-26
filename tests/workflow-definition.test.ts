@@ -355,6 +355,22 @@ describe("the definitions a folder holds", () => {
         outputs: { type: "object", properties: { $dataset: { type: "string" } } }
       })
     ).toEqual([["", "outputs"]]);
+    // A file belongs to one run: no literal names one and no field is named like its key.
+    expect(
+      refused({
+        steps: [
+          trigger,
+          operation("first", { doc: { value: [{ $file: "file_1", name: "a.pdf" }] } }),
+          output()
+        ]
+      })
+    ).toEqual([["", "steps.first.input.doc"]]);
+    expect(
+      refused({
+        steps: [trigger, output()],
+        inputs: { type: "object", properties: { $file: { type: "string" } } }
+      })
+    ).toEqual([["", "inputs"]]);
   });
 
   it("refuses a definition without its one trigger first and its one output last", async () => {

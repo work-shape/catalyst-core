@@ -6,6 +6,7 @@ import type {
   ApprovalRequestHandler,
   Authorizer,
   ClientInstanceId,
+  ConversationId,
   DataToolSource,
   JobRetry,
   JobSchedule,
@@ -62,6 +63,11 @@ interface ModuleRuntime {
    * copies of them. Absent where the process has no store of files.
    */
   files?: KnowledgeFiles;
+  /**
+   * Removes what a conversation holds of its attachments, such as the text prepared from a
+   * document, through the attachment handlers that keep it.
+   */
+  releaseConversationAttachments?(conversationId: ConversationId): Promise<void>;
 }
 
 /** What a module adds once it has the call path. A module leaves out what it does not have. */

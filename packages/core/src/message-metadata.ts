@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { agentPreviewSchema, type AgentPreview } from "./agent-preview";
 import { readKnowledgeCitationSources, type KnowledgeCitationSource } from "./knowledge-citations";
 import { MESSAGE_FINISH_STATUSES } from "@work-shape/catalyst-asset-schemas";
@@ -224,6 +225,23 @@ export interface StoredModelOutputProjection {
   text: string;
   notice?: JsonObject;
 }
+
+/**
+ * The key of a Workflow agent step's task message that names the files of the run the agent
+ * gets. The agent's worker attaches them before the first turn and writes the attachment
+ * manifest beside it.
+ */
+export const WORKFLOW_AGENT_FILES_METADATA_KEY = "workflowFiles";
+
+/** The files of the run a task message names, or `undefined` where it names none. */
+export function readWorkflowAgentFiles(
+  metadata: JsonObject | Record<string, unknown> | undefined
+): string[] | undefined {
+  const read = workflowAgentFilesSchema.safeParse(metadata?.[WORKFLOW_AGENT_FILES_METADATA_KEY]);
+  return read.success ? read.data.fileIds : undefined;
+}
+
+const workflowAgentFilesSchema = z.object({ fileIds: z.array(z.string().min(1)).min(1) });
 
 export function createUserMessageMetadata(input: {
   preview?: AgentPreview;

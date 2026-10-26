@@ -95,7 +95,12 @@ export async function startAgentStep(
   tx: PlatformStores,
   run: WorkflowRun,
   stepRun: WorkflowStepRun,
-  end: { input: JsonObject; principal: WorkflowRunPrincipal; tester?: AuthenticatedUser },
+  end: {
+    input: JsonObject;
+    principal: WorkflowRunPrincipal;
+    tester?: AuthenticatedUser;
+    files?: string[];
+  },
   title: string,
   retainedUntil: string
 ): Promise<void> {
@@ -107,6 +112,7 @@ export async function startAgentStep(
     principal: end.principal,
     ...(end.tester ? { tester: end.tester } : {}),
     task: JSON.stringify(end.input),
+    ...(end.files?.length ? { files: end.files } : {}),
     title,
     correlationId: run.correlationId,
     retainedUntil

@@ -17,6 +17,7 @@ import { workflowResource } from "./workflow-resource";
 import { compileJsonSchema } from "@work-shape/catalyst-connections";
 import {
   WORKFLOW_DATASET_KEY,
+  WORKFLOW_FILE_KEY,
   WORKFLOW_ACTIONS,
   WORKFLOW_START_KEY_INPUT,
   isAppError,
@@ -56,6 +57,7 @@ import {
 import type { WorkflowStepIndex } from "./definition";
 import type { WorkflowDefinitionSource } from "./definition-source";
 import {
+  fileReferences,
   holdsBrokenDatasetReference,
   holdsDatasetReference,
   jsonBytes,
@@ -75,6 +77,7 @@ import {
 import { operationWaitMs, operationWaitOutcome, stillRunningError } from "./operation-wait";
 import { resolveInput, resolveReference, resolveRunKey, type ReferenceScope } from "./references";
 import { workflowRunActor } from "./run-identity";
+import type { WorkflowRunFiles } from "./run-files";
 import { WorkflowStepFailure } from "./step-failure";
 import { testRunCall } from "./test-run";
 
@@ -88,6 +91,8 @@ export type StepEnd =
       tester?: AuthenticatedUser;
       input: JsonObject;
       principal: import("@work-shape/catalyst-core").WorkflowRunPrincipal;
+      /** The files of the run the input names: the agent gets them with its task. */
+      files?: string[];
     }
   | { kind: "notice"; notice: NoticeSendInput }
   | { kind: "done"; output: JsonValue; operationRunId?: OperationRunId; call?: WorkflowStepRunCall }
@@ -133,6 +138,8 @@ export interface StepExecutorOptions {
   definitions: Pick<WorkflowDefinitionSource, "read" | "draft">;
   limits: WorkflowLimitContext;
   datasets?: WorkflowDatasets;
+  /** The files of runs; absent where the instance keeps no files. */
+  runFiles?: WorkflowRunFiles;
   now(): Date;
   /** Where the script of a code step is read. */
   stepFiles: WorkflowStepFiles;
@@ -174,6 +181,7 @@ export function createStepExecutor(options: StepExecutorOptions) {
     };
     const input = await resolveInput(scope, step.input, textSchemasOf(attempt));
     withinStepData(input, "The input of the step");
+    await checkedFiles(run, input);
     await recordStepInput(stores.workflowRuns, scope, input);
     fitsSchema(
       workflowValueSchema(step.inputSchema, definition.types),
@@ -272,6 +280,16 @@ export function createStepExecutor(options: StepExecutorOptions) {
     return { kind: "done", output: outcome.value, call };
   }
 
+  /** The files of the run a value names, each checked to be the run's own. */
+  async function checkedFiles(run: WorkflowRun, value: JsonValue) {
+    const references = fileReferences(value) ?? [];
+    if (references.length === 0) return references;
+    if (!options.runFiles)
+      throw new WorkflowStepFailure("file_storage_unavailable", "This instance keeps no files");
+    await options.runFiles.check(run, references);
+    return references;
+  }
+
   function withinStepData(value: JsonValue, what: string): void {
     if (jsonBytes(value) > limits.stepDataMaxBytes) {
       throw new WorkflowStepFailure(
@@ -283,6 +301,12 @@ export function createStepExecutor(options: StepExecutorOptions) {
       throw new WorkflowStepFailure(
         "dataset_reference_invalid",
         `${what} holds '${WORKFLOW_DATASET_KEY}' on a value that is no reference to a dataset`
+      );
+    }
+    if (fileReferences(value) === undefined) {
+      throw new WorkflowStepFailure(
+        "file_reference_invalid",
+        `${what} holds '${WORKFLOW_FILE_KEY}' on a value that is no reference to a file`
       );
     }
   }
@@ -355,6 +379,7 @@ export function createStepExecutor(options: StepExecutorOptions) {
           if (stepRun.status === "waiting" && ended) return ended;
           const input = await resolveInput(scope, step.input, textSchemasOf(attempt));
           withinStepData(input, "The child input");
+          await checkedFiles(run, input);
           const caller = await callerOf(run, stepRun, attempt.definition);
           const asset = await stores.configAssets.getConfigAsset({
             clientInstanceId,
@@ -420,6 +445,7 @@ export function createStepExecutor(options: StepExecutorOptions) {
         case "operation": {
           const input = await resolveInput(scope, step.input, textSchemasOf(attempt));
           withinStepData(input, "The input of the step");
+          await checkedFiles(run, input);
           await recordStepInput(stores.workflowRuns, scope, input);
           if (options.datasets)
             for (const ref of datasetReferences(input))
@@ -644,6 +670,8 @@ export function createStepExecutor(options: StepExecutorOptions) {
               "not_supported_yet",
               "Agent steps do not receive datasets yet"
             );
+          // The files the input names are the run's own: the agent reads them as attachments.
+          const files = await checkedFiles(run, input);
           fitsSchema(
             step.inputSchema,
             input,
@@ -667,7 +695,8 @@ export function createStepExecutor(options: StepExecutorOptions) {
             kind: "agent",
             input,
             principal: actor,
-            ...(call ? { tester: call.actor } : {})
+            ...(call ? { tester: call.actor } : {}),
+            ...(files.length > 0 ? { files: files.map((file) => file.$file) } : {})
           };
         }
         case "code":
@@ -675,6 +704,7 @@ export function createStepExecutor(options: StepExecutorOptions) {
         case "output": {
           const output = await resolveInput(scope, step.input, textSchemasOf(attempt));
           withinStepData(output, "The result of the run");
+          await checkedFiles(run, output);
           await recordStepInput(stores.workflowRuns, scope, output);
           const schema = compileJsonSchema(
             workflowValueSchema(attempt.definition.outputs, attempt.definition.types)
