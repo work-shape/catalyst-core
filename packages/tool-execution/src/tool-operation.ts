@@ -13,6 +13,7 @@ import {
   isAppError,
   forbiddenPreviewTool,
   isAuthenticatedServicePrincipal,
+  servicePrincipalAsRunUser,
   isDataToolName,
   operationCallFromToolRequest,
   toErrorEnvelope,
@@ -168,7 +169,7 @@ export function toolOperation(
       return tool.authorize ? tool.authorize(input, context) : { allowed: true };
     },
     scope: null,
-    auth: "user",
+    auth: tool.auth ?? "user",
     inputSchema: tool.inputSchema,
     outputSchema: tool.outputSchema ?? z.unknown(),
     resource: () => undefined,
@@ -231,10 +232,15 @@ function toolCallOf(
   context: OperationExecutionContext,
   options: ToolOperationOptions
 ): { request: ToolExecutionRequest; toolContext: ToolExecutionContext } {
-  const { actor, origin } = context;
-  if (origin.kind !== "agent" || isAuthenticatedServicePrincipal(actor)) {
+  const { origin } = context;
+  const principal = isAuthenticatedServicePrincipal(context.actor);
+  if (origin.kind !== "agent" || (principal && tool.auth !== "principal")) {
     throw new AppError("FORBIDDEN", `'${tool.name}' is a tool of an agent that acts for a person`);
   }
+  // A tool open to service principals sees one as the run sees it, a user without roles.
+  const actor = isAuthenticatedServicePrincipal(context.actor)
+    ? servicePrincipalAsRunUser(context.actor)
+    : context.actor;
   const request = toolRequestFromOperationCall({
     operation: tool.name,
     effect: tool.effect,
