@@ -34,6 +34,7 @@ import {
   WORKSPACE_STORE_PATH
 } from "./infrastructure";
 import { createJobWorker } from "./job-worker";
+import { runWorkerUntilStopped } from "./worker-lifecycle";
 import type { ClientInstanceCapability } from "./capabilities";
 import {
   assertCommandWorkerServesModuleJobKinds,
@@ -298,27 +299,9 @@ export async function runClientInstanceWorkspaceCommandWorker(
   input: CreateClientInstanceWorkspaceCommandWorkerInput
 ): Promise<void> {
   const service = await createClientInstanceWorkspaceCommandWorker(input);
-  let stopping = false;
-  const stop = (signal: NodeJS.Signals) => {
-    if (stopping) {
-      return;
-    }
-    stopping = true;
-    createLogger().info({ signal }, "Workspace command worker is stopping");
-    service.stop().catch((error: unknown) => {
-      createLogger().error({ error }, "Worker shutdown failed");
-      process.exitCode = 1;
-    });
-  };
-  process.once("SIGTERM", stop);
-  process.once("SIGINT", stop);
-  try {
-    await service.runUntilStopped();
-  } finally {
-    process.off("SIGTERM", stop);
-    process.off("SIGINT", stop);
-    await service.close();
-  }
+  await runWorkerUntilStopped(service, {
+    stoppingMessage: "Workspace command worker is stopping"
+  });
 }
 
 async function loadWorkspaceWorkerConfig(
