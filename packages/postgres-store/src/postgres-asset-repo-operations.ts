@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNull, max, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNull, lte, max, ne, sql } from "drizzle-orm";
 import {
   AppError,
   assetRepoBundleObjectKey,
@@ -10,7 +10,13 @@ import {
   type ConfigAssetStore
 } from "@work-shape/catalyst-core";
 import type { PostgresConnection, PostgresTransaction } from "./postgres-database";
-import { assetCheckouts, assetRepoBundles } from "./schema";
+import {
+  assetCheckouts,
+  assetRepoBundles,
+  configAssetRevisions,
+  configAssets,
+  configAssetState
+} from "./schema";
 
 // The ledger of the repositories of assets. Postgres says which bundles make a repository and
 // which commit its draft is at. A save writes a pending row before it puts its bundle; the
@@ -218,18 +224,137 @@ export async function assertRepoObjects(
   input: Parameters<ConfigAssetStore["applyConfigAssetMutations"]>[0]
 ): Promise<void> {
   for (const mutation of input.mutations) {
-    if (mutation.type !== "upsert" || !mutation.repository) {
-      continue;
-    }
-    const { bundle } = mutation.repository;
-    const size = await input.repositoryObjectSize?.(bundle.objectKey);
-    if (size !== bundle.bytes) {
-      throw new AppError("CONFLICT", "The bundle of the save is not in the store", {
-        reason: "bundle_object_missing",
-        objectKey: bundle.objectKey
-      });
+    if (mutation.type === "upsert" && mutation.repository) {
+      await assertRepoObject(mutation.repository, input.repositoryObjectSize);
     }
   }
+}
+
+async function assertRepoObject(
+  write: AssetRepoWrite,
+  objectSize: ((objectKey: string) => Promise<number | undefined>) | undefined
+): Promise<void> {
+  const { bundle } = write;
+  if ((await objectSize?.(bundle.objectKey)) !== bundle.bytes) {
+    throw new AppError("CONFLICT", "The bundle of the save is not in the store", {
+      reason: "bundle_object_missing",
+      objectKey: bundle.objectKey
+    });
+  }
+}
+
+export async function listAssetsWithoutCommits(
+  db: PostgresConnection,
+  input: Parameters<ConfigAssetStore["listAssetsWithoutCommits"]>[0]
+): ReturnType<ConfigAssetStore["listAssetsWithoutCommits"]> {
+  return db
+    .selectDistinct({ id: configAssets.id, name: configAssets.name })
+    .from(configAssets)
+    .innerJoin(configAssetRevisions, eq(configAssetRevisions.assetId, configAssets.id))
+    .where(
+      and(
+        eq(configAssets.clientInstanceId, input.clientInstanceId),
+        eq(configAssets.kind, input.kind),
+        input.name === undefined ? undefined : eq(configAssets.name, input.name),
+        input.after === undefined ? undefined : gt(configAssets.id, input.after),
+        isNull(configAssetRevisions.commit)
+      )
+    )
+    .orderBy(asc(configAssets.id))
+    .limit(input.limit);
+}
+
+export async function fillAssetRepoRevision(
+  db: PostgresConnection,
+  input: Parameters<ConfigAssetStore["fillAssetRepoRevision"]>[0]
+): ReturnType<ConfigAssetStore["fillAssetRepoRevision"]> {
+  const { clientInstanceId, assetId, repository: write } = input;
+  if (write) {
+    await assertRepoObject(write, input.repositoryObjectSize);
+  }
+  return db.transaction(async (tx) => {
+    // The lock every write of an asset takes first, so no write moves the draft meanwhile.
+    await tx
+      .select({ version: configAssetState.version })
+      .from(configAssetState)
+      .where(eq(configAssetState.clientInstanceId, clientInstanceId))
+      .for("update");
+    const [asset] = await tx
+      .select({ kind: configAssets.kind, name: configAssets.name })
+      .from(configAssets)
+      .where(and(eq(configAssets.clientInstanceId, clientInstanceId), eq(configAssets.id, assetId)))
+      .limit(1);
+    // The revision and the one before it.
+    const [row, before] = await tx
+      .select()
+      .from(configAssetRevisions)
+      .where(
+        and(
+          eq(configAssetRevisions.clientInstanceId, clientInstanceId),
+          eq(configAssetRevisions.assetId, assetId),
+          lte(configAssetRevisions.revision, input.revision)
+        )
+      )
+      .orderBy(desc(configAssetRevisions.revision))
+      .limit(2);
+    if (!asset || row?.revision !== input.revision) {
+      throw new AppError("NOT_FOUND", "The asset has no revision of this number");
+    }
+    const fileSetId = row.fileSetId ?? input.fileSetId ?? null;
+    const answer = fileSetId === null ? {} : { fileSetId };
+    if (row.commit !== null) {
+      if (write && row.commit !== write.commit) {
+        throw new AppError("CONFLICT", "The revision names another commit", {
+          reason: "revision_committed"
+        });
+      }
+      return answer;
+    }
+    if (before && before.commit === null && (write || row.config === null)) {
+      throw new AppError("CONFLICT", "The revision before this one names no commit yet", {
+        reason: "base_without_commit"
+      });
+    }
+    if (row.config === null) {
+      if (write) {
+        throw new AppError("VALIDATION_FAILED", "A deletion adds no commit");
+      }
+      // A deletion keeps the commit and tree of the revision it deleted, as its tombstone does.
+      if (before) {
+        await tx
+          .update(configAssetRevisions)
+          .set({ commit: before.commit, tree: before.tree })
+          .where(eq(configAssetRevisions.id, row.id));
+      }
+      return answer;
+    }
+    if (write) {
+      if (write.baseCommit !== (before?.commit ?? null)) {
+        throw new AppError(
+          "CONFLICT",
+          "The commit does not stand on the commit of the revision before",
+          { reason: "base_moved" }
+        );
+      }
+      const key = `${asset.kind}:${asset.name}`;
+      await insertRepoWrites(
+        tx,
+        clientInstanceId,
+        new Date(),
+        [{ kind: asset.kind, name: asset.name, write }],
+        { [key]: row.revision },
+        { [key]: assetId }
+      );
+    }
+    await tx
+      .update(configAssetRevisions)
+      .set({
+        fileSetId,
+        ...(write ? { commit: write.commit, tree: write.tree } : {})
+      })
+      .where(eq(configAssetRevisions.id, row.id));
+    return answer;
+  });
 }
 
 export async function listAssetRepoBundles(

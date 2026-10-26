@@ -614,6 +614,34 @@ export const setAssetDefaultResponseSchema = z.object({
   version: z.number().int().positive()
 });
 
+export const adoptAssetRepositoryRequestSchema = z.object({
+  /** Only the asset of this name. Left out, every asset of the kind. */
+  name: nameText(z.string().min(1)).optional(),
+  /** The `after` of the answer before, to go on where it stopped. */
+  after: z.string().min(1).optional()
+});
+
+/**
+ * What one call of the adoption did. It walks every workspace, Personal Workspaces among them
+ * (ADR-0015), so it answers counts and asset ids, never a name or content. A call stops after
+ * a while: until `done`, call again with its `after`.
+ */
+export const adoptAssetRepositoryResponseSchema = z.object({
+  /** Assets whose every revision names a commit now. */
+  adopted: z.number().int().nonnegative(),
+  /** Revisions this call gave a commit, a deletion's included. */
+  revisions: z.number().int().nonnegative(),
+  /** Commits this call made. */
+  commits: z.number().int().nonnegative(),
+  /** Assets left as they were, or part of the way, because a revision cannot be committed. */
+  refused: z.number().int().nonnegative(),
+  adoptedAssetIds: z.array(z.string()),
+  refusedAssetIds: z.array(z.string()),
+  done: z.boolean(),
+  /** Where the next call goes on. Absent while it starts at the beginning again. */
+  after: z.string().optional()
+});
+
 export const setAssetAvailabilityRequestSchema = z.object({
   /** Required with dependency consent: refuse a definition changed since it was reviewed. */
   expectedRevision: revisionNumberSchema.optional(),
@@ -825,6 +853,7 @@ export const assetPreconditionRequiredDetailsSchema = z.object({
 export type AssetScope = z.infer<typeof assetScopeSchema>;
 export type AssetSummary = z.infer<typeof assetSummarySchema>;
 export type Asset = z.infer<typeof assetSchema>;
+export type AdoptAssetRepositoryResponse = z.infer<typeof adoptAssetRepositoryResponseSchema>;
 export type PublishNarrative = z.infer<typeof publishNarrativeSchema>;
 export type AssetSyncItem = z.infer<typeof assetSyncItemSchema>;
 export type AssetSyncRefusedItem = z.infer<typeof assetSyncRefusedItemSchema>;

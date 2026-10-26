@@ -1,4 +1,6 @@
 import {
+  adoptAssetRepositoryRequestSchema,
+  adoptAssetRepositoryResponseSchema,
   assetPointersResponseSchema,
   assetSchema,
   assetScopeQuerySchema,
@@ -30,10 +32,11 @@ import { agentAvailabilitySchema, configAssetRevisionSchema } from "../configura
 import { listQuerySchema } from "../shared";
 import { defineRegisteredOperation, json, page } from "./define-operation";
 
-// Every operation here is one of the registry: a call is an Operation Run. None names its
-// right in `requires`, because the right is the kind's own (`<kind>.read`, `<kind>.write`,
-// `<kind>.delete`) and is decided on the asset the call names: a grant on the instance, on a
-// workspace or on the asset itself can answer it. The registration brings that check.
+// Every operation here is one of the registry: a call is an Operation Run. None but the
+// adoption names its right in `requires`, because the right is the kind's own (`<kind>.read`,
+// `<kind>.write`, `<kind>.delete`) and is decided on the asset the call names: a grant on the
+// instance, on a workspace or on the asset itself can answer it. The registration brings that
+// check.
 export const assetOperations = {
   "assets.list": defineRegisteredOperation({
     id: "assets.list",
@@ -95,6 +98,25 @@ export const assetOperations = {
     body: setAssetDefaultRequestSchema,
     response: json(setAssetDefaultResponseSchema),
     errors: ["CONFLICT"],
+    rateClass: "write"
+  }),
+  // An operator's deploy step (WF-GIT-2), with the release right on the instance: the assets
+  // of a kind whose content is a repository, written before the kind had one, get one commit
+  // per revision. Never run at startup.
+  "assets.adopt_repository": defineRegisteredOperation({
+    id: "assets.adopt_repository",
+    method: "POST",
+    path: "/api/v1/assets/:kind/adopt-repository",
+    summary:
+      "Give every revision of the assets of one kind written before it had a repository its commit",
+    tag: "Assets",
+    auth: "principal",
+    scope: "config_assets:release",
+    requires: ["assets.release"],
+    effect: "changing",
+    body: adoptAssetRepositoryRequestSchema,
+    response: json(adoptAssetRepositoryResponseSchema),
+    errors: ["VALIDATION_FAILED", "CONFLICT", "TIMEOUT"],
     rateClass: "write"
   }),
   "assets.validate": defineRegisteredOperation({

@@ -21,6 +21,7 @@
 {"name":"approval_request.reverted","legacy":true,"audited":true,"phases":["after"]}
 {"name":"approval_request.withdrawn","legacy":true,"audited":true,"phases":["after"]}
 {"name":"asset.before_write","legacy":false,"audited":false,"phases":["before"]}
+{"name":"asset.repository_adopted","legacy":false,"audited":true,"phases":["after"]}
 {"name":"audit.pruned","legacy":true,"audited":true,"phases":["after"]}
 {"name":"auth.personal_access_token_issued","legacy":true,"audited":true,"phases":["after"]}
 {"name":"auth.service_access_token_issued","legacy":true,"audited":true,"phases":["after"]}

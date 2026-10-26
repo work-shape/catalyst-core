@@ -1,6 +1,5 @@
 import {
   AppError,
-  ObjectNotFound,
   type AssetScope,
   type LocaleCode,
   type ConfigAssetRecord,
@@ -15,6 +14,7 @@ import {
   assertReferencesWithinOwners
 } from "./asset-owner-references";
 import type { AssetWorkflowOptions } from "../types";
+import { repositoryObjectSize } from "./asset-repo-save";
 
 export type ConfigAssetWriterOptions = Pick<
   AssetWorkflowOptions,
@@ -102,23 +102,12 @@ export async function applyValidatedConfigAssetMutations(
   await validate({ state, assets });
   const read = new Set(assets.map((asset) => asset.activeRevisionId));
   // The `files` store, which holds the bundle of a write that adds a commit to a repository.
-  const objects = options.pages?.objects;
+  const objectSize = repositoryObjectSize(options.pages?.objects);
   const { underLock, ...batch } = input;
   return options.configAssets.store.applyConfigAssetMutations({
     ...batch,
     mutations,
-    ...(objects
-      ? {
-          repositoryObjectSize: (key: string) =>
-            objects.head(key).then(
-              (head) => head.size,
-              (error: unknown) => {
-                if (error instanceof ObjectNotFound) return undefined;
-                throw error;
-              }
-            )
-        }
-      : {}),
+    ...(objectSize ? { repositoryObjectSize: objectSize } : {}),
     async validate(locked) {
       const ids = await locked.listActiveRevisionIds();
       const unchanged =

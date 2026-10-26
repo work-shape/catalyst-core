@@ -27,6 +27,8 @@ import {
 import {
   answerAssetRepoSave,
   beginAssetRepoSave,
+  fillAssetRepoRevision,
+  listAssetsWithoutCommits,
   getAssetRepoSave,
   getAssetCheckout,
   listAssetRepoBundles,
@@ -783,6 +785,8 @@ export function createPostgresConfigAssetsStore(
     unpublishConfigAsset: (input) => unpublishPostgresConfigAsset(db, input),
     removeConfigAsset: (input) => removePostgresConfigAsset(db, input),
     listAssetRepoBundles: (input) => listAssetRepoBundles(db, input),
+    listAssetsWithoutCommits: (input) => listAssetsWithoutCommits(db, input),
+    fillAssetRepoRevision: (input) => fillAssetRepoRevision(db, input),
     beginAssetRepoSave: (input) => beginAssetRepoSave(own(), input),
     nameAssetRepoSaveBundle: (input) => nameAssetRepoSaveBundle(own(), input),
     getAssetRepoSave: (input) => getAssetRepoSave(db, input),

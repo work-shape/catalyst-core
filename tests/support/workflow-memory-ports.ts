@@ -257,6 +257,8 @@ export const unusedConfigAssetStore: ConfigAssetStore = {
   discardConfigAssetDraft: unsupported,
   removeConfigAsset: unsupported,
   listAssetRepoBundles: unsupported,
+  listAssetsWithoutCommits: unsupported,
+  fillAssetRepoRevision: unsupported,
   beginAssetRepoSave: unsupported,
   getAssetRepoSave: unsupported,
   answerAssetRepoSave: unsupported,

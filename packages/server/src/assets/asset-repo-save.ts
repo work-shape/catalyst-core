@@ -1,12 +1,14 @@
 import { assetRepoMib, ASSET_REPO_MAX_BUNDLE_BYTES } from "@work-shape/catalyst-asset-repo";
 import {
   AppError,
+  ObjectNotFound,
   fileSetFileObjectKey,
   getSubjectUserId,
   isAuthenticatedServicePrincipal,
   type AssetRepoWrite,
   type AuthenticatedIdentity,
   type FileSet,
+  type ObjectStorage,
   type OperationRunId
 } from "@work-shape/catalyst-core";
 import { createAssetRepoCommitClient } from "./asset-repo-jobs";
@@ -40,6 +42,11 @@ export async function commitAssetFileSet(
     /** The commit of the draft the files replace. `null` starts the repository. */
     baseCommit: string | null;
     actor: AuthenticatedIdentity;
+    /**
+     * The author and time a revision recorded, for a commit made after it: the adoption of a
+     * revision from before its kind had a repository. Left out, the caller and the save's time.
+     */
+    recorded?: { author: string; time: number };
     message: string;
     /** What a person calls an asset of the kind, for a refusal that says what to do next. */
     kind: string;
@@ -62,8 +69,9 @@ export async function commitAssetFileSet(
         checksum: file.sha256
       })),
       baseCommit: input.baseCommit,
-      author: authorOf(input.actor),
-      message: input.message
+      author: input.recorded?.author ?? authorOf(input.actor),
+      message: input.message,
+      ...(input.recorded ? { time: input.recorded.time } : {})
     },
     ...(input.signal ? { signal: input.signal } : {})
   });
@@ -109,4 +117,30 @@ export async function commitAssetFileSet(
     });
   }
   throw new AppError("INTERNAL", result.message, { reason: "commit_failed" });
+}
+
+/**
+ * The size of an object of the `files` store, or nothing where there is none: what the write
+ * of a revision asks of the bundle it names before the bundle becomes part of the repository.
+ */
+export function repositoryObjectSize(
+  objects: ObjectStorage | undefined
+): ((objectKey: string) => Promise<number | undefined>) | undefined {
+  if (!objects) return undefined;
+  return (key) =>
+    objects.head(key).then(
+      (head) => head.size,
+      (error: unknown) => {
+        if (error instanceof ObjectNotFound) return undefined;
+        throw error;
+      }
+    );
+}
+
+/** The fixed reason an error's details name, where they name one. */
+export function reasonOf(error: { details?: unknown }): unknown {
+  const { details } = error;
+  return typeof details === "object" && details !== null && "reason" in details
+    ? details.reason
+    : undefined;
 }

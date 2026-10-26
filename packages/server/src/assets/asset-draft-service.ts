@@ -33,7 +33,7 @@ import {
   type AssetFileInput
 } from "./asset-files";
 import type { WorkflowAssetKind } from "../asset-kinds/shared";
-import { commitAssetFileSet } from "./asset-repo-save";
+import { commitAssetFileSet, reasonOf } from "./asset-repo-save";
 import { requirePrecondition, revisionConflictOf } from "./asset-revision";
 import { validateAssetSet, withDefinition, withoutDefinition } from "./asset-set";
 import {
@@ -271,9 +271,18 @@ export class AssetDraftWorkflow {
       if (fileSet) {
         await removeUnnamedAssetFileSet(this.options, assetId, fileSet.id).catch(() => undefined);
       }
-      // Another save moved the draft while this one was committed on it: the caller read a
-      // revision that is not the draft any more, which is answered as every stale write is.
-      if (isAppError(error) && error.code === "CONFLICT" && reasonOf(error) === "draft_moved") {
+      // Another save moved the draft while this one was committed on it, or the adoption gave
+      // the draft read without a commit its commit meanwhile (WF-GIT-2): the caller read a
+      // draft that is not the draft any more, which is answered as every stale write is.
+      const adoptedMeanwhile =
+        isAppError(error) &&
+        kind.content === "repository" &&
+        target.asset?.commit === undefined &&
+        reasonOf(error) === "repository_write_without_commit";
+      if (
+        isAppError(error) &&
+        ((error.code === "CONFLICT" && reasonOf(error) === "draft_moved") || adoptedMeanwhile)
+      ) {
         throw await revisionConflictOf(
           this.options,
           call.access,
@@ -904,14 +913,6 @@ function publishAction(kind: WorkflowAssetKind): string {
     );
   }
   return publish;
-}
-
-/** The fixed reason an error's details name, where they name one. */
-function reasonOf(error: { details?: unknown }): unknown {
-  const { details } = error;
-  return typeof details === "object" && details !== null && "reason" in details
-    ? details.reason
-    : undefined;
 }
 
 /** Where an asset enforces, as its audit names it: the instance or one workspace. */
