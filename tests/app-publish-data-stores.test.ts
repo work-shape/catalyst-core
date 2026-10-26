@@ -379,8 +379,8 @@ describe("GOLIVE-1: an App's Publish carries the Data Stores it binds", () => {
     );
   });
 
-  // DP-3 rights review: an agent's publish of the App and its store asks its person every right
-  // the held item asks of who decides it, here data_store.publish on the store.
+  // A guard beside the DP-3 rights fix: the store's further right, data_store.publish, is asked
+  // of the person up front, before the confirmation, so their click never lacks it.
   it("refuses an agent's publish of the App and its store for a person without data_store.publish, and publishes it on their confirmation with the right", async () => {
     const named = await storeWithPendingMigration("golive-agent", "golive-agent-app");
     const storeId = required(await asset(DATA_STORE_ASSET_KIND, "golive-agent")).id;
