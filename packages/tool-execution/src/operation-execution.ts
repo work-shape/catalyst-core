@@ -16,6 +16,8 @@ import {
   dataStoreRefusalOf,
   mailSendReasonOf,
   isAppError,
+  exposureOfOrigin,
+  hasAuthScope,
   isAuthenticatedServicePrincipal,
   isToolOperationAnswer,
   moduleOffError,
@@ -399,6 +401,24 @@ export async function authorizeOrigin(
       ...(definition.action === null ? {} : { action: definition.action }),
       reason: "user_only",
       message: `Only a person may call '${definition.name}', and a service principal is none`
+    };
+  }
+  // A call made for a personal key away from its request, such as a step of a test run the key
+  // started, carries the key's operation scopes, which a route asks of the key's own calls: an
+  // operation the key could not call is refused, such as a read of a Data Store's or a
+  // Knowledge Base's rows, which no key's scopes reach.
+  if (
+    !isAuthenticatedServicePrincipal(call.actor) &&
+    call.actor.keyScopes !== undefined &&
+    exposureOfOrigin(call.origin) !== "outside" &&
+    definition.scope !== null &&
+    !hasAuthScope(call.actor, definition.scope)
+  ) {
+    return {
+      allowed: false,
+      ...(definition.action === null ? {} : { action: definition.action }),
+      reason: "outside_key_scope",
+      message: `The API key this call is made for does not carry the scope '${definition.scope}', which '${definition.name}' needs`
     };
   }
   if (call.origin.kind !== "agent") {

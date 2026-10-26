@@ -20,7 +20,10 @@ import {
   type OperationRun,
   type OperationRunStore,
   type OperationCallRuntime,
-  type UserStore
+  type UserStore,
+  type PersonalApiKeyStore,
+  operationScopesOfPersonalApiKey,
+  usablePersonalApiKey
 } from "@work-shape/catalyst-core";
 import {
   OPERATION_CALL_APPROVAL_KIND,
@@ -69,6 +72,11 @@ export interface OperationCallApprovalOptions {
   /** The call path the frozen call is executed on. Read when a request is decided. */
   deps(): RunOperationDeps;
   users: Pick<UserStore, "getUser">;
+  /**
+   * Where a call made for a personal API key reads the key again before it is executed. Without
+   * it such a call is not executed.
+   */
+  personalApiKeys?: Pick<PersonalApiKeyStore, "resolvePersonalApiKey">;
   workflowAgentActor?(
     runId: import("@work-shape/catalyst-core").AgentRunId
   ): Promise<import("@work-shape/catalyst-core").AuthenticatedIdentity | undefined>;
@@ -690,7 +698,10 @@ export async function recordApprovedOperationCallEnd(
  * gone or may not act: the call is then not executed.
  */
 async function currentActor(
-  options: Pick<OperationCallApprovalOptions, "clientInstanceId" | "users" | "workflowAgentActor">,
+  options: Pick<
+    OperationCallApprovalOptions,
+    "clientInstanceId" | "users" | "workflowAgentActor" | "personalApiKeys"
+  >,
   run: OperationRun,
   payload: OperationCallPayload
 ): Promise<import("@work-shape/catalyst-core").AuthenticatedIdentity | undefined> {
@@ -712,6 +723,19 @@ async function currentActor(
   if (!user || user.status !== "active") {
     return undefined;
   }
+  // A call made for a personal key acts as that key, as it is now: narrowed to its scopes, and
+  // not at all once it is revoked or expired.
+  const delegated = run.actor.delegatedActor;
+  const key =
+    delegated?.kind === "api_key"
+      ? options.personalApiKeys &&
+        (await usablePersonalApiKey(options.personalApiKeys, {
+          clientInstanceId,
+          keyId: delegated.id,
+          ownerUserId: user.id
+        }))
+      : undefined;
+  if (delegated?.kind === "api_key" && !key) return undefined;
   return {
     id: user.id,
     externalUserId,
@@ -725,7 +749,8 @@ async function currentActor(
     ...(payload.actor.subjectUserId ? { subjectUserId: payload.actor.subjectUserId } : {}),
     ...(principal ? { principal: { ...principal, clientInstanceId } } : {}),
     ...(run.actor.delegatedActor ? { delegatedActor: run.actor.delegatedActor } : {}),
-    ...(payload.actor.scopes ? { scopes: payload.actor.scopes } : {})
+    ...(payload.actor.scopes ? { scopes: payload.actor.scopes } : {}),
+    ...(key ? { keyScopes: key.scopes, scopes: operationScopesOfPersonalApiKey(key.scopes) } : {})
   };
 }
 

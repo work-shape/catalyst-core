@@ -305,6 +305,30 @@ export function operationScopesOfPersonalApiKey(scopes: readonly string[]): Oper
   return [...granted];
 }
 
+/**
+ * The key where it can still act for its owner now: the owner's, not revoked and not expired.
+ * Nothing otherwise. What acts later for a key, such as a test run it started or a call of it
+ * that waited for a confirmation, asks this before it acts.
+ */
+export async function usablePersonalApiKey(
+  store: Pick<PersonalApiKeyStore, "resolvePersonalApiKey">,
+  input: { clientInstanceId: ClientInstanceId; keyId: ApiCredentialId; ownerUserId: string },
+  now = Date.now()
+): Promise<PersonalApiKeyRecord | undefined> {
+  const key = (
+    await store.resolvePersonalApiKey({
+      clientInstanceId: input.clientInstanceId,
+      keyId: input.keyId
+    })
+  )?.key;
+  return key &&
+    key.ownerUserId === input.ownerUserId &&
+    !key.revokedAt &&
+    Date.parse(key.expiresAt) > now
+    ? key
+    : undefined;
+}
+
 /** Refuses an expiry in the past or further out than a key may live. */
 export function requirePersonalApiKeyExpiry(expiresAt: string, now = Date.now()): void {
   const at = Date.parse(expiresAt);

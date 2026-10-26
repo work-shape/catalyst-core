@@ -2,6 +2,8 @@ import { z } from "zod";
 import {
   AppError,
   auditActorFromIdentity,
+  CONNECTION_EXPOSURE_ACTION_PREFIX,
+  isOutsideCall,
   KNOWLEDGE_BASE_ACTIONS,
   isAuthenticatedServicePrincipal,
   isOperationRunId,
@@ -137,6 +139,7 @@ export function sourceOperation(
     case "source_items":
       return {
         ...base,
+        ...sourceNamesRight(target.resource),
         inputSchema: knowledgeSourceItemsInputSchema,
         outputSchema: knowledgeSourceItemsOutputSchema,
         execute: (input, context) => {
@@ -152,6 +155,7 @@ export function sourceOperation(
     case "locate":
       return {
         ...base,
+        ...sourceNamesRight(target.resource),
         inputSchema: knowledgeLocateInputSchema,
         outputSchema: knowledgeLocateOutputSchema,
         execute: (input, context) =>
@@ -162,6 +166,33 @@ export function sourceOperation(
           )
       };
   }
+}
+
+/**
+ * Who reads a source's items: a holder of `knowledge_base.read`, but no outside client (an API
+ * key, or a call made for one). Their names, paths and links are the outside system's, which
+ * no operation exposes to `outside`, as `connections.source_folders` does not.
+ */
+function sourceNamesRight(resource: OperationResource): {
+  action: null;
+  authorize: NonNullable<OperationDefinition["authorize"]>;
+} {
+  return {
+    action: null,
+    authorize: (_input, { actor, origin, access }) => {
+      if (isOutsideCall(actor, origin)) {
+        return {
+          allowed: false,
+          action: `${CONNECTION_EXPOSURE_ACTION_PREFIX}outside`,
+          reason: "no_grant"
+        };
+      }
+      const decision = access.authorize(KNOWLEDGE_BASE_ACTIONS.read, resource);
+      return decision.allowed
+        ? { allowed: true }
+        : { allowed: false, action: KNOWLEDGE_BASE_ACTIONS.read, reason: decision.reason };
+    }
+  };
 }
 
 /**

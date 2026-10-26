@@ -382,6 +382,13 @@ export async function callStepOperation(input: {
         if (reason === "user_only" && ruled !== undefined) {
           throw new OperationStepFailure(refusal.code, ruled, trace, { systemic: true });
         }
+        // A test run started with an API key: the key, not a grant, lacks the scope or right.
+        if (reason === "outside_key_scope" && ruled !== undefined) {
+          throw new OperationStepFailure(refusal.code, ruled, trace, {
+            systemic: true,
+            ...(action === undefined ? {} : { action })
+          });
+        }
         const { code, message } = refused(action, result.reason.boundBy !== undefined);
         throw new OperationStepFailure(code, message, trace, { systemic: true, action });
       }
