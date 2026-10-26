@@ -93,6 +93,14 @@ worker receives only what its `environment` spells out:
 - no `pid`, no mount of `/etc/vivd-catalyst` or of a path whose variable has no default, and
   the Docker socket only on `workspace-command-worker`.
 
+The public host of the outside forms, a service of `docker-compose.prod.yml` that runs
+`outside-forms/dist/host/main.js` or reads `OUTSIDE_FORMS_DATABASE_URL`, is held to the same
+rules. It also needs `OUTSIDE_FORMS_DATABASE_URL` (or `OUTSIDE_FORMS_DATABASE_URL_FILE`), and
+neither it nor any other of its variables may be `DATABASE_URL` or read it: the host connects
+with a database role of its own, which the operator creates before the host is switched on
+(the docs' operator runbook, Deployment, The outside forms host's database role). A deployment
+without the host passes.
+
 A deployment adds its own assertions in an executable
 `deploy/scripts/check-release-policy.sh`, which runs last.
 
