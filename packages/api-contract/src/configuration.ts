@@ -374,8 +374,6 @@ export const configAssetReferencesSchema = z.object({
    * still names one shows it as unavailable, so it can be removed.
    */
   unavailableTools: z.array(unavailableToolSchema).optional(),
-  /** @deprecated Use unavailableTools. Kept for existing agent editors. */
-  moduleOffTools: z.array(z.object({ name: z.string(), module: z.string() })).optional(),
   /**
    * What the platform tells every agent before its own instructions, read-only: the rules
    * every agent gets, and the orientation an agent gets whose tools name one of `toolNames`.

@@ -41380,24 +41380,6 @@
               "$ref": "#/components/schemas/UnavailableTool"
             }
           },
-          "moduleOffTools": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "name": {
-                  "type": "string"
-                },
-                "module": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "name",
-                "module"
-              ]
-            }
-          },
           "platformInstructions": {
             "type": "object",
             "properties": {
