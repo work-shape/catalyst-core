@@ -139,6 +139,15 @@ export interface FindingsWorld extends AppActionsInstance {
   store: DataStoreRecord;
   /** The ceilings of a statement on a store. A test lowers one and restores it. */
   statementLimits: { statementTimeoutMs?: number; maxRows?: number; maxBytes?: number };
+  /**
+   * Writes a store's draft from files, as a save does, and publishes nothing. Answers the
+   * revision it was written as.
+   */
+  draftStore(
+    name: string,
+    files: StoreFile[],
+    workspaceId?: CollaborationWorkspaceId
+  ): Promise<number>;
   /** Publishes a store from files and waits for its database. Answers its record. */
   publishStore(
     name: string,
@@ -163,7 +172,9 @@ export interface FindingsWorld extends AppActionsInstance {
  * The instance of `setupAppActions` with Data Stores on, the store `findings` holding four
  * rows, and the App `findings` published at revision 1 with a draft at revision 2.
  */
-export async function setupFindingsApp(): Promise<FindingsWorld> {
+export async function setupFindingsApp(
+  options: { explicitCredentials?: true } = {}
+): Promise<FindingsWorld> {
   const databaseUrl = await fileTestDatabaseUrl();
   // The stores before the instance: the kind `data_store` is registered when it is set up.
   const own = await createTestInstance({ postgres: { applicationName: "findings_app_stores" } });
@@ -185,6 +196,8 @@ export async function setupFindingsApp(): Promise<FindingsWorld> {
   let dataStoresOn = true;
   const t = await setupAppActions({
     modules: { dataStores: { enabled: true } },
+    // The CLI signs in with an API key, as on an instance.
+    ...options,
     furtherKinds: [dataStoreKind(dataStores)],
     // A build that answers a manifest whose actions reach a store it does not list.
     tamper(built) {
@@ -226,10 +239,15 @@ export async function setupFindingsApp(): Promise<FindingsWorld> {
     return sql;
   };
 
-  const publishStore: FindingsWorld["publishStore"] = async (name, files, workspaceId) => {
-    const config = dataStores.readFiles(
+  const storeConfig = (files: StoreFile[]) =>
+    dataStores.readFiles(
       files.map((file) => ({ path: file.path, bytes: new TextEncoder().encode(file.text) }))
     );
+  const writeStoreDraft = async (
+    name: string,
+    config: ReturnType<typeof storeConfig>,
+    workspaceId: CollaborationWorkspaceId | undefined
+  ) => {
     const assetKey = `${DATA_STORE_ASSET_KIND}:${name}`;
     const current = await t.stores.configAssets.getConfigAsset({
       clientInstanceId,
@@ -250,7 +268,19 @@ export async function setupFindingsApp(): Promise<FindingsWorld> {
         }
       ]
     });
-    const revision = required(written.revisions[assetKey]);
+    return {
+      revision: required(written.revisions[assetKey]),
+      assetId: required(written.assetIds[assetKey])
+    };
+  };
+
+  const draftStore: FindingsWorld["draftStore"] = async (name, files, workspaceId) =>
+    (await writeStoreDraft(name, storeConfig(files), workspaceId)).revision;
+
+  const publishStore: FindingsWorld["publishStore"] = async (name, files, workspaceId) => {
+    const config = storeConfig(files);
+    const written = await writeStoreDraft(name, config, workspaceId);
+    const { revision } = written;
     const stored = required(
       await t.stores.configAssets.getConfigAssetRevision({
         clientInstanceId,
@@ -264,7 +294,7 @@ export async function setupFindingsApp(): Promise<FindingsWorld> {
         clientInstanceId,
         kind: DATA_STORE_ASSET_KIND,
         name,
-        assetId: required(written.assetIds[assetKey]),
+        assetId: written.assetId,
         revision,
         revisionId: stored.id
       });
@@ -302,6 +332,7 @@ export async function setupFindingsApp(): Promise<FindingsWorld> {
     store,
     statementLimits,
     dataStores,
+    draftStore,
     publishStore,
     addFindings,
     findingRows: () => rowsAs<JsonObject[]>`select * from findings order by id`,

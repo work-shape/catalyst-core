@@ -34,6 +34,8 @@ export interface AppPublishCall {
   suggested: AppAudience | undefined;
   /** The Workflows the call makes live with the App, by name (DP-3). */
   workflows: readonly string[];
+  /** The Data Stores the call publishes with the App, by name (GOLIVE-1). */
+  dataStores: readonly string[];
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -52,17 +54,19 @@ export function appPublishCall(decision: {
   const { name, revision, workspaceId } = input;
   if (typeof name !== "string" || typeof revision !== "number") return undefined;
   const suggested = appAudienceSchema.safeParse(input.audience);
-  const workflows = Array.isArray(input.workflows)
-    ? input.workflows.flatMap((workflow) =>
-        isRecord(workflow) && typeof workflow.name === "string" ? [workflow.name] : []
-      )
-    : [];
+  const names = (list: unknown) =>
+    Array.isArray(list)
+      ? list.flatMap((entry) =>
+          isRecord(entry) && typeof entry.name === "string" ? [entry.name] : []
+        )
+      : [];
   return {
     app: name,
     revision,
     workspaceId: typeof workspaceId === "string" ? workspaceId : undefined,
     suggested: suggested.success ? suggested.data : undefined,
-    workflows
+    workflows: names(input.workflows),
+    dataStores: names(input.dataStores)
   };
 }
 
@@ -99,7 +103,7 @@ export function appPublishConfirmationReady(input: {
   narrative: PublishNarrativeRead;
   readsStoredData: boolean | undefined;
   storedData: AppPublishDataRead;
-  /** The Workflows the call makes live with the App. Absent where it names none. */
+  /** The stores and Workflows the call makes live with the App. Absent where it names none. */
   together?: AppPublishTogetherRead;
 }): boolean {
   if (input.offer === undefined || input.offer.selected !== input.selected) return false;
@@ -197,15 +201,17 @@ export function useAppPublishConfirmation(
   const readsStoredData = question.readsStoredData;
   const storedData = useAppPublishData(call.app, call.revision, readsStoredData === true);
   const selected = settled ? (read ?? offer?.selected) : undefined;
-  // The Workflows the agent named go live with the App on Allow: each as the review shows it.
-  const reviewed = useAppPublishTogether(call.app, call.revision, call.workflows.length > 0);
-  const together =
-    call.workflows.length > 0
-      ? {
-          ...reviewed,
-          workflows: reviewed.workflows.filter(({ name }) => call.workflows.includes(name))
-        }
-      : undefined;
+  // The stores and Workflows the agent named go live with the App on Allow: each as the
+  // review shows it.
+  const names = call.workflows.length + call.dataStores.length > 0;
+  const reviewed = useAppPublishTogether(call.app, call.revision, names);
+  const together = names
+    ? {
+        ...reviewed,
+        workflows: reviewed.workflows.filter(({ name }) => call.workflows.includes(name)),
+        dataStores: reviewed.dataStores.filter(({ name }) => call.dataStores.includes(name))
+      }
+    : undefined;
   return {
     audience: selected,
     ready: appPublishConfirmationReady({

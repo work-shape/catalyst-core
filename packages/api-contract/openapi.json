@@ -2555,7 +2555,7 @@
     "/api/v1/apps/{app}/publish-review": {
       "get": {
         "operationId": "apps.publish_review",
-        "summary": "Read what publishing an App's draft comes to: the App and the Workflows it calls, their pending drafts, publish questions and what would refuse them",
+        "summary": "Read what publishing an App's draft comes to: the App, the Workflows it calls and the Data Stores it binds, their pending drafts and migrations, publish questions and what would refuse them",
         "tags": [
           "Apps"
         ],
@@ -38367,6 +38367,71 @@
               ]
             }
           },
+          "dataStores": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "draftRevision": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "publishedRevision": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "pending": {
+                  "type": "boolean"
+                },
+                "narrative": {
+                  "$ref": "#/components/schemas/PublishNarrative"
+                },
+                "lastChangedBy": {
+                  "type": "string"
+                },
+                "refusals": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AppPublishRefusal"
+                  }
+                },
+                "liveLevel": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "minSchema": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "pendingMigrations": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "name",
+                "title",
+                "draftRevision",
+                "pending",
+                "refusals",
+                "liveLevel",
+                "pendingMigrations"
+              ]
+            }
+          },
           "publishesTogether": {
             "type": "boolean"
           },
@@ -38377,6 +38442,7 @@
         "required": [
           "app",
           "workflows",
+          "dataStores",
           "publishesTogether",
           "ready"
         ]
@@ -39649,7 +39715,10 @@
               "properties": {
                 "kind": {
                   "type": "string",
-                  "const": "workflow"
+                  "enum": [
+                    "data_store",
+                    "workflow"
+                  ]
                 },
                 "name": {
                   "type": "string"
@@ -46470,6 +46539,28 @@
           },
           "workflows": {
             "maxItems": 20,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "revision": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "name",
+                "revision"
+              ]
+            }
+          },
+          "dataStores": {
+            "maxItems": 100,
             "type": "array",
             "items": {
               "type": "object",

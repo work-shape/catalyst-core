@@ -370,11 +370,12 @@ async function publish(
       ? `${candidate.appAudience.label}${candidate.appAudience.people === undefined ? "" : ` (${candidate.appAudience.people} people)`}`
       : undefined
   );
-  // A publish of the draft makes the pending Workflows it reaches live with it.
+  // A publish of the draft makes the pending Data Stores and Workflows it reaches live with it.
   const together =
-    number === (candidate.draftRevision ?? candidate.revision) && startsWorkflows(candidate.config)
+    number === (candidate.draftRevision ?? candidate.revision) &&
+    (startsWorkflows(candidate.config) || dataStoresOf(manifestOf(candidate.config)).length > 0)
       ? await appPublishTogether(target.api, app)
-      : { workflows: [], lines: [] };
+      : { workflows: [], dataStores: [], lines: [] };
   const question = [formatReview(app, review), storedData, together.lines.join("\n")]
     .filter(Boolean)
     .join("\n");
@@ -419,7 +420,8 @@ async function publish(
           revision: number,
           workspaceId: target.workspaceId,
           audience,
-          ...(together.workflows.length > 0 ? { workflows: together.workflows } : {})
+          ...(together.workflows.length > 0 ? { workflows: together.workflows } : {}),
+          ...(together.dataStores.length > 0 ? { dataStores: together.dataStores } : {})
         },
         idempotencyKey,
         ...(answer === "unattended" ? { unattended: true } : {})
@@ -440,8 +442,8 @@ async function publish(
       ? JSON.stringify(outcome.output, null, 2)
       : [
           ...(outcome.output.publishedWith ?? []).map(
-            (workflow) =>
-              `Published revision ${workflow.publishedRevision} of Workflow '${workflow.name}'.`
+            (member) =>
+              `Published revision ${member.publishedRevision} of ${member.kind === "data_store" ? "Data Store" : "Workflow"} '${member.name}'.`
           ),
           `Published revision ${outcome.output.publishedRevision} of App '${app}'${outcome.output.replacedRevision === undefined ? "" : ` in place of revision ${outcome.output.replacedRevision}`}.`
         ].join("\n")

@@ -249,7 +249,10 @@ export function useAppPublishData(
 /** One Workflow a Publish of an App's draft makes live with it, as the review names it. */
 export type AppPublishTogetherWorkflow = AppPublishReview["workflows"][number];
 
-/** What one Publish of an App's draft makes live with it (DP-3), as the dialog reads it. */
+/** One Data Store a Publish of an App's draft publishes with it, as the review names it. */
+export type AppPublishTogetherStore = AppPublishReview["dataStores"][number];
+
+/** What one Publish of an App's draft makes live with it (DP-3, GOLIVE-1), as the dialog reads it. */
 export interface AppPublishTogetherRead {
   /** As the stored-data read of the same question: loading, failed or ready. */
   status: AppPublishDataRead["status"];
@@ -259,6 +262,11 @@ export interface AppPublishTogetherRead {
    * other than the draft, and for a reader who may not write the App and reads no review.
    */
   workflows: readonly AppPublishTogetherWorkflow[];
+  /**
+   * The Data Stores the draft binds whose draft is not published, each with the migrations
+   * it would apply: the Publish names each with the revision shown. Empty as `workflows` is.
+   */
+  dataStores: readonly AppPublishTogetherStore[];
   retry(): void;
 }
 
@@ -291,15 +299,24 @@ export function useAppPublishTogether(
     retry: false
   });
   const retry = () => void query.refetch().catch(() => undefined);
-  if (!enabled) return { status: "ready", workflows: [], retry };
-  if (query.isError) return { status: "failed", workflows: [], retry };
-  if (query.data === undefined) return { status: "loading", workflows: [], retry };
+  const none = { workflows: [], dataStores: [], retry };
+  if (!enabled) return { status: "ready", ...none };
+  if (query.isError) return { status: "failed", ...none };
+  if (query.data === undefined) return { status: "loading", ...none };
   const review = query.data;
-  const workflows =
-    review && review.app.draftRevision === revision
-      ? review.workflows.filter((workflow) => workflow.pending)
-      : [];
-  return { status: "ready", workflows, retry };
+  if (!review || review.app.draftRevision !== revision) return { status: "ready", ...none };
+  return {
+    status: "ready",
+    workflows: review.workflows.filter((workflow) => workflow.pending),
+    dataStores: review.dataStores.filter((store) => store.pending),
+    retry
+  };
+}
+
+/** What one Publish of an App names to make live with it, each at the revision shown. */
+export interface AppPublishNamed {
+  workflows: readonly { name: string; revision: number }[];
+  dataStores: readonly { name: string; revision: number }[];
 }
 
 /** Who a publish of an App makes it live for: its builder, its workspace or the whole instance. */
@@ -546,8 +563,8 @@ export interface AppWrites {
     app: string,
     revision: number,
     audience?: AppAudience,
-    /** The Workflows made live with the App, each at the revision the person was shown. */
-    workflows?: readonly { name: string; revision: number }[]
+    /** The Data Stores and Workflows made live with the App, each at the revision shown. */
+    together?: AppPublishNamed
   ): Promise<unknown>;
   /** Puts the draft back on the published revision. */
   discardDraft(app: string, expectedRevision: number): Promise<unknown>;
@@ -598,7 +615,7 @@ export function useAppWrites(workspaceId: string | undefined): AppWrites {
           })
         ).finally(changed);
       },
-      publish: (app, revision, audience, workflows) =>
+      publish: (app, revision, audience, together) =>
         made(
           client.assets.publish({
             params: params(app),
@@ -606,7 +623,8 @@ export function useAppWrites(workspaceId: string | undefined): AppWrites {
               revision,
               workspaceId,
               ...(audience === undefined ? {} : { audience }),
-              ...(workflows?.length ? { workflows: [...workflows] } : {})
+              ...(together?.workflows.length ? { workflows: [...together.workflows] } : {}),
+              ...(together?.dataStores.length ? { dataStores: [...together.dataStores] } : {})
             }
           })
         ).finally(changed),

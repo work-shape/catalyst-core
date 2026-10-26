@@ -59,3 +59,38 @@ describe("the sentence of a publish refused for a Workflow", () => {
     expect(appPublishRefusal(refused(422, { reason: "other" }))).toBeUndefined();
   });
 });
+
+// GOLIVE-1: the store published with the App failed its migration or is still migrating; the
+// dialog names the store by its title and the migration, in its own words.
+describe("the sentence of a publish refused for a Data Store published with the App", () => {
+  it("names the store and the migration that failed, and asks to try again while it migrates", () => {
+    const failed = appPublishRefusal(
+      refused(409, {
+        reason: "data_store_migration_failed",
+        dataStore: "pruefergebnisse",
+        title: "Prüfergebnisse",
+        migration: "add_status"
+      })
+    );
+    const migrating = appPublishRefusal(
+      refused(409, {
+        reason: "data_store_migrating",
+        dataStore: "pruefergebnisse",
+        title: "Prüfergebnisse"
+      })
+    );
+    const de = createTranslationContext("de").t;
+    const en = createTranslationContext("en").t;
+    const say = (t: typeof de, refusal: typeof failed) =>
+      refusal ? t(refusal.key, refusal.values) : undefined;
+    expect(say(de, failed)).toBe(
+      "Die Änderung „add_status“ am Datenspeicher „Prüfergebnisse“ ließ sich nicht anwenden. Die App ist nicht veröffentlicht."
+    );
+    expect(say(de, migrating)).toBe(
+      "Der Datenspeicher „Prüfergebnisse“ wird noch umgestellt. Versuche es in einer Minute noch einmal."
+    );
+    expect(say(en, failed)).toBe(
+      "The change “add_status” to the data store “Prüfergebnisse” could not be applied. The app is not published."
+    );
+  });
+});

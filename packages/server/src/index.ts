@@ -365,6 +365,7 @@ export {
   createAppAssetKind
 } from "./apps/app-kind";
 export { workflowLiveCallerWarnings } from "./apps/live-workflow-callers";
+export { awaitStoreLevels, type StoreAwaited, type StoreWaitClock } from "./apps/app-store-wait";
 export { ASSET_PUT_BODY_LIMIT_BYTES } from "./assets/asset-files";
 export { createConnectionAssetKind } from "./asset-kinds/connection";
 export { createGuardrailAssetKind, defineGuardrailAssetKind } from "./asset-kinds/guardrail";

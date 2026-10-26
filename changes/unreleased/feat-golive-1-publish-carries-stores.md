@@ -1,0 +1,5 @@
+---
+section: Added
+---
+
+- **Apps:** An App's Publish carries the Data Stores its manifest binds (GOLIVE-1). `apps.publish_review` lists each store whose draft is not published, with its live level, the level the App needs and its pending migrations, and refuses a store whose draft stays below the App's `minSchema` (`data_store_draft_below_min_schema`). `assets.publish` of an App takes `dataStores: [{ name, revision }]`: each store is published as its own publish does it and its migrations applied, and the App and its Workflows go live once every store reached its level. A failed migration (`data_store_migration_failed`) or a wait over 60 seconds (`data_store_migrating`, retryable) publishes neither the App nor its Workflows. The publisher needs `data_store.publish` on each store; a held publish carries the stores in `publishedWith` and only a holder of `data_store.publish` on each decides it. The Publish dialog, the agent's confirmation, the Inbox item and `catalyst app publish` name the stores, and the dialog says the store refusals in German and English.
