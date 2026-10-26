@@ -232,13 +232,13 @@ describe("catalyst skill pull (ADISC-2 check 71)", () => {
     expect(await tree(f.cwd)).toEqual(before);
   });
 
-  it.each(["agent", "agents", "workflow", "guardrail", "unknown-kind"])(
+  it.each(["agent", "agents", "guardrail", "unknown-kind"])(
     "rejects %s pull as usage before contacting the instance",
     async (kind) => {
       const f = await fixture();
       expect(await f.run([kind, "pull", "guide", "copy"])).toMatchObject({
         code: 2,
-        err: expect.stringContaining("'pull' is a command of skills and Apps only")
+        err: expect.stringContaining("'pull' is a command of skills, Apps and Workflows only")
       });
       expect(f.calls).toEqual([]);
       expect(await tree(f.cwd)).toEqual({});
