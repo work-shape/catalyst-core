@@ -13,26 +13,27 @@ import {
 import type { ClientInstanceId, JsonObject } from "@work-shape/catalyst-core";
 
 /**
- * The working state a capability keeps of its own process (ADR-0033), such as a form's draft.
- * A capability reads and writes only its own rows, through its port. Nothing here references a
- * platform table, and nothing of the platform reads it.
- */
-
-/**
  * The start of the name of every database role that the public host of the capability
  * `outside-forms` connects with (EW-9). Row-level security keeps such a role to that
  * capability's rows; an operator creates it, see the docs' operator runbook.
  */
-export const OUTSIDE_FORMS_HOST_ROLE_PREFIX = "catalyst_outside_forms";
+const OUTSIDE_FORMS_HOST_ROLE_PREFIX = sql.raw(`'catalyst_outside_forms'`);
 
 /**
  * Who a row of `capability_records` is for. The platform's role owns the table and row-level
  * security does not apply to it. Every other role gets what its grants give, as before the
- * policies (`by_grant`), and a role whose name starts with OUTSIDE_FORMS_HOST_ROLE_PREFIX only
- * the rows of `outside-forms`, for reading and for writing. Neither policy names a role, so the
- * migration needs no role to exist and no CREATEROLE.
+ * policies (`by_grant`), and a session that logged in as, or switched to, a role whose name
+ * starts with OUTSIDE_FORMS_HOST_ROLE_PREFIX only the rows of `outside-forms`, for reading and
+ * for writing: `session_user` holds it also after a SET ROLE. Neither policy names a role, so
+ * the migration needs no role to exist and no CREATEROLE.
  */
-const outsideFormsHostRows = sql`capability = 'outside-forms' or not starts_with(current_user::text, ${sql.raw(`'${OUTSIDE_FORMS_HOST_ROLE_PREFIX}'`)})`;
+const outsideFormsHostRows = sql`capability = 'outside-forms' or not (starts_with(current_user::text, ${OUTSIDE_FORMS_HOST_ROLE_PREFIX}) or starts_with(session_user::text, ${OUTSIDE_FORMS_HOST_ROLE_PREFIX}))`;
+
+/**
+ * The working state a capability keeps of its own process (ADR-0033), such as a form's draft.
+ * A capability reads and writes only its own rows, through its port. Nothing here references a
+ * platform table, and nothing of the platform reads it.
+ */
 export const capabilityRecords = pgTable(
   "capability_records",
   {

@@ -47,12 +47,20 @@ describe("the outside forms host's database role", () => {
       await db.sql.unsafe(`
         create role "${role}" login nosuperuser nocreatedb nocreaterole noinherit noreplication
           nobypassrls connection limit 8 password '${PASSWORD}';
+        alter role "${role}" set statement_timeout = '30s';
+        alter role "${role}" set lock_timeout = '5s';
+        alter role "${role}" set idle_in_transaction_session_timeout = '60s';
         alter role "${role}" set temp_file_limit = '64MB';
         grant connect on database "${database}" to "${role}";
         grant usage on schema public to "${role}";
         grant select, insert, update on table capability_records to "${role}";
       `);
     }
+    await db.sql.unsafe(`
+      revoke temporary on database "${database}" from public;
+      revoke execute on function lo_create(oid), lo_creat(integer), lo_from_bytea(oid, bytea)
+        from public;
+    `);
     await db.sql.unsafe(`
       create role "${INSPECTION_ROLE}" login nosuperuser nobypassrls password '${PASSWORD}';
       grant connect on database "${database}" to "${INSPECTION_ROLE}";
@@ -152,6 +160,10 @@ describe("the outside forms host's database role", () => {
     await refused(host`select nextval('drizzle.__drizzle_migrations_id_seq')`);
     await refused(host`update workflow_runs set status = 'done'`);
     await refused(host.unsafe(`set role "${new URL(db.databaseUrl).username}"`));
+    // Nor fills the disk outside the table: no temporary table, no large object.
+    await refused(host`create temporary table planted (id text)`);
+    await refused(host`select lo_create(0)`);
+    await refused(host`select lo_from_bytea(0, '\\x00')`);
   });
 
   it("is refused every change of the schema", async () => {
@@ -235,6 +247,40 @@ describe("the outside forms host's database role", () => {
     expect(problems).toMatch(/owns capability_records/u);
     expect(problems).toMatch(/privileges on other tables or sequences/u);
     expect(problems).toMatch(/may write records of capabilities other than outside-forms/u);
+  });
+
+  it("holds the rows after a switch of role, and reports a membership and a column grant", async () => {
+    const other = await platformRecord("switched", "document-processing", "f-switched");
+    const member = `catalyst_outside_forms_member_${suffix}`;
+    const database = new URL(db.databaseUrl).pathname.slice(1);
+    await db.sql.unsafe(`
+      create role "${member}" login noinherit password '${PASSWORD}';
+      grant connect on database "${database}" to "${member}";
+      grant select, insert, update on table capability_records to "${member}";
+      grant pg_read_all_data to "${member}";
+      grant select (id, email) on table "user" to "${member}";
+    `);
+    try {
+      const switched = connect(urlAs(member));
+      await switched`set role pg_read_all_data`;
+      // The session logged in as a host role, so the rows stay held under the role it took.
+      const seen = await switched`
+        select id from capability_records where client_instance_id = ${other.clientInstanceId}
+      `;
+      expect(seen).toHaveLength(0);
+      await switched`reset role`;
+
+      const opened = await createPostgresCapabilityRecords({
+        databaseUrl: urlAs(member),
+        capability: "outside-forms"
+      });
+      await opened.close();
+      const problems = opened.access.problems.join("\n");
+      expect(problems).toMatch(/is a member of pg_read_all_data/u);
+      expect(problems).toMatch(/privileges on other tables or sequences: public\.user/u);
+    } finally {
+      await db.sql.unsafe(`drop owned by "${member}"; drop role "${member}"`);
+    }
   });
 
   it("leaves the access of the platform and of other roles as their grants give it", async () => {

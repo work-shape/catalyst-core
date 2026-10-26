@@ -23,6 +23,19 @@ const ROLE = `
   where r.rolname = current_user
 `;
 
+/**
+ * The roles the connected one is a member of. With or without INHERIT it can switch to each
+ * with SET ROLE, and the checks below see only its own privileges.
+ */
+const MEMBERSHIPS = `
+  select g.rolname as name
+  from pg_catalog.pg_auth_members m
+  join pg_catalog.pg_roles g on g.oid = m.roleid
+  join pg_catalog.pg_roles r on r.oid = m.member
+  where r.rolname = current_user
+  order by 1
+`;
+
 const TABLE = `
   select c.relrowsecurity as row_security,
     pg_catalog.pg_has_role(current_user, c.relowner, 'MEMBER') as owner,
@@ -44,8 +57,9 @@ const OTHER_RELATIONS = `
     and not (n.nspname = 'public' and c.relname = 'capability_records')
     and (
       (c.relkind in ('r', 'p', 'v', 'm', 'f')
-        and pg_catalog.has_table_privilege(c.oid,
-          'SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER'))
+        and (pg_catalog.has_table_privilege(c.oid,
+            'SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER')
+          or pg_catalog.has_any_column_privilege(c.oid, 'SELECT, INSERT, UPDATE, REFERENCES')))
       or (c.relkind = 'S'
         and pg_catalog.has_sequence_privilege(c.oid, 'USAGE, SELECT, UPDATE'))
     )
@@ -98,9 +112,8 @@ export async function inspectCapabilityRecordsAccess(
   sql: postgres.Sql,
   capability: string
 ): Promise<CapabilityRecordsAccess> {
-  const [table] = await sql.unsafe<
-    { row_security: boolean; owner: boolean; reads_and_writes: boolean }[]
-  >(TABLE);
+  const [table] =
+    await sql.unsafe<{ row_security: boolean; owner: boolean; reads_and_writes: boolean }[]>(TABLE);
   if (!table) {
     throw new Error(
       "The database has no table capability_records. Run the migration step of this release before starting."
@@ -118,9 +131,10 @@ export async function inspectCapabilityRecordsAccess(
   }
 
   const problems: string[] = [];
-  const [role] = await sql.unsafe<
-    { role: string; superuser: boolean; bypass: boolean; creates_schemas: boolean }[]
-  >(ROLE);
+  const [role] =
+    await sql.unsafe<
+      { role: string; superuser: boolean; bypass: boolean; creates_schemas: boolean }[]
+    >(ROLE);
   if (role?.superuser) problems.push(`The role ${role.role} is a superuser.`);
   if (role?.bypass) problems.push(`The role ${role.role} bypasses row-level security.`);
   if (table.owner) {
@@ -130,6 +144,12 @@ export async function inspectCapabilityRecordsAccess(
   }
   if (!table.row_security) problems.push("Row-level security is off on capability_records.");
   if (role?.creates_schemas) problems.push("The role may create schemas in the database.");
+  const memberships = await sql.unsafe<{ name: string }[]>(MEMBERSHIPS);
+  if (memberships.length > 0) {
+    problems.push(
+      `The role is a member of ${listed(memberships.map((row) => row.name))}, so it may act with their privileges.`
+    );
+  }
 
   const others = await sql.unsafe<{ name: string }[]>(OTHER_RELATIONS);
   if (others.length > 0) {

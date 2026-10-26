@@ -21,6 +21,9 @@ const forbiddenSecrets = [
   "SERVICE_ACCESS_TOKEN_SECRET",
   "DOCUMENT_WORKER_TOKEN",
   "AWS_SECRET_ACCESS_KEY",
+  // The superuser of the Compose stack's Postgres, from which an address can be put together.
+  "POSTGRES_USER",
+  "POSTGRES_PASSWORD",
   ...(await modelSecretNames())
 ];
 // A value that reads the platform's address, resolved as the helpers resolve a variable.
@@ -29,8 +32,9 @@ const readsPlatformUrl = /\/variable-without-default\/DATABASE_URL(?![A-Za-z0-9_
 const compose = await resolveCompose(file, ["DATABASE_URL", ...HOST_URLS]);
 const hosts = Object.entries(compose.services).filter(
   ([, service]) =>
-    service.command?.some((part) => HOST_ENTRY.test(part)) ||
-    HOST_URLS.some((name) => service.environment?.[name] !== undefined)
+    [...(service.entrypoint ?? []), ...(service.command ?? [])].some((part) =>
+      HOST_ENTRY.test(part)
+    ) || HOST_URLS.some((name) => service.environment?.[name] !== undefined)
 );
 for (const [name, service] of hosts) {
   const environment = service.environment ?? {};
