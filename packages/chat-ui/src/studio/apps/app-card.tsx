@@ -140,7 +140,8 @@ export function AppCardView({
         </IconTile>
         <div className="grid min-w-0 flex-1 basis-40 gap-0.5">
           <p className="truncate text-label text-foreground">{saved.title}</p>
-          <p className="truncate text-caption text-muted-foreground" data-testid="app-card-state">
+          {/* The state is read whole: at phone width it takes a second line, never an ellipsis. */}
+          <p className="text-caption text-muted-foreground" data-testid="app-card-state">
             {t(STATE_LINES[state])}
           </p>
         </div>
