@@ -1,4 +1,9 @@
-import { AppError, type StorePage } from "@work-shape/catalyst-core";
+import {
+  AppError,
+  decodePageCursor,
+  encodePageCursor,
+  type StorePage
+} from "@work-shape/catalyst-core";
 import { listQuerySchema, timestampSchema } from "@work-shape/catalyst-api-contract";
 import { z } from "zod";
 
@@ -15,7 +20,7 @@ function readCursor(
 ): Key[] | undefined {
   if (!cursor) return undefined;
   try {
-    const parsed = cursorSchema.parse(JSON.parse(Buffer.from(cursor, "base64url").toString()));
+    const parsed = cursorSchema.parse(decodePageCursor(cursor));
     if (parsed.scope !== scope) throw new Error("Wrong list");
     if (parsed.keys.length !== order.length) throw new Error("Wrong key count");
     for (const [index, field] of order.entries()) {
@@ -88,7 +93,7 @@ export function paginate<Row>(
     items: page,
     ...(eligible.length > limit && last
       ? {
-          nextCursor: Buffer.from(JSON.stringify({ scope, keys: keys(last) })).toString("base64url")
+          nextCursor: encodePageCursor({ scope, keys: keys(last) })
         }
       : {})
   };

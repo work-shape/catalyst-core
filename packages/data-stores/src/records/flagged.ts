@@ -1,6 +1,8 @@
 import { z } from "zod";
 import {
   AppError,
+  decodePageCursor,
+  encodePageCursor,
   DATA_STORE_RECORD_OPERATIONS,
   KNOWLEDGE_BASE_ACTIONS,
   RECORD_FIELD_STATES,
@@ -77,20 +79,18 @@ const ORDER = `table_name collate "C", coalesce(record_key::text, '') collate "C
 const cursorSchema = z.tuple([z.string(), z.string(), z.string(), z.string(), z.string()]);
 
 function encodeCursor(row: CandidateRow): string {
-  return Buffer.from(
-    JSON.stringify([
-      row.table_name,
-      row.record_key === null ? "" : JSON.stringify(row.record_key),
-      row.field_name,
-      row.knowledge_base_id,
-      row.document_id
-    ])
-  ).toString("base64url");
+  return encodePageCursor([
+    row.table_name,
+    row.record_key === null ? "" : JSON.stringify(row.record_key),
+    row.field_name,
+    row.knowledge_base_id,
+    row.document_id
+  ]);
 }
 
 function decodeCursor(cursor: string): z.infer<typeof cursorSchema> {
   try {
-    return cursorSchema.parse(JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")));
+    return cursorSchema.parse(decodePageCursor(cursor));
   } catch {
     throw new AppError("VALIDATION_FAILED", "The cursor is not one this list gave out", {
       fields: ["cursor"]

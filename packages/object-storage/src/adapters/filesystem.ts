@@ -209,6 +209,7 @@ function compareKeys(left: string, right: string): number {
   return Buffer.compare(Buffer.from(left, "utf8"), Buffer.from(right, "utf8"));
 }
 
+// Filesystem cursors encode the raw UTF-8 key, without the JSON used by core page cursors.
 function encodeCursor(key: string): string {
   return Buffer.from(key, "utf8").toString("base64url");
 }

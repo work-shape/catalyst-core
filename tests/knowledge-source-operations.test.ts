@@ -343,6 +343,61 @@ describe("source sync operations (KB 74, 75)", () => {
     ]);
   });
 
+  it("reads an existing document tuple and preserves its PostgreSQL timestamp precision", async () => {
+    const world = await setup();
+    const hash = "a".repeat(64);
+    await world.sql`insert into catalyst_kb.contents(sha256,format,state)
+      values (${hash},'pdf','extracted')`;
+    await world.sql`insert into catalyst_kb.documents
+      (id,managed_file_id,content_sha256,title,file_name,added_at)
+      values ('doc_1','file_1',${hash},'File','file.pdf',timestamptz '2026-10-17 12:34:56.123456+00'),
+             ('doc_0','file_0',${hash},'Other','other.pdf',timestamptz '2026-10-17 12:34:56.123456+00')`;
+    const documents = required(
+      world.dataStores.knowledgeBackend.documentStore({
+        backend: "builtin",
+        assetId: world.record.id,
+        name: KB,
+        methods: ["keyword", "semantic"]
+      })
+    );
+    const cursor = "WyIyMDI2LTEwLTE3IDEyOjM0OjU2LjEyMzQ1NiswMCIsImRvY18xIl0";
+    expect((await documents.listDocuments({ limit: 1 })).nextCursor).toBe(cursor);
+    expect(
+      (await documents.listDocuments({ limit: 1, cursor })).documents.map(({ id }) => id)
+    ).toEqual(["doc_0"]);
+    // The connector sanitizes errors thrown inside its transaction callback.
+    for (const invalid of ["nonsense", "e30"])
+      await expect(documents.listDocuments({ limit: 1, cursor: invalid })).rejects.toMatchObject({
+        code: "INTERNAL",
+        message: "The query failed.",
+        details: undefined,
+        exposeMessage: true
+      });
+  });
+
+  it("reads an existing source-item cursor and writes the same bytes", async () => {
+    const world = await setup();
+    const at = "2026-10-17T12:34:56.123Z";
+    await world.sql`insert into catalyst_kb.source_items
+      (id,source_id,item_id,version,name,path,mime,size,modified_at,state,changed_at)
+      values ('item_1','source','one','1','one.txt','/one.txt','text/plain',0,${at},'discovered',${at}),
+             ('item_2','source','two','1','two.txt','/two.txt','text/plain',0,${at},'discovered',${at})`;
+    const cursor = "eyJhdCI6IjIwMjYtMTAtMTdUMTI6MzQ6NTYuMTIzWiIsImlkIjoiaXRlbV8xIn0";
+    const read = (cursor?: string) =>
+      world.dataStores.knowledgeSources.items(
+        world.record.id,
+        { source: SOURCE, limit: 1, ...(cursor ? { cursor } : {}) },
+        new AbortController().signal
+      );
+    expect((await read()).nextCursor).toBe(cursor);
+    expect((await read(cursor)).items.map(({ id }) => id)).toEqual(["item_2"]);
+    for (const invalid of ["nonsense", "e30"])
+      await expect(read(invalid)).rejects.toMatchObject({
+        code: "VALIDATION_FAILED",
+        message: "The source item cursor is invalid"
+      });
+  });
+
   it("reports derived state, bounded pages, failure codes and content-free locate; retry fetches failed source documents again", async () => {
     const world = await setup();
     const item = world.world.put({

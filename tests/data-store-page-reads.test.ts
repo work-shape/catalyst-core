@@ -115,6 +115,18 @@ describe("the reads of a Data Store's page", () => {
   const page = async (world: World, input: JsonObject) =>
     pageSchema.parse(await read(world, "rows", input));
 
+  it("reads an existing primary-key cursor and writes the same bytes", async () => {
+    const world = await published("cursor_compat", [manifest(), init, notes]);
+    const store = connect(world.record.location.database);
+    await store`insert into pairs (b, a) values (3, 'café/東京'), (4, 'next')`;
+    const cursor = "eyJrIjpbIjMiLCJjYWbDqS_mnbHkuqwiXX0";
+    const first = await page(world, { table: "pairs", limit: 1 });
+    expect(first.rows[0]?.at).toBe(cursor);
+    expect(first.next).toBe(cursor);
+    const second = await page(world, { table: "pairs", after: cursor, limit: 1 });
+    expect(second.rows.map(({ values }) => values)).toEqual([{ b: 4, a: "next", note: null }]);
+  });
+
   it("pages through a table in the order of its primary key until its last row, with a page size the server bounds", async () => {
     const world = await published("keyset");
     await call(world, "insert", {
@@ -338,6 +350,9 @@ describe("the reads of a Data Store's page", () => {
     expect(
       await refusal(read(world, "rows", { table: "findings", after: "nonsense" }))
     ).toMatchObject({
+      code: "VALIDATION_FAILED",
+      message:
+        "This cursor does not name a row of the table as it is now. Read the table from its first page again.",
       details: { reason: "cursor_invalid" }
     });
     // A cursor of a table with a key on a table without one.
