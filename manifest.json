@@ -1,0 +1,2522 @@
+[
+  {
+    "file": "0001-390-en-light-page.png",
+    "label": "/",
+    "width": 390,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/w/cws_880632ce-9aec-49f4-84ad-f927bf9f6ddf"
+  },
+  {
+    "file": "0002-390-en-dark-page.png",
+    "label": "/",
+    "width": 390,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/w/cws_880632ce-9aec-49f4-84ad-f927bf9f6ddf"
+  },
+  {
+    "file": "0003-390-de-light-page.png",
+    "label": "/",
+    "width": 390,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/w/cws_880632ce-9aec-49f4-84ad-f927bf9f6ddf"
+  },
+  {
+    "file": "0004-390-de-dark-page.png",
+    "label": "/",
+    "width": 390,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/w/cws_880632ce-9aec-49f4-84ad-f927bf9f6ddf"
+  },
+  {
+    "file": "0005-1440-en-light-page.png",
+    "label": "/",
+    "width": 1440,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/w/cws_880632ce-9aec-49f4-84ad-f927bf9f6ddf"
+  },
+  {
+    "file": "0006-1440-en-dark-page.png",
+    "label": "/",
+    "width": 1440,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/w/cws_880632ce-9aec-49f4-84ad-f927bf9f6ddf"
+  },
+  {
+    "file": "0007-1440-de-light-page.png",
+    "label": "/",
+    "width": 1440,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/w/cws_880632ce-9aec-49f4-84ad-f927bf9f6ddf"
+  },
+  {
+    "file": "0008-1440-de-dark-page.png",
+    "label": "/",
+    "width": 1440,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/w/cws_880632ce-9aec-49f4-84ad-f927bf9f6ddf"
+  },
+  {
+    "file": "0009-390-en-light-page.png",
+    "label": "/build/agents",
+    "width": 390,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/build/agents"
+  },
+  {
+    "file": "0010-390-en-dark-page.png",
+    "label": "/build/agents",
+    "width": 390,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/build/agents"
+  },
+  {
+    "file": "0011-390-de-light-page.png",
+    "label": "/build/agents",
+    "width": 390,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/build/agents"
+  },
+  {
+    "file": "0012-390-de-dark-page.png",
+    "label": "/build/agents",
+    "width": 390,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/build/agents"
+  },
+  {
+    "file": "0013-1440-en-light-page.png",
+    "label": "/build/agents",
+    "width": 1440,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/build/agents"
+  },
+  {
+    "file": "0014-1440-en-dark-page.png",
+    "label": "/build/agents",
+    "width": 1440,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/build/agents"
+  },
+  {
+    "file": "0015-1440-de-light-page.png",
+    "label": "/build/agents",
+    "width": 1440,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/build/agents"
+  },
+  {
+    "file": "0016-1440-de-dark-page.png",
+    "label": "/build/agents",
+    "width": 1440,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/build/agents"
+  },
+  {
+    "file": "0017-390-en-light-page.png",
+    "label": "/build/connections",
+    "width": 390,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/build/connections"
+  },
+  {
+    "file": "0018-390-en-dark-page.png",
+    "label": "/build/connections",
+    "width": 390,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/build/connections"
+  },
+  {
+    "file": "0019-390-de-light-page.png",
+    "label": "/build/connections",
+    "width": 390,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/build/connections"
+  },
+  {
+    "file": "0020-390-de-dark-page.png",
+    "label": "/build/connections",
+    "width": 390,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/build/connections"
+  },
+  {
+    "file": "0021-1440-en-light-page.png",
+    "label": "/build/connections",
+    "width": 1440,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/build/connections"
+  },
+  {
+    "file": "0022-1440-en-dark-page.png",
+    "label": "/build/connections",
+    "width": 1440,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/build/connections"
+  },
+  {
+    "file": "0023-1440-de-light-page.png",
+    "label": "/build/connections",
+    "width": 1440,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/build/connections"
+  },
+  {
+    "file": "0024-1440-de-dark-page.png",
+    "label": "/build/connections",
+    "width": 1440,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/build/connections"
+  },
+  {
+    "file": "0025-390-en-light-page.png",
+    "label": "/build/data-stores",
+    "width": 390,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/build/data-stores"
+  },
+  {
+    "file": "0026-390-en-dark-page.png",
+    "label": "/build/data-stores",
+    "width": 390,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/build/data-stores"
+  },
+  {
+    "file": "0027-390-de-light-page.png",
+    "label": "/build/data-stores",
+    "width": 390,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/build/data-stores"
+  },
+  {
+    "file": "0028-390-de-dark-page.png",
+    "label": "/build/data-stores",
+    "width": 390,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/build/data-stores"
+  },
+  {
+    "file": "0029-1440-en-light-page.png",
+    "label": "/build/data-stores",
+    "width": 1440,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/build/data-stores"
+  },
+  {
+    "file": "0030-1440-en-dark-page.png",
+    "label": "/build/data-stores",
+    "width": 1440,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/build/data-stores"
+  },
+  {
+    "file": "0031-1440-de-light-page.png",
+    "label": "/build/data-stores",
+    "width": 1440,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/build/data-stores"
+  },
+  {
+    "file": "0032-1440-de-dark-page.png",
+    "label": "/build/data-stores",
+    "width": 1440,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/build/data-stores"
+  },
+  {
+    "file": "0033-390-en-light-page.png",
+    "label": "/build/guardrails",
+    "width": 390,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/build/guardrails"
+  },
+  {
+    "file": "0034-390-en-dark-page.png",
+    "label": "/build/guardrails",
+    "width": 390,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/build/guardrails"
+  },
+  {
+    "file": "0035-390-de-light-page.png",
+    "label": "/build/guardrails",
+    "width": 390,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/build/guardrails"
+  },
+  {
+    "file": "0036-390-de-dark-page.png",
+    "label": "/build/guardrails",
+    "width": 390,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/build/guardrails"
+  },
+  {
+    "file": "0037-1440-en-light-page.png",
+    "label": "/build/guardrails",
+    "width": 1440,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/build/guardrails"
+  },
+  {
+    "file": "0038-1440-en-dark-page.png",
+    "label": "/build/guardrails",
+    "width": 1440,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/build/guardrails"
+  },
+  {
+    "file": "0039-1440-de-light-page.png",
+    "label": "/build/guardrails",
+    "width": 1440,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/build/guardrails"
+  },
+  {
+    "file": "0040-1440-de-dark-page.png",
+    "label": "/build/guardrails",
+    "width": 1440,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/build/guardrails"
+  },
+  {
+    "file": "0041-390-en-light-page.png",
+    "label": "/build/skills",
+    "width": 390,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/build/skills"
+  },
+  {
+    "file": "0042-390-en-dark-page.png",
+    "label": "/build/skills",
+    "width": 390,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/build/skills"
+  },
+  {
+    "file": "0043-390-de-light-page.png",
+    "label": "/build/skills",
+    "width": 390,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/build/skills"
+  },
+  {
+    "file": "0044-390-de-dark-page.png",
+    "label": "/build/skills",
+    "width": 390,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/build/skills"
+  },
+  {
+    "file": "0045-1440-en-light-page.png",
+    "label": "/build/skills",
+    "width": 1440,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/build/skills"
+  },
+  {
+    "file": "0046-1440-en-dark-page.png",
+    "label": "/build/skills",
+    "width": 1440,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/build/skills"
+  },
+  {
+    "file": "0047-1440-de-light-page.png",
+    "label": "/build/skills",
+    "width": 1440,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/build/skills"
+  },
+  {
+    "file": "0048-1440-de-dark-page.png",
+    "label": "/build/skills",
+    "width": 1440,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/build/skills"
+  },
+  {
+    "file": "0049-390-en-light-page.png",
+    "label": "/inbox",
+    "width": 390,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/inbox"
+  },
+  {
+    "file": "0050-390-en-dark-page.png",
+    "label": "/inbox",
+    "width": 390,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/inbox"
+  },
+  {
+    "file": "0051-390-de-light-page.png",
+    "label": "/inbox",
+    "width": 390,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/inbox"
+  },
+  {
+    "file": "0052-390-de-dark-page.png",
+    "label": "/inbox",
+    "width": 390,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/inbox"
+  },
+  {
+    "file": "0053-1440-en-light-page.png",
+    "label": "/inbox",
+    "width": 1440,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/inbox"
+  },
+  {
+    "file": "0054-1440-en-dark-page.png",
+    "label": "/inbox",
+    "width": 1440,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/inbox"
+  },
+  {
+    "file": "0055-1440-de-light-page.png",
+    "label": "/inbox",
+    "width": 1440,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/inbox"
+  },
+  {
+    "file": "0056-1440-de-dark-page.png",
+    "label": "/inbox",
+    "width": 1440,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/inbox"
+  },
+  {
+    "file": "0057-390-en-light-page.png",
+    "label": "/settings/instance/access",
+    "width": 390,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/access"
+  },
+  {
+    "file": "0058-390-en-dark-page.png",
+    "label": "/settings/instance/access",
+    "width": 390,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/access"
+  },
+  {
+    "file": "0059-390-de-light-page.png",
+    "label": "/settings/instance/access",
+    "width": 390,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/access"
+  },
+  {
+    "file": "0060-390-de-dark-page.png",
+    "label": "/settings/instance/access",
+    "width": 390,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/access"
+  },
+  {
+    "file": "0061-1440-en-light-page.png",
+    "label": "/settings/instance/access",
+    "width": 1440,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/access"
+  },
+  {
+    "file": "0062-1440-en-dark-page.png",
+    "label": "/settings/instance/access",
+    "width": 1440,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/access"
+  },
+  {
+    "file": "0063-1440-de-light-page.png",
+    "label": "/settings/instance/access",
+    "width": 1440,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/access"
+  },
+  {
+    "file": "0064-1440-de-dark-page.png",
+    "label": "/settings/instance/access",
+    "width": 1440,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/access"
+  },
+  {
+    "file": "0065-390-en-light-page.png",
+    "label": "/settings/instance/api-access",
+    "width": 390,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/api-access"
+  },
+  {
+    "file": "0066-390-en-dark-page.png",
+    "label": "/settings/instance/api-access",
+    "width": 390,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/api-access"
+  },
+  {
+    "file": "0067-390-de-light-page.png",
+    "label": "/settings/instance/api-access",
+    "width": 390,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/api-access"
+  },
+  {
+    "file": "0068-390-de-dark-page.png",
+    "label": "/settings/instance/api-access",
+    "width": 390,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/api-access"
+  },
+  {
+    "file": "0069-1440-en-light-page.png",
+    "label": "/settings/instance/api-access",
+    "width": 1440,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/api-access"
+  },
+  {
+    "file": "0070-1440-en-dark-page.png",
+    "label": "/settings/instance/api-access",
+    "width": 1440,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/api-access"
+  },
+  {
+    "file": "0071-1440-de-light-page.png",
+    "label": "/settings/instance/api-access",
+    "width": 1440,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/api-access"
+  },
+  {
+    "file": "0072-1440-de-dark-page.png",
+    "label": "/settings/instance/api-access",
+    "width": 1440,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/api-access"
+  },
+  {
+    "file": "0073-390-en-light-page.png",
+    "label": "/settings/instance/audit",
+    "width": 390,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/audit"
+  },
+  {
+    "file": "0074-390-en-dark-page.png",
+    "label": "/settings/instance/audit",
+    "width": 390,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/audit"
+  },
+  {
+    "file": "0075-390-de-light-page.png",
+    "label": "/settings/instance/audit",
+    "width": 390,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/audit"
+  },
+  {
+    "file": "0076-390-de-dark-page.png",
+    "label": "/settings/instance/audit",
+    "width": 390,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/audit"
+  },
+  {
+    "file": "0077-1440-en-light-page.png",
+    "label": "/settings/instance/audit",
+    "width": 1440,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/audit"
+  },
+  {
+    "file": "0078-1440-en-dark-page.png",
+    "label": "/settings/instance/audit",
+    "width": 1440,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/audit"
+  },
+  {
+    "file": "0079-1440-de-light-page.png",
+    "label": "/settings/instance/audit",
+    "width": 1440,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/audit"
+  },
+  {
+    "file": "0080-1440-de-dark-page.png",
+    "label": "/settings/instance/audit",
+    "width": 1440,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/audit"
+  },
+  {
+    "file": "0081-390-en-light-page.png",
+    "label": "/settings/instance/infrastructure",
+    "width": 390,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/infrastructure"
+  },
+  {
+    "file": "0082-390-en-dark-page.png",
+    "label": "/settings/instance/infrastructure",
+    "width": 390,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/infrastructure"
+  },
+  {
+    "file": "0083-390-de-light-page.png",
+    "label": "/settings/instance/infrastructure",
+    "width": 390,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/infrastructure"
+  },
+  {
+    "file": "0084-390-de-dark-page.png",
+    "label": "/settings/instance/infrastructure",
+    "width": 390,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/infrastructure"
+  },
+  {
+    "file": "0085-1440-en-light-page.png",
+    "label": "/settings/instance/infrastructure",
+    "width": 1440,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/infrastructure"
+  },
+  {
+    "file": "0086-1440-en-dark-page.png",
+    "label": "/settings/instance/infrastructure",
+    "width": 1440,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/infrastructure"
+  },
+  {
+    "file": "0087-1440-de-light-page.png",
+    "label": "/settings/instance/infrastructure",
+    "width": 1440,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/infrastructure"
+  },
+  {
+    "file": "0088-1440-de-dark-page.png",
+    "label": "/settings/instance/infrastructure",
+    "width": 1440,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/infrastructure"
+  },
+  {
+    "file": "0089-390-en-light-page.png",
+    "label": "/settings/instance/jobs",
+    "width": 390,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/jobs"
+  },
+  {
+    "file": "0090-390-en-dark-page.png",
+    "label": "/settings/instance/jobs",
+    "width": 390,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/jobs"
+  },
+  {
+    "file": "0091-390-de-light-page.png",
+    "label": "/settings/instance/jobs",
+    "width": 390,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/jobs"
+  },
+  {
+    "file": "0092-390-de-dark-page.png",
+    "label": "/settings/instance/jobs",
+    "width": 390,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/jobs"
+  },
+  {
+    "file": "0093-1440-en-light-page.png",
+    "label": "/settings/instance/jobs",
+    "width": 1440,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/jobs"
+  },
+  {
+    "file": "0094-1440-en-dark-page.png",
+    "label": "/settings/instance/jobs",
+    "width": 1440,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/jobs"
+  },
+  {
+    "file": "0095-1440-de-light-page.png",
+    "label": "/settings/instance/jobs",
+    "width": 1440,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/jobs"
+  },
+  {
+    "file": "0096-1440-de-dark-page.png",
+    "label": "/settings/instance/jobs",
+    "width": 1440,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/jobs"
+  },
+  {
+    "file": "0097-390-en-light-page.png",
+    "label": "/settings/instance/limits",
+    "width": 390,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/limits"
+  },
+  {
+    "file": "0098-390-en-dark-page.png",
+    "label": "/settings/instance/limits",
+    "width": 390,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/limits"
+  },
+  {
+    "file": "0099-390-de-light-page.png",
+    "label": "/settings/instance/limits",
+    "width": 390,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/limits"
+  },
+  {
+    "file": "0100-390-de-dark-page.png",
+    "label": "/settings/instance/limits",
+    "width": 390,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/limits"
+  },
+  {
+    "file": "0101-1440-en-light-page.png",
+    "label": "/settings/instance/limits",
+    "width": 1440,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/limits"
+  },
+  {
+    "file": "0102-1440-en-dark-page.png",
+    "label": "/settings/instance/limits",
+    "width": 1440,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/limits"
+  },
+  {
+    "file": "0103-1440-de-light-page.png",
+    "label": "/settings/instance/limits",
+    "width": 1440,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/limits"
+  },
+  {
+    "file": "0104-1440-de-dark-page.png",
+    "label": "/settings/instance/limits",
+    "width": 1440,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/limits"
+  },
+  {
+    "file": "0105-390-en-light-page.png",
+    "label": "/settings/instance/modules",
+    "width": 390,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/modules"
+  },
+  {
+    "file": "0106-390-en-dark-page.png",
+    "label": "/settings/instance/modules",
+    "width": 390,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/modules"
+  },
+  {
+    "file": "0107-390-de-light-page.png",
+    "label": "/settings/instance/modules",
+    "width": 390,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/modules"
+  },
+  {
+    "file": "0108-390-de-dark-page.png",
+    "label": "/settings/instance/modules",
+    "width": 390,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/modules"
+  },
+  {
+    "file": "0109-1440-en-light-page.png",
+    "label": "/settings/instance/modules",
+    "width": 1440,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/modules"
+  },
+  {
+    "file": "0110-1440-en-dark-page.png",
+    "label": "/settings/instance/modules",
+    "width": 1440,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/modules"
+  },
+  {
+    "file": "0111-1440-de-light-page.png",
+    "label": "/settings/instance/modules",
+    "width": 1440,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/modules"
+  },
+  {
+    "file": "0112-1440-de-dark-page.png",
+    "label": "/settings/instance/modules",
+    "width": 1440,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/modules"
+  },
+  {
+    "file": "0113-390-en-light-page.png",
+    "label": "/settings/instance/operations",
+    "width": 390,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/operations"
+  },
+  {
+    "file": "0114-390-en-dark-page.png",
+    "label": "/settings/instance/operations",
+    "width": 390,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/operations"
+  },
+  {
+    "file": "0115-390-de-light-page.png",
+    "label": "/settings/instance/operations",
+    "width": 390,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/operations"
+  },
+  {
+    "file": "0116-390-de-dark-page.png",
+    "label": "/settings/instance/operations",
+    "width": 390,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/operations"
+  },
+  {
+    "file": "0117-1440-en-light-page.png",
+    "label": "/settings/instance/operations",
+    "width": 1440,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/operations"
+  },
+  {
+    "file": "0118-1440-en-dark-page.png",
+    "label": "/settings/instance/operations",
+    "width": 1440,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/operations"
+  },
+  {
+    "file": "0119-1440-de-light-page.png",
+    "label": "/settings/instance/operations",
+    "width": 1440,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/operations"
+  },
+  {
+    "file": "0120-1440-de-dark-page.png",
+    "label": "/settings/instance/operations",
+    "width": 1440,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/operations"
+  },
+  {
+    "file": "0121-390-en-light-page.png",
+    "label": "/settings/instance/usage",
+    "width": 390,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/usage"
+  },
+  {
+    "file": "0122-390-en-dark-page.png",
+    "label": "/settings/instance/usage",
+    "width": 390,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/usage"
+  },
+  {
+    "file": "0123-390-de-light-page.png",
+    "label": "/settings/instance/usage",
+    "width": 390,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/usage"
+  },
+  {
+    "file": "0124-390-de-dark-page.png",
+    "label": "/settings/instance/usage",
+    "width": 390,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/usage"
+  },
+  {
+    "file": "0125-1440-en-light-page.png",
+    "label": "/settings/instance/usage",
+    "width": 1440,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/usage"
+  },
+  {
+    "file": "0126-1440-en-dark-page.png",
+    "label": "/settings/instance/usage",
+    "width": 1440,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/usage"
+  },
+  {
+    "file": "0127-1440-de-light-page.png",
+    "label": "/settings/instance/usage",
+    "width": 1440,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/usage"
+  },
+  {
+    "file": "0128-1440-de-dark-page.png",
+    "label": "/settings/instance/usage",
+    "width": 1440,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/usage"
+  },
+  {
+    "file": "0129-390-en-light-page.png",
+    "label": "/settings/instance/users",
+    "width": 390,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/users"
+  },
+  {
+    "file": "0130-390-en-dark-page.png",
+    "label": "/settings/instance/users",
+    "width": 390,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/users"
+  },
+  {
+    "file": "0131-390-de-light-page.png",
+    "label": "/settings/instance/users",
+    "width": 390,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/users"
+  },
+  {
+    "file": "0132-390-de-dark-page.png",
+    "label": "/settings/instance/users",
+    "width": 390,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/users"
+  },
+  {
+    "file": "0133-1440-en-light-page.png",
+    "label": "/settings/instance/users",
+    "width": 1440,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/users"
+  },
+  {
+    "file": "0134-1440-en-dark-page.png",
+    "label": "/settings/instance/users",
+    "width": 1440,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/users"
+  },
+  {
+    "file": "0135-1440-de-light-page.png",
+    "label": "/settings/instance/users",
+    "width": 1440,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/users"
+  },
+  {
+    "file": "0136-1440-de-dark-page.png",
+    "label": "/settings/instance/users",
+    "width": 1440,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/users"
+  },
+  {
+    "file": "0137-390-en-light-page.png",
+    "label": "/settings/instance/workspaces",
+    "width": 390,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/workspaces"
+  },
+  {
+    "file": "0138-390-en-dark-page.png",
+    "label": "/settings/instance/workspaces",
+    "width": 390,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/workspaces"
+  },
+  {
+    "file": "0139-390-de-light-page.png",
+    "label": "/settings/instance/workspaces",
+    "width": 390,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/workspaces"
+  },
+  {
+    "file": "0140-390-de-dark-page.png",
+    "label": "/settings/instance/workspaces",
+    "width": 390,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/workspaces"
+  },
+  {
+    "file": "0141-1440-en-light-page.png",
+    "label": "/settings/instance/workspaces",
+    "width": 1440,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/workspaces"
+  },
+  {
+    "file": "0142-1440-en-dark-page.png",
+    "label": "/settings/instance/workspaces",
+    "width": 1440,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/workspaces"
+  },
+  {
+    "file": "0143-1440-de-light-page.png",
+    "label": "/settings/instance/workspaces",
+    "width": 1440,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/workspaces"
+  },
+  {
+    "file": "0144-1440-de-dark-page.png",
+    "label": "/settings/instance/workspaces",
+    "width": 1440,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/instance/workspaces"
+  },
+  {
+    "file": "0145-390-en-light-page.png",
+    "label": "/settings/workspace/general",
+    "width": 390,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/workspace/general"
+  },
+  {
+    "file": "0146-390-en-dark-page.png",
+    "label": "/settings/workspace/general",
+    "width": 390,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/workspace/general"
+  },
+  {
+    "file": "0147-390-de-light-page.png",
+    "label": "/settings/workspace/general",
+    "width": 390,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/workspace/general"
+  },
+  {
+    "file": "0148-390-de-dark-page.png",
+    "label": "/settings/workspace/general",
+    "width": 390,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/workspace/general"
+  },
+  {
+    "file": "0149-1440-en-light-page.png",
+    "label": "/settings/workspace/general",
+    "width": 1440,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/workspace/general"
+  },
+  {
+    "file": "0150-1440-en-dark-page.png",
+    "label": "/settings/workspace/general",
+    "width": 1440,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/workspace/general"
+  },
+  {
+    "file": "0151-1440-de-light-page.png",
+    "label": "/settings/workspace/general",
+    "width": 1440,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/workspace/general"
+  },
+  {
+    "file": "0152-1440-de-dark-page.png",
+    "label": "/settings/workspace/general",
+    "width": 1440,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/workspace/general"
+  },
+  {
+    "file": "0153-390-en-light-page.png",
+    "label": "/settings/workspace/members",
+    "width": 390,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/workspace/members"
+  },
+  {
+    "file": "0154-390-en-dark-page.png",
+    "label": "/settings/workspace/members",
+    "width": 390,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/workspace/members"
+  },
+  {
+    "file": "0155-390-de-light-page.png",
+    "label": "/settings/workspace/members",
+    "width": 390,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/workspace/members"
+  },
+  {
+    "file": "0156-390-de-dark-page.png",
+    "label": "/settings/workspace/members",
+    "width": 390,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/workspace/members"
+  },
+  {
+    "file": "0157-1440-en-light-page.png",
+    "label": "/settings/workspace/members",
+    "width": 1440,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/workspace/members"
+  },
+  {
+    "file": "0158-1440-en-dark-page.png",
+    "label": "/settings/workspace/members",
+    "width": 1440,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/workspace/members"
+  },
+  {
+    "file": "0159-1440-de-light-page.png",
+    "label": "/settings/workspace/members",
+    "width": 1440,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/workspace/members"
+  },
+  {
+    "file": "0160-1440-de-dark-page.png",
+    "label": "/settings/workspace/members",
+    "width": 1440,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/workspace/members"
+  },
+  {
+    "file": "0161-390-en-light-page.png",
+    "label": "/settings/workspace/usage",
+    "width": 390,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/workspace/usage"
+  },
+  {
+    "file": "0162-390-en-dark-page.png",
+    "label": "/settings/workspace/usage",
+    "width": 390,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/workspace/usage"
+  },
+  {
+    "file": "0163-390-de-light-page.png",
+    "label": "/settings/workspace/usage",
+    "width": 390,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/workspace/usage"
+  },
+  {
+    "file": "0164-390-de-dark-page.png",
+    "label": "/settings/workspace/usage",
+    "width": 390,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/workspace/usage"
+  },
+  {
+    "file": "0165-1440-en-light-page.png",
+    "label": "/settings/workspace/usage",
+    "width": 1440,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/workspace/usage"
+  },
+  {
+    "file": "0166-1440-en-dark-page.png",
+    "label": "/settings/workspace/usage",
+    "width": 1440,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/workspace/usage"
+  },
+  {
+    "file": "0167-1440-de-light-page.png",
+    "label": "/settings/workspace/usage",
+    "width": 1440,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/workspace/usage"
+  },
+  {
+    "file": "0168-1440-de-dark-page.png",
+    "label": "/settings/workspace/usage",
+    "width": 1440,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/workspace/usage"
+  },
+  {
+    "file": "0169-390-en-light-page.png",
+    "label": "/settings/you/api-keys",
+    "width": 390,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/you/api-keys"
+  },
+  {
+    "file": "0170-390-en-dark-page.png",
+    "label": "/settings/you/api-keys",
+    "width": 390,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/you/api-keys"
+  },
+  {
+    "file": "0171-390-de-light-page.png",
+    "label": "/settings/you/api-keys",
+    "width": 390,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/you/api-keys"
+  },
+  {
+    "file": "0172-390-de-dark-page.png",
+    "label": "/settings/you/api-keys",
+    "width": 390,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/you/api-keys"
+  },
+  {
+    "file": "0173-1440-en-light-page.png",
+    "label": "/settings/you/api-keys",
+    "width": 1440,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/you/api-keys"
+  },
+  {
+    "file": "0174-1440-en-dark-page.png",
+    "label": "/settings/you/api-keys",
+    "width": 1440,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/you/api-keys"
+  },
+  {
+    "file": "0175-1440-de-light-page.png",
+    "label": "/settings/you/api-keys",
+    "width": 1440,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/you/api-keys"
+  },
+  {
+    "file": "0176-1440-de-dark-page.png",
+    "label": "/settings/you/api-keys",
+    "width": 1440,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/you/api-keys"
+  },
+  {
+    "file": "0177-390-en-light-page.png",
+    "label": "/settings/you/confirmations",
+    "width": 390,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/you/confirmations"
+  },
+  {
+    "file": "0178-390-en-dark-page.png",
+    "label": "/settings/you/confirmations",
+    "width": 390,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/you/confirmations"
+  },
+  {
+    "file": "0179-390-de-light-page.png",
+    "label": "/settings/you/confirmations",
+    "width": 390,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/you/confirmations"
+  },
+  {
+    "file": "0180-390-de-dark-page.png",
+    "label": "/settings/you/confirmations",
+    "width": 390,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/you/confirmations"
+  },
+  {
+    "file": "0181-1440-en-light-page.png",
+    "label": "/settings/you/confirmations",
+    "width": 1440,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/you/confirmations"
+  },
+  {
+    "file": "0182-1440-en-dark-page.png",
+    "label": "/settings/you/confirmations",
+    "width": 1440,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/you/confirmations"
+  },
+  {
+    "file": "0183-1440-de-light-page.png",
+    "label": "/settings/you/confirmations",
+    "width": 1440,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/you/confirmations"
+  },
+  {
+    "file": "0184-1440-de-dark-page.png",
+    "label": "/settings/you/confirmations",
+    "width": 1440,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/you/confirmations"
+  },
+  {
+    "file": "0185-390-en-light-page.png",
+    "label": "/settings/you/connect",
+    "width": 390,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/you/connect"
+  },
+  {
+    "file": "0186-390-en-dark-page.png",
+    "label": "/settings/you/connect",
+    "width": 390,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/you/connect"
+  },
+  {
+    "file": "0187-390-de-light-page.png",
+    "label": "/settings/you/connect",
+    "width": 390,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/you/connect"
+  },
+  {
+    "file": "0188-390-de-dark-page.png",
+    "label": "/settings/you/connect",
+    "width": 390,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/you/connect"
+  },
+  {
+    "file": "0189-1440-en-light-page.png",
+    "label": "/settings/you/connect",
+    "width": 1440,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/you/connect"
+  },
+  {
+    "file": "0190-1440-en-dark-page.png",
+    "label": "/settings/you/connect",
+    "width": 1440,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/you/connect"
+  },
+  {
+    "file": "0191-1440-de-light-page.png",
+    "label": "/settings/you/connect",
+    "width": 1440,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/you/connect"
+  },
+  {
+    "file": "0192-1440-de-dark-page.png",
+    "label": "/settings/you/connect",
+    "width": 1440,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/you/connect"
+  },
+  {
+    "file": "0193-390-en-light-page.png",
+    "label": "/settings/you/connections",
+    "width": 390,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/you/connections"
+  },
+  {
+    "file": "0194-390-en-dark-page.png",
+    "label": "/settings/you/connections",
+    "width": 390,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/you/connections"
+  },
+  {
+    "file": "0195-390-de-light-page.png",
+    "label": "/settings/you/connections",
+    "width": 390,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/you/connections"
+  },
+  {
+    "file": "0196-390-de-dark-page.png",
+    "label": "/settings/you/connections",
+    "width": 390,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/you/connections"
+  },
+  {
+    "file": "0197-1440-en-light-page.png",
+    "label": "/settings/you/connections",
+    "width": 1440,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/you/connections"
+  },
+  {
+    "file": "0198-1440-en-dark-page.png",
+    "label": "/settings/you/connections",
+    "width": 1440,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/you/connections"
+  },
+  {
+    "file": "0199-1440-de-light-page.png",
+    "label": "/settings/you/connections",
+    "width": 1440,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/you/connections"
+  },
+  {
+    "file": "0200-1440-de-dark-page.png",
+    "label": "/settings/you/connections",
+    "width": 1440,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/you/connections"
+  },
+  {
+    "file": "0201-390-en-light-page.png",
+    "label": "/settings/you/language-appearance",
+    "width": 390,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/you/language-appearance"
+  },
+  {
+    "file": "0202-390-en-dark-page.png",
+    "label": "/settings/you/language-appearance",
+    "width": 390,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/you/language-appearance"
+  },
+  {
+    "file": "0203-390-de-light-page.png",
+    "label": "/settings/you/language-appearance",
+    "width": 390,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/you/language-appearance"
+  },
+  {
+    "file": "0204-390-de-dark-page.png",
+    "label": "/settings/you/language-appearance",
+    "width": 390,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/you/language-appearance"
+  },
+  {
+    "file": "0205-1440-en-light-page.png",
+    "label": "/settings/you/language-appearance",
+    "width": 1440,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/you/language-appearance"
+  },
+  {
+    "file": "0206-1440-en-dark-page.png",
+    "label": "/settings/you/language-appearance",
+    "width": 1440,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/you/language-appearance"
+  },
+  {
+    "file": "0207-1440-de-light-page.png",
+    "label": "/settings/you/language-appearance",
+    "width": 1440,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/you/language-appearance"
+  },
+  {
+    "file": "0208-1440-de-dark-page.png",
+    "label": "/settings/you/language-appearance",
+    "width": 1440,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/you/language-appearance"
+  },
+  {
+    "file": "0209-390-en-light-page.png",
+    "label": "/settings/you/profile",
+    "width": 390,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/you/profile"
+  },
+  {
+    "file": "0210-390-en-dark-page.png",
+    "label": "/settings/you/profile",
+    "width": 390,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/you/profile"
+  },
+  {
+    "file": "0211-390-de-light-page.png",
+    "label": "/settings/you/profile",
+    "width": 390,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/you/profile"
+  },
+  {
+    "file": "0212-390-de-dark-page.png",
+    "label": "/settings/you/profile",
+    "width": 390,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/you/profile"
+  },
+  {
+    "file": "0213-1440-en-light-page.png",
+    "label": "/settings/you/profile",
+    "width": 1440,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/you/profile"
+  },
+  {
+    "file": "0214-1440-en-dark-page.png",
+    "label": "/settings/you/profile",
+    "width": 1440,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/you/profile"
+  },
+  {
+    "file": "0215-1440-de-light-page.png",
+    "label": "/settings/you/profile",
+    "width": 1440,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/you/profile"
+  },
+  {
+    "file": "0216-1440-de-dark-page.png",
+    "label": "/settings/you/profile",
+    "width": 1440,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/you/profile"
+  },
+  {
+    "file": "0217-390-en-light-page.png",
+    "label": "/settings/you/security",
+    "width": 390,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/you/security"
+  },
+  {
+    "file": "0218-390-en-dark-page.png",
+    "label": "/settings/you/security",
+    "width": 390,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/you/security"
+  },
+  {
+    "file": "0219-390-de-light-page.png",
+    "label": "/settings/you/security",
+    "width": 390,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/you/security"
+  },
+  {
+    "file": "0220-390-de-dark-page.png",
+    "label": "/settings/you/security",
+    "width": 390,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/you/security"
+  },
+  {
+    "file": "0221-1440-en-light-page.png",
+    "label": "/settings/you/security",
+    "width": 1440,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/you/security"
+  },
+  {
+    "file": "0222-1440-en-dark-page.png",
+    "label": "/settings/you/security",
+    "width": 1440,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/you/security"
+  },
+  {
+    "file": "0223-1440-de-light-page.png",
+    "label": "/settings/you/security",
+    "width": 1440,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/you/security"
+  },
+  {
+    "file": "0224-1440-de-dark-page.png",
+    "label": "/settings/you/security",
+    "width": 1440,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/you/security"
+  },
+  {
+    "file": "0225-390-en-light-page.png",
+    "label": "/settings/you/usage",
+    "width": 390,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/you/usage"
+  },
+  {
+    "file": "0226-390-en-dark-page.png",
+    "label": "/settings/you/usage",
+    "width": 390,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/you/usage"
+  },
+  {
+    "file": "0227-390-de-light-page.png",
+    "label": "/settings/you/usage",
+    "width": 390,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/you/usage"
+  },
+  {
+    "file": "0228-390-de-dark-page.png",
+    "label": "/settings/you/usage",
+    "width": 390,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/you/usage"
+  },
+  {
+    "file": "0229-1440-en-light-page.png",
+    "label": "/settings/you/usage",
+    "width": 1440,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/you/usage"
+  },
+  {
+    "file": "0230-1440-en-dark-page.png",
+    "label": "/settings/you/usage",
+    "width": 1440,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/you/usage"
+  },
+  {
+    "file": "0231-1440-de-light-page.png",
+    "label": "/settings/you/usage",
+    "width": 1440,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/you/usage"
+  },
+  {
+    "file": "0232-1440-de-dark-page.png",
+    "label": "/settings/you/usage",
+    "width": 1440,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/settings/you/usage"
+  },
+  {
+    "file": "0233-390-en-light-page.png",
+    "label": "/w/{workspace}/agents",
+    "width": 390,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/w/cws_7a6c7041-8fd4-4f0a-bdf6-2c477e57b8d0/agents"
+  },
+  {
+    "file": "0234-390-en-dark-page.png",
+    "label": "/w/{workspace}/agents",
+    "width": 390,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/w/cws_7a6c7041-8fd4-4f0a-bdf6-2c477e57b8d0/agents"
+  },
+  {
+    "file": "0235-390-de-light-page.png",
+    "label": "/w/{workspace}/agents",
+    "width": 390,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/w/cws_7a6c7041-8fd4-4f0a-bdf6-2c477e57b8d0/agents"
+  },
+  {
+    "file": "0236-390-de-dark-page.png",
+    "label": "/w/{workspace}/agents",
+    "width": 390,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/w/cws_7a6c7041-8fd4-4f0a-bdf6-2c477e57b8d0/agents"
+  },
+  {
+    "file": "0237-1440-en-light-page.png",
+    "label": "/w/{workspace}/agents",
+    "width": 1440,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/w/cws_7a6c7041-8fd4-4f0a-bdf6-2c477e57b8d0/agents"
+  },
+  {
+    "file": "0238-1440-en-dark-page.png",
+    "label": "/w/{workspace}/agents",
+    "width": 1440,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/w/cws_7a6c7041-8fd4-4f0a-bdf6-2c477e57b8d0/agents"
+  },
+  {
+    "file": "0239-1440-de-light-page.png",
+    "label": "/w/{workspace}/agents",
+    "width": 1440,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/w/cws_7a6c7041-8fd4-4f0a-bdf6-2c477e57b8d0/agents"
+  },
+  {
+    "file": "0240-1440-de-dark-page.png",
+    "label": "/w/{workspace}/agents",
+    "width": 1440,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/w/cws_7a6c7041-8fd4-4f0a-bdf6-2c477e57b8d0/agents"
+  },
+  {
+    "file": "0241-390-en-light-page.png",
+    "label": "/w/{workspace}/apps",
+    "width": 390,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/w/cws_7a6c7041-8fd4-4f0a-bdf6-2c477e57b8d0/apps"
+  },
+  {
+    "file": "0242-390-en-dark-page.png",
+    "label": "/w/{workspace}/apps",
+    "width": 390,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/w/cws_7a6c7041-8fd4-4f0a-bdf6-2c477e57b8d0/apps"
+  },
+  {
+    "file": "0243-390-de-light-page.png",
+    "label": "/w/{workspace}/apps",
+    "width": 390,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/w/cws_7a6c7041-8fd4-4f0a-bdf6-2c477e57b8d0/apps"
+  },
+  {
+    "file": "0244-390-de-dark-page.png",
+    "label": "/w/{workspace}/apps",
+    "width": 390,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/w/cws_7a6c7041-8fd4-4f0a-bdf6-2c477e57b8d0/apps"
+  },
+  {
+    "file": "0245-1440-en-light-page.png",
+    "label": "/w/{workspace}/apps",
+    "width": 1440,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/w/cws_7a6c7041-8fd4-4f0a-bdf6-2c477e57b8d0/apps"
+  },
+  {
+    "file": "0246-1440-en-dark-page.png",
+    "label": "/w/{workspace}/apps",
+    "width": 1440,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/w/cws_7a6c7041-8fd4-4f0a-bdf6-2c477e57b8d0/apps"
+  },
+  {
+    "file": "0247-1440-de-light-page.png",
+    "label": "/w/{workspace}/apps",
+    "width": 1440,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/w/cws_7a6c7041-8fd4-4f0a-bdf6-2c477e57b8d0/apps"
+  },
+  {
+    "file": "0248-1440-de-dark-page.png",
+    "label": "/w/{workspace}/apps",
+    "width": 1440,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/w/cws_7a6c7041-8fd4-4f0a-bdf6-2c477e57b8d0/apps"
+  },
+  {
+    "file": "0249-390-en-light-page.png",
+    "label": "/w/{workspace}/workflows",
+    "width": 390,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/w/cws_7a6c7041-8fd4-4f0a-bdf6-2c477e57b8d0/workflows"
+  },
+  {
+    "file": "0250-390-en-dark-page.png",
+    "label": "/w/{workspace}/workflows",
+    "width": 390,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/w/cws_7a6c7041-8fd4-4f0a-bdf6-2c477e57b8d0/workflows"
+  },
+  {
+    "file": "0251-390-de-light-page.png",
+    "label": "/w/{workspace}/workflows",
+    "width": 390,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/w/cws_7a6c7041-8fd4-4f0a-bdf6-2c477e57b8d0/workflows"
+  },
+  {
+    "file": "0252-390-de-dark-page.png",
+    "label": "/w/{workspace}/workflows",
+    "width": 390,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/w/cws_7a6c7041-8fd4-4f0a-bdf6-2c477e57b8d0/workflows"
+  },
+  {
+    "file": "0253-1440-en-light-page.png",
+    "label": "/w/{workspace}/workflows",
+    "width": 1440,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/w/cws_7a6c7041-8fd4-4f0a-bdf6-2c477e57b8d0/workflows"
+  },
+  {
+    "file": "0254-1440-en-dark-page.png",
+    "label": "/w/{workspace}/workflows",
+    "width": 1440,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/w/cws_7a6c7041-8fd4-4f0a-bdf6-2c477e57b8d0/workflows"
+  },
+  {
+    "file": "0255-1440-de-light-page.png",
+    "label": "/w/{workspace}/workflows",
+    "width": 1440,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/w/cws_7a6c7041-8fd4-4f0a-bdf6-2c477e57b8d0/workflows"
+  },
+  {
+    "file": "0256-1440-de-dark-page.png",
+    "label": "/w/{workspace}/workflows",
+    "width": 1440,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/w/cws_7a6c7041-8fd4-4f0a-bdf6-2c477e57b8d0/workflows"
+  },
+  {
+    "file": "0257-390-en-light-end.png",
+    "label": "chat thread",
+    "width": 390,
+    "locale": "en",
+    "theme": "light",
+    "position": "end",
+    "url": "http://127.0.0.1:53146/w/cws_7a6c7041-8fd4-4f0a-bdf6-2c477e57b8d0/c/conv_7dadb254-4c13-42d0-9097-0c39cb940838"
+  },
+  {
+    "file": "0258-390-en-light-scrolled.png",
+    "label": "chat thread",
+    "width": 390,
+    "locale": "en",
+    "theme": "light",
+    "position": "scrolled",
+    "url": "http://127.0.0.1:53146/w/cws_7a6c7041-8fd4-4f0a-bdf6-2c477e57b8d0/c/conv_7dadb254-4c13-42d0-9097-0c39cb940838"
+  },
+  {
+    "file": "0259-390-en-dark-end.png",
+    "label": "chat thread",
+    "width": 390,
+    "locale": "en",
+    "theme": "dark",
+    "position": "end",
+    "url": "http://127.0.0.1:53146/w/cws_7a6c7041-8fd4-4f0a-bdf6-2c477e57b8d0/c/conv_7dadb254-4c13-42d0-9097-0c39cb940838"
+  },
+  {
+    "file": "0260-390-en-dark-scrolled.png",
+    "label": "chat thread",
+    "width": 390,
+    "locale": "en",
+    "theme": "dark",
+    "position": "scrolled",
+    "url": "http://127.0.0.1:53146/w/cws_7a6c7041-8fd4-4f0a-bdf6-2c477e57b8d0/c/conv_7dadb254-4c13-42d0-9097-0c39cb940838"
+  },
+  {
+    "file": "0261-390-de-light-end.png",
+    "label": "chat thread",
+    "width": 390,
+    "locale": "de",
+    "theme": "light",
+    "position": "end",
+    "url": "http://127.0.0.1:53146/w/cws_7a6c7041-8fd4-4f0a-bdf6-2c477e57b8d0/c/conv_7dadb254-4c13-42d0-9097-0c39cb940838"
+  },
+  {
+    "file": "0262-390-de-light-scrolled.png",
+    "label": "chat thread",
+    "width": 390,
+    "locale": "de",
+    "theme": "light",
+    "position": "scrolled",
+    "url": "http://127.0.0.1:53146/w/cws_7a6c7041-8fd4-4f0a-bdf6-2c477e57b8d0/c/conv_7dadb254-4c13-42d0-9097-0c39cb940838"
+  },
+  {
+    "file": "0263-390-de-dark-end.png",
+    "label": "chat thread",
+    "width": 390,
+    "locale": "de",
+    "theme": "dark",
+    "position": "end",
+    "url": "http://127.0.0.1:53146/w/cws_7a6c7041-8fd4-4f0a-bdf6-2c477e57b8d0/c/conv_7dadb254-4c13-42d0-9097-0c39cb940838"
+  },
+  {
+    "file": "0264-390-de-dark-scrolled.png",
+    "label": "chat thread",
+    "width": 390,
+    "locale": "de",
+    "theme": "dark",
+    "position": "scrolled",
+    "url": "http://127.0.0.1:53146/w/cws_7a6c7041-8fd4-4f0a-bdf6-2c477e57b8d0/c/conv_7dadb254-4c13-42d0-9097-0c39cb940838"
+  },
+  {
+    "file": "0265-1440-en-light-end.png",
+    "label": "chat thread",
+    "width": 1440,
+    "locale": "en",
+    "theme": "light",
+    "position": "end",
+    "url": "http://127.0.0.1:53146/w/cws_7a6c7041-8fd4-4f0a-bdf6-2c477e57b8d0/c/conv_7dadb254-4c13-42d0-9097-0c39cb940838"
+  },
+  {
+    "file": "0266-1440-en-light-scrolled.png",
+    "label": "chat thread",
+    "width": 1440,
+    "locale": "en",
+    "theme": "light",
+    "position": "scrolled",
+    "url": "http://127.0.0.1:53146/w/cws_7a6c7041-8fd4-4f0a-bdf6-2c477e57b8d0/c/conv_7dadb254-4c13-42d0-9097-0c39cb940838"
+  },
+  {
+    "file": "0267-1440-en-dark-end.png",
+    "label": "chat thread",
+    "width": 1440,
+    "locale": "en",
+    "theme": "dark",
+    "position": "end",
+    "url": "http://127.0.0.1:53146/w/cws_7a6c7041-8fd4-4f0a-bdf6-2c477e57b8d0/c/conv_7dadb254-4c13-42d0-9097-0c39cb940838"
+  },
+  {
+    "file": "0268-1440-en-dark-scrolled.png",
+    "label": "chat thread",
+    "width": 1440,
+    "locale": "en",
+    "theme": "dark",
+    "position": "scrolled",
+    "url": "http://127.0.0.1:53146/w/cws_7a6c7041-8fd4-4f0a-bdf6-2c477e57b8d0/c/conv_7dadb254-4c13-42d0-9097-0c39cb940838"
+  },
+  {
+    "file": "0269-1440-de-light-end.png",
+    "label": "chat thread",
+    "width": 1440,
+    "locale": "de",
+    "theme": "light",
+    "position": "end",
+    "url": "http://127.0.0.1:53146/w/cws_7a6c7041-8fd4-4f0a-bdf6-2c477e57b8d0/c/conv_7dadb254-4c13-42d0-9097-0c39cb940838"
+  },
+  {
+    "file": "0270-1440-de-light-scrolled.png",
+    "label": "chat thread",
+    "width": 1440,
+    "locale": "de",
+    "theme": "light",
+    "position": "scrolled",
+    "url": "http://127.0.0.1:53146/w/cws_7a6c7041-8fd4-4f0a-bdf6-2c477e57b8d0/c/conv_7dadb254-4c13-42d0-9097-0c39cb940838"
+  },
+  {
+    "file": "0271-1440-de-dark-end.png",
+    "label": "chat thread",
+    "width": 1440,
+    "locale": "de",
+    "theme": "dark",
+    "position": "end",
+    "url": "http://127.0.0.1:53146/w/cws_7a6c7041-8fd4-4f0a-bdf6-2c477e57b8d0/c/conv_7dadb254-4c13-42d0-9097-0c39cb940838"
+  },
+  {
+    "file": "0272-1440-de-dark-scrolled.png",
+    "label": "chat thread",
+    "width": 1440,
+    "locale": "de",
+    "theme": "dark",
+    "position": "scrolled",
+    "url": "http://127.0.0.1:53146/w/cws_7a6c7041-8fd4-4f0a-bdf6-2c477e57b8d0/c/conv_7dadb254-4c13-42d0-9097-0c39cb940838"
+  },
+  {
+    "file": "0273-390-en-light-page.png",
+    "label": "outside-settings",
+    "width": 390,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/w/cws_880632ce-9aec-49f4-84ad-f927bf9f6ddf/workflows/outside-2096cdab/settings"
+  },
+  {
+    "file": "0274-390-en-dark-page.png",
+    "label": "outside-settings",
+    "width": 390,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/w/cws_880632ce-9aec-49f4-84ad-f927bf9f6ddf/workflows/outside-fc2f224b/settings"
+  },
+  {
+    "file": "0275-390-de-light-page.png",
+    "label": "outside-settings",
+    "width": 390,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/w/cws_880632ce-9aec-49f4-84ad-f927bf9f6ddf/workflows/outside-96b3ff96/settings"
+  },
+  {
+    "file": "0276-390-de-dark-page.png",
+    "label": "outside-settings",
+    "width": 390,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/w/cws_880632ce-9aec-49f4-84ad-f927bf9f6ddf/workflows/outside-d420d9f2/settings"
+  },
+  {
+    "file": "0277-1440-en-light-page.png",
+    "label": "outside-settings",
+    "width": 1440,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/w/cws_880632ce-9aec-49f4-84ad-f927bf9f6ddf/workflows/outside-6f34c74d/settings"
+  },
+  {
+    "file": "0278-1440-en-dark-page.png",
+    "label": "outside-settings",
+    "width": 1440,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/w/cws_880632ce-9aec-49f4-84ad-f927bf9f6ddf/workflows/outside-4fd0cd3c/settings"
+  },
+  {
+    "file": "0279-1440-de-light-page.png",
+    "label": "outside-settings",
+    "width": 1440,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/w/cws_880632ce-9aec-49f4-84ad-f927bf9f6ddf/workflows/outside-126e6e5c/settings"
+  },
+  {
+    "file": "0280-1440-de-dark-page.png",
+    "label": "outside-settings",
+    "width": 1440,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:53146/w/cws_880632ce-9aec-49f4-84ad-f927bf9f6ddf/workflows/outside-cdb7b57f/settings"
+  }
+]
