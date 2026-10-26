@@ -143,6 +143,9 @@ export interface StorePublishedWith {
   level: number;
   /** The names of the named revision's migrations, by number. */
   migrations: ReadonlyMap<number, string>;
+  /** The level the App needs, and whether the named revision has a config to tell its level. */
+  minSchema: number | undefined;
+  stored: boolean;
 }
 
 const storeMigrationsSchema = z.object({
@@ -202,15 +205,32 @@ export async function dataStoresPublishedWith(
     });
     const title = assetTitle(stored?.config, name);
     const { level, migrations } = storeMigrationsOf(stored?.config);
-    const minSchema = bound.get(name);
-    if (stored?.config && minSchema !== undefined && level < minSchema) {
+    stores.push({
+      name,
+      revision,
+      asset,
+      title,
+      level,
+      migrations,
+      minSchema: bound.get(name),
+      stored: stored?.config !== undefined
+    });
+  }
+  return stores;
+}
+
+/**
+ * Refuses a store whose named revision stays below the level the App needs. Asked only after
+ * the caller's publish right on each store: the refusal names the store's title and level.
+ */
+export function requireStoreLevels(stores: readonly StorePublishedWith[]): void {
+  for (const { name, title, level, minSchema, stored } of stores) {
+    if (stored && minSchema !== undefined && level < minSchema) {
       throw dataStoreRefusalError("data_store_draft_below_min_schema", name, {
         title,
         minSchema,
         level
       });
     }
-    stores.push({ name, revision, asset, title, level, migrations });
   }
-  return stores;
 }
