@@ -108,6 +108,10 @@ export async function execWorkspaceCommand(
   if (skillMountFailure) {
     return skillMountFailure;
   }
+  const platformFailure = platformFailureResult(resultCommand.value);
+  if (platformFailure) {
+    return platformFailure;
+  }
   const expectedOutputs = normalized.value.expectedOutputs;
   if (resultCommand.value.output) {
     const existingWorkspacePaths =
@@ -209,6 +213,57 @@ function skillMountFailureResult(
   );
 }
 
+/**
+ * The reasons of a command the platform failed to run, as the agent reads them in
+ * `details.reason`. The sandbox did not start, or the worker or the runner failed: none of it
+ * is the command's doing, nor the person's to fix.
+ */
+type WorkspacePlatformFailureReason = "sandbox_unavailable" | "no_worker" | "platform_error";
+
+/** The codes of a command that failed for the platform, not for what it ran. */
+const PLATFORM_FAILURE_REASONS: Partial<Record<string, WorkspacePlatformFailureReason>> = {
+  WORKSPACE_COMMAND_SPAWN_FAILED: "sandbox_unavailable",
+  WORKSPACE_COMMAND_WORKER_LOST: "platform_error",
+  WORKSPACE_COMMAND_RUNNER_ERROR: "platform_error"
+};
+
+/**
+ * What the agent is told of a command the platform could not run. It never carries the
+ * worker's cause, which names images, registries and hosts: that is in the command's row for
+ * the operator. It tells the agent that the failure is the platform's, gives the time and the
+ * command's id to pass on, and names nobody as the one to fix it.
+ */
+function workspacePlatformFailure(input: {
+  reason: WorkspacePlatformFailureReason;
+  commandId: string;
+  at: string;
+}): ToolHandlerResult<never> {
+  const what =
+    input.reason === "sandbox_unavailable"
+      ? "the platform's sandbox for commands could not start"
+      : input.reason === "no_worker"
+        ? "code execution is unavailable on the platform right now"
+        : "the platform failed while running it";
+  return failed(
+    "handler_failed",
+    `The command did not run because ${what}. This is a technical problem of the platform, not something the person did or has to fix. Tell the person so in plain words, say that the operator of the platform has to look into it, and give the time (${input.at}) and the command id (${input.commandId}) so they can pass them on. Do not name any person, administrator or contact as the one to fix it. Offer to try again later, or to continue another way without running commands. Do not repeat the command in this reply.`,
+    { commandId: input.commandId, reason: input.reason, at: input.at }
+  );
+}
+
+function platformFailureResult(
+  command: WorkspaceCommand
+): ToolHandlerResult<z.infer<typeof workspaceExecOutputSchema>> | undefined {
+  if (command.status !== "failed" || !command.error) return undefined;
+  const reason = PLATFORM_FAILURE_REASONS[command.error.code];
+  if (!reason) return undefined;
+  return workspacePlatformFailure({
+    reason,
+    commandId: command.id,
+    at: command.completedAt ?? command.updatedAt
+  });
+}
+
 function commandResultToToolResult(
   queued: WorkspaceCommand,
   result: WorkspaceCommandResult
@@ -237,11 +292,14 @@ function commandResultToToolResult(
         }
       };
     case "no_worker":
-      return failedValidationResult(result.reason, {
-        commandId: queued.id,
-        status: result.command.status,
-        reason: "no_worker"
-      });
+      return {
+        status: "failed",
+        result: workspacePlatformFailure({
+          reason: "no_worker",
+          commandId: queued.id,
+          at: result.command.updatedAt
+        })
+      };
     case "wait_limit":
       return failedValidationResult(result.reason, {
         commandId: queued.id,
