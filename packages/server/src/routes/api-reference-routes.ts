@@ -48,6 +48,7 @@ export function registerApiReferenceRoutes(route: Route, options: ChatServerOpti
         "content-security-policy",
         `default-src 'none'; style-src 'sha256-${styleHash}'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`
       )
+      .header("x-frame-options", "DENY")
       .header("x-content-type-options", "nosniff")
       .header("cache-control", "private, no-store")
       .send(page.html);

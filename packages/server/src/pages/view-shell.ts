@@ -1,4 +1,5 @@
 import { VIEW_SHELL, VIEW_SHELL_MESSAGES } from "@work-shape/catalyst-api-contract";
+import { frameAncestors } from "../http/framing";
 
 // The shell: the document every generated view is framed in. A view is a `srcdoc` frame, and a
 // content policy cannot stop a document from navigating its own frame to another host, with
@@ -16,9 +17,13 @@ import { VIEW_SHELL, VIEW_SHELL_MESSAGES } from "@work-shape/catalyst-api-contra
 /**
  * The policy of the shell document and, by inheritance, the outer bound of every view.
  * `sandbox` gives the shell no origin, whoever frames it and however: it never runs as the
- * instance. `allowedScriptSrc` is `views.allowedScriptSrc` of the instance config.
+ * instance. `allowedScriptSrc` is `views.allowedScriptSrc` of the instance config, and
+ * `interfaceOrigins` the origins the interface, the widget included, runs on.
  */
-export function viewShellContentPolicy(allowedScriptSrc: readonly string[]): string {
+export function viewShellContentPolicy(
+  allowedScriptSrc: readonly string[],
+  interfaceOrigins: readonly string[]
+): string {
   return [
     "sandbox allow-scripts",
     "default-src 'none'",
@@ -38,7 +43,8 @@ export function viewShellContentPolicy(allowedScriptSrc: readonly string[]): str
     // the instance's own included. The view itself is `srcdoc` and is not an address.
     "frame-src 'none'",
     "base-uri 'none'",
-    "form-action 'none'"
+    "form-action 'none'",
+    frameAncestors(interfaceOrigins)
   ].join("; ");
 }
 

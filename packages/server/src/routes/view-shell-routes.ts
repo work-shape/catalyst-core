@@ -1,5 +1,6 @@
 import { apiOperations } from "@work-shape/catalyst-api-contract";
-import { AppError } from "@work-shape/catalyst-core";
+import { AppError, normalizeAllowedOrigins } from "@work-shape/catalyst-core";
+import { FRAME_OPTIONS_HEADERS } from "../http/framing";
 import type { Route } from "../http/route";
 import type { ResolvedChatServerOptions } from "../types";
 import { VIEW_SHELL_FILES, viewShellContentPolicy } from "../pages/view-shell";
@@ -13,8 +14,9 @@ const VIEW_SHELL_MAX_AGE_SECONDS = 300;
 
 export function registerViewShellRoutes(
   route: Route,
-  options: Pick<ResolvedChatServerOptions, "config">
+  options: Pick<ResolvedChatServerOptions, "config" | "allowedOrigins">
 ): void {
+  const interfaceOrigins = normalizeAllowedOrigins(options.allowedOrigins);
   route(apiOperations["view_shell.files.get"], ({ params, request, reply }) => {
     const file = VIEW_SHELL_FILES.get(params.version)?.get(params.file);
     if (!file) {
@@ -32,8 +34,9 @@ export function registerViewShellRoutes(
         .header("content-type", file.contentType)
         .header(
           "content-security-policy",
-          viewShellContentPolicy(options.config.views.allowedScriptSrc)
+          viewShellContentPolicy(options.config.views.allowedScriptSrc, interfaceOrigins)
         )
+        .headers(FRAME_OPTIONS_HEADERS)
         .header("cache-control", `public, max-age=${VIEW_SHELL_MAX_AGE_SECONDS}`)
         // The answer depends on what the request is for, so a cache keeps one per destination.
         .header("vary", "Sec-Fetch-Dest")

@@ -56,6 +56,7 @@ interface Preview {
 const HEADER_SET = {
   "content-security-policy":
     "sandbox allow-scripts allow-forms allow-downloads; default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'; worker-src 'none'; frame-ancestors 'self' https://ui.example.test",
+  "x-frame-options": "SAMEORIGIN",
   "x-content-type-options": "nosniff",
   "referrer-policy": "no-referrer",
   "x-dns-prefetch-control": "off",

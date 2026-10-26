@@ -3,6 +3,7 @@ import type { ClientInstanceId, FileSetId, ServedFileSetAsset } from "@work-shap
 import { APP_MODES } from "@work-shape/catalyst-core";
 import { createHash, createHmac, hkdfSync, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
+import { FRAME_OPTIONS_HEADERS, frameAncestors } from "../http/framing";
 
 // Serving a Page: the files of one file set, to the frame that shows it and to nobody else.
 //
@@ -283,11 +284,11 @@ export interface AppContentDocument {
  * The policy of every answer of the content route. It is the policy of the shell document and,
  * by inheritance, of the Page inside it. There is no setting that removes a part of it.
  *
- * `frameAncestors` are the origins the interface runs on. The shell is framed by the interface
+ * `interfaceOrigins` are the origins the interface runs on. The shell is framed by the interface
  * and by no other site.
  */
 function appContentPolicy(
-  frameAncestors: readonly string[],
+  interfaceOrigins: readonly string[],
   document: AppContentDocument | undefined
 ): string {
   const outsideHosts = document?.outsideHosts ?? [];
@@ -315,17 +316,8 @@ function appContentPolicy(
     "form-action 'none'",
     // A worker is a second place scripts run in, and the Page's own script does not need one.
     "worker-src 'none'",
-    `frame-ancestors ${["'self'", ...frameAncestors.filter(isPolicySource)].join(" ")}`
+    frameAncestors(interfaceOrigins)
   ].join("; ");
-}
-
-/**
- * Whether a policy can name an origin. The grammar of a source has no address in brackets, so
- * an interface that runs on an IPv6 literal cannot frame a Page; a browser would ignore the
- * source and say so on every answer.
- */
-function isPolicySource(origin: string): boolean {
-  return URL.canParse(origin) && !new URL(origin).hostname.startsWith("[");
 }
 
 /**
@@ -333,11 +325,12 @@ function isPolicySource(origin: string): boolean {
  * `document` is given with a shell document.
  */
 export function appContentHeaders(
-  frameAncestors: readonly string[],
+  interfaceOrigins: readonly string[],
   document?: AppContentDocument
 ): Record<string, string> {
   return {
-    "content-security-policy": appContentPolicy(frameAncestors, document),
+    "content-security-policy": appContentPolicy(interfaceOrigins, document),
+    ...FRAME_OPTIONS_HEADERS,
     "x-content-type-options": "nosniff",
     // The address holds the token. No request the Page causes names it to anyone.
     "referrer-policy": "no-referrer",

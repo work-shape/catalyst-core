@@ -138,7 +138,7 @@ describe("view runtime", () => {
 
 describe("view shell", () => {
   const shellPolicy =
-    "sandbox allow-scripts; default-src 'none'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'";
+    "sandbox allow-scripts; default-src 'none'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'";
   const document = { version: VIEW_SHELL.version, file: VIEW_SHELL.documentFile };
   const script = { version: VIEW_SHELL.version, file: VIEW_SHELL.scriptFile };
 
@@ -154,6 +154,7 @@ describe("view shell", () => {
     expect(response.headers).toMatchObject({
       "content-type": "text/html; charset=utf-8",
       "content-security-policy": shellPolicy,
+      "x-frame-options": "SAMEORIGIN",
       "cache-control": "public, max-age=300",
       vary: expect.stringContaining("Sec-Fetch-Dest"),
       "x-content-type-options": "nosniff",
