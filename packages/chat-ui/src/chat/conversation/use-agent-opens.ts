@@ -46,7 +46,7 @@ export interface AgentOpens {
   pageOf(open: AssetOpen): WorkspaceRoute | undefined;
   /**
    * Takes the person to a page a link in the conversation names, the conversation docked
-   * beside it. The page reads the asset with the person's rights, as any visit does.
+   * beside it and the page in front. The page reads with the person's rights, as any visit does.
    */
   goToPage(page: WorkspaceRoute): void;
   /** Notes a run this tab started: only such a run takes the person anywhere. */
@@ -260,11 +260,15 @@ export function useAgentOpens(input: {
     [client, conversationId, onError, onSubjectChanged, openPage, storedSubject, workspaceId]
   );
 
+  const { showPage } = dock;
   const goToPage = useCallback(
     (page: WorkspaceRoute) => {
-      if (conversationId !== undefined) openPage(page, conversationId);
+      if (conversationId === undefined) return;
+      openPage(page, conversationId);
+      // The person asked for the page: where the dock lies over it, the page is in front.
+      showPage();
     },
-    [conversationId, openPage]
+    [conversationId, openPage, showPage]
   );
 
   // The offer stands for the last run, also one this tab only reads: in a second tab, after a

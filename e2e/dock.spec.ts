@@ -296,6 +296,18 @@ test("a link in an answer opens the Data Store's page in place, the conversation
     await expect(page.getByRole("heading", { name: title, level: 1 })).toBeVisible();
     await expect(chatColumn(page)).toHaveAttribute("data-chat-mode", "dock");
     await expect(chatColumn(page)).toContainText("Local agent response");
+
+    // At phone width the dock lies over the page: the page the person asked for is in front.
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(
+      `/w/${encodeURIComponent(conversation.collaborationWorkspaceId)}/c/${conversation.id}`
+    );
+    await chatColumn(page).locator("a[data-page-link]").last().click();
+    await expect(page).toHaveURL(
+      new RegExp(`/build/data-stores/${store}\\?chat=${conversation.id}$`, "u")
+    );
+    await expect(page.getByRole("heading", { name: title, level: 1 })).toBeVisible();
+    await expect(chatColumn(page)).not.toBeVisible();
   } finally {
     const storeUrl = `${apiBaseUrl}/api/v1/assets/data_store/${store}`;
     const deleted = await requestWithOrigin(page, "post", `${storeUrl}/delete`, {
