@@ -92,6 +92,21 @@ An App belongs to one workspace. The commands take it from `--workspace`, from t
 - `publish <app>` prints what the draft makes live. That is the publish dialog's Connections and outside hosts, and beside them the changing actions the revision calls live (each marked new or changed) and the Data Store levels it needs, all compared against the published revision. It then asks before publishing. `--yes` asks nothing: the publish waits in your Inbox until you allow it there (exit 3), and a run without a terminal and without `--yes` publishes nothing (exit 1). A required approval still waits in the Inbox (exit 3). `--revision <n>` publishes an older revision instead, which is the way back.
 - `status <app> [dir]` prints the draft revision and the published revision, with who made each and when. A revision exists only once its files have built, so the draft shown is built, together with its kit version. With a pulled folder it also lists the files you changed, added or removed since the pull.
 
+## Workflows as a folder
+
+A Workflow folder holds `workflow.yaml` at its root and its scripts in `steps/`. It uses the App folder commands and the same `.catalyst-app.json` baseline, recording the Workflow's name, instance, workspace, revision and file hashes. Pull into an empty or new folder; a refresh refuses local changes. A push from a stale revision is refused with the instance's reason.
+
+```sh
+catalyst workflow pull <workflow> [dir] [--published | --revision <n>] # write a revision locally
+catalyst workflow push [dir]                                      # save a changed folder as one draft revision and commit
+catalyst workflow status <workflow> [dir]                         # draft, published and local changes
+catalyst workflow publish <workflow> --revision <n> [--yes]      # review and ask before publishing
+catalyst workflow history <workflow>                              # list revisions
+catalyst workflow revert <workflow> --to <n> --if-revision <n>      # restore a revision
+```
+
+An unchanged push creates no revision or commit. A new folder creates the Workflow under the `id` in `workflow.yaml`; a pulled folder keeps its id. Files that look like credentials are saved with a warning naming their path and line, never the matched text. Publishing, history and revert use the generic asset commands. `catalyst config pull|push` still carries agents, skills and guardrails, with no Workflow.
+
 ## Pull a skill for a local agent
 
 When you want to use one of the instance's skills locally, pull its entire folder:
