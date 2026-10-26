@@ -107,17 +107,15 @@ function PageSurfaceActions({ pageId }: { pageId: string }) {
 }
 
 /**
- * What the surface frame shows for a Page: under its name what the preview is (PREVIEW-1), the
- * switch in its header and the revision as its content, which reaches the frame's edges.
+ * What the surface frame shows for a Page: the switch in its header and the revision as its
+ * content, which reaches the frame's edges.
  */
 export function pageSurfaceRendering(surface: SurfaceOf<"page">): {
-  subtitle: ReactNode;
   actions: ReactNode;
   content: ReactNode;
   flush: true;
 } {
   return {
-    subtitle: <PreviewStateLine conversationId={surface.conversationId} pageId={surface.pageId} />,
     actions: (
       <>
         <PageAppAction
@@ -235,6 +233,7 @@ function PageSurface({
   return (
     <PageSurfaceView
       view={view}
+      stateLine={<PreviewStateLine conversationId={conversationId} pageId={pageId} />}
       buildErrors={gone ? undefined : buildErrors}
       revision={number}
       preview={
@@ -339,18 +338,21 @@ function usePageAddress(conversationId: string, pageId: string, fileSetId: strin
 }
 
 /**
- * The content of a Page surface: the preview with the build errors as one line under it, or
- * the files. The preview stays mounted under the files, so the Page keeps its state while the
- * reader looks at its source.
+ * The content of a Page surface: under the head what the preview is (PREVIEW-1), then the
+ * preview with the build errors as one line under it, or the files. The preview stays mounted
+ * under the files, so the Page keeps its state while the reader looks at its source.
  */
 export function PageSurfaceView({
   view,
+  stateLine,
   preview,
   files,
   buildErrors,
   revision
 }: {
   view: PageView;
+  /** What the preview is, read whole on its own line: the head has no room for it. */
+  stateLine?: ReactNode;
   preview: ReactNode;
   files: ReactNode;
   buildErrors?: readonly PageBuildError[];
@@ -362,6 +364,7 @@ export function PageSurfaceView({
 }) {
   return (
     <div className="flex h-full min-h-0 flex-col" data-page-view={view} data-revision={revision}>
+      {stateLine}
       <div className="min-h-0 flex-1" hidden={view !== "preview"}>
         {preview}
       </div>

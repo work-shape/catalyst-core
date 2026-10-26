@@ -324,7 +324,7 @@ export function SurfaceSlotFrame({
       }
       icon={rendering?.titleIcon}
       title={surface.title}
-      subtitle={rendering?.subtitle ?? surface.subtitle}
+      subtitle={surface.subtitle}
       actions={rendering?.actions}
       flush={rendering?.flush}
       fullscreen={

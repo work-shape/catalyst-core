@@ -87,7 +87,10 @@ function appsOffered(host: AppsHost | undefined): boolean {
   return host?.enabled === true && host.workspace !== undefined;
 }
 
-/** The state line of a preview, under its name in the head of the surface. */
+/**
+ * The state line of a preview, a quiet band right under the head of the surface. It wraps
+ * rather than being cut: the head of a preview beside the chat leaves its name a few words.
+ */
 export function PreviewStateLine(props: PreviewOfPage) {
   return appsOffered(useAppsHost()) ? <PreviewStateLineOf {...props} /> : null;
 }
@@ -96,11 +99,17 @@ function PreviewStateLineOf(props: PreviewOfPage) {
   const { t } = useTranslation();
   const { standing } = usePreviewStanding(props);
   const line = previewStateLine(standing, t);
-  // Until the instance answered, the line keeps its room, so the name does not move.
+  // Until the instance answered, the band keeps its room, so the preview does not move.
   return (
-    <span title={line} data-testid="preview-state" data-standing={standing.kind}>
+    <Banner
+      layout="line"
+      icon={line === undefined ? null : undefined}
+      className="shrink-0 border-b bg-card px-4 py-2"
+      data-testid="preview-state"
+      data-standing={standing.kind}
+    >
       {line ?? "\u00a0"}
-    </span>
+    </Banner>
   );
 }
 
