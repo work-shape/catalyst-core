@@ -1,0 +1,22 @@
+{
+  "routes": [
+    "/",
+    "/w/{workspace}/workflows"
+  ],
+  "required": [],
+  "states": [
+    {
+      "name": "link-in-answer",
+      "setup": "/private/tmp/claude-501/-Users-felixpahlke-code-catalyst/a2ce655e-be6a-4606-83fd-3c646e25be76/scratchpad/chatlink-shots/thread.mjs"
+    },
+    {
+      "name": "page-after-click",
+      "setup": "/private/tmp/claude-501/-Users-felixpahlke-code-catalyst/a2ce655e-be6a-4606-83fd-3c646e25be76/scratchpad/chatlink-shots/after-click.mjs"
+    }
+  ],
+  "modules": [],
+  "pr": 85,
+  "head": "4d720fe38b33c26ce0af910766137653a06c0dee",
+  "base": "4213c2fb2fcb38605edd739a253b4f3fa2a072fa",
+  "tested": "4d720fe38b33c26ce0af910766137653a06c0dee"
+}
