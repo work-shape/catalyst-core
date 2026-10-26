@@ -47,6 +47,27 @@ describe("the instance's brand for a capability", () => {
     expect(asked).toEqual(["https://chat.example.test/brand/logo.png"]);
   });
 
+  it("reads a logo at a path against the instance's address when the instance sends no mail", async () => {
+    const base = createTestConfig();
+    const asked: string[] = [];
+    const brand = createCapabilityBrand(
+      parseClientInstanceConfig({
+        ...base,
+        instance: { ...base.instance, publicUrl: "https://app.example.test" },
+        ui: { ...base.ui, logoUrl: "/brand/logo.png" },
+        infrastructure: { ...base.infrastructure, mail: undefined }
+      }),
+      {
+        fetch: async (url) => {
+          asked.push(String(url));
+          return new Response(PNG, { status: 200 });
+        }
+      }
+    );
+    await expect(brand.logo()).resolves.toEqual({ contentType: "image/png", content: PNG });
+    expect(asked).toEqual(["https://app.example.test/brand/logo.png"]);
+  });
+
   it("has no logo where none is set or it is no image, and no colour that is not hex", async () => {
     expect(await createCapabilityBrand(configWith({ logoUrl: undefined })).logo()).toBeUndefined();
     const notAnImage = createCapabilityBrand(configWith({ logoUrl: "/brand/logo.svg" }), {

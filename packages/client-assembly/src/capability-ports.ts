@@ -101,7 +101,7 @@ const HEX_COLOR = /^#[0-9a-f]{6}$/iu;
 
 /**
  * The instance's name, accent colour and logo as a capability shows them outside the instance.
- * The logo is read once from where the release config points, as the mails read it.
+ * The logo is read from where the release config points, as the mails read it.
  */
 export function createCapabilityBrand(
   config: ClientInstanceConfig,
@@ -109,7 +109,8 @@ export function createCapabilityBrand(
   options: Pick<Parameters<typeof createInlineImageLoader>[0], "fetch"> = {}
 ): ClientInstanceCapabilityBrand {
   const branding = createClientBranding(config);
-  const appUrl = config.infrastructure.mail?.appUrl;
+  // A logo at a path of the instance resolves against the instance's address, with or without mail.
+  const appUrl = config.infrastructure.mail?.appUrl ?? config.instance.publicUrl;
   const logo = branding.logoUrl
     ? createInlineImageLoader({
         url: branding.logoUrl,
