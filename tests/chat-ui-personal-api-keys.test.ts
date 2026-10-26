@@ -121,15 +121,15 @@ describe("personal API key model", () => {
     ).toEqual(["connection.use", "workflow.use"]);
   });
 
-  it("starts the key `catalyst setup` asks for with the held authoring rights the screen offers and the use level", () => {
+  it("starts the key `catalyst setup` asks for with the held authoring rights the screen offers and the use level but connection.use", () => {
     expect(setupKeyActions(undefined)).toEqual([]);
     expect(
       setupKeyActions({
         ...platformContext(),
         authoringActions: ["agent.read", "agent.write", "workflow.publish"],
-        useActions: ["connection.use"]
+        useActions: ["connection.use", "workflow.use"]
       })
-    ).toEqual(["agent.read", "agent.write", "connection.use"]);
+    ).toEqual(["agent.read", "agent.write", "workflow.use"]);
   });
 
   it("reads whether the CLI's setup asked for the use level", () => {
@@ -274,7 +274,7 @@ describe("You > API keys", () => {
             ...cliOffer,
             actions: ["agent.read", "agent.write"],
             useActions: ["connection.use", "workflow.use"],
-            setupActions: ["agent.read", "agent.write", "connection.use", "workflow.use"]
+            setupActions: ["agent.read", "agent.write", "workflow.use"]
           },
           ...(asksUseLevel === undefined ? {} : { asksUseLevel }),
           pending: false,
@@ -283,10 +283,10 @@ describe("You > API keys", () => {
       )
     );
 
-  it("ticks the authoring rights and the use level for the key `catalyst setup` asks for, and nothing for any other", () => {
+  it("ticks the authoring rights and the use level but connection.use for the key `catalyst setup` asks for, and nothing for any other", () => {
     const setup = renderConfirm("en", true);
     expect(setup).toContain("Use");
-    expect(setup.match(/aria-checked="true"/gu)?.length).toBe(4);
+    expect(setup.match(/aria-checked="true"/gu)?.length).toBe(3);
     expect(renderConfirm("de", true)).toContain("Verwenden");
     expect(renderConfirm("en").match(/aria-checked="true"/gu)).toBeNull();
   });

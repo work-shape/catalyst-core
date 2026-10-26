@@ -7,6 +7,7 @@ import {
   isAppError,
   isAuthenticatedServicePrincipal,
   operationDenialError,
+  PERSONAL_API_KEY_ACTIONS,
   WORKFLOW_ERROR_CODES,
   workflowStepIdempotencyKey,
   type AuthenticatedIdentity,
@@ -137,7 +138,8 @@ const interruptedSchema = z.object({ interrupted: z.literal(true) });
 const failureReasonSchema = z.object({ reason: z.string().regex(/^[a-z_]{1,64}$/u) });
 const refusedRightSchema = z.object({
   action: z.string(),
-  boundBy: z.object({ id: z.string(), label: z.string() }).optional()
+  boundBy: z.object({ id: z.string(), label: z.string() }).optional(),
+  reason: z.string().optional()
 });
 const heldRunSchema = z.object({
   operationRunId: z.custom<OperationRunId>((value) => typeof value === "string" && value !== "")
@@ -389,7 +391,11 @@ export async function callStepOperation(input: {
             ...(action === undefined ? {} : { action })
           });
         }
-        const { code, message } = refused(action, result.reason.boundBy !== undefined);
+        const { code, message } = refused(
+          action,
+          result.reason.boundBy !== undefined,
+          reason === "outside_key_scope"
+        );
         throw new OperationStepFailure(code, message, trace, { systemic: true, action });
       }
       if (input.draft && isApprovalUnavailable(result.reason)) {
@@ -587,7 +593,11 @@ function refusalOf(
   const right = refusedRightSchema.safeParse(error.details);
   const action = right.success ? right.data.action : undefined;
   if (error.code === "FORBIDDEN") {
-    const { code, message } = refused(action, right.success && right.data.boundBy !== undefined);
+    const { code, message } = refused(
+      action,
+      right.success && right.data.boundBy !== undefined,
+      right.success && right.data.reason === "outside_key_scope"
+    );
     return new OperationStepFailure(
       code,
       message,
@@ -603,10 +613,14 @@ function refusalOf(
   );
 }
 
-/** The refusal of a right of one step: the right, and whether the principal lacks it. */
+/**
+ * The refusal of a right of one step: the right, whether the principal lacks it, and whether
+ * the person holds it and the personal key the test run acts as does not carry it.
+ */
 type RefusedRight = (
   action: string | undefined,
-  principalSide: boolean
+  principalSide: boolean,
+  outsideKeyScope: boolean
 ) => { code: string; message: string };
 
 /**
@@ -622,8 +636,21 @@ function refusedRight(
   testRun: boolean
 ): RefusedRight {
   const on = source === undefined ? "" : ` on '${source}'`;
-  return (action, principalSide) => {
+  return (action, principalSide, outsideKeyScope) => {
     const right = action === undefined ? "the right it needs" : `the right '${action}'`;
+    if (testRun && !principalSide && outsideKeyScope) {
+      // A key carries only the actions its owner can name on it; any other, such as
+      // `mail_sender.use`, no key carries, whatever its owner holds (connections-and-secrets.md).
+      return PERSONAL_API_KEY_ACTIONS.some((named) => named === action)
+        ? {
+            code: WORKFLOW_TEST_RUN_ERRORS.testerKeyScope,
+            message: `The API key that started the test run does not carry ${right}${on} to call '${operation}'. You hold the right; start the test run with a key whose scopes name it`
+          }
+        : {
+            code: WORKFLOW_TEST_RUN_ERRORS.testerKeyCannotCarry,
+            message: `No API key can carry ${right}${on}, which '${operation}' needs, so a test run started with a key cannot call it. Start the test run signed in to the app`
+          };
+    }
     if (!testRun) {
       return {
         code: "FORBIDDEN",

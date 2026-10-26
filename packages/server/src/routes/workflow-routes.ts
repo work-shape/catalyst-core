@@ -1,6 +1,7 @@
 import { apiOperations } from "@work-shape/catalyst-api-contract";
 import {
   AppError,
+  appWorkflowRefusalError,
   createPersonLabelLookup,
   requireUnmarkedConversation,
   WORKFLOW_ACTIONS,
@@ -188,11 +189,24 @@ function registerWorkflowRoutes(
     );
   }
 
-  /** A run a start or a test answers: one already holding its key may be somebody else's. */
+  /**
+   * A run a start or a test answers: one already holding its key may be somebody else's. An
+   * outside client that may not read the Workflow is answered that run only where this very
+   * credential started it. Any other is told what a Workflow that is not there tells it
+   * (`missing`), so a run key names no run of a Workflow the credential cannot see.
+   */
   async function startedRun(
     run: WorkflowRunView,
-    context: { access: ActorAccess; actor: AuthenticatedIdentity; origin: OperationOrigin }
+    context: { access: ActorAccess; actor: AuthenticatedIdentity; origin: OperationOrigin },
+    missing: () => AppError
   ) {
+    if (
+      isOutsideCall(context.actor, context.origin) &&
+      !startedByThisCredential(run, context.actor) &&
+      !context.access.authorize(WORKFLOW_ACTIONS.read, await resourceOf(run.workflow)).allowed
+    ) {
+      throw missing();
+    }
     const readable =
       runDataReadable(run, context, false) ||
       context.access.authorize(WORKFLOW_ACTIONS.readRunData, await resourceOf(run.workflow))
@@ -246,7 +260,8 @@ function registerWorkflowRoutes(
           operationRunId: context.runId,
           correlationId: context.correlationId
         }),
-        context
+        context,
+        () => appWorkflowRefusalError("workflow_unavailable", input.workflow)
       )
   });
 
@@ -347,7 +362,11 @@ function registerWorkflowRoutes(
               }
             : {})
         }),
-        context
+        context,
+        () =>
+          revision === "draft"
+            ? noWorkflowDraftError(input.workflow)
+            : appWorkflowRefusalError("workflow_unavailable", input.workflow)
       );
     }
   });
@@ -563,6 +582,11 @@ function registerWorkflowRoutes(
       );
     }
   });
+}
+
+/** What a test run of a Workflow without a draft is answered. */
+export function noWorkflowDraftError(workflow: string): AppError {
+  return new AppError("NOT_FOUND", `There is no Workflow '${workflow}'`);
 }
 
 function startedBy(run: WorkflowRunView, actor: AuthenticatedIdentity): boolean {

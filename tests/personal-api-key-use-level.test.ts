@@ -78,7 +78,7 @@ describe("the use level of a personal key", () => {
     const tims = await contextOf(tim.id);
     expect(tims.useActions).toEqual(["connection.use"]);
     expect((await contextOf(t.root.id)).useActions).toEqual(["connection.use", "workflow.use"]);
-    // The key `catalyst setup` asks for starts with Tim's authoring rights and the use level.
+    // A key with Tim's authoring rights and the use level, connection.use ticked by hand.
     expect(tims.authoringActions).toEqual(AUTHORING);
     const withUse = await issuePersonalKey(
       t,

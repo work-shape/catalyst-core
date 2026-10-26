@@ -1,4 +1,5 @@
 import type { PersonalApiKey, PlatformContext } from "@work-shape/catalyst-api-client";
+import { CONNECTION_ACTIONS } from "@work-shape/catalyst-core";
 
 /** How long a new key lives, in days. The instance takes at most a year. */
 export const PERSONAL_KEY_EXPIRY_DAYS = [30, 90, 365] as const;
@@ -64,14 +65,17 @@ export function personalKeyUseOffer(context: PlatformContext | undefined): strin
 
 /**
  * What the key `catalyst setup` asks for starts with: the reading, writing and publishing
- * rights the person holds among the ones offered, and the use level. Deleting is ticked by
- * hand.
+ * rights the person holds among the ones offered, and the use level without `connection.use`.
+ * Deleting is ticked by hand, and so is `connection.use`: with it the results of a
+ * Connection's calls exposed to outside clients are copied to the computer that holds the key,
+ * a choice of its own that starts off (connections-and-secrets.md, Exposure to outside
+ * clients).
  */
 export function setupKeyActions(context: PlatformContext | undefined): string[] {
   const offered = new Set(personalKeyActionOffer(context));
   return [
     ...(context?.authoringActions ?? []).filter((action) => offered.has(action)),
-    ...personalKeyUseOffer(context)
+    ...personalKeyUseOffer(context).filter((action) => action !== CONNECTION_ACTIONS.use)
   ];
 }
 

@@ -15,6 +15,7 @@ import {
   save,
   testRun
 } from "./support/mail-workflows";
+import { issuePersonalKey, personalKeyToken } from "./support/personal-api-keys";
 import { withTestSql } from "./support/test-sql";
 import { runSchema, workflowFixture, type WorkflowFixture } from "./support/workflow-instance";
 import { stepRunsOf } from "./support/workflow-runs";
@@ -470,5 +471,47 @@ describe("a test run of a mail.send step", () => {
     expect(step).not.toHaveProperty("sendsMail");
     expect(response.body).not.toContain("Monthly check");
     expect(response.body).not.toContain("<html");
+  });
+
+  it("stops a test run a personal key started at the mail step, saying no key carries mail_sender.use", async () => {
+    const t = await ready({ mail: { recipientDomains: ["kanzlei.de"] }, personalKeys: true });
+    await grantSystem(t);
+    await save(t, mailFlow("draft", basic(ref("email"))));
+    // The root holds mail_sender.use, and no scope a key can name carries it.
+    const key = await issuePersonalKey(t, ["workflow.read", "workflow.write"], t.root.id);
+    const started = await t.call(t.root.id, "workflows.test", {
+      params: { workflow: "draft" },
+      payload: { input: { email: "anna@kanzlei.de" } },
+      headers: await personalKeyToken(t, key.secret)
+    });
+    expect(started.statusCode, started.body).toBe(200);
+    const ended = await t.finish(runSchema.parse(started.json()).id);
+    expect(ended.status).toBe("failed");
+    expect(ended.error).toMatchObject({
+      code: "tester_key_cannot_carry",
+      action: "mail_sender.use",
+      message: expect.stringContaining("No API key can carry the right 'mail_sender.use'")
+    });
+    expect(t.capturedMail()).toEqual([]);
+    // Kai, who lacks mail_sender.use, is told so through his key as in the app.
+    for (const action of ["workflow.read", "workflow.write"]) {
+      await t.allow({ kind: "user", id: t.kai.id }, action);
+    }
+    const kaiKey = await issuePersonalKey(t, ["workflow.read", "workflow.write"], t.kai.id);
+    const byKai = await t.call(t.kai.id, "workflows.test", {
+      params: { workflow: "draft" },
+      payload: { input: { email: "anna@kanzlei.de" } },
+      headers: await personalKeyToken(t, kaiKey.secret)
+    });
+    expect(byKai.statusCode, byKai.body).toBe(200);
+    expect((await t.finish(runSchema.parse(byKai.json()).id)).error).toMatchObject({
+      code: "tester_missing_right",
+      action: "mail_sender.use"
+    });
+    // Signed in, the same person test-runs it as before.
+    expect(await testRun(t, "draft", { email: "anna@kanzlei.de" })).toMatchObject({
+      status: "done",
+      target: "dry_run"
+    });
   });
 });

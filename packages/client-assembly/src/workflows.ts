@@ -6,13 +6,13 @@ import {
 } from "@work-shape/catalyst-config-schema";
 import {
   createWorkflowRoutes,
+  noWorkflowDraftError,
   workflowRunAsPrincipal,
   type OperationCalls,
   type RouteRegistration,
   type WorkflowListEntry
 } from "@work-shape/catalyst-server";
 import {
-  AppError,
   appWorkflowRefusalError,
   workflowDurationMs,
   type JobSchedule,
@@ -272,7 +272,7 @@ export function createInstanceWorkflows(parts: InstanceWorkflowsParts): Instance
                   : await assets.draft(workflow);
             if (!draft && revision === "published")
               throw appWorkflowRefusalError("workflow_unavailable", workflow);
-            if (!draft) throw new AppError("NOT_FOUND", `There is no Workflow '${workflow}'`);
+            if (!draft) throw noWorkflowDraftError(workflow);
             // The principal bounds the test run and lends it nothing: it is asked to exist and
             // be active, and no right over it is asked of the tester (ADR-0031).
             if (draft.manifest.runAs !== undefined)
