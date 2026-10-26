@@ -9,7 +9,7 @@ import { registerModuleOperations } from "@work-shape/catalyst-server";
 import { createClientInstanceExecutionAssembly, type CreateClientInstanceAppInput } from "./app";
 import { readClientInstanceEnv } from "./env";
 import { createJobWorker } from "./job-worker";
-import { createLogger } from "./logger";
+import { runWorkerUntilStopped } from "./worker-lifecycle";
 
 /** Keeps ingestion's platform connections below the operated server's connection budget. */
 const DEFAULT_KNOWLEDGE_WORKER_POOL_SIZE = 6;
@@ -133,20 +133,9 @@ export async function runClientInstanceKnowledgeWorker(
     }
     return;
   }
-  const stop = (signal: NodeJS.Signals) => {
-    createLogger().info({ signal }, "Knowledge worker is stopping");
-    service.stop().catch((error: unknown) => {
-      createLogger().error({ error }, "Knowledge worker shutdown failed");
-      process.exitCode = 1;
-    });
-  };
-  process.once("SIGTERM", stop);
-  process.once("SIGINT", stop);
-  try {
-    await service.runUntilStopped();
-  } finally {
-    process.off("SIGTERM", stop);
-    process.off("SIGINT", stop);
-    await service.close();
-  }
+  await runWorkerUntilStopped(service, {
+    stoppingMessage: "Knowledge worker is stopping",
+    shutdownFailureMessage: "Knowledge worker shutdown failed",
+    stopOnEachSignal: true
+  });
 }

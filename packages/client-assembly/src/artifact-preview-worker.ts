@@ -24,6 +24,7 @@ import {
   WORKSPACE_STORE_PATH
 } from "./infrastructure";
 import { createJobWorker } from "./job-worker";
+import { runWorkerUntilStopped } from "./worker-lifecycle";
 import { endResolveOnlyRun, resolveInstanceModules } from "./modules";
 import { createPlatformStore } from "./store";
 
@@ -157,27 +158,9 @@ export async function runClientInstanceArtifactPreviewWorker(
   input: CreateClientInstanceArtifactPreviewWorkerInput
 ): Promise<void> {
   const service = await createClientInstanceArtifactPreviewWorker(input);
-  let stopping = false;
-  const stop = (signal: NodeJS.Signals) => {
-    if (stopping) {
-      return;
-    }
-    stopping = true;
-    createLogger().info({ signal }, "Artifact preview worker is stopping");
-    service.stop().catch((error: unknown) => {
-      createLogger().error({ error }, "Worker shutdown failed");
-      process.exitCode = 1;
-    });
-  };
-  process.once("SIGTERM", stop);
-  process.once("SIGINT", stop);
-  try {
-    await service.runUntilStopped();
-  } finally {
-    process.off("SIGTERM", stop);
-    process.off("SIGINT", stop);
-    await service.close();
-  }
+  await runWorkerUntilStopped(service, {
+    stoppingMessage: "Artifact preview worker is stopping"
+  });
 }
 
 async function loadArtifactPreviewWorkerConfig(

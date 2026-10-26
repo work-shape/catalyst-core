@@ -1,6 +1,5 @@
 import type { ResultShaper } from "@work-shape/catalyst-core";
 import type { CatalogueEntry } from "@work-shape/catalyst-connections";
-import { createLogger } from "./logger";
 import {
   AppError,
   type ConnectorTypeDefinition,
@@ -14,6 +13,7 @@ import type { ClientInstanceCapability } from "./capabilities";
 import { readClientInstanceEnv, type ClientInstanceEnv } from "./env";
 import { createClientInstanceAgentRunJobs } from "./agent-run-jobs";
 import { createJobWorker } from "./job-worker";
+import { runWorkerUntilStopped } from "./worker-lifecycle";
 import { registerModuleOperations } from "@work-shape/catalyst-server";
 
 // How long a worker that was told to stop lets its runs end on their own. A run that is not
@@ -91,26 +91,10 @@ export async function runClientInstanceAgentRunWorker(
 ): Promise<void> {
   const service = await createClientInstanceAgentRunWorker(input);
   const drainMs = readAgentRunWorkerDrainTimeoutMs(readClientInstanceEnv(input.env));
-  let signals = 0;
-  // The first signal drains the running runs up to the timeout; a second one ends them now.
-  const stop = (signal: NodeJS.Signals) => {
-    signals += 1;
-    if (signals > 2) return;
-    createLogger().info({ signal, draining: signals === 1 }, "Agent run worker is stopping");
-    service.stop(signals === 1 ? { drainMs } : {}).catch((error: unknown) => {
-      createLogger().error({ error }, "Worker shutdown failed");
-      process.exitCode = 1;
-    });
-  };
-  process.on("SIGTERM", stop);
-  process.on("SIGINT", stop);
-  try {
-    await service.runUntilStopped();
-  } finally {
-    process.off("SIGTERM", stop);
-    process.off("SIGINT", stop);
-    await service.close();
-  }
+  await runWorkerUntilStopped(service, {
+    stoppingMessage: "Agent run worker is stopping",
+    drainMs
+  });
 }
 
 export function readAgentRunWorkerDrainTimeoutMs(env: ClientInstanceEnv): number {
