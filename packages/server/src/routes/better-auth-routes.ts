@@ -6,7 +6,12 @@ import {
   STANDALONE_AUTH_SOURCE,
   type StandaloneTwoFactorEvent
 } from "@work-shape/catalyst-auth";
-import { AppError, createPlatformId, type AuditActor } from "@work-shape/catalyst-core";
+import {
+  AppError,
+  createPlatformId,
+  type AuditActor,
+  type AuditEventName
+} from "@work-shape/catalyst-core";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { accountTried, requireWithinLimit } from "../http/rate-limit";
 import type { ResolvedChatServerOptions } from "../types";
@@ -78,13 +83,20 @@ export function registerBetterAuthRoutes(
   });
 }
 
-const TWO_FACTOR_AUDIT_TYPES = {
-  enabled: "user.two_factor_enabled",
-  disabled: "user.two_factor_disabled",
-  backup_codes_regenerated: "user.two_factor_backup_codes_regenerated",
-  backup_code_used: "user.two_factor_backup_code_used",
-  locked: "user.two_factor_locked"
-} as const satisfies Record<StandaloneTwoFactorEvent["type"], string>;
+function twoFactorAuditType(type: StandaloneTwoFactorEvent["type"]): AuditEventName {
+  switch (type) {
+    case "enabled":
+      return "user.two_factor_enabled";
+    case "disabled":
+      return "user.two_factor_disabled";
+    case "backup_codes_regenerated":
+      return "user.two_factor_backup_codes_regenerated";
+    case "backup_code_used":
+      return "user.two_factor_backup_code_used";
+    case "locked":
+      return "user.two_factor_locked";
+  }
+}
 
 /**
  * TWO-FACTOR-1: the audit of a person's own two-factor changes. The row names the event, the
@@ -118,7 +130,7 @@ async function recordTwoFactorEvent(
         }
       : { externalUserId: event.authUserId, displayLabel: event.authUserId, roles: [] };
     await options.auditRecorder.record({
-      type: TWO_FACTOR_AUDIT_TYPES[event.type],
+      type: twoFactorAuditType(event.type),
       status: event.type === "locked" ? "denied" : "success",
       actor,
       ...(user ? { subject: user.id } : {}),
