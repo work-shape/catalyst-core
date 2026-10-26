@@ -5,14 +5,20 @@ import {
   type PlatformStores
 } from "@work-shape/catalyst-core";
 import type {
+  ClientInstanceCapabilityBrand,
   ClientInstanceCapabilityMail,
   ClientInstanceCapabilityPlatformStores,
   ClientInstanceCapabilityRecords
 } from "@work-shape/catalyst-capability-sdk";
-import type { MailSender } from "@work-shape/catalyst-mail";
+import {
+  createClientBranding,
+  type ClientInstanceConfig
+} from "@work-shape/catalyst-config-schema";
+import { createInlineImageLoader, type MailSender } from "@work-shape/catalyst-mail";
 
 // The ports one capability gets of the platform's records (ADR-0033): its own records, the
-// Operation Runs of its own operations, and the instance's mailer.
+// Operation Runs of its own operations, the instance's mailer and how the instance presents
+// itself outside.
 
 export function capabilityStoresOf(input: {
   clientInstanceId: ClientInstanceId;
@@ -87,6 +93,39 @@ export function createCapabilityMail(input: {
         reason: result.failure ?? "rejected",
         ...(result.providerCode ? { providerCode: result.providerCode } : {})
       };
+    }
+  };
+}
+
+const HEX_COLOR = /^#[0-9a-f]{6}$/iu;
+
+/**
+ * The instance's name, accent colour and logo as a capability shows them outside the instance.
+ * The logo is read once from where the release config points, as the mails read it.
+ */
+export function createCapabilityBrand(
+  config: ClientInstanceConfig,
+  /** Tests read the logo through their own reader. */
+  options: Pick<Parameters<typeof createInlineImageLoader>[0], "fetch"> = {}
+): ClientInstanceCapabilityBrand {
+  const branding = createClientBranding(config);
+  const appUrl = config.infrastructure.mail?.appUrl;
+  const logo = branding.logoUrl
+    ? createInlineImageLoader({
+        url: branding.logoUrl,
+        ...(appUrl ? { baseUrl: appUrl } : {}),
+        ...(options.fetch ? { fetch: options.fetch } : {}),
+        contentId: "logo"
+      })
+    : undefined;
+  return {
+    name: branding.clientName,
+    ...(branding.accentColor && HEX_COLOR.test(branding.accentColor)
+      ? { accentColor: branding.accentColor }
+      : {}),
+    async logo() {
+      const image = await logo?.();
+      return image ? { contentType: image.contentType, content: image.content } : undefined;
     }
   };
 }

@@ -144,6 +144,8 @@ export interface ClientInstanceCapabilityContext {
   knowledgeDocuments?: KnowledgeHitDocuments;
   /** The instance's mailer. Ready once the instance has started; ask `available` first. */
   mail: ClientInstanceCapabilityMail;
+  /** The instance's name, accent colour and logo, for a page the capability shows outside it. */
+  brand?: ClientInstanceCapabilityBrand;
   /** Which process this is: the API process, or a worker that runs steps and agents. */
   process: CapabilityProcess;
 }
@@ -206,6 +208,20 @@ export interface ClientInstanceCapabilityMail {
   ): Promise<
     | { ok: true }
     | { ok: false; reason: "no_mail" | "rejected" | "unsent" | "uncertain"; providerCode?: string }
+  >;
+}
+
+/**
+ * How the instance presents itself on a page outside it, such as a form a person without an
+ * account fills in. The page loads nothing from the instance, so the logo comes as its bytes.
+ */
+export interface ClientInstanceCapabilityBrand {
+  name: string;
+  /** A hex colour such as `#0f766e`, where the instance sets one. */
+  accentColor?: string;
+  /** The logo where one is set and could be read: PNG, JPEG or GIF of at most 256 KiB. */
+  logo(): Promise<
+    { contentType: "image/png" | "image/jpeg" | "image/gif"; content: Uint8Array } | undefined
   >;
 }
 
