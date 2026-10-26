@@ -90,6 +90,10 @@
 @theme static {
   /* The dimmed page behind a modal dialog. */
   --color-scrim: rgb(0 0 0 / 0.45);
+  /* A scannable code (QrCode): black on white in either mode, since many scanners do not read
+     an inverted code. */
+  --color-code-paper: #ffffff;
+  --color-code-ink: #000000;
 
   /* Radius: 4 for checkbox and inline code, 8 for fields, rows and menu items, 12 for
      cards, lists, menus and popovers, 16 for dialogs and the composer. Buttons and the
