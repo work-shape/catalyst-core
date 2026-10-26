@@ -1,5 +1,6 @@
 import pino from "pino";
 import { LOG_REDACTION, type Logger } from "@work-shape/catalyst-core";
+import { redactRequestUrl } from "./request-log";
 
 const REDACTED = "[REDACTED]";
 const TRUNCATED = "[TRUNCATED]";
@@ -28,15 +29,7 @@ export function createLogger(): Logger {
             // A marked value given as the record itself: its entries are never copied.
             markOf(fields) !== undefined
               ? { value: markOf(fields) }
-              : sanitizeFields(
-                  {
-                    ...fields,
-                    ...(fields.req === undefined ? {} : { req: serializeRequest(fields.req) }),
-                    ...(fields.res === undefined ? {} : { res: serializeResponse(fields.res) })
-                  },
-                  0,
-                  new WeakSet<object>()
-                )
+              : sanitizeFields(fields, 0, new WeakSet<object>())
         }
       },
       process.stdout
@@ -87,7 +80,15 @@ function sanitizeFields(
   for (const [key, value] of Object.entries(fields)) {
     output[key] = SECRET_KEY_PATTERN.test(key.toLowerCase().replace(/[^a-z0-9]/gu, ""))
       ? REDACTED
-      : sanitize(value, depth, seen);
+      : sanitize(
+          key === "req"
+            ? serializeRequest(value)
+            : key === "res"
+              ? serializeResponse(value)
+              : value,
+          depth,
+          seen
+        );
   }
   return output;
 }
@@ -137,6 +138,11 @@ function markOf(value: object): string | undefined {
 
 function sanitizeString(value: string): string {
   const redacted = value
+    // Fastify repeats the raw target in its route-not-found message, outside `req`.
+    .replace(
+      /^Route (\S+):([\s\S]*) not found$/u,
+      (_match, method: string, url: string) => `Route ${method}:${redactRequestUrl(url)} not found`
+    )
     .replace(URL_PASSWORD_PATTERN, `$1:${REDACTED}@`)
     .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/giu, `Bearer ${REDACTED}`)
     .replace(/\bsk-[A-Za-z0-9_-]{16,}\b/giu, REDACTED);
@@ -150,6 +156,7 @@ function serializeRequest(value: unknown): unknown {
   if (
     value !== null &&
     typeof value === "object" &&
+    markOf(value) === undefined &&
     "method" in value &&
     "url" in value &&
     typeof value.method === "string" &&
@@ -157,7 +164,7 @@ function serializeRequest(value: unknown): unknown {
   ) {
     return {
       method: value.method,
-      url: value.url,
+      url: redactRequestUrl(value.url),
       ...("host" in value && typeof value.host === "string" ? { host: value.host } : {}),
       ...("ip" in value && typeof value.ip === "string" ? { remoteAddress: value.ip } : {})
     };
@@ -170,6 +177,7 @@ function serializeResponse(value: unknown): unknown {
   if (
     value !== null &&
     typeof value === "object" &&
+    markOf(value) === undefined &&
     "statusCode" in value &&
     typeof value.statusCode === "number"
   ) {
