@@ -26,7 +26,7 @@ import type { PageApps } from "./page-apps";
  * A `require_approval` there is a block, kept as a block hit. Nothing can wait for an
  * approval: the save's own before-events ask nothing about a draft it writes, so no call is
  * left to hold and no request is filed. A hit that asked for an approval nobody can give would
- * count a hold that never was. The person's Update app in the preview (`apps.update_from_page`)
+ * count a hold that never was. The person's Save to draft in the preview (`apps.update_from_page`)
  * writes the same draft and waits for the approval there.
  */
 export async function askAboutDraft(
@@ -112,7 +112,7 @@ function draftGuardrailRefusal(answer: PlatformEventAnswer, event: OperationBefo
   // The refusal ends in the guardrail's reason, which may end a sentence of its own.
   const first = /[.!?…]$/u.test(why) ? why : `${why}.`;
   return asksForApproval && !blocked
-    ? `${first} It asks for another person's approval, which app.save cannot wait for. The App's draft was not written. Ask the person to use Update app in the preview, where the write can wait for the approval.`
+    ? `${first} It asks for another person's approval, which app.save cannot wait for. The App's draft was not written. Ask the person to use Save to draft in the preview, where the write can wait for the approval.`
     : `${first} The App's draft was not written.`;
 }
 
@@ -135,9 +135,9 @@ export const draftNotWritten = (
 });
 
 export const DRAFT_CHANGED_ELSEWHERE =
-  "The App's draft was changed elsewhere since this folder last wrote it, so this save did not write over it. Tell the person: Update app in the preview replaces the draft with what the preview shows.";
+  "The App's draft was changed elsewhere since this folder last wrote it, so this save did not write over it. Tell the person: Save to draft in the preview replaces the draft with what the preview shows.";
 export const DRAFT_MOVED_TO_OTHER_PAGE =
-  "Another folder was put into this App since this one last wrote it, so its draft is now written from that folder and this save did not change it. Tell the person: Update app in the preview puts this folder into the App again.";
+  "Another folder was put into this App since this one last wrote it, so its draft is now written from that folder and this save did not change it. Tell the person: Save to draft in the preview puts this folder into the App again.";
 export const DRAFT_OF_OTHER_FOLDER =
   "This conversation is about an App that this folder never wrote, so this save did not change it. Save the folder the App was made from, or ask the person to start a new conversation for a new App.";
 
@@ -176,5 +176,5 @@ export function draftRefusal(error: unknown, logger: AssetWorkflowOptions["logge
       "The draft of an App could not be written from its preview"
     );
   }
-  return "The App's draft could not be written right now. Save it again in a moment; if it fails again, tell the person to use Update app in the preview.";
+  return "The App's draft could not be written right now. Save it again in a moment; if it fails again, tell the person to use Save to draft in the preview.";
 }

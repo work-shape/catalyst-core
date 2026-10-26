@@ -332,7 +332,7 @@ describe("an App the agent writes from a Page of its conversation", () => {
         title: "Offers",
         saved: false,
         message:
-          "Guardrail 'No IBAN in Apps' blocked app 'Offers': Apps hold no bank account. It asks for another person's approval, which app.save cannot wait for. The App's draft was not written. Ask the person to use Update app in the preview, where the write can wait for the approval."
+          "Guardrail 'No IBAN in Apps' blocked app 'Offers': Apps hold no bank account. It asks for another person's approval, which app.save cannot wait for. The App's draft was not written. Ask the person to use Save to draft in the preview, where the write can wait for the approval."
       });
       expect(await draftRevisionOf(t, "offers")).toBe(1);
       expect(await hitsOf(t)).toEqual([["asset.before_write", "block", "offers"]]);

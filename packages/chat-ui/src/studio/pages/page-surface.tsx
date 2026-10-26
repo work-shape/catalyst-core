@@ -20,7 +20,7 @@ import {
   SegmentedControlItem
 } from "@work-shape/catalyst-ui";
 import { useWorkspaceApiClient } from "../../shared/api/workspace-api-client";
-import { PageAppAction } from "../apps/page-app-action";
+import { PageAppAction, PreviewNeedsAppNotice, PreviewStateLine } from "../apps/page-app-action";
 import { useTranslation } from "../../shared/i18n";
 import type { PageBuildError, SurfaceOf } from "../../chat/surface/surface";
 import { createPageBridge, type PageBridge } from "./bridge-host";
@@ -107,15 +107,17 @@ function PageSurfaceActions({ pageId }: { pageId: string }) {
 }
 
 /**
- * What the surface frame shows for a Page: the switch in its header and the revision as its
- * content, which reaches the frame's edges.
+ * What the surface frame shows for a Page: under its name what the preview is (PREVIEW-1), the
+ * switch in its header and the revision as its content, which reaches the frame's edges.
  */
 export function pageSurfaceRendering(surface: SurfaceOf<"page">): {
+  subtitle: ReactNode;
   actions: ReactNode;
   content: ReactNode;
   flush: true;
 } {
   return {
+    subtitle: <PreviewStateLine conversationId={surface.conversationId} pageId={surface.pageId} />,
     actions: (
       <>
         <PageAppAction
@@ -212,6 +214,10 @@ function PageSurface({
   });
   const preview = usePageAddress(conversationId, pageId, fileSetId);
   const address = preview.shown;
+  // A call of this revision was refused because a preview is no App. Each revision is a new
+  // mount of the surface, so a new revision starts without the notice.
+  const [needsApp, setNeedsApp] = useState(false);
+  const onPreviewIsNoApp = useCallback(() => setNeedsApp(true), []);
 
   const gone = pageIsGone(detail.error) || preview.gone;
   const state: PreviewState = gone
@@ -241,6 +247,9 @@ function PageSurface({
               draftHosts={address.draftHosts}
               onAllowed={preview.reload}
             />
+            {needsApp ? (
+              <PreviewNeedsAppNotice conversationId={conversationId} pageId={pageId} />
+            ) : null}
             <div className="min-h-0 flex-1">
               <LivePagePreview
                 title={t("pages.previewOf", { name })}
@@ -249,6 +258,7 @@ function PageSurface({
                 session={address.pageSessionId}
                 url={pageFrameAddress(address.url, apiBaseUrl, window.location.href)}
                 address={address}
+                onPreviewIsNoApp={onPreviewIsNoApp}
               />
             </div>
           </div>
@@ -439,7 +449,8 @@ export function LivePagePreview({
   session,
   url,
   route,
-  address
+  address,
+  onPreviewIsNoApp
 }: {
   /** Names the frame for someone who does not see it. */
   title: string;
@@ -454,14 +465,19 @@ export function LivePagePreview({
    * They are made with the viewer's session and name this address. Without it none is made.
    */
   address?: FrameAddress;
+  /** A call was refused because the frame is a preview of a conversation, which is no App. */
+  onPreviewIsNoApp?: () => void;
 }) {
   const { locale } = useTranslation();
   const { client } = useWorkspaceApiClient();
   const host = usePageHost();
   const texts = useFrameCallTexts();
   const calls = useMemo(
-    () => (address ? createFrameCalls(client, address, texts) : undefined),
-    [client, address, texts]
+    () =>
+      address
+        ? createFrameCalls(client, address, texts, onPreviewIsNoApp ? { onPreviewIsNoApp } : {})
+        : undefined,
+    [client, address, texts, onPreviewIsNoApp]
   );
   const callsRef = useRef(calls);
   const frameRef = useRef<HTMLIFrameElement>(null);

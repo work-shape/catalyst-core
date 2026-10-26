@@ -1,17 +1,19 @@
-import { RefreshCw } from "lucide-react";
+import { Save } from "lucide-react";
 import { useState } from "react";
-import { Button, Dialog, FormNotice, InlineError } from "@work-shape/catalyst-ui";
+import { Button, Dialog, InlineError } from "@work-shape/catalyst-ui";
 import { instanceSentence, PendingApprovalError } from "../build-area/build-refusals";
 import { useTranslation } from "../../shared/i18n";
 import { apiErrorCode } from "../../shared/workspace-utils";
 import { useAppWrites, type AppFromPage, type AppLinkCandidate } from "./app-data";
 import { appRefusalText } from "./app-model";
+import { SharePublishDialog } from "./app-publish-dialog";
 import { useAppsHost } from "./apps-host";
 import { PageHeaderAction } from "./page-header-action";
 
 /**
- * Update app, in the header of a Page whose App the reader may write. It writes the Page as it
- * is now into the draft of that App and publishes nothing.
+ * Save to draft, in the header of a Page whose App the reader may write, beside Open app. It
+ * writes the Page as it is now into the draft of that App and publishes nothing, which its
+ * words and its done state say (PREVIEW-1).
  */
 export function UpdateAppAction({
   conversationId,
@@ -31,7 +33,7 @@ export function UpdateAppAction({
     <>
       <PageHeaderAction
         label={t("apps.update")}
-        icon={<RefreshCw aria-hidden="true" />}
+        icon={<Save aria-hidden="true" />}
         onClick={() => setOpen(true)}
       />
       {open ? (
@@ -83,6 +85,10 @@ export function UpdateAppDialog({
   const [moved, setMoved] = useState(false);
   // An App the header does not read again is asked for its revision after a refusal.
   const [linkRevision, setLinkRevision] = useState(app.draftRevision);
+  // The done state hands over to the App's Publish dialog.
+  const [publishing, setPublishing] = useState(false);
+  const mayPublish = host?.rights.write === true && host.rights.publish;
+  const tell = host?.tellConversation;
 
   const update = () => {
     setPhase("working");
@@ -121,6 +127,23 @@ export function UpdateAppDialog({
       );
   };
 
+  if (publishing) {
+    return (
+      <SharePublishDialog
+        app={app.name}
+        onClose={onClose}
+        // The agent of the conversation goes on from the publish, as from the App's card.
+        {...(tell
+          ? {
+              onPublished: () => {
+                tell(t("apps.cardPublishedTell", { title: app.title })).catch(() => undefined);
+              }
+            }
+          : {})}
+      />
+    );
+  }
+
   return (
     <UpdateAppDialogView
       name={app.title}
@@ -131,23 +154,25 @@ export function UpdateAppDialog({
       failure={failure}
       onClose={onClose}
       onUpdate={update}
+      {...(mayPublish ? { onPublish: () => setPublishing(true) } : {})}
       onOpen={() => {
         onClose();
-        host?.showRoute({
-          kind: "app-edit",
-          collaborationWorkspaceId: app.workspaceId,
-          app: app.name
-        });
+        host?.showRoute(
+          { kind: "app-edit", collaborationWorkspaceId: app.workspaceId, app: app.name },
+          { chat: conversationId }
+        );
       }}
     />
   );
 }
 
 /**
- * What Update app asks and answers, in one place: what the update does and to which App before
- * it, and after it that the draft has the Page and where to publish it. A draft that is not
- * this Page's copy is replaced only by a second, differently named button: one that was
- * changed somewhere else, and the draft of an App the Page is put into for the first time.
+ * What Save to draft asks and answers, in one place: what the save does and to which App before
+ * it, and after it that the draft has the Page and nothing is published yet, with Publish for
+ * whoever may publish and the App's page for everybody else. No check mark: a saved draft is
+ * not live. A draft that is not this Page's copy is replaced only by a second, differently
+ * named button: one that was changed somewhere else, and the draft of an App the Page is put
+ * into for the first time.
  */
 export function UpdateAppDialogView({
   name,
@@ -158,6 +183,7 @@ export function UpdateAppDialogView({
   failure,
   onClose,
   onUpdate,
+  onPublish,
   onOpen
 }: {
   /** What people read as the App's name. */
@@ -172,7 +198,9 @@ export function UpdateAppDialogView({
   failure: string | undefined;
   onClose(): void;
   onUpdate(): void;
-  /** Opens the draft of the App. */
+  /** Opens the App's Publish dialog, for a reader who may publish it. */
+  onPublish?: (() => void) | undefined;
+  /** Opens the App's page. */
   onOpen(): void;
 }) {
   const { t } = useTranslation();
@@ -181,19 +209,25 @@ export function UpdateAppDialogView({
       <Dialog
         open
         size="sm"
-        title={t("apps.updateDoneTitle", { name })}
+        title={t("apps.updateDoneTitle")}
         onClose={onClose}
         footer={
           <>
             <Button variant="outline" onClick={onClose}>
               {t("close")}
             </Button>
-            <Button onClick={onOpen}>{t("apps.openDraft")}</Button>
+            {onPublish ? (
+              <Button onClick={onPublish}>{t("apps.publish")}</Button>
+            ) : (
+              <Button onClick={onOpen}>{t("apps.openApp")}</Button>
+            )}
           </>
         }
       >
         <div className="grid gap-3">
-          <FormNotice tone="success">{t("apps.updateDone")}</FormNotice>
+          <p className="text-body" role="status">
+            {t("apps.updateDone")}
+          </p>
           {pageName !== undefined && pageName.trim() !== name.trim() ? (
             <p className="text-body text-muted-foreground">
               {t("apps.updateKeptName", { name, page: pageName })}

@@ -29,7 +29,7 @@ You can also save it yourself:
 2. Check the **Name**. It is filled in with the name the App's folder gives itself, its `app.yaml` name or its HTML title, or else the folder's name. The App's address is made from the name, as when the agent saves it, and does not change later.
 3. Click **Save** ("Speichern").
 
-After that, each change you ask for in the same chat goes into the App's draft once the agent saves it again. When that did not happen, for example because someone changed the draft elsewhere, the preview offers **Update app** ("App aktualisieren"): **Replace draft** ("Entwurf ersetzen") puts what the preview shows now into the draft.
+After that, each change you ask for in the same chat goes into the App's draft once the agent saves it again. The preview's header says what you look at: "Preview · not saved yet" ("Vorschau · noch nicht gespeichert") before the first save, and afterwards that it is a preview of the App, whose Data Stores and Workflows run only in the App itself. **Open app** ("App öffnen") takes you to the App's draft with the chat beside it. When the agent's save did not reach the draft, for example because someone changed the draft elsewhere, **Save to draft** ("Im Entwurf speichern") in the preview's header puts what the preview shows now into the draft (**Replace draft**, "Entwurf ersetzen", where the draft changed). Saving publishes nothing: others see the change once you publish.
 
 ## Try it safely
 

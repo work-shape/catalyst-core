@@ -553,6 +553,41 @@ describe("the calls of a frame", () => {
     });
   });
 
+  // Fails without PREVIEW-1: nothing outside the frame heard that a preview is no App, so the
+  // person saw only what the agent's code made of the refusal.
+  it("tell the surface when a call was refused because the preview is no App, and only then", async () => {
+    const refusals = [
+      refusal(409, "CONFLICT", "Save it as an App", { reason: "data_store_needs_app" }),
+      refusal(409, "CONFLICT", "A draft changes nothing", { reason: "draft_safe_mode" })
+    ];
+    let heard = 0;
+    const calls = createFrameCalls(
+      {
+        apps: {
+          sessions: {
+            write_storage: () => Promise.reject(new Error("not asked")),
+            context: () => Promise.resolve({ can: {} }),
+            call_action: () => Promise.reject(refusals.shift()),
+            get_workflow_run: () => Promise.reject(new Error("not asked"))
+          }
+        }
+      },
+      address,
+      undefined,
+      { onPreviewIsNoApp: () => (heard += 1) }
+    );
+    if (!calls) throw new Error("The address names a frame");
+
+    const first = await calls.run({ type: "action", name: "load", input: {} });
+    expect(first).toEqual({
+      ok: false,
+      error: expect.objectContaining({ code: "data_store_needs_app" })
+    });
+    expect(heard).toBe(1);
+    await calls.run({ type: "action", name: "save", input: {} });
+    expect(heard).toBe(1);
+  });
+
   // Fails without the fix round: the run of a refused or failed call was dropped, so
   // `AppCallError.runId` named nothing, and each App worded a missing right itself.
   it("keep the run of a refusal and word a missing right on a Connection in the person's language", () => {
