@@ -1,4 +1,9 @@
 import {
+  SKILL_FILE_MAX_BYTES,
+  SKILL_MAX_BYTES,
+  SKILL_MAX_FILES
+} from "@work-shape/catalyst-api-contract";
+import {
   formatSkillMarkdown,
   parseSkillManifest,
   skillConfigSchema,
@@ -61,12 +66,7 @@ const SKILL_TEXT_EXTENSIONS: readonly string[] = [
 const SKILL_PATH_MAX_CHARS = 240;
 const SKILL_PATH_SEGMENT_MAX_CHARS = 100;
 
-/** How large one file of a skill is at most, in bytes. */
-const SKILL_FILE_MAX_BYTES = 2 * 1024 * 1024;
-/** How many files one skill holds at most. */
-const SKILL_MAX_FILES = 500;
-/** How large the files of one skill are at most together, in bytes: what one write carries. */
-export const SKILL_MAX_BYTES = 8 * 1024 * 1024;
+export { SKILL_MAX_BYTES } from "@work-shape/catalyst-api-contract";
 
 type SkillFileRefusal =
   | "skill_manifest_missing"

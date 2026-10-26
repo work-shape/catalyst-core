@@ -503,6 +503,9 @@ importers:
       '@work-shape/catalyst-api-client':
         specifier: workspace:*
         version: link:../api-client
+      '@work-shape/catalyst-api-contract':
+        specifier: workspace:*
+        version: link:../api-contract
       '@work-shape/catalyst-config-schema':
         specifier: workspace:*
         version: link:../config-schema
