@@ -24,10 +24,25 @@ describe("system instructions", () => {
       "Never name a person, an administrator or a contact as the one to fix it"
     );
     expect(CATALYST_INTERNAL_AGENT_PROMPT).toContain("give the time and the run or command id");
-    // The help contact is for a missing right only.
+    // The help contact is for rights and the instance's content, never for a platform failure.
     expect(CATALYST_INTERNAL_AGENT_PROMPT).toContain(
-      "For a missing right, name the administrator supplied by the tool result"
+      "For a missing right or a question about the instance's content or access, name the administrator"
     );
+    expect(CATALYST_INTERNAL_AGENT_PROMPT).toContain(
+      "helpContact answers questions about the instance's content and access, never a platform or infrastructure failure"
+    );
+    expect(PLATFORM_ORIENTATION).toContain(
+      "never name it as the one to fix a platform or infrastructure failure"
+    );
+  });
+  it("does not let an agent infer what an outside client can reach from its own tools", () => {
+    expect(PLATFORM_ORIENTATION).toContain(
+      "not what an outside client (CLI, MCP, a personal key) can reach"
+    );
+    expect(PLATFORM_ORIENTATION).toContain(
+      "open your answer by saying that it depends on the Connection's \"Outside clients\" exposure and the key's scopes, and that you have not checked them"
+    );
+    expect(PLATFORM_ORIENTATION).toContain("never infer it from your own tools");
   });
   it("keeps technical ids in agent handoffs and out of replies the person reads", () => {
     const content = createSystemInstructions("Help.", "en");
