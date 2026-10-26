@@ -318,6 +318,8 @@ export async function workflowFixture(
      * Outbound mail on: `mail.send` with the system sender, its mails rendered in the frame and
      * handed to the transport given, a capture where none is.
      */
+    /** Operations of the call path beside the platform's, such as one a capability brings. */
+    operations?: readonly import("@work-shape/catalyst-core").OperationDefinition[];
     mail?: {
       recipientDomains: readonly string[];
       transport?: MailTransport;
@@ -406,6 +408,8 @@ export async function workflowFixture(
               ...(options.now ? { now: options.now } : {}),
               defaultLocale: "en"
             });
+          for (const definition of options.operations ?? [])
+            server.operationCalls.registry.register(definition);
           operationRegistry = server.operationCalls.registry;
           modules = resolveInstanceModules(config, []).snapshot;
           instanceStores = stores;
