@@ -5,6 +5,8 @@ import type { PostgresChangeStatements } from "@work-shape/catalyst-postgres-con
 import { z } from "zod";
 import {
   AppError,
+  decodePageCursor,
+  encodePageCursor,
   isAppError,
   knowledgeSourceItemsInputSchema,
   knowledgeSourceItemsOutputSchema,
@@ -323,7 +325,7 @@ export function createKnowledgeSources(runtime: DataStoreRuntime): KnowledgeSour
         try {
           cursor = z
             .object({ at: z.iso.datetime(), id: z.string() })
-            .parse(JSON.parse(Buffer.from(input.cursor, "base64url").toString()));
+            .parse(decodePageCursor(input.cursor));
         } catch {
           throw new AppError("VALIDATION_FAILED", "The source item cursor is invalid");
         }
@@ -360,9 +362,7 @@ export function createKnowledgeSources(runtime: DataStoreRuntime): KnowledgeSour
           })),
           ...(rows.length > limit && last
             ? {
-                nextCursor: Buffer.from(
-                  JSON.stringify({ at: last.changed_at.toISOString(), id: last.id })
-                ).toString("base64url")
+                nextCursor: encodePageCursor({ at: last.changed_at.toISOString(), id: last.id })
               }
             : {})
         });

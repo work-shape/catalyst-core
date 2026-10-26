@@ -1,6 +1,12 @@
 import { scopePredicate } from "./scoped-tables";
 import type { PostgresParameter } from "@work-shape/catalyst-postgres-connector";
-import { AppError, DATA_STORE_PREVIEW_ROW_LIMIT, type JsonObject } from "@work-shape/catalyst-core";
+import {
+  AppError,
+  DATA_STORE_PREVIEW_ROW_LIMIT,
+  decodePageCursor,
+  encodePageCursor,
+  type JsonObject
+} from "@work-shape/catalyst-core";
 import { z } from "zod";
 import { catalogTarget, readTables } from "./catalog";
 import { quoteIdentifier } from "./server";
@@ -95,11 +101,9 @@ const cursorInvalid = () =>
     { reason: "cursor_invalid" }
   );
 
-const cursorOf = (place: Place) => Buffer.from(JSON.stringify(place)).toString("base64url");
-
 function placeOf(cursor: string): Place {
   try {
-    const parsed: unknown = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8"));
+    const parsed: unknown = decodePageCursor(cursor);
     return placeSchema.parse(parsed);
   } catch {
     throw cursorInvalid();
@@ -254,7 +258,7 @@ export const rows: StoreRead = {
         typeof row[`x${index}`] === "string" ? [name] : []
       );
       return {
-        at: cursorOf(
+        at: encodePageCursor(
           physical
             ? { t: String(row.k0), p: String(row.k1) }
             : { k: key.map((_, index) => String(row[`k${index}`])) }

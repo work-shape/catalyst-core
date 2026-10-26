@@ -1,6 +1,8 @@
 import { z } from "zod";
 import {
   AppError,
+  decodePageCursor,
+  encodePageCursor,
   KNOWLEDGE_CONTENT_STATES,
   KNOWLEDGE_DOCUMENT_FORMATS,
   KNOWLEDGE_DOCUMENT_WAIT_CODES,
@@ -40,13 +42,9 @@ const documentRow = z.object({
 
 const cursorSchema = z.tuple([z.string().min(1).max(64), z.string().min(1).max(200)]);
 
-function encodeCursor(at: string, id: string): string {
-  return Buffer.from(JSON.stringify([at, id])).toString("base64url");
-}
-
 function decodeCursor(cursor: string): [string, string] {
   try {
-    return cursorSchema.parse(JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")));
+    return cursorSchema.parse(decodePageCursor(cursor));
   } catch {
     throw new AppError(
       "VALIDATION_FAILED",
@@ -122,7 +120,7 @@ export async function listKnowledgeDocuments(
     ...(summary ? { summary } : {}),
     documents: page.map(entryOf),
     ...(rows.length > input.limit && last
-      ? { nextCursor: encodeCursor(last.cursor_at, last.id) }
+      ? { nextCursor: encodePageCursor([last.cursor_at, last.id]) }
       : {})
   };
 }

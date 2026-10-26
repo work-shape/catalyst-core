@@ -537,6 +537,26 @@ describe("list and timestamp conventions", () => {
     expect(listQuerySchema.parse({}).limit).toBe(50);
   });
 
+  it("reads an existing scoped tuple cursor and writes the same bytes", async () => {
+    const { server } = await createServer();
+    const cursor =
+      "eyJzY29wZSI6IltcInRlc3RMaXN0XCIse30se31dIiwia2V5cyI6WyIyMDI2LTEwLTA5VDEyOjAwOjAwLjAwMFoiLCIyNTkiXX0";
+    const first = await server.call("testList", { query: { limit: 1 } }, asCaller());
+    expect(first.statusCode).toBe(200);
+    expect(operations.testList.response.schema.parse(first.json()).nextCursor).toBe(cursor);
+    const second = await server.call("testList", { query: { limit: 1, cursor } }, asCaller());
+    expect(second.statusCode).toBe(200);
+    expect(operations.testList.response.schema.parse(second.json()).items).toEqual([
+      { id: "258", createdAt: "2026-10-09T12:00:00.000Z" }
+    ]);
+    const invalid = await server.call("testList", { query: { cursor: "nonsense" } }, asCaller());
+    expect(invalid.statusCode).toBe(422);
+    expect(apiErrorResponseSchema.parse(invalid.json()).error).toMatchObject({
+      code: "VALIDATION_FAILED",
+      message: "List cursor is invalid"
+    });
+  });
+
   it("uses exclusive tuple cursors across ties, and binds them to the list filters", async () => {
     const { server } = await createServer();
     const ids: string[] = [];

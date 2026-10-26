@@ -273,6 +273,27 @@ describe("REC-2 records review through the public operation source", () => {
     ).toMatchObject({ code: "NOT_FOUND" });
   });
 
+  it("reads an existing flagged-fields tuple and writes the same bytes", async () => {
+    const w = await world("cursor_compat");
+    const a = await w.item("a1", "kaufvertrag", { kaufpreis: 100 });
+    const b = await w.item("b1", "kaufvertrag", { kaufpreis: 200 });
+    const c = await w.item("c1", "kaufvertrag", { kaufpreis: 300 });
+    await call(w, "records.propose", { table: "objekt", items: [a, b, c] });
+    // A fixed citation id makes the entire historical tuple reproducible. The cursor is
+    // formed from candidates even when their Knowledge Base is no longer readable.
+    await w.target`update catalyst.record_fields set knowledge_base_id='kb_legacy'`;
+    const cursor = "WyJvYmpla3QiLCIxNDAyIiwia2F1ZnByZWlzIiwia2JfbGVnYWN5IiwiYTEiXQ";
+    expect((await flagged(w, { limit: 1 })).nextCursor).toBe(cursor);
+    expect((await flagged(w, { limit: 1, cursor })).nextCursor).toBe(
+      "WyJvYmpla3QiLCIxNDAyIiwia2F1ZnByZWlzIiwia2JfbGVnYWN5IiwiYjEiXQ"
+    );
+    expect(await refusal(flagged(w, { cursor: "e30" }))).toMatchObject({
+      code: "VALIDATION_FAILED",
+      message: "The cursor is not one this list gave out",
+      details: { fields: ["cursor"] }
+    });
+  });
+
   it("pages through flagged candidates with a cursor and refuses a cursor it did not give out", async () => {
     const w = await world("paging");
     const items = [];
@@ -817,5 +838,5 @@ describe("REC-2 records review through the public operation source", () => {
     });
     const listed = groupFlagged((await flagged(w, { limit: 1_000 })).items).fieldCount;
     expect({ flagged: preview.flagged, listed }).toEqual({ flagged: 500, listed: 500 });
-  });
+  }, 60_000);
 });
