@@ -538,7 +538,9 @@ describe("process logger", () => {
         headers: { authorization: bearer, cookie: "private-cookie" }
       });
       expect(response.statusCode).toBe(200);
-      const missing = await app.call("testUnknown");
+      const missing = await app.call("testUnknown", {
+        undeclaredQuery: { cursor: "private-cursor", email: "private-email", limit: "20" }
+      });
       expect(missing.statusCode).toBe(404);
       expect((await app.call("testHidden")).statusCode).toBe(200);
       expect(lines).toEqual(
@@ -560,6 +562,11 @@ describe("process logger", () => {
             res: { statusCode: 200 }
           }),
           expect.objectContaining({ msg: "request completed", res: { statusCode: 404 } }),
+          expect.objectContaining({
+            req: expect.objectContaining({
+              url: "/test-unknown?cursor=[redacted]&email=[redacted]&limit=20"
+            })
+          }),
           expect.objectContaining({ level: 50, msg: "reply", res: { statusCode: 503 } }),
           expect.objectContaining({ level: 50, msg: "fatal mapped", token: "[REDACTED]" })
         ])
@@ -572,6 +579,8 @@ describe("process logger", () => {
       expect(chunks.join("")).not.toContain('"statusCode":null');
       expect(chunks.join("")).not.toContain(bearer);
       expect(chunks.join("")).not.toContain("private-cookie");
+      expect(chunks.join("")).not.toContain("private-cursor");
+      expect(chunks.join("")).not.toContain("private-email");
     } finally {
       await app.close();
     }
