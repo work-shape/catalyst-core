@@ -96,7 +96,22 @@ const DATA_STORE_REFUSALS: Record<DataStoreRefusal, Record<string, unknown>> = {
   data_store_below_min_schema: { dataStore: "belege", minSchema: 3, level: 2 },
   data_store_needs_app: { dataStore: "belege" },
   data_store_unavailable: { dataStore: "belege" },
-  data_store_not_listed: { dataStore: "belege", action: "list-receipts" }
+  data_store_not_listed: { dataStore: "belege", action: "list-receipts" },
+  data_store_not_reached: { dataStore: "belege" },
+  data_store_draft_below_min_schema: {
+    dataStore: "belege",
+    title: "Belege",
+    minSchema: 3,
+    level: 2
+  },
+  data_store_migration_failed: {
+    dataStore: "belege",
+    title: "Belege",
+    migration: "add_status",
+    level: 2,
+    failure: "column exists"
+  },
+  data_store_migrating: { dataStore: "belege", title: "Belege", level: 2, minSchema: 3 }
 };
 
 const PUBLISH_REFUSALS: [reason: string, details: Record<string, unknown>][] = [
@@ -379,34 +394,110 @@ describe("the refusals of the publish paths, in the reader's language", () => {
 // GOLIVE-1: the store published with the App failed its migration or is still migrating; the
 // dialog names the store by its title and the migration, in its own words.
 describe("the sentence of a publish refused for a Data Store published with the App", () => {
-  it("names the store and the migration that failed, and asks to try again while it migrates", () => {
-    const failed = appPublishRefusal(
-      refused(409, {
-        reason: "data_store_migration_failed",
-        dataStore: "pruefergebnisse",
-        title: "Prüfergebnisse",
-        migration: "add_status"
-      })
-    );
-    const migrating = appPublishRefusal(
-      refused(409, {
-        reason: "data_store_migrating",
-        dataStore: "pruefergebnisse",
-        title: "Prüfergebnisse"
-      })
-    );
-    const de = createTranslationContext("de").t;
-    const en = createTranslationContext("en").t;
-    const say = (t: typeof de, refusal: typeof failed) =>
-      refusal ? t(refusal.key, refusal.values) : undefined;
-    expect(say(de, failed)).toBe(
-      "Die Änderung „add_status“ am Datenspeicher „Prüfergebnisse“ ließ sich nicht anwenden. Die App ist nicht veröffentlicht."
-    );
-    expect(say(de, migrating)).toBe(
-      "Der Datenspeicher „Prüfergebnisse“ wird noch umgestellt. Versuche es in einer Minute noch einmal."
-    );
-    expect(say(en, failed)).toBe(
-      "The change “add_status” to the data store “Prüfergebnisse” could not be applied. The app is not published."
+  const store = { dataStore: "pruefergebnisse", title: "Prüfergebnisse" };
+  const toStore = {
+    route: { kind: "build-asset", assetKind: "data-stores", name: "pruefergebnisse" }
+  };
+
+  it("names the store by its title and the migration that failed, never the instance's failure", () => {
+    const failed = refused(409, "CONFLICT", {
+      reason: "data_store_migration_failed",
+      ...store,
+      migration: "add_status",
+      level: 2,
+      failure: 'relation "status" already exists'
+    });
+    expect(appPublishRefusal(failed, de, opensAll)).toEqual({
+      message:
+        "Die Änderung „add_status“ am Datenspeicher „Prüfergebnisse“ ließ sich nicht anwenden. Die App ist nicht veröffentlicht.",
+      action: { label: "Datenspeicher öffnen", ...toStore }
+    });
+    expect(appPublishRefusal(failed, en)).toEqual({
+      message:
+        "The change “add_status” to the data store “Prüfergebnisse” could not be applied. The app is not published."
+    });
+    // A migration the instance names only by its level is not named.
+    expect(
+      appPublishRefusal(
+        refused(409, "CONFLICT", {
+          reason: "data_store_migration_failed",
+          ...store,
+          migration: "3"
+        }),
+        de
+      )?.message
+    ).toBe(
+      "Eine Änderung am Datenspeicher „Prüfergebnisse“ ließ sich nicht anwenden. Die App ist nicht veröffentlicht."
     );
   });
+
+  it("asks to try again while the store migrates, with the way to the store", () => {
+    const migrating = refused(409, "CONFLICT", {
+      reason: "data_store_migrating",
+      ...store,
+      level: 2,
+      minSchema: 3,
+      retryable: true
+    });
+    expect(appPublishRefusal(migrating, de, opensAll)).toEqual({
+      message:
+        "Der Datenspeicher „Prüfergebnisse“ wird noch umgestellt. Versuche es in einer Minute noch einmal.",
+      action: { label: "Datenspeicher öffnen", ...toStore }
+    });
+    expect(appPublishRefusal(migrating, en)?.message).toBe(
+      "The data store “Prüfergebnisse” is still being updated. Try again in a minute."
+    );
+  });
+
+  it("asks for the store's draft to reach the level, with the way to the store", () => {
+    const below = refused(409, "CONFLICT", {
+      reason: "data_store_draft_below_min_schema",
+      ...store,
+      minSchema: 3,
+      level: 2
+    });
+    expect(appPublishRefusal(below, de, opensAll)).toEqual({
+      message:
+        "Die App braucht eine neuere Fassung des Datenspeichers „Prüfergebnisse“, als sein Entwurf hat. Bitte den Agenten, den Datenspeicher zu ergänzen.",
+      action: { label: "Datenspeicher öffnen", ...toStore }
+    });
+    expect(appPublishRefusal(below, en, opensAll)?.action).toEqual({
+      label: "Open data store",
+      ...toStore
+    });
+    expect(appPublishRefusal(below, de, { canOpen: () => false })?.action).toBeUndefined();
+  });
+
+  it("names a store the publish does not carry by its name where no title is given", () => {
+    expect(
+      appPublishRefusal(
+        refused(422, "VALIDATION_FAILED", {
+          reason: "data_store_not_reached",
+          dataStore: "pruefergebnisse"
+        }),
+        de,
+        opensAll
+      )
+    ).toEqual({
+      message:
+        "Die App nutzt den Datenspeicher „pruefergebnisse“ nicht, darum wird er nicht mit ihr veröffentlicht. Öffne den Dialog noch einmal, um zu sehen, was live geht.",
+      action: { label: "Datenspeicher öffnen", ...toStore }
+    });
+  });
+
+  it.each(["data_store_not_reached", "data_store_migrating", "data_store_named_twice"])(
+    "offers the named store for %s only when its page is available",
+    (reason) => {
+      const error = refused(409, "CONFLICT", { reason, ...store });
+      expect(appPublishRefusal(error, de, opensAll)?.action).toEqual({
+        label: "Datenspeicher öffnen",
+        ...toStore
+      });
+      expect(appPublishRefusal(error, en, opensAll)?.action).toEqual({
+        label: "Open data store",
+        ...toStore
+      });
+      expect(appPublishRefusal(error, de, { canOpen: () => false })?.action).toBeUndefined();
+    }
+  );
 });

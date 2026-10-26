@@ -223,12 +223,6 @@ export const apps = defineTranslations({
     "apps.publishTogetherDataStore": "Data store “{title}”",
     "apps.publishTogetherMigrationOne": "{count} new change to its tables",
     "apps.publishTogetherMigrations": "{count} new changes to its tables",
-    "apps.publishDataStoreMigrationFailed":
-      "The change “{migration}” to the data store “{title}” could not be applied. The app is not published.",
-    "apps.publishDataStoreMigrating":
-      "The data store “{title}” is still being updated. Try again in a minute.",
-    "apps.publishDataStoreDraftBelowMinSchema":
-      "The app needs a newer version of the data store “{title}” than its draft has. Ask the agent to extend the data store.",
     "apps.publishThisRevision": "Publish this version",
     "apps.publishTitle": "Publish “{name}”?",
     "apps.published": "Published · version {number}",
@@ -490,12 +484,6 @@ export const apps = defineTranslations({
     "apps.publishTogetherDataStore": "Datenspeicher „{title}“",
     "apps.publishTogetherMigrationOne": "{count} neue Änderung der Tabellen",
     "apps.publishTogetherMigrations": "{count} neue Änderungen der Tabellen",
-    "apps.publishDataStoreMigrationFailed":
-      "Die Änderung „{migration}“ am Datenspeicher „{title}“ ließ sich nicht anwenden. Die App ist nicht veröffentlicht.",
-    "apps.publishDataStoreMigrating":
-      "Der Datenspeicher „{title}“ wird noch umgestellt. Versuche es in einer Minute noch einmal.",
-    "apps.publishDataStoreDraftBelowMinSchema":
-      "Die App braucht eine neuere Fassung des Datenspeichers „{title}“, als sein Entwurf hat. Bitte den Agenten, den Datenspeicher zu ergänzen.",
     "apps.publishThisRevision": "Diese Version veröffentlichen",
     "apps.publishTitle": "„{name}“ veröffentlichen?",
     "apps.published": "Veröffentlicht · Version {number}",

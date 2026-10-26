@@ -191,6 +191,59 @@ describe("GOLIVE-1: the App's Publish question names the Data Stores it publishe
     expect(held(markup)).toBe(true);
   });
 
+  it("words each store refusal from the shared table, keeps an unknown one as sent, and links nowhere without a host", () => {
+    const markup = dialog(
+      ready(
+        [],
+        [
+          {
+            ...store,
+            refusals: [
+              {
+                reason: "data_store_not_reached",
+                message: "The App's revision does not bind the Data Store 'pruefergebnisse'."
+              },
+              { reason: "store_reason_from_later", message: "A sentence of a later instance." }
+            ]
+          }
+        ]
+      ),
+      "de"
+    );
+    expect(markup).toContain(
+      "Die App nutzt den Datenspeicher „Prüfergebnisse“ nicht, darum wird er nicht mit ihr veröffentlicht."
+    );
+    expect(markup).not.toContain("does not bind");
+    expect(markup).toContain("A sentence of a later instance.");
+    // No host says the reader can open the store's page: no way there is offered.
+    expect(markup).not.toContain("Datenspeicher öffnen");
+    expect(held(markup)).toBe(true);
+  });
+
+  it("says which right a store publish lacks in German, using the refusal's right", () => {
+    const markup = dialog(
+      ready(
+        [],
+        [
+          {
+            ...store,
+            refusals: [
+              {
+                reason: "no_grant",
+                right: "data_store.publish",
+                message: "You may not publish this store."
+              }
+            ]
+          }
+        ]
+      ),
+      "de"
+    );
+    expect(markup).toContain("Dafür brauchst du das Recht „Datenspeicher veröffentlichen“.");
+    expect(markup).not.toContain("You may not publish this store.");
+    expect(held(markup)).toBe(true);
+  });
+
   it("sends each store and Workflow with the revision shown", () => {
     expect(appPublishTogetherNamed(ready([parent], [store]))).toEqual({
       workflows: [{ name: "visit-log", revision: 1 }],
