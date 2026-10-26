@@ -1,4 +1,4 @@
-import { executeApprovedOperation } from "@work-shape/catalyst-tool-execution";
+import { executeApprovedOperation, runOperation } from "@work-shape/catalyst-tool-execution";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   CONNECTION_MAX_PARALLEL_CALLS,
@@ -12,7 +12,11 @@ import type {
   ConnectorOperationDescriptor,
   JsonValue
 } from "@work-shape/catalyst-core";
-import { connectionCallSentence } from "@work-shape/catalyst-core";
+import {
+  asApiCredentialId,
+  connectionCallSentence,
+  type OperationOrigin
+} from "@work-shape/catalyst-core";
 import { clientInstanceId } from "./support/access-instance";
 import {
   DEFAULT_LIMITS,
@@ -21,6 +25,7 @@ import {
   appOrigin,
   echo,
   fixture,
+  identityOf,
   lookup,
   operationOf
 } from "./support/connection-operations";
@@ -38,6 +43,12 @@ import { applyAtCurrentRevisions } from "./support/asset-revisions";
 
 afterEach(() => {
   vi.restoreAllMocks();
+});
+
+const workflowOrigin = (): OperationOrigin => ({
+  kind: "workflow",
+  workflowRunId: "wfr_test",
+  stepRunId: "wfs_test"
 });
 describe("a call of a Connection's operation", () => {
   it("lets only members of an available workspace use a Connection through an agent; a deny wins (AVAIL-1)", async () => {
@@ -347,6 +358,73 @@ describe("a call of a Connection's operation", () => {
         "authorize connection.use"
       ]);
     }
+  });
+
+  it("asks a call made for a key from another surface for outside and the key's connection.use", async () => {
+    // As an agent step or an operation step of a test run a personal key started calls: the
+    // tester's rights, the key named beside them, its scopes carried for this check alone.
+    const t = await fixture();
+    const assetId = await t.seed("crm", {
+      operations: [operationOf("echo", { exposure: ["agent", "workflow"] })]
+    });
+    await t.grant(t.kai.id, "connection.use", { assetId });
+    t.state.agentTools.set("assistant", ["connection.crm.echo"]);
+    const callFor = (
+      keyScopes: readonly string[] | undefined,
+      origin = agentOrigin("connection.crm.echo")
+    ) =>
+      runOperation(
+        {
+          operation: "connection.crm.echo",
+          effect: "reading",
+          input: { text: "hello" },
+          actor: {
+            ...identityOf(t.kai),
+            delegatedActor: {
+              kind: "api_key",
+              id: asApiCredentialId("cred_key"),
+              displayLabel: "Laptop",
+              authSource: "personal_api_key"
+            },
+            ...(keyScopes ? { outsideKeyScopes: keyScopes } : {})
+          },
+          origin,
+          correlationId: "corr_test"
+        },
+        t.operationCalls.deps
+      );
+
+    for (const origin of [agentOrigin("connection.crm.echo"), workflowOrigin()]) {
+      expect((await callFor(["connection.use"], origin)).result).toMatchObject({
+        status: "denied",
+        reason: { kind: "forbidden", action: "connection_exposure:outside", reason: "no_grant" }
+      });
+    }
+    expect(t.executed).toEqual([]);
+
+    await t.seed("crm", {
+      operations: [operationOf("echo", { exposure: ["agent", "workflow", "outside"] })]
+    });
+    for (const scopes of [["workflow.write"], undefined]) {
+      expect((await callFor(scopes)).result).toMatchObject({
+        status: "denied",
+        reason: { kind: "forbidden", action: "connection.use", reason: "outside_key_scope" }
+      });
+    }
+    expect(t.executed).toEqual([]);
+    expect((await callFor(["connection.use"])).result).toMatchObject({
+      status: "done",
+      output: { text: "hello" }
+    });
+    // The person's own call from the agent needs `agent` alone, as before.
+    await t.seed("crm", { operations: [operationOf("echo", { exposure: ["agent"] })] });
+    const own = await t.invoke(
+      t.kai,
+      "connection.crm.echo",
+      { text: "hello" },
+      { origin: agentOrigin("connection.crm.echo") }
+    );
+    expect(own.result).toMatchObject({ status: "done" });
   });
 
   it("refuses a person outside an App and a schedule whatever the operation is exposed to", async () => {

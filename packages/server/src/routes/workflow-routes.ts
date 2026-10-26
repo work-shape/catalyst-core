@@ -6,6 +6,7 @@ import {
   WORKFLOW_ACTIONS,
   WORKFLOW_ASSET_KIND,
   isAuthenticatedServicePrincipal,
+  isOutsideCall,
   type AccessResource,
   type ActorAccess,
   type AuthenticatedIdentity,
@@ -167,6 +168,43 @@ function registerWorkflowRoutes(
       run && startedBy(run, actor)
         ? { allowed: true }
         : decide(access, WORKFLOW_ACTIONS.write, resource);
+
+  /**
+   * Whether the run's result may answer this caller, where its other rights let it read the
+   * run. An outside client (an API credential, or a call made for one) reads the result of a
+   * run it started itself, which is what its Workflow answers whoever starts it, and of other
+   * runs only with `workflow.read_run_data`. A person in the interface reads it as before.
+   */
+  function resultReadable(
+    run: WorkflowRunView,
+    caller: { actor: AuthenticatedIdentity; origin: OperationOrigin },
+    readRunData: boolean
+  ): boolean {
+    return (
+      !isOutsideCall(caller.actor, caller.origin) ||
+      readRunData ||
+      startedByThisCredential(run, caller.actor)
+    );
+  }
+
+  /**
+   * Whether the outputs of the run's steps may answer this caller. A step's output is what the
+   * step read, such as a Connection's data under exposure `workflow`, and not what the
+   * Workflow answers. An outside client reads them only with `workflow.read_run_data`, or in
+   * a test run it started itself, whose Connection calls were asked exposure `outside` and
+   * the key's `connection.use`.
+   */
+  function stepOutputsReadable(
+    run: WorkflowRunView,
+    caller: { actor: AuthenticatedIdentity; origin: OperationOrigin },
+    readRunData: boolean
+  ): boolean {
+    return (
+      !isOutsideCall(caller.actor, caller.origin) ||
+      readRunData ||
+      (run.mode === "test" && startedByThisCredential(run, caller.actor))
+    );
+  }
 
   route.operation(apiOperations["workflows.list"], {
     // The list is of what the caller may be shown: the right is asked of each Workflow below.
@@ -347,15 +385,22 @@ function registerWorkflowRoutes(
       });
       return withConnectionTitles(
         context.access,
-        (await namedNow(runs)).map((run) => toRunResource(run, !run.hasAgentSteps || includeData))
+        (await namedNow(runs)).map((run) => {
+          const readable = resultReadable(run, context, includeData);
+          return withItemLabel(
+            toRunResource(run, (!run.hasAgentSteps || includeData) && readable),
+            readable
+          );
+        })
       );
     }
   });
 
   route.operation(apiOperations["workflows.download_dataset"], {
-    authorize: (input, { access, actor }) =>
+    authorize: (input, { access, actor, origin }) =>
       authorizeOnRun(input.runId, (run, resource) =>
-        run && startedBy(run, actor)
+        run &&
+        (isOutsideCall(actor, origin) ? startedByThisCredential(run, actor) : startedBy(run, actor))
           ? { allowed: true }
           : decide(access, WORKFLOW_ACTIONS.readRunData, resource)
       ),
@@ -399,11 +444,18 @@ function registerWorkflowRoutes(
     execute: async (input, { access, actor, origin }) => {
       const [run] = await namedNow([await runOf(input.runId, mayReadRun(access, actor, origin))]);
       if (!run) throw new AppError("NOT_FOUND", "There is no such Workflow Run");
-      const resource = toRunResource(
-        run,
-        !run.hasAgentSteps ||
-          (origin.kind === "app" && startedBy(run, actor)) ||
-          access.authorize(WORKFLOW_ACTIONS.readRunData, await resourceOf(run.workflow)).allowed
+      const readRunData = access.authorize(
+        WORKFLOW_ACTIONS.readRunData,
+        await resourceOf(run.workflow)
+      ).allowed;
+      const readable = resultReadable(run, { actor, origin }, readRunData);
+      const resource = withItemLabel(
+        toRunResource(
+          run,
+          (!run.hasAgentSteps || (origin.kind === "app" && startedBy(run, actor)) || readRunData) &&
+            readable
+        ),
+        readable
       );
       const [titled = resource] = await withConnectionTitles(access, [resource]);
       return titled;
@@ -447,10 +499,12 @@ function registerWorkflowRoutes(
         },
         ...(context.paging ? { page: context.paging } : {})
       });
+      const outputsReadable = stepOutputsReadable(run, context, mayReadData);
       return withConnectionTitles(
         context.access,
         stepRuns.map((step) => {
           const { outputPreview, log, ...summary } = toStepRunResource(step, mayReadData);
+          if (!outputsReadable) return withoutIterationLabel(summary);
           if (run.hasAgentSteps && !mayReadData) return summary;
           // The mail a simulated or test send would send, subject and body, is the run's data.
           const mailPreview = step.sendsMail === true && step.target !== "live";
@@ -476,12 +530,20 @@ function registerWorkflowRoutes(
         correlationId: context.correlationId
       });
       if (!run) throw new AppError("NOT_FOUND", "There is no such Workflow Run");
-      return toRunResource(
-        run,
-        !run.hasAgentSteps ||
-          (context.origin.kind === "app" && startedBy(run, context.actor)) ||
-          context.access.authorize(WORKFLOW_ACTIONS.readRunData, await resourceOf(run.workflow))
-            .allowed
+      const readRunData = context.access.authorize(
+        WORKFLOW_ACTIONS.readRunData,
+        await resourceOf(run.workflow)
+      ).allowed;
+      const readable = resultReadable(run, context, readRunData);
+      return withItemLabel(
+        toRunResource(
+          run,
+          (!run.hasAgentSteps ||
+            (context.origin.kind === "app" && startedBy(run, context.actor)) ||
+            readRunData) &&
+            readable
+        ),
+        readable
       );
     }
   });
@@ -490,6 +552,19 @@ function registerWorkflowRoutes(
 function startedBy(run: WorkflowRunView, actor: AuthenticatedIdentity): boolean {
   const kind = isAuthenticatedServicePrincipal(actor) ? "service_principal" : "user";
   return run.startedBy.kind === kind && run.startedBy.id === actor.id;
+}
+
+/**
+ * Whether the very credential of the call started the run: the service principal, or the
+ * person's same API key. A run the person started in the interface, or with another key, was
+ * not started by this key, and its steps were never asked what this key may carry.
+ */
+function startedByThisCredential(run: WorkflowRunView, actor: AuthenticatedIdentity): boolean {
+  if (!startedBy(run, actor)) return false;
+  if (isAuthenticatedServicePrincipal(actor)) return true;
+  const key = actor.delegatedActor;
+  const recorded = run.startedBy.delegatedActor;
+  return key?.kind === "api_key" && recorded?.kind === "api_key" && recorded.id === key.id;
 }
 
 /** A run as the API answers it: without the instance and the correlation id it carries. */
@@ -510,6 +585,26 @@ function toRunResource(run: WorkflowRunView, includeData = true) {
     principal: { id: principal.id, name: principal.name, displayLabel: principal.displayLabel },
     startedBy: { kind: run.startedBy.kind, id: run.startedBy.id, label: run.startedBy.label }
   };
+}
+
+/**
+ * A run with the label of the loop item that started it only where the run's data is for the
+ * caller: the label is a field of the parent's loop items, which a step read.
+ */
+function withItemLabel<Resource extends { itemLabel?: string }>(
+  resource: Resource,
+  readable: boolean
+): Omit<Resource, "itemLabel"> {
+  if (readable) return resource;
+  const { itemLabel: _label, ...rest } = resource;
+  return rest;
+}
+
+/** A step run without the label of its loop item, a field of the items a step read. */
+function withoutIterationLabel<Step extends { iteration?: { index: number; label?: string } }>(
+  step: Step
+): Step {
+  return step.iteration ? { ...step, iteration: { index: step.iteration.index } } : step;
 }
 
 /**

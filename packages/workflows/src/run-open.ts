@@ -298,7 +298,12 @@ export function createRunOpening(options: {
             startedBy: {
               kind: isAuthenticatedServicePrincipal(startedBy) ? "service_principal" : "user",
               id: startedBy.id,
-              label: startedBy.displayLabel
+              label: startedBy.displayLabel,
+              // The key a person started it with: a test run's steps answer that key, and
+              // the run's data is read back by that key alone (connections-and-secrets.md).
+              ...(!isAuthenticatedServicePrincipal(startedBy) && startedBy.delegatedActor
+                ? { delegatedActor: startedBy.delegatedActor }
+                : {})
             },
             ...(input.operationRunId ? { operationRunId: input.operationRunId } : {}),
             ...(input.key === undefined ? {} : { runKey: input.key }),

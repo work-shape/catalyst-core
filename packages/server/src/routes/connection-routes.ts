@@ -3,6 +3,7 @@ import {
   AppError,
   CONNECTION_ACTIONS,
   CONNECTION_ASSET_KIND,
+  CONNECTION_EXPOSURE_ACTION_PREFIX,
   auditActorFromIdentity,
   connectionAdminConsentReturnOf,
   connectionCallReasonOf,
@@ -11,6 +12,7 @@ import {
   connectionOAuthReasonOf,
   isAppError,
   isAuthenticatedServicePrincipal,
+  isOutsideCall,
   type ActorAccess,
   type AuthenticatedIdentity,
   type OperationAuthorization,
@@ -176,7 +178,17 @@ export function registerConnectionRoutes(route: Route, options: ChatServerOption
 
   // Who may use the Connection may choose its folders: the right a source's publish needs.
   route.operation(apiOperations["connections.source_folders"], {
-    authorize: (input, { access }) => authorizeOn(access, CONNECTION_ACTIONS.use, input.name),
+    authorize: (input, { access, actor, origin }) =>
+      // Folder names are data of the outside system, and listing them is no operation with an
+      // exposure: nothing exposes them to `outside`, so an API credential is refused as a call
+      // of an operation not exposed to it is.
+      isOutsideCall(actor, origin)
+        ? {
+            allowed: false,
+            action: `${CONNECTION_EXPOSURE_ACTION_PREFIX}outside`,
+            reason: "no_grant"
+          }
+        : authorizeOn(access, CONNECTION_ACTIONS.use, input.name),
     resource: connectionResource,
     module: CONNECTIONS_MODULE,
     execute: async (input, context) => {

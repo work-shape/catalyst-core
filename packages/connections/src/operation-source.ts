@@ -4,9 +4,14 @@ import {
   CONNECTION_EXPOSURE_ACTION_PREFIX,
   connectionOperationName,
   exposureOfOrigin,
+  isAuthenticatedServicePrincipal,
+  isOutsideCall,
+  outsideKeyScopesOf,
   parseConnectionOperationName,
+  personalApiKeyCovers,
   requirePersonalConnectionContext,
   personalDataConversation,
+  type AuthenticatedIdentity,
   type ConnectionOperationConfig,
   type ConnectorOperationDescriptor,
   type DataToolDescriptor,
@@ -77,16 +82,31 @@ function resourceOf(connection: StoredConnection): OperationResource {
  */
 export function connectionExposureDenial(
   operation: Pick<ConnectionOperationConfig, "exposure">,
-  origin: OperationOrigin
+  origin: OperationOrigin,
+  actor?: AuthenticatedIdentity
 ): Extract<OperationAuthorization, { allowed: false }> | undefined {
   const needed = exposureOfOrigin(origin);
-  return needed !== undefined && operation.exposure.includes(needed)
-    ? undefined
-    : {
-        allowed: false,
-        action: `${CONNECTION_EXPOSURE_ACTION_PREFIX}${needed ?? origin.kind}`,
-        reason: "no_grant"
-      };
+  if (needed === undefined || !operation.exposure.includes(needed)) {
+    return {
+      allowed: false,
+      action: `${CONNECTION_EXPOSURE_ACTION_PREFIX}${needed ?? origin.kind}`,
+      reason: "no_grant"
+    };
+  }
+  // A call made for a person's API key from another surface, such as a step of a test run the
+  // key started, answers the key as well: it needs `outside` beside its surface's exposure.
+  if (
+    actor !== undefined &&
+    isOutsideCall(actor, origin) &&
+    !operation.exposure.includes("outside")
+  ) {
+    return {
+      allowed: false,
+      action: `${CONNECTION_EXPOSURE_ACTION_PREFIX}outside`,
+      reason: "no_grant"
+    };
+  }
+  return undefined;
 }
 
 /**
@@ -110,9 +130,12 @@ async function authorizeCall(
       origin: context.origin
     });
   }
-  const unexposed = connectionExposureDenial(operation, context.origin);
+  const unexposed = connectionExposureDenial(operation, context.origin, context.actor);
   if (unexposed) return unexposed;
-  const decision = context.access.authorize(CONNECTION_ACTIONS.use, resourceOf(connection));
+  const resource = resourceOf(connection);
+  const decision = keyCoversUse(context, resource)
+    ? context.access.authorize(CONNECTION_ACTIONS.use, resource)
+    : { allowed: false as const, reason: "outside_key_scope" as const };
   if (decision.allowed) return { allowed: true };
   return {
     allowed: false,
@@ -125,6 +148,23 @@ async function authorizeCall(
       context.origin.kind === "agent" ? connection.config.displayName : undefined
     )
   };
+}
+
+/**
+ * Whether the key an outside call is made for names `connection.use` on the Connection. A
+ * direct call of a key is narrowed to its scopes by its access already; a step of a test run
+ * the key started acts with its tester's rights, so the key is asked here. A call made for a
+ * key whose scopes are not known is refused. Any other call has no key to ask.
+ */
+function keyCoversUse(context: OperationAuthorizeContext, resource: OperationResource): boolean {
+  const { actor, origin } = context;
+  if (isAuthenticatedServicePrincipal(actor) || !isOutsideCall(actor, origin)) return true;
+  if (actor.delegatedActor?.kind !== "api_key") return true;
+  const scopes = outsideKeyScopesOf(actor);
+  return (
+    scopes !== undefined &&
+    personalApiKeyCovers(scopes, CONNECTION_ACTIONS.use, resource, undefined)
+  );
 }
 
 function stateOf(
