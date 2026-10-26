@@ -91,3 +91,17 @@ it.each(["Exampledata", "exampletax", "formatCount", "datevalue", "at=(co(), val
     expect(deniedNames(text)).toEqual([]);
   }
 );
+
+it("lets a private repository name a vendor, never a customer", () => {
+  const customer = "immobilien" + "aufbau";
+  const vendor = "da" + "tev";
+  expect(deniedNames(`${vendor.toUpperCase()} ${customer}`, { vendors: false })).toEqual([
+    customer
+  ]);
+  expect(
+    deniedNames(`read${vendor.charAt(0).toUpperCase() + vendor.slice(1)}Rows`, { vendors: false })
+  ).toEqual([]);
+  expect(deniedNames(`read${vendor.charAt(0).toUpperCase() + vendor.slice(1)}Rows`)).toEqual([
+    vendor
+  ]);
+});
