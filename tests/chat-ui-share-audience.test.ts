@@ -549,14 +549,16 @@ describe("SHARE-1 fix round: the agent's App publish asks “For whom?” before
       revision: 2,
       workspaceId: "cw_1",
       suggested: "self",
-      workflows: []
+      workflows: [],
+      dataStores: []
     });
     expect(preview({ kind: "app", name: "findings", revision: 2 })).toEqual({
       app: "findings",
       revision: 2,
       workspaceId: undefined,
       suggested: undefined,
-      workflows: []
+      workflows: [],
+      dataStores: []
     });
     // DP-3: the Workflows the call makes live with the App, by name.
     expect(
