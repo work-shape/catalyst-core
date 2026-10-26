@@ -63,3 +63,5 @@ export type {
 } from "./types";
 
 export { compileSqlStatement } from "./sql-action";
+
+export { RULES, RUNTIME_RULES_INTRO, renderRuntimeRules } from "./runtime-rules";

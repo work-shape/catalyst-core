@@ -215,6 +215,10 @@ export interface PageBuildIssue {
   /** Counts from 1. */
   column?: number;
   message: string;
+  /** The authoring rule and its repair, for runtime_rule refusals. */
+  rule?: string;
+  sentence?: string;
+  fix?: string;
   code?: string;
   /** The tag name, for an issue about one element of an HTML file. */
   element?: string;

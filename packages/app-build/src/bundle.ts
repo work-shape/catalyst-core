@@ -1,6 +1,6 @@
 import { context, transform, type Loader, type Message, type Plugin } from "esbuild";
 import { fileSetPathIssue } from "@work-shape/catalyst-core";
-import type { CompiledAppAction } from "./action-input";
+import { declaredExternalHostsOf, type CompiledAppAction } from "./action-input";
 import { compileActions } from "./actions";
 import { resolveReference, rewriteHtml, withHeadStart } from "./html";
 import {
@@ -20,6 +20,7 @@ import {
   PAGE_BUILD_MAX_OUTPUT_BYTES
 } from "./limits";
 import { PAGE_MANIFEST_FILE, parsePageManifest, type PageManifest } from "./manifest";
+import { scriptRuntimeErrors } from "./runtime-rule-script";
 import { generateRouteTree, PAGE_ROUTE_TREE_FILE } from "./routes";
 import type { PageBuildError, PageBuildResult, PageFile, PageRoute } from "./types";
 
@@ -122,7 +123,7 @@ export async function buildPage(input: {
   if (compiled.status === "errors") {
     return failed(compiled.errors);
   }
-  const syntaxErrors = await checkSyntax(input.files);
+  const syntaxErrors = await checkSyntax(input.files, declaredExternalHostsOf(manifest).length > 0);
   if (syntaxErrors.length > 0) {
     return failed(syntaxErrors);
   }
@@ -236,6 +237,16 @@ async function buildHtmlPage(
     }
     for (const block of rewritten.extracted) {
       inlineOrigins.set(block.path, { file: file.path, line: block.line });
+      if (block.kind !== "style") {
+        errors.push(
+          ...scriptRuntimeErrors({
+            file: file.path,
+            text: block.text,
+            externalHosts: declaredExternalHostsOf(manifest).length > 0,
+            line: block.line
+          })
+        );
+      }
       const bytes = encoder.encode(block.text);
       if (block.kind === "module_script") {
         sources.set(block.path, bytes);
@@ -490,7 +501,10 @@ function findSource(sources: ReadonlyMap<string, Uint8Array>, target: string): s
 }
 
 /** Parses every script source of the Page, so that a file no route imports is checked too. */
-async function checkSyntax(files: readonly PageFile[]): Promise<PageBuildError[]> {
+async function checkSyntax(
+  files: readonly PageFile[],
+  externalHosts: boolean
+): Promise<PageBuildError[]> {
   const decoder = new TextDecoder();
   const errors: PageBuildError[] = [];
   for (const file of files) {
@@ -498,7 +512,10 @@ async function checkSyntax(files: readonly PageFile[]): Promise<PageBuildError[]
     if (loader === undefined || isServerFile(file.path)) {
       continue;
     }
-    const messages = await syntaxErrorsOf(decoder.decode(file.bytes), loader);
+    const text = decoder.decode(file.bytes);
+    const messages = await syntaxErrorsOf(text, loader);
+    if (messages.length === 0)
+      errors.push(...scriptRuntimeErrors({ file: file.path, text, externalHosts }));
     errors.push(...messages.map((message) => buildError(message, file.path)));
     if (errors.length >= PAGE_BUILD_MAX_ERRORS) {
       break;

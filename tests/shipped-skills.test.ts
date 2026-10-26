@@ -484,13 +484,8 @@ it("teaches the App sandbox before sending an agent to the detailed guide", () =
     "form-action 'none'",
     "localStorage",
     "storage.get/set",
-    "draft preview shares",
-    "250 ms",
-    "before its batch is saved",
-    "sessionStorage shim (it throws SecurityError)",
-    "localStorage instanceof Storage is false",
     "Data Stores",
-    "Network"
+    "direct network"
   ])
     expect(platformDocsSkill.content).toContain(rule);
   const guide = platformDocsSkill.resources?.find(

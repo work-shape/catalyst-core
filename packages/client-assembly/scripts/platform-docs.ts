@@ -1,3 +1,4 @@
+import { renderRuntimeRules } from "@work-shape/catalyst-app-build";
 import { readdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -85,6 +86,23 @@ function renderPlatformDocs(pages: readonly PlatformDocsPage[]): string {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const sandboxFile = join(DOCS_ROOT, "apps/sandbox.md");
+  const sandbox = await readFile(sandboxFile, "utf8");
+  const start = "<!-- runtime-rules:start -->";
+  const end = "<!-- runtime-rules:end -->";
+  const startOffset = sandbox.indexOf(start);
+  const endOffset = sandbox.indexOf(end);
+  if (startOffset < 0 || endOffset < startOffset) {
+    throw new Error("apps/sandbox.md is missing its runtime-rules section markers.");
+  }
+  const section = `${start}\n${renderRuntimeRules()}\n${end}`;
+  const updated = sandbox.slice(0, startOffset) + section + sandbox.slice(endOffset + end.length);
+  if (sandbox !== updated) {
+    if (process.argv.includes("--check")) {
+      throw new Error("apps/sandbox.md runtime rules differ. Run pnpm generate:platform-docs.");
+    }
+    await writeFile(sandboxFile, updated);
+  }
   const pages = await readPlatformDocsPages();
   const text = renderPlatformDocs(pages);
   const file = relative(process.cwd(), GENERATED_FILE);

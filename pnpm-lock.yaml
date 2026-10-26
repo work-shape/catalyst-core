@@ -309,6 +309,9 @@ importers:
       parse5:
         specifier: 7.3.0
         version: 7.3.0
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
       zod:
         specifier: 4.4.3
         version: 4.4.3
@@ -319,9 +322,6 @@ importers:
       tsup:
         specifier: ^8.5.1
         version: 8.5.1(jiti@2.7.0)(postcss@8.5.31)(tsx@4.22.4)(typescript@6.0.3)(yaml@2.9.1)
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
 
   packages/app-kit:
     dependencies:
@@ -1038,6 +1038,9 @@ importers:
 
   packages/tool-execution:
     dependencies:
+      '@work-shape/catalyst-app-build':
+        specifier: workspace:*
+        version: link:../app-build
       '@work-shape/catalyst-config-schema':
         specifier: workspace:*
         version: link:../config-schema

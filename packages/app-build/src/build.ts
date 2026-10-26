@@ -25,3 +25,5 @@ export {
   ROUTE_GENERATOR_EXECUTED_FILE,
   type GeneratedRoutes
 } from "./routes";
+
+export { scriptRuntimeErrors } from "./runtime-rule-script";
