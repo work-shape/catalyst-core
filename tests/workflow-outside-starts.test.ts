@@ -227,6 +227,57 @@ describe("a Workflow started from outside", () => {
     expect(t.executed).toEqual([]);
   });
 
+  it("gives a credential with read_run_data no step input of a run no outside client started", async () => {
+    const { t, tim } = await ready();
+    await seedCrm(t, true);
+    const opened = withTriggers("notify-clients", [{ kind: "manual" }, { kind: "outside" }]);
+    expect((await publish(t, opened)).statusCode).toBe(200);
+    // A reporting account whose credential may read every run's data of the Workflow.
+    const reporter = await t.stores.apiAccess.createServicePrincipal({
+      clientInstanceId,
+      displayLabel: "Reporter",
+      permissions: ["config_assets.read"]
+    });
+    for (const action of ["workflow.read", "workflow.read_run_data"]) {
+      await t.allow({ kind: "service_principal", id: reporter.id }, action);
+    }
+    const issued = await t.call(t.root.id, "api_credentials.create", {
+      params: { servicePrincipalId: reporter.id },
+      payload: {
+        name: "Reporting",
+        scopes: ["config_assets:read"],
+        expiresAt: new Date(Date.now() + 86_400_000).toISOString()
+      }
+    });
+    expect(issued.statusCode, issued.body).toBe(200);
+    const { secret } = z.object({ secret: z.string() }).parse(issued.json());
+    const headers = await personalKeyToken(t, secret);
+
+    // Tim starts it in the app.
+    const bySession = await t.call(tim.id, "workflows.start", {
+      params: { workflow: "notify-clients" },
+      payload: { input: { note: NOTE } }
+    });
+    expect(bySession.statusCode, bySession.body).toBe(200);
+    const run = await t.finish(runSchema.parse(bySession.json()).id);
+    expect(run.status).toBe("done");
+
+    // Its step runs carry no input, dataset or output.
+    const steps = await t.call(reporter.id, "workflows.list_step_runs", {
+      params: { runId: run.id },
+      headers
+    });
+    expect(steps.statusCode, steps.body).toBe(200);
+    expect(steps.body).not.toContain("inputPreview");
+    expect(steps.body).not.toContain("outputPreview");
+    expect(steps.body).not.toContain(NOTE);
+    const read = await t.call(reporter.id, "workflows.get_run", {
+      params: { runId: run.id },
+      headers
+    });
+    expect(read.body).not.toContain("outputPreview");
+  });
+
   it("gives a key no data of a run that was not started from outside", async () => {
     const { t, tim, headers } = await ready();
     await seedCrm(t, true);

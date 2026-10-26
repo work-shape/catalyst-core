@@ -63,6 +63,8 @@ export interface WorkflowRunsPort {
     operationRunId?: OperationRunId;
     correlationId: string;
     revision?: WorkflowRunStartedFrom["workflowRevision"];
+    /** An outside client starts it: its dataset inputs must come from runs that answer one. */
+    outside?: boolean;
     /** The action of an App's draft whose click started the test (DP-1). */
     startedFrom?: WorkflowRunStartedFrom;
   }): Promise<WorkflowRunView>;

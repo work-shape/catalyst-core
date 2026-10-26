@@ -234,10 +234,13 @@ function registerWorkflowRoutes(
     ) {
       throw missing();
     }
-    const readable =
-      runDataReadable(run, context, false) ||
-      context.access.authorize(WORKFLOW_ACTIONS.readRunData, await resourceOf(run.workflow))
-        .allowed;
+    // The right to read run data opens a run held by its key only where the run may answer
+    // this caller: an outside client gets no data of a run that answers none.
+    const readable = runDataReadable(
+      run,
+      context,
+      context.access.authorize(WORKFLOW_ACTIONS.readRunData, await resourceOf(run.workflow)).allowed
+    );
     return forCaller(toRunResource(run, readable), readable);
   }
 
@@ -397,6 +400,8 @@ function registerWorkflowRoutes(
           startedBy: actor,
           operationRunId: context.runId,
           correlationId: context.correlationId,
+          // Its dataset inputs are held to what an outside client may read.
+          ...(isOutsideCall(actor, origin) ? { outside: true } : {}),
           revision,
           ...(origin.kind === "app" && origin.appName !== undefined
             ? {
@@ -596,8 +601,15 @@ function registerWorkflowRoutes(
       return withConnectionTitles(
         context.access,
         stepRuns.map((step) => {
-          const { outputPreview, log, ...summary } = toStepRunResource(step, mayReadData);
-          if (!outputsReadable) return withoutIterationLabel(summary);
+          const { outputPreview, log, ...summary } = toStepRunResource(
+            step,
+            mayReadData && outputsReadable
+          );
+          if (!outputsReadable) {
+            // What a step read or wrote is the run's data: its input, its datasets, its agent.
+            const { agent: _agent, datasets: _datasets, ...rest } = summary;
+            return withoutIterationLabel(rest);
+          }
           if (run.hasAgentSteps && !mayReadData) return summary;
           // The mail a simulated or test send would send, subject and body, is the run's data.
           const mailPreview = step.sendsMail === true && step.target !== "live";
