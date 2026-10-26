@@ -16,6 +16,7 @@ export const pages = defineTranslations({
     "pages.cardBuilding": "Building the preview",
     "pages.cardErrors": "The preview could not be built",
     "pages.cardFailed": "The preview could not be opened",
+    "pages.cardFoldedPreview": "Preview updated",
     "pages.errorPlace": "{file}, line {line}",
     "pages.errorsKeepShown":
       "The preview still shows the last version. Ask the agent to fix the errors.",
@@ -63,6 +64,7 @@ export const pages = defineTranslations({
     "pages.cardBuilding": "Die Vorschau wird gebaut",
     "pages.cardErrors": "Die Vorschau konnte nicht gebaut werden",
     "pages.cardFailed": "Die Vorschau konnte nicht geöffnet werden",
+    "pages.cardFoldedPreview": "Vorschau aktualisiert",
     "pages.errorPlace": "{file}, Zeile {line}",
     "pages.errorsKeepShown":
       "Die Vorschau zeigt weiter den letzten Stand. Bitte den Agenten, die Fehler zu beheben.",

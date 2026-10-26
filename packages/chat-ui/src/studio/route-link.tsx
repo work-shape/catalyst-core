@@ -9,7 +9,7 @@ interface RouteLinkProps extends Omit<
   "href" | "onClick" | "children" | "aria-describedby"
 > {
   route: WorkspaceRoute;
-  variant: "primary" | "link";
+  variant: "primary" | "outline" | "link";
   size?: "sm" | "md";
   /** The id of what the link acts on, where its text alone does not say it. */
   describedBy?: string;

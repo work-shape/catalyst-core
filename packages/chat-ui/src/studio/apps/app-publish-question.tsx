@@ -202,7 +202,7 @@ export function useAppPublishSend(workspaceId: string, app: string): AppPublishS
   };
 }
 
-/** What "Share" asks the Publish dialog about: the App's draft, in the open workspace. */
+/** What "Publish" on the App's card asks the dialog about: the draft, in the open workspace. */
 export interface SharePublishQuestion {
   name: string;
   workspace: AppsWorkspace;
@@ -215,8 +215,8 @@ export interface SharePublishQuestion {
 }
 
 /**
- * Reads the draft "Share" asks about, for a reader who may write and publish Apps. A draft that
- * is what is live is asked about too: Share may change only who the App is for. Where the
+ * Reads the draft the App's card asks about, for a reader who may write and publish Apps. A draft
+ * that is what is live is asked about too: the publish may change only who the App is for. Where the
  * reader may not publish, or the draft cannot be read, it calls `onClose` and asks nothing.
  */
 export function useSharePublishQuestion(

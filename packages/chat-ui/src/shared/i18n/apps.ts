@@ -88,6 +88,11 @@ export const apps = defineTranslations({
     "apps.liveOnceStale":
       "The draft changed since this list was loaded. Look at it again and switch it on there.",
     "apps.buildWithAgent": "Build one with the agent",
+    "apps.cardDraftSaved": "Draft saved · not published yet",
+    "apps.cardFoldedDraft": "Draft saved",
+    "apps.cardPublished": "Published",
+    "apps.cardPublishedTell": "I published “{title}”.",
+    "apps.cardSavedOnlyYou": "Saved · only for you, not published yet",
     "apps.changed": "Changed {when}",
     "apps.copyLink": "Copy link",
     "apps.delete": "Delete",
@@ -242,10 +247,6 @@ export const apps = defineTranslations({
     "apps.revisionsDescription": "Every saved state of {name}, the newest first.",
     "apps.revisionsEmpty": "No versions yet.",
     "apps.revisionsFailed": "The versions could not be loaded.",
-    "apps.savedDraftLine":
-      "Saved to the draft of {title}. You can use it now; others see the change once you share it.",
-    "apps.savedLine": "Saved as the app {title}. You can use it now; others can once you share it.",
-    "apps.savedShare": "Share",
     "apps.save": "Save as app",
     "apps.saveBody":
       "What this preview shows becomes the draft of a new app in {workspace}. Nothing is published yet.",
@@ -361,6 +362,11 @@ export const apps = defineTranslations({
     "apps.liveOnceStale":
       "Der Entwurf hat sich geändert, seit diese Liste geladen wurde. Sieh ihn dir erneut an und schalte es dort ein.",
     "apps.buildWithAgent": "Eine mit dem Agenten bauen",
+    "apps.cardDraftSaved": "Entwurf gespeichert · noch nicht veröffentlicht",
+    "apps.cardFoldedDraft": "Entwurf gespeichert",
+    "apps.cardPublished": "Veröffentlicht",
+    "apps.cardPublishedTell": "Ich habe „{title}“ veröffentlicht.",
+    "apps.cardSavedOnlyYou": "Gespeichert · nur für dich, noch nicht veröffentlicht",
     "apps.changed": "Geändert {when}",
     "apps.copyLink": "Link kopieren",
     "apps.delete": "Löschen",
@@ -518,11 +524,6 @@ export const apps = defineTranslations({
     "apps.revisionsDescription": "Jeder gespeicherte Stand von {name}, der neueste zuerst.",
     "apps.revisionsEmpty": "Noch keine Versionen.",
     "apps.revisionsFailed": "Die Versionen konnten nicht geladen werden.",
-    "apps.savedDraftLine":
-      "Im Entwurf von {title} gespeichert. Du kannst ihn jetzt nutzen; andere sehen die Änderung, sobald du ihn teilst.",
-    "apps.savedLine":
-      "Als App {title} gespeichert. Du kannst sie jetzt nutzen, andere, sobald du sie teilst.",
-    "apps.savedShare": "Teilen",
     "apps.save": "Als App speichern",
     "apps.saveBody":
       "Was diese Vorschau zeigt, wird zum Entwurf einer neuen App in {workspace}. Veröffentlicht wird noch nichts.",
