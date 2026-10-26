@@ -10,13 +10,19 @@ import {
   type ConnectionProposalBindingState,
   CONNECTION_NAME_MAX_LENGTH,
   CONNECTION_MAX_ACCEPTED_OPERATIONS,
+  OPERATION_EFFECTS,
   findConnectorTypeIssues,
   type AssetValidationIssue,
   type ConnectorTypeRegistry,
   type ToolExecutionContext,
   type JsonObject
 } from "@work-shape/catalyst-core";
-import { defineTool, toolSuccess, type AnyToolDefinition } from "@work-shape/catalyst-tool-sdk";
+import {
+  defineTool,
+  deriveInputJsonSchema,
+  toolSuccess,
+  type AnyToolDefinition
+} from "@work-shape/catalyst-tool-sdk";
 import { z } from "zod";
 import {
   checkConnectionDraft,
@@ -64,45 +70,74 @@ const customInputSchema = z.strictObject({
     .string()
     .min(1)
     .describe(
-      "What to connect: 'mcp' for a remote MCP server, 'http_api' for a REST API, or another Connector type of this instance, which has a form of its own."
+      "'mcp' for a remote MCP server, 'http_api' for a REST API, or another Connector type of this instance."
     ),
   connection: z
     .string()
     .min(1)
     .max(CONNECTION_NAME_MAX_LENGTH)
-    .describe("The new Connection's id in lowercase letters, digits and hyphens, such as 'brain'."),
-  title: z.string().min(1).max(120).describe("Its name in words, such as 'Brain'."),
+    .describe("The new Connection's id in lowercase letters, digits and hyphens."),
+  title: z.string().min(1).max(120).describe("Its name in words."),
   url: z
     .string()
     .min(1)
     .optional()
     .describe(
-      "For 'mcp' the server's address, for 'http_api' the address every request starts with. https, without user name, password, query or fragment. Leave it out for another type: its form asks."
+      "For 'mcp' the server's address, for 'http_api' the address every request starts with: https, without user name, password, query or fragment. Left out for another type."
     ),
   keyHeader: z
     .string()
     .optional()
     .describe(
-      "For 'mcp' or 'http_api': the name of the header the key is sent in, such as 'x-api-key', where the service does not take it as a bearer token. A name only: the person types the key."
+      "For 'mcp' or 'http_api': the header a key goes in, such as 'x-api-key', where it is no bearer token. The name only."
     ),
   headerNames: z
     .array(z.string())
     .max(PROPOSAL_HEADERS_MAX)
     .optional()
-    .describe(
-      "For 'http_api': names of fixed headers that carry no credential, such as 'x-tenant-id'. The person types their values."
-    ),
+    .describe("For 'http_api': fixed headers that carry no credential, such as 'x-tenant-id'."),
   testPath: z
     .string()
     .min(1)
     .optional()
-    .describe(
-      "For 'http_api': a GET path relative to url that answers 2xx only with a valid key, such as '/me'."
-    )
+    .describe("For 'http_api': a GET path that answers 2xx only with a valid key, such as '/me'.")
 });
 
 const entrySchema = z.strictObject({ id: z.string().min(1), part: z.enum(CATALOGUE_PARTS) });
 const inputSchema = z.union([z.strictObject({ entry: entrySchema }), customInputSchema]);
+
+// What the model is shown: one object, since some model providers refuse a union at the root of
+// a tool's input, and the operations without the field notes of draft_tools, said once instead.
+// The union above still checks every call.
+const modelParameterSchema = z.strictObject({
+  schema: z.record(z.string(), z.unknown()),
+  description: z.string().optional(),
+  required: z.boolean().optional().describe("Query parameters only; never on a path parameter.")
+});
+const modelInputSchema = customInputSchema.extend({
+  entry: entrySchema.optional().describe("An offered catalogue entry, given alone."),
+  connectorType: customInputSchema.shape.connectorType.optional(),
+  connection: customInputSchema.shape.connection.optional(),
+  title: customInputSchema.shape.title.optional(),
+  operations: z
+    .array(
+      z.strictObject({
+        name: z.string(),
+        title: z.string().optional(),
+        description: z.string(),
+        method: z.string(),
+        path: z.string(),
+        pathParams: z.record(z.string(), modelParameterSchema).optional(),
+        query: z.record(z.string(), modelParameterSchema).optional(),
+        effect: z.enum(OPERATION_EFFECTS)
+      })
+    )
+    .max(CONNECTION_MAX_ACCEPTED_OPERATIONS)
+    .optional()
+    .describe(
+      "For 'http_api': GET operations that only read, effect reading. A path starts with '/', has no query and declares each {name} in pathParams. A parameter's schema has type string, integer or number (a query one also boolean or an array of those) and no fixed value: no default, const, example or one-value enum."
+    )
+});
 
 /** Minimal, read-only catalogue projection supplied by the instance. Hosts stay internal. */
 export interface ConnectionProposalCatalogueEntry {
@@ -401,17 +436,18 @@ export function createConnectionProposeTool(input: {
     icon: "connection",
     effect: "reading",
     description: [
-      "Propose a Connection when the person wants to connect an outside system: a remote MCP server ('mcp'), a REST API ('http_api') or another Connector type of the instance.",
-      "Read catalogue.entries in platform.context first. If an entry fits, pass only entry: { id, part }; do not web-search the provider or draft tools against its hosts. Otherwise name the type, an id, a name in words and, for 'mcp' or 'http_api', the address, authScheme, credentialMode, OAuth endpoints, scopes and public clientId, and GET read operations. The tool checks them and answers the proposal, which shows as a card; the person's screen then opens the New connection dialog filled with it, with this conversation beside it. Nothing is saved before the person presses Connect there.",
-      "Never ask for a key, token or password, and never put one into the proposal or the address: the person enters the key, or signs in, in the dialog. Say in one sentence that they enter the key or sign in there and press Connect.",
-      "When they have connected, a message from them says so and which tools they approved. Then go on: for a REST API draft any reads not already included with " +
+      "Propose a new Connection to an outside system: a remote MCP server ('mcp'), a REST API ('http_api') or another Connector type of the instance.",
+      "Read catalogue.entries in platform.context first. If an entry fits, pass only entry: { id, part }; do not web-search the provider or draft tools against its hosts. Otherwise name the type, an id, a title and, for 'mcp' or 'http_api', the url, authScheme, credentialMode (user for mail, calendar and personal files), OAuth endpoints, scopes and public clientId, and GET read operations.",
+      "Issues in the answer are fixed before you call again. A passing proposal shows as a card; the person's screen opens the New connection dialog filled with it, where they enter the key or sign in and press Connect. Nothing is saved before.",
+      "Never ask for a key, token or password, nor put one into the proposal: say in one sentence that they enter it in the dialog. Never ask a question in the same turn as an approval card. Never say a service is unsupported: build the custom path and name the one step you cannot do.",
+      "A message from the person says when it is connected and which tools they approved. Then draft any missing reads of a REST API with " +
         CONNECTION_DRAFT_TOOL_NAME +
-        "; offer approved tools to an agent with " +
+        ", offer the tools with " +
         CONNECTION_OFFER_TOOL_NAME +
-        " where you hold it; then build what they asked for.",
-      "For mail, calendar and personal files propose credentialMode user. Never ask a question in the same turn as an approval card. Never say a service is unsupported: build the custom path and name the one step you cannot do. An issue in the answer is fixed before you call the tool again; no card shows until the proposal passes."
+        " where you hold it, and build what they asked for."
     ].join(" "),
     inputSchema,
+    inputJsonSchema: deriveInputJsonSchema(modelInputSchema),
     outputSchema,
     async execute(proposal, context) {
       const entries = (await input.catalogue?.read(context)) ?? [];

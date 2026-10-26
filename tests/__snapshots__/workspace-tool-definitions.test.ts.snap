@@ -34,7 +34,7 @@ exports[`workspace tool definitions > offers the same tools, in the same order, 
         "expectedOutputs": {
           "type": "array",
           "maxItems": 32,
-          "description": "Optional postconditions for files that should exist in /workspace after the command. Use kind \\"directory\\" only when checking that a rendered/generated directory contains tracked files. Use this for created outputs or verification steps that depend on an existing artifact. Set promote only when the command itself should promote the output.",
+          "description": "Files that should exist in /workspace after the command. Kind \\"directory\\" checks that a generated directory holds tracked files. Set promote only when the command itself should promote the output.",
           "items": {
             "type": "object",
             "additionalProperties": false,
@@ -108,7 +108,7 @@ exports[`workspace tool definitions > offers the same tools, in the same order, 
             ],
             "additionalProperties": false
           },
-          "description": "Optional postconditions for files that should exist in /workspace after the command. Use kind \\"directory\\" only when checking that a rendered/generated directory contains tracked files. Use this for created outputs or verification steps that depend on an existing artifact. Set promote only when the command itself should promote the output."
+          "description": "Files that should exist in /workspace after the command. Kind \\"directory\\" checks that a generated directory holds tracked files. Set promote only when the command itself should promote the output."
         }
       },
       "required": [
@@ -377,7 +377,6 @@ exports[`workspace tool definitions > offers the same tools, in the same order, 
       "type": "object",
       "properties": {
         "files": {
-          "minItems": 1,
           "maxItems": 16,
           "type": "array",
           "items": {
@@ -385,12 +384,10 @@ exports[`workspace tool definitions > offers the same tools, in the same order, 
             "properties": {
               "fileId": {
                 "type": "string",
-                "minLength": 1,
                 "maxLength": 255
               },
               "path": {
                 "type": "string",
-                "minLength": 1,
                 "maxLength": 512,
                 "description": "Optional workspace-relative destination path override. Usually omit this and use the returned importedFiles[].path exactly in workspace.exec."
               }
@@ -500,19 +497,16 @@ exports[`workspace tool definitions > offers the same tools, in the same order, 
       "properties": {
         "path": {
           "type": "string",
-          "minLength": 1,
           "maxLength": 512
         },
         "offset": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 9007199254740991,
           "description": "First line to return, counted from 1. Omit it to start at line 1. To continue, pass the nextOffset of the previous answer."
         },
         "limit": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 9007199254740991,
           "description": "Number of lines to return. Omit it for up to 400 lines."
         }
       },
@@ -812,24 +806,20 @@ exports[`workspace tool definitions > offers the same tools, in the same order, 
       "properties": {
         "path": {
           "type": "string",
-          "minLength": 1,
           "maxLength": 512,
           "description": "Workspace path to the final user-facing artifact. Prefer artifacts/ or /workspace/artifacts/ outputs."
         },
         "kind": {
           "default": "workspace.file",
           "type": "string",
-          "minLength": 1,
           "maxLength": 160
         },
         "filename": {
           "type": "string",
-          "minLength": 1,
           "maxLength": 255
         },
         "mimeType": {
           "type": "string",
-          "minLength": 1,
           "maxLength": 160
         }
       },
@@ -917,7 +907,7 @@ exports[`workspace tool definitions > offers the same tools, in the same order, 
   },
   {
     "name": "workspace.preview_images",
-    "description": "Load bounded rendered preview images into model-visible visual context. This is how to check rendered output: images loaded here are never listed among the person's files, so render checks under /workspace/previews and promote with workspace.promote_artifact only the files the person should get. Give exactly one source: artifactId, path, or paths. Use path/paths for rendered image files under /workspace/previews, or artifactId with page/slide/sheet/range selectors for managed DOCX/XLSX/PPTX/PDF artifacts. The result reports pending, failed, or unsupported when pixels are not actually attached. Loaded images stay in visual context for the current turn only; call the tool again in a later turn to see them again.",
+    "description": "Load rendered preview images so you can see them, to check rendered output. They are never listed among the person's files: render checks under /workspace/previews and promote with workspace.promote_artifact only what the person should get. Give exactly one source: artifactId, path, or paths. Use path or paths for images under /workspace/previews, or artifactId with page, slide, sheet or range selectors for a managed DOCX, XLSX, PPTX or PDF. The result says pending, failed or unsupported when no pixels are attached. Images stay visible for this turn only.",
     "permission": null,
     "inputJsonSchema": {
       "type": "object",
@@ -927,13 +917,13 @@ exports[`workspace tool definitions > offers the same tools, in the same order, 
           "type": "string",
           "minLength": 1,
           "maxLength": 255,
-          "description": "Managed source artifact id for DOCX/XLSX/PPTX/PDF preview rendering or already-managed image previews."
+          "description": "Managed DOCX/XLSX/PPTX/PDF or image artifact id."
         },
         "path": {
           "type": "string",
           "minLength": 1,
           "maxLength": 512,
-          "description": "Workspace path to a rendered preview image, usually under previews/, e.g. previews/report/page-1.png or /workspace/previews/report/page-1.png."
+          "description": "A rendered preview image, such as previews/report/page-1.png."
         },
         "paths": {
           "type": "array",
@@ -944,7 +934,7 @@ exports[`workspace tool definitions > offers the same tools, in the same order, 
             "minLength": 1,
             "maxLength": 512
           },
-          "description": "Workspace paths to rendered preview images, usually under previews/. Preview images are model-visible but are not user-download artifacts unless separately promoted."
+          "description": "Rendered preview images, usually under previews/."
         },
         "pages": {
           "type": "array",
@@ -954,7 +944,7 @@ exports[`workspace tool definitions > offers the same tools, in the same order, 
             "type": "integer",
             "minimum": 1
           },
-          "description": "Optional PDF/DOCX page numbers to load when preview metadata has page numbers."
+          "description": "PDF/DOCX page numbers."
         },
         "slides": {
           "type": "array",
@@ -964,7 +954,7 @@ exports[`workspace tool definitions > offers the same tools, in the same order, 
             "type": "integer",
             "minimum": 1
           },
-          "description": "Optional PPTX slide numbers to load when preview metadata has slide numbers."
+          "description": "PPTX slide numbers."
         },
         "sheets": {
           "type": "array",
@@ -975,7 +965,7 @@ exports[`workspace tool definitions > offers the same tools, in the same order, 
             "minLength": 1,
             "maxLength": 160
           },
-          "description": "Optional XLSX sheet names to load when preview metadata has sheet labels."
+          "description": "XLSX sheet names."
         },
         "ranges": {
           "type": "array",
@@ -986,14 +976,14 @@ exports[`workspace tool definitions > offers the same tools, in the same order, 
             "minLength": 1,
             "maxLength": 160
           },
-          "description": "Optional XLSX ranges to load. Prefer sheet-qualified ranges like \`Summary!A1:B4\`; unqualified ranges require exactly one \`sheets\` value."
+          "description": "XLSX ranges such as \`Summary!A1:B4\`; an unqualified range needs exactly one \`sheets\` value."
         },
         "maxImages": {
           "type": "integer",
           "minimum": 1,
           "maximum": 12,
           "default": 12,
-          "description": "Maximum preview images to attach to model context."
+          "description": "Most images to load."
         }
       }
     },
@@ -1005,13 +995,13 @@ exports[`workspace tool definitions > offers the same tools, in the same order, 
           "type": "string",
           "minLength": 1,
           "maxLength": 255,
-          "description": "Managed source artifact id for DOCX/XLSX/PPTX/PDF preview rendering or already-managed image previews."
+          "description": "Managed DOCX/XLSX/PPTX/PDF or image artifact id."
         },
         "path": {
           "type": "string",
           "minLength": 1,
           "maxLength": 512,
-          "description": "Workspace path to a rendered preview image, usually under previews/, e.g. previews/report/page-1.png or /workspace/previews/report/page-1.png."
+          "description": "A rendered preview image, such as previews/report/page-1.png."
         },
         "paths": {
           "minItems": 1,
@@ -1022,7 +1012,7 @@ exports[`workspace tool definitions > offers the same tools, in the same order, 
             "minLength": 1,
             "maxLength": 512
           },
-          "description": "Workspace paths to rendered preview images, usually under previews/. Preview images are model-visible but are not user-download artifacts unless separately promoted."
+          "description": "Rendered preview images, usually under previews/."
         },
         "pages": {
           "minItems": 1,
@@ -1033,7 +1023,7 @@ exports[`workspace tool definitions > offers the same tools, in the same order, 
             "minimum": 1,
             "maximum": 9007199254740991
           },
-          "description": "Optional PDF/DOCX page numbers to load when preview metadata has page numbers."
+          "description": "PDF/DOCX page numbers."
         },
         "slides": {
           "minItems": 1,
@@ -1044,7 +1034,7 @@ exports[`workspace tool definitions > offers the same tools, in the same order, 
             "minimum": 1,
             "maximum": 9007199254740991
           },
-          "description": "Optional PPTX slide numbers to load when preview metadata has slide numbers."
+          "description": "PPTX slide numbers."
         },
         "sheets": {
           "minItems": 1,
@@ -1055,7 +1045,7 @@ exports[`workspace tool definitions > offers the same tools, in the same order, 
             "minLength": 1,
             "maxLength": 160
           },
-          "description": "Optional XLSX sheet names to load when preview metadata has sheet labels."
+          "description": "XLSX sheet names."
         },
         "ranges": {
           "minItems": 1,
@@ -1066,11 +1056,11 @@ exports[`workspace tool definitions > offers the same tools, in the same order, 
             "minLength": 1,
             "maxLength": 160
           },
-          "description": "Optional XLSX ranges to load. Prefer sheet-qualified ranges like \`Summary!A1:B4\`; unqualified ranges require exactly one \`sheets\` value."
+          "description": "XLSX ranges such as \`Summary!A1:B4\`; an unqualified range needs exactly one \`sheets\` value."
         },
         "maxImages": {
           "default": 12,
-          "description": "Maximum preview images to attach to model context.",
+          "description": "Most images to load.",
           "type": "integer",
           "minimum": 1,
           "maximum": 12

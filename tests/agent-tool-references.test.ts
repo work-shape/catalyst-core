@@ -231,6 +231,15 @@ describe("the tools the agent page is told of", () => {
       expect(proposal?.description).toContain(
         "Never ask a question in the same turn as an approval card"
       );
+      // How a Connection is proposed is said by its tools, once: the orientation names the kind.
+      expect(proposal?.description).toContain("Read catalogue.entries in platform.context first");
+      expect(proposal?.description).toContain(
+        "credentialMode (user for mail, calendar and personal files)"
+      );
+      expect(proposal?.description).toContain("Never say a service is unsupported");
+      const draft = tools.find((tool) => tool.name === "platform.connections.draft_tools");
+      expect(draft?.description).toContain("Read catalogue.entries and connectorTypes");
+      expect(draft?.description).toContain("draft nothing against a host it covers");
       const untold = tools
         .filter((tool) => !tool.title?.en || !tool.title.de || !tool.group)
         .map((tool) => tool.name);

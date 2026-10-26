@@ -26,20 +26,15 @@ export function createWorkflowTestTools(): AnyToolDefinition[] {
       effect: "changing",
       permission: { mode: "allow" },
       description: [
-        "Start a test run of the saved draft of the Workflow this conversation is about, or of a Workflow draft this conversation created, and no other Workflow.",
-        "Give its name as 'workflow' and the input its definition asks for as 'input'. Read its definition with platform.assets.get first.",
-        "The run acts as the person you work for, bounded by the Workflow's service principal, with you as its origin. It needs the person's workflow.write right.",
-        "Reading steps read live; changing steps are Simulated unless the called asset has a test target. A person's Run live once switch cannot be set by an agent; a switched step that needs confirmation is refused: ask the person to start that test from the canvas.",
-        "A test starts without asking for confirmation unless an administrator made its policy stricter. It never publishes.",
-        "Use workflows.get_run for progress and workflows.list_step_runs for every step's target and result. Report what would have been written, and any refusal, to the person."
+        "Start a test run of the saved draft of the Workflow this conversation is about, or of one this conversation created, with the input its definition asks for (read it with platform.assets.get first). It runs as the person, bounded by the Workflow's service principal, needs their workflow.write right, and never publishes.",
+        "Reading steps read live; changing steps are simulated unless the called asset has a test target. Only a person sets Run live once: a switched step that needs confirmation is refused, so ask them to start that test from the canvas.",
+        "Follow it with workflows.get_run and workflows.list_step_runs, and report what would have been written and any refusal."
       ].join(" "),
       inputSchema: z.object({
         workflow: z
           .string()
           .min(1)
-          .describe(
-            "The name of the conversation's subject Workflow, or of a Workflow draft this conversation created."
-          ),
+          .describe("The subject Workflow, or a draft this conversation created."),
         input: z.record(z.string(), z.unknown())
       }),
       execute
@@ -50,7 +45,7 @@ export function createWorkflowTestTools(): AnyToolDefinition[] {
       title: { en: "Read Workflow Run", de: "Workflow-Lauf lesen" },
       effect: "reading",
       description:
-        "Read a Workflow Run by its id: status, mode, person who started it, error and result preview. After workflows.test, use this to check whether the run has ended, then workflows.list_step_runs to explain each step's target and result. Reads with the person's workflow.read right.",
+        "Read a Workflow Run by its id: status, mode, who started it, error and result preview. After workflows.test, check whether it ended, then read its steps with workflows.list_step_runs.",
       inputSchema: z.object({ runId }),
       execute
     }),
@@ -60,7 +55,7 @@ export function createWorkflowTestTools(): AnyToolDefinition[] {
       title: { en: "Read Workflow step results", de: "Workflow-Schrittergebnisse lesen" },
       effect: "reading",
       description:
-        "Read a page of a Workflow Run's steps in execution order, with status, target, error and result preview. A target of dry_run means Simulated: outputPreview describes what wouldHaveDone, without making the change. live means Live and test means Test. Follow nextCursor with cursor until no page remains, including steps inside loops and blocks. Reads with the person's workflow.read right.",
+        "Read a page of a Workflow Run's steps in order, with status, target, error and result preview. Target dry_run means Simulated: outputPreview says what it wouldHaveDone. Follow nextCursor until no page remains, steps in loops and blocks included.",
       inputSchema: z.object({
         runId,
         limit: z.string().optional().describe("Page size, up to 200."),

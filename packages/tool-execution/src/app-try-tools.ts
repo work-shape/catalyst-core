@@ -23,9 +23,8 @@ export function createAppTryTools(): AnyToolDefinition[] {
       effect: "changing",
       permission: { mode: "allow" },
       description: [
-        "Try one named action of the saved draft of an App, exactly as the person's click on its button in the draft does, and see its answer. Only the conversation's subject App or an App this conversation created.",
-        "Reading actions read live. Changing actions are simulated (status dry_run, with what they would have done) unless the person switched on Run live once. A workflow action starts a test run of the Workflow it calls: its draft where the person may write that Workflow, else its published revision, never a live run. The answer names the test run as workflowRun with its runId and which revision runs; follow it with workflows.get_run and workflows.list_step_runs and report each step's target and result.",
-        "Use this to try an App and the Workflow behind it before anything is published. Never ask the person to publish in order to try something."
+        "Try one named action of an App's saved draft as the person's click in the draft does, and see its answer: the conversation's subject App or one this conversation created.",
+        "Reading actions read live; changing ones are simulated (dry_run, with what they would have done) unless the person switched on Run live once. A workflow action starts a test run, never a live run: its answer names workflowRun; follow it with workflows.get_run and workflows.list_step_runs and report each step's target and result."
       ].join(" "),
       inputSchema: z.object({
         app,
@@ -33,7 +32,7 @@ export function createAppTryTools(): AnyToolDefinition[] {
         input: z
           .record(z.string(), z.unknown())
           .optional()
-          .describe("The action's parameters, by name, as the App's page passes them.")
+          .describe("The action's parameters by name.")
       }),
       execute
     }),
@@ -43,8 +42,8 @@ export function createAppTryTools(): AnyToolDefinition[] {
       title: { en: "Review App publish", de: "Veröffentlichung der App prüfen" },
       effect: "reading",
       description: [
-        "Read what publishing an App's draft comes to, before you ask the person: the App and each Workflow its actions call, whether each has a pending draft, the sentence its publish question leads with, and what would refuse each publish now (a missing right or a check). It changes nothing. Only the conversation's subject App or an App this conversation created.",
-        "Workflows come children first, and pending ones are made live with the App by one Publish: when the person wants it live and ready is true, call assets.publish with kind app, the App's draftRevision and, in workflows, each pending Workflow with its draftRevision, and tell them in one sentence what that one click makes live. Name every refusal and who can resolve it; never claim anything is live."
+        "Read what publishing an App's draft comes to, changing nothing: the App and each Workflow its actions call, children first, whether each has a pending draft, the sentence its publish question leads with, and what would refuse each publish now. The conversation's subject App or one this conversation created.",
+        "When the person wants it live and ready is true, call assets.publish with the App's draftRevision and each pending Workflow in workflows. Name every refusal and who can resolve it; never claim anything is live."
       ].join(" "),
       inputSchema: z.object({ app }),
       execute

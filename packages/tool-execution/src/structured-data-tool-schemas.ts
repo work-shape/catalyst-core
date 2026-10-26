@@ -10,17 +10,14 @@ const labelSchema = z.string().min(1).max(120);
 const valueSchema = z.union([z.string().max(2000), z.number(), z.boolean(), z.null()]);
 const sourceSchema = z
   .object({
-    fileId: z
-      .string()
-      .min(1)
-      .describe("Managed file id from the current conversation attachment manifest."),
+    fileId: z.string().min(1),
     page: z.number().int().positive().optional()
   })
   .strict();
 const sourcesSchema = z
   .array(sourceSchema)
   .max(8)
-  .describe("Optional source references using the file ids visible to the model.");
+  .describe("File ids from the conversation's attachment manifest.");
 const attentionSchema = z
   .object({
     reason: z.enum(STRUCTURED_DATA_REVIEW_REASONS),
@@ -30,7 +27,7 @@ const attentionSchema = z
 
 const replaceFieldSchema = z
   .object({
-    key: keySchema.describe("Stable field key to reuse in later patches."),
+    key: keySchema,
     label: labelSchema,
     value: valueSchema,
     sources: sourcesSchema.optional(),
@@ -54,7 +51,7 @@ function requireUniqueKeys(
 
 const replaceSectionSchema = z
   .object({
-    key: keySchema.describe("Stable section key to reuse in later patches."),
+    key: keySchema,
     label: labelSchema,
     fields: z
       .array(replaceFieldSchema)
@@ -78,8 +75,8 @@ const replaceInputSchema = z
 
 const patchSetSchema = z
   .object({
-    sectionKey: keySchema.describe("Existing section key."),
-    fieldKey: keySchema.describe("Existing or new field key."),
+    sectionKey: keySchema.describe("An existing section."),
+    fieldKey: keySchema.describe("An existing or new field."),
     value: valueSchema,
     label: labelSchema.optional(),
     sources: sourcesSchema.optional(),
@@ -89,8 +86,8 @@ const patchSetSchema = z
 
 const patchRemoveSchema = z
   .object({
-    sectionKey: keySchema.describe("Section containing the field."),
-    fieldKey: keySchema.describe("Field to remove if present.")
+    sectionKey: keySchema,
+    fieldKey: keySchema
   })
   .strict();
 
@@ -127,21 +124,17 @@ const publishFieldsSchema = z
         "replace supplies the full structure and needs title and sections. patch edits named fields with set and remove."
       ),
     resourceKey: keySchema.describe(
-      "Stable key identifying this conversation resource. With patch, the key of the resource previously published with replace."
+      "Stable key of this conversation resource; with patch, the one published with replace."
     ),
-    title: replaceInputSchema.shape.title
-      .describe("Title shown for the resource. Required with replace, not allowed with patch.")
-      .optional(),
+    title: replaceInputSchema.shape.title.describe("Only with replace.").optional(),
     sections: replaceInputSchema.shape.sections
-      .describe(
-        "Complete replacement structure for the resource. Required with replace, not allowed with patch."
-      )
+      .describe("The whole structure. Only with replace.")
       .optional(),
     set: patchInputSchema.shape.set.describe(
-      "Named field values to update or append in existing sections. Only with patch."
+      "Field values to update or append in existing sections. Only with patch."
     ),
     remove: patchInputSchema.shape.remove.describe(
-      "Named fields to remove; missing fields are ignored. Only with patch."
+      "Fields to remove; missing ones are ignored. Only with patch."
     )
   })
   .strict();

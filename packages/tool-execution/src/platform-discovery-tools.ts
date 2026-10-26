@@ -300,11 +300,10 @@ export function createPlatformDiscoveryTools(
       icon: "guide",
       effect: context.effect,
       description: [
-        "Read what this instance can do and what the user may do on it: the modules that are on, the kinds of asset that exist (agent, skill, workflow, app, data_store, knowledge_base, connection, as far as they are on), and the user's rights.",
-        "'actions' are rights on instance-owned assets of a kind, such as 'workflow.read', 'workflow.write' (save drafts) or 'workflow.publish'. 'assetActions' are read rights on some assets of a kind only. 'workspaces' names visible workspaces and the rights on their assets; current: true marks this conversation's workspace. Before refusing a create or change, check the actions of the workspace that owns it. A workspace skill.write allows creating a skill there even when actions has no skill.write; rights on another workspace do not apply here. A kind with createApproval, such as skill, is created here only once one of createApproval.approverNames approves this user's request; without it a create asks the user to confirm the exact call.",
-        "Call it before you say whether something can be built here or whether the user may change it. availableHere lists the published agents and Apps offered in this conversation's workspace. Use their titles, never internal names. An asset found through platform.assets.list may be editable but unavailable to use here; never offer it as an available agent or App.",
-        "catalogue.entries lists only offered services: id, title, category, parts, credential modes and whether an installed Connection has its client secret set. If an entry fits, propose it without web-searching the provider; never draft http_api tools for its hosts. connectorTypes lists the kinds of Connection this instance can make and how each signs in to the outside system: none, bearer or header (a key the person enters), oauth (the person signs in with the provider) or oauth_client (the instance signs in as an app registered with the provider). Before you plan to connect a system, read them here instead of researching the provider's documentation: a type with a service connects that system ready-made, mcp connects the provider's MCP server, and http_api connects a REST API that needs no sign-in, a key, or OAuth through an app the person registered with the provider.",
-        "Leave runAs out of a new Workflow; publishing creates its own account. Use a name from workflowPrincipals only when the person asks for an existing shared account; never guess one or use integration or release accounts. Schedules use instance.timeZone; if timeZoneDefaulted, say that UTC is the instance default. Store the intended IANA timeZone on each schedule trigger; never shift the wall clock into UTC yourself. caller identifies the person you act for: use caller.id to notify 'me', without asking them for an id. Give person to resolve a recipient by name or email within this user's directory rights. An empty result means no known match; ask for a clearer name, never an internal id. If several match, ask which person by name/email."
+        "Read what this instance offers and what the user may do on it: the modules that are on, the kinds of asset as far as they are on, and the user's rights. Call it before you say whether something can be built here or whether the user may change it.",
+        "'actions' are rights on instance-owned assets of a kind, such as 'workflow.write' (save drafts) or 'workflow.publish'; 'assetActions' are read rights on some assets of a kind. 'workspaces' names visible workspaces and the rights on their assets; current: true marks this conversation's. Before refusing a create or change, check the actions of the workspace that owns it. A workspace skill.write allows creating a skill there even when actions has no skill.write; rights on another workspace do not apply here. A kind's createApproval names who approves a create. availableHere lists the published agents and Apps offered here.",
+        "catalogue.entries lists the services the instance offers. connectorTypes lists the kinds of Connection this instance can make and how each signs in: none, bearer or header (a key the person enters), oauth (the person signs in with the provider) or oauth_client (the instance signs in as an app registered with the provider). Read them before you plan to connect a system, instead of the provider's documentation.",
+        "Leave runAs out of a new Workflow; publishing creates its own account. Use a name from workflowPrincipals only when the person asks for an existing shared account, never integration or release accounts. Schedules use instance.timeZone (UTC where timeZoneDefaulted: say so); store the intended IANA timeZone on each trigger and never shift the wall clock into UTC. caller is the person you act for: use caller.id to notify 'me'. 'person' resolves a recipient by name or email: with no match ask for a clearer name, with several ask which one, never for an internal id."
       ].join(" "),
       inputSchema: z.object({
         person: searchText(200)
@@ -362,22 +361,14 @@ export function createPlatformDiscoveryTools(
       icon: "guide",
       effect: listAssets.effect,
       description: [
-        "Find the assets the user may see on this platform: agents, skills, Workflows, Apps, Data Stores, Knowledge Bases and Connections.",
-        "Answers the kind, the name, the title and the description of each, never what it holds. An asset the user may not see is not listed; say that you know none of that name, not that it is hidden.",
-        `Give 'kind' to search one kind, and 'text' for part of the name or the title. Answers at most ${PLATFORM_ASSET_LIST_MAX}; 'truncated' says there are more, so search narrower.`,
-        `Pages and files are not assets: ${listFiles.name} finds them.`
+        "Find the assets the user may see: agents, skills, Workflows, Apps, Data Stores, Knowledge Bases and Connections, with kind, name, title and description, never their content. What the user may not see is not listed: say you know none of that name.",
+        `At most ${PLATFORM_ASSET_LIST_MAX}; 'truncated' says there are more, so search narrower. Pages and files are no assets: ${listFiles.name} finds them.`
       ].join(" "),
       inputSchema: z.object({
         kind: searchText(100)
           .optional()
-          .describe(
-            "One kind as platform.context lists it, such as 'workflow' or 'app'. Without it every kind is searched."
-          ),
-        text: searchText(200)
-          .optional()
-          .describe(
-            "Part of the name or the title, whatever the case. Names use lowercase and hyphens."
-          )
+          .describe("One kind as platform.context lists it, such as 'workflow'."),
+        text: searchText(200).optional().describe("Part of the name or the title.")
       }),
       outputSchema: listAssetsOutputSchema,
       async execute(input, toolContext) {
@@ -405,16 +396,14 @@ export function createPlatformDiscoveryTools(
       icon: "files",
       effect: listFiles.effect,
       description: [
-        "Find the previews and files in the conversations of this workspace that the user may see: folders shown with workspace.open ('page'), files people uploaded ('upload') and files an agent made in a workspace ('generated_file'). Newest first.",
-        "Answers the name, the type, the size, when it last changed and the conversation it lives in, never what it holds. What the user may not see is not listed; say that you know none of that name, not that it is hidden.",
-        `Give 'text' for part of the name or of the title of its conversation, and 'kind' for one kind. Answers at most ${PLATFORM_ASSET_LIST_MAX}; 'truncated' says there are more, so search narrower.`,
-        "You can read only what is marked 'inThisConversation', with the tools you read files with. For anything else, tell the user which conversation holds it, so they can open it there or add the file to this one."
+        "Find the previews and files in this workspace's conversations that the user may see: folders shown with workspace.open ('page'), uploads ('upload') and files an agent made ('generated_file'), newest first, with name, type, size, change time and conversation, never their content. What the user may not see is not listed: say you know none of that name.",
+        `At most ${PLATFORM_ASSET_LIST_MAX}; 'truncated' says there are more, so search narrower. Only what is marked 'inThisConversation' can be read here; for anything else, tell the user which conversation holds it.`
       ].join(" "),
       inputSchema: z.object({
         kind: z.enum(FOUND_FILE_KINDS).optional().describe("Only previews, uploads or made files."),
         text: searchText(200)
           .optional()
-          .describe("Part of the name or of the conversation's title, whatever the case.")
+          .describe("Part of the name or of the conversation's title.")
       }),
       outputSchema: listFilesOutputSchema,
       async execute(input, toolContext) {

@@ -32,6 +32,7 @@ describe("the input schema a model is shown for a tool", () => {
     });
     config.administration.agentConfiguration.agentSkillChanges.enabled = true;
     config.modules.apps = { enabled: true };
+    config.modules.connections = { enabled: true };
     config.infrastructure.objectStorage.files = {
       provider: "filesystem",
       root: join(workspaceObjectRoot, "files")
@@ -58,6 +59,8 @@ describe("the input schema a model is shown for a tool", () => {
           "read_skill",
           "platform.assets.put",
           "platform.assets.list",
+          "platform.connections.propose",
+          "platform.connections.draft_tools",
           "propose_skill_change"
         ])
       );

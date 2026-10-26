@@ -55,26 +55,21 @@ const workspaceReadLimitDescription = `Number of lines to return. Omit it for up
 const workspaceCwdDescription =
   "Optional workspace-relative directory for this command only. It does not persist as the next command's cwd.";
 const workspaceExpectedOutputsDescription =
-  'Optional postconditions for files that should exist in /workspace after the command. Use kind "directory" only when checking that a rendered/generated directory contains tracked files. Use this for created outputs or verification steps that depend on an existing artifact. Set promote only when the command itself should promote the output.';
+  'Files that should exist in /workspace after the command. Kind "directory" checks that a generated directory holds tracked files. Set promote only when the command itself should promote the output.';
 const workspaceImportPathDescription =
   "Optional workspace-relative destination path override. Usually omit this and use the returned importedFiles[].path exactly in workspace.exec.";
 const workspacePromotePathDescription =
   "Workspace path to the final user-facing artifact. Prefer artifacts/ or /workspace/artifacts/ outputs.";
-const workspacePreviewArtifactDescription =
-  "Managed source artifact id for DOCX/XLSX/PPTX/PDF preview rendering or already-managed image previews.";
+const workspacePreviewArtifactDescription = "Managed DOCX/XLSX/PPTX/PDF or image artifact id.";
 const workspacePreviewPathDescription =
-  "Workspace path to a rendered preview image, usually under previews/, e.g. previews/report/page-1.png or /workspace/previews/report/page-1.png.";
-const workspacePreviewPathsDescription =
-  "Workspace paths to rendered preview images, usually under previews/. Preview images are model-visible but are not user-download artifacts unless separately promoted.";
-const workspacePreviewPagesDescription =
-  "Optional PDF/DOCX page numbers to load when preview metadata has page numbers.";
-const workspacePreviewSlidesDescription =
-  "Optional PPTX slide numbers to load when preview metadata has slide numbers.";
-const workspacePreviewSheetsDescription =
-  "Optional XLSX sheet names to load when preview metadata has sheet labels.";
+  "A rendered preview image, such as previews/report/page-1.png.";
+const workspacePreviewPathsDescription = "Rendered preview images, usually under previews/.";
+const workspacePreviewPagesDescription = "PDF/DOCX page numbers.";
+const workspacePreviewSlidesDescription = "PPTX slide numbers.";
+const workspacePreviewSheetsDescription = "XLSX sheet names.";
 const workspacePreviewRangesDescription =
-  "Optional XLSX ranges to load. Prefer sheet-qualified ranges like `Summary!A1:B4`; unqualified ranges require exactly one `sheets` value.";
-const workspacePreviewMaxImagesDescription = "Maximum preview images to attach to model context.";
+  "XLSX ranges such as `Summary!A1:B4`; an unqualified range needs exactly one `sheets` value.";
+const workspacePreviewMaxImagesDescription = "Most images to load.";
 const workspacePreviewPositiveIntegerListSchema = z
   .array(z.number().int().min(1))
   .min(1)

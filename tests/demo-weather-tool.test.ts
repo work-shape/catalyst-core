@@ -30,7 +30,6 @@ describe("demo weather forecast tool", () => {
     expect(schema).not.toHaveProperty("$schema");
     expect(properties.location).toMatchObject({
       type: "string",
-      minLength: 1,
       maxLength: 120,
       description: "City, region, or place name for the forecast."
     });
@@ -52,6 +51,8 @@ describe("demo weather forecast tool", () => {
       description: "Optional ISO date for deterministic demos."
     });
     expect(schema.required).not.toContain("startDate");
+    // A minimum length of one tells the model nothing a required string does not.
+    expect(properties.location).not.toHaveProperty("minLength");
   });
 
   it("returns a structured forecast with a weather display payload", async () => {

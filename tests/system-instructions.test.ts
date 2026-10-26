@@ -143,16 +143,11 @@ describe("system instructions", () => {
   });
 });
 
-it("guides complete Connection proposals through offered entries first", () => {
-  expect(PLATFORM_ORIENTATION).toContain("catalogue.entries and connectorTypes");
-  expect(PLATFORM_ORIENTATION).toContain("do not web-search the provider");
-  expect(PLATFORM_ORIENTATION).toContain(
-    "Never draft http_api tools against a host an offered entry covers"
-  );
-  expect(PLATFORM_ORIENTATION).toContain(
-    "Never ask a question in the same turn as an approval card"
-  );
-  expect(PLATFORM_ORIENTATION).toContain("For mail, calendar and personal files propose mode user");
-  expect(PLATFORM_ORIENTATION).toContain("Never say a service is unsupported");
+// The tools that propose and draft a Connection say how; the orientation only names the kind and
+// where its secret is entered, so the rules reach the model once.
+it("names the Connection kind without repeating how its tools propose one", () => {
+  expect(PLATFORM_ORIENTATION).toContain("enters any key or secret there, never in this chat");
+  expect(PLATFORM_ORIENTATION).not.toContain("catalogue.entries");
+  expect(PLATFORM_ORIENTATION).not.toContain("do not web-search the provider");
   expect(PLATFORM_ORIENTATION).not.toContain("use the provider's MCP server where one exists");
 });

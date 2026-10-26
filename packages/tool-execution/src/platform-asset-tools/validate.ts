@@ -44,21 +44,17 @@ export function createValidateAssetTool(calls: PlatformAssetValidateCalls): AnyT
     icon: "guide",
     effect: validate.effect,
     description: [
-      "Check a definition without saving it. Answers what a save of it would be refused for: each issue with the path of the value, a sentence and, where the check names one, a code.",
-      "The checks are the ones a save runs. An empty list means a save of this config passes them.",
-      "A warning refuses nothing: correct what it names, or tell the person about it.",
+      "Check a definition without saving it, with the checks a save runs: answers each issue with its path, a sentence and maybe a code; an empty list passes. A warning refuses nothing: correct it or tell the person.",
       BOUND
     ].join(" "),
     inputSchema: z.object({
       config: configSchema,
       kind: kindSchema
         .optional()
-        .describe(
-          "Only for a draft this conversation created beside the asset it is about: its kind. Give it with 'name'."
-        ),
+        .describe("Only for a draft this conversation created: its kind, with 'name'."),
       name: nameSchema
         .optional()
-        .describe("Only for a draft this conversation created: its name. Give it with 'kind'.")
+        .describe("Only for a draft this conversation created: its name, with 'kind'.")
     }),
     outputSchema: validateOutputSchema,
     async execute(input, context) {

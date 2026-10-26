@@ -128,50 +128,36 @@ export const connectionDraftParameterSchema = z.object({
   schema: z
     .record(z.string(), z.unknown())
     .describe(
-      "The JSON Schema of the value. Its 'type' is string, integer or number; a query parameter may also be boolean, or array with scalar 'items' of type string, integer, number or boolean. Arrays send repeated query keys in input order, at most 32 values. No 'default', 'const', 'examples', 'example' or singleton 'enum': a draft carries no fixed value of its own."
+      "JSON Schema of type string, integer or number; a query parameter may also be boolean or an array of those (repeated keys, at most 32). No fixed value: no default, const, examples, example or one-value enum."
     ),
-  description: z.string().optional().describe("What the value is, for whoever fills it."),
+  description: z.string().optional(),
   required: z
     .boolean()
     .optional()
-    .describe(
-      "For a query parameter only: true where the API needs it. A path parameter is always required."
-    )
+    .describe("Query parameters only; a path parameter is always required.")
 });
 
 export const connectionDraftOperationSchema = z.object({
   name: z
     .string()
     .min(1)
-    .describe(
-      "The operation's id: letters, digits, '_' or '-', starting with a letter, such as 'list_clients'. The tool is called connection.<connection>.<name>."
-    ),
-  title: z
-    .string()
-    .optional()
-    .describe("The name in words a person reads in the list, such as 'List customers'."),
+    .describe("Letters, digits, '_' or '-', starting with a letter, such as 'list_clients'."),
+  title: z.string().optional().describe("The name a person reads, such as 'List customers'."),
   description: z
     .string()
-    .describe(
-      "What the operation reads and when an agent calls it, in one or two sentences. An agent that carries the tool reads it."
-    ),
-  method: z.string().describe("GET. This first cut reads only; any other method is refused."),
+    .describe("What it reads and when an agent calls it, in one or two sentences."),
+  method: z.string().describe("GET; any other method is refused."),
   path: z
     .string()
     .describe(
-      "The path relative to the base address, from '/', with each path parameter as {name}, such as '/clients/{clientId}/fiscal-years'. No query: a query value is a declared parameter."
+      "From '/', relative to the base address, each path parameter as {name}, such as '/clients/{clientId}'; no query string."
     ),
   pathParams: z
     .record(z.string(), connectionDraftParameterSchema)
     .optional()
-    .describe("Every {name} of the path, by name."),
-  query: z
-    .record(z.string(), connectionDraftParameterSchema)
-    .optional()
-    .describe("The query parameters, by name."),
-  effect: z
-    .enum(OPERATION_EFFECTS)
-    .describe("reading. This first cut reads only; 'changing' is refused.")
+    .describe("Every {name} of the path."),
+  query: z.record(z.string(), connectionDraftParameterSchema).optional(),
+  effect: z.enum(OPERATION_EFFECTS).describe("reading; 'changing' is refused.")
 });
 
 const inputSchema = z.object({
@@ -180,34 +166,30 @@ const inputSchema = z.object({
     .min(1)
     .max(CONNECTION_NAME_MAX_LENGTH)
     .describe(
-      "The id of the Connection the tools are for, such as 'crm': the one the request names, or a new one in lowercase letters, digits and hyphens."
+      "The Connection's id, such as 'crm': the one the request names, or a new one in lowercase letters, digits and hyphens."
     ),
-  title: z.string().min(1).max(120).describe("The Connection's name in words, such as 'CRM'."),
+  title: z.string().min(1).max(120).describe("Its name in words, such as 'CRM'."),
   baseUrl: z
     .string()
     .min(1)
     .describe(
-      "The address every request starts with, such as 'https://crm.example/api/v1'. No user name, password, query or fragment."
+      "The address every request starts with, such as 'https://crm.example/api/v1', without user name, password, query or fragment."
     ),
   headerNames: z
     .array(z.string())
     .max(DRAFT_HEADERS_MAX)
     .optional()
     .describe(
-      "The names of fixed headers the API needs on every request that carry no credential, such as 'x-tenant-id'. Names only: a person types their values. A header that carries a key is never one of them: the person enters the key on the Connection's page."
+      "Fixed headers every request needs that carry no credential, such as 'x-tenant-id'. Names only: a person types the values."
     ),
   testPath: z
     .string()
     .min(1)
     .optional()
     .describe(
-      "A GET path, relative to baseUrl and without query, that answers 2xx only with a valid key, such as '/health' or '/me'. The Connection's test reads it, so the test proves the key; without one the test only reaches the address. Leave it out when you know no such path."
+      "A GET path relative to baseUrl, without query, that answers 2xx only with a valid key, such as '/me', so the Connection's test proves the key. Leave it out when you know none."
     ),
-  operations: z
-    .array(connectionDraftOperationSchema)
-    .min(1)
-    .max(CONNECTION_MAX_ACCEPTED_OPERATIONS)
-    .describe("The operations to propose, each one GET request that only reads.")
+  operations: z.array(connectionDraftOperationSchema).min(1).max(CONNECTION_MAX_ACCEPTED_OPERATIONS)
 });
 
 const declaredParameterSchema = z.object({
@@ -381,15 +363,12 @@ export function createConnectionDraftTool(input: {
     icon: "connection",
     effect: "reading",
     description: [
-      "Propose the tools of a REST API Connection for a person to approve. Use it when the person asks you to draft the tools of a REST API, such as from the API's OpenAPI description, which you may read with web_fetch.",
-      "Draft for an API that answers with no sign-in, with a key the person enters, or with OAuth through an app the person registered with the provider: the Connection signs in with nothing else. Read catalogue.entries and connectorTypes in platform.context first. If an entry fits, propose it with platform.connections.propose and do not web-search the provider or draft http_api tools against a host the entry covers. Otherwise propose the whole custom Connection, including OAuth endpoints and client id where needed, with platform.connections.propose.",
-      "Write each operation as one GET request that only reads: its name, a description an agent can act on, the path with its parameters and the query parameters, each with a JSON Schema.",
-      "Name a testPath when the API has a read path that answers only with a valid key, such as a health or 'me' path: the Connection's test reads it, so the test proves the key.",
-      "The tool checks the operations as a save of the Connection would, and answers either every issue, which you fix before you call it again, or the draft, which the person sees as a card in this conversation. From the card they open the Connection's approval list and approve the tools; nothing is saved before that, and you never save a Connection.",
-      "Never ask for a key and never put one into the draft: the person enters it on the Connection's page. A header or parameter that carries a credential, a fixed value in a parameter's schema ('default', 'const', 'examples', 'example', a singleton 'enum'), a method other than GET and the effect 'changing' are refused.",
-      "Call it only once the way is clear: never in an answer that also asks the person something, and never while it is open whether these tools can work or are what the person wants. Ask first; draft in a later answer.",
-      "After a draft, tell the person in one sentence to review the tools on the card and approve what they need.",
-      `Once they say they approved them, offer the tools to an agent with ${CONNECTION_OFFER_TOOL_NAME} where you hold it: no agent can call them before.`
+      "Propose the read operations of a REST API Connection for a person to approve, such as from the API's OpenAPI description, which web_fetch can read. For an API with no sign-in, a key the person enters, or OAuth through an app the person registered with the provider.",
+      "Read catalogue.entries and connectorTypes in platform.context first. If an entry fits, propose it with platform.connections.propose and draft nothing against a host it covers. Otherwise propose the whole custom Connection, with its OAuth endpoints and client id, with platform.connections.propose.",
+      "Each operation is one GET that only reads, with a JSON Schema per parameter. Credentials in a header or parameter, fixed values in a schema, other methods and 'changing' are refused. Never ask for a key: the person enters it on the Connection's page.",
+      "The tool checks the draft as a save would and answers the issues, which you fix before calling again, or the draft, shown as a card. From it the person approves the tools; nothing is saved before, and you never save a Connection.",
+      "Call it only once the way is clear, never in an answer that also asks the person something. Then tell them in one sentence to review and approve the tools on the card.",
+      `Once they say they approved them, offer the tools with ${CONNECTION_OFFER_TOOL_NAME} where you hold it: no agent can call them before.`
     ].join(" "),
     inputSchema,
     outputSchema,
