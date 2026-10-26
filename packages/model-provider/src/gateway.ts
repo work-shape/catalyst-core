@@ -58,6 +58,12 @@ export interface ModelCall {
   reasoningEffort?: ReasoningEffortConfig;
   fastTier?: boolean;
   continuation?: ModelProviderContinuation;
+  /**
+   * The same for every call whose prompt starts the same way, such as the steps and turns of
+   * one conversation: a provider that caches prompts sends such calls to the same cache. An
+   * adapter whose provider takes no such key leaves it out.
+   */
+  cacheKey?: string;
   attribution: ModelAttribution;
   clientInstanceId: ClientInstanceId;
   /** Ties the usage event to the request that caused the call. */
@@ -248,6 +254,7 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
       reasoningEffort: call.reasoningEffort,
       fastTier: call.fastTier,
       continuation: call.continuation,
+      cacheKey: call.cacheKey,
       signal: limit.signal,
       deadline: call.deadline
     };

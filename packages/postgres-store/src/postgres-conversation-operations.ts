@@ -24,12 +24,14 @@ import {
   type FoundFile,
   type ModelProviderContinuationCheckpoint,
   type ModelProviderContinuationStore,
+  type ModelProviderTurnContinuation,
   type MoveConversationInput,
   type SetConversationSubjectInput,
   type UserId
 } from "@work-shape/catalyst-core";
-import { and, asc, desc, eq, gt, inArray, isNull, lt, ne, notExists, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNull, ne, notExists, or, sql } from "drizzle-orm";
 import { type PostgresConnection, type PostgresTransaction } from "./postgres-database";
+import { writeAssistantMessageContinuations } from "./postgres-model-provider-continuation-writes";
 import { mapConversation, mapMessage, type MessageRow } from "./rows";
 import {
   collaborationWorkspaces,
@@ -39,7 +41,6 @@ import {
   conversationAttachments,
   conversations,
   messages,
-  modelProviderContinuations,
   productUsers
 } from "./schema";
 
@@ -491,33 +492,7 @@ async function appendAssistantMessage(
 ): Promise<ChatMessage> {
   return db.transaction(async (tx) => {
     const row = await appendMessageRecord(tx, { ...input, role: "assistant" });
-    if (input.providerContinuation) {
-      await tx
-        .insert(modelProviderContinuations)
-        .values({
-          clientInstanceId: row.clientInstanceId,
-          conversationId: row.conversationId,
-          providerId: input.providerContinuation.providerId,
-          state: input.providerContinuation.state,
-          sourceMessageId: row.id,
-          sourceStorageOrdinal: row.storageOrdinal,
-          updatedAt: row.createdAt
-        })
-        .onConflictDoUpdate({
-          target: [
-            modelProviderContinuations.clientInstanceId,
-            modelProviderContinuations.conversationId,
-            modelProviderContinuations.providerId
-          ],
-          set: {
-            state: input.providerContinuation.state,
-            sourceMessageId: row.id,
-            sourceStorageOrdinal: row.storageOrdinal,
-            updatedAt: row.createdAt
-          },
-          setWhere: lt(modelProviderContinuations.sourceStorageOrdinal, row.storageOrdinal)
-        });
-    }
+    await writeAssistantMessageContinuations(tx, input, row);
     return mapMessage(row);
   });
 }
@@ -655,6 +630,7 @@ export function createPostgresConversationsStore(
     | "searchWorkspaceFiles"
     | "deleteModelProviderContinuation"
     | "getModelProviderContinuation"
+    | "getModelProviderTurnContinuation"
     | "listExpiredConversations"
     | "expireConversation"
   >
@@ -794,6 +770,11 @@ export function createPostgresConversationsStore(
       input: Parameters<ModelProviderContinuationStore["getModelProviderContinuation"]>[0]
     ): Promise<ModelProviderContinuationCheckpoint | undefined> {
       return deps.getModelProviderContinuation(input);
+    },
+    async getModelProviderTurnContinuation(
+      input: Parameters<ModelProviderContinuationStore["getModelProviderTurnContinuation"]>[0]
+    ): Promise<ModelProviderTurnContinuation | undefined> {
+      return deps.getModelProviderTurnContinuation(input);
     },
     async deleteModelProviderContinuation(
       input: Parameters<ModelProviderContinuationStore["deleteModelProviderContinuation"]>[0]

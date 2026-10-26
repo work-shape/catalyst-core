@@ -16,6 +16,7 @@ import { isUnofferedDataToolCall } from "../model-tool-materialization";
 import {
   createToolResultMetadata,
   stableStringify,
+  TOOL_RESULT_READ_TOOL_NAME,
   type ModelOutputProjection
 } from "../model-context-projection";
 import type { RunState } from "../run-state";
@@ -24,6 +25,7 @@ import type { ModelInput } from "./model-input";
 import type { RunEvents } from "./run-events";
 import type { LocalAgentRuntimeOptions } from "./run-events";
 import { isRunAgentCall, stepLimitRefusal } from "./subagents";
+import { createToolResultReader } from "./tool-result-read";
 
 const DEFAULT_REPEATED_TOOL_CALL_LIMIT = 3;
 
@@ -81,7 +83,14 @@ export class ToolDispatch {
         context,
         state,
         toolCall,
-        runTool: this.options.runTool,
+        // A cut result is read from the run's own conversation, not run as an operation.
+        runTool:
+          toolCall.toolName === TOOL_RESULT_READ_TOOL_NAME
+            ? createToolResultReader(
+                this.options.conversationHistory,
+                this.modelInput.modelContextOptions(context)
+              )
+            : this.options.runTool,
         unoffered:
           isUnofferedDataToolCall(toolCall.toolName, offeredDataTools) ||
           Boolean(input.preview && forbiddenPreviewTool(toolCall.toolName)),

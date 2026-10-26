@@ -43,7 +43,7 @@ import type { LocalAgentRuntimeOptions } from "./run-events";
 const DEFAULT_CONVERSATION_HISTORY_LIMIT = 20;
 const DEFAULT_MODEL_CONTEXT: ModelContextProjectionOptions = {
   toolOutput: {
-    maxTokens: 60000
+    maxTokens: 12000
   }
 };
 
@@ -57,6 +57,8 @@ export class ModelInput {
   ): {
     binding: ModelBindingRef;
     provider: ModelProviderConfig;
+    /** The model the provider is asked for. */
+    model: string;
     capabilities: ModelCapabilities;
     reasoningEffort?: ReasoningEffortConfig;
     fastMode: boolean;
@@ -88,6 +90,7 @@ export class ModelInput {
       return {
         binding: { bindingId },
         provider,
+        model: binding.model ?? provider.model,
         capabilities,
         // An effort the user picked wins while the binding still offers it; a pick the binding
         // no longer offers falls back to the configured effort instead of failing the run.
@@ -112,6 +115,7 @@ export class ModelInput {
     return {
       binding: { providerId: provider.id },
       provider,
+      model: provider.model,
       capabilities,
       reasoningEffort:
         agent.reasoningEffort ??
@@ -132,7 +136,15 @@ export class ModelInput {
     input: StartAgentRunInput,
     context: RuntimeCallContext,
     provider: ModelProviderConfig,
-    options: { compactionEnabled: boolean; withoutCheckpoint?: boolean }
+    options: {
+      compactionEnabled: boolean;
+      withoutCheckpoint?: boolean;
+      /**
+       * The model the run asks for. Given, the continuation the conversation's last run ended
+       * with on it is sent again, so the request starts as that run's last one did.
+       */
+      model?: string;
+    }
   ): Promise<{
     messages: ModelMessage[];
     providerContinuation?: ModelCompletion["continuation"];
@@ -177,7 +189,7 @@ export class ModelInput {
       legacyCheckpointIndex >= 0
         ? readAssistantProviderContinuation(history[legacyCheckpointIndex]?.metadata)
         : undefined;
-    const checkpoint =
+    const compactionCheckpoint =
       storedCheckpoint &&
       storedCheckpointIndex >= legacyCheckpointIndex &&
       storedCheckpointIndex >= 0
@@ -186,6 +198,24 @@ export class ModelInput {
             state: storedCheckpoint.state
           }
         : legacyCheckpoint;
+    // The last run's continuation holds the checkpoint's and its own steps' reasoning. Another
+    // model could not read that reasoning, and one written before the checkpoint lacks it.
+    const turn =
+      options.model === undefined
+        ? undefined
+        : await this.options.modelProviderContinuationStore?.getModelProviderTurnContinuation({
+            clientInstanceId: context.clientInstanceId,
+            conversationId: input.conversationId,
+            providerId: provider.id
+          });
+    const turnIndex =
+      turn && turn.model === options.model
+        ? history.findIndex((message) => message.id === turn.sourceMessageId)
+        : -1;
+    const checkpoint =
+      turn && turnIndex >= 0 && turnIndex >= checkpointIndex
+        ? { providerId: turn.providerId, state: turn.state }
+        : compactionCheckpoint;
     const activeHistory = compactionEnabled
       ? history.slice(Math.max(checkpointIndex, 0))
       : selectRecentCompleteHistory(
@@ -305,6 +335,7 @@ export class ModelInput {
           reasoningEffort,
           fastTier: modelSelection.fastMode && capabilities.fastTier,
           continuation: capabilities.continuation ? providerContinuation : undefined,
+          cacheKey: modelCacheKeyOf(input),
           attribution: {
             kind: input.workflowAgent ? "workflow_step" : "agent_run",
             ...(input.workflowAgent ? { workflowRunId: input.workflowAgent.workflowRunId } : {}),
@@ -326,6 +357,17 @@ export class ModelInput {
       )
     );
   }
+}
+
+/**
+ * What every model call of a run sends as its cache key, so the steps and later turns of one
+ * conversation reach the same prompt cache: the Workflow Run of a Workflow step, the
+ * conversation of the run above a subagent, the run's own conversation otherwise.
+ */
+function modelCacheKeyOf(
+  input: Pick<StartAgentRunInput, "conversationId" | "parentConversationId" | "workflowAgent">
+): string {
+  return input.workflowAgent?.workflowRunId ?? input.parentConversationId ?? input.conversationId;
 }
 
 export function getProviderCompactionThreshold(

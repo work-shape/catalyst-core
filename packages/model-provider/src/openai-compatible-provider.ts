@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import {
   AppError,
   REASONING_EFFORTS,
@@ -26,6 +27,7 @@ import {
 } from "./model-provider-error";
 import {
   createProviderToolMetadata,
+  continuationForOpenAiResponsesRequest,
   createOpenAiResponsesContinuation,
   didOpenAiResponsesCompact,
   isOpenAiResponsesContinuationAboveStringLimit,
@@ -42,7 +44,7 @@ import {
   toResponsesModelUsage
 } from "./openai-compatible-mapping";
 import {
-  isEncryptedContentAboveStringLimit,
+  isEncryptedContentRejected,
   readProviderErrorMessage,
   readProviderErrorMetadata
 } from "./provider-error";
@@ -208,9 +210,10 @@ export class OpenAiCompatibleChatProvider {
   }
 
   private async completeResponses(
-    request: ModelCompletionRequest,
+    sent: ModelCompletionRequest,
     context: TransportCallContext
   ): Promise<ModelCompletion> {
+    const request = this.withRequestContinuation(sent);
     const metadata = createProviderToolMetadata(request.tools);
     const response = await this.postResponse({
       body: this.createResponsesRequestBody(request, metadata),
@@ -240,9 +243,10 @@ export class OpenAiCompatibleChatProvider {
   }
 
   private async *streamResponses(
-    request: ModelCompletionRequest,
+    sent: ModelCompletionRequest,
     context: TransportCallContext
   ): AsyncIterable<ModelCompletionStreamEvent> {
+    const request = this.withRequestContinuation(sent);
     const metadata = createProviderToolMetadata(request.tools);
     const response = await this.postResponse({
       body: {
@@ -351,6 +355,15 @@ export class OpenAiCompatibleChatProvider {
     };
   }
 
+  private withRequestContinuation(request: ModelCompletionRequest): ModelCompletionRequest {
+    const continuation = continuationForOpenAiResponsesRequest(
+      this.id,
+      request.continuation,
+      request.messages
+    );
+    return continuation === request.continuation ? request : { ...request, continuation };
+  }
+
   private createResponsesRequestBody(
     request: ModelCompletionRequest,
     metadata: ReturnType<typeof createProviderToolMetadata>
@@ -391,6 +404,7 @@ export class OpenAiCompatibleChatProvider {
       ],
       tool_choice: request.tools.length > 0 ? "auto" : undefined,
       ...(request.fastMode ? { service_tier: "priority" as const } : {}),
+      ...(request.cacheKey ? { prompt_cache_key: toPromptCacheKey(request.cacheKey) } : {}),
       ...(this.options.contextManagement?.compaction
         ? {
             context_management: [
@@ -448,7 +462,7 @@ export class OpenAiCompatibleChatProvider {
     const continuationRejected =
       request?.continuation !== undefined &&
       response.status === 400 &&
-      isEncryptedContentAboveStringLimit(payload);
+      isEncryptedContentRejected(payload);
     return new ModelProviderError({
       ...typed,
       kind: continuationRejected
@@ -475,6 +489,18 @@ function assertNoProviderNativeToolsForChatCompletions(
     "VALIDATION_FAILED",
     "Provider-native model tools are only supported for OpenAI-compatible providers configured with api: responses"
   );
+}
+
+/**
+ * The provider takes a key of at most 64 characters. A longer one is sent as its hash, which is
+ * the same for the same key.
+ */
+const PROMPT_CACHE_KEY_MAX_CHARS = 64;
+
+export function toPromptCacheKey(key: string): string {
+  return key.length <= PROMPT_CACHE_KEY_MAX_CHARS
+    ? key
+    : createHash("sha256").update(key).digest("base64url");
 }
 
 function shouldRequestReasoningSummary(model: string): boolean {

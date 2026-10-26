@@ -364,6 +364,38 @@ export function readOpenAiResponsesContinuationItems(
   );
 }
 
+/**
+ * The continuation a request sends: only the reasoning of the tool calls in its messages. A
+ * continuation carried from turn to turn then drops the reasoning of calls history no longer
+ * holds, instead of growing with the conversation.
+ */
+export function continuationForOpenAiResponsesRequest(
+  providerId: string,
+  continuation: ModelProviderContinuation | undefined,
+  messages: ModelMessage[]
+): ModelProviderContinuation | undefined {
+  if (continuation?.providerId !== providerId) return continuation;
+  const items = readOpenAiResponsesContinuationItems(providerId, continuation);
+  const compactionItem = readOpenAiResponsesCompactionItem(providerId, continuation);
+  const callIds = new Set(
+    messages.flatMap((message) =>
+      message.role === "assistant" ? (message.toolCalls ?? []).map((call) => call.toolCallId) : []
+    )
+  );
+  const kept = items.filter((entry) => callIds.has(entry.beforeToolCallId));
+  if (kept.length === items.length) return continuation;
+  return compactionItem || kept.length > 0
+    ? {
+        providerId,
+        state: {
+          kind: "openai_responses",
+          ...(compactionItem ? { compactionItem } : {}),
+          encryptedReasoningItems: kept
+        } satisfies OpenAiResponsesContinuationState
+      }
+    : undefined;
+}
+
 export function readOpenAiResponsesCompactionItem(
   providerId: string,
   continuation: ModelProviderContinuation | undefined

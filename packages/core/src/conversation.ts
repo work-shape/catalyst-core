@@ -239,8 +239,15 @@ export interface AppendAssistantMessageInput {
   conversationId: ConversationId;
   text: string;
   metadata?: JsonObject;
+  /** Where the conversation's history starts for this provider: kept after a compaction. */
   providerContinuation?: {
     providerId: string;
+    state: JsonValue;
+  };
+  /** The continuation the run ended with, given with its last message: see `ModelProviderTurnContinuation`. */
+  turnContinuation?: {
+    providerId: string;
+    model: string;
     state: JsonValue;
   };
 }
@@ -416,13 +423,37 @@ export interface ModelProviderContinuationCheckpoint {
   updatedAt: ISODateString;
 }
 
+/**
+ * The provider continuation the last finished run of a conversation ended with, on one provider
+ * and model: opaque, such as the encrypted reasoning of its steps. The next run on the same model
+ * starts from it, so its request repeats the last one's and the provider's prompt cache holds.
+ * Stored with the run's last message and gone with it or the conversation.
+ */
+export interface ModelProviderTurnContinuation {
+  clientInstanceId: ClientInstanceId;
+  conversationId: ConversationId;
+  providerId: string;
+  model: string;
+  state: JsonValue;
+  sourceMessageId: MessageId;
+  updatedAt: ISODateString;
+}
+
 export interface ModelProviderContinuationStore {
   getModelProviderContinuation(input: {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;
     providerId: string;
   }): Promise<ModelProviderContinuationCheckpoint | undefined>;
-  /** Drops a continuation the provider cannot accept; the conversation goes on from its history. */
+  getModelProviderTurnContinuation(input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+    providerId: string;
+  }): Promise<ModelProviderTurnContinuation | undefined>;
+  /**
+   * Drops the continuations a provider cannot accept, the checkpoint and the turn's; the
+   * conversation goes on from its history.
+   */
   deleteModelProviderContinuation(input: {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;

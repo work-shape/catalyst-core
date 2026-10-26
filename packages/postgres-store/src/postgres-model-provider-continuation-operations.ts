@@ -3,15 +3,20 @@ import {
   asConversationId,
   asMessageId,
   type ModelProviderContinuationCheckpoint,
-  type ModelProviderContinuationStore
+  type ModelProviderContinuationStore,
+  type ModelProviderTurnContinuation
 } from "@work-shape/catalyst-core";
 import { requireClaimedAgentRun } from "./postgres-agent-run-worker-operations";
 import type { PostgresConnection } from "./postgres-database";
-import { modelProviderContinuations } from "./schema";
+import { modelProviderContinuations, modelProviderTurnContinuations } from "./schema";
+
+type ContinuationKey = Parameters<
+  ModelProviderContinuationStore["getModelProviderContinuation"]
+>[0];
 
 export async function getModelProviderContinuation(
   db: PostgresConnection,
-  input: Parameters<ModelProviderContinuationStore["getModelProviderContinuation"]>[0]
+  input: ContinuationKey
 ): Promise<ModelProviderContinuationCheckpoint | undefined> {
   const [row] = await db
     .select()
@@ -27,12 +32,30 @@ export async function getModelProviderContinuation(
   return row ? mapModelProviderContinuation(row) : undefined;
 }
 
+export async function getModelProviderTurnContinuation(
+  db: PostgresConnection,
+  input: ContinuationKey
+): Promise<ModelProviderTurnContinuation | undefined> {
+  const [row] = await db
+    .select()
+    .from(modelProviderTurnContinuations)
+    .where(
+      and(
+        eq(modelProviderTurnContinuations.clientInstanceId, input.clientInstanceId),
+        eq(modelProviderTurnContinuations.conversationId, input.conversationId),
+        eq(modelProviderTurnContinuations.providerId, input.providerId)
+      )
+    )
+    .limit(1);
+  return row ? { ...mapModelProviderContinuation(row), model: row.model } : undefined;
+}
+
 export async function deleteModelProviderContinuation(
   db: PostgresConnection,
   input: Parameters<ModelProviderContinuationStore["deleteModelProviderContinuation"]>[0]
 ): Promise<void> {
-  const remove = (tx: PostgresConnection) =>
-    tx
+  const remove = async (tx: PostgresConnection) => {
+    await tx
       .delete(modelProviderContinuations)
       .where(
         and(
@@ -41,13 +64,19 @@ export async function deleteModelProviderContinuation(
           eq(modelProviderContinuations.providerId, input.providerId)
         )
       );
+    await tx
+      .delete(modelProviderTurnContinuations)
+      .where(
+        and(
+          eq(modelProviderTurnContinuations.clientInstanceId, input.clientInstanceId),
+          eq(modelProviderTurnContinuations.conversationId, input.conversationId),
+          eq(modelProviderTurnContinuations.providerId, input.providerId)
+        )
+      );
+  };
   const { runFence } = input;
-  if (!runFence) {
-    await remove(db);
-    return;
-  }
   await db.transaction(async (tx) => {
-    await requireClaimedAgentRun(tx, input.clientInstanceId, runFence);
+    if (runFence) await requireClaimedAgentRun(tx, input.clientInstanceId, runFence);
     await remove(tx);
   });
 }

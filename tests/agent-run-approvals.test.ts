@@ -646,7 +646,7 @@ describe("agent approval pause (operations checks 4, 5 and 6)", () => {
     expect(await f.calls(said.runId)).toMatchObject([
       { id: said.call.id, status: "done", decision: { mode: "approved", byLabel: "approver" } }
     ]);
-    expect((await f.messages(said.conversationId)).at(-1)?.text).toContain('"changed": "default"');
+    expect((await f.messages(said.conversationId)).at(-1)?.text).toContain('"changed":"default"');
     expect((await f.decide(requestId, "approve")).statusCode).toBe(409);
     await getTestJobs(f.app).runDue();
     expect(f.executed).toEqual(["default"]);

@@ -34,11 +34,13 @@ export function readProviderErrorMessage(payload: unknown): string | undefined {
 }
 
 /**
- * Whether a provider refused the request because an `encrypted_content` string in it is above
- * the provider's string limit. Read from the error's code and parameter, not from its message.
+ * Whether a provider refused the request for an `encrypted_content` string in it: above the
+ * provider's string limit, or one it cannot decrypt, such as one another deployment produced.
+ * Read from the error's code and parameter, not from its message.
  */
-export function isEncryptedContentAboveStringLimit(payload: unknown): boolean {
+export function isEncryptedContentRejected(payload: unknown): boolean {
   const error = isRecord(payload) ? (isRecord(payload.error) ? payload.error : payload) : {};
+  if (error.code === "invalid_encrypted_content") return true;
   return (
     error.code === "string_above_max_length" &&
     typeof error.param === "string" &&

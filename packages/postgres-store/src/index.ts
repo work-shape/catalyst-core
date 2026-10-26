@@ -23,7 +23,8 @@ import {
 } from "./postgres-workspace-deletion";
 import {
   deleteModelProviderContinuation as deletePostgresModelProviderContinuation,
-  getModelProviderContinuation as getPostgresModelProviderContinuation
+  getModelProviderContinuation as getPostgresModelProviderContinuation,
+  getModelProviderTurnContinuation as getPostgresModelProviderTurnContinuation
 } from "./postgres-model-provider-continuation-operations";
 import { searchWorkspaceFiles as searchPostgresWorkspaceFiles } from "./postgres-file-search-operations";
 import {
@@ -134,6 +135,8 @@ function bindStores(
       deleteModelProviderContinuation: (input) =>
         deletePostgresModelProviderContinuation(db, input),
       getModelProviderContinuation: (input) => getPostgresModelProviderContinuation(db, input),
+      getModelProviderTurnContinuation: (input) =>
+        getPostgresModelProviderTurnContinuation(db, input),
       listExpiredConversations: (input) => listExpiredConversations(db, input),
       expireConversation: (input) => expireConversation(db, input)
     }),

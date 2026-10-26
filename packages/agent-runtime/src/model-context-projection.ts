@@ -118,7 +118,7 @@ export async function projectRunOwnMessages(
           role: "tool",
           toolCallId: metadata.toolCallId,
           content: result
-            ? (await createModelVisibleToolOutput(result, options)).content
+            ? (await createModelVisibleToolOutput(result, options, "loaded", metadata)).content
             : typeof metadata.modelOutput === "string"
               ? metadata.modelOutput
               : message.text
@@ -191,29 +191,11 @@ export function selectRecentCompleteHistory(
 export async function createModelVisibleToolOutput(
   result: ToolExecutionResult,
   options: ModelContextProjectionOptions,
-  images: "loaded" | "not_loaded" = "loaded"
+  images: "loaded" | "not_loaded" = "loaded",
+  /** The call the result answers: the note on a cut result names it and how to read the rest. */
+  call?: ToolResultCall
 ): Promise<ModelOutputProjection> {
-  // Data-critical boundary: privateOutput and private rendered display data must never be
-  // serialized into model-visible history. Private render-view tools return only a zero-data
-  // acknowledgement through output unless they are explicitly implemented as non-private query tools.
-  // A subagent must hand the confirmation operation back to its parent. Other refusal
-  // details and codes stay in the stored result, outside the model-visible handoff.
-  const content =
-    result.status === "success"
-      ? stringifyForModel(result.output ?? { status: "success" })
-      : stringifyForModel(
-          result.error.code === "confirmation_required"
-            ? {
-                message: result.error.message,
-                operation: isJsonObject(result.error.details)
-                  ? result.error.details.operation
-                  : undefined
-              }
-            : result.error.code === "not_allowed"
-              ? { message: result.error.message }
-              : result.error
-        );
-  const bounded = boundModelOutput(content, options);
+  const bounded = boundModelOutput(modelVisibleToolText(result), options, call);
   if (images === "not_loaded") {
     const summary = summarizeModelVisibleArtifactsNotLoaded(result);
     if (!summary) {
@@ -240,6 +222,37 @@ export async function createModelVisibleToolOutput(
       ...visualArtifacts.parts
     ]
   };
+}
+
+/** A call a tool result answers. */
+export interface ToolResultCall {
+  toolName: string;
+  toolCallId: string;
+}
+
+/**
+ * The whole text of a tool result as the model reads it, before any cut.
+ *
+ * Data-critical boundary: privateOutput and private rendered display data must never be
+ * serialized into model-visible history. Private render-view tools return only a zero-data
+ * acknowledgement through output unless they are explicitly implemented as non-private query
+ * tools. A subagent must hand the confirmation operation back to its parent. Other refusal
+ * details and codes stay in the stored result, outside the model-visible handoff.
+ */
+export function modelVisibleToolText(result: ToolExecutionResult): string {
+  if (result.status === "success") {
+    return stringifyForModel(result.output ?? { status: "success" });
+  }
+  return stringifyForModel(
+    result.error.code === "confirmation_required"
+      ? {
+          message: result.error.message,
+          operation: isJsonObject(result.error.details) ? result.error.details.operation : undefined
+        }
+      : result.error.code === "not_allowed"
+        ? { message: result.error.message }
+        : result.error
+  );
 }
 
 export function dropCurrentSubmittedMessage(
@@ -317,7 +330,7 @@ async function toModelHistoryMessage(
     }
     const result = readToolExecutionResult(metadata.result);
     const projected = result
-      ? (await createModelVisibleToolOutput(result, options, "not_loaded")).content
+      ? (await createModelVisibleToolOutput(result, options, "not_loaded", metadata)).content
       : typeof metadata.modelOutput === "string"
         ? metadata.modelOutput
         : message.text;
@@ -472,6 +485,7 @@ function readAssistantToolCalls(metadata: JsonObject | undefined): ModelToolCall
 function readToolResultMetadata(metadata: JsonObject | undefined):
   | {
       toolCallId: string;
+      toolName: string;
       result?: JsonValue;
       modelOutput?: JsonValue;
     }
@@ -482,6 +496,7 @@ function readToolResultMetadata(metadata: JsonObject | undefined):
   }
   return {
     toolCallId: runtime.toolCallId,
+    toolName: runtime.toolName,
     result: runtime.result,
     modelOutput: runtime.modelOutput
   };
@@ -676,7 +691,9 @@ function isSupportedImageMimeType(value: string): value is SupportedImageMimeTyp
   );
 }
 
-function readToolExecutionResult(value: JsonValue | undefined): ToolExecutionResult | undefined {
+export function readToolExecutionResult(
+  value: JsonValue | undefined
+): ToolExecutionResult | undefined {
   if (!isJsonObject(value)) {
     return undefined;
   }
@@ -692,9 +709,20 @@ function readToolExecutionResult(value: JsonValue | undefined): ToolExecutionRes
   return undefined;
 }
 
+/** The tool every run with tools has, to read a cut result in parts. */
+export const TOOL_RESULT_READ_TOOL_NAME = "tool_result.read";
+
+/**
+ * A result above the bound is cut in the middle: its start and its end stay, with a note between
+ * them that names the result, how much was left out and how to read it: with
+ * `tool_result.read`, from the stored result, and where the tool can, by calling it narrower.
+ * The cut depends on the result alone, so a stored result is shown the same way in every later
+ * request, which keeps the provider's prompt cache.
+ */
 function boundModelOutput(
   content: string,
-  options: ModelContextProjectionOptions
+  options: ModelContextProjectionOptions,
+  call: ToolResultCall | undefined
 ): ModelOutputProjection {
   const originalBytes = byteLength(content);
   const originalTokens = estimateTokens(content);
@@ -709,24 +737,29 @@ function boundModelOutput(
     };
   }
 
-  const maxCharsByTokens = maxTokens * CHARS_PER_TOKEN;
-  const maxCharsByBytes = maxBytes ?? Number.POSITIVE_INFINITY;
-  const maxChars = Math.max(1000, Math.min(maxCharsByTokens, maxCharsByBytes));
-  const marker = [
-    "",
-    "[Tool output bounded for active model context]",
-    `Original estimate: ${originalTokens} tokens / ${originalBytes} bytes.`,
-    `Projected limit: ${maxTokens} tokens${maxBytes ? ` / ${maxBytes} bytes` : ""}.`,
-    "The full tool output remains stored in agent-visible history and may be available as a managed artifact."
-  ].join("\n");
-  const markerBudget = marker.length + 8;
-  const contentBudget = Math.max(0, maxChars - markerBudget);
+  const maxChars = modelOutputMaxChars(options);
+  const hint = cutResultHint(call?.toolName);
+  const note = (leftOutFrom: number, leftOutTo: number) =>
+    [
+      "",
+      `[Result cut for the model: ${content.length} characters, about ${originalTokens} tokens (${originalBytes} bytes), above the bound of ${maxTokens} tokens${maxBytes ? ` / ${maxBytes} bytes` : ""}. Characters ${leftOutFrom} to ${leftOutTo} are left out here; the whole result stays stored.]`,
+      ...(call
+        ? [
+            `Read the left-out part with ${TOOL_RESULT_READ_TOOL_NAME} {"id":"${call.toolCallId}","offset":${leftOutFrom}} and go on with the offset each answer names.`
+          ]
+        : []),
+      ...(hint ? [hint] : []),
+      ""
+    ].join("\n");
+  // The note names where the cut is, so its longest form is part of the budget.
+  const contentBudget = Math.max(0, maxChars - note(content.length, content.length).length);
   const headLength = Math.ceil(contentBudget / 2);
   const tailLength = Math.floor(contentBudget / 2);
+  const tailStart = content.length - tailLength;
   const bounded =
     content.length <= contentBudget
       ? content
-      : `${content.slice(0, headLength)}${marker}\n${content.slice(content.length - tailLength)}`;
+      : `${content.slice(0, headLength)}${note(headLength, tailStart)}${content.slice(tailStart)}`;
 
   return {
     text: bounded,
@@ -743,11 +776,39 @@ function boundModelOutput(
   };
 }
 
+/** The most characters of one tool result the model reads. */
+export function modelOutputMaxChars(options: ModelContextProjectionOptions): number {
+  const maxCharsByTokens = options.toolOutput.maxTokens * CHARS_PER_TOKEN;
+  const maxCharsByBytes = options.toolOutput.maxBytes ?? Number.POSITIVE_INFINITY;
+  return Math.max(1000, Math.min(maxCharsByTokens, maxCharsByBytes));
+}
+
+/** Another way to the part of a cut result the agent needs, for the tools that have one. */
+export function cutResultHint(toolName: string | undefined): string | undefined {
+  if (toolName === "workspace.exec") {
+    return "Or run the command again with its output narrowed by grep, head or tail.";
+  }
+  if (toolName === "workspace.read_file") {
+    return "Or call workspace.read_file again with a smaller limit and the offset to continue from.";
+  }
+  if (toolName?.endsWith(".query")) {
+    return "Or ask for less: fewer columns, a filter or an aggregate, or page with LIMIT and OFFSET.";
+  }
+  if (toolName === TOOL_RESULT_READ_TOOL_NAME) {
+    return `Or call ${TOOL_RESULT_READ_TOOL_NAME} with a smaller limit.`;
+  }
+  return undefined;
+}
+
+/**
+ * JSON without spaces and with the keys of every object in order: the same value gives the same
+ * text whether it comes from the tool or back from storage, which keeps no key order.
+ */
 function stringifyForModel(value: unknown): string {
   if (typeof value === "string") {
     return value;
   }
-  return JSON.stringify(unknownToJsonValue(value), null, 2);
+  return stableStringify(value);
 }
 
 function sortForStableStringify(value: JsonValue): JsonValue {

@@ -38,6 +38,7 @@ import { enqueueJob } from "./jobs/store";
 import { resumeAgentRunAfterApproval } from "./postgres-agent-run-approval-resume";
 import { requireActiveConversationLock } from "./postgres-conversation-operations";
 import type { PostgresConnection, PostgresTransaction } from "./postgres-database";
+import { writeAssistantMessageContinuations } from "./postgres-model-provider-continuation-writes";
 import { withdrawUnclaimedWorkspaceCommandsOfRuns } from "./postgres-execution-workspace-operations";
 import { mapAgentRun, mapMessage, mapRunObservation } from "./rows";
 import { appendAuditEvent } from "./postgres-audit-usage-operations";
@@ -48,7 +49,6 @@ import {
   conversationFollowUps,
   conversations,
   messages,
-  modelProviderContinuations,
   platformJobs
 } from "./schema";
 
@@ -531,33 +531,8 @@ async function insertClaimedAgentRunMessage(
         eq(conversations.status, "active")
       )
     );
-  if (message.role === "assistant" && message.providerContinuation) {
-    const continuation = message.providerContinuation;
-    await tx
-      .insert(modelProviderContinuations)
-      .values({
-        clientInstanceId: claim.clientInstanceId,
-        conversationId: run.conversationId,
-        providerId: continuation.providerId,
-        state: continuation.state,
-        sourceMessageId: row.id,
-        sourceStorageOrdinal: row.storageOrdinal,
-        updatedAt: createdAt
-      })
-      .onConflictDoUpdate({
-        target: [
-          modelProviderContinuations.clientInstanceId,
-          modelProviderContinuations.conversationId,
-          modelProviderContinuations.providerId
-        ],
-        set: {
-          state: continuation.state,
-          sourceMessageId: row.id,
-          sourceStorageOrdinal: row.storageOrdinal,
-          updatedAt: createdAt
-        },
-        setWhere: lt(modelProviderContinuations.sourceStorageOrdinal, row.storageOrdinal)
-      });
+  if (message.role === "assistant") {
+    await writeAssistantMessageContinuations(tx, message, row);
   }
   return mapMessage(row);
 }

@@ -69,6 +69,7 @@ export interface OpenAiResponsesRequestBody {
   include?: string[];
   tool_choice?: "auto";
   service_tier?: OpenAiServiceTierRequest;
+  prompt_cache_key?: string;
   stream?: boolean;
   store?: boolean;
 }

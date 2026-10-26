@@ -289,7 +289,7 @@ describe("client instance app vertical slice", () => {
       expect.arrayContaining([
         expect.objectContaining({
           role: "tool",
-          text: expect.stringContaining('"echoed": "hello"')
+          text: expect.stringContaining('"echoed":"hello"')
         })
       ])
     );

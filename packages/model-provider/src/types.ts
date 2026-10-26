@@ -101,6 +101,8 @@ export interface ModelCompletionRequest {
   /** Requests the provider's fast processing tier. The adapter maps it to the provider parameter. */
   fastMode?: boolean;
   continuation?: ModelProviderContinuation;
+  /** See `ModelCall.cacheKey`. */
+  cacheKey?: string;
   messages: ModelMessage[];
   tools: ModelTool[];
 }
@@ -206,6 +208,8 @@ export interface ModelAdapterRequest {
   reasoningEffort?: ReasoningEffortConfig;
   fastTier?: boolean;
   continuation?: ModelProviderContinuation;
+  /** See `ModelCall.cacheKey`. */
+  cacheKey?: string;
   /** Aborts when the caller stops the call or its deadline passes. The adapter stops with it. */
   signal?: AbortSignal;
   deadline?: Date;

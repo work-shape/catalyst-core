@@ -85,6 +85,7 @@ export const openAiCompatibleModelProvider = defineProvider({
         reasoningEffort: request.reasoningEffort,
         fastMode: request.fastTier,
         continuation: request.continuation,
+        cacheKey: request.cacheKey,
         messages: request.messages,
         tools: request.tools
       });

@@ -29,6 +29,7 @@ import {
   type ChatMessage,
   type ClientInstanceId,
   type ConversationHistoryStore,
+  type ConversationId,
   type SteeredUserMessage,
   type JobControl,
   type JobSchedule,
@@ -593,10 +594,12 @@ async function reconstructInput(
     );
   const attachmentManifest = readUserAttachmentManifest(message.metadata);
   const workflowAgent = run.workflowStepRunId ? await workflowAgentOf(options, run) : undefined;
-  const ancestors = run.parentRunId ? await ancestorsOf(options, run.parentRunId) : undefined;
+  const above = run.parentRunId ? await ancestorsOf(options, run.parentRunId) : undefined;
   return {
     ...(workflowAgent ? { workflowAgent } : {}),
-    ...(ancestors ? { ancestors } : {}),
+    ...(above
+      ? { ancestors: above.ancestors, parentConversationId: above.parentConversationId }
+      : {}),
     agentName: run.agentName,
     preview,
     modelBindingId: run.modelBindingId,
@@ -624,8 +627,9 @@ const ANCESTORS_MAX = 4;
 async function ancestorsOf(
   options: AgentRunJobsOptions,
   parentRunId: AgentRunId
-): Promise<AgentRunModelOrigin[]> {
+): Promise<{ ancestors: AgentRunModelOrigin[]; parentConversationId?: ConversationId }> {
   const ancestors: AgentRunModelOrigin[] = [];
+  let parentConversationId: ConversationId | undefined;
   let next: AgentRunId | undefined = parentRunId;
   while (next && ancestors.length < ANCESTORS_MAX) {
     const parent = await options.stores.agentRuns.getAgentRun({
@@ -634,6 +638,7 @@ async function ancestorsOf(
     });
     if (!parent)
       throw new AppError("NOT_FOUND", "The run that started this subagent is not available");
+    parentConversationId ??= parent.conversationId;
     const { agentName, preview, modelBindingId } = await reconstructInput(
       options,
       {
@@ -649,7 +654,7 @@ async function ancestorsOf(
     });
     next = parent.parentRunId;
   }
-  return ancestors;
+  return { ancestors, ...(parentConversationId ? { parentConversationId } : {}) };
 }
 
 function fencedConversationHistory(
