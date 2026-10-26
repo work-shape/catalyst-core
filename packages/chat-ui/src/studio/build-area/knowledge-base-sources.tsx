@@ -1,13 +1,33 @@
-import { FolderSync, Play, Plug, RefreshCw, RotateCcw, Trash2 } from "lucide-react";
-import { useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
+import {
+  Folder,
+  FolderOpen,
+  FolderSync,
+  Play,
+  Plug,
+  RefreshCw,
+  RotateCcw,
+  Trash2,
+  X
+} from "lucide-react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+  type ReactNode
+} from "react";
 import {
   Badge,
   Banner,
   Button,
   Chip,
+  Disclosure,
+  DisclosureContent,
+  DisclosureTrigger,
   EmptyState,
   Field,
   FormNotice,
+  IconButton,
   KeyValue,
   KeyValueList,
   List,
@@ -25,7 +45,12 @@ import type {
   KnowledgeSourceStatus
 } from "./knowledge-base-source";
 import { sourceFailureText, sourceItemCounts, sourceStateView } from "./knowledge-source-status";
-import { newKnowledgeSource, type KnowledgeSourceForm } from "./knowledge-sources-model";
+import {
+  newKnowledgeSource,
+  sourceFolderIds,
+  type KnowledgeSourceForm
+} from "./knowledge-sources-model";
+import { KnowledgeSourceFolderPicker } from "./knowledge-source-folder-picker";
 import type { ActionNotice } from "./build-model";
 import { useOptionalBuildNavigation } from "../../shared/build-route";
 import { requestBuildCreateDialog } from "./build-create-request";
@@ -60,6 +85,7 @@ export function KnowledgeSourcesSection({
   canPublish = false,
   workflows,
   workflowPage,
+  adding = true,
   onChange
 }: {
   source: KnowledgeBaseSource;
@@ -76,6 +102,11 @@ export function KnowledgeSourcesSection({
   /** The Workflows that fill the Knowledge Base, by which a Workflow-fed source is titled. */
   workflows?: readonly DataFlowRef[];
   workflowPage?: DataFlowPage;
+  /**
+   * Whether the section offers to add a source. The page of a new Knowledge Base adds its
+   * source with the choice of where its documents come from instead.
+   */
+  adding?: boolean;
   onChange(sources: KnowledgeSourceForm[]): void;
 }) {
   const { t } = useTranslation();
@@ -98,6 +129,30 @@ export function KnowledgeSourcesSection({
     onChange(sources.map((entry) => (entry.id === id ? { ...entry, ...patch } : entry)));
   const [search, setSearch] = useState(NO_SEARCH);
   const read = source.useSourceConnections?.(search, owner);
+  // What each source's Connection is, whatever the reader searches for in the chooser.
+  const known = source.useSourceConnections?.(NO_SEARCH, owner);
+  const choiceOf = (connection: string): KnowledgeChoice | undefined =>
+    known?.status === "ready"
+      ? known.data.items.find((choice) => choice.name === connection)
+      : undefined;
+  // The folder chooser of one source. A new source whose folders can be chosen by name opens
+  // it at once: choosing its folders is the next step.
+  const [picking, setPicking] = useState<string>();
+  // Each source is looked at once: one that has folders, as every saved one does, is left alone.
+  const seen = useRef(new Set<string>());
+  useEffect(() => {
+    // Until the Connections are read, nobody knows which sources can choose folders by name.
+    if (known?.status !== "ready") return;
+    for (const entry of sources) {
+      if (seen.current.has(entry.id)) continue;
+      seen.current.add(entry.id);
+      if (canWrite && entry.folders.trim() === "" && choiceOf(entry.connection)?.browsesFolders) {
+        setPicking(entry.id);
+      }
+    }
+  });
+  const pickingEntry = sources.find((entry) => entry.id === picking);
+  const pickingChoice = pickingEntry && choiceOf(pickingEntry.connection);
   // Where no Connection can be chosen at all, one neutral line says what to connect first,
   // instead of an empty list, an empty chooser and its error.
   const noneToChoose =
@@ -129,8 +184,11 @@ export function KnowledgeSourcesSection({
           {sources.map((entry) => (
             <SourceItem
               key={entry.id}
+              source={source}
               entry={entry}
+              choice={choiceOf(entry.connection)}
               canWrite={canWrite}
+              onPick={() => setPicking(entry.id)}
               onChange={(patch) => change(entry.id, patch)}
               onRemove={() => onChange(sources.filter((other) => other.id !== entry.id))}
             >
@@ -162,7 +220,20 @@ export function KnowledgeSourcesSection({
           ))}
         </ul>
       )}
-      {noneToChoose ? (
+      {pickingEntry && pickingChoice ? (
+        <KnowledgeSourceFolderPicker
+          source={source}
+          connection={pickingEntry.connection}
+          connectionTitle={pickingChoice.title || pickingChoice.name}
+          chosen={sourceFolderIds(pickingEntry.folders)}
+          onClose={() => setPicking(undefined)}
+          onChoose={(folders) => {
+            change(pickingEntry.id, { folders: folders.join("\n") });
+            setPicking(undefined);
+          }}
+        />
+      ) : null}
+      {!adding ? null : noneToChoose ? (
         <NoSourceConnection source={source} />
       ) : canWrite && read !== undefined ? (
         <>
@@ -178,21 +249,84 @@ export function KnowledgeSourcesSection({
   );
 }
 
-/** One source of the draft: its Connection, its folders and its patterns. */
+/**
+ * One source of the draft: its Connection, its folders and its patterns. Where the Connection
+ * lets the reader choose folders by name, the folders stand by their paths with a button to
+ * choose them; their ids and the patterns wait under Advanced settings.
+ */
 function SourceItem({
+  source,
   entry,
+  choice,
   canWrite,
+  onPick,
   onChange,
   onRemove,
   children
 }: {
+  source: KnowledgeBaseSource;
   entry: KnowledgeSourceForm;
+  /** The Connection as the list names it, once read. */
+  choice: KnowledgeChoice | undefined;
   canWrite: boolean;
+  /** Opens the folder chooser of this source. */
+  onPick(): void;
   onChange(patch: Partial<KnowledgeSourceForm>): void;
   onRemove(): void;
   children: ReactNode;
 }) {
   const { t } = useTranslation();
+  const browses = choice?.browsesFolders === true;
+  const folders = sourceFolderIds(entry.folders);
+  const idsField = (
+    <Field
+      label={t("knowledgeSources.folders")}
+      hint={t("knowledgeSources.foldersHint")}
+      required={!browses}
+    >
+      <Textarea
+        rows={2}
+        required={!browses}
+        spellCheck={false}
+        value={entry.folders}
+        readOnly={!canWrite}
+        data-knowledge-source-field="folders"
+        onChange={(event) => onChange({ folders: event.target.value })}
+      />
+    </Field>
+  );
+  const patternFields = (
+    <div className="grid min-w-0 gap-3 sm:grid-cols-2">
+      <Field
+        label={t("knowledgeSources.include")}
+        hint={t("knowledgeSources.includeHint")}
+        optional
+      >
+        <Textarea
+          rows={2}
+          spellCheck={false}
+          value={entry.include}
+          readOnly={!canWrite}
+          data-knowledge-source-field="include"
+          onChange={(event) => onChange({ include: event.target.value })}
+        />
+      </Field>
+      <Field
+        label={t("knowledgeSources.exclude")}
+        hint={t("knowledgeSources.excludeHint")}
+        optional
+      >
+        <Textarea
+          rows={2}
+          spellCheck={false}
+          value={entry.exclude}
+          readOnly={!canWrite}
+          data-knowledge-source-field="exclude"
+          onChange={(event) => onChange({ exclude: event.target.value })}
+        />
+      </Field>
+    </div>
+  );
   return (
     <li className="grid min-w-0 gap-3 rounded-md border p-4" data-knowledge-source={entry.id}>
       <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
@@ -200,7 +334,11 @@ function SourceItem({
           <KeyValue label={t("knowledgeSources.connection")}>
             <span className="flex min-w-0 items-center gap-1.5">
               <Plug aria-hidden="true" className="size-4 shrink-0" />
-              <code className="min-w-0 break-all font-mono text-code">{entry.connection}</code>
+              {choice?.title ? (
+                <span className="min-w-0 break-words">{choice.title}</span>
+              ) : (
+                <code className="min-w-0 break-all font-mono text-code">{entry.connection}</code>
+              )}
             </span>
           </KeyValue>
         </KeyValueList>
@@ -217,53 +355,85 @@ function SourceItem({
           </Button>
         ) : null}
       </div>
-      <Field
-        label={t("knowledgeSources.folders")}
-        hint={t("knowledgeSources.foldersHint")}
-        required
-      >
-        <Textarea
-          rows={2}
-          required
-          spellCheck={false}
-          value={entry.folders}
-          readOnly={!canWrite}
-          data-knowledge-source-field="folders"
-          onChange={(event) => onChange({ folders: event.target.value })}
-        />
-      </Field>
-      <div className="grid min-w-0 gap-3 sm:grid-cols-2">
-        <Field
-          label={t("knowledgeSources.include")}
-          hint={t("knowledgeSources.includeHint")}
-          optional
-        >
-          <Textarea
-            rows={2}
-            spellCheck={false}
-            value={entry.include}
-            readOnly={!canWrite}
-            data-knowledge-source-field="include"
-            onChange={(event) => onChange({ include: event.target.value })}
-          />
+      {browses ? (
+        <Field label={t("knowledgeSources.chosenFolders")} required>
+          <div className="grid min-w-0 gap-2" data-knowledge-source-folders="">
+            {folders.length === 0 ? (
+              <p className="text-caption text-muted-foreground">
+                {t("knowledgeSources.noFolderChosen")}
+              </p>
+            ) : (
+              <ul className="grid min-w-0 gap-1">
+                {folders.map((folder) => (
+                  <li key={folder} className="flex min-w-0 items-center gap-2">
+                    <Folder aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
+                    <FolderPath source={source} connection={entry.connection} folder={folder} />
+                    {canWrite ? (
+                      <IconButton
+                        variant="ghost"
+                        size="sm"
+                        label={t("knowledgeSources.removeFolder")}
+                        onClick={() =>
+                          onChange({
+                            folders: folders.filter((other) => other !== folder).join("\n")
+                          })
+                        }
+                      >
+                        <X aria-hidden="true" />
+                      </IconButton>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {canWrite ? (
+              <div>
+                <Button variant="outline" size="sm" data-knowledge-source-pick="" onClick={onPick}>
+                  <FolderOpen aria-hidden="true" />
+                  {t("knowledgeSources.pickFolders")}
+                </Button>
+              </div>
+            ) : null}
+          </div>
         </Field>
-        <Field
-          label={t("knowledgeSources.exclude")}
-          hint={t("knowledgeSources.excludeHint")}
-          optional
-        >
-          <Textarea
-            rows={2}
-            spellCheck={false}
-            value={entry.exclude}
-            readOnly={!canWrite}
-            data-knowledge-source-field="exclude"
-            onChange={(event) => onChange({ exclude: event.target.value })}
-          />
-        </Field>
-      </div>
+      ) : (
+        idsField
+      )}
+      <Disclosure data-knowledge-source-advanced="">
+        <DisclosureTrigger className="text-caption">
+          {t("knowledgeSources.advanced")}
+        </DisclosureTrigger>
+        <DisclosureContent>
+          <div className="grid min-w-0 gap-3 pt-2">
+            {browses ? idsField : null}
+            {patternFields}
+          </div>
+        </DisclosureContent>
+      </Disclosure>
       {children}
     </li>
+  );
+}
+
+/** A chosen folder by its path at the source, or by its id until that is read. */
+function FolderPath({
+  source,
+  connection,
+  folder
+}: {
+  source: KnowledgeBaseSource;
+  connection: string;
+  folder: string;
+}) {
+  const read = source.useSourceFolders?.(connection, folder, true);
+  return (
+    <span
+      className="min-w-0 flex-1 truncate text-body"
+      title={folder}
+      data-knowledge-source-folder={folder}
+    >
+      {read?.status === "ready" ? read.data.folder.path : folder}
+    </span>
   );
 }
 
@@ -649,31 +819,11 @@ function releasedOf(answer: unknown): number {
 function NoSourceConnection({ source }: { source: KnowledgeBaseSource }) {
   const { locale, t } = useTranslation();
   const types = source.useSourceTypes?.();
-  const navigation = useOptionalBuildNavigation();
-  const connections = { kindPath: CONNECTIONS_BUILD_PATH };
   return (
     <EmptyState
       layout="inline"
       data-knowledge-sources-none=""
-      action={
-        types !== undefined && types.length > 0 && navigation ? (
-          <Button asChild variant="outline" size="sm">
-            <a
-              href={navigation.href(connections)}
-              data-knowledge-source-connect=""
-              onClick={(event) => {
-                if (!opensHere(event)) return;
-                event.preventDefault();
-                navigation.open(connections);
-                requestBuildCreateDialog(CONNECTIONS_BUILD_PATH);
-              }}
-            >
-              <Plug aria-hidden="true" />
-              {t("connections.new")}
-            </a>
-          </Button>
-        ) : undefined
-      }
+      action={types !== undefined && types.length > 0 ? <NewSourceConnection /> : undefined}
     >
       {types === undefined
         ? t("knowledgeSources.noConnections")
@@ -685,6 +835,31 @@ function NoSourceConnection({ source }: { source: KnowledgeBaseSource }) {
               )
             })}
     </EmptyState>
+  );
+}
+
+/** Opens the New connection dialog on the Connections page, where Studio can open it. */
+export function NewSourceConnection() {
+  const { t } = useTranslation();
+  const navigation = useOptionalBuildNavigation();
+  if (!navigation) return null;
+  const connections = { kindPath: CONNECTIONS_BUILD_PATH };
+  return (
+    <Button asChild variant="outline" size="sm">
+      <a
+        href={navigation.href(connections)}
+        data-knowledge-source-connect=""
+        onClick={(event) => {
+          if (!opensHere(event)) return;
+          event.preventDefault();
+          navigation.open(connections);
+          requestBuildCreateDialog(CONNECTIONS_BUILD_PATH);
+        }}
+      >
+        <Plug aria-hidden="true" />
+        {t("connections.new")}
+      </a>
+    </Button>
   );
 }
 

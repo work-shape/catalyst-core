@@ -36,7 +36,7 @@ const SECRET_MARK = "[secret]";
  * What a Connection's page and the agent editor read beyond the asset, and the test. Each is
  * an operation of the registry. The right is the Connection's own and is decided on the
  * Connection the call names, so every operation brings its check. Every field these routes
- * read is declared: `name` is the one path field, and none takes a body or a query.
+ * read is declared: `name` is the one path field, and only the source folders take a query.
  */
 export function registerConnectionRoutes(route: Route, options: ChatServerOptions): void {
   const { connections } = options;
@@ -172,6 +172,30 @@ export function registerConnectionRoutes(route: Route, options: ChatServerOption
     changeClass: "reversible",
     module: CONNECTIONS_MODULE,
     execute: (input, context) => required().test(input.name, context.runtime.signal, context.actor)
+  });
+
+  // Who may use the Connection may choose its folders: the right a source's publish needs.
+  route.operation(apiOperations["connections.source_folders"], {
+    authorize: (input, { access }) => authorizeOn(access, CONNECTION_ACTIONS.use, input.name),
+    resource: connectionResource,
+    module: CONNECTIONS_MODULE,
+    execute: async (input, context) => {
+      const port = required();
+      if (!(await port.resource(input.name))) {
+        throw new AppError("NOT_FOUND", `Connection '${input.name}' does not exist`);
+      }
+      if (!port.sourceFolders) {
+        throw new AppError("CONFLICT", "This instance offers no folder choice");
+      }
+      return port.sourceFolders(
+        input.name,
+        {
+          ...(input.parent === undefined ? {} : { parentId: input.parent }),
+          ...(input.pageToken === undefined ? {} : { pageToken: input.pageToken })
+        },
+        context.runtime.signal ?? new AbortController().signal
+      );
+    }
   });
 
   route.operation(apiOperations["connections.set_secret"], {

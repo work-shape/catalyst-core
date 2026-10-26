@@ -12,4 +12,5 @@ connections.person_context  GET /api/v1/connections/:name/person-context
 connections.revoke_person  DELETE /api/v1/connections/:name/people/:userId
 connections.set_person_context  PUT /api/v1/connections/:name/person-context
 connections.set_secret  PUT /api/v1/connections/:name/secret
+connections.source_folders  GET /api/v1/connections/:name/source-folders
 connections.test  POST /api/v1/connections/:name/test

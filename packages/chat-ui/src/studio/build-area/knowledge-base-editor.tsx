@@ -12,7 +12,6 @@ import {
   KeyValueList,
   Picker,
   PickerButton,
-  RadioGroup,
   Textarea
 } from "@work-shape/catalyst-ui";
 import { useTranslation, type TranslationKey } from "../../shared/i18n";
@@ -33,6 +32,7 @@ import { ReadState } from "./data-store-read-state";
 import { KnowledgeBaseAgents, KnowledgeBaseHolders } from "./knowledge-base-access";
 import { KnowledgeStatus, KnowledgeTestQuery } from "./knowledge-base-checks";
 import { KnowledgeDocuments } from "./knowledge-base-documents";
+import { KnowledgeSourceChoice } from "./knowledge-base-source-choice";
 import { KnowledgeSourcesSection } from "./knowledge-base-sources";
 import { KnowledgeTestSearch } from "./knowledge-base-test-search";
 import {
@@ -40,7 +40,6 @@ import {
   knowledgeBasePublishesOnCreate,
   knowledgeTableRows,
   type KnowledgeBaseForm,
-  type KnowledgeBaseHolds,
   type KnowledgeTableForm
 } from "./knowledge-base-model";
 import type { KnowledgeBaseSource, KnowledgeHoldersRead } from "./knowledge-base-source";
@@ -180,34 +179,43 @@ export function KnowledgeBaseEditor({
       />
     )
   });
-  const holdsOptions: { value: KnowledgeBaseHolds; label: string; description: string }[] = [
+  // The formats this instance reads: PDF and DOCX need its document processing, the same module
+  // switch the instance reads them by. Without the settings, the text formats.
+  const uploadDescription = t(
+    semantic
+      ? "knowledge.holdsDocumentsDescriptionSemantic"
+      : "knowledge.holdsDocumentsDescription",
     {
-      value: "documents",
-      label: t("knowledge.holdsDocuments"),
-      // The formats this instance reads: PDF and DOCX need its document processing, the same
-      // module switch the instance reads them by. Without the settings, the text formats.
-      description: t(
-        semantic
-          ? "knowledge.holdsDocumentsDescriptionSemantic"
-          : "knowledge.holdsDocumentsDescription",
-        {
-          formats: uploadFormatList(
-            uploadFormats(
-              settings?.config.modules.documents?.enabled === true
-                ? KNOWLEDGE_DOCUMENT_FORMATS
-                : undefined
-            ),
-            locale
-          )
-        }
+      formats: uploadFormatList(
+        uploadFormats(
+          settings?.config.modules.documents?.enabled === true
+            ? KNOWLEDGE_DOCUMENT_FORMATS
+            : undefined
+        ),
+        locale
       )
-    },
-    {
-      value: "tables",
-      label: t("knowledge.holdsTables"),
-      description: t("knowledge.holdsTablesDescription")
     }
-  ];
+  );
+  // A new one names its synced source with where its knowledge comes from; an existing one
+  // adds more under Synced sources.
+  const sourcesSection = (
+    <>
+      <KnowledgeSourcesSection
+        source={source}
+        knowledgeBase={asset?.name}
+        published={published}
+        owner={frame.owner}
+        sources={form.sources}
+        canWrite={canWrite}
+        canPublish={frame.draft?.canPublish === true}
+        workflows={dataFlows?.fills}
+        workflowPage={workflowPage}
+        adding={asset !== undefined}
+        onChange={(sources) => update({ sources })}
+      />
+      <FieldRefusals messages={refusalsOf(outcome, "sources")} />
+    </>
+  );
 
   const sections: AssetSection[] = [
     {
@@ -265,15 +273,20 @@ export function KnowledgeBaseEditor({
               </KeyValue>
             </KeyValueList>
           ) : (
-            <RadioGroup
-              label={t("knowledge.holdsLabel")}
-              options={holdsOptions}
-              value={form.holds}
-              disabled={!canWrite}
-              onValueChange={(holds) => update({ holds })}
+            <KnowledgeSourceChoice
+              source={source}
+              owner={frame.owner}
+              form={form}
+              canWrite={canWrite}
+              uploadDescription={uploadDescription}
+              update={update}
             />
           )}
-          {documents ? null : (
+          {documents ? (
+            asset === undefined && form.sources.length > 0 ? (
+              sourcesSection
+            ) : null
+          ) : (
             <TablesSource
               source={source}
               owner={frame.owner}
@@ -286,7 +299,7 @@ export function KnowledgeBaseEditor({
         </>
       )
     },
-    ...(documents && source.useSourceConnections
+    ...(documents && asset !== undefined && source.useSourceConnections
       ? [
           {
             id: "sources",
@@ -294,23 +307,7 @@ export function KnowledgeBaseEditor({
             description: t("knowledgeSources.description"),
             count: form.sources.length,
             refusalField: "sources" as const,
-            body: (
-              <>
-                <KnowledgeSourcesSection
-                  source={source}
-                  knowledgeBase={asset?.name}
-                  published={published}
-                  owner={frame.owner}
-                  sources={form.sources}
-                  canWrite={canWrite}
-                  canPublish={frame.draft?.canPublish === true}
-                  workflows={dataFlows?.fills}
-                  workflowPage={workflowPage}
-                  onChange={(sources) => update({ sources })}
-                />
-                <FieldRefusals messages={refusalsOf(outcome, "sources")} />
-              </>
-            )
+            body: sourcesSection
           }
         ]
       : []),

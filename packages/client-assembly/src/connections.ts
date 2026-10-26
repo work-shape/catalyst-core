@@ -29,6 +29,7 @@ import {
   type SecretKeyring
 } from "@work-shape/catalyst-connections";
 import {
+  AppError,
   createConnectorTypeRegistry,
   type ApprovalRequestHandler,
   type ClientInstanceId,
@@ -301,10 +302,11 @@ async function buildInstanceConnections(
     managedClients
   };
   const slots = new ConnectionCallSlots();
+  const openDocumentSource = createDocumentSourceOpener(operations, slots);
   return {
     connectorTypes,
     catalogue,
-    openDocumentSource: createDocumentSourceOpener(operations, slots),
+    openDocumentSource,
     egress,
     ...(credentials ? { credentials } : {}),
     ...(signInEnding ? { signInEnding } : {}),
@@ -321,6 +323,14 @@ async function buildInstanceConnections(
       }),
       discover: (connectionName, attempt) =>
         discoverConnection({ ...operations, connectionName, ...attempt }),
+      // A person choosing a Knowledge Base's folders, on the same limits as its sync.
+      sourceFolders: async (connectionName, input, signal) => {
+        const { capability, context } = await openDocumentSource(connectionName, signal);
+        if (!capability.folders) {
+          throw new AppError("CONFLICT", "This Connection's type offers no folder choice");
+        }
+        return capability.folders(input, context);
+      },
       ...(signInTokens ? { keepAlive: (input) => signInTokens.keepAlive(input) } : {})
     },
     async seed() {

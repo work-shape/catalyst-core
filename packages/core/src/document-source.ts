@@ -7,12 +7,14 @@ import { AppError, type AppErrorCode } from "./errors";
 // in `connections.ts` names). Spec: connections-and-secrets.md,
 // "The `document_source` capability"; data-stores-and-knowledge-bases.md, Synced sources.
 //
-// Its only caller is the sync of a Knowledge Base (`knowledge_base.sync` and
-// `knowledge_base.fetch`), acting as the Knowledge Base's ingestion principal. The calls are no
-// catalogue operations: they are not listed among a Connection's operations, have no exposure
-// and are reachable by no agent, App, Workflow step, bridge or outside client. Each call gets a
-// `ConnectorContext` from the platform, so it runs on the same credential resolver, egress
-// checker and limits as every call of the Connection.
+// The caller of `list`, `changes` and `fetch` is the sync of a Knowledge Base
+// (`knowledge_base.sync` and `knowledge_base.fetch`), acting as the Knowledge Base's ingestion
+// principal. The optional `folders` is called by a person choosing a source's folders, through
+// `connections.source_folders` and with `connection.use` on the Connection; it answers folder
+// names and ids, never items. None is a catalogue operation: none is listed among a
+// Connection's operations or has an exposure, and no agent, App, Workflow step or bridge reaches
+// one. Each call gets a `ConnectorContext` from the platform, so it runs on the same credential
+// resolver, egress checker and limits as every call of the Connection.
 //
 // Sensitive data. Items carry file names and paths, which can name people. They go into the
 // Knowledge Base's own store and never into a job payload, an error, a log line or an audit
@@ -103,6 +105,31 @@ export interface DocumentSourceFetchInput {
    * `over_limit` once the cap is passed, and nothing past the cap is read from the source.
    */
   maxBytes: number;
+}
+
+/**
+ * What a person choosing a source's folders asks: the folders directly inside one folder.
+ * Left out, `parentId` names the top the Connection's account sees.
+ */
+export interface DocumentSourceFoldersInput {
+  parentId?: string;
+  /** The `nextPageToken` of the page before. Left out, the first page. */
+  pageToken?: string;
+}
+
+/** One folder, as a person chooses it. */
+export interface DocumentSourceFolder {
+  id: string;
+  name: string;
+}
+
+/** What `folders` answers: the folder asked about, and one page of the folders inside it. */
+export interface DocumentSourceFolderPage {
+  /** The folder listed, with its path from the top, such as `/Objekte/2024`; `/` for the top. */
+  folder: DocumentSourceFolder & { path: string };
+  folders: DocumentSourceFolder[];
+  /** Present while pages follow. */
+  nextPageToken?: string;
 }
 
 /**

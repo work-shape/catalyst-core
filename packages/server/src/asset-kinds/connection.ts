@@ -25,6 +25,7 @@ import {
   type ConnectionConfig,
   type ConnectionSignInEnding,
   type ConnectorOAuthEndpoints,
+  type DocumentSourceCapability,
   type JsonObject,
   type ConnectorTypeRegistry,
   type EgressChecker,
@@ -407,9 +408,9 @@ export function createConnectionAssetKind(options: ConnectionAssetKindOptions): 
             ? {}
             : { catalogueEntry: connection.catalogue.entry }),
           // A Knowledge Base can sync documents through it: its page offers it as a source.
-          ...(options.connectorTypes.get(connection.connectorType)?.documentSource === undefined
-            ? {}
-            : { documentSource: true })
+          ...documentSourceAttributes(
+            options.connectorTypes.get(connection.connectorType)?.documentSource
+          )
         }
       })
     }),
@@ -664,4 +665,18 @@ export function createConnectionAssetKind(options: ConnectionAssetKindOptions): 
       });
     }
   };
+}
+
+/**
+ * What a list says of a Connection a Knowledge Base can sync documents through: that it can,
+ * and whether a person can choose its folders by name.
+ */
+function documentSourceAttributes(source: DocumentSourceCapability | undefined): {
+  documentSource?: true;
+  browsesFolders?: true;
+} {
+  if (source === undefined) return {};
+  return source.folders === undefined
+    ? { documentSource: true }
+    : { documentSource: true, browsesFolders: true };
 }

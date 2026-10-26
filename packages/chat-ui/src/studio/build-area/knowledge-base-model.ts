@@ -31,7 +31,7 @@ export interface KnowledgeTableForm {
  * Data Store it describes. A definition with a `backend` describes tables; one without keeps
  * documents (the built-in backend).
  */
-export type KnowledgeBaseHolds = "documents" | "tables";
+type KnowledgeBaseHolds = "documents" | "tables";
 
 /** How a Knowledge Base of documents searches where the instance offers no search by meaning. */
 const NEW_DOCUMENT_METHODS: readonly string[] = ["keyword"];

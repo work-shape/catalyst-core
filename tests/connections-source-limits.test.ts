@@ -266,4 +266,40 @@ describe("Connection source limits (CS-6 acceptance 61)", () => {
       items: []
     });
   });
+  it("lets a person browse folders on the same limits, and offers no browsing a type lacks", async () => {
+    const t = await sourceWorld({ concurrency: 1 });
+    const plain = await t.open();
+    expect(plain.capability.folders).toBeUndefined();
+    let unblock = () => {};
+    let started = () => {};
+    const held = new Promise<void>((resolve) => {
+      unblock = resolve;
+    });
+    const ready = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    t.source.capability.folders = async ({ parentId }) => {
+      started();
+      await held;
+      return {
+        folder: { id: parentId ?? "top", name: "Top", path: "/" },
+        folders: [{ id: "approved", name: "Approved" }]
+      };
+    };
+    const first = await t.open();
+    const second = await t.open();
+    const browsing = first.capability.folders?.({}, first.context);
+    await ready;
+    try {
+      await expect(second.capability.list({ boundary }, second.context)).rejects.toMatchObject({
+        sourceCode: "rate_limited"
+      });
+    } finally {
+      unblock();
+    }
+    await expect(browsing).resolves.toEqual({
+      folder: { id: "top", name: "Top", path: "/" },
+      folders: [{ id: "approved", name: "Approved" }]
+    });
+  });
 });

@@ -205,6 +205,8 @@ export {
 export { sourceFailureText, sourceItemCounts, sourceStateView } from "./knowledge-source-status";
 export { KnowledgeSourcesSection } from "./knowledge-base-sources";
 export { ReindexStatement } from "./knowledge-base-reindex";
+export { KnowledgeSourceChoice } from "./knowledge-base-source-choice";
+export { KnowledgeSourceFolderPicker } from "./knowledge-source-folder-picker";
 export {
   PublishQuestionLines,
   publishQuestionHolds,
