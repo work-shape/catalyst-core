@@ -480,7 +480,8 @@ describe("a module that is off", () => {
       ["personalApiKeys", false, "modules.personalApiKeys.enabled"],
       ["feedback", false, "modules.feedback.enabled"],
       ["workshaper", false, "modules.workshaper.enabled"],
-      ["guardrails", true, "modules.guardrails.enabled"]
+      ["guardrails", true, "modules.guardrails.enabled"],
+      ["outsideForms", false, "modules.outsideForms.enabled"]
     ]);
     expect(items[0]).toMatchObject({
       shipped: true,

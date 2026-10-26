@@ -34,6 +34,14 @@ export class OperationCallStoppedError extends Error {
 }
 
 /**
+ * The longest delay a Node timer keeps: a longer one fires at once. An operation that may wait
+ * longer, such as an outside form open for 30 days, is cut at this bound instead, and its
+ * execute returns long before it.
+ */
+const TIMER_DELAY_MAX_MS = 2 ** 31 - 1;
+const timerDelay = (ms: number) => Math.min(TIMER_DELAY_MAX_MS, Math.max(0, ms));
+
+/**
  * Bounds the live call, before any result recording. A late answer therefore cannot write
  * success after a timeout. The executor records the stop before aborting the implementation.
  */
@@ -86,7 +94,7 @@ export function startOperationCall(
   // A paged read spans many calls and deferred leases; its paging owner bounds the total
   // duration and each page. A worker stop must still leave its checkpoint resumable.
   if (!execution.runtime.readPages)
-    timer = setTimeout(() => cut("timeout"), Math.max(0, until - now.getTime()));
+    timer = setTimeout(() => cut("timeout"), timerDelay(until - now.getTime()));
   let answer: Promise<unknown>;
   try {
     answer = Promise.resolve(

@@ -8,6 +8,8 @@ import {
   type AttachmentManifest,
   type BeforeActionCheck,
   type CapabilityAssetKind,
+  type CapabilityRecord,
+  type CapabilityRecordStore,
   type ClientInstanceId,
   type ConfigAssetStore,
   type GuardrailStore,
@@ -33,6 +35,10 @@ import {
   type ModuleDefinition,
   type ModuleSnapshot,
   type ObjectStorage,
+  type OperationDefinition,
+  type OperationRun,
+  type OperationRunEnd,
+  type OperationRunId,
   type PlatformFileStore,
   type PlatformStores,
   type ProviderRegion,
@@ -94,6 +100,10 @@ export type {
 
 export type ClientInstanceEnv = Record<string, string | undefined>;
 
+/** The processes a capability is created in: the API process, and the workers. */
+export const CAPABILITY_PROCESSES = ["api", "worker"] as const;
+export type CapabilityProcess = (typeof CAPABILITY_PROCESSES)[number];
+
 export interface ClientInstanceCapabilityContext {
   logger: Logger;
   clientInstanceId: ClientInstanceId;
@@ -132,15 +142,71 @@ export interface ClientInstanceCapabilityContext {
    * them (KB-7c). Answers none where Knowledge Bases are off or the process keeps no files.
    */
   knowledgeDocuments?: KnowledgeHitDocuments;
+  /** The instance's mailer. Ready once the instance has started; ask `available` first. */
+  mail: ClientInstanceCapabilityMail;
+  /** Which process this is: the API process, or a worker that runs steps and agents. */
+  process: CapabilityProcess;
 }
 
 /**
  * The platform's records a capability may reach: the guardrails' hits and shipped switches,
- * which the platform keeps for the guardrails capability, and the published config assets.
+ * which the platform keeps for the guardrails capability, the published config assets, the
+ * capability's own records and the Operation Runs of its own operations (ADR-0033).
  */
 export interface ClientInstanceCapabilityPlatformStores {
   guardrails: GuardrailStore;
   configAssets: Pick<ConfigAssetStore, "listPublishedConfigAssets">;
+  /** The capability's own records. It reaches no other capability's. */
+  records: ClientInstanceCapabilityRecords;
+  /** The Operation Runs of the operations the capability contributes, and no others. */
+  operationRuns: ClientInstanceCapabilityOperationRuns;
+}
+
+/** `CapabilityRecordStore` bound to the instance and to one capability. */
+export type ClientInstanceCapabilityRecords = {
+  [Method in keyof CapabilityRecordStore]: (
+    input: Omit<Parameters<CapabilityRecordStore[Method]>[0], "clientInstanceId" | "capability">
+  ) => ReturnType<CapabilityRecordStore[Method]>;
+};
+export type { CapabilityRecord };
+
+export interface ClientInstanceCapabilityOperationRuns {
+  get(id: OperationRunId): Promise<OperationRun | undefined>;
+  /**
+   * Ends a run of one of the capability's own operations with `completion: async` that is
+   * still `running`. The transaction that ends it queues every Workflow step that waits for
+   * it. `undefined` when it is not running any more. A run of another operation is refused,
+   * and so is any end but `done` or `failed`.
+   */
+  finish(input: {
+    id: OperationRunId;
+    end: Extract<OperationRunEnd, { status: "done" | "failed" }>;
+  }): Promise<OperationRun | undefined>;
+}
+
+/**
+ * The instance's mailer, as the system sender in the frame of `workflow-message`. The capability
+ * writes the subject and the Markdown; every value it puts in is escaped. Nothing is sent where
+ * the instance has no mail.
+ */
+export interface ClientInstanceCapabilityMail {
+  readonly available: () => boolean;
+  send(
+    message: {
+      to: { email: string; name?: string };
+      subject: string;
+      markdown: string;
+      locale: LocaleCode;
+      /** The display name of the From line; the instance's sender otherwise. */
+      fromName?: string;
+      /** The Workflow the mail is sent for, as the mail's footer names it. */
+      workflowName: string;
+    },
+    context?: { signal?: AbortSignal }
+  ): Promise<
+    | { ok: true }
+    | { ok: false; reason: "no_mail" | "rejected" | "unsent" | "uncertain"; providerCode?: string }
+  >;
 }
 
 /** What a capability calls a model for. It names the call on its usage record. */
@@ -273,6 +339,18 @@ export interface ClientInstanceCapabilityContribution {
   beforeActionCheck?: BeforeActionCheck;
   knowledgeFieldExtractor?: import("@work-shape/catalyst-core").KnowledgeFieldExtractor;
   tools?: AnyToolDefinition[];
+  /**
+   * Operations the capability brings (ADR-0033). Every process registers them with the
+   * platform's own, so a Workflow `operation` step and every other caller reach them under the
+   * same policy and audit. One with `completion: async` is ended through
+   * `stores.operationRuns.finish`. A module that lists them in `operations` turns them off.
+   */
+  operations?: readonly OperationDefinition[];
+  /**
+   * Work that runs in the API process alone while it serves, such as a poll of the
+   * capability's records. Started after the server listens and stopped before it closes.
+   */
+  background?: { start(): void; stop(): Promise<void> };
   attachments?: ClientInstanceAttachmentHandler[];
   managedObjects?: ClientInstanceManagedObjectReaderContribution[];
   jobRetries?: ClientInstanceJobRetry[];

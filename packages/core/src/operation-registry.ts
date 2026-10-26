@@ -317,6 +317,13 @@ interface OperationDefinitionBase<Input, Output> {
   batch?: true;
   /** A Workflow start called by a draft starts a test run of its published revision. */
   draftTarget?: "test";
+  /**
+   * A step of a Workflow may name it by its exact name, and `platform.assets.operations` lists it
+   * for a step: an operation a capability brings for Workflows sets it (ADR-0033). The
+   * operations of a Connection, a Data Store, a Knowledge Base and a Workflow are listed by
+   * their prefix without it.
+   */
+  workflowStep?: true;
   /** The release's own policy value. Without one the instance default of the effect applies. */
   defaultPolicy?: PolicyValue;
   /**

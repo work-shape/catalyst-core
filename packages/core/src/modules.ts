@@ -18,7 +18,8 @@ export const MODULE_NAMES = [
   "personalApiKeys",
   "feedback",
   "workshaper",
-  "guardrails"
+  "guardrails",
+  "outsideForms"
 ] as const;
 
 export type ModuleName = (typeof MODULE_NAMES)[number];

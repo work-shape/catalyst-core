@@ -136,3 +136,4 @@ export {
   type CreateClientInstanceKnowledgeWorkerInput,
   type KnowledgeWorkerPlacement
 } from "./knowledge-worker";
+export { capabilityStoresOf } from "./capability-ports";

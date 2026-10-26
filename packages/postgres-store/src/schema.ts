@@ -25,6 +25,7 @@ import * as infrastructureTables from "./schema/infrastructure";
 import * as jobsTables from "./schema/jobs";
 import * as knowledgeBasesTables from "./schema/knowledgeBases";
 import * as liveOnceSwitchesTables from "./schema/liveOnceSwitches";
+import * as capabilityRecordsTables from "./schema/capabilityRecords";
 import * as noticeMailTables from "./schema/noticeMail";
 import * as operationRunsTables from "./schema/operationRuns";
 import * as pagesTables from "./schema/pages";
@@ -59,6 +60,7 @@ export * from "./schema/infrastructure";
 export * from "./schema/jobs";
 export * from "./schema/knowledgeBases";
 export * from "./schema/liveOnceSwitches";
+export * from "./schema/capabilityRecords";
 export * from "./schema/noticeMail";
 export * from "./schema/operationRuns";
 export * from "./schema/pages";
@@ -94,6 +96,7 @@ export const schema = {
   ...jobsTables,
   ...knowledgeBasesTables,
   ...liveOnceSwitchesTables,
+  ...capabilityRecordsTables,
   ...noticeMailTables,
   ...operationRunsTables,
   ...pagesTables,

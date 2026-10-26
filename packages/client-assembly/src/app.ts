@@ -22,6 +22,11 @@ import {
 } from "@work-shape/catalyst-server";
 import type { ChatAttachmentService, ChatServerOptions } from "@work-shape/catalyst-server";
 import { createManagedObjectAccess } from "@work-shape/catalyst-capability-sdk";
+import type {
+  CapabilityProcess,
+  ClientInstanceCapabilityPlatformStores
+} from "@work-shape/catalyst-capability-sdk";
+import { capabilityStoresOf, createCapabilityMail } from "./capability-ports";
 import {
   AppError,
   asCollaborationWorkspaceId,
@@ -163,7 +168,7 @@ export interface ClientInstanceApp extends HttpRuntime {
 export async function createClientInstanceApp(
   input: CreateClientInstanceAppInput
 ): Promise<ClientInstanceApp> {
-  const execution = await createClientInstanceExecutionAssembly(input);
+  const execution = await createClientInstanceExecutionAssembly(input, { process: "api" });
   const {
     logger,
     env,
@@ -305,12 +310,18 @@ export async function createClientInstanceApp(
       });
       jobs.start();
       agentRunJobs?.start();
+      for (const contribution of execution.capabilityContributions)
+        contribution.background?.start();
       return baseUrl;
     },
     async close() {
       // The workers go first: they give their jobs back while the database is still open. A
       // run that is executing here is ended as interrupted.
-      await Promise.all([jobs.stop(), agentRunJobs?.stop()]);
+      await Promise.all([
+        jobs.stop(),
+        agentRunJobs?.stop(),
+        ...execution.capabilityContributions.map((contribution) => contribution.background?.stop())
+      ]);
       await server.close();
       await standaloneAuth?.close();
       await execution.close();
@@ -323,7 +334,7 @@ export async function createClientInstanceExecutionAssembly(
     CreateClientInstanceAppInput,
     "agentRunWorker" | "knowledgeWorker" | "allowedOrigins"
   >,
-  processOptions: { poolSize?: number } = {}
+  processOptions: { poolSize?: number; process?: CapabilityProcess } = {}
 ) {
   const logger = createLogger();
   const env = readClientInstanceEnv(input.env);
@@ -386,7 +397,24 @@ export async function createClientInstanceExecutionAssembly(
   // The Knowledge Base module starts after the capabilities: their tools reach its documents
   // once it has.
   let knowledgeDocuments: KnowledgeHitDocuments | undefined;
+  // The mailer is made after the capabilities; their port sends through it once it is.
+  let capabilityMailer: ChatServerOptions["mail"];
+  const capabilityOperationNames = new Map<string, Set<string>>();
   const capabilityContributions = await createCapabilityContributions(capabilities, {
+    process: processOptions.process ?? "worker",
+    mail: createCapabilityMail({
+      sender: () => capabilityMailer?.sender,
+      defaultFromName:
+        config.infrastructure.mail?.sender.fromName ?? config.clientInstance.displayName
+    }),
+    scoped: (capability) =>
+      capabilityStoresOf({
+        clientInstanceId,
+        capability,
+        store,
+        operations: () => capabilityOperationNames.get(capability) ?? new Set<string>()
+      }),
+    operationNames: capabilityOperationNames,
     logger,
     capabilitiesConfig: config.capabilities,
     modules,
@@ -662,6 +690,10 @@ export async function createClientInstanceExecutionAssembly(
     stores: store,
     mail: noticeMail
   });
+  capabilityMailer = noticeMail;
+  for (const contribution of capabilityContributions)
+    for (const operation of contribution.operations ?? [])
+      operationCalls.registry.register(operation);
   const modulesStarted = await moduleAssembly.start({
     knowledgeFieldExtractor: capabilityContributions.find((part) => part.knowledgeFieldExtractor)
       ?.knowledgeFieldExtractor,
@@ -829,11 +861,37 @@ function assertGuardrailsCheck(
 
 async function createCapabilityContributions(
   capabilities: readonly ClientInstanceCapability[],
-  context: Parameters<ClientInstanceCapability["create"]>[0]
+  context: Omit<Parameters<ClientInstanceCapability["create"]>[0], "stores"> & {
+    stores: Omit<ClientInstanceCapabilityPlatformStores, "records" | "operationRuns">;
+    /** The stores bound to one capability (ADR-0033). */
+    scoped: (
+      capability: string
+    ) => Pick<ClientInstanceCapabilityPlatformStores, "records" | "operationRuns">;
+    /** Filled with the operations each capability contributes, by capability name. */
+    operationNames: Map<string, Set<string>>;
+  }
 ): Promise<ClientInstanceCapabilityContribution[]> {
+  const { scoped, operationNames, ...shared } = context;
   const contributions: ClientInstanceCapabilityContribution[] = [];
   for (const capability of capabilities) {
-    contributions.push(await capability.create(context));
+    // The name scopes the capability's records and runs, so two of one name would share them.
+    if (operationNames.has(capability.name)) {
+      throw new AppError("INTERNAL", `Two capabilities are named '${capability.name}'`);
+    }
+    const contribution = await capability.create({
+      ...shared,
+      stores: { ...shared.stores, ...scoped(capability.name) }
+    });
+    operationNames.set(
+      capability.name,
+      // Only its async operations: those are the runs a capability ends itself.
+      new Set(
+        (contribution.operations ?? [])
+          .filter((operation) => operation.completion !== undefined)
+          .map((operation) => operation.name)
+      )
+    );
+    contributions.push(contribution);
   }
   return contributions;
 }
