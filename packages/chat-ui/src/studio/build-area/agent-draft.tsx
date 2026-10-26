@@ -306,6 +306,11 @@ function ModelLines({
   if (live.fastMode !== draft.fastMode) {
     lines.push(`${t("configFastMode")}: ${t(live.fastMode ? "agentDraft.on" : "agentDraft.off")}`);
   }
+  if (live.useModelFallback !== draft.useModelFallback) {
+    lines.push(
+      `${t("configModelFallback")}: ${t(live.useModelFallback ? "agentDraft.on" : "agentDraft.off")}`
+    );
+  }
   if (
     JSON.stringify(live.userSelectableModelBindingIds) !==
       JSON.stringify(draft.userSelectableModelBindingIds) ||

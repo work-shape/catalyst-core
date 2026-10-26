@@ -19,6 +19,7 @@ import {
   type WebAccessConfig,
   type AgentRunId,
   type AgentRuntimeEvent,
+  type ClientInstanceId,
   type ConversationId,
   type RuntimeCallContext,
   type SteeredUserMessage,
@@ -70,6 +71,19 @@ export interface LocalAgentRuntimeOptions {
    * that kind. Asked once when a run starts. Without it no conversation is offered any.
    */
   conversationOffer?: ConversationOfferSource;
+  /**
+   * The model bindings the Shared Workspace that owns a run's agent allows, or `undefined` where
+   * it sets no list. Read once when a run starts whose binding names a fallback: a fallback the
+   * list leaves out is never called. Asked with the workspace of an agent a workspace owns, and
+   * for an agent the run holds itself (a Workflow step's, a preview's) with its conversation,
+   * whose workspace then owns it. An agent of the instance is asked about nothing. Without this
+   * reader no fallback is held back by a workspace.
+   */
+  workspaceModelBindings?: (
+    input: { clientInstanceId: ClientInstanceId } & (
+      { workspaceId: string } | { conversationId: ConversationId }
+    )
+  ) => Promise<readonly string[] | undefined>;
   webAccess?: WebAccessConfig;
   /**
    * `modules.connections.personalModelRegions`, set where the Connections module is on. Then

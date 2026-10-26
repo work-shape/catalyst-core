@@ -532,6 +532,41 @@ clientInstance:
     ]);
   });
 
+  it("writes a fallback that names a chat binding in the EU, and refuses any other", async () => {
+    const root = await repository({ "config/app.yaml": FRESH_CONFIG });
+    const azure = (id: string, ...more: string[]) => [
+      "models",
+      "add",
+      "azure",
+      "--id",
+      id,
+      "--endpoint",
+      `https://${id}.openai.azure.com`,
+      "--model",
+      `${id}-deployment`,
+      ...PRICES,
+      ...more
+    ];
+    expect((await run(root, azure("azure-eu"))).code).toBe(0);
+
+    const missing = await run(root, azure("azure-sweden", "--fallback", "gone"));
+    expect(missing).toMatchObject({ code: 1 });
+    expect(missing.err).toContain(
+      "The release config has no model binding 'gone' to fall back to."
+    );
+
+    const added = await run(root, azure("azure-sweden", "--fallback", "azure-eu"));
+    expect(added, added.err).toMatchObject({ code: 0 });
+    expect(added.out).toContain("'azure-sweden', falls back to 'azure-eu'");
+    const config = await startupAccepts(join(root, "config/app.yaml"), {
+      AZURE_OPENAI_API_KEY: "first",
+      AZURE_SWEDEN_API_KEY: "second"
+    });
+    expect(config.modelBindings.find((binding) => binding.id === "azure-sweden")).toMatchObject({
+      fallback: "azure-eu"
+    });
+  });
+
   it("refuses an id that an environment file sets itself: the new keys would merge into its entry", async () => {
     const base = `${FRESH_CONFIG.replace("  environment: development\n", "")}infrastructure:
   models:

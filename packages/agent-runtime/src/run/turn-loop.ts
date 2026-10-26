@@ -17,9 +17,11 @@ import {
   type PausedToolCall,
   type RuntimeAssetSnapshot,
   type RuntimeCallContext,
-  type StartAgentRunInput
+  type StartAgentRunInput,
+  type StoredModelFallback
 } from "@work-shape/catalyst-core";
 import {
+  ModelRouteFailedError,
   isModelProviderContinuationRejected,
   withStorableToolInput,
   type ModelCompletion,
@@ -37,6 +39,7 @@ import {
 import { describeAgentDataTools, materializeModelTools } from "../model-tool-materialization";
 import {
   ModelInput,
+  type ModelSelection,
   getProviderCompactionThreshold,
   getSnapshotAgentConfig,
   getSnapshotSkillMetadata
@@ -77,10 +80,11 @@ export class TurnLoop {
         ...setup.ancestorRoutes
       ]
     };
+    const model = runModelOf(setup, input.resume?.state.modelFallback);
     const entry = input.resume
-      ? await this.resumeEntry(state, runId, input, context, setup, input.resume.state)
-      : await this.startEntry(runId, input, context, setup);
-    if (entry) await this.runSteps(state, runId, input, context, setup, entry);
+      ? await this.resumeEntry(state, runId, input, context, setup, model, input.resume.state)
+      : await this.startEntry(runId, input, context, setup, model);
+    if (entry) await this.runSteps(state, runId, input, context, setup, model, entry);
   }
 
   /** What every step of the run uses: its agent, model, tools and the start of its input. */
@@ -134,7 +138,6 @@ export class TurnLoop {
       input.modelBindingId,
       input.reasoningEffort
     );
-    const { capabilities } = modelSelection;
     // Read once for the run, not for each model call of it: what the agent is offered stays
     // the same while it works, except web tools removed after a personal call. Whether a
     // tool may still be called is asked again by each call,
@@ -167,20 +170,34 @@ export class TurnLoop {
       );
     }
     const offeredDataTools = new Set(dataTools.described.map((tool) => tool.name));
-    const tools = withToolResultRead(
-      materializeModelTools({
-        agent,
-        capabilities,
-        toolRegistry: this.options.toolRegistry,
-        dataTools: dataTools.described,
-        webAccess: this.options.webAccess
-      })
-    );
-    const compactThresholdTokens = getProviderCompactionThreshold(
-      modelSelection.provider,
-      capabilities
-    );
-    const compactionEnabled = compactThresholdTokens !== undefined;
+    // What a model of the run is sent: the tools it takes and where its context compacts.
+    const modelSetupOf = (selection: ModelSelection): ModelSetup => {
+      const compactThresholdTokens = getProviderCompactionThreshold(
+        selection.provider,
+        selection.capabilities
+      );
+      return {
+        modelSelection: selection,
+        tools: withToolResultRead(
+          materializeModelTools({
+            agent,
+            capabilities: selection.capabilities,
+            toolRegistry: this.options.toolRegistry,
+            dataTools: dataTools.described,
+            webAccess: this.options.webAccess
+          })
+        ),
+        compactThresholdTokens,
+        compactionEnabled: compactThresholdTokens !== undefined
+      };
+    };
+    const { tools, compactThresholdTokens, compactionEnabled } = modelSetupOf(modelSelection);
+    const fallbackSelection = this.modelInput.getFallbackSelection(agent, modelSelection);
+    const fallback =
+      fallbackSelection &&
+      (await this.workspaceAllows(assets, input, context, fallbackSelection.binding))
+        ? modelSetupOf(fallbackSelection)
+        : undefined;
     const userContent = await createSubmittedUserMessageContent(
       input.message.text,
       input.message.attachmentManifest,
@@ -212,10 +229,40 @@ export class TurnLoop {
       offeredDataTools,
       compactThresholdTokens,
       compactionEnabled,
+      ...(fallback ? { fallback } : {}),
       systemMessage,
       userMessage,
       maxSteps: agent.maxSteps ?? this.options.maxSteps ?? DEFAULT_MAX_STEPS
     };
+  }
+
+  /**
+   * Whether the Shared Workspace that owns the run's agent allows the binding, by the list it
+   * holds when the run starts. An agent of the instance, and one of a workspace without a list,
+   * may use it.
+   */
+  private async workspaceAllows(
+    assets: RuntimeAssetSnapshot,
+    input: StartAgentRunInput,
+    context: RuntimeCallContext,
+    binding: ModelSelection["binding"]
+  ): Promise<boolean> {
+    const read = this.options.workspaceModelBindings;
+    if (!read || !("bindingId" in binding)) return true;
+    // A Workflow step's agent and a preview's are the run's own: its conversation's workspace
+    // owns them. A named agent is owned where its definition is.
+    const scope =
+      input.workflowAgent || input.preview
+        ? undefined
+        : assets.agentKeys?.get(input.agentName)?.scope;
+    if (scope?.kind === "instance") return true;
+    const { clientInstanceId } = context;
+    const allowed = await read(
+      scope?.kind === "workspace"
+        ? { clientInstanceId, workspaceId: scope.workspaceId }
+        : { clientInstanceId, conversationId: input.conversationId }
+    );
+    return allowed === undefined || allowed.includes(binding.bindingId);
   }
 
   /**
@@ -242,30 +289,47 @@ export class TurnLoop {
     runId: AgentRunId,
     input: StartAgentRunInput,
     context: RuntimeCallContext,
-    setup: RunSetup
+    setup: RunSetup,
+    model: RunModel
   ): Promise<StepEntry> {
-    const { modelSelection, compactionEnabled, systemMessage, userMessage } = setup;
-    const history = await this.modelInput.loadModelHistory(
-      input,
-      context,
-      modelSelection.provider,
-      { compactionEnabled, model: modelSelection.model }
-    );
+    const { systemMessage, userMessage } = setup;
+    // What a run on this model starts from: the history as that model's provider continues it.
+    const historyFor = async (on: ModelSetup) => {
+      const history = await this.modelInput.loadModelHistory(
+        input,
+        context,
+        on.modelSelection.provider,
+        { compactionEnabled: on.compactionEnabled, model: on.modelSelection.model }
+      );
+      return {
+        messages: [systemMessage, ...history.messages, userMessage],
+        providerContinuation: history.providerContinuation,
+        ...(history.fromTurn ? { fromTurn: true as const } : {})
+      };
+    };
+    const start = await historyFor(model.current);
     return {
-      messages: [systemMessage, ...history.messages, userMessage],
+      messages: start.messages,
+      ownMessagesFrom: start.messages.length,
       firstStep: 0,
       repeatedToolCalls: new Map(),
-      providerContinuation: history.providerContinuation,
+      providerContinuation: start.providerContinuation,
+      ...(start.fromTurn ? { fromTurn: true as const } : {}),
       runCompacted: false,
       modelInputFrom: { kind: "input" },
-      rebuildWithoutContinuation: async () => {
+      historyFor,
+      rebuildWithoutContinuation: async (on, fromTurn) => {
+        const { provider } = on.modelSelection;
         // The provider can never accept this continuation, so every message of the
-        // conversation would fail. Drop it and send the request once more from the
-        // conversation's history.
+        // conversation would fail. Drop it and send the request once more. Refused reasoning
+        // of the last run goes alone: the request goes on from the compaction checkpoint, so a
+        // long conversation does not send all of its history. A refused checkpoint goes too,
+        // and the request goes on from the conversation's history.
         await this.options.modelProviderContinuationStore?.deleteModelProviderContinuation({
           clientInstanceId: context.clientInstanceId,
           conversationId: input.conversationId,
-          providerId: modelSelection.provider.id,
+          providerId: provider.id,
+          ...(fromTurn ? { keepCheckpoint: true } : {}),
           runFence: context.runFence
         });
         this.options.logger?.warn(
@@ -273,17 +337,21 @@ export class TurnLoop {
             type: "model_provider_continuation.dropped",
             runId,
             conversationId: input.conversationId,
-            providerId: modelSelection.provider.id
+            providerId: provider.id,
+            continuation: fromTurn ? "turn" : "checkpoint"
           },
-          "Model provider continuation dropped; request rebuilt from history"
+          fromTurn
+            ? "Model provider reasoning dropped; request rebuilt from the checkpoint"
+            : "Model provider continuation dropped; request rebuilt from history"
         );
-        const rebuilt = await this.modelInput.loadModelHistory(
-          input,
-          context,
-          modelSelection.provider,
-          { compactionEnabled, withoutCheckpoint: true }
-        );
-        return [systemMessage, ...rebuilt.messages, userMessage];
+        const rebuilt = await this.modelInput.loadModelHistory(input, context, provider, {
+          compactionEnabled: on.compactionEnabled,
+          ...(fromTurn ? {} : { withoutCheckpoint: true })
+        });
+        return {
+          messages: [systemMessage, ...rebuilt.messages, userMessage],
+          providerContinuation: rebuilt.providerContinuation
+        };
       }
     };
   }
@@ -299,6 +367,7 @@ export class TurnLoop {
     input: StartAgentRunInput,
     context: RuntimeCallContext,
     setup: RunSetup,
+    model: RunModel,
     resume: AgentRunResumeState
   ): Promise<StepEntry | undefined> {
     const messages = await resumedModelMessages({
@@ -308,8 +377,8 @@ export class TurnLoop {
       resume,
       modelInput: this.modelInput,
       conversationHistory: this.options.conversationHistory,
-      provider: setup.modelSelection.provider,
-      compactionEnabled: setup.compactionEnabled,
+      provider: model.current.modelSelection.provider,
+      compactionEnabled: model.current.compactionEnabled,
       systemMessage: setup.systemMessage,
       userMessage: setup.userMessage
     });
@@ -361,7 +430,8 @@ export class TurnLoop {
           ...(resume.providerContinuation
             ? { providerContinuation: resume.providerContinuation }
             : {}),
-          compacted: resume.compacted
+          compacted: resume.compacted,
+          ...(model.switched ? { modelFallback: model.switched } : {})
         },
         modelInput: this.modelInput,
         toolDispatch: this.toolDispatch,
@@ -371,13 +441,14 @@ export class TurnLoop {
     }
     return {
       messages,
+      ownMessagesFrom: messages.length,
       firstStep: resume.step + 1,
       repeatedToolCalls,
       providerContinuation: resume.providerContinuation,
       runCompacted: resume.compacted,
       modelInputFrom: resume.modelInputFrom,
       // A continuation the provider refuses is left out; the messages hold the run all the same.
-      rebuildWithoutContinuation: () => Promise.resolve(messages)
+      rebuildWithoutContinuation: () => Promise.resolve(undefined)
     };
   }
 
@@ -387,42 +458,107 @@ export class TurnLoop {
     input: StartAgentRunInput,
     context: RuntimeCallContext,
     setup: RunSetup,
+    model: RunModel,
     entry: StepEntry
   ): Promise<void> {
-    const { modelSelection, tools, offeredDataTools, compactThresholdTokens, maxSteps } = setup;
+    const { offeredDataTools, maxSteps } = setup;
     const { repeatedToolCalls } = entry;
     const knowledgeSources = new Map<string, KnowledgeCitationSource>();
     collectKnowledgeCitations(entry.messages, knowledgeSources);
-    let { messages, providerContinuation, runCompacted, modelInputFrom } = entry;
+    let { messages, providerContinuation, runCompacted, modelInputFrom, ownMessagesFrom } = entry;
     // True until the first answer: only then does a request carry a continuation from an earlier run.
     let carriesEarlierContinuation = providerContinuation !== undefined;
-    const callModel = () =>
-      this.modelInput.callModel(
-        runId,
-        input,
-        context,
-        messages,
-        modelSelection,
-        tools,
-        providerContinuation,
-        state,
-        this.runEvents
-      );
+    // Whether that continuation is the last run's reasoning rather than the compaction checkpoint.
+    let continuationFromTurn = entry.fromTurn === true;
+    // The run's input from its history and its input message on: the history is taken again
+    // where the run's model changes, the run's own messages are kept.
+    const withHistory = (history: ModelMessage[]) => {
+      messages = [...history, ...messages.slice(ownMessagesFrom)];
+      ownMessagesFrom = history.length;
+    };
+    /**
+     * Sends the call to the run's model. Where that model's route fails before it gave anything
+     * and the run has a fallback, the run switches to the fallback, once, for the rest of the run,
+     * and sends the call there. The switch is a model switch: the request goes on from what a run
+     * on the fallback would start from, without the continuation and reasoning of the other model.
+     */
+    const callModel = async (
+      request: { tools?: ModelTool[]; withoutContinuation?: true } = {}
+    ): ReturnType<ModelInput["callModel"]> => {
+      try {
+        return await this.modelInput.callModel(
+          runId,
+          input,
+          context,
+          messages,
+          model.current.modelSelection,
+          request.tools ?? model.current.tools,
+          request.withoutContinuation ? undefined : providerContinuation,
+          state,
+          this.runEvents,
+          model.fallback !== undefined
+        );
+      } catch (error) {
+        const to = model.fallback;
+        if (!to || !(error instanceof ModelRouteFailedError)) throw error;
+        const switched = {
+          from: fallbackBindingOf(model.current.modelSelection),
+          to: fallbackBindingOf(to.modelSelection),
+          reason: error.reason
+        };
+        this.options.logger?.warn(
+          {
+            type: "model_fallback",
+            runId,
+            from: switched.from.bindingId,
+            to: switched.to.bindingId,
+            kind: error.kind
+          },
+          "Model route failed; the run goes on on the binding's fallback"
+        );
+        model.current = to;
+        model.fallback = undefined;
+        model.switched = switched;
+        providerContinuation = undefined;
+        carriesEarlierContinuation = false;
+        continuationFromTurn = false;
+        // A run compacted in the provider holds its context in the continuation it drops; a
+        // resumed run holds its input as it paused. Both go on from the messages they hold.
+        if (entry.historyFor && !runCompacted) {
+          const history = await entry.historyFor(to);
+          withHistory(history.messages);
+          providerContinuation = history.providerContinuation;
+          carriesEarlierContinuation = providerContinuation !== undefined;
+          continuationFromTurn = history.fromTurn === true;
+        }
+        return callModel(request);
+      }
+    };
+
+    /**
+     * Sends the call. Where the provider refuses the continuation from an earlier run, it is
+     * dropped and the call sent again: refused reasoning first, then a refused checkpoint.
+     */
+    const callAcceptingContinuation = (): ReturnType<ModelInput["callModel"]> =>
+      callModel().catch(async (error: unknown) => {
+        if (!carriesEarlierContinuation || !isModelProviderContinuationRejected(error)) {
+          throw error;
+        }
+        const rebuilt = await entry.rebuildWithoutContinuation(model.current, continuationFromTurn);
+        if (rebuilt) withHistory(rebuilt.messages);
+        providerContinuation = rebuilt?.providerContinuation;
+        carriesEarlierContinuation = providerContinuation !== undefined;
+        continuationFromTurn = false;
+        return callAcceptingContinuation();
+      });
 
     for (let step = entry.firstStep; step < maxSteps; step += 1) {
       // The step boundary: all results of the last step are in. A new run's first request
       // goes out with its input alone, so a refused continuation rebuilds it in full.
       if (step > 0 || input.resume) await this.takeSteers(state, runId, input, context, messages);
-      const modelResult = await callModel().catch(async (error: unknown) => {
-        if (!carriesEarlierContinuation || !isModelProviderContinuationRejected(error)) {
-          throw error;
-        }
-        carriesEarlierContinuation = false;
-        messages = await entry.rebuildWithoutContinuation();
-        providerContinuation = undefined;
-        return callModel();
-      });
+      const modelResult = await callAcceptingContinuation();
       carriesEarlierContinuation = false;
+      const { modelSelection, compactThresholdTokens } = model.current;
       const { completion, emittedDeltas, reasoning } = modelResult;
       const toolCalls = completion.toolCalls.map(withStorableToolInput);
       providerContinuation = completion.continuation;
@@ -478,17 +614,7 @@ export class TurnLoop {
               { role: "assistant", content: assistantText },
               { role: "user", content: repairPrompt }
             );
-            const repair = await this.modelInput.callModel(
-              runId,
-              input,
-              context,
-              messages,
-              modelSelection,
-              [],
-              undefined,
-              state,
-              this.runEvents
-            );
+            const repair = await callModel({ tools: [], withoutContinuation: true });
             assistantText = repair.completion.text;
             const secondIssue = invalid(assistantText);
             if (secondIssue || repair.completion.toolCalls.length > 0) {
@@ -516,9 +642,11 @@ export class TurnLoop {
               assistantText.includes(`[${source.ref}]`)
             ),
             citations: completion.citations,
-            modelContext
+            modelContext,
+            ...(model.switched ? { modelFallback: model.switched } : {})
           }),
           providerContinuation: persistedContinuation,
+          // Kept for the model that answered: the next run on it sends its reasoning again.
           ...(providerContinuation
             ? {
                 turnContinuation: {
@@ -589,7 +717,8 @@ export class TurnLoop {
               }
             }
           : {}),
-        compacted: runCompacted
+        compacted: runCompacted,
+        ...(model.switched ? { modelFallback: model.switched } : {})
       };
       if (outcome.kind === "paused") {
         pauseRun(state, outcome, {
@@ -647,30 +776,93 @@ export class TurnLoop {
   }
 }
 
-/** What every step of a run uses. */
-interface RunSetup {
-  modelSelection: ReturnType<ModelInput["getModelSelectionForAgent"]>;
-  /** The routes of the runs above a subagent, nearest first; none for any other run. */
-  ancestorRoutes: NonNullable<RuntimeCallContext["modelRoutes"]>;
+/** What a model of the run is sent beside the messages. */
+interface ModelSetup {
+  modelSelection: ModelSelection;
   tools: ModelTool[];
-  offeredDataTools: ReadonlySet<string>;
   compactThresholdTokens: number | undefined;
   compactionEnabled: boolean;
+}
+
+/** What every step of a run uses. Its own fields are those of the binding chosen for the run. */
+interface RunSetup extends ModelSetup {
+  /** The routes of the runs above a subagent, nearest first; none for any other run. */
+  ancestorRoutes: NonNullable<RuntimeCallContext["modelRoutes"]>;
+  offeredDataTools: ReadonlySet<string>;
+  /** The binding's fallback, where the run may switch to it. */
+  fallback?: ModelSetup;
   systemMessage: ModelMessage;
   userMessage: ModelMessage;
   maxSteps: number;
 }
 
+/** The model a run's calls go to now, and the fallback it may still switch to once. */
+interface RunModel {
+  current: ModelSetup;
+  fallback?: ModelSetup;
+  /** Set once the run switched: what the answer and a pause record of it. */
+  switched?: StoredModelFallback;
+}
+
+/**
+ * A run starts on the binding chosen for it. One that resumes after it switched goes on on the
+ * fallback, where that is still the fallback the run may use; otherwise it starts over on its
+ * binding with the fallback in reserve.
+ */
+function runModelOf(setup: RunSetup, switched: StoredModelFallback | undefined): RunModel {
+  const { fallback } = setup;
+  if (
+    switched &&
+    fallback &&
+    "bindingId" in fallback.modelSelection.binding &&
+    fallback.modelSelection.binding.bindingId === switched.to.bindingId
+  ) {
+    return { current: fallback, switched };
+  }
+  return { current: setup, ...(fallback ? { fallback } : {}) };
+}
+
+/** How the line under an answer names a binding of the switch. */
+function fallbackBindingOf(selection: ModelSelection): StoredModelFallback["from"] {
+  return {
+    bindingId: "bindingId" in selection.binding ? selection.binding.bindingId : selection.model,
+    model: selection.model,
+    ...(selection.label === undefined ? {} : { label: selection.label })
+  };
+}
+
 /** Where the steps of a run start: a new run's first step, or the step after a paused one. */
 interface StepEntry {
   messages: ModelMessage[];
+  /** Where in `messages` the run's own steps start, after its history and its input. */
+  ownMessagesFrom: number;
   firstStep: number;
   repeatedToolCalls: Map<string, number>;
   providerContinuation: ModelCompletion["continuation"];
   runCompacted: boolean;
   modelInputFrom: AgentRunResumeState["modelInputFrom"];
-  /** The messages to send when the provider refuses the continuation the first request carries. */
-  rebuildWithoutContinuation(): Promise<ModelMessage[]>;
+  /**
+   * The history and input a run on this model starts from, with the continuation it sends.
+   * Missing on a resumed run, which goes on from the messages it paused with.
+   */
+  historyFor?(model: ModelSetup): Promise<{
+    messages: ModelMessage[];
+    providerContinuation: ModelCompletion["continuation"];
+    fromTurn?: true;
+  }>;
+  /** The entry's continuation is the last run's reasoning, not the compaction checkpoint. */
+  fromTurn?: true;
+  /**
+   * The history and input to send when the provider refuses the continuation the first request
+   * carries (`fromTurn`: the last run's reasoning), with the continuation still to send;
+   * `undefined` keeps the messages as they are and sends none.
+   */
+  rebuildWithoutContinuation(
+    model: ModelSetup,
+    fromTurn: boolean
+  ): Promise<
+    { messages: ModelMessage[]; providerContinuation?: ModelCompletion["continuation"] } | undefined
+  >;
 }
 
 function toPausedToolCall(toolCall: ModelToolCall): PausedToolCall {

@@ -36,8 +36,14 @@ export interface ModelRetryPolicy {
 export function createModelRetryPolicy(input: {
   signal?: AbortSignal;
   deadline?: Date;
+  /**
+   * False where the call has a fallback: a rate limit then fails the call at once instead of
+   * waiting for the minute to pass, since another model is free now.
+   */
+  waitOnRateLimit?: boolean;
 }): ModelRetryPolicy {
   const { signal, deadline } = input;
+  const waitOnRateLimit = input.waitOnRateLimit ?? true;
   let transientFailures = 0;
   let rateLimitFailures = 0;
   let rateLimitWaitLeftMs = MODEL_PROVIDER_RATE_LIMIT_WAIT_TOTAL_MS;
@@ -68,6 +74,7 @@ export function createModelRetryPolicy(input: {
       const retryAfterMs = error.retryAfterMs;
       let waitMs: number;
       if (error.kind === "rate_limit") {
+        if (!waitOnRateLimit) throw failure;
         rateLimitFailures += 1;
         // Never sooner than the provider asks, and never past what is left of the minute.
         waitMs = Math.min(

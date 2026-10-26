@@ -1,4 +1,5 @@
 import type { AgentRunProjection, Message } from "@work-shape/catalyst-api-client";
+import { readAssistantModelFallback } from "@work-shape/catalyst-core";
 import type { UIMessage } from "ai";
 import { readToolDisplayPayloadFromToolResult } from "../../shared/domain-ui-widgets";
 import {
@@ -561,11 +562,14 @@ function createPersistedUiMessageMetadata(
 ): AssistantUiMessageMetadata | undefined {
   const completedRunId = readCompatibleAssistantFinalRunId(message);
   const contextCompacted = runMessages.some(readCompatibleAssistantContextCompacted);
-  return completedRunId || contextCompacted
+  const modelFallback =
+    message.role === "assistant" ? readAssistantModelFallback(message.metadata) : undefined;
+  return completedRunId || contextCompacted || modelFallback
     ? {
         custom: {
           ...(completedRunId ? { completedRunId } : {}),
-          ...(contextCompacted ? { contextCompacted: true } : {})
+          ...(contextCompacted ? { contextCompacted: true } : {}),
+          ...(modelFallback ? { modelFallback } : {})
         }
       }
     : undefined;

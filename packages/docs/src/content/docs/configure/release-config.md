@@ -480,7 +480,7 @@ rejects that unsupported combination.
 
 Agent configuration may override a binding's default with one of Catalyst's product-owned reasoning efforts: `none`, `low`, `medium`, `high`, `xhigh`, or `max`. Only bindings with `agentSelectable: true` are valid agent choices; set it to `false` for internal bindings such as conversation-title generation. The server validates model-binding references and reasoning values; the UI does not accept arbitrary model identifiers.
 
-An agent's `modelBindingId`, `reasoningEffort`, `fastMode`, `userSelectableModelBindingIds`, and `modelReasoningEfforts` are editable in Studio exactly when the caller holds the `agent_models.manage` permission, and the server rejects an interactive change to any of them without it. Superadmins hold the permission by default; a superadmin can grant it to individual users. `modelBindingId` and `reasoningEffort` remain valid `editableAgentFields` values for compatibility but no longer have an effect. `catalyst config push` is unchanged and may set all five.
+An agent's `modelBindingId`, `reasoningEffort`, `fastMode`, `useModelFallback`, `userSelectableModelBindingIds`, and `modelReasoningEfforts` are editable in Studio exactly when the caller holds the `agent_models.manage` permission, and the server rejects an interactive change to any of them without it. Superadmins hold the permission by default; a superadmin can grant it to individual users. `modelBindingId` and `reasoningEffort` remain valid `editableAgentFields` values for compatibility but no longer have an effect. `catalyst config push` is unchanged and may set all six.
 
 Set `supportsFastMode: true` on a binding whose provider deployment offers a priority processing tier. It defaults to `false`. An agent may set `fastMode: true` only while its binding supports it; saving it for another binding is a validation error, and switching an agent to a binding without support in Studio clears it. For fast-mode runs the OpenAI-compatible adapter sends `service_tier: "priority"` on both API shapes. When a chat user picks another model, fast mode applies only if that binding supports it. Fast runs are billed with the rate card's `fast` rates, see above.
 
@@ -742,6 +742,47 @@ A model or effort a user picks becomes their own default for new conversations a
 with their account, so it follows them across devices. A conversation that already ran stays on
 what its latest run used. A user who never picked anything follows the agent's configured model
 and effort, so a change to those defaults still reaches them.
+
+### Fallback model
+
+A chat binding may name one other chat binding to answer when its own model is overloaded or
+cannot be reached:
+
+```yaml
+modelBindings:
+  - id: gpt56Sol
+    providerId: azure-eu
+    model: acme-gpt-5.6-sol
+    label: GPT-5.6 Sol
+    fallback: gpt61Sol
+  - id: gpt61Sol
+    providerId: azure-eu
+    model: acme-gpt-6.1-sol
+    label: GPT-6.1 Sol
+    fallback: gpt56Sol
+```
+
+- A rate limit switches the run to the fallback at once, without the minute the call would
+  otherwise wait. A server error, a timeout or a lost connection switches after the two short
+  retries every call gets. Nothing else switches, and only while the failed call has shown the
+  person nothing yet.
+- The rest of the run stays on the fallback, with the fallback's tools, reasoning effort and
+  compaction threshold. The next run starts on the binding chosen for it again. Two bindings may
+  name each other: a run switches at most once.
+- It applies to chat runs, their subagents and Workflow agent steps, agents fixed to one model
+  included. It does not add a model to the picker. An agent's author turns it off for that agent
+  with "Use fallback model" in the agent editor (`useModelFallback: false`).
+- There is no switch when the agent's Shared Workspace has a model list without the fallback.
+- The fallback's call is admitted and recorded on the fallback binding: usage limits apply to it,
+  and usage and cost are counted on the model that answered.
+- Under the answer the person reads one line, such as "Answered with GPT-6.1 Sol, GPT-5.6 Sol was
+  overloaded". The log gets a `model_fallback` warning with both binding ids and the error kind.
+- System calls (document and field extraction, titles, guardrails) and embeddings never fall
+  back.
+
+Startup stops, naming the binding, when a `fallback` names the binding itself, a binding that
+does not exist, an embedding binding, or a binding whose provider entry has another `region`.
+An embedding binding takes no `fallback`.
 
 ### Embedding models
 

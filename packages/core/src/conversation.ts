@@ -452,12 +452,14 @@ export interface ModelProviderContinuationStore {
   }): Promise<ModelProviderTurnContinuation | undefined>;
   /**
    * Drops the continuations a provider cannot accept, the checkpoint and the turn's; the
-   * conversation goes on from its history.
+   * conversation goes on from its history. With `keepCheckpoint` only the turn's goes: the
+   * conversation goes on from its compaction checkpoint.
    */
   deleteModelProviderContinuation(input: {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;
     providerId: string;
+    keepCheckpoint?: boolean;
     /** Given when an Agent Run drops it: refused once the run lost its lease. */
     runFence?: AgentRunWriteFence;
   }): Promise<void>;

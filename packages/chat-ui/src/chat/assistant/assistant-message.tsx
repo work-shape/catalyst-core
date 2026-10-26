@@ -29,6 +29,7 @@ import {
 import type { AssistantUiMessageCustomMetadata } from "./assistant-ui-adapter";
 import { AssistantSourcePart } from "./assistant-source-part";
 import { useTranslation } from "../../shared/i18n";
+import { modelDisplayLabel } from "../../shared/model-label";
 import { MarkdownText } from "../markdown/markdown-text";
 import { DataPart, ToolCallFoldLabel, ToolCallPart } from "../tools/tool-call";
 import { ToolGroupContent, ToolGroupRoot, ToolGroupTrigger } from "./assistant-tool-group";
@@ -137,6 +138,10 @@ function AssistantMessage({
     (state) =>
       (state.message.metadata.custom as AssistantUiMessageCustomMetadata | undefined)
         ?.contextCompacted === true
+  );
+  const modelFallback = useAuiState(
+    (state) =>
+      (state.message.metadata.custom as AssistantUiMessageCustomMetadata | undefined)?.modelFallback
   );
   const matchesActiveRun = Boolean(activeRunId && messageId === activeRunId);
   const activeRunMessage = Boolean(
@@ -250,6 +255,19 @@ function AssistantMessage({
         )}
         <MessageError />
       </div>
+      {modelFallback && !messageRunning ? (
+        <p className="px-1 text-caption text-muted-foreground" data-testid="model-fallback-line">
+          {t(
+            modelFallback.reason === "rate_limit"
+              ? "modelFallbackRateLimit"
+              : "modelFallbackUnavailable",
+            {
+              to: modelDisplayLabel(modelFallback.to),
+              from: modelDisplayLabel(modelFallback.from)
+            }
+          )}
+        </p>
+      ) : null}
       {!messageRunning ? (
         <div className="mt-1 flex min-h-8 items-center gap-1 opacity-100 md:opacity-0 md:transition-opacity md:group-hover/message:opacity-100 md:group-focus-within/message:opacity-100">
           <ActionBarPrimitive.Copy asChild>

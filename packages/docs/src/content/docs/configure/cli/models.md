@@ -39,6 +39,8 @@ It refuses, and writes nothing:
 
 `add` never asks for a key, never reads one and never writes one. It prints the name of the one secret to set. The default name is the provider's own (`AZURE_OPENAI_API_KEY`, `GOOGLE_VERTEX_CREDENTIALS`, `AWS_BEARER_TOKEN_BEDROCK`); where another entry already uses it, the name is made from the id, such as `AZURE_SWEDEN_API_KEY`. `--secret <NAME>` names another.
 
+`--fallback <binding>` writes `fallback` on the new binding: the chat binding that answers when its model is overloaded or cannot be reached. It refuses a binding the release config does not have, an embedding binding and one whose provider is not in `eu`. It writes one direction; the other binding's `fallback` is set by hand.
+
 A Vertex binding states `agentSelectable: false`: the adapter carries no tool calls, which every agent run needs, so it serves the product's own calls, such as document extraction.
 
 ## Check

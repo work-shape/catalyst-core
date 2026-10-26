@@ -63,6 +63,7 @@ export const AGENT_MODEL_SETTING_FIELDS = [
   "modelBindingId",
   "reasoningEffort",
   "fastMode",
+  "useModelFallback",
   "userSelectableModelBindingIds",
   "modelReasoningEfforts"
 ] as const;
@@ -107,6 +108,12 @@ export interface ModelBindingConfig {
    * high; an empty list leaves the effort to the agent's model settings.
    */
   userSelectableReasoningEfforts?: ReasoningEffortConfig[];
+  /**
+   * The chat binding that answers an agent run's call when this binding's route is rate-limited
+   * or down. Another chat binding, on a provider of the same region. A run switches at most once
+   * and stays on it to its end; the next run starts on this binding again.
+   */
+  fallback?: string;
 }
 
 export { MODEL_USAGE_TIERS } from "@work-shape/catalyst-asset-schemas";

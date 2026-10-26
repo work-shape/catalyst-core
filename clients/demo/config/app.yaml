@@ -161,12 +161,14 @@ modelBindings:
   - id: gpt61Sol
     providerId: openai
     model: gpt-6.1-sol
+    fallback: gpt56Sol
     description:
       en: The newest model for complex analysis and multi-step work.
       de: Das neueste Modell für komplexe Analysen und mehrstufige Aufgaben.
   - id: gpt56Sol
     providerId: openai
     model: gpt-5.6-sol
+    fallback: gpt61Sol
     description:
       en: For complex analysis and multi-step work. Slower and the most thorough.
       de: Für komplexe Analysen und mehrstufige Aufgaben. Langsamer und am gründlichsten.

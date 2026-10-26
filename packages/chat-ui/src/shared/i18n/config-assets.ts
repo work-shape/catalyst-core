@@ -119,6 +119,9 @@ export const configAssets = defineTranslations({
     configFastMode: "Fast mode",
     configFastModeHint:
       "Runs use the provider's priority tier. Fast runs are billed at a higher rate.",
+    configModelFallback: "Use fallback model",
+    configModelFallbackHint:
+      "When the model is overloaded or cannot be reached, the fallback model set for it answers instead.",
     configReasoningEffort: "Reasoning effort",
     configReloadLatest: "Reload latest",
     configRestore: "Restore",
@@ -310,6 +313,9 @@ export const configAssets = defineTranslations({
     configFastMode: "Schnellmodus",
     configFastModeHint:
       "Läufe nutzen die Prioritätsstufe des Anbieters. Schnelle Läufe werden zu einem höheren Preis abgerechnet.",
+    configModelFallback: "Ausweichmodell verwenden",
+    configModelFallbackHint:
+      "Ist das Modell ausgelastet oder nicht erreichbar, antwortet das Ausweichmodell, das für es hinterlegt ist.",
     configReasoningEffort: "Denkaufwand",
     configReloadLatest: "Neueste Version laden",
     configRestore: "Wiederherstellen",

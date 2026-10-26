@@ -82,6 +82,19 @@ catalyst models add openai-compatible --id acme-eu \
 
 `--api responses` for an endpoint that offers the Responses API, and `--auth api-key` for one that takes the key in an `api-key` header instead of a bearer token. The secret is named after the id, here `ACME_EU_API_KEY`.
 
+## A fallback model
+
+`--fallback <binding>` names the chat binding that answers when the new provider's model is overloaded or cannot be reached, such as a second deployment of the same model in another resource:
+
+```sh
+catalyst models add azure --id azure-sweden \
+  --endpoint https://acme-sweden.openai.azure.com --model acme-gpt-deployment \
+  --fallback azure-eu \
+  --input-price 2.5 --cached-input-price 0.25 --output-price 10
+```
+
+The fallback must be a chat binding of the release config on a provider with region `eu`. The command writes `fallback` on the new binding only; for the other direction, add `fallback: azure-sweden` to the `azure-eu` binding by hand. What a run does when it switches is in [Release config](/configure/release-config/#fallback-model).
+
 ## When something is not right
 
 - **The check says the secret is missing.** The instance did not find the secret's name in its secrets: set it where the API and the agent run worker read theirs, and deploy again.

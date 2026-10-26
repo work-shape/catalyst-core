@@ -260,6 +260,7 @@ const FIELD_OF_CONFIG_KEY = new Map<string, BuildRefusalField>([
   ["modelReasoningEfforts", "model"],
   ["reasoningEffort", "model"],
   ["fastMode", "model"],
+  ["useModelFallback", "model"],
   ["knowledgeBases", "knowledge"],
   ["backend", "source"],
   ["tables", "source"],

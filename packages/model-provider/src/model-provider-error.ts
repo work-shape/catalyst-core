@@ -1,4 +1,9 @@
-import { AppError, type AppErrorCode, type ModelTokenUsage } from "@work-shape/catalyst-core";
+import {
+  AppError,
+  type AppErrorCode,
+  type ModelFallbackReason,
+  type ModelTokenUsage
+} from "@work-shape/catalyst-core";
 
 // Protects logs from a provider's error body, which can repeat what a user sent: the provider's
 // message is kept up to this length, for the log only. Nobody sees it in the product.
@@ -86,6 +91,37 @@ export class ModelProviderError extends AppError {
   get providerMessage(): string | undefined {
     return this.#providerMessage;
   }
+}
+
+/**
+ * What the gateway throws for a call whose caller has a fallback, when the route failed while
+ * the call had given the caller nothing: a rate limit at once, any other failure of the route
+ * after the call's retries. The caller sends the call again to its fallback.
+ */
+export class ModelRouteFailedError extends AppError {
+  readonly reason: ModelFallbackReason;
+  readonly kind: ModelProviderErrorKind;
+
+  constructor(error: ModelProviderError) {
+    super(
+      error.kind === "rate_limit" ? "RATE_LIMITED" : "INTERNAL",
+      error.kind === "rate_limit"
+        ? "The model is receiving too many requests"
+        : "The model could not be reached"
+    );
+    this.name = "ModelRouteFailedError";
+    this.kind = error.kind;
+    this.reason = error.kind === "rate_limit" ? "rate_limit" : "unavailable";
+    this.cause = error;
+  }
+}
+
+/**
+ * Whether a provider error is a failure of the model's route that a fallback answers: overloaded
+ * or down, the failures a call is sent again on.
+ */
+export function isModelRouteFailure(error: unknown): error is ModelProviderError {
+  return error instanceof ModelProviderError && RETRYABLE_KINDS.has(error.kind);
 }
 
 /** Which kind an HTTP status of a provider means. */

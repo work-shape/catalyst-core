@@ -1,4 +1,5 @@
 import type { AgentRunProjection } from "@work-shape/catalyst-api-client";
+import type { StoredModelFallback } from "@work-shape/catalyst-core";
 import { type ApprovalDecisionEvent } from "../approvals/approval-request-model";
 
 export interface AssistantUiActiveRun {
@@ -15,6 +16,8 @@ export interface AssistantUiMessageCustomMetadata {
   completedRunId?: string;
   runDurationMs?: number;
   contextCompacted?: boolean;
+  /** The run switched to its binding's fallback, which wrote the answer. */
+  modelFallback?: StoredModelFallback;
   approvalDecision?: AssistantUiApprovalDecision;
 }
 

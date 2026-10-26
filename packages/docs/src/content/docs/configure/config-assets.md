@@ -259,11 +259,13 @@ administration:
 
 Fields outside `editableAgentFields` are owned by the CLI workflow: the UI shows them read-only and the server rejects interactive writes that change them. `catalyst config push` requires the separate `config_assets.release` permission and may change everything.
 
-Five agent fields are not governed by `editableAgentFields`: `modelBindingId`, `reasoningEffort`, `fastMode`, `userSelectableModelBindingIds`, and `modelReasoningEfforts`. They are editable exactly when the caller holds `agent_models.manage`, and read-only otherwise. Listing `modelBindingId` or `reasoningEffort` in `editableAgentFields` is still accepted but has no effect.
+Six agent fields are not governed by `editableAgentFields`: `modelBindingId`, `reasoningEffort`, `fastMode`, `useModelFallback`, `userSelectableModelBindingIds`, and `modelReasoningEfforts`. They are editable exactly when the caller holds `agent_models.manage`, and read-only otherwise. Listing `modelBindingId` or `reasoningEffort` in `editableAgentFields` is still accepted but has no effect.
 
 One exception: a workspace can carry a list of allowed model bindings among its build limits. A user who may write an agent the workspace owns sets `modelBindingId` to a binding on that list without holding `agent_models.manage`. A binding that is not on the list is refused for every writer. An agent there that names a provider or no model is refused unless the writer holds `agent_models.manage`. The other four fields keep the rule above.
 
 `fastMode` (boolean, default `false`) runs the agent on the provider's priority tier, billed at the rate card's fast rates. It is valid only when the agent's model binding declares `supportsFastMode` in release config. The CLI writes `fastMode: true` to the agent YAML and omits the key when it is off.
+
+`useModelFallback` (boolean, default `true`) lets a run switch to the fallback its model binding names in release config when that model is overloaded or cannot be reached (see [Fallback model](/configure/release-config/#fallback-model)). `useModelFallback: false` keeps the agent on its own model; the key is omitted while it is on.
 
 ### Models users may choose
 

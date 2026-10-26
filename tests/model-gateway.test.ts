@@ -11,6 +11,7 @@ import {
 import {
   MODEL_PROVIDER_MESSAGE_MAX_CHARS,
   ModelProviderError,
+  ModelRouteFailedError,
   createInstanceModelGateway,
   createModelGateway,
   isModelProviderContinuationRejected,
@@ -187,6 +188,83 @@ describe("model gateway", () => {
     expect(waitsBetween(attemptTimes)).toEqual([1_000, 4_000]);
     expect(f.governance.admitted).toBe(1);
     expect(f.governance.recorded).toHaveLength(1);
+  });
+
+  it("fails a rate-limited call with a fallback at once, as a failed route", async () => {
+    let attempts = 0;
+    const f = fixture({
+      async complete() {
+        attempts += 1;
+        throw new ModelProviderError({
+          kind: "rate_limit",
+          status: 429,
+          retryAfterMs: 30_000,
+          message: "Model provider rate limit reached"
+        });
+      }
+    });
+
+    const error = await f.gateway.complete(call({ hasFallback: true })).catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(ModelRouteFailedError);
+    expect(error).toMatchObject({ reason: "rate_limit", kind: "rate_limit", code: "RATE_LIMITED" });
+    expect(attempts).toBe(1);
+    expect(f.governance.recorded).toHaveLength(1);
+  });
+
+  it("fails a call with a fallback as a failed route only after the two waits on a server error", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, "random").mockReturnValue(0.5);
+    const attemptTimes: number[] = [];
+    const f = fixture({
+      async complete() {
+        attemptTimes.push(Date.now());
+        throw new ModelProviderError({
+          kind: "server_error",
+          status: 503,
+          message: "Model provider request failed"
+        });
+      }
+    });
+
+    const failed = f.gateway.complete(call({ hasFallback: true })).catch((e: unknown) => e);
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    expect(await failed).toMatchObject({ name: "ModelRouteFailedError", reason: "unavailable" });
+    expect(waitsBetween(attemptTimes)).toEqual([1_000, 4_000]);
+  });
+
+  it("keeps a call with a fallback failing as it is once output was shown, or where the request is wrong", async () => {
+    const shown = fixture({
+      async *stream() {
+        yield { type: "text_delta", delta: "Visible" };
+        throw new ModelProviderError({
+          kind: "rate_limit",
+          status: 429,
+          message: "Model provider rate limit reached"
+        });
+      }
+    });
+    const refused = fixture({
+      async complete() {
+        throw new ModelProviderError({
+          kind: "invalid_request",
+          status: 400,
+          message: "Model provider request was invalid"
+        });
+      }
+    });
+
+    const afterOutput = await drain(shown.gateway.stream(call({ hasFallback: true }))).catch(
+      (e: unknown) => e
+    );
+    const invalid = await refused.gateway
+      .complete(call({ hasFallback: true }))
+      .catch((e: unknown) => e);
+
+    expect(afterOutput).not.toBeInstanceOf(ModelRouteFailedError);
+    expect(invalid).toBeInstanceOf(ModelProviderError);
+    expect(invalid).toMatchObject({ kind: "invalid_request" });
   });
 
   it("answers with the attempt that succeeds and records the call once", async () => {

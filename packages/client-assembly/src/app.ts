@@ -24,6 +24,7 @@ import type { ChatAttachmentService, ChatServerOptions } from "@work-shape/catal
 import { createManagedObjectAccess } from "@work-shape/catalyst-capability-sdk";
 import {
   AppError,
+  asCollaborationWorkspaceId,
   KNOWLEDGE_JOB_KINDS,
   personalDataConversation,
   type ConnectorTypeDefinition,
@@ -708,6 +709,21 @@ export async function createClientInstanceExecutionAssembly(
     modelGateway,
     ...createInstanceAgentTools(operationCalls, toolRegistry, toolOptions),
     conversationOffer,
+    // A Shared Workspace's list of models holds a run's fallback back too (FALLBACK-1).
+    workspaceModelBindings: async (input) => {
+      const workspaceId =
+        "workspaceId" in input
+          ? asCollaborationWorkspaceId(input.workspaceId)
+          : (
+              await store.conversations.getConversation(
+                input.clientInstanceId,
+                input.conversationId
+              )
+            )?.collaborationWorkspaceId;
+      if (workspaceId === undefined) return undefined;
+      const workspace = await store.workspaces.getWorkspace(input.clientInstanceId, workspaceId);
+      return workspace?.allowedModelBindingIds;
+    },
     // A run reads how its subagents ended at the end of the step that started them.
     subagents: store.childAgentRuns,
     webAccess: config.webAccess,

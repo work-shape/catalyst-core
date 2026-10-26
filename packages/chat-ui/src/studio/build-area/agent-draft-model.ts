@@ -28,6 +28,7 @@ const MODEL_PARTS = [
   "modelBindingId",
   "reasoningEffort",
   "fastMode",
+  "useModelFallback",
   "userSelectableModelBindingIds",
   "modelReasoningEfforts"
 ] as const satisfies readonly (keyof AgentFormState)[];

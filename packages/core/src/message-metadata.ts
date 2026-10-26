@@ -13,6 +13,11 @@ import type { AttachmentManifest } from "./files";
 import type { AgentRunId, MessageId, ToolCallId } from "./ids";
 import { asMessageId } from "./ids";
 import { personLabelForModel } from "./person-labels";
+import {
+  isModelFallbackReason,
+  type StoredModelFallback,
+  type StoredModelFallbackBinding
+} from "./model-fallback";
 import { isJsonObject, unknownToJsonValue, type JsonObject, type JsonValue } from "./json";
 import type { ToolExecutionResult } from "./tool-execution";
 import type { MessageCitation, WebSource, WebSourceProvider } from "./web-source";
@@ -79,6 +84,7 @@ export interface AgentRuntimeAssistantFinalMetadata {
   citations?: MessageCitation[];
   modelContext?: StoredModelContextSnapshot;
   providerContinuation?: StoredModelProviderContinuation;
+  modelFallback?: StoredModelFallback;
 }
 
 export interface AgentRuntimeToolResultMetadata {
@@ -269,6 +275,7 @@ export function createAssistantFinalMetadata(input: {
   finishStatus?: (typeof MESSAGE_FINISH_STATUSES)[number];
   cancellationReason?: string;
   modelContext?: StoredModelContextSnapshot;
+  modelFallback?: StoredModelFallback;
 }): JsonObject {
   return wrapAgentRuntimeMetadata({
     version: MESSAGE_METADATA_VERSION,
@@ -281,7 +288,8 @@ export function createAssistantFinalMetadata(input: {
     ...(input.knowledgeSources?.length
       ? { knowledgeSources: readKnowledgeCitationSources(input.knowledgeSources) }
       : {}),
-    ...(input.modelContext ? { modelContext: input.modelContext } : {})
+    ...(input.modelContext ? { modelContext: input.modelContext } : {}),
+    ...(input.modelFallback ? { modelFallback: input.modelFallback } : {})
   });
 }
 
@@ -379,7 +387,8 @@ export function readAgentRuntimeMessageMetadata(
         ? { knowledgeSources: readKnowledgeCitationSources(runtime.knowledgeSources) }
         : {}),
       ...readModelContextMetadata(runtime.modelContext),
-      ...readProviderContinuationMetadata(runtime.providerContinuation)
+      ...readProviderContinuationMetadata(runtime.providerContinuation),
+      ...readModelFallbackMetadata(runtime.modelFallback)
     };
   }
   if (
@@ -568,6 +577,37 @@ function readModelContextMetadata(value: unknown): { modelContext?: StoredModelC
       compacted: value.compacted
     }
   };
+}
+
+function readModelFallbackMetadata(value: unknown): { modelFallback?: StoredModelFallback } {
+  if (!isUnknownRecord(value) || !isModelFallbackReason(value.reason)) {
+    return {};
+  }
+  const from = readModelFallbackBinding(value.from);
+  const to = readModelFallbackBinding(value.to);
+  return from && to ? { modelFallback: { from, to, reason: value.reason } } : {};
+}
+
+function readModelFallbackBinding(value: unknown): StoredModelFallbackBinding | undefined {
+  if (
+    !isUnknownRecord(value) ||
+    typeof value.bindingId !== "string" ||
+    typeof value.model !== "string"
+  ) {
+    return undefined;
+  }
+  return {
+    bindingId: value.bindingId,
+    model: value.model,
+    ...(typeof value.label === "string" ? { label: value.label } : {})
+  };
+}
+
+/** The model switch of the run that wrote the answer, where it switched to a fallback. */
+export function readAssistantModelFallback(
+  metadata: JsonObject | Record<string, unknown> | undefined
+): StoredModelFallback | undefined {
+  return readAssistantFinalMetadata(metadata)?.modelFallback;
 }
 
 function readProviderContinuationMetadata(value: unknown): {

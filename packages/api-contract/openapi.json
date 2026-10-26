@@ -40105,6 +40105,9 @@
           },
           "modelContext": {
             "$ref": "#/components/schemas/StoredModelContextSnapshot"
+          },
+          "modelFallback": {
+            "$ref": "#/components/schemas/StoredModelFallback"
           }
         },
         "required": [
@@ -41197,6 +41200,9 @@
                   "type": "string"
                 },
                 "label": {
+                  "type": "string"
+                },
+                "fallback": {
                   "type": "string"
                 }
               },
@@ -48070,6 +48076,59 @@
           "inputTokens",
           "compactThresholdTokens",
           "compacted"
+        ]
+      },
+      "StoredModelFallback": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "object",
+            "properties": {
+              "bindingId": {
+                "type": "string"
+              },
+              "model": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "bindingId",
+              "model"
+            ]
+          },
+          "to": {
+            "type": "object",
+            "properties": {
+              "bindingId": {
+                "type": "string"
+              },
+              "model": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "bindingId",
+              "model"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "rate_limit",
+              "unavailable"
+            ]
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "reason"
         ]
       },
       "StoredReasoningSummary": {

@@ -178,6 +178,7 @@ const REVIEWED_FIELDS = [
   "userSelectableModelBindingIds",
   "reasoningEffort",
   "fastMode",
+  "useModelFallback",
   "maxSteps",
   "toolNames",
   "skillNames",

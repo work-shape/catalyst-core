@@ -29,7 +29,7 @@ export interface AssetWriteFollowUp {
 export interface ConfigAssetValidationRefs extends StoredAgentReferences {
   modelProviderIds: string[];
   modelBindingIds: string[];
-  modelBindings: Array<{ id: string; model: string; label?: string }>;
+  modelBindings: Array<{ id: string; model: string; label?: string; fallback?: string }>;
   fastModeModelBindingIds: string[];
   reasoningEfforts: string[];
   enabledToolNames: string[];

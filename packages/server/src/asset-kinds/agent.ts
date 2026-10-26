@@ -231,6 +231,9 @@ export function agentModelSettingValue(agent: unknown, field: AgentModelSettingF
   if (field === "fastMode") {
     return value ?? false;
   }
+  if (field === "useModelFallback") {
+    return value ?? true;
+  }
   if (field === "userSelectableModelBindingIds") {
     return value ?? [];
   }
