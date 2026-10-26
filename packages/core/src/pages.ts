@@ -585,13 +585,18 @@ export function fileSetPathIssue(path: string): string | undefined {
  * holds every file of the set, source and built, by part and path.
  */
 export function requireFileSetWithinLimits(
-  files: readonly { part: "src" | "dist"; path: string; bytes: number }[]
+  files: readonly { part: "src" | "dist"; path: string; bytes: number }[],
+  limits = {
+    files: FILE_SET_MAX_FILES,
+    fileBytes: FILE_SET_MAX_FILE_BYTES,
+    treeBytes: FILE_SET_MAX_TOTAL_BYTES
+  }
 ): void {
-  if (files.length > FILE_SET_MAX_FILES) {
+  if (files.length > limits.files) {
     throw pageRefusal(
       "file_set_too_large",
-      `The Page has ${files.length} files. A Page holds at most ${FILE_SET_MAX_FILES} (FILE_SET_MAX_FILES), source and built files together.`,
-      { cap: "FILE_SET_MAX_FILES", limit: FILE_SET_MAX_FILES, actual: files.length }
+      `The Page has ${files.length} files. A Page holds at most ${limits.files} (FILE_SET_MAX_FILES), source and built files together.`,
+      { cap: "FILE_SET_MAX_FILES", limit: limits.files, actual: files.length }
     );
   }
   const seen = new Set<string>();
@@ -613,13 +618,13 @@ export function requireFileSetWithinLimits(
       );
     }
     seen.add(key);
-    if (file.bytes > FILE_SET_MAX_FILE_BYTES) {
+    if (file.bytes > limits.fileBytes) {
       throw pageRefusal(
         "file_set_too_large",
-        `The file '${file.path}' has ${file.bytes} bytes. A file of a Page has at most ${megabytes(FILE_SET_MAX_FILE_BYTES)} (FILE_SET_MAX_FILE_BYTES).`,
+        `The file '${file.path}' has ${file.bytes} bytes. A file of a Page has at most ${megabytes(limits.fileBytes)} (FILE_SET_MAX_FILE_BYTES).`,
         {
           cap: "FILE_SET_MAX_FILE_BYTES",
-          limit: FILE_SET_MAX_FILE_BYTES,
+          limit: limits.fileBytes,
           actual: file.bytes,
           file: file.path
         }
@@ -627,11 +632,11 @@ export function requireFileSetWithinLimits(
     }
     total += file.bytes;
   }
-  if (total > FILE_SET_MAX_TOTAL_BYTES) {
+  if (total > limits.treeBytes) {
     throw pageRefusal(
       "file_set_too_large",
-      `The Page has ${total} bytes. A Page has at most ${megabytes(FILE_SET_MAX_TOTAL_BYTES)} (FILE_SET_MAX_TOTAL_BYTES), source and built files together.`,
-      { cap: "FILE_SET_MAX_TOTAL_BYTES", limit: FILE_SET_MAX_TOTAL_BYTES, actual: total }
+      `The Page has ${total} bytes. A Page has at most ${megabytes(limits.treeBytes)} (FILE_SET_MAX_TOTAL_BYTES), source and built files together.`,
+      { cap: "FILE_SET_MAX_TOTAL_BYTES", limit: limits.treeBytes, actual: total }
     );
   }
 }

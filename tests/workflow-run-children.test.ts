@@ -1,3 +1,4 @@
+import { workflowStepFiles } from "./support/workflow-step-files";
 import { withTestSql } from "./support/test-sql";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
@@ -727,7 +728,9 @@ describe("a deadline while every step waits", () => {
         definitions: definitions.source,
         limits: { maxDurationMs: 10_000 },
         codeRunner: { timeoutSeconds: 30 },
-        stepFiles: { readStepFile: async () => Buffer.from('print("{}")') }
+        stepFiles: workflowStepFiles(["steps/steps/wait.py"], async () =>
+          Buffer.from('print("{}")')
+        )
       }
     );
     await t.allow({ kind: "service_principal", id: t.principal.id }, "workflow.use");

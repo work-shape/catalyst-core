@@ -128,11 +128,12 @@ async function applyBundle(
   repository: Repository,
   directory: string,
   bundle: BundleReference,
-  copy: string
+  copy: string,
+  maxBundleBytes: number
 ): Promise<void> {
   const refuse = (code: string, reason: string) =>
     new Refused(code, `The bundle '${bundle.file}' ${reason}`, bundle.file);
-  if (bundle.bytes > ASSET_REPO_MAX_BUNDLE_BYTES) {
+  if (bundle.bytes > maxBundleBytes) {
     throw refuse(
       "bundle_too_large",
       `has ${bundle.bytes} bytes. A bundle has at most ${ASSET_REPO_MAX_BUNDLE_BYTES} (ASSET_REPO_MAX_BUNDLE_BYTES).`
@@ -196,13 +197,7 @@ async function applyBundle(
     // `--strict` checks every object and that everything an object names exists. Git 2.39
     // does not check the objects of a bundle on a setting alone, so the pack is indexed here.
     await repository.git(
-      [
-        "index-pack",
-        "--stdin",
-        "--fix-thin",
-        "--strict",
-        `--max-input-size=${ASSET_REPO_MAX_BUNDLE_BYTES}`
-      ],
+      ["index-pack", "--stdin", "--fix-thin", "--strict", `--max-input-size=${maxBundleBytes}`],
       { inputFile: { path, offset: header.packOffset } }
     );
   } catch (error) {
@@ -230,12 +225,19 @@ export async function applyBundles(
   repository: Repository,
   directory: string,
   bundles: readonly BundleReference[],
-  scratch: string
+  scratch: string,
+  maxBundleBytes = ASSET_REPO_MAX_BUNDLE_BYTES
 ): Promise<void> {
   const copies = join(scratch, "bundles");
   await mkdir(copies, { mode: 0o700 });
   for (const [index, bundle] of bundles.entries()) {
-    await applyBundle(repository, directory, bundle, join(copies, `${index}.bundle`));
+    await applyBundle(
+      repository,
+      directory,
+      bundle,
+      join(copies, `${index}.bundle`),
+      maxBundleBytes
+    );
   }
 }
 

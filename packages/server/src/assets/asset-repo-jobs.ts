@@ -109,9 +109,10 @@ async function readRecorded(
   objects: ObjectStorage,
   key: string,
   recorded: { bytes: number; sha256: string },
-  signal: AbortSignal
+  signal: AbortSignal,
+  bound = ASSET_REPO_MAX_BUNDLE_BYTES
 ): Promise<Uint8Array> {
-  if (recorded.bytes > ASSET_REPO_MAX_BUNDLE_BYTES) {
+  if (recorded.bytes > bound) {
     throw new NotAsRecorded();
   }
   const stored = await objects.get(key).catch(() => {
@@ -156,33 +157,39 @@ async function readEach<Item, Read>(
 /** What the sizes a request names already decide, before a byte is read. */
 function requestRefusal(request: AssetRepoCommitRequest): Refused | undefined {
   const { files } = request;
-  if (files.length > ASSET_REPO_MAX_FILES) {
+  const limits = request.limits ?? {
+    files: ASSET_REPO_MAX_FILES,
+    fileBytes: ASSET_REPO_MAX_FILE_BYTES,
+    treeBytes: ASSET_REPO_MAX_TREE_BYTES,
+    historyBytes: ASSET_REPO_MAX_BUNDLE_BYTES,
+    settingPrefix: "asset.repository"
+  };
+  if (files.length > limits.files) {
     return {
       status: "refused",
       code: "too_many_files",
-      message: `The folder holds ${files.length} files. A repository takes at most ${ASSET_REPO_MAX_FILES} (ASSET_REPO_MAX_FILES).`
+      message: `The folder holds ${files.length} files. A repository takes at most ${limits.files} (${request.limits ? `${limits.settingPrefix}.files` : "ASSET_REPO_MAX_FILES"}).`
     };
   }
-  const large = files.find((file) => file.byteSize > ASSET_REPO_MAX_FILE_BYTES);
+  const large = files.find((file) => file.byteSize > limits.fileBytes);
   if (large) {
     return {
       status: "refused",
       code: "file_too_large",
       path: large.path,
-      message: `'${large.path}' has ${large.byteSize} bytes. A file has at most ${ASSET_REPO_MAX_FILE_BYTES} (ASSET_REPO_MAX_FILE_BYTES).`
+      message: `'${large.path}' has ${large.byteSize} bytes. A file has at most ${limits.fileBytes} (${request.limits ? `${limits.settingPrefix}.fileBytes` : "ASSET_REPO_MAX_FILE_BYTES"}).`
     };
   }
   const total = files.reduce((sum, file) => sum + file.byteSize, 0);
-  if (total > ASSET_REPO_MAX_TREE_BYTES) {
+  if (total > limits.treeBytes) {
     return {
       status: "refused",
       code: "tree_too_large",
-      message: `The files have ${assetRepoMib(total)} together. One save may hold at most ${assetRepoMib(ASSET_REPO_MAX_TREE_BYTES)}. Nothing was saved. Remove files or make them smaller, then save again.`
+      message: `The files have ${assetRepoMib(total)} together. One save may hold at most ${assetRepoMib(limits.treeBytes)}. (${limits.settingPrefix}.treeBytes). Nothing was saved. Remove files or make them smaller, then save again.`
     };
   }
   return undefined;
 }
-
 /** The history of the repository is at its limit. Nothing shortens a history yet. */
 const HISTORY_TOO_LARGE: Refused = {
   status: "refused",
@@ -220,6 +227,13 @@ export function createAssetRepoJobs(options: AssetRepoJobsOptions): {
   ): Promise<AssetRepoCommitResult | undefined> => {
     const { assetId, operationRunId, request } = save;
     const address = { clientInstanceId, assetId, operationRunId };
+    const historyBound = request.limits?.historyBytes ?? ASSET_REPO_MAX_BUNDLE_BYTES;
+    const historyRefusal = request.limits
+      ? {
+          ...HISTORY_TOO_LARGE,
+          message: `The repository history exceeds ${request.limits.settingPrefix}.historyBytes (${historyBound} bytes)`
+        }
+      : HISTORY_TOO_LARGE;
     const tooLarge = requestRefusal(request);
     if (tooLarge) {
       return tooLarge;
@@ -243,8 +257,8 @@ export function createAssetRepoJobs(options: AssetRepoJobsOptions): {
     // holds the whole history. What that may weigh is the limit of a repository, so the room
     // a save needs does not grow past it however long the history is.
     const history = ledger.reduce((sum, row) => sum + row.bytes, 0);
-    if (history > ASSET_REPO_MAX_BUNDLE_BYTES) {
-      return HISTORY_TOO_LARGE;
+    if (history > historyBound) {
+      return historyRefusal;
     }
     if (request.baseCommit !== null && ledger.length === 0) {
       return {
@@ -259,7 +273,7 @@ export function createAssetRepoJobs(options: AssetRepoJobsOptions): {
         tip: row.tipCommit,
         prerequisite: row.prerequisiteCommit ?? null,
         sha256: row.sha256,
-        bytes: await readRecorded(objects, row.objectKey, row, signal)
+        bytes: await readRecorded(objects, row.objectKey, row, signal, historyBound)
       }));
     } catch (error) {
       if (!(error instanceof NotAsRecorded)) {
@@ -280,7 +294,8 @@ export function createAssetRepoJobs(options: AssetRepoJobsOptions): {
           source,
           file.objectKey,
           { bytes: file.byteSize, sha256: file.checksum },
-          signal
+          signal,
+          request.limits?.fileBytes
         )
       }));
     } catch (error) {
@@ -301,6 +316,7 @@ export function createAssetRepoJobs(options: AssetRepoJobsOptions): {
         // The time the request names, or the time of the save, which every attempt of its run
         // reads from its row.
         time: request.time ?? Math.floor(Date.parse(save.savedAt) / 1000),
+        ...(request.limits ? { limits: request.limits } : {}),
         message: request.message
       },
       files,
@@ -319,8 +335,8 @@ export function createAssetRepoJobs(options: AssetRepoJobsOptions): {
     }
     const { sha256, bytes, kind, prerequisite } = outcome.bundle;
     // The bundle of this save would be part of the history every later save reads.
-    if (history + bytes.byteLength > ASSET_REPO_MAX_BUNDLE_BYTES) {
-      return HISTORY_TOO_LARGE;
+    if (history + bytes.byteLength > historyBound) {
+      return historyRefusal;
     }
     const bundle: AssetRepoSaveBundle = {
       objectKey: assetRepoBundleObjectKey({ assetId, commit: outcome.commit, sha256 }),

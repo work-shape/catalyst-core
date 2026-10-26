@@ -10,6 +10,7 @@ import { testOperations } from "./support/operations";
 import { workflowConfigSchema } from "@work-shape/catalyst-config-schema";
 import {
   WORKFLOW_ASSET_KIND,
+  isJsonObject,
   createModuleRegistry,
   scheduleDedupeKey,
   type JobWorker,
@@ -17,7 +18,12 @@ import {
 } from "@work-shape/catalyst-core";
 import { assetRepoSweepJob, createAssetRepoJobs } from "@work-shape/catalyst-server";
 import { LocalWorkspaceCommandProcessExecutor } from "@work-shape/catalyst-tool-execution";
-import { createCodeStepJobs, writeWorkflowManifest } from "@work-shape/catalyst-workflows";
+import {
+  WORKFLOW_SOURCE_DEFAULTS,
+  createCodeStepJobs,
+  writeWorkflowManifest,
+  type WorkflowSourceLimits
+} from "@work-shape/catalyst-workflows";
 import { SERVICE_HEADER, clientInstanceId, errorSchema } from "./support/access-instance";
 import { createTestConfig } from "./support/fixtures";
 import { localAssetRepoCommit, readRepoCommit } from "./support/asset-repo";
@@ -90,7 +96,7 @@ afterEach(async () => {
   );
 });
 
-async function ready(options: { files?: false } = {}) {
+async function ready(options: { files?: false; sourceLimits?: WorkflowSourceLimits } = {}) {
   const objects = new MemoryObjectStorage();
   const t = await readyWorkflows(
     (fixture) => {
@@ -99,6 +105,7 @@ async function ready(options: { files?: false } = {}) {
     {
       definitions: "assets",
       codeRunner: { timeoutSeconds: 20 },
+      ...(options.sourceLimits ? { sourceLimits: options.sourceLimits } : {}),
       ...(options.files === false ? {} : { files: objects })
     }
   );
@@ -123,6 +130,7 @@ async function ready(options: { files?: false } = {}) {
     ...createCodeStepJobs({
       clientInstanceId,
       stores: t.stores,
+      stepFiles: t.stepFiles,
       sandbox: new LocalWorkspaceCommandProcessExecutor(),
       tempRoot: join(tempRoot, "code"),
       slots: 2,
@@ -490,15 +498,9 @@ describe("a Workflow whose writes are commits", () => {
     const live = bundleObjects();
     expect(live).toHaveLength(1);
     // A file no step names is refused by the engine's check of the definition.
-    const refused = await saveConfig(
-      definition(),
-      [...files, { path: "steps/unused.py", content: "print(1)\n" }],
-      first
-    );
+    const refused = await saveConfig({ ...definition(), id: "another" }, files, first);
     expect(refused.statusCode, refused.body).toBe(422);
-    expect(errorSchema.parse(refused.json()).error.details).toMatchObject({
-      reason: "code_file_unused"
-    });
+
     expect((await stored()).revision).toBe(first);
     expect(await ledger()).toHaveLength(1);
     expect(bundleObjects()).toHaveLength(2);
@@ -532,6 +534,101 @@ describe("a Workflow whose writes are commits", () => {
     const run = await t.finish(started.id, runner);
     expect(run.status, JSON.stringify(run.error)).toBe("done");
     expect(JSON.parse(run.outputPreview?.text ?? "null")).toEqual({ result: 42 });
+  }, 120_000);
+
+  it("runs its own revision tree through later publish and deletion, and a config edit carries the extras (check 152)", async () => {
+    const { t, saveFolder, saveConfig, revisionOf, runner, stored } = await ready();
+    const manifest = definition();
+    const code = Array.isArray(manifest.steps) ? manifest.steps[1] : undefined;
+    if (!isJsonObject(code)) throw new Error("The fixture has no code step");
+    delete code.file;
+    code.entry = "lib/run_domain.py";
+    const folder = (factor: number) => [
+      { path: "workflow.yaml", text: writeWorkflowManifest(manifest) },
+      {
+        path: "lib/run_domain.py",
+        text: 'from lib.db import factor\nimport json, sys\nnumber=json.load(sys.stdin)["number"]\nprint(json.dumps({"result":number*factor,"sql":open("sql/query.sql").read()}))'
+      },
+      { path: "lib/db.py", text: `factor = ${factor}` },
+      { path: "sql/query.sql", text: "select 42" },
+      { path: "tests/unused.txt", text: "accepted" }
+    ];
+    const first = revisionOf(await saveFolder(folder(2), null));
+    await t.expectOk(t.root.id, "assets.publish", {
+      params: address,
+      payload: { revision: first }
+    });
+    const begin = async () =>
+      z.object({ id: z.string() }).parse(
+        (
+          await t.expectOk(t.root.id, "workflows.start", {
+            params: { workflow: WORKFLOW },
+            payload: { input: { number: 21 } }
+          })
+        ).json()
+      );
+    const old = await begin();
+    const second = revisionOf(await saveFolder(folder(3), first));
+    await t.expectOk(t.root.id, "assets.publish", {
+      params: address,
+      payload: { revision: second }
+    });
+    const newer = await begin();
+    const third = revisionOf(await saveConfig({ ...manifest, name: "Renamed" }, [], second));
+    expect((await stored()).config?.files).toBeUndefined();
+    await t.expectOk(t.root.id, "assets.delete", {
+      params: address,
+      payload: { expectedRevision: third }
+    });
+    for (const [run, factor] of [
+      [old, 2],
+      [newer, 3]
+    ] as const) {
+      const ended = await t.finish(run.id, runner);
+      expect(ended.status, JSON.stringify(ended.error)).toBe("done");
+      expect(JSON.parse(ended.outputPreview?.text ?? "null")).toEqual({ result: 21 * factor });
+    }
+  }, 120_000);
+
+  it("refuses an oversized tree with its operator setting named and advertises the configured bounds", async () => {
+    const sourceLimits = { ...WORKFLOW_SOURCE_DEFAULTS, files: 2 };
+    const { t, saveFolder, stored } = await ready({ sourceLimits });
+    const context = await t.expectOk(t.admin.id, "platform.context.get", {});
+    expect(
+      z
+        .object({ kinds: z.array(z.object({ kind: z.string(), source: z.unknown().optional() })) })
+        .parse(context.json())
+        .kinds.find((kind) => kind.kind === "workflow")?.source
+    ).toEqual(sourceLimits);
+    const response = await saveFolder(
+      [
+        { path: "workflow.yaml", text: writeWorkflowManifest(definition()) },
+        { path: "steps/double.py", text: script(2) },
+        { path: "sql/unused.sql", text: "select 1" }
+      ],
+      null
+    );
+    expect(response.statusCode, response.body).toBe(422);
+    expect(response.body).toContain("workflows.source.files");
+    await expect(stored()).rejects.toThrow("not stored");
+  }, 120_000);
+
+  it("can raise the repository file bound above its default without copying source into config.files", async () => {
+    const sourceLimits = { ...WORKFLOW_SOURCE_DEFAULTS, fileBytes: 4 * 1024 ** 2 };
+    const { saveFolder, revisionOf, stored } = await ready({ sourceLimits });
+    revisionOf(
+      await saveFolder(
+        [
+          { path: "workflow.yaml", text: writeWorkflowManifest(definition()) },
+          { path: "steps/double.py", text: script(2) },
+          { path: "lib/large.txt", text: "x".repeat(3 * 1024 ** 2) }
+        ],
+        null
+      )
+    );
+    expect((await stored()).config?.files).toEqual([
+      { path: "steps/double.py", content: script(2) }
+    ]);
   }, 120_000);
 
   it("keeps a Workflow from before its repository on file sets without a commit", async () => {
@@ -572,7 +669,7 @@ describe("a Workflow whose writes are commits", () => {
   }, 120_000);
 
   // Fails where the folder is stored first: the Page file set refused the path in its own words.
-  it("refuses a step file outside steps/ as the engine does, before anything is stored or committed", async () => {
+  it("refuses a missing entry before anything is stored or committed", async () => {
     const { saveConfig, saveFolder, bundleObjects, objects } = await ready();
     for (const response of [
       await saveConfig(definition(), [{ path: "lib/double.py", content: script(2) }], null),
@@ -586,7 +683,7 @@ describe("a Workflow whose writes are commits", () => {
     ]) {
       expect(response.statusCode, response.body).toBe(422);
       expect(errorSchema.parse(response.json()).error.details).toMatchObject({
-        reason: "code_file_invalid"
+        reason: "code_file_missing"
       });
     }
     expect(bundleObjects()).toEqual([]);

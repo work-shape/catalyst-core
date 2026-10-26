@@ -1,3 +1,4 @@
+import { createWorkflowAssetStepFiles } from "@work-shape/catalyst-client-assembly";
 import {
   createAppAssetKind,
   createAssetRepoCommitClient,
@@ -214,6 +215,7 @@ export function hangingAt(
 export interface WorkflowFixture extends ConnectionOperationsFixture {
   /** What the instance has of Workflows. No job handler where the module is off. */
   workflows: InstanceWorkflows;
+  stepFiles: NonNullable<InstanceWorkflowsParts["stepFiles"]>;
   /** Worker warnings and errors, for a failing pass's diagnostics. */
   workerLogs: unknown[];
   /**
@@ -304,6 +306,7 @@ export async function workflowFixture(
     locale?: InstanceWorkflowsParts["locale"];
     /** The files of the Workflows' revisions, and what runs the scripts of code steps. */
     stepFiles?: InstanceWorkflowsParts["stepFiles"];
+    sourceLimits?: InstanceWorkflowsParts["sourceLimits"];
     codeRunner?: InstanceWorkflowsParts["codeRunner"];
     /** For the job that removes run data: the days a run keeps its values, and batch sizes. */
     stepDataDays?: number;
@@ -356,6 +359,7 @@ export async function workflowFixture(
     runs: () => workflows,
     runnerPackages: options.runnerPackages ?? [],
     limits: { ceilings, stepSlots: options.stepSlots ?? 4 },
+    ...(options.sourceLimits ? { sourceLimits: options.sourceLimits } : {}),
     // Where the instance keeps files, its writes are commits (WF-GIT-1).
     ...(options.files ? { repository: true } : {}),
     ...(options.now ? { now: options.now } : {}),
@@ -385,6 +389,7 @@ export async function workflowFixture(
           ...(options.personalKeys ? { personalApiKeys: { enabled: true } } : {})
         },
         server(stores, config, kinds) {
+          if (options.sourceLimits) config.workflows.source = options.sourceLimits;
           if (options.mail)
             config.infrastructure = infrastructureConfigSchema.parse({
               ...config.infrastructure,
@@ -436,7 +441,9 @@ export async function workflowFixture(
           instanceStores = stores;
           workflows = createInstanceWorkflows({
             modules,
-            ...(options.datasetObjects ? { datasetObjects: options.datasetObjects } : {}),
+            ...((options.files ?? options.datasetObjects)
+              ? { datasetObjects: options.files ?? options.datasetObjects }
+              : {}),
             ...(options.datasetLimits ? { datasetLimits: options.datasetLimits } : {}),
             clientInstanceId,
             stores,
@@ -449,6 +456,7 @@ export async function workflowFixture(
             operationCalls: server.operationCalls,
             ...(options.stepSlots === undefined ? {} : { stepSlots: options.stepSlots }),
             ceilings,
+            ...(options.sourceLimits ? { sourceLimits: options.sourceLimits } : {}),
             ...(fromAssets ? {} : { definitions: given ?? fixtureDefinitions() }),
             ...(options.limits ? { limits: options.limits } : {}),
             ...(options.now ? { now: options.now } : {}),
@@ -499,6 +507,17 @@ export async function workflowFixture(
   return {
     ...t,
     workflows: built,
+    stepFiles:
+      options.stepFiles ??
+      createWorkflowAssetStepFiles({
+        clientInstanceId,
+        configAssets: t.stores.configAssets,
+        pages: t.stores.pages,
+        ...(options.sourceLimits ? { sourceLimits: options.sourceLimits } : {}),
+        ...((options.files ?? options.datasetObjects)
+          ? { objects: options.files ?? options.datasetObjects }
+          : {})
+      }),
     workerLogs,
     principal,
     capturedMail: () => capture.list(),

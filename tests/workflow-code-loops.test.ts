@@ -1,3 +1,4 @@
+import { workflowStepFiles } from "./support/workflow-step-files";
 import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -77,12 +78,9 @@ describe("code steps inside dataset loops", () => {
         {
           definitions: definitions.source,
           datasetObjects: objects,
-          stepFiles: {
-            readStepFile: ({ path }) =>
-              Promise.resolve(
-                path === "steps/read.py" ? new TextEncoder().encode(READ_ROWS) : undefined
-              )
-          },
+          stepFiles: workflowStepFiles(["steps/read.py"], async () =>
+            new TextEncoder().encode(READ_ROWS)
+          ),
           codeRunner: { timeoutSeconds: 60 }
         }
       );
@@ -94,6 +92,7 @@ describe("code steps inside dataset loops", () => {
         ...createCodeStepJobs({
           clientInstanceId,
           stores: t.stores,
+          stepFiles: t.stepFiles,
           sandbox: new LocalWorkspaceCommandProcessExecutor(),
           tempRoot,
           slots: 2,
@@ -121,7 +120,11 @@ describe("code steps inside dataset loops", () => {
           ids: rows.slice(index * size, (index + 1) * size).map((row) => row.id)
         }))
       );
-      expect(await readdir(tempRoot)).toEqual([]);
+      expect(
+        (await readdir(tempRoot)).filter(
+          (name) => !name.startsWith("catalyst-workflow-source-cache")
+        )
+      ).toEqual([]);
     },
     120_000
   );

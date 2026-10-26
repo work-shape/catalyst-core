@@ -1,3 +1,4 @@
+import { workflowStepFiles } from "./support/workflow-step-files";
 import { execFile } from "node:child_process";
 import { link, mkdir, mkdtemp, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -20,8 +21,7 @@ import {
   openOutputFile,
   parseWorkflowManifest,
   storeOutputDatasets,
-  type CodeStepDatasets,
-  type WorkflowStepFiles
+  type CodeStepDatasets
 } from "@work-shape/catalyst-workflows";
 import { clientInstanceId } from "./support/access-instance";
 import { MemoryObjectStorage } from "./support/memory-object-storage";
@@ -329,7 +329,11 @@ describe.each(sandboxes)("a script that leaves a file %s", (_, sandbox) => {
       expect(result.outcome).toMatchObject({ kind: "failed", error: { code } });
       expect(stored).toEqual([]);
       // Nothing of the step is left on the worker's disk.
-      expect(await readdir(tempRoot)).toEqual([]);
+      expect(
+        (await readdir(tempRoot)).filter(
+          (name) => !name.startsWith("catalyst-workflow-source-cache")
+        )
+      ).toEqual([]);
     },
     120_000
   );
@@ -345,7 +349,9 @@ describe.each(sandboxes)("a script that leaves a file %s", (_, sandbox) => {
     if (result.kind !== "ended") throw new Error(`The script did not run: ${result.kind}`);
     expect(result.outcome).toMatchObject({ kind: "failed", error: { code: "code_disk_limit" } });
     expect(Date.now() - started).toBeLessThan(30_000);
-    expect(await readdir(tempRoot)).toEqual([]);
+    expect(
+      (await readdir(tempRoot)).filter((name) => !name.startsWith("catalyst-workflow-source-cache"))
+    ).toEqual([]);
   }, 120_000);
 });
 
@@ -435,7 +441,9 @@ json.dump({"findings": {"path": OUT + "/findings.jsonl"}}, open("output.json", "
     expect(result.outcome).toMatchObject({ kind: "output" });
     expect(stored).toEqual([{ files: 1, paths: 1, rows: 20 }]);
     expect(taken.get("wfd_shared")).toBe(20);
-    expect(await readdir(tempRoot)).toEqual([]);
+    expect(
+      (await readdir(tempRoot)).filter((name) => !name.startsWith("catalyst-workflow-source-cache"))
+    ).toEqual([]);
   }, 120_000);
 
   it("refuses input past the bound before it is written, and never runs the script", async () => {
@@ -454,7 +462,9 @@ json.dump({"findings": {"path": OUT + "/findings.jsonl"}}, open("output.json", "
     expect(rows).toBeGreaterThan(50);
     expect(rows).toBeLessThan(66);
     expect(stored).toEqual([]);
-    expect(await readdir(tempRoot)).toEqual([]);
+    expect(
+      (await readdir(tempRoot)).filter((name) => !name.startsWith("catalyst-workflow-source-cache"))
+    ).toEqual([]);
   }, 120_000);
 
   it("counts the input files against many small files the script writes", async () => {
@@ -472,7 +482,9 @@ json.dump({"findings": {"path": OUT + "/findings.jsonl"}}, open("output.json", "
     if (result.kind !== "ended") throw new Error(`The script did not run: ${result.kind}`);
     expect(result.outcome).toMatchObject({ kind: "failed", error: { code: "code_disk_limit" } });
     expect(stored).toEqual([]);
-    expect(await readdir(tempRoot)).toEqual([]);
+    expect(
+      (await readdir(tempRoot)).filter((name) => !name.startsWith("catalyst-workflow-source-cache"))
+    ).toEqual([]);
   }, 120_000);
 
   it("counts the input files against what the script may write", async () => {
@@ -496,7 +508,9 @@ json.dump({"findings": {"path": OUT + "/findings.jsonl"}}, open("output.json", "
     expect(result.outcome).toMatchObject({ kind: "failed", error: { code: "code_disk_limit" } });
     expect(result.log.stderr.trim()).toBe("cut");
     expect(stored).toEqual([]);
-    expect(await readdir(tempRoot)).toEqual([]);
+    expect(
+      (await readdir(tempRoot)).filter((name) => !name.startsWith("catalyst-workflow-source-cache"))
+    ).toEqual([]);
   }, 120_000);
 });
 
@@ -641,12 +655,9 @@ async function ready(
     "steps/generate.py": GENERATE,
     "steps/check.py": CHECK
   };
-  const stepFiles: WorkflowStepFiles = {
-    readStepFile: ({ path }) =>
-      Promise.resolve(
-        scripts[path] === undefined ? undefined : new TextEncoder().encode(scripts[path])
-      )
-  };
+  const stepFiles = workflowStepFiles(Object.keys(scripts), async ({ path }) =>
+    scripts[path] === undefined ? undefined : new TextEncoder().encode(scripts[path])
+  );
   const objects = new MemoryObjectStorage();
   const limits = workflowsConfigSchema.parse({}).datasets;
   const t = await readyWorkflows(
@@ -667,6 +678,7 @@ async function ready(
     ...createCodeStepJobs({
       clientInstanceId,
       stores: t.stores,
+      stepFiles: t.stepFiles,
       sandbox,
       tempRoot,
       slots: 2,
@@ -751,7 +763,9 @@ describe.each(sandboxes)("check 35: a code step on datasets %s", (where, sandbox
       expect(checked.network).toBe(false);
     }
     // The worker leaves nothing of the steps on its disk.
-    expect(await readdir(tempRoot)).toEqual([]);
+    expect(
+      (await readdir(tempRoot)).filter((name) => !name.startsWith("catalyst-workflow-source-cache"))
+    ).toEqual([]);
   }, 180_000);
 
   it("fails the step on a line that does not fit the row schema, with its number and no content", async () => {
@@ -850,7 +864,9 @@ describe("a dataset a code step's run may not read", () => {
     const check = (await stepRunsOf(t, ended.id)).find((step) => step.stepId === "check");
     expect(check).toMatchObject({ status: "failed", error: { code: "FORBIDDEN" } });
     // The script never ran: no step directory was made for it.
-    expect(await readdir(tempRoot)).toEqual([]);
+    expect(
+      (await readdir(tempRoot)).filter((name) => !name.startsWith("catalyst-workflow-source-cache"))
+    ).toEqual([]);
   }, 120_000);
 });
 

@@ -1,3 +1,4 @@
+import { workflowStepFiles } from "./support/workflow-step-files";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -67,14 +68,11 @@ it.each(["code_input", "code_output", "output"])(
         definitions: definitions.source,
         now: () => new Date(Date.now() + days * 86_400_000),
         codeRunner: { timeoutSeconds: 20 },
-        stepFiles: {
-          readStepFile: () =>
-            Promise.resolve(
-              new TextEncoder().encode(
-                `import json\nwith open("output.json", "w") as out:\n    json.dump(${JSON.stringify({ payload: value })}, out)`
-              )
-            )
-        }
+        stepFiles: workflowStepFiles(["steps/probe.py"], async () =>
+          new TextEncoder().encode(
+            `import json\nwith open("output.json", "w") as out:\n    json.dump(${JSON.stringify({ payload: value })}, out)`
+          )
+        )
       }
     );
     directory = await mkdtemp(join(tmpdir(), "wf-retention-fix-code-"));
@@ -83,6 +81,7 @@ it.each(["code_input", "code_output", "output"])(
       ...createCodeStepJobs({
         clientInstanceId,
         stores: t.stores,
+        stepFiles: t.stepFiles,
         sandbox: new LocalWorkspaceCommandProcessExecutor(),
         tempRoot: directory,
         slots: 1,

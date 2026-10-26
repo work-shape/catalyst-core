@@ -71,6 +71,7 @@ export {
   WORKFLOW_LIST_DESCRIPTION_MAX,
   WORKFLOW_LIST_NAME_MAX,
   createWorkflowAssetDefinitions,
+  createWorkflowAssetStepFiles,
   createWorkflowAssetKind,
   type PublishedWorkflow
 } from "./workflow-assets";

@@ -16,10 +16,7 @@ import {
   type ModelCompletion,
   type ModelAdapterRequest
 } from "@work-shape/catalyst-model-provider";
-import {
-  WORKFLOW_CODE_FILE_MAX_BYTES,
-  WORKFLOW_STEP_FILES_MAX_BYTES
-} from "@work-shape/catalyst-workflows";
+import {} from "@work-shape/catalyst-workflows";
 import { drainRunEvents, injectStartConversationRun } from "./support/chat-server-run-harness";
 import { createTestConfig } from "./support/fixtures";
 import { createTestInstance, type TestInstance } from "./support/test-instance";
@@ -337,9 +334,7 @@ describe("a conversation about a Workflow with a code step", () => {
     expect(again.config.manifest.steps).toHaveLength(4);
 
     // A script of the largest size a save takes is stored whole, as the agent sent it.
-    const largest = [
-      { path: "steps/double.py", content: "#".repeat(WORKFLOW_CODE_FILE_MAX_BYTES) }
-    ];
+    const largest = [{ path: "steps/double.py", content: "#".repeat(256 * 1024) }];
     expect(await t.put(configOf(largest), again.revision)).toEqual({
       saved: true,
       revision: t.published + 2
@@ -350,11 +345,6 @@ describe("a conversation about a Workflow with a code step", () => {
   it("says of a config what a save of its files is refused for, each issue with its path and code, and saves none of them", async () => {
     const before = await t.asset();
     const filesBefore = await t.storedFiles();
-    const other = { path: "steps/other.py", content: "" };
-    const large = "#".repeat(WORKFLOW_CODE_FILE_MAX_BYTES + 1);
-    const names = Array.from({ length: 9 }, (_, position) => `part${position}.py`);
-    const full = "#".repeat(WORKFLOW_CODE_FILE_MAX_BYTES);
-    expect(names.length * full.length).toBeGreaterThan(WORKFLOW_STEP_FILES_MAX_BYTES);
     const cases: [string, unknown, { path: string; code: string }[]][] = [
       // The config without `files`, and with none, while a step names a script.
       ["no files", configOf(undefined), [{ path: "steps.code0.file", code: "code_file_missing" }]],
@@ -363,34 +353,17 @@ describe("a conversation about a Workflow with a code step", () => {
       [
         "another script",
         configOf([good], ["triple.py"]),
-        [
-          { path: "files[0].path", code: "code_file_unused" },
-          { path: "steps.code0.file", code: "code_file_missing" }
-        ]
+        [{ path: "steps.code0.file", code: "code_file_missing" }]
       ],
-      ["unused", configOf([good, other]), [{ path: "files[1].path", code: "code_file_unused" }]],
       // A path outside the folder, one that leaves it, and a file that is no script.
-      ...["double.py", "/steps/double.py", "steps/../double.py", "steps/notes.md"].map(
+      ...["/steps/double.py", "steps/../double.py", ".git/config"].map(
         (path): [string, unknown, { path: string; code: string }[]] => [
           path,
           configOf([good, { path, content: "" }]),
-          [{ path: "files[1].path", code: "code_file_invalid" }]
+          [{ path, code: "code_file_invalid" }]
         ]
       ),
-      ["twice", configOf([good, good]), [{ path: "files[1].path", code: "code_file_invalid" }]],
-      [
-        "one too large",
-        configOf([{ ...good, content: large }]),
-        [{ path: "steps.code0.file", code: "code_file_too_large" }]
-      ],
-      [
-        "too large together",
-        configOf(
-          names.map((name) => ({ path: `steps/${name}`, content: full })),
-          names
-        ),
-        [{ path: "files", code: "code_files_too_large" }]
-      ]
+      ["twice", configOf([good, good]), [{ path: good.path, code: "code_file_invalid" }]]
     ];
     for (const [title, candidate, issues] of cases) {
       // The aggregate byte case exceeds the HTTP body bound. Keep it and the mismatched

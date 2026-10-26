@@ -71,6 +71,7 @@ export interface InstanceWorkflowsParts extends Pick<
   /** `localization.defaultLocale`: the language of the notices the engine writes itself. */
   locale?: WorkflowEngineOptions["locale"];
   stepSlots?: number;
+  sourceLimits?: import("@work-shape/catalyst-workflows").WorkflowSourceLimits;
   datasetObjects?: WorkflowEngineOptions["datasetObjects"];
   datasetLimits?: WorkflowEngineOptions["datasetLimits"];
   releaseRunThread?: WorkflowEngineOptions["releaseRunThread"];
@@ -161,7 +162,13 @@ export function createInstanceWorkflows(parts: InstanceWorkflowsParts): Instance
     parts.stepFiles ??
     (given
       ? noWorkflowStepFiles
-      : createWorkflowAssetStepFiles({ clientInstanceId, configAssets: stores.configAssets }));
+      : createWorkflowAssetStepFiles({
+          clientInstanceId,
+          configAssets: stores.configAssets,
+          pages: stores.pages,
+          ...(parts.datasetObjects ? { objects: parts.datasetObjects } : {}),
+          ...(parts.sourceLimits ? { sourceLimits: parts.sourceLimits } : {})
+        }));
   const engine = createWorkflowEngine({
     stepSlots: parts.stepSlots ?? workflowsConfigSchema.parse({}).stepSlots,
     ceilings: parts.ceilings ?? workflowLimitCeilingsOf(),
@@ -331,6 +338,7 @@ export const assembleWorkflows: ModuleSeam = ({ config, modules, clientInstanceI
               knowledgeSources: modules.isEnabled("knowledge"),
               // Every write is a commit where the instance makes commits (WF-GIT-1).
               repository: commitsAssetRepos(config, modules),
+              sourceLimits: config.workflows.source,
               mailSend: {
                 registered: outboundMailOf(config) !== undefined,
                 recipientDomains: outboundMailOf(config)?.outbound.recipientDomains ?? []
@@ -349,6 +357,7 @@ export const assembleWorkflows: ModuleSeam = ({ config, modules, clientInstanceI
         notices,
         locale: config.localization.defaultLocale,
         stepSlots: config.workflows.stepSlots,
+        sourceLimits: config.workflows.source,
         ...(files
           ? {
               datasetObjects: files.objects,

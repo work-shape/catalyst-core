@@ -96,6 +96,31 @@ export const webAccessConfigSchema = z
  */
 export const workflowsConfigSchema = z
   .strictObject({
+    source: z
+      .strictObject({
+        fileBytes: z
+          .number()
+          .int()
+          .positive()
+          .default(2 * 1024 ** 2),
+        files: z.number().int().positive().default(2000),
+        treeBytes: z
+          .number()
+          .int()
+          .positive()
+          .default(50 * 1024 ** 2),
+        historyBytes: z
+          .number()
+          .int()
+          .positive()
+          .default(100 * 1024 ** 2),
+        cacheBytes: z
+          .number()
+          .int()
+          .positive()
+          .default(512 * 1024 ** 2)
+      })
+      .prefault({}),
     /** Caps Workflow step jobs in each serving process; invalid values stop startup. */
     stepSlots: z.number().int().min(1).max(64).default(4),
     datasets: z

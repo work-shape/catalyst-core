@@ -21,7 +21,7 @@ import type { AssetWorkflowOptions } from "../types";
 //
 // Nothing here knows a kind of asset.
 
-type SaveContext = Pick<AssetWorkflowOptions, "clientInstanceId" | "stores" | "pages">;
+type SaveContext = Pick<AssetWorkflowOptions, "clientInstanceId" | "stores" | "pages" | "config">;
 
 /** Who the ledger names as the author of a commit: the opaque id of the caller. */
 function authorOf(actor: AuthenticatedIdentity): string {
@@ -62,6 +62,9 @@ export async function commitAssetFileSet(
     operationRunId: input.operationRunId,
     request: {
       store: "files",
+      ...(input.kind === "workflow"
+        ? { limits: { ...options.config.workflows.source, settingPrefix: "workflows.source" } }
+        : {}),
       files: input.fileSet.sourceFiles.map((file) => ({
         path: file.path,
         objectKey: fileSetFileObjectKey(owner, input.fileSet.id, "src", file.path),
@@ -92,7 +95,7 @@ export async function commitAssetFileSet(
     throw new AppError(
       "VALIDATION_FAILED",
       // The worker knows no kind. Here the sentence names what the person saved.
-      result.code === "history_too_large"
+      result.code === "history_too_large" && input.kind !== "workflow"
         ? `The stored history of this ${input.kind} has reached the limit of ${assetRepoMib(ASSET_REPO_MAX_BUNDLE_BYTES)}. Nothing was saved. Until history can be shortened, the way out is a new ${input.kind} from the current files.`
         : result.message,
       { reason: result.code, ...(result.path === undefined ? {} : { path: result.path }) },

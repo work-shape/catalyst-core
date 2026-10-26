@@ -67,11 +67,17 @@ export {
 export {
   WORKFLOW_CODE_DISK_BYTES,
   WORKFLOW_CODE_ERRORS,
-  WORKFLOW_CODE_FILE_MAX_BYTES,
   WORKFLOW_CODE_LANGUAGES,
   WORKFLOW_CODE_LOG_MAX_BYTES,
   WORKFLOW_CODE_STEP_EFFECT,
-  WORKFLOW_STEP_FILES_MAX_BYTES,
+  WORKFLOW_SOURCE_DEFAULTS,
+  codeEntry,
+  codeFileIssue,
+  sourcePathIssue,
+  workflowSourceIssues,
+  workflowSourcePathIssues,
+  type WorkflowSourceLimits,
+  type WorkflowSourceTree,
   codeStepIssues,
   noWorkflowStepFiles,
   stepFileBytes,
@@ -181,3 +187,5 @@ export {
   type WorkflowOutsideBlocker
 } from "./outside-reach";
 export { workflowOutsideIssues } from "./outside-reach";
+
+export { createWorkflowSourceCache } from "./source-cache";
