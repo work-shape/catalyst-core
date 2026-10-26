@@ -7,6 +7,44 @@ The entries of the next release are files in `changes/unreleased/`, one per chan
 adds such a file and does not edit this one (see "Changelog" in README.md). The release folds them
 in, and `pnpm changelog` prints the next release's section as it will read.
 
+## 0.8.0-rc.12 — 2026-10-26
+
+### Added
+
+- Capabilities: a capability gets the instance's name, accent colour and logo (`brand`) for a page it shows outside the instance; the logo comes as its bytes, read from where the release config points, against the instance's address.
+
+### Changed
+
+- A document source may list an item without a size (CS-16). The sync keeps 0 for it, the fetch's bytes decide, and a first pass that waits for its confirmation assumes a size per format for such items, so the estimate is not zero. The contract test kit checks the fetched bytes against the listed size only where the source lists one.
+- A catalogue entry whose tools and source parts reach the same host adds it to the egress list once.
+- `createPostgresCapabilityRecords` takes the `capability` it opens the records for and answers `access.problems`: each way its database role reaches beyond those records (superuser, `BYPASSRLS`, owner of the table, membership of another role, privileges on another table, column, sequence or schema, a definer function, a record of another capability). It no longer reads the migration ledger with a role that may not read it.
+- The deployment kit's policy check refuses an outside forms host in `docker-compose.prod.yml` that receives `DATABASE_URL`, `POSTGRES_USER` or `POSTGRES_PASSWORD`, sets a variable from `DATABASE_URL`, or has no `OUTSIDE_FORMS_DATABASE_URL`.
+- Operator runbook: the outside forms host's database role (Operate > Deployment). An instance that already runs the host creates the role and changes its Compose file before it deploys this release.
+- The name guard's test support tells customer names from accounting-vendor names. `deniedNames` and `scanProductSource` keep both out by default; a private repository may pass `vendors: false` / `vendorNames: false` so its packages can name the vendors they connect, while customer names stay banned everywhere.
+
+### Fixed
+
+- A personal API key no longer reaches a Connection's data through a surface other than an operation exposed to `outside`. `apps.try_action` refuses an API key or a service principal (`user_only`).
+- A test run of a Workflow draft started with a key carries the key into its steps, with the key's scopes. Each step's call then needs what the key's own call would need:
+  - A Connection operation, from an operation step or as an agent step's tool, needs exposure `outside` and `connection.use` on the key. It is refused with the same reasons as the key's direct call (`connection_exposure:outside`, `outside_key_scope`).
+  - A Data Store or Knowledge Base step needs the operation scope of its call. A key never carries `data_store_rows:*`, so these steps are refused (`outside_key_scope`).
+  - A revoked or expired key stops the run (`tester_key_unusable`).
+  - A draft without such a step test-runs with a key as before.
+- An agent step's worker in such a test run keeps acting for the key, so its tool calls are asked the same.
+- A call made for a key that another person approves runs with that key's scopes, and does not run once the key is revoked or expired. A call its own person confirms in their Inbox still runs as that person's own click.
+- For runs it did not start, an API credential (a key, or a service principal's) reads step outputs, code step logs, loop item labels, run labels, run keys and the result only with `workflow.read_run_data`. This applies to `workflows.list_step_runs`, `workflows.get_run`, `workflows.list_runs`, `workflows.cancel_run`, and to the run that `workflows.start` or `workflows.test` answers for a key another run already holds.
+- Without that right, a key may not list runs by `keyPrefix`, finds by `key` only a run it started itself, and `workflows.download_dataset` needs the run to be the key's own. A run records the key it was started with. A person signed in to the app reads what they read before.
+- `connections.source_folders`, `knowledge_bases.source_items` and `knowledge_bases.locate` refuse an API key (`connection_exposure:outside`): the names, paths and links of a source's folders and items belong to the outside system, and nothing exposes them to `outside`.
+- **Release:** The outside-forms capability package publishes its `skills` folder, which its capability reads at runtime. In 0.8.0-rc.11 the package was published without it, so the capability failed when assembled.
+- A workspace command whose sandbox could not start (`docker run` exiting 125 with the Docker client's own error, such as an image that cannot be pulled) is now a start failure of the sandbox, not the command's own exit. `workspace.exec` tells the agent with `details.reason` `sandbox_unavailable`, the command's id and time, and without the worker's cause, that the failure is the platform's and not the person's to fix. A lost worker or a runner error comes back the same way with `platform_error`, and no worker with `no_worker`.
+- The platform rules tell every agent to put a platform failure on the platform's operator with its time and id, never on the person in the conversation or a named contact. `platform.context`'s `helpContact` is for questions about the instance's content and access, never for a platform or infrastructure failure.
+- The platform orientation says that `platform.assets.operations` shows what the agent can call, not what an outside client (CLI, MCP, a personal key) can reach. Asked about an outside client, the agent opens its answer by saying that it depends on the Connection's "Outside clients" exposure and the key's scopes and that it has not checked them.
+- An Agent Run worker (`agentRunWorker: "separate"`) starts with `modules.apps` on without `CHAT_SESSION_TOKEN_SECRET` or `BETTER_AUTH_SECRET`. Only the API signs and checks the content tokens of Pages and Apps, so only the API derives their key; a worker still gets the `files` store and the same startup checks for it.
+
+### Database
+
+- Migration `0154_capability_records_row_security` turns on row-level security for `capability_records` with two policies: a permissive one that keeps every role's access as its grants give it, and a restrictive one that holds every session that logged in as, or switched to, a role whose name starts with `catalyst_outside_forms` to the rows of the capability `outside-forms`. The platform's role owns the table, or is a superuser, and is not subject to either. The migration creates no role and needs no `CREATEROLE`. A backup made by a role that neither owns the table nor is a superuser needs `pg_dump --enable-row-security`, or it stops at this table.
+
 ## 0.8.0-rc.11 — 2026-10-26
 
 ### Added
