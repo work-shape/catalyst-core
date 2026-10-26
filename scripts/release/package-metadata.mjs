@@ -75,6 +75,8 @@ const OVERRIDES = {
   },
   // Shell scripts, host files and Node checks, shipped as they are: nothing is built.
   "artifact-helpers": { files: ["dist", "skills"], sideEffects: undefined },
+  // Its capability reads the skill it ships at runtime from ../skills relative to dist/.
+  "outside-forms": { files: ["dist", "skills"] },
   "deployment-kit": {
     files: ["bin", "lib", "host", "verify", "dev", "docker"],
     sideEffects: undefined,
