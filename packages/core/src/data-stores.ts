@@ -437,16 +437,31 @@ const DATA_STORE_REFUSALS = {
   /** The store is below the migration level the App's manifest asks for. */
   data_store_below_min_schema: "CONFLICT",
   /** An action reaches a store the manifest of its App does not list. */
-  data_store_not_listed: "VALIDATION_FAILED"
+  data_store_not_listed: "VALIDATION_FAILED",
+  /** An App's publish names a store to publish with it that its revision's manifest does not bind. */
+  data_store_not_reached: "VALIDATION_FAILED",
+  /** The App needs a level of the store that the store's draft does not reach either. */
+  data_store_draft_below_min_schema: "CONFLICT",
+  /** A migration of a store published with an App failed, so the App did not go live. */
+  data_store_migration_failed: "CONFLICT",
+  /** A store published with an App was still migrating when the wait ran out. Retryable. */
+  data_store_migrating: "CONFLICT"
 } as const satisfies Record<string, AppErrorCode>;
 
 export type DataStoreRefusal = keyof typeof DATA_STORE_REFUSALS;
 
-/** What a refusal names beside the store: the two levels, or the action that reaches it. */
+/**
+ * What a refusal names beside the store: the two levels, the action that reaches it, or, for
+ * a publish with an App, the store's title, the migration that failed and why.
+ */
 interface DataStoreRefusalFacts {
   minSchema?: number;
   level?: number;
   action?: string;
+  title?: string;
+  migration?: string;
+  failure?: string;
+  retryable?: boolean;
 }
 
 const DATA_STORE_REFUSAL_SENTENCES: Record<
@@ -460,7 +475,15 @@ const DATA_STORE_REFUSAL_SENTENCES: Record<
   data_store_below_min_schema: (store, { minSchema, level }) =>
     `The App needs the Data Store '${store}' at migration level ${minSchema} (minSchema) and the store is at level ${level}. Publish the store's migrations first.`,
   data_store_not_listed: (store, { action }) =>
-    `The action '${action}' reaches the Data Store '${store}', which the manifest of its App does not list under 'dataStores'. An App reaches what its manifest names and nothing else.`
+    `The action '${action}' reaches the Data Store '${store}', which the manifest of its App does not list under 'dataStores'. An App reaches what its manifest names and nothing else.`,
+  data_store_not_reached: (store) =>
+    `The App's revision does not bind the Data Store '${store}' under 'dataStores', so it is not published with it. Name only the stores apps.publish_review lists.`,
+  data_store_draft_below_min_schema: (store, { minSchema, level }) =>
+    `The App needs the Data Store '${store}' at migration level ${minSchema} (minSchema) and the store's draft reaches only level ${level}. Add the migration to the store's draft, then publish the App with it.`,
+  data_store_migration_failed: (store, { migration, failure }) =>
+    `The migration '${migration}' of the Data Store '${store}' could not be applied, so neither the App nor its Workflows were published.${failure ? ` ${failure}` : ""} Fix the migration in the store's draft and publish the App with the store again.`,
+  data_store_migrating: (store, { level, minSchema }) =>
+    `The Data Store '${store}' is still applying its migrations (at level ${level}, the App needs ${minSchema}), so nothing else was published. Publish the App again in a minute.`
 };
 
 /**

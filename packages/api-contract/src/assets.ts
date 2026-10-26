@@ -61,6 +61,12 @@ const revisionNumberSchema = z.number().int().positive();
 export const APP_PUBLISH_WORKFLOWS_MAX = 20;
 
 /**
+ * How many Data Stores one publish of an App publishes with it at most: as many as a manifest
+ * may bind (`dataStores`, 100 entries), since each named store must be one the App binds.
+ */
+export const APP_PUBLISH_DATA_STORES_MAX = 100;
+
+/**
  * The revision a write was made against. Every write of an asset names one: the server
  * refuses a write without it with `PRECONDITION_REQUIRED` and never takes it as leave to
  * overwrite. The field is optional here only so that this refusal names the asset.
@@ -499,6 +505,17 @@ export const publishAssetRequestSchema = z.object({
   workflows: z
     .array(z.object({ name: z.string().min(1), revision: revisionNumberSchema }).strict())
     .max(APP_PUBLISH_WORKFLOWS_MAX)
+    .optional(),
+  /**
+   * Of an App only: the Data Store drafts this publish makes live with it (GOLIVE-1), each
+   * with the revision the person reviewed, as `apps.publish_review` lists them. Each must be
+   * a store the App's revision binds under `dataStores`. Each store is published first, in
+   * its own transaction, and its migrations applied; the App and its Workflows go live only
+   * once every store reached its level, and none of them where a migration fails.
+   */
+  dataStores: z
+    .array(z.object({ name: z.string().min(1), revision: revisionNumberSchema }).strict())
+    .max(APP_PUBLISH_DATA_STORES_MAX)
     .optional()
 });
 
@@ -514,11 +531,14 @@ export const assetPointersResponseSchema = z.object({
   publishedRevision: revisionNumberSchema,
   /** The revision that was published before a publish, left out on the first one. */
   replacedRevision: revisionNumberSchema.optional(),
-  /** The Workflows a publish of an App made live with it, in the order they were published. */
+  /**
+   * The Data Stores and Workflows a publish of an App made live with it, in the order they
+   * were published: the stores first.
+   */
   publishedWith: z
     .array(
       z.object({
-        kind: z.literal("workflow"),
+        kind: z.enum(["data_store", "workflow"]),
         name: z.string(),
         publishedRevision: revisionNumberSchema,
         replacedRevision: revisionNumberSchema.optional()

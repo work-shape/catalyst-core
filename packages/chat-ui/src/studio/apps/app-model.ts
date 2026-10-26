@@ -234,8 +234,9 @@ export function appRefusalText(error: unknown): TranslationKey | undefined {
 
 /**
  * The sentence of a refused publish, with what it names: a Workflow the App starts that is not
- * live, or an action whose mapping does not fit that Workflow (DP-0). Every other refusal is
- * one `appRefusalText` knows, or none.
+ * live, an action whose mapping does not fit that Workflow (DP-0), or a Data Store published
+ * with the App whose migration failed, is still migrating or whose draft is below the level the
+ * App needs (GOLIVE-1). Every other refusal is one `appRefusalText` knows, or none.
  */
 export function appPublishRefusal(
   error: unknown
@@ -246,10 +247,23 @@ export function appPublishRefusal(
     const value = field(details, name);
     return typeof value === "string" ? value : "";
   };
-  const values = { workflow: text("workflow"), action: text("action"), input: text("input") };
+  const values = {
+    workflow: text("workflow"),
+    action: text("action"),
+    input: text("input"),
+    // A store's refusal names it by its title, and by its id where it carries none.
+    title: text("title") || text("dataStore"),
+    migration: text("migration")
+  };
   switch (refusalReason(error)) {
     case "workflow_unavailable":
       return { key: "apps.publishWorkflowUnavailable", values };
+    case "data_store_migration_failed":
+      return { key: "apps.publishDataStoreMigrationFailed", values };
+    case "data_store_migrating":
+      return { key: "apps.publishDataStoreMigrating", values };
+    case "data_store_draft_below_min_schema":
+      return { key: "apps.publishDataStoreDraftBelowMinSchema", values };
     case "workflow_input_invalid":
       return {
         key:

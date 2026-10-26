@@ -1,11 +1,15 @@
+import { declaredDataStoresOf } from "@work-shape/catalyst-app-build";
 import {
   AppError,
+  DATA_STORE_ASSET_KIND,
   WORKFLOW_ASSET_KIND,
   appReachesDataStore,
+  dataStoreRefusalError,
   type AssetScope,
   type ConfigAssetRecord,
   type JsonObject
 } from "@work-shape/catalyst-core";
+import { z } from "zod";
 import type { AssetWorkflowOptions } from "../types";
 
 // The Workflows an App's revision reaches (DP-3): those its `workflow` actions name and,
@@ -127,4 +131,86 @@ export async function workflowsPublishedWith(
     const revision = revisions.get(name);
     return asset && revision !== undefined ? [{ name, revision, asset }] : [];
   });
+}
+
+/** A Data Store a publish of an App names to publish with it (GOLIVE-1). */
+export interface StorePublishedWith {
+  name: string;
+  revision: number;
+  asset: ConfigAssetRecord;
+  title: string;
+  /** The level the named revision brings the store to: the number of its last migration. */
+  level: number;
+  /** The names of the named revision's migrations, by number. */
+  migrations: ReadonlyMap<number, string>;
+}
+
+const storeMigrationsSchema = z.object({
+  migrations: z.array(z.object({ number: z.number(), name: z.string() }))
+});
+
+/** The migrations a revision of a Data Store holds, by number, and the last one's number. */
+export function storeMigrationsOf(config: unknown): {
+  level: number;
+  migrations: Map<number, string>;
+} {
+  const listed = storeMigrationsSchema.safeParse(config).data?.migrations ?? [];
+  return {
+    level: Math.max(0, ...listed.map(({ number }) => number)),
+    migrations: new Map(listed.map(({ number, name }) => [number, name]))
+  };
+}
+
+/**
+ * The Data Stores a publish of an App names to publish with it, checked against the App's
+ * revision: each once, bound by its manifest under `dataStores`, active where the App reaches
+ * it, and named at a revision that reaches the level the App asks of it. So no store is
+ * published for an App that could not use it.
+ */
+export async function dataStoresPublishedWith(
+  options: ClosureOptions,
+  app: { scope: AssetScope; config: JsonObject },
+  named: readonly { name: string; revision: number }[]
+): Promise<StorePublishedWith[]> {
+  const bound = new Map(
+    declaredDataStoresOf(app.config.manifest).map(({ name, minSchema }) => [name, minSchema])
+  );
+  const seen = new Set<string>();
+  const stores: StorePublishedWith[] = [];
+  for (const { name, revision } of named) {
+    if (seen.has(name)) {
+      throw new AppError("VALIDATION_FAILED", `The Data Store '${name}' is named twice`, {
+        reason: "data_store_named_twice",
+        dataStore: name
+      });
+    }
+    seen.add(name);
+    if (!bound.has(name)) throw dataStoreRefusalError("data_store_not_reached", name);
+    const asset = await options.configAssets.store.getConfigAsset({
+      clientInstanceId: options.clientInstanceId,
+      kind: DATA_STORE_ASSET_KIND,
+      name
+    });
+    if (asset?.status !== "active" || !appReachesDataStore(app.scope, asset.scope)) {
+      throw dataStoreRefusalError("data_store_unavailable", name);
+    }
+    const stored = await options.configAssets.store.getConfigAssetRevision({
+      clientInstanceId: options.clientInstanceId,
+      kind: DATA_STORE_ASSET_KIND,
+      name,
+      revision
+    });
+    const title = assetTitle(stored?.config, name);
+    const { level, migrations } = storeMigrationsOf(stored?.config);
+    const minSchema = bound.get(name);
+    if (stored?.config && minSchema !== undefined && level < minSchema) {
+      throw dataStoreRefusalError("data_store_draft_below_min_schema", name, {
+        title,
+        minSchema,
+        level
+      });
+    }
+    stores.push({ name, revision, asset, title, level, migrations });
+  }
+  return stores;
 }

@@ -195,8 +195,9 @@ export function PublishReviewBody({
 }
 
 /**
- * The Workflows an App's publish makes live with it (DP-3), children first: each with the
- * version it makes live and its own sentence. Approving approves them all.
+ * The Data Stores and Workflows an App's publish makes live with it (DP-3, GOLIVE-1), the
+ * stores first and the Workflows children first: each with the version it makes live and its
+ * own sentence. Approving approves them all.
  */
 function PublishedWith({ reviews }: { reviews: readonly PublishReview[] }) {
   const { t } = useTranslation();
@@ -208,7 +209,12 @@ function PublishedWith({ reviews }: { reviews: readonly PublishReview[] }) {
             <li key={review.name} className="grid min-w-0 gap-1" data-asset={review.name}>
               <span className="flex min-w-0 flex-wrap items-center gap-2">
                 <span className="wrap-anywhere">
-                  {t("operations.publishTogetherWorkflow", { title: review.title })}
+                  {t(
+                    review.kind === "data_store"
+                      ? "operations.publishTogetherDataStore"
+                      : "operations.publishTogetherWorkflow",
+                    { title: review.title }
+                  )}
                 </span>
                 <Badge tone={review.liveRevision === undefined ? "accent" : "neutral"}>
                   {review.liveRevision === undefined

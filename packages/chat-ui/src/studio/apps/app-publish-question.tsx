@@ -2,7 +2,13 @@ import { useEffect, useState } from "react";
 import { RadioGroup } from "@work-shape/catalyst-ui";
 import { instanceSentence, PendingApprovalError } from "../build-area/build-refusals";
 import { useTranslation, type TranslationContextValue } from "../../shared/i18n";
-import { useApp, useAppWrites, type AppAudience, type AppAudienceOffer } from "./app-data";
+import {
+  useApp,
+  useAppWrites,
+  type AppAudience,
+  type AppAudienceOffer,
+  type AppPublishNamed
+} from "./app-data";
 import {
   appDraftRevision,
   appDraftShown,
@@ -155,8 +161,8 @@ export interface AppPublishSend {
   send(
     revision: number,
     audience: AppAudience | undefined,
-    /** The Workflows the one Publish makes live with the App (DP-3). */
-    workflows?: readonly { name: string; revision: number }[]
+    /** The Data Stores and Workflows the one Publish makes live with the App (DP-3, GOLIVE-1). */
+    together?: AppPublishNamed
   ): Promise<"published" | "waits" | "failed">;
 }
 
@@ -171,11 +177,11 @@ export function useAppPublishSend(workspaceId: string, app: string): AppPublishS
     busy,
     error,
     waits,
-    send: async (revision, audience, workflows) => {
+    send: async (revision, audience, together) => {
       setBusy(true);
       setError(undefined);
       try {
-        await writes.publish(app, revision, audience, workflows);
+        await writes.publish(app, revision, audience, together);
         return "published";
       } catch (caught) {
         if (caught instanceof PendingApprovalError) {

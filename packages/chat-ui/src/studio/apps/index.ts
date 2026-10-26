@@ -46,6 +46,7 @@ export {
 } from "./app-model";
 export { AppPreviewNotice, appPreviewState } from "./app-preview";
 export { AppPublishDataView, AppStoredDataFact } from "./app-publish-data";
+export { appPublishTogetherNamed } from "./app-publish-together";
 export { AppToolsGroup, appsOfOwner, appToolsView, type AppToolsRead } from "./app-tools-group";
 export { AppView, AppViewFrame } from "./app-view";
 export { AppsHostProvider, type AppsHost } from "./apps-host";

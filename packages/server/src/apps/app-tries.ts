@@ -1,4 +1,4 @@
-import { compiledActionsOf } from "@work-shape/catalyst-app-build";
+import { compiledActionsOf, declaredDataStoresOf } from "@work-shape/catalyst-app-build";
 import {
   APP_ASSET_KIND,
   type AppPublishReview,
@@ -7,12 +7,16 @@ import {
 } from "@work-shape/catalyst-api-contract";
 import {
   AppError,
+  DATA_STORE_ASSET_KIND,
   WORKFLOW_ACTIONS,
+  appReachesDataStore,
   appWorkflowRefusalError,
+  dataStoreRefusalError,
   isAppError,
   isAuthenticatedServicePrincipal,
   isOutsideCall,
   type ActorAccess,
+  type AssetScope,
   type AuthenticatedIdentity,
   type ConfigAssetRecord,
   type JsonObject,
@@ -26,7 +30,7 @@ import { accessResource, decide } from "../assets/asset-access";
 import { AssetWorkflow } from "../assets/asset-service";
 import type { ResolvedChatServerOptions } from "../types";
 import type { AppActionCalls } from "./action-call";
-import { appWorkflowClosure, assetTitle, workflowPending } from "./app-closure";
+import { appWorkflowClosure, assetTitle, storeMigrationsOf, workflowPending } from "./app-closure";
 import { APP_ACTIONS, appWorkflowInputMisfit } from "./app-kind";
 import type { AppWorkflow } from "./app-service";
 
@@ -41,6 +45,12 @@ type ReviewItem = AppPublishReview["app"];
 /** Why a service principal or an API key is refused a try of an App's draft. */
 const TRY_NEEDS_A_PERSON =
   "Trying an App's draft needs a person signed in to the app; API keys cannot use it";
+
+/** What the review calls an asset of each kind in a sentence. */
+const KIND_NOUNS: Readonly<Record<string, string>> = {
+  [APP_ASSET_KIND]: "App",
+  [DATA_STORE_ASSET_KIND]: "Data Store"
+};
 
 /** How many of a Workflow's newest runs the review looks through for its last test run. */
 const RECENT_RUNS_READ = 50;
@@ -198,12 +208,66 @@ export class AppDraftTries {
         if (misfit) item.refusals.push(refusalOf(misfit));
       }
     }
+    const dataStores = config
+      ? await this.reviewStores(context, { scope: row.scope, config }, item)
+      : [];
     return {
       app: item,
       workflows,
+      dataStores,
       publishesTogether: true,
-      ready: [item, ...workflows].every(({ refusals }) => refusals.length === 0)
+      ready: [item, ...workflows, ...dataStores].every(({ refusals }) => refusals.length === 0)
     };
+  }
+
+  /**
+   * The Data Stores the App's draft binds whose draft is not published (GOLIVE-1), as one
+   * Publish of the App would publish them: each with its live level, the level the App asks of
+   * it and the migrations its draft would apply. A store whose draft does not reach that level
+   * either is refused, on its own line where it is pending and on the App's where it is not.
+   * Each is read with the reader's right to read it, as a Workflow is.
+   */
+  private async reviewStores(
+    context: OperationExecutionContext,
+    app: { scope: AssetScope; config: JsonObject },
+    appItem: ReviewItem
+  ): Promise<AppPublishReview["dataStores"]> {
+    const { clientInstanceId, configAssets, stores } = this.options;
+    const reviewed: AppPublishReview["dataStores"] = [];
+    for (const { name, minSchema } of declaredDataStoresOf(app.config.manifest)) {
+      const asset = await configAssets.store.getConfigAsset({
+        clientInstanceId,
+        kind: DATA_STORE_ASSET_KIND,
+        name
+      });
+      // The App's own publish refuses a store that is not there for it.
+      if (asset?.status !== "active" || !appReachesDataStore(app.scope, asset.scope)) continue;
+      const { item, config } = await this.item(context, asset);
+      const liveLevel =
+        (await stores.dataStores.getDataStore({ clientInstanceId, id: asset.id }))?.level ?? 0;
+      const draft = storeMigrationsOf(config);
+      if (config && minSchema !== undefined && draft.level < minSchema) {
+        const refusal = refusalOf(
+          dataStoreRefusalError("data_store_draft_below_min_schema", name, {
+            title: item.title,
+            minSchema,
+            level: draft.level
+          })
+        );
+        (item.pending ? item.refusals : appItem.refusals).push(refusal);
+      }
+      if (!item.pending) continue;
+      reviewed.push({
+        ...item,
+        liveLevel,
+        ...(minSchema === undefined ? {} : { minSchema }),
+        pendingMigrations: [...draft.migrations]
+          .filter(([number]) => number > liveLevel)
+          .sort(([a], [b]) => a - b)
+          .map(([, migration]) => migration)
+      });
+    }
+    return reviewed;
   }
 
   /**
@@ -267,7 +331,7 @@ export class AppDraftTries {
             reason: right.reason ?? "no_grant",
             message:
               right.message ??
-              `You may not publish the ${row.kind === APP_ASSET_KIND ? "App" : "Workflow"} '${row.name}'.`,
+              `You may not publish the ${KIND_NOUNS[row.kind] ?? "Workflow"} '${row.name}'.`,
             ...(right.action === undefined ? {} : { right: right.action })
           });
         }

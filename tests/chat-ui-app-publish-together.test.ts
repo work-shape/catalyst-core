@@ -1,6 +1,11 @@
 import { createElement, type ReactNode } from "react";
 import { describe, expect, it } from "vitest";
-import { appManifestSummary, PublishDialog } from "@work-shape/catalyst-chat-ui/apps";
+import {
+  appManifestSummary,
+  appPublishCall,
+  appPublishTogetherNamed,
+  PublishDialog
+} from "@work-shape/catalyst-chat-ui/apps";
 import { renderItem } from "./chat-ui-inbox-harness";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 
@@ -65,7 +70,24 @@ const dialog = (together: Together, locale: "en" | "de" = "en") =>
     }),
     locale
   );
-const ready = (workflows: Workflow[]): Together => ({ status: "ready", workflows, retry: noop });
+type Store = Together["dataStores"][number];
+const ready = (workflows: Workflow[], dataStores: Store[] = []): Together => ({
+  status: "ready",
+  workflows,
+  dataStores,
+  retry: noop
+});
+const store: Store = {
+  name: "pruefergebnisse",
+  title: "Prüfergebnisse",
+  draftRevision: 3,
+  publishedRevision: 2,
+  pending: true,
+  liveLevel: 1,
+  minSchema: 2,
+  pendingMigrations: ["add_status"],
+  refusals: []
+};
 
 describe("DP-3: the App's Publish question names what it makes live with the App", () => {
   it("lists each pending Workflow, children first, new or changed, its last author and test run", () => {
@@ -98,8 +120,10 @@ describe("DP-3: the App's Publish question names what it makes live with the App
   });
 
   it("holds Publish while the Workflows load, after their read failed, and while one would be refused", () => {
-    expect(held(dialog({ status: "loading", workflows: [], retry: noop }))).toBe(true);
-    const failed = dialog({ status: "failed", workflows: [], retry: noop });
+    expect(held(dialog({ status: "loading", workflows: [], dataStores: [], retry: noop }))).toBe(
+      true
+    );
+    const failed = dialog({ status: "failed", workflows: [], dataStores: [], retry: noop });
     expect(failed).toContain("What is published with the app could not be read.");
     expect(held(failed)).toBe(true);
     const refused = dialog(
@@ -121,9 +145,74 @@ describe("DP-3: the App's Publish question names what it makes live with the App
   });
 });
 
+describe("GOLIVE-1: the App's Publish question names the Data Stores it publishes with the App", () => {
+  it("lists the store after the Workflows, with the changes to its tables, in German", () => {
+    const markup = dialog(ready([parent], [store]), "de");
+    const line = at(markup, "Wird zusammen veröffentlicht");
+    expect(at(markup, "Datenspeicher „Prüfergebnisse“")).toBeGreaterThan(
+      at(markup, "Workflow „Visit log“")
+    );
+    expect(at(markup, "Workflow „Visit log“")).toBeGreaterThan(line);
+    expect(markup).toContain("1 neue Änderung der Tabellen");
+    expect(held(markup)).toBe(false);
+  });
+
+  it("counts several changes, and shows the line for a store alone", () => {
+    const markup = dialog(ready([], [{ ...store, pendingMigrations: ["a", "b"] }]));
+    expect(markup).toContain("Published with it");
+    expect(markup).toContain("Data store “Prüfergebnisse”");
+    expect(markup).toContain("2 new changes to its tables");
+  });
+
+  it("holds Publish and says why in German where the store's draft stays below what the App needs", () => {
+    const markup = dialog(
+      ready(
+        [],
+        [
+          {
+            ...store,
+            refusals: [
+              {
+                reason: "data_store_draft_below_min_schema",
+                message: "The App needs the Data Store 'pruefergebnisse' at migration level 3."
+              }
+            ]
+          }
+        ]
+      ),
+      "de"
+    );
+    expect(markup).toContain(
+      "Die App braucht eine neuere Fassung des Datenspeichers „Prüfergebnisse“, als sein Entwurf hat. Bitte den Agenten, den Datenspeicher zu ergänzen."
+    );
+    expect(held(markup)).toBe(true);
+  });
+
+  it("sends each store and Workflow with the revision shown", () => {
+    expect(appPublishTogetherNamed(ready([parent], [store]))).toEqual({
+      workflows: [{ name: "visit-log", revision: 1 }],
+      dataStores: [{ name: "pruefergebnisse", revision: 3 }]
+    });
+  });
+
+  it("reads the stores an agent's publish names, for its confirmation", () => {
+    expect(
+      appPublishCall({
+        operationId: "assets.publish",
+        inputPreview: {
+          kind: "app",
+          name: "visits",
+          revision: 4,
+          dataStores: [{ name: "pruefergebnisse", revision: 3 }]
+        }
+      })
+    ).toMatchObject({ workflows: [], dataStores: ["pruefergebnisse"] });
+  });
+});
+
 describe("DP-3: the Inbox item of a held App publish lists what it publishes with the App", () => {
   const review = (name: string, title: string, revision: number, liveRevision?: number) => ({
-    kind: name === "visits" ? "app" : "workflow",
+    kind: name === "visits" ? "app" : name === "pruefergebnisse" ? "data_store" : "workflow",
     name,
     title,
     revision,
@@ -148,6 +237,7 @@ describe("DP-3: the Inbox item of a held App publish lists what it publishes wit
           review: {
             ...review("visits", "Visits", 4, 3),
             publishedWith: [
+              review("pruefergebnisse", "Prüfergebnisse", 3, 2),
               review("visit-check", "Visit check", 3, 2),
               review("visit-log", "Visit log", 1)
             ]
@@ -163,12 +253,16 @@ describe("DP-3: the Inbox item of a held App publish lists what it publishes wit
     const list = at(markup, 'data-testid="publish-review-published-with"');
     const checkAt = at(markup, "Workflow “Visit check”");
     expect(checkAt).toBeGreaterThan(list);
-    expect(at(markup, "Version 3, in place of version 2")).toBeGreaterThan(checkAt);
+    expect(markup.indexOf("Version 3, in place of version 2", checkAt)).toBeGreaterThan(checkAt);
     expect(at(markup, "Workflow “Visit log”")).toBeGreaterThan(checkAt);
     expect(markup).toContain("Version 1, the first one published");
   });
 
-  it("says it in German", () => {
-    expect(item("de")).toContain("Wird zusammen veröffentlicht");
+  it("says it in German, and names a store published with the App as a data store first", () => {
+    const markup = item("de");
+    expect(markup).toContain("Wird zusammen veröffentlicht");
+    expect(at(markup, "Datenspeicher „Prüfergebnisse“")).toBeLessThan(
+      at(markup, "Workflow „Visit check“")
+    );
   });
 });

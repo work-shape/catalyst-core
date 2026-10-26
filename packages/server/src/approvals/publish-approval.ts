@@ -2,6 +2,8 @@ import { appAudienceSchema } from "@work-shape/catalyst-api-contract";
 import type { AppAudience } from "@work-shape/catalyst-core";
 import {
   AppError,
+  DATA_STORE_ACTIONS,
+  DATA_STORE_ASSET_KIND,
   WORKFLOW_ACTIONS,
   asCollaborationWorkspaceId,
   callerCanConfirm,
@@ -93,8 +95,9 @@ const publishedMemberSchema = publishedAssetSchema.extend({
 /** What a held publish is about, frozen when it is filed: the asset and its two pointers then. */
 const publishSubjectSchema = publishedAssetSchema.extend({
   /**
-   * The Workflows a publish of an App makes live with it (DP-3), children first. The request
-   * holds the set as one item: it moves when any of them moves.
+   * The Data Stores and Workflows a publish of an App makes live with it (DP-3, GOLIVE-1):
+   * the stores first, then the Workflows, children first. The request holds the set as one
+   * item: it moves when any of them moves.
    */
   publishedWith: z.array(publishedMemberSchema).optional(),
   audience: appAudienceSchema.optional(),
@@ -247,18 +250,29 @@ async function publishMoved(
 }
 
 /**
+ * The right on a member of a held publish whose kind has no approval of its own: a Data Store's
+ * publish is never held by itself, so whoever decides an App's publish that carries a store
+ * holds the right to publish that store (GOLIVE-1).
+ */
+const MEMBER_RIGHTS_WITHOUT_APPROVAL: Readonly<Record<string, PlatformAction>> = {
+  [DATA_STORE_ASSET_KIND]: DATA_STORE_ACTIONS.publish
+};
+
+/**
  * The rights a held publish asks of who decides it beside its own kind's: the `approve` right
- * of each asset published with it, on that asset (DP-3). A subject that cannot be read, or a
- * member of a kind whose publish is never held, throws: nobody decides such a request.
+ * of each asset published with it, on that asset (DP-3), and `data_store.publish` on each Data
+ * Store it publishes (GOLIVE-1). A subject that cannot be read, or a member of a kind none of
+ * these names, throws: nobody decides such a request.
  */
 export function publishMemberRights(subject: JsonObject): ApprovalFurtherRight[] {
   const parsed = publishSubjectSchema.safeParse(subject);
   if (!parsed.success) throw undecidable();
   return (parsed.data.publishedWith ?? []).map((member) => {
-    const approval = PUBLISH_APPROVALS[member.kind];
-    if (!approval) throw undecidable();
+    const permission =
+      PUBLISH_APPROVALS[member.kind]?.approve ?? MEMBER_RIGHTS_WITHOUT_APPROVAL[member.kind];
+    if (!permission) throw undecidable();
     return {
-      permission: approval.approve,
+      permission,
       resource: {
         kind: member.kind,
         name: member.name,

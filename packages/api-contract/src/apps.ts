@@ -312,6 +312,23 @@ export const appPublishReviewSchema = z.object({
     })
   ),
   /**
+   * The Data Stores the App's draft binds whose draft is not published (GOLIVE-1): one Publish
+   * of the App publishes each it names in `dataStores` first and applies its migrations. Each
+   * says the level the store is at, the level the App needs and the migrations it would apply.
+   */
+  dataStores: z
+    .array(
+      appPublishReviewItemSchema.extend({
+        /** The number of the last migration the store has applied. Zero before the first. */
+        liveLevel: z.number().int().nonnegative(),
+        /** The level the App's manifest asks of the store, where it asks one. */
+        minSchema: z.number().int().positive().optional(),
+        /** The names of the draft's migrations above the live level, in the order they apply. */
+        pendingMigrations: z.array(z.string())
+      })
+    )
+    .default([]),
+  /**
    * One Publish of the App also publishes the pending Workflow drafts it reaches, when the
    * publish names them in `workflows` (DP-3). Where false, each pending Workflow is published
    * before the App, by its own publish.

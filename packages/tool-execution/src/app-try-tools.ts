@@ -42,7 +42,7 @@ export function createAppTryTools(): AnyToolDefinition[] {
       title: { en: "Review App publish", de: "Veröffentlichung der App prüfen" },
       effect: "reading",
       description: [
-        "Read what publishing an App's draft comes to, changing nothing: the App and each Workflow its actions call, children first, whether each has a pending draft, the sentence its publish question leads with, and what would refuse each publish now. The conversation's subject App or one this conversation created.",
+        "Read what publishing an App's draft comes to, changing nothing: the App, each Workflow its actions call, children first, and each Data Store it binds with a pending draft and the migrations that would apply, whether each has a pending draft, the sentence its publish question leads with, and what would refuse each publish now. The conversation's subject App or one this conversation created.",
         "When the person wants it live and ready is true, call assets.publish with the App's draftRevision and each pending Workflow in workflows. Name every refusal and who can resolve it; never claim anything is live."
       ].join(" "),
       inputSchema: z.object({ app }),
