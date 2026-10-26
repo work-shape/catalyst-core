@@ -26,7 +26,11 @@ import type {
   CapabilityProcess,
   ClientInstanceCapabilityPlatformStores
 } from "@work-shape/catalyst-capability-sdk";
-import { capabilityStoresOf, createCapabilityMail } from "./capability-ports";
+import {
+  capabilityStoresOf,
+  createCapabilityBrand,
+  createCapabilityMail
+} from "./capability-ports";
 import {
   AppError,
   asCollaborationWorkspaceId,
@@ -407,6 +411,7 @@ export async function createClientInstanceExecutionAssembly(
       defaultFromName:
         config.infrastructure.mail?.sender.fromName ?? config.clientInstance.displayName
     }),
+    brand: createCapabilityBrand(config),
     scoped: (capability) =>
       capabilityStoresOf({
         clientInstanceId,
