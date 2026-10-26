@@ -81,6 +81,10 @@ A plain element without a rule of the App's own already has these colours. A rul
 
 Use fixed colours only where the person asks for a look of their own, such as a brand's. Such an App also sets `:root { color-scheme: light; }` (or `dark`), so that what the browser draws matches it whatever the interface's mode.
 
+Plain HTML gets room around the body, the interface's font and type sizes, and styles for headings, text, links, lists, code, tables, buttons and form fields: write plain elements and set no page margin, font or colour unless the App needs a look of its own. The platform's stylesheet for plain HTML defines no class, so the App's class names are its own. A rule of the App's own wins when it stands outside any `@layer` or in a layer the App names itself; do not write it into `@layer base` or `@layer components`. An App that sets a background sets the text colour with it.
+
+Which stylesheet an HTML file gets is decided per file by what its scripts import. A file with a script that imports `react`, `react/jsx-runtime`, `react-dom`, `react-dom/client`, `@work-shape/catalyst-app-kit/ui`, `@work-shape/catalyst-app-kit/router` or `@tanstack/react-router` gets the kit's component stylesheet and none of the styles for plain elements, so build such an App with React unless it must be HTML. Every other HTML file gets the styles for plain elements, also one whose script imports `@work-shape/catalyst-app-kit` for actions or the context, or `drawChart` from `@work-shape/catalyst-app-kit/charts`.
+
 ## Fonts and libraries
 
 Put fonts and libraries in the App's folder or use the kit's; an outside address (Google Fonts, Adobe Fonts or a CDN) will not load.

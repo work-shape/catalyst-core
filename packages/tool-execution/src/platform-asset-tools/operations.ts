@@ -53,17 +53,15 @@ export function createOperationsTool(calls: PlatformOperationsCalls): AnyToolDef
     icon: "guide",
     effect: operations.effect,
     description: [
-      "List the operations a step of a Workflow may call, as far as the person you act for may see them: the name a step writes under 'operation', its title and description, what it belongs to (its source's kind, and the source's title where the person may read it), whether it reads or changes and is available now, and its input and output as JSON Schema where it has one.",
-      "With 'for: app' it lists instead the operations of Connections that an App's connection action may call, each named 'connection.<connection>.<operation>': the action file writes the two parts as 'connection' and 'operation', and the effect as it is listed.",
-      "Each page holds at most 200 operations. Pass 'nextCursor' back as 'cursor', keeping 'for', 'name' and 'prefix' unchanged, until 'nextCursor' is absent. Filter by exact 'name' or by 'prefix', such as 'connection.crm.' or 'data_store.orders.', to find one Connection's or store's operations directly. Do this before concluding an operation does not exist. 'truncated' without 'nextCursor' means a source left operations out; it does not prove absence."
+      "List the operations a Workflow step may call, as far as the person may see them: the name a step writes under 'operation', title, description, source, whether it reads or changes and is available now, and its input and output JSON Schema.",
+      "With 'for: app' it lists the Connection operations an App's connection action may call, named 'connection.<connection>.<operation>'; the action file writes the two parts as 'connection' and 'operation', with the listed effect.",
+      "At most 200 a page: pass 'nextCursor' back as 'cursor' with the same filters until it is absent before you conclude an operation does not exist. Filter by exact 'name' or by 'prefix', such as 'connection.crm.'. 'truncated' without 'nextCursor' means a source left operations out; it proves no absence."
     ].join(" "),
     inputSchema: z.object({
       for: z
         .enum(OPERATIONS_AUDIENCES)
         .optional()
-        .describe(
-          "Who calls the operations: 'workflow' for a step of a Workflow (the default), 'app' for an App's connection action."
-        ),
+        .describe("'workflow' (the default) or 'app' for an App's connection action."),
       cursor: z.string().min(1).optional().describe("The previous page's nextCursor."),
       name: z.string().min(1).optional().describe("An exact full operation name."),
       prefix: z

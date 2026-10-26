@@ -176,11 +176,12 @@ describe("the platform's knowledge of an agent", () => {
     expect(
       (await offerFor(["read_skill"], { kind: "connection", name: "crm" }, true)).toolNames
     ).toContain("platform.connections.draft_tools");
-    expect(offered.orientation).toContain("never dump HTTP or YAML");
+    // What an agent without the tools says stands in the platform's rules, for every agent.
+    expect(offered.orientation).not.toContain("never dump HTTP or YAML");
   });
 
   // CS-5d: approved tools reach no agent before it is given them. The offer of that give goes
-  // with the drafting, and the orientation says the person's confirmation publishes the agent.
+  // with the drafting; the orientation says an agent calls them only once given them.
   it("offers the give of a Connection's tools to an agent with the drafting", async () => {
     const offered = await offerFor(PLATFORM_TOOLS, undefined, true);
     expect(offered.toolNames).toContain("platform.connections.offer_to_agent");
@@ -190,7 +191,9 @@ describe("the platform's knowledge of an agent", () => {
     expect(
       (await offerFor(["read_skill"], { kind: "connection", name: "crm" }, true)).toolNames
     ).toContain("platform.connections.offer_to_agent");
-    expect(offered.orientation).toContain("an agent can call them only after it is given them");
+    expect(offered.orientation).toContain(
+      "An agent calls a Connection's tools only once it is given them"
+    );
   });
 
   // ACCEPT-2c C-4: German replies said "technischer Primärschlüssel", "App-ID" and

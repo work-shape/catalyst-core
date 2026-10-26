@@ -36,18 +36,8 @@ function createShowViewInputSchema() {
       .describe(
         "Complete standalone HTML fragment or document to render for the user. Follow the layout, color, icon, and script rules in the tool description."
       ),
-    mode: z
-      .enum(TOOL_DISPLAY_MODES)
-      .default("inline")
-      .describe(
-        "Where the widget renders. Keep inline, the default, so it sits inside your answer."
-      ),
-    title: z
-      .string()
-      .min(1)
-      .max(160)
-      .describe("Optional short title for the rendered display.")
-      .optional()
+    mode: z.enum(TOOL_DISPLAY_MODES).default("inline").describe("Keep inline, the default."),
+    title: z.string().min(1).max(160).describe("A short title.").optional()
   });
 }
 

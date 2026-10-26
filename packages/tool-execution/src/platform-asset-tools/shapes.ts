@@ -107,7 +107,7 @@ export const issueSchema = z.object({
 export const configSchema = z
   .record(z.string(), z.unknown())
   .describe(
-    "The whole config as the read answered it under 'config', with your changes: every field it had, in the shape it had. What a config holds is decided by the kind of the asset, not by this tool."
+    "The whole config as read under 'config', with your changes: every field, in its shape."
   );
 const jsonObjectSchema = z.record(z.string(), z.unknown());
 
@@ -123,7 +123,7 @@ export const readOutputSchema = z.object({
   workspaceId: z.string().optional()
 });
 
-export const BOUND = `Without 'kind' and 'name' it works on the asset this conversation is about: open the asset with ${PLATFORM_ASSET_TOOLS.open.name} first, which makes it the one the conversation is about. With them it works on a draft this conversation created beside that asset, and on no other asset.`;
+export const BOUND = `Without 'kind' and 'name' it works on the asset this conversation is about (open one with ${PLATFORM_ASSET_TOOLS.open.name} first); with them, on a draft this conversation created, and on no other asset.`;
 
 export const kindSchema = z
   .string()

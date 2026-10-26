@@ -59,7 +59,7 @@ export function workspacePreviewImagesTool(deps: WorkspaceToolDependencies) {
     icon: "image",
     effect: "reading",
     description:
-      "Load bounded rendered preview images into model-visible visual context. This is how to check rendered output: images loaded here are never listed among the person's files, so render checks under /workspace/previews and promote with workspace.promote_artifact only the files the person should get. Give exactly one source: artifactId, path, or paths. Use path/paths for rendered image files under /workspace/previews, or artifactId with page/slide/sheet/range selectors for managed DOCX/XLSX/PPTX/PDF artifacts. The result reports pending, failed, or unsupported when pixels are not actually attached. Loaded images stay in visual context for the current turn only; call the tool again in a later turn to see them again.",
+      "Load rendered preview images so you can see them, to check rendered output. They are never listed among the person's files: render checks under /workspace/previews and promote with workspace.promote_artifact only what the person should get. Give exactly one source: artifactId, path, or paths. Use path or paths for images under /workspace/previews, or artifactId with page, slide, sheet or range selectors for a managed DOCX, XLSX, PPTX or PDF. The result says pending, failed or unsupported when no pixels are attached. Images stay visible for this turn only.",
     inputSchema: workspacePreviewImagesInputSchema,
     outputSchema: workspacePreviewImagesOutputSchema,
     inputJsonSchema: workspacePreviewImagesInputJsonSchema,
