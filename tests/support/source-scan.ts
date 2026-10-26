@@ -92,11 +92,15 @@ export interface SourceScan {
 /**
  * Reads the product source of a repository: `src` and `tools` of every package and client.
  * Name and personal-path guards also read package scripts and documentation, client widgets,
- * the deployment kit and the name guard itself. Customer vocabulary is compared through one-way hashes.
+ * the deployment kit and the name guard itself. Customer vocabulary is compared through one-way hashes;
+ * `vendorNames: false` lets a private repository's packages name the vendors they connect.
  * A provider's address belongs in its adapter and a secret is read by the resolver, so both
  * are searched for everywhere else.
  */
-export async function scanProductSource(repositoryRoot: string): Promise<SourceScan> {
+export async function scanProductSource(
+  repositoryRoot: string,
+  options: { vendorNames?: boolean } = {}
+): Promise<SourceScan> {
   const scan: SourceScan = {
     hostLiterals: [],
     computedEnvReads: [],
@@ -162,7 +166,8 @@ export async function scanProductSource(repositoryRoot: string): Promise<SourceS
   for (const file of [...nameFiles].sort()) {
     const path = relative(repositoryRoot, file).replaceAll("\\", "/");
     const text = await readFile(file, "utf8");
-    for (const name of deniedNames(text)) scan.customerNames.push(`${path} ${name}`);
+    for (const name of deniedNames(text, { vendors: options.vendorNames ?? true }))
+      scan.customerNames.push(`${path} ${name}`);
     if (!path.startsWith("clients/demo/")) {
       for (const match of text.matchAll(DEMO_TOOL_NAME)) {
         scan.demoToolNames.push(`${path} ${match[0]}`);
