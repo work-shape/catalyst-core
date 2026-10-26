@@ -402,6 +402,16 @@ describe("local workspace command runner", () => {
       status: "failed",
       error: { code: "handler_failed", details: { reason: "platform_error" } }
     });
+    // What the model reads: the platform's problem, not the person's input, to try again later,
+    // and no one named to fix it.
+    if (failed.status !== "failed") throw new Error("Expected a failed result");
+    expect(failed.error.message).toContain("the platform failed while running it");
+    expect(failed.error.message).toContain(
+      "a technical problem of the platform, not of the person's input"
+    );
+    expect(failed.error.message).toContain("suggest trying again later");
+    expect(failed.error.message).toContain("Do not name any person, administrator or contact");
+    expect(failed.error.message).not.toMatch(/operator|helpContact/iu);
     await expect(harness.commandExecutionDirectories()).resolves.toEqual([]);
   });
 

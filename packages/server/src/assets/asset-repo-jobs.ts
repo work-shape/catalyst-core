@@ -552,7 +552,7 @@ export function createAssetRepoCommitClient(
                     status: "failed",
                     reason: "no_worker",
                     message:
-                      "No workspace command worker takes commits to repositories on this instance. An operator has to start that worker. Nothing was saved."
+                      "No workspace command worker takes commits to repositories on this instance. This is a problem of the platform, not of the request; try again later. Nothing was saved."
                   }
                 : {
                     status: "failed",

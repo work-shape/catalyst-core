@@ -197,10 +197,10 @@ describe("the notice of a run that ended as failed or cancelled", () => {
     const silent = { ...interrupted, code: "AGENT_RUN_TOOL_SILENT", tool: "web.fetch" };
 
     expect(terminalRunNotice(notTaken, en)).toBe(
-      "The reply was stopped because code could not be run. Code execution is unavailable right now. Try again later or ask an administrator."
+      "The reply was stopped because code could not be run. Code execution is unavailable right now. This is a problem of the platform, not of your input. Try again later."
     );
     expect(terminalRunNotice(notTaken, de)).toBe(
-      "Die Antwort wurde gestoppt, weil Code gerade nicht ausgeführt werden kann. Versuche es später erneut oder wende dich an einen Administrator."
+      "Die Antwort wurde gestoppt, weil Code gerade nicht ausgeführt werden kann. Das ist ein Problem der Plattform, nicht deiner Eingabe. Versuche es später erneut."
     );
     expect(terminalRunNotice(silent, en)).toBe(
       "The reply was stopped: it waited for the tool web.fetch, which did not answer in time. Please send your message again."

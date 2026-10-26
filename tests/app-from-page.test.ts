@@ -304,7 +304,7 @@ describe("an App made from a Page", () => {
       status: "failed",
       reason: "command_missing",
       message:
-        "The runner image of this instance has no 'catalyst-asset-repo'. It is older than the release that keeps repositories; an operator has to roll out the runner image of this release."
+        "The runner image of this instance has no 'catalyst-asset-repo'. It is older than the release that keeps repositories: a problem of the platform, not of the request, solved by rolling out the runner image of this release."
     });
     const old = await setup({ commits: outdated });
     const refused = await create(old, await old.storePage("old image"), "old");

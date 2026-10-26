@@ -50,7 +50,7 @@ export async function editWorkspaceFile(
   if (!fileStore || !objectStore) {
     return failed(
       "handler_failed",
-      "This instance has no storage for workspace files, so workspace.edit_file cannot run. Tell the user; an operator has to configure it."
+      "This instance has no storage for workspace files, so workspace.edit_file cannot run. Tell the person this is a problem of the platform, not of their input, and name nobody as the one to fix it."
     );
   }
   const path = resolveTextFilePath(input.path, deps.limits);
