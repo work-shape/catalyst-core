@@ -29,6 +29,18 @@ if [[ "$1" == "compose" ]]; then
   while [[ "$1" == --profile || "$1" == --env-file || "$1" == -f ]]; do shift 2; done
   case "$1" in
     config)
+      if [[ "$2" == "--format" && "$3" == yaml ]]; then
+        cat <<'YAML'
+services:
+  api:
+    depends_on:
+      schema-setup:
+        condition: service_completed_successfully
+  schema-setup:
+    restart: "no"
+YAML
+        exit 0
+      fi
       [[ "$2" == "--services" ]] || exit 1
       services=(api doc-worker agent-run-worker artifact-preview-worker ui caddy)
       if [[ "${HOST_KNOWLEDGE_WORKER:-0}" == "1" ]]; then
@@ -43,7 +55,17 @@ if [[ "$1" == "compose" ]]; then
       done
       ;;
     ps)
-      service="$3"
+      if [[ "$2" == --all && $# == 3 ]]; then
+        # The full project has an auxiliary service outside the release image list.
+        if [[ ! -f "$state/agent-run-worker.started" ]]; then
+          echo postgres-new
+        else
+          echo api-new doc-worker-new agent-run-worker-new artifact-preview-worker-new ui-new caddy-new postgres-new schema-setup-new auxiliary-new
+          if [[ "$EXECUTION_WORKSPACES" == 1 ]]; then echo workspace-command-worker-new; fi
+        fi
+        exit 0
+      fi
+      service="${*: -1}"
       if [[ "$service" == "agent-run-worker" ]]; then
         [[ -f "$state/agent-run-worker.stopped" ]] || echo agent-run-worker-old
         [[ -f "$state/agent-run-worker.started" ]] && echo agent-run-worker-new
@@ -57,12 +79,20 @@ if [[ "$1" == "compose" ]]; then
     exec)
       # The upload check arrives as an argument; HOST_UPLOAD_CHECK=stuck makes it fail the way a
       # file nobody processes does. The job lookup that follows is answered from the queue.
-      if [[ " $* " == *" api sh -c "*"node --input-type=module -e"* ]]; then
-        [[ "$*" == *'externalUserId: "catalyst-deploy-check"'* && "${*: -1}" == "$IMAGE_TAG" ]] \
+      if [[ " $* " == *" doc-worker node -e "*"/ready"* ]]; then
+        attempt="$(cat "$state/ready-attempt" 2>/dev/null || echo 0)"
+        echo "$((attempt + 1))" > "$state/ready-attempt"
+        [[ "$attempt" -ge "${HOST_READY_FAILURES:-0}" ]] || { /bin/sleep 0.05; exit 1; }
+      elif [[ " $* " == *" api sh -c "*"node --input-type=module -e"* ]]; then
+        [[ "$*" == *'externalUserId: "catalyst-deploy-check"'* && "${*: -2:1}" == "$IMAGE_TAG" && "${*: -1}" == "${HOST_EXPECT_UPLOAD_TIMEOUT:-${UPLOAD_CHECK_TIMEOUT_SECONDS:-600}}" ]] \
           || { echo "the upload check was not sent with its release" >&2; exit 1; }
+        if [[ "${HOST_UPLOAD_CHECK:-}" == "pause" ]]; then
+          echo 'upload-check: processing: state=preprocessing, 600 s remaining'
+          until [[ -f "$state/finish-upload" ]]; do /bin/sleep 0.05; done
+        fi
         if [[ "${HOST_UPLOAD_CHECK:-}" == "stuck" ]]; then
           echo "upload-check: attachment=att_fixture"
-          echo 'upload-check: FAILED: the file was not processed within 60 s: its state is still "queued"'
+          echo 'upload-check: FAILED: the file was not processed within 600 s: its state is still "queued"'
           exit 1
         fi
         echo "upload-check: a file uploaded as catalyst-deploy-check was processed in 2.0 s"
@@ -77,7 +107,24 @@ fi
 case "$1" in
   inspect)
     container="$4"
-    if [[ "$3" == "{{index .Config.Cmd 1}}" && "$container" == "knowledge-worker-new" ]]; then
+    if [[ "$3" == *".RestartCount"* ]]; then
+      service="${container%-new}"
+      status=running restarts=0 code=0 health=none
+      [[ "$service" != postgres ]] || restarts="${HOST_BASELINE_RESTARTS:-0}"
+      if [[ "$service" == schema-setup ]]; then status=exited; fi
+      if [[ "$service" == "${HOST_FAIL_SERVICE:-}" && -f "$state/agent-run-worker.started" ]]; then
+        sample="$(cat "$state/$service.samples" 2>/dev/null || echo 0)"
+        echo "$((sample + 1))" > "$state/$service.samples"
+        if (( sample >= ${HOST_FAIL_AFTER_SAMPLE:-0} )); then
+          case "${HOST_FAIL_STATE:-}" in
+            restarted) restarts=$((restarts + 1)) ;;
+            unhealthy|starting) health="$HOST_FAIL_STATE" ;;
+            *) status="$HOST_FAIL_STATE"; code="${HOST_EXIT_CODE:-1}" ;;
+          esac
+        fi
+      fi
+      echo "$service $status $restarts $code $health"
+    elif [[ "$3" == "{{index .Config.Cmd 1}}" && "$container" == "knowledge-worker-new" ]]; then
       echo fixture/dist/knowledge-worker.js
     elif [[ "$3" == "{{.State.Running}}" ]]; then
       echo true
@@ -86,6 +133,14 @@ case "$1" in
     else
       echo "$(service_image "${container%-new}") true"
     fi
+    ;;
+  logs)
+    echo 'worker failed: missing configuration'
+    echo 'STORAGE_SECRET_KEY=fixture-storage-secret TOKEN="fixture token with spaces"'
+    echo '{"password":"fixture-password","apiKey":"fixture-api-key"}'
+    echo "credential='fixture credential' Authorization: Bearer fixture-bearer"
+    echo 'postgres://fixture-user:fixture-db-password@db/fixture'
+    echo 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJmaXh0dXJlIn0.signature'
     ;;
   stop) touch "$state/agent-run-worker.stopped" ;;
 esac

@@ -56,11 +56,28 @@ Node, jq and the AWS CLI run in containers or on the release machine, not on the
 A deploy sends the Compose file, the Caddyfile and the files under `host/` to the VM, then runs
 `lib/deploy-remote.sh` there: pull, back up the database server under `pre-deploy/` (a failed
 backup aborts before migrations), migrate, start the services, roll `agent-run-worker` with a
-drain, and fail unless every service runs the digest of the release.
+drain, and fail unless every service runs the digest of the release. It snapshots container restart
+counts before starting, then checks **every container in the Compose project** at 60 s and
+90 s after startup and again after the upload check. A restarting, exited, dead or paused
+container, a restart count that grew during deploy (including any restart of a new container),
+or a healthcheck that is not `healthy` fails the deploy. Historical restart counts are allowed.
+The failure names each service and prints its last 30 log lines with credential assignments,
+authorization headers, URL passwords and token-like values masked. Diagnostics go only to the
+operator's deploy output; the kit adds no retained log store or payload audit records.
+
+A service referenced by a Compose `depends_on` condition of `service_completed_successfully`
+is a one-shot: an exit of 0 is accepted, and a removed one-shot container need not exist. An
+exit with another code still fails. The exemption comes from the resolved Compose definition,
+including anchors, rather than the service name. Previous Agent Run workers being deliberately
+drained by this deploy remain exempt.
 
 The deploy ends with the upload check, `host/check-upload.mjs`, which runs inside the `api`
-container: it creates a conversation, uploads one small text file, waits up to 60 s until the
-file's state is `ready`, and deletes the file and the conversation again, also when it fails. A
+container: first it waits for the document worker's `/ready` endpoint inside that worker,
+then creates a conversation, uploads one small text file, waits until the file's state is
+`ready`, and deletes the file and the conversation again, also when it fails. Readiness and
+processing each have their own **600 s** timeout, independent of the **15 s** per HTTP request.
+Set `UPLOAD_CHECK_TIMEOUT_SECONDS` in the host's app env file to change both 600 s budgets.
+The check prints readiness retries and processing progress every 15 s as it runs. A
 file that is not processed fails the deploy with its state and with the job read from
 `platform_jobs`, for example `conversation_attachment.preprocess is queued, attempt 0 of 3`.
 The release keeps running; the deploy says that uploads do not work on it.

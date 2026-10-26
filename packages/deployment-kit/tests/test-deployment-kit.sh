@@ -506,7 +506,7 @@ run_remote_deploy() {
   local app_dir="$host/app" bin="$host/bin"
   mkdir -p "$app_dir" "$bin" "$host/state"
   cp "$fakes/host-docker" "$bin/docker"
-  printf '#!/usr/bin/env bash\nexit 0\n' > "$bin/sleep"
+  printf '#!/usr/bin/env bash\necho "sleep $*" >> "$HOST_LOG"\nexit 0\n' > "$bin/sleep"
   cat > "$bin/sudo" <<'SH'
 #!/usr/bin/env bash
 if [[ "$1" == "install" ]]; then
@@ -525,6 +525,9 @@ SH
   chmod +x "$bin"/* "$app_dir"/*.sh
   printf 'POSTGRES_DB=agent_chat\nPUBLIC_HOSTNAMES=a.example.test,b.example.test\nIMAGE_TAG=previous\n' \
     > "$host/app.env"
+  if [[ -n "${HOST_APP_UPLOAD_TIMEOUT:-}" ]]; then
+    printf 'UPLOAD_CHECK_TIMEOUT_SECONDS=%s\n' "$HOST_APP_UPLOAD_TIMEOUT" >> "$host/app.env"
+  fi
   # The command names the real host paths; point it at the scratch host instead.
   sed -e "s#REMOTE_APP_DIR=[^ ]*#REMOTE_APP_DIR=$app_dir#" \
     -e "s#REMOTE_ENV_FILE=[^ ]*#REMOTE_ENV_FILE=$host/app.env#" \
@@ -533,7 +536,7 @@ SH
   if [[ "${HOST_MINIMAL_PATH:-0}" == "1" ]]; then
     # Only Ubuntu base utilities and Docker; no jq, Node, Python, gh or AWS CLI.
     local tool
-    for tool in bash chmod awk mktemp cp rm sed grep wc tr nohup sh cat touch; do
+    for tool in bash chmod awk mktemp cp rm sed grep wc tr nohup sh cat touch tee tail; do
       ln -s "$(command -v "$tool")" "$bin/$tool"
     done
     host_path="$bin"
@@ -624,7 +627,7 @@ test_remote_deploy() {
   assert_contains "$host/output" \
     "upload-check: job of the file: conversation_attachment.preprocess is queued, attempt 0 of 3"
   assert_contains "$host/output" "The upload check failed: $release runs"
-  assert_contains "$host/log" "logs --tail=50 doc-worker"
+  assert_contains "$host/log" "logs --tail=30 doc-worker"
 
   # Without execution workspaces neither the worker nor the runner is touched.
   has_host_bash "the deploy without execution workspaces" || return 0
@@ -644,6 +647,95 @@ test_remote_deploy() {
   assert_not_contains "$host/log" "workspace-command-worker"
 }
 
+# Inspect every project service, including a healthy-looking worker that restarted and an
+# auxiliary container not named in require_release_image. Existing historical counts are OK.
+test_remote_service_health() {
+  local capture="$scratch/deploy-capture" host service state
+  for state in restarting exited unhealthy starting restarted; do
+    host="$scratch/health-$state"
+    if run_remote_deploy "$capture" "$host" HOST_FAIL_SERVICE=workspace-command-worker "HOST_FAIL_STATE=$state"; then
+      fail "deploy accepted worker state $state"
+    fi
+    assert_contains "$host/output" "Service workspace-command-worker"
+    assert_contains "$host/output" "worker failed: missing configuration"
+    assert_contains "$host/log" "logs --tail=30 workspace-command-worker-new"
+    assert_not_contains "$host/output" "fixture-storage-secret"
+    assert_not_contains "$host/output" "fixture token"
+    assert_not_contains "$host/output" "fixture-password"
+    assert_not_contains "$host/output" "fixture-api-key"
+    assert_not_contains "$host/output" "fixture credential"
+    assert_not_contains "$host/output" "fixture-bearer"
+    assert_not_contains "$host/output" "fixture-db-password"
+    assert_not_contains "$host/output" "eyJhbGci"
+  done
+  for service in auxiliary caddy postgres schema-setup; do
+    host="$scratch/health-$service"
+    if run_remote_deploy "$capture" "$host" "HOST_FAIL_SERVICE=$service" HOST_FAIL_STATE=exited; then
+      fail "deploy accepted exited $service"
+    fi
+    assert_contains "$host/output" "Service $service"
+  done
+  # Exit 0 only exempts the explicitly completed dependency, not a name/restart=no.
+  host="$scratch/health-exit-zero"
+  if run_remote_deploy "$capture" "$host" HOST_FAIL_SERVICE=auxiliary HOST_FAIL_STATE=exited HOST_EXIT_CODE=0; then
+    fail "deploy accepted an ordinary service that exited zero"
+  fi
+  # Second sample and final post-upload sample both enforce the original restart baseline.
+  for sample in 1 2; do
+    host="$scratch/health-late-$sample"
+    if run_remote_deploy "$capture" "$host" HOST_FAIL_SERVICE=workspace-command-worker HOST_FAIL_STATE=restarted "HOST_FAIL_AFTER_SAMPLE=$sample"; then
+      fail "deploy missed restart at sample $sample"
+    fi
+    assert_contains "$host/output" "restart count grew from 0 to 1"
+    assert_contains "$host/log" "sleep 60"
+    assert_contains "$host/log" "sleep 30"
+  done
+  host="$scratch/health-historical"
+  run_remote_deploy "$capture" "$host" HOST_BASELINE_RESTARTS=4 \
+    || { cat "$host/output" >&2; fail "historical restarts failed deploy"; }
+  host="$scratch/health-baseline-growth"
+  if run_remote_deploy "$capture" "$host" HOST_BASELINE_RESTARTS=4 HOST_FAIL_SERVICE=postgres HOST_FAIL_STATE=restarted; then
+    fail "deploy missed restart of unchanged postgres"
+  fi
+  assert_contains "$host/output" "restart count grew from 4 to 5"
+}
+
+test_remote_upload_readiness() {
+  local capture="$scratch/deploy-capture" host="$scratch/upload-readiness"
+  HOST_APP_UPLOAD_TIMEOUT=720 run_remote_deploy "$capture" "$host" HOST_READY_FAILURES=2 HOST_EXPECT_UPLOAD_TIMEOUT=720 \
+    || { cat "$host/output" >&2; fail "upload readiness retry failed"; }
+  assert_contains "$host/output" "doc-worker not ready after"
+  assert_contains "$host/output" "doc-worker is ready; processing timeout is 720 s"
+  [[ "$(cat "$host/state/ready-attempt")" == 3 ]] || fail "readiness was not polled before upload"
+  (( $(line_of "$host/log" "sleep 5") < $(line_of "$host/log" "api sh -c") )) \
+    || fail "upload started before readiness"
+  host="$scratch/upload-readiness-timeout"
+  # The fake probe sleeps for real here so Bash's SECONDS deadline advances.
+  if run_remote_deploy "$capture" "$host" HOST_READY_FAILURES=100000 UPLOAD_CHECK_TIMEOUT_SECONDS=1; then
+    fail "deploy accepted a document worker that never became ready"
+  fi
+  assert_contains "$host/output" "readiness timed out after 1 s"
+  assert_not_contains "$host/log" "api sh -c"
+}
+
+test_remote_upload_progress() {
+  local capture="$scratch/deploy-capture" host="$scratch/upload-stream" deploy_pid observed=0
+  run_remote_deploy "$capture" "$host" HOST_UPLOAD_CHECK=pause &
+  deploy_pid=$!
+  for _ in $(seq 100); do
+    if [[ -f "$host/output" ]] && grep -Fq 'processing: state=preprocessing' "$host/output"; then
+      observed=1
+      break
+    fi
+    command sleep 0.1
+  done
+  # Always unblock and reap the deploy, including when progress was buffered.
+  mkdir -p "$host/state"
+  touch "$host/state/finish-upload"
+  wait "$deploy_pid" || { cat "$host/output" >&2; fail "streamed upload check failed"; }
+  [[ "$observed" == 1 ]] || fail "upload progress was buffered until the check finished"
+}
+
 # Runs host/check-upload.mjs against the fake API in mode $2, as the deploy does: the script
 # as the argument of "-e", the credential ($3, default the fixture's) on stdin. Output and API
 # log land in $1.
@@ -655,8 +747,11 @@ run_upload_check() {
   node "$kit_dir/tests/support/upload-api.mjs" "$mode" "$dir/api.log" "$dir/port" &
   api=$!
   for _ in $(seq 50); do [[ -s "$dir/port" ]] && break; command sleep 0.1; done
-  printf '%s' "$credential" | node --input-type=module -e "$(cat "$kit_dir/host/check-upload.mjs")" -- \
-    --release=staging-2026.10.06-1 --wait=1 "--api=http://127.0.0.1:$(cat "$dir/port")" \
+  local wait_option=(--release=staging-2026.10.06-1) node_options=(--input-type=module)
+  if [[ "${4:-}" != default ]]; then wait_option+=("--wait=${4:-1}"); fi
+  if [[ "$mode" == slow ]]; then node_options+=(--import "$kit_dir/tests/support/upload-clock.mjs"); fi
+  printf '%s' "$credential" | node "${node_options[@]}" -e "$(cat "$kit_dir/host/check-upload.mjs")" -- \
+    "${wait_option[@]}" "--api=http://127.0.0.1:$(cat "$dir/port")" \
     > "$dir/output" 2>&1 || status=$?
   kill "$api" 2> /dev/null || true
   wait "$api" 2> /dev/null || true
@@ -697,6 +792,7 @@ test_upload_check() {
   # with the two conversation scopes, and everything it made is deleted.
   run_upload_check "$dir/ready" ready || { cat "$dir/ready/output" >&2; fail "upload check failed"; }
   assert_contains "$dir/ready/output" "upload-check: a file uploaded as catalyst-deploy-check was processed"
+  assert_contains "$dir/ready/output" "processing: state=preprocessing"
   assert_contains "$dir/ready/api.log" "POST /api/v1/instance/session-tokens server-credential"
   assert_contains "$dir/ready/api.log" "token for catalyst-deploy-check with conversation:read,conversation:write"
   assert_contains "$dir/ready/api.log" "title Deploy check staging-2026.10.06-1 (synthetic, safe to delete)"
@@ -704,6 +800,18 @@ test_upload_check() {
   assert_contains "$dir/ready/api.log" "DELETE /api/v1/conversations/conv_fixture/draft-attachments/att_fixture"
   assert_contains "$dir/ready/api.log" "$removed"
   assert_not_contains "$dir/ready/output" "fixture-credential"
+
+  # First processing after a deploy took seven minutes. The default must accommodate it;
+  # the old 60 s budget still times out under exactly the same accelerated fake clock.
+  run_upload_check "$dir/slow-default" slow fixture-credential default \
+    || { cat "$dir/slow-default/output" >&2; fail "default timeout rejected seven-minute processing"; }
+  assert_contains "$dir/slow-default/output" "waiting up to 600 s"
+  assert_contains "$dir/slow-default/output" "processing: state=preprocessing"
+  if run_upload_check "$dir/slow-short" slow fixture-credential 60; then
+    fail "the short processing timeout was ignored"
+  fi
+  assert_contains "$dir/slow-short/output" "not processed within 60 s"
+  assert_contains "$dir/slow-short/api.log" "$removed"
 
   # A file nobody processes fails after the wait, names its state and the attachment for the
   # job lookup, and is removed all the same. So is one whose processing failed.
@@ -1064,6 +1172,9 @@ test_deploy
 test_remote_deploy
 test_remote_deploy_without_jq
 test_remote_deploy_streaming_services
+test_remote_service_health
+test_remote_upload_readiness
+test_remote_upload_progress
 test_upload_check
 test_host_backup_scripts
 test_deployment_policy

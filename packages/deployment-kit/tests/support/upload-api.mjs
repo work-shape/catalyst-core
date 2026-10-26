@@ -55,7 +55,7 @@ const server = createServer(async (request, response) => {
     const status =
       mode === "stuck"
         ? "queued"
-        : reads < 2
+        : reads < (mode === "slow" ? 8 : 2)
           ? "preprocessing"
           : mode === "failed"
             ? "failed"
