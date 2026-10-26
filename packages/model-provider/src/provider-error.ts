@@ -1,4 +1,4 @@
-import { isRecord } from "@work-shape/catalyst-core";
+import { isRecord, retryAfterSeconds } from "@work-shape/catalyst-core";
 import { boundProviderMessage } from "./model-provider-error";
 
 export function readProviderErrorMetadata(
@@ -49,14 +49,8 @@ export function isEncryptedContentRejected(payload: unknown): boolean {
   );
 }
 
-/** `Retry-After` is a number of seconds or an HTTP date; a date in the past means no wait. */
+/** Keep the shared parser's advice in the milliseconds the model retry loop uses. */
 function retryAfter(value: string | null | undefined): { retryAfterMs?: number } {
-  const text = value?.trim();
-  if (!text) {
-    return {};
-  }
-  const retryAfterMs = /^\d{1,9}$/u.test(text)
-    ? Number(text) * 1000
-    : Date.parse(text) - Date.now();
-  return Number.isFinite(retryAfterMs) ? { retryAfterMs: Math.max(0, retryAfterMs) } : {};
+  const seconds = retryAfterSeconds(value ?? undefined);
+  return seconds === undefined ? {} : { retryAfterMs: seconds * 1000 };
 }

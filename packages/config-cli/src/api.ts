@@ -1,3 +1,4 @@
+import { setTimeout as defaultSleep } from "node:timers/promises";
 import { randomUUID } from "node:crypto";
 import {
   MAX_LIST_LIMIT,
@@ -194,10 +195,6 @@ const CHANGE_RETRY_DELAY_MS = 500;
 const READ_ATTEMPTS = 5;
 /** The longest one wait for the rate limit. A longer one is reported instead. */
 const MAX_RATE_LIMIT_WAIT_SECONDS = 60;
-
-function defaultSleep(milliseconds: number): Promise<void> {
-  return new Promise((resolveSleep) => setTimeout(resolveSleep, milliseconds));
-}
 
 /** A reading call. Over the rate limit it waits as long as the instance says and asks again. */
 async function read<Output>(

@@ -1,3 +1,4 @@
+import { setTimeout as delay } from "node:timers/promises";
 import { previewForTurn } from "./agent-preview";
 import { auditActorFromUser } from "@work-shape/catalyst-core";
 import {
@@ -677,8 +678,4 @@ export class RunStartWorkflow {
     }
     return message;
   }
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }

@@ -1,3 +1,4 @@
+import { setTimeout } from "node:timers/promises";
 import {
   defineJobHandler,
   type ClientInstanceId,
@@ -154,9 +155,7 @@ export function createCodeStepJobs(options: CodeStepJobsOptions): CodeStepJobs {
         let over = false;
         const watch = async (): Promise<void> => {
           while (!over && !stop.signal.aborted) {
-            await new Promise((resolve) =>
-              setTimeout(resolve, options.cancelCheckMs ?? CANCEL_CHECK_MS)
-            );
+            await setTimeout(options.cancelCheckMs ?? CANCEL_CHECK_MS);
             if (over) return;
             const still = await stores.workflowRuns.readStagedCode(ref).catch(() => staged);
             if (!still) stop.abort(new Error("The step run was cancelled"));

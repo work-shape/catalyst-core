@@ -1,3 +1,4 @@
+import { setTimeout } from "node:timers/promises";
 import { createHash } from "node:crypto";
 import {
   htmlTitle,
@@ -542,7 +543,7 @@ export function createPageBuildClient(
             }
             continue;
           }
-          await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+          await setTimeout(pollIntervalMs);
         }
       } finally {
         await options.stores.pages.deletePageBuild(address).catch(() => undefined);
