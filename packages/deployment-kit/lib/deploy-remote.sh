@@ -21,6 +21,93 @@ compose() {
     "$@"
 }
 
+# Logs are diagnostic output only: never print credentials from a failed process.
+mask_secrets() {
+  local diagnostic_line
+  # A line at a time keeps the progress stream live even on hosts without stdbuf/sed -u.
+  while IFS= read -r diagnostic_line || [[ -n "$diagnostic_line" ]]; do
+    printf '%s\n' "$diagnostic_line" | sed -E \
+      -e '/^upload-check: attachment=[A-Za-z0-9_-]+$/b' \
+      -e 's/(Bearer|Basic)[[:space:]]+[^[:space:]",;]+/\1 [REDACTED]/Ig' \
+      -e 's/(([^[:space:]:=,{}]*)(secret|token|password|credential|authorization|api[_-]?key|access[_-]?key|private[_-]?key)[^[:space:]:=,{}]*["'"'"']?[[:space:]]*[:=][[:space:]]*)("[^"]*"|'"'"'[^'"'"']*'"'"'|[^[:space:],;}]+)/\1[REDACTED]/Ig' \
+      -e 's#(://)[^/@[:space:]]+:[^/@[:space:]]+@#\1[REDACTED]@#g' \
+      -e 's/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/[REDACTED]/g' \
+      -e 's/[A-Za-z0-9_+\/-]{32,}={0,2}/[REDACTED]/g'
+  done
+}
+
+service_failure() {
+  local service="$1" id="$2" reason="$3"
+  echo "Service $service ($id) failed deploy check: $reason" >&2
+  docker logs --tail=30 "$id" 2>&1 | mask_secrets >&2 || true
+}
+
+# Snapshot before pull/start: an unchanged container must not hide a restart during deploy.
+restart_counts=""
+container_state_format='{{index .Config.Labels "com.docker.compose.service"}} {{.State.Status}} {{.RestartCount}} {{.State.ExitCode}} {{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}'
+record_restart_counts() {
+  local ids id service state restarts code health
+  ids="$(compose ps --all -q)"
+  for id in $ids; do
+    read -r service state restarts code health <<< "$(docker inspect -f "$container_state_format" "$id")"
+    printf '%s %s\n' "$id" "$restarts"
+  done
+}
+restart_counts="$(record_restart_counts)"
+
+# Compose emits canonical YAML (not the source YAML). A dependency explicitly required to
+# complete successfully is a one-shot, including when `compose run --rm` has removed it.
+# Do not infer this from a service name or restart policy (which defaults to "no").
+one_shot_services="$(compose config --format yaml | awk '
+  /^services:$/ { services = 1; next }
+  /^[^ ]/ { services = 0 }
+  services && /^    depends_on:$/ { dependencies = 1; next }
+  /^    [^ ]/ { dependencies = 0 }
+  dependencies && /^      [^ ]+:$/ { dependency = $1; sub(/:$/, "", dependency) }
+  dependencies && /^        condition: service_completed_successfully$/ { print dependency }
+')"
+
+check_project_services() {
+  local ids id service state restarts code health baseline reason failed=0
+  ids="$(compose ps --all -q)"
+  if [[ -z "$ids" ]]; then
+    echo "Deploy check found no containers in the Compose project" >&2
+    return 1
+  fi
+  for id in $ids; do
+    # Previous Agent Run workers deliberately exit while draining beside their replacements.
+    if grep -q -x -F -e "$id" <<< "$draining_ids"; then continue; fi
+    read -r service state restarts code health <<< "$(docker inspect -f "$container_state_format" "$id")"
+    baseline="$(awk -v id="$id" '$1 == id { print $2 }' <<< "$restart_counts")"
+    baseline="${baseline:-0}"
+    reason=""
+    if (( restarts > baseline )); then
+      reason="restart count grew from $baseline to $restarts during deploy"
+    elif [[ "$state" == exited && "$code" == 0 ]] && grep -q -x -F -e "$service" <<< "$one_shot_services"; then
+      continue
+    elif [[ "$state" != running ]]; then
+      reason="state=$state, exit code=$code"
+    elif [[ "$health" != none && "$health" != healthy ]]; then
+      reason="health=$health"
+    fi
+    if [[ -n "$reason" ]]; then
+      service_failure "$service" "$id" "$reason"
+      failed=1
+    fi
+  done
+  return "$failed"
+}
+
+# Two observations after startup (60 s and 90 s) catch workers that briefly look alive.
+settle_project_services() {
+  echo "Deploy check: allowing services to settle for 60 s"
+  sleep 60
+  check_project_services
+  echo "Deploy check: observing services for another 30 s"
+  sleep 30
+  check_project_services
+}
+
 # Replaces agent-run-worker without a claim gap: the new worker starts and is verified
 # before the old one gets SIGTERM. The old worker then drains its active runs in the
 # background (up to its stop_grace_period) while the new one claims queued runs.
@@ -44,7 +131,7 @@ roll_agent_run_worker() {
   for id in $new_ids; do
     if [[ "$(docker inspect -f '{{.State.Running}}' "$id")" != "true" ]]; then
       echo "New agent-run-worker container is not running: $id" >&2
-      docker logs --tail=100 "$id" >&2 || true
+      service_failure agent-run-worker "$id" "new container is not running"
       exit 1
     fi
   done
@@ -75,13 +162,14 @@ require_release_image() {
       echo "Service $service is not running the release image:" >&2
       echo "  expected: $expected" >&2
       echo "  actual:   ${actual% *} (running: ${actual##* })" >&2
+      service_failure "$service" "$id" "release image mismatch or container is not running"
       exit 1
     fi
     checked=$((checked + 1))
   done
   if [[ "$checked" -eq 0 ]]; then
     echo "Service $service has no running container on the release image" >&2
-    compose logs --tail=100 "$service" >&2 || true
+    compose logs --tail=30 "$service" 2>&1 | mask_secrets >&2 || true
     exit 1
   fi
 }
@@ -216,6 +304,7 @@ if [[ -n "$knowledge_worker_service" ]]; then
   knowledge_worker_entry="$(docker inspect -f '{{index .Config.Cmd 1}}' "$knowledge_worker_id")"
   compose exec -T knowledge-worker node "$knowledge_worker_entry" --check-ready < /dev/null
 fi
+settle_project_services
 echo "All services run the images of $IMAGE_TAG."
 
 # The services run; now a file has to get through them. check-upload.mjs uploads one synthetic
@@ -224,16 +313,40 @@ echo "All services run the images of $IMAGE_TAG."
 # shell pipes the credential to it, so it is in no argument list and not in this script's
 # environment. When the file is not processed, the job that should have done it is read from
 # the queue, so the failure names the job kind and the state it is in.
-upload_check_output=""
+upload_check_timeout="${UPLOAD_CHECK_TIMEOUT_SECONDS:-$(read_env_file_value UPLOAD_CHECK_TIMEOUT_SECONDS)}"
+upload_check_timeout="${upload_check_timeout:-600}"
+if [[ ! "$upload_check_timeout" =~ ^[1-9][0-9]*$ ]]; then
+  echo "UPLOAD_CHECK_TIMEOUT_SECONDS must be a positive integer" >&2
+  exit 1
+fi
+# Poll in the worker's own network namespace, without a credential or exposing its port.
+# Readiness and processing each get this timeout; neither is the 15 s HTTP request timeout.
+echo "upload-check: waiting for doc-worker /ready (up to $upload_check_timeout s)"
+ready_started=$SECONDS
+until compose exec -T doc-worker node -e \
+  'fetch(`http://127.0.0.1:${process.env.PORT || 4110}/ready`, {signal: AbortSignal.timeout(15000)}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))' \
+  < /dev/null > /dev/null 2>&1; do
+  if (( SECONDS - ready_started >= upload_check_timeout )); then
+    id="$(compose ps --all -q doc-worker)"
+    service_failure doc-worker "$id" "readiness timed out after $upload_check_timeout s"
+    exit 1
+  fi
+  echo "upload-check: doc-worker not ready after $((SECONDS - ready_started)) s; waiting"
+  sleep 5
+done
+echo "upload-check: doc-worker is ready; processing timeout is $upload_check_timeout s"
+upload_check_output="$(mktemp)"
+trap 'rm -f "$upload_check_output"' EXIT
+# Stream progress while retaining only masked output for the attachment/job lookup.
 # shellcheck disable=SC2016
-if upload_check_output="$(compose exec -T api sh -c \
-  'printf %s "$CHAT_SERVER_CREDENTIAL" | node --input-type=module -e "$1" -- "--release=$2"' \
-  sh "$(cat "$REMOTE_APP_DIR/check-upload.mjs")" "$IMAGE_TAG" < /dev/null 2>&1)"; then
-  printf '%s\n' "$upload_check_output"
+if compose exec -T api sh -c \
+  'printf %s "$CHAT_SERVER_CREDENTIAL" | node --input-type=module -e "$1" -- "--release=$2" "--wait=$3"' \
+  sh "$(cat "$REMOTE_APP_DIR/check-upload.mjs")" "$IMAGE_TAG" "$upload_check_timeout" < /dev/null 2>&1 \
+  | mask_secrets | tee "$upload_check_output"; then
+  check_project_services
 else
-  printf '%s\n' "$upload_check_output" >&2
   attachment_id="$(sed -n 's/^upload-check: attachment=\([A-Za-z0-9_-]\{1,\}\)$/\1/p' \
-    <<< "$upload_check_output" | tail -n 1)"
+    "$upload_check_output" | tail -n 1)"
   if [[ -n "$attachment_id" ]]; then
     job_query="select kind || ' is ' || status || ', attempt ' || attempts || ' of ' || max_attempts
       || coalesce(', ' || error_code, '') || coalesce(': ' || left(error_message, 200), '')
@@ -241,9 +354,10 @@ else
     # shellcheck disable=SC2016
     jobs_of_file="$(compose exec -T postgres sh -c \
       'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -At -c "$1"' sh "$job_query" < /dev/null 2>&1 || true)"
-    echo "upload-check: job of the file: ${jobs_of_file:-none was enqueued for $attachment_id}" >&2
+    echo "upload-check: job of the file: ${jobs_of_file:-none was enqueued for $attachment_id}" | mask_secrets >&2
   fi
+  check_project_services || true
   echo "The upload check failed: $IMAGE_TAG runs, but a file uploaded to it was not processed." >&2
-  compose logs --tail=50 doc-worker >&2 || true
+  compose logs --tail=30 doc-worker 2>&1 | mask_secrets >&2 || true
   exit 1
 fi

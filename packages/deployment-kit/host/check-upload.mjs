@@ -14,7 +14,7 @@
 // Input: the server credential on stdin, so that it is in no argument list, and
 //   --release=NAME    the release, for the conversation title
 //   --api=URL         default http://127.0.0.1:4100, plain HTTP inside the container
-//   --wait=SECONDS    how long the file may take, default 60
+//   --wait=SECONDS    how long the file may take, default 600
 //
 // Output: lines that start with "upload-check:". After a failure one of them is
 // "upload-check: attachment=<id>", which the deploy script uses to look up the job.
@@ -24,7 +24,7 @@ import { request } from "node:http";
 const option = (name) =>
   process.argv.find((argument) => argument.startsWith(`--${name}=`))?.slice(name.length + 3);
 const apiUrl = (option("api") ?? "http://127.0.0.1:4100").replace(/\/+$/, "");
-const waitSeconds = Number(option("wait") ?? 60);
+const waitSeconds = Number(option("wait") ?? 600);
 const release = option("release") ?? "unknown release";
 const POLL_MS = 500;
 const REQUEST_TIMEOUT_MS = 15_000;
@@ -149,6 +149,8 @@ async function signIn() {
 async function waitUntilReady(token, conversationId, attachmentId) {
   const deadline = Date.now() + waitSeconds * 1000;
   let status = "queued";
+  let lastProgress = 0;
+  say(`waiting up to ${waitSeconds} s for document processing`);
   for (;;) {
     const page = await call(
       "wait",
@@ -162,6 +164,10 @@ async function waitUntilReady(token, conversationId, attachmentId) {
     }
     status = attachment.status;
     if (status === "ready") return;
+    if (Date.now() - lastProgress >= 15_000) {
+      say(`processing: state=${status}, ${Math.ceil((deadline - Date.now()) / 1000)} s remaining`);
+      lastProgress = Date.now();
+    }
     if (status !== "queued" && status !== "preprocessing") {
       const reason = attachment.error?.message ?? attachment.error?.code;
       throw new CheckFailure(
@@ -195,6 +201,9 @@ async function cleanUp(token, conversationId, attachmentId) {
 }
 
 async function main() {
+  if (!Number.isFinite(waitSeconds) || waitSeconds <= 0) {
+    throw new CheckFailure("--wait must be a positive number of seconds");
+  }
   const started = Date.now();
   const token = await signIn();
   const title = `Deploy check ${release} (synthetic, safe to delete)`;
