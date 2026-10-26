@@ -1,8 +1,4 @@
-import {
-  dataStoreRefusalError,
-  type DataStoreFailure,
-  type DataStoreRecord
-} from "@work-shape/catalyst-core";
+import { dataStoreRefusalError, type DataStoreRecord } from "@work-shape/catalyst-core";
 
 // The wait of one Publish of an App for the Data Stores it published with it (GOLIVE-1): each
 // store's own publish wrote its record and queued its migrate job, and the job writes each
@@ -26,8 +22,6 @@ export interface StoreAwaited {
   level: number;
   /** The names of that revision's migrations, by number, to name the one that failed. */
   migrations: ReadonlyMap<number, string>;
-  /** What the record said failed before this publish: that failure is not this publish's. */
-  before: DataStoreFailure | undefined;
 }
 
 export interface StoreWaitClock {
@@ -44,13 +38,10 @@ export const realStoreWaitClock: StoreWaitClock = {
   sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 };
 
-const sameFailure = (a: DataStoreFailure | undefined, b: DataStoreFailure | undefined) =>
-  a !== undefined && b !== undefined && a.code === b.code && a.message === b.message;
-
 /**
  * Waits until every store is ready at its level. It refuses with `data_store_migration_failed`
- * as soon as a store's record holds a failure it did not hold before the publish, naming the
- * migration after the last applied one, and with `data_store_migrating` once the time is up.
+ * as soon as a store's record holds a failure, naming the migration after the last applied
+ * one (a store's publish clears the failure an earlier attempt left), and with `data_store_migrating` once the time is up.
  * A store whose record is gone or retired is `data_store_unavailable`.
  */
 export async function awaitStoreLevels(
@@ -68,7 +59,7 @@ export async function awaitStoreLevels(
         throw dataStoreRefusalError("data_store_unavailable", store.name);
       }
       if (record.status === "ready" && record.level >= store.level) continue;
-      if (record.failure && !sameFailure(record.failure, store.before)) {
+      if (record.failure) {
         const number = record.level + 1;
         throw dataStoreRefusalError("data_store_migration_failed", store.name, {
           title: store.title,

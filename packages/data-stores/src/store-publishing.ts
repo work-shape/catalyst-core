@@ -93,19 +93,25 @@ export async function publishDataStore(
   }
   const now = new Date().toISOString();
   const names = server.namesOf(storeId);
+  // A publish starts a new attempt: a failure an earlier attempt left is not this one's, and
+  // whoever waits on the record (an App's Publish, GOLIVE-1) reads only what this job writes.
+  const { failure: _earlier, ...kept }: DataStoreRecord = current ?? {
+    id: storeId,
+    clientInstanceId,
+    name: definition.name,
+    status: "provisioning",
+    location: { ...server.location, database: names.database },
+    roles: { app: names.app, migration: names.migration },
+    level: 0,
+    migrations: [],
+    conditions: [],
+    targetRevision: input.revision,
+    sizeLimitBytes: limits.sizeLimitBytes,
+    createdAt: now,
+    updatedAt: now
+  };
   const record: DataStoreRecord = {
-    ...(current ?? {
-      id: storeId,
-      clientInstanceId,
-      name: definition.name,
-      status: "provisioning",
-      location: { ...server.location, database: names.database },
-      roles: { app: names.app, migration: names.migration },
-      level: 0,
-      migrations: [],
-      conditions: [],
-      createdAt: now
-    }),
+    ...kept,
     targetRevision: input.revision,
     // The instance's ceiling, which a manifest lowers and never raises.
     sizeLimitBytes: Math.min(

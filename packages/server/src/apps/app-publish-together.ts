@@ -21,6 +21,7 @@ import { APP_ASSET_KIND } from "./app-kind";
 import {
   assetTitle,
   dataStoresPublishedWith,
+  requireStoreLevels,
   workflowsPublishedWith,
   type StorePublishedWith
 } from "./app-closure";
@@ -101,10 +102,13 @@ export class AppPublishTogether {
   ): Promise<OperationAuthorization> {
     const right = await this.assets.authorizePublish(caller, input);
     if (!right.allowed) return right;
-    for (const member of allOf(await this.members(input))) {
+    // A store's level is told only to one who may publish it.
+    const members = await this.members(input, { levels: false });
+    for (const member of allOf(members)) {
       const own = await this.assets.authorizePublish(caller, addressOf(member));
       if (!own.allowed) return own;
     }
+    requireStoreLevels(members.stores);
     return right;
   }
 
@@ -211,7 +215,6 @@ export class AppPublishTogether {
     const published = [];
     const awaited = [];
     for (const store of named) {
-      const before = await read(store.asset.id);
       const member = { ...store, kind: DATA_STORE_ASSET_KIND };
       published.push(pointersOf(member, await this.assets.drafts.publish(call, addressOf(member))));
       awaited.push({
@@ -219,8 +222,7 @@ export class AppPublishTogether {
         title: store.title,
         storeId: store.asset.id,
         level: store.level,
-        migrations: store.migrations,
-        before: before?.failure
+        migrations: store.migrations
       });
     }
     await awaitStoreLevels(read, awaited, this.clock);
@@ -228,7 +230,10 @@ export class AppPublishTogether {
   }
 
   /** The stores and Workflows the call names to publish with an App, checked and ordered. */
-  private async members(input: PublishTogetherInput): Promise<Members> {
+  private async members(
+    input: PublishTogetherInput,
+    check: { levels: boolean } = { levels: true }
+  ): Promise<Members> {
     if (!input.workflows?.length && !input.dataStores?.length) return NONE;
     if (input.kind !== APP_ASSET_KIND) {
       throw new AppError(
@@ -258,10 +263,12 @@ export class AppPublishTogether {
     const workflows = input.workflows?.length
       ? await workflowsPublishedWith(this.options, of, input.workflows)
       : [];
+    const stores = input.dataStores?.length
+      ? await dataStoresPublishedWith(this.options, of, input.dataStores)
+      : [];
+    if (check.levels) requireStoreLevels(stores);
     return {
-      stores: input.dataStores?.length
-        ? await dataStoresPublishedWith(this.options, of, input.dataStores)
-        : [],
+      stores,
       workflows: workflows.map((workflow) => ({ ...workflow, kind: WORKFLOW_ASSET_KIND }))
     };
   }

@@ -187,7 +187,7 @@ describe("GOLIVE-1: an App's Publish carries the Data Stores it binds", () => {
     expect((await asset("app", "golive-bound-app"))?.publishedRevision).toBeUndefined();
   });
 
-  it("leaves the App unpublished when the store's migration fails, and names the store and the migration", async () => {
+  it("leaves the App unpublished when the store's migration fails, names the store and the migration, and publishes once it is mended", async () => {
     const named = await storeWithPendingMigration("golive-broken", "golive-broken-app", broken);
 
     const refused = await publishWith(t.admin.id, "golive-broken-app", named.app, [
@@ -211,6 +211,20 @@ describe("GOLIVE-1: an App's Publish carries the Data Stores it binds", () => {
       named.store
     );
     expect(await record("golive-broken")).toMatchObject({ level: 1 });
+
+    // Fails while a store's publish keeps the failure an earlier attempt left on its record:
+    // the publish of the mended migration read that failure as its own.
+    const mended = await t.draftStore(
+      "golive-broken",
+      [storeManifest("golive-broken"), init, addNote],
+      t.workspaceId
+    );
+    const published = await publishWith(t.admin.id, "golive-broken-app", named.app, [
+      { name: "golive-broken", revision: mended }
+    ]);
+    expectStatus(published, 200);
+    expect((await asset("app", "golive-broken-app"))?.publishedRevision).toBe(named.app);
+    expect(await record("golive-broken")).toMatchObject({ level: 2 });
   });
 
   // Rights: the App's dialog never publishes a store its publisher may not publish.
@@ -229,6 +243,11 @@ describe("GOLIVE-1: an App's Publish carries the Data Stores it binds", () => {
             code: "FORBIDDEN",
             details: expect.objectContaining({ action: "data_store.publish" })
           });
+          // Below the App's level, the store's title and level are not told before the right.
+          const below = await publishWith(t.kai.id, "golive-rights-app", named.app, [
+            { name: "golive-rights", revision: 1 }
+          ]);
+          expectStatus(below, 403);
         })
       )
     );

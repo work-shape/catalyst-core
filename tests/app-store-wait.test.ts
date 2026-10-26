@@ -8,8 +8,7 @@ import {
 import { clientInstanceId } from "./support/access-instance";
 
 // GOLIVE-1's wait, on records a test writes: an App's Publish waits for the stores it published
-// to reach their level, reads only their records, and tells a failure of this publish from one
-// an earlier attempt left on the record.
+// to reach their level and reads only their records.
 
 const record = (overrides: Partial<DataStoreRecord>): DataStoreRecord => ({
   id: "ast_store",
@@ -36,8 +35,7 @@ const store: StoreAwaited = {
   migrations: new Map([
     [1, "init"],
     [2, "add_note"]
-  ]),
-  before: undefined
+  ])
 };
 
 /** A clock that moves one poll at each sleep. */
@@ -94,19 +92,6 @@ describe("the wait of an App's Publish for the stores it publishes", () => {
         failure: failure.message
       }
     });
-  });
-
-  // Fails without the comparison: the failure an earlier publish left on the record ended the
-  // wait at once, before this publish's job had run.
-  it("waits past a failure the record held before this publish", async () => {
-    const before = { code: "migration_failed", message: "An earlier attempt failed." };
-    await expect(
-      awaitStoreLevels(
-        reads(record({ failure: before }), record({ failure: before, level: 2 })),
-        [{ ...store, before }],
-        steppingClock()
-      )
-    ).resolves.toBeUndefined();
   });
 
   it("answers data_store_migrating, retryable, once the time is up", async () => {
