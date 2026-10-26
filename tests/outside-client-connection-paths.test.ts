@@ -293,6 +293,13 @@ describe("a Workflow run read or started with a key", () => {
       headers
     });
     expect(byPrefix.statusCode, byPrefix.body).toBe(403);
+    const byRunKey = await t.call(tim.id, "workflows.list_runs", {
+      params: { workflow: "notify-clients" },
+      query: { key: "2026-10/anna" },
+      headers
+    });
+    expect(byRunKey.statusCode, byRunKey.body).toBe(200);
+    expect(runsSchema.parse(byRunKey.json()).items).toEqual([]);
     // A start with a key that the admin's run holds answers that run, without its result.
     for (const action of ["workflow.write", "workflow.use"]) await allow(t, tim.id, action);
     const starter = await keyOf(t, tim.id, ["workflow.read", "workflow.write", "workflow.use"]);

@@ -609,6 +609,47 @@ describe("Workflow Child Agent Runs (CR-2)", () => {
     expect(changed).toEqual([]);
   });
 
+  it("asks an agent step's tool in a test run a key started what the key's own call needs", async () => {
+    let keyId = "";
+    const f = await fixture("test", false, "user-1", {
+      beforeJobs: async ({ app, clientInstanceId, runId }) => {
+        const owner = (await app.call("me.get")).json<{ id: string }>().id;
+        const key = await app.stores.personalApiKeys.createPersonalApiKey({
+          clientInstanceId,
+          ownerUserId: asUserId(owner),
+          name: "CLI",
+          scopes: ["workflow.write", "connection.use"],
+          expiresAt: new Date(Date.now() + 86_400_000).toISOString()
+        });
+        keyId = key.key.id;
+        // The run as a test run the key started records it: the key's call of workflows.test.
+        await withTestSql(async (sql) => {
+          const delegatedActor = {
+            kind: "api_key",
+            id: keyId,
+            displayLabel: "CLI",
+            authSource: "personal_api_key"
+          };
+          await sql`update workflow_runs
+            set started_by = jsonb_set(started_by, '{delegatedActor}', ${sql.json(delegatedActor)})
+            where id = ${runId}`;
+        });
+      }
+    });
+    // The agent reads the refusal as its tool's answer and answers all the same.
+    await f.ended("done");
+    const call = required(
+      (await f.app.stores.operationRuns.list({ clientInstanceId: f.clientInstanceId })).find(
+        (call) => call.operation === toolName
+      )
+    );
+    // The Connection's operation is exposed to agents only, not to outside clients: the
+    // agent step's worker still acts for the key, and the call records it.
+    expect(call.status).toBe("denied");
+    expect(call.actor.delegatedActor).toMatchObject({ kind: "api_key", id: keyId });
+    expect(changed).toEqual([]);
+  });
+
   it("tests an agent step of a Workflow-owned account as its tester, bounded by the rights its definition needs", async () => {
     const f = await fixture("test", false, "user-1", { ownAccount: true, principalUses: false });
     const step = await f.ended("done");

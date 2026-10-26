@@ -92,7 +92,10 @@ export function exposureOfOrigin(origin: OperationOrigin): ConnectionExposure | 
  */
 export function isOutsideCall(actor: AuthenticatedIdentity, origin: OperationOrigin): boolean {
   if (exposureOfOrigin(origin) === "outside") return true;
-  return !isAuthenticatedServicePrincipal(actor) && actor.delegatedActor?.kind === "api_key";
+  if (isAuthenticatedServicePrincipal(actor)) return false;
+  // Only a personal key gives an actor `keyScopes`: an actor rebuilt with them and without the
+  // key, as an agent step's worker may, is made for the key all the same.
+  return actor.delegatedActor?.kind === "api_key" || actor.keyScopes !== undefined;
 }
 
 /**
