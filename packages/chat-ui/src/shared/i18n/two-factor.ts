@@ -34,6 +34,7 @@ export const twoFactor = defineTranslations({
     "twoFactor.codeInvalid": "The code is wrong or has expired. Enter the one the app shows now.",
     "twoFactor.backupCodeInvalid": "This backup code is wrong or was used already.",
     "twoFactor.locked": "Too many wrong codes. Wait 15 minutes, then sign in again.",
+    "twoFactor.rateLimited": "Too many tries from this address. Wait a minute, then try again.",
     "twoFactor.challengeExpired": "This sign-in has expired. Sign in again with your password.",
     "twoFactor.passwordWrong": "The password is wrong.",
     "twoFactor.on": "On",
@@ -101,6 +102,8 @@ export const twoFactor = defineTranslations({
       "Der Code stimmt nicht oder ist abgelaufen. Gib den ein, den die App jetzt zeigt.",
     "twoFactor.backupCodeInvalid": "Dieser Backup-Code stimmt nicht oder wurde schon benutzt.",
     "twoFactor.locked": "Zu viele falsche Codes. Warte 15 Minuten und melde dich dann neu an.",
+    "twoFactor.rateLimited":
+      "Zu viele Versuche von dieser Adresse. Warte eine Minute und versuche es dann noch einmal.",
     "twoFactor.challengeExpired":
       "Diese Anmeldung ist abgelaufen. Melde dich noch einmal mit deinem Passwort an.",
     "twoFactor.passwordWrong": "Das Passwort stimmt nicht.",

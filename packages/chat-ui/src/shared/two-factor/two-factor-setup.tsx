@@ -29,8 +29,11 @@ export function twoFactorRefusal(
   kind: SecondFactorKind | "password",
   t: TranslationContextValue["t"]
 ): string {
-  if (result.code === "ACCOUNT_TEMPORARILY_LOCKED" || result.status === 429) {
+  if (result.code === "ACCOUNT_TEMPORARILY_LOCKED") {
     return t("twoFactor.locked");
+  }
+  if (result.status === 429) {
+    return t("twoFactor.rateLimited");
   }
   if (
     result.code === "TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE" ||

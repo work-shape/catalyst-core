@@ -849,6 +849,20 @@ Startup stops, naming the binding, when:
 The `deterministic` provider embeds with vectors made from a hash of each text: the same text
 gives the same vector, and nearness of meaning is not modelled. It is for tests and development.
 
+## Two-factor sign-in
+
+Accounts with a password may add a code from an authenticator app. `required: true` makes every
+such account set it up before anything else opens, existing accounts and sessions included.
+Without it each person decides in Settings. See
+[Two-factor sign-in](/operate/auth-and-embedding/#two-factor-sign-in).
+
+```yaml
+auth:
+  standalone:
+    twoFactor:
+      required: true
+```
+
 ## Mail
 
 An instance has no mail until `infrastructure.mail` names a provider. With mail, the login panel
@@ -933,7 +947,8 @@ rateLimits:
 - `writePerMinute`: calls to one changing operation, per signed-in person or service.
 - `signInPerAccountPerMinute`: sign-in, password reset and password change tries on one account
   from one client address.
-- `signInPerAddressPerMinute`: the same tries from one client address, whatever the account.
+- `signInPerAddressPerMinute`: the same tries from one client address, whatever the account,
+  and the codes of [two-factor sign-in](/operate/auth-and-embedding/#two-factor-sign-in).
   Size it for the largest office that reaches the instance through one address.
 
 There are no settings per operation. A refused API key or server credential is counted per
