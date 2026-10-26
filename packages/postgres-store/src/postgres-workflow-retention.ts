@@ -3,20 +3,26 @@ import {
   and,
   asc,
   eq,
+  exists,
   getTableColumns,
   inArray,
   isNotNull,
   lt,
+  ne,
+  not,
   notExists,
+  notInArray,
   or,
   isNull,
   sql,
+  type AnyColumn,
   type SQL
 } from "drizzle-orm";
 import { WORKFLOW_ENDED_STATUSES, type WorkflowRunsStore } from "@work-shape/catalyst-core";
 import type { PostgresConnection } from "./postgres-database";
 import { runIs } from "./postgres-workflow-run-mapping";
 import {
+  approvalRequests,
   conversationAttachments,
   conversations,
   managedArtifacts,
@@ -25,7 +31,8 @@ import {
   agentRunObservations,
   agentRuns,
   modelProviderContinuations,
-  modelProviderTurnContinuations
+  modelProviderTurnContinuations,
+  operationRuns
 } from "./schema";
 import { workflowRuns, workflowStepRuns } from "./schema/workflowRuns";
 
@@ -131,6 +138,35 @@ const stepGovernance = {
   Exclude<keyof typeof workflowStepRuns.$inferSelect, keyof typeof stepValues>,
   true
 >;
+
+// The keys of a JSON object column that stay, or null where it holds none.
+const onlyKeys = (column: SQL | AnyColumn, keys: readonly string[]) =>
+  sql`case when ${column} is null then null else (select coalesce(jsonb_object_agg(key, value), '{}'::jsonb)
+    from jsonb_each(${column}) where key in (${sql.join(
+      keys.map((key) => sql`${key}`),
+      sql`, `
+    )})) end`;
+
+// What a settled request of a thread keeps of its held call. Keep it the shape of
+// `minimizedOperationCallPayload` (server, approvals), which every path that ends a held call
+// writes and the Inbox reads; this repairs a request that ended without it.
+const heldCallKeys = [
+  "runId",
+  "operation",
+  "effect",
+  "mode",
+  "asset",
+  "subject",
+  "subjectKind",
+  "origin",
+  "workspaceId",
+  "expiresAt"
+] as const;
+const minimizedHeldCall = sql`${onlyKeys(approvalRequests.payload, heldCallKeys)}
+  || case when jsonb_typeof(${approvalRequests.payload}->'actor') = 'object'
+    then jsonb_build_object('actor', ${onlyKeys(sql`${approvalRequests.payload}->'actor'`, ["id", "label"])})
+    else '{}'::jsonb end
+  || '{"inputRemoved": true}'::jsonb`;
 
 function assertColumns(columns: object, values: object, governance: object) {
   const owned = [...Object.keys(values), ...Object.keys(governance)].sort();
@@ -324,6 +360,134 @@ export function workflowRetention(
                 )
               )
             );
+          // Copies no handler removed, as where none is configured: their bytes stay, named by
+          // object key, size and sha256 so they can be found; their names and what was read
+          // from them go.
+          const otherConversation = (fileId: SQL | AnyColumn) =>
+            tx
+              .select({ id: conversationAttachments.id })
+              .from(conversationAttachments)
+              .where(
+                and(
+                  eq(conversationAttachments.clientInstanceId, ref.clientInstanceId),
+                  eq(conversationAttachments.fileId, fileId),
+                  notInArray(conversationAttachments.conversationId, threads)
+                )
+              );
+          const kept = await tx
+            .update(conversationAttachments)
+            .set({
+              filename: sql`${conversationAttachments.id}`,
+              processingMetadata: {},
+              warnings: [],
+              error: onlyKeys(conversationAttachments.error, ["code"])
+            })
+            .where(
+              and(
+                eq(conversationAttachments.clientInstanceId, ref.clientInstanceId),
+                inArray(conversationAttachments.conversationId, threads)
+              )
+            )
+            .returning({ fileId: conversationAttachments.fileId });
+          const prepared = await tx
+            .update(managedArtifacts)
+            .set({ filename: null, metadata: {} })
+            .where(
+              and(
+                eq(managedArtifacts.clientInstanceId, ref.clientInstanceId),
+                inArray(managedArtifacts.conversationId, threads)
+              )
+            )
+            .returning({ fileId: managedArtifacts.sourceFileId });
+          const keptFiles = [
+            ...new Set(
+              [...kept, ...prepared].flatMap((row) => (row.fileId === null ? [] : [row.fileId]))
+            )
+          ];
+          if (keptFiles.length > 0)
+            await tx
+              .update(managedFiles)
+              .set({ filename: sql`${managedFiles.id}` })
+              .where(
+                and(
+                  eq(managedFiles.clientInstanceId, ref.clientInstanceId),
+                  inArray(managedFiles.id, keptFiles),
+                  isNull(managedFiles.ownerKind),
+                  notExists(otherConversation(managedFiles.id)),
+                  notExists(
+                    tx
+                      .select({ id: managedArtifacts.id })
+                      .from(managedArtifacts)
+                      .where(
+                        and(
+                          eq(managedArtifacts.clientInstanceId, ref.clientInstanceId),
+                          eq(managedArtifacts.sourceFileId, managedFiles.id),
+                          notInArray(managedArtifacts.conversationId, threads)
+                        )
+                      )
+                  )
+                )
+              );
+          // What the thread's ended tool calls answered goes; a read keeps only its counts. The
+          // calls stay for their audit age with ids, status, hashes and sizes, and their
+          // decisions without a comment. A call still running keeps its recovery marker.
+          await tx
+            .update(operationRuns)
+            .set({
+              output: sql`case when ${operationRuns.effect} = 'reading' then ${operationRuns.output} end`,
+              decision: sql`${operationRuns.decision} - 'comment'`
+            })
+            .where(
+              and(
+                eq(operationRuns.clientInstanceId, ref.clientInstanceId),
+                isNotNull(operationRuns.conversationId),
+                inArray(operationRuns.conversationId, threads),
+                ne(operationRuns.status, "running")
+              )
+            );
+          // A settled request of a thread keeps who decided and when, without the decider's
+          // comment. One that held a call keeps which call it was and what came of it; its input
+          // and sign-in context go. Another kind's payload, such as a skill change, is the
+          // asset change it applied and stays. A request still pending, or approved and not yet
+          // carried out, needs its input: the path that ends it minimizes it then.
+          const settled = and(
+            eq(approvalRequests.clientInstanceId, ref.clientInstanceId),
+            inArray(sql`${approvalRequests.origin}->>'conversationId'`, threads),
+            ne(approvalRequests.status, "pending"),
+            sql`coalesce(${approvalRequests.applyResult}->>'execution', '') <> 'queued'`
+          );
+          // A held call's request names its call, whether it was the confirmation or the
+          // approval that followed it.
+          const heldCall = exists(
+            tx
+              .select({ id: operationRuns.id })
+              .from(operationRuns)
+              .where(
+                and(
+                  eq(operationRuns.clientInstanceId, ref.clientInstanceId),
+                  eq(operationRuns.id, sql`${approvalRequests.payload}->>'runId'`)
+                )
+              )
+          );
+          await tx
+            .update(approvalRequests)
+            .set({
+              payload: minimizedHeldCall,
+              decision: sql`${approvalRequests.decision} - 'comment'`,
+              applyResult: sql`${onlyKeys(approvalRequests.applyResult, [
+                "runId",
+                "requestId",
+                "execution",
+                "approvalRequestId"
+              ])} || case when jsonb_typeof(${approvalRequests.applyResult}->'error') = 'object'
+                then jsonb_build_object('error', ${onlyKeys(sql`${approvalRequests.applyResult}->'error'`, ["code"])})
+                else '{}'::jsonb end`
+            })
+            .where(and(settled, heldCall));
+          await tx
+            .update(approvalRequests)
+            .set({ decision: sql`${approvalRequests.decision} - 'comment'` })
+            .where(and(settled, not(heldCall), sql`${approvalRequests.decision} ? 'comment'`));
         }
         return marked.length > 0;
       });

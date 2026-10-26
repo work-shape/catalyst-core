@@ -346,7 +346,7 @@ async function expectNoValues(ids: string[]) {
     const [runs] = await sql<{ remaining: number; repaired: number }[]>`
       select count(*) filter (where definition is not null or input <> '{}'::jsonb
         or output is not null or checkpoint is not null or item_label is not null)::int as remaining,
-        count(*) filter (where data_prune_version = 2 and data_pruned_at is not null)::int as repaired
+        count(*) filter (where data_prune_version = 3 and data_pruned_at is not null)::int as repaired
       from workflow_runs where id in ${sql(ids)}`;
     const [steps] = await sql<{ remaining: number }[]>`
       select count(*)::int as remaining from workflow_step_runs
