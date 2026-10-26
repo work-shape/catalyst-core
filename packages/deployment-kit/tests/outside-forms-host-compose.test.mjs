@@ -54,6 +54,24 @@ test("the outside forms host gets its own database address and nothing of the pl
     assert.notEqual(appEnvironment.status, 0);
     assert.match(appEnvironment.stderr, /must not receive DATABASE_URL/u);
 
+    const fromParts = run(
+      compose.replace(
+        "${OUTSIDE_FORMS_DATABASE_URL:?OUTSIDE_FORMS_DATABASE_URL is required}",
+        "postgres://${POSTGRES_USER:?x}:${POSTGRES_PASSWORD:?x}@postgres:5432/app"
+      )
+    );
+    assert.notEqual(fromParts.status, 0);
+    assert.match(fromParts.stderr, /must not receive POSTGRES_USER/u);
+
+    const byEntrypoint = run(
+      compose
+        .replace("  outside-forms:", "  forms:")
+        .replace("    command: [node,", "    entrypoint: [node,")
+        .replace(/^ {6}OUTSIDE_FORMS_DATABASE_URL:.*\n/mu, "")
+    );
+    assert.notEqual(byEntrypoint.status, 0);
+    assert.match(byEntrypoint.stderr, /forms needs OUTSIDE_FORMS_DATABASE_URL/u);
+
     const missing = run(compose.replace(/^ {6}OUTSIDE_FORMS_DATABASE_URL:.*\n/mu, ""));
     assert.notEqual(missing.status, 0);
     assert.match(missing.stderr, /needs OUTSIDE_FORMS_DATABASE_URL/u);

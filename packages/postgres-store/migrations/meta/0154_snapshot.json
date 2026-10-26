@@ -1,5 +1,5 @@
 {
-  "id": "4c51dccd-9629-46bc-8183-f3068e415a39",
+  "id": "39a0f2b2-6922-49b5-8574-5ea546ee9ecf",
   "prevId": "7efc2f3f-3201-4548-8332-48f3d60943be",
   "version": "7",
   "dialect": "postgresql",
@@ -8505,8 +8505,8 @@
           "to": [
             "public"
           ],
-          "using": "capability = 'outside-forms' or not starts_with(current_user::text, 'catalyst_outside_forms')",
-          "withCheck": "capability = 'outside-forms' or not starts_with(current_user::text, 'catalyst_outside_forms')"
+          "using": "capability = 'outside-forms' or not (starts_with(current_user::text, 'catalyst_outside_forms') or starts_with(session_user::text, 'catalyst_outside_forms'))",
+          "withCheck": "capability = 'outside-forms' or not (starts_with(current_user::text, 'catalyst_outside_forms') or starts_with(session_user::text, 'catalyst_outside_forms'))"
         }
       },
       "checkConstraints": {},
