@@ -555,12 +555,12 @@ describe("a workspace command no worker takes", () => {
       reason: WORKSPACE_COMMAND_NO_WORKER_MESSAGE,
       command: { status: "cancelled", cancellationReason: "No worker took the workspace command" }
     });
-    // The agent passes it on to a person: the platform's operator has to look into it, the
-    // person does not, and no administrator is named. The worker is not named either.
+    // The agent passes it on to a person: a problem of the platform, not of their input, to
+    // try again later, with no one named to fix it. The worker is not named either.
     expect(WORKSPACE_COMMAND_NO_WORKER_MESSAGE).toMatch(
-      /^Code execution is unavailable on the platform right now.* not something the person did or has to fix; the operator of the platform has to look into it/u
+      /^Code execution is unavailable on the platform right now.* a technical problem of the platform, not of the person's input.* suggest trying again later, and name nobody as the one to fix it/u
     );
-    expect(WORKSPACE_COMMAND_NO_WORKER_MESSAGE).not.toMatch(/administrator/iu);
+    expect(WORKSPACE_COMMAND_NO_WORKER_MESSAGE).not.toMatch(/administrator|operator/iu);
     expect(WORKSPACE_COMMAND_NO_WORKER_MESSAGE).not.toMatch(/worker/iu);
     // Not before the limit, and long before the idle limit of a run would have ended the run.
     expect(waited).toBeGreaterThanOrEqual(JOB_UNCLAIMED_MS);

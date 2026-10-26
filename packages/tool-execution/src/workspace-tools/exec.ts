@@ -230,8 +230,9 @@ const PLATFORM_FAILURE_REASONS: Partial<Record<string, WorkspacePlatformFailureR
 /**
  * What the agent is told of a command the platform could not run. It never carries the
  * worker's cause, which names images, registries and hosts: that is in the command's row for
- * the operator. It tells the agent that the failure is the platform's, gives the time and the
- * command's id to pass on, and names nobody as the one to fix it.
+ * the operator. It tells the agent that the failure is the platform's, not the person's input,
+ * to suggest trying again later, gives the time and the command's id to pass on, and names
+ * nobody as the one to fix it.
  */
 function workspacePlatformFailure(input: {
   reason: WorkspacePlatformFailureReason;
@@ -246,7 +247,7 @@ function workspacePlatformFailure(input: {
         : "the platform failed while running it";
   return failed(
     "handler_failed",
-    `The command did not run because ${what}. This is a technical problem of the platform, not something the person did or has to fix. Tell the person so in plain words, say that the operator of the platform has to look into it, and give the time (${input.at}) and the command id (${input.commandId}) so they can pass them on. Do not name any person, administrator or contact as the one to fix it. Offer to try again later, or to continue another way without running commands. Do not repeat the command in this reply.`,
+    `The command did not run because ${what}. This is a technical problem of the platform, not of the person's input, and nothing they or anyone on their instance has to fix. Tell the person so in plain words, suggest trying again later, and give the time (${input.at}) and the command id (${input.commandId}) so they can pass them on. Do not name any person, administrator or contact as the one to fix it. Offer to continue another way without running commands if there is one. Do not repeat the command in this reply.`,
     { commandId: input.commandId, reason: input.reason, at: input.at }
   );
 }

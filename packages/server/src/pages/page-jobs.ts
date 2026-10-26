@@ -89,7 +89,7 @@ export const PAGE_BUILD_BUSY_MESSAGE =
   "The Page was not built in time: the workers that build Pages are busy with other builds, or its build did not end. Nothing was saved. Save the Page again.";
 /** What a save is told when no worker takes builds. */
 export const PAGE_BUILD_NO_WORKER_MESSAGE =
-  "No workspace command worker takes Page builds on this instance: the build was not started. An operator has to start that worker. Nothing was saved.";
+  "No workspace command worker takes Page builds on this instance: the build was not started. This is a problem of the platform, not of the request; try again later. Nothing was saved.";
 
 /** Ends the transaction that would publish a revision for a save that has its answer already. */
 class BuildAlreadyAnswered extends Error {}

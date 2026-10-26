@@ -351,7 +351,7 @@ export function createSandboxAssetRepo(options: SandboxAssetRepoOptions): AssetR
         return {
           status: "failed",
           reason: "command_missing",
-          message: `The runner image of this instance has no '${ASSET_REPO_COMMAND}'. It is older than the release that keeps repositories; an operator has to roll out the runner image of this release.`,
+          message: `The runner image of this instance has no '${ASSET_REPO_COMMAND}'. It is older than the release that keeps repositories: a problem of the platform, not of the request, solved by rolling out the runner image of this release.`,
           detail: result.stderrPreview
         };
       }

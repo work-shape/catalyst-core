@@ -476,7 +476,10 @@ describe("workspace tools", () => {
         }
       });
       if (result.status === "failed") {
-        expect(result.error.message).toContain("not something the person did or has to fix");
+        expect(result.error.message).toContain(
+          "a technical problem of the platform, not of the person's input"
+        );
+        expect(result.error.message).toContain("suggest trying again later");
         expect(result.error.message).not.toMatch(/administrator has to/iu);
       }
       expect(Date.now() - startedAt).toBeGreaterThanOrEqual(JOB_UNCLAIMED_MS);
@@ -538,12 +541,13 @@ describe("workspace tools", () => {
       const details = jsonObject(result.error.details);
       const message = result.error.message;
       expect(message).toContain("the platform's sandbox for commands could not start");
-      expect(message).toContain("not something the person did or has to fix");
-      expect(message).toContain("the operator of the platform has to look into it");
+      expect(message).toContain("a technical problem of the platform, not of the person's input");
+      expect(message).toContain("suggest trying again later");
+      expect(message).not.toMatch(/operator|helpContact/iu);
       expect(message).toContain(`the command id (${text(details.commandId)})`);
       expect(message).toContain(`the time (${text(details.at)})`);
       expect(message).toContain("Do not name any person, administrator or contact");
-      expect(message).toContain("Offer to try again later");
+      expect(message).toContain("Offer to continue another way");
       // The worker's cause names images, registries and hosts, and stays with the operator.
       expect(JSON.stringify(result)).not.toMatch(/docker|unauthorized|registry/iu);
     } finally {

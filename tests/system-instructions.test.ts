@@ -4,6 +4,7 @@ import {
   CATALYST_INTERNAL_AGENT_PROMPT,
   createSystemInstructions
 } from "../packages/agent-runtime/src/system-instructions";
+import { workshaperAgent } from "../packages/client-assembly/src/workshaper";
 
 describe("system instructions", () => {
   it("directs an agent without connection drafting to Studio without asking for credentials", () => {
@@ -15,11 +16,15 @@ describe("system instructions", () => {
     expect(content).toContain("Do not substitute HTTP or YAML dumps");
     expect(content).toContain("Never ask for keys or passwords in chat");
   });
-  it("puts a platform failure on the platform's operator, never on the person or a named contact", () => {
+  it("calls a platform failure the platform's, never the person's input, and names no one to fix it", () => {
     expect(CATALYST_INTERNAL_AGENT_PROMPT).toContain(
       "When a tool fails for a platform reason (a sandbox or runner that cannot start"
     );
-    expect(CATALYST_INTERNAL_AGENT_PROMPT).toContain("not something the person did or has to fix");
+    expect(CATALYST_INTERNAL_AGENT_PROMPT).toContain(
+      "a technical problem of the platform, not of the person's input"
+    );
+    expect(CATALYST_INTERNAL_AGENT_PROMPT).toContain("Suggest trying again later");
+    expect(CATALYST_INTERNAL_AGENT_PROMPT).not.toMatch(/operator/iu);
     expect(CATALYST_INTERNAL_AGENT_PROMPT).toContain(
       "Never name a person, an administrator or a contact as the one to fix it"
     );
@@ -33,6 +38,15 @@ describe("system instructions", () => {
     );
     expect(PLATFORM_ORIENTATION).toContain(
       "never name it as the one to fix a platform or infrastructure failure"
+    );
+  });
+  it("has Workshaper call a platform failure the platform's and send nobody to fix it", () => {
+    const { instructions } = workshaperAgent({ toolNames: [], skillNames: [] });
+    expect(instructions).toContain(
+      "say it is a problem of the platform, not of the person's input, and suggest trying again later"
+    );
+    expect(instructions).toContain(
+      "Never tell the person, an administrator or the help contact to fix it"
     );
   });
   it("does not let an agent infer what an outside client can reach from its own tools", () => {

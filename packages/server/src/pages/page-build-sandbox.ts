@@ -219,7 +219,7 @@ export function createSandboxPageBuild(options: SandboxPageBuildOptions): PageBu
         return {
           status: "failed",
           reason: "command_missing",
-          message: `The runner image of this instance has no '${PAGE_BUILD_COMMAND}'. It is older than the release that builds Pages; an operator has to roll out the runner image of this release.`,
+          message: `The runner image of this instance has no '${PAGE_BUILD_COMMAND}'. It is older than the release that builds Pages: a problem of the platform, not of the request, solved by rolling out the runner image of this release.`,
           detail: result.stderrPreview
         };
       }
