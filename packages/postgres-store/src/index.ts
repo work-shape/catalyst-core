@@ -33,7 +33,12 @@ import {
 } from "./postgres-conversation-list-operations";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres, { type Notice } from "postgres";
-import type { DatabaseReadiness, Logger, PlatformStores } from "@work-shape/catalyst-core";
+import type {
+  CapabilityRecordStore,
+  DatabaseReadiness,
+  Logger,
+  PlatformStores
+} from "@work-shape/catalyst-core";
 import type { PostgresConnection } from "./postgres-database";
 import { assertDatabaseMigrated } from "./migrations";
 import { createDatabaseReadinessCheck } from "./readiness";
@@ -235,4 +240,26 @@ export async function createPostgresStores(
     await sql.end();
     throw error;
   }
+}
+
+/**
+ * The capability records alone, on a connection of their own (ADR-0033): what a capability's
+ * own process opens, such as the outside form's public host, which reaches no other store.
+ */
+export async function createPostgresCapabilityRecords(
+  options: Omit<PostgresStoresOptions, "onStatement">
+): Promise<{ records: CapabilityRecordStore; close(): Promise<void> }> {
+  const sql = postgres(options.databaseUrl, {
+    max: options.poolSize ?? 4,
+    idle_timeout: 30,
+    onnotice: (notice) => handlePostgresNotice(notice, options.logger)
+  });
+  const db = drizzle(sql, { schema });
+  try {
+    await assertDatabaseMigrated(sql);
+  } catch (error) {
+    await sql.end();
+    throw error;
+  }
+  return { records: createPostgresCapabilityRecordStore(db), close: () => sql.end() };
 }
