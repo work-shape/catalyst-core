@@ -241,7 +241,11 @@ describe("the Users page", () => {
       await mounted.unmount();
     }
 
-    const own = await usersPage(["superadmin"], [{ ...account, twoFactorEnabled: true }], account.id);
+    const own = await usersPage(
+      ["superadmin"],
+      [{ ...account, twoFactorEnabled: true }],
+      account.id
+    );
     try {
       await act(async () => rowButton("Managed person", "managed@example.test").click());
       expect(own.container.textContent).toContain("Delete user");
