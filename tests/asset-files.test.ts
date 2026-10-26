@@ -58,6 +58,25 @@ describe("an App written from files and built as a Page is built", () => {
 
     expectStatus(response, 200);
     const answer = fileWriteSchema.parse(response.json());
+    expect(answer.files).toMatchInlineSnapshot(`
+      [
+        {
+          "bytes": 41,
+          "path": "app.yaml",
+          "sha256": "6695b38b30e7e5ba9b0695811e1dd78a99254a3e0b6323abde2d6c9f6a713fd2",
+        },
+        {
+          "bytes": 137,
+          "path": "src/routes/__root.tsx",
+          "sha256": "6e0d768669cc703b4cfd0b58db2d8c9b9ae578fe2b30eac273c2058492345510",
+        },
+        {
+          "bytes": 137,
+          "path": "src/routes/index.tsx",
+          "sha256": "b857906c24e277cef8d7b8448b298b85cfd82c04dfdebd211db916dc6d2b28c0",
+        },
+      ]
+    `);
     const put = files
       .map((file) => ({
         path: file.path,

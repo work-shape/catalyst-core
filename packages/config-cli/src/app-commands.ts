@@ -731,6 +731,7 @@ function dataStoresOf(
 }
 
 /** JSON with the keys of every object in order, so two equal declarations compare equal. */
+// Unknown action values include undefined array items, which become null here; core accepts JSON values only.
 function canonicalJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
   if (isRecord(value)) {

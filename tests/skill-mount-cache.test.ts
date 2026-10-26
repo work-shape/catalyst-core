@@ -125,11 +125,14 @@ async function tree(directory: string): Promise<Record<string, string>> {
 
 describe("the skill folder cache of a command worker", () => {
   it("fills a folder read-only, checked against its hashes, and uses it again without a read", async () => {
-    const { cache, reads } = await cacheWith(() => FOLDER);
+    const { root, cache, reads } = await cacheWith(() => FOLDER);
     const first = await cache.acquire(instance, [mount()]);
     first.release();
     const folder = first.folders[0];
     if (!folder) throw new Error("No folder");
+    expect(relative(root, folder.directory)).toMatchInlineSnapshot(
+      `"757bd3a43cc8741e2d06c7f1f8ce1ea7/133c69702135b445643faf6f0cd579bc5c6277ae/folder"`
+    );
     expect(folder.name).toBe("form");
     expect(await tree(folder.directory)).toEqual({
       "SKILL.md": `444 ${FOLDER[0]?.sha256}`,

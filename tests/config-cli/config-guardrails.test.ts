@@ -79,6 +79,16 @@ describe("config CLI guardrails in the working copy", () => {
 
     expect(await runConfigCommand("pull", options), output.join("")).toBe(0);
     expect(output.join("")).toContain("Pulled 0 agents, 0 skills, 2 guardrails");
+    const baseline = (await readStateFile(resolve(directory, STATE_FILENAME))).instances.local;
+    expect({
+      privacy: baseline?.assets?.["guardrail:privacy"]?.hash,
+      noIban: baseline?.assets?.["guardrail:no_iban"]?.hash
+    }).toMatchInlineSnapshot(`
+      {
+        "noIban": "1a11c61e9ee34d64c5b5f767c3c63c08e4788c61d86ebb1bbbdce703fa9bc4b6",
+        "privacy": "984bf999aa5a9190fe378bd7078fe44fdab69f8ecbc2d41f9a1813c6185b5b07",
+      }
+    `);
     const privacy = resolve(directory, "guardrails", "privacy");
     expect((await readdir(privacy)).sort()).toEqual(["check.md", "guardrail.yaml"]);
     expect(await readFile(resolve(privacy, "check.md"), "utf8")).toBe(

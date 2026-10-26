@@ -5,7 +5,8 @@ import {
   type SkillFolderReader,
   type WorkspaceCommandSkillMount
 } from "@work-shape/catalyst-core";
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
+import { sha256Hex } from "@work-shape/catalyst-core/sha256";
 import {
   chmod,
   lstat,
@@ -454,10 +455,6 @@ async function listDirectories(directory: string): Promise<string[]> {
 async function touch(entry: string): Promise<void> {
   const now = new Date();
   await utimes(entry, now, now);
-}
-
-function sha256Hex(value: Uint8Array | string): string {
-  return createHash("sha256").update(value).digest("hex");
 }
 
 function isCode(error: unknown, code: string): boolean {

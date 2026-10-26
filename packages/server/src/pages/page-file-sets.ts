@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { sha256Hex as sha256 } from "@work-shape/catalyst-core/sha256";
 import {
   AppError,
   createFileSetId,
@@ -273,10 +273,6 @@ function fileSetIndexEntry(file: PageFileInput): FileSetFile {
     bytes: file.bytes.byteLength,
     contentType: fileSetContentType(file.path)
   };
-}
-
-function sha256(bytes: Uint8Array): string {
-  return createHash("sha256").update(bytes).digest("hex");
 }
 
 /**
