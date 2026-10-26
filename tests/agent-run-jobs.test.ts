@@ -7,6 +7,8 @@ import {
   AGENT_RUN_LEASE_MS,
   AGENT_RUN_MAX_QUEUED_MS,
   asClientInstanceId,
+  asConversationAttachmentId,
+  asManagedFileId,
   asToolCallId,
   createPlatformId,
   WORKFLOW_AGENT_FILES_METADATA_KEY,
@@ -434,9 +436,8 @@ describe("agent runs as claimed jobs", () => {
             : [
                 {
                   kind: "document",
-                  fileId: "file_copy" as AttachmentManifest["attachments"][number]["fileId"],
-                  attachmentId:
-                    "att_copy" as AttachmentManifest["attachments"][number]["attachmentId"],
+                  fileId: asManagedFileId("file_copy"),
+                  attachmentId: asConversationAttachmentId("att_copy"),
                   filename: "document.pdf",
                   byteSize: 10,
                   status: "ready"
