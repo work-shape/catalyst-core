@@ -150,7 +150,11 @@ export function useWorkspaceChatModel({
   });
 
   const meQuery = useWorkspaceMeQuery({ apiBaseUrl, client });
-  const isAuthenticated = Boolean(meQuery.data);
+  // On an instance that requires a second factor, a person without one reaches their own record
+  // and nothing else (TWO-FACTOR-1): nothing else is asked for until the setup screen is done.
+  const twoFactorSetupRequired =
+    meQuery.data?.twoFactor?.required === true && !meQuery.data.twoFactor.enrolled;
+  const isAuthenticated = Boolean(meQuery.data) && !twoFactorSetupRequired;
   const { localePreference, selectLocale } = useAccountLocale({
     apiBaseUrl,
     authScope: WORKSPACE_AUTH_SCOPE,
@@ -962,6 +966,7 @@ export function useWorkspaceChatModel({
       loginRequired: apiErrorStatus(meQuery.error) === 401,
       sessionUnavailable: Boolean(meQuery.error),
       accountDisabled: apiErrorReason(meQuery.error) === "user_disabled",
+      twoFactorSetupRequired,
       sessionRetrying: meQuery.isFetching,
       signingOut: signOutMutation.isPending,
       signOut: () => signOutMutation.mutate(),

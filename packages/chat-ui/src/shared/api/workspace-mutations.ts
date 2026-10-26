@@ -540,6 +540,17 @@ export function useSuperadminUserMutations(
       invalidateAuditEvents();
     }
   });
+  const resetUserTwoFactor = useMutation({
+    mutationFn: async (userId: string) =>
+      completedOutput(
+        await input.client.users.two_factor.reset({ params: { userId } }),
+        input.heldMessage
+      ),
+    onSuccess: () => {
+      invalidateSuperadminUsers();
+      invalidateAuditEvents();
+    }
+  });
   const sendUserInvitation = useMutation({
     mutationFn: async (userId: string) =>
       completedOutput(
@@ -559,6 +570,7 @@ export function useSuperadminUserMutations(
     upsertUserIdentity,
     deleteUserIdentity,
     resetUserPassword,
+    resetUserTwoFactor,
     sendUserInvitation,
     isPending:
       createUser.isPending ||
@@ -567,6 +579,7 @@ export function useSuperadminUserMutations(
       upsertUserIdentity.isPending ||
       deleteUserIdentity.isPending ||
       resetUserPassword.isPending ||
+      resetUserTwoFactor.isPending ||
       sendUserInvitation.isPending
   };
 }

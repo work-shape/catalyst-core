@@ -128,6 +128,8 @@ export interface WorkspaceAuthModel {
   sessionUnavailable: boolean;
   /** The person signed in, but an administrator disabled their account. */
   accountDisabled: boolean;
+  /** The instance requires two-factor sign-in and this person has not set it up yet. */
+  twoFactorSetupRequired: boolean;
   sessionRetrying: boolean;
   signingOut: boolean;
   signOut(): void;
