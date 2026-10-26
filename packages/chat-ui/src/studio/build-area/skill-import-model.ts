@@ -1,3 +1,8 @@
+import {
+  SKILL_FILE_MAX_BYTES as SKILL_IMPORT_FILE_MAX_BYTES,
+  SKILL_MAX_BYTES as SKILL_IMPORT_MAX_BYTES,
+  SKILL_MAX_FILES as SKILL_IMPORT_MAX_FILES
+} from "@work-shape/catalyst-api-contract";
 import JSZip from "jszip";
 import { SKILL_NAME_PATTERN, parseSkillMarkdown } from "@work-shape/catalyst-core";
 import {
@@ -14,12 +19,11 @@ import {
 // for its limits is refused here already, by path, in the sentences a save's refusal has; the
 // instance checks every write again.
 
-/** How large one file of a skill is at most, as the instance holds it (decision 2). */
-export const SKILL_IMPORT_FILE_MAX_BYTES = 2 * 1024 * 1024;
-/** How many files one skill holds at most. */
-export const SKILL_IMPORT_MAX_FILES = 500;
-/** How large the files of one skill are at most together: what one write carries. */
-export const SKILL_IMPORT_MAX_BYTES = 8 * 1024 * 1024;
+export {
+  SKILL_FILE_MAX_BYTES as SKILL_IMPORT_FILE_MAX_BYTES,
+  SKILL_MAX_BYTES as SKILL_IMPORT_MAX_BYTES,
+  SKILL_MAX_FILES as SKILL_IMPORT_MAX_FILES
+} from "@work-shape/catalyst-api-contract";
 /**
  * How large an archive is read at most. A .zip of a skill within its limits is smaller: a
  * larger one is refused before it is opened.

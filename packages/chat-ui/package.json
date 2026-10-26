@@ -101,6 +101,7 @@
     "@univerjs/sheets-drawing-ui": "0.25.1",
     "@univerjs/ui": "0.25.1",
     "@work-shape/catalyst-api-client": "workspace:*",
+    "@work-shape/catalyst-api-contract": "workspace:*",
     "@work-shape/catalyst-config-schema": "workspace:*",
     "@work-shape/catalyst-core": "workspace:*",
     "@work-shape/catalyst-ui": "workspace:*",
