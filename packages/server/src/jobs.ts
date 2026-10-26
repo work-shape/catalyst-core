@@ -327,7 +327,11 @@ export function createChatServerJobs(
     approvals: options.approvalRequests?.store,
     // Approved calls are executed where the call path of the instance exists, with its tools.
     calls: options.operationCalls
-      ? { deps: () => operationCalls.deps, users: options.stores.users }
+      ? {
+          deps: () => operationCalls.deps,
+          users: options.stores.users,
+          personalApiKeys: options.stores.personalApiKeys
+        }
       : undefined,
     now
   };

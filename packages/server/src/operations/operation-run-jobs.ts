@@ -15,6 +15,7 @@ import {
   type OperationRunStore,
   type PlatformStores,
   type RegisteredJobHandler,
+  type PersonalApiKeyStore,
   type UserStore
 } from "@work-shape/catalyst-core";
 import {
@@ -89,7 +90,11 @@ export interface OperationRunJobOptions {
   /** Without it no call was ever held, and an expired run has no request to end. */
   approvals?: ApprovalRequestStore;
   /** The call path approved calls are executed on. Without it this process executes none. */
-  calls?: { deps(): RunOperationDeps; users: Pick<UserStore, "getUser"> };
+  calls?: {
+    deps(): RunOperationDeps;
+    users: Pick<UserStore, "getUser">;
+    personalApiKeys: Pick<PersonalApiKeyStore, "resolvePersonalApiKey">;
+  };
   now(): Date;
 }
 

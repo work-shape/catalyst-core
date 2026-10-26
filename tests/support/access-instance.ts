@@ -5,6 +5,7 @@ import type { WorkflowAssetKind } from "@work-shape/catalyst-server";
 import { parseClientInstanceConfig } from "@work-shape/catalyst-config-schema";
 import {
   LEGACY_LIST_GRANTOR,
+  PERSONAL_API_KEY_ACTIONS,
   StoreBackedAuditRecorder,
   asApiCredentialId,
   asClientInstanceId,
@@ -157,6 +158,8 @@ export function recordAuthAdapter(): AuthAdapter {
       );
       const user = rows.length === 1 ? signedInUserSchema.parse(rows[0]) : undefined;
       if (!user) throw new Error(`No test user '${String(userId)}'`);
+      const personal = request.headers[KEY_HEADER] === "personal";
+      if (personal) await storeTestPersonalKey(user.id);
       return {
         id: user.id,
         externalUserId: user.id,
@@ -167,11 +170,11 @@ export function recordAuthAdapter(): AuthAdapter {
         clientInstanceId,
         authSource: "test",
         scopes,
-        ...(request.headers[KEY_HEADER] === "personal"
+        ...(personal
           ? {
               delegatedActor: {
                 kind: "api_key" as const,
-                id: asApiCredentialId("key_test"),
+                id: testPersonalKeyId(user.id),
                 displayLabel: "Test key",
                 authSource: "test"
               }
@@ -180,6 +183,28 @@ export function recordAuthAdapter(): AuthAdapter {
       };
     }
   };
+}
+
+/** The id of the personal key a user signs in with under `x-test-key: personal`. */
+function testPersonalKeyId(userId: string) {
+  return asApiCredentialId(`key_test_${userId}`);
+}
+
+/**
+ * Stores the user's personal key, naming every action a key may carry, so that a call made
+ * for it and approved later finds it usable. The call itself carries no key scopes: the tests
+ * decide its rights with the scopes header.
+ */
+async function storeTestPersonalKey(userId: string): Promise<void> {
+  const id = testPersonalKeyId(userId);
+  await withTestSql(
+    (sql) => sql`
+      insert into api_credentials
+        (id, client_instance_id, owner_user_id, name, key_prefix, secret_hash, scopes, created_at, expires_at)
+      values (${id}, ${clientInstanceId}, ${userId}, 'Test key', ${id}, 'unused',
+        ${sql.json([...PERSONAL_API_KEY_ACTIONS])}, now(), now() + interval '30 days')
+      on conflict do nothing`
+  );
 }
 
 /**

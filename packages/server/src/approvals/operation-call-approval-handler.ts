@@ -73,10 +73,9 @@ export interface OperationCallApprovalOptions {
   deps(): RunOperationDeps;
   users: Pick<UserStore, "getUser">;
   /**
-   * Where a call made for a personal API key reads the key again before it is executed. Without
-   * it such a call is not executed.
+   * Where a call made for a personal API key reads the key again before it is executed.
    */
-  personalApiKeys?: Pick<PersonalApiKeyStore, "resolvePersonalApiKey">;
+  personalApiKeys: Pick<PersonalApiKeyStore, "resolvePersonalApiKey">;
   workflowAgentActor?(
     runId: import("@work-shape/catalyst-core").AgentRunId
   ): Promise<import("@work-shape/catalyst-core").AuthenticatedIdentity | undefined>;
@@ -537,7 +536,7 @@ export async function endHeldOperationCalls(
 
 export interface ApprovedOperationCallExecutorOptions extends Pick<
   OperationCallApprovalOptions,
-  "clientInstanceId" | "deps" | "users"
+  "clientInstanceId" | "deps" | "users" | "personalApiKeys"
 > {
   approvals: Pick<ApprovalRequestStore, "getApprovalRequest" | "transitionApprovedApprovalRequest">;
 }
@@ -723,19 +722,19 @@ async function currentActor(
   if (!user || user.status !== "active") {
     return undefined;
   }
-  // A call made for a personal key acts as that key, as it is now: narrowed to its scopes, and
-  // not at all once it is revoked or expired.
+  // A call made for a personal key and approved by somebody acts as that key, as it is now:
+  // narrowed to its scopes, and not at all once it is revoked or expired. One its person
+  // confirmed in their Inbox is asked again as their own click in the app (OP-4b).
   const delegated = run.actor.delegatedActor;
   const key =
-    delegated?.kind === "api_key"
-      ? options.personalApiKeys &&
-        (await usablePersonalApiKey(options.personalApiKeys, {
+    delegated?.kind === "api_key" && payload.mode !== "confirmation"
+      ? await usablePersonalApiKey(options.personalApiKeys, {
           clientInstanceId,
           keyId: delegated.id,
           ownerUserId: user.id
-        }))
+        })
       : undefined;
-  if (delegated?.kind === "api_key" && !key) return undefined;
+  if (delegated?.kind === "api_key" && payload.mode !== "confirmation" && !key) return undefined;
   return {
     id: user.id,
     externalUserId,

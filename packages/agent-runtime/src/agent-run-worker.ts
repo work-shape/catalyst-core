@@ -482,7 +482,7 @@ async function executeClaimedRun(
         runId: run.id
       });
       const user = await options.loadCurrentUser(run);
-      const authorization = requireAuthorization(run, user);
+      const authorization = actingFor(requireAuthorization(run, user), user);
       const workflowDraft = run.workflowStepRunId
         ? await options.loadWorkflowAgentDraft?.(run)
         : undefined;
@@ -839,6 +839,26 @@ function requireAuthorization(run: AgentRun, user: AuthenticatedUser) {
     subjectUserId: authorization.subjectUserId,
     delegatedActor: authorization.delegatedActor,
     scopes: [...authorization.scopes]
+  };
+}
+
+/**
+ * The run's authorization, kept for the personal key the current user acts for. A Workflow
+ * agent step in a test run that a key started acts for that key: its stored authorization
+ * names no key, so the key, its operation scopes and its narrowing come from the user the
+ * test run rebuilt, and the step's calls, waited ones too, are asked what the key may do.
+ */
+function actingFor(
+  authorization: ReturnType<typeof requireAuthorization>,
+  user: AuthenticatedUser
+): ReturnType<typeof requireAuthorization> {
+  if (user.keyScopes === undefined || user.delegatedActor?.kind !== "api_key") {
+    return authorization;
+  }
+  return {
+    ...authorization,
+    delegatedActor: user.delegatedActor,
+    scopes: [...(user.scopes ?? [])]
   };
 }
 

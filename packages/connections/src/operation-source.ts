@@ -158,7 +158,8 @@ async function authorizeCall(
 function keyCoversUse(context: OperationAuthorizeContext, resource: OperationResource): boolean {
   const { actor, origin } = context;
   if (isAuthenticatedServicePrincipal(actor) || !isOutsideCall(actor, origin)) return true;
-  if (actor.delegatedActor?.kind !== "api_key") return true;
+  // Made for a key: authenticated by one, or rebuilt with its scopes for a step it started.
+  if (actor.delegatedActor?.kind !== "api_key" && actor.keyScopes === undefined) return true;
   const scopes = actor.keyScopes;
   return (
     scopes !== undefined &&

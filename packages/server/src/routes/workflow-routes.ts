@@ -387,11 +387,18 @@ function registerWorkflowRoutes(
           { exposeMessage: true }
         );
       }
-      const runs = await required().listRuns({
+      const listed = await required().listRuns({
         workflow: input.workflow,
         ...(key ? { key } : {}),
         ...(context.paging ? { page: context.paging } : {})
       });
+      // A run key can be a value a person would not show, such as a client's address: asked by
+      // its key, an outside client without the right finds only a run it started itself. One
+      // key names one run, so this leaves no page short.
+      const runs =
+        key && !includeData && isOutsideCall(context.actor, context.origin)
+          ? listed.filter((run) => startedByThisCredential(run, context.actor))
+          : listed;
       return withConnectionTitles(
         context.access,
         (await namedNow(runs)).map((run) => {
