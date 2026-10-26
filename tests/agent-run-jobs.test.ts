@@ -1,11 +1,16 @@
 import type { ChildProcess } from "node:child_process";
-import { createLocalAgentRunExecutor } from "@work-shape/catalyst-agent-runtime";
+import {
+  createAgentRunJobs,
+  createLocalAgentRunExecutor
+} from "@work-shape/catalyst-agent-runtime";
 import {
   AGENT_RUN_LEASE_MS,
   AGENT_RUN_MAX_QUEUED_MS,
   asClientInstanceId,
   asToolCallId,
   createPlatformId,
+  WORKFLOW_AGENT_FILES_METADATA_KEY,
+  type AttachmentManifest,
   type AgentRunAuthorization,
   type AgentRunJobLease,
   type AgentRunResumeState,
@@ -18,7 +23,7 @@ import {
 import { runCommandSchema } from "@work-shape/catalyst-api-contract";
 import { ToolRegistry } from "@work-shape/catalyst-tool-execution";
 import { ModelUsageGovernance } from "@work-shape/catalyst-usage-governance";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   useAgentRunJobFixture,
   type AgentRunJobFixture as Fixture,
@@ -410,6 +415,102 @@ describe("agent runs as claimed jobs", () => {
     });
     expect(await fixture.jobs()).toMatchObject([{ status: "succeeded", attempts: 1 }]);
   });
+
+  it.each(["supported", "unsupported"] as const)(
+    "sets up %s Workflow run files only once across a pause and resume",
+    async (kind) => {
+      const fixture = await createFixture(`workflow_files_${kind}`);
+      const run = await fixture.accept("Check the run's file");
+      const fileIds = ["file_run_document"];
+      await db.sql`update agent_runs set workflow_step_run_id = 'wsr_file_check' where id = ${run.id}`;
+      await db.sql`update messages set metadata = ${db.sql.json({
+        [WORKFLOW_AGENT_FILES_METADATA_KEY]: { fileIds }
+      })} where id = ${run.inputMessageId}`;
+      const attachmentManifest: AttachmentManifest = {
+        version: 1,
+        attachments:
+          kind === "unsupported"
+            ? []
+            : [
+                {
+                  kind: "document",
+                  fileId: "file_copy" as AttachmentManifest["attachments"][number]["fileId"],
+                  attachmentId:
+                    "att_copy" as AttachmentManifest["attachments"][number]["attachmentId"],
+                  filename: "document.pdf",
+                  byteSize: 10,
+                  status: "ready"
+                }
+              ]
+      };
+      // Attachment handlers refuse every unsupported file. The assembly still stores the
+      // empty result and copy map through the same transaction as a supported upload.
+      const attachWorkflowFiles = vi.fn(async () => {
+        await db.store.childAgentRuns.attachWorkflowAgentFiles({
+          clientInstanceId: fixture.clientInstanceId,
+          runId: run.id,
+          attachmentManifest,
+          fileCopies: kind === "unsupported" ? {} : { file_run_document: "file_copy" },
+          claimedAt: new Date().toISOString()
+        });
+        return attachmentManifest;
+      });
+      const worker = () =>
+        harness.worker(
+          db.store,
+          fixture.clientInstanceId,
+          createAgentRunJobs({
+            clientInstanceId: fixture.clientInstanceId,
+            stores: db.store,
+            loadCurrentUser: async () => fixture.user,
+            loadWorkflowAgent: async () => ({
+              workflowRunId: "wfr_file_check",
+              instructions: "Check the file",
+              toolNames: [],
+              outputSchema: { type: "object" }
+            }),
+            attachWorkflowFiles,
+            execute: fixture.executor.execute,
+            slots: 1
+          }).handlers
+        );
+      const call = await waitingCall(fixture, run, db.store);
+      const pass = worker().runDue();
+      const first = await fixture.executor.next();
+      first.waitForDecision(
+        {
+          toolCallId: asToolCallId("toolcall-1"),
+          toolName: "demo.change",
+          operationRunId: call.id,
+          operationId: "demo.change",
+          mode: "confirm",
+          inputPreview: { text: "one" },
+          expiresAt: required(call.expiresAt)
+        },
+        resumeState(call.id)
+      );
+      await pass;
+      expect(attachWorkflowFiles).toHaveBeenCalledTimes(1);
+      expect(attachWorkflowFiles.mock.calls[0]).toMatchObject([{ fileIds }]);
+      await db.store.agentRuns.decideWaitingToolCall({
+        clientInstanceId: fixture.clientInstanceId,
+        operationRunId: call.id,
+        deciderUserId: fixture.user.id,
+        decision: { mode: "confirmed", by: fixture.user.id, at: new Date().toISOString() }
+      });
+      // A new worker reconstructs the input from the persisted task, not an in-memory flag.
+      const resumed = worker().runDue();
+      const second = await fixture.executor.next();
+      second.complete();
+      await resumed;
+      expect(second.input.resume).toBeDefined();
+      expect(second.input.message.attachmentManifest).toEqual(
+        kind === "unsupported" ? undefined : attachmentManifest
+      );
+      expect(await fixture.run(run)).toMatchObject({ status: "completed" });
+      expect(attachWorkflowFiles).toHaveBeenCalledTimes(1);
+    }
+  );
 
   it("lets a run that waits for a decision hold no lease, keep the conversation and resume in a new job", async () => {
     const fixture = await createFixture("decision");
