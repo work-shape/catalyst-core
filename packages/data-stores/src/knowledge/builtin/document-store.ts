@@ -1,4 +1,4 @@
-import { listKnowledgeDocuments } from "./document-listing";
+import { decodeKnowledgeDocumentCursor, listKnowledgeDocuments } from "./document-listing";
 import { hasOutdatedProcessor, processingSummary } from "./processing-summary";
 import { createKnowledgeFieldStore } from "./field-store";
 import { documentOfFile } from "./document-of-file";
@@ -857,9 +857,12 @@ export function createBuiltinDocumentStore(
       );
     },
 
-    listDocuments(input, signal) {
+    async listDocuments(input, signal) {
+      // Decode before entering the executor: callback errors become database failures there.
+      const after =
+        input.cursor === undefined ? undefined : decodeKnowledgeDocumentCursor(input.cursor);
       return inStore("Listing the documents", KNOWLEDGE_DOCUMENTS_TIMEOUT_MS, signal, (sql) =>
-        listKnowledgeDocuments(sql, input)
+        listKnowledgeDocuments(sql, { limit: input.limit, ...(after ? { after } : {}) })
       );
     },
 

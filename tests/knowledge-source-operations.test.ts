@@ -4,7 +4,11 @@ import { callTestPath, createTestFetch } from "./support/test-instance";
 import postgres from "postgres";
 import { fileTestDatabaseUrl } from "./support/test-database";
 import { eventually } from "./support/assertions";
-import { createActorAccess, KNOWLEDGE_BASE_ASSET_KIND } from "@work-shape/catalyst-core";
+import {
+  createActorAccess,
+  encodePageCursor,
+  KNOWLEDGE_BASE_ASSET_KIND
+} from "@work-shape/catalyst-core";
 import { asUserId, LEGACY_LIST_GRANTOR } from "@work-shape/catalyst-core";
 import { describe, expect, it, vi } from "vitest";
 import { required } from "./support/assertions";
@@ -365,14 +369,26 @@ describe("source sync operations (KB 74, 75)", () => {
     expect(
       (await documents.listDocuments({ limit: 1, cursor })).documents.map(({ id }) => id)
     ).toEqual(["doc_0"]);
-    // The connector sanitizes errors thrown inside its transaction callback.
-    for (const invalid of ["nonsense", "e30"])
-      await expect(documents.listDocuments({ limit: 1, cursor: invalid })).rejects.toMatchObject({
-        code: "INTERNAL",
-        message: "The query failed.",
-        details: undefined,
-        exposeMessage: true
+  });
+
+  it("refuses garbage and tampered document cursors with a 400 invalid_cursor response", async () => {
+    const world = await setup();
+    for (const cursor of [
+      "nonsense",
+      "e30",
+      encodePageCursor(["not-a-timestamp", "doc_1"]),
+      encodePageCursor(["2026-02-30 12:34:56+00", "doc_1"]),
+      encodePageCursor(["2026-10-17 12:34:56.123456+00", "doc_\u0000"])
+    ]) {
+      const response = await world.instance.api.call("knowledge_bases.list_documents", {
+        params: { knowledgeBase: KB },
+        query: { limit: 1, cursor }
       });
+      expect(response.statusCode, response.body).toBe(400);
+      expect(response.json()).toMatchObject({
+        error: { code: "BAD_REQUEST", details: { reason: "invalid_cursor" } }
+      });
+    }
   });
 
   it("reads an existing source-item cursor and writes the same bytes", async () => {

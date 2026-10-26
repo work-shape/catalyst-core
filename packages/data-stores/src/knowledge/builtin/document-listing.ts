@@ -8,8 +8,7 @@ import {
   KNOWLEDGE_DOCUMENT_WAIT_CODES,
   knowledgeDocumentFailureCodeSchema,
   knowledgeDocumentStateOf,
-  type KnowledgeDocumentEntry,
-  type KnowledgeDocumentStore
+  type KnowledgeDocumentEntry
 } from "@work-shape/catalyst-core";
 import type { PostgresChangeStatements } from "@work-shape/catalyst-postgres-connector";
 
@@ -40,18 +39,29 @@ const documentRow = z.object({
   cursor_at: z.string()
 });
 
-const cursorSchema = z.tuple([z.string().min(1).max(64), z.string().min(1).max(200)]);
+const cursorSchema = z.tuple([
+  z
+    .string()
+    .max(64)
+    // PostgreSQL emits UTC timestamps with a space and up to six fractional digits. Validate
+    // their ISO equivalent, but keep the original value so pagination loses no precision.
+    .refine(
+      (value) => z.iso.datetime().safeParse(value.replace(" ", "T").replace(/\+00$/u, "Z")).success
+    ),
+  z
+    .string()
+    .min(1)
+    .max(200)
+    .refine((value) => !value.includes("\u0000"))
+]);
 
-function decodeCursor(cursor: string): [string, string] {
+export function decodeKnowledgeDocumentCursor(cursor: string): [string, string] {
   try {
     return cursorSchema.parse(decodePageCursor(cursor));
   } catch {
-    throw new AppError(
-      "VALIDATION_FAILED",
-      "The cursor is not one this list answered.",
-      { reason: "knowledge_cursor_invalid" },
-      { exposeMessage: true }
-    );
+    throw new AppError("BAD_REQUEST", "The cursor is not one this list answered.", {
+      reason: "invalid_cursor"
+    });
   }
 }
 
@@ -68,11 +78,11 @@ const summaryRow = z.object({
 /** One page and, on the first page, the state of all retained documents, aggregated in SQL. */
 export async function listKnowledgeDocuments(
   sql: PostgresChangeStatements,
-  input: Parameters<KnowledgeDocumentStore["listDocuments"]>[0]
+  input: { limit: number; after?: [string, string] }
 ) {
-  const after = input.cursor === undefined ? undefined : decodeCursor(input.cursor);
+  const { after } = input;
   const [totals] =
-    input.cursor === undefined
+    after === undefined
       ? z.array(summaryRow).parse(
           await sql.run(`
     select count(*)::int as count,
