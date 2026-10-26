@@ -1,6 +1,7 @@
 import {
   ACTIVE_AGENT_RUN_STATUSES,
   readAssistantToolCallsMetadata,
+  readWorkflowAgentFiles,
   AppError,
   SUBAGENTS_PER_RUN,
   SUBAGENT_ANSWER_MAX_LENGTH,
@@ -249,17 +250,22 @@ export function createPostgresChildAgentRunStore(
                 isNull(conversationAttachments.messageId)
               )
             );
+        const workflowFiles = readWorkflowAgentFiles(message.metadata);
         await tx
           .update(messages)
           .set({
             metadata: {
               ...createUserMessageMetadata({ attachmentManifest: input.attachmentManifest }),
-              ...(message.metadata[WORKFLOW_AGENT_FILES_METADATA_KEY] === undefined
-                ? {}
-                : {
-                    [WORKFLOW_AGENT_FILES_METADATA_KEY]:
-                      message.metadata[WORKFLOW_AGENT_FILES_METADATA_KEY]
-                  })
+              ...(workflowFiles
+                ? {
+                    [WORKFLOW_AGENT_FILES_METADATA_KEY]: {
+                      fileIds: workflowFiles,
+                      // The alias belongs to this task's claimed attachments, never to a
+                      // global file lookup. Canonical step data and task input keep run ids.
+                      fileCopies: { ...input.fileCopies }
+                    }
+                  }
+                : {})
             }
           })
           .where(

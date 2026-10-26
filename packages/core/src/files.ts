@@ -810,6 +810,7 @@ export interface ConversationAttachmentStore {
     error: JsonObject;
     completedAt: ISODateString;
   }): Promise<ConversationAttachment>;
+  /** Also resolves a Workflow run-file id through the copy claimed by its task in this thread. */
   findReadyConversationAttachmentByFile(input: {
     clientInstanceId: ClientInstanceId;
     conversationId: ConversationId;

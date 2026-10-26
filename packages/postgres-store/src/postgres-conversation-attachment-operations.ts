@@ -1,5 +1,6 @@
 import {
   PENDING_ATTACHMENT_STATUSES,
+  WORKFLOW_AGENT_FILES_METADATA_KEY,
   AppError,
   asConversationAttachmentId,
   asConversationId,
@@ -15,14 +16,25 @@ import {
   type SubjectRowClaim,
   type UpdateConversationAttachmentInput
 } from "@work-shape/catalyst-core";
-import { and, asc, desc, sql as drizzleSql, eq, inArray, isNotNull, isNull, ne } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  sql as drizzleSql,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  ne,
+  or
+} from "drizzle-orm";
 import { lockActiveConversation, touchConversation } from "./postgres-conversation-operations";
 import {
   type PostgresConnection,
   type PostgresPlatformFileStoreCallbacks
 } from "./postgres-file-store-types";
 import { mapConversationAttachment } from "./rows";
-import { conversationAttachments, managedFiles } from "./schema";
+import { conversationAttachments, conversations, managedFiles, messages } from "./schema";
 
 function leaseExpiry(leaseMs: number) {
   return drizzleSql`now() + make_interval(secs => ${leaseMs}::double precision / 1000)`;
@@ -558,7 +570,22 @@ export async function findReadyConversationAttachmentByFile(
       and(
         eq(conversationAttachments.clientInstanceId, input.clientInstanceId),
         eq(conversationAttachments.conversationId, input.conversationId),
-        eq(conversationAttachments.fileId, input.fileId),
+        or(
+          eq(conversationAttachments.fileId, input.fileId),
+          // A Workflow task also names the original run file. Resolve it only through the
+          // mapping on the message that claimed this ready copy in this same run thread.
+          drizzleSql`exists (
+            select 1 from ${messages}
+            inner join ${conversations} on ${conversations.id} = ${messages.conversationId}
+              and ${conversations.clientInstanceId} = ${messages.clientInstanceId}
+            where ${messages.clientInstanceId} = ${input.clientInstanceId}
+              and ${messages.conversationId} = ${input.conversationId}
+              and ${messages.id} = ${conversationAttachments.messageId}
+              and ${conversations.kind} = 'run_thread'
+              and ${messages.metadata}->${WORKFLOW_AGENT_FILES_METADATA_KEY}->'fileCopies'->>${input.fileId}
+                = ${conversationAttachments.fileId}
+          )`
+        ),
         eq(conversationAttachments.status, "ready")
       )
     )
