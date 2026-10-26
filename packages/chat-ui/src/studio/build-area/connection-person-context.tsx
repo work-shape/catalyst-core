@@ -281,7 +281,7 @@ function PersonContextMapping({
       setFailure(
         error instanceof PersonContextConflictError
           ? { kind: "conflict" }
-          : { kind: "failed", message: instanceSentence(error) }
+          : { kind: "failed", message: instanceSentence(error, t) }
       );
     } finally {
       setSaving(undefined);

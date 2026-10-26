@@ -1,12 +1,5 @@
 import { useState } from "react";
-import {
-  Banner,
-  Button,
-  Dialog,
-  InlineError,
-  KeyValue,
-  KeyValueList
-} from "@work-shape/catalyst-ui";
+import { Banner, Button, Dialog, KeyValue, KeyValueList } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../../shared/i18n";
 import {
   narrativeHolds,
@@ -39,7 +32,9 @@ import {
   useAppPublishSend,
   useSharePublishQuestion
 } from "./app-publish-question";
-import type { AppsWorkspace } from "./apps-host";
+import { useAppsHost, type AppsWorkspace } from "./apps-host";
+import type { RefusalAction, ToldRefusal } from "../../shared/i18n/refusals";
+import { RefusalNotice } from "../refusal-notice";
 
 /** The revision a publish names, with what its manifest reaches. */
 export interface PublishAsk {
@@ -74,6 +69,8 @@ type PublishDialogProps = {
   ask: PublishAsk;
   loading: boolean;
   error: string | undefined;
+  /** The way to the Data Store or the Workflow a refusal names, shown beside its sentence. */
+  errorAction?: RefusalAction | undefined;
   onConfirm(): void;
   onClose(): void;
 };
@@ -96,15 +93,18 @@ interface PublishAudienceAsk {
 export function AskedPublishDialog({
   app,
   onPublished,
+  onRefusal,
   ...props
 }: PublishDialogProps & {
   app: string;
   /** The draft went live, not held for an approval: the card it was asked from says so. */
   onPublished?(): void;
+  /** Hears each refusal of a send, and nothing for a send that was not refused. */
+  onRefusal?: (refusal: ToldRefusal | undefined) => void;
 }) {
   const [chosen, setChosen] = useState<AppAudience>();
   const question = useAppPublishNarrative(props.workspace.id, app, props.ask.revision, chosen);
-  const publishing = useAppPublishSend(props.workspace.id, app);
+  const publishing = useAppPublishSend(props.workspace.id, app, onRefusal);
   // The pending Workflows the draft reaches go live with it, on this one Publish (DP-3).
   const together = useAppPublishTogether(app, props.ask.revision);
   // What is sent is what is shown: the choice, or the audience the instance proposed.
@@ -113,6 +113,7 @@ export function AskedPublishDialog({
     ...props,
     loading: publishing.busy,
     error: publishing.error,
+    errorAction: publishing.errorAction,
     waits: publishing.waits,
     narrative: question.narrative,
     together,
@@ -202,6 +203,7 @@ export function PublishDialog({
   ask,
   loading,
   error,
+  errorAction,
   storedData,
   narrative = NO_NARRATIVE,
   audience,
@@ -222,6 +224,7 @@ export function PublishDialog({
   together?: AppPublishTogetherRead;
 }) {
   const { t } = useTranslation();
+  const host = useAppsHost();
   const offer = audience?.offer;
   const selected = audience?.selected;
   // The offer names the people of the audience it was read for; for another choice it waits.
@@ -302,7 +305,21 @@ export function PublishDialog({
             </PublishDetails>
           )}
           {waits ? <Banner data-testid="app-publish-waits">{t("apps.publishWaits")}</Banner> : null}
-          {error ? <InlineError>{error}</InlineError> : null}
+          {error ? (
+            <RefusalNotice
+              message={error}
+              action={errorAction}
+              // The way leaves the dialog: it closes, and the page it names opens.
+              onOpen={
+                host
+                  ? (route) => {
+                      onClose();
+                      host.showRoute(route);
+                    }
+                  : undefined
+              }
+            />
+          ) : null}
         </div>
       </div>
     </Dialog>

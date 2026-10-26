@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { RadioGroup } from "@work-shape/catalyst-ui";
 import { instanceSentence, PendingApprovalError } from "../build-area/build-refusals";
 import { useTranslation, type TranslationContextValue } from "../../shared/i18n";
+import type { RefusalAction, ToldRefusal } from "../../shared/i18n/refusals";
 import {
   useApp,
   useAppWrites,
@@ -155,6 +156,8 @@ export function appPublishBody(
 export interface AppPublishSend {
   busy: boolean;
   error: string | undefined;
+  /** The way to what the refusal names, where it names a Data Store or a Workflow. */
+  errorAction: RefusalAction | undefined;
   /** The publish waits for an approver: the live revision stays until then. */
   waits: boolean;
   /** Sends the publish: made live, held for an approver, or refused. */
@@ -166,20 +169,30 @@ export interface AppPublishSend {
   ): Promise<"published" | "waits" | "failed">;
 }
 
-/** The publish the dialog sends itself, with the audience it asked for. */
-export function useAppPublishSend(workspaceId: string, app: string): AppPublishSend {
+/**
+ * The publish the dialog sends itself, with the audience it asked for. `onRefusal` hears each
+ * refusal, and nothing when a later send was not refused, so the page can keep it in its head.
+ */
+export function useAppPublishSend(
+  workspaceId: string,
+  app: string,
+  onRefusal?: (refusal: ToldRefusal | undefined) => void
+): AppPublishSend {
   const { t } = useTranslation();
+  const host = useAppsHost();
   const writes = useAppWrites(workspaceId);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string>();
+  const [error, setError] = useState<ToldRefusal>();
   const [waits, setWaits] = useState(false);
   return {
     busy,
-    error,
+    error: error?.message,
+    errorAction: error?.action,
     waits,
     send: async (revision, audience, together) => {
       setBusy(true);
       setError(undefined);
+      onRefusal?.(undefined);
       try {
         await writes.publish(app, revision, audience, together);
         return "published";
@@ -188,12 +201,12 @@ export function useAppPublishSend(workspaceId: string, app: string): AppPublishS
           setWaits(true);
           return "waits";
         }
-        const refusal = appPublishRefusal(caught);
-        setError(
-          refusal
-            ? t(refusal.key, refusal.values)
-            : (instanceSentence(caught) ?? t("apps.publishFailed"))
-        );
+        const refusal = appPublishRefusal(caught, t, {
+          workspaceId,
+          ...(host?.canOpen ? { canOpen: host.canOpen } : {})
+        }) ?? { message: instanceSentence(caught, t) ?? t("apps.publishFailed") };
+        setError(refusal);
+        onRefusal?.(refusal);
         return "failed";
       } finally {
         setBusy(false);

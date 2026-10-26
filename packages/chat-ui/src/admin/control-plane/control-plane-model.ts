@@ -6,6 +6,7 @@ import type {
   LocaleCode,
   SafeConfig
 } from "@work-shape/catalyst-api-client";
+import { DATA_STORE_ASSET_KIND } from "@work-shape/catalyst-core";
 import type { AgentCreation } from "../../studio/agents/agents-model";
 import { createAssetWrites } from "../../shared/api/asset-writes";
 import {
@@ -89,6 +90,11 @@ export interface ControlPlaneModel {
   canViewBuild: boolean;
   /** The viewer may open agents in Build: the Agents page links each agent to its page there. */
   canOpenAgentsInBuild: boolean;
+  /**
+   * The viewer may open Data Stores in Build: a refusal that names a store links to its page
+   * there (REFUSE-1).
+   */
+  canOpenDataStoresInBuild: boolean;
   /**
    * The viewer may write a Connection in Build: the card of a drafted REST API's tools opens
    * its approval list.
@@ -271,6 +277,7 @@ export function useControlPlaneModel({
     canViewAdministration: firstAdministrationRoute(catalog, build, viewer) !== undefined,
     canViewBuild,
     canOpenAgentsInBuild: canViewBuild && buildRights.reads(AGENT_ASSET_KIND),
+    canOpenDataStoresInBuild: canViewBuild && buildRights.reads(DATA_STORE_ASSET_KIND),
     mayWriteConnections:
       canViewBuild &&
       (buildRights.mayCreate(CONNECTION_ASSET_KIND) ||

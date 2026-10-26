@@ -23,6 +23,7 @@ import { workspaceQueryKeys } from "../../shared/api/workspace-query-keys";
 import { AGENTS_BUILD_PATH, useOptionalBuildNavigation } from "../../shared/build-route";
 import { canManageServicePrincipals, canManageUsers } from "../../shared/governance";
 import { workspaceRoutePath } from "../../shared/routes";
+import { useTranslation } from "../../shared/i18n";
 import { useSettingsPage } from "../../shared/settings-page-context";
 import { apiErrorCode } from "../../shared/workspace-utils";
 import { instanceSentence, PendingApprovalError } from "./build-refusals";
@@ -236,6 +237,7 @@ export interface ConnectionSource {
  * `connections.test` runs the test.
  */
 export function useConnectionSource(): ConnectionSource {
+  const { t } = useTranslation();
   const { apiBaseUrl, authScope, client, user, startDockedChat, tellConversation } =
     useSettingsPage();
   const api = { apiBaseUrl, authScope, client };
@@ -315,7 +317,7 @@ export function useConnectionSource(): ConnectionSource {
       if (query.error && !query.isFetching) {
         return {
           status: "failed",
-          message: instanceSentence(query.error),
+          message: instanceSentence(query.error, t),
           retry: () => void query.refetch().catch(() => undefined)
         };
       }
@@ -474,7 +476,7 @@ export function useConnectionSource(): ConnectionSource {
         if (query.error && !query.isFetching) {
           return {
             status: "failed",
-            message: instanceSentence(query.error),
+            message: instanceSentence(query.error, t),
             retry: () => void query.refetch().catch(() => undefined)
           };
         }
@@ -521,7 +523,7 @@ export function useConnectionSource(): ConnectionSource {
               ? { status: "held" }
               : apiErrorCode(test.error) === "FORBIDDEN"
                 ? { status: "refused" }
-                : { status: "failed", message: instanceSentence(test.error) }
+                : { status: "failed", message: instanceSentence(test.error, t) }
             : { status: "idle" };
       return { run, start: () => test.mutate() };
     }

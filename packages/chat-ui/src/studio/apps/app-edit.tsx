@@ -49,6 +49,8 @@ import { AskedPublishDialog, askToPublish, type PublishAsk } from "./app-publish
 import { AppStoredDataFact } from "./app-publish-data";
 import { useAppsHost, type AppsWorkspace } from "./apps-host";
 import { RevisionsDrawer } from "./revisions-drawer";
+import { RefusalNotice } from "../refusal-notice";
+import type { ToldRefusal } from "../../shared/i18n/refusals";
 import { personName } from "../../shared/person-name";
 
 /** The sides of a draft: the App in its frame, its source files, and its named actions. */
@@ -105,6 +107,9 @@ export function AppEdit({ app }: { app: string }) {
   const [revisionsOpen, setRevisionsOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
+  // The last refusal of a publish from the dialog: it stays in the head once the dialog closes,
+  // with the way to what it names (REFUSE-1).
+  const [refused, setRefused] = useState<ToldRefusal>();
   // The shown draft: the outside hosts its frame may not call before a publish, and whether the
   // viewer may allow them for their own preview.
   const [shown, setShown] = useState<AppPreviewResponse>();
@@ -180,13 +185,12 @@ export function AppEdit({ app }: { app: string }) {
         setPublishWaits(true);
         return true;
       }
-      const refusal = appPublishRefusal(caught);
+      const refusal = appPublishRefusal(caught, t);
       setError(
         caught instanceof PendingApprovalError
           ? t("apps.publishPending")
-          : refusal
-            ? t(refusal.key, refusal.values)
-            : (instanceSentence(caught) ??
+          : (refusal?.message ??
+              instanceSentence(caught, t) ??
               t(
                 failure === "publish"
                   ? "apps.publishFailed"
@@ -235,6 +239,7 @@ export function AppEdit({ app }: { app: string }) {
           asset && draft !== undefined
             ? () => {
                 setError(undefined);
+                setRefused(undefined);
                 setPublishAsk(askToPublish(draft, published, asset.config));
               }
             : undefined
@@ -253,6 +258,15 @@ export function AppEdit({ app }: { app: string }) {
           <Banner layout="page" className="shrink-0" data-testid="app-publish-waits">
             {t("apps.publishWaits")}
           </Banner>
+        ) : null}
+        {refused && !publishAsk ? (
+          <RefusalNotice
+            layout="page"
+            className="shrink-0"
+            message={refused.message}
+            action={refused.action}
+            onOpen={host.showRoute}
+          />
         ) : null}
         {/* The preview stays mounted under the other sides, so the App keeps its state. */}
         <div className="size-full" hidden={view !== "preview"}>
@@ -311,6 +325,7 @@ export function AppEdit({ app }: { app: string }) {
           ask={publishAsk}
           loading={busy}
           error={error}
+          onRefusal={setRefused}
           onConfirm={() => {
             run("publish", () => writes.publish(app, publishAsk.revision))
               .then((done) => {
@@ -375,6 +390,7 @@ export function AppEdit({ app }: { app: string }) {
             rights.publish
               ? (revision: ConfigAssetRevision) => {
                   setError(undefined);
+                  setRefused(undefined);
                   setPublishAsk(askToPublish(revision.revision, published, revision.config));
                 }
               : undefined

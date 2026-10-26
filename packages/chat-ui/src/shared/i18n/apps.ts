@@ -206,15 +206,6 @@ export const apps = defineTranslations({
     "apps.storedDataFact":
       "When published, this app reads stored data with the data store's own app role. Rights on the store are then checked for whoever publishes the app, not for each viewer, so everyone who may use it sees what its actions select.",
     "apps.publishFailed": "The app could not be published.",
-    "apps.publishWorkflowUnavailable":
-      "The Workflow “{workflow}” that this app starts is not published. Publish the Workflow first, then the app.",
-    "apps.publishWorkflowInputMissing":
-      "The action “{action}” does not pass “{input}”, which the Workflow “{workflow}” needs.",
-    "apps.publishWorkflowInputUndeclared":
-      "The action “{action}” passes “{input}”, which the Workflow “{workflow}” does not take.",
-    "apps.revisionFilesRemoved":
-      "The files of this version are not stored any more, so it cannot be published or shown.",
-    "apps.tooLargeToHold": "This change needs an approval, and it is too large to be held for one.",
     "apps.filesTooLarge": "The files of this version are too large to show here.",
     "apps.publishHosts": "External hosts it calls",
     "apps.publishMissingRight": "You need the right “{right}” to publish.",
@@ -482,16 +473,6 @@ export const apps = defineTranslations({
     "apps.storedDataFact":
       "Nach dem Veröffentlichen liest diese App gespeicherte Daten mit der eigenen App-Rolle des Datenspeichers. Rechte am Speicher werden dann bei der Person geprüft, die die App veröffentlicht, nicht bei jeder Person, die sie ansieht. Deshalb sehen alle, die sie nutzen dürfen, was ihre Aktionen auswählen.",
     "apps.publishFailed": "Die App konnte nicht veröffentlicht werden.",
-    "apps.publishWorkflowUnavailable":
-      "Der Workflow „{workflow}“, den diese App startet, ist nicht veröffentlicht. Veröffentliche zuerst den Workflow, dann die App.",
-    "apps.publishWorkflowInputMissing":
-      "Die Aktion „{action}“ übergibt „{input}“ nicht, das der Workflow „{workflow}“ braucht.",
-    "apps.publishWorkflowInputUndeclared":
-      "Die Aktion „{action}“ übergibt „{input}“, das der Workflow „{workflow}“ nicht annimmt.",
-    "apps.revisionFilesRemoved":
-      "Die Dateien dieser Version sind nicht mehr gespeichert. Sie lässt sich weder veröffentlichen noch anzeigen.",
-    "apps.tooLargeToHold":
-      "Diese Änderung braucht eine Freigabe und ist zu groß, um dafür zurückgehalten zu werden.",
     "apps.filesTooLarge": "Die Dateien dieser Version sind zu groß, um sie hier anzuzeigen.",
     "apps.publishHosts": "Externe Hosts, die sie aufruft",
     "apps.publishMissingRight": "Zum Veröffentlichen brauchst du das Recht „{right}“.",

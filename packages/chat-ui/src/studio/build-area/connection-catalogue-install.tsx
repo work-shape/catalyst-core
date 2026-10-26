@@ -285,7 +285,7 @@ export function CatalogueInstall({
       });
     } catch (error) {
       setBusy(false);
-      setRefusals(approvalRefusals(error, config, t));
+      setRefusals(approvalRefusals(error, config, t, locale));
     }
   };
 

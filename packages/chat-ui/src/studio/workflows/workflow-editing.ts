@@ -474,7 +474,7 @@ export function useWorkflowEditing(input: {
           )
         );
       } else {
-        setError(instanceSentence(failure) ?? t("workflows.settings.saveFailed"));
+        setError(instanceSentence(failure, t) ?? t("workflows.settings.saveFailed"));
       }
     } finally {
       setSending(undefined);
@@ -514,7 +514,7 @@ export function useWorkflowEditing(input: {
     } catch (failure) {
       const refused = readRefusalDetails(failure).issues;
       if (refused.length === 0) {
-        return instanceSentence(failure) ?? t("workflows.settings.saveFailed");
+        return instanceSentence(failure, t) ?? t("workflows.settings.saveFailed");
       }
       return edit.kind === "move" && moved !== undefined
         ? moveRefusal(

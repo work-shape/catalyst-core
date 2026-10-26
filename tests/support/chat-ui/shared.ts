@@ -53,3 +53,4 @@ export {
 } from "../../../packages/chat-ui/src/shared/shell-session";
 
 export type { SettingsViewer } from "../../../packages/chat-ui/src/shared/page-definition";
+export { tellRefusal } from "../../../packages/chat-ui/src/shared/i18n/refusals";

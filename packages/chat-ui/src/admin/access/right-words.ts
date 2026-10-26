@@ -99,6 +99,11 @@ export function verbLabel(verb: RightVerb, t: Translate): string {
  * its id.
  */
 export function actionLabel(action: string, t: Translate): string {
+  return knownActionLabel(action, t) ?? t("rights.actionUnknown");
+}
+
+/** What an action allows, as `actionLabel` names it, or nothing for an action not known here. */
+export function knownActionLabel(action: string, t: Translate): string | undefined {
   if (isOwnWordAction(action)) {
     return t(ownActionKeys[action]);
   }
@@ -106,7 +111,7 @@ export function actionLabel(action: string, t: Translate): string {
   const kind = action.slice(0, dot);
   const verb = action.slice(dot + 1);
   const label = isVerb(verb) ? verbOnKind(kind, t(verbKeys[verb]), t) : undefined;
-  return dot > 0 && label !== undefined ? sentenceStart(label) : t("rights.actionUnknown");
+  return dot > 0 && label !== undefined ? sentenceStart(label) : undefined;
 }
 
 /**

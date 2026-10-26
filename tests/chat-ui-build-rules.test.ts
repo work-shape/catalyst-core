@@ -79,26 +79,26 @@ describe("the address of a new asset", () => {
     const de = createTranslationContext("de").t;
     const taken = { ok: true as const, found: refusedName("name_taken") };
     const invalid = { ok: true as const, found: refusedName("name_invalid") };
-    expect(addressCheckOf(taken, en)).toEqual({
+    expect(addressCheckOf(taken, en, "en")).toEqual({
       state: "refused",
       reason: "This address is taken. Choose another name or address."
     });
-    expect(addressCheckOf(taken, de)).toEqual({
+    expect(addressCheckOf(taken, de, "de")).toEqual({
       state: "refused",
       reason: "Diese Adresse ist vergeben. Wähle einen anderen Namen oder eine andere Adresse."
     });
     // The reason says the rule the dialog makes addresses by, with its limit.
-    expect(addressCheckOf(invalid, en)).toEqual({
+    expect(addressCheckOf(invalid, en, "en")).toEqual({
       state: "refused",
       reason:
         "This address does not work. Use lowercase letters and digits in words joined by -, starting with a letter, at most 63 characters."
     });
-    expect(addressCheckOf(invalid, de)).toEqual({
+    expect(addressCheckOf(invalid, de, "de")).toEqual({
       state: "refused",
       reason:
         "Diese Adresse geht so nicht. Nimm Kleinbuchstaben und Ziffern in Wörtern, die - verbindet, am Anfang einen Buchstaben, höchstens 63 Zeichen."
     });
-    expect(addressCheckOf({ ok: true, found: { available: true } }, en)).toEqual({
+    expect(addressCheckOf({ ok: true, found: { available: true } }, en, "en")).toEqual({
       state: "free"
     });
     // A refusal of the check itself is the instance's sentence; a lost connection says
@@ -106,11 +106,13 @@ describe("the address of a new asset", () => {
     const forbidden = new ApiError(403, "Missing permission agent.write", {
       error: { code: "FORBIDDEN", message: "Missing permission agent.write" }
     });
-    expect(addressCheckOf({ ok: false, error: forbidden }, en)).toEqual({
+    expect(addressCheckOf({ ok: false, error: forbidden }, en, "en")).toEqual({
       state: "refused",
       reason: "Missing permission agent.write"
     });
-    expect(addressCheckOf({ ok: false, error: new TypeError("Failed to fetch") }, en)).toEqual({
+    expect(
+      addressCheckOf({ ok: false, error: new TypeError("Failed to fetch") }, en, "en")
+    ).toEqual({
       state: "unchecked"
     });
 
@@ -446,7 +448,8 @@ describe("Studio refusals", () => {
         reason: "revision_conflict",
         conflicts: [{ kind: "agent", name: "tax" }]
       }),
-      t
+      t,
+      "en"
     );
 
     expect(outcome).toEqual({ ok: false, conflict: true });
@@ -464,7 +467,8 @@ describe("Studio refusals", () => {
         refusal("REVISION_CONFLICT", "Config agent 'tax' is at revision 4", {
           conflicts: [{ ...conflict, ...changed }]
         }),
-        t
+        t,
+        "en"
       )
     ).toEqual({ ok: false, conflict: true, currentRevision: 4, ...changed });
     expect(
@@ -472,13 +476,14 @@ describe("Studio refusals", () => {
         refusal("REVISION_CONFLICT", "Config agent 'tax' was deleted at revision 4", {
           conflicts: [{ ...conflict, deleted: true, ...changed }]
         }),
-        t
+        t,
+        "en"
       )
     ).toEqual({ ok: false, conflict: true, deleted: true, currentRevision: 4, ...changed });
   });
 
   it("shows any other conflict as the instance said it", () => {
-    expect(readBuildRefusal(refusal("CONFLICT", "The default agent changed"), t)).toEqual({
+    expect(readBuildRefusal(refusal("CONFLICT", "The default agent changed"), t, "en")).toEqual({
       ok: false,
       conflict: false,
       refusals: [{ message: "The default agent changed", asSent: true }]
@@ -493,7 +498,8 @@ describe("Studio refusals", () => {
         workspaceId: "ws-tax",
         workspace: "Tax"
       }),
-      t
+      t,
+      "en"
     );
 
     expect(outcome).toEqual({
@@ -518,7 +524,7 @@ describe("Studio refusals", () => {
       { reason: "tool_not_allowed", toolName: "documents.read", ...workspace },
       { reason: "model_not_allowed", modelBindingId: "reasoning", ...workspace },
       { reason: "model_binding_required", ...workspace }
-    ].map((details) => readBuildRefusal(refusal("FORBIDDEN", "Forbidden", details), t));
+    ].map((details) => readBuildRefusal(refusal("FORBIDDEN", "Forbidden", details), t, "en"));
     const refused = (refusals: unknown[]) => ({ ok: false, conflict: false, refusals });
     expect(messages).toEqual([
       refused([
@@ -553,7 +559,8 @@ describe("Studio refusals", () => {
         workspaceId: "ws-tax",
         workspace: "Steuern"
       }),
-      createTranslationContext("de").t
+      createTranslationContext("de").t,
+      "de"
     );
 
     expect(refusalsOf(outcome, "tools")).toEqual([
@@ -577,7 +584,8 @@ describe("Studio refusals", () => {
           { path: ["toolNames"] }
         ]
       }),
-      t
+      t,
+      "en"
     );
 
     expect(refusalsOf(outcome, "tools")).toEqual(["Tool 'nope' is not registered"]);
@@ -594,7 +602,7 @@ describe("Studio refusals", () => {
   });
 
   it("says that a change waits for an approval", () => {
-    expect(readBuildRefusal(new PendingApprovalError(), t)).toEqual({
+    expect(readBuildRefusal(new PendingApprovalError(), t, "en")).toEqual({
       ok: false,
       conflict: false,
       refusals: [
@@ -612,7 +620,7 @@ describe("Studio refusals", () => {
   it("names who may approve a change that waits, in both languages", () => {
     const waiting = new PendingApprovalError(["Mara Lindqvist", "Jonas Berg"]);
 
-    expect(refusalsOf(readBuildRefusal(waiting, t), undefined)).toEqual([
+    expect(refusalsOf(readBuildRefusal(waiting, t, "en"), undefined)).toEqual([
       "This change waits for approval by Mara Lindqvist or Jonas Berg. Nothing has changed yet and your text is still here."
     ]);
     expect(
@@ -631,7 +639,7 @@ describe("Studio refusals", () => {
   it("shows every other sentence as the instance said it", () => {
     const unread = "The change would break an asset the caller may not read";
 
-    expect(readBuildRefusal(refusal("VALIDATION_FAILED", unread), t)).toEqual({
+    expect(readBuildRefusal(refusal("VALIDATION_FAILED", unread), t, "en")).toEqual({
       ok: false,
       conflict: false,
       refusals: [{ message: unread, asSent: true }]
@@ -642,7 +650,8 @@ describe("Studio refusals", () => {
           refusal("VALIDATION_FAILED", "The definition is invalid", {
             issues: [{ message: unread, path: [] }]
           }),
-          t
+          t,
+          "en"
         ),
         undefined
       )
@@ -652,15 +661,16 @@ describe("Studio refusals", () => {
       refusalsOf(
         readBuildRefusal(
           refusal("FORBIDDEN", "Agent 'tax-a' may not be the default", { reason: "other" }),
-          t
+          t,
+          "en"
         ),
         undefined
       )
     ).toEqual(["Agent 'tax-a' may not be the default"]);
-    expect(refusalsOf(readBuildRefusal(new Error("Network down"), t), undefined)).toEqual([
+    expect(refusalsOf(readBuildRefusal(new Error("Network down"), t, "en"), undefined)).toEqual([
       "Network down"
     ]);
-    expect(refusalsOf(readBuildRefusal(undefined, t), undefined)).toEqual([
+    expect(refusalsOf(readBuildRefusal(undefined, t, "en"), undefined)).toEqual([
       "The change could not be saved."
     ]);
   });

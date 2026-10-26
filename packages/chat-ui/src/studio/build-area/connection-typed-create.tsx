@@ -218,7 +218,7 @@ export function TypedConnectionCreate({
         return;
       case "write_failed": {
         setSteps([]);
-        const { errors: found, detail } = connectionWriteErrors(outcome.error, name, t);
+        const { errors: found, detail } = connectionWriteErrors(outcome.error, name, t, locale);
         setErrors({
           ...(found.id === undefined ? {} : { id: found.id }),
           general:
@@ -233,7 +233,7 @@ export function TypedConnectionCreate({
   };
 
   const sentenceOf = (error: unknown): string => {
-    const outcome = readBuildRefusal(error, t);
+    const outcome = readBuildRefusal(error, t, locale);
     return outcome.ok || outcome.conflict
       ? t("connectionCreate.errorFailed")
       : outcome.refusals.map((refusal) => refusal.message).join(" ");

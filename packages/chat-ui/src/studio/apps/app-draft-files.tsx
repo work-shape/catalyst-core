@@ -30,11 +30,11 @@ export function AppDraftFiles({
   const published = useAppFiles(workspaceId, app, comparedTo);
 
   if (draft.error !== undefined) {
-    const refusal = appRefusalText(draft.error);
+    const refusal = appRefusalText(draft.error, t);
     if (refusal) {
       return (
         <EmptyState layout="inline" className="p-4">
-          {t(refusal)}
+          {refusal}
         </EmptyState>
       );
     }

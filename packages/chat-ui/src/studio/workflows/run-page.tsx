@@ -122,7 +122,7 @@ export function WorkflowRunPage({
       setCancelError(
         workflowWriteRefusal(error) === "refused"
           ? t("workflows.run.cancelRefused")
-          : (instanceSentence(error) ?? t("workflows.run.cancelFailed"))
+          : (instanceSentence(error, t) ?? t("workflows.run.cancelFailed"))
       );
     } finally {
       setCancelBusy(false);

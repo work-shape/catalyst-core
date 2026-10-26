@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { GuardrailHits, ShippedGuardrailView } from "@work-shape/catalyst-api-client";
+import { useTranslation } from "../../shared/i18n";
 import { useSettingsPage, type SettingsPageContextValue } from "../../shared/settings-page-context";
 import { instanceSentence, PendingApprovalError } from "./build-refusals";
 
@@ -39,6 +40,7 @@ export interface GuardrailSource {
 export function useShippedGuardrails(
   settings: Pick<SettingsPageContextValue, "apiBaseUrl" | "authScope" | "client">
 ): ShippedGuardrailsRead {
+  const { t } = useTranslation();
   const { apiBaseUrl, authScope, client } = settings;
   const queryClient = useQueryClient();
   const key = ["shipped-guardrails", apiBaseUrl, authScope];
@@ -66,14 +68,14 @@ export function useShippedGuardrails(
       switchTo: (name, enabled) =>
         change.mutateAsync({ name, enabled }).then(
           () => undefined,
-          (error: unknown) => instanceSentence(error) ?? ""
+          (error: unknown) => instanceSentence(error, t) ?? ""
         )
     };
   }
   if (query.error && !query.isFetching) {
     return {
       status: "failed",
-      message: instanceSentence(query.error),
+      message: instanceSentence(query.error, t),
       retry: () => void query.refetch().catch(() => undefined)
     };
   }
@@ -82,6 +84,7 @@ export function useShippedGuardrails(
 
 /** The Guardrail page on the instance: `guardrails.list_hits` answers the hits. */
 export function useGuardrailSource(): GuardrailSource {
+  const { t } = useTranslation();
   const { apiBaseUrl, authScope, client } = useSettingsPage();
   return {
     useHits(name) {
@@ -96,7 +99,7 @@ export function useGuardrailSource(): GuardrailSource {
       if (query.error && !query.isFetching) {
         return {
           status: "failed",
-          message: instanceSentence(query.error),
+          message: instanceSentence(query.error, t),
           retry: () => void query.refetch().catch(() => undefined)
         };
       }

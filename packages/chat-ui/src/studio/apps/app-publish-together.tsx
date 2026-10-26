@@ -7,6 +7,7 @@ import {
   Skeleton
 } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../../shared/i18n";
+import { tellRefusal } from "../../shared/i18n/refusals";
 import { RunStateBadge } from "../workflows/workflows-frame";
 import type {
   AppPublishNamed,
@@ -104,7 +105,17 @@ function TogetherItem({ workflow }: { workflow: AppPublishTogetherWorkflow }) {
         )}
       </span>
       {workflow.refusals.map((refusal) => (
-        <InlineError key={`${refusal.reason}:${refusal.message}`}>{refusal.message}</InlineError>
+        <InlineError key={`${refusal.reason}:${refusal.message}`}>
+          {/* The review names the Workflow by its row and a missing right as `right`. */}
+          {tellRefusal(
+            {
+              reason: refusal.reason,
+              workflow: workflow.name,
+              ...(refusal.right === undefined ? {} : { right: refusal.right })
+            },
+            t
+          )?.message ?? refusal.message}
+        </InlineError>
       ))}
     </li>
   );
