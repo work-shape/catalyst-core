@@ -8,6 +8,7 @@ import { createFailureNotices } from "./failure-notices";
 import { createLoopProgress } from "./loop-progress";
 import { createStepClaim } from "./step-claim";
 import { createWorkflowDatasets } from "./datasets";
+import { createWorkflowRunFiles, type WorkflowRunFiles } from "./run-files";
 import { createDatasetLifetime } from "./dataset-lifetime";
 import {
   AppError,
@@ -26,6 +27,7 @@ import {
   type JobSchedule,
   type LocaleCode,
   type PlatformStores,
+  type ConversationId,
   type Notices,
   type RegisteredJobHandler,
   type StorePage,
@@ -131,6 +133,11 @@ export interface WorkflowEngineOptions {
   stepDataDays?: number;
   /** Batch sizes of the job that removes run data, below the release's own, for a test. */
   pruneBatch?: WorkflowDataPruningOptions["batch"];
+  /**
+   * Removes what a run thread holds of its attachments, the copies of the run's files an agent
+   * got and what was prepared from them, when the run's files are pruned.
+   */
+  releaseRunThread?(conversationId: ConversationId): Promise<void>;
 }
 
 export type { StartWorkflowRunInput, TestWorkflowRunInput } from "./run-open";
@@ -202,6 +209,8 @@ export interface WorkflowEngine {
   jobSchedules: readonly JobSchedule[];
   /** Removes the values of the runs that are due, as the daily job does. */
   pruneRunData: WorkflowDataPruning["prune"];
+  /** The files of runs; absent where the instance keeps no files. */
+  runFiles?: WorkflowRunFiles;
 }
 
 export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEngine {
@@ -224,6 +233,16 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
           limits: options.datasetLimits
         })
       : undefined;
+  // A run's files lie in the same files store as its datasets.
+  const runFiles = options.datasetObjects
+    ? createWorkflowRunFiles({
+        clientInstanceId,
+        stores,
+        objects: options.datasetObjects,
+        ...(options.releaseRunThread ? { releaseThread: options.releaseRunThread } : {}),
+        now
+      })
+    : undefined;
   const datasetLifetime = createDatasetLifetime({
     clientInstanceId,
     stores,
@@ -242,6 +261,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     now,
     stepFiles,
     ...(datasets ? { datasets } : {}),
+    ...(runFiles ? { runFiles } : {}),
     ...(options.codeRunner ? { codeRunner: options.codeRunner } : {})
   });
 
@@ -781,6 +801,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     stepDataDays: options.stepDataDays ?? WORKFLOW_STEP_DATA_DAYS,
     ...(options.pruneBatch ? { batch: options.pruneBatch } : {}),
     pruneDatasets: datasetLifetime.prune,
+    ...(runFiles ? { pruneRunFiles: runFiles.prune } : {}),
     now
   });
 
@@ -796,6 +817,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     ],
     jobSchedules: [pruning.schedule],
     pruneRunData: pruning.prune,
+    ...(runFiles ? { runFiles } : {}),
     planSchedules: schedule.plan,
     planSchedule: schedule.planOne,
 

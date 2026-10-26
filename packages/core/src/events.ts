@@ -23,6 +23,7 @@ import { liveOnceEvents } from "./events/live-once";
 import { mailEvents } from "./events/mail";
 import { messageEvents } from "./events/message";
 import { noticeEvents } from "./events/notice";
+import { outsideFormEvents } from "./events/outside-form";
 import { operationEvents } from "./events/operation";
 import { permissionEvents } from "./events/permission";
 import { roleEvents } from "./events/role";
@@ -67,6 +68,7 @@ export const EVENTS = joinEvents(
   messageEvents,
   noticeEvents,
   operationEvents,
+  outsideFormEvents,
   permissionEvents,
   roleEvents,
   scheduledStartEvents,

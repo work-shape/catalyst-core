@@ -1,4 +1,5 @@
 import {
+  PENDING_ATTACHMENT_STATUSES,
   AppError,
   asConversationAttachmentId,
   asConversationId,
@@ -6,7 +7,6 @@ import {
   type ClientInstanceId,
   type ConversationAttachment,
   type ConversationAttachmentId,
-  type ConversationAttachmentStatus,
   type ConversationId,
   type CreateConversationAttachmentInput,
   type DraftAttachment,
@@ -590,8 +590,3 @@ export async function findConversationAttachmentByFile(
     .limit(1);
   return row ? mapConversationAttachment(row) : undefined;
 }
-
-const PENDING_ATTACHMENT_STATUSES = [
-  "queued",
-  "preprocessing"
-] as const satisfies readonly ConversationAttachmentStatus[];

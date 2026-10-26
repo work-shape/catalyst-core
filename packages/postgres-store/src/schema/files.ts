@@ -40,7 +40,8 @@ export const managedFiles = pgTable(
   },
   (table) => [
     index("managed_files_client_owner_idx").on(table.clientInstanceId, table.ownerUserId),
-    index("managed_files_checksum_idx").on(table.clientInstanceId, table.checksum)
+    index("managed_files_checksum_idx").on(table.clientInstanceId, table.checksum),
+    index("managed_files_owner_idx").on(table.clientInstanceId, table.ownerKind, table.ownerId)
   ]
 );
 

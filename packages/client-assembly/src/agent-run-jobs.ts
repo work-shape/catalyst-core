@@ -10,13 +10,20 @@ import {
   type AgentRunSignal,
   type WorkerLocalAgentRuntimeOptions
 } from "@work-shape/catalyst-agent-runtime";
+import { setTimeout as delay } from "node:timers/promises";
+import type { ChatAttachmentService } from "@work-shape/catalyst-server";
+import { createUploadFileContent } from "@work-shape/catalyst-capability-sdk";
+import type { WorkflowRunFiles } from "@work-shape/catalyst-workflows";
 import {
   AppError,
   agentUseRefusalOf,
   asUserId,
+  isAppError,
+  PENDING_ATTACHMENT_STATUSES,
   createAuthorizer,
   isAgentAvailableInWorkspace,
   type AgentRun,
+  type AttachmentManifest,
   type AuthenticatedUser,
   type ClientInstanceId,
   type JobWorker,
@@ -49,6 +56,10 @@ interface AgentRunExecutionAssembly {
   env: ClientInstanceEnv;
   localAgentRuntimeOptions: WorkerLocalAgentRuntimeOptions;
   operationCalls: { registry: Pick<OperationRegistry, "resolveMany"> };
+  /** The attachment handlers, which prepare the files a Workflow agent step gets. */
+  attachments?: WorkflowFileAttachments;
+  /** The files of Workflow runs; absent where the instance keeps none. */
+  runFiles?: Pick<WorkflowRunFiles, "read">;
 }
 
 /** The job kinds that execute Agent Runs, for the process that serves them. */
@@ -63,6 +74,7 @@ export function createClientInstanceAgentRunJobs(
     loadCurrentUser: (run) =>
       loadCurrentUser(execution.store, execution.operationCalls.registry, run),
     loadWorkflowAgent: (run) => workflowAgentInput(execution.store, run),
+    ...withWorkflowFiles(execution),
     loadWorkflowAgentDraft: async (run) => {
       const call = await workflowAgentCall(execution.store, execution.operationCalls.registry, run);
       return call && "draft" in call ? call.draft : undefined;
@@ -216,4 +228,82 @@ async function loadCurrentUser(
       );
   }
   return current;
+}
+
+/** The longest a Workflow agent run waits for its files to be prepared before it starts. */
+const WORKFLOW_FILES_WAIT_MS = 10 * 60 * 1_000;
+const WORKFLOW_FILES_POLL_MS = 1_000;
+const PREPARING = new Set<string>(PENDING_ATTACHMENT_STATUSES);
+
+type WorkflowFileAttachments = Pick<
+  ChatAttachmentService,
+  "uploadDraftAttachment" | "listDraftAttachments" | "createAttachmentManifest"
+>;
+
+/**
+ * Gives a Workflow agent step's run the files its task names: each is copied into the run's
+ * thread as a draft attachment, as an upload would be, so the attachment handlers prepare it
+ * where they keep their files. The run waits until each is ready or refused, and their
+ * manifest is stored on the task message. A copy has the run file's checksum, so a run that
+ * starts again finds the copies it made. A file that is gone since the step checked it is left
+ * out, and so are one no handler takes and one still preparing at the end of the wait: the
+ * agent starts with what is ready.
+ */
+async function attachWorkflowFiles(
+  store: PlatformStores,
+  runFiles: Pick<WorkflowRunFiles, "read">,
+  attachments: WorkflowFileAttachments,
+  input: { run: AgentRun; fileIds: readonly string[]; signal: AbortSignal }
+): Promise<AttachmentManifest> {
+  const { run, signal } = input;
+  const { clientInstanceId, conversationId } = run;
+  const attachmentIds = new Set<string>();
+  for (const fileId of new Set(input.fileIds)) {
+    const read = await runFiles.read(fileId);
+    if (!read) continue;
+    let attachment;
+    try {
+      ({ attachment } = await attachments.uploadDraftAttachment({
+        conversationId,
+        ownerUserId: read.file.ownerUserId,
+        filename: read.file.filename,
+        ...(read.file.mimeType ? { mimeType: read.file.mimeType } : {}),
+        content: createUploadFileContent(read.bytes)
+      }));
+    } catch (error) {
+      // No handler takes this kind of file, such as a spreadsheet: the agent goes without it.
+      if (isAppError(error) && (error.code === "BAD_REQUEST" || error.code === "VALIDATION_FAILED"))
+        continue;
+      throw error;
+    }
+    attachmentIds.add(attachment.id);
+  }
+  const listed = async () =>
+    (await attachments.listDraftAttachments(conversationId)).filter((attachment) =>
+      attachmentIds.has(attachment.id)
+    );
+  const deadline = Date.now() + WORKFLOW_FILES_WAIT_MS;
+  let current = await listed();
+  while (current.some((attachment) => PREPARING.has(attachment.status)) && Date.now() < deadline) {
+    await delay(WORKFLOW_FILES_POLL_MS, undefined, { signal });
+    current = await listed();
+  }
+  const attachmentManifest = attachments.createAttachmentManifest(current);
+  await store.childAgentRuns.attachWorkflowAgentFiles({
+    clientInstanceId,
+    runId: run.id,
+    attachmentManifest,
+    claimedAt: new Date().toISOString()
+  });
+  return attachmentManifest;
+}
+
+function withWorkflowFiles(
+  execution: AgentRunExecutionAssembly
+): Pick<AgentRunJobsOptions, "attachWorkflowFiles"> {
+  const { attachments, runFiles, store } = execution;
+  if (!attachments || !runFiles) return {};
+  return {
+    attachWorkflowFiles: (input) => attachWorkflowFiles(store, runFiles, attachments, input)
+  };
 }

@@ -50,7 +50,8 @@ import {
   lt,
   ne,
   notExists,
-  notInArray
+  notInArray,
+  sum
 } from "drizzle-orm";
 import { enqueueJob } from "./jobs/store";
 import {
@@ -316,6 +317,24 @@ class PostgresPlatformFileStore implements PlatformFileStore {
       )
       .returning({ id: managedFiles.id });
     return rows.length;
+  }
+
+  async ownedManagedFileBytes(input: {
+    clientInstanceId: ClientInstanceId;
+    owner: ManagedFileOwner;
+  }): Promise<number> {
+    const [row] = await this.db
+      .select({ bytes: sum(managedFiles.byteSize) })
+      .from(managedFiles)
+      .where(
+        and(
+          eq(managedFiles.clientInstanceId, input.clientInstanceId),
+          eq(managedFiles.ownerKind, input.owner.kind),
+          eq(managedFiles.ownerId, input.owner.id),
+          ne(managedFiles.status, "deleted")
+        )
+      );
+    return Number(row?.bytes ?? 0);
   }
 
   async restoreOwnedManagedFiles(input: {

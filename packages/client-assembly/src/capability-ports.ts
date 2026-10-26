@@ -8,8 +8,10 @@ import type {
   ClientInstanceCapabilityBrand,
   ClientInstanceCapabilityMail,
   ClientInstanceCapabilityPlatformStores,
-  ClientInstanceCapabilityRecords
+  ClientInstanceCapabilityRecords,
+  ClientInstanceCapabilityRunFiles
 } from "@work-shape/catalyst-capability-sdk";
+import type { WorkflowRunFiles } from "@work-shape/catalyst-workflows";
 import {
   createClientBranding,
   type ClientInstanceConfig
@@ -17,16 +19,21 @@ import {
 import { createInlineImageLoader, type MailSender } from "@work-shape/catalyst-mail";
 
 // The ports one capability gets of the platform's records (ADR-0033): its own records, the
-// Operation Runs of its own operations, the instance's mailer and how the instance presents
-// itself outside.
+// Operation Runs of its own operations, the files of the Workflow runs those serve, the
+// instance's mailer and how the instance presents itself outside.
 
 export function capabilityStoresOf(input: {
   clientInstanceId: ClientInstanceId;
   capability: string;
-  store: Pick<PlatformStores, "capabilityRecords" | "operationRuns">;
+  store: Pick<PlatformStores, "capabilityRecords" | "operationRuns" | "workflowRuns">;
   /** The capability's async operations, known once it is created. */
   operations: () => ReadonlySet<string>;
-}): Pick<ClientInstanceCapabilityPlatformStores, "records" | "operationRuns"> {
+  /**
+   * The files of Workflow runs, once the process has its store of files. Absent where the
+   * instance runs no Workflows or keeps no files: the capability then gets no `runFiles`.
+   */
+  runFiles?: () => WorkflowRunFiles | undefined;
+}): Pick<ClientInstanceCapabilityPlatformStores, "records" | "operationRuns" | "runFiles"> {
   const { clientInstanceId, capability, store } = input;
   const own = { clientInstanceId, capability };
   const records: ClientInstanceCapabilityRecords = {
@@ -55,8 +62,41 @@ export function capabilityStoresOf(input: {
         }
         return store.operationRuns.finish({ clientInstanceId, id: run.id, end });
       }
-    }
+    },
+    ...(input.runFiles ? { runFiles: runFilesPort(input.runFiles) } : {})
   };
+
+  function runFilesPort(
+    files: () => WorkflowRunFiles | undefined
+  ): ClientInstanceCapabilityRunFiles {
+    return {
+      async create({ operationRunId, filename, mimeType, content }) {
+        const run = await ownRun(operationRunId);
+        if (!run) {
+          throw new AppError("NOT_FOUND", "No run of this capability's operations has this id");
+        }
+        if (run.status !== "running") {
+          throw new AppError("CONFLICT", "The run has ended, so it keeps no file", {
+            reason: "run_ended"
+          });
+        }
+        if (run.origin.kind !== "workflow") {
+          throw new AppError("FORBIDDEN", "Only a run that a Workflow step started keeps files");
+        }
+        const workflowRun = await store.workflowRuns.readRun({
+          clientInstanceId,
+          id: run.origin.workflowRunId
+        });
+        const keeper = files();
+        if (!workflowRun || !keeper) {
+          throw new AppError("CONFLICT", "This instance keeps no files of Workflow runs", {
+            reason: "files_unavailable"
+          });
+        }
+        return keeper.create({ run: workflowRun, filename, mimeType, content });
+      }
+    };
+  }
 }
 
 export function createCapabilityMail(input: {

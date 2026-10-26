@@ -72,6 +72,7 @@ export interface InstanceWorkflowsParts extends Pick<
   stepSlots?: number;
   datasetObjects?: WorkflowEngineOptions["datasetObjects"];
   datasetLimits?: WorkflowEngineOptions["datasetLimits"];
+  releaseRunThread?: WorkflowEngineOptions["releaseRunThread"];
   /** `workflows.limits` of release config, with the release schema's defaults when left out. */
   ceilings?: WorkflowLimitCeilings;
   /**
@@ -173,6 +174,7 @@ export function createInstanceWorkflows(parts: InstanceWorkflowsParts): Instance
           datasetLimits: parts.datasetLimits ?? workflowsConfigSchema.parse({}).datasets
         }
       : {}),
+    ...(parts.releaseRunThread ? { releaseRunThread: parts.releaseRunThread } : {}),
     definitions: given ?? assets,
     operationCalls,
     ...(parts.limits ? { limits: parts.limits } : {}),
@@ -334,7 +336,7 @@ export const assembleWorkflows: ModuleSeam = ({ config, modules, clientInstanceI
           ]
         }
       : {}),
-    async start({ operationCalls, files, notices }) {
+    async start({ operationCalls, files, notices, releaseConversationAttachments }) {
       registry = operationCalls.registry;
       const workflows = createInstanceWorkflows({
         modules,
@@ -349,6 +351,9 @@ export const assembleWorkflows: ModuleSeam = ({ config, modules, clientInstanceI
               datasetObjects: files.objects,
               datasetLimits: config.workflows.datasets
             }
+          : {}),
+        ...(releaseConversationAttachments
+          ? { releaseRunThread: releaseConversationAttachments }
           : {}),
         ceilings: workflowLimitCeilingsOf(config.workflows),
         ...zone,

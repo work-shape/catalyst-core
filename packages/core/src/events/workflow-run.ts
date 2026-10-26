@@ -55,6 +55,27 @@ const WORKFLOW_DATASET_EVENTS = {
 
 export const workflowRunEvents = {
   ...WORKFLOW_DATASET_EVENTS,
+  // A file a step took into its run, such as a document sent with an outside form. Its name
+  // never goes into the event.
+  "workflow_run.file_kept": {
+    subject: "workflow_run",
+    legacy: false,
+    audited: true,
+    phases: ["after"] as const,
+    name: "workflow_run.file_kept",
+    payload: {
+      type: "object",
+      additionalProperties: false,
+      required: ["runId", "fileId", "bytes", "sha256", "mimeType"],
+      properties: {
+        runId: { type: "string" },
+        fileId: { type: "string" },
+        bytes: { type: "integer", minimum: 1 },
+        sha256: { type: "string" },
+        mimeType: { type: "string" }
+      }
+    } satisfies JsonObject
+  },
   "workflow_run.cancelled": {
     ...LEGACY_AUDIT,
     name: "workflow_run.cancelled",

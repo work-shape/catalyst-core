@@ -237,6 +237,11 @@ export function isImageFileFormat(
 }
 
 export type ConversationAttachmentStatus = (typeof CONVERSATION_ATTACHMENT_STATUSES)[number];
+/** The statuses of an attachment that is still being prepared. */
+export const PENDING_ATTACHMENT_STATUSES = [
+  "queued",
+  "preprocessing"
+] as const satisfies readonly ConversationAttachmentStatus[];
 
 export interface AttachmentWarning {
   code: string;
@@ -246,14 +251,14 @@ export interface AttachmentWarning {
 export type AttachmentArtifactRefs = Record<string, ManagedArtifactId>;
 
 /**
- * The Asset that owns a Managed File, where one does: the file then follows the Asset's
- * retention and no Conversation's. The cleanup of Conversations and the orphan sweep leave
- * such a file alone; only its owner removes it. A Knowledge Base owns the copy of every file
- * added to it.
+ * What owns a Managed File, where something does: the file then follows its owner's retention
+ * and no Conversation's. The cleanup of Conversations and the orphan sweep leave such a file
+ * alone; only its owner removes it. A Knowledge Base owns the copy of every file added to it;
+ * a Workflow run owns the files its steps took in, and they go with the run's values.
  */
 export interface ManagedFileOwner {
-  kind: "knowledge_base";
-  /** The id of the owning Asset. */
+  kind: "knowledge_base" | "workflow_run";
+  /** The id of the owning Asset or run. */
   id: string;
 }
 
@@ -595,6 +600,11 @@ export interface ManagedFileStore {
     clientInstanceId: ClientInstanceId;
     owner: ManagedFileOwner;
     fileIds: readonly ManagedFileId[];
+  }): Promise<number>;
+  /** The bytes of the files `owner` holds, deleted ones left out. */
+  ownedManagedFileBytes(input: {
+    clientInstanceId: ClientInstanceId;
+    owner: ManagedFileOwner;
   }): Promise<number>;
   /**
    * Marks files `owner` owns and marked deleted available again, and returns how many. For an

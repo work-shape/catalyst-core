@@ -8,6 +8,7 @@ import type {
   ToolCallId
 } from "./ids";
 import type { ISODateString } from "./time";
+import type { AttachmentManifest } from "./files";
 import type { RunAgentResult } from "./subagents";
 import type { ReasoningEffortConfig } from "./config";
 import type { AuthenticatedUser, WorkflowRunPrincipal } from "./identity";
@@ -110,10 +111,26 @@ export interface ChildAgentRunStore {
     principal: WorkflowRunPrincipal;
     tester?: AuthenticatedUser;
     task: string;
+    /**
+     * The files of the run the agent gets with its task. The task message names them, and the
+     * agent's worker attaches them before the first turn (`WORKFLOW_AGENT_FILES_METADATA_KEY`).
+     */
+    files?: readonly string[];
     title: string;
     correlationId: string;
     retainedUntil: ISODateString;
   }): Promise<AgentRun>;
+  /**
+   * Gives a Workflow agent run's task message the files the worker attached: claims the ready
+   * draft attachments of its thread for the message and writes their manifest beside the files
+   * it names. Answers the manifest as stored.
+   */
+  attachWorkflowAgentFiles(input: {
+    clientInstanceId: ClientInstanceId;
+    runId: AgentRunId;
+    attachmentManifest: AttachmentManifest;
+    claimedAt: ISODateString;
+  }): Promise<void>;
   cancelWorkflowAgentRuns(input: {
     clientInstanceId: ClientInstanceId;
     runId: string;
@@ -152,6 +169,11 @@ export interface ChildAgentRunStore {
   listRunThreadIds(input: {
     clientInstanceId: ClientInstanceId;
     rootConversationId: ConversationId;
+  }): Promise<ConversationId[]>;
+  /** The run threads of a Workflow run, one per agent step run, for the pruning of its files. */
+  listWorkflowRunThreadIds(input: {
+    clientInstanceId: ClientInstanceId;
+    runId: string;
   }): Promise<ConversationId[]>;
   /** The subagents of a chat conversation's runs, newest first. */
   listSubagents(input: {

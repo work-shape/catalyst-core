@@ -46,7 +46,8 @@ import {
   type RegisteredProviderDefinition,
   type RetriedJob,
   type SecretResolver,
-  type ShippedSkill
+  type ShippedSkill,
+  type WorkflowFileReference
 } from "@work-shape/catalyst-core";
 import type {
   DataSourceDescribeInput,
@@ -162,6 +163,30 @@ export interface ClientInstanceCapabilityPlatformStores {
   records: ClientInstanceCapabilityRecords;
   /** The Operation Runs of the operations the capability contributes, and no others. */
   operationRuns: ClientInstanceCapabilityOperationRuns;
+  /**
+   * Files of the Workflow runs that the capability's own operations serve. Absent where the
+   * instance keeps no files.
+   */
+  runFiles?: ClientInstanceCapabilityRunFiles;
+}
+
+/**
+ * Keeps a file in the Workflow run that a run of one of the capability's own operations serves,
+ * such as a document a person sent with a form. The file is the run's: it goes with the run's
+ * values, and a later step names it by the reference the call answers.
+ */
+export interface ClientInstanceCapabilityRunFiles {
+  /**
+   * Refused for a run of another operation, one that is not `running`, one that no Workflow
+   * step started, and above the size a run keeps (`WORKFLOW_RUN_FILE_MAX_BYTES`,
+   * `WORKFLOW_RUN_FILES_MAX_BYTES`). `mimeType` is the type the capability checked.
+   */
+  create(input: {
+    operationRunId: OperationRunId;
+    filename: string;
+    mimeType: string;
+    content: Uint8Array;
+  }): Promise<WorkflowFileReference>;
 }
 
 /** `CapabilityRecordStore` bound to the instance and to one capability. */

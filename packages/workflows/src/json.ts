@@ -1,9 +1,12 @@
 import {
   WORKFLOW_DATASET_KEY,
   WORKFLOW_DATASET_TYPE,
+  WORKFLOW_FILE_KEY,
   workflowDatasetReferenceSchema,
+  workflowFileReferenceSchema,
   type JsonObject,
-  type JsonValue
+  type JsonValue,
+  type WorkflowFileReference
 } from "@work-shape/catalyst-core";
 import { z } from "zod";
 
@@ -72,6 +75,33 @@ export function holdsBrokenDatasetReference(value: JsonValue): boolean {
     return !workflowDatasetReferenceSchema.safeParse(value).success;
   }
   return Object.values(value).some(holdsBrokenDatasetReference);
+}
+
+/** Whether a value holds the key that marks a file of the run anywhere, as a reference or not. */
+export function holdsFileKey(value: JsonValue): boolean {
+  if (value === null || typeof value !== "object") return false;
+  if (Array.isArray(value)) return value.some(holdsFileKey);
+  return Object.hasOwn(value, WORKFLOW_FILE_KEY) || Object.values(value).some(holdsFileKey);
+}
+
+/**
+ * The files of the run a value names, in order, each once; `undefined` where it holds the key
+ * that marks a file on a value that is no reference to one.
+ */
+export function fileReferences(value: JsonValue): WorkflowFileReference[] | undefined {
+  const found = new Map<string, WorkflowFileReference>();
+  function walk(item: JsonValue): boolean {
+    if (item === null || typeof item !== "object") return true;
+    if (Array.isArray(item)) return item.every(walk);
+    if (Object.hasOwn(item, WORKFLOW_FILE_KEY)) {
+      const reference = workflowFileReferenceSchema.safeParse(item);
+      if (!reference.success) return false;
+      found.set(reference.data.$file, reference.data);
+      return true;
+    }
+    return Object.values(item).every(walk);
+  }
+  return walk(value) ? [...found.values()] : undefined;
 }
 
 /** Whether a value holds a reference to a dataset anywhere. */
