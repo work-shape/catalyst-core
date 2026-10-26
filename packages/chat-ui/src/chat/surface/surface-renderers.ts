@@ -12,8 +12,6 @@ interface SurfaceRendering {
   actions?: ReactNode;
   /** An icon of what the surface shows. The frame draws it before the title. */
   titleIcon?: ReactNode;
-  /** The line under the title, where the kind reads it itself. It wins over the surface's. */
-  subtitle?: ReactNode;
   content: ReactNode;
   /** The content reaches the edges of the frame and lays out its own height. */
   flush?: boolean;
