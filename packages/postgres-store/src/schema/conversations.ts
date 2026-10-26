@@ -148,7 +148,8 @@ export const modelProviderContinuations = pgTable(
     primaryKey({
       name: "model_provider_continuations_pk",
       columns: [table.clientInstanceId, table.conversationId, table.providerId]
-    })
+    }),
+    index("model_provider_continuations_source_message_idx").on(table.sourceMessageId)
   ]
 );
 
@@ -178,6 +179,9 @@ export const modelProviderTurnContinuations = pgTable(
     primaryKey({
       name: "model_provider_turn_continuations_pk",
       columns: [table.clientInstanceId, table.conversationId, table.providerId]
-    })
+    }),
+    // Deleting a message looks here for the row it removes: without the index, every deleted
+    // message of a conversation reads the whole table.
+    index("model_provider_turn_continuations_source_message_idx").on(table.sourceMessageId)
   ]
 );

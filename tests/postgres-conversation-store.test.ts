@@ -269,6 +269,92 @@ describe("Postgres conversation store", () => {
     }
   });
 
+  it("keeps no provider continuation of a deleted or expired conversation", async () => {
+    const store = (
+      await createTestInstance({
+        postgres: {}
+      })
+    ).stores;
+    const sql = postgres(databaseUrl, { max: 1 });
+    const clientInstanceId = asClientInstanceId(`continuations_${globalThis.crypto.randomUUID()}`);
+    const user = await store.users.createUser({ clientInstanceId, displayLabel: "Author" });
+    const workspace = await store.workspaces.ensurePersonalWorkspace({
+      clientInstanceId,
+      userId: user.id
+    });
+    const withContinuations = async (title: string, retainedUntil: string) => {
+      const conversation = await store.conversations.createConversation({
+        visibility: "workspace",
+        clientInstanceId,
+        collaborationWorkspaceId: workspace.id,
+        createdByUserId: user.id,
+        createdByExternalUserId: "user_test",
+        title,
+        retainedUntil
+      });
+      await store.conversations.appendMessage({
+        clientInstanceId,
+        conversationId: conversation.id,
+        role: "user",
+        text: "Question"
+      });
+      await store.conversations.appendAssistantMessage({
+        clientInstanceId,
+        conversationId: conversation.id,
+        text: "Answer",
+        providerContinuation: { providerId: "test-provider", state: { checkpoint: "c1" } },
+        turnContinuation: {
+          providerId: "test-provider",
+          model: "model-a",
+          state: { reasoning: "encrypted" }
+        }
+      });
+      return conversation.id;
+    };
+    const rowsOf = async (conversationId: ConversationId) => {
+      const [row] = await sql<{ checkpoints: number; turns: number }[]>`
+        select
+          (select count(*)::int from model_provider_continuations
+            where conversation_id = ${conversationId}) as checkpoints,
+          (select count(*)::int from model_provider_turn_continuations
+            where conversation_id = ${conversationId}) as turns
+      `;
+      return row;
+    };
+    const deleted = await withContinuations("Deleted", "2999-01-01T00:00:00.000Z");
+    const expired = await withContinuations("Expired", "2000-01-01T00:00:00.000Z");
+
+    try {
+      await expect(rowsOf(deleted)).resolves.toEqual({ checkpoints: 1, turns: 1 });
+      await expect(rowsOf(expired)).resolves.toEqual({ checkpoints: 1, turns: 1 });
+
+      const now = new Date().toISOString();
+      await store.conversations.deleteConversation({
+        clientInstanceId,
+        conversationId: deleted,
+        deletedAt: now
+      });
+      await expect(
+        store.conversations.expireConversation({
+          clientInstanceId,
+          conversationId: expired,
+          expiredAt: now,
+          now
+        })
+      ).resolves.toMatchObject({ status: "expired" });
+
+      await expect(rowsOf(deleted)).resolves.toEqual({ checkpoints: 0, turns: 0 });
+      await expect(rowsOf(expired)).resolves.toEqual({ checkpoints: 0, turns: 0 });
+    } finally {
+      await sql`delete from conversations where client_instance_id = ${clientInstanceId}`;
+      await sql`delete from collaboration_workspace_memberships where client_instance_id = ${clientInstanceId}`;
+      await sql`delete from collaboration_workspaces where client_instance_id = ${clientInstanceId}`;
+      await sql`delete from product_users where client_instance_id = ${clientInstanceId}`;
+      await sql.end();
+      await store.close();
+    }
+  });
+
   it("finds and marks only managed files without an active conversation", async () => {
     const store = (
       await createTestInstance({
