@@ -52,6 +52,9 @@ export type DelegatedActor =
   | { kind: "service_principal"; id: string; displayLabel?: string; authSource: string }
   | { kind: "api_key"; id: ApiCredentialId; displayLabel: string; authSource: string };
 
+/** Whether a person signed in with a password has a second factor (TWO-FACTOR-1). */
+export type TwoFactorState = "enrolled" | "missing";
+
 export interface AuthenticatedUser {
   /** Set by adapters when a browser session cookie authenticated this request. */
   authenticationMethod?: "session-cookie";
@@ -84,6 +87,11 @@ export interface AuthenticatedUser {
    * signed-in person.
    */
   keyScopes?: readonly string[];
+  /**
+   * Whether a person signed in with a password has a second factor (TWO-FACTOR-1). Set only by
+   * the password sign-in's adapter; absent for every other way in.
+   */
+  twoFactor?: TwoFactorState;
 }
 
 export interface AuthenticatedServicePrincipal {

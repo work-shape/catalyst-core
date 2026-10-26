@@ -34,6 +34,49 @@ export const userEvents = {
     audited: true,
     phases: ["after"]
   },
+  // Two-factor sign-in (TWO-FACTOR-1): the event and the person, never a secret or a code.
+  "user.two_factor_enabled": {
+    name: "user.two_factor_enabled",
+    subject: "user",
+    legacy: false,
+    audited: true,
+    phases: ["after"]
+  },
+  "user.two_factor_disabled": {
+    name: "user.two_factor_disabled",
+    subject: "user",
+    legacy: false,
+    audited: true,
+    phases: ["after"]
+  },
+  "user.two_factor_backup_codes_regenerated": {
+    name: "user.two_factor_backup_codes_regenerated",
+    subject: "user",
+    legacy: false,
+    audited: true,
+    phases: ["after"]
+  },
+  "user.two_factor_backup_code_used": {
+    name: "user.two_factor_backup_code_used",
+    subject: "user",
+    legacy: false,
+    audited: true,
+    phases: ["after"]
+  },
+  "user.two_factor_locked": {
+    name: "user.two_factor_locked",
+    subject: "user",
+    legacy: false,
+    audited: true,
+    phases: ["after"]
+  },
+  "user.two_factor_reset": {
+    name: "user.two_factor_reset",
+    subject: "user",
+    legacy: false,
+    audited: true,
+    phases: ["after"]
+  },
   "user.profile_updated": { ...LEGACY_AUDIT, name: "user.profile_updated", subject: "user" },
   "user.updated": { ...LEGACY_AUDIT, name: "user.updated", subject: "user" }
 } as const satisfies Record<string, PlatformEventDefinition>;

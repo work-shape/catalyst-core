@@ -334,6 +334,8 @@ describe("client instance app vertical slice", () => {
             return new Response(null, { status: 404 });
           },
           routeKind: () => undefined,
+          twoFactorEnrolled: async () => new Set<string>(),
+          resetTwoFactor: async () => ({ hadFactor: false }),
           async setPassword() {},
           async setOrCreatePasswordSignIn() {
             throw new AppError("INTERNAL", "Password sign-in should not be created");

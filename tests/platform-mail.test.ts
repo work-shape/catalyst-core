@@ -503,6 +503,8 @@ async function createMailHarness(input: { mailEnabled?: boolean; listCaptured?: 
       return new Response(null, { status: 404 });
     },
     routeKind: () => undefined,
+    twoFactorEnrolled: async () => new Set<string>(),
+    resetTwoFactor: async () => ({ hadFactor: false }),
     async setPassword(command) {
       passwords.set(command.externalUserId, command.password);
     },

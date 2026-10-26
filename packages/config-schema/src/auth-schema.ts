@@ -37,7 +37,17 @@ export const standaloneAuthConfigSchema = z.object({
   enabled: z.boolean().default(false),
   baseUrl: z.string().url().optional(),
   trustedOrigins: z.array(z.string().url()).default([]),
-  seedUsers: z.array(standaloneSeedUserSchema).default([])
+  seedUsers: z.array(standaloneSeedUserSchema).default([]),
+  /**
+   * Two-factor sign-in for accounts with a password (TWO-FACTOR-1). With `required`, every such
+   * account sets up a code from an authenticator app before anything else opens, existing
+   * sessions included. Without it a person turns it on and off in Settings.
+   */
+  twoFactor: z
+    .object({
+      required: z.boolean().default(false)
+    })
+    .prefault({})
 });
 
 export type UserIdentityConfig = z.infer<typeof userIdentitySchema>;

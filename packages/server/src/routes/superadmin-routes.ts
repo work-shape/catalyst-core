@@ -1,12 +1,15 @@
 import { apiOperations } from "@work-shape/catalyst-api-contract";
-import { asUserId } from "@work-shape/catalyst-core";
+import { asUserId, type OperationAuthorization } from "@work-shape/catalyst-core";
 import { recordGovernanceAccess } from "../access/governance-actions";
 import { workspaceLabeler } from "../usage/usage-report-service";
 import type { Route } from "../http/route";
 import { deletionState } from "./deletion-answer";
 import { requirePathParam } from "./request-context";
 import type { ChatServerOptions } from "../types";
-import { UserAdministrationWorkflow } from "../users/user-administration-service";
+import {
+  OWN_TWO_FACTOR_MESSAGE,
+  UserAdministrationWorkflow
+} from "../users/user-administration-service";
 import { authorizeUserAdministration } from "../access/user-administration-rights";
 
 /** What stands in the hashed input of a call where a password was. */
@@ -26,6 +29,7 @@ export function registerSuperadminRoutes(route: Route, options: ChatServerOption
   const resetPassword = apiOperations["users.password.reset"];
   const sendInvitation = apiOperations["users.invitation.send"];
   const deleteIdentity = apiOperations["users.identities.delete"];
+  const resetTwoFactor = apiOperations["users.two_factor.reset"];
 
   route(apiOperations["usage.get_summary"], async ({ user, context }) => {
     await recordGovernanceAccess({
@@ -142,6 +146,21 @@ export function registerSuperadminRoutes(route: Route, options: ChatServerOption
       })
   });
 
+  route.operation(resetTwoFactor, {
+    // The deleted factor cannot be restored: the person sets up a new one.
+    authorize: (input, context) =>
+      context.actor.id === input.userId
+        ? Promise.resolve(ownTwoFactorRefusal(resetTwoFactor.id))
+        : authorizeUserAdministration(options, resetTwoFactor.id, context, {
+            userId: input.userId
+          }),
+    resource: ({ userId }) => ({ kind: "user", id: userId }),
+    execute: (input, context) =>
+      userAdministration.resetTwoFactor(resetTwoFactor.id, context, {
+        userId: userIdParam(input)
+      })
+  });
+
   route.operation(sendInvitation, {
     // Sending an invitation sends mail outside the instance.
     changeClass: "outward",
@@ -166,6 +185,19 @@ export function registerSuperadminRoutes(route: Route, options: ChatServerOption
     execute: (input, context) =>
       userAdministration.deleteIdentity(deleteIdentity.id, context, identityParams(input))
   });
+}
+
+/**
+ * Nobody resets their own second factor: someone who lost device and codes is signed out by
+ * the reset, and one who still has them turns it off in Settings (TWO-FACTOR-1).
+ */
+function ownTwoFactorRefusal(operationId: string): OperationAuthorization {
+  return {
+    allowed: false,
+    action: operationId,
+    reason: "holder_not_administrable",
+    message: OWN_TWO_FACTOR_MESSAGE
+  };
 }
 
 function userIdParam(params: { userId: string }) {
