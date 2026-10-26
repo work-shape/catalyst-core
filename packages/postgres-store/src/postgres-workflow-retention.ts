@@ -277,6 +277,7 @@ export function workflowRetention(
             .delete(managedArtifacts)
             .where(
               and(
+                eq(managedArtifacts.clientInstanceId, ref.clientInstanceId),
                 inArray(managedArtifacts.conversationId, threads),
                 eq(managedArtifacts.status, "deleted")
               )
@@ -285,6 +286,7 @@ export function workflowRetention(
             .delete(conversationAttachments)
             .where(
               and(
+                eq(conversationAttachments.clientInstanceId, ref.clientInstanceId),
                 inArray(conversationAttachments.conversationId, threads),
                 eq(conversationAttachments.status, "deleted")
               )
@@ -302,13 +304,23 @@ export function workflowRetention(
                   tx
                     .select({ id: conversationAttachments.id })
                     .from(conversationAttachments)
-                    .where(eq(conversationAttachments.fileId, managedFiles.id))
+                    .where(
+                      and(
+                        eq(conversationAttachments.clientInstanceId, ref.clientInstanceId),
+                        eq(conversationAttachments.fileId, managedFiles.id)
+                      )
+                    )
                 ),
                 notExists(
                   tx
                     .select({ id: managedArtifacts.id })
                     .from(managedArtifacts)
-                    .where(eq(managedArtifacts.sourceFileId, managedFiles.id))
+                    .where(
+                      and(
+                        eq(managedArtifacts.clientInstanceId, ref.clientInstanceId),
+                        eq(managedArtifacts.sourceFileId, managedFiles.id)
+                      )
+                    )
                 )
               )
             );
