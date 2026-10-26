@@ -1,3 +1,4 @@
+import { createWorkflowSourceCache } from "./source-cache";
 import { randomUUID } from "node:crypto";
 import { lstat, mkdir, mkdtemp, readdir, realpath, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -24,6 +25,10 @@ import {
   WORKFLOW_CODE_DISK_BYTES,
   WORKFLOW_CODE_ERRORS,
   WORKFLOW_CODE_LOG_MAX_BYTES,
+  codeFileIssue,
+  noWorkflowStepFiles,
+  type WorkflowStepFiles,
+  type WorkflowSourceLimits,
   codeLanguageOf
 } from "./code-step";
 import { holdsDatasetReference, jsonValueSchema } from "./json";
@@ -46,16 +51,35 @@ import { WorkflowStepFailure } from "./step-failure";
 // to an output directory on the worker's disk, of a bounded size. The worker reads the files
 // the result names from there: regular files directly in the directory, no link followed.
 
+const NODE_LOADER_FILE = "node-root-loader.mjs";
+const NODE_REGISTER_FILE = "node-root-register.mjs";
+const NODE_ROOT_REGISTER = `import {register} from "node:module"; register(new URL("./node-root-loader.mjs", import.meta.url));`;
+// Node's NODE_PATH covers CommonJS. ESM needs the same root fallback through its resolver.
+const NODE_ROOT_LOADER = `import {resolve as pathResolve} from 'node:path';
+import {pathToFileURL} from 'node:url';
+export async function resolve(specifier, context, nextResolve) {
+  try { return await nextResolve(specifier, context); }
+  catch (error) {
+    if (error.code !== 'ERR_MODULE_NOT_FOUND' || specifier.startsWith('.') || specifier.startsWith('/') || specifier.includes(':')) throw error;
+    const root = process.env.WORKFLOW_SOURCE_ROOT;
+    const candidate = pathResolve(root, specifier);
+    if (!candidate.startsWith(root + '/')) throw error;
+    try {return await nextResolve(pathToFileURL(candidate).href, context);} catch {throw error;}
+  }
+}`;
 const INPUT_FILE = "input.json";
 /** The file a script writes its result to. A script that writes none prints its result. */
 const OUTPUT_FILE = "output.json";
 
 const DIRECTORY_PREFIX = "catalyst-code-step-";
 const COMMAND_ID_PREFIX = "code-step-";
+const CACHE_PREFIX = "catalyst-workflow-source-cache-";
 
 export interface CodeSandboxOptions {
   /** The sandbox of the instance, the one that runs agent commands. */
   sandbox: WorkspaceCommandProcessExecutor;
+  stepFiles?: WorkflowStepFiles;
+  sourceLimits?: WorkflowSourceLimits;
   /** Where the directories of code steps are made. The sandbox must be able to mount below it. */
   tempRoot: string;
   /** What one code step's container gets, in place of what an agent's command gets. */
@@ -106,9 +130,42 @@ function scriptCommand(input: {
   maxBytes: number;
   /** Where the script writes files on the worker's disk: no file of it may grow past this. */
   diskBytes?: number;
+  tree?: boolean;
+  sourceRoot?: string;
+  legacyIo?: boolean;
+  data?: SandboxDataDirectories;
 }): string {
   const { interpreter, script, mark } = input;
   const most = String(input.maxBytes + 1);
+  const quote = (value: string) => "'" + value.replaceAll("'", "'\"'\"'") + "'";
+  if (input.tree)
+    return [
+      ...(input.diskBytes === undefined
+        ? []
+        : [`ulimit -f ${String(Math.floor(input.diskBytes / 1024) + 1)} || exit 125`]),
+      `source_root=${quote(input.sourceRoot ?? SANDBOX_SOURCE_DIRECTORY)}; [ -d "$source_root/tree" ] || exit 125`,
+      'export WORKFLOW_SOURCE_ROOT="$source_root/tree"',
+      `export WORKFLOW_INPUT_FILE="$source_root/${INPUT_FILE}"`,
+      `export WORKFLOW_OUTPUT_FILE="$PWD/${OUTPUT_FILE}"`,
+      ...(input.data
+        ? [
+            `export WORKFLOW_DATA_INPUT_DIRECTORY=${quote(input.data.input)} WORKFLOW_DATA_OUTPUT_DIRECTORY=${quote(input.data.output)}`
+          ]
+        : []),
+      ...(input.legacyIo
+        ? [
+            'if [ ! input.json -ef "$WORKFLOW_INPUT_FILE" ]; then cp "$WORKFLOW_INPUT_FILE" input.json || exit 125; fi',
+            'export PYTHONPATH="$source_root/tree" NODE_PATH="$source_root/tree" PYTHONDONTWRITEBYTECODE=1'
+          ]
+        : [
+            'cd "$source_root/tree" || exit 125',
+            'export PYTHONPATH="$PWD" NODE_PATH="$PWD" PYTHONDONTWRITEBYTECODE=1'
+          ]),
+      `${interpreter}${interpreter === "node" ? ` --import "$source_root/${NODE_REGISTER_FILE}"` : ""} "$source_root/tree"/${quote(script)} < "$WORKFLOW_INPUT_FILE" | { head -c ${most}; cat > /dev/null; }`,
+      "code=${PIPESTATUS[0]}",
+      `if [ -f "$WORKFLOW_OUTPUT_FILE" ] && [ ! -L "$WORKFLOW_OUTPUT_FILE" ]; then printf '\\n%s\\n' '${mark}'; head -c ${most} "$WORKFLOW_OUTPUT_FILE"; fi`,
+      'exit "$code"'
+    ].join("\n");
   return [
     // A file the script writes ends one block past the bound, so the worker sees it is over.
     ...(input.diskBytes === undefined
@@ -135,6 +192,10 @@ export function createCodeSandbox(options: CodeSandboxOptions) {
   const { sandbox, tempRoot, limits, outputMaxBytes } = options;
   const diskBytes = options.diskBytes ?? WORKFLOW_CODE_DISK_BYTES;
   const active = new Set<string>();
+  const sourceCache = createWorkflowSourceCache({
+    directory: join(tempRoot, `${CACHE_PREFIX}${process.pid}`),
+    ...(options.sourceLimits ? { limits: options.sourceLimits } : {})
+  });
 
   /**
    * Removes what a killed worker left: the directories and the containers of code steps that
@@ -147,7 +208,24 @@ export function createCodeSandbox(options: CodeSandboxOptions) {
     let directories = 0;
     for (const entry of await readdir(tempRoot, { withFileTypes: true }).catch(() => [])) {
       const directory = join(tempRoot, entry.name);
-      if (!entry.isDirectory() || !entry.name.startsWith(DIRECTORY_PREFIX)) continue;
+      if (!entry.isDirectory()) continue;
+      if (entry.name.startsWith(CACHE_PREFIX)) {
+        const pid = Number(entry.name.slice(CACHE_PREFIX.length));
+        if (!Number.isSafeInteger(pid) || pid <= 0 || pid === process.pid) continue;
+        try {
+          process.kill(pid, 0);
+        } catch (error) {
+          if (
+            error instanceof Error &&
+            "code" in error &&
+            error.code === "ESRCH" &&
+            (await lstat(directory)).mtimeMs <= cutoff
+          )
+            await removeScriptDirectory(directory);
+        }
+        continue;
+      }
+      if (!entry.name.startsWith(DIRECTORY_PREFIX)) continue;
       if (active.has(directory)) continue;
       try {
         if ((await lstat(directory)).mtimeMs <= cutoff) {
@@ -175,7 +253,7 @@ export function createCodeSandbox(options: CodeSandboxOptions) {
     const { staged, signal } = input;
     const usesDatasets = staged.datasets !== undefined || holdsDatasetReference(staged.input);
     if (signal.aborted) return { kind: "stopped" };
-    const language = codeLanguageOf(staged.file);
+    const language = codeFileIssue(staged.file) ? undefined : codeLanguageOf(staged.file);
     if (!language) {
       return {
         kind: "ended",
@@ -245,8 +323,40 @@ export function createCodeSandbox(options: CodeSandboxOptions) {
           };
         }
       }
-      const script = `step.${staged.file.split(".").at(-1) ?? ""}`;
-      await writeFile(join(directory, script), staged.source, { flag: "wx" });
+      const script = staged.tree ? staged.file : `step.${staged.file.split(".").at(-1) ?? ""}`;
+      if (staged.tree) {
+        try {
+          const tree = await (options.stepFiles ?? noWorkflowStepFiles).readTree(staged.tree);
+          if (
+            !tree ||
+            tree.hash !== staged.tree.hash ||
+            !tree.files.some((file) => file.path === staged.file)
+          )
+            return {
+              kind: "ended",
+              outcome: failed(
+                WORKFLOW_CODE_ERRORS.fileMissing,
+                "The staged revision's tree or entry is missing"
+              ),
+              log: noLog
+            };
+          await sourceCache.copy(tree, join(directory, "tree"), stop.signal);
+        } catch (error) {
+          if (stop.signal.aborted) return { kind: "stopped" };
+          if (!(error instanceof WorkflowStepFailure)) throw error;
+          return {
+            kind: "ended",
+            outcome: { kind: "failed", error: error.toRunError() },
+            log: noLog
+          };
+        }
+      } else {
+        await writeFile(join(directory, script), staged.source ?? "", { flag: "wx" });
+      }
+      if (staged.tree && language.command === "node") {
+        await writeFile(join(directory, NODE_LOADER_FILE), NODE_ROOT_LOADER, { flag: "wx" });
+        await writeFile(join(directory, NODE_REGISTER_FILE), NODE_ROOT_REGISTER, { flag: "wx" });
+      }
       await writeFile(join(directory, INPUT_FILE), JSON.stringify(stagedInput), { flag: "wx" });
       const mark = `catalyst-result-${randomUUID()}`;
       // The step's data on disk is measured while the script runs: its input files and
@@ -279,6 +389,10 @@ export function createCodeSandbox(options: CodeSandboxOptions) {
             command: scriptCommand({
               interpreter: language.command,
               script,
+              tree: staged.tree !== undefined,
+              sourceRoot: sandbox.dataPaths ? SANDBOX_SOURCE_DIRECTORY : directory,
+              legacyIo: staged.legacyIo === true,
+              ...(seen ? { data: seen } : {}),
               mark,
               maxBytes: outputMaxBytes,
               ...(data ? { diskBytes: room } : {})

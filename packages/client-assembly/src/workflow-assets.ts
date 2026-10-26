@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import {
   checkWorkflowOwnRights,
   publishWorkflowOwnAccount,
@@ -30,8 +31,13 @@ import {
 import {
   ASSET_OWNER_KINDS,
   AppError,
+  ObjectNotFound,
+  fileSetFileObjectKey,
+  type ObjectStorage,
+  type PagesStore,
   WORKFLOW_ACTIONS,
   WORKFLOW_ASSET_KIND,
+  WORKFLOW_MANIFEST_FILE,
   defineAssetKind,
   enqueueKnowledgeWorkflowSourceEnd,
   parseConnectionOperationName,
@@ -57,6 +63,11 @@ import {
   parseCron,
   nextDueAfter,
   stepFileBytes,
+  writeWorkflowManifest,
+  workflowSourcePathIssues,
+  WORKFLOW_CODE_ERRORS,
+  WorkflowStepFailure,
+  type WorkflowSourceLimits,
   workflowDefinitionRefusal,
   workflowOutsideIssues,
   workflowStepFileIssues,
@@ -78,15 +89,10 @@ import {
 import { z } from "zod";
 import { runnerPackageManifest } from "./runner-packages";
 import { workflowPublishQuestion } from "./workflow-publish-question";
-import { WORKFLOW_REVISION_FILES } from "./workflow-folder";
+import { WORKFLOW_REVISION_FILES, workflowRevisionFiles } from "./workflow-folder";
 
-// A Workflow as an asset: the kind the asset operations register, and the published revisions
-// of that kind as the engine reads its definitions. A revision's config is the id of the
-// Workflow under `name`, `workflow.yaml` as an object under `manifest` and the files of its
-// `steps/` folder under `files`. The files are part of the revision, as the resources of a
-// skill are: one write stores both, a revision never changes, and whoever reads the revision
-// reads its files. Every write also keeps that folder as a file set and, where the Workflow
-// has a repository, commits it there (WF-GIT-1); the config stays what everything reads.
+// Config is the Workflow read model. Its immutable file set holds the complete source tree;
+// config.files is a one-release rollback copy, and the fallback for unadopted revisions.
 
 const manifestOfConfigSchema = z.object({ manifest: z.unknown() });
 const nameOfConfigSchema = z.object({ name: z.string() });
@@ -176,6 +182,7 @@ export function createWorkflowAssetKind(
      * config alone, as before.
      */
     repository?: boolean;
+    sourceLimits?: WorkflowSourceLimits;
   }
 ): WorkflowAssetKind {
   const { clientInstanceId, timeZone = "UTC", now = () => new Date(), limits } = options;
@@ -299,7 +306,12 @@ export function createWorkflowAssetKind(
               }
             ];
           }
-          const files = workflowStepFileIssues(result.manifest, workflow.files ?? []);
+          // Repository writes validate entries against the complete folder in revisionFiles.read.
+          const files = workflowStepFileIssues(
+            options.repository ? { steps: [] } : result.manifest,
+            workflow.files ?? [],
+            options.sourceLimits
+          );
           if (files.length > 0) throw workflowStepFilesRefusal(workflow.name, files);
         }
         return [];
@@ -492,7 +504,13 @@ export function createWorkflowAssetKind(
       return undefined;
     },
     // Written as its config or as its whole folder, read as either (WF-GIT-1).
-    ...(options.repository ? { revisionFiles: WORKFLOW_REVISION_FILES } : {}),
+    ...(options.repository
+      ? {
+          revisionFiles: options.sourceLimits
+            ? workflowRevisionFiles(options.sourceLimits)
+            : WORKFLOW_REVISION_FILES
+        }
+      : {}),
     writeWarnings: (_definition, files) => skillSecretWarnings(files ?? []),
     // The live Apps that start it stop working without it: an unpublish and a delete say so.
     liveCallerWarnings: workflowLiveCallerWarnings,
@@ -737,9 +755,16 @@ function publishedWorkflowOf(asset: ConfigAssetRecord): PublishedWorkflow | unde
       ? {}
       : { description: shown.description.slice(0, WORKFLOW_LIST_DESCRIPTION_MAX) }),
     revisionId,
-    definition,
-    files: stepFilesOf(publishedConfig)
+    definition
   };
+}
+
+/** Content identity is stable when adoption adds git metadata to an existing revision. */
+function sourceTreeHash(files: readonly { path: string; bytes: number; sha256: string }[]): string {
+  const index = files
+    .map(({ path, bytes, sha256 }) => ({ path, bytes, sha256 }))
+    .sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+  return createHash("sha256").update(JSON.stringify(index)).digest("hex");
 }
 
 /**
@@ -751,9 +776,12 @@ function publishedWorkflowOf(asset: ConfigAssetRecord): PublishedWorkflow | unde
 export function createWorkflowAssetStepFiles(options: {
   clientInstanceId: ClientInstanceId;
   configAssets: Pick<ConfigAssetStore, "getConfigAssetRevisionById">;
+  pages?: Pick<PagesStore, "getAssetFileSet">;
+  objects?: ObjectStorage;
+  sourceLimits?: WorkflowSourceLimits;
 }): WorkflowStepFiles {
   return {
-    async readStepFile({ workflow, revisionId, path }) {
+    async readTree({ workflow, revisionId }) {
       if (!WORKFLOW_NAME_PATTERN.test(workflow)) return undefined;
       const revision = await options.configAssets.getConfigAssetRevisionById({
         clientInstanceId: options.clientInstanceId,
@@ -761,7 +789,92 @@ export function createWorkflowAssetStepFiles(options: {
         name: workflow,
         revisionId
       });
-      return stepFileBytes(stepFilesOf(revision?.config), path);
+      if (!revision) return undefined;
+      if (revision.fileSetId) {
+        if (!options.pages || !options.objects)
+          throw new WorkflowStepFailure(
+            WORKFLOW_CODE_ERRORS.fileMissing,
+            "The revision's files store is not configured"
+          );
+        const set = await options.pages.getAssetFileSet({
+          clientInstanceId: options.clientInstanceId,
+          assetId: revision.assetId,
+          fileSetId: revision.fileSetId
+        });
+        if (!set)
+          throw new WorkflowStepFailure(
+            WORKFLOW_CODE_ERRORS.fileMissing,
+            "The revision's file set is missing"
+          );
+        const issue = workflowSourcePathIssues(set.sourceFiles)[0];
+        if (issue) throw new WorkflowStepFailure(issue.code, issue.message);
+        const objects = options.objects;
+        return {
+          hash: sourceTreeHash(set.sourceFiles),
+          files: set.sourceFiles,
+          async readFile(path: string, signal?: AbortSignal) {
+            const file = set.sourceFiles.find((candidate) => candidate.path === path);
+            if (!file) return undefined;
+            const object = await objects
+              .get(fileSetFileObjectKey(set.owner, set.id, "src", path))
+              .catch((error: unknown) => {
+                if (error instanceof ObjectNotFound)
+                  throw new WorkflowStepFailure(
+                    WORKFLOW_CODE_ERRORS.fileMissing,
+                    "A revision file is missing"
+                  );
+                throw error;
+              });
+            if (!object)
+              throw new WorkflowStepFailure(
+                WORKFLOW_CODE_ERRORS.fileMissing,
+                "A revision file is missing"
+              );
+            const bytes = new Uint8Array(file.bytes);
+            let length = 0;
+            const hash = createHash("sha256");
+            for await (const chunk of object.body) {
+              signal?.throwIfAborted();
+              if (length + chunk.byteLength > file.bytes)
+                throw new WorkflowStepFailure(
+                  WORKFLOW_CODE_ERRORS.fileInvalid,
+                  "A revision file exceeds its recorded size"
+                );
+              bytes.set(chunk, length);
+              hash.update(chunk);
+              length += chunk.byteLength;
+            }
+            if (length !== file.bytes || hash.digest("hex") !== file.sha256)
+              throw new WorkflowStepFailure(
+                WORKFLOW_CODE_ERRORS.fileInvalid,
+                "A revision file does not match its hash"
+              );
+            return bytes;
+          }
+        };
+      }
+      // Only unadopted revisions use the previous release's inline files.
+      const manifest = manifestOfConfigSchema.safeParse(revision.config).data?.manifest;
+      if (manifest === undefined) return undefined;
+      const files = [
+        { path: WORKFLOW_MANIFEST_FILE, content: writeWorkflowManifest(manifest) },
+        ...stepFilesOf(revision.config)
+      ];
+      const issue = workflowSourcePathIssues(
+        files.map((file) => ({ path: file.path, bytes: Buffer.byteLength(file.content) }))
+      )[0];
+      if (issue) throw new WorkflowStepFailure(issue.code, issue.message);
+      return {
+        hash: sourceTreeHash(
+          files.map(({ path, content }) => ({
+            path,
+            bytes: Buffer.byteLength(content),
+            sha256: createHash("sha256").update(content).digest("hex")
+          }))
+        ),
+        files: files.map((file) => ({ path: file.path, bytes: Buffer.byteLength(file.content) })),
+        readFile: async (path: string) => stepFileBytes(files, path)
+      };
     }
   };
 }

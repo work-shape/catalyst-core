@@ -42,7 +42,8 @@ const UNBUILT_FILE_SET_KIT_VERSION = "none";
 export const ASSET_PUT_BODY_LIMIT_BYTES =
   Math.ceil(ASSET_PUT_FILES_MAX_BYTES / 3) * 4 + 1024 * 1024;
 
-type FilesContext = Pick<AssetWorkflowOptions, "clientInstanceId" | "stores" | "pages">;
+type FilesContext = Pick<AssetWorkflowOptions, "clientInstanceId" | "stores" | "pages"> &
+  Partial<Pick<AssetWorkflowOptions, "config">>;
 
 /** One source file as a call carries it. */
 export type AssetFileInput = { path: string; text: string } | { path: string; base64: string };
@@ -317,6 +318,9 @@ export async function storeRevisionFiles(
       fileSetId,
       kitVersion: UNBUILT_FILE_SET_KIT_VERSION,
       manifest: hook.manifestOf(input.extras),
+      ...(input.kind.kind === "workflow" && options.config
+        ? { limits: options.config.workflows.source }
+        : {}),
       sourceFiles: input.files,
       builtFiles: [],
       writes: ["src"],
@@ -340,7 +344,7 @@ export async function storeRevisionFiles(
  */
 export async function readRevisionFiles(
   options: FilesContext,
-  kind: Pick<WorkflowAssetKind, "revisionFiles">,
+  kind: Pick<WorkflowAssetKind, "revisionFiles"> & Partial<Pick<WorkflowAssetKind, "content">>,
   revision: { assetId: string; config: unknown; fileSetId?: FileSetId }
 ): Promise<{ files: AssetFileOutput[] }> {
   const { files, contentTypes } = await readRevisionFolder(options, kind, revision);
@@ -361,7 +365,7 @@ export async function readRevisionFiles(
  */
 export async function readRevisionFolder(
   options: FilesContext,
-  kind: Pick<WorkflowAssetKind, "revisionFiles">,
+  kind: Pick<WorkflowAssetKind, "revisionFiles"> & Partial<Pick<WorkflowAssetKind, "content">>,
   revision: { assetId: string; config: unknown; fileSetId?: FileSetId }
 ): Promise<{
   files: { path: string; bytes: Uint8Array }[];
@@ -390,7 +394,8 @@ export async function readRevisionFolder(
     })
   );
   const held = new Set(own.map((file) => file.path));
-  const index = hook.indexed({}, fileSet).files;
+  const index =
+    kind.content === "repository" ? fileSet?.sourceFiles : hook.indexed({}, fileSet).files;
   const extras = z.array(z.object({ path: z.string() })).parse(index ?? []);
   const others = await Promise.all(
     extras

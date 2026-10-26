@@ -72,7 +72,7 @@ const committedSchema = z.object({
     kind: z.enum(ASSET_REPO_BUNDLE_KINDS),
     prerequisite: z.string().regex(OBJECT_ID).nullable(),
     sha256: z.string().regex(/^[0-9a-f]{64}$/u),
-    bytes: z.number().int().positive().max(ASSET_REPO_MAX_BUNDLE_BYTES)
+    bytes: z.number().int().positive()
   })
 });
 const refusedSchema = z.object({
@@ -176,7 +176,8 @@ async function readWritten(path: string, maxBytes: number, what: string): Promis
 
 async function readOutput(
   outputDirectory: string,
-  base: string | null
+  base: string | null,
+  maxBundleBytes: number
 ): Promise<AssetRepoCommitOutcome> {
   const text = await readWritten(
     join(outputDirectory, ASSET_REPO_RESULT_FILE),
@@ -203,6 +204,8 @@ async function readOutput(
     };
   }
   const { bundle } = result;
+  if (bundle.bytes > maxBundleBytes)
+    throw new OutputRefused("The returned bundle exceeds the repository history bound");
   // The commit stands on the base the worker named and comes in the bundle the ledger takes
   // for it: a full one for a first commit, and otherwise one that stands on the base.
   if (
@@ -246,7 +249,15 @@ export function createSandboxAssetRepo(options: SandboxAssetRepoOptions): AssetR
         path: file.path,
         mode: "100644",
         size: file.bytes.byteLength
-      }))
+      })),
+      input.request.limits
+        ? {
+            maxFiles: input.request.limits.files,
+            maxFileBytes: input.request.limits.fileBytes,
+            maxTreeBytes: input.request.limits.treeBytes,
+            maxPathBytes: 512
+          }
+        : undefined
     );
     if (refusal) {
       return { status: "refused", ...refusal };
@@ -254,7 +265,12 @@ export function createSandboxAssetRepo(options: SandboxAssetRepoOptions): AssetR
     await mkdir(options.tempRoot, { recursive: true });
     // A commit is not started where the disk cannot hold the largest one.
     const disk = await statfs(options.tempRoot);
-    if (disk.bavail * disk.bsize < ASSET_REPO_COMMIT_DISK_BYTES) {
+    if (
+      disk.bavail * disk.bsize <
+      (input.request.limits
+        ? 5 * input.request.limits.treeBytes + 3 * input.request.limits.historyBytes
+        : ASSET_REPO_COMMIT_DISK_BYTES)
+    ) {
       return NO_SPACE;
     }
     if (Date.now() >= nextSweep) {
@@ -374,7 +390,11 @@ export function createSandboxAssetRepo(options: SandboxAssetRepoOptions): AssetR
           message: "The command left no output directory."
         };
       }
-      return await readOutput(outputDirectory, input.request.base);
+      return await readOutput(
+        outputDirectory,
+        input.request.base,
+        input.request.limits?.historyBytes ?? ASSET_REPO_MAX_BUNDLE_BYTES
+      );
     } catch (error) {
       if (error instanceof OutputRefused) {
         return { status: "failed", reason: "crashed", message: error.message };

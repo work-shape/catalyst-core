@@ -2,19 +2,20 @@ import { AppError, WORKFLOW_MANIFEST_FILE, readYamlData } from "@work-shape/cata
 import { workflowConfigSchema } from "@work-shape/catalyst-config-schema";
 import type { WorkflowAssetKind } from "@work-shape/catalyst-server";
 import {
-  WORKFLOW_CODE_ERRORS,
+  WORKFLOW_SOURCE_DEFAULTS,
+  codeEntry,
+  indexWorkflowSteps,
+  workflowSourceIssues,
+  parseWorkflowManifest,
+  type WorkflowSourceLimits,
   workflowStepFileIssues,
   workflowStepFilesRefusal,
   writeWorkflowManifest,
   type WorkflowStepFile
 } from "@work-shape/catalyst-workflows";
 
-// A Workflow as a folder (WF-GIT-1): `workflow.yaml` and the files of its `steps/` folder, as
-// the revision config `{ name, manifest, files }` holds them. The config holds every file of
-// the folder, so the folder of a revision is always its config written out: a write of the
-// config renders `workflow.yaml` from the manifest, and a write of the folder keeps the bytes
-// of `workflow.yaml` it was sent and reads them into the manifest. The file set of every
-// revision is that folder, and its commit holds the same.
+// The immutable file set holds the complete Workflow folder. Config stays the existing read
+// model; only legacy scripts needed for a one-release rollback are also held inline.
 
 const utf8 = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
 const encode = (text: string) => new TextEncoder().encode(text);
@@ -29,17 +30,6 @@ function textOf(bytes: Uint8Array): string | undefined {
 
 function refusal(reason: string, message: string, path: string): AppError {
   return new AppError("VALIDATION_FAILED", message, { reason, path }, { exposeMessage: true });
-}
-
-/**
- * What the engine refuses of the step files alone, whatever the steps name: a path outside
- * `steps/`, a file twice, text the store cannot hold, too many bytes. Asked before the folder
- * is stored, so such a write is refused as a save always was and nothing is committed.
- */
-function stepFileIssues(files: readonly WorkflowStepFile[]) {
-  return workflowStepFileIssues({ steps: [] }, files).filter(
-    (issue) => issue.code !== WORKFLOW_CODE_ERRORS.fileUnused
-  );
 }
 
 /** The manifest `workflow.yaml` holds, or the refusal of a file that holds none. */
@@ -58,73 +48,110 @@ function readManifest(bytes: Uint8Array): unknown {
 }
 
 /** The folder of a Workflow's revision, and the config a write of it makes. */
-export const WORKFLOW_REVISION_FILES: NonNullable<WorkflowAssetKind["revisionFiles"]> = {
-  manifestFile: WORKFLOW_MANIFEST_FILE,
-  read(name, files) {
-    const manifest = files.find((file) => file.path === WORKFLOW_MANIFEST_FILE);
-    if (!manifest) {
-      throw refusal(
-        "workflow_manifest_missing",
-        `The files hold no '${WORKFLOW_MANIFEST_FILE}'. Every write carries the whole folder of the Workflow, '${WORKFLOW_MANIFEST_FILE}' among it.`,
-        WORKFLOW_MANIFEST_FILE
+export function workflowRevisionFiles(
+  limits: WorkflowSourceLimits = WORKFLOW_SOURCE_DEFAULTS
+): NonNullable<WorkflowAssetKind["revisionFiles"]> {
+  return {
+    manifestFile: WORKFLOW_MANIFEST_FILE,
+    read(name, files) {
+      const manifest = files.find((file) => file.path === WORKFLOW_MANIFEST_FILE);
+      if (!manifest) {
+        throw refusal(
+          "workflow_manifest_missing",
+          `The files hold no '${WORKFLOW_MANIFEST_FILE}'. Every write carries the whole folder of the Workflow, '${WORKFLOW_MANIFEST_FILE}' among it.`,
+          WORKFLOW_MANIFEST_FILE
+        );
+      }
+      const issues = workflowSourceIssues(
+        files.map((file) => ({ path: file.path, bytes: file.bytes.byteLength })),
+        limits
       );
-    }
-    const others = files
-      .filter((file) => file !== manifest)
-      .map(({ path, bytes }) => {
-        const content = textOf(bytes);
-        // A step's file is a script or instructions, which the config holds as text.
-        if (content === undefined) {
-          throw refusal("workflow_file_not_text", `The file '${path}' is no UTF-8 text.`, path);
-        }
-        return { path, content };
-      })
-      .sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0));
-    const issues = stepFileIssues(others);
-    if (issues.length > 0) throw workflowStepFilesRefusal(name, issues);
-    return {
-      config: {
-        name,
-        manifest: readManifest(manifest.bytes),
-        ...(others.length > 0 ? { files: others } : {})
-      },
-      // The config holds every file: none is kept beside it alone.
-      extras: []
-    };
-  },
-  manifestOf: () => ({ kind: "workflow" }),
-  indexed: (config) => config,
-  carried: (config) => config,
-  filesOfConfig(config) {
-    const workflow = workflowConfigSchema.safeParse(config);
-    // A config whose files the engine refuses has no folder: its write is refused as before.
-    if (!workflow.success || stepFileIssues(workflow.data.files ?? []).length > 0) return [];
-    return [
-      {
-        path: WORKFLOW_MANIFEST_FILE,
-        bytes: encode(writeWorkflowManifest(workflow.data.manifest))
-      },
-      ...(workflow.data.files ?? []).map((file) => ({
-        path: file.path,
-        bytes: encode(file.content)
-      }))
-    ];
-  },
-  matchesConfig(config, file) {
-    const workflow = workflowConfigSchema.safeParse(config);
-    if (!workflow.success) return false;
-    if (file.path !== WORKFLOW_MANIFEST_FILE) {
-      const held = workflow.data.files?.find((candidate) => candidate.path === file.path);
-      return held !== undefined && textOf(file.bytes) === held.content;
-    }
-    try {
-      // Written out the same, whatever order of keys or comments the stored bytes hold.
-      return (
-        writeWorkflowManifest(readManifest(file.bytes)) ===
-        writeWorkflowManifest(workflow.data.manifest)
+      if (issues.length) throw workflowStepFilesRefusal(name, issues);
+      const parsed = parseWorkflowManifest(readManifest(manifest.bytes));
+      if (!parsed.ok)
+        throw refusal(
+          "definition_invalid",
+          parsed.issues[0]?.message ?? "Invalid manifest",
+          WORKFLOW_MANIFEST_FILE
+        );
+      // Keep the previous release's scripts for a one-release rollback only.
+      const rollback: WorkflowStepFile[] = [];
+      const legacyPaths = new Set(
+        [...indexWorkflowSteps(parsed.manifest).values()].flatMap(({ step }) =>
+          step.type === "code" && step.file !== undefined ? [codeEntry(step)] : []
+        )
       );
-    } catch {
-      return false;
+      let rollbackBytes = 0;
+      for (const file of files) {
+        if (
+          !legacyPaths.has(file.path) ||
+          !/^steps\/.+\.(py|js|mjs)$/iu.test(file.path) ||
+          file.bytes.byteLength > 256 * 1024
+        )
+          continue;
+        const content = textOf(file.bytes);
+        if (content === undefined || rollbackBytes + file.bytes.byteLength > 2 * 1024 ** 2)
+          continue;
+        rollback.push({ path: file.path, content });
+        rollbackBytes += file.bytes.byteLength;
+      }
+      const missing = workflowStepFileIssues(
+        parsed.manifest,
+        files.map((file) => ({ path: file.path, content: "" })),
+        limits
+      );
+      if (missing.length) throw workflowStepFilesRefusal(name, missing);
+      return {
+        config: {
+          name,
+          manifest: parsed.manifest,
+          ...(rollback.length ? { files: rollback } : {})
+        },
+        extras: files
+          .filter((file) => file !== manifest && !rollback.some((old) => old.path === file.path))
+          .map((file) => file.path)
+      };
+    },
+    manifestOf: () => ({ kind: "workflow" }),
+    indexed: (config) => config,
+    carried: (config) => config,
+    filesOfConfig(config) {
+      const workflow = workflowConfigSchema.safeParse(config);
+      // A config whose files the engine refuses has no folder: its write is refused as before.
+      if (
+        !workflow.success ||
+        workflowStepFileIssues({ steps: [] }, workflow.data.files ?? [], limits).length > 0
+      )
+        return [];
+      return [
+        {
+          path: WORKFLOW_MANIFEST_FILE,
+          bytes: encode(writeWorkflowManifest(workflow.data.manifest))
+        },
+        ...(workflow.data.files ?? []).map((file) => ({
+          path: file.path,
+          bytes: encode(file.content)
+        }))
+      ];
+    },
+    matchesConfig(config, file) {
+      const workflow = workflowConfigSchema.safeParse(config);
+      if (!workflow.success) return false;
+      if (file.path !== WORKFLOW_MANIFEST_FILE) {
+        const held = workflow.data.files?.find((candidate) => candidate.path === file.path);
+        return held !== undefined && textOf(file.bytes) === held.content;
+      }
+      try {
+        // Written out the same, whatever order of keys or comments the stored bytes hold.
+        return (
+          writeWorkflowManifest(readManifest(file.bytes)) ===
+          writeWorkflowManifest(workflow.data.manifest)
+        );
+      } catch {
+        return false;
+      }
     }
-  }
-};
+  };
+}
+
+export const WORKFLOW_REVISION_FILES = workflowRevisionFiles();

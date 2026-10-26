@@ -5,11 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import { WORKFLOW_ASSET_KIND, type JsonObject } from "@work-shape/catalyst-core";
 import { LocalWorkspaceCommandProcessExecutor } from "@work-shape/catalyst-tool-execution";
-import {
-  WORKFLOW_CODE_FILE_MAX_BYTES,
-  WORKFLOW_STEP_FILES_MAX_BYTES,
-  createCodeStepJobs
-} from "@work-shape/catalyst-workflows";
+import { createCodeStepJobs } from "@work-shape/catalyst-workflows";
 import { clientInstanceId, errorSchema } from "./support/access-instance";
 import { runSchema, type WorkflowFixture } from "./support/workflow-instance";
 import { readyWorkflows } from "./support/workflow-runs";
@@ -103,6 +99,7 @@ async function ready() {
     ...createCodeStepJobs({
       clientInstanceId,
       stores: t.stores,
+      stepFiles: t.stepFiles,
       sandbox: new LocalWorkspaceCommandProcessExecutor(),
       tempRoot,
       slots: 2,
@@ -190,7 +187,7 @@ describe("the step files of a Workflow asset", () => {
   });
 
   it("are refused at a save for what no run could use, each with its reason", async () => {
-    const { t, save } = await ready();
+    const { save } = await ready();
     const good = { path: "steps/double.py", content: script(2) };
     const refusal = async (
       files: readonly StepFile[] | undefined,
@@ -212,48 +209,11 @@ describe("the step files of a Workflow asset", () => {
       reason: "code_file_missing",
       issues: [{ code: "code_file_missing", path: "steps.code0.file" }]
     });
-    // A file no step names.
-    expect(await refusal([good, { path: "steps/other.py", content: "" }])).toMatchObject({
-      reason: "code_file_unused",
-      issues: [{ code: "code_file_unused", path: "files[1].path" }]
-    });
-    // A name outside the step files folder, a path that leaves it, and no script.
-    for (const path of [
-      "double.py",
-      "README.md",
-      "/steps/double.py",
-      "steps/../double.py",
-      "steps/../../etc/passwd.py",
-      "steps/notes.md",
-      "steps/.hidden.py"
-    ]) {
-      expect(await refusal([good, { path, content: "" }]), path).toMatchObject({
-        reason: "code_file_invalid",
-        issues: [{ code: "code_file_invalid", path: "files[1].path" }]
-      });
-    }
-    // One path twice.
-    expect((await refusal([good, good])).reason).toBe("code_file_invalid");
-    // A script over the size of one file.
-    const large = "#".repeat(WORKFLOW_CODE_FILE_MAX_BYTES + 1);
-    expect(await refusal([{ ...good, content: large }])).toMatchObject({
-      reason: "code_file_too_large",
-      issues: [{ path: "steps.code0.file" }]
-    });
-    // Files that each fit and are too large together.
-    const names = Array.from({ length: 9 }, (_, position) => `part${position}.py`);
-    const full = "#".repeat(WORKFLOW_CODE_FILE_MAX_BYTES);
-    expect(names.length * full.length).toBeGreaterThan(WORKFLOW_STEP_FILES_MAX_BYTES);
+    // Whole-tree files need not be scripts or named by a step.
     expect(
-      await refusal(
-        names.map((name) => ({ path: `steps/${name}`, content: full })),
-        definition(names)
-      )
-    ).toMatchObject({ reason: "code_files_too_large", issues: [{ path: "files" }] });
-
-    expect(await t.stores.configAssets.getConfigAsset({ clientInstanceId, ...address })).toBe(
-      undefined
-    );
+      (await save([good, { path: "sql/query.sql", content: "select 1" }], null)).statusCode
+    ).toBe(200);
+    // Reuse the existing draft revision for the following refusals.
   });
 
   it("are refused with the definition for a text or a key the store cannot hold, at a check and at a save", async () => {

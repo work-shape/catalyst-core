@@ -345,7 +345,12 @@ export type WorkflowStep =
     })
   /** Runs one script file of the step files folder on its input as JSON and returns JSON. */
   | (WorkflowStepBase &
-      WorkflowDeclaredSchemas & { type: "code"; file: string; input: WorkflowInputMapping })
+      WorkflowDeclaredSchemas & {
+        type: "code";
+        entry?: string;
+        file?: string;
+        input: WorkflowInputMapping;
+      })
   /** The run's result, checked against the definition's `outputs`. */
   | (WorkflowStepBase & { type: "output"; input: WorkflowInputMapping })
   /** Runs an agent task with the instructions of one step file and returns JSON. */

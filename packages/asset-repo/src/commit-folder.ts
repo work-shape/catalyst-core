@@ -18,7 +18,7 @@ import {
   Refused,
   type BoundedCopy
 } from "./materialise";
-import type { CommitFolderRequest, CommitFolderResult } from "./request";
+import type { CommitFolderRequest, CommitFolderResult, RepositoryLimits } from "./request";
 import { pathRefusal, treeRefusal, type TreeEntry } from "./tree-check";
 
 // One commit from a folder of plain files. The folder is read as files and nothing else: git
@@ -36,7 +36,6 @@ const COMMITTER = { name: "catalyst", email: "platform@catalyst.invalid" };
  * A walk that found more names than this stops and the folder is refused: directories hold no
  * bytes, so the cap on files alone would let a folder make the command walk any number of them.
  */
-const FOLDER_MAX_ENTRIES = 4 * ASSET_REPO_MAX_FILES;
 
 /** One file of the folder, as it was read: its path in the tree and the copy of its bytes. */
 interface SnapshotFile extends TreeEntry {
@@ -52,7 +51,8 @@ interface SnapshotFile extends TreeEntry {
  */
 async function snapshotFolder(
   folder: string,
-  snapshot: string
+  snapshot: string,
+  limits: RepositoryLimits
 ): Promise<{ entries: TreeEntry[]; files: SnapshotFile[] }> {
   const root = await lstat(folder).catch(() => undefined);
   if (!root?.isDirectory()) {
@@ -76,10 +76,10 @@ async function snapshotFolder(
     for await (const entry of await opendir(directory)) {
       names += 1;
       // Counted while the names are read, so a directory of any size is left after this many.
-      if (names > FOLDER_MAX_ENTRIES) {
+      if (names > 4 * limits.files) {
         throw new Refused(
           "too_many_files",
-          `The folder holds more than ${FOLDER_MAX_ENTRIES} files and directories`,
+          `The folder holds more than ${4 * limits.files} files and directories`,
           `${prefix}${entry.name}`
         );
       }
@@ -106,7 +106,7 @@ async function snapshotFolder(
         }
         const copy = join(snapshot, String(files.length));
         try {
-          const copied = await copyBounded(source, copy, ASSET_REPO_MAX_FILE_BYTES);
+          const copied = await copyBounded(source, copy, limits.fileBytes);
           const file = { mode: FILE_MODE, path, size: copied.bytes, copy };
           entries.push(file);
           files.push(file);
@@ -115,10 +115,10 @@ async function snapshotFolder(
           await source.close();
         }
         // Nothing is copied past what a tree may weigh.
-        if (bytes > ASSET_REPO_MAX_TREE_BYTES) {
+        if (bytes > limits.treeBytes) {
           throw new Refused(
             "tree_too_large",
-            `The files of the folder have more than ${ASSET_REPO_MAX_TREE_BYTES} bytes together (ASSET_REPO_MAX_TREE_BYTES). '${path}' is the first past it.`,
+            `The files of the folder have more than ${limits.treeBytes} bytes together (limits.treeBytes). '${path}' is the first past it.`,
             path
           );
         }
@@ -184,7 +184,19 @@ export interface CommitFolderInput {
  */
 export async function commitFolder(input: CommitFolderInput): Promise<CommitFolderResult> {
   const { repository, request, folder } = input;
-  await applyBundles(repository, input.bundles, request.bundles, input.scratch);
+  const limits = request.limits ?? {
+    fileBytes: ASSET_REPO_MAX_FILE_BYTES,
+    files: ASSET_REPO_MAX_FILES,
+    treeBytes: ASSET_REPO_MAX_TREE_BYTES,
+    historyBytes: ASSET_REPO_MAX_BUNDLE_BYTES
+  };
+  await applyBundles(
+    repository,
+    input.bundles,
+    request.bundles,
+    input.scratch,
+    limits.historyBytes
+  );
   if (
     request.base !== null &&
     !(await repository.succeeds(["cat-file", "-e", `${request.base}^{commit}`]))
@@ -195,8 +207,14 @@ export async function commitFolder(input: CommitFolderInput): Promise<CommitFold
     );
   }
 
-  const { entries, files } = await snapshotFolder(folder, join(input.scratch, "snapshot"));
-  const refused = treeRefusal(entries);
+  const { entries, files } = await snapshotFolder(folder, join(input.scratch, "snapshot"), limits);
+  const treeLimits = {
+    maxFileBytes: limits.fileBytes,
+    maxFiles: limits.files,
+    maxTreeBytes: limits.treeBytes,
+    maxPathBytes: 512
+  };
+  const refused = treeRefusal(entries, treeLimits);
   if (refused) {
     throw new Refused(refused.code, refused.message, refused.path);
   }
@@ -250,7 +268,7 @@ export async function commitFolder(input: CommitFolderInput): Promise<CommitFold
   // The tree as git wrote it is what the store relies on, so it is checked again as such: a
   // path the index left out or folded shows here, as a tree with fewer files.
   const written = await readTree(repository, commit);
-  const stored = treeRefusal(written);
+  const stored = treeRefusal(written, treeLimits);
   if (stored) {
     throw new Refused(stored.code, stored.message, stored.path);
   }
@@ -274,7 +292,7 @@ export async function commitFolder(input: CommitFolderInput): Promise<CommitFold
   const source = await open(made, "r");
   let copiedOut: BoundedCopy;
   try {
-    copiedOut = await copyBounded(source, join(input.output, file), ASSET_REPO_MAX_BUNDLE_BYTES);
+    copiedOut = await copyBounded(source, join(input.output, file), limits.historyBytes);
   } finally {
     await source.close();
   }

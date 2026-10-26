@@ -24,6 +24,7 @@ import type { AssetCall } from "./asset-access";
 import type { AssetWarning } from "./asset-placement";
 import {
   buildAssetFileSet,
+  readRevisionFolder,
   copyFileSetToAsset,
   decodeAssetFiles,
   removeUnnamedAssetFileSet,
@@ -200,11 +201,27 @@ export class AssetDraftWorkflow {
       next: sent,
       principalId: call.actor.id
     });
+    const own = hook.filesOfConfig(config);
+    const previous = target.asset?.status === "active" ? target.asset : undefined;
+    const oldOwn = new Set(
+      previous ? hook.filesOfConfig(previous.config).map((file) => file.path) : []
+    );
+    const carried = previous?.fileSetId
+      ? (
+          await readRevisionFolder(this.options, kind, {
+            assetId: previous.id,
+            config: previous.config,
+            fileSetId: previous.fileSetId
+          })
+        ).files.filter(
+          (file) => !oldOwn.has(file.path) && !own.some((next) => next.path === file.path)
+        )
+      : [];
+    const files = [...own, ...carried];
+    const read = files.length ? hook.read(target.name, files) : { config, extras: [] };
     const { written } = await this.writeFolder(call, target, {
-      config,
-      // A config the kind's schema refuses has no folder: the write refuses it as before.
-      files: hook.filesOfConfig(config),
-      extras: [],
+      ...read,
+      files,
       expectedRevision
     });
     return written;

@@ -206,7 +206,8 @@ print(json.dumps(found))
     // Nothing the worker's own environment holds reaches the script, whatever it is named:
     // every value the two share is one the sandbox sets or the image brings.
     const shared = Object.entries(env).filter(
-      ([name, value]) => process.env[name] === value && !["LANG", "LC_ALL"].includes(name)
+      ([name, value]) =>
+        process.env[name] === value && !["LANG", "LC_ALL", "PYTHONDONTWRITEBYTECODE"].includes(name)
     );
     expect(shared.map(([name]) => name)).toEqual([]);
     for (const name of Object.keys(env)) {

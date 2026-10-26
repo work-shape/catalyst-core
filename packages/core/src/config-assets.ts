@@ -301,6 +301,13 @@ export interface AssetRepoSourceFile {
  * the author. It holds no bytes. The time of the commit is the save's, unless it names one.
  */
 export interface AssetRepoCommitRequest {
+  limits?: {
+    fileBytes: number;
+    files: number;
+    treeBytes: number;
+    historyBytes: number;
+    settingPrefix: string;
+  };
   /** The store the files lie in: the `files` store or the one of the Execution Workspaces. */
   store: "files" | "workspaces";
   files: AssetRepoSourceFile[];

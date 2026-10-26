@@ -265,6 +265,9 @@ export async function readPlatformContext(
       owners: [...kind.owners],
       actions: { ...kind.actions },
       ...principalActionsOf(options, kind),
+      ...(kind.kind === WORKFLOW_ASSET_KIND
+        ? { source: options.config.workflows.source, repository: kind.content === "repository" }
+        : {}),
       ...(kind.representation === "files"
         ? {
             ...(kind.manifestFile === undefined ? {} : { manifestFile: kind.manifestFile }),

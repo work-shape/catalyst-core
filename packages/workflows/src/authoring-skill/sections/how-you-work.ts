@@ -7,16 +7,16 @@ already installed: use \`yaml.safe_load\` and \`yaml.safe_dump\`, without instal
 
 1. Read the definition. You get its \`config\`, the \`revision\` it is at and whether you see the
    draft or the published revision. The config is \`{ name, manifest, files }\`: \`manifest\` is
-   the definition, and \`files\` is the list of the scripts its \`code\` steps run, each
-   \`{ path, content }\`. A Workflow without a \`code\` step has no \`files\`, or an empty list.
+   the definition. Read the folder for its whole source tree. \`files\` carries only legacy
+   scripts for rollback; use folder writes to add shared modules, SQL and tests.
 2. Change the \`manifest\` and the \`files\` in your answer to the read, never from memory. Keep
    everything you were not asked to change exactly as it is, the ids of the steps and the
    content of every script among it.
 3. Check the whole config before you save. Each issue names the path of a value and says what
    is wrong with it. Correct it and check again until no issue is left.
-4. Save the whole config, every file with its whole content among it, with the revision you
-   read as \`expectedRevision\`. A save replaces the draft: a file you leave out is gone from
-   it, and a save that leaves out a file a step names is refused. A save moves the draft
+4. Save the config or the whole folder with the revision you read as \`expectedRevision\`.
+   A folder write replaces the whole tree; omitted files are removed. A config write updates
+   its legacy scripts and keeps the other tree files. Every entry must remain present. A save moves the draft
    only: it publishes nothing and starts nothing, and the published revision keeps running as
    it is. A person publishes the draft when they have looked at it.
 5. A save that answers a conflict means somebody saved since you read. Read again, make your

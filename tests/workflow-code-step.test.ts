@@ -1,3 +1,4 @@
+import { workflowStepFiles } from "./support/workflow-step-files";
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { mkdtempSync } from "node:fs";
@@ -19,8 +20,7 @@ import {
 import {
   WORKFLOW_CODE_STEP_EFFECT,
   createCodeStepJobs,
-  parseWorkflowManifest,
-  type WorkflowStepFiles
+  parseWorkflowManifest
 } from "@work-shape/catalyst-workflows";
 import { clientInstanceId } from "./support/access-instance";
 import { publishedDefinitions, runSchema, type WorkflowFixture } from "./support/workflow-instance";
@@ -106,16 +106,12 @@ async function ready(options: Options = {}) {
   const file = options.file ?? "compute.py";
   const revisionId = definitions.publish(compute(options.step, file));
   const asked: { workflow: string; revisionId: string; path: string }[] = [];
-  const stepFiles: WorkflowStepFiles = {
-    readStepFile(input) {
-      asked.push(input);
-      return Promise.resolve(
-        options.script !== undefined && input.path === `steps/${file}`
-          ? new TextEncoder().encode(options.script)
-          : undefined
-      );
-    }
-  };
+  const stepFiles = workflowStepFiles([`steps/${file}`], async (input) => {
+    asked.push(input);
+    return options.script !== undefined && input.path === `steps/${file}`
+      ? new TextEncoder().encode(options.script)
+      : undefined;
+  });
   const t = await readyWorkflows(
     (fixture) => {
       open = fixture;
@@ -136,6 +132,7 @@ async function ready(options: Options = {}) {
     ...createCodeStepJobs({
       clientInstanceId,
       stores: t.stores,
+      stepFiles: t.stepFiles,
       sandbox: options.sandbox ?? new LocalWorkspaceCommandProcessExecutor(),
       tempRoot,
       slots: 2,
@@ -286,14 +283,8 @@ print(json.dumps({"count": len(data["numbers"])}))
     });
     await missing.t.instance.close();
 
-    const large = await ready({ script: `# ${"x".repeat(300 * 1024)}` });
-    const tooLarge = await large.t.expectRefused(
-      large.t.root.id,
-      "workflows.start",
-      { params: { workflow: "compute" }, payload: { input: {} } },
-      { status: 422, code: "VALIDATION_FAILED" }
-    );
-    expect(tooLarge.details).toMatchObject({ reason: "code_file_too_large" });
+    const large = await ready({ script: `# ${"x".repeat(300 * 1024)}\nprint("{}")` });
+    expect((await large.run()).status).toBe("done");
   });
 
   it.each([
@@ -482,6 +473,7 @@ print(json.dumps({"sum": sum(data["numbers"])}))
       ...createCodeStepJobs({
         clientInstanceId,
         stores: t.stores,
+        stepFiles: t.stepFiles,
         sandbox: new LocalWorkspaceCommandProcessExecutor(),
         tempRoot: tmpdir(),
         slots: 2,
@@ -926,7 +918,9 @@ finally:
     expect(written).toBeLessThanOrEqual(16);
     // Nothing of it is on the worker's disk: the directory of the step is gone, and it never
     // held more than the script and the input.
-    expect(await readdir(tempRoot)).toEqual([]);
+    expect(
+      (await readdir(tempRoot)).filter((name) => !name.startsWith("catalyst-workflow-source-cache"))
+    ).toEqual([]);
   }, 60_000);
 
   it("cannot write where the worker put the script, and sees its working directory as memory", async () => {
@@ -956,7 +950,7 @@ print(json.dumps({
       .object({ code: z.array(z.unknown()), workspace: z.array(z.unknown()) })
       .parse(JSON.parse((await step(ended.id))?.outputPreview?.text ?? "null"));
     // What the worker wrote is read-only for the script, whatever file system holds it.
-    expect(seen.code).toEqual([false, ["input.json", "step.py"], [expect.any(String), "ro"]]);
+    expect(seen.code).toEqual([false, ["input.json", "tree"], [expect.any(String), "ro"]]);
     expect(seen.workspace).toEqual([true, ["tmpfs", "rw"], "/workspace"]);
   }, 60_000);
 
@@ -1006,6 +1000,7 @@ describe("what a killed command worker left of code steps", () => {
     const jobs = createCodeStepJobs({
       clientInstanceId,
       stores: t.stores,
+      stepFiles: t.stepFiles,
       sandbox,
       tempRoot,
       slots: 1,

@@ -3,9 +3,6 @@ import { describe, expect, it } from "vitest";
 import { WORKFLOW_EXECUTED_STEP_TYPES, WORKFLOW_STEP_TYPES } from "@work-shape/catalyst-core";
 import {
   WORKFLOW_AUTHORING_EXAMPLES,
-  WORKFLOW_CODE_FILE_MAX_BYTES,
-  WORKFLOW_CODE_LANGUAGES,
-  WORKFLOW_STEP_FILES_MAX_BYTES,
   checkChildContracts,
   childRulesRevisionWarnings,
   parseWorkflowManifest,
@@ -158,87 +155,29 @@ describe("the skill for writing a Workflow", () => {
     const issuesOf = (steps: readonly string[], files: readonly WorkflowStepFile[]) =>
       workflowStepFileIssues(stepsOf(steps), files).map(({ path, code }) => ({ path, code }));
 
-    it("says that a config holds its files, whatever the instance", () => {
-      expect(content).toContain("The config is `{ name, manifest, files }`");
-      expect(content).toContain("each\n   `{ path, content }`");
-      // What it said while no instance stored a file.
-      expect(content).not.toMatch(/keeps? (no )?step files/u);
-      expect(content).not.toContain("do not add a `code` step");
-    });
-
-    it("names a file by the path a save accepts for the step's `file`, a folder below among it", () => {
-      for (const [file, path] of [
-        ["classify.py", "steps/classify.py"],
-        ["checks/total.py", "steps/checks/total.py"]
-      ] as const) {
-        expect(content).toContain(`\`${file}\``);
-        expect(content).toContain(path);
-        expect(issuesOf([file], [{ path, content: "" }])).toEqual([]);
-        // The step's own spelling of the path is no path of a file.
-        expect(issuesOf([file], [{ path: file, content: "" }])).not.toEqual([]);
-      }
-      // Two steps may name one file, as it says.
-      expect(content).toContain("Two steps may name the same file");
+    it("describes the immutable tree, entry alias, operator bounds and absolute IO paths", () => {
+      for (const text of [
+        "entry: lib/run.py",
+        "file: run.py",
+        "read-only",
+        "PYTHONPATH",
+        "NODE_PATH",
+        "WORKFLOW_INPUT_FILE",
+        "WORKFLOW_OUTPUT_FILE",
+        "workflows.source.*",
+        "code_file_missing"
+      ])
+        expect(content).toContain(text);
+      expect(content).not.toContain("code_file_unused");
       expect(
-        issuesOf(["classify.py", "classify.py"], [{ path: "steps/classify.py", content: "" }])
-      ).toEqual([]);
-    });
-
-    it("names every ending the runner takes and the two bounds a save holds the files to", () => {
-      for (const ending of Object.keys(WORKFLOW_CODE_LANGUAGES)) {
-        expect(content).toContain(`\`.${ending}\``);
-      }
-      expect(content).toContain(`One script is at most ${WORKFLOW_CODE_FILE_MAX_BYTES} bytes`);
-      expect(content).toContain(`together at most ${WORKFLOW_STEP_FILES_MAX_BYTES} bytes`);
-      const fits = "#".repeat(WORKFLOW_CODE_FILE_MAX_BYTES);
-      expect(issuesOf(["a.py"], [{ path: "steps/a.py", content: fits }])).toEqual([]);
-    });
-
-    it("names each issue of the files by the code and the path the check answers it with", () => {
-      const good = { path: "steps/a.py", content: "" };
-      const full = "#".repeat(WORKFLOW_CODE_FILE_MAX_BYTES);
-      const names = Array.from(
-        { length: Math.floor(WORKFLOW_STEP_FILES_MAX_BYTES / WORKFLOW_CODE_FILE_MAX_BYTES) + 1 },
-        (_, position) => `part${position}.py`
-      );
-      const answered = [
-        ...issuesOf(["a.py"], []),
-        ...issuesOf(["a.py"], [good, { path: "a.py", content: "" }]),
-        ...issuesOf(["a.py"], [good, { path: "steps/notes.md", content: "" }]),
-        ...issuesOf(["a.py"], [good, good]),
-        ...issuesOf(["a.py"], [{ ...good, content: "a\u0000b" }]),
-        ...issuesOf(["a.py"], [good, { path: "steps/b.py", content: "" }]),
-        ...issuesOf(["a.py"], [{ ...good, content: `${full}#` }]),
-        ...issuesOf(
-          names,
-          names.map((name) => ({ path: `steps/${name}`, content: full }))
+        issuesOf(
+          ["a.py"],
+          [
+            { path: "steps/a.py", content: "" },
+            { path: "sql/query.sql", content: "select 1" }
+          ]
         )
-      ];
-      /** The path of an issue as the skill writes it: with the id and the position left open. */
-      const told = ({ path, code }: { path: string; code: string }) =>
-        `\`${code}\` at \`${path
-          .replace(/^steps\.[^.]+\./u, "steps.<step id>.")
-          .replace(/\[\d+\]/u, "[<position>]")}\``;
-      const section = content.split("## The step files of a code step")[1] ?? "";
-      const codes = new Set(answered.map((issue) => issue.code));
-      expect([...codes].sort()).toEqual([
-        "code_file_invalid",
-        "code_file_missing",
-        "code_file_too_large",
-        "code_file_unused",
-        "code_files_too_large"
-      ]);
-      for (const issue of answered) {
-        // The content of a file is told in the entry of its code, after the path of the file.
-        if (issue.path.endsWith(".content")) {
-          expect(section).toContain("At `files[<position>].content`");
-          continue;
-        }
-        expect(section, told(issue)).toContain(told(issue));
-      }
-      // And it names no code of a file that the check never answers.
-      const named = [...section.matchAll(/^- `(code_[a-z_]+)` at /gmu)].map((match) => match[1]);
-      expect(named.sort()).toEqual([...codes].sort());
+      ).toEqual([]);
     });
   });
 

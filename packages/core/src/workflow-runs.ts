@@ -332,16 +332,19 @@ export interface WorkflowStepRunLog {
 }
 
 /**
- * A code step as it waits for the sandbox: the script and the input its container is given,
- * and nothing else. The step run keeps it from the moment the engine hands the step to the
+ * A code step as it waits for the sandbox: its revision tree reference and mapped input. The step run keeps it from the moment the engine hands the step to the
  * command worker until the script has ended.
  */
 export interface WorkflowStagedCode {
   /** The language of the runner image the script is run in. */
   language: string;
-  /** The path of the script in the Workflow's step files folder. */
+  /** The entry path from the Workflow tree root. */
   file: string;
-  source: string;
+  /** Inline script for older jobs and the one-release file alias / worker rollback. */
+  source?: string;
+  tree?: { workflow: string; revisionId: string; hash: string };
+  /** One-release alias compatibility: relative input.json/output.json in writable scratch. */
+  legacyIo?: true;
   /** The mapped input. A dataset in it is its reference; the worker hands the script a file. */
   input: JsonObject;
   timeoutSeconds: number;

@@ -19,7 +19,15 @@ export interface BundleReference {
   bytes: number;
 }
 
+export interface RepositoryLimits {
+  fileBytes: number;
+  files: number;
+  treeBytes: number;
+  historyBytes: number;
+}
+
 export interface CommitFolderRequest {
+  limits?: RepositoryLimits;
   bundles: BundleReference[];
   /** The commit the folder was written from, which becomes the parent. `null` for the first. */
   base: string | null;
@@ -143,7 +151,29 @@ export function parseCommitFolderRequest(value: unknown): CommitFolderRequest {
   if ((base === null) !== (named.length === 0)) {
     throw new RequestError("A first commit names no bundle, and every other names its base");
   }
-  return { bundles: named, base, author, time, message };
+  const limits = request.limits === undefined ? undefined : record(request.limits, "limits");
+  const positive = (value: unknown): number => {
+    if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0)
+      throw new RequestError("Repository limits are positive safe integers");
+    return value;
+  };
+  return {
+    bundles: named,
+    base,
+    author,
+    time,
+    message,
+    ...(limits
+      ? {
+          limits: {
+            fileBytes: positive(limits.fileBytes),
+            files: positive(limits.files),
+            treeBytes: positive(limits.treeBytes),
+            historyBytes: positive(limits.historyBytes)
+          }
+        }
+      : {})
+  };
 }
 
 export function parseMaterialiseRequest(value: unknown): MaterialiseRequest {

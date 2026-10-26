@@ -1,3 +1,4 @@
+import { createWorkflowAssetStepFiles } from "./workflow-assets";
 import { createLogger } from "./logger";
 import { tmpdir } from "node:os";
 import {
@@ -216,6 +217,16 @@ export async function createClientInstanceWorkspaceCommandWorker(
         slots: Math.min(codeSteps.slots, config.workflows.stepSlots),
         timeoutSeconds: codeSteps.timeoutSeconds,
         diskBytes: codeSteps.diskBytes,
+        sourceLimits: config.workflows.source,
+        stepFiles: createWorkflowAssetStepFiles({
+          clientInstanceId,
+          configAssets: store.configAssets,
+          pages: store.pages,
+          ...(hasFilesStore
+            ? { objects: await createFilesStore(config, infrastructure.context) }
+            : {}),
+          sourceLimits: config.workflows.source
+        }),
         // The datasets of a code step's input and output, in the instance's `files` store.
         ...(hasFilesStore
           ? {

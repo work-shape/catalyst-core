@@ -14,7 +14,11 @@ import {
 import type { WorkspaceCommandProcessExecutor } from "@work-shape/catalyst-tool-execution";
 import type { CodeStepDatasets } from "./code-datasets";
 import { createCodeSandbox, type CodeSandboxOptions } from "./code-sandbox";
-import { WORKFLOW_CODE_ERRORS } from "./code-step";
+import {
+  WORKFLOW_CODE_ERRORS,
+  type WorkflowStepFiles,
+  type WorkflowSourceLimits
+} from "./code-step";
 import { createWorkflowDatasets } from "./datasets";
 import { WORKFLOW_STEP_DATA_MAX_BYTES } from "./limits";
 import {
@@ -40,6 +44,8 @@ export interface CodeStepJobsOptions {
   tempRoot: string;
   /** How many scripts this worker runs at once. */
   slots: number;
+  stepFiles?: WorkflowStepFiles;
+  sourceLimits?: WorkflowSourceLimits;
   limits: CodeSandboxOptions["limits"];
   /** The longest a script may run. What a killed worker left is older than twice that. */
   timeoutSeconds: number;
@@ -73,6 +79,8 @@ export function createCodeStepJobs(options: CodeStepJobsOptions): CodeStepJobs {
     tempRoot: options.tempRoot,
     limits: options.limits,
     outputMaxBytes: WORKFLOW_STEP_DATA_MAX_BYTES,
+    ...(options.stepFiles ? { stepFiles: options.stepFiles } : {}),
+    ...(options.sourceLimits ? { sourceLimits: options.sourceLimits } : {}),
     ...(options.diskBytes === undefined ? {} : { diskBytes: options.diskBytes })
   });
   const datasets = options.datasets

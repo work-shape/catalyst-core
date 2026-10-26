@@ -131,7 +131,7 @@ export async function storePageFileSet(
 
 type FileSetPart = { part: "src" | "dist"; file: PageFileInput };
 
-type FileSetContent = Pick<
+type FileSetContent = { limits?: { files: number; fileBytes: number; treeBytes: number } } & Pick<
   StorePageFileSetInput,
   "kitVersion" | "manifest" | "sourceFiles" | "builtFiles" | "createdByUserId"
 >;
@@ -141,14 +141,15 @@ type FileSetContent = Pick<
  * set, and no built file with a shadow tree in its markup.
  */
 function requireStorableFileSet(
-  input: Pick<FileSetContent, "sourceFiles" | "builtFiles">
+  input: Pick<FileSetContent, "sourceFiles" | "builtFiles" | "limits">
 ): FileSetPart[] {
   const parts: FileSetPart[] = [
     ...input.sourceFiles.map((file) => ({ part: "src" as const, file })),
     ...input.builtFiles.map((file) => ({ part: "dist" as const, file }))
   ];
   requireFileSetWithinLimits(
-    parts.map(({ part, file }) => ({ part, path: file.path, bytes: file.bytes.byteLength }))
+    parts.map(({ part, file }) => ({ part, path: file.path, bytes: file.bytes.byteLength })),
+    input.limits
   );
   for (const file of input.builtFiles) {
     if (holdsDeclarativeShadowTree(file)) {

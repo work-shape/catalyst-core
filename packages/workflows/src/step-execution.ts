@@ -52,6 +52,7 @@ import {
   codeFileIssue,
   codeLanguageOf,
   readCodeFile,
+  codeEntry,
   type WorkflowStepFiles
 } from "./code-step";
 import type { WorkflowStepIndex } from "./definition";
@@ -208,20 +209,23 @@ export function createStepExecutor(options: StepExecutorOptions) {
         "This instance runs no sandbox, so it runs no code step: Execution Workspaces are off or have no sandbox"
       );
     }
-    const file = codeFileIssue(step.file);
+    const entry = codeEntry(step);
+    const file = codeFileIssue(entry);
     if (file) throw new WorkflowStepFailure(WORKFLOW_CODE_ERRORS.fileInvalid, file);
     const read = await readCodeFile(
       options.stepFiles,
       { workflow: run.workflow, revisionId: run.definitionRevisionId },
-      step.file
+      entry,
+      step.file !== undefined
     );
     if ("code" in read) throw new WorkflowStepFailure(read.code, read.message);
     return {
       kind: "code",
       staged: {
-        language: codeLanguageOf(step.file)?.language ?? "",
-        file: step.file,
-        source: read.source,
+        language: codeLanguageOf(entry)?.language ?? "",
+        file: entry,
+        tree: read.tree,
+        ...(step.file === undefined ? {} : { legacyIo: true as const, source: read.source }),
         input,
         timeoutSeconds: options.codeRunner.timeoutSeconds,
         ...(writesDatasets
