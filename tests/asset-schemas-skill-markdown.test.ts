@@ -1,5 +1,5 @@
-import { readdir, readFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { resolve } from "node:path";
+import { build } from "esbuild";
 import { parseSkillMarkdown, SkillMarkdownError } from "@work-shape/catalyst-asset-schemas";
 import { describe, expect, it } from "vitest";
 
@@ -49,20 +49,27 @@ describe("the name of a skill file that states none", () => {
 
 describe("the packages a browser bundle loads", () => {
   // chat-ui imports core and api-contract, and both import asset-schemas. A Node module in
-  // any of them fails every page when the bundle loads it.
+  // their root export graphs fails every page. Core's separate sha256 entry is Node-only.
+  const browserBuild = (entry: string) =>
+    build({
+      entryPoints: [resolve(import.meta.dirname, "..", entry)],
+      tsconfig: resolve(import.meta.dirname, "../tsconfig.base.json"),
+      bundle: true,
+      platform: "browser",
+      write: false,
+      logLevel: "silent"
+    });
+
   it.each(["packages/asset-schemas", "packages/core", "packages/api-contract"])(
-    "%s imports no Node module",
+    "%s root bundles without Node modules",
     async (packagePath) => {
-      const source = resolve(import.meta.dirname, "..", packagePath, "src");
-      const files = await readdir(source, { recursive: true });
-      const offenders: string[] = [];
-      for (const file of files.filter((name) => /\.tsx?$/u.test(name))) {
-        const text = await readFile(join(source, file), "utf8");
-        if (/\bfrom\s+"node:|\bimport\(\s*"node:|\brequire\(\s*"node:/u.test(text)) {
-          offenders.push(file);
-        }
-      }
-      expect(offenders).toEqual([]);
+      await browserBuild(`${packagePath}/src/index.ts`);
     }
   );
+
+  it("refuses core's Node-only hash entry in a browser bundle", async () => {
+    await expect(browserBuild("packages/core/src/sha256.ts")).rejects.toThrow(
+      'Could not resolve "node:crypto"'
+    );
+  });
 });
