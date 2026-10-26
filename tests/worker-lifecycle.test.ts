@@ -1,7 +1,6 @@
 import { EventEmitter } from "node:events";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createLogger } from "../packages/client-assembly/src/logger";
-import { runWorkerUntilStopped } from "../packages/client-assembly/src/worker-lifecycle";
+import { createLogger, runWorkerUntilStopped } from "@work-shape/catalyst-client-assembly";
 import { deferred } from "./support/assertions";
 
 describe("worker lifecycle", () => {
