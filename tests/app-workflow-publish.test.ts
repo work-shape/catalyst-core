@@ -11,6 +11,7 @@ import {
   type PlatformStores
 } from "@work-shape/catalyst-core";
 import { clientInstanceId } from "./support/access-instance";
+import { agentPublishes } from "./support/agent-publish-confirmation";
 import { action, setupAppActions, type AppActionsInstance } from "./support/app-actions";
 import { expectStatus } from "./support/app-instance";
 import { guardedEvents } from "./support/guardrails";
@@ -703,6 +704,95 @@ describe("an App and the Workflows it starts, at the App's publish", () => {
     expect(await publishedRevisionOf(WORKFLOW_ASSET_KIND, "rights-child")).toBe(child);
     expect(await publishedRevisionOf(WORKFLOW_ASSET_KIND, "rights-parent")).toBe(parent);
     expect(await publishedRevisionOf("app", "pages-j")).toBe(1);
+  });
+
+  // DP-3 rights review: a person's confirmation of their agent's publish approved the joint
+  // item on the App's right alone, so it made the Workflows live without workflow.approve.
+  it("refuses an agent's joint publish its person confirms without the Workflow's approve right, and publishes it for one who holds it", async () => {
+    await publishWorkflow("agent-child", await putWorkflow("agent-child", { type: "object" }));
+    const child = await putWorkflow("agent-child", markedInputs("held_note"), 1);
+    const parent = await putParent("agent-parent", "agent-child");
+    expectStatus(
+      await t.putApp(t.admin.id, "pages-agent", pagesApp("pages-agent", "agent-parent")),
+      200
+    );
+    const parentId = await t.assetId(WORKFLOW_ASSET_KIND, "agent-parent");
+    const childId = await t.assetId(WORKFLOW_ASSET_KIND, "agent-child");
+    const input = {
+      kind: "app",
+      name: "pages-agent",
+      revision: 1,
+      workspaceId: t.workspaceId,
+      audience: "workspace",
+      workflows: [
+        { name: "agent-parent", revision: parent },
+        { name: "agent-child", revision: child }
+      ]
+    };
+    const grants: string[] = [];
+    const right = async (action: string) => {
+      const { id } = await t.stores.access.createGrant({
+        clientInstanceId,
+        holderKind: "user",
+        holderId: t.kai.id,
+        action,
+        effect: "allow",
+        scopeKind: "instance",
+        grantedBy: t.admin.id
+      });
+      grants.push(id);
+    };
+
+    // Kai may publish all three and approve an App's publish, and no Workflow's.
+    await right("app.approve");
+    try {
+      await withRights(
+        t.kai.id,
+        [
+          ["app.publish", { workspaceId: t.workspaceId }],
+          ...[parentId, childId].flatMap((assetId) => [
+            ["workflow.use", { assetId }] as const,
+            ["workflow.read", { assetId }] as const,
+            ["workflow.publish", { assetId }] as const
+          ])
+        ],
+        async () => {
+          const requests = () =>
+            t.stores.approvals.countApprovalRequests({
+              clientInstanceId,
+              kinds: ["app_publish"],
+              requestedById: t.kai.id
+            });
+          const before = await requests();
+          // An agent's call cannot wait for an approver after its person's click: refused,
+          // and no request is filed whose approval would execute nothing.
+          const made = await agentPublishes(t, t.workspaceId, input, "without");
+          expect(await made.confirm()).toMatchObject({
+            execution: "refused",
+            run: { status: "denied", denial: { reason: "approval_unavailable" } }
+          });
+          expect(await requests()).toBe(before);
+          expect(await publishedRevisionOf(WORKFLOW_ASSET_KIND, "agent-child")).toBe(1);
+          expect(await publishedRevisionOf(WORKFLOW_ASSET_KIND, "agent-parent")).toBeUndefined();
+          expect(await publishedRevisionOf("app", "pages-agent")).toBeUndefined();
+
+          await right("workflow.approve");
+          const approved = await agentPublishes(t, t.workspaceId, input, "with");
+          expect(await approved.confirm()).toMatchObject({
+            execution: "done",
+            run: { decision: { mode: "approved", reason: "approved_by_caller" } }
+          });
+        }
+      );
+    } finally {
+      for (const grantId of grants) {
+        await t.stores.access.deleteGrant({ clientInstanceId, grantId });
+      }
+    }
+
+    expect(await publishedRevisionOf(WORKFLOW_ASSET_KIND, "agent-child")).toBe(child);
+    expect(await publishedRevisionOf(WORKFLOW_ASSET_KIND, "agent-parent")).toBe(parent);
+    expect(await publishedRevisionOf("app", "pages-agent")).toBe(1);
   });
 
   it("names what `catalyst app publish` makes live with the App and publishes it all on one yes", async () => {
