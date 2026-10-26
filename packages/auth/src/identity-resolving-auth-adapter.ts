@@ -58,7 +58,8 @@ export class IdentityResolvingAuthAdapter implements AuthAdapter {
               subjectUserId: resolved.id
             }),
       delegatedActor: claims.delegatedActor,
-      scopes: claims.scopes
+      scopes: claims.scopes,
+      ...(claims.twoFactor === undefined ? {} : { twoFactor: claims.twoFactor })
     });
   }
 }

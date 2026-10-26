@@ -849,6 +849,20 @@ export function createPostgresUsersStore(db: PostgresConnection): UserStore {
     async getUser(input: Parameters<UserStore["getUser"]>[0]): Promise<UserRecord | undefined> {
       return getUserRecord(db, input.clientInstanceId, input.userId);
     },
+    async findUserByIdentity(input) {
+      const [linked] = await db
+        .select({ userId: userIdentities.userId })
+        .from(userIdentities)
+        .where(
+          and(
+            eq(userIdentities.clientInstanceId, input.clientInstanceId),
+            eq(userIdentities.authSource, input.authSource),
+            eq(userIdentities.externalUserId, input.externalUserId)
+          )
+        )
+        .limit(1);
+      return linked ? getUserRecord(db, input.clientInstanceId, linked.userId) : undefined;
+    },
     async hasOtherActiveSuperadmin({ clientInstanceId, userId }) {
       const [row] = await db
         .select({ id: productUsers.id })

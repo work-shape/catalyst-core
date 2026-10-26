@@ -198,6 +198,8 @@ export interface ChatServerOptions {
     | "findPasswordSignIn"
     | "createPasswordSetupToken"
     | "completePasswordSetup"
+    | "twoFactorEnrolled"
+    | "resetTwoFactor"
   >;
   /**
    * The senders `mail.send` sends as on this instance (MAIL-1): `system` while release config

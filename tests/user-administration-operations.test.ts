@@ -676,6 +676,8 @@ async function createFixture() {
     baseUrl: "http://127.0.0.1:4100/api/auth",
     handleRequest: () => Promise.resolve(new Response(null, { status: 404 })),
     routeKind: () => undefined,
+    twoFactorEnrolled: async () => new Set<string>(),
+    resetTwoFactor: async () => ({ hadFactor: false }),
     setPassword(command) {
       counts.passwordWrites += 1;
       passwords.set(command.externalUserId, command.password);

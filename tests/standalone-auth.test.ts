@@ -30,6 +30,15 @@ import { routeTestOperations } from "./support/operations";
 import Fastify from "../packages/server/node_modules/fastify/fastify.js";
 import { installErrorHandler } from "../packages/server/src/errors";
 import { registerBetterAuthRoutes } from "../packages/server/src/routes/better-auth-routes";
+import type { Logger } from "@work-shape/catalyst-core";
+
+const silentLogger: Logger = {
+  debug: () => undefined,
+  info: () => undefined,
+  warn: () => undefined,
+  error: () => undefined,
+  child: () => silentLogger
+};
 
 describe("standalone auth email routes", () => {
   const baseUrl = "http://localhost:3000";
@@ -287,10 +296,15 @@ describe("standalone auth email routes", () => {
     const httpServer = Fastify();
     const server = await bindTestTransport(httpServer, () => httpServer.close());
     installErrorHandler(httpServer);
+    const { stores } = await createTestInstance();
     registerBetterAuthRoutes(httpServer, {
       standaloneAuth: auth,
       rateLimiter: createInProcessRateLimiter(),
-      config: createTestConfig()
+      config: createTestConfig(),
+      auditRecorder: { record: vi.fn() },
+      stores,
+      clientInstanceId: asClientInstanceId(createTestConfig().clientInstance.id),
+      logger: silentLogger
     });
     try {
       const sessionBefore = await sql`select * from session order by id`;

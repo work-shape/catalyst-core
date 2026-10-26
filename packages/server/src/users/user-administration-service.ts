@@ -86,6 +86,14 @@ interface SendUserInvitationCommand {
   userId: UserId;
 }
 
+interface ResetUserTwoFactorCommand {
+  userId: UserId;
+}
+
+/** The refusal of a reset of one's own second factor. */
+export const OWN_TWO_FACTOR_MESSAGE =
+  "Nobody resets their own two-factor sign-in: turn it off in Settings, or ask another admin";
+
 interface ResetUserPasswordCommand {
   userId: UserId;
   password: string;
@@ -105,10 +113,28 @@ export class UserAdministrationWorkflow {
       page,
       excludeSuperadmins: !isSuperadmin(user)
     });
-    if (isSuperadmin(user)) {
+    return this.withTwoFactorState(
+      isSuperadmin(user) ? users : users.filter((candidate) => !isSuperadmin(candidate))
+    );
+  }
+
+  /** Each user with a password sign-in, with whether it has a second factor. */
+  private async withTwoFactorState(
+    users: UserRecord[]
+  ): Promise<(UserRecord & { twoFactorEnabled?: boolean })[]> {
+    const auth = this.options.standaloneAuth;
+    if (!auth) {
       return users;
     }
-    return users.filter((candidate) => !isSuperadmin(candidate));
+    const signInOf = (user: UserRecord) =>
+      user.identities.find((identity) => identity.authSource === STANDALONE_AUTH_SOURCE)
+        ?.externalUserId;
+    const signIns = users.flatMap((user) => signInOf(user) ?? []);
+    const enrolled = await auth.twoFactorEnrolled(signIns);
+    return users.map((user) => {
+      const signIn = signInOf(user);
+      return signIn === undefined ? user : { ...user, twoFactorEnabled: enrolled.has(signIn) };
+    });
   }
 
   async createUser(
@@ -336,6 +362,62 @@ export class UserAdministrationWorkflow {
       created ? "user.password_sign_in_created" : "user.password_reset"
     );
     return { ok: true };
+  }
+
+  /**
+   * An admin's reset of a user's two-factor sign-in (TWO-FACTOR-1): the factor and every
+   * trusted browser are deleted, the flag cleared and the person's sessions ended, so their next
+   * sign-in with the password reaches the setup. Never on one's own account. The admin confirms
+   * who asks outside the instance first; nothing of the factor is in the answer or the audit.
+   */
+  async resetTwoFactor(
+    operationId: string,
+    context: ChangeContext,
+    command: ResetUserTwoFactorCommand
+  ): Promise<{ ok: true; hadFactor: boolean }> {
+    personOf(context.actor);
+    const reset = this.options.standaloneAuth?.resetTwoFactor;
+    if (!reset) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        "Two-factor sign-in requires standalone auth to be enabled for this client instance"
+      );
+    }
+    if (command.userId === context.actor.id) {
+      throw new AppError("FORBIDDEN", OWN_TWO_FACTOR_MESSAGE, {
+        reason: "holder_not_administrable"
+      });
+    }
+    const { user, hadFactor } = await this.whileRightsHeld(
+      context,
+      command.userId,
+      async (held, now) => {
+        await requireUserAdministration(held.options, operationId, now, { userId: command.userId });
+        const current = await held.getUserOrThrow(command.userId);
+        requireNotInDeletion(current);
+        const identity = current.identities.find(
+          (candidate) => candidate.authSource === STANDALONE_AUTH_SOURCE
+        );
+        if (!identity) {
+          throw new AppError(
+            "VALIDATION_FAILED",
+            "This user has no password sign-in, so there is no two-factor sign-in to reset"
+          );
+        }
+        // The last step before the commit, after the check: a deleted factor is not taken back.
+        const result = await reset({ externalUserId: identity.externalUserId });
+        return { user: current, hadFactor: result.hadFactor };
+      }
+    );
+    await context.audit.record({
+      type: "user.two_factor_reset",
+      status: "success",
+      actor: auditActorFromIdentity(context.actor),
+      subject: user.id,
+      correlationId: context.correlationId,
+      metadata: { authSource: STANDALONE_AUTH_SOURCE, hadFactor }
+    });
+    return { ok: true, hadFactor };
   }
 
   /**

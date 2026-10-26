@@ -148,6 +148,12 @@ export interface UserStore {
     clientInstanceId: ClientInstanceId;
     userId: UserId;
   }): Promise<UserRecord | undefined>;
+  /** The user a sign-in identity is linked to, whatever their status. Never links or creates. */
+  findUserByIdentity(input: {
+    clientInstanceId: ClientInstanceId;
+    authSource: string;
+    externalUserId: string;
+  }): Promise<UserRecord | undefined>;
   /**
    * Whether an active person other than `userId`, whose deletion was not requested, holds
    * `superadmin`. The last-superadmin rule asks it under the rights locks.

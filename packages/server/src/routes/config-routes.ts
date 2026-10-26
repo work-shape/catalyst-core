@@ -14,6 +14,7 @@ import type { Route } from "../http/route";
 import { resolveRequestLocale } from "./request-context";
 import type { ChatServerOptions } from "../types";
 import { readInstanceAdminName } from "../users/instance-admin-contact";
+import { withTwoFactorState } from "../http/two-factor-gate";
 
 export function registerConfigRoutes(route: Route, options: ChatServerOptions): void {
   route(apiOperations["health.get"], () => ({
@@ -31,7 +32,7 @@ export function registerConfigRoutes(route: Route, options: ChatServerOptions): 
       userId: asUserId(getSubjectUserId(user))
     });
     return {
-      ...user,
+      ...withTwoFactorState(options, user),
       ...(record?.locale ? { locale: record.locale } : {}),
       // Without a record nothing can steer, so the message waits.
       followUpMode: record ? (record.followUpMode ?? DEFAULT_FOLLOW_UP_MODE) : "queue",

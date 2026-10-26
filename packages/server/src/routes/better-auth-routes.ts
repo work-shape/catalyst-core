@@ -2,9 +2,11 @@ import { Readable } from "node:stream";
 import type { ReadableStream as NodeReadableStream } from "node:stream/web";
 import {
   hasExplicitCredentials,
-  STANDALONE_AUTH_CLIENT_ADDRESS_HEADER
+  STANDALONE_AUTH_CLIENT_ADDRESS_HEADER,
+  STANDALONE_AUTH_SOURCE,
+  type StandaloneTwoFactorEvent
 } from "@work-shape/catalyst-auth";
-import { AppError } from "@work-shape/catalyst-core";
+import { AppError, createPlatformId, type AuditActor } from "@work-shape/catalyst-core";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { accountTried, requireWithinLimit } from "../http/rate-limit";
 import type { ResolvedChatServerOptions } from "../types";
@@ -15,7 +17,16 @@ const SESSION_ROUTES = { id: "auth.session", rateClass: "read" } as const;
 
 export function registerBetterAuthRoutes(
   app: FastifyInstance,
-  options: Pick<ResolvedChatServerOptions, "standaloneAuth" | "rateLimiter" | "config">
+  options: Pick<
+    ResolvedChatServerOptions,
+    | "standaloneAuth"
+    | "rateLimiter"
+    | "config"
+    | "auditRecorder"
+    | "stores"
+    | "clientInstanceId"
+    | "logger"
+  >
 ): void {
   const standaloneAuth = options.standaloneAuth;
   if (!standaloneAuth) {
@@ -53,16 +64,76 @@ export function registerBetterAuthRoutes(
           "Standalone auth endpoints do not accept explicit credential headers"
         );
       }
+      const correlationId = createPlatformId("corr");
       const response = await standaloneAuth.handleRequest(
         new Request(url, {
           method: request.method,
           headers: toRequestHeaders(request.headers, request.ip),
           body: request.method === "GET" ? undefined : toRequestBody(request.body)
-        })
+        }),
+        { twoFactor: (event) => recordTwoFactorEvent(options, event, correlationId) }
       );
       return sendWebResponse(reply, response);
     }
   });
+}
+
+const TWO_FACTOR_AUDIT_TYPES = {
+  enabled: "user.two_factor_enabled",
+  disabled: "user.two_factor_disabled",
+  backup_codes_regenerated: "user.two_factor_backup_codes_regenerated",
+  backup_code_used: "user.two_factor_backup_code_used",
+  locked: "user.two_factor_locked"
+} as const satisfies Record<StandaloneTwoFactorEvent["type"], string>;
+
+/**
+ * TWO-FACTOR-1: the audit of a person's own two-factor changes. The row names the event, the
+ * person and, for a used backup code, how many are left; never a secret, a code or a key URI.
+ * A failed write is logged and does not undo what the library has done.
+ */
+async function recordTwoFactorEvent(
+  options: Pick<
+    ResolvedChatServerOptions,
+    "auditRecorder" | "stores" | "clientInstanceId" | "logger"
+  >,
+  event: StandaloneTwoFactorEvent,
+  correlationId: string
+): Promise<void> {
+  try {
+    const user = await options.stores.users.findUserByIdentity({
+      clientInstanceId: options.clientInstanceId,
+      authSource: STANDALONE_AUTH_SOURCE,
+      externalUserId: event.authUserId
+    });
+    const actor: AuditActor = user
+      ? {
+          userId: user.id,
+          externalUserId: event.authUserId,
+          displayLabel: user.displayLabel,
+          roles: user.roles,
+          principalKind: "user",
+          principalId: user.id,
+          principalDisplayLabel: user.displayLabel,
+          subjectUserId: user.id
+        }
+      : { externalUserId: event.authUserId, displayLabel: event.authUserId, roles: [] };
+    await options.auditRecorder.record({
+      type: TWO_FACTOR_AUDIT_TYPES[event.type],
+      status: event.type === "locked" ? "denied" : "success",
+      actor,
+      ...(user ? { subject: user.id } : {}),
+      correlationId,
+      metadata: {
+        authSource: STANDALONE_AUTH_SOURCE,
+        ...(event.backupCodesLeft === undefined ? {} : { backupCodesLeft: event.backupCodesLeft })
+      }
+    });
+  } catch (error) {
+    options.logger.error(
+      { eventType: event.type, error: error instanceof Error ? error.message : String(error) },
+      "Two-factor audit event could not be recorded"
+    );
+  }
 }
 
 export function sendWebResponse(reply: FastifyReply, response: Response): FastifyReply {

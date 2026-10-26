@@ -7,6 +7,7 @@ import type { ResolvedChatServerOptions } from "../types";
 import { PasswordSetupWorkflow } from "../users/password-setup-service";
 import { UserAccountWorkflow } from "../users/user-account-service";
 import { readInstanceAdminName } from "../users/instance-admin-contact";
+import { withTwoFactorState } from "../http/two-factor-gate";
 
 export function registerUserAccountRoutes(route: Route, options: ResolvedChatServerOptions): void {
   const userAccount = new UserAccountWorkflow(options);
@@ -40,7 +41,7 @@ export function registerUserAccountRoutes(route: Route, options: ResolvedChatSer
       ...(body.followUpMode === undefined ? {} : { followUpMode: body.followUpMode })
     });
     return {
-      ...updated,
+      ...withTwoFactorState(options, updated),
       // A profile change moves no right, so the answer loaded for this request still holds.
       permissions: allowedLegacyPermissions(access),
       instanceAdminName: await readInstanceAdminName(options.stores.users, options.clientInstanceId)

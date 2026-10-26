@@ -1,6 +1,7 @@
 import {
   boolean,
   index,
+  integer,
   jsonb,
   pgTable,
   primaryKey,
@@ -16,7 +17,9 @@ export const authUsers = pgTable("user", {
   emailVerified: boolean("emailVerified").notNull().default(false),
   image: text("image"),
   createdAt: timestamp("createdAt", { withTimezone: true }).notNull(),
-  updatedAt: timestamp("updatedAt", { withTimezone: true }).notNull()
+  updatedAt: timestamp("updatedAt", { withTimezone: true }).notNull(),
+  /** Whether the person signs in with a second factor: set when its first code was valid. */
+  twoFactorEnabled: boolean("two_factor_enabled").notNull().default(false)
 });
 
 export const authSessions = pgTable(
@@ -74,6 +77,26 @@ export const authVerifications = pgTable(
   (table) => [index("verification_identifier_idx").on(table.identifier)]
 );
 
+/**
+ * The second factor of a password sign-in (TWO-FACTOR-1). The sign-in library encrypts `secret`
+ * and `backup_codes` with a key derived from the auth secret, which is never in the database.
+ */
+export const authTwoFactors = pgTable(
+  "two_factor",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => authUsers.id, { onDelete: "cascade" }),
+    secret: text("secret").notNull(),
+    backupCodes: text("backup_codes").notNull(),
+    verified: boolean("verified").notNull().default(true),
+    failedVerificationCount: integer("failed_verification_count").notNull().default(0),
+    lockedUntil: timestamp("locked_until", { withTimezone: true })
+  },
+  (table) => [uniqueIndex("two_factor_user_id_idx").on(table.userId)]
+);
+
 export const standaloneAuthProfiles = pgTable(
   "standalone_auth_profiles",
   {
@@ -106,5 +129,6 @@ export const standaloneAuthSchema = {
   session: authSessions,
   account: authAccounts,
   verification: authVerifications,
+  twoFactor: authTwoFactors,
   standaloneAuthProfiles
 };

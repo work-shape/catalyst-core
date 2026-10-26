@@ -1,5 +1,5 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { and, eq, like } from "drizzle-orm";
+import { and, eq, inArray, like } from "drizzle-orm";
 import { drizzle, type PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
@@ -15,11 +15,19 @@ import {
 import {
   authAccounts,
   authSessions,
+  authTwoFactors,
   authUsers,
   authVerifications,
   standaloneAuthProfiles,
   standaloneAuthSchema
 } from "./standalone-auth-schema";
+import {
+  keepTrustedBrowserExpiry,
+  standaloneTwoFactorPlugins,
+  TRUST_DEVICE_IDENTIFIER_PREFIX,
+  withTwoFactorEvents,
+  type StandaloneTwoFactorEvent
+} from "./standalone-two-factor";
 import type { AuthAdapter, AuthRequest } from "./types";
 
 export interface StandaloneAuthSeedUser {
@@ -38,6 +46,17 @@ export interface StandaloneAuthOptions {
   baseUrl: string;
   trustedOrigins?: string[];
   seedUsers?: StandaloneAuthSeedUser[];
+  /** The name an authenticator app shows beside the account: the instance's product name. */
+  twoFactorIssuer?: string;
+}
+
+export interface StandaloneAuthObserver {
+  /** Called once for each change the call made to a person's second factor, after it answered. */
+  twoFactor?(event: StandaloneTwoFactorEvent): Promise<void>;
+}
+
+export interface ResetStandaloneTwoFactorInput {
+  externalUserId: string;
 }
 
 /**
@@ -104,7 +123,11 @@ export interface CompletedStandalonePasswordSetup {
 }
 
 export interface StandaloneAuthRuntime {
-  handleRequest(request: Request): Promise<Response>;
+  /**
+   * Answers a call to one of the library's routes. `observer` hears what the call did to a
+   * person's second factor, for the audit.
+   */
+  handleRequest(request: Request, observer?: StandaloneAuthObserver): Promise<Response>;
   /**
    * How the server that mounts the routes counts a call before it hands it to
    * `handleRequest`. Nothing for a path the library does not serve. The library's own limiter
@@ -129,6 +152,13 @@ export interface StandaloneAuthRuntime {
   completePasswordSetup(
     input: CompleteStandalonePasswordSetupInput
   ): Promise<CompletedStandalonePasswordSetup>;
+  /** The password sign-ins among these that have a second factor, by `externalUserId`. */
+  twoFactorEnrolled(externalUserIds: readonly string[]): Promise<Set<string>>;
+  /**
+   * An admin's reset: deletes the second factor and every trusted browser of the sign-in, clears
+   * its flag and ends its sessions, in one transaction. False where it had no factor.
+   */
+  resetTwoFactor(input: ResetStandaloneTwoFactorInput): Promise<{ hadFactor: boolean }>;
   close(): Promise<void>;
 }
 
@@ -144,6 +174,7 @@ interface BetterAuthSessionApi {
         id: string;
         email: string;
         emailVerified?: boolean;
+        twoFactorEnabled?: boolean | null;
       };
     } | null>;
   };
@@ -171,7 +202,18 @@ export async function createStandaloneAuthRuntime(
       enabled: true,
       disableSignUp: true,
       minPasswordLength: 8
-    }
+    },
+    databaseHooks: {
+      verification: {
+        create: {
+          before: async (data) => keepTrustedBrowserExpiry(data)
+        }
+      }
+    },
+    plugins: standaloneTwoFactorPlugins({
+      issuer: options.twoFactorIssuer ?? "Catalyst",
+      deleteTrustedBrowsers: (authUserId) => profileStore.deleteTrustedBrowsers(authUserId)
+    })
   });
 
   async function seedUsers(): Promise<void> {
@@ -187,7 +229,13 @@ export async function createStandaloneAuthRuntime(
   );
 
   return {
-    handleRequest: (request) => auth.handler(request),
+    async handleRequest(request, observer) {
+      const { response, events } = await withTwoFactorEvents(() => auth.handler(request));
+      for (const event of events) {
+        await observer?.twoFactor?.(event);
+      }
+      return response;
+    },
     routeKind: (pathname) => standaloneAuthRouteKind(routePatterns, pathname),
     authAdapter: new BetterAuthAdapter(auth, profileStore),
     baseUrl: options.baseUrl,
@@ -199,6 +247,8 @@ export async function createStandaloneAuthRuntime(
     findPasswordSignIn: (input) => profileStore.findPasswordSignIn(input),
     createPasswordSetupToken: (input) => profileStore.createPasswordSetupToken(input),
     completePasswordSetup: (input) => profileStore.completePasswordSetup(input),
+    twoFactorEnrolled: (externalUserIds) => profileStore.twoFactorEnrolled(externalUserIds),
+    resetTwoFactor: (input) => profileStore.resetTwoFactor(input),
     async close() {
       await sql.end();
     }
@@ -214,7 +264,9 @@ const CREDENTIAL_ROUTES = [
   "/verify-password",
   "/reset-password",
   "/request-password-reset",
-  "/send-verification-email"
+  "/send-verification-email",
+  // A code or a backup code is a credential too: counted per address before the library sees it.
+  "/two-factor/"
 ];
 
 function standaloneAuthRouteKind(
@@ -268,6 +320,7 @@ class BetterAuthAdapter implements AuthAdapter {
       displayLabel: profile.displayLabel,
       email: session.user.email,
       emailVerified: session.user.emailVerified ?? false,
+      twoFactor: session.user.twoFactorEnabled === true ? "enrolled" : "missing",
       roles: profile.roles,
       permissionRefs: profile.permissionRefs,
       permissions: profile.permissions,
@@ -394,6 +447,10 @@ class StandaloneAuthProfileStore {
         .where(eq(standaloneAuthProfiles.authUserId, profile.authUserId))
         .limit(1);
       if (remainingProfiles.length === 0) {
+        // The second factor and the trusted browsers go before the auth user, in this
+        // transaction: nothing of the factor stays (ERASE-ACTOR-IDS).
+        await tx.delete(authTwoFactors).where(eq(authTwoFactors.userId, profile.authUserId));
+        await tx.delete(authVerifications).where(trustedBrowsersOf(profile.authUserId));
         await tx.delete(authUsers).where(eq(authUsers.id, profile.authUserId));
       }
     });
@@ -476,6 +533,53 @@ class StandaloneAuthProfileStore {
       await this.writeCredentialAccount(tx, profile.authUserId, passwordHash);
       await tx.delete(authSessions).where(eq(authSessions.userId, profile.authUserId));
       return { externalUserId: profile.externalUserId };
+    });
+  }
+
+  async deleteTrustedBrowsers(authUserId: string): Promise<void> {
+    await this.db.delete(authVerifications).where(trustedBrowsersOf(authUserId));
+  }
+
+  async twoFactorEnrolled(externalUserIds: readonly string[]): Promise<Set<string>> {
+    if (externalUserIds.length === 0) {
+      return new Set();
+    }
+    const rows = await this.db
+      .select({ externalUserId: standaloneAuthProfiles.externalUserId })
+      .from(standaloneAuthProfiles)
+      .innerJoin(authUsers, eq(authUsers.id, standaloneAuthProfiles.authUserId))
+      .where(
+        and(
+          eq(standaloneAuthProfiles.clientInstanceId, this.clientInstanceId),
+          inArray(standaloneAuthProfiles.externalUserId, [...externalUserIds]),
+          eq(authUsers.twoFactorEnabled, true)
+        )
+      );
+    return new Set(rows.map((row) => row.externalUserId));
+  }
+
+  async resetTwoFactor(input: ResetStandaloneTwoFactorInput): Promise<{ hadFactor: boolean }> {
+    const profile = await this.getProfileByExternalUserId(input.externalUserId);
+    if (!profile) {
+      throw new AppError("NOT_FOUND", "No standalone auth account exists for this user");
+    }
+    return this.db.transaction(async (tx) => {
+      const [user] = await tx
+        .select({ twoFactorEnabled: authUsers.twoFactorEnabled })
+        .from(authUsers)
+        .where(eq(authUsers.id, profile.authUserId))
+        .for("update");
+      const removed = await tx
+        .delete(authTwoFactors)
+        .where(eq(authTwoFactors.userId, profile.authUserId))
+        .returning({ id: authTwoFactors.id });
+      await tx
+        .update(authUsers)
+        .set({ twoFactorEnabled: false, updatedAt: new Date() })
+        .where(eq(authUsers.id, profile.authUserId));
+      await tx.delete(authVerifications).where(trustedBrowsersOf(profile.authUserId));
+      await tx.delete(authSessions).where(eq(authSessions.userId, profile.authUserId));
+      return { hadFactor: user?.twoFactorEnabled === true || removed.length > 0 };
     });
   }
 
@@ -615,6 +719,14 @@ function passwordSetupTokensOf(authUserId: string) {
   return and(
     eq(authVerifications.value, authUserId),
     like(authVerifications.identifier, `${PASSWORD_SETUP_IDENTIFIER_PREFIX}%`)
+  );
+}
+
+/** The person's trusted browsers: the library's verification rows `trust-device-…`. */
+function trustedBrowsersOf(authUserId: string) {
+  return and(
+    eq(authVerifications.value, authUserId),
+    like(authVerifications.identifier, `${TRUST_DEVICE_IDENTIFIER_PREFIX}%`)
   );
 }
 

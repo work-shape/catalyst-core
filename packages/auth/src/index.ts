@@ -6,3 +6,9 @@ export * from "./service-access-token";
 export * from "./identity-resolving-auth-adapter";
 export * from "./composite-auth-adapter";
 export * from "./standalone-auth";
+export {
+  FORGET_TRUSTED_BROWSERS_PATH,
+  TRUSTED_BROWSER_DAYS,
+  type StandaloneTwoFactorEvent,
+  type StandaloneTwoFactorEventType
+} from "./standalone-two-factor";

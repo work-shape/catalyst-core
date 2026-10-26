@@ -51,6 +51,7 @@ import type { ResolvedChatServerOptions } from "../types";
 import { resolveRequestLocale } from "../routes/request-context";
 import { stageOperationUpload } from "./multipart-upload";
 import { accountTried, requireWithinLimit } from "./rate-limit";
+import { requireSecondFactor } from "./two-factor-gate";
 
 type RouteServerOptions = Pick<
   ResolvedChatServerOptions,
@@ -66,6 +67,7 @@ type RouteServerOptions = Pick<
   | "auditRecorder"
   | "authorizer"
   | "operationCalls"
+  | "standaloneAuth"
 >;
 
 /** What a handler knows about a call whose caller is not a signed-in user. */
@@ -692,6 +694,7 @@ async function authenticate(
       return { context };
     case "principal": {
       const authenticated = await authenticateIdentity(options, request, correlationId);
+      await requireSecondFactor(options, operation.id, authenticated);
       return {
         identity: isAuthenticatedServicePrincipal(authenticated)
           ? authenticated
@@ -704,6 +707,7 @@ async function authenticate(
       if (isAuthenticatedServicePrincipal(authenticated)) {
         throw new AppError("FORBIDDEN", "Service principals cannot access user-scoped routes");
       }
+      await requireSecondFactor(options, operation.id, authenticated);
       const user = normalizeAuthenticatedUser(authenticated);
       return {
         user,

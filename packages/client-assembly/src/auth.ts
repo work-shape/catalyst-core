@@ -18,6 +18,7 @@ import {
   type SecretResolver
 } from "@work-shape/catalyst-core";
 import {
+  createClientBranding,
   getDevelopmentAuthUsers,
   type ClientInstanceConfig
 } from "@work-shape/catalyst-config-schema";
@@ -184,7 +185,10 @@ export async function createStandaloneAuthRuntimeForClientInstance(input: {
     secret,
     baseUrl: resolveBetterAuthUrl(input),
     trustedOrigins: input.allowedOrigins,
-    seedUsers
+    seedUsers,
+    // An authenticator app lists the account under the instance's product name.
+    twoFactorIssuer:
+      createClientBranding(input.config).title || input.config.clientInstance.displayName
   });
 }
 
