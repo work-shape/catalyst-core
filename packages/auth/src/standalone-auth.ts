@@ -371,6 +371,8 @@ class StandaloneAuthProfileStore {
     }
     await this.upsertCredentialAccount(profile.authUserId, input.password);
     await this.db.delete(authSessions).where(eq(authSessions.userId, profile.authUserId));
+    // A new password asks every browser for the code again.
+    await this.deleteTrustedBrowsers(profile.authUserId);
   }
 
   async setOrCreatePasswordSignIn(
@@ -388,6 +390,7 @@ class StandaloneAuthProfileStore {
       permissions: input.permissions
     });
     await this.db.delete(authSessions).where(eq(authSessions.userId, authUser.id));
+    await this.deleteTrustedBrowsers(authUser.id);
     return {
       externalUserId: authUser.id,
       displayLabel: input.displayLabel,
@@ -422,6 +425,7 @@ class StandaloneAuthProfileStore {
       throw new AppError("FORBIDDEN", "Current password is incorrect");
     }
     await this.upsertCredentialAccount(profile.authUserId, input.newPassword);
+    await this.deleteTrustedBrowsers(profile.authUserId);
   }
 
   async deletePasswordSignIn(input: DeleteStandalonePasswordSignInInput): Promise<void> {
@@ -532,6 +536,7 @@ class StandaloneAuthProfileStore {
       }
       await this.writeCredentialAccount(tx, profile.authUserId, passwordHash);
       await tx.delete(authSessions).where(eq(authSessions.userId, profile.authUserId));
+      await tx.delete(authVerifications).where(trustedBrowsersOf(profile.authUserId));
       return { externalUserId: profile.externalUserId };
     });
   }

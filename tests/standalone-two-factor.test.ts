@@ -348,6 +348,82 @@ describe("two-factor sign-in in the sign-in library (TWO-FACTOR-1)", () => {
     expect(await sql`select id from "user" where id = ${account.authUserId}`).toHaveLength(0);
   });
 
+  it("ends every session opened with the password alone when the factor is turned on", async () => {
+    const account = await passwordAccount();
+    const setupBrowser = await signedIn(account.credentials);
+    const otherBrowser = await signedIn(account.credentials);
+    expect(await sessionCount(account.authUserId)).toBe(2);
+
+    const enabled = await enroll(setupBrowser, account.credentials.password);
+    expect(enabled.status).toBe(200);
+    expect(await sessionCount(account.authUserId)).toBe(1);
+    const kept = await readJson(
+      await call(setupBrowser, "/get-session", undefined, "GET"),
+      sessionUserSchema
+    );
+    expect(kept.user.id).toBe(account.authUserId);
+    expect(
+      (await call(otherBrowser, "/get-session", undefined, "GET").then((r) => r.json())) ?? null
+    ).toBeNull();
+  });
+
+  it("checks codes sent side by side over several challenges against one lock", async () => {
+    const account = await enrolledAccount();
+    const browsers: CookieJar[] = [];
+    for (let challenge = 0; challenge < 12; challenge += 1) {
+      const browser = new CookieJar();
+      await call(browser, "/sign-in/email", account.credentials);
+      browsers.push(browser);
+    }
+
+    const statuses = await Promise.all(
+      browsers.map((browser) =>
+        call(browser, "/two-factor/verify-totp", { code: wrongCode(account.totpUri) }).then(
+          (response) => response.status
+        )
+      )
+    );
+    expect(statuses.filter((status) => status === 401)).toHaveLength(10);
+    expect(statuses.filter((status) => status === 429)).toHaveLength(2);
+    expect(events).toEqual([{ type: "locked", authUserId: account.authUserId }]);
+  });
+
+  it("asks every browser for the code again after a new password", async () => {
+    const account = await enrolledAccount();
+    const trustBrowser = async () => {
+      const browser = new CookieJar();
+      await call(browser, "/sign-in/email", account.credentials);
+      await call(browser, "/two-factor/verify-totp", {
+        code: totpCode(account.totpUri),
+        trustDevice: true
+      });
+      expect(await trustRows(account.authUserId)).toHaveLength(1);
+    };
+
+    await trustBrowser();
+    await auth.changePassword({
+      externalUserId: account.authUserId,
+      currentPassword: account.credentials.password,
+      newPassword: account.credentials.password
+    });
+    expect(await trustRows(account.authUserId)).toHaveLength(0);
+
+    await trustBrowser();
+    await auth.setPassword({
+      externalUserId: account.authUserId,
+      password: account.credentials.password
+    });
+    expect(await trustRows(account.authUserId)).toHaveLength(0);
+
+    await trustBrowser();
+    const token = await auth.createPasswordSetupToken({
+      externalUserId: account.authUserId,
+      ttlMs: 60_000
+    });
+    await auth.completePasswordSetup({ token, password: account.credentials.password });
+    expect(await trustRows(account.authUserId)).toHaveLength(0);
+  });
+
   it("lists which sign-ins have a factor", async () => {
     const enrolled = await enrolledAccount();
     const plain = await passwordAccount();

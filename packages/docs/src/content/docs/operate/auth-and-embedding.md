@@ -86,9 +86,9 @@ An account that signs in with a password can add a second factor: a six-digit co
 
 A person sets it up under **Settings > You > Security** (German: **Einstellungen › Du › Sicherheit**): the password, a QR code with its key as text, the first code from the app, then ten backup codes, shown once, to copy or download. Each backup code signs in once in place of the app. The same page makes ten new backup codes, forgets every trusted browser, and turns the factor off, each with the password. To move to a new phone, a person turns it off and sets it up again.
 
-At sign-in, an account with a factor asks for the code after the password; a password alone opens no session. **Trust this browser for 30 days** skips the code in that browser for 30 days from the moment the code was entered. A sign-in from the browser in that time does not extend it, so a browser is asked for the code at least every 30 days. Turning the factor off, an admin's reset and **Stop trusting all browsers** end the trust at once.
+At sign-in, an account with a factor asks for the code after the password; a password alone opens no session. **Trust this browser for 30 days** skips the code in that browser for 30 days from the moment the code was entered. A sign-in from the browser in that time does not extend it, so a browser is asked for the code at least every 30 days. Turning the factor off, a new password, an admin's reset and **Stop trusting all browsers** end the trust at once. Setting the factor up ends every other session of the account, so a session opened with the password alone does not carry on.
 
-Wrong codes are limited: five per sign-in, and ten in a row lock the account's code step for 15 minutes. The codes also count toward the instance's sign-in limit per client address, `rateLimits.signInPerAddressPerMinute`.
+Wrong codes are limited: five per sign-in, and ten in a row lock the account's code step for 15 minutes. One API process checks one person's codes one at a time, so codes sent side by side over several sign-ins still meet that lock. The codes also count toward the instance's sign-in limit per client address, `rateLimits.signInPerAddressPerMinute`.
 
 ### Requiring it
 
