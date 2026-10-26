@@ -5,4 +5,5 @@ users.identities.upsert  PUT /api/v1/instance/users/:userId/identities
 users.invitation.send  POST /api/v1/instance/users/:userId/invitation
 users.list  GET /api/v1/instance/users
 users.password.reset  POST /api/v1/instance/users/:userId/password
+users.two_factor.reset  POST /api/v1/instance/users/:userId/two-factor/reset
 users.update  PATCH /api/v1/instance/users/:userId

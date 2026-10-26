@@ -37,7 +37,7 @@ export const uiGuardHints: Record<UiGuardCategory, string> = {
   "overlay-imports":
     "Import the component from @work-shape/catalyst-ui. Only the library imports radix-ui and cmdk.",
   "library-imports":
-    "The library imports only react, react-dom, radix-ui, cmdk, lucide-react, class-variance-authority, clsx, tailwind-merge and its own files. Only data/chart-engine.ts imports echarts.",
+    "The library imports only react, react-dom, radix-ui, cmdk, lucide-react, class-variance-authority, clsx, tailwind-merge and its own files. Only data/chart-engine.ts imports echarts, and only data/qr-code.tsx imports qrcode-generator.",
   "library-storage": "The library keeps nothing in storage and loads nothing.",
   "library-text":
     "The library shows no text of its own: take it as a prop or from the UiRoot labels."
@@ -62,6 +62,7 @@ const LIBRARY_IMPORTS = new Set([
 /** A package one library file wraps, so that no other file and no caller sees it. */
 const LIBRARY_ENGINE_IMPORTS: Readonly<Record<string, string>> = {
   "packages/ui/src/data/chart-engine.ts": "echarts",
+  "packages/ui/src/data/qr-code.tsx": "qrcode-generator",
   "packages/ui/src/flow/flow-engine.tsx": "@xyflow",
   "packages/ui/src/flow/flow-engine-nodes.tsx": "@xyflow",
   "packages/ui/src/flow/flow-layout.ts": "@dagrejs"
