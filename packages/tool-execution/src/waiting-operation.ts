@@ -135,9 +135,12 @@ export async function executeConfirmedOperation(
     context.definition.name === "assets.publish" &&
     policy.next === "await_approval"
   ) {
+    // The person's confirmation is their own click: it approves only where their click on
+    // Publish would, with every right the held item asks of who decides it (DP-3).
     const approval = await context.definition.approval?.(context.call.input);
     const access = await deps.authorizer.forActor(context.call.actor);
-    if (!approval || !access.authorize(approval.action).allowed)
+    const clicked = { ...context.call, origin: { kind: "user" as const } };
+    if (!approval || !approvedByCaller(clicked, policy, approval, access))
       return holdForApproval(context, policy, waiting.heldInput, approval);
     return executeWaitingCall(
       context,
@@ -239,7 +242,9 @@ async function holdForApproval(
       ? { execution: "refused" as const, run: ended, error: ended.error ?? UNKNOWN_END }
       : readDecidedOperationEnd(run.id, run.approvalRequestId, deps);
   };
-  if (!deps.approvals || definition.secret) return refuse();
+  // An agent's call never moves on to an approval (`holdConfirmedForApproval`): filed, the
+  // request would wait for an approver whose decision executes nothing.
+  if (!deps.approvals || definition.secret || run.origin.kind === "agent") return refuse();
   const expiresAt = new Date(
     context.now().getTime() + HELD_AFTER_CONFIRMATION_EXPIRES_AFTER_MS
   ).toISOString();

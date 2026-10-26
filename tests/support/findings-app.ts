@@ -16,7 +16,12 @@ import {
 import { createDataStores, type DataStores } from "@work-shape/catalyst-data-stores";
 import { createPostgresJobWorker } from "@work-shape/catalyst-postgres-store";
 import { clientInstanceId } from "./access-instance";
-import { action, setupAppActions, type AppActionsInstance } from "./app-actions";
+import {
+  action,
+  setupAppActions,
+  type AppActionsInstance,
+  type AppActionsOptions
+} from "./app-actions";
 import { expectStatus, type AppFile } from "./app-instance";
 import { eventually, required } from "./assertions";
 import { finding, init, manifest, type StoreFile } from "./data-store-world";
@@ -173,7 +178,7 @@ export interface FindingsWorld extends AppActionsInstance {
  * rows, and the App `findings` published at revision 1 with a draft at revision 2.
  */
 export async function setupFindingsApp(
-  options: { explicitCredentials?: true } = {}
+  options: Pick<AppActionsOptions, "explicitCredentials" | "events"> = {}
 ): Promise<FindingsWorld> {
   const databaseUrl = await fileTestDatabaseUrl();
   // The stores before the instance: the kind `data_store` is registered when it is set up.

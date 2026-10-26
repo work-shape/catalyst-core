@@ -3,9 +3,11 @@ import { z } from "zod";
 import { appPublishReviewSchema } from "@work-shape/catalyst-api-contract";
 import { DATA_STORE_ASSET_KIND, asUserId } from "@work-shape/catalyst-core";
 import { clientInstanceId } from "./support/access-instance";
+import { agentPublishes } from "./support/agent-publish-confirmation";
 import { expectStatus } from "./support/app-instance";
 import { eventually, required } from "./support/assertions";
 import { init, type StoreFile } from "./support/data-store-world";
+import { guardedEvents } from "./support/guardrails";
 import { findingsApp, setupFindingsApp, type FindingsWorld } from "./support/findings-app";
 import { runCli } from "@work-shape/catalyst-cli";
 import { testOperations } from "./support/operations";
@@ -47,7 +49,24 @@ const heldSchema = z.object({
 describe("GOLIVE-1: an App's Publish carries the Data Stores it binds", () => {
   let t: FindingsWorld;
   beforeAll(async () => {
-    t = await setupFindingsApp({ explicitCredentials: true });
+    t = await setupFindingsApp({
+      explicitCredentials: true,
+      // The publish of the App golive-agent-app waits for an approver; the others are not held.
+      events: (stores) =>
+        guardedEvents(stores, {
+          "held-app": {
+            displayName: "The agent's App",
+            on: "app.before_publish",
+            check: {
+              kind: "pattern",
+              fields: ["name"],
+              pattern: "^golive-agent-app$",
+              reason: "Not without a look."
+            },
+            outcome: "require_approval"
+          }
+        }).events
+    });
   });
   afterAll(() => t.closeAll());
 
@@ -358,6 +377,63 @@ describe("GOLIVE-1: an App's Publish carries the Data Stores it binds", () => {
     expect((await asset(DATA_STORE_ASSET_KIND, "golive-held"))?.publishedRevision).toBe(
       named.store
     );
+  });
+
+  // DP-3 rights review: an agent's publish of the App and its store asks its person every right
+  // the held item asks of who decides it, here data_store.publish on the store.
+  it("refuses an agent's publish of the App and its store for a person without data_store.publish, and publishes it on their confirmation with the right", async () => {
+    const named = await storeWithPendingMigration("golive-agent", "golive-agent-app");
+    const storeId = required(await asset(DATA_STORE_ASSET_KIND, "golive-agent")).id;
+    const input = {
+      kind: "app",
+      name: "golive-agent-app",
+      revision: named.app,
+      workspaceId: t.workspaceId,
+      audience: "workspace",
+      dataStores: [{ name: "golive-agent", revision: named.store }]
+    };
+    // Kai may publish the App and approve an App's publish, and may not publish the store.
+    const approver = await t.stores.access.createGrant({
+      clientInstanceId,
+      holderKind: "user",
+      holderId: t.kai.id,
+      action: "app.approve",
+      effect: "allow",
+      scopeKind: "instance",
+      grantedBy: asUserId(t.root.id)
+    });
+    try {
+      await t.withRight(t.kai.id, "app.publish", { workspaceId: t.workspaceId }, () =>
+        t.withRight(t.kai.id, "data_store.read", { assetId: storeId }, () =>
+          t.withRight(t.kai.id, "data_store.insert", { assetId: storeId }, async () => {
+            // Without the store's own publish right the agent's call is refused before Kai
+            // is asked, as Kai's own publish is.
+            const { made } = await agentPublishes(t, t.workspaceId, input, "store-without");
+            expect(made.run).toMatchObject({
+              status: "denied",
+              denial: { kind: "forbidden", action: "data_store.publish" }
+            });
+            expect((await asset(DATA_STORE_ASSET_KIND, "golive-agent"))?.publishedRevision).toBe(1);
+            expect(await record("golive-agent")).toMatchObject({ level: 1 });
+            expect((await asset("app", "golive-agent-app"))?.publishedRevision).toBeUndefined();
+
+            await t.withRight(t.kai.id, "data_store.publish", { assetId: storeId }, async () => {
+              const confirmed = await (
+                await agentPublishes(t, t.workspaceId, input, "store-with")
+              ).confirm();
+              expect(confirmed).toMatchObject({
+                execution: "done",
+                run: { decision: { mode: "approved", reason: "approved_by_caller" } }
+              });
+            });
+          })
+        )
+      );
+    } finally {
+      await t.stores.access.deleteGrant({ clientInstanceId, grantId: approver.id });
+    }
+    expect(await record("golive-agent")).toMatchObject({ status: "ready", level: 2 });
+    expect((await asset("app", "golive-agent-app"))?.publishedRevision).toBe(named.app);
   });
 
   it("names the store and its migration in `catalyst app publish` and publishes them with the App on one yes", async () => {
