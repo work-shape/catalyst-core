@@ -54,7 +54,7 @@ import { pages } from "./pages";
 import { personalApiKeys } from "./personal-api-keys";
 import { personalConnections } from "./personal-connections";
 import { publishNarrative } from "./publish-narrative";
-import { refusals } from "./refusals";
+import { refusals } from "./refusal-texts";
 import { rights } from "./rights";
 import { scheduled } from "./scheduled";
 import { settings } from "./settings";
