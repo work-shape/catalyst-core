@@ -126,21 +126,24 @@ describe("DP-3: the App's Publish question names what it makes live with the App
     const failed = dialog({ status: "failed", workflows: [], dataStores: [], retry: noop });
     expect(failed).toContain("What is published with the app could not be read.");
     expect(held(failed)).toBe(true);
-    const refused = dialog(
-      ready([
-        {
-          ...parent,
-          refusals: [
-            {
-              reason: "no_grant",
-              right: "workflow.publish",
-              message: "You may not publish the Workflow 'visit-log'."
-            }
-          ]
-        }
-      ])
-    );
-    expect(refused).toContain("You may not publish the Workflow &#x27;visit-log&#x27;.");
+    const publishWithRefusal = ready([
+      {
+        ...parent,
+        refusals: [
+          {
+            reason: "no_grant",
+            right: "workflow.publish",
+            message: "You may not publish the Workflow 'visit-log'."
+          }
+        ]
+      }
+    ]);
+    const refused = dialog(publishWithRefusal);
+    expect(refused).toContain("You need the right “Publish workflows” for this.");
+    const refusedDe = dialog(publishWithRefusal, "de");
+    expect(refusedDe).toContain("Dafür brauchst du das Recht „Workflows veröffentlichen“.");
+    expect(refusedDe).not.toContain("You may not publish");
+    expect(held(refusedDe)).toBe(true);
     expect(held(refused)).toBe(true);
   });
 });
