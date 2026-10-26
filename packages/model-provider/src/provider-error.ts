@@ -52,5 +52,5 @@ export function isEncryptedContentRejected(payload: unknown): boolean {
 /** Keep the shared parser's advice in the milliseconds the model retry loop uses. */
 function retryAfter(value: string | null | undefined): { retryAfterMs?: number } {
   const seconds = retryAfterSeconds(value ?? undefined);
-  return seconds === undefined ? {} : { retryAfterMs: seconds * 1000 };
+  return seconds === undefined ? {} : { retryAfterMs: Math.round(seconds * 1000) };
 }

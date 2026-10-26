@@ -56,6 +56,20 @@ describe("provider error boundary", () => {
     }
   });
 
+  it("preserves whole milliseconds when converting HTTP-date advice from seconds", () => {
+    vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-10-09T12:00:00.999Z") });
+    try {
+      expect(
+        readProviderErrorMetadata(
+          undefined,
+          new Headers({ "retry-after": "Fri, 09 Oct 2026 12:00:02 GMT" })
+        ).retryAfterMs
+      ).toBe(1001);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it.each([
     "2026-10-09T12:00:45Z",
     "Fri, 09 Oct 2026 12:00:45 UTC",
