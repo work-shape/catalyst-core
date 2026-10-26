@@ -17,7 +17,10 @@ import { WORKFLOW_ENDED_STATUSES, type WorkflowRunsStore } from "@work-shape/cat
 import type { PostgresConnection } from "./postgres-database";
 import { runIs } from "./postgres-workflow-run-mapping";
 import {
+  conversationAttachments,
   conversations,
+  managedArtifacts,
+  managedFiles,
   messages,
   agentRunObservations,
   agentRuns,
@@ -266,6 +269,49 @@ export function workflowRetention(
             .update(agentRuns)
             .set({ resumeState: null })
             .where(inArray(agentRuns.conversationId, threads));
+          // The copies of the run's files its agents got: the attachment handlers removed their
+          // bytes and marked their rows deleted before this, and the rows go now, with their
+          // names and what was prepared from them. A row not marked still names bytes no
+          // handler removed and stays, so they can be found.
+          await tx
+            .delete(managedArtifacts)
+            .where(
+              and(
+                inArray(managedArtifacts.conversationId, threads),
+                eq(managedArtifacts.status, "deleted")
+              )
+            );
+          const copies = await tx
+            .delete(conversationAttachments)
+            .where(
+              and(
+                inArray(conversationAttachments.conversationId, threads),
+                eq(conversationAttachments.status, "deleted")
+              )
+            )
+            .returning({ fileId: conversationAttachments.fileId });
+          if (copies.length > 0)
+            await tx.delete(managedFiles).where(
+              and(
+                eq(managedFiles.clientInstanceId, ref.clientInstanceId),
+                inArray(managedFiles.id, [...new Set(copies.map((copy) => copy.fileId))]),
+                eq(managedFiles.status, "deleted"),
+                isNull(managedFiles.ownerKind),
+                // A file another conversation still names is not only this run's.
+                notExists(
+                  tx
+                    .select({ id: conversationAttachments.id })
+                    .from(conversationAttachments)
+                    .where(eq(conversationAttachments.fileId, managedFiles.id))
+                ),
+                notExists(
+                  tx
+                    .select({ id: managedArtifacts.id })
+                    .from(managedArtifacts)
+                    .where(eq(managedArtifacts.sourceFileId, managedFiles.id))
+                )
+              )
+            );
         }
         return marked.length > 0;
       });
