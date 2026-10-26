@@ -1,0 +1,65 @@
+{
+  "routes": [
+    "/",
+    "/build/agents",
+    "/build/connections",
+    "/build/data-stores",
+    "/build/guardrails",
+    "/build/knowledge-bases",
+    "/build/skills",
+    "/inbox",
+    "/settings/instance/access",
+    "/settings/instance/api-access",
+    "/settings/instance/audit",
+    "/settings/instance/infrastructure",
+    "/settings/instance/jobs",
+    "/settings/instance/limits",
+    "/settings/instance/modules",
+    "/settings/instance/operations",
+    "/settings/instance/usage",
+    "/settings/instance/users",
+    "/settings/instance/workspaces",
+    "/settings/workspace/general",
+    "/settings/workspace/members",
+    "/settings/workspace/usage",
+    "/settings/you/api-keys",
+    "/settings/you/confirmations",
+    "/settings/you/connect",
+    "/settings/you/connections",
+    "/settings/you/language-appearance",
+    "/settings/you/profile",
+    "/settings/you/security",
+    "/settings/you/usage",
+    "/w/{workspace}/agents",
+    "/w/{workspace}/apps",
+    "/w/{workspace}/workflows"
+  ],
+  "required": [],
+  "states": [
+    {
+      "name": "preview-checkout",
+      "setup": "/private/tmp/claude-501/-Users-felixpahlke-code-catalyst/a2ce655e-be6a-4606-83fd-3c646e25be76/scratchpad/preview-1/checkout.mjs"
+    },
+    {
+      "name": "preview-unsaved",
+      "setup": "/private/tmp/claude-501/-Users-felixpahlke-code-catalyst/a2ce655e-be6a-4606-83fd-3c646e25be76/scratchpad/preview-1/unsaved.mjs"
+    },
+    {
+      "name": "save-asked",
+      "setup": "/private/tmp/claude-501/-Users-felixpahlke-code-catalyst/a2ce655e-be6a-4606-83fd-3c646e25be76/scratchpad/preview-1/save-asked.mjs"
+    },
+    {
+      "name": "save-done",
+      "setup": "/private/tmp/claude-501/-Users-felixpahlke-code-catalyst/a2ce655e-be6a-4606-83fd-3c646e25be76/scratchpad/preview-1/save-done.mjs"
+    },
+    {
+      "name": "needs-app",
+      "setup": "/private/tmp/claude-501/-Users-felixpahlke-code-catalyst/a2ce655e-be6a-4606-83fd-3c646e25be76/scratchpad/preview-1/needs-app.mjs"
+    }
+  ],
+  "modules": [],
+  "pr": 87,
+  "head": "718237a112e3b843da3b1716f9167f0dd1bac279",
+  "base": "ef8d4126fded43647e42c7322a1b747403c80d74",
+  "tested": "91093041a65f5f233e082034913962a396e32175"
+}
