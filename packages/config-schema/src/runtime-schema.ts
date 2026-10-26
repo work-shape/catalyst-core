@@ -30,11 +30,11 @@ export const modelContextConfigSchema = z
   .object({
     toolOutput: z
       .object({
-        maxTokens: z.number().int().positive().default(60000),
+        maxTokens: z.number().int().positive().default(12000),
         maxBytes: z.number().int().positive().optional()
       })
       .default({
-        maxTokens: 60000
+        maxTokens: 12000
       })
   })
   .prefault({});

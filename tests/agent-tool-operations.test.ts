@@ -232,8 +232,8 @@ describe("an agent's tool calls in a chat run", () => {
     expect(ofAgent.every((event) => event.operationRunId === undefined)).toBe(true);
 
     // The conversation reads as it did before tools were operations.
-    expect(first.toolMessages).toEqual([expect.stringContaining('"changed": "one"')]);
-    expect(second.toolMessages).toEqual([expect.stringContaining('"read": "two"')]);
+    expect(first.toolMessages).toEqual([expect.stringContaining('"changed":"one"')]);
+    expect(second.toolMessages).toEqual([expect.stringContaining('"read":"two"')]);
     expect(calls).toEqual(["one"]);
     await f.app.close();
   });

@@ -45,6 +45,7 @@ import { isCancellationRequested, type RunEvents } from "./run-events";
 import { answerSubagents, finishPausedStep, pauseRun, resumedModelMessages } from "./resume-entry";
 import type { ToolDispatch } from "./tool-dispatch";
 import { isRunAgentCall } from "./subagents";
+import { withToolResultRead } from "./tool-result-read";
 import type { LocalAgentRuntimeOptions } from "./run-events";
 
 const DEFAULT_MAX_STEPS = 64;
@@ -166,13 +167,15 @@ export class TurnLoop {
       );
     }
     const offeredDataTools = new Set(dataTools.described.map((tool) => tool.name));
-    const tools = materializeModelTools({
-      agent,
-      capabilities,
-      toolRegistry: this.options.toolRegistry,
-      dataTools: dataTools.described,
-      webAccess: this.options.webAccess
-    });
+    const tools = withToolResultRead(
+      materializeModelTools({
+        agent,
+        capabilities,
+        toolRegistry: this.options.toolRegistry,
+        dataTools: dataTools.described,
+        webAccess: this.options.webAccess
+      })
+    );
     const compactThresholdTokens = getProviderCompactionThreshold(
       modelSelection.provider,
       capabilities
@@ -246,7 +249,7 @@ export class TurnLoop {
       input,
       context,
       modelSelection.provider,
-      { compactionEnabled }
+      { compactionEnabled, model: modelSelection.model }
     );
     return {
       messages: [systemMessage, ...history.messages, userMessage],
@@ -515,7 +518,16 @@ export class TurnLoop {
             citations: completion.citations,
             modelContext
           }),
-          providerContinuation: persistedContinuation
+          providerContinuation: persistedContinuation,
+          ...(providerContinuation
+            ? {
+                turnContinuation: {
+                  providerId: providerContinuation.providerId,
+                  model: modelSelection.model,
+                  state: unknownToJsonValue(providerContinuation.state)
+                }
+              }
+            : {})
         });
         if (emittedDeltas) {
           state.completeMessage(persisted);

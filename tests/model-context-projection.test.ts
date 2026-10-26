@@ -18,6 +18,7 @@ import {
   createAssistantToolCallsMetadata,
   createModelVisibleToolOutput,
   createToolResultMetadata,
+  cutResultHint,
   projectAgentVisibleHistory,
   selectRecentCompleteHistory
 } from "../packages/agent-runtime/src/model-context-projection";
@@ -593,6 +594,53 @@ describe("model context projection", () => {
     ).toMatchObject({ artifactId: "art_sheet", sheets: ["Costs"], ranges: ["A1:C4"] });
     // A document page is asked for again by its file and page, as view_document_page takes them.
     expect(named[3]).toMatchObject({ fileId: "file_contract", page: "7" });
+  });
+});
+
+describe("a tool result as the model reads it", () => {
+  const options = { toolOutput: { maxTokens: 12000 } };
+  const success = (output: unknown): ToolExecutionResult => ({ status: "success", output });
+
+  it("is compact JSON with its keys in order, the same text whichever order they came in", async () => {
+    const first = await createModelVisibleToolOutput(
+      success({ rows: [{ name: "a", id: 1 }], count: 1 }),
+      options
+    );
+    const second = await createModelVisibleToolOutput(
+      success({ count: 1, rows: [{ id: 1, name: "a" }] }),
+      options
+    );
+
+    expect(first.text).toBe('{"count":1,"rows":[{"id":1,"name":"a"}]}');
+    expect(second.text).toBe(first.text);
+  });
+
+  it("is cut in the middle above the bound, the same way every time, with how to get the rest", async () => {
+    const lines = Array.from({ length: 20000 }, (_, index) => `line ${index}`).join("\n");
+    const call = { toolName: "workspace.exec", toolCallId: "call_exec" };
+    const cut = async () => createModelVisibleToolOutput(success(lines), options, "loaded", call);
+
+    const first = await cut();
+    const second = await cut();
+
+    expect(first.text).toBe(second.text);
+    expect(first.text.length).toBeLessThanOrEqual(12000 * 4);
+    expect(first.text.startsWith("line 0\nline 1\n")).toBe(true);
+    expect(first.text.endsWith("line 19999")).toBe(true);
+    const leftOut = /Characters (\d+) to (\d+) are left out here/u.exec(first.text);
+    const from = Number(leftOut?.[1]);
+    expect(first.text).toContain(`[Result cut for the model: ${lines.length} characters`);
+    expect(first.text.slice(0, from)).toBe(lines.slice(0, from));
+    expect(first.text).toContain(`tool_result.read {"id":"call_exec","offset":${from}}`);
+    expect(first.text).toContain(cutResultHint("workspace.exec"));
+    expect(first.notice).toMatchObject({ type: "tool_output_bounded", maxTokens: 12000 });
+  });
+
+  it("names another way to the rest for each tool that has one", () => {
+    expect(cutResultHint("workspace.read_file")).toContain("offset");
+    expect(cutResultHint("data_store.query")).toContain("LIMIT and OFFSET");
+    expect(cutResultHint("tool_result.read")).toContain("smaller limit");
+    expect(cutResultHint("crm.lookup")).toBeUndefined();
   });
 });
 

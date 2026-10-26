@@ -67,6 +67,8 @@ export interface StartAgentRunInput {
    * read is a route without a region, which no personal call passes.
    */
   ancestors?: readonly AgentRunModelOrigin[];
+  /** Of a subagent: the conversation of the run that started it. Its model calls share its key. */
+  parentConversationId?: ConversationId;
 }
 
 /** What picks a run's model: its agent, the preview it ran, the binding its person picked. */

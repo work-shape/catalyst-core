@@ -170,6 +170,7 @@ export function adapterFromFakeProvider(
           reasoningEffort: request.reasoningEffort,
           fastMode: request.fastTier,
           continuation: request.continuation,
+          ...(request.cacheKey ? { cacheKey: request.cacheKey } : {}),
           messages: request.messages,
           tools: request.tools
         },
@@ -186,6 +187,7 @@ export function adapterFromFakeProvider(
           reasoningEffort: request.reasoningEffort,
           fastMode: request.fastTier,
           continuation: request.continuation,
+          ...(request.cacheKey ? { cacheKey: request.cacheKey } : {}),
           messages: request.messages,
           tools: request.tools
         },

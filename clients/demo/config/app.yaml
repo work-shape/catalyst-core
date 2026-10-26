@@ -429,7 +429,7 @@ runtime:
   repeatedToolCallLimit: 3
 modelContext:
   toolOutput:
-    maxTokens: 60000
+    maxTokens: 12000
 tools:
   - name: read_skill
     enabled: true

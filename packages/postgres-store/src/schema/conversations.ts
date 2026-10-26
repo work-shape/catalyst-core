@@ -16,7 +16,8 @@ import type {
   Conversation,
   ConversationCreationTarget,
   ConversationKind,
-  ModelProviderContinuationCheckpoint
+  ModelProviderContinuationCheckpoint,
+  ModelProviderTurnContinuation
 } from "@work-shape/catalyst-core";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { collaborationWorkspaces } from "./workspaces";
@@ -146,6 +147,36 @@ export const modelProviderContinuations = pgTable(
   (table) => [
     primaryKey({
       name: "model_provider_continuations_pk",
+      columns: [table.clientInstanceId, table.conversationId, table.providerId]
+    })
+  ]
+);
+
+/**
+ * The provider continuation the last finished run of a conversation ended with, on one provider
+ * and model: the encrypted reasoning of its steps. The next run on the same model sends it again,
+ * so its request starts as the last one did and the provider's prompt cache holds. It is never
+ * where history starts: that is `model_provider_continuations`.
+ */
+export const modelProviderTurnContinuations = pgTable(
+  "model_provider_turn_continuations",
+  {
+    clientInstanceId: text("client_instance_id").notNull(),
+    conversationId: text("conversation_id")
+      .notNull()
+      .references(() => conversations.id, { onDelete: "cascade" }),
+    providerId: text("provider_id").notNull(),
+    model: text("model").notNull(),
+    state: jsonb("state").$type<ModelProviderTurnContinuation["state"]>().notNull(),
+    sourceMessageId: text("source_message_id")
+      .notNull()
+      .references(() => messages.id, { onDelete: "cascade" }),
+    sourceStorageOrdinal: bigint("source_storage_ordinal", { mode: "number" }).notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull()
+  },
+  (table) => [
+    primaryKey({
+      name: "model_provider_turn_continuations_pk",
       columns: [table.clientInstanceId, table.conversationId, table.providerId]
     })
   ]

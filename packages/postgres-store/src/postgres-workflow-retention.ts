@@ -21,7 +21,8 @@ import {
   messages,
   agentRunObservations,
   agentRuns,
-  modelProviderContinuations
+  modelProviderContinuations,
+  modelProviderTurnContinuations
 } from "./schema";
 import { workflowRuns, workflowStepRuns } from "./schema/workflowRuns";
 
@@ -258,6 +259,9 @@ export function workflowRetention(
           await tx
             .delete(modelProviderContinuations)
             .where(inArray(modelProviderContinuations.conversationId, threads));
+          await tx
+            .delete(modelProviderTurnContinuations)
+            .where(inArray(modelProviderTurnContinuations.conversationId, threads));
           await tx
             .update(agentRuns)
             .set({ resumeState: null })

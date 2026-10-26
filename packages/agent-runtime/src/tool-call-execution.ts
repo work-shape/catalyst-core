@@ -71,7 +71,12 @@ export async function executeToolCall(input: {
     : input.refusal;
   if (refusal) {
     const result = { status: "failed" as const, error: refusal };
-    const modelOutput = await createModelVisibleToolOutput(result, input.modelContext);
+    const modelOutput = await createModelVisibleToolOutput(
+      result,
+      input.modelContext,
+      "loaded",
+      input.toolCall
+    );
     input.state.emit({
       type: "tool_call_failed",
       runId: input.runId,
@@ -96,7 +101,12 @@ export async function executeToolCall(input: {
         }
       }
     };
-    const modelOutput = await createModelVisibleToolOutput(result, input.modelContext);
+    const modelOutput = await createModelVisibleToolOutput(
+      result,
+      input.modelContext,
+      "loaded",
+      input.toolCall
+    );
     input.state.emit({
       type: "tool_call_failed",
       runId: input.runId,
@@ -145,7 +155,12 @@ export async function emitToolCallEnd(
   result: ToolExecutionResult
 ): Promise<{ result: ToolExecutionResult; modelOutput: ModelOutputProjection }> {
   const toolCallId = asToolCallId(input.toolCall.toolCallId);
-  const modelOutput = await createModelVisibleToolOutput(result, input.modelContext);
+  const modelOutput = await createModelVisibleToolOutput(
+    result,
+    input.modelContext,
+    "loaded",
+    input.toolCall
+  );
   logProjectionNotice(input, modelOutput);
   input.state.emit({
     type: result.status === "success" ? "tool_call_completed" : "tool_call_failed",

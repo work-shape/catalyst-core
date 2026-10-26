@@ -893,6 +893,15 @@ describe("OpenAI-compatible model provider", () => {
       provider.complete(
         {
           ...request,
+          messages: [
+            ...request.messages,
+            {
+              role: "assistant" as const,
+              content: "",
+              toolCalls: [{ toolCallId: "call_a", toolName: "lookup", input: {} }]
+            },
+            { role: "tool" as const, toolCallId: "call_a", content: "{}" }
+          ],
           continuation: {
             providerId: "azure-eu",
             state: {

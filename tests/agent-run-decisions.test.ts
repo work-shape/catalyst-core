@@ -352,7 +352,7 @@ describe("an agent's call that waits for its person's decision", () => {
       "tool",
       "assistant"
     ]);
-    expect(messages.at(-1)?.text).toContain('"changed": "one"');
+    expect(messages.at(-1)?.text).toContain('"changed":"one"');
     // The model went on from the step it paused in: the message, its call and the result.
     expect(lastModelInput()).toEqual(["user", "assistant:demo.change", "tool"]);
 
@@ -436,7 +436,7 @@ describe("an agent's call that waits for its person's decision", () => {
       "assistant"
     ]);
     const tools = messages.filter((message) => message.role === "tool");
-    expect(tools[0]?.text).toContain('"changed": "one"');
+    expect(tools[0]?.text).toContain('"changed":"one"');
     expect(tools[1]?.text).toContain("The user declined this call. Nothing ran.");
     expect(lastModelInput()).toEqual(["user", "assistant:demo.change,demo.change", "tool", "tool"]);
     const types = (await f.events(said.runId)).map((event) => event.type);

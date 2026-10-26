@@ -318,7 +318,10 @@ describe("CS-9c personal data switches web tools off", () => {
               }
             }
           : {}),
-        tools: requests.map((request) => request.tools.map((tool) => tool.name))
+        // `tool_result.read` is last in every request with tools; these cases are about the rest.
+        tools: requests.map((request) =>
+          request.tools.map((tool) => tool.name).filter((name) => name !== "tool_result.read")
+        )
       };
     }
     return {

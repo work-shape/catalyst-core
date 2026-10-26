@@ -26,8 +26,23 @@ export function parseJsonObject(value: string): unknown {
   return parsed.input;
 }
 
+/**
+ * The input of a call as it is sent back to the model, its object keys in order. A call read back
+ * from storage, which keeps no key order, is then sent as the run sent it, and the provider's
+ * prompt cache still holds the request up to it.
+ */
 export function serializeToolInput(toolCall: ModelToolCall): string {
-  return toolCall.inputParseError?.rawInput ?? JSON.stringify(toolCall.input);
+  return toolCall.inputParseError?.rawInput ?? JSON.stringify(withSortedKeys(toolCall.input));
+}
+
+function withSortedKeys(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(withSortedKeys);
+  if (value === null || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.entries(value)
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+      .map(([key, entry]) => [key, withSortedKeys(entry)])
+  );
 }
 
 /**

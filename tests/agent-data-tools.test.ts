@@ -127,7 +127,7 @@ describe("an agent carries data tools", () => {
     const answer = await chat.say(`/tool ${ECHO} {"text":"hello"}`);
 
     expect(answer.failed).toEqual([]);
-    expect(answer.completed.join("\n")).toContain('"echo": "hello"');
+    expect(answer.completed.join("\n")).toContain('"echo":"hello"');
     expect(connection.executed).toEqual([ECHO]);
     expect(chat.runs).toHaveLength(1);
     expect(chat.runs[0]).toMatchObject({
