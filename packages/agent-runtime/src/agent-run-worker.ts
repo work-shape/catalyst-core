@@ -17,6 +17,7 @@ import {
   readAssistantFinalMetadata,
   readUserMessageMetadata,
   readWorkflowAgentFiles,
+  workflowAgentFilesAttached,
   runFailureCodeOf,
   type AgentRun,
   type AgentRunError,
@@ -610,7 +611,12 @@ async function reconstructInput(
   const workflowFiles = run.workflowStepRunId
     ? readWorkflowAgentFiles(message.metadata)
     : undefined;
-  if (workflowFiles && !attachmentManifest && signal) {
+  if (
+    workflowFiles &&
+    !attachmentManifest &&
+    !workflowAgentFilesAttached(message.metadata) &&
+    signal
+  ) {
     if (!options.attachWorkflowFiles)
       throw new AppError(
         "CONFLICT",

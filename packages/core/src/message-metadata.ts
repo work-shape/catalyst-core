@@ -243,6 +243,12 @@ export function readWorkflowAgentFiles(
 
 const workflowAgentFilesSchema = z.object({ fileIds: z.array(z.string().min(1)).min(1) });
 
+/** The copy map is stored after attachment setup, including when no handler takes a file. */
+export function workflowAgentFilesAttached(metadata: JsonObject | undefined): boolean {
+  const files = metadata?.[WORKFLOW_AGENT_FILES_METADATA_KEY];
+  return isJsonObject(files) && isJsonObject(files.fileCopies);
+}
+
 export function createUserMessageMetadata(input: {
   preview?: AgentPreview;
   attachmentManifest?: AttachmentManifest;
