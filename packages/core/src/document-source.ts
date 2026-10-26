@@ -42,8 +42,11 @@ export const documentSourceItemSchema = z.strictObject({
   path: z.string().startsWith("/").max(4_000),
   name: z.string().min(1).max(1_000),
   mime: z.string().min(1).max(255),
-  /** The size in bytes as the source lists it. */
-  size: z.number().int().min(0),
+  /**
+   * The size in bytes as the source lists it. A source that lists none (CS-16) leaves it
+   * out: the fetch's bytes decide, and a first pass's estimate assumes a size per format.
+   */
+  size: z.number().int().min(0).optional(),
   modifiedAt: z.iso.datetime({ offset: true }),
   /** Where a person opens the original at the source, such as the file's address in Box. */
   originLink: z

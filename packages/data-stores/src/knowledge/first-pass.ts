@@ -45,6 +45,18 @@ export function firstPassStopOf(input: { firstPassStop?: number }): number {
   return input.firstPassStop ?? KNOWLEDGE_FIRST_PASS_STOP;
 }
 
+/**
+ * The bytes a stop counts for an item its source listed without a size (CS-16),
+ * by format, so the estimate is not zero. Estimates until MD-5 measures real sources; an empty
+ * file listed with size 0 is counted the same way.
+ */
+export const UNSIZED_ITEM_BYTES: Record<KnowledgeDocumentFormat, number> = {
+  txt: 8_000,
+  markdown: 8_000,
+  pdf: 250_000,
+  docx: 60_000
+};
+
 /** Adds `items` of `format` and their bytes to a stop's tally. */
 export function tallyFirstPass(
   stop: FirstPassStop,

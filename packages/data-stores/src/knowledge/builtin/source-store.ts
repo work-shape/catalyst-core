@@ -23,7 +23,12 @@ import {
 import type { PostgresChangeStatements } from "@work-shape/catalyst-postgres-connector";
 import { settleSourceSync } from "./source-lifecycle";
 import type { DataStoreRuntime } from "../../runtime";
-import { emptyFirstPassStop, firstPassStopSchema, tallyFirstPass } from "../first-pass";
+import {
+  emptyFirstPassStop,
+  firstPassStopSchema,
+  tallyFirstPass,
+  UNSIZED_ITEM_BYTES
+} from "../first-pass";
 
 // Source writes use the executor's job lease and the owned store transaction together.
 // No outside request runs inside either transaction.
@@ -203,7 +208,7 @@ export function createSourceStore(
           if (!old || old.state === "withdrawn") held++;
           const format = sourceFormat(item);
           const failure =
-            item.size > KNOWLEDGE_FILE_MAX_BYTES
+            (item.size ?? 0) > KNOWLEDGE_FILE_MAX_BYTES
               ? "knowledge_file_over_limit"
               : !format
                 ? "knowledge_file_format_unsupported"
@@ -231,7 +236,8 @@ export function createSourceStore(
               item.path,
               item.name,
               item.mime,
-              item.size,
+              // A source that lists no size keeps 0; the fetch's bytes decide (CS-16).
+              item.size ?? 0,
               item.modifiedAt,
               item.originLink ?? null,
               failure ? "failed" : "discovered",
@@ -342,12 +348,13 @@ export function createSourceStore(
               mime: z.string(),
               ext: z.string().nullable(),
               n: z.number().int(),
+              unsized: z.number().int(),
               bytes: z.coerce.number()
             })
           )
           .parse(
             await sql.run(
-              "select mime,lower(substring(name from '\\.([^.]*)$')) as ext,count(*)::int as n,coalesce(sum(size),0)::text as bytes from catalyst_kb.source_items where source_id=$1::text and seen_run_id=$2::text and state in ('discovered','fetched') group by 1,2",
+              "select mime,lower(substring(name from '\\.([^.]*)$')) as ext,count(*)::int as n,(count(*) filter (where size=0))::int as unsized,coalesce(sum(size),0)::text as bytes from catalyst_kb.source_items where source_id=$1::text and seen_run_id=$2::text and state in ('discovered','fetched') group by 1,2",
               [payload.sourceId, payload.syncRunId]
             )
           );
@@ -355,7 +362,12 @@ export function createSourceStore(
         for (const group of groups) {
           const format = sourceFormat({ name: `item.${group.ext ?? ""}`, mime: group.mime });
           if (!format) continue;
-          tallyFirstPass(stop, format, group.bytes, group.n);
+          tallyFirstPass(
+            stop,
+            format,
+            group.bytes + group.unsized * UNSIZED_ITEM_BYTES[format],
+            group.n
+          );
         }
         await sql.run("update catalyst_kb.sync_runs set cursor_after=$2::text where id=$1::text", [
           payload.syncRunId,

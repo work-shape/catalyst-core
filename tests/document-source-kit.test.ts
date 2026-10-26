@@ -119,6 +119,29 @@ describe("the document_source contract test kit", () => {
     );
   });
 
+  it("passes a source that lists no size: the fetch's bytes decide (CS-16)", async () => {
+    const unsized = <T extends { size?: number }>({ size: _size, ...item }: T) => item;
+    const harness = harnessOf((source) => ({
+      ...source,
+      async list(input, context) {
+        const page = await source.list(input, context);
+        return { ...page, items: page.items.map(unsized) };
+      },
+      async changes(input, context) {
+        const answer = await source.changes(input, context);
+        return answer.kind === "changes"
+          ? {
+              ...answer,
+              changes: answer.changes.map((change) =>
+                change.kind === "upsert" ? { ...change, item: unsized(change.item) } : change
+              )
+            }
+          : answer;
+      }
+    }));
+    await expect(verifyDocumentSource(harness)).resolves.toEqual([]);
+  });
+
   it("names stable_ids for ids that change from one listing to the next", async () => {
     let call = 0;
     const harness = harnessOf((source) => ({
