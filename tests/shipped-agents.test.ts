@@ -107,6 +107,12 @@ describe("the agent that ships with the platform", () => {
     expect(config.toolNames).not.toContain("run_agent");
     expect(config.toolNames.filter((name) => name.startsWith("connection."))).toEqual([]);
     expect(config.shipped).toMatchObject({ toolNames: config.toolNames });
+    // Asked what a local agent with a personal key reaches, it reads the docs, not its own tools:
+    // it once told a person such a key read their Data Stores.
+    expect(config.instructions).toContain(
+      "answer from the docs page getting-started/local-agent, never from your own tools"
+    );
+    expect(config.instructions).toContain("A key reads no Data Store rows");
     const listed = listSchema.parse(
       (await app.call("assets.list", { params: { kind: "agent" } })).json()
     ).items;
