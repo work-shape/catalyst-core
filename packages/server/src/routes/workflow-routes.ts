@@ -170,12 +170,13 @@ function registerWorkflowRoutes(
         : decide(access, WORKFLOW_ACTIONS.write, resource);
 
   /**
-   * Whether the run's result may answer this caller, where its other rights let it read the
-   * run. An outside client (an API credential, or a call made for one) reads the result of a
-   * run it started itself, which is what its Workflow answers whoever starts it, and of other
-   * runs only with `workflow.read_run_data`. A person in the interface reads it as before.
+   * Whether the run's data may answer this caller, where its other rights let it read the run:
+   * its result, its steps' outputs and logs, and the labels, run key and loop item label that
+   * a step read. An outside client (an API credential, or a call made for one) reads them for
+   * a run it started itself and for other runs only with `workflow.read_run_data`. A person
+   * in the interface reads them as before.
    */
-  function resultReadable(
+  function runDataReadable(
     run: WorkflowRunView,
     caller: { actor: AuthenticatedIdentity; origin: OperationOrigin },
     readRunData: boolean
@@ -187,23 +188,16 @@ function registerWorkflowRoutes(
     );
   }
 
-  /**
-   * Whether the outputs of the run's steps may answer this caller. A step's output is what the
-   * step read, such as a Connection's data under exposure `workflow`, and not what the
-   * Workflow answers. An outside client reads them only with `workflow.read_run_data`, or in
-   * a test run it started itself, whose Connection calls were asked exposure `outside` and
-   * the key's `connection.use`.
-   */
-  function stepOutputsReadable(
+  /** A run a start or a test answers: one already holding its key may be somebody else's. */
+  async function startedRun(
     run: WorkflowRunView,
-    caller: { actor: AuthenticatedIdentity; origin: OperationOrigin },
-    readRunData: boolean
-  ): boolean {
-    return (
-      !isOutsideCall(caller.actor, caller.origin) ||
-      readRunData ||
-      (run.mode === "test" && startedByThisCredential(run, caller.actor))
-    );
+    context: { access: ActorAccess; actor: AuthenticatedIdentity; origin: OperationOrigin }
+  ) {
+    const readable =
+      runDataReadable(run, context, false) ||
+      context.access.authorize(WORKFLOW_ACTIONS.readRunData, await resourceOf(run.workflow))
+        .allowed;
+    return forCaller(toRunResource(run, readable), readable);
   }
 
   route.operation(apiOperations["workflows.list"], {
@@ -243,7 +237,7 @@ function registerWorkflowRoutes(
     resource: workflowResource,
     module: WORKFLOWS_MODULE,
     execute: async (input, context) =>
-      toRunResource(
+      startedRun(
         await required().start({
           workflow: input.workflow,
           input: input.input,
@@ -251,7 +245,8 @@ function registerWorkflowRoutes(
           startedBy: context.actor,
           operationRunId: context.runId,
           correlationId: context.correlationId
-        })
+        }),
+        context
       )
   });
 
@@ -331,7 +326,7 @@ function registerWorkflowRoutes(
       }
       await requireTestSubject(input.workflow, origin);
       const { revision } = testRevisionOf(context.access, await resourceOf(input.workflow), origin);
-      return toRunResource(
+      return startedRun(
         await required().test({
           workflow: input.workflow,
           input: input.input,
@@ -351,7 +346,8 @@ function registerWorkflowRoutes(
                 }
               }
             : {})
-        })
+        }),
+        context
       );
     }
   });
@@ -378,6 +374,19 @@ function registerWorkflowRoutes(
         WORKFLOW_ACTIONS.readRunData,
         await resourceOf(input.workflow)
       ).allowed;
+      // A prefix would spell out other people's run keys one character at a time.
+      if (
+        input.keyPrefix !== undefined &&
+        !includeData &&
+        isOutsideCall(context.actor, context.origin)
+      ) {
+        throw new AppError(
+          "FORBIDDEN",
+          "Listing runs by a key prefix with an API key needs the right to read the Workflow's run data",
+          { reason: "no_grant", action: WORKFLOW_ACTIONS.readRunData },
+          { exposeMessage: true }
+        );
+      }
       const runs = await required().listRuns({
         workflow: input.workflow,
         ...(key ? { key } : {}),
@@ -386,8 +395,8 @@ function registerWorkflowRoutes(
       return withConnectionTitles(
         context.access,
         (await namedNow(runs)).map((run) => {
-          const readable = resultReadable(run, context, includeData);
-          return withItemLabel(
+          const readable = runDataReadable(run, context, includeData);
+          return forCaller(
             toRunResource(run, (!run.hasAgentSteps || includeData) && readable),
             readable
           );
@@ -448,8 +457,8 @@ function registerWorkflowRoutes(
         WORKFLOW_ACTIONS.readRunData,
         await resourceOf(run.workflow)
       ).allowed;
-      const readable = resultReadable(run, { actor, origin }, readRunData);
-      const resource = withItemLabel(
+      const readable = runDataReadable(run, { actor, origin }, readRunData);
+      const resource = forCaller(
         toRunResource(
           run,
           (!run.hasAgentSteps || (origin.kind === "app" && startedBy(run, actor)) || readRunData) &&
@@ -499,7 +508,7 @@ function registerWorkflowRoutes(
         },
         ...(context.paging ? { page: context.paging } : {})
       });
-      const outputsReadable = stepOutputsReadable(run, context, mayReadData);
+      const outputsReadable = runDataReadable(run, context, mayReadData);
       return withConnectionTitles(
         context.access,
         stepRuns.map((step) => {
@@ -534,8 +543,8 @@ function registerWorkflowRoutes(
         WORKFLOW_ACTIONS.readRunData,
         await resourceOf(run.workflow)
       ).allowed;
-      const readable = resultReadable(run, context, readRunData);
-      return withItemLabel(
+      const readable = runDataReadable(run, context, readRunData);
+      return forCaller(
         toRunResource(
           run,
           (!run.hasAgentSteps ||
@@ -588,15 +597,15 @@ function toRunResource(run: WorkflowRunView, includeData = true) {
 }
 
 /**
- * A run with the label of the loop item that started it only where the run's data is for the
- * caller: the label is a field of the parent's loop items, which a step read.
+ * A run with its labels, its run key and the label of the loop item that started it only
+ * where the run's data is for the caller: each is a value a step or the trigger read.
  */
-function withItemLabel<Resource extends { itemLabel?: string }>(
+function forCaller<Resource extends { itemLabel?: string; labels?: unknown; runKey?: string }>(
   resource: Resource,
   readable: boolean
-): Omit<Resource, "itemLabel"> {
+): Omit<Resource, "itemLabel" | "labels" | "runKey"> {
   if (readable) return resource;
-  const { itemLabel: _label, ...rest } = resource;
+  const { itemLabel: _label, labels: _labels, runKey: _key, ...rest } = resource;
   return rest;
 }
 

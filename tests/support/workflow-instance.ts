@@ -320,6 +320,8 @@ export async function workflowFixture(
      */
     /** Operations of the call path beside the platform's, such as one a capability brings. */
     operations?: readonly import("@work-shape/catalyst-core").OperationDefinition[];
+    /** Sources of operations that come from data, such as a Data Store's, beside the instance's. */
+    operationSources?: readonly import("@work-shape/catalyst-core").OperationSource[];
     mail?: {
       recipientDomains: readonly string[];
       transport?: MailTransport;
@@ -410,6 +412,8 @@ export async function workflowFixture(
             });
           for (const definition of options.operations ?? [])
             server.operationCalls.registry.register(definition);
+          for (const source of options.operationSources ?? [])
+            server.operationCalls.registry.addSource(source);
           operationRegistry = server.operationCalls.registry;
           modules = resolveInstanceModules(config, []).snapshot;
           instanceStores = stores;

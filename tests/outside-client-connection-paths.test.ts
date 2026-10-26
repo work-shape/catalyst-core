@@ -1,12 +1,23 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
-import { WORKFLOW_ASSET_KIND } from "@work-shape/catalyst-core";
+import {
+  DATA_STORE_OPERATION_RIGHTS,
+  DATA_STORE_OPERATION_SCOPES,
+  KNOWLEDGE_BASE_ACTIONS,
+  WORKFLOW_ASSET_KIND,
+  asApiCredentialId,
+  dataStoreOperationName,
+  knowledgeSearchOperationName,
+  type JsonValue,
+  type OperationDefinition,
+  type OperationSource
+} from "@work-shape/catalyst-core";
 import { clientInstanceId, errorSchema, type AccessInstance } from "./support/access-instance";
 import { setupAppActions, type AppActionsInstance } from "./support/app-actions";
 import { operationOf } from "./support/connection-operations";
 import { issuePersonalKey, personalKeyServer, personalKeyToken } from "./support/personal-api-keys";
 import { runSchema, stepRunsSchema, type WorkflowFixture } from "./support/workflow-instance";
-import { NOTE, notifyClients, readyWorkflows, start } from "./support/workflow-runs";
+import { NOTE, notifyClients, readyWorkflows } from "./support/workflow-runs";
 
 // An outside client, a personal API key over the CLI, reaches a Connection's data only through
 // an operation exposed to `outside` (connections-and-secrets.md, Exposure to outside clients).
@@ -47,14 +58,15 @@ describe("an App draft's action tried with a key", () => {
   });
 
   it("is refused to a key with app.read, app.write and connection.use, and tried by the person", async () => {
-    t = await setupAppActions({
+    const app = await setupAppActions({
       modules: { personalApiKeys: { enabled: true } },
       server: (stores) => personalKeyServer(stores)
     });
+    t = app;
     await allow(t, t.admin.id, "connection.use");
     const headers = await keyOf(t, t.admin.id, ["app.read", "app.write", "connection.use"]);
     const tryLoad = (extra: { headers?: { authorization: string } } = {}) =>
-      t!.call(t!.admin.id, "apps.try_action", {
+      app.call(app.admin.id, "apps.try_action", {
         params: { app: "orders", action: "load" },
         payload: { input: { text: "client tax data" } },
         ...extra
@@ -81,7 +93,9 @@ describe("a Workflow run read or started with a key", () => {
     open = undefined;
   });
 
-  const ready = async (options: { definitions?: "assets" } = {}) => {
+  const ready = async (
+    options: { definitions?: "assets"; operationSources?: readonly OperationSource[] } = {}
+  ) => {
     const t = await readyWorkflows(
       (fixture) => {
         open = fixture;
@@ -209,9 +223,41 @@ describe("a Workflow run read or started with a key", () => {
     expect(unscoped.error).toMatchObject({ action: "connection.use" });
   });
 
+  it("stops a key's test run once the key is revoked", async () => {
+    const { t, tim } = await ready({ definitions: "assets" });
+    const scopes = ["workflow.read", "workflow.write", "connection.use"];
+    for (const action of scopes) await allow(t, tim.id, action);
+    await t.seed("crm", {
+      operations: [
+        operationOf("echo", { exposure: ["workflow", "outside"] }),
+        operationOf("write", { effect: "changing", exposure: ["workflow", "outside"] })
+      ]
+    });
+    await saveDraft(t, notifyClients());
+    const key = await issuePersonalKey(t, scopes, tim.id);
+    const response = await t.call(tim.id, "workflows.test", {
+      params: { workflow: "notify-clients" },
+      payload: { input: { note: NOTE } },
+      headers: await personalKeyToken(t, key.secret)
+    });
+    expect(response.statusCode, response.body).toBe(200);
+    await t.stores.personalApiKeys.revokePersonalApiKey({
+      clientInstanceId,
+      keyId: asApiCredentialId(key.key.id)
+    });
+    const run = await t.finish(runSchema.parse(response.json()).id);
+    expect(run.status).toBe("failed");
+    expect(run.error).toMatchObject({ code: "tester_key_unusable" });
+    expect(t.executed).toEqual([]);
+  });
+
   it("gives a key with workflow.read no step output of an admin's run, and the person in the app the same as before", async () => {
     const { t, tim } = await ready();
-    const run = await start(t);
+    const started = await t.expectOk(t.root.id, "workflows.start", {
+      params: { workflow: "notify-clients" },
+      payload: { input: { note: NOTE }, key: "2026-10/anna" }
+    });
+    const run = runSchema.parse(started.json());
     await t.finish(run.id);
     await allow(t, tim.id, "workflow.read");
     const headers = await keyOf(t, tim.id, ["workflow.read"]);
@@ -238,6 +284,27 @@ describe("a Workflow run read or started with a key", () => {
     });
     expect(listed.statusCode, listed.body).toBe(200);
     expect(runsSchema.parse(listed.json()).items.every((item) => !item.outputPreview)).toBe(true);
+    // Nor its run key, nor other people's keys spelled out by a prefix.
+    expect(got.body).not.toContain("2026-10/anna");
+    expect(listed.body).not.toContain("2026-10/anna");
+    const byPrefix = await t.call(tim.id, "workflows.list_runs", {
+      params: { workflow: "notify-clients" },
+      query: { keyPrefix: "2026-10/" },
+      headers
+    });
+    expect(byPrefix.statusCode, byPrefix.body).toBe(403);
+    // A start with a key that the admin's run holds answers that run, without its result.
+    for (const action of ["workflow.write", "workflow.use"]) await allow(t, tim.id, action);
+    const starter = await keyOf(t, tim.id, ["workflow.read", "workflow.write", "workflow.use"]);
+    const again = await t.call(tim.id, "workflows.start", {
+      params: { workflow: "notify-clients" },
+      payload: { input: { note: NOTE }, key: "2026-10/anna" },
+      headers: starter
+    });
+    expect(again.statusCode, again.body).toBe(200);
+    expect(runSchema.parse(again.json())).toMatchObject({ id: run.id });
+    expect(runSchema.parse(again.json()).outputPreview).toBeUndefined();
+    expect(again.body).not.toContain("2026-10/anna");
 
     // Tim signed in to the app reads them as before.
     const bySession = await stepRuns(t, tim.id, run.id);
@@ -248,7 +315,7 @@ describe("a Workflow run read or started with a key", () => {
     expect(runSchema.parse(read.json()).outputPreview).toBeDefined();
   });
 
-  it("gives a key the result of a published run it started, and not its steps' outputs", async () => {
+  it("gives a key the result and step outputs of a published run it started, and another key neither", async () => {
     const { t, tim } = await ready();
     for (const action of ["workflow.read", "workflow.write", "workflow.use"]) {
       await allow(t, tim.id, action);
@@ -267,14 +334,18 @@ describe("a Workflow run read or started with a key", () => {
     const got = await t.call(tim.id, "workflows.get_run", { params: { runId: run.id }, headers });
     expect(runSchema.parse(got.json()).outputPreview).toBeDefined();
     const steps = await stepRuns(t, tim.id, run.id, headers);
-    expect(steps.every((step) => step.outputPreview === undefined)).toBe(true);
-    // Another key of Tim's did not start it: no result either.
+    expect(steps.find((step) => step.stepId === "clients")?.outputPreview?.text).toContain(
+      "client-anna"
+    );
+    // Another key of Tim's did not start it: neither its result nor its steps' outputs.
     const other = await keyOf(t, tim.id, ["workflow.read"]);
     const read = await t.call(tim.id, "workflows.get_run", {
       params: { runId: run.id },
       headers: other
     });
     expect(runSchema.parse(read.json()).outputPreview).toBeUndefined();
+    const otherSteps = await stepRuns(t, tim.id, run.id, other);
+    expect(otherSteps.every((step) => step.outputPreview === undefined)).toBe(true);
   });
 
   it("refuses a key the folder names of a Connection, and lets the person through", async () => {
@@ -296,5 +367,101 @@ describe("a Workflow run read or started with a key", () => {
     // The person passes the check; this Connection offers no folder choice.
     const bySession = await folders();
     expect(bySession.statusCode, bySession.body).not.toBe(403);
+  });
+  /**
+   * A read of a Data Store's rows and a search of a Knowledge Base, as the instance registers
+   * them: their names, rights and the scope `data_store_rows:read` a key's call needs. What
+   * they answer stands in for the rows; the scope and the rights are what is tested.
+   */
+  const rowReads = (): OperationDefinition[] => {
+    const read = (
+      name: string,
+      action: string,
+      kind: string,
+      answer: JsonValue
+    ): OperationDefinition => ({
+      name,
+      effect: "reading",
+      action,
+      scope: DATA_STORE_OPERATION_SCOPES.query,
+      auth: "principal",
+      inputSchema: z.object({}).loose(),
+      outputSchema: z.unknown(),
+      resource: () => ({ kind, id: name, name: name.split(".")[1] ?? name }),
+      module: "dataStores",
+      timeoutMs: 10_000,
+      execute: () => Promise.resolve(answer)
+    });
+    return [
+      read(
+        dataStoreOperationName("findings", "query"),
+        DATA_STORE_OPERATION_RIGHTS.query,
+        "data_store",
+        { rows: [{ client: "client tax row" }] }
+      ),
+      read(knowledgeSearchOperationName("handbook"), KNOWLEDGE_BASE_ACTIONS.use, "knowledge_base", {
+        results: [{ text: "handbook passage" }]
+      })
+    ];
+  };
+
+  /** The operations as a source contributes those that come from data. */
+  const sourceOf = (definitions: OperationDefinition[]): OperationSource => {
+    const byName = new Map(definitions.map((definition) => [definition.name, definition]));
+    return {
+      resolve: (name) => Promise.resolve(byName.get(name)),
+      resolveMany: (names) => Promise.resolve(names.flatMap((name) => byName.get(name) ?? [])),
+      list: () => Promise.resolve({ operations: definitions, truncated: [] })
+    };
+  };
+
+  /** A draft of one step that calls the operation. */
+  const reading = (id: string, operation: string) => ({
+    id,
+    name: id,
+    runAs: "workflow-runner",
+    inputs: { type: "object" },
+    outputs: { type: "object" },
+    steps: [
+      { id: "start", name: "Start by hand", type: "trigger", triggers: [{ kind: "manual" }] },
+      { id: "read", name: "Read", type: "operation", operation, input: {} },
+      {
+        id: "result",
+        name: "Result",
+        type: "output",
+        input: { read: { ref: { step: "read", path: "" } } }
+      }
+    ]
+  });
+
+  it("refuses a key's test run a Data Store query and a Knowledge Base search, which no key's scopes reach", async () => {
+    const { t, tim } = await ready({
+      definitions: "assets",
+      operationSources: [sourceOf(rowReads())]
+    });
+    const rights = ["workflow.read", "workflow.write", "data_store.read", "knowledge_base.use"];
+    for (const action of rights) {
+      await allow(t, tim.id, action);
+      await t.allow({ kind: "service_principal", id: t.principal.id }, action);
+    }
+    const drafts = [
+      reading("read-findings", dataStoreOperationName("findings", "query")),
+      reading("search-handbook", knowledgeSearchOperationName("handbook"))
+    ];
+    for (const draft of drafts) await saveDraft(t, draft);
+    const headers = await keyOf(t, tim.id, rights);
+
+    for (const draft of drafts) {
+      const byKey = await testRun(t, tim.id, draft.id, headers);
+      expect(byKey.status, JSON.stringify(byKey)).toBe("failed");
+      const [read] = (await stepRuns(t, tim.id, byKey.id, headers)).filter(
+        (step) => step.stepId === "read"
+      );
+      expect(read?.status).toBe("failed");
+      expect(read?.error?.message).toContain("data_store_rows:read");
+      // Tim in his session test-runs it as before.
+      const bySession = await testRun(t, tim.id, draft.id);
+      expect(bySession.status, JSON.stringify(bySession)).toBe("done");
+    }
   });
 });

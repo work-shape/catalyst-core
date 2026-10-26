@@ -93,6 +93,7 @@ export function createOperationCalls(options: OperationCallsOptions): OperationC
     clientInstanceId,
     deps: () => deps,
     users: options.stores.users,
+    personalApiKeys: options.stores.personalApiKeys,
     configAssets: options.stores.configAssets,
     ...(options.configAssets
       ? {

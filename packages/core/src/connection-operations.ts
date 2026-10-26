@@ -96,16 +96,6 @@ export function isOutsideCall(actor: AuthenticatedIdentity, origin: OperationOri
 }
 
 /**
- * The scopes of the personal key an outside call is made for, where it is made for one: the
- * key of the request, or the key that started the test run the call is a step of. Nothing for
- * a service principal, which has no key scopes, and for a person's own session.
- */
-export function outsideKeyScopesOf(actor: AuthenticatedIdentity): readonly string[] | undefined {
-  if (isAuthenticatedServicePrincipal(actor)) return undefined;
-  return actor.keyScopes ?? actor.outsideKeyScopes;
-}
-
-/**
  * The mode of a Connection's credential: `shared`, one credential for everyone who may use it,
  * or `user`, a personal connection on which each person acts with their own account (CS-9).
  */

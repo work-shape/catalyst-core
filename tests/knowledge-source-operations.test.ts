@@ -404,6 +404,72 @@ describe("source sync operations (KB 74, 75)", () => {
     });
   });
 
+  it("refuses an API key the names of a source's items, and lets the person read them", async () => {
+    const world = await setup();
+    world.world.put({
+      folderId: "folder",
+      name: "inspect.txt",
+      mime: "text/plain",
+      bytes: new TextEncoder().encode("Inspection text")
+    });
+    const started = await world.instance.api.call("knowledge_bases.sync", {
+      params: { knowledgeBase: KB },
+      payload: { source: SOURCE, mode: "full" }
+    });
+    expect(started.statusCode, started.body).toBe(202);
+    const [run] = await world.sql`select id from catalyst_kb.sync_runs`;
+    await world.drain(String(required(run).id));
+    const items = await world.instance.api.call("knowledge_bases.source_items", {
+      params: { knowledgeBase: KB, source: SOURCE },
+      query: { limit: "1" }
+    });
+    expect(items.statusCode, items.body).toBe(200);
+    expect(items.body).toContain("inspect.txt");
+    const id = String(required(items.json<{ items: { id: string }[] }>().items[0]).id);
+
+    const admin = required(
+      (await world.instance.stores.users.listUsers({ clientInstanceId })).find((user) =>
+        user.roles.includes("superadmin")
+      )
+    );
+    const key = await world.instance.stores.personalApiKeys.createPersonalApiKey({
+      clientInstanceId,
+      ownerUserId: admin.id,
+      name: "Read",
+      scopes: ["knowledge_base.read"],
+      expiresAt: new Date(Date.now() + 86400000).toISOString()
+    });
+    const token = await world.instance.api.call("access_tokens.exchange", {
+      headers: { authorization: `Bearer ${key.secret}` }
+    });
+    expect(token.statusCode, token.body).toBe(200);
+    const headers = {
+      authorization: `Bearer ${token.json<{ accessToken: string }>().accessToken}`
+    };
+    // The key still reads the sources' state and counts.
+    const sources = await world.instance.api.call("knowledge_bases.sources", {
+      params: { knowledgeBase: KB },
+      headers
+    });
+    expect(sources.statusCode, sources.body).toBe(200);
+    for (const refused of [
+      await world.instance.api.call("knowledge_bases.source_items", {
+        params: { knowledgeBase: KB, source: SOURCE },
+        query: { limit: "1" },
+        headers
+      }),
+      await world.instance.api.call("knowledge_bases.locate", {
+        params: { knowledgeBase: KB },
+        query: { sourceItemId: id },
+        headers
+      })
+    ]) {
+      expect(refused.statusCode, refused.body).toBe(403);
+      expect(refused.body).toContain("connection_exposure:outside");
+      expect(refused.body).not.toContain("inspect.txt");
+    }
+  });
+
   it("keeps a retried unsupported item failed with its format code, without fetching it", async () => {
     const world = await setup();
     world.world.put({

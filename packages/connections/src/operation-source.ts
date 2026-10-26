@@ -6,7 +6,6 @@ import {
   exposureOfOrigin,
   isAuthenticatedServicePrincipal,
   isOutsideCall,
-  outsideKeyScopesOf,
   parseConnectionOperationName,
   personalApiKeyCovers,
   requirePersonalConnectionContext,
@@ -151,16 +150,16 @@ async function authorizeCall(
 }
 
 /**
- * Whether the key an outside call is made for names `connection.use` on the Connection. A
- * direct call of a key is narrowed to its scopes by its access already; a step of a test run
- * the key started acts with its tester's rights, so the key is asked here. A call made for a
- * key whose scopes are not known is refused. Any other call has no key to ask.
+ * Whether the key an outside call is made for names `connection.use` on the Connection. Its
+ * access is narrowed to the key's scopes already wherever the call carries them; a call made
+ * for a key whose scopes it does not carry, as an actor rebuilt from a stored run would be, is
+ * refused. Any other call has no key to ask.
  */
 function keyCoversUse(context: OperationAuthorizeContext, resource: OperationResource): boolean {
   const { actor, origin } = context;
   if (isAuthenticatedServicePrincipal(actor) || !isOutsideCall(actor, origin)) return true;
   if (actor.delegatedActor?.kind !== "api_key") return true;
-  const scopes = outsideKeyScopesOf(actor);
+  const scopes = actor.keyScopes;
   return (
     scopes !== undefined &&
     personalApiKeyCovers(scopes, CONNECTION_ACTIONS.use, resource, undefined)

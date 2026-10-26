@@ -386,7 +386,7 @@ describe("a call of a Connection's operation", () => {
               displayLabel: "Laptop",
               authSource: "personal_api_key"
             },
-            ...(keyScopes ? { outsideKeyScopes: keyScopes } : {})
+            ...(keyScopes ? { keyScopes } : {})
           },
           origin,
           correlationId: "corr_test"

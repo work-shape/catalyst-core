@@ -3,6 +3,8 @@ import {
   asUserId,
   callerCanConfirm,
   isPrincipalGrantableAction,
+  operationScopesOfPersonalApiKey,
+  usablePersonalApiKey,
   type AuthenticatedUser,
   type DelegatedActor,
   type OperationDraftContext,
@@ -132,9 +134,16 @@ export async function testRunCall(
       clientInstanceId,
       authSource: WORKFLOW_TEST_RUN_AUTH_SOURCE,
       correlationId: run.correlationId,
-      // A test run a personal key started answers that key: its Connection calls are asked
-      // as the key's own calls are, with exposure `outside` and the key's `connection.use`.
-      ...(key ? { delegatedActor: key.actor, outsideKeyScopes: key.scopes } : {})
+      // A test run a personal key started acts as that key: its rights narrowed to the key's
+      // scopes, its calls asked the key's operation scopes, and a Connection's operation
+      // exposure `outside`, as the key's own calls are (connections-and-secrets.md).
+      ...(key
+        ? {
+            delegatedActor: key.actor,
+            keyScopes: key.scopes,
+            scopes: operationScopesOfPersonalApiKey(key.scopes)
+          }
+        : {})
     },
     draft: {
       workflowRunId: run.id,
@@ -179,17 +188,12 @@ async function startingKey(
     .map((candidate) => candidate?.delegatedActor)
     .find((candidate) => candidate?.kind === "api_key");
   if (actor?.kind !== "api_key") return undefined;
-  const resolved = await stores.personalApiKeys.resolvePersonalApiKey({
+  const key = await usablePersonalApiKey(stores.personalApiKeys, {
     clientInstanceId: run.clientInstanceId,
-    keyId: actor.id
+    keyId: actor.id,
+    ownerUserId: testerId
   });
-  const key = resolved?.key;
-  if (
-    !key ||
-    key.ownerUserId !== testerId ||
-    Boolean(key.revokedAt) ||
-    Date.parse(key.expiresAt) <= Date.now()
-  ) {
+  if (!key) {
     throw new WorkflowStepFailure(
       WORKFLOW_TEST_RUN_ERRORS.testerKeyUnusable,
       "The API key that started the test run is revoked or expired, so the test run stops",
