@@ -47,6 +47,7 @@ describe("system instructions", () => {
       "open your answer by saying that it depends on the Connection's \"Outside clients\" exposure and the key's scopes, and that you have not checked them"
     );
     expect(PLATFORM_ORIENTATION).toContain("never infer it from your own tools");
+    expect(PLATFORM_ORIENTATION).toContain("read the page getting-started/local-agent");
   });
   it("keeps technical ids in agent handoffs and out of replies the person reads", () => {
     const content = createSystemInstructions("Help.", "en");
