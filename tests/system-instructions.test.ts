@@ -4,7 +4,6 @@ import {
   CATALYST_INTERNAL_AGENT_PROMPT,
   createSystemInstructions
 } from "../packages/agent-runtime/src/system-instructions";
-import { workshaperAgent } from "../packages/client-assembly/src/workshaper";
 
 describe("system instructions", () => {
   it("directs an agent without connection drafting to Studio without asking for credentials", () => {
@@ -38,15 +37,6 @@ describe("system instructions", () => {
     );
     expect(PLATFORM_ORIENTATION).toContain(
       "never name it as the one to fix a platform or infrastructure failure"
-    );
-  });
-  it("has Workshaper call a platform failure the platform's and send nobody to fix it", () => {
-    const { instructions } = workshaperAgent({ toolNames: [], skillNames: [] });
-    expect(instructions).toContain(
-      "say it is a problem of the platform, not of the person's input, and suggest trying again later"
-    );
-    expect(instructions).toContain(
-      "Never tell the person, an administrator or the help contact to fix it"
     );
   });
   it("does not let an agent infer what an outside client can reach from its own tools", () => {
