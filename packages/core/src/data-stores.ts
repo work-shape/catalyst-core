@@ -469,13 +469,13 @@ const DATA_STORE_REFUSAL_SENTENCES: Record<
   (store: string, about: DataStoreRefusalFacts) => string
 > = {
   data_store_unavailable: (store) =>
-    `The Data Store '${store}' is not available: no published Data Store of that name is in the App's workspace or on the instance. It may have been deleted.`,
+    `The Data Store '${store}' is not available: no published Data Store of that name is in the App's workspace or on the instance. It may have been deleted. Save the Data Store with assets.put in a scope the App can reach, then publish it with assets.publish.`,
   data_store_needs_app: (store) =>
-    `A Page of a conversation cannot reach the Data Store '${store}': a Data Store is bound by the manifest of an App. Save the Page as an App.`,
+    `A Page of a conversation cannot reach the Data Store '${store}': a Data Store is bound by the manifest of an App. Save the Page as an App with app.save, then open the App to call its Data Store actions.`,
   data_store_below_min_schema: (store, { minSchema, level }) =>
-    `The App needs the Data Store '${store}' at migration level ${minSchema} (minSchema) and the store is at level ${level}. Publish the store's migrations first.`,
+    `The App needs the Data Store '${store}' at migration level ${minSchema} (minSchema) and the store is at level ${level}. Publish the App: its Publish carries the store's pending migrations (dataStores in assets.publish).`,
   data_store_not_listed: (store, { action }) =>
-    `The action '${action}' reaches the Data Store '${store}', which the manifest of its App does not list under 'dataStores'. An App reaches what its manifest names and nothing else.`,
+    `The action '${action}' reaches the Data Store '${store}', which the manifest of its App does not list under 'dataStores'. Add the store to dataStores in the App's manifest, save the App with app.save, and publish it with assets.publish.`,
   data_store_not_reached: (store) =>
     `The App's revision does not bind the Data Store '${store}' under 'dataStores', so it is not published with it. Name only the stores apps.publish_review lists.`,
   data_store_draft_below_min_schema: (store, { minSchema, level }) =>

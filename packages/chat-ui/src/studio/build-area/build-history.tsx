@@ -85,7 +85,7 @@ export function BuildHistory({
       },
       (loadError: unknown) => {
         if (current) {
-          setError(instanceSentence(loadError) ?? t("configRevisionLoadFailed"));
+          setError(instanceSentence(loadError, t) ?? t("configRevisionLoadFailed"));
         }
       }
     );
@@ -102,7 +102,7 @@ export function BuildHistory({
       setNextCursor(page.nextCursor);
       setError(undefined);
     } catch (loadError) {
-      setError(instanceSentence(loadError) ?? t("configRevisionLoadFailed"));
+      setError(instanceSentence(loadError, t) ?? t("configRevisionLoadFailed"));
     } finally {
       setLoadingMore(false);
     }

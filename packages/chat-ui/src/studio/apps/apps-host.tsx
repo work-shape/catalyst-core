@@ -48,6 +48,11 @@ export interface AppsHost {
    * reader is not shown.
    */
   operations?: { href: string; runHref(runId: string): string };
+  /**
+   * Whether the reader is shown the page of `route`: a refusal links only to a page its reader
+   * can open (REFUSE-1). Absent, it links nowhere.
+   */
+  canOpen?(route: WorkspaceRoute): boolean;
 }
 
 const AppsHostContext = createContext<AppsHost | undefined>(undefined);

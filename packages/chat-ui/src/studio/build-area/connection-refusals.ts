@@ -1,3 +1,4 @@
+import type { LocaleCode } from "@work-shape/catalyst-api-client";
 import { EGRESS_DENIED } from "@work-shape/catalyst-core";
 import type { TranslationContextValue, TranslationKey } from "../../shared/i18n";
 import { issueRefusal, readBuildRefusal, readRefusalDetails } from "./build-refusals";
@@ -65,9 +66,10 @@ export function connectionWriteErrors(
   error: unknown,
   name: string,
   t: Translate,
+  locale: LocaleCode,
   url?: string
 ): { errors: CreateFieldErrors; detail?: string } {
-  const outcome = readBuildRefusal(error, t);
+  const outcome = readBuildRefusal(error, t, locale);
   if (!outcome.ok && outcome.conflict) {
     return { errors: { id: t("connectionCreate.errorIdTaken", { name }) } };
   }
@@ -134,12 +136,17 @@ export interface ApprovalRefused {
 export function approvalRefusals(
   error: unknown,
   config: Record<string, unknown>,
-  t: Translate
+  t: Translate,
+  locale: LocaleCode
 ): ApprovalRefused {
   const issues = readRefusalDetails(error).issues;
   const operations = Array.isArray(config.operations) ? config.operations : [];
   if (issues.length === 0) {
-    const told = connectionRefusalOf(readBuildRefusal(error, t), "connections.refusedUnknown", t);
+    const told = connectionRefusalOf(
+      readBuildRefusal(error, t, locale),
+      "connections.refusedUnknown",
+      t
+    );
     return { refusals: [told.message], ...(told.detail ? { detail: told.detail } : {}) };
   }
   const refusals = issues.map((issue) => {

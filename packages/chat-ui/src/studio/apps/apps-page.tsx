@@ -145,8 +145,9 @@ export function AppsPage() {
       await writes.remove(app.name, app.revision);
       setDeleting(undefined);
     } catch (error) {
-      const refusal = appRefusalText(error);
-      setDeleteError(refusal ? t(refusal) : (instanceSentence(error) ?? t("apps.deleteFailed")));
+      setDeleteError(
+        appRefusalText(error, t) ?? instanceSentence(error, t) ?? t("apps.deleteFailed")
+      );
     } finally {
       setDeleteBusy(false);
     }

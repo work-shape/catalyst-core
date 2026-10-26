@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import type { LocaleCode } from "@work-shape/catalyst-api-client";
 import { ASSET_ADDRESS_MAX_LENGTH } from "@work-shape/catalyst-core";
 import type { AddressCheck } from "@work-shape/catalyst-ui";
 import type { CheckName, NameCheckAnswer } from "../../shared/api/asset-writes";
@@ -16,7 +17,8 @@ type Translate = TranslationContextValue["t"];
  */
 export function addressCheckOf(
   answer: { ok: true; found: NameCheckAnswer } | { ok: false; error: unknown },
-  t: Translate
+  t: Translate,
+  locale: LocaleCode
 ): AddressCheck {
   if (answer.ok) {
     const { found } = answer;
@@ -32,7 +34,9 @@ export function addressCheckOf(
   }
   // Only the instance's refusal carries a code; a lost connection says nothing of the name.
   const outcome =
-    apiErrorCode(answer.error) === undefined ? undefined : readBuildRefusal(answer.error, t);
+    apiErrorCode(answer.error) === undefined
+      ? undefined
+      : readBuildRefusal(answer.error, t, locale);
   return outcome && !outcome.ok && !outcome.conflict
     ? { state: "refused", reason: outcome.refusals.map((refusal) => refusal.message).join(" ") }
     : { state: "unchecked" };
@@ -51,7 +55,7 @@ export function addressBlocksCreate(check: AddressCheck): boolean {
  * for the address shown counts. Without `checkName` nothing is asked.
  */
 export function useAddressCheck(checkName: CheckName | undefined, name: string): AddressCheck {
-  const { t } = useTranslation();
+  const { locale, t } = useTranslation();
   const [answer, setAnswer] = useState<{ name: string; check: AddressCheck }>();
   // The caller hands a new function on every render; the check follows the name alone.
   const check = useRef(checkName);
@@ -63,16 +67,17 @@ export function useAddressCheck(checkName: CheckName | undefined, name: string):
     let current = true;
     const timer = window.setTimeout(() => {
       ask(name).then(
-        (found) => current && setAnswer({ name, check: addressCheckOf({ ok: true, found }, t) }),
+        (found) =>
+          current && setAnswer({ name, check: addressCheckOf({ ok: true, found }, t, locale) }),
         (error: unknown) =>
-          current && setAnswer({ name, check: addressCheckOf({ ok: false, error }, t) })
+          current && setAnswer({ name, check: addressCheckOf({ ok: false, error }, t, locale) })
       );
     }, BUILD_SEARCH_DELAY_MS);
     return () => {
       current = false;
       window.clearTimeout(timer);
     };
-  }, [asks, name, t]);
+  }, [asks, name, t, locale]);
   if (!asks) return { state: "unchecked" };
   return answer?.name === name ? answer.check : { state: "checking" };
 }

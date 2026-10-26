@@ -109,7 +109,7 @@ function SaveAsAppDialog({
         writes.saveFromPage({ conversationId, pageId, id, name }).then(
           (saved) => onSaved(saved.name),
           async (error: unknown) => {
-            const refusal = appRefusalText(error);
+            const refusal = appRefusalText(error, t);
             if (apiErrorCode(error) === "CONFLICT") {
               // The id the name gives is taken. An App the reader may write can take the Page
               // instead.
@@ -131,7 +131,7 @@ function SaveAsAppDialog({
             } else {
               setFailure({
                 name,
-                message: refusal ? t(refusal) : (instanceSentence(error) ?? t("apps.saveFailed"))
+                message: refusal ?? instanceSentence(error, t) ?? t("apps.saveFailed")
               });
             }
             setSaving(false);

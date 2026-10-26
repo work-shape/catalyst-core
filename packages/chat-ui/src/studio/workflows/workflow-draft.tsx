@@ -72,7 +72,7 @@ export function useEditWithAgent(
           // A Workflow the reader may not read and one that is gone are refused alike.
           failure instanceof ApiError && (failure.status === 403 || failure.status === 404)
             ? t("workflows.edit.refused")
-            : (instanceSentence(failure) ?? t("workflows.edit.failed"))
+            : (instanceSentence(failure, t) ?? t("workflows.edit.failed"))
         );
       })
       .finally(() => setBusy(false));
@@ -211,7 +211,7 @@ export function useWorkflowDraft(
       }
       setError(
         (change === "publish" ? workflowPublishRefusal(failure, t) : undefined) ??
-          instanceSentence(failure) ??
+          instanceSentence(failure, t) ??
           t(
             change === "publish" ? "workflows.draft.publishFailed" : "workflows.draft.discardFailed"
           )

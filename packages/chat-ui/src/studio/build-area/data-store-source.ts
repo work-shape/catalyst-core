@@ -6,6 +6,7 @@ import { workspaceQueryKeys } from "../../shared/api/workspace-query-keys";
 import { usePlatformContextQuery } from "../../shared/api/workspace-queries";
 import { canViewSystem } from "../../shared/governance";
 import { workspaceRoutePath, type WorkspaceRoute } from "../../shared/routes";
+import { useTranslation } from "../../shared/i18n";
 import { useSettingsPage } from "../../shared/settings-page-context";
 import { apiErrorCode } from "../../shared/workspace-utils";
 import { useAppsHost } from "../apps/apps-host";
@@ -136,6 +137,7 @@ export interface DataStoreSource {
  * `.value`, `.used_by`, `.records_flagged` and `.records_decide`.
  */
 export function useDataStoreSource(): DataStoreSource {
+  const { t } = useTranslation();
   const { apiBaseUrl, authScope, client } = useSettingsPage();
   const queryClient = useQueryClient();
   const platform = usePlatformContextQuery({ apiBaseUrl, authScope, client, enabled: true }).data;
@@ -196,7 +198,7 @@ export function useDataStoreSource(): DataStoreSource {
         try {
           await calls.records_decide({ params: { store }, body: decision });
         } catch (error) {
-          return instanceSentence(error) ?? "";
+          return instanceSentence(error, t) ?? "";
         }
         // What waits, the rows the decision wrote and the store's size are read again.
         await queryClient.invalidateQueries({ queryKey: key("flagged", store) });
@@ -285,6 +287,7 @@ function useRead<Answer>(
     pollWhile?: (answer: Answer) => boolean;
   } = {}
 ): DataStoreRead<Answer> {
+  const { t } = useTranslation();
   const { pollWhile } = options;
   // Since when the store this reads, by its query, has been read again: by the clock, as a
   // failed read changes no answer.
@@ -321,7 +324,7 @@ function useRead<Answer>(
     const reason = refusalReason(query.error);
     return {
       status: "failed",
-      message: instanceSentence(query.error),
+      message: instanceSentence(query.error, t),
       ...(reason === undefined ? {} : { reason }),
       retry: () => void query.refetch().catch(() => undefined)
     };

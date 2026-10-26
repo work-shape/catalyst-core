@@ -7,12 +7,14 @@ import type {
 } from "@work-shape/catalyst-api-client";
 import { invalidateOfferedAgents } from "../../shared/api/agent-placement-mutations";
 import { workspaceQueryKeys } from "../../shared/api/workspace-query-keys";
-import { useTranslation } from "../../shared/i18n";
+import { useTranslation, type TranslationContextValue } from "../../shared/i18n";
 import { useSettingsPage } from "../../shared/settings-page-context";
 import { apiErrorCode } from "../../shared/workspace-utils";
 import { readDraftRefusal, type AgentDraftRefusal } from "./agent-draft-model";
 import type { DraftDecision } from "./build-data";
 import { instanceSentence } from "./build-refusals";
+
+type Translate = TranslationContextValue["t"];
 
 /** What the last Publish or Discard answered, for the page to say. */
 export type AgentDraftAnswer =
@@ -52,6 +54,8 @@ export async function decideDraft(input: {
   /** Reads the draft again. */
   reread(): Promise<unknown>;
   failedMessage: string;
+  /** The reader's translator: a refusal the refusal table knows is told in their language. */
+  t: Translate;
 }): Promise<AgentDraftAnswer | undefined> {
   let outcome: OperationOutcome<unknown>;
   try {
@@ -60,7 +64,7 @@ export async function decideDraft(input: {
     await input.reread().catch(() => undefined);
     const refusal = readDraftRefusal(error);
     if (refusal !== undefined) return { kind: refusal };
-    return { kind: "failed", message: instanceSentence(error) ?? input.failedMessage };
+    return { kind: "failed", message: instanceSentence(error, input.t) ?? input.failedMessage };
   }
   if (outcome.status !== "done") return { kind: "waits" };
   await input.done().catch(() => undefined);
@@ -184,7 +188,8 @@ export function useAgentDraft(input: {
         await reload();
       },
       reread,
-      failedMessage: t("agentDraft.failed")
+      failedMessage: t("agentDraft.failed"),
+      t
     });
     setAnswered({ sent: revision, answer: next });
     setBusy(undefined);

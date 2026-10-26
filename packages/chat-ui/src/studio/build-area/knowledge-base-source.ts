@@ -14,6 +14,7 @@ import {
   useWorkspaceUsersQuery
 } from "../../shared/api/workspace-queries";
 import { canManageServicePrincipals, canManageUsers } from "../../shared/governance";
+import { useTranslation, type TranslationContextValue } from "../../shared/i18n";
 import { useSettingsPage } from "../../shared/settings-page-context";
 import { apiErrorCode } from "../../shared/workspace-utils";
 import { instanceSentence, PendingApprovalError, readRefusalDetails } from "./build-refusals";
@@ -23,6 +24,8 @@ import type { MoreRead, PagedItems } from "./paged-items";
 import { useAvailabilityChoice, type AvailabilityFrame } from "./asset-availability";
 import type { AvailabilityChoice } from "./asset-availability-fields";
 import type { ConnectorTypeOffer } from "./connection-typed-model";
+
+type Translate = TranslationContextValue["t"];
 
 /**
  * The state of one published Knowledge Base, as `knowledge_bases.get` answers it, with the data
@@ -358,6 +361,7 @@ export type KnowledgeHoldersRead =
 
 /** The Knowledge Base pages on the instance's own operations. */
 export function useKnowledgeBaseSource(): KnowledgeBaseSource {
+  const { t } = useTranslation();
   const { apiBaseUrl, authScope, client, activeWorkspace, user } = useSettingsPage();
   const queryClient = useQueryClient();
   const api = { apiBaseUrl, authScope, client };
@@ -413,7 +417,7 @@ export function useKnowledgeBaseSource(): KnowledgeBaseSource {
         }
       ),
     check: (knowledgeBase) =>
-      called(async () => {
+      called(t, async () => {
         const outcome = await client.knowledge_bases.check({ params: { knowledgeBase } });
         if (outcome.status !== "done") throw new PendingApprovalError();
         // Every read of the state shows what this check found. A check finds nothing about the
@@ -429,7 +433,7 @@ export function useKnowledgeBaseSource(): KnowledgeBaseSource {
         return checked;
       }),
     reindex: (knowledgeBase, confirm) =>
-      called(async () => {
+      called(t, async () => {
         const outcome = await client.knowledge_bases.reindex({
           params: { knowledgeBase },
           body: confirm === undefined ? {} : { confirm }
@@ -442,11 +446,14 @@ export function useKnowledgeBaseSource(): KnowledgeBaseSource {
         return outcome.output;
       }),
     query: (knowledgeBase, sql) =>
-      called(() => client.knowledge_bases.query({ params: { knowledgeBase }, body: { sql } })),
+      called(t, () => client.knowledge_bases.query({ params: { knowledgeBase }, body: { sql } })),
     search: (knowledgeBase, query) =>
-      called(() => client.knowledge_bases.search({ params: { knowledgeBase }, body: { query } })),
+      called(t, () =>
+        client.knowledge_bases.search({ params: { knowledgeBase }, body: { query } })
+      ),
     useDataStores: (search, owner) =>
       knowledgeReadOf(
+        t,
         useOwnedChoices(
           client,
           key("choice", "data_store", owner ?? "", search),
@@ -465,6 +472,7 @@ export function useKnowledgeBaseSource(): KnowledgeBaseSource {
       ),
     useKnowledgeBases: (search, enabled, owner) =>
       knowledgeReadOf(
+        t,
         useOwnedChoices(
           client,
           key("choice", "knowledge_base", owner ?? "", search),
@@ -479,7 +487,7 @@ export function useKnowledgeBaseSource(): KnowledgeBaseSource {
     useDocuments: (knowledgeBase, enabled = true) =>
       useDocuments(client, knowledgeBase, key("documents", knowledgeBase), enabled),
     retry: (knowledgeBase, documentIds) =>
-      called(async () => {
+      called(t, async () => {
         const outcome = await client.knowledge_bases.retry_documents({
           params: { knowledgeBase },
           body: { documentIds: [...documentIds] }
@@ -489,7 +497,7 @@ export function useKnowledgeBaseSource(): KnowledgeBaseSource {
         return outcome.output;
       }),
     remove: (knowledgeBase, documentIds) =>
-      called(async () => {
+      called(t, async () => {
         const outcome = await client.knowledge_bases.remove_documents({
           params: { knowledgeBase },
           body: { documentIds: [...documentIds] }
@@ -499,7 +507,7 @@ export function useKnowledgeBaseSource(): KnowledgeBaseSource {
         return outcome.output;
       }),
     addFiles: (knowledgeBase, files) =>
-      called(async () => {
+      called(t, async () => {
         const outcome = await client.knowledge_bases.add_files({
           params: { knowledgeBase },
           body: { files: files.map(({ conversationId, fileId }) => ({ conversationId, fileId })) }
@@ -509,7 +517,7 @@ export function useKnowledgeBaseSource(): KnowledgeBaseSource {
         return { count: outcome.output.count };
       }),
     uploadFile: (knowledgeBase, file, idempotencyKey) =>
-      called(async () => {
+      called(t, async () => {
         const outcome = await client.knowledge_bases.upload_file({
           params: { knowledgeBase },
           file,
@@ -548,6 +556,7 @@ export function useKnowledgeBaseSource(): KnowledgeBaseSource {
     },
     useSourceConnections: (search, owner) => {
       const read = knowledgeReadOf(
+        t,
         useOwnedChoices(
           client,
           key("choice", "connection", owner ?? "", search),
@@ -587,6 +596,7 @@ export function useKnowledgeBaseSource(): KnowledgeBaseSource {
       });
       const first = query.data?.pages[0];
       return readStateOf(
+        t,
         first === undefined
           ? undefined
           : {
@@ -604,7 +614,7 @@ export function useKnowledgeBaseSource(): KnowledgeBaseSource {
         { enabled: publishedRevision !== undefined, pollWhile: sourcesStillSyncing }
       ),
     syncSource: (knowledgeBase, source) =>
-      called(async () => {
+      called(t, async () => {
         const outcome = await client.knowledge_bases.sync({
           params: { knowledgeBase },
           body: { source }
@@ -618,7 +628,7 @@ export function useKnowledgeBaseSource(): KnowledgeBaseSource {
         return outcome.status === "done" ? outcome.output : outcome.run;
       }),
     confirmSource: (knowledgeBase, source) =>
-      called(async () => {
+      called(t, async () => {
         const outcome = await client.knowledge_bases.sync({
           params: { knowledgeBase },
           body: { source, confirm: true }
@@ -630,7 +640,7 @@ export function useKnowledgeBaseSource(): KnowledgeBaseSource {
         return outcome.status === "done" ? outcome.output : outcome.run;
       }),
     retrySource: (knowledgeBase, source, failureCode) =>
-      called(async () => {
+      called(t, async () => {
         const outcome = await client.knowledge_bases.retry_documents({
           params: { knowledgeBase },
           body: { source, failureCode }
@@ -668,6 +678,7 @@ function useDocuments(
   queryKey: (string | number)[],
   enabled: boolean
 ): KnowledgeRead<KnowledgeDocumentPages> {
+  const { t } = useTranslation();
   const query = useInfiniteQuery({
     queryKey,
     enabled,
@@ -686,6 +697,7 @@ function useDocuments(
         : false
   });
   return readStateOf(
+    t,
     query.data === undefined
       ? undefined
       : {
@@ -707,6 +719,7 @@ function useOpenableFiles(
   search: string,
   enabled: boolean
 ): KnowledgeRead<PagedItems<KnowledgeOpenableFile>> {
+  const { t } = useTranslation();
   const query = useInfiniteQuery({
     queryKey,
     queryFn: ({ pageParam, signal }) =>
@@ -718,6 +731,7 @@ function useOpenableFiles(
     placeholderData: keepPreviousData
   });
   return readStateOf(
+    t,
     query.data === undefined
       ? undefined
       : {
@@ -787,8 +801,11 @@ function toKnowledgeChoice(asset: {
 }
 
 /** A chooser's read in the page's states. */
-function knowledgeReadOf<Item>(read: OwnedChoicesRead<Item>): KnowledgeRead<PagedItems<Item>> {
-  return readStateOf(read.choices, {
+function knowledgeReadOf<Item>(
+  t: Translate,
+  read: OwnedChoicesRead<Item>
+): KnowledgeRead<PagedItems<Item>> {
+  return readStateOf(t, read.choices, {
     error: read.error,
     isFetching: read.fetching,
     refetch: async () => read.retry()
@@ -811,6 +828,7 @@ function moreOf(query: {
  * does not blink.
  */
 function readStateOf<Answer>(
+  t: Translate,
   data: Answer | undefined,
   query: { error: unknown; isFetching: boolean; refetch(): Promise<unknown> }
 ): KnowledgeRead<Answer> {
@@ -823,14 +841,17 @@ function readStateOf<Answer>(
     }
     return {
       status: "failed",
-      message: instanceSentence(query.error),
+      message: instanceSentence(query.error, t),
       retry: () => void query.refetch().catch(() => undefined)
     };
   }
   return { status: "loading" };
 }
 
-async function called<Answer>(call: () => Promise<Answer>): Promise<KnowledgeCall<Answer>> {
+async function called<Answer>(
+  t: Translate,
+  call: () => Promise<Answer>
+): Promise<KnowledgeCall<Answer>> {
   try {
     return { ok: true, data: await call() };
   } catch (error) {
@@ -839,7 +860,7 @@ async function called<Answer>(call: () => Promise<Answer>): Promise<KnowledgeCal
     return {
       ok: false,
       refused: code === "FORBIDDEN",
-      message: instanceSentence(error),
+      message: instanceSentence(error, t),
       ...(reason === undefined ? {} : { reason }),
       ...(error instanceof ApiError && code !== undefined ? {} : { unanswered: true as const })
     };
@@ -855,6 +876,7 @@ function useRead<Answer>(
     pollWhile?: (answer: Answer) => boolean;
   } = {}
 ): KnowledgeRead<Answer> {
+  const { t } = useTranslation();
   const { pollWhile } = options;
   const query = useQuery({
     queryKey,
@@ -864,5 +886,5 @@ function useRead<Answer>(
     refetchInterval: ({ state }) =>
       pollWhile && state.data !== undefined && pollWhile(state.data) ? DOCUMENTS_POLL_MS : false
   });
-  return readStateOf(query.data, query);
+  return readStateOf(t, query.data, query);
 }

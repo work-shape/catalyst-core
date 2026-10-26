@@ -13,7 +13,16 @@ import {
   resolveBuildRights,
   type AssetRights
 } from "../../shared/build-rights";
-import type { TranslationKey } from "../../shared/i18n";
+import type { TranslationContextValue, TranslationKey } from "../../shared/i18n";
+import { workflowPublishRefusal } from "../workflows/workflow-publish-rights-model";
+import {
+  refusalDetailsOf,
+  tellRefusal,
+  type RefusalPlace,
+  type ToldRefusal
+} from "../../shared/i18n/refusals";
+
+type Translate = TranslationContextValue["t"];
 
 /** The four rights of an App, by the names the instance decides them under. */
 export const APP_RIGHT_NAMES = {
@@ -218,65 +227,29 @@ function refusalReason(error: unknown): string | undefined {
 }
 
 /**
- * The sentence for a refusal the Apps area knows by its reason. Everything else is shown as
- * the instance said it.
+ * The sentence of a refusal the interface knows by its reason (REFUSE-1), in the reader's
+ * language. Everything else is shown as the instance said it.
  */
-export function appRefusalText(error: unknown): TranslationKey | undefined {
-  switch (refusalReason(error)) {
-    case "revision_files_removed":
-      return "apps.revisionFilesRemoved";
-    case "input_too_large_to_hold":
-      return "apps.tooLargeToHold";
-    default:
-      return undefined;
-  }
+export function appRefusalText(error: unknown, t: Translate): string | undefined {
+  return appPublishRefusal(error, t)?.message;
 }
 
 /**
- * The sentence of a refused publish, with what it names: a Workflow the App starts that is not
- * live, an action whose mapping does not fit that Workflow (DP-0), or a Data Store published
- * with the App whose migration failed, is still migrating or whose draft is below the level the
- * App needs (GOLIVE-1). Every other refusal is one `appRefusalText` knows, or none.
+ * A refused publish, or another refused write of an App, in the reader's language: the table's
+ * sentence, with the way to the Data Store or the Workflow it names where `place` lets the
+ * reader go there. A Workflow the Publish makes live with the App (DP-3) is refused as its own
+ * Publish would be, in the Workflows' sentences. Nothing for a refusal neither knows.
  */
 export function appPublishRefusal(
-  error: unknown
-): { key: TranslationKey; values?: Record<string, string> } | undefined {
+  error: unknown,
+  t: Translate,
+  place?: RefusalPlace
+): ToldRefusal | undefined {
   if (!(error instanceof ApiError)) return undefined;
-  const details = field(field(error.payload, "error"), "details");
-  const text = (name: string) => {
-    const value = field(details, name);
-    return typeof value === "string" ? value : "";
-  };
-  const values = {
-    workflow: text("workflow"),
-    action: text("action"),
-    input: text("input"),
-    // A store's refusal names it by its title, and by its id where it carries none.
-    title: text("title") || text("dataStore"),
-    migration: text("migration")
-  };
-  switch (refusalReason(error)) {
-    case "workflow_unavailable":
-      return { key: "apps.publishWorkflowUnavailable", values };
-    case "data_store_migration_failed":
-      return { key: "apps.publishDataStoreMigrationFailed", values };
-    case "data_store_migrating":
-      return { key: "apps.publishDataStoreMigrating", values };
-    case "data_store_draft_below_min_schema":
-      return { key: "apps.publishDataStoreDraftBelowMinSchema", values };
-    case "workflow_input_invalid":
-      return {
-        key:
-          text("fault") === "missing"
-            ? "apps.publishWorkflowInputMissing"
-            : "apps.publishWorkflowInputUndeclared",
-        values
-      };
-    default: {
-      const key = appRefusalText(error);
-      return key ? { key } : undefined;
-    }
-  }
+  const told = tellRefusal(refusalDetailsOf(error), t, place);
+  if (told !== undefined) return told;
+  const member = workflowPublishRefusal(error, t);
+  return member === undefined ? undefined : { message: member };
 }
 
 /** Why the instance gave no address for a revision of an App. */

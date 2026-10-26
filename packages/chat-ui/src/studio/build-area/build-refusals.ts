@@ -1,6 +1,7 @@
 import type { LocaleCode } from "@work-shape/catalyst-api-client";
 import { EGRESS_DENIED } from "@work-shape/catalyst-core";
 import type { TranslationContextValue, TranslationKey } from "../../shared/i18n";
+import { refusalDetailsOf, tellRefusal } from "../../shared/i18n/refusals";
 import { formatFileBytes } from "./skill-form-model";
 import { apiErrorCode, apiErrorMessage } from "../../shared/workspace-utils";
 
@@ -243,11 +244,13 @@ function readConflict(error: unknown): BuildConflict {
 }
 
 /**
- * What the instance said about a call it refused or could not serve. A call that never got an
- * answer has no such sentence: the page then says in the reader's language what did not work.
+ * What the instance said about a call it refused or could not serve, in the reader's language
+ * where the refusal table knows its reason (REFUSE-1). A call that never got an answer has no
+ * such sentence: the page then says in the reader's language what did not work.
  */
-export function instanceSentence(error: unknown): string | undefined {
-  return apiErrorCode(error) === undefined ? undefined : apiErrorMessage(error, undefined);
+export function instanceSentence(error: unknown, t: Translate): string | undefined {
+  if (apiErrorCode(error) === undefined) return undefined;
+  return tellRefusal(refusalDetailsOf(error), t)?.message ?? apiErrorMessage(error, undefined);
 }
 
 /** The fields of a definition whose refusal belongs to one field of the page. */
@@ -269,14 +272,14 @@ const FIELD_OF_CONFIG_KEY = new Map<string, BuildRefusalField>([
 
 /**
  * Reads a refused change. A refusal from a workspace's build limits names its field and is told in
- * the reader's language; an issue of the definition goes to the field its path names; every
- * other sentence is shown as the instance said it, which includes the one sentence about an
- * asset the reader may not read.
+ * the reader's language; an issue of the definition goes to the field its path names; a reason
+ * the refusal table knows is told in its words; every other sentence is shown as the instance
+ * said it, which includes the one sentence about an asset the reader may not read.
  */
 export function readBuildRefusal(
   error: unknown,
   t: Translate,
-  locale: LocaleCode = "en"
+  locale: LocaleCode
 ): BuildWriteOutcome {
   if (apiErrorCode(error) === "REVISION_CONFLICT") {
     return readRefusalDetails(error).reason === "draft_changed"
@@ -365,6 +368,10 @@ export function readBuildRefusal(
         return { ...(concerned ? { field: concerned } : {}), ...issueRefusal(issue, t) };
       })
     };
+  }
+  const told = tellRefusal(refusalDetailsOf(error), t);
+  if (told !== undefined) {
+    return refused({ message: told.message });
   }
   const sentence = apiErrorMessage(error, undefined);
   return refused(

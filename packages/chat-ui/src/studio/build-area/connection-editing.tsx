@@ -264,7 +264,7 @@ export function ConnectionSecretEditor({
             (error: unknown) =>
               setResult({
                 tone: "error",
-                text: instanceSentence(error) ?? t("connections.secretFailed")
+                text: instanceSentence(error, t) ?? t("connections.secretFailed")
               })
           )
           .finally(() => setSaving(false));
@@ -380,7 +380,7 @@ export function DiscoveredTools({
         setAsked(
           error instanceof PendingApprovalError
             ? t("connections.discoverHeld")
-            : (instanceSentence(error) ?? t("connections.discoverFailed"))
+            : (instanceSentence(error, t) ?? t("connections.discoverFailed"))
         )
       )
       .finally(() => setAsking(false));

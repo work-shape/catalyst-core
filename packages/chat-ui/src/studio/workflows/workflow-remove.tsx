@@ -70,7 +70,7 @@ export function WorkflowRemoveDialog({
         remove(answer.revision)
           .then(onRemoved)
           .catch((failure: unknown) => {
-            setError(instanceSentence(failure) ?? t("workflows.remove.failed"));
+            setError(instanceSentence(failure, t) ?? t("workflows.remove.failed"));
           })
           .finally(() => setBusy(false));
       }}

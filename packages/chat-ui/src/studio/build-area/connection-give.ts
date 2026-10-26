@@ -1,7 +1,6 @@
 import type { ApiClient } from "@work-shape/catalyst-api-client";
-import { apiErrorCode } from "../../shared/workspace-utils";
+import { apiErrorCode, apiErrorMessage } from "../../shared/workspace-utils";
 import { operationTitle } from "./connection-approval-model";
-import { instanceSentence } from "./build-refusals";
 
 // "Einem Agenten geben" (CS-5d; ruling of 2026-10-24): the approved tools of a Connection go to
 // one agent the person picks, after a confirmation that names the agent and the tools. Only an
@@ -137,8 +136,12 @@ export async function giveTools(
   }
 }
 
+/**
+ * The instance's sentence on a give it refused or could not serve. A give meets no reason of the
+ * refusal table (REFUSE-1), so the sentence is shown as the instance said it.
+ */
 function messageOf(error: unknown): { message?: string } {
-  const message = instanceSentence(error);
+  const message = apiErrorCode(error) === undefined ? undefined : apiErrorMessage(error, undefined);
   return message === undefined ? {} : { message };
 }
 

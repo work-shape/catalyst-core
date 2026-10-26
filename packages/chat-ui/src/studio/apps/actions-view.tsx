@@ -69,7 +69,7 @@ export function AppDraftActions({
           message:
             apiErrorCode(caught) === "REVISION_CONFLICT"
               ? t("apps.liveOnceStale")
-              : (instanceSentence(caught) ?? t("apps.liveOnceFailed"))
+              : (instanceSentence(caught, t) ?? t("apps.liveOnceFailed"))
         })
       )
       .finally(() => setSwitching(undefined));

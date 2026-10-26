@@ -522,7 +522,7 @@ describe("a statement of an App on a Data Store", () => {
     expect(t.refusal(refused)).toMatchObject({
       code: "CONFLICT",
       message:
-        "The App needs the Data Store 'findings' at migration level 2 (minSchema) and the store is at level 1. Publish the store's migrations first.",
+        "The App needs the Data Store 'findings' at migration level 2 (minSchema) and the store is at level 1. Publish the App: its Publish carries the store's pending migrations (dataStores in assets.publish).",
       details: {
         reason: "data_store_below_min_schema",
         dataStore: "findings",
@@ -610,7 +610,7 @@ describe("a statement of an App on a Data Store", () => {
     const unlisted = {
       code: "VALIDATION_FAILED",
       message:
-        "The action 'add_finding' reaches the Data Store 'findings', which the manifest of its App does not list under 'dataStores'. An App reaches what its manifest names and nothing else.",
+        "The action 'add_finding' reaches the Data Store 'findings', which the manifest of its App does not list under 'dataStores'. Add the store to dataStores in the App's manifest, save the App with app.save, and publish it with assets.publish.",
       details: { reason: "data_store_not_listed", dataStore: "findings" }
     };
 
@@ -676,7 +676,7 @@ describe("a statement of an App on a Data Store", () => {
     expect(t.refusal(response)).toMatchObject({
       code: "NOT_FOUND",
       message:
-        "The Data Store 'archive' is not available: no published Data Store of that name is in the App's workspace or on the instance. It may have been deleted.",
+        "The Data Store 'archive' is not available: no published Data Store of that name is in the App's workspace or on the instance. It may have been deleted. Save the Data Store with assets.put in a scope the App can reach, then publish it with assets.publish.",
       details: { reason: "data_store_unavailable", dataStore: "archive" }
     });
     expect(await t.runOf(response.headers["operation-run-id"])).toMatchObject({

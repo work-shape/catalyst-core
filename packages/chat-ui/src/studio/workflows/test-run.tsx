@@ -66,7 +66,7 @@ export function useTestRun(
             : {
                 message:
                   workflowAccountRefusal(failure, t) ??
-                  instanceSentence(failure) ??
+                  instanceSentence(failure, t) ??
                   t("workflows.test.failed")
               }
       );
@@ -159,7 +159,7 @@ export function useRunLiveOnce(
             : workflowWriteRefusal(failure) === "refused"
               ? t("workflows.test.refused")
               : (workflowAccountRefusal(failure, t) ??
-                instanceSentence(failure) ??
+                instanceSentence(failure, t) ??
                 t("workflows.liveOnce.failed"))
       });
     }

@@ -75,7 +75,7 @@ export function useStartRun(input: {
             : {
                 message:
                   workflowAccountRefusal(failure, t) ??
-                  instanceSentence(failure) ??
+                  instanceSentence(failure, t) ??
                   t("workflows.start.failed")
               }
       );

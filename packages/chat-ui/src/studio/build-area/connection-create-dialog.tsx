@@ -314,7 +314,7 @@ export function ConnectionCreateFlow({
             return (await put({ name, config: definition, expectedRevision })).revision;
           } catch (error) {
             // The id is held by a deleted asset: the Connection is made again after that delete.
-            const met = readBuildRefusal(error, t);
+            const met = readBuildRefusal(error, t, locale);
             if (
               expectedRevision !== null ||
               met.ok ||
@@ -413,12 +413,18 @@ export function ConnectionCreateFlow({
 
   /** The fields a refused definition is about, in the reader's words. */
   const writeErrors = (error: unknown): CreateFieldErrors => {
-    const { errors: found, detail } = connectionWriteErrors(error, name, t, fields.form.url);
+    const { errors: found, detail } = connectionWriteErrors(
+      error,
+      name,
+      t,
+      locale,
+      fields.form.url
+    );
     return detail === undefined ? found : { ...found, detail };
   };
 
   const sentenceOf = (error: unknown): string => {
-    const outcome = readBuildRefusal(error, t);
+    const outcome = readBuildRefusal(error, t, locale);
     return outcome.ok || outcome.conflict
       ? t("connectionCreate.errorFailed")
       : outcome.refusals.map((refusal) => refusal.message).join(" ");
@@ -515,7 +521,7 @@ export function ConnectionCreateFlow({
       }
     } catch (error) {
       setBusy(false);
-      setRefusals(approvalRefusals(error, config, t));
+      setRefusals(approvalRefusals(error, config, t, locale));
     }
   };
 

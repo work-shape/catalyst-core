@@ -110,13 +110,11 @@ export function UpdateAppDialog({
             setPhase("idle");
             return;
           }
-          const refusal = appRefusalText(error);
+          const refusal = appRefusalText(error, t);
           setFailure(
             error instanceof PendingApprovalError
               ? t("apps.publishPending")
-              : refusal
-                ? t(refusal)
-                : (instanceSentence(error) ?? t("apps.updateFailed"))
+              : (refusal ?? instanceSentence(error, t) ?? t("apps.updateFailed"))
           );
           setPhase("failed");
         }

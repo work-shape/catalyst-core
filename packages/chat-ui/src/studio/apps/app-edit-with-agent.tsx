@@ -31,7 +31,7 @@ export function useAppEditWithAgent(
               // An App the reader may not read and one that is gone are refused alike.
               failure instanceof ApiError && (failure.status === 403 || failure.status === 404)
                 ? t("apps.editWithAgentRefused")
-                : (instanceSentence(failure) ?? t("apps.editWithAgentFailed"))
+                : (instanceSentence(failure, t) ?? t("apps.editWithAgentFailed"))
             );
           })
   );

@@ -558,7 +558,8 @@ describe("the calls of a frame", () => {
   it("keep the run of a refusal and word a missing right on a Connection in the person's language", () => {
     const texts = {
       connectionUseDenied: (label: string | undefined, frame: "page" | "app") =>
-        `sentence for ${label ?? `no label in the ${frame}`}`
+        `sentence for ${label ?? `no label in the ${frame}`}`,
+      refusal: () => undefined
     };
     const denied = (details: Record<string, unknown>) =>
       frameCallFailure(
@@ -630,6 +631,74 @@ describe("the calls of a frame", () => {
     for (const text of [sentence("Mara"), sentence("Mara", "de")]) {
       expect(text).not.toMatch(/Settings|Einstellungen/u);
     }
+  });
+
+  // REFUSE-1: an App shows a refusal's sentence as it is, so the host tells it in the viewer's
+  // language. The code the App reads stays the instance's. Fails without the change: the App
+  // was handed the instance's English sentence.
+  it("tell an App a refusal the interface knows in the viewer's language, with the code unchanged", () => {
+    const API = "https://chat.example.com";
+    const failure = (
+      locale: "en" | "de",
+      details: Record<string, unknown>,
+      [status, code]: [number, string] = [409, "CONFLICT"]
+    ) => {
+      const queryClient = new QueryClient();
+      queryClient.setQueryData(["me", API], { instanceAdminName: undefined });
+      let told: ReturnType<typeof frameCallFailure> | undefined;
+      function Probe() {
+        told = frameCallFailure(
+          refusal(status, code, "Save the Page as an App with app.save", details),
+          useFrameCallTexts()
+        );
+        return null;
+      }
+      renderToStaticMarkup(
+        createElement(
+          QueryClientProvider,
+          { client: queryClient },
+          createElement(
+            WorkspaceApiClientProvider,
+            { apiBaseUrl: API, children: null },
+            createElement(TranslationProvider, { locale, children: createElement(Probe) })
+          )
+        )
+      );
+      return told;
+    };
+    expect(failure("de", { reason: "data_store_needs_app", dataStore: "belege" })).toEqual({
+      code: "data_store_needs_app",
+      message:
+        "Diese Vorschau erreicht keine Datenspeicher. Zum Testen mit echten Daten öffne die App.",
+      retryable: false
+    });
+    expect(
+      failure("en", { reason: "data_store_unavailable", dataStore: "belege", operationRunId: "r1" })
+    ).toEqual({
+      code: "data_store_unavailable",
+      message: "There is no data store “belege” here (any more).",
+      runId: "r1"
+    });
+    // A missing right on a Data Store, not on a Connection: still a refusal for the right.
+    expect(
+      failure("de", { reason: "no_grant", action: "data_store.read" }, [403, "FORBIDDEN"])
+    ).toEqual({
+      code: "forbidden",
+      message: "Dafür brauchst du das Recht „Datenspeicher ansehen“.",
+      right: "data_store.read",
+      retryable: false
+    });
+    // A right this interface does not know is not named by a placeholder.
+    expect(
+      failure("de", { reason: "no_grant", action: "connection_exposure.outside" }, [
+        403,
+        "FORBIDDEN"
+      ])?.message
+    ).toBe("Save the Page as an App with app.save");
+    // A reason the interface does not know keeps the instance's sentence.
+    expect(failure("de", { reason: "upstream_error" })?.message).toBe(
+      "Save the Page as an App with app.save"
+    );
   });
 
   it("tell a Page nothing of what is no answer of the instance", () => {

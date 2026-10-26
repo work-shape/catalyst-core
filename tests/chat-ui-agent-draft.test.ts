@@ -314,7 +314,13 @@ describe("Publish and Discard", () => {
     const reloaded = vi.fn(async () => undefined);
     const reread = vi.fn(async () => undefined);
     return {
-      answer: decideDraft({ call, done: reloaded, reread, failedMessage: "Try again." }),
+      answer: decideDraft({
+        call,
+        done: reloaded,
+        reread,
+        failedMessage: "Try again.",
+        t: createTranslationContext("en").t
+      }),
       reloaded,
       reread
     };

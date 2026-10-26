@@ -26,7 +26,7 @@ export function useBuildEditWithAgent(
               // An asset the reader may not read and one that is gone are refused alike.
               failure instanceof ApiError && (failure.status === 403 || failure.status === 404)
                 ? t("build.editWithAgentRefused")
-                : (instanceSentence(failure) ?? t("build.editWithAgentFailed"))
+                : (instanceSentence(failure, t) ?? t("build.editWithAgentFailed"))
             );
           })
   );

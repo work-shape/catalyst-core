@@ -1,0 +1,11 @@
+# The person of the App publish refusal spec. No other spec uses them: the spec saves an App,
+# and an App's id is taken once for the whole instance.
+- email: e2e-app-publish-refusal@example.test
+  displayLabel: Zz E2E App Publish Refusal
+  passwordEnvName: E2E_APP_PUBLISH_REFUSAL_PASSWORD
+  developmentPassword: e2e-app-publish-refusal-password
+  roles:
+    - user
+    - admin
+  permissionRefs:
+    - demo-tools

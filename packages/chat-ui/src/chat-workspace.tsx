@@ -543,7 +543,14 @@ function ChatWorkspaceContent({
     // The Operations page is a System page (RIGHTS-1e): linked for who may open it.
     ...(model.controlPlane.viewsSystem
       ? { operations: { href: operationRunsHref(), runHref: operationRunHref } }
-      : {})
+      : {}),
+    // The pages a refusal may link to, for who is shown them.
+    canOpen: (route) =>
+      route.kind === "build-asset"
+        ? route.assetKind === "data-stores" && model.controlPlane.canOpenDataStoresInBuild
+        : route.kind === "workflow"
+          ? model.workflows.access === "open"
+          : route.kind === "app-edit" && model.apps.enabled && model.apps.rights.write
   };
   const workflowsHost: WorkflowsHost | undefined =
     model.workflows.access === "open"

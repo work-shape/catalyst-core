@@ -338,7 +338,7 @@ export function useBuildSource(): BuildSource {
     rights,
     loading: contextQuery.isLoading,
     error: contextQuery.error
-      ? (instanceSentence(contextQuery.error) ?? t("build.loadFailed"))
+      ? (instanceSentence(contextQuery.error, t) ?? t("build.loadFailed"))
       : undefined,
     reload: () => contextQuery.refetch(),
     scopeOf: (kind) => (scopedKinds.has(kind) ? scopeFor(kind) : undefined),
@@ -424,7 +424,9 @@ export function useBuildSource(): BuildSource {
       return {
         // Undefined while the list's owner is chosen: the list shows as loading, not as empty.
         rows: opening ? undefined : query.data?.pages.flatMap((page) => page.items),
-        error: query.error ? (instanceSentence(query.error) ?? t("build.loadFailed")) : undefined,
+        error: query.error
+          ? (instanceSentence(query.error, t) ?? t("build.loadFailed"))
+          : undefined,
         hasMore: query.hasNextPage,
         loadingMore: query.isFetchingNextPage,
         // A failed page shows through `error`, so there is nothing to catch here.
@@ -522,7 +524,7 @@ export function useBuildSource(): BuildSource {
         }
         return {
           status: "failed",
-          message: instanceSentence(query.error) ?? t("build.loadFailed"),
+          message: instanceSentence(query.error, t) ?? t("build.loadFailed"),
           retry: () => void query.refetch().catch(() => undefined)
         };
       }

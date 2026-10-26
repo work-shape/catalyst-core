@@ -532,11 +532,16 @@ describe("the draft of an App (layout 3)", () => {
         error: { code: "VALIDATION_FAILED", details: { reason } }
       });
 
-    expect(appRefusalText(refused("revision_files_removed"))).toBe("apps.revisionFilesRemoved");
-    expect(appRefusalText(refused("input_too_large_to_hold"))).toBe("apps.tooLargeToHold");
+    const { t } = createTranslationContext("en");
+    expect(appRefusalText(refused("revision_files_removed"), t)).toBe(
+      "The files of this version are not stored any more, so it cannot be published or shown."
+    );
+    expect(appRefusalText(refused("input_too_large_to_hold"), t)).toBe(
+      "This change needs an approval, and it is too large to be held for one."
+    );
     // Every other refusal is shown as the instance said it.
-    expect(appRefusalText(refused("something_else"))).toBeUndefined();
-    expect(appRefusalText(new Error("offline"))).toBeUndefined();
+    expect(appRefusalText(refused("something_else"), t)).toBeUndefined();
+    expect(appRefusalText(new Error("offline"), t)).toBeUndefined();
   });
 
   it("asks once before publishing, with the Connections and hosts the revision reaches", () => {

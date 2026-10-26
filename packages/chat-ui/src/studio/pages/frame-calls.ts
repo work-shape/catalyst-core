@@ -88,6 +88,11 @@ export interface FrameCallTexts {
    * and whether the frame is a Page of a conversation or an App, which the sentence names.
    */
   connectionUseDenied(connectionLabel: string | undefined, frame: "page" | "app"): string;
+  /**
+   * The interface's own sentence for a refusal it knows by its reason and details, or nothing
+   * where it has none: the instance's sentence then stays.
+   */
+  refusal(details: Record<string, unknown>): string | undefined;
 }
 
 /** The refusals the same call again cannot change. A frame offers no retry for them. */
@@ -104,8 +109,8 @@ const FINAL_REFUSALS: readonly string[] = [
  * What a frame reads of a call that was refused or failed: a fixed word, a sentence, for a
  * missing right the right, and the run where one was recorded. A refusal for a right says
  * `forbidden`. Every other error says the reason the instance gave, or its error code in
- * lower case. The sentence is the instance's, but for the missing right to use a Connection,
- * which the interface words in the person's language.
+ * lower case. The sentence is the instance's, but for the missing right to use a Connection
+ * and a refusal the interface's table knows, which it words in the person's language.
  */
 export function frameCallFailure(
   error: unknown,
@@ -124,7 +129,7 @@ export function frameCallFailure(
       message:
         texts && details.connectionUseDenied === true
           ? texts.connectionUseDenied(label, details.frame === "page" ? "page" : "app")
-          : error.message,
+          : (texts?.refusal(details) ?? error.message),
       right: details.action,
       retryable: false,
       ...run
@@ -134,7 +139,8 @@ export function frameCallFailure(
   const code = reason ?? error.code?.toLowerCase() ?? "failed";
   return {
     code,
-    message: error.message,
+    // The code stays the instance's; only the sentence is told in the viewer's language.
+    message: texts?.refusal(details) ?? error.message,
     ...(FINAL_REFUSALS.includes(code) ? { retryable: false } : {}),
     ...run
   };
