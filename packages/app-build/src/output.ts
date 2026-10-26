@@ -36,6 +36,9 @@ const reportedError = z.strictObject({
   message: z.string().max(PAGE_BUILD_MAX_MESSAGE_CHARS + 3),
   code: z.enum(PAGE_BUILD_ERROR_CODES).optional(),
   element: z.string().max(64).optional(),
+  rule: z.string().max(64).optional(),
+  sentence: z.string().max(512).optional(),
+  fix: z.string().max(512).optional(),
   attribute: z.string().max(64).optional()
 });
 

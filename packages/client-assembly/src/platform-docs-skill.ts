@@ -1,3 +1,4 @@
+import { renderRuntimeRules } from "@work-shape/catalyst-app-build";
 import { PLATFORM_DOCS_SKILL_NAME, type ShippedSkill } from "@work-shape/catalyst-core";
 import generated from "./generated/platform-docs.json" with { type: "json" };
 
@@ -30,7 +31,8 @@ const content = [
   "",
   "The product documentation of this platform's release, one reference file per page. Read the page that answers the question with read_skill, naming this skill and the page's path as `resourcePath`. Read a reference once per conversation while its contents remain in context; return to the relevant page only when you need information no longer available. A link in a page such as `/configure/build/` is the reference `references/configure/build.md`.",
   "",
-  "The App guide has one page per task under references/apps/: read only the page the task needs, as the index below describes. Sandbox rules: allow-scripts allow-forms allow-downloads without allow-same-origin; preventDefault in submit handlers and form-action 'none' blocks form targets. Saved Apps have a per-person localStorage shim; a builder's draft preview shares that person's state with the published App. Writes coalesce per key about every 250 ms; a write is lost if the page closes or reloads before its batch is saved, even though pagehide/hidden try a best-effort flush. Prefer awaited kit 1.6.0 storage.get/set for small JSON state and Data Stores for shared records. There is no sessionStorage shim (it throws SecurityError); localStorage instanceof Storage is false. Network is restricted to reviewed manifest hosts on published Apps; credentials and platform calls go through named actions, never direct fetch or CDNs.",
+  "The App guide has one page per task under references/apps/: read only the page the task needs, as the index below describes. Sandbox rules: allow-scripts allow-forms allow-downloads without allow-same-origin; preventDefault in submit handlers and form-action 'none' blocks form targets. Use awaited kit storage.get/set for small JSON state and Data Stores for shared records. Credentials and platform calls go through named actions; bundle fonts and libraries instead of loading CDNs.",
+  renderRuntimeRules(),
   "The docs describe the product. What exists on this instance and what the user may do here, ask the platform's tools.",
   ...[
     ...new Set([...SECTION_HEADINGS.keys(), ...generated.pages.map(({ path }) => sectionOf(path))])

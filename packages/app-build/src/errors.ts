@@ -6,6 +6,7 @@ export const PAGE_BUILD_ERROR_CODES = [
   "external_resource",
   "import_unavailable",
   "syntax",
+  "runtime_rule",
   "routes_invalid",
   "action_invalid",
   "connection_not_declared",
@@ -27,6 +28,10 @@ export interface PageBuildError {
   /** Counts from 1. */
   column?: number;
   message: string;
+  /** The authoring rule and its repair, for runtime_rule refusals. */
+  rule?: string;
+  sentence?: string;
+  fix?: string;
   code?: PageBuildErrorCode;
   /** The tag name, for an error about one element of an HTML file. */
   element?: string;

@@ -1,3 +1,4 @@
+import { runtimeRuleError } from "./runtime-rules";
 import { parse, type DefaultTreeAdapterMap, type Token } from "parse5";
 import { kitFilePath, kitHasFonts } from "./kit";
 import type { PageBuildError } from "./types";
@@ -216,6 +217,9 @@ export function rewriteHtml(input: {
             message: `<${node.tagName} ${name}="..."> is an inline event handler, which a Page's content policy blocks. Remove the attribute and add the handler with addEventListener in a script.`
           });
         }
+      }
+      if (node.tagName === "a" && attribute(node, "target")?.toLowerCase() === "_blank") {
+        fail(node, { ...runtimeRuleError("new_window"), attribute: "target" });
       }
       const location = node.sourceCodeLocation;
       if (location) {

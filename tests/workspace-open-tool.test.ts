@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import { RELEASED_KIT_VERSIONS, type PageBuildLimits } from "@work-shape/catalyst-app-build";
+import { RULES, RELEASED_KIT_VERSIONS, type PageBuildLimits } from "@work-shape/catalyst-app-build";
 import {
   createPageBuildClient,
   createPageBundleJobs,
@@ -314,6 +314,7 @@ describe("workspace.open", () => {
         }
       }
     });
+    for (const { sentence, fix } of RULES) expect(tool.description).toContain(`${sentence} ${fix}`);
     expect(tool.description).toMatch(/^Show an HTML file or a folder/u);
     expect(tool.description).toContain(`which is ${RELEASED_KIT_VERSIONS.at(-1)} for a new App`);
     for (const rule of [
@@ -331,6 +332,34 @@ describe("workspace.open", () => {
       "Put fonts and libraries in the App's folder or use the kit's; an outside address (Google Fonts, Adobe Fonts or a CDN) will not load."
     );
   });
+  it("returns runtime_rule with the original file, line and repair before storing a preview", async () => {
+    const harness = await createSaveHarness();
+    await harness.write("dialogs", {
+      "app.yaml": htmlManifest,
+      "index.html": "<script>\nconfirm('continue?');\n</script>"
+    });
+    expect(await harness.open("dialogs")).toMatchObject({
+      status: "success",
+      output: {
+        errors: [
+          {
+            code: "runtime_rule",
+            file: "index.html",
+            line: 2,
+            rule: "browser_dialog",
+            sentence: expect.any(String),
+            fix: expect.stringContaining("ConfirmDialog")
+          }
+        ]
+      }
+    });
+    expect(await harness.fileSets()).toEqual([]);
+    await harness.write("dialogs", {
+      "index.html": "<script>const dialog = { confirm() {} }; dialog.confirm();</script>"
+    });
+    expect(await harness.open("dialogs")).toMatchObject({ output: { number: 1 } });
+  });
+
   it("builds the folder into revision 1, and a second open into revision 2", async () => {
     const harness = await createSaveHarness();
     await harness.write("calculator", reactPage({ "index.tsx": fileRoute("/") }));

@@ -1,3 +1,4 @@
+import { renderRuntimeRules } from "@work-shape/catalyst-app-build";
 import { posix as posixPath } from "node:path";
 import { z } from "zod";
 import {
@@ -68,6 +69,9 @@ const pageBuildIssueSchema = z.object({
   message: z.string(),
   code: z.string().optional(),
   element: z.string().optional(),
+  rule: z.string().max(64).optional(),
+  sentence: z.string().max(512).optional(),
+  fix: z.string().max(512).optional(),
   attribute: z.string().optional()
 });
 
@@ -100,7 +104,8 @@ export function createWorkspaceOpenTool(options: WorkspaceOpenToolOptions): AnyT
       "For an app, a dashboard or a tool, write its folder with the workspace file tools and open it, never a loose HTML file. Hard-coded data is fine for a quick one; live data comes through actions once it is kept as an App.",
       "When to use a View, an App or a Workflow: references/apps/app-or-workflow.md in 'platform-docs'.",
       "A folder opens with app.yaml (id, name, kit: an exact kit version, which is 1.8.0 for a new App, optional entry); without app.yaml it opens its index.html. A React App has TanStack Router file routes under src/routes/ (__root.tsx, index.tsx) and imports only its own files, react, react-dom, @tanstack/react-router and @work-shape/catalyst-app-kit; nothing is installed. A plain HTML App names 'entry: index.html' and adds listeners in a script: inline handlers such as onclick are refused.",
-      "Sandbox: allow-scripts allow-forms allow-downloads without allow-same-origin; handle submit with preventDefault, since form-action 'none' blocks navigation. localStorage is a per-person shim: prefer the kit's storage.get/set (1.6.0) for small preferences, catch storage errors such as SecurityError, and keep shared records in Data Stores through named actions. Network reaches only the manifest's reviewed hosts on a published App; use named actions, never a direct platform fetch.",
+      renderRuntimeRules(),
+      "Sandbox: allow-scripts allow-forms allow-downloads without allow-same-origin; handle submit with preventDefault, since form-action 'none' blocks navigation. Use the kit's storage.get/set (1.6.0) for small preferences, catch storage errors such as SecurityError, and keep shared records in Data Stores through named actions. Network reaches only the manifest's reviewed hosts on a published App; use named actions for platform calls.",
       "Put fonts and libraries in the App's folder or use the kit's; an outside address (Google Fonts, Adobe Fonts or a CDN) will not load.",
       "Plain elements get the interface's look in light and dark from kit 1.2.0; colour your own rules with var(--background), var(--foreground), var(--muted-foreground), var(--border) or var(--primary), never fixed colours.",
       "Before writing an action, read its page of 'platform-docs': references/apps/connection-actions.md, data-store-actions.md or workflow-actions.md; examples.md has whole Apps, sandbox.md the styling and storage rules, troubleshooting.md a failed save or call.",

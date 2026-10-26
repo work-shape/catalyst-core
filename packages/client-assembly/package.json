@@ -39,7 +39,7 @@
   },
   "scripts": {
     "build": "tsup src/index.ts src/local-key-cli.ts --format esm --dts",
-    "generate:platform-docs": "node scripts/platform-docs.ts",
+    "generate:platform-docs": "pnpm --filter @work-shape/catalyst-app-build build && node scripts/platform-docs.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

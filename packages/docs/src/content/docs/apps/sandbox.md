@@ -1,9 +1,25 @@
 ---
 title: App sandbox and storage
-description: What an App's frame allows, such as forms and event handlers, the per-person localStorage shim and kit storage, the network an App reaches, and the fonts and libraries it can load.
+description: What an App's frame allows, such as forms and event handlers, kit storage and the legacy per-person localStorage shim, the network an App reaches, and the fonts and libraries it can load.
 ---
 
 Part of [Build an App](/apps/build/).
+
+## Runtime rules
+
+The build refuses unsupported browser references with `runtime_rule`, the file, line,
+rule id, sentence and fix. Only global references count: `dialog.confirm()` and a locally
+bound `confirm` pass. `workspace.open` checks the source before `app.save` keeps the built revision.
+
+<!-- runtime-rules:start -->
+The frame has no modals, popups, top navigation, browser storage or direct network; everything goes through the kit. Builds check new source only; stored revisions, including publishing an older revision, are unchanged. These authoring checks are not a security boundary: the sandbox and CSP remain the boundary. A declared external host permits direct network subject to the frame's CSP.
+
+- Apps cannot use browser alert, confirm, prompt or print dialogs. Use ConfirmDialog or Dialog from the kit, or an HTML `<dialog>`.
+- Apps cannot open a new window with window.open or a link with target="_blank". Use the kit's navigate or files.open.
+- Apps cannot access the parent or top frame or use postMessage directly. Use the kit's navigate and client.
+- Apps cannot use browser localStorage, sessionStorage, indexedDB or document.cookie. Use the kit's storage.get/set; keep shared records in Data Stores.
+- Apps cannot use fetch, XMLHttpRequest, WebSocket or EventSource when the manifest names no external host. Use a named action.
+<!-- runtime-rules:end -->
 
 ## Sandbox, forms and personal state
 
@@ -12,7 +28,9 @@ A form's validation and `submit` event work. Handle `submit` with `event.prevent
 and call a named action; `form-action 'none'` blocks navigation to every form target.
 Inline `onclick` and `onsubmit` attributes are refused: use `addEventListener` or React handlers.
 
-An App or unsaved preview gets a `window.localStorage`-compatible shim before its first script runs.
+New builds use the kit's storage API below. Existing stored revisions are not rebuilt or
+refused when published. For compatibility, they still get a `window.localStorage`-compatible
+shim before their first script runs.
 It reads only the current person's state in that App; it never exposes the platform's browser
 storage. The state is stored on the instance, survives reloads and App revisions, and is erased
 with the App or the person's account. Native `getItem`, `setItem`, `removeItem`, `clear`,
@@ -29,7 +47,7 @@ but this is best effort. A write is lost if the page closes before its batch is 
 An immediate reload within the batching window can also lose the write; await kit
 `storage.set` before navigating or reloading when the save must persist.
 
-Prefer the JSON API of kit **1.6.0** and later, whose save waits for persistence and rejects on failure:
+Use the JSON API of kit **1.6.0** and later, whose save waits for persistence and rejects on failure:
 
 ```ts
 import { storage } from "@work-shape/catalyst-app-kit";
