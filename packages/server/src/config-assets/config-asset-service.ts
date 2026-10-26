@@ -122,9 +122,7 @@ export function configAssetReferences(
       : {}),
     enabledToolNames,
     tools: offeredToolReferences(options, enabledToolNames),
-    unavailableTools,
-    // Compatibility for the agent editor until it consumes unavailableTools.
-    moduleOffTools: unavailableTools.map(({ name, module }) => ({ name, module }))
+    unavailableTools
   };
 }
 

@@ -82,9 +82,6 @@ export interface CreateDataSourceToolsInput {
   dataSources: DataSourceRegistry;
 }
 
-/** @deprecated Use CreateDataSourceToolsInput. */
-export type CreateDataSourceQueryToolsInput = CreateDataSourceToolsInput;
-
 const queryToolInputSchema = z.object({
   query: z
     .string()
@@ -285,9 +282,6 @@ export function createDataSourceTools(input: CreateDataSourceToolsInput): AnyToo
     ];
   });
 }
-
-/** @deprecated Query-enabled sources now expose both query and schema-description tools. */
-export const createDataSourceQueryTools = createDataSourceTools;
 
 export function assertReadOnlyQuery(query: string): void {
   const normalized = maskSqlLiteralsAndComments(query).trim().replace(/;+$/u, "").trim();
