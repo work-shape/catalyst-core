@@ -80,6 +80,9 @@ describe("command group routing", () => {
       expect.arrayContaining([
         "config pull",
         "workflow runs",
+        "workflow pull",
+        "workflow push",
+        "workflow status",
         "<kind> publish",
         "connection secret set"
       ])
