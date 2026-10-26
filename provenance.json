@@ -1,0 +1,49 @@
+{
+  "routes": [
+    "/",
+    "/build/agents",
+    "/build/connections",
+    "/build/data-stores",
+    "/build/guardrails",
+    "/build/knowledge-bases",
+    "/build/skills",
+    "/inbox",
+    "/settings/instance/access",
+    "/settings/instance/api-access",
+    "/settings/instance/audit",
+    "/settings/instance/infrastructure",
+    "/settings/instance/jobs",
+    "/settings/instance/limits",
+    "/settings/instance/modules",
+    "/settings/instance/operations",
+    "/settings/instance/usage",
+    "/settings/instance/users",
+    "/settings/instance/workspaces",
+    "/settings/workspace/general",
+    "/settings/workspace/members",
+    "/settings/workspace/usage",
+    "/settings/you/api-keys",
+    "/settings/you/confirmations",
+    "/settings/you/connect",
+    "/settings/you/connections",
+    "/settings/you/language-appearance",
+    "/settings/you/profile",
+    "/settings/you/security",
+    "/settings/you/usage",
+    "/w/{workspace}/agents",
+    "/w/{workspace}/apps",
+    "/w/{workspace}/workflows"
+  ],
+  "required": [],
+  "states": [
+    {
+      "name": "outside-settings",
+      "setup": "/private/tmp/claude-501/-Users-felixpahlke-code-catalyst/a2ce655e-be6a-4606-83fd-3c646e25be76/scratchpad/wf-outside/outside-settings.mjs"
+    }
+  ],
+  "modules": [],
+  "pr": 74,
+  "head": "bc686c7477d4f2fd5a0812067bb132c2c64bfe53",
+  "base": "d305d82570be600a10f9840b357723c4246eb2e8",
+  "tested": "bc686c7477d4f2fd5a0812067bb132c2c64bfe53"
+}
