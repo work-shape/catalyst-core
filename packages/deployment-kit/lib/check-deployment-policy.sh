@@ -42,6 +42,6 @@ bash "$kit_dir/lib/release-manifest.sh" write \
   --release staging-policy-check --images "$bake_images" > "$scratch/release-manifest.json"
 bash "$kit_dir/lib/release-manifest.sh" check "$scratch/release-manifest.json"
 
-for wiring in artifact-preview-worker agent-run-worker knowledge-worker workspace-command-worker; do
+for wiring in artifact-preview-worker agent-run-worker knowledge-worker workspace-command-worker outside-forms-host; do
   node "$kit_dir/verify/$wiring-compose.mjs"
 done

@@ -32,6 +32,10 @@ import {
   listConversationsWithActiveRun as listPostgresConversationsWithActiveRun
 } from "./postgres-conversation-list-operations";
 import { drizzle } from "drizzle-orm/postgres-js";
+import {
+  inspectCapabilityRecordsAccess,
+  type CapabilityRecordsAccess
+} from "./capability-records-access";
 import postgres, { type Notice } from "postgres";
 import type {
   CapabilityRecordStore,
@@ -101,6 +105,10 @@ export interface PostgresStores extends PlatformStores {
 
 export { createPostgresJobWorker, type CreatePostgresJobWorkerInput } from "./jobs/worker";
 export { DatabaseBehindError, migrateDatabase, type MigrateDatabaseInput } from "./migrations";
+export {
+  inspectCapabilityRecordsAccess,
+  type CapabilityRecordsAccess
+} from "./capability-records-access";
 export { READINESS_DATABASE_TIMEOUT_MS } from "./readiness";
 export { ERASED_PERSON_COPIES, KEPT_LABEL_COLUMNS } from "./postgres-account-erasure";
 
@@ -245,10 +253,16 @@ export async function createPostgresStores(
 /**
  * The capability records alone, on a connection of their own (ADR-0033): what a capability's
  * own process opens, such as the outside form's public host, which reaches no other store.
+ * `access` says what the connection's role may reach besides the records of `capability`;
+ * the process decides whether it starts with that.
  */
 export async function createPostgresCapabilityRecords(
-  options: Omit<PostgresStoresOptions, "onStatement">
-): Promise<{ records: CapabilityRecordStore; close(): Promise<void> }> {
+  options: Omit<PostgresStoresOptions, "onStatement"> & { capability: string }
+): Promise<{
+  records: CapabilityRecordStore;
+  access: CapabilityRecordsAccess;
+  close(): Promise<void>;
+}> {
   const sql = postgres(options.databaseUrl, {
     max: options.poolSize ?? 4,
     idle_timeout: 30,
@@ -256,10 +270,10 @@ export async function createPostgresCapabilityRecords(
   });
   const db = drizzle(sql, { schema });
   try {
-    await assertDatabaseMigrated(sql);
+    const access = await inspectCapabilityRecordsAccess(sql, options.capability);
+    return { records: createPostgresCapabilityRecordStore(db), access, close: () => sql.end() };
   } catch (error) {
     await sql.end();
     throw error;
   }
-  return { records: createPostgresCapabilityRecordStore(db), close: () => sql.end() };
 }
