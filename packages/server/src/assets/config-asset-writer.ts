@@ -149,8 +149,11 @@ function withRevisionFiles(
 ): MutationInput["mutations"] {
   return mutations.map((mutation) => {
     if (mutation.type !== "upsert" || mutation.fileSetId !== undefined) return mutation;
-    const hook = options.configAssets.kinds.require(mutation.kind).revisionFiles;
-    if (!hook) return mutation;
+    const kind = options.configAssets.kinds.require(mutation.kind);
+    const hook = kind.revisionFiles;
+    // A kind whose folder is a repository names the folder of every write itself: an earlier
+    // file set never says what a write of it holds.
+    if (!hook || kind.content === "repository") return mutation;
     const current =
       mutation.operation === "revert"
         ? undefined

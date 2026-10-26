@@ -172,9 +172,27 @@ export async function createInstancePageBuildJobs(input: {
 }
 
 /**
+ * Whether this instance commits to the repositories of assets: with the `apps` module on, and
+ * with `workflows` on where the instance has a `files` store, which a Workflow's folder is
+ * kept in, and the workspace command worker, which makes the commits: Execution Workspaces
+ * and a sandbox. Without either a Workflow keeps config revisions and nothing is committed.
+ * The API, which decides whether a Workflow's writes are commits, and the worker, which serves
+ * them, ask the same.
+ */
+export function commitsAssetRepos(config: ClientInstanceConfig, modules: ModuleSnapshot): boolean {
+  return (
+    modules.isEnabled("apps") ||
+    (modules.isEnabled("workflows") &&
+      config.infrastructure.objectStorage.files !== undefined &&
+      config.executionWorkspaces.enabled &&
+      config.infrastructure.sandbox !== undefined)
+  );
+}
+
+/**
  * The handlers of `asset_repo.commit` and `asset_repo.sweep` and the schedule of the sweep, for
  * the workspace command worker: the one process that reaches the sandbox, where git runs.
- * Nothing with the module off.
+ * Nothing where the instance commits to no repository.
  */
 export async function createInstanceAssetRepoJobs(input: {
   config: ClientInstanceConfig;
@@ -187,7 +205,7 @@ export async function createInstanceAssetRepoJobs(input: {
   tempRoot: string;
   logger: Logger;
 }): Promise<{ handlers: RegisteredJobHandler[]; schedules: JobSchedule[] }> {
-  if (!input.modules.isEnabled("apps")) {
+  if (!commitsAssetRepos(input.config, input.modules)) {
     return { handlers: [], schedules: [] };
   }
   return createAssetRepoJobs({

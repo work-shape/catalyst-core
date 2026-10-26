@@ -143,7 +143,9 @@ describe("the lifecycle and the representation of an asset kind", () => {
     expect(defineAssetKind({ ...base, ...files, content: "repository" }).content).toBe(
       "repository"
     );
-    expect(() => defineAssetKind({ ...base, content: "repository" })).toThrow("holds no files");
+    // A config kind holds no file set to name; its folder may be a repository (WF-GIT-1).
+    expect(() => defineAssetKind({ ...base, content: "file_set" })).toThrow("holds no files");
+    expect(defineAssetKind({ ...base, content: "repository" }).content).toBe("repository");
     expect(createAppAssetKind().content).toBe("repository");
   });
 

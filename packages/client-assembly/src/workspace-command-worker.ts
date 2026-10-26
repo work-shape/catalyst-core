@@ -43,6 +43,7 @@ import {
   resolveInstanceModules
 } from "./modules";
 import {
+  commitsAssetRepos,
   createInstanceAssetRepoJobs,
   createInstancePageBuildJobs,
   requireFilesStore
@@ -69,8 +70,8 @@ export interface CreateClientInstanceWorkspaceCommandWorkerInput {
 export interface ClientInstanceWorkspaceCommandWorker {
   readonly config: ClientInstanceConfig;
   /**
-   * The job worker that serves `workspace.command` and, with the `apps` module on, `page.bundle`
-   * and the commits and the sweep of asset repositories.
+   * The job worker that serves `workspace.command`, with the `apps` module on `page.bundle`,
+   * and the commits and the sweep of asset repositories where Apps or Workflows make them.
    */
   readonly worker: JobWorker;
   /** Starts the worker and resolves once `stop` has ended its commands. */
@@ -97,8 +98,11 @@ export async function createClientInstanceWorkspaceCommandWorker(
   // open, so a module that needs more of this worker stops the process here.
   const buildsPages = modules.isEnabled("apps");
   const runsCodeSteps = modules.isEnabled(workflowsModule.name);
+  // The saves of Apps, and of Workflows where the instance keeps their folders, are commits.
+  const commits = commitsAssetRepos(config, modules);
   assertCommandWorkerServesModuleJobKinds(modules, [
-    ...(buildsPages ? [pageBundleJob.kind, assetRepoCommitJob.kind, assetRepoSweepJob.kind] : []),
+    ...(buildsPages ? [pageBundleJob.kind] : []),
+    ...(commits ? [assetRepoCommitJob.kind, assetRepoSweepJob.kind] : []),
     ...(runsCodeSteps ? [WORKFLOW_CODE_JOB_KIND, WORKFLOW_CODE_SWEEP_JOB_KIND] : [])
   ]);
   if (buildsPages) {

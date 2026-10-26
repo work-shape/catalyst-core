@@ -40,7 +40,12 @@ export const workflowsModule = defineModule({
     WORKFLOW_CODE_JOB_KIND,
     WORKFLOW_CODE_SWEEP_JOB_KIND,
     WORKFLOW_RUN_JOB_KINDS.pruneData,
-    WORKFLOW_RUN_JOB_KINDS.deleteDatasets
+    WORKFLOW_RUN_JOB_KINDS.deleteDatasets,
+    // Every write of a Workflow is a commit of its folder, as an App's is (WF-GIT-1). The
+    // command worker serves them where the instance has a `files` store; without one a
+    // Workflow keeps config revisions and nothing is committed.
+    "asset_repo.commit",
+    "asset_repo.sweep"
   ],
   // The scripts of code steps run in the sandbox, which the command worker alone reaches.
   commandWorkerJobKinds: [WORKFLOW_CODE_JOB_KIND, WORKFLOW_CODE_SWEEP_JOB_KIND]
@@ -96,6 +101,7 @@ export {
   indexWorkflowSteps,
   parseWorkflowManifest,
   readWorkflowManifest,
+  writeWorkflowManifest,
   workflowManifestFingerprint,
   type WorkflowDefinitionIssue,
   type WorkflowDefinitionResult

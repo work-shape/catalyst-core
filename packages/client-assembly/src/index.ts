@@ -82,6 +82,7 @@ export {
   type SandboxMemoryTerm
 } from "./sandbox-memory";
 export { migrateClientInstanceDatabase } from "./migrate";
+export { commitsAssetRepos } from "./pages";
 export { createPlatformStore } from "./store";
 export {
   createEnvironmentSecrets,

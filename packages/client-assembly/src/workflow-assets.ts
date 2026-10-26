@@ -76,13 +76,15 @@ import {
 import { z } from "zod";
 import { runnerPackageManifest } from "./runner-packages";
 import { workflowPublishQuestion } from "./workflow-publish-question";
+import { WORKFLOW_REVISION_FILES } from "./workflow-folder";
 
 // A Workflow as an asset: the kind the asset operations register, and the published revisions
 // of that kind as the engine reads its definitions. A revision's config is the id of the
 // Workflow under `name`, `workflow.yaml` as an object under `manifest` and the files of its
 // `steps/` folder under `files`. The files are part of the revision, as the resources of a
 // skill are: one write stores both, a revision never changes, and whoever reads the revision
-// reads its files.
+// reads its files. Every write also keeps that folder as a file set and, where the Workflow
+// has a repository, commits it there (WF-GIT-1); the config stays what everything reads.
 
 const manifestOfConfigSchema = z.object({ manifest: z.unknown() });
 const nameOfConfigSchema = z.object({ name: z.string() });
@@ -166,6 +168,12 @@ export function createWorkflowAssetKind(
      * Workflow's source in each, in its transaction (KBW-2c).
      */
     knowledgeSources?: boolean;
+    /**
+     * Whether every write is a commit of the Workflow's folder (WF-GIT-1): where the instance
+     * keeps files and runs the worker that commits. Without it a Workflow is written as its
+     * config alone, as before.
+     */
+    repository?: boolean;
   }
 ): WorkflowAssetKind {
   const { clientInstanceId, timeZone = "UTC", now = () => new Date(), limits } = options;
@@ -269,6 +277,8 @@ export function createWorkflowAssetKind(
         use: WORKFLOW_ACTIONS.use
       },
       lifecycle: "draft_published",
+      // Every write is a commit of the Workflow's folder in its own repository (WF-GIT-1).
+      ...(options.repository ? { content: "repository" as const } : {}),
       draftCalls: true,
       validate: () => [],
       // Asked of the Workflows a write adds or changes only, and of the revision a publish
@@ -468,6 +478,8 @@ export function createWorkflowAssetKind(
         await endKnowledgeSources(stores, name, previousRevision, correlationId);
       return undefined;
     },
+    // Written as its config or as its whole folder, read as either (WF-GIT-1).
+    ...(options.repository ? { revisionFiles: WORKFLOW_REVISION_FILES } : {}),
     // The live Apps that start it stop working without it: an unpublish and a delete say so.
     liveCallerWarnings: workflowLiveCallerWarnings,
     async onUnpublish({ stores, assetId, published }) {

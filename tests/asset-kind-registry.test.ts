@@ -157,6 +157,28 @@ describe("asset kind registry", () => {
     ).toBe("draft_published");
   });
 
+  // Fails without the refusal: a config kind with no folder would ask every write for a
+  // commit of files it never stores.
+  it("refuses a config kind that keeps a repository and reads no folder", () => {
+    const committed = defineAssetKind({
+      kind: "gizmo",
+      plural: "gizmos",
+      content: "repository",
+      schema: z.object({ name: z.string() }),
+      nameRule: { pattern: /^.+$/u, description: "Gizmo name is invalid" },
+      actions: { read: "gizmo.read", write: "gizmo.write", delete: "gizmo.delete" },
+      summarize: (gizmo) => ({ name: gizmo.name, title: gizmo.name }),
+      validate: () => []
+    });
+    expect(() => createAssetKindRegistry([committed])).toThrow(
+      "Asset kind 'gizmo' keeps its config in a repository and has no folder to commit"
+    );
+    const revisionFiles = { manifestFile: "gizmo.yaml" };
+    expect(
+      createAssetKindRegistry([{ ...committed, revisionFiles }]).require("gizmo").content
+    ).toBe("repository");
+  });
+
   it("refuses a kind or a plural that is registered twice, and an unknown kind", () => {
     expect(() => createAssetKindRegistry([agentKind, skillKind, agentKind])).toThrow(
       "Asset kind 'agent' is registered more than once"

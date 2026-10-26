@@ -60,6 +60,14 @@ export async function putAsset(
     assertStoredWritable(target, "always");
     return scope.drafts.putFolder(call, target, input.files, expectedRevision);
   }
+  if (kind.revisionFiles && kind.content === "repository" && input.config !== undefined) {
+    // Every write of such a kind is a commit of its folder: the config is written as one.
+    requireMatchingConfigName(input.config, input.name);
+    requireOwnScope(target, call.access);
+    await requireExpectedRevision(scope.options, call, target, expectedRevision);
+    assertStoredWritable(target, "always");
+    return scope.drafts.putConfig(call, target, input.config, expectedRevision);
+  }
   if (input.config === undefined || input.files !== undefined) {
     throw new AppError(
       "VALIDATION_FAILED",

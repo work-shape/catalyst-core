@@ -103,6 +103,22 @@ describe("the module registry", () => {
     ).toThrow(/Module 'resources' is registered more than once/u);
   });
 
+  // Fails where a kind counts as off once any module that lists it is: with Apps off, the
+  // worker of an instance with Workflows on dropped the commits of every Workflow save.
+  it("counts a job kind two modules list as on while either is", () => {
+    const registry = createModuleRegistry(platformModules);
+    const workflowsOnly = registry.snapshot({
+      apps: { enabled: false },
+      workflows: { enabled: true }
+    });
+    for (const kind of ["asset_repo.commit", "asset_repo.sweep"]) {
+      expect(workflowsOnly.offModuleOf("jobKind", kind)).toBeUndefined();
+    }
+    expect(workflowsOnly.offModuleOf("jobKind", "page.bundle")).toBe("apps");
+    const neither = registry.snapshot({ apps: { enabled: false }, workflows: { enabled: false } });
+    expect(neither.offModuleOf("jobKind", "asset_repo.commit")).toBe("apps");
+  });
+
   it("is frozen, and so is the snapshot it resolves", () => {
     const registry = createModuleRegistry(platformModules);
     const snapshot = registry.snapshot({ resources: { enabled: true } });

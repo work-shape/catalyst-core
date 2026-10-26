@@ -161,17 +161,6 @@ export class AssetDraftWorkflow {
     const read = kind.revisionFiles?.read(name, files);
     if (!read) throw new AppError("INTERNAL", `A ${kind.kind} holds no files`);
     requireMatchingConfigName(read.config, name);
-    // A new asset's id is made here: its files are stored under it before its row exists.
-    const assetId = target.asset?.id ?? createPlatformId("cfga");
-    const fileSet = await storeRevisionFiles(this.options, {
-      kind,
-      assetId,
-      files,
-      extras: read.extras,
-      ...(isAuthenticatedServicePrincipal(call.actor)
-        ? {}
-        : { createdByUserId: asUserId(getSubjectUserId(call.actor)) })
-    });
     // What the event of the write says of the files: each by its path and hash, no content.
     const entries = files
       .map((file) => ({
@@ -180,20 +169,116 @@ export class AssetDraftWorkflow {
         bytes: file.bytes.byteLength
       }))
       .sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0));
+    const { written, fileSet } = await this.writeFolder(call, target, {
+      ...read,
+      files,
+      expectedRevision,
+      auditFiles: entries,
+      warningFiles: files
+    });
+    return { ...written, ...(fileSet ? { fileSetId: fileSet.id } : {}), files: entries };
+  }
+
+  /**
+   * The write of the config alone of a kind whose folder is a repository (WF-GIT-1): the
+   * folder is the config written out, so the write is the write of that folder, committed as
+   * any other. The config is stored as it was sent, after the kind's own preparation of an
+   * interactive save, so the folder says what the revision says. Its caller has asked the
+   * right, the owner and the expected revision.
+   */
+  async putConfig(
+    call: AssetCall,
+    target: AssetTarget,
+    sent: Record<string, unknown>,
+    expectedRevision: number | null
+  ) {
+    const { kind } = target;
+    const hook = kind.revisionFiles;
+    if (!hook) throw new AppError("INTERNAL", `A ${kind.kind} holds no files`);
+    const config = kind.prepareInteractiveUpsert({
+      current: target.asset?.status === "active" ? target.asset.config : undefined,
+      next: sent,
+      principalId: call.actor.id
+    });
+    const { written } = await this.writeFolder(call, target, {
+      config,
+      // A config the kind's schema refuses has no folder: the write refuses it as before.
+      files: hook.filesOfConfig(config),
+      extras: [],
+      expectedRevision
+    });
+    return written;
+  }
+
+  /**
+   * Stores the folder of one write as a file set of the asset, commits it where the asset's
+   * files are a repository, and writes the revision that names both. A new asset of such a
+   * kind starts its repository with this write; one whose draft names no commit, from before
+   * its kind had a repository, gets the file set and no commit until it is adopted. A write
+   * that is refused, or a commit that is not made, leaves no file set; a commit whose
+   * revision is refused stays a pending bundle, which the sweeper removes.
+   */
+  private async writeFolder(
+    call: AssetCall,
+    target: AssetTarget,
+    write: {
+      config: Record<string, unknown>;
+      files: readonly { path: string; bytes: Uint8Array }[];
+      extras: readonly string[];
+      expectedRevision: number | null;
+      /** What the event of a folder write names of its files. */
+      auditFiles?: readonly { path: string; sha256: string; bytes: number }[];
+      /** The files of a folder write, for the kind's warnings alone. */
+      warningFiles?: readonly { path: string; bytes: Uint8Array }[];
+    }
+  ) {
+    const { kind, name } = target;
+    // A new asset's id is made here: its files are stored under it before its row exists.
+    const assetId = target.asset?.id ?? createPlatformId("cfga");
+    const fileSet =
+      write.files.length === 0
+        ? undefined
+        : await storeRevisionFiles(this.options, {
+            kind,
+            assetId,
+            files: write.files,
+            extras: write.extras,
+            ...(isAuthenticatedServicePrincipal(call.actor)
+              ? {}
+              : { createdByUserId: asUserId(getSubjectUserId(call.actor)) })
+          });
     try {
+      const repository = fileSet
+        ? await this.commit(call, target, {
+            assetId,
+            fileSet,
+            ...(target.asset === undefined ? { firstCommit: `Create ${kind.kind} '${name}'` } : {})
+          })
+        : undefined;
       // The config names the files it does not hold, from the rows of the file set.
-      const config = kind.revisionFiles?.indexed(toJsonObject(read.config), fileSet) ?? read.config;
+      const config =
+        kind.revisionFiles?.indexed(toJsonObject(write.config), fileSet) ?? write.config;
       const written = await this.host.upsert(call, target, config, {
-        expectedRevision,
+        expectedRevision: write.expectedRevision,
         audit: "config_asset.updated",
-        auditFiles: entries,
-        warningFiles: files,
-        ...(fileSet ? { fileSet: { assetId, fileSetId: fileSet.id } } : {})
+        ...(write.auditFiles ? { auditFiles: write.auditFiles } : {}),
+        ...(write.warningFiles ? { warningFiles: write.warningFiles } : {}),
+        ...(fileSet ? { fileSet: { assetId, fileSetId: fileSet.id } } : {}),
+        ...(repository ? { repository } : {})
       });
-      return { ...written, ...(fileSet ? { fileSetId: fileSet.id } : {}), files: entries };
+      return { written, fileSet };
     } catch (error) {
       if (fileSet) {
         await removeUnnamedAssetFileSet(this.options, assetId, fileSet.id).catch(() => undefined);
+      }
+      // Another save moved the draft while this one was committed on it: the caller read a
+      // revision that is not the draft any more, which is answered as every stale write is.
+      if (isAppError(error) && error.code === "CONFLICT" && reasonOf(error) === "draft_moved") {
+        throw await revisionConflictOf(
+          this.options,
+          call.access,
+          await this.host.target(target.address)
+        );
       }
       throw error;
     }
@@ -819,6 +904,14 @@ function publishAction(kind: WorkflowAssetKind): string {
     );
   }
   return publish;
+}
+
+/** The fixed reason an error's details name, where they name one. */
+function reasonOf(error: { details?: unknown }): unknown {
+  const { details } = error;
+  return typeof details === "object" && details !== null && "reason" in details
+    ? details.reason
+    : undefined;
 }
 
 /** Where an asset enforces, as its audit names it: the instance or one workspace. */

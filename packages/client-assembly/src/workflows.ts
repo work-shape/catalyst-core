@@ -1,5 +1,6 @@
 import type { StorePage } from "@work-shape/catalyst-core";
 import { outboundMailOf } from "./mail";
+import { commitsAssetRepos } from "./pages";
 import {
   workflowsConfigSchema,
   type ClientInstanceConfig
@@ -328,6 +329,8 @@ export const assembleWorkflows: ModuleSeam = ({ config, modules, clientInstanceI
               registry: () => registry,
               runs: () => runs,
               knowledgeSources: modules.isEnabled("knowledge"),
+              // Every write is a commit where the instance makes commits (WF-GIT-1).
+              repository: commitsAssetRepos(config, modules),
               mailSend: {
                 registered: outboundMailOf(config) !== undefined,
                 recipientDomains: outboundMailOf(config)?.outbound.recipientDomains ?? []

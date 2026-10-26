@@ -1,5 +1,6 @@
 import {
   createAppAssetKind,
+  createAssetRepoCommitClient,
   createNotices,
   registerMailSendOperation
 } from "@work-shape/catalyst-server";
@@ -27,6 +28,7 @@ import type {
   JobSchedule,
   JobWorker,
   ModuleSnapshot,
+  ObjectStorage,
   PlatformEventEmitter,
   PlatformStores,
   OperationRegistry,
@@ -310,6 +312,11 @@ export async function workflowFixture(
     events?: (stores: PlatformStores) => PlatformEventEmitter;
     /** Personal API keys on: a request with an access token acts as the key's owner. */
     personalKeys?: true;
+    /**
+     * The instance's `files` store: a write of a Workflow keeps its folder there and commits it
+     * with the job `asset_repo.commit`, which a worker of the test serves (WF-GIT-1).
+     */
+    files?: ObjectStorage;
     /** Module needed to project platform asset tools through the real agent runner. */
     publishTool?: true;
     /** The kind `app` registered, for Apps whose actions start Workflows. */
@@ -349,6 +356,8 @@ export async function workflowFixture(
     runs: () => workflows,
     runnerPackages: options.runnerPackages ?? [],
     limits: { ceilings, stepSlots: options.stepSlots ?? 4 },
+    // Where the instance keeps files, its writes are commits (WF-GIT-1).
+    ...(options.files ? { repository: true } : {}),
     ...(options.now ? { now: options.now } : {}),
     ...(options.timeZone === undefined ? {} : { timeZone: options.timeZone }),
     ...(options.mail
@@ -396,6 +405,14 @@ export async function workflowFixture(
           const server = {
             ...connectionOptions.server?.(stores, config, kinds),
             ...(options.personalKeys ? personalKeyServer(stores) : {}),
+            ...(options.files
+              ? {
+                  pages: {
+                    objects: options.files,
+                    assetRepo: createAssetRepoCommitClient({ stores, pollIntervalMs: 20 })
+                  }
+                }
+              : {}),
             ...(options.mail ? { mailSenders: ["system"] } : {})
           };
           if (!server.operationCalls) throw new Error("The instance built no call path");
