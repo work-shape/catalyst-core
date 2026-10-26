@@ -10,6 +10,18 @@ export const refusals = defineTranslations({
     "refusals.dataStoreUnavailable": "There is no data store “{dataStore}” here (any more).",
     "refusals.dataStoreNotListed":
       "The action “{action}” uses the data store “{dataStore}”, which the app does not list. Ask the agent to add it to the app.",
+    "refusals.dataStoreNamedTwice":
+      "The data store “{dataStore}” is named twice. Open the dialog again.",
+    "refusals.dataStoreNotReached":
+      "The app does not use the data store “{dataStore}”, so it is not published with it. Open the dialog again to see what goes live.",
+    "refusals.dataStoreDraftBelowMinSchema":
+      "The app needs a newer version of the data store “{dataStore}” than its draft has. Ask the agent to extend the data store.",
+    "refusals.dataStoreMigrationFailed":
+      "The change “{migration}” to the data store “{dataStore}” could not be applied. The app is not published.",
+    "refusals.dataStoreMigrationFailedUnnamed":
+      "A change to the data store “{dataStore}” could not be applied. The app is not published.",
+    "refusals.dataStoreMigrating":
+      "The data store “{dataStore}” is still being updated. Try again in a minute.",
     "refusals.dataStoreNotReady": "The data store is not ready yet. Try again in a moment.",
     "refusals.dataStoreKeyReused":
       "The app sent this change twice with different content. Reload the app and try again.",
@@ -86,6 +98,18 @@ export const refusals = defineTranslations({
     "refusals.dataStoreUnavailable": "Den Datenspeicher „{dataStore}“ gibt es hier nicht (mehr).",
     "refusals.dataStoreNotListed":
       "Die Aktion „{action}“ nutzt den Datenspeicher „{dataStore}“, den die App nicht angibt. Bitte den Agenten, ihn in der App einzutragen.",
+    "refusals.dataStoreNamedTwice":
+      "Der Datenspeicher „{dataStore}“ ist doppelt genannt. Öffne den Dialog noch einmal.",
+    "refusals.dataStoreNotReached":
+      "Die App nutzt den Datenspeicher „{dataStore}“ nicht, darum wird er nicht mit ihr veröffentlicht. Öffne den Dialog noch einmal, um zu sehen, was live geht.",
+    "refusals.dataStoreDraftBelowMinSchema":
+      "Die App braucht eine neuere Fassung des Datenspeichers „{dataStore}“, als sein Entwurf hat. Bitte den Agenten, den Datenspeicher zu ergänzen.",
+    "refusals.dataStoreMigrationFailed":
+      "Die Änderung „{migration}“ am Datenspeicher „{dataStore}“ ließ sich nicht anwenden. Die App ist nicht veröffentlicht.",
+    "refusals.dataStoreMigrationFailedUnnamed":
+      "Eine Änderung am Datenspeicher „{dataStore}“ ließ sich nicht anwenden. Die App ist nicht veröffentlicht.",
+    "refusals.dataStoreMigrating":
+      "Der Datenspeicher „{dataStore}“ wird noch umgestellt. Versuche es in einer Minute noch einmal.",
     "refusals.dataStoreNotReady":
       "Der Datenspeicher ist noch nicht bereit. Versuche es gleich noch einmal.",
     "refusals.dataStoreKeyReused":

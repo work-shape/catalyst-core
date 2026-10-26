@@ -8,6 +8,7 @@ import {
 } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../../shared/i18n";
 import { tellRefusal } from "../../shared/i18n/refusals";
+import { RefusalNotice } from "../refusal-notice";
 import { RunStateBadge } from "../workflows/workflows-frame";
 import type {
   AppPublishNamed,
@@ -15,6 +16,7 @@ import type {
   AppPublishTogetherStore,
   AppPublishTogetherWorkflow
 } from "./app-data";
+import { useAppsHost } from "./apps-host";
 
 // "Published with it" in an App's Publish question (DP-3, GOLIVE-1): the Workflows with
 // changes their live revision does not have, children first, and then the Data Stores whose
@@ -44,8 +46,9 @@ export function AppPublishTogetherView({ read }: { read: AppPublishTogetherRead 
   if (read.status === "ready" && read.workflows.length === 0 && read.dataStores.length === 0) {
     return null;
   }
+  // Stacked: each store and Workflow, with what would refuse it, takes the dialog's width.
   return (
-    <KeyValueList>
+    <KeyValueList layout="stacked">
       <TogetherLine read={read} />
     </KeyValueList>
   );
@@ -65,7 +68,7 @@ function TogetherLine({ read }: { read: AppPublishTogetherRead }) {
           </Button>
         </span>
       ) : (
-        <ul className="grid gap-2" data-testid="app-publish-together">
+        <ul className="grid w-full min-w-0 gap-2" data-testid="app-publish-together">
           {read.workflows.map((workflow) => (
             <TogetherItem key={workflow.name} workflow={workflow} />
           ))}
@@ -124,6 +127,7 @@ function TogetherItem({ workflow }: { workflow: AppPublishTogetherWorkflow }) {
 /** A Data Store published with the App: new or changed, and the changes to its tables. */
 function TogetherStore({ store }: { store: AppPublishTogetherStore }) {
   const { locale, t } = useTranslation();
+  const host = useAppsHost();
   const isNew = store.publishedRevision === undefined;
   const count = store.pendingMigrations.length;
   return (
@@ -151,13 +155,31 @@ function TogetherStore({ store }: { store: AppPublishTogetherStore }) {
           ) : null}
         </span>
       ) : null}
-      {store.refusals.map((refusal) => (
-        <InlineError key={`${refusal.reason}:${refusal.message}`}>
-          {refusal.reason === "data_store_draft_below_min_schema"
-            ? t("apps.publishDataStoreDraftBelowMinSchema", { title: store.title })
-            : refusal.message}
-        </InlineError>
-      ))}
+      {store.refusals.map((refusal) => {
+        // The review names the store by its row; a reason the table does not know keeps the
+        // instance's sentence. The way to the store is offered where the reader can open it.
+        const told = tellRefusal(
+          {
+            reason: refusal.reason,
+            dataStore: store.name,
+            title: store.title,
+            ...(refusal.right === undefined ? {} : { right: refusal.right })
+          },
+          t,
+          {
+            ...(host?.workspace ? { workspaceId: host.workspace.id } : {}),
+            ...(host?.canOpen ? { canOpen: host.canOpen } : {})
+          }
+        );
+        return (
+          <RefusalNotice
+            key={`${refusal.reason}:${refusal.message}`}
+            message={told?.message ?? refusal.message}
+            action={told?.action}
+            onOpen={host?.showRoute}
+          />
+        );
+      })}
     </li>
   );
 }

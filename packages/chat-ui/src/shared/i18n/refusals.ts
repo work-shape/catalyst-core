@@ -84,6 +84,19 @@ const namingRight =
     return label === undefined ? undefined : { key, values: { right: label } };
   };
 
+/**
+ * A sentence that names a store a publish carries, by the title people see where the details
+ * give one and else by its name, and each of `names` beside it.
+ */
+const namingStore =
+  (key: TranslationKey, ...names: string[]): RefusalRow["sentence"] =>
+  (details, t) => {
+    const dataStore = text(details, "title") || text(details, "dataStore");
+    return dataStore === ""
+      ? undefined
+      : naming(key, "dataStore", ...names)({ ...details, dataStore }, t);
+  };
+
 /** The store a refusal names, at its page in Build. */
 function toDataStore(details: RefusalDetails): RowAction | undefined {
   const name = text(details, "dataStore");
@@ -134,6 +147,28 @@ const DATA_STORE_ROWS = {
   },
   data_store_not_listed: {
     sentence: naming("refusals.dataStoreNotListed", "action", "dataStore"),
+    action: toDataStore
+  },
+  // A publish with an App names the store by its title. The instance's own failure text and
+  // the levels are never shown.
+  data_store_not_reached: {
+    sentence: namingStore("refusals.dataStoreNotReached"),
+    action: toDataStore
+  },
+  data_store_draft_below_min_schema: {
+    sentence: namingStore("refusals.dataStoreDraftBelowMinSchema"),
+    action: toDataStore
+  },
+  data_store_migration_failed: {
+    // A migration without a name of its own is named by its level: then it is not named.
+    sentence: (details, t) =>
+      /^\d*$/u.test(text(details, "migration"))
+        ? namingStore("refusals.dataStoreMigrationFailedUnnamed")(details, t)
+        : namingStore("refusals.dataStoreMigrationFailed", "migration")(details, t),
+    action: toDataStore
+  },
+  data_store_migrating: {
+    sentence: namingStore("refusals.dataStoreMigrating"),
     action: toDataStore
   }
 } satisfies Record<DataStoreRefusal, RefusalRow>;
@@ -219,6 +254,10 @@ const REFUSALS: Readonly<Record<string, RefusalRow>> = {
   ...APP_WORKFLOW_ROWS,
   workflow_not_reached: { sentence: naming("refusals.workflowNotReached", "workflow") },
   workflow_named_twice: { sentence: naming("refusals.workflowNamedTwice", "workflow") },
+  data_store_named_twice: {
+    sentence: naming("refusals.dataStoreNamedTwice", "dataStore"),
+    action: toDataStore
+  },
   workflows_without_app: { sentence: plain("refusals.workflowsWithoutApp") },
   ...Object.fromEntries(
     WORKFLOW_DEFINITION_REASONS.map((reason) => [
