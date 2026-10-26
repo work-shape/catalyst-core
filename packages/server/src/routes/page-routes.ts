@@ -52,7 +52,7 @@ const pageNotFound = () => new AppError("NOT_FOUND", "Page is not available");
 
 export function registerPageRoutes(route: Route, options: ResolvedChatServerOptions): void {
   const conversations = new ConversationWorkflow(options);
-  const frameAncestors = normalizeAllowedOrigins(options.allowedOrigins);
+  const interfaceOrigins = normalizeAllowedOrigins(options.allowedOrigins);
 
   function contentKey(): Uint8Array {
     if (!options.pages?.contentKey) {
@@ -301,7 +301,7 @@ export function registerPageRoutes(route: Route, options: ResolvedChatServerOpti
       viewerId: checked.claims.viewerId
     });
     void reply.headers(
-      appContentHeaders(frameAncestors, {
+      appContentHeaders(interfaceOrigins, {
         pageScriptHash: shell.pageScriptHash,
         outsideHosts: outsideHosts.allowed
       })

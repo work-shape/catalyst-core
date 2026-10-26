@@ -96,8 +96,9 @@ describe("the reference an instance serves", () => {
     const page = await instance.call("docs.get", {}, asCaller());
     expect(page.headers["content-type"]).toBe("text/html; charset=utf-8");
     expect(page.headers["content-security-policy"]).toMatch(
-      /^default-src 'none'; style-src 'sha256-[A-Za-z0-9+/=]+'; /u
+      /^default-src 'none'; style-src 'sha256-[A-Za-z0-9+/=]+'; .*; frame-ancestors 'none'$/u
     );
+    expect(page.headers["x-frame-options"]).toBe("DENY");
     expect(page.body).toContain(`href="${apiOperations["openapi.get"].path}" download`);
     // No script, no image, no stylesheet and no font: one style element is all the page has.
     expect(page.body).not.toMatch(/<script|<link|<img|<iframe|\ssrc=|url\(|@import/iu);
