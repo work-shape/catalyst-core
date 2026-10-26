@@ -23,6 +23,7 @@ import {
 } from "../assets/asset-placement";
 import { publishPolicyFloor } from "../approvals/publish-approval";
 import { AssetWorkflow } from "../assets/asset-service";
+import { adoptAssetRepositories } from "../assets/asset-repo-adoption";
 import { AppPublishTogether } from "../apps/app-publish-together";
 
 import { ConfigAssetWorkflow } from "../config-assets/config-asset-service";
@@ -69,6 +70,13 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
     policyTargets: (input) => workflow.syncPolicyTargets(input),
     bodyLimitBytes: ASSET_SYNC_BODY_MAX_BYTES,
     execute: (input, context) => workflow.checkSync(context, input)
+  });
+
+  // The registry asks the release right on the instance; the operation reaches every
+  // workspace, so its answer names no asset.
+  route.operation(apiOperations["assets.adopt_repository"], {
+    execute: ({ kind, ...input }, context) =>
+      adoptAssetRepositories(options, context, { kind, ...input })
   });
 
   route.operation(apiOperations["assets.set_default"], {

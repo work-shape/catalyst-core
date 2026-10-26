@@ -298,7 +298,7 @@ export interface AssetRepoSourceFile {
 /**
  * What a save asks of the worker that reaches the sandbox: the files of the folder as they
  * were when the save began, the commit they were written from and who the ledger names as
- * the author. It holds no bytes. The time of the commit is the save's.
+ * the author. It holds no bytes. The time of the commit is the save's, unless it names one.
  */
 export interface AssetRepoCommitRequest {
   /** The store the files lie in: the `files` store or the one of the Execution Workspaces. */
@@ -310,6 +310,11 @@ export interface AssetRepoCommitRequest {
   author: string;
   /** One line, made by the caller from what the ledger knows. */
   message: string;
+  /**
+   * The time the commit carries, in whole seconds since the epoch, where it is not the time of
+   * the save: the adoption of a revision commits at the time the revision was written.
+   */
+  time?: number;
 }
 
 /**
@@ -708,6 +713,36 @@ export interface ConfigAssetStore {
     assetId: string;
     includeSuperseded?: true;
   }): Promise<AssetRepoBundle[]>;
+  /**
+   * The assets of one kind, in every scope and of every status, of which a revision names no
+   * commit: what the adoption of their repositories walks (WF-GIT-2), in the order of their
+   * ids, after `after`. With `name`, only the asset of that name.
+   */
+  listAssetsWithoutCommits(input: {
+    clientInstanceId: ClientInstanceId;
+    kind: ConfigAssetKind;
+    name?: string;
+    after?: string;
+    limit: number;
+  }): Promise<{ id: string; name: string }[]>;
+  /**
+   * Fills a revision of an asset that was written before its kind had a repository, under the
+   * lock every write of an asset takes: its file set where it names none, and its commit and
+   * tree. The commit stands on the commit of the revision before it, which must be
+   * `repository.baseCommit`; the first revision starts the repository. The pending bundle of
+   * the save becomes part of the repository as for any write (`insertRepoWrites`). A deletion
+   * names no new commit and keeps the one before it, as its tombstone does. A revision that
+   * names this commit already is answered as it is. Answers the file set the revision names.
+   */
+  fillAssetRepoRevision(input: {
+    clientInstanceId: ClientInstanceId;
+    assetId: string;
+    revision: number;
+    fileSetId?: FileSetId;
+    repository?: AssetRepoWrite;
+    /** As in `applyConfigAssetMutations`. Asked for the bundle of `repository`. */
+    repositoryObjectSize?(objectKey: string): Promise<number | undefined>;
+  }): Promise<{ fileSetId?: FileSetId }>;
   /**
    * Starts a save, or finds the one the Operation Run started before. The first call writes a
    * pending row with the time of the save; every later call of the run answers that row, so a

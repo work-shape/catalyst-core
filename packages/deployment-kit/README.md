@@ -138,6 +138,22 @@ the worker starts on the host. An entry point must start its process through
 `defineClientInstance` for this. One that ends without the line fails, and one that is still
 running after two minutes is killed and fails.
 
+## After the deploy
+
+Some releases need an operator step once their deploy is done. The deploy never runs one, and
+no process runs one at startup. Each runs on one environment at a time, with the release key of
+that instance (`CATALYST_API_KEY`, scopes `config_assets:read` and `config_assets:release`).
+On production it is the operator's step, authorized per deploy.
+
+- **Adopt Workflows into repositories** (WF-GIT-2), once on each instance whose Workflows'
+  writes are commits (`modules.workflows.enabled`, a `files` store and the workspace command
+  worker), after the first deploy of a release with it:
+  `catalyst workflow adopt --all --instance <url>`. Every revision of a Workflow written before
+  gets one commit, oldest first, made by the workspace command worker. It answers asset ids and
+  counts, never a name, prints progress as it goes, and goes on where it stopped when run again.
+  A refused Workflow is listed by its id; the API's log names the revision and why. Rehearse it
+  on a copy of the staging database first.
+
 ## Deployments that install released packages
 
 `package.json` names every `@work-shape/catalyst-*` package at one exact release version, the

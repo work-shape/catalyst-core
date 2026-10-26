@@ -52,7 +52,13 @@ function parseCommandLine(args: string[]) {
   const parsed = parseArgs({ args, options: OPTIONS, allowPositionals: true, strict: true });
   return {
     ...parsed,
-    values: { files: false, personal: false, none: false, ...parsed.values } satisfies Values
+    values: {
+      files: false,
+      personal: false,
+      none: false,
+      all: false,
+      ...parsed.values
+    } satisfies Values
   };
 }
 
@@ -157,7 +163,7 @@ export async function runAssetCommand(
     if (verb.named && name === "") throw new UsageError(`Usage: catalyst ${noun} ${verb.usage}`);
     if (
       extra.length > (verbName === "pull" ? 1 : 0) ||
-      (!verb.named && verbName !== "set-default" && name !== "")
+      (!verb.named && verbName !== "set-default" && verbName !== "adopt" && name !== "")
     ) {
       throw new UsageError(`Unexpected argument '${extra[0] ?? name}'.`);
     }

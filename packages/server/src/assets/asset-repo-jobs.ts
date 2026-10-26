@@ -298,8 +298,9 @@ export function createAssetRepoJobs(options: AssetRepoJobsOptions): {
       request: {
         base: request.baseCommit,
         author: request.author,
-        // The time of the save, which every attempt of its run reads from its row.
-        time: Math.floor(Date.parse(save.savedAt) / 1000),
+        // The time the request names, or the time of the save, which every attempt of its run
+        // reads from its row.
+        time: request.time ?? Math.floor(Date.parse(save.savedAt) / 1000),
         message: request.message
       },
       files,
