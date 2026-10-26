@@ -88,6 +88,15 @@ export interface AuthenticatedUser {
    */
   keyScopes?: readonly string[];
   /**
+   * On the tester of a Workflow test run that a personal API key started: that key's scopes.
+   * The run acts with the tester's rights, which these do not narrow as `keyScopes` would; they
+   * are asked only where a Connection's data would reach the key, so a Connection operation
+   * of the run needs exposure `outside` and the scope `connection.use` as a direct call of the
+   * key does (connections-and-secrets.md, Exposure to outside clients). Set by the engine from
+   * the stored key, never from a request.
+   */
+  outsideKeyScopes?: readonly string[];
+  /**
    * Whether a person signed in with a password has a second factor (TWO-FACTOR-1). Set only by
    * the password sign-in's adapter; absent for every other way in.
    */

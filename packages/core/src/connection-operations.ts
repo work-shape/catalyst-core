@@ -11,6 +11,7 @@ import {
   type ConnectorOperationDescriptor
 } from "./connections";
 import { AppError, isAppError, type AppErrorCode } from "./errors";
+import { isAuthenticatedServicePrincipal, type AuthenticatedIdentity } from "./identity";
 import type { OperationOrigin } from "./operations";
 
 // What an accepted operation of a Connection is called, who may reach it from where, what a
@@ -80,6 +81,28 @@ export function exposureOfOrigin(origin: OperationOrigin): ConnectionExposure | 
     case "schedule":
       return undefined;
   }
+}
+
+/**
+ * Whether a call is an outside client's: it came over an API credential (origin `cli` or
+ * `mcp`), or it is made for a person's API key from any origin, as a step of a test run the key
+ * started is. What such a call answers leaves the instance for a computer the instance does
+ * not control, so a Connection's data reaches it only through an operation exposed to
+ * `outside` (connections-and-secrets.md, Exposure to outside clients).
+ */
+export function isOutsideCall(actor: AuthenticatedIdentity, origin: OperationOrigin): boolean {
+  if (exposureOfOrigin(origin) === "outside") return true;
+  return !isAuthenticatedServicePrincipal(actor) && actor.delegatedActor?.kind === "api_key";
+}
+
+/**
+ * The scopes of the personal key an outside call is made for, where it is made for one: the
+ * key of the request, or the key that started the test run the call is a step of. Nothing for
+ * a service principal, which has no key scopes, and for a person's own session.
+ */
+export function outsideKeyScopesOf(actor: AuthenticatedIdentity): readonly string[] | undefined {
+  if (isAuthenticatedServicePrincipal(actor)) return undefined;
+  return actor.keyScopes ?? actor.outsideKeyScopes;
 }
 
 /**

@@ -11,6 +11,7 @@ import {
   appWorkflowRefusalError,
   isAppError,
   isAuthenticatedServicePrincipal,
+  isOutsideCall,
   type ActorAccess,
   type AuthenticatedIdentity,
   type ConfigAssetRecord,
@@ -37,6 +38,10 @@ import type { AppWorkflow } from "./app-service";
 type Refusal = AppPublishReview["app"]["refusals"][number];
 type ReviewItem = AppPublishReview["app"];
 
+/** Why a service principal or an API key is refused a try of an App's draft. */
+const TRY_NEEDS_A_PERSON =
+  "Trying an App's draft needs a person signed in to the app; API keys cannot use it";
+
 /** How many of a Workflow's newest runs the review looks through for its last test run. */
 const RECENT_RUNS_READ = 50;
 
@@ -61,13 +66,13 @@ export class AppDraftTries {
     caller: { access: ActorAccess; actor: AuthenticatedIdentity; origin: OperationOrigin },
     app: string
   ): Promise<OperationAuthorization> {
-    if (isAuthenticatedServicePrincipal(caller.actor)) {
-      return {
-        allowed: false,
-        action: APP_ACTIONS.write,
-        reason: "no_grant",
-        message: "Only a person tries the draft of an App"
-      };
+    if (
+      isAuthenticatedServicePrincipal(caller.actor) ||
+      isOutsideCall(caller.actor, caller.origin)
+    ) {
+      // A key cannot call an App action: what the action reads would leave the instance
+      // through an operation that is exposed to Apps, not to outside clients.
+      return { allowed: false, reason: "user_only", message: TRY_NEEDS_A_PERSON };
     }
     const asset = await this.app(app);
     const decision = decide(
@@ -89,8 +94,13 @@ export class AppDraftTries {
     input: { app: string; action: string; input: Record<string, unknown> }
   ): Promise<AppTryActionResult> {
     const { actor, access, origin } = context;
-    if (isAuthenticatedServicePrincipal(actor)) {
-      throw new AppError("FORBIDDEN", "Only a person tries the draft of an App");
+    if (isAuthenticatedServicePrincipal(actor) || isOutsideCall(actor, origin)) {
+      throw new AppError(
+        "FORBIDDEN",
+        TRY_NEEDS_A_PERSON,
+        { reason: "user_only" },
+        { exposeMessage: true }
+      );
     }
     await this.requireSubject(input.app, origin);
     const caller = { user: actor, access };
