@@ -1,4 +1,4 @@
-import type { ReasoningEffortConfig } from "@work-shape/catalyst-core";
+import { isRecord, type ReasoningEffortConfig } from "@work-shape/catalyst-core";
 import type { ModelProviderContinuation } from "../types";
 import type { BedrockEffort, BedrockMessagesRequest, BedrockThinkingBlock } from "./bedrock-wire";
 
@@ -143,8 +143,4 @@ export function toBedrockContinuation(
   const turns: BedrockThinkingTurn[] =
     thought && toolCallIds.length > 0 ? [...kept, { toolCallIds, blocks: [...answer] }] : [...kept];
   return turns.length > 0 ? { providerId, state: { kind: CONTINUATION_KIND, turns } } : undefined;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
 }

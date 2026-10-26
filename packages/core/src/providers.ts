@@ -1,3 +1,4 @@
+import { isRecord } from "./json";
 import {
   providerRegionSchema as modelRegionSchema,
   PROVIDER_CHECK_ERROR_CLASSES,
@@ -409,8 +410,4 @@ function readRegion(
 /** A startup failure in the `infrastructure` section. The message names the field, no value. */
 export function infrastructureError(field: string, reason: string): AppError {
   return new AppError("VALIDATION_FAILED", `'${field}' ${reason}`, { field });
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

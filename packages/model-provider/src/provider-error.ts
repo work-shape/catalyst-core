@@ -1,3 +1,4 @@
+import { isRecord } from "@work-shape/catalyst-core";
 import { boundProviderMessage } from "./model-provider-error";
 
 export function readProviderErrorMetadata(
@@ -58,8 +59,4 @@ function retryAfter(value: string | null | undefined): { retryAfterMs?: number }
     ? Number(text) * 1000
     : Date.parse(text) - Date.now();
   return Number.isFinite(retryAfterMs) ? { retryAfterMs: Math.max(0, retryAfterMs) } : {};
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
 }

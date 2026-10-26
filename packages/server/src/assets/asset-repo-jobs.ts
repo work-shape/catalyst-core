@@ -7,6 +7,7 @@ import {
   ASSET_REPO_MAX_TREE_BYTES
 } from "@work-shape/catalyst-asset-repo";
 import {
+  isRecord,
   assetObjectPrefix,
   assetRepoBundleObjectKey,
   defineJobHandler,
@@ -574,8 +575,4 @@ export function createAssetRepoCommitClient(
       }
     }
   };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

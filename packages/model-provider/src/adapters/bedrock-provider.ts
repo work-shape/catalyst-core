@@ -1,5 +1,6 @@
 import { BEDROCK_REGION, bedrockProfileRefusal } from "@work-shape/catalyst-asset-schemas";
 import {
+  isRecord,
   AppError,
   type ProviderCheckContext,
   type ProviderCheckResult
@@ -502,8 +503,4 @@ function parseJson(text: string): unknown {
 /** Only a bounded identifier of a known field crosses the provider boundary. */
 function identifier(value: unknown): string | undefined {
   return typeof value === "string" && /^[a-zA-Z0-9_.:-]{1,128}$/u.test(value) ? value : undefined;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
