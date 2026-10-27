@@ -24,6 +24,7 @@ import {
   personalKeyActionOffer,
   personalKeyDraftProblem,
   personalKeyExpiryOf,
+  personalKeyInstanceOffer,
   personalKeyRequest,
   personalKeyUseOffer,
   personalKeyScopeParts,
@@ -56,6 +57,7 @@ const now = new Date("2026-10-13T12:00:00.000Z");
 const cliOffer = {
   actions: ["agent.read", "agent.write"],
   useActions: [],
+  instanceActions: [],
   setupActions: [],
   workspaces: [],
   settled: true
@@ -130,6 +132,42 @@ describe("personal API key model", () => {
         useActions: ["connection.use", "workflow.use"]
       })
     ).toEqual(["agent.read", "agent.write", "workflow.use"]);
+  });
+
+  it("offers system.view as the instance level only to a person who holds it, and never ticks it for `catalyst setup`", () => {
+    expect(personalKeyInstanceOffer(undefined)).toEqual([]);
+    expect(personalKeyInstanceOffer(platformContext())).toEqual([]);
+    const holder: PlatformContext = {
+      ...platformContext(),
+      instanceActions: ["agent.read", "system.view"],
+      authoringActions: ["agent.read", "system.view"]
+    };
+    expect(personalKeyInstanceOffer(holder)).toEqual(["system.view"]);
+    // It is a level of its own, not an authoring action, and setup starts without it.
+    expect(personalKeyActionOffer(holder)).not.toContain("system.view");
+    expect(setupKeyActions(holder)).toEqual(["agent.read"]);
+  });
+
+  it("sends system.view only on a key over the whole instance, never narrowed to a workspace or asset", () => {
+    const everywhere = { workspaceId: "", assetName: "" };
+    expect(buildPersonalKeyScopes(["agent.read", "system.view"], everywhere)).toEqual([
+      "agent.read",
+      "system.view"
+    ]);
+    expect(
+      buildPersonalKeyScopes(["agent.read", "system.view"], {
+        ...everywhere,
+        workspaceId: "ws-tax"
+      })
+    ).toEqual(["agent.read:ws-tax"]);
+    expect(
+      buildPersonalKeyScopes(["system.view"], { workspaceId: "ws-tax", assetName: "vat-helper" })
+    ).toEqual([]);
+    const draft = { ...initialPersonalKeyDraft("laptop"), actions: ["system.view"] };
+    expect(personalKeyRequest(draft, now)?.scopes).toEqual(["system.view"]);
+    // Narrowed, a key of system.view alone has no scope left to send.
+    expect(personalKeyDraftProblem({ ...draft, workspaceId: "ws-tax" })).toBe("scopes");
+    expect(personalKeyRequest({ ...draft, workspaceId: "ws-tax" }, now)).toBeUndefined();
   });
 
   it("reads whether the CLI's setup asked for the use level", () => {
@@ -868,6 +906,124 @@ describe("You > API keys, for a person and an admin alike", () => {
       expect(confirmed).toEqual([
         expect.objectContaining({ scopes: ["agent.write", "skill.write"] })
       ]);
+    } finally {
+      await mounted.unmount();
+    }
+  });
+
+  it("a new key offers system.view unticked to a person who holds it and posts it once ticked", async () => {
+    const posted: unknown[] = [];
+    const answer: typeof fetch = async (input, init) => {
+      const request = new Request(input, init);
+      const path = new URL(request.url).pathname;
+      if (path !== apiOperations["me.api_keys.list"].buildPath({})) {
+        return Response.json({ ...platformContext(), instanceActions: ["system.view"] });
+      }
+      if (request.method !== "POST") return Response.json({ items: [] });
+      posted.push(await request.json());
+      return Response.json({ error: { code: "FORBIDDEN", message: "Forbidden" } }, { status: 403 });
+    };
+    const mounted = await mountPage(
+      settingsPageContext(createApiClient({ baseUrl: SETTINGS_INSTANCE_URL, fetchImpl: answer })),
+      "en",
+      createElement(ApiKeysPage)
+    );
+    try {
+      await waitForText(mounted.container, "No personal API keys yet.");
+      await act(async () => {
+        buttonNamed("New key").click();
+      });
+      const dialog = required(document.querySelector<HTMLElement>("dialog[open]"));
+      await waitForText(dialog, "View the System pages");
+      const name = required(dialog.querySelector<HTMLInputElement>("input"));
+      await act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(
+          name,
+          "models-check"
+        );
+        name.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      expect(scopeBox(dialog, "View the System pages").getAttribute("aria-checked")).toBe("false");
+      expect(buttonNamed("Create key", dialog).disabled).toBe(true);
+      await act(async () => {
+        scopeLabel(dialog, "View the System pages").click();
+      });
+      await act(async () => {
+        buttonNamed("Create key", dialog).click();
+      });
+      await waitForText(document.body, "You may not issue this key.");
+      expect(posted).toEqual([
+        expect.objectContaining({ name: "models-check", scopes: ["system.view"] })
+      ]);
+    } finally {
+      await mounted.unmount();
+    }
+  });
+
+  it("a connect code for `catalyst setup` offers system.view unticked, sends it once ticked, and drops it when a workspace narrows the key", async () => {
+    const confirmed: ConfirmConnectCodeRequest[] = [];
+    const holder: PlatformContext = {
+      ...platformContext(),
+      instanceActions: ["agent.read", "system.view"],
+      authoringActions: ["agent.read"]
+    };
+    const mounted = await mountPage(
+      settingsPageContext(createApiClient({ baseUrl: SETTINGS_INSTANCE_URL, fetchImpl: fetch })),
+      "en",
+      createElement(ConnectCodeConfirm, {
+        code: "BCDF-GHJK",
+        request: {
+          clientLabel: "catalyst CLI",
+          createdAt: "2026-10-13T11:58:00.000Z",
+          expiresAt: "2026-10-13T12:13:00.000Z"
+        },
+        offer: {
+          ...cliOffer,
+          actions: personalKeyActionOffer(holder),
+          instanceActions: personalKeyInstanceOffer(holder),
+          setupActions: setupKeyActions(holder),
+          workspaces: [{ id: "ws-tax", name: "Tax" }]
+        },
+        asksUseLevel: true,
+        pending: false,
+        onConfirm: async (body) => {
+          confirmed.push(body);
+        }
+      })
+    );
+    const confirm = async () =>
+      act(async () => {
+        required(
+          mounted.container.querySelector<HTMLButtonElement>('button[type="submit"]')
+        ).click();
+      });
+    try {
+      expect(mounted.container.textContent).toContain(
+        "Lets the key run only the read-only check of the instance's providers"
+      );
+      expect(
+        scopeBox(mounted.container, "View the System pages").getAttribute("aria-checked")
+      ).toBe("false");
+      await act(async () => {
+        scopeBox(mounted.container, "View the System pages").click();
+      });
+      await confirm();
+      expect(confirmed.at(-1)?.scopes).toEqual(["agent.read", "system.view"]);
+
+      await act(async () => {
+        required(mounted.container.querySelector<HTMLElement>('[aria-haspopup="dialog"]')).click();
+      });
+      await act(async () => {
+        required(
+          [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(
+            (option) => option.textContent === "Tax"
+          )
+        ).click();
+      });
+      // A key limited to a workspace no longer offers or carries the instance level.
+      expect(mounted.container.textContent).not.toContain("View the System pages");
+      await confirm();
+      expect(confirmed.at(-1)?.scopes).toEqual(["agent.read:ws-tax"]);
     } finally {
       await mounted.unmount();
     }

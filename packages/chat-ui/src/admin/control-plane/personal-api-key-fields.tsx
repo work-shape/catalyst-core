@@ -4,6 +4,7 @@ import { useTranslation } from "../../shared/i18n";
 import { actionLabel } from "../access/right-words";
 import {
   PERSONAL_KEY_EXPIRY_DAYS,
+  isPersonalKeyInstanceAction,
   personalKeyDraftProblem,
   personalKeyExpiryOf,
   type PersonalKeyDraft
@@ -23,12 +24,14 @@ export interface PersonalKeyWorkspace {
  * The name, the scopes and the end of a personal key: the same fields for a new key and for a
  * CLI's connect code. The scopes are actions, each named as the rights screens name it, all
  * limited to what one workspace owns where one is chosen, and within it to one asset where its
- * id is given.
+ * id is given. The instance level is offered only while no workspace is chosen, and choosing one
+ * unticks it.
  */
 export function PersonalKeyFields({
   draft,
   actions,
   useActions,
+  instanceActions = [],
   workspaces,
   onChange
 }: {
@@ -37,6 +40,8 @@ export function PersonalKeyFields({
   actions: readonly string[];
   /** The use level offered, in order: the use rights the person holds. */
   useActions: readonly string[];
+  /** The instance level offered: `system.view` where the person holds it. */
+  instanceActions?: readonly string[];
   /** The workspaces the key can be limited to. */
   workspaces: readonly PersonalKeyWorkspace[];
   onChange(draft: PersonalKeyDraft): void;
@@ -48,7 +53,7 @@ export function PersonalKeyFields({
   const workspaceLabel = (workspace: PersonalKeyWorkspace) =>
     workspace.name ?? t("personalApiKeys.workspacePersonal");
   const chosenWorkspace = workspaces.find((workspace) => workspace.id === draft.workspaceId);
-  const offered = [...actions, ...useActions];
+  const offered = [...actions, ...useActions, ...instanceActions];
   const toggle = (action: string) => (checked: boolean) =>
     onChange({
       ...draft,
@@ -90,6 +95,15 @@ export function PersonalKeyFields({
           {boxes(useActions)}
         </fieldset>
       ) : null}
+      {instanceActions.length > 0 && !draft.workspaceId ? (
+        <fieldset className="grid gap-2">
+          <legend className="text-label">{t("personalApiKeys.instanceLevel")}</legend>
+          <p className="text-caption text-muted-foreground">
+            {t("personalApiKeys.instanceLevelHint")}
+          </p>
+          {boxes(instanceActions)}
+        </fieldset>
+      ) : null}
       <Field label={t("personalApiKeys.workspace")} hint={t("personalApiKeys.workspaceHint")}>
         <Picker
           search={workspaces.length >= WORKSPACE_SEARCH_FROM_COUNT}
@@ -102,7 +116,16 @@ export function PersonalKeyFields({
           ]}
           value={draft.workspaceId}
           onValueChange={(workspaceId) =>
-            onChange({ ...draft, workspaceId, ...(workspaceId ? {} : { assetName: "" }) })
+            onChange({
+              ...draft,
+              workspaceId,
+              ...(workspaceId
+                ? {
+                    // A workspace narrows the key: the instance level does not go with it.
+                    actions: draft.actions.filter((action) => !isPersonalKeyInstanceAction(action))
+                  }
+                : { assetName: "" })
+            })
           }
         >
           <PickerButton

@@ -4,6 +4,7 @@ import {
   DATA_STORE_MIGRATION_OUTCOMES,
   DATA_STORE_OPERATION_PREFIX,
   LISTED_DATA_STORE_STATUSES,
+  isAuthenticatedServicePrincipal,
   type DataStoreCondition,
   type OperationDefinition
 } from "@work-shape/catalyst-core";
@@ -56,7 +57,7 @@ const dataStoreStateSchema = z.object({
   }),
   /**
    * What the last job of the store found open on the server, each with what an operator does.
-   * Empty for a reader without `system.view`.
+   * Empty for a reader without `system.view` and for personal API keys.
    */
   conditions: z.array(z.object({ code: z.enum(DATA_STORE_CONDITIONS), message: z.string() })),
   /**
@@ -136,7 +137,8 @@ export function dataStoreStateOperationName(store: string): string {
 /**
  * The read of one store's state. It needs `data_store.read` on the store and reads no row of
  * it, so a call that completes leaves no run. What the server leaves open is answered to a
- * holder of `system.view` alone.
+ * holder of `system.view` alone. A personal key's `system.view` reaches only the
+ * infrastructure check, never these server details.
  */
 export function stateOperation(store: PublishedStore, module: string): OperationDefinition {
   return {
@@ -152,6 +154,13 @@ export function stateOperation(store: PublishedStore, module: string): Operation
     module,
     timeoutMs: DATA_STORE_STATE_TIMEOUT_MS,
     execute: (_input, context) =>
-      Promise.resolve(stateOf(store, context.access.authorize(SEES_SERVER_CONDITIONS).allowed))
+      Promise.resolve(
+        stateOf(
+          store,
+          (isAuthenticatedServicePrincipal(context.actor) ||
+            context.actor.keyScopes === undefined) &&
+            context.access.authorize(SEES_SERVER_CONDITIONS).allowed
+        )
+      )
   };
 }

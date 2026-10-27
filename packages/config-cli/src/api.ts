@@ -106,8 +106,10 @@ export async function createConfigApi(options: ConfigApiOptions) {
 
   return {
     /** Any reading operation of the instance. A refusal throws as `ConfigApiError`. */
-    read: <Output>(request: (client: ApiClient) => Promise<Output>): Promise<Output> =>
-      read(sleep, () => request(client)),
+    read: <Output>(
+      request: (client: ApiClient) => Promise<Output>,
+      onRateLimitWait?: (seconds: number) => void
+    ): Promise<Output> => read(sleep, () => request(client), onRateLimitWait),
     change,
     /** The version of the instance's asset set and the name of its default agent. */
     getOverview: async (): Promise<{ version: number; defaultAgentName?: string }> => {
@@ -199,7 +201,8 @@ const MAX_RATE_LIMIT_WAIT_SECONDS = 60;
 /** A reading call. Over the rate limit it waits as long as the instance says and asks again. */
 async function read<Output>(
   sleep: (milliseconds: number) => Promise<void>,
-  request: () => Promise<Output>
+  request: () => Promise<Output>,
+  onRateLimitWait?: (seconds: number) => void
 ): Promise<Output> {
   for (let attempt = 1; ; attempt += 1) {
     try {
@@ -209,6 +212,7 @@ async function read<Output>(
       if (wait === undefined || wait > MAX_RATE_LIMIT_WAIT_SECONDS || attempt >= READ_ATTEMPTS) {
         throw toConfigApiError(error);
       }
+      onRateLimitWait?.(wait);
       await sleep(wait * 1000);
     }
   }

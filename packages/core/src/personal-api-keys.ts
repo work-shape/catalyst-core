@@ -170,11 +170,13 @@ export const PERSONAL_API_KEY_USE_ACTIONS = [
 
 /**
  * The actions a personal key can name: reading, writing, deleting and publishing what the
- * owner builds, and the use level. Approving and administering stay with a signed-in person.
+ * owner builds, the use level, and the read-only infrastructure check under `system.view`.
+ * Approving and administering stay with a signed-in person.
  */
 export const PERSONAL_API_KEY_ACTIONS: readonly PlatformAction[] = ACTIONS.filter(
   (action) =>
     /\.(read|write|delete|publish)$/u.test(action) ||
+    action === "system.view" ||
     PERSONAL_API_KEY_USE_ACTIONS.some((use) => use === action)
 );
 
@@ -211,6 +213,8 @@ export function parsePersonalApiKeyScope(scope: string): PersonalApiKeyScope | u
   const known = PERSONAL_API_KEY_ACTIONS.find((candidate) => candidate === action);
   if (known === undefined) return undefined;
   if (separator === -1) return { action: known };
+  // This scope reaches one instance check, so a workspace or asset cannot narrow it.
+  if (known === "system.view") return undefined;
   const resource = scope.slice(separator + 1);
   const slash = resource.indexOf("/");
   const workspaceId = slash === -1 ? resource : resource.slice(0, slash);
@@ -287,15 +291,18 @@ export function personalApiKeyNamesAction(scopes: readonly string[], action: str
 /**
  * The operation scopes a personal key's calls carry: reading the owner's own account, and the
  * asset operations of what its scopes read, write or publish. A key reaches no conversation,
- * no administration and none of the account's changes. The use level adds none: it counts on
- * the operations the other scopes reach, such as a Workflow's publish, which lends the rights of
- * its account, and its start. The rows of a Data Store stay out of reach until CLI-PARITY-4.
+ * no administration and none of the account's changes. `system.view` adds only the read-only
+ * infrastructure check, still subject to the owner's current right. The use level adds none:
+ * it counts on the operations the other scopes reach, such as a Workflow's publish, which
+ * lends the rights of its account, and its start. The rows of a Data Store stay out of reach
+ * until CLI-PARITY-4.
  */
 export function operationScopesOfPersonalApiKey(scopes: readonly string[]): OperationScope[] {
   const granted = new Set<OperationScope>(["me:read"]);
   for (const scope of scopes) {
     const action = parsePersonalApiKeyScope(scope)?.action;
     if (action === undefined) continue;
+    if (action === "system.view") granted.add("infrastructure:check");
     if (action.endsWith(".read")) granted.add("config_assets:read");
     if (action.endsWith(".write") || action.endsWith(".delete")) {
       granted.add("config_assets:write");

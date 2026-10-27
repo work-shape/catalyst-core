@@ -10,7 +10,7 @@ An instance calls models with your own endpoint and key: Azure OpenAI, Gemini on
 3. You deploy the release config.
 4. `catalyst models check` asks the running instance whether the provider takes the key.
 
-Whoever may change the deployment repository and deploy it may add a provider; the instance grants no right for it. The check needs a key with the right of the Infrastructure page (`system.view`). Every provider added this way processes data in the EU (`region: eu`); the command refuses another region. The [release config](/configure/release-config/#model-provider-configuration) describes every setting it writes, and [the command](/configure/cli/models/) every option.
+Whoever may change the deployment repository and deploy it may add a provider; the instance grants no right for it. The check needs a personal API key with the scope `system.view`, the right of the Infrastructure page, issued by a person who holds that right; a Service Principal's key is refused. Every provider added this way processes data in the EU (`region: eu`); the command refuses another region. The [release config](/configure/release-config/#model-provider-configuration) describes every setting it writes, and [the command](/configure/cli/models/) every option.
 
 Prices are per million tokens in the rate card's currency. Use what the provider bills you; the prices below are examples. Under a spend budget the instance refuses a model without a price, and Bedrock needs prices above zero always.
 
@@ -97,6 +97,9 @@ The fallback must be a chat binding of the release config on a provider with reg
 
 ## When something is not right
 
+- **The check answers `403`.** Your key lacks the scope `system.view`, or you do not hold the right; the CLI says the check needs both. A key issued without the scope gains none later: issue a new one under **Settings > You > API keys**, or with `catalyst login`, tick **View the System pages** under **Instance**, leave it over the whole instance rather than one workspace, and revoke the old one. A Service Principal's key is always refused.
+- **The check waits.** The instance checks at most once a minute; a call inside that minute waits for the next check, and the CLI says so on stderr.
+- **A provider `openai` shows up that you did not add.** Your release config `extends` the demo client's config, which brings OpenAI's own endpoint with `region: global` and the secret `OPENAI_API_KEY`. Objects merge, so the provider you add sits beside it and removes nothing. See [Sharing config across environments](/configure/release-config/#sharing-config-across-environments-with-extends).
 - **The check says the secret is missing.** The instance did not find the secret's name in its secrets: set it where the API and the agent run worker read theirs, and deploy again.
 - **`access_denied`.** The provider refused the key. Set the right key, or a key of the right resource or account.
 - **`not_found`.** The provider does not know the address or the project.

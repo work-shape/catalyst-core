@@ -43,6 +43,8 @@ export const FIRST_PARTY_AUTH_SCOPES = [
   "governance:write",
   "user_admin:read",
   "user_admin:write",
+  // A personal key can check providers without reaching other user administration routes.
+  "infrastructure:check",
   "api_access:read",
   "api_access:write",
   "config_assets:read",

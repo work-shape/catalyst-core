@@ -739,7 +739,7 @@ describe("catalyst models check", () => {
     });
     expect(result, result.err).toMatchObject({ code: 0, err: "" });
     expect(result.out).toBe(
-      "ok  models.azure-eu  openai-compatible, region eu, byo-test.openai.azure.com\n" +
+      "ok  azure-eu  openai-compatible, region eu, byo-test.openai.azure.com\n" +
         "  secret AZURE_OPENAI_API_KEY: set\n" +
         "  The check listed the models of the resource with the key. It does not call the deployment.\n"
     );
@@ -782,12 +782,12 @@ describe("catalyst models check", () => {
       expect(result.out + result.err).not.toContain("Incorrect API key");
       expect(result.out + result.err).not.toContain("sk-proj");
       if (json.length === 0) {
-        expect(result.out).toContain("failed  models.azure-eu");
+        expect(result.out).toContain("failed  azure-eu");
         expect(result.out).toContain("  secret credentialSecret: missing\n");
         expect(result.out).toContain("  access_denied: The provider refused the credentials.\n");
       } else {
         expect(JSON.parse(result.out)).toMatchObject({
-          id: "models.azure-eu",
+          id: "azure-eu",
           check: { status: "failed", errorClass: "access_denied" }
         });
       }
@@ -807,17 +807,83 @@ describe("catalyst models check", () => {
       );
       expect(absent.out + absent.err).not.toContain(id);
     }
-    const refused = await run(root, ["models", "check", "azure-eu", "--instance", INSTANCE], {
+    for (const error of [
+      { code: "FORBIDDEN", message: "Missing auth scope 'infrastructure:check'" },
+      { code: "FORBIDDEN", message: "Service principals cannot access user-scoped routes" },
+      {
+        code: "FORBIDDEN",
+        message: "The call needs system.view",
+        details: { action: "system.view", reason: "no_grant" }
+      }
+    ]) {
+      const refused = await run(root, ["models", "check", "azure-eu", "--instance", INSTANCE], {
+        fetchImpl: apiFetch(() => Response.json({ error }, { status: 403 }))
+      });
+      expect(refused.code).toBe(1);
+      expect(refused.err).toContain("'system.view' right");
+      expect(refused.err).toContain("personal API key with the 'system.view' scope");
+    }
+  });
+
+  it.each([
+    "Token was issued for another client instance",
+    "Two-factor authentication setup is required"
+  ])("keeps an unrelated refusal: %s", async (message) => {
+    const root = await repository({});
+    const result = await run(root, ["models", "check", "azure-eu", "--instance", INSTANCE], {
       fetchImpl: apiFetch(() =>
-        Response.json(
-          { error: { code: "FORBIDDEN", message: "This needs the right system.view." } },
-          { status: 403 }
-        )
+        Response.json({ error: { code: "FORBIDDEN", message } }, { status: 403 })
       )
     });
-    expect(refused.code).toBe(1);
-    expect(refused.err).toContain("system.view");
+    expect(result.code).toBe(1);
+    expect(result.err).toContain(message);
+    expect(result.err).not.toContain("system.view");
   });
+
+  it.each(["check", "list"])(
+    "announces the rate-limit wait for %s on stderr and keeps JSON readable",
+    async (verb) => {
+      const root = await repository({ "config/app.yaml": FRESH_CONFIG });
+      const waits: number[] = [];
+      let attempts = 0;
+      const result = await run(
+        root,
+        [
+          "models",
+          verb,
+          ...(verb === "check" ? ["azure-eu"] : []),
+          "--instance",
+          INSTANCE,
+          "--json"
+        ],
+        {
+          fetchImpl: apiFetch(() => {
+            attempts += 1;
+            return attempts === 1
+              ? Response.json(
+                  {
+                    error: {
+                      code: "RATE_LIMITED",
+                      message: "Too soon",
+                      details: { retryAfterSeconds: 55 }
+                    }
+                  },
+                  { status: 429, headers: { "Retry-After": "55" } }
+                )
+              : Response.json(infrastructure({ status: "ok", checkedAt: CHECKED_AT }));
+          }),
+          sleep: async (ms) => {
+            waits.push(ms);
+          }
+        }
+      );
+      expect(result.code, result.err).toBe(0);
+      expect(waits).toEqual([55_000]);
+      expect(attempts).toBe(2);
+      expect(result.err).toContain("Waiting 55s");
+      expect(() => JSON.parse(result.out)).not.toThrow();
+    }
+  );
 });
 
 describe("catalyst models list", () => {
@@ -857,8 +923,9 @@ describe("catalyst models list", () => {
     const remote = await run(root, ["models", "list", "--instance", INSTANCE, "--json"], {
       fetchImpl: apiFetch((request) => {
         expect(new URL(request.url).pathname).toBe(
-          apiOperations["instance.infrastructure.get"].path
+          apiOperations["instance.infrastructure.check"].path
         );
+        expect(request.method).toBe("POST");
         return Response.json(infrastructure({ status: "ok", checkedAt: CHECKED_AT }));
       })
     });

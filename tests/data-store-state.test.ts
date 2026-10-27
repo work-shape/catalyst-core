@@ -58,11 +58,15 @@ describe("the state of a Data Store", () => {
     return required(await world.dataStores.operationSource.resolve("data_store.findings.state"));
   }
 
-  async function stateOf(world: World, access: ActorAccess = operator) {
+  async function stateOf(
+    world: World,
+    access: ActorAccess = operator,
+    actor: AuthenticatedUser = reader
+  ) {
     const operation = await operationOf(world);
     return operation.execute(operation.inputSchema.parse({}), {
       runId: createPlatformId<"OperationRunId">("opr"),
-      actor: reader,
+      actor,
       origin: { kind: "user" },
       correlationId: "data-store-state",
       runtime: {},
@@ -156,7 +160,7 @@ describe("the state of a Data Store", () => {
     expect(await stateOf(world)).toMatchObject({ conditions: [] });
   });
 
-  it("answers what the server leaves open to a holder of system.view alone, and a deny takes it away", async () => {
+  it("shows server conditions to a signed-in holder of system.view, and hides them from a deny or a personal key", async () => {
     const world = await published("audience");
     await db.sql`update data_stores set conditions = ${db.sql.json(["sessions_open"])} where id = ${world.id}`;
     const codes = async (access: ActorAccess) =>
@@ -175,6 +179,11 @@ describe("the state of a Data Store", () => {
     expect(await codes(accessOf({ ...reader, roles: ["user", "superadmin"] }))).toEqual([
       "sessions_open"
     ]);
+    // A model-check scope cannot disclose server details through an authoring read.
+    const keyOwner = { ...reader, keyScopes: ["data_store.read", "system.view"] };
+    const keyAccess = accessOf(keyOwner, { grants: [instanceRow("system.view", "allow")] });
+    expect(keyAccess.authorize("system.view").allowed).toBe(true);
+    expect(stateSchema.parse(await stateOf(world, keyAccess, keyOwner)).conditions).toEqual([]);
     // The rest of the state is the same for both.
     const { conditions: _shown, ...forOperator } = z
       .record(z.string(), z.unknown())

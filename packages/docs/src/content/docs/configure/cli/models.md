@@ -45,10 +45,18 @@ A Vertex binding states `agentSelectable: false`: the adapter carries no tool ca
 
 ## Check
 
-`models check <id>` runs `instance.infrastructure.check` on the instance and prints the provider's row: whether its secret is set, and `ok` or the class of the failure (`unreachable`, `timeout`, `access_denied`, `not_found`, `rejected`, `failed`) with the product's sentence for it. What a provider answered is never shown. The check runs where the key is, on the instance; the CLI never holds the key. It needs the right of the Infrastructure page (`system.view`). The instance runs the check at most once a minute; a call inside that minute waits for it. `--json` prints the row as JSON. The exit code is 0 for `ok` and 1 otherwise.
+`models check <id>` runs `instance.infrastructure.check` on the instance and prints the provider's row: whether its secret is set, and `ok` or the class of the failure (`unreachable`, `timeout`, `access_denied`, `not_found`, `rejected`, `failed`) with the product's sentence for it. What a provider answered is never shown. The check runs where the key is, on the instance; the CLI never holds the key. The instance runs the check at most once a minute; a call inside that minute waits for it, and the CLI says on stderr that it is waiting. `--json` prints the row as JSON. The exit code is 0 for `ok` and 1 otherwise.
 
 What `ok` shows depends on the provider: for Azure and other OpenAI-compatible endpoints, the key listed the endpoint's models; for Vertex, Google gave a token for the key; for Bedrock, Bedrock took the key. None of them calls the model. The first conversation with an agent on the binding does.
 
+### The key
+
+`check` and `list --instance` take a personal API key with the scope `system.view`, the right of the Infrastructure page. The key does what its scope and your rights at the moment of the call both allow, so you must hold `system.view` yourself: Superadmins do. Without either, the instance answers `403` and the CLI says the check needs both. A Service Principal's key is refused.
+
+A key issued without the scope gains none later: issue a new one under **Settings > You > API keys**, or with `catalyst login`, which saves it for the CLI, and revoke the old one. On the key's screen, tick **View the System pages** under **Instance**. The screen offers it only to a person who holds the right, never ticks it in advance, also not for `catalyst setup`, and only while the key is not limited to a workspace: choosing a workspace unticks it. See [Log in and API keys](/configure/cli/auth/).
+
 ## List
 
-`models list` prints each provider of the release config with its region, its secret's name, its bindings and whether every model it bills has a price. With `--instance`, it also reads `instance.infrastructure.get` and shows each provider's last check and whether its secret is set; a provider the instance does not have yet shows as not deployed. `--json` prints the same as JSON.
+`models list` prints each provider of the release config with its region, its secret's name, its bindings and whether every model it bills has a price. With `--instance`, it also runs the same check as `check` on the instance and shows each provider's result and whether its secret is set; a provider the instance does not have yet shows as not deployed. Every run calls all providers and uses up the instance's single **Check now** slot for the next minute. It needs the same key, and inside the minute it waits the same way. `--json` prints the same as JSON.
+
+A release config that `extends` the demo client's config takes its provider `openai` with it: OpenAI's own endpoint, `region: global`, secret `OPENAI_API_KEY`. Objects merge, so a provider you add sits beside it and removes nothing, and `list` shows both. See [Sharing config across environments](/configure/release-config/#sharing-config-across-environments-with-extends).
