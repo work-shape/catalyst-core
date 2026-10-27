@@ -13,6 +13,7 @@ import { AppActionList } from "../apps/action-list";
 import { AppWorkflow } from "../apps/app-service";
 import { AppDraftTries } from "../apps/app-tries";
 import { DraftHosts } from "../apps/draft-hosts";
+import { PreviewReports } from "../apps/preview-reports";
 import type { Route } from "../http/route";
 import type { ResolvedChatServerOptions } from "../types";
 
@@ -30,6 +31,7 @@ export function registerAppRoutes(route: Route, options: ResolvedChatServerOptio
   const actionList = new AppActionList(options);
   const draftHosts = new DraftHosts(options);
   const tries = new AppDraftTries(options, { apps: workflow, actions });
+  const previewReports = new PreviewReports(options, actions);
 
   route.operation(apiOperations["apps.create_from_page"], {
     authorize: (input, { actor, access }) => workflow.authorizeCreate(actor, access, input),
@@ -128,6 +130,23 @@ export function registerAppRoutes(route: Route, options: ResolvedChatServerOptio
       { pageSessionId: params.pageSessionId, fileSetId: body.fileSetId, token: body.token }
     );
     return { can: await actions.can(session) };
+  });
+
+  // What the preview reported of itself (PREVIEW-STATUS-1). Diagnostics for the agent of the
+  // conversation, scrubbed and bounded again here: a plain route, so no Operation Run, audit
+  // event or log line holds a report.
+  route(apiOperations["apps.sessions.report"], async ({ user, access, params, body, reply }) => {
+    void reply.header("cache-control", "no-store");
+    return previewReports.report(
+      { user, access },
+      {
+        pageSessionId: params.pageSessionId,
+        fileSetId: body.fileSetId,
+        token: body.token,
+        conversationId: body.conversationId,
+        report: body.report
+      }
+    );
   });
 
   route.operation(apiOperations["apps.sessions.write_storage"], {

@@ -7,6 +7,8 @@ import {
   appActionsSchema,
   appFromPageQuerySchema,
   appFromPageSchema,
+  appPreviewReportRequestSchema,
+  appPreviewReportResponseSchema,
   appPreviewRequestSchema,
   appSessionContextRequestSchema,
   appSessionContextSchema,
@@ -190,6 +192,25 @@ export const appOperations = {
     response: json(appSessionContextSchema),
     errors: ["NOT_FOUND"],
     rateClass: "read"
+  }),
+  // POST because it carries the token of the frame's address, which never stands in a path.
+  // Diagnostics, not a governance event: no Operation Run, audit event or log line holds a
+  // report, so it is no registered operation.
+  "apps.sessions.report": defineOperation({
+    id: "apps.sessions.report",
+    method: "POST",
+    path: "/api/v1/app-content-sessions/:pageSessionId/report",
+    summary:
+      "Keep what the preview a frame shows reported of itself, scrubbed and bounded, for the conversation's agent",
+    tag: "Apps",
+    auth: "user",
+    scope: "conversation:write",
+    requires: [],
+    effect: "changing",
+    body: appPreviewReportRequestSchema,
+    response: json(appPreviewReportResponseSchema),
+    errors: ["NOT_FOUND", "VALIDATION_FAILED"],
+    rateClass: "write"
   }),
   "apps.sessions.write_storage": defineRegisteredOperation({
     id: "apps.sessions.write_storage",

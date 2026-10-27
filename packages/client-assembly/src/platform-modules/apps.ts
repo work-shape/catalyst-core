@@ -26,6 +26,7 @@ export const appsModule = defineModule({
     "apps.sessions.call_action",
     "apps.sessions.write_storage",
     "apps.sessions.get_workflow_run",
+    "apps.sessions.report",
     "apps.try_action",
     "apps.publish_review"
   ],

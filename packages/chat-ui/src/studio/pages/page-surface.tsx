@@ -27,7 +27,8 @@ import { createPageBridge, type PageBridge } from "./bridge-host";
 import { useFrameCallTexts } from "./frame-call-texts";
 import { FrameApprovalWait, type FrameWait } from "./frame-approval-wait";
 import { FrameTestRun, type FrameTestRunShown } from "./frame-test-run";
-import { createFrameCalls, type FrameAddress } from "./frame-calls";
+import { createFrameCalls, frameSessionProof, type FrameAddress } from "./frame-calls";
+import { createPreviewReporter, type PreviewReporter } from "./preview-report";
 import { DraftHostsNotice } from "./draft-hosts-notice";
 import {
   keepPageAddress,
@@ -36,7 +37,7 @@ import {
   type PageAddressState
 } from "./page-address";
 import { PageFiles } from "./page-files";
-import { usePageHost } from "./page-host";
+import { usePageConversationId, usePageHost } from "./page-host";
 import { buildErrorCountLabel, buildErrorPlace } from "./page-save";
 import { PreviewPane, type PreviewState } from "./preview-pane";
 
@@ -513,6 +514,49 @@ export function LivePagePreview({
   });
   const hosted = host !== undefined;
 
+  // What the preview does is reported for the conversation's agent (PREVIEW-STATUS-1): one
+  // reporter per address, which is one mount of the frame. The instance decides which
+  // conversation a report counts for: a Page's own, or for the draft of an App the open
+  // conversation when it is about that App.
+  const reporterRef = useRef<PreviewReporter | undefined>(undefined);
+  const conversationId = usePageConversationId();
+  const reportUrl = address?.url;
+  const reportFileSetId = address?.fileSetId;
+  const reportSession = address?.pageSessionId;
+  useEffect(() => {
+    const proof =
+      reportUrl === undefined || reportFileSetId === undefined || reportSession === undefined
+        ? undefined
+        : frameSessionProof({
+            url: reportUrl,
+            fileSetId: reportFileSetId,
+            pageSessionId: reportSession
+          });
+    if (!proof) {
+      return undefined;
+    }
+    const reporter = createPreviewReporter((report) =>
+      client.apps.sessions.report({
+        params: { pageSessionId: proof.pageSessionId },
+        body: {
+          fileSetId: proof.fileSetId,
+          token: proof.token,
+          ...(conversationId === undefined ? {} : { conversationId }),
+          report
+        }
+      })
+    );
+    reporterRef.current = reporter;
+    const frame = frameRef.current;
+    const onLoad = () => reporter.frameLoaded();
+    frame?.addEventListener("load", onLoad);
+    return () => {
+      frame?.removeEventListener("load", onLoad);
+      reporter.stop();
+      if (reporterRef.current === reporter) reporterRef.current = undefined;
+    };
+  }, [client, conversationId, reportUrl, reportFileSetId, reportSession]);
+
   useEffect(() => {
     if (!hosted) {
       return undefined;
@@ -541,7 +585,10 @@ export function LivePagePreview({
       onResize: () => undefined,
       calls: () => callsRef.current,
       onCallWaits: (runId) => setWait({ session, runId }),
-      onTestRun: (run) => setTestRun({ session, run })
+      onTestRun: (run) => setTestRun({ session, run }),
+      onGreeted: () => reporterRef.current?.greeted(),
+      onReport: (report) => reporterRef.current?.guardReport(report),
+      onCallFailed: (name, code) => reporterRef.current?.callFailed(name, code)
     });
     bridgeRef.current = bridge;
     const onMessage = (event: MessageEvent) => bridge.receive(event);

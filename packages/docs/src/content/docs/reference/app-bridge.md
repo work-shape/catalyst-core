@@ -41,6 +41,9 @@ An App reaches a Connection, a Data Store or a Workflow only through a named act
 | `action`        | `session`, `requestId`, `name`, `input` (an object), optional `idempotencyKey`                  | `action_result`       |
 | `storage_write` | `session`, `requestId`, `mutation` (`set` with string key/value, `remove` with key, or `clear`) | `storage_result`      |
 | `workflow_run`  | `session`, `requestId`, `runId`                                                                 | `workflow_run_result` |
+| `report`        | `report`: the platform's guard reports what the page did (`settled`, optional `empty`, at most 10 `entries`, `more`) | nothing |
+
+`report` is sent by the platform's guard in the page frame, not by the kit, and needs no session. The interface and the instance each scrub and bound it, and the instance keeps it for the conversation's agent for 24 hours.
 
 The runtime installs personal storage before App scripts run and supplies its session to storage writes. Every other message after `ready` names the session the interface gave in `context`. A message of another shape, with an unknown key, or naming another session is dropped.
 

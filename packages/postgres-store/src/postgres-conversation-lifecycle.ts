@@ -20,6 +20,7 @@ import {
   executionWorkspaces,
   pages,
   pageBuilds,
+  previewReports,
   agentRuns,
   agentTryConversations,
   assetCheckouts
@@ -211,7 +212,7 @@ export async function markLockedConversationTreeDeleted(
 }
 
 /**
- * Deletes the Conversation's messages and structured data and marks its attachments and the
+ * Deletes the Conversation's messages, structured data and preview reports and marks its attachments and the
  * Conversation itself deleted. The caller holds the row lock. Files, artifacts, preview state
  * and the execution workspace stay for the cleanup that follows.
  */
@@ -269,6 +270,15 @@ async function markLockedConversationDeleted(
       and(
         eq(conversationCreatedAssets.clientInstanceId, input.clientInstanceId),
         eq(conversationCreatedAssets.conversationId, input.conversationId)
+      )
+    );
+  // What its previews reported is diagnostics of the conversation and goes with it.
+  await tx
+    .delete(previewReports)
+    .where(
+      and(
+        eq(previewReports.clientInstanceId, input.clientInstanceId),
+        eq(previewReports.conversationId, input.conversationId)
       )
     );
   const [row] = await tx

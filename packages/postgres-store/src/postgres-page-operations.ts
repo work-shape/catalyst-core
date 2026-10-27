@@ -22,6 +22,11 @@ import {
   listDraftHostAllowances,
   removeDraftHostAllowances
 } from "./postgres-draft-host-allowances";
+import {
+  getPreviewReport,
+  prunePreviewReports,
+  putPreviewReport
+} from "./postgres-preview-reports";
 import { publishedRevisions } from "./postgres-config-asset-revisions";
 import { type PostgresConnection } from "./postgres-database";
 import { configAssetRevisions, configAssets } from "./schema/configAssets";
@@ -591,6 +596,9 @@ export function createPostgresPagesStore(db: PostgresConnection): PagesStore {
     allowDraftHost: (input) => allowDraftHost(db, input),
     listDraftHostAllowances: (input) => listDraftHostAllowances(db, input),
     removeDraftHostAllowances: (input) => removeDraftHostAllowances(db, input),
+    putPreviewReport: (input) => putPreviewReport(db, input),
+    getPreviewReport: (input) => getPreviewReport(db, input),
+    prunePreviewReports: (input) => prunePreviewReports(db, input),
     ensurePage: (input) => ensurePage(db, input),
     createPageFileSet: (input) => createPageFileSet(db, input),
     listPages: (input) => listPages(db, input),

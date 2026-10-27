@@ -128,6 +128,12 @@ export const sweepConnectionSetupSessionsJob = defineScheduledKind(
   "connection_setup_sessions.sweep"
 );
 
+/**
+ * Removes what previews reported once it is 24 hours old (PREVIEW-STATUS-1). A read never
+ * answers an older report, so a tick that is late keeps nothing longer for anyone who asks.
+ */
+export const prunePreviewReportsJob = defineScheduledKind("preview_reports.prune");
+
 /** Asks every provider of the instance whether it answers. */
 export const checkInfrastructureJob = defineScheduledKind("infrastructure.check", 2 * MINUTE_MS);
 
@@ -205,6 +211,12 @@ export const pruneJobsSchedule = defineSchedule({ kind: pruneJobsJob, every: DAY
 export const sweepConnectionSetupSessionsSchedule = defineSchedule({
   kind: sweepConnectionSetupSessionsJob,
   every: HOUR_MS
+});
+export const prunePreviewReportsSchedule = defineSchedule({
+  kind: prunePreviewReportsJob,
+  every: HOUR_MS,
+  // Reports kept while no API ran go as soon as one is up.
+  dueAtStart: true
 });
 export const adoptLegacyJobsSchedule = defineSchedule({
   kind: adoptLegacyJobsJob,

@@ -160,7 +160,12 @@ export interface FrameCallHooks {
 
 /** What the calls of a frame use of the API client: the calls of a page session. */
 export interface FrameCallClient {
-  apps: Pick<ApiClient["apps"], "sessions">;
+  apps: {
+    sessions: Pick<
+      ApiClient["apps"]["sessions"],
+      "call_action" | "context" | "get_workflow_run" | "write_storage"
+    >;
+  };
 }
 
 /** The calls of the frame at `address`, made with the session of `client`. */

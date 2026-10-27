@@ -8,6 +8,7 @@ import {
   type UserId
 } from "./ids";
 import type { JsonObject } from "./json";
+import type { PreviewReport } from "@work-shape/catalyst-asset-schemas";
 
 // A Page is a folder of files a conversation owns. Each save is a file set: the source files,
 // the built files, the validated manifest and the kit version, stored once and never changed.
@@ -343,7 +344,38 @@ export interface DraftHostAllowanceKey {
   userId: UserId;
 }
 
+/** The report of one preview, for one conversation and one file set (PREVIEW-STATUS-1). */
+export interface PreviewReportKey {
+  clientInstanceId: ClientInstanceId;
+  conversationId: ConversationId;
+  fileSetId: FileSetId;
+}
+
+/** A kept report and when it was written. */
+export interface StoredPreviewReport {
+  report: PreviewReport;
+  reportedAt: string;
+}
+
 export interface PagesStore {
+  /**
+   * Keeps the newest report of a preview in place of the one before, while the conversation
+   * is active and the file set exists. `false` says nothing was kept. The caller scrubbed and
+   * bounded the report: the store keeps what it is given.
+   */
+  putPreviewReport(
+    input: PreviewReportKey & { report: PreviewReport; reportedAt: string }
+  ): Promise<boolean>;
+  /** The report, when it was written after `notBefore`. An older one counts as gone. */
+  getPreviewReport(
+    input: PreviewReportKey & { notBefore: string }
+  ): Promise<StoredPreviewReport | undefined>;
+  /** Removes every report written before `before`. Answers how many went. */
+  prunePreviewReports(input: {
+    clientInstanceId: ClientInstanceId;
+    before: string;
+  }): Promise<number>;
+
   getAppUserStorage(input: AppUserStorageKey): Promise<Record<string, string>>;
   mutateAppUserStorage(
     input: AppUserStorageKey & { mutation: AppUserStorageMutation }

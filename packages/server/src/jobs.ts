@@ -2,6 +2,7 @@ import { createScheduledPromptHandler } from "./conversations/scheduled-start-jo
 import { createNoticeMailJobs } from "./notices/notice-mail";
 import { createFeedbackJobs } from "./feedback/feedback-jobs";
 import {
+  PREVIEW_REPORT_KEEP_MS,
   asCollaborationWorkspaceId,
   asConversationId,
   asUserId,
@@ -34,6 +35,8 @@ import {
   pruneAuditEventsSchedule,
   pruneJobsJob,
   pruneJobsSchedule,
+  prunePreviewReportsJob,
+  prunePreviewReportsSchedule,
   reconcileUsageJob,
   reconcileUsageSchedule,
   recoverAbandonedModelCallsJob,
@@ -236,6 +239,18 @@ export function createChatServerJobs(
       }
     }),
     defineJobHandler({
+      kind: prunePreviewReportsJob,
+      slots: 1,
+      async run(_job, control) {
+        const removed = await options.stores.pages.prunePreviewReports({
+          clientInstanceId: options.clientInstanceId,
+          before: new Date(now().getTime() - PREVIEW_REPORT_KEEP_MS).toISOString()
+        });
+        // A count only: what a report said is never in a log line.
+        if (removed > 0) control.logger.info({ removed }, "Removed preview reports past a day");
+      }
+    }),
+    defineJobHandler({
       kind: adoptLegacyJobsJob,
       slots: 1,
       async run(_job, control) {
@@ -293,6 +308,7 @@ export function createChatServerJobs(
     expireConversationsSchedule,
     pruneAuditEventsSchedule,
     pruneJobsSchedule,
+    prunePreviewReportsSchedule,
     adoptLegacyJobsSchedule,
     backfillUsageAttributionSchedule,
     recoverAbandonedModelCallsSchedule,

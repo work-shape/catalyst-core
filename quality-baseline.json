@@ -334,7 +334,7 @@
       "target": "operations",
       "rule": "plain-changing",
       "scope": "conversation",
-      "count": 14,
+      "count": 15,
       "owner": "CONV-1"
     },
     {
@@ -814,6 +814,13 @@
       "reason": "AD-3: check 66's personal-key push of an instance agent needs a Namespace root until NS-RETIRE",
       "acceptedBy": "manager",
       "date": "2026-10-17"
+    },
+    {
+      "key": "operations|plain-changing|conversation",
+      "to": 15,
+      "reason": "apps.sessions.report (PREVIEW-STATUS-1a) keeps a preview's scrubbed diagnostics for its conversation; by design no audit event or Operation Run holds a report.",
+      "acceptedBy": "architect (agent sees the preview, 2026-10-27)",
+      "date": "2026-10-27"
     }
   ]
 }

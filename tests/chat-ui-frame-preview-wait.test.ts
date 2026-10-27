@@ -42,7 +42,7 @@ const theme = {
 };
 
 it("the mounted preview turns a held action into an overlay, blocks its iframe, and restores access on Close", async () => {
-  const fetch = vi.fn(() =>
+  const fetch = vi.fn((_url: RequestInfo | URL, _init?: RequestInit) =>
     Promise.resolve(
       new Response(
         JSON.stringify({
@@ -138,7 +138,9 @@ it("the mounted preview turns a held action into an overlay, blocks its iframe, 
     window.dispatchEvent(message);
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
-  expect(fetch).toHaveBeenCalledTimes(1);
+  // The preview also reports itself once it is mounted (PREVIEW-STATUS-1); one call was made.
+  const calls = fetch.mock.calls.filter(([url]) => !String(url).endsWith("/report"));
+  expect(calls).toHaveLength(1);
   expect(host.querySelector('[data-testid="frame-approval-wait"]')).not.toBeNull();
   expect(iframe?.parentElement?.hasAttribute("inert")).toBe(true);
   expect(iframe?.isConnected).toBe(true);

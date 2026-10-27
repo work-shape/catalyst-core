@@ -165,7 +165,10 @@ interface AppActionHelpers {
    * A Page in a conversation of `userId`, and its frame: with the actions of the App `orders`
    * unless the test brings the Page's files.
    */
-  openPage(userId: string, source?: AppFile[]): Promise<Frame & { pageId: string }>;
+  openPage(
+    userId: string,
+    source?: AppFile[]
+  ): Promise<Frame & { pageId: string; conversationId: string }>;
   callAction(
     userId: string,
     frame: Frame,
@@ -254,7 +257,11 @@ export async function setupAppActions(
       payload: { fileSetId: stored.fileSet.id }
     });
     expectStatus(response, 200);
-    return { ...frameOf(response.json()), pageId: stored.page.id };
+    return {
+      ...frameOf(response.json()),
+      pageId: stored.page.id,
+      conversationId: conversation.id
+    };
   };
 
   const callAction = (

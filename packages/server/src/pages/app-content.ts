@@ -391,6 +391,257 @@ export function isHtmlContentType(contentType: string): boolean {
   return /^(?:text\/html|application\/xhtml\+xml)\s*(?:;|$)/iu.test(contentType);
 }
 
+// What the guard reports of the Page (PREVIEW-STATUS-1): uncaught errors, unhandled rejections,
+// `console.error`, content policy violations, and whether the Page drew anything once it
+// settled: after load, 1.5 seconds without a new entry, at most 8 seconds. It posts the report
+// to the interface, the window above the shell, once settled and again a second after each
+// change. At most 10 distinct entries with counts, each cut at 1000 characters: the interface
+// scrubs and bounds the report before it goes anywhere, and the instance does so again, because
+// the Page shares this realm and can write into what is collected or post a report itself.
+// `console.error` keeps its string arguments; an object reads `[Object]` and an array
+// `[Array]`. It never throws into the Page: a collector that fails reports nothing.
+export const PREVIEW_COLLECTOR_SOURCE = `function (win, host) {
+  "use strict";
+  var MAX_ENTRIES = 10;
+  var MAX_CHARS = 1000;
+  var MAX_COUNT = 1000000000;
+  var QUIET_MS = 1500;
+  var SETTLE_MAX_MS = 8000;
+  var RESEND_MS = 1000;
+  var apply = win.Reflect.apply;
+  var describe = win.Object.getOwnPropertyDescriptor;
+  function getter(prototype, name) {
+    var found = prototype && describe(prototype, name);
+    var get = found && found.get;
+    return function (self) {
+      return get ? apply(get, self, []) : self[name];
+    };
+  }
+  var doc = win.document;
+  var now = win.Date.now;
+  var floor = win.Math.floor;
+  var setTimer = win.setTimeout;
+  var listen = win.EventTarget.prototype.addEventListener;
+  var stringOf = win.String;
+  var isArray = win.Array.isArray;
+  var isPrototypeOf = win.Object.prototype.isPrototypeOf;
+  var slice = win.String.prototype.slice;
+  var trim = win.String.prototype.trim;
+  var join = win.Array.prototype.join;
+  var exec = win.RegExp.prototype.exec;
+  var errorPrototype = win.Error.prototype;
+  var errorEventPrototype = win.ErrorEvent ? win.ErrorEvent.prototype : null;
+  var errorMessage = getter(errorEventPrototype, "message");
+  var errorFile = getter(errorEventPrototype, "filename");
+  var errorLine = getter(errorEventPrototype, "lineno");
+  var errorValue = getter(errorEventPrototype, "error");
+  var rejectionPrototype = win.PromiseRejectionEvent ? win.PromiseRejectionEvent.prototype : null;
+  var rejectionReason = getter(rejectionPrototype, "reason");
+  var violationPrototype = win.SecurityPolicyViolationEvent
+    ? win.SecurityPolicyViolationEvent.prototype
+    : null;
+  var violatedDirective = getter(violationPrototype, "effectiveDirective");
+  var blockedAddress = getter(violationPrototype, "blockedURI");
+  var violationFile = getter(violationPrototype, "sourceFile");
+  var violationLine = getter(violationPrototype, "lineNumber");
+  var bodyOf = getter(win.Document.prototype, "body");
+  var visibleText = win.HTMLElement && describe(win.HTMLElement.prototype, "innerText")
+    ? getter(win.HTMLElement.prototype, "innerText")
+    : getter(win.Node.prototype, "textContent");
+  var queryAll = win.Document.prototype.querySelectorAll;
+  var rectOf = win.Element.prototype.getBoundingClientRect;
+  var ORIGIN = /^[a-z][a-z0-9+.-]*:\\/\\/[^\\/?#]*/i;
+  var SCHEME = /^[a-z][a-z0-9+.-]*/i;
+  var DRAWN = "img,svg,canvas,video,picture,input,button,select,textarea";
+
+  var entries = [];
+  var more = 0;
+  var settled = false;
+  var loadedAt = -1;
+  var lastAt = now();
+  var pending = false;
+
+  function errorText(error) {
+    var name = error.name;
+    var message = error.message;
+    return (typeof name === "string" && name ? name : "Error") +
+      (typeof message === "string" && message ? ": " + message : "");
+  }
+  function text(value) {
+    try {
+      if (typeof value === "string") {
+        return value;
+      }
+      if (value === null || (typeof value !== "object" && typeof value !== "function")) {
+        return stringOf(value);
+      }
+      if (isArray(value)) {
+        return "[Array]";
+      }
+      if (apply(isPrototypeOf, errorPrototype, [value])) {
+        return errorText(value);
+      }
+    } catch (error) {}
+    return "[Object]";
+  }
+  function bounded(value) {
+    return typeof value === "string" ? apply(slice, value, [0, MAX_CHARS]) : undefined;
+  }
+  function add(kind, message, file, line) {
+    message = bounded(message) || "";
+    file = bounded(file) || undefined;
+    line = typeof line === "number" && line >= 0 && line <= MAX_COUNT && floor(line) === line
+      ? line
+      : undefined;
+    for (var index = 0; index < entries.length; index += 1) {
+      var entry = entries[index];
+      if (entry.kind === kind && entry.message === message && entry.file === file && entry.line === line) {
+        if (entry.count < MAX_COUNT) {
+          entry.count += 1;
+        }
+        changed();
+        return;
+      }
+    }
+    if (entries.length >= MAX_ENTRIES) {
+      if (more < MAX_COUNT) {
+        more += 1;
+      }
+      changed();
+      return;
+    }
+    var added = { kind: kind, message: message, count: 1 };
+    if (file !== undefined) {
+      added.file = file;
+    }
+    if (line !== undefined) {
+      added.line = line;
+    }
+    entries[entries.length] = added;
+    changed();
+  }
+  function changed() {
+    lastAt = now();
+    if (settled && !pending) {
+      pending = true;
+      apply(setTimer, win, [send, RESEND_MS]);
+    }
+  }
+  function drewSomething() {
+    try {
+      var body = bodyOf(doc);
+      if (!body) {
+        return false;
+      }
+      var shown = visibleText(body);
+      if (typeof shown === "string" && apply(trim, shown, []).length > 0) {
+        return true;
+      }
+      var drawn = apply(queryAll, doc, [DRAWN]);
+      for (var index = 0; index < drawn.length; index += 1) {
+        var rect = apply(rectOf, drawn[index], []);
+        if (rect.width > 0 && rect.height > 0) {
+          return true;
+        }
+      }
+      return false;
+    } catch (error) {
+      return undefined;
+    }
+  }
+  function send() {
+    pending = false;
+    var listed = [];
+    for (var index = 0; index < entries.length; index += 1) {
+      var entry = entries[index];
+      var copy = { kind: entry.kind, message: entry.message, count: entry.count };
+      if (entry.file !== undefined) {
+        copy.file = entry.file;
+      }
+      if (entry.line !== undefined) {
+        copy.line = entry.line;
+      }
+      listed[index] = copy;
+    }
+    var report = { settled: true, entries: listed, more: more };
+    var drew = drewSomething();
+    if (drew !== undefined) {
+      report.empty = !drew;
+    }
+    try {
+      // The bridge's mark and version: catalystBridge 1.
+      host.postMessage({ catalystBridge: 1, type: "report", report: report }, "*");
+    } catch (error) {}
+  }
+  function check() {
+    if (settled) {
+      return;
+    }
+    var at = now();
+    if (at - loadedAt >= SETTLE_MAX_MS || at - lastAt >= QUIET_MS) {
+      settled = true;
+      send();
+      return;
+    }
+    var wait = (lastAt + QUIET_MS < loadedAt + SETTLE_MAX_MS ? lastAt + QUIET_MS : loadedAt + SETTLE_MAX_MS) - at;
+    apply(setTimer, win, [check, wait > 0 ? wait : 0]);
+  }
+  function guarded(handle) {
+    return function (event) {
+      try {
+        handle(event);
+      } catch (error) {}
+    };
+  }
+
+  apply(listen, win, ["error", guarded(function (event) {
+    // A file that failed to load is an error event too, but no ErrorEvent.
+    if (!errorEventPrototype || !apply(isPrototypeOf, errorEventPrototype, [event])) {
+      return;
+    }
+    var value = errorValue(event);
+    var message = errorMessage(event);
+    add("error", message || (value === undefined ? "Error" : text(value)), errorFile(event), errorLine(event));
+  }), true]);
+  apply(listen, win, ["unhandledrejection", guarded(function (event) {
+    add("rejection", text(rejectionPrototype ? rejectionReason(event) : event.reason));
+  }), true]);
+  apply(listen, win, ["securitypolicyviolation", guarded(function (event) {
+    var directive = violatedDirective(event);
+    var blocked = blockedAddress(event);
+    var origin = typeof blocked === "string" ? apply(exec, ORIGIN, [blocked]) || apply(exec, SCHEME, [blocked]) : null;
+    add(
+      "policy",
+      (typeof directive === "string" && directive ? directive : "policy") +
+        (origin ? " blocked " + origin[0] : ""),
+      violationFile(event),
+      violationLine(event)
+    );
+  }), true]);
+  apply(listen, win, ["load", guarded(function () {
+    loadedAt = now();
+    if (lastAt < loadedAt) {
+      lastAt = loadedAt;
+    }
+    apply(setTimer, win, [check, QUIET_MS]);
+  })]);
+
+  var console = win.console;
+  var original = console && console.error;
+  if (typeof original === "function") {
+    console.error = function () {
+      try {
+        var parts = [];
+        for (var index = 0; index < arguments.length; index += 1) {
+          parts[index] = text(arguments[index]);
+        }
+        add("console", apply(join, parts, [" "]));
+      } catch (error) {}
+      return apply(original, console, arguments);
+    };
+  }
+}`;
+
 // The platform's own script of a Page frame. It is the only thing in the document the frame is
 // given, and the stored HTML is a text in it: the script writes the HTML into the document as
 // its last step. So there is no Page before the guard is in place. A script that does not run,
@@ -630,6 +881,11 @@ const PAGE_GUARD_SOURCE = `(function (page) {
   for (var kind = 0; kind < events.length; kind += 1) {
     listen(window, events[kind], cancel, true);
   }
+
+  // What the Page does is reported to the interface. A collector that fails leaves the Page.
+  try {
+    (${PREVIEW_COLLECTOR_SOURCE})(window, window.parent.parent);
+  } catch (error) {}
 
   // The Page, now that everything above holds. The parser reads it from here on.
   apply(write, document, [page]);

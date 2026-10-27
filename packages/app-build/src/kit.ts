@@ -115,6 +115,16 @@ export function rendersKitComponents(importedPath: string): boolean {
 }
 
 /**
+ * Whether an address a built script imports is the kit's client: the file that greets the
+ * interface and calls through the bridge. A folder whose scripts import it uses the bridge.
+ */
+export function importsKitClient(importedPath: string): boolean {
+  return (
+    importedPath.startsWith(`${KIT_RUNTIME_PATH}/`) && importedPath.endsWith(`/${KIT_CLIENT_FILE}`)
+  );
+}
+
+/**
  * What the build writes first into an HTML file: a stylesheet of the kit and the theme script.
  * A file of plain elements gets the stylesheet of a plain Page. A file whose script renders
  * components of the kit gets the library's stylesheet instead, as the document of a React Page
