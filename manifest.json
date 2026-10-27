@@ -1,0 +1,74 @@
+[
+  {
+    "file": "0001-390-en-light-page.png",
+    "label": "publish-dialog",
+    "width": 390,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:14541/build/knowledge-bases/shots-kb-publish"
+  },
+  {
+    "file": "0002-390-en-dark-page.png",
+    "label": "publish-dialog",
+    "width": 390,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:14541/build/knowledge-bases/shots-kb-publish"
+  },
+  {
+    "file": "0003-390-de-light-page.png",
+    "label": "publish-dialog",
+    "width": 390,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:14541/build/knowledge-bases/shots-kb-publish"
+  },
+  {
+    "file": "0004-390-de-dark-page.png",
+    "label": "publish-dialog",
+    "width": 390,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:14541/build/knowledge-bases/shots-kb-publish"
+  },
+  {
+    "file": "0005-1440-en-light-page.png",
+    "label": "publish-dialog",
+    "width": 1440,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:14541/build/knowledge-bases/shots-kb-publish"
+  },
+  {
+    "file": "0006-1440-en-dark-page.png",
+    "label": "publish-dialog",
+    "width": 1440,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:14541/build/knowledge-bases/shots-kb-publish"
+  },
+  {
+    "file": "0007-1440-de-light-page.png",
+    "label": "publish-dialog",
+    "width": 1440,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:14541/build/knowledge-bases/shots-kb-publish"
+  },
+  {
+    "file": "0008-1440-de-dark-page.png",
+    "label": "publish-dialog",
+    "width": 1440,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:14541/build/knowledge-bases/shots-kb-publish"
+  }
+]

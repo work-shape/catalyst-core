@@ -1,0 +1,17 @@
+{
+  "routes": [],
+  "required": [],
+  "states": [
+    {
+      "name": "publish-dialog",
+      "setup": "/private/tmp/claude-501/-Users-felixpahlke-code-catalyst/a2ce655e-be6a-4606-83fd-3c646e25be76/scratchpad/publish-dialog.mjs"
+    }
+  ],
+  "modules": [
+    "knowledge"
+  ],
+  "pr": 100,
+  "head": "0d9174230637697840bd49dc9e2077fa3149fef4",
+  "base": "5246bc06dc17359390669b6adb7484f54b67cbaf",
+  "tested": "14321f927c9e010e4f98a046637952818300e9b0"
+}
