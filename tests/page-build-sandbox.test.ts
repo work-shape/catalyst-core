@@ -81,7 +81,9 @@ describe("a Page build in the sandbox", () => {
       pages: [{ path: "/" }, { path: "/history" }]
     });
     const files = new Map(outcome.files.map((file) => [file.path, decoder.decode(file.bytes)]));
-    expect([...files.keys()].sort()).toEqual(["app.js", "index.html"]);
+    expect([...files.keys()].sort()).toEqual(["app.js", "app.js.map", "index.html"]);
+    expect(files.get("app.js")).not.toContain("sourceMappingURL");
+    expect(files.get("app.js.map")).not.toContain("sourcesContent");
     expect(files.get("app.js")).toContain("/app-runtime/kit/1.0.0/router.js");
     // The directory of the build is gone.
     expect(await readdir(tempRoot)).toEqual([]);

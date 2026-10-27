@@ -393,7 +393,11 @@ describe("workspace.open", () => {
       "src/routes/__root.tsx",
       "src/routes/index.tsx"
     ]);
-    expect(stored?.builtFiles.map((file) => file.path).sort()).toEqual(["app.js", "index.html"]);
+    expect(stored?.builtFiles.map((file) => file.path).sort()).toEqual([
+      "app.js",
+      "app.js.map",
+      "index.html"
+    ]);
     const script = new TextDecoder().decode(
       await readObjectBytes(
         harness.files,
