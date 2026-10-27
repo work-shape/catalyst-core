@@ -14,7 +14,8 @@ CREATE TABLE "config_asset_publications" (
 CREATE UNIQUE INDEX "config_asset_publications_asset_number_idx" ON "config_asset_publications" USING btree ("asset_id","number");--> statement-breakpoint
 -- Every asset published today gets its publication 1, of the revision its pointer names: at
 -- the time and by whom its newest retained successful publish event of that revision says, as
--- the App's head read it so far, or else at the asset's last change and by nobody named.
+-- the App's head read it so far, or else at the asset's last change and by nobody named. An
+-- actor whose account is gone is not copied: its deletion emptied every copy but audit's.
 INSERT INTO "config_asset_publications" ("id", "client_instance_id", "asset_id", "revision", "number", "actor", "published_at")
 WITH "published" AS (
 	SELECT a."id", a."client_instance_id", a."kind", a."name", a."created_at", a."updated_at", r."revision"
@@ -33,7 +34,12 @@ WITH "published" AS (
 		AND e."created_at" >= p."created_at"
 	ORDER BY p."id", e."created_at" DESC, e."id" DESC
 )
-SELECT 'publication_' || gen_random_uuid()::text, p."client_instance_id", p."id", p."revision", 1, r."actor", coalesce(r."created_at", p."updated_at")
+SELECT 'publication_' || gen_random_uuid()::text, p."client_instance_id", p."id", p."revision", 1,
+	CASE WHEN r."actor"->>'userId' IS NULL OR EXISTS (
+		SELECT 1 FROM "product_users" u
+		WHERE u."id" = r."actor"->>'userId' AND u."client_instance_id" = p."client_instance_id"
+	) THEN r."actor" END,
+	coalesce(r."created_at", p."updated_at")
 FROM "published" p
 LEFT JOIN "retained" r ON r."id" = p."id";--> statement-breakpoint
 -- The key comes last: its lock on config_assets then waits only for the check of the rows above.

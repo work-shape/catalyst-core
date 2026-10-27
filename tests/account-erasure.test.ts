@@ -65,6 +65,7 @@ describe("deleting an account empties the stored copies of the person (ERASE-ACT
       agent: createPlatformId("asset"),
       connection: createPlatformId("asset"),
       revision: createPlatformId("rev"),
+      publication: createPlatformId("publication"),
       feedback: createPlatformId("fb"),
       agentRun: createPlatformId("run"),
       followUp: createPlatformId("fup"),
@@ -178,6 +179,12 @@ describe("deleting an account empties the stored copies of the person (ERASE-ACT
       values (${ids.revision}, ${clientInstanceId}, ${ids.agent}, 1, 'create',
         ${db.sql.json({ userId: uid, externalUserId: IDP, displayLabel: NAME, roles: ["user"] })},
         1, ${at})`;
+    await db.sql`
+      insert into config_asset_publications (id, client_instance_id, asset_id, revision, number,
+        actor, published_at)
+      values (${ids.publication}, ${clientInstanceId}, ${ids.agent}, 1, 1,
+        ${db.sql.json({ userId: uid, externalUserId: IDP, displayLabel: NAME, roles: ["user"] })},
+        ${at})`;
     await db.sql`
       insert into feedback (id, client_instance_id, subject_kind, agent_name, author_user_id,
         text, state, handled_by_user_id, handled_by_label, handled_at, created_at, updated_at)
@@ -297,6 +304,9 @@ describe("deleting an account empties the stored copies of the person (ERASE-ACT
       db.sql`select actor from config_asset_revisions where id = ${seeded.revision}`
     ).resolves.toEqual([{ actor: { userId: uid, displayLabel: "", roles: ["user"] } }]);
     await expect(
+      db.sql`select actor from config_asset_publications where id = ${seeded.publication}`
+    ).resolves.toEqual([{ actor: { userId: uid, displayLabel: "", roles: ["user"] } }]);
+    await expect(
       db.sql`select handled_by_user_id, handled_by_label from feedback where id = ${seeded.feedback}`
     ).resolves.toEqual([{ handled_by_user_id: uid, handled_by_label: "" }]);
     // Still handled, by an account that is gone.
@@ -337,6 +347,7 @@ describe("deleting an account empties the stored copies of the person (ERASE-ACT
       expect.arrayContaining([
         "agent_runs",
         "approval_requests",
+        "config_asset_publications",
         "config_asset_revisions",
         "connection_bindings",
         "conversation_follow_ups",
