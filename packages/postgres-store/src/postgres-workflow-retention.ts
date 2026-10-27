@@ -21,6 +21,7 @@ import {
 import { WORKFLOW_ENDED_STATUSES, type WorkflowRunsStore } from "@work-shape/catalyst-core";
 import type { PostgresConnection } from "./postgres-database";
 import { runIs } from "./postgres-workflow-run-mapping";
+import { minimizedHeldCallResult, onlyKeys } from "./postgres-pruned-run";
 import {
   approvalRequests,
   conversationAttachments,
@@ -138,14 +139,6 @@ const stepGovernance = {
   Exclude<keyof typeof workflowStepRuns.$inferSelect, keyof typeof stepValues>,
   true
 >;
-
-// The keys of a JSON object column that stay, or null where it holds none.
-const onlyKeys = (column: SQL | AnyColumn, keys: readonly string[]) =>
-  sql`case when ${column} is null then null else (select coalesce(jsonb_object_agg(key, value), '{}'::jsonb)
-    from jsonb_each(${column}) where key in (${sql.join(
-      keys.map((key) => sql`${key}`),
-      sql`, `
-    )})) end`;
 
 // What a settled request of a thread keeps of its held call. Keep it the shape of
 // `minimizedOperationCallPayload` (server, approvals), which every path that ends a held call
@@ -428,31 +421,55 @@ export function workflowRetention(
                   )
                 )
               );
-          // What the thread's ended tool calls answered goes; a read keeps only its counts. The
+          // What the run's ended calls answered goes; a read keeps only its counts. These are the
+          // calls its threads' agents made and those of its own steps (origin `workflow`). The
           // calls stay for their audit age with ids, status, hashes and sizes, and their
-          // decisions without a comment. A call still running keeps its recovery marker.
+          // decisions and denials without a comment. A call still running keeps its recovery
+          // marker. What a
+          // call or decision writes after this keeps no more (`postgres-pruned-run`).
+          const ownCalls = tx
+            .select({ id: operationRuns.id })
+            .from(operationRuns)
+            .where(
+              and(
+                eq(operationRuns.clientInstanceId, ref.clientInstanceId),
+                eq(operationRuns.originKind, "workflow"),
+                sql`${operationRuns.origin}->>'workflowRunId' = ${ref.id}`
+              )
+            );
           await tx
             .update(operationRuns)
             .set({
               output: sql`case when ${operationRuns.effect} = 'reading' then ${operationRuns.output} end`,
-              decision: sql`${operationRuns.decision} - 'comment'`
+              decision: sql`${operationRuns.decision} - 'comment'`,
+              // A declined call's denial names who declined it, not what they wrote.
+              error: sql`${operationRuns.error} #- '{denial,comment}'`
             })
             .where(
               and(
                 eq(operationRuns.clientInstanceId, ref.clientInstanceId),
-                isNotNull(operationRuns.conversationId),
-                inArray(operationRuns.conversationId, threads),
+                or(
+                  and(
+                    isNotNull(operationRuns.conversationId),
+                    inArray(operationRuns.conversationId, threads)
+                  ),
+                  inArray(operationRuns.id, ownCalls)
+                ),
                 ne(operationRuns.status, "running")
               )
             );
-          // A settled request of a thread keeps who decided and when, without the decider's
-          // comment. One that held a call keeps which call it was and what came of it; its input
-          // and sign-in context go. Another kind's payload, such as a skill change, is the
-          // asset change it applied and stays. A request still pending, or approved and not yet
-          // carried out, needs its input: the path that ends it minimizes it then.
+          // A settled request of a thread, or of a call of the run's steps, keeps who decided
+          // and when, without the decider's comment. One that held a call keeps which call it
+          // was and what came of it; its input and sign-in context go. Another kind's payload,
+          // such as a skill change, is the asset change it applied and stays. A request still
+          // pending, or approved and not yet carried out, needs its input: the path that ends it
+          // minimizes it then, and drops the comment where the run is pruned by then.
           const settled = and(
             eq(approvalRequests.clientInstanceId, ref.clientInstanceId),
-            inArray(sql`${approvalRequests.origin}->>'conversationId'`, threads),
+            or(
+              inArray(sql`${approvalRequests.origin}->>'conversationId'`, threads),
+              inArray(sql`${approvalRequests.payload}->>'runId'`, ownCalls)
+            ),
             ne(approvalRequests.status, "pending"),
             sql`coalesce(${approvalRequests.applyResult}->>'execution', '') <> 'queued'`
           );
@@ -474,14 +491,7 @@ export function workflowRetention(
             .set({
               payload: minimizedHeldCall,
               decision: sql`${approvalRequests.decision} - 'comment'`,
-              applyResult: sql`${onlyKeys(approvalRequests.applyResult, [
-                "runId",
-                "requestId",
-                "execution",
-                "approvalRequestId"
-              ])} || case when jsonb_typeof(${approvalRequests.applyResult}->'error') = 'object'
-                then jsonb_build_object('error', ${onlyKeys(sql`${approvalRequests.applyResult}->'error'`, ["code"])})
-                else '{}'::jsonb end`
+              applyResult: minimizedHeldCallResult(approvalRequests.applyResult)
             })
             .where(and(settled, heldCall));
           await tx
