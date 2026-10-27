@@ -1107,6 +1107,13 @@
       "when": 1793053846127,
       "tag": "0157_workflow_retention_version_3",
       "breakpoints": true
+    },
+    {
+      "idx": 158,
+      "version": "7",
+      "when": 1793058337342,
+      "tag": "0158_config_asset_publications",
+      "breakpoints": true
     }
   ]
 }

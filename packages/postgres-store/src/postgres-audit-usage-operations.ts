@@ -287,43 +287,6 @@ export async function backfillModelUsageAttribution(
 
 export function createPostgresAuditStore(db: PostgresConnection): AuditEventStore {
   return {
-    async getAssetPublication({ clientInstanceId, assetId, revision }) {
-      // Audit retention may remove the event. Never substitute the revision's save author.
-      const [row] = await db
-        .select({ at: auditEvents.createdAt, actor: auditEvents.actor })
-        .from(auditEvents)
-        .innerJoin(
-          configAssets,
-          and(
-            eq(configAssets.clientInstanceId, auditEvents.clientInstanceId),
-            eq(configAssets.id, assetId),
-            drizzleSql`${auditEvents.metadata}->>'kind' = ${configAssets.kind}`,
-            drizzleSql`${auditEvents.metadata}->>'name' = ${configAssets.name}`,
-            gte(auditEvents.createdAt, configAssets.createdAt)
-          )
-        )
-        .where(
-          and(
-            eq(auditEvents.clientInstanceId, clientInstanceId),
-            inArray(auditEvents.type, [
-              "app.published",
-              "config_asset.published",
-              "guardrail.published"
-            ]),
-            eq(auditEvents.status, "success"),
-            drizzleSql`${auditEvents.metadata}->>'revision' = ${String(revision)}`
-          )
-        )
-        .orderBy(desc(auditEvents.createdAt), desc(auditEvents.id))
-        .limit(1);
-      return row
-        ? {
-            at: row.at.toISOString(),
-            ...(row.actor?.displayLabel ? { by: row.actor.displayLabel } : {}),
-            ...(row.actor?.userId ? { byUserId: row.actor.userId } : {})
-          }
-        : undefined;
-    },
     async appendAuditEvent(input: AuditEventInput): Promise<AuditEvent> {
       return appendAuditEvent(db, input);
     },

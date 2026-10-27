@@ -3,6 +3,7 @@ import {
   ApiError,
   appInterfacePath,
   type AssetSummary,
+  type ConfigAssetPublication,
   type ConfigAssetRevision
 } from "@work-shape/catalyst-api-client";
 import { describe, expect, it } from "vitest";
@@ -10,6 +11,7 @@ import { createTranslationContext } from "./support/chat-ui/shared";
 import {
   AppDeleteDialog,
   appDraftIsAhead,
+  appHistory,
   AppEditFrame,
   appLink,
   appManifestSummary,
@@ -256,6 +258,7 @@ describe("an open App (layout 2)", () => {
         workspace,
         rights,
         publishedRevision: served.revision,
+        liveVersion: { number: 5, publishedAt: "2026-10-26T09:00:00.000Z" },
         children: createElement("p", null, "the app"),
         onBack() {},
         onEdit() {},
@@ -286,7 +289,7 @@ describe("an open App (layout 2)", () => {
     const order = [
       'href="/w/cw_1/apps"',
       ">Angebotsrechner</h1>",
-      "Published · version 2",
+      "Live: version 5 · since Oct 26",
       'aria-label="More actions"',
       "the app"
     ].map((part) => markup.indexOf(part));
@@ -302,13 +305,13 @@ describe("an open App (layout 2)", () => {
     const markup = frame(NO_APP_RIGHTS);
 
     expect(markup).toContain(">Angebotsrechner</h1>");
-    expect(markup).not.toContain("Published");
+    expect(markup).not.toContain("Live:");
     expect(markup).not.toContain("Nordlicht Beratung");
     expect(markup).not.toContain('aria-label="More actions"');
     expect(markup).toMatch(/<button[^>]*>(?:<svg.*?<\/svg>)?Copy link<\/button>/u);
     expect(markup).not.toContain("Details");
     // A publisher is a builder and reads the number, also without the right to write.
-    expect(frame({ ...NO_APP_RIGHTS, publish: true })).toContain("Published · version 2");
+    expect(frame({ ...NO_APP_RIGHTS, publish: true })).toContain("Live: version 5");
   });
 
   it("tells whoever uses the App where its data comes from, with no right to read the App", () => {
@@ -362,6 +365,9 @@ describe("the draft of an App (layout 3)", () => {
         workspace,
         rights,
         ...revisions,
+        ...(revisions.publishedRevision === undefined
+          ? {}
+          : { liveVersion: { number: 1, publishedAt: "2026-10-26T09:00:00.000Z" } }),
         children: createElement("p", null, "the draft"),
         onBack() {}
       }),
@@ -370,11 +376,12 @@ describe("the draft of an App (layout 3)", () => {
   const publishButton = (markup: string) =>
     /<button[^>]*>(?:(?!<\/button>).)*Publish<\/button>/u.exec(markup)?.[0] ?? "";
 
-  it("heads the draft with its number, Discard, Publish and the overflow", () => {
+  it("heads the draft with the live version, Discard, Publish and the overflow", () => {
     const markup = frame(ALL);
     const order = [
       ">Angebotsrechner</h1>",
-      "Draft · version 3",
+      "Live: version 1 · since Oct 26",
+      "Draft: changed since version 1",
       ">Discard</button>",
       "Publish</button>",
       'aria-label="More actions"',
@@ -385,6 +392,8 @@ describe("the draft of an App (layout 3)", () => {
     expect(order).toEqual([...order].sort((left, right) => left - right));
     expect(publishButton(markup)).not.toContain('disabled=""');
     expect(markup).not.toContain("You need the right");
+    // The revisions, 3 and 2, are no member's number.
+    expect(markup).not.toMatch(/version [23]\b/u);
   });
 
   it("holds Publish for a writer without the publish right, and names the right", () => {
@@ -433,30 +442,28 @@ describe("the draft of an App (layout 3)", () => {
       .exec(markup)?.[1]
       ?.replace(/<[^>]*>/gu, "") ?? "";
 
-  // DAILY-WINS 6: the head says what a draft does and what is live beside it (Apps check 45).
-  it("says the draft reads live data and simulates changes, and who made what is live when", () => {
-    const at = "2026-10-12T14:05:00.000Z";
-    const moment = (locale: "en" | "de") =>
-      new Date(at).toLocaleString(locale, { dateStyle: "long", timeStyle: "short" });
-    const live = { publication: { at, by: "Anna Beispiel" } };
+  // DAILY-WINS 6: the head says what a draft does and what is live beside it (Apps check 45);
+  // the live version and its day stand in the head's badge (APPVER-1).
+  it("says the draft reads live data and simulates changes, and who made what is live", () => {
+    const live = {
+      liveVersion: { number: 4, publishedAt: "2026-10-12T14:05:00.000Z", by: "Anna Beispiel" }
+    };
 
+    expect(headed(live)).toContain("Live: version 4 · since Oct 12");
     expect(draftLine(headed(live))).toBe(
-      `Draft · reads live data · changes are simulated · Live since ${moment("en")}, published by Anna Beispiel`
+      "Draft · reads live data · changes are simulated · Published by Anna Beispiel"
     );
     expect(draftLine(headed(live, "de"))).toBe(
-      `Entwurf · liest Live-Daten · Änderungen werden simuliert · Live seit ${moment("de")}, veröffentlicht von Anna Beispiel`
+      "Entwurf · liest Live-Daten · Änderungen werden simuliert · Veröffentlicht von Anna Beispiel"
     );
-    // An event without a person names the time alone; one that audit retention removed, neither.
-    expect(draftLine(headed({ publication: { at } }))).toBe(
-      `Draft · reads live data · changes are simulated · Live since ${moment("en")}`
-    );
-    expect(draftLine(headed({}))).toBe("Draft · reads live data · changes are simulated · Live");
-    expect(draftLine(headed({ publishedRevision: undefined }))).toBe(
-      "Draft · reads live data · changes are simulated · Not published yet"
-    );
-    expect(draftLine(headed({ publishedRevision: undefined }, "de"))).toBe(
-      "Entwurf · liest Live-Daten · Änderungen werden simuliert · Noch nicht veröffentlicht"
-    );
+    // A version without a person, as one from before versions were recorded, names nobody.
+    expect(
+      draftLine(headed({ liveVersion: { number: 1, publishedAt: "2026-10-12T14:05:00.000Z" } }))
+    ).toBe("Draft · reads live data · changes are simulated");
+    // A draft never published says so in the head, and the line says what a draft does.
+    const never = headed({ publishedRevision: undefined }, "de");
+    expect(never).toContain("Entwurf · noch nicht veröffentlicht");
+    expect(draftLine(never)).toBe("Entwurf · liest Live-Daten · Änderungen werden simuliert");
     expect(headed({ rights: NO_APP_RIGHTS, ...live })).not.toContain("app-draft-line");
   });
 
@@ -569,7 +576,7 @@ describe("the draft of an App (layout 3)", () => {
 
     expect(markup).toContain("Publish “Angebotsrechner”?");
     expect(markup).toContain(
-      "Everyone in Nordlicht Beratung gets version 3 when they open the app."
+      "Everyone in Nordlicht Beratung gets this state when they open the app."
     );
     expect(markup).toContain("Connections it uses");
     expect(markup).toContain(">crm</code>");
@@ -601,7 +608,7 @@ describe("the draft of an App (layout 3)", () => {
   });
 });
 
-describe("the revisions of an App", () => {
+describe("the history of an App", () => {
   const revision = (number: number, overrides: Partial<ConfigAssetRevision> = {}) =>
     ({
       assetId: "cfga_angebotsrechner",
@@ -613,40 +620,124 @@ describe("the revisions of an App", () => {
       createdAt: `2026-10-0${number}T09:30:00.000Z`,
       ...overrides
     }) satisfies ConfigAssetRevision;
-  const drawer = (onPublish?: (revision: ConfigAssetRevision) => void) =>
+  const publication = (number: number, published: number, day: number, by?: string) =>
+    ({
+      number,
+      revision: published,
+      actor: by ? { displayLabel: by, roles: [] } : null,
+      publishedAt: `2026-10-0${day}T12:00:00.000Z`
+    }) satisfies ConfigAssetPublication;
+  // Five saves and three publishes: revision 1, then 3, then back to 1. The newest save is the
+  // agent's, the second one was saved from a preview.
+  const publications = [
+    publication(3, 1, 4, "Jana Petersen"),
+    publication(2, 3, 3, "Jana Petersen"),
+    publication(1, 1, 1)
+  ];
+  const revisions = [
+    revision(5, { origin: { kind: "agent_run", conversationId: "conv_1" } }),
+    revision(4),
+    revision(3),
+    revision(2, {
+      origin: { kind: "page", conversationId: "conv_1", pageId: "page_1", fileSetNumber: 2 }
+    }),
+    revision(1)
+  ];
+  const drawer = (
+    onPublish?: (revision: ConfigAssetRevision) => void,
+    locale: "en" | "de" = "en"
+  ) =>
     render(
       createElement(RevisionsDrawerView, {
         open: true,
         name: "Angebotsrechner",
-        revisions: [revision(3), revision(2), revision(1)],
+        publications,
+        revisions,
         failed: false,
         hasMore: false,
         loadingMore: false,
-        draftRevision: 3,
-        publishedRevision: 2,
+        draftRevision: 5,
+        publishedRevision: 1,
         onPublish,
+        onLoadMore() {},
+        onRetry() {},
+        onClose() {}
+      }),
+      locale
+    );
+
+  it("folds the saves under the version each came after, the newest version first", () => {
+    expect(appHistory(publications, revisions, true)).toEqual({
+      versions: [
+        { publication: publications[0], saves: [revisions[0]] },
+        { publication: publications[1], saves: [revisions[1]] },
+        { publication: publications[2], saves: [revisions[2], revisions[3]] }
+      ],
+      before: [revisions[4]]
+    });
+    // A save older than every version read waits for the versions further back.
+    expect(appHistory(publications.slice(0, 2), revisions, false).before).toEqual([]);
+  });
+
+  it("names each version, who published it and when, and the saves after it, without a revision number", () => {
+    const markup = drawer();
+
+    expect(markup).toContain(
+      "Every version of Angebotsrechner with the draft saves after it, the newest first."
+    );
+    const order = ["Version 3", "Version 2", "Version 1"].map((part) => markup.indexOf(part));
+    expect(order).not.toContain(-1);
+    expect(order).toEqual([...order].sort((left, right) => left - right));
+    expect(markup).toMatch(/data-version="3"(?:(?!data-version).)*>Published</u);
+    expect(markup).not.toMatch(/data-version="[12]"(?:(?!data-version).)*>Published</u);
+    expect(markup).toContain("Published by Jana Petersen · ");
+    // The version from before versions were recorded names nobody.
+    expect(markup).toMatch(/data-version="1"(?:(?!data-version).)*Published · /u);
+    expect(markup.match(/>1 draft save</gu)).toHaveLength(2);
+    expect(markup).toContain(">2 draft saves<");
+    expect(markup).toContain(">1 draft save before version 1<");
+    expect(markup).toContain("Workshaper for Jana Petersen");
+    expect(markup).toMatch(/data-revision="2"(?:(?!data-revision).)*Saved from the preview/u);
+    expect(markup).toMatch(/data-revision="5"(?:(?!data-revision).)*>Draft</u);
+    expect(markup).not.toMatch(/Version [45]/u);
+    expect(markup).not.toContain("Publish this save");
+    const german = drawer(undefined, "de");
+    expect(german).toContain("Veröffentlicht von Jana Petersen · ");
+    expect(german).toContain(">2 Entwurfsstände<");
+    expect(german).toContain(">1 Entwurfsstand vor Version 1<");
+    expect(german).toContain("Workshaper für Jana Petersen");
+    expect(german).toContain("Aus der Vorschau gespeichert");
+  });
+
+  it("lets a holder of the publish right publish every save but the live one", () => {
+    const markup = drawer(() => undefined);
+
+    expect(markup.match(/Publish this save/gu)).toHaveLength(4);
+    expect(markup).not.toMatch(/data-revision="1"(?:(?!data-revision).)*Publish this save/u);
+    expect(drawer(() => undefined, "de")).toContain("Diesen Stand veröffentlichen");
+  });
+
+  it("lists the saves of an App never published as they are", () => {
+    const markup = render(
+      createElement(RevisionsDrawerView, {
+        open: true,
+        name: "Angebotsrechner",
+        publications: [],
+        revisions: [revision(2), revision(1)],
+        failed: false,
+        hasMore: false,
+        loadingMore: false,
+        draftRevision: 2,
+        publishedRevision: undefined,
         onLoadMore() {},
         onRetry() {},
         onClose() {}
       })
     );
-
-  it("lists who saved each revision and when, and marks the two pointers", () => {
-    const markup = drawer();
-
-    expect(markup).toContain("Every saved state of Angebotsrechner, the newest first.");
-    expect(markup.match(/Jana Petersen/gu)).toHaveLength(3);
-    expect(markup).toContain("Version 3");
-    expect(markup).toMatch(/data-revision="3"(?:(?!data-revision).)*>Draft</u);
-    expect(markup).toMatch(/data-revision="2"(?:(?!data-revision).)*>Published</u);
-    expect(markup).not.toContain("Publish this version");
-  });
-
-  it("lets a holder of the publish right publish every revision but the published one", () => {
-    const markup = drawer(() => undefined);
-
-    expect(markup.match(/Publish this version/gu)).toHaveLength(2);
-    expect(markup).not.toMatch(/data-revision="2"(?:(?!data-revision).)*Publish this version/u);
+    expect(markup.match(/data-revision="/gu)).toHaveLength(2);
+    expect(markup).toContain("Jana Petersen");
+    expect(markup).not.toMatch(/\d draft saves?/u);
+    expect(markup).not.toContain("Version");
   });
 });
 

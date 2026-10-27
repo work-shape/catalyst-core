@@ -21,6 +21,7 @@ import {
   type PageHeaderAction
 } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../../shared/i18n";
+import { formatDayShort } from "../../shared/locale-format";
 import { workspaceRoutePath } from "../../shared/routes";
 import { AppActionEffect, AppActionOutcomeBadge } from "./app-action-facts";
 import type { AppActionsRead } from "./app-data";
@@ -95,12 +96,32 @@ export function CopyAppLinkButton({ workspaceId, app }: { workspaceId: string; a
   );
 }
 
-/** Where an App stands, as a list row and the header of the App say it. */
-export function AppStateBadge({ state }: { state: AppState }) {
-  const { t } = useTranslation();
+/** The version of an App that is live, as the instance numbers its publishes. */
+export interface AppLiveVersion {
+  number: number;
+  publishedAt: string;
+}
+
+/**
+ * Where an App stands, as a list row and the head of the App say it. The head knows the live
+ * version and says it with its date; a list row says that the App is published.
+ */
+export function AppStateBadge({
+  state,
+  liveVersion
+}: {
+  state: AppState;
+  liveVersion?: AppLiveVersion | undefined;
+}) {
+  const { locale, t } = useTranslation();
   return state.kind === "published" ? (
     <Badge tone="success" size="sm" dot>
-      {t("apps.published", { number: state.revision })}
+      {liveVersion
+        ? t("apps.liveVersion", {
+            number: liveVersion.number,
+            date: formatDayShort(liveVersion.publishedAt, locale)
+          })
+        : t("apps.publishedBadge")}
     </Badge>
   ) : (
     <Badge tone="neutral" size="sm" dot>
@@ -303,9 +324,7 @@ export function AppDetailsDialog({
       open
       size="sm"
       title={t("apps.detailsOf", { name })}
-      description={
-        app ? t("apps.detailsRevision", { number: app.contentRevision ?? app.revision }) : undefined
-      }
+      description={app ? t("apps.detailsRevision") : undefined}
       onClose={onClose}
       footer={
         <Button variant="outline" onClick={onClose}>

@@ -98,7 +98,7 @@ export function assetToolSentence(
         return t(call.isError ? "assetToolSaveFailed" : "assetToolSaving");
       }
       if (answer?.saved === true && typeof answer.revision === "number") {
-        return t("assetToolSaved", { number: answer.revision });
+        return t("assetToolSaved");
       }
       if (answer?.conflict !== undefined) {
         return t("assetToolSaveConflict");

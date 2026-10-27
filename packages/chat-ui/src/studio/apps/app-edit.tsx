@@ -19,7 +19,6 @@ import {
 import { instanceSentence, PendingApprovalError } from "../build-area/build-refusals";
 import { CopyIdItem } from "../copy-id-item";
 import { useTranslation } from "../../shared/i18n";
-import { formatMoment } from "../../shared/locale-format";
 import { DraftHostsNotice } from "../pages/draft-hosts-notice";
 import { PreviewPane } from "../pages/preview-pane";
 import { workspaceRoutePath } from "../../shared/routes";
@@ -31,7 +30,8 @@ import {
   AppDeleteDialog,
   AppFrame,
   AppHeader,
-  AppStateBadge
+  AppStateBadge,
+  type AppLiveVersion
 } from "./app-header";
 import {
   APP_RIGHT_NAMES,
@@ -221,7 +221,8 @@ export function AppEdit({ app }: { app: string }) {
         rights={rights}
         draftRevision={draft}
         publishedRevision={published}
-        publication={asset?.publication}
+        liveVersion={asset?.liveVersion}
+        draftChangedSinceLive={asset?.draftChangedSinceLive}
         dataSources={dataSources}
         view={view}
         onViewChange={setView}
@@ -358,7 +359,7 @@ export function AppEdit({ app }: { app: string }) {
           }}
           onClose={closeDialogs}
         >
-          {t("apps.discardBody", { number: published })}
+          {t("apps.discardBody")}
           {error ? <InlineError className="mt-3">{error}</InlineError> : null}
         </ConfirmDialog>
       ) : null}
@@ -386,6 +387,7 @@ export function AppEdit({ app }: { app: string }) {
           draftRevision={draft}
           publishedRevision={published}
           load={(cursor) => writes.revisions(app, cursor)}
+          loadPublications={(cursor) => writes.publications(app, cursor)}
           onPublish={
             rights.publish
               ? (revision: ConfigAssetRevision) => {
@@ -424,7 +426,8 @@ export function AppEditFrame({
   rights,
   draftRevision,
   publishedRevision,
-  publication,
+  liveVersion,
+  draftChangedSinceLive,
   dataSources,
   view,
   draftConfig,
@@ -448,8 +451,10 @@ export function AppEditFrame({
   /** The number of the draft, once the record arrived. */
   draftRevision?: number;
   publishedRevision?: number;
-  /** Who made the live revision live and when, as far as the instance still records it. */
-  publication?: { at: string; by?: string } | undefined;
+  /** The live version: its number, when and by whom it was published. */
+  liveVersion?: (AppLiveVersion & { by?: string }) | undefined;
+  /** Whether the draft is another revision than the live one, as the instance says it. */
+  draftChangedSinceLive?: boolean | undefined;
   /** Where the App's data comes from, one sentence per filler, once it is known. */
   dataSources?: readonly string[] | undefined;
   /** The side that is shown. Left out, the head has no switch. */
@@ -471,11 +476,11 @@ export function AppEditFrame({
   onRevisions?: () => void;
   onDelete?: () => void;
 }) {
-  const { locale, t } = useTranslation();
+  const { t } = useTranslation();
   const missingRightId = useId();
   const known = rights.write && draftRevision !== undefined;
   const hasSources = dataSources !== undefined && dataSources.length > 0;
-  const ahead = appDraftIsAhead(draftRevision, publishedRevision);
+  const ahead = draftChangedSinceLive ?? appDraftIsAhead(draftRevision, publishedRevision);
   const missingRight = known && !rights.publish;
   const editWithAgent = useAppEditWithAgent(app, rights);
   const shownView = view ?? "preview";
@@ -514,17 +519,23 @@ export function AppEditFrame({
             description={description}
             state={
               known ? (
-                // A draft that is what is published says so, as the list and the App do.
-                publishedRevision !== undefined && !ahead ? (
-                  <AppStateBadge
-                    state={{ kind: "published", revision: publishedRevision, draftAhead: false }}
-                  />
-                ) : (
-                  <Badge tone={ahead ? "warning" : "neutral"} size="sm" dot>
-                    {publishedRevision === undefined
-                      ? t("apps.draftNotPublished")
-                      : t("apps.draftRevision", { number: draftRevision })}
+                // What is live, by its version, and whether the draft changed since.
+                publishedRevision === undefined ? (
+                  <Badge tone="neutral" size="sm" dot>
+                    {t("apps.draftNotPublished")}
                   </Badge>
+                ) : (
+                  <span className="flex flex-wrap items-center gap-2">
+                    <AppStateBadge
+                      state={{ kind: "published", revision: publishedRevision, draftAhead: ahead }}
+                      liveVersion={liveVersion}
+                    />
+                    {ahead && liveVersion ? (
+                      <Badge tone="warning" size="sm" dot>
+                        {t("apps.draftChangedSince", { number: liveVersion.number })}
+                      </Badge>
+                    ) : null}
+                  </span>
                 )
               ) : (
                 <Badge size="sm">{t("apps.draft")}</Badge>
@@ -583,17 +594,9 @@ export function AppEditFrame({
           {known ? (
             <Banner layout="page" className="shrink-0" data-testid="app-draft-line">
               {t("apps.draftSimulates")}
-              {" · "}
-              {publishedRevision === undefined
-                ? t("apps.notPublishedYet")
-                : publication
-                  ? publication.by !== undefined
-                    ? t("apps.liveSinceBy", {
-                        date: formatMoment(publication.at, locale),
-                        name: personName(publication.by, t)
-                      })
-                    : t("apps.liveSince", { date: formatMoment(publication.at, locale) })
-                  : t("apps.live")}
+              {liveVersion?.by === undefined
+                ? null
+                : ` · ${t("apps.publishedBy", { name: personName(liveVersion.by, t) })}`}
             </Banner>
           ) : null}
           {/* The head is one row; what the reader may not do is said in a line under it. */}

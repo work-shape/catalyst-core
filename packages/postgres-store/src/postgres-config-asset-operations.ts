@@ -20,6 +20,7 @@ import {
   createPlatformId,
   WORKFLOW_ASSET_KIND,
   type ConfigAssetRecord,
+  type ConfigAssetPublicationRecord,
   type ConfigAssetRevisionRecord,
   type ConfigAssetState,
   type ConfigAssetStore
@@ -49,6 +50,7 @@ import {
 } from "./rows";
 import {
   configAssetAvailability,
+  configAssetPublications,
   configAssetRevisions,
   configAssets,
   configAssetState,
@@ -164,6 +166,32 @@ async function listConfigAssetRevisions(
     .orderBy(newestFirst ? desc(configAssetRevisions.revision) : asc(configAssetRevisions.revision))
     .limit(input.page?.limit ?? 2147483647);
   return rows.map(mapConfigAssetRevision);
+}
+
+async function listConfigAssetPublications(
+  db: PostgresConnection,
+  input: Parameters<ConfigAssetStore["listConfigAssetPublications"]>[0]
+): Promise<ConfigAssetPublicationRecord[]> {
+  const rows = await db
+    .select()
+    .from(configAssetPublications)
+    .where(
+      and(
+        eq(configAssetPublications.clientInstanceId, input.clientInstanceId),
+        eq(configAssetPublications.assetId, input.assetId),
+        keysetFilter(input.page, [configAssetPublications.number], true)
+      )
+    )
+    .orderBy(desc(configAssetPublications.number))
+    .limit(input.page?.limit ?? 2147483647);
+  return rows.map((row) => ({
+    assetId: row.assetId,
+    number: row.number,
+    revision: row.revision,
+    actor: row.actor,
+    publishedAt: row.publishedAt.toISOString(),
+    ...(row.note === null ? {} : { note: row.note })
+  }));
 }
 
 async function applyConfigAssetMutations(
@@ -770,6 +798,7 @@ export function createPostgresConfigAssetsStore(
     ): Promise<ConfigAssetRevisionRecord[]> {
       return listConfigAssetRevisions(db, input);
     },
+    listConfigAssetPublications: (input) => listConfigAssetPublications(db, input),
     async getConfigAssetRevision(
       input: Parameters<ConfigAssetStore["getConfigAssetRevision"]>[0]
     ): Promise<ConfigAssetRevisionRecord | undefined> {

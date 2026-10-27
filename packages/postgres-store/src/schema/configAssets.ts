@@ -118,6 +118,29 @@ export const configAssetRevisions = pgTable(
   ]
 );
 
+/**
+ * Each publish of a `draft_published` asset, numbered from 1 per asset: what members call a
+ * version. A publish of an earlier revision, the way back, is a row of its own.
+ */
+export const configAssetPublications = pgTable(
+  "config_asset_publications",
+  {
+    id: text("id").primaryKey(),
+    clientInstanceId: text("client_instance_id").notNull(),
+    assetId: text("asset_id")
+      .notNull()
+      .references(() => configAssets.id, { onDelete: "cascade" }),
+    revision: integer("revision").notNull(),
+    number: integer("number").notNull(),
+    actor: jsonb("actor").$type<AuditActor>(),
+    publishedAt: timestamp("published_at", { withTimezone: true }).notNull(),
+    note: text("note")
+  },
+  (table) => [
+    uniqueIndex("config_asset_publications_asset_number_idx").on(table.assetId, table.number)
+  ]
+);
+
 /** Availability of agents, Apps, Knowledge Bases and Connections. No row grants no workspace availability. */
 export const configAssetAvailability = pgTable(
   "config_asset_availability",

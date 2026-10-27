@@ -3,7 +3,7 @@ import { appCallersByWorkflow } from "../workflows/app-callers";
 import { workflowCallers } from "../workflows/workflow-callers";
 import { agentDependencyAvailability } from "./agent-dependency-availability";
 import { appAudienceReview } from "../apps/app-audience";
-import type { AppAudience } from "@work-shape/catalyst-core";
+import type { AppAudience, AuditActor } from "@work-shape/catalyst-core";
 import {
   agentConfigSchema,
   resolveStoredAgentReferences
@@ -420,32 +420,11 @@ export class AssetReadWorkflow {
     // action the instance refuses and hides none it allows (AD-4).
     const allowed = allowedOn(target.kind, call, target.resource);
     const saveApproval = await this.saveApproval(call, target);
-    // The draft header names the publish, which can be by someone other than its author.
-    const recorded =
+    // The version the draft's head names: the newest publication, while something is live.
+    const liveVersion =
       target.kind.kind === "app" && !publishedOnly && asset.publishedRevision !== undefined
-        ? await this.options.stores.audit
-            .getAssetPublication({
-              clientInstanceId: this.options.clientInstanceId,
-              assetId: asset.id,
-              revision: asset.publishedRevision
-            })
-            .catch(() => undefined)
+        ? await this.liveVersion(asset.id, asset.publishedRevision)
         : undefined;
-    // Audit keeps the publisher's name until it is pruned. The page names them as their account
-    // is now: a deleted account's name is empty, which the interface shows as "Deleted account".
-    const publication = recorded && {
-      at: recorded.at,
-      ...(recorded.byUserId === undefined
-        ? recorded.by === undefined
-          ? {}
-          : { by: recorded.by }
-        : {
-            by: await createPersonLabelLookup(
-              this.options.stores.users,
-              this.options.clientInstanceId
-            )(recorded.byUserId, recorded.by ?? "")
-          })
-    };
     return {
       ...(saveApproval ? { saveApproval } : {}),
       ...(agentStatus ?? {}),
@@ -468,7 +447,10 @@ export class AssetReadWorkflow {
               (await appCallersByWorkflow(this.options, call.access)).get(asset.name) ?? []
           }
         : {}),
-      ...(publication ? { publication } : {}),
+      ...(liveVersion ? { liveVersion } : {}),
+      ...(target.kind.kind === "app" && !publishedOnly && asset.publishedRevision !== undefined
+        ? { draftChangedSinceLive: asset.revision !== asset.publishedRevision }
+        : {}),
       ...(publishQuestion?.length ? { publishQuestion } : {}),
       ...(publishConfirmation ? { publishConfirmation } : {}),
       ...(publishProcessing ? { publishProcessing } : {}),
@@ -593,22 +575,7 @@ export class AssetReadWorkflow {
       page,
       newestFirst: true
     });
-    // Who wrote each revision is named as the account is now: a deleted account's name is
-    // empty, which the interface shows as "Deleted account".
-    const labelOf = createPersonLabelLookup(
-      this.options.stores.users,
-      this.options.clientInstanceId
-    );
-    const named = await Promise.all(
-      revisions.map(async ({ actor }) => {
-        if (actor?.userId === undefined) return actor;
-        const displayLabel = await labelOf(actor.userId, actor.displayLabel);
-        if (displayLabel) return { ...actor, displayLabel };
-        // Nor does it name the account at the identity provider.
-        const { externalUserId: _externalUserId, ...gone } = actor;
-        return { ...gone, displayLabel };
-      })
-    );
+    const named = await this.namedActors(revisions.map(({ actor }) => actor));
     return revisions.map((revision, index) => ({
       assetId: revision.assetId,
       revision: revision.revision,
@@ -619,6 +586,74 @@ export class AssetReadWorkflow {
       globalVersion: revision.globalVersion,
       createdAt: revision.createdAt
     }));
+  }
+
+  /**
+   * One page of the publications of an asset with a draft, newest first: its versions. Read
+   * with the right of its history, which they are part of.
+   */
+  async listPublications(call: AssetCall, address: AssetAddress, page: StorePage | undefined) {
+    const target = await this.host.target(address);
+    call.access.require(
+      this.readAction(call.access, target, { revision: "draft" }).action,
+      target.resource
+    );
+    if (!target.asset) {
+      throw notFound(target);
+    }
+    const publications = await this.options.configAssets.store.listConfigAssetPublications({
+      clientInstanceId: this.options.clientInstanceId,
+      assetId: target.asset.id,
+      page
+    });
+    const named = await this.namedActors(publications.map(({ actor }) => actor));
+    return publications.map((publication, index) => ({
+      number: publication.number,
+      revision: publication.revision,
+      actor: named[index] ?? publication.actor,
+      publishedAt: publication.publishedAt,
+      ...(publication.note === undefined ? {} : { note: publication.note })
+    }));
+  }
+
+  /**
+   * The newest publication of an asset, with the name of who made it as the account is now.
+   * None where it is not of the live revision: a worker of the release before recorded none.
+   */
+  private async liveVersion(assetId: string, publishedRevision: number) {
+    const [live] = await this.options.configAssets.store.listConfigAssetPublications({
+      clientInstanceId: this.options.clientInstanceId,
+      assetId,
+      page: { limit: 1 }
+    });
+    if (live?.revision !== publishedRevision) return undefined;
+    const [by] = await this.namedActors([live.actor]);
+    return {
+      number: live.number,
+      publishedAt: live.publishedAt,
+      ...(by ? { by: by.displayLabel } : {})
+    };
+  }
+
+  /**
+   * Who acted, named as the account is now: a deleted account's name is empty, which the
+   * interface shows as "Deleted account".
+   */
+  private async namedActors(actors: readonly (AuditActor | null)[]) {
+    const labelOf = createPersonLabelLookup(
+      this.options.stores.users,
+      this.options.clientInstanceId
+    );
+    return Promise.all(
+      actors.map(async (actor) => {
+        if (actor?.userId === undefined) return actor;
+        const displayLabel = await labelOf(actor.userId, actor.displayLabel);
+        if (displayLabel) return { ...actor, displayLabel };
+        // Nor does it name the account at the identity provider.
+        const { externalUserId: _externalUserId, ...gone } = actor;
+        return { ...gone, displayLabel };
+      })
+    );
   }
 
   /**

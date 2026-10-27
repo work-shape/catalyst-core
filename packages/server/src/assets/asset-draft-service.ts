@@ -9,6 +9,7 @@ import {
   AppError,
   GUARDRAIL_ASSET_KIND,
   asUserId,
+  auditActorFromIdentity,
   createPlatformId,
   getSubjectUserId,
   isAppError,
@@ -605,6 +606,7 @@ export class AssetDraftWorkflow {
         clientInstanceId: this.options.clientInstanceId,
         kind: kind.kind,
         name,
+        actor: auditActorFromIdentity(call.actor),
         // The asset the right was checked on, and the revision that was checked above.
         assetId: asset.id,
         revision: input.revision,
@@ -640,6 +642,7 @@ export class AssetDraftWorkflow {
       kind: kind.kind,
       name,
       revision: published.revision,
+      publication: published.publication,
       ...(published.publishWidens === undefined ? {} : { publish_widens: published.publishWidens }),
       ...(audience ? { audience } : {}),
       ...(published.replacedRevision === undefined

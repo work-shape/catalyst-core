@@ -234,6 +234,15 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
     execute: (input, context) => workflow.reads.listRevisions(context, input, context.paging)
   });
 
+  route.operation(apiOperations["assets.publications.list"], {
+    // The versions are part of the history, and asked for as it is.
+    authorize: (input, { access }) =>
+      workflow.reads.authorizeGet(access, { ...input, revision: "draft" }),
+    resource: assetResource,
+    policyTargets: (input) => workflow.policyTargets(input),
+    execute: (input, context) => workflow.reads.listPublications(context, input, context.paging)
+  });
+
   route.operation(apiOperations["assets.revert"], {
     authorize: (input, { access }) => workflow.authorizeRevisionWrite(access, input, "write"),
     resource: assetResource,

@@ -28,7 +28,11 @@ import {
   validateAssetRequestSchema,
   validateAssetResponseSchema
 } from "../assets";
-import { agentAvailabilitySchema, configAssetRevisionSchema } from "../configuration";
+import {
+  agentAvailabilitySchema,
+  configAssetPublicationSchema,
+  configAssetRevisionSchema
+} from "../configuration";
 import { listQuerySchema } from "../shared";
 import { defineRegisteredOperation, json, page } from "./define-operation";
 
@@ -296,6 +300,21 @@ export const assetOperations = {
     effect: "reading",
     query: listQuerySchema.extend(assetScopeQuerySchema.shape),
     response: page(configAssetRevisionSchema, ["revision"], true),
+    errors: ["NOT_FOUND"],
+    rateClass: "read"
+  }),
+  "assets.publications.list": defineRegisteredOperation({
+    id: "assets.publications.list",
+    method: "GET",
+    path: "/api/v1/assets/:kind/:name/publications",
+    summary: "List the publications of one asset with a draft, newest first",
+    tag: "Assets",
+    auth: "principal",
+    scope: "config_assets:read",
+    requires: [],
+    effect: "reading",
+    query: listQuerySchema.extend(assetScopeQuerySchema.shape),
+    response: page(configAssetPublicationSchema, ["number"], true),
     errors: ["NOT_FOUND"],
     rateClass: "read"
   }),
