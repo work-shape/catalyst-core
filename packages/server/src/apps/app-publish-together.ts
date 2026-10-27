@@ -20,7 +20,7 @@ import type { AssetAddress } from "../assets/asset-target";
 import { publishEvents } from "../guardrails/asset-guardrail-events";
 import type { AssetWorkflowOptions } from "../types";
 import type { AppAudience } from "@work-shape/catalyst-core";
-import { APP_ASSET_KIND } from "./app-kind";
+import { APP_ASSET_KIND, requireAppPublish } from "./app-kind";
 import {
   assetTitle,
   dataStoresPublishedWith,
@@ -189,11 +189,39 @@ export class AppPublishTogether {
     const members = await this.members(input);
     const migrating = await this.storesToAwait(call, input, members.stores);
     // A store published stays published, and a wait takes up to a minute: the App's own checks
-    // come first, so a refusal of its audience, its revision or the set publishes no store and
-    // waits for none. Its Workflows' checks cannot: a Workflow's asks that its children are
-    // live, which they are only further down.
+    // come first, including its read-only onPublish checks against the proposed revisions.
+    // A refusal publishes no store and waits for none. Its Workflows' checks cannot: a
+    // Workflow asks that its children are live, which they are only further down.
     if (members.stores.length > 0 || migrating.length > 0) {
-      await this.assets.drafts.checkPublish(call, input);
+      const { asset, revision } = await this.assets.drafts.checkPublish(call, input);
+      const workflowConfigs = new Map<string, JsonObject>();
+      for (const member of members.workflows) {
+        const stored = await this.options.configAssets.store.getConfigAssetRevision({
+          clientInstanceId: this.options.clientInstanceId,
+          kind: member.kind,
+          name: member.name,
+          revision: member.revision
+        });
+        if (!stored?.config) {
+          throw new AppError(
+            "NOT_FOUND",
+            `Config ${member.kind} '${member.name}' has no revision ${member.revision} to publish`,
+            { reason: "revision_unknown", revision: member.revision }
+          );
+        }
+        workflowConfigs.set(member.name, stored.config);
+      }
+      await requireAppPublish({
+        clientInstanceId: this.options.clientInstanceId,
+        access: call.access,
+        scope: asset.scope,
+        config: revision.config,
+        stores: this.options.stores,
+        dataStoreLevels: new Map(
+          [...members.stores, ...migrating].map(({ name, level }) => [name, level])
+        ),
+        workflowConfigs
+      });
     }
     const storesPublished = await this.publishStores(call, members.stores, migrating);
     if (members.workflows.length === 0) {

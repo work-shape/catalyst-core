@@ -178,7 +178,10 @@ export interface FindingsWorld extends AppActionsInstance {
  * rows, and the App `findings` published at revision 1 with a draft at revision 2.
  */
 export async function setupFindingsApp(
-  options: Pick<AppActionsOptions, "explicitCredentials" | "events"> = {}
+  options: Pick<
+    AppActionsOptions,
+    "explicitCredentials" | "events" | "furtherKinds" | "modules"
+  > = {}
 ): Promise<FindingsWorld> {
   const databaseUrl = await fileTestDatabaseUrl();
   // The stores before the instance: the kind `data_store` is registered when it is set up.
@@ -200,10 +203,10 @@ export async function setupFindingsApp(
   });
   let dataStoresOn = true;
   const t = await setupAppActions({
-    modules: { dataStores: { enabled: true } },
     // The CLI signs in with an API key, as on an instance.
     ...options,
-    furtherKinds: [dataStoreKind(dataStores)],
+    modules: { ...options.modules, dataStores: { enabled: true } },
+    furtherKinds: [dataStoreKind(dataStores), ...(options.furtherKinds ?? [])],
     // A build that answers a manifest whose actions reach a store it does not list.
     tamper(built) {
       if (built.status !== "built" || built.manifest.id !== UNLISTED_STORE_APP) return built;

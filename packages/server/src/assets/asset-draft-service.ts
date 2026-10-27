@@ -576,6 +576,24 @@ export class AssetDraftWorkflow {
         ? await prepareAppPublication(this.options, call, asset, input.audience)
         : { audience: undefined, personalWorkspace: undefined };
     const revision = await liveRevision(this.options, call, target, input.revision);
+    // A built revision needs its own nonempty file set before any dependent publish moves.
+    // The pointer store repeats this under its lock when the revision actually goes live.
+    if (kind.representation === "files" && !kind.manifestOfFiles) {
+      const fileSet = revision.fileSetId
+        ? await this.options.stores.pages.getAssetFileSet({
+            clientInstanceId: this.options.clientInstanceId,
+            assetId: asset.id,
+            fileSetId: revision.fileSetId
+          })
+        : undefined;
+      if (!fileSet || fileSet.builtFileCount === 0) {
+        throw new AppError(
+          "VALIDATION_FAILED",
+          `Revision ${input.revision} of ${kind.kind} '${name}' has no built files to serve, so it is not published. Write the files again and publish the new revision.`,
+          { reason: "revision_files_removed", revision: input.revision }
+        );
+      }
+    }
     const stored = await loadStoredAssets(this.options);
     validateAssetSet(
       this.options.configAssets.kinds.kinds,
