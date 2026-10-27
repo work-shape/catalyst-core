@@ -1,0 +1,61 @@
+{
+  "routes": [
+    "/",
+    "/build/agents",
+    "/build/connections",
+    "/build/data-stores",
+    "/build/guardrails",
+    "/build/knowledge-bases",
+    "/build/skills",
+    "/inbox",
+    "/settings/instance/access",
+    "/settings/instance/api-access",
+    "/settings/instance/audit",
+    "/settings/instance/infrastructure",
+    "/settings/instance/jobs",
+    "/settings/instance/limits",
+    "/settings/instance/modules",
+    "/settings/instance/operations",
+    "/settings/instance/usage",
+    "/settings/instance/users",
+    "/settings/instance/workspaces",
+    "/settings/workspace/general",
+    "/settings/workspace/members",
+    "/settings/workspace/usage",
+    "/settings/you/api-keys",
+    "/settings/you/confirmations",
+    "/settings/you/connect",
+    "/settings/you/connections",
+    "/settings/you/language-appearance",
+    "/settings/you/profile",
+    "/settings/you/security",
+    "/settings/you/usage",
+    "/w/{workspace}/agents",
+    "/w/{workspace}/apps",
+    "/w/{workspace}/workflows"
+  ],
+  "required": [],
+  "states": [
+    {
+      "name": "key-confirm",
+      "setup": "/tmp/key-wording-shots/key.mjs"
+    },
+    {
+      "name": "tester-key-unusable",
+      "setup": "/tmp/key-wording-shots/unusable.mjs"
+    },
+    {
+      "name": "tester-key-scope",
+      "setup": "/tmp/key-wording-shots/scope.mjs"
+    },
+    {
+      "name": "tester-key-cannot-carry",
+      "setup": "/tmp/key-wording-shots/cannot_carry.mjs"
+    }
+  ],
+  "modules": [],
+  "pr": 110,
+  "head": "3c1c41cb4f17e0cd6119cd7a1268c1591527f5ae",
+  "base": "6e66df9637b9c911d37b2e02750101776070480b",
+  "tested": "959a43cc63c073ad50e239a921ae482ff13e5d03"
+}
