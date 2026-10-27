@@ -1,5 +1,5 @@
 import { Readable } from "node:stream";
-import { downloadAnswerSchema } from "../http/download";
+import { displaysInline, downloadAnswerSchema } from "../http/download";
 import {
   isRegisteredOperation,
   operationPathParamNames,
@@ -276,7 +276,7 @@ export function createOperationFace(options: OperationFaceOptions): OperationFac
               .header("content-type", download.contentType)
               .header(
                 "content-disposition",
-                `${download.inline === true ? "inline" : "attachment"}; filename="${encodeURIComponent(download.filename)}"`
+                `${download.inline === true && displaysInline(download.contentType) ? "inline" : "attachment"}; filename="${encodeURIComponent(download.filename)}"`
               )
               .header("cache-control", "private, no-store")
               .header("x-content-type-options", "nosniff")
