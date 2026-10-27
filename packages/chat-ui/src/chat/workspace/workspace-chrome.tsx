@@ -233,15 +233,14 @@ export function StagingBanner({ environment }: { environment: string }) {
 
 /**
  * The header of the chat: the button that opens the rail's drawer under 768 px and the agent
- * selector. From 768 px up, on a conversation with no surface beside it, the header is no band:
- * the thread scrolls to the window's top and the controls float over it on a light fade.
- * Everywhere else it is a solid band, which ends where a surface beside it begins, so nothing
- * that scrolls passes under the controls. Outside a conversation it gives way to a pinned detail
- * head, which is a band of its own: the controls float over its start.
+ * selector. On a conversation it is a solid band at every width, as high as the controls, which
+ * ends where a surface beside it begins, so nothing that scrolls passes under the controls.
+ * Outside a conversation it gives way to a pinned detail head, which is a band of its own: the
+ * controls float over its start.
  *
- * The band's fade reaches 1rem below it. At rest nothing stands under the band, the fade or the
- * floating controls: a thread starts 5rem down, and a page starts below the band in a narrow
- * window. Only what has scrolled up passes under them.
+ * The band's fade reaches 1rem below it. At rest nothing stands under the band or the fade: a
+ * thread starts 5rem down, and a page starts below the band in a narrow window. Only what has
+ * scrolled up passes under them.
  */
 export function WorkspaceChrome({
   agentDisplay,
@@ -257,9 +256,8 @@ export function WorkspaceChrome({
   agentDisplay: AgentChipDisplay;
   agents: SafeConfig["agents"];
   /**
-   * True on a conversation: the band stands at phone width and beside a surface, whatever the
-   * surface shows; from 768 px up with nothing beside it the controls float over the thread.
-   * Elsewhere the band gives way where the main area holds a pinned detail head.
+   * True on a conversation: the band stands at every width, whatever a surface beside it shows.
+   * Elsewhere it gives way where the main area holds a pinned detail head.
    */
   conversation: boolean;
   /** What a surface takes of the main area beside the conversation, in pixels. */
@@ -274,8 +272,6 @@ export function WorkspaceChrome({
 }) {
   const { t } = useTranslation();
   const besideSurface = surfaceBesideWidth > 0;
-  // A conversation alone in the main area: from 768 px up the controls float over the thread.
-  const floating = conversation && !besideSurface;
 
   return (
     <header
@@ -286,10 +282,6 @@ export function WorkspaceChrome({
         // from 768 px up it holds nothing and is gone: a page's title line there is 56 px down,
         // where the band and its fade would cover it.
         !conversation && "md:hidden",
-        // From 768 px up a conversation alone scrolls to the window's top: no band and no 1rem
-        // fade, only the light fade below. At phone width the band stays, as the controls take
-        // most of the line there.
-        floating && "md:bg-transparent md:after:hidden",
         // A pinned detail head, and a sub-rail whose area name stands beside that button, are
         // bands of their own.
         !conversation &&
@@ -304,14 +296,6 @@ export function WorkspaceChrome({
       style={{ right: surfaceBesideWidth }}
       inert={covered}
     >
-      {/* Keeps the floating controls legible once messages pass underneath. */}
-      {floating ? (
-        <div
-          data-header-fade=""
-          className="pointer-events-none absolute inset-x-0 -top-px bottom-0 -z-10 bg-gradient-to-b from-background/25 via-background/3 to-transparent max-md:hidden"
-          aria-hidden="true"
-        />
-      ) : null}
       <div className="pointer-events-auto flex min-w-0 items-center gap-2">
         <IconButton className="md:hidden" label={t("openSidebar")} onClick={onOpenSidebar}>
           <PanelLeft aria-hidden="true" />

@@ -166,23 +166,19 @@ describe("agent chip in the header", () => {
     expect(beside).not.toContain("data-header-fade");
   });
 
-  // Fails with the band of #210 at every width: from 768 px up a conversation no longer
-  // scrolled to the window's top, and the band cut it off under the agent picker.
-  it("floats over a conversation alone from 768 px up, and keeps the band at phone width", () => {
+  it("keeps the opaque conversation band and its bottom fade at every width", () => {
     const header = (markup: string) => /<header[^>]*>/u.exec(markup)?.[0] ?? "";
     const alone = renderHeader();
 
     expect(header(alone)).not.toContain("data-beside-surface");
     expect(header(alone)).not.toContain("border-b");
-    // At phone width the band and its 1rem fade stand.
     expect(header(alone)).toContain("bg-background");
     expect(header(alone)).toContain("after:bg-gradient-to-b");
-    // From 768 px up both go, and a light fade keeps the controls legible.
-    expect(header(alone)).toMatch(/\bmd:bg-transparent\b/u);
-    expect(header(alone)).toMatch(/\bmd:after:hidden\b/u);
-    const fade = /<div[^>]*data-header-fade[^>]*>/u.exec(alone)?.[0] ?? "";
-    expect(fade).toContain("from-background/25");
-    expect(fade).toMatch(/\bmax-md:hidden\b/u);
+    expect(header(alone)).toContain("after:top-full");
+    expect(header(alone)).toContain("after:h-4");
+    expect(header(alone)).not.toMatch(/\bmd:bg-transparent\b/u);
+    expect(header(alone)).not.toMatch(/\bmd:after:hidden\b/u);
+    expect(alone).not.toContain("data-header-fade");
 
     // Outside a conversation the band rules of 06d6c7922 stand.
     const elsewhere = renderHeader({ conversation: false, showAgentSelector: false });
