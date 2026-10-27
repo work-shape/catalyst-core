@@ -115,9 +115,12 @@ describe("what keeps a Workflow from outside clients", () => {
   // refusal names only those the publisher may read and counts the rest. Fails without the
   // check: it named 'payroll' to a publisher who may not read it.
   it("names to a publisher only the Connections they may read", async () => {
-    const child = {
+    const child: WorkflowManifest = {
       ...manifest(["connection.payroll.read", "connection.hr.read"]),
-      id: "payroll-sync"
+      id: "payroll-sync",
+      name: "Payroll sync",
+      inputs: { type: "object" },
+      outputs: { type: "object" }
     };
     const [issue] = await workflowOutsideIssues(
       manifest(["connection.crm.write", "workflow.payroll-sync.start"]),
@@ -126,9 +129,7 @@ describe("what keeps a Workflow from outside clients", () => {
         definitions: {
           read: (id) =>
             Promise.resolve(
-              id === child.id
-                ? ({ manifest: child } as Awaited<ReturnType<typeof deps.definitions.read>>)
-                : undefined
+              id === child.id ? { revisionId: "rev-child", manifest: child } : undefined
             )
         },
         readable: (connection) => Promise.resolve(connection === "crm")

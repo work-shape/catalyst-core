@@ -670,6 +670,5 @@ export async function answersOutsideClient(
     run.rootRunId === run.id
       ? run
       : await workflowRuns.readRun({ clientInstanceId, id: run.rootRunId });
-  // A root that cannot be read counts as one an outside client started: never guess open.
-  return root === undefined || root.trigger === WORKFLOW_OUTSIDE_TRIGGER;
+  return root?.trigger === WORKFLOW_OUTSIDE_TRIGGER;
 }
