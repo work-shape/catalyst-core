@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { managedFileIdFromUrl, useAttachmentContentContext } from "../files/attachment-content";
 import { resolveFileType } from "../files/file-type";
 import { FileTypeIcon } from "../files/file-type-icon";
+import { useImageFailed } from "../files/image-failure";
 import { viewerObjectUrl } from "../files/viewer-object-url";
 import { useTranslation } from "../../shared/i18n";
 
@@ -42,7 +43,7 @@ export function ImagePart() {
   );
 }
 
-function ImageFilePart({
+export function ImageFilePart({
   data,
   filename,
   mimeType
@@ -95,8 +96,9 @@ function ImageFilePart({
       }
     };
   }, [attachmentClient, data, selectedConversationId]);
+  const image = useImageFailed(imageUrl);
 
-  if (!imageUrl) {
+  if (!imageUrl || image.failed) {
     return (
       <div className="chat-message-block my-2 inline-flex max-w-full items-center gap-2 rounded-md border bg-card px-3 py-2 text-sm shadow-xs">
         <FileTypeIcon type={resolveFileType({ filename, mimeType })} />
@@ -111,6 +113,7 @@ function ImageFilePart({
         src={imageUrl}
         alt={filename ?? t("attachmentImageFallbackAlt")}
         className="max-h-96 w-auto max-w-full rounded object-contain"
+        onError={image.onError}
       />
       {filename ? (
         <figcaption className="truncate px-1 pb-1 text-xs text-muted-foreground">
