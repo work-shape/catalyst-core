@@ -13,7 +13,7 @@ export function createAppPublishTool() {
     icon: "app",
     effect: "changing",
     description:
-      "Ask the person to publish a saved App or Workflow draft, only when they ask to share or publish it: give the kind, name and the revision you saved. Nothing goes live before they confirm. For an App, read apps.publish_review first and name in workflows each Workflow it lists as pending and in dataStores each Data Store it lists as pending, each with its draftRevision: one confirmation publishes the stores and applies their migrations, then the Workflows and the App, or none of the App and its Workflows. An App's audience (self, workspace or instance) is only your suggestion; the person chooses. Omitted, it suggests Only me on a first publish and keeps the live audience later. A Workflow takes no audience.",
+      "Offer the publish confirmation card for a saved App or Workflow draft when the person asks to share or publish it, or at the end of a build step that leads to going live: give the kind, name and the revision you saved. Nothing goes live before they confirm. For an App, read apps.publish_review first and name in workflows each Workflow it lists as pending and in dataStores each Data Store it lists as pending, each with its draftRevision: one confirmation publishes the stores and applies their migrations, then the Workflows and the App, or none of the App and its Workflows. An App's audience (self, workspace or instance) is only your suggestion; the person chooses. Omitted, it suggests Only me on a first publish and keeps the live audience later. A Workflow takes no audience.",
     inputSchema: z.object({
       kind: z.enum(["app", WORKFLOW_ASSET_KIND]),
       name: z.string().min(1),
