@@ -101,6 +101,14 @@ export const workflows = defineTranslations({
       "Under {place}, allow the account “{account}” to use the Connection “{connection}”, then run the workflow again.",
     "workflows.advice.needsApproval":
       "Whoever builds the workflow has to change the step, or an administrator the rule that asks for the approval.",
+    "workflows.advice.notExposed":
+      "Running it again ends the same way: whoever builds the workflow has to change the step.",
+    "workflows.advice.notExposedWorkflow":
+      "Whoever manages the Connection “{connection}” can add “{surface}” under “{field}” for this operation on its page. Then run the workflow again.",
+    "workflows.advice.notExposedOutside":
+      "Whoever manages the Connection “{connection}” can add “{surface}” under “{field}” for this operation on its page. Or start the workflow here, not from an outside client.",
+    "workflows.advice.notExposedOutsideOfStep":
+      "Start the workflow here, not from an outside client.",
     "workflows.advice.notSupported": "Whoever builds the workflow has to replace the step.",
     "workflows.advice.operationMissing":
       "Whoever builds the workflow has to point the step at something that exists.",
@@ -362,6 +370,14 @@ export const workflows = defineTranslations({
       "The workflow may not do this: its account “{account}” may not use the Connection that one of its steps calls.",
     "workflows.reason.needsApproval":
       "This step would wait for an approval, which a run cannot do.",
+    "workflows.reason.notExposed": "What this step calls is not open to this run.",
+    "workflows.reason.notExposedWorkflow":
+      "The Connection “{connection}” does not let Workflows call this operation.",
+    "workflows.reason.notExposedWorkflowOfStep": "What this step calls is not open to Workflows.",
+    "workflows.reason.notExposedOutside":
+      "An outside client started this run, and the Connection “{connection}” does not let outside clients call this operation.",
+    "workflows.reason.notExposedOutsideOfStep":
+      "An outside client started this run, and this step reads data that is not open to outside clients.",
     "workflows.reason.notSupported": "This instance cannot run this kind of step yet.",
     "workflows.reason.operationMissing": "What this step uses no longer exists on this instance.",
     "workflows.reason.other": "The step failed.",
@@ -803,6 +819,14 @@ export const workflows = defineTranslations({
       "Erlaube dem Konto „{account}“ unter {place}, die Verbindung „{connection}“ zu verwenden, und starte den Workflow dann erneut.",
     "workflows.advice.needsApproval":
       "Wer den Workflow baut, muss den Schritt ändern, oder ein Administrator die Regel, die die Freigabe verlangt.",
+    "workflows.advice.notExposed":
+      "Ein neuer Lauf endet genauso: Wer den Workflow baut, muss den Schritt ändern.",
+    "workflows.advice.notExposedWorkflow":
+      "Wer die Verbindung „{connection}“ verwaltet, kann auf ihrer Seite bei dieser Operation „{surface}“ unter „{field}“ ergänzen. Starte den Workflow dann erneut.",
+    "workflows.advice.notExposedOutside":
+      "Wer die Verbindung „{connection}“ verwaltet, kann auf ihrer Seite bei dieser Operation „{surface}“ unter „{field}“ ergänzen. Oder starte den Workflow hier statt über einen externen Client.",
+    "workflows.advice.notExposedOutsideOfStep":
+      "Starte den Workflow hier statt über einen externen Client.",
     "workflows.advice.notSupported": "Wer den Workflow baut, muss den Schritt ersetzen.",
     "workflows.advice.operationMissing":
       "Wer den Workflow baut, muss den Schritt auf etwas richten, das es gibt.",
@@ -1072,6 +1096,16 @@ export const workflows = defineTranslations({
       "Der Workflow darf das nicht: Sein Konto „{account}“ darf die Verbindung nicht verwenden, die einer seiner Schritte aufruft.",
     "workflows.reason.needsApproval":
       "Dieser Schritt würde auf eine Freigabe warten, und das kann ein Lauf nicht.",
+    "workflows.reason.notExposed":
+      "Was dieser Schritt aufruft, ist für diesen Lauf nicht freigegeben.",
+    "workflows.reason.notExposedWorkflow":
+      "Die Verbindung „{connection}“ lässt Workflows diese Operation nicht aufrufen.",
+    "workflows.reason.notExposedWorkflowOfStep":
+      "Was dieser Schritt aufruft, ist nicht für Workflows freigegeben.",
+    "workflows.reason.notExposedOutside":
+      "Ein externer Client hat diesen Lauf gestartet, und die Verbindung „{connection}“ lässt externe Clients diese Operation nicht aufrufen.",
+    "workflows.reason.notExposedOutsideOfStep":
+      "Ein externer Client hat diesen Lauf gestartet, und dieser Schritt liest Daten, die nicht für externe Clients freigegeben sind.",
     "workflows.reason.notSupported":
       "Diese Instanz kann diese Art von Schritt noch nicht ausführen.",
     "workflows.reason.operationMissing":

@@ -31,7 +31,6 @@ import {
 import {
   ASSET_OWNER_KINDS,
   AppError,
-  CONNECTION_ACTIONS,
   CONNECTION_ASSET_KIND,
   ObjectNotFound,
   fileSetFileObjectKey,
@@ -493,12 +492,12 @@ export function createWorkflowAssetKind(
           clientInstanceId,
           configAssets: stores.configAssets
         }),
-        // The refusal names a child's Connection only to a publisher who may read or use it.
-        async readable(connection) {
+        // A child can name assets and operations its parent's publisher may not see.
+        async readable(kind, name) {
           const asset = await stores.configAssets.getConfigAsset({
             clientInstanceId,
-            kind: CONNECTION_ASSET_KIND,
-            name: connection
+            kind,
+            name
           });
           if (asset?.status !== "active") return false;
           const resource: AccessResource = {
@@ -507,8 +506,20 @@ export function createWorkflowAssetKind(
             assetId: asset.id,
             ...(asset.scope.kind === "workspace" ? { workspaceId: asset.scope.workspaceId } : {})
           };
-          return [CONNECTION_ACTIONS.read, CONNECTION_ACTIONS.use].some(
-            (right) => access.authorize(right, resource).allowed
+          if (access.authorize(`${kind}.read`, resource).allowed) return true;
+          if (
+            kind === "workflow" &&
+            [WORKFLOW_ACTIONS.write, WORKFLOW_ACTIONS.publish].some(
+              (right) => access.authorize(right, resource).allowed
+            )
+          )
+            return true;
+          // Knowledge Base use opens search, not its definition. Workflow use opens only
+          // the published revision, never an unpublished child's draft.
+          return (
+            (kind === CONNECTION_ASSET_KIND ||
+              (kind === "workflow" && asset.publishedRevision !== undefined)) &&
+            access.authorize(`${kind}.use`, resource).allowed
           );
         }
       });

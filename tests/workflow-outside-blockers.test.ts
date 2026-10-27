@@ -132,12 +132,98 @@ describe("what keeps a Workflow from outside clients", () => {
               id === child.id ? { revisionId: "rev-child", manifest: child } : undefined
             )
         },
-        readable: (connection) => Promise.resolve(connection === "crm")
+        readable: (kind, name) => Promise.resolve(kind === "connection" && name === "crm")
       }
     );
     expect(issue?.code).toBe("outside_not_exposed");
     expect(issue?.message).toContain("the Connection 'crm'; 2 Connections you may not read");
     expect(issue?.message).not.toContain("payroll");
     expect(issue?.message).not.toContain("hr'");
+  });
+
+  it("counts hidden Knowledge Bases, unpublished children and operations of unreadable children", async () => {
+    const child: WorkflowManifest = {
+      ...manifest([
+        "knowledge.private-documents.search",
+        "workflow.private-child.start",
+        "app.private-report.refresh",
+        "private.tool"
+      ]),
+      id: "private-definition",
+      name: "Private definition",
+      inputs: { type: "object" },
+      outputs: { type: "object" }
+    };
+    const root = manifest([
+      "knowledge.uploads.search",
+      "workflow.public-child.start",
+      "workflow.private-definition.start",
+      "public.tool"
+    ]);
+    const dependencies = {
+      ...deps,
+      definitions: {
+        read: (id: string) =>
+          Promise.resolve(id === child.id ? { revisionId: "child", manifest: child } : undefined)
+      },
+      readable: (kind: string, name: string) =>
+        Promise.resolve(
+          (kind === "knowledge_base" && name === "uploads") ||
+            (kind === "workflow" && name === "public-child")
+        )
+    };
+    const [issue] = await workflowOutsideIssues(root, dependencies);
+    expect(issue?.message).toContain(
+      "the Knowledge Base 'uploads'; a Knowledge Base you may not read"
+    );
+    expect(issue?.message).toContain(
+      "the unpublished child Workflow 'public-child'; an unpublished child Workflow you may not read"
+    );
+    expect(issue?.message).toContain("the operation 'public.tool'; 2 operations you may not read");
+    for (const secret of [
+      "private-documents",
+      "private-child",
+      "private-report",
+      "private.tool",
+      "private-definition"
+    ]) {
+      expect(issue?.message).not.toContain(secret);
+    }
+    // Once the child is readable its operations may be named, without lending asset read rights.
+    const [readable] = await workflowOutsideIssues(root, {
+      ...dependencies,
+      readable: (kind, name) => Promise.resolve(kind === "workflow" && name === child.id)
+    });
+    expect(readable?.message).toContain("'app.private-report.refresh'");
+    expect(readable?.message).toContain("'private.tool'");
+    expect(readable?.message).not.toContain("private-documents");
+    expect(readable?.message).not.toContain("private-child");
+  });
+
+  it("names a repeated operation when any definition naming it is readable, in either traversal order", async () => {
+    const children = ["hidden", "visible"].map((id): WorkflowManifest => ({
+      ...manifest(["shared.operation", "shared.operation"]),
+      id,
+      name: id,
+      inputs: { type: "object" },
+      outputs: { type: "object" }
+    }));
+    for (const order of [children, [...children].reverse()]) {
+      const [issue] = await workflowOutsideIssues(
+        manifest(order.map(({ id }) => `workflow.${id}.start`)),
+        {
+          ...deps,
+          definitions: {
+            read: (id) => {
+              const child = children.find((child) => child.id === id);
+              return Promise.resolve(child ? { revisionId: id, manifest: child } : undefined);
+            }
+          },
+          readable: (kind, name) => Promise.resolve(kind === "workflow" && name === "visible")
+        }
+      );
+      expect(issue?.message).toContain("the operation 'shared.operation'");
+      expect(issue?.message).not.toContain("operations you may not read");
+    }
   });
 });

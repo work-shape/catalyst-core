@@ -89,6 +89,15 @@ export async function workflowOutsideBlockers(
     definitions: Pick<WorkflowDefinitionSource, "read">;
   }
 ): Promise<WorkflowOutsideBlocker[]> {
+  return (await scanOutsideBlockers(manifest, deps)).blockers;
+}
+
+/** Keeps operation provenance internal: enforcement needs blockers, disclosure needs readers. */
+async function scanOutsideBlockers(
+  manifest: Pick<WorkflowManifest, "id" | "steps" | "tools">,
+  deps: Parameters<typeof workflowOutsideBlockers>[1]
+) {
+  const operationWorkflows = new Map<string, Set<string>>();
   const found = new Map<string, WorkflowOutsideBlocker>();
   const block = (kind: WorkflowOutsideBlocker["kind"], name: string) =>
     found.set(`${kind}\u0000${name}`, { kind, name });
@@ -152,6 +161,9 @@ export async function workflowOutsideBlockers(
       // An App's action (under `bridge`), an API operation that reads runs or sources as the
       // Workflow's account, a tool of the release: none is asked of `outside`, so all are closed.
       block("operation", name);
+      const sources = operationWorkflows.get(name) ?? new Set<string>();
+      sources.add(definition.id);
+      operationWorkflows.set(name, sources);
     }
     for (const child of children) {
       const revision = await deps.definitions.read(child, deps.configAssets);
@@ -164,7 +176,7 @@ export async function workflowOutsideBlockers(
   }
 
   await visit(manifest);
-  return [...found.values()];
+  return { blockers: [...found.values()], operationWorkflows };
 }
 
 /**
@@ -202,48 +214,57 @@ export function workflowNotOutsideRefusal(workflow: string): AppError {
 
 /**
  * What a publish is refused for: a revision outside clients may start that reads data not
- * exposed to them, with what blocks it by name. A Connection is named only where the publisher
- * may read it (`readable`): a child Workflow's account may use Connections the publisher may
- * not see, and those are counted. The start asks again, since a Connection or a child changes
- * later.
+ * exposed to them. Assets are named only where the publisher may read them (`readable`),
+ * operations only where the publisher may read a definition that names them. All others are
+ * counted. The start asks again, since a Connection or a child changes later.
  */
 export async function workflowOutsideIssues(
   manifest: Pick<WorkflowManifest, "id" | "steps" | "tools">,
   deps: Parameters<typeof workflowOutsideBlockers>[1] & {
-    readable(connection: string): Promise<boolean>;
+    readable(
+      kind: Exclude<WorkflowOutsideBlocker["kind"], "operation">,
+      name: string
+    ): Promise<boolean>;
   }
 ): Promise<WorkflowDefinitionIssue[]> {
   if (!startsFromOutside(manifest)) return [];
-  const blockers = await workflowOutsideBlockers(manifest, deps);
+  const { blockers, operationWorkflows } = await scanOutsideBlockers(manifest, deps);
   if (blockers.length === 0) return [];
-  const namesOf = (kind: WorkflowOutsideBlocker["kind"]) =>
-    blockers.flatMap((blocker) => (blocker.kind === kind ? [blocker.name] : []));
-  const listed = (names: readonly string[], one: string, many: string) =>
-    names.length === 0
-      ? []
-      : [`${names.length === 1 ? one : many} ${names.map((name) => `'${name}'`).join(", ")}`];
-  const connections = namesOf("connection");
-  const shown = await Promise.all(connections.map((name) => deps.readable(name)));
-  const hidden = shown.filter((readable) => !readable).length;
-  const parts = [
-    ...listed(
-      connections.filter((_name, index) => shown[index]),
-      "the Connection",
-      "the Connections"
-    ),
-    ...(hidden === 0
-      ? []
-      : [
-          hidden === 1 ? "a Connection you may not read" : `${hidden} Connections you may not read`
-        ]),
-    ...listed(namesOf("knowledge_base"), "the Knowledge Base", "the Knowledge Bases"),
-    ...listed(
-      namesOf("workflow"),
-      "the unpublished child Workflow",
-      "the unpublished child Workflows"
-    ),
-    ...listed(namesOf("operation"), "the operation", "the operations")
-  ];
+  const visible = await Promise.all(
+    blockers.map(async (blocker) => {
+      if (blocker.kind !== "operation") return deps.readable(blocker.kind, blocker.name);
+      const sources = operationWorkflows.get(blocker.name) ?? new Set<string>();
+      if (sources.has(manifest.id)) return true;
+      return (await Promise.all([...sources].map((name) => deps.readable("workflow", name)))).some(
+        Boolean
+      );
+    })
+  );
+  const parts: string[] = [];
+  const labels = [
+    ["connection", "Connection", "Connections"],
+    ["knowledge_base", "Knowledge Base", "Knowledge Bases"],
+    ["workflow", "unpublished child Workflow", "unpublished child Workflows"],
+    ["operation", "operation", "operations"]
+  ] as const;
+  for (const [kind, one, many] of labels) {
+    const named = blockers.filter((blocker, index) => blocker.kind === kind && visible[index]);
+    const hidden = blockers.filter(
+      (blocker, index) => blocker.kind === kind && !visible[index]
+    ).length;
+    if (named.length > 0) {
+      parts.push(
+        `the ${named.length === 1 ? one : many} ${named.map(({ name }) => `'${name}'`).join(", ")}`
+      );
+    }
+    if (hidden > 0) {
+      parts.push(
+        hidden === 1
+          ? `${kind === "operation" || kind === "workflow" ? "an" : "a"} ${one} you may not read`
+          : `${hidden} ${many} you may not read`
+      );
+    }
+  }
   const [trigger] = manifest.steps;
   return [
     {

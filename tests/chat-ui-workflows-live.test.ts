@@ -14,6 +14,7 @@ import {
 } from "@work-shape/catalyst-chat-ui/workflows";
 import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harness";
 import { recordedApiClient } from "./support/recorded-api-client";
+import { failureAdvice } from "./support/chat-ui/studio-workflows";
 
 // The Workflow screens over the engine of an instance: the reads and the two writes through
 // the client, and what the pages say about what the engine does not do yet. Every test here
@@ -811,6 +812,111 @@ describe("what a run says about how it ended", () => {
       now: new Date("2026-10-12T09:12:00.000Z")
     });
     expect(graph.nodes.find((node) => node.id === "remind")?.footer).toContain(named);
+  });
+
+  it("tells a step refused for its Connection's exposure where to open it, never to grant a right (WF-OUT)", () => {
+    const outside = {
+      code: "FORBIDDEN",
+      message:
+        "'connection.buchhaltung-kanzlei.list_invoices' is not exposed to outside clients, and an outside client started this run. Expose it to outside clients on the Connection's page, or turn off starts by outside clients in the Workflow's settings",
+      action: "connection_exposure:outside"
+    };
+    const failure = toWorkflowStepRun(
+      stepRun("wfs_2", "remind", { status: "failed", error: outside })
+    ).failure;
+    expect(failure).toMatchObject({
+      reason: "notExposed",
+      exposure: "outside",
+      connection: "buchhaltung-kanzlei"
+    });
+    // The action no grant carries is never kept as a right to name.
+    expect(failure?.action).toBeUndefined();
+    if (failure === undefined) throw new Error("no failure");
+    const admin = { administers: true, place: "Settings › API access" };
+    expect(failureHappened(failure, t)).toBe(
+      "An outside client started this run, and the Connection “buchhaltung-kanzlei” does not let outside clients call this operation."
+    );
+    expect(failureHappened(failure, de)).toBe(
+      "Ein externer Client hat diesen Lauf gestartet, und die Verbindung „buchhaltung-kanzlei“ lässt externe Clients diese Operation nicht aufrufen."
+    );
+    // An administrator of accounts is told the same: no account's right opens it.
+    expect(failureAdvice(failure, t, admin)).toBe(
+      "Whoever manages the Connection “buchhaltung-kanzlei” can add “Outside clients” under “Callable by” for this operation on its page. Or start the workflow here, not from an outside client."
+    );
+    expect(failureAdvice(failure, de, admin)).toBe(
+      "Wer die Verbindung „buchhaltung-kanzlei“ verwaltet, kann auf ihrer Seite bei dieser Operation „Externe Clients“ unter „Aufrufbar durch“ ergänzen. Oder starte den Workflow hier statt über einen externen Client."
+    );
+    // The Connection's title wins where the instance sends one.
+    expect(failureHappened({ ...failure, connectionTitle: "Buchhaltung Kanzlei" }, t)).toContain(
+      "the Connection “Buchhaltung Kanzlei”"
+    );
+
+    // The run's page says it, although the failed step is held, and offers no right.
+    const html = page({ ...run, status: "failed", error: outside }, [
+      stepRun("wfs_1", "start", { stepType: "trigger" }),
+      stepRun("wfs_2", "remind", { status: "failed", error: outside })
+    ]);
+    expect(html).toContain("does not let outside clients call this operation");
+    expect(html).toContain("under “Callable by”");
+    for (const grant of ["lacks the right", "this right", "connection_exposure"]) {
+      expect(html).not.toContain(grant);
+    }
+
+    // Not exposed to Workflows: the Connection's page again, with its own surface.
+    const workflow = toWorkflowRun({
+      ...run,
+      status: "failed",
+      error: {
+        code: "FORBIDDEN",
+        message:
+          "'connection.crm.search' is not exposed to Workflows. Expose it to Workflows on the Connection's page",
+        action: "connection_exposure:workflow"
+      }
+    }).failure;
+    expect(workflow && failureHappened(workflow, t)).toBe(
+      "The Connection “crm” does not let Workflows call this operation."
+    );
+    expect(workflow && failureAdvice(workflow, de, admin)).toBe(
+      "Wer die Verbindung „crm“ verwaltet, kann auf ihrer Seite bei dieser Operation „Workflows“ unter „Aufrufbar durch“ ergänzen. Starte den Workflow dann erneut."
+    );
+
+    // Data of no Connection, which no exposure opens: only the run side is offered.
+    const knowledge = toWorkflowRun({
+      ...run,
+      status: "failed",
+      error: {
+        code: "FORBIDDEN",
+        message:
+          "'knowledge.search' reads data that is not open to outside clients, and an outside client started the test run. To run this step, start the test run signed in to the app",
+        action: "connection_exposure:outside"
+      }
+    }).failure;
+    expect(knowledge?.connection).toBeUndefined();
+    expect(knowledge && failureHappened(knowledge, t)).toBe(
+      "An outside client started this run, and this step reads data that is not open to outside clients."
+    );
+    expect(knowledge && failureAdvice(knowledge, t, admin)).toBe(
+      "Start the workflow here, not from an outside client."
+    );
+    // A sentence of another form names no Connection.
+    const unnamed = toWorkflowRun({
+      ...run,
+      status: "failed",
+      error: { code: "FORBIDDEN", message: "may not", action: "connection_exposure:outside" }
+    }).failure;
+    expect(unnamed).toMatchObject({ reason: "notExposed", exposure: "outside" });
+    expect(unnamed?.connection).toBeUndefined();
+
+    // A missing right keeps its grant advice.
+    expect(
+      failureAdvice({ reason: "missingRight", action: "connection.use" }, t, {
+        ...admin,
+        account: "Workflow runner",
+        connection: "crm"
+      })
+    ).toBe(
+      "Under Settings › API access, allow the account “Workflow runner” to use the Connection “crm”, then run the workflow again."
+    );
   });
 
   it("names the right a tester lacks in words, never as its technical name", () => {
