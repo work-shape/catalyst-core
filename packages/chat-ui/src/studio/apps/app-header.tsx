@@ -99,7 +99,7 @@ export function CopyAppLinkButton({ workspaceId, app }: { workspaceId: string; a
 /** The version of an App that is live, as the instance numbers its publishes. */
 export interface AppLiveVersion {
   number: number;
-  publishedAt: string;
+  publishedAt?: string;
 }
 
 /**
@@ -117,10 +117,12 @@ export function AppStateBadge({
   return state.kind === "published" ? (
     <Badge tone="success" size="sm" dot>
       {liveVersion
-        ? t("apps.liveVersion", {
-            number: liveVersion.number,
-            date: formatDayShort(liveVersion.publishedAt, locale)
-          })
+        ? liveVersion.publishedAt
+          ? t("apps.liveVersion", {
+              number: liveVersion.number,
+              date: formatDayShort(liveVersion.publishedAt, locale)
+            })
+          : t("apps.liveVersionWithoutDate", { number: liveVersion.number })
         : t("apps.publishedBadge")}
     </Badge>
   ) : (

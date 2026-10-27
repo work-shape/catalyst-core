@@ -100,6 +100,21 @@ describe("publications backfill (APPVER-1)", () => {
           String(id).startsWith("publication_")
         )
       ).toBe(true);
+      // The corrective migration hides inferred times without inventing replacement dates.
+      const correction = await readFile(
+        "packages/postgres-store/migrations/0162_publication_time_known.sql",
+        "utf8"
+      );
+      for (const statement of correction.split("--> statement-breakpoint"))
+        if (statement.trim()) await sql.unsafe(statement);
+      expect(
+        await sql`SELECT asset_id, published_at_known FROM config_asset_publications ORDER BY asset_id`
+      ).toEqual([
+        { asset_id: "credited", published_at_known: true },
+        { asset_id: "erased", published_at_known: false },
+        { asset_id: "pruned", published_at_known: false },
+        { asset_id: "recreated", published_at_known: false }
+      ]);
       // A second publish of an asset takes the next number; the same number twice is refused.
       await expect(
         sql`INSERT INTO config_asset_publications (id, client_instance_id, asset_id, revision, number, published_at)

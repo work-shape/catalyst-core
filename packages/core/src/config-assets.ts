@@ -187,9 +187,11 @@ export type ConfigAssetRevisionOrigin =
       fileSetNumber: number;
       /** The agent of that conversation saved the Page into the asset, not a person's step. */
       byAgent?: true;
+      /** The saving agent’s display name at the time of the save. */
+      agentDisplayName?: string;
     }
   /** An agent's tool call in the conversation wrote the revision, for the person it acts for. */
-  | { kind: "agent_run"; conversationId: string };
+  | { kind: "agent_run"; conversationId: string; agentDisplayName?: string };
 
 /** An asset whose Page is a given one, with who wrote it from that Page last. */
 export interface ConfigAssetFromPage {
@@ -226,7 +228,8 @@ export interface ConfigAssetPublicationRecord {
   revision: number;
   /** Absent where it is not known, as for the publications the migration wrote. */
   actor: AuditActor | null;
-  publishedAt: string;
+  /** Absent when the historical publish time is unknown. */
+  publishedAt?: string;
   note?: string;
 }
 

@@ -189,7 +189,7 @@ async function listConfigAssetPublications(
     number: row.number,
     revision: row.revision,
     actor: row.actor,
-    publishedAt: row.publishedAt.toISOString(),
+    ...(row.publishedAtKnown ? { publishedAt: row.publishedAt.toISOString() } : {}),
     ...(row.note === null ? {} : { note: row.note })
   }));
 }

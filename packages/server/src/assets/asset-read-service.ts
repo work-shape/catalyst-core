@@ -611,7 +611,7 @@ export class AssetReadWorkflow {
       number: publication.number,
       revision: publication.revision,
       actor: named[index] ?? publication.actor,
-      publishedAt: publication.publishedAt,
+      ...(publication.publishedAt === undefined ? {} : { publishedAt: publication.publishedAt }),
       ...(publication.note === undefined ? {} : { note: publication.note })
     }));
   }
@@ -630,7 +630,7 @@ export class AssetReadWorkflow {
     const [by] = await this.namedActors([live.actor]);
     return {
       number: live.number,
-      publishedAt: live.publishedAt,
+      ...(live.publishedAt === undefined ? {} : { publishedAt: live.publishedAt }),
       ...(by ? { by: by.displayLabel } : {})
     };
   }

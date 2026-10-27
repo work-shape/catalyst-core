@@ -25,7 +25,7 @@ import {
   createAppSaveTool,
   LocalWorkspaceCommandProcessExecutor
 } from "@work-shape/catalyst-tool-execution";
-import { clientInstanceId } from "./support/access-instance";
+import { agent, clientInstanceId } from "./support/access-instance";
 import { appFiles, expectStatus, setupAppInstance, type AppInstance } from "./support/app-instance";
 import { assetRepoCommandFromSource } from "./support/asset-repo";
 import { testServerOptions } from "./support/test-instance";
@@ -237,6 +237,75 @@ describe("app.save in a conversation", () => {
       message: expect.stringContaining("never wrote")
     });
     expect(await stored("bound-app")).toMatchObject({ revision: 2 });
+  });
+
+  it("records the saving agent's display name for Page and direct saves, without rewriting old revisions", async () => {
+    const conversationId = await conversationOf(t.admin, "private");
+    await t.storePage("saved by assistant", {}, { conversationId });
+    await calls.saveApp(await contextOf(t.admin, conversationId), {
+      page: "Offers",
+      name: "save-authors",
+      title: "Save authors"
+    });
+    // A distinct agent uses the same writer, but its own name is saved with its revision.
+    await t.stores.configAssets.applyConfigAssetMutations({
+      clientInstanceId,
+      baseRevisions: { "agent:other-helper": null },
+      mutations: [
+        {
+          type: "upsert",
+          kind: "agent",
+          name: "other-helper",
+          config: agent("other-helper", { displayName: "Other helper" })
+        }
+      ]
+    });
+    const context = await contextOf(t.admin, conversationId, "platform.assets.put");
+    if (!context.toolRequest) throw new Error("Missing tool request");
+    context.toolRequest.agentName = "other-helper";
+    await calls.put(context, {
+      expectedRevision: 1,
+      files: appFiles("saved directly").map((file) => {
+        if (!("text" in file)) throw new Error("Expected text source");
+        return file;
+      })
+    });
+    // Renaming a helper later must not relabel the save it already made.
+    await t.stores.configAssets.applyConfigAssetMutations({
+      clientInstanceId,
+      baseRevisions: { "agent:other-helper": 1 },
+      mutations: [
+        {
+          type: "upsert",
+          kind: "agent",
+          name: "other-helper",
+          config: agent("other-helper", { displayName: "Renamed helper" })
+        }
+      ]
+    });
+    const revisions = await t.stores.configAssets.listConfigAssetRevisions({
+      clientInstanceId,
+      kind: "app",
+      name: "save-authors"
+    });
+    expect(revisions.map(({ origin }) => origin)).toEqual([
+      expect.objectContaining({ kind: "page", byAgent: true, agentDisplayName: "assistant" }),
+      expect.objectContaining({ kind: "agent_run", agentDisplayName: "Other helper" })
+    ]);
+    const history = await t.expectOk(t.admin.id, "assets.revisions.list", {
+      params: { kind: "app", name: "save-authors" },
+      query: { workspaceId: t.workspaceId }
+    });
+    expect(history.json()).toMatchObject({
+      items: expect.arrayContaining([
+        expect.objectContaining({
+          origin: expect.objectContaining({ agentDisplayName: "assistant" })
+        }),
+        expect.objectContaining({
+          origin: expect.objectContaining({ agentDisplayName: "Other helper" })
+        })
+      ])
+    });
   });
 
   it("does not write over a draft changed elsewhere, and says so", async () => {

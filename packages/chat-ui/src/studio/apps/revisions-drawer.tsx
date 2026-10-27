@@ -295,14 +295,20 @@ export function RevisionsDrawerView({
                         ) : null
                       }
                       description={[
-                        publication.actor
-                          ? t("apps.versionPublishedBy", {
-                              name: personName(publication.actor.displayLabel, t),
-                              date: formatMomentShort(publication.publishedAt, locale)
-                            })
-                          : t("apps.versionPublished", {
-                              date: formatMomentShort(publication.publishedAt, locale)
-                            }),
+                        publication.publishedAt === undefined
+                          ? publication.actor
+                            ? t("apps.versionPublishedByWithoutDate", {
+                                name: personName(publication.actor.displayLabel, t)
+                              })
+                            : t("apps.publishedBadge")
+                          : publication.actor
+                            ? t("apps.versionPublishedBy", {
+                                name: personName(publication.actor.displayLabel, t),
+                                date: formatMomentShort(publication.publishedAt, locale)
+                              })
+                            : t("apps.versionPublished", {
+                                date: formatMomentShort(publication.publishedAt, locale)
+                              }),
                         ...(publication.note ? [publication.note] : [])
                       ].join(" · ")}
                       descriptionWraps
@@ -328,9 +334,13 @@ export function RevisionsDrawerView({
             {history.before.length > 0 ? (
               <li className="grid">
                 {folded(
-                  history.before.length === 1
-                    ? t("apps.savesBeforeFirstOne")
-                    : t("apps.savesBeforeFirst", { count: history.before.length }),
+                  publications?.some(({ publishedAt }) => publishedAt === undefined)
+                    ? history.before.length === 1
+                      ? t("apps.savesOne")
+                      : t("apps.saves", { count: history.before.length })
+                    : history.before.length === 1
+                      ? t("apps.savesBeforeFirstOne")
+                      : t("apps.savesBeforeFirst", { count: history.before.length }),
                   history.before
                 )}
               </li>
@@ -356,7 +366,15 @@ export function RevisionsDrawerView({
 /** Who made a save: the person, their agent for them, or the preview it was saved from. */
 function saveAuthor(revision: ConfigAssetRevision, t: TranslationContextValue["t"]): string {
   const person = personName(revision.actor?.displayLabel, t);
-  if (savedByAgent(revision)) return t("apps.saveByAgent", { name: person });
+  if (savedByAgent(revision)) {
+    const agent =
+      revision.origin && "agentDisplayName" in revision.origin
+        ? revision.origin.agentDisplayName
+        : undefined;
+    return agent
+      ? t("apps.saveByAgent", { agent, name: person })
+      : t("apps.saveByUnknownAgent", { name: person });
+  }
   if (revision.origin?.kind === "page") return t("apps.saveFromPreview");
   return person;
 }

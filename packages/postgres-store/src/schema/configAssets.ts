@@ -134,6 +134,8 @@ export const configAssetPublications = pgTable(
     number: integer("number").notNull(),
     actor: jsonb("actor").$type<AuditActor>(),
     publishedAt: timestamp("published_at", { withTimezone: true }).notNull(),
+    /** False for historical publishes whose timestamp was inferred from an edit. */
+    publishedAtKnown: boolean("published_at_known").notNull().default(true),
     note: text("note")
   },
   (table) => [
