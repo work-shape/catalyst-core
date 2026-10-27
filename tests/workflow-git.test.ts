@@ -1,9 +1,13 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { commitsAssetRepos, platformModules } from "@work-shape/catalyst-client-assembly";
+import {
+  commitsAssetRepos,
+  createLogger,
+  platformModules
+} from "@work-shape/catalyst-client-assembly";
 import { runCli } from "@work-shape/catalyst-cli";
 import { createTestFetch } from "./support/test-instance";
 import { testOperations } from "./support/operations";
@@ -11,6 +15,7 @@ import { workflowConfigSchema } from "@work-shape/catalyst-config-schema";
 import {
   WORKFLOW_ASSET_KIND,
   isJsonObject,
+  readYamlData,
   createModuleRegistry,
   scheduleDedupeKey,
   type JobWorker,
@@ -21,6 +26,7 @@ import { LocalWorkspaceCommandProcessExecutor } from "@work-shape/catalyst-tool-
 import {
   WORKFLOW_SOURCE_DEFAULTS,
   createCodeStepJobs,
+  parseWorkflowManifest,
   writeWorkflowManifest,
   type WorkflowSourceLimits
 } from "@work-shape/catalyst-workflows";
@@ -31,6 +37,9 @@ import { recordJobErrors } from "./support/job-diagnostics";
 import { MemoryObjectStorage } from "./support/memory-object-storage";
 import { type WorkflowFixture } from "./support/workflow-instance";
 import { readyWorkflows } from "./support/workflow-runs";
+import * as yaml from "yaml";
+
+vi.mock("yaml", { spy: true });
 
 // Every write of a Workflow is a commit of its folder in its own repository (WF-GIT-1),
 // against a real Postgres, through the API of an instance with the module `workflows` on and
@@ -444,6 +453,150 @@ describe("a Workflow whose writes are commits", () => {
       { path: "steps/double.py", text: script(3) },
       { path: "workflow.yaml", text: yaml }
     ]);
+  }, 120_000);
+
+  it("preserves handwritten YAML across the config saves used by the canvas and agent tools", async () => {
+    const { saveFolder, saveConfig, revisionOf, stored, commitOf } = await ready();
+    const yaml = `# Keep the author's overview.
+name: Double # The displayed Workflow name.
+id: double
+runAs: workflow-runner
+inputs: { type: object }
+outputs: { type: object }
+
+
+# Execution order.
+steps:
+  - id: start
+    name: Start
+    type: trigger
+    triggers:
+      - kind: manual # How it starts.
+
+  # The script's explanation.
+  - id: code0
+    type: code
+    name: Run double.py # The displayed step name.
+    file: double.py
+    input: { number: { ref: { step: start, path: input.number } } }
+    inputSchema: { type: object }
+    outputSchema: { type: object }
+
+  # The result's explanation.
+  - id: result
+    name: Result
+    type: output
+    input: { result: { ref: { step: code0, path: result } } }
+`;
+    const files = [{ path: "steps/double.py", content: script(2) }];
+    let revision = revisionOf(
+      await saveFolder(
+        [
+          { path: "workflow.yaml", text: yaml },
+          { path: "steps/double.py", text: script(2) }
+        ],
+        null
+      )
+    );
+    const manifest = definition();
+    const steps = manifest.steps;
+    if (!Array.isArray(steps)) throw new Error("Missing fixture steps");
+    const trigger = steps[0];
+    const code = steps[1];
+    if (!isJsonObject(trigger) || !isJsonObject(code)) throw new Error("Missing fixture steps");
+    const edits = [
+      () => {
+        code.name = "Renamed script";
+      },
+      () => {
+        steps.splice(2, 0, {
+          id: "added",
+          name: "Added",
+          type: "code",
+          file: "double.py",
+          input: {},
+          inputSchema: { type: "object" },
+          outputSchema: { type: "object" }
+        });
+      },
+      () => {
+        steps.splice(2, 1);
+      },
+      () => {
+        trigger.triggers = [{ kind: "schedule", cron: "0 9 * * *" }];
+      },
+      () => {
+        manifest.description = "After the schedule change";
+      }
+    ];
+    for (const change of edits) {
+      change();
+      revision = revisionOf(await saveConfig(manifest, files, revision));
+      const asset = await stored();
+      const expected = parseWorkflowManifest(manifest);
+      if (!expected.ok) throw new Error("Invalid fixture manifest");
+      expect(asset.config?.manifest).toEqual(expected.manifest);
+      const commit = await commitOf(asset.commit ?? "");
+      const text = commit.files["workflow.yaml"] ?? "";
+      const parsed = readYamlData(text, "workflow.yaml", { refuseAliases: true });
+      expect(parsed.ok).toBe(true);
+      if (!parsed.ok) throw new Error("Invalid committed YAML");
+      expect(parsed.value).toEqual(manifest);
+      expect(text).toContain("name: Double # The displayed Workflow name.\nid: double");
+      expect(text).toContain("\n\n\n# Execution order.");
+      expect(text).toContain("# The script's explanation.");
+      expect(text).toContain("name: Renamed script # The displayed step name.");
+      expect(text).toContain("# The result's explanation.");
+      expect(commit.files["steps/double.py"]).toBe(script(2));
+      expect(text.includes("id: added")).toBe(
+        steps.some((step) => isJsonObject(step) && step.id === "added")
+      );
+    }
+  }, 120_000);
+
+  it("uses the full render and logs no content when a document edit cannot round-trip", async () => {
+    const { saveFolder, saveConfig, revisionOf, stored, commitOf } = await ready();
+    const files = [{ path: "steps/double.py", content: script(2) }];
+    const first = revisionOf(
+      await saveFolder(
+        [
+          {
+            path: "workflow.yaml",
+            text: `# Handwritten note.\n${writeWorkflowManifest(definition())}`
+          },
+          { path: "steps/double.py", text: script(2) }
+        ],
+        null
+      )
+    );
+    // The helper's mismatch refusal is tested separately; exercise the shared save's fallback.
+    const edit = vi.spyOn(yaml, "parseDocument").mockImplementationOnce(() => {
+      throw new Error("Could not edit the document: private source details");
+    });
+    const warn = vi.spyOn(createLogger(), "warn").mockImplementation(() => {});
+    try {
+      const manifest = definition("Changed");
+      revisionOf(await saveConfig(manifest, files, first));
+      const commit = await commitOf((await stored()).commit ?? "");
+      expect(commit.files["workflow.yaml"]).toBe(writeWorkflowManifest(manifest));
+      expect(edit).toHaveBeenCalled();
+      const fallback = warn.mock.calls.filter(
+        ([fields]) =>
+          typeof fields === "object" &&
+          fields !== null &&
+          "event" in fields &&
+          fields.event === "asset_config_file_edit_fallback"
+      );
+      expect(fallback).toEqual([
+        [
+          { kind: "workflow", event: "asset_config_file_edit_fallback" },
+          "Config file edit fell back to a full render"
+        ]
+      ]);
+    } finally {
+      edit.mockRestore();
+      warn.mockRestore();
+    }
   }, 120_000);
 
   it("refuses the second of two saves from one revision with 412 and adds one commit", async () => {

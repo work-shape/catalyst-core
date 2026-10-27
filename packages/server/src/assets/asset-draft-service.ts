@@ -206,18 +206,30 @@ export class AssetDraftWorkflow {
     const oldOwn = new Set(
       previous ? hook.filesOfConfig(previous.config).map((file) => file.path) : []
     );
-    const carried = previous?.fileSetId
+    const before = previous?.fileSetId
       ? (
           await readRevisionFolder(this.options, kind, {
             assetId: previous.id,
             config: previous.config,
             fileSetId: previous.fileSetId
           })
-        ).files.filter(
-          (file) => !oldOwn.has(file.path) && !own.some((next) => next.path === file.path)
-        )
+        ).files
       : [];
-    const files = [...own, ...carried];
+    const edited = own.map((file) => {
+      const old = before.find((candidate) => candidate.path === file.path);
+      if (!old || file.path !== hook.manifestFile || !hook.editManifest) return file;
+      const bytes = hook.editManifest(config, old.bytes);
+      if (bytes !== undefined) return { path: file.path, bytes };
+      this.options.logger.warn(
+        { kind: kind.kind, event: "asset_config_file_edit_fallback" },
+        "Config file edit fell back to a full render"
+      );
+      return file;
+    });
+    const carried = before.filter(
+      (file) => !oldOwn.has(file.path) && !own.some((next) => next.path === file.path)
+    );
+    const files = [...edited, ...carried];
     const read = files.length ? hook.read(target.name, files) : { config, extras: [] };
     const { written } = await this.writeFolder(call, target, {
       ...read,

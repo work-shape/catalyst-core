@@ -14,6 +14,8 @@ import {
   type WorkflowStepFile
 } from "@work-shape/catalyst-workflows";
 
+import { editWorkflowManifest } from "./workflow-yaml-edit";
+
 // The immutable file set holds the complete Workflow folder. Config stays the existing read
 // model; only legacy scripts needed for a one-release rollback are also held inline.
 
@@ -134,6 +136,13 @@ export function workflowRevisionFiles(
         }))
       ];
     },
+    editManifest(config, bytes) {
+      const workflow = workflowConfigSchema.safeParse(config);
+      const original = textOf(bytes);
+      if (!workflow.success || original === undefined) return undefined;
+      const edited = editWorkflowManifest(original, workflow.data.manifest);
+      return edited === undefined ? undefined : encode(edited);
+    },
     matchesConfig(config, file) {
       const workflow = workflowConfigSchema.safeParse(config);
       if (!workflow.success) return false;
@@ -143,9 +152,12 @@ export function workflowRevisionFiles(
       }
       try {
         // Written out the same, whatever order of keys or comments the stored bytes hold.
+        const parsed = parseWorkflowManifest(readManifest(file.bytes));
+        const expected = parseWorkflowManifest(workflow.data.manifest);
         return (
-          writeWorkflowManifest(readManifest(file.bytes)) ===
-          writeWorkflowManifest(workflow.data.manifest)
+          parsed.ok &&
+          expected.ok &&
+          writeWorkflowManifest(parsed.manifest) === writeWorkflowManifest(expected.manifest)
         );
       } catch {
         return false;
