@@ -16,6 +16,12 @@ import { issuePersonalKey, personalKeyToken } from "./support/personal-api-keys"
 import type { WorkflowFixture } from "./support/workflow-instance";
 import { NOTE, notifyClients, readyWorkflows } from "./support/workflow-runs";
 
+// Publishing a Workflow that reaches data closed to outside clients is a signed-in person's act
+// too (WF-OUT): a Connection operation not exposed to outside clients or a Knowledge Base,
+// through a child Workflow too, by the scan a start from outside asks. Otherwise a key fills a
+// Data Store from such a Connection, with a Workflow of its own or by a child it re-publishes,
+// for an outside Workflow to read.
+//
 // Starts by outside clients are a signed-in person's to turn on (WF-OUT). A key that may
 // publish Workflows could otherwise publish a scheduled Workflow that copies what a Connection
 // kept from outside clients into a Data Store, and an outside one that reads that store: the
@@ -111,6 +117,43 @@ describe("turning on starts by outside clients", () => {
     return asset?.publishedRevision;
   };
 
+  /** Stores crm with its operations exposed to Workflows, and to outside clients where asked. */
+  const exposeCrm = (t: WorkflowFixture, outside: boolean) => {
+    const exposure = outside ? ["workflow", "outside"] : ["workflow"];
+    return t.seed("crm", {
+      displayName: "Kundenregister",
+      operations: [
+        operationOf("echo", { exposure }),
+        operationOf("write", { effect: "changing", exposure })
+      ]
+    });
+  };
+
+  const publishNamed = (
+    t: WorkflowFixture,
+    name: string,
+    revision: number,
+    headers?: Record<string, string>
+  ) =>
+    t.call(t.root.id, "assets.publish", {
+      params: { kind: WORKFLOW_ASSET_KIND, name },
+      payload: { revision },
+      ...(headers ? { headers } : {})
+    });
+
+  const expectReachRefused = (
+    response: { statusCode: number; body: string; json(): unknown },
+    workflow: string
+  ) => {
+    expect(response.statusCode, response.body).toBe(403);
+    expect(errorSchema.parse(response.json()).error.details).toEqual({
+      reason: "reach_person_only",
+      workflow
+    });
+    expect(response.body).toContain("the Connection 'crm'");
+    expect(response.body).toContain("only a person signed in to Catalyst publishes it");
+  };
+
   const expectRefused = (response: { statusCode: number; body: string; json(): unknown }) => {
     expect(response.statusCode, response.body).toBe(403);
     expect(errorSchema.parse(response.json()).error.details).toMatchObject({
@@ -119,6 +162,68 @@ describe("turning on starts by outside clients", () => {
     });
     expect(response.body).toContain("only a person signed in to Catalyst publishes it");
   };
+
+  it("refuses a key's publish of a Workflow that reads a Connection kept from outside clients, switch off", async () => {
+    const { t, key } = await ready();
+    await exposeCrm(t, false);
+    // Scheduled or by hand, it could copy crm's answer into a store an outside Workflow reads.
+    const revision = await write(t, OFF, key);
+    expectReachRefused(await publish(t, revision, key), "notify-clients");
+    expect(await published(t)).toBeUndefined();
+    // The person publishes the same revision.
+    const byPerson = await publish(t, revision);
+    expect(byPerson.statusCode, byPerson.body).toBe(200);
+    // Exposed to outside clients, the key publishes it as before.
+    await exposeCrm(t, true);
+    const open = await write(t, { ...OFF, name: "Notify clients again" }, key);
+    const byKey = await publish(t, open, key);
+    expect(byKey.statusCode, byKey.body).toBe(200);
+    expect(await published(t)).toBe(open);
+  });
+
+  it("refuses a key's re-publish of a child that an outside Workflow starts, once the child reads closed data", async () => {
+    const { t, key } = await ready();
+    const child = { ...withTriggers(["parent"]), id: "read-clients", name: "Read clients" };
+    const parent = {
+      id: "outside-parent",
+      name: "Outside parent",
+      runAs: "workflow-runner",
+      inputs: { type: "object", properties: { note: { type: "string" } }, required: ["note"] },
+      outputs: { type: "object" },
+      steps: [
+        { id: "start", name: "Start", type: "trigger", triggers: [{ kind: "outside" }] },
+        {
+          id: "child",
+          name: "Read the clients",
+          type: "workflow",
+          workflow: "read-clients",
+          input: { note: { ref: { step: "start", path: "input.note" } } }
+        },
+        { id: "result", name: "Result", type: "output", input: {} }
+      ]
+    };
+    await t.allow({ kind: "service_principal", id: t.principal.id }, "workflow.use");
+    // A person publishes both while crm answers outside clients.
+    const first = await publishNamed(t, "read-clients", await write(t, child));
+    expect(first.statusCode, first.body).toBe(200);
+    const outside = await publishNamed(t, "outside-parent", await write(t, parent));
+    expect(outside.statusCode, outside.body).toBe(200);
+
+    // crm's admin takes outside back. The key re-publishes the child the outside Workflow
+    // starts: refused, since the child now reads data closed to outside clients.
+    await exposeCrm(t, false);
+    const again = await write(t, { ...child, name: "Read clients again" }, key);
+    expectReachRefused(await publishNamed(t, "read-clients", again, key), "read-clients");
+    // The person may publish it; the outside start stays refused at the start.
+    const byPerson = await publishNamed(t, "read-clients", again);
+    expect(byPerson.statusCode, byPerson.body).toBe(200);
+    const started = await t.call(t.root.id, "workflows.start", {
+      params: { workflow: "outside-parent" },
+      payload: { input: { note: NOTE } },
+      headers: key
+    });
+    expect(started.statusCode, started.body).toBe(403);
+  });
 
   it("refuses a key's first publish of a Workflow with the switch on", async () => {
     const { t, key } = await ready();

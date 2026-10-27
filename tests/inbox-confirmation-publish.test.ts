@@ -6,6 +6,7 @@ import {
   type CentralPolicySetting
 } from "@work-shape/catalyst-core";
 import { clientInstanceId, errorSchema } from "./support/access-instance";
+import { operationOf } from "./support/connection-operations";
 import { appFiles, expectStatus, setupAppInstance, type AppInstance } from "./support/app-instance";
 import { guardedEvents } from "./support/guardrails";
 import { getTestJobs } from "./support/test-instance";
@@ -433,36 +434,57 @@ describe("an unattended CLI publish of a Workflow (OP-4b)", () => {
       }
     );
     const id = "unattended-notify";
-    const put = await t.expectOk(t.root.id, "assets.put", {
-      params: { kind: WORKFLOW_ASSET_KIND, name: id },
-      payload: {
-        config: { name: id, manifest: { ...notifyClients(), id } },
-        expectedRevision: null
-      }
-    });
-    const { revision } = z.object({ revision: z.number() }).parse(put.json());
-    const response = await t.call(t.root.id, "assets.publish", {
-      params: { kind: WORKFLOW_ASSET_KIND, name: id },
-      payload: { revision },
-      headers: UNATTENDED_KEY
-    });
-    expectStatus(response, 202);
-    const waiting = waitingSchema.parse(response.json());
     const asset = () =>
       t.stores.configAssets.getConfigAsset({
         clientInstanceId,
         kind: WORKFLOW_ASSET_KIND,
         name: id
       });
+    const allowed = async (expectedRevision: number | null) => {
+      const put = await t.expectOk(t.root.id, "assets.put", {
+        params: { kind: WORKFLOW_ASSET_KIND, name: id },
+        payload: {
+          config: { name: id, manifest: { ...notifyClients(), id } },
+          expectedRevision
+        }
+      });
+      const { revision } = z.object({ revision: z.number() }).parse(put.json());
+      const response = await t.call(t.root.id, "assets.publish", {
+        params: { kind: WORKFLOW_ASSET_KIND, name: id },
+        payload: { revision },
+        headers: UNATTENDED_KEY
+      });
+      expectStatus(response, 202);
+      const waiting = waitingSchema.parse(response.json());
+      expect((await asset())?.publishedRevision).toBeUndefined();
+      expectStatus(
+        await t.call(t.root.id, "approval_requests.decide", {
+          params: { requestId: waiting.requestId },
+          payload: { decision: "approve" }
+        }),
+        200
+      );
+      await getTestJobs(t.instance).runDue();
+      return { revision, waiting };
+    };
+    // crm is exposed to Workflows alone: the Allow is the key's call confirmed, and a key
+    // publishes only a Workflow whose reach is open to outside clients (WF-OUT).
+    const closed = await allowed(null);
     expect((await asset())?.publishedRevision).toBeUndefined();
-    expectStatus(
-      await t.call(t.root.id, "approval_requests.decide", {
-        params: { requestId: waiting.requestId },
-        payload: { decision: "approve" }
-      }),
-      200
-    );
-    await getTestJobs(t.instance).runDue();
+    expect(
+      await t.stores.operationRuns.get({ clientInstanceId, id: closed.waiting.runId })
+    ).toMatchObject({
+      status: "failed",
+      error: { code: "FORBIDDEN", message: expect.stringContaining("the Connection 'crm'") }
+    });
+    const exposure = ["workflow", "outside"];
+    await t.seed("crm", {
+      operations: [
+        operationOf("echo", { exposure }),
+        operationOf("write", { effect: "changing", exposure })
+      ]
+    });
+    const { revision } = await allowed(closed.revision);
     expect(await asset()).toMatchObject({ publishedRevision: revision });
   });
 });

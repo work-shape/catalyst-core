@@ -41,6 +41,15 @@ export function startsFromOutside(manifest: Pick<WorkflowManifest, "steps">): bo
   );
 }
 
+/**
+ * Whether a publish is a signed-in person's act: a person in the app, an agent in their chat or
+ * a session an embedding host issued for them. Not a personal API key (nor an actor rebuilt for
+ * one, as its Inbox confirmation is), a Service Principal's credential or a run.
+ */
+function publishesAsPerson(actor: AuthenticatedIdentity): boolean {
+  return !isAuthenticatedServicePrincipal(actor) && !isOutsideCall(actor, { kind: "user" });
+}
+
 /** The reason a publish of a Workflow outside clients may start is refused to a credential. */
 export const WORKFLOW_OUTSIDE_SWITCH_PERSON_ONLY = "outside_switch_person_only";
 
@@ -60,9 +69,7 @@ export function workflowOutsideSwitchRefusal(
   manifest: Pick<WorkflowManifest, "id" | "steps">,
   actor: AuthenticatedIdentity
 ): AppError | undefined {
-  if (!startsFromOutside(manifest)) return undefined;
-  const person = !isAuthenticatedServicePrincipal(actor) && !isOutsideCall(actor, { kind: "user" });
-  if (person) return undefined;
+  if (!startsFromOutside(manifest) || publishesAsPerson(actor)) return undefined;
   return new AppError(
     "FORBIDDEN",
     `The Workflow '${manifest.id}' can be started by outside clients, so only a person signed in to Catalyst publishes it: publish it in Catalyst, or turn off starts by outside clients (CLI, MCP) in its settings before publishing it with an API key`,
@@ -245,22 +252,24 @@ export function workflowNotOutsideRefusal(workflow: string): AppError {
   );
 }
 
+/** Who reads a refusal: what the publisher may read, by kind and name. */
+type OutsideReader = Parameters<typeof workflowOutsideBlockers>[1] & {
+  readable(
+    kind: Exclude<WorkflowOutsideBlocker["kind"], "operation">,
+    name: string
+  ): Promise<boolean>;
+};
+
 /**
- * What a publish is refused for: a revision outside clients may start that reads data not
- * exposed to them. Assets are named only where the publisher may read them (`readable`),
- * operations only where the publisher may read a definition that names them. All others are
- * counted. The start asks again, since a Connection or a child changes later.
+ * What blocks the definition from answering an outside client, in words for its publisher.
+ * Assets are named only where the publisher may read them (`readable`), operations only where
+ * the publisher may read a definition that names them. All others are counted. Empty where
+ * nothing blocks it.
  */
-export async function workflowOutsideIssues(
+async function outsideBlockerParts(
   manifest: Pick<WorkflowManifest, "id" | "steps" | "tools">,
-  deps: Parameters<typeof workflowOutsideBlockers>[1] & {
-    readable(
-      kind: Exclude<WorkflowOutsideBlocker["kind"], "operation">,
-      name: string
-    ): Promise<boolean>;
-  }
-): Promise<WorkflowDefinitionIssue[]> {
-  if (!startsFromOutside(manifest)) return [];
+  deps: OutsideReader
+): Promise<string[]> {
   const { blockers, operationWorkflows } = await scanOutsideBlockers(manifest, deps);
   if (blockers.length === 0) return [];
   const visible = await Promise.all(
@@ -298,6 +307,21 @@ export async function workflowOutsideIssues(
       );
     }
   }
+  return parts;
+}
+
+/**
+ * What a publish is refused for: a revision outside clients may start that reads data not
+ * exposed to them, named as `outsideBlockerParts` names it. The start asks again, since a
+ * Connection or a child changes later.
+ */
+export async function workflowOutsideIssues(
+  manifest: Pick<WorkflowManifest, "id" | "steps" | "tools">,
+  deps: OutsideReader
+): Promise<WorkflowDefinitionIssue[]> {
+  if (!startsFromOutside(manifest)) return [];
+  const parts = await outsideBlockerParts(manifest, deps);
+  if (parts.length === 0) return [];
   const [trigger] = manifest.steps;
   return [
     {
@@ -306,4 +330,32 @@ export async function workflowOutsideIssues(
       message: `Outside clients may start it, and it reads data they may not have: ${parts.join("; ")}. Expose the operations it calls to outside clients on the Connection's page, or turn off starts by outside clients`
     }
   ];
+}
+
+/** The reason a credential's publish of a Workflow that reaches closed data is refused. */
+export const WORKFLOW_REACH_PERSON_ONLY = "reach_person_only";
+
+/**
+ * The refusal of a publish by a credential (a personal API key, a Service Principal's
+ * credential or a run, as `workflowOutsideSwitchRefusal` names them) of a revision whose reach,
+ * child Workflows included, is not open to outside clients by the scan a start from outside
+ * asks, whatever its switch says. Such a Workflow can read a Connection kept from outside
+ * clients or a Knowledge Base and copy it into a Data Store that an outside Workflow reads, so
+ * publishing it is a signed-in person's act (WF-OUT). Nothing for a person, or for a revision
+ * whose reach is open to outside clients: a key publishes that as before.
+ */
+export async function workflowReachRefusal(
+  manifest: Pick<WorkflowManifest, "id" | "steps" | "tools">,
+  actor: AuthenticatedIdentity,
+  deps: OutsideReader
+): Promise<AppError | undefined> {
+  if (publishesAsPerson(actor)) return undefined;
+  const parts = await outsideBlockerParts(manifest, deps);
+  if (parts.length === 0) return undefined;
+  return new AppError(
+    "FORBIDDEN",
+    `The Workflow '${manifest.id}' reads data that is not exposed to outside clients (${parts.join("; ")}), so only a person signed in to Catalyst publishes it: publish it in Catalyst, or have the operations it calls exposed to outside clients on the Connection's page`,
+    { reason: WORKFLOW_REACH_PERSON_ONLY, workflow: manifest.id },
+    { exposeMessage: true }
+  );
 }

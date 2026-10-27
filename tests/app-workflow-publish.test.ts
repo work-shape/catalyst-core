@@ -19,6 +19,7 @@ import { createTestFetch, getTestJobs } from "./support/test-instance";
 import { testOperations } from "./support/operations";
 import { runCli } from "@work-shape/catalyst-cli";
 import { instanceWorkflowAssetKind } from "./support/workflow-instance";
+import { operationOf } from "./support/connection-operations";
 
 // DP-0 (drafts together): an App is published only with the Workflows its `workflow` actions
 // start. The Workflow is an asset of the instance here, as on a real one, and the engine
@@ -443,6 +444,56 @@ describe("an App and the Workflows it starts, at the App's publish", () => {
     expect(await publishedRevisionOf(WORKFLOW_ASSET_KIND, "refused-child")).toBe(1);
     expect(await publishedRevisionOf(WORKFLOW_ASSET_KIND, "refused-parent")).toBeUndefined();
     expect(await publishedRevisionOf("app", "pages-r")).toBeUndefined();
+  });
+
+  // WF-OUT: a key publishes only Workflows whose reach is open to outside clients, so a key
+  // cannot build a Workflow that copies a Connection kept from outside clients into a store.
+  it("refuses a key's App publish that carries a Workflow reading a Connection kept from outside clients", async () => {
+    await t.seed("clients", {
+      operations: [operationOf("echo", { exposure: ["workflow"] })]
+    });
+    await t.grant(t.admin.id, "connection.use", {
+      assetId: await t.assetId("connection", "clients")
+    });
+    const manifest = pageWorkflow("client-pages", PAGE_INPUTS);
+    const steps = [
+      manifest.steps[0],
+      {
+        id: "clients",
+        name: "Read the clients",
+        type: "operation",
+        operation: "connection.clients.echo",
+        input: { text: { ref: { step: "start", path: "input.page" } } }
+      },
+      manifest.steps[1]
+    ];
+    const written = await t.expectOk(t.root.id, "assets.put", {
+      params: { kind: WORKFLOW_ASSET_KIND, name: "client-pages" },
+      payload: {
+        config: { name: "client-pages", manifest: { ...manifest, steps } },
+        expectedRevision: null
+      }
+    });
+    const revision = z.object({ revision: z.number() }).parse(written.json()).revision;
+    expectStatus(await t.putApp(t.admin.id, "pages-k", pagesApp("pages-k", "client-pages")), 200);
+    const named = [{ name: "client-pages", revision }];
+
+    const byKey = await t.call(t.admin.id, "assets.publish", {
+      params: { kind: "app", name: "pages-k" },
+      payload: { revision: 1, workspaceId: t.workspaceId, audience: "workspace", workflows: named },
+      headers: { "x-test-key": "personal" }
+    });
+    expectStatus(byKey, 403);
+    expect(refusalSchema.parse(byKey.json()).error.details).toEqual({
+      reason: "reach_person_only",
+      workflow: "client-pages"
+    });
+    expect(await publishedRevisionOf(WORKFLOW_ASSET_KIND, "client-pages")).toBeUndefined();
+    expect(await publishedRevisionOf("app", "pages-k")).toBeUndefined();
+
+    // The person publishes both in Catalyst.
+    expectStatus(await publishTogether(t.admin.id, "pages-k", named), 200);
+    expect(await publishedRevisionOf(WORKFLOW_ASSET_KIND, "client-pages")).toBe(revision);
   });
 
   it("refuses to publish with the App a Workflow its revision does not reach", async () => {
