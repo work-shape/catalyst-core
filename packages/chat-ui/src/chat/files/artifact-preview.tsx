@@ -28,6 +28,7 @@ import {
 } from "./artifact-preview-shell";
 import { useConversationFileBlob } from "./conversation-file-content";
 import { resolveFileType } from "./file-type";
+import { useImageFailed } from "./image-failure";
 import { TranslationProvider, useTranslation } from "../../shared/i18n";
 import { MarkdownArtifact } from "../markdown/markdown-text";
 import { workbookToUniverPreview, type SpreadsheetWorkbookPreview } from "./spreadsheet-preview";
@@ -128,6 +129,9 @@ function BlobArtifactPreview({
     content: { kind: "artifact", artifactId: artifact.artifactId },
     ...(previewKind === "pdf" || previewKind === "image" ? { viewer: previewKind } : {})
   });
+  const image = useImageFailed(
+    previewKind === "image" && state.status === "ready" ? state.url : undefined
+  );
 
   if (state.status === "loading") {
     return (
@@ -153,12 +157,13 @@ function BlobArtifactPreview({
     return <SpreadsheetFilePreview blob={state.blob} />;
   }
 
-  if ((previewKind === "pdf" || previewKind === "image") && state.url) {
+  if ((previewKind === "pdf" || previewKind === "image") && state.url && !image.failed) {
     return (
       <NativeFilePreview
         kind={previewKind}
         title={artifactDisplayFilename(artifact)}
         url={state.url}
+        {...(previewKind === "image" ? { onError: image.onError } : {})}
       />
     );
   }

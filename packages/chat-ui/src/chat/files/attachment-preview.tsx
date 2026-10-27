@@ -6,6 +6,7 @@ import { managedFileIdFromUrl, useAttachmentContentContext } from "./attachment-
 import { useOpenConversationFile } from "./conversation-file-presentation";
 import { resolveFileType } from "./file-type";
 import { FileTypeIcon } from "./file-type-icon";
+import { useImageFailed } from "./image-failure";
 import { viewerObjectUrl } from "./viewer-object-url";
 import { useTranslation } from "../../shared/i18n";
 
@@ -21,6 +22,7 @@ export function AttachmentPreview({
 }) {
   const attachment = useAuiState((state) => state.attachment as AttachmentSnapshot);
   const imageUrl = useAttachmentImageUrl(attachment);
+  const image = useImageFailed(imageUrl);
   const managedFileId = managedFileIdFromAttachmentContent(attachment.content);
   const attachmentContent = useAttachmentContentContext();
   const openConversationFile = useOpenConversationFile();
@@ -54,7 +56,8 @@ export function AttachmentPreview({
     }
   }
 
-  if (isImageAttachment(attachment)) {
+  // An image that does not decode is shown as the file it is, which opens like any other.
+  if (isImageAttachment(attachment) && !image.failed) {
     return (
       <AttachmentPrimitive.Root className="group/attachment relative max-w-xs">
         <figure className="grid gap-1 overflow-hidden rounded-md border bg-card p-1 shadow-xs">
@@ -63,6 +66,7 @@ export function AttachmentPreview({
               src={imageUrl}
               alt={attachment.name || t("attachmentImageFallbackAlt")}
               className="max-h-72 w-auto max-w-full rounded object-contain"
+              onError={image.onError}
             />
           ) : (
             <div className="flex min-h-20 items-center gap-2 px-3 py-2 text-sm text-muted-foreground">
