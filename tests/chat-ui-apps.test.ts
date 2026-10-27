@@ -746,11 +746,11 @@ describe("the history of an App", () => {
 
     expect(markup.match(/Publish this save/gu)).toHaveLength(3);
     // Version 2 may be published again; versions 3 and 1 are the live revision.
-    expect(markup.match(/Publish this version again/gu)).toHaveLength(1);
-    expect(markup).toMatch(/data-version="2"(?:(?!data-version).)*Publish this version again/u);
+    expect(markup.match(/Publish again/gu)).toHaveLength(1);
+    expect(markup).toMatch(/data-version="2"(?:(?!data-version).)*Publish again/u);
     const german = drawer(() => undefined, "de");
     expect(german).toContain("Diesen Stand veröffentlichen");
-    expect(german).toContain("Diese Version erneut veröffentlichen");
+    expect(german).toContain("Erneut veröffentlichen");
   });
 
   it("says before version 1 only the saves that never became a version", () => {
