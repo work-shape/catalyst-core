@@ -490,6 +490,33 @@ describe("Workflow run keys", () => {
     for (const event of started) expect(JSON.stringify(event)).not.toContain("2026-09/");
   });
 
+  it("holds a key per starter: another person's key starts a run of their own, and each repeat answers its starter's run", async () => {
+    const definitions = publishedDefinitions();
+    definitions.publish(echo());
+    const t = await ready(definitions);
+    echoing(t);
+    const startAs = async (userId: string, value: string) =>
+      keyedRunSchema.parse(
+        (
+          await t.expectOk(userId, "workflows.start", {
+            params: { workflow: "echo" },
+            payload: { input: { value }, key: "2026-09/1402" }
+          })
+        ).json()
+      );
+
+    const roots = await startAs(t.root.id, "root");
+    const admins = await startAs(t.admin.id, "admin");
+    expect(admins.id).not.toBe(roots.id);
+    expect(admins).toMatchObject({ runKey: "2026-09/1402", startedBy: { id: t.admin.id } });
+    expect((await t.finish(roots.id)).status).toBe("done");
+    // A repeat by either starter answers that starter's run, open or done, and starts nothing.
+    expect((await startAs(t.root.id, "again")).id).toBe(roots.id);
+    expect((await startAs(t.admin.id, "again")).id).toBe(admins.id);
+    const both = await runsOf(t, "echo", { key: "2026-09/1402" });
+    expect(both.map((run) => run.id).sort()).toEqual([roots.id, admins.id].sort());
+  });
+
   it("makes one run of two starts with one key whose transactions overlap", async () => {
     const definitions = publishedDefinitions();
     definitions.publish(echo());

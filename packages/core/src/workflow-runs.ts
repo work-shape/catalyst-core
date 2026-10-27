@@ -47,7 +47,7 @@ export { WORKFLOW_ENDED_STATUSES } from "@work-shape/catalyst-asset-schemas";
 
 /**
  * The ends of a run that give its run key up: a start with the key after one of them is a new
- * run. A run that is open or `done` holds its key (`workflow_runs_active_run_key_idx`).
+ * run. A run that is open or `done` holds its key (`workflow_runs_active_starter_run_key_idx`).
  */
 export const WORKFLOW_KEY_RELEASING_STATUSES = [
   "failed",
@@ -430,7 +430,8 @@ export interface WorkflowRunsStore {
    */
   createRun(run: NewWorkflowRun): Promise<WorkflowRun | undefined>;
   /**
-   * The run of a Workflow and mode that holds a key: open or `done`, as the key's index has it.
+   * The run of a Workflow and mode that holds a key for its starter: open or `done`, as the
+   * key's index has it. Another starter's run with the same key is never it.
    * Read after `createRun` answered nothing, in the same transaction, and held until it ends,
    * so its end either comes before (and is read) or after this transaction (and sees a step
    * that links to it). Nothing where the holder ended `failed`, `cancelled` or `limit_reached`
@@ -441,6 +442,7 @@ export interface WorkflowRunsStore {
     workflow: string;
     mode: WorkflowRunMode;
     runKey: string;
+    startedBy: OperationRunActor;
   }): Promise<WorkflowRun | undefined>;
   /**
    * Keeps on the step run of a `workflow` step the run its start was answered by key, which
