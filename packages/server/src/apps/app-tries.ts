@@ -295,12 +295,18 @@ export class AppDraftTries {
         const number = liveLevel + 1;
         item.refusals.push(
           refusalOf(
-            dataStoreRefusalError("data_store_migration_failed", name, {
-              title: item.title,
-              migration: draft.migrations.get(number) ?? String(number),
-              level: liveLevel,
-              failure: record.failure.message
-            })
+            dataStoreRefusalError(
+              record.failure.code === "job_exhausted"
+                ? "data_store_job_exhausted"
+                : "data_store_migration_failed",
+              name,
+              {
+                title: item.title,
+                migration: draft.migrations.get(number) ?? String(number),
+                level: liveLevel,
+                failure: record.failure.message
+              }
+            )
           )
         );
       }

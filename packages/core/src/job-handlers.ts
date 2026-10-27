@@ -36,7 +36,8 @@ export interface JobHandler<Payload extends JsonObject = JsonObject> {
   readonly slots: number;
   run(job: Job<Payload>, control: JobControl): Promise<void>;
   /**
-   * Runs when the last attempt is used up, in the transaction that marks the job `dead`.
+   * Runs when the executor gives up after a failure, including a non-retryable error or an
+   * expired final lease, in the transaction that marks the job `failed` or `dead`.
    * `stores` are bound to that transaction.
    */
   onExhausted?(job: Job<Payload>, stores: PlatformStores): Promise<void>;

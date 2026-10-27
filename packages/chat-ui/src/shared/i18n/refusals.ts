@@ -167,6 +167,10 @@ const DATA_STORE_ROWS = {
         : namingStore("refusals.dataStoreMigrationFailed", "migration")(details, t),
     action: toDataStore
   },
+  data_store_job_exhausted: {
+    sentence: namingStore("refusals.dataStoreJobExhausted"),
+    action: toDataStore
+  },
   data_store_migrating: {
     sentence: namingStore("refusals.dataStoreMigrating"),
     action: toDataStore

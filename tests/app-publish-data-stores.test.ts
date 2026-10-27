@@ -606,60 +606,67 @@ describe("GOLIVE-1: an App's Publish carries the Data Stores it binds", () => {
 
   // GOLIVE-1 follow-up review: a live store whose job ended in a failure is refused at once,
   // and a store the publisher may not publish is not waited for, so its failure is not told.
-  it("refuses a live store whose migration failed, and waits only for a store its publisher may publish", async () => {
-    const named = await storeWithPendingMigration("golive-stuck", "golive-stuck-app");
-    const storeAsset = required(await asset(DATA_STORE_ASSET_KIND, "golive-stuck"));
-    const stored = required(
-      await t.stores.configAssets.getConfigAssetRevision({
+  it.each(["migration_failed", "job_exhausted"])(
+    "refuses a live store with %s, and waits only for a store its publisher may publish",
+    async (failureCode) => {
+      const name = `golive-stuck-${failureCode.replaceAll("_", "-")}`;
+      const app = `${name}-app`;
+      const reason =
+        failureCode === "job_exhausted"
+          ? "data_store_job_exhausted"
+          : "data_store_migration_failed";
+      const named = await storeWithPendingMigration(name, app);
+      const storeAsset = required(await asset(DATA_STORE_ASSET_KIND, name));
+      const stored = required(
+        await t.stores.configAssets.getConfigAssetRevision({
+          clientInstanceId,
+          kind: DATA_STORE_ASSET_KIND,
+          name,
+          revision: named.store
+        })
+      );
+      await t.stores.configAssets.publishConfigAssetRevision({
         clientInstanceId,
         kind: DATA_STORE_ASSET_KIND,
-        name: "golive-stuck",
-        revision: named.store
-      })
-    );
-    await t.stores.configAssets.publishConfigAssetRevision({
-      clientInstanceId,
-      kind: DATA_STORE_ASSET_KIND,
-      name: "golive-stuck",
-      assetId: storeAsset.id,
-      revision: named.store,
-      revisionId: stored.id
-    });
-    await t.stores.dataStores.putDataStore({
-      ...(await record("golive-stuck")),
-      failure: { code: "migration_failed", message: "The database said no." }
-    });
+        name,
+        assetId: storeAsset.id,
+        revision: named.store,
+        revisionId: stored.id
+      });
+      await t.stores.dataStores.putDataStore({
+        ...(await record(name)),
+        failure: { code: failureCode, message: "The database said no." }
+      });
 
-    const read = await review("golive-stuck-app");
-    expect(read.dataStores[0]?.refusals).toEqual([
-      expect.objectContaining({ reason: "data_store_migration_failed" })
-    ]);
-    expect(read.ready).toBe(false);
-    const refused = await publishWith(t.admin.id, "golive-stuck-app", named.app, []);
-    expectStatus(refused, 409);
-    expect(t.refusal(refused).details).toMatchObject({
-      reason: "data_store_migration_failed",
-      migration: "add_note",
-      failure: "The database said no."
-    });
+      const read = await review(app);
+      expect(read.dataStores[0]?.refusals).toEqual([expect.objectContaining({ reason })]);
+      expect(read.ready).toBe(false);
+      const refused = await publishWith(t.admin.id, app, named.app, []);
+      expectStatus(refused, 409);
+      expect(t.refusal(refused).details).toMatchObject({
+        reason,
+        migration: "add_note",
+        failure: "The database said no."
+      });
 
-    const storeId = storeAsset.id;
-    await t.withRight(t.kai.id, "app.publish", { workspaceId: t.workspaceId }, () =>
-      t.withRight(t.kai.id, "data_store.read", { assetId: storeId }, () =>
-        t.withRight(t.kai.id, "data_store.insert", { assetId: storeId }, async () => {
-          const below = await publishWith(t.kai.id, "golive-stuck-app", named.app, []);
-          expectStatus(below, 409);
-          expect(t.refusal(below).details).toEqual({
-            reason: "data_store_below_min_schema",
-            dataStore: "golive-stuck",
-            minSchema: 2,
-            level: 1
-          });
-        })
-      )
-    );
-    expect((await asset("app", "golive-stuck-app"))?.publishedRevision).toBeUndefined();
-  });
+      const storeId = storeAsset.id;
+      await t.withRight(t.kai.id, "app.publish", { workspaceId: t.workspaceId }, () =>
+        t.withRight(t.kai.id, "data_store.read", { assetId: storeId }, () =>
+          t.withRight(t.kai.id, "data_store.insert", { assetId: storeId }, async () => {
+            const below = await publishWith(t.kai.id, app, named.app, []);
+            expectStatus(below, 409);
+            expect(t.refusal(below).details).toEqual({
+              reason: "data_store_below_min_schema",
+              dataStore: name,
+              minSchema: 2,
+              level: 1
+            });
+          })
+        )
+      );
+      expect((await asset("app", app))?.publishedRevision).toBeUndefined();
+    }
+  );
 
   // Rights: the App's dialog never publishes a store its publisher may not publish.
   it("refuses a publisher without data_store.publish on the store before anything changes", async () => {

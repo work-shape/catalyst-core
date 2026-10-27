@@ -444,6 +444,8 @@ const DATA_STORE_REFUSALS = {
   data_store_draft_below_min_schema: "CONFLICT",
   /** A migration of a store published with an App failed, so the App did not go live. */
   data_store_migration_failed: "CONFLICT",
+  /** The store job gave up without a more specific failure. */
+  data_store_job_exhausted: "CONFLICT",
   /** A store published with an App was still migrating when the wait ran out. Retryable. */
   data_store_migrating: "CONFLICT"
 } as const satisfies Record<string, AppErrorCode>;
@@ -482,6 +484,8 @@ const DATA_STORE_REFUSAL_SENTENCES: Record<
     `The App needs the Data Store '${store}' at migration level ${minSchema} (minSchema) and the store's draft reaches only level ${level}. Add the migration to the store's draft, then publish the App with it.`,
   data_store_migration_failed: (store, { migration, failure }) =>
     `The migration '${migration}' of the Data Store '${store}' could not be applied, so neither the App nor its Workflows were published.${failure ? ` ${failure}` : ""} Fix the migration in the store's draft and publish the App with the store again.`,
+  data_store_job_exhausted: (store) =>
+    `Die Einrichtung oder Umstellung des Datenspeichers „${store}“ wurde abgebrochen und wird nicht mehr automatisch versucht. Die App wurde nicht veröffentlicht. Bitte einen Administrator, den Auftrag unter System > Jobs erneut zu starten. Veröffentliche danach die App erneut.`,
   data_store_migrating: (store, { level, minSchema }) =>
     `The Data Store '${store}' is still applying its migrations (at level ${level}, the App needs ${minSchema}), so nothing else was published. Publish the App again in a minute.`
 };
