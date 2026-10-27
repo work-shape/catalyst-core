@@ -22,6 +22,7 @@ import {
   pageBuilds,
   previewReports,
   previewViewerReports,
+  previewCaptures,
   agentRuns,
   agentTryConversations,
   assetCheckouts
@@ -274,7 +275,9 @@ async function markLockedConversationDeleted(
       )
     );
   // What its previews reported is diagnostics of the conversation and goes with it.
-  for (const reports of [previewViewerReports, previewReports]) {
+  // So are the capture requests of its runs (PREVIEW-SEE-1); their pictures are artifacts of
+  // the conversation and go with those.
+  for (const reports of [previewViewerReports, previewReports, previewCaptures]) {
     await tx
       .delete(reports)
       .where(

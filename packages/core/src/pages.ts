@@ -5,10 +5,11 @@ import {
   type Brand,
   type ClientInstanceId,
   type ConversationId,
+  type ManagedArtifactId,
   type UserId
 } from "./ids";
 import type { JsonObject } from "./json";
-import type { PreviewReport } from "@work-shape/catalyst-asset-schemas";
+import type { PreviewCaptureRefusal, PreviewReport } from "@work-shape/catalyst-asset-schemas";
 
 // A Page is a folder of files a conversation owns. Each save is a file set: the source files,
 // the built files, the validated manifest and the kit version, stored once and never changed.
@@ -18,6 +19,12 @@ import type { PreviewReport } from "@work-shape/catalyst-asset-schemas";
  * Named here because the run notes what that preview reported on the tool's result.
  */
 export const WORKSPACE_OPEN_TOOL_NAME = "workspace.open";
+
+/**
+ * The agent's tool that asks the browser of the person whose turn the run serves for a picture
+ * of the preview they have open (PREVIEW-SEE-1). Offered only on a model route that takes images.
+ */
+export { PREVIEW_CAPTURE_TOOL_NAME } from "@work-shape/catalyst-asset-schemas";
 
 export type PageId = Brand<string, "PageId">;
 export type FileSetId = Brand<string, "FileSetId">;
@@ -383,6 +390,25 @@ export interface PreviewViewerKey {
   userId: UserId;
 }
 
+/** Where a capture request stands (PREVIEW-SEE-1). */
+export type PreviewCaptureState =
+  | { status: "pending" | "answering" }
+  | {
+      status: "captured";
+      artifactId: ManagedArtifactId;
+      width: number;
+      height: number;
+      /** The number of the revision the picture shows. */
+      number: number;
+    }
+  | { status: "refused"; code: PreviewCaptureRefusal };
+
+/** A capture request the person's browser is asked to answer: which revision it is of. */
+export interface PendingPreviewCapture {
+  id: string;
+  fileSetId: FileSetId;
+}
+
 export interface PagesStore {
   /**
    * Keeps the newest report of a preview in place of the one before, while the conversation
@@ -412,6 +438,53 @@ export interface PagesStore {
     clientInstanceId: ClientInstanceId;
     before: string;
   }): Promise<number>;
+
+  /**
+   * The newest revision the person's browser reported a preview of in the conversation after
+   * `since`: the preview the person has open.
+   */
+  viewedPreview(input: PreviewViewerKey & { since: string }): Promise<FileSetId | undefined>;
+  /**
+   * Asks the person's browser for a picture of `fileSetId`, for one tool call of a run. Refused
+   * with `capture_limit`, and nothing kept, when the run asked `perRun` times or the person's
+   * runs `perHour` times in the hour before `requestedAt`. The same tool call asked again finds
+   * its first request.
+   */
+  requestPreviewCapture(
+    input: PreviewViewerKey & {
+      runId: string;
+      toolCallId: string;
+      fileSetId: FileSetId;
+      requestedAt: string;
+      perRun: number;
+      perHour: number;
+    }
+  ): Promise<{ id: string } | { refused: "capture_limit" }>;
+  /** The person's requests of the conversation that wait for their browser, asked after `notBefore`. */
+  pendingPreviewCaptures(
+    input: PreviewViewerKey & { notBefore: string }
+  ): Promise<PendingPreviewCapture[]>;
+  /**
+   * Takes a pending request to answer it: only the person it asks, in its conversation, for its
+   * revision, while it was asked after `notBefore`. `false` when it is no such request.
+   */
+  claimPreviewCapture(
+    input: PreviewViewerKey & { id: string; fileSetId: FileSetId; notBefore: string }
+  ): Promise<boolean>;
+  /** Ends a request that is in one of the states `from`. `false` when it was in none. */
+  settlePreviewCapture(input: {
+    clientInstanceId: ClientInstanceId;
+    id: string;
+    from: readonly ("pending" | "answering")[];
+    outcome:
+      | { status: "captured"; artifactId: ManagedArtifactId; width: number; height: number }
+      | { status: "refused"; code: PreviewCaptureRefusal };
+    answeredAt: string;
+  }): Promise<boolean>;
+  getPreviewCapture(input: {
+    clientInstanceId: ClientInstanceId;
+    id: string;
+  }): Promise<PreviewCaptureState | undefined>;
 
   getAppUserStorage(input: AppUserStorageKey): Promise<Record<string, string>>;
   mutateAppUserStorage(
@@ -604,6 +677,17 @@ export function fileSetFileObjectKey(
   path: string
 ): string {
   return `${fileSetObjectPrefix(owner, fileSetId)}${part}/${path}`;
+}
+
+/**
+ * The `source` in the metadata of a picture of a preview (PREVIEW-SEE-1): an artifact of the
+ * conversation whose bytes are in the `files` store below `previewCaptureObjectPrefix`.
+ */
+export const PREVIEW_CAPTURE_ARTIFACT_SOURCE = "preview_capture";
+
+/** The object store prefix of the pictures of a conversation's previews, removed with it. */
+export function previewCaptureObjectPrefix(conversationId: ConversationId): string {
+  return `preview-captures/${conversationId}/`;
 }
 
 /** The object store prefix of everything a Page holds. */

@@ -25,4 +25,5 @@ export * from "./mail-send";
 export * from "./data-scope";
 export * from "./feedback-values";
 export * from "./callable-operations";
+export * from "./preview-capture";
 export * from "./preview-report";

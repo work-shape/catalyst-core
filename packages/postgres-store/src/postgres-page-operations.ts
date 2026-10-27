@@ -29,6 +29,14 @@ import {
   putPreviewReport,
   takePreviewReport
 } from "./postgres-preview-reports";
+import {
+  claimPreviewCapture,
+  getPreviewCapture,
+  pendingPreviewCaptures,
+  requestPreviewCapture,
+  settlePreviewCapture,
+  viewedPreview
+} from "./postgres-preview-captures";
 import { publishedRevisions } from "./postgres-config-asset-revisions";
 import { type PostgresConnection } from "./postgres-database";
 import { configAssetRevisions, configAssets } from "./schema/configAssets";
@@ -603,6 +611,12 @@ export function createPostgresPagesStore(db: PostgresConnection): PagesStore {
     previewViewedSince: (input) => previewViewedSince(db, input),
     takePreviewReport: (input) => takePreviewReport(db, input),
     prunePreviewReports: (input) => prunePreviewReports(db, input),
+    viewedPreview: (input) => viewedPreview(db, input),
+    requestPreviewCapture: (input) => requestPreviewCapture(db, input),
+    pendingPreviewCaptures: (input) => pendingPreviewCaptures(db, input),
+    claimPreviewCapture: (input) => claimPreviewCapture(db, input),
+    settlePreviewCapture: (input) => settlePreviewCapture(db, input),
+    getPreviewCapture: (input) => getPreviewCapture(db, input),
     ensurePage: (input) => ensurePage(db, input),
     createPageFileSet: (input) => createPageFileSet(db, input),
     listPages: (input) => listPages(db, input),
