@@ -13,7 +13,7 @@ import { asUserId, LEGACY_LIST_GRANTOR } from "@work-shape/catalyst-core";
 import { describe, expect, it, vi } from "vitest";
 import { required } from "./support/assertions";
 import { clientInstanceId } from "./support/data-store-instance";
-import { useKnowledgeSync } from "./support/knowledge-sync";
+import { knowledgePublisher, useKnowledgeSync } from "./support/knowledge-sync";
 const KB = "sync-test",
   SOURCE = "source";
 describe("source sync operations (KB 74, 75)", () => {
@@ -727,6 +727,7 @@ describe("source sync operations (KB 74, 75)", () => {
       world.instance.stores.transaction((stores) =>
         world.knowledge.publish(stores, {
           access: memberAccess,
+          actor: knowledgePublisher,
           assetId: asset.id,
           revision: 1,
           config: definition,
@@ -744,6 +745,7 @@ describe("source sync operations (KB 74, 75)", () => {
       world.instance.stores.transaction((stores) =>
         world.knowledge.publish(stores, {
           access,
+          actor: knowledgePublisher,
           assetId: asset.id,
           revision: 1,
           config: definition,
@@ -786,6 +788,7 @@ describe("source sync operations (KB 74, 75)", () => {
       world.instance.stores.transaction((stores) =>
         world.knowledge.publish(stores, {
           access,
+          actor: knowledgePublisher,
           assetId: asset.id,
           revision: 2,
           config: { ...definition, sources: [] },
@@ -809,6 +812,7 @@ describe("source sync operations (KB 74, 75)", () => {
       world.instance.stores.transaction((stores) =>
         world.knowledge.publish(stores, {
           access: denied,
+          actor: knowledgePublisher,
           assetId: asset.id,
           revision: 1,
           config: definition,
@@ -821,6 +825,7 @@ describe("source sync operations (KB 74, 75)", () => {
       world.instance.stores.transaction((stores) =>
         world.knowledge.publish(stores, {
           access: denied,
+          actor: knowledgePublisher,
           assetId: asset.id,
           revision: 2,
           config: { ...definition, title: "Renamed" },
@@ -833,6 +838,7 @@ describe("source sync operations (KB 74, 75)", () => {
       world.instance.stores.transaction((stores) =>
         world.knowledge.publish(stores, {
           access: denied,
+          actor: knowledgePublisher,
           assetId: asset.id,
           revision: 3,
           config: {

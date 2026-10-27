@@ -82,7 +82,8 @@ async function knowledgeProcessingReview(
   embedding: KnowledgeEmbedding,
   draftOnly = false,
   /** Where the store's record is read: a publish passes the rows of its transaction. */
-  records: DataStoreRecordsStore = runtime.stores.dataStores
+  records: DataStoreRecordsStore = runtime.stores.dataStores,
+  locale?: string
 ) {
   const next = knowledgeBaseDefinitionSchema.parse(config);
   const before = knowledgeBaseDefinitionSchema.safeParse(previous);
@@ -143,11 +144,6 @@ async function knowledgeProcessingReview(
   // exist, use the accepted file byte limit as an explicit conservative estimate.
   const unestimated = groups.reduce((sum, group) => sum + group.unestimated, 0);
   const conservativeTokens = tokens + unestimated * Math.ceil(KNOWLEDGE_FILE_MAX_BYTES / 3);
-  const basis = unestimated
-    ? `existing passages/source byte sizes; ${unestimated} contents without size estimates use the ${KNOWLEDGE_FILE_MAX_BYTES}-byte file limit conservatively`
-    : "existing passages or original byte sizes";
-  // The estimate as fields, for a reader that words it in its own language (the sentence below
-  // is the API's and the CLI's).
   const embeddingCost: KnowledgeProcessingCost = !next.methods.includes("semantic")
     ? { kind: "none" }
     : price
@@ -158,12 +154,6 @@ async function knowledgeProcessingReview(
           currency: price.currency
         }
       : { kind: "unavailable" };
-  const cost =
-    embeddingCost.kind === "none"
-      ? "0 (keyword only)"
-      : embeddingCost.kind === "estimate"
-        ? `${embeddingCost.min.toFixed(6)}–${embeddingCost.max.toFixed(6)} ${embeddingCost.currency} estimated from ${basis}; changed output may cost more`
-        : "embedding cost unavailable: configure the approved binding's customer rate";
   const confirmation = hash
     .update(
       JSON.stringify({
@@ -177,11 +167,53 @@ async function knowledgeProcessingReview(
     cost: embeddingCost,
     confirmation,
     lines: [
-      `Reprocess ${count} affected contents. Built-in processing has no model cost. Re-embedding: ${cost}. Only the affected types are reprocessed.`,
+      processingSentence(count, embeddingCost, locale),
       `Confirm with assets.publish confirmProcessing: '${confirmation}' (CLI: --confirm ${confirmation}).`
     ],
     priced: !next.methods.includes("semantic") || price !== undefined
   };
+}
+
+/**
+ * What a publish processes again and what that costs, in the reader's language (German or
+ * English) and as the Studio publish dialog words it from the same fields.
+ */
+function processingSentence(
+  count: number,
+  cost: KnowledgeProcessingCost,
+  locale: string | undefined
+): string {
+  const de = locale === "de";
+  const format = (value: number, options: Intl.NumberFormatOptions = {}) =>
+    new Intl.NumberFormat(de ? "de-DE" : "en-US", options).format(value);
+  const read = de
+    ? count === 1
+      ? "1 Dokument wird mit den neuen Einstellungen noch einmal gelesen."
+      : `${format(count)} Dokumente werden mit den neuen Einstellungen noch einmal gelesen.`
+    : count === 1
+      ? "1 document is read again with the new settings."
+      : `${format(count)} documents are read again with the new settings.`;
+  if (cost.kind === "none")
+    return `${read} ${de ? "Das kostet nichts, weil nichts eingebettet wird." : "This costs nothing, because nothing is embedded."}`;
+  if (cost.kind === "unavailable")
+    return `${read} ${
+      de
+        ? "Für das Einbettungsmodell ist kein Preis hinterlegt, darum sind die Kosten unbekannt und die Veröffentlichung ist noch nicht möglich."
+        : "The embedding model has no price set, so the cost is unknown and this cannot be published yet."
+    }`;
+  // Cents from one unit up; below it two significant digits, so a small estimate never reads 0.
+  const amount = (value: number) =>
+    `${format(
+      value,
+      cost.max >= 1 || cost.max === 0
+        ? { minimumFractionDigits: 2, maximumFractionDigits: 2 }
+        : { maximumSignificantDigits: 2 }
+    )} ${cost.currency}`;
+  return `${read} ${
+    de
+      ? `Das Lesen ist kostenlos. Das Einbetten der Ergebnisse kostet geschätzt ${amount(cost.min)} bis ${amount(cost.max)}, möglicherweise mehr.`
+      : `Reading them is free. Embedding the results costs an estimated ${amount(cost.min)} to ${amount(cost.max)}, possibly more.`
+  }`;
 }
 
 export function createKnowledgeReprocessHandler(runtime: KnowledgeRuntime) {
@@ -290,7 +322,8 @@ export async function knowledgePublishReview(
     input.assetId,
     input.embedding,
     input.draftOnly ?? false,
-    records
+    records,
+    input.locale
   );
   const reindex = await publishReindexReview(runtime, {
     assetId: input.assetId,
@@ -335,7 +368,7 @@ export async function confirmKnowledgeProcessing(
     replaced: unknown;
     confirmProcessing?: string;
     /** Who publishes: a re-index it starts is counted for them. */
-    actor?: AuthenticatedIdentity;
+    actor: AuthenticatedIdentity;
   },
   embedding: KnowledgeEmbedding
 ) {
@@ -379,7 +412,7 @@ export async function confirmKnowledgeProcessing(
   if (drops) await enqueueDropUnusedEmbeddings(runtime, stores, input.assetId);
   const next = knowledgeBaseDefinitionSchema.parse(input.config);
   const before = knowledgeBaseDefinitionSchema.parse(input.replaced);
-  if (review.reindex && input.actor) {
+  if (review.reindex) {
     await startPublishedReindex(runtime, stores, {
       assetId: input.assetId,
       name: next.name,

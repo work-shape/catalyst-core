@@ -82,7 +82,7 @@ export interface KnowledgeBases {
       replaced: unknown;
       confirmProcessing?: string;
       /** Who publishes: a re-index the publish starts is counted for them. */
-      actor?: AuthenticatedIdentity;
+      actor: AuthenticatedIdentity;
     }
   ): Promise<void>;
   /**
@@ -332,7 +332,7 @@ export function createKnowledgeBases(input: {
           config,
           replaced,
           ...(confirmProcessing ? { confirmProcessing } : {}),
-          ...(actor ? { actor } : {})
+          actor
         },
         input.embedding
       );

@@ -104,7 +104,11 @@ describe("Knowledge Base processing review at scale", () => {
         scope: asset.scope,
         config: { ...asset.publishedConfig, methods: ["keyword"], documentTypes }
       });
-      const count = Number(lines.join("\n").match(/Reprocess (\d+) affected/u)?.[1] ?? 0);
+      const count = Number(
+        (
+          lines.join("\n").match(/([\d,]+) documents? (?:is|are) read again/u)?.[1] ?? "0"
+        ).replaceAll(",", "")
+      );
       expect(count, pattern).toBe(expected);
     }
     const documentTypes = knowledgeDocumentTypesSchema.parse([
@@ -120,7 +124,7 @@ describe("Knowledge Base processing review at scale", () => {
       scope: asset.scope,
       config: { ...asset.publishedConfig, methods: ["keyword"], documentTypes }
     });
-    expect(lines.join("\n")).toContain("Reprocess 2 affected contents");
+    expect(lines.join("\n")).toContain("2 documents are read again with the new settings.");
   });
   registerKnowledgeProcessingVolumeTest(counted, 1001);
 });

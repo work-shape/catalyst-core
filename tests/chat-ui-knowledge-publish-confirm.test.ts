@@ -167,8 +167,8 @@ async function publishFrom(page: HTMLElement): Promise<void> {
   await act(async () => confirm.click());
 }
 
-const REPROCESS_EN =
-  "Reprocess 3 affected contents. Built-in processing has no model cost. Re-embedding: 0.500000–2.000000 USD estimated from existing passages or original byte sizes; changed output may cost more. Only the affected types are reprocessed.";
+/** The server's processing sentence, which the dialog words anew from its fields. */
+const SERVER_SENTENCE = "The server's processing sentence.";
 
 /** Opens the publish dialog without confirming it. */
 async function openDialog(page: HTMLElement): Promise<string> {
@@ -181,7 +181,7 @@ async function openDialog(page: HTMLElement): Promise<string> {
 
 describe("The processing line of the publish dialog", () => {
   const question = (cost: NonNullable<PublishQuestionAnswer["processing"]>["cost"], count = 3) => ({
-    lines: ["Re-embed with text-embedding-3-large: 1,200 passages.", REPROCESS_EN],
+    lines: ["Re-embed with text-embedding-3-large: 1,200 passages.", SERVER_SENTENCE],
     confirmation: CONFIRMATION,
     processing: { count, line: 1, cost }
   });
@@ -194,7 +194,7 @@ describe("The processing line of the publish dialog", () => {
     expect(text).toContain("Re-embed with text-embedding-3-large");
     expect(text).toContain("3 documents are read again with the new settings.");
     expect(text).toContain("$0.50 to $2.00");
-    expect(text).not.toContain("Reprocess");
+    expect(text).not.toContain(SERVER_SENTENCE);
   });
 
   it("is built from the statement's fields in German", async () => {
@@ -207,7 +207,7 @@ describe("The processing line of the publish dialog", () => {
     );
     expect(text).toContain("1 Dokument wird mit den neuen Einstellungen noch einmal gelesen.");
     expect(text).toMatch(/0,50\s*\$ bis 2,00\s*\$/u);
-    expect(text).not.toContain("Reprocess");
+    expect(text).not.toContain(SERVER_SENTENCE);
   });
 
   it.each([
@@ -218,7 +218,7 @@ describe("The processing line of the publish dialog", () => {
       await mount({ question: question({ kind }), publish: vi.fn(async () => pointers) })
     );
     expect(text).toContain(expected);
-    expect(text).not.toContain("Reprocess");
+    expect(text).not.toContain(SERVER_SENTENCE);
   });
 });
 
