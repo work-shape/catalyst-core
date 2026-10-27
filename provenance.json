@@ -1,0 +1,53 @@
+{
+  "routes": [
+    "/",
+    "/build/agents",
+    "/build/connections",
+    "/build/data-stores",
+    "/build/guardrails",
+    "/build/knowledge-bases",
+    "/build/skills",
+    "/inbox",
+    "/settings/instance/access",
+    "/settings/instance/api-access",
+    "/settings/instance/audit",
+    "/settings/instance/infrastructure",
+    "/settings/instance/jobs",
+    "/settings/instance/limits",
+    "/settings/instance/modules",
+    "/settings/instance/operations",
+    "/settings/instance/usage",
+    "/settings/instance/users",
+    "/settings/instance/workspaces",
+    "/settings/workspace/general",
+    "/settings/workspace/members",
+    "/settings/workspace/usage",
+    "/settings/you/api-keys",
+    "/settings/you/confirmations",
+    "/settings/you/connect",
+    "/settings/you/connections",
+    "/settings/you/language-appearance",
+    "/settings/you/profile",
+    "/settings/you/security",
+    "/settings/you/usage",
+    "/w/{workspace}/agents",
+    "/w/{workspace}/apps",
+    "/w/{workspace}/workflows"
+  ],
+  "required": [],
+  "states": [
+    {
+      "name": "history",
+      "setup": "/Users/felix/code/catalyst-ws/.worktrees/appver-leftovers/history-shots.mjs"
+    },
+    {
+      "name": "undated-head",
+      "setup": "/Users/felix/code/catalyst-ws/.worktrees/appver-leftovers/head-shots.mjs"
+    }
+  ],
+  "modules": [],
+  "pr": 121,
+  "head": "5d840fcf6faaee41d777e247b82bbc1725ae9b35",
+  "base": "1c604ef62a621fc07e96859ecbb027a322b5e11d",
+  "tested": "bf28c223d2ca8b98009930b2644ae72d3696a630"
+}
