@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import type { JsonObject, WorkflowCodeOutcome } from "@work-shape/catalyst-core";
 import {
@@ -199,6 +199,8 @@ print(json.dumps(found))
   }, 120_000);
 
   it("sees no variable of the platform's environment", async () => {
+    // A host may use the sandbox's fixed value too; equality is not inheritance.
+    vi.stubEnv("TMPDIR", "/tmp");
     const result = await script(`import json, os\nprint(json.dumps(dict(os.environ)))`);
     const env = z.record(z.string(), z.string()).parse(valueOf(outcomeOf(result)));
     expect(Object.keys(env)).not.toContain("CATALYST_TEST_PLATFORM_SECRET");
@@ -207,13 +209,15 @@ print(json.dumps(found))
     // every value the two share is one the sandbox sets or the image brings.
     const shared = Object.entries(env).filter(
       ([name, value]) =>
-        process.env[name] === value && !["LANG", "LC_ALL", "PYTHONDONTWRITEBYTECODE"].includes(name)
+        process.env[name] === value &&
+        !["LANG", "LC_ALL", "PYTHONDONTWRITEBYTECODE", "TMPDIR"].includes(name)
     );
     expect(shared.map(([name]) => name)).toEqual([]);
     for (const name of Object.keys(env)) {
       expect(name).not.toMatch(/SECRET|TOKEN|PASSWORD|DATABASE|POSTGRES|AWS_|API_KEY/u);
     }
     expect(env.HOME).toBe("/workspace");
+    expect(env.TMPDIR).toBe("/tmp");
   }, 120_000);
 
   it("holds its script and its input and no other path of the host", async () => {
