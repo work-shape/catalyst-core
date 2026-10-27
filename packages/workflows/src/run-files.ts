@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import {
   AppError,
+  ObjectNotFound,
   asManagedFileId,
   readObjectBytes,
   WORKFLOW_RUN_FILE_MAX_BYTES,
@@ -73,18 +74,30 @@ export function createWorkflowRunFiles(options: {
   const { clientInstanceId, stores, objects, now } = options;
 
   /**
-   * Without attachment handlers, the copies in a run thread have nobody else to remove them: as
-   * a handler alone would, their bytes and what was prepared from them are deleted from the
-   * files store, the one store the engine knows, and their records are marked deleted, so they
-   * go with the run's values. A file another conversation still names stays.
+   * Without attachment handlers, the copies in a run thread have nobody else to remove them. The
+   * engine knows one store, the files store: where every object of the thread's copies, and of
+   * what was prepared from them, lies there, they are deleted and their records marked deleted,
+   * as a handler alone would, so the records go with the run's values. Where one lies elsewhere,
+   * as in the store of a handler since removed, nothing is deleted: the records stay, named by
+   * key, size and sha256, so the bytes can be found. A file another conversation names stays.
    */
   async function releaseWithoutHandler(conversationId: ConversationId) {
     const deletion = await stores.files.listConversationManagedObjectsForDeletion({
       clientInstanceId,
       conversationId
     });
-    for (const objectKey of [...deletion.fileObjectKeys, ...deletion.artifactObjectKeys])
-      await objects.delete(objectKey);
+    const objectKeys = [...deletion.fileObjectKeys, ...deletion.artifactObjectKeys];
+    for (const objectKey of objectKeys) {
+      const here = await objects.head(objectKey).then(
+        () => true,
+        (error: unknown) => {
+          if (error instanceof ObjectNotFound) return false;
+          throw error;
+        }
+      );
+      if (!here) return;
+    }
+    for (const objectKey of objectKeys) await objects.delete(objectKey);
     await stores.files.markConversationManagedObjectsDeleted({
       clientInstanceId,
       conversationId,

@@ -34,17 +34,22 @@ async function prepared(options: { attachmentHandler: boolean }) {
     },
     { datasetObjects: objects }
   );
-  const handler = createManagedObjectAccess({
-    clientInstanceId,
-    files: t.stores.files,
-    byteStore: objects,
-    keyFactory: {
-      createFileObjectKey: (input) =>
-        `documents/${input.conversationId}/${createPlatformId("obj")}`,
-      createArtifactObjectKey: (input) =>
-        `documents/${input.conversationId}/${input.kind}/${createPlatformId("obj")}`
-    }
-  });
+  const handlerOn = (byteStore: MemoryObjectStorage) =>
+    createManagedObjectAccess({
+      clientInstanceId,
+      files: t.stores.files,
+      byteStore,
+      keyFactory: {
+        createFileObjectKey: (input) =>
+          `documents/${input.conversationId}/${createPlatformId("obj")}`,
+        createArtifactObjectKey: (input) =>
+          `documents/${input.conversationId}/${input.kind}/${createPlatformId("obj")}`
+      }
+    });
+  const handler = handlerOn(objects);
+  // A store of its own, as that of a handler the instance no longer has.
+  const elsewhere = new MemoryObjectStorage();
+  const handlers = { files: handler, elsewhere: handlerOn(elsewhere) };
   const files = createWorkflowRunFiles({
     clientInstanceId,
     stores: t.stores,
@@ -80,8 +85,12 @@ async function prepared(options: { attachmentHandler: boolean }) {
   }
 
   /** A copy of a file in a conversation, as an agent gets one, with a text prepared from it. */
-  async function copyInto(conversationId: ConversationId, name: string) {
-    const copy = await handler.createFile({
+  async function copyInto(
+    conversationId: ConversationId,
+    name: string,
+    store: keyof typeof handlers = "files"
+  ) {
+    const copy = await handlers[store].createFile({
       ownerUserId: "usr_owner",
       conversationId,
       filename: name,
@@ -99,7 +108,7 @@ async function prepared(options: { attachmentHandler: boolean }) {
       status: "ready",
       processingMetadata: { title: name }
     });
-    await handler.createArtifact({
+    await handlers[store].createArtifact({
       conversationId,
       sourceFileId: copy.id,
       kind: "document.text",
@@ -223,6 +232,7 @@ async function prepared(options: { attachmentHandler: boolean }) {
       changing: createPlatformId("oprun"),
       reading: createPlatformId("oprun"),
       declined: createPlatformId("oprun"),
+      running: createPlatformId("oprun"),
       approved: createPlatformId("apr")
     };
     const actor = { kind: "service_principal", id: "svc_workflow", label: "Workflow" };
@@ -245,7 +255,12 @@ async function prepared(options: { attachmentHandler: boolean }) {
             'corr-5', now(), now()),
           (${ids.declined}, ${clientInstanceId}, 'crm.update', 'changing', 'service_principal',
             'svc_workflow', ${sql.json(actor)}, 'workflow', ${sql.json(origin)}, 'sha256:in-6',
-            'denied', null, null, null, null, 'corr-6', now(), now())`;
+            'denied', null, null, null, null, 'corr-6', now(), now()),
+          (${ids.running}, ${clientInstanceId}, 'crm.update', 'changing', 'service_principal',
+            'svc_workflow', ${sql.json(actor)}, 'workflow', ${sql.json(origin)}, 'sha256:in-7',
+            'running',
+            ${sql.json({ mode: "approval", by: "usr_reviewer", at: decidedAt, comment: `${client} again` })},
+            null, ${sql.json({ value: { recoverAfter: decidedAt } })}, null, 'corr-7', now(), now())`;
       await sql`update operation_runs set error = ${sql.json({ code: "DECLINED", message: "The call was declined", denial: { kind: "declined", by: "usr_reviewer", comment: `${client} is on leave` } })}
         where id = ${ids.declined}`;
       await sql`insert into approval_requests (id, client_instance_id, kind, summary, payload,
@@ -274,7 +289,17 @@ async function prepared(options: { attachmentHandler: boolean }) {
     });
   }
 
-  return { t, objects, threadOf, copyInto, callsIn, stepCallsOf, pruneValues, readRun };
+  return {
+    t,
+    objects,
+    elsewhere,
+    threadOf,
+    copyInto,
+    callsIn,
+    stepCallsOf,
+    pruneValues,
+    readRun
+  };
 }
 
 async function rowsOf(conversationId: ConversationId) {
@@ -408,7 +433,8 @@ describe("a pruned Workflow run's threads", () => {
     const stepRows = (of: typeof ids) =>
       withTestSql(async (sql) => ({
         calls: await sql`select * from operation_runs
-          where id in (${of.changing}, ${of.reading}, ${of.declined}) order by effect, status`,
+          where id in (${of.changing}, ${of.reading}, ${of.declined}, ${of.running})
+          order by effect, status`,
         request: (await sql`select * from approval_requests where id = ${of.approved}`)[0]
       }));
     const otherBefore = await stepRows(otherIds);
@@ -428,6 +454,13 @@ describe("a pruned Workflow run's threads", () => {
         output: null,
         result_bytes: 64,
         decision: { mode: "approval", by: "usr_reviewer", at: "2026-09-01T10:00:00.000Z" }
+      },
+      // A call still running keeps its recovery marker, and loses the comment all the same.
+      {
+        effect: "changing",
+        status: "running",
+        output: { value: { recoverAfter: "2026-09-01T10:00:00.000Z" } },
+        decision: { mode: "approval", by: "usr_reviewer" }
       },
       { effect: "reading", output: { value: { pages: 1, rows: 3, bytes: 512 } } }
     ]);
@@ -459,12 +492,15 @@ describe("a pruned Workflow run's threads", () => {
   });
 
   it("keep no file copy no attachment handler removed: its bytes and records go", async () => {
-    const { t, objects, threadOf, copyInto, pruneValues, readRun } = await prepared({
+    const { t, objects, elsewhere, threadOf, copyInto, pruneValues, readRun } = await prepared({
       attachmentHandler: false
     });
     const run = await readRun();
     const thread = await threadOf(run);
     const copy = await copyInto(thread, "contract-anna.pdf");
+    // A thread whose copy lies in a store the engine does not know.
+    const otherThread = await threadOf(run);
+    const away = await copyInto(otherThread, "contract-carla.pdf", "elsewhere");
     // A chat holds a copy of the same name: it belongs to no run.
     const chat = asConversationId(
       (
@@ -510,5 +546,17 @@ describe("a pruned Workflow run's threads", () => {
     expect(objects.size).toBe(objectsBefore - 3);
     // The chat's copies are as they were.
     expect(await rowsOf(chat)).toEqual(chatBefore);
+    // A copy whose bytes lie elsewhere keeps them, named by key, size and sha256 only.
+    const kept = await rowsOf(otherThread);
+    expect(JSON.stringify(kept)).not.toContain("contract-carla");
+    expect(kept.files).toEqual([
+      expect.objectContaining({
+        id: away.id,
+        object_key: away.objectKey,
+        byte_size: pdf.byteLength,
+        checksum: away.checksum
+      })
+    ]);
+    expect(elsewhere.size).toBe(2);
   });
 });
