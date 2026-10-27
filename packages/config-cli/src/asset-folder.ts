@@ -1,5 +1,5 @@
 import { isRecord } from "@work-shape/catalyst-asset-schemas";
-import { sha256Hex as sha256 } from "@work-shape/catalyst-core/sha256";
+import { sha256Hex as sha256 } from "./sha256";
 import {
   lstat,
   mkdir,

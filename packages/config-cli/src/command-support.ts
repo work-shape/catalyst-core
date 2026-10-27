@@ -11,7 +11,7 @@ import {
   type AgentConfig,
   type SkillConfig
 } from "@work-shape/catalyst-asset-schemas";
-import { sha256Hex as assetHash } from "@work-shape/catalyst-core/sha256";
+import { sha256Hex as assetHash } from "./sha256";
 import { mkdir, mkdtemp, rename, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { ConfigApiError, createConfigApi, type ConfigApi } from "./api";
