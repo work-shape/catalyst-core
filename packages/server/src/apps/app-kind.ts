@@ -185,6 +185,24 @@ const STORE_RIGHT_OF_EFFECT = {
   changing: DATA_STORE_ACTIONS.insert
 } as const;
 
+/** The same read-only checks before a joint publish and inside the App's transaction. */
+interface AppPublishCheck {
+  clientInstanceId: ClientInstanceId;
+  access: ActorAccess;
+  scope: AssetScope;
+  config: JsonObject;
+  stores: PlatformStores;
+  /** Only stores being published or awaited, at the levels their revisions will reach. */
+  dataStoreLevels?: ReadonlyMap<string, number>;
+  /** Only the named Workflow revisions being published with the App. */
+  workflowConfigs?: ReadonlyMap<string, JsonObject>;
+}
+
+export async function requireAppPublish(input: AppPublishCheck): Promise<void> {
+  await requireDataStores(input);
+  await requireWorkflows(input);
+}
+
 /**
  * What a publish of an App answers for. The right to a Data Store is checked on the App and
  * not of each person who uses it (data-stores-and-knowledge-bases.md, Scope): whoever may use
@@ -199,13 +217,7 @@ const STORE_RIGHT_OF_EFFECT = {
  * level the manifest asks for. Two point reads per listed store, in the transaction of the
  * publish.
  */
-async function requireDataStores(input: {
-  clientInstanceId: ClientInstanceId;
-  access: ActorAccess;
-  scope: AssetScope;
-  config: JsonObject;
-  stores: PlatformStores;
-}): Promise<void> {
+async function requireDataStores(input: AppPublishCheck): Promise<void> {
   const { clientInstanceId, access, scope, stores } = input;
   const listed = declaredDataStoresOf(input.config.manifest);
   const actions = compiledActionsOf(input.config.manifest).flatMap((action) =>
@@ -221,27 +233,29 @@ async function requireDataStores(input: {
       kind: DATA_STORE_ASSET_KIND,
       name
     });
+    const prospectiveLevel = input.dataStoreLevels?.get(name);
     const record =
-      asset?.status === "active" && asset.publishedRevisionId !== undefined
+      asset?.status === "active"
         ? await stores.dataStores.getDataStore({ clientInstanceId, id: asset.id })
         : undefined;
     if (
-      !asset ||
-      !record ||
-      record.status === "retired" ||
+      asset?.status !== "active" ||
+      (prospectiveLevel === undefined && (!record || asset.publishedRevisionId === undefined)) ||
+      record?.status === "retired" ||
       !appReachesDataStore(scope, asset.scope)
     ) {
       throw dataStoreRefusalError("data_store_unavailable", name);
     }
-    if (minSchema !== undefined && record.level < minSchema) {
+    const level = prospectiveLevel ?? record?.level ?? 0;
+    if (minSchema !== undefined && level < minSchema) {
       throw dataStoreRefusalError("data_store_below_min_schema", name, {
         minSchema,
-        level: record.level
+        level
       });
     }
     const resource = {
       kind: DATA_STORE_ASSET_KIND,
-      assetId: record.id,
+      assetId: asset.id,
       name,
       ...(asset.scope.kind === "workspace" ? { workspaceId: asset.scope.workspaceId } : {})
     };
@@ -277,13 +291,7 @@ const workflowInputsSchema = z.object({
  * starts them with nothing on the Workflow. Nothing is written for it: the published pointer of
  * the App is the record. One point read per Workflow, in the transaction of the publish.
  */
-async function requireWorkflows(input: {
-  clientInstanceId: ClientInstanceId;
-  access: ActorAccess;
-  scope: AssetScope;
-  config: JsonObject;
-  stores: PlatformStores;
-}): Promise<void> {
+async function requireWorkflows(input: AppPublishCheck): Promise<void> {
   const actions = compiledActionsOf(input.config.manifest).flatMap((action) =>
     action.kind === "workflow" ? [action] : []
   );
@@ -293,9 +301,10 @@ async function requireWorkflows(input: {
       kind: WORKFLOW_ASSET_KIND,
       name: action.workflow
     });
+    const config = input.workflowConfigs?.get(action.workflow) ?? asset?.publishedConfig;
     if (
       asset?.status !== "active" ||
-      asset.publishedConfig === undefined ||
+      config === undefined ||
       !appReachesDataStore(input.scope, asset.scope)
     ) {
       throw appWorkflowRefusalError("workflow_unavailable", action.workflow);
@@ -306,7 +315,7 @@ async function requireWorkflows(input: {
       name: action.workflow,
       ...(asset.scope.kind === "workspace" ? { workspaceId: asset.scope.workspaceId } : {})
     });
-    const misfit = appWorkflowInputMisfit(action, asset.publishedConfig);
+    const misfit = appWorkflowInputMisfit(action, config);
     if (misfit) throw misfit;
   }
 }
@@ -404,8 +413,7 @@ export function createAppAssetKind(): WorkflowAssetKind {
     assertInteractiveUpsertAllowed: () => undefined,
     assertInteractiveDeleteAllowed: () => undefined,
     onPublish: async (input) => {
-      await requireDataStores(input);
-      await requireWorkflows(input);
+      await requireAppPublish(input);
       // A publish reviews the hosts of the revision it publishes. What people allowed for
       // their own view of the draft before ends with it, in the publish's transaction
       // (DRAFT-HOSTS-1).

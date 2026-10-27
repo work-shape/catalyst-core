@@ -1,3 +1,4 @@
+import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 import { appPublishReviewSchema } from "@work-shape/catalyst-api-contract";
@@ -10,6 +11,8 @@ import { init, type StoreFile } from "./support/data-store-world";
 import { guardedEvents } from "./support/guardrails";
 import { findingsApp, setupFindingsApp, type FindingsWorld } from "./support/findings-app";
 import { runCli } from "@work-shape/catalyst-cli";
+import { fileTestDatabaseUrl } from "./support/test-database";
+import { instanceWorkflowAssetKind } from "./support/workflow-instance";
 import { testOperations } from "./support/operations";
 import { createTestFetch, getTestJobs } from "./support/test-instance";
 
@@ -51,6 +54,13 @@ describe("GOLIVE-1: an App's Publish carries the Data Stores it binds", () => {
   beforeAll(async () => {
     t = await setupFindingsApp({
       explicitCredentials: true,
+      modules: { workflows: { enabled: true } },
+      furtherKinds: [
+        instanceWorkflowAssetKind(
+          () => t.stores,
+          () => undefined
+        )
+      ],
       // The publish of the App golive-agent-app waits for an approver; the others are not held.
       events: (stores) =>
         guardedEvents(stores, {
@@ -161,6 +171,27 @@ describe("GOLIVE-1: an App's Publish carries the Data Stores it binds", () => {
     expect((await asset("app", "golive-one-app"))?.publishedRevision).toBe(named.app);
     // Nothing is pending any more: the review lists no store.
     expect((await review("golive-one-app")).dataStores).toEqual([]);
+  });
+
+  it("pre-checks a named store at its first revision before its runtime record exists", async () => {
+    const name = "golive-new-store";
+    const app = `${name}-app`;
+    const store = await t.draftStore(name, [storeManifest(name), init], t.workspaceId);
+    expect(
+      await t.stores.dataStores.getDataStore({
+        clientInstanceId,
+        id: required(await asset(DATA_STORE_ASSET_KIND, name)).id
+      })
+    ).toBeUndefined();
+    expectStatus(
+      await t.putApp(t.admin.id, app, findingsApp({ id: app, marker: app, store: name })),
+      200
+    );
+
+    expectStatus(await publishWith(t.admin.id, app, 1, [{ name, revision: store }]), 200);
+
+    expect(await record(name)).toMatchObject({ status: "ready", level: 1 });
+    expect((await asset("app", app))?.publishedRevision).toBe(1);
   });
 
   it("refuses a store whose draft stays below the level the App needs, in the review and before anything changes", async () => {
@@ -305,6 +336,217 @@ describe("GOLIVE-1: an App's Publish carries the Data Stores it binds", () => {
     expect(await record("golive-first")).toMatchObject({ level: 1 });
     expect((await asset("app", "golive-first-app"))?.publishedRevision).toBeUndefined();
   });
+
+  it.each(["unpublished", "below_min_schema"] as const)(
+    "checks an unnamed bound store that is %s before publishing a named store",
+    async (fault) => {
+      const name = `golive-unnamed-${fault.replaceAll("_", "-")}`;
+      const app = `${name}-app`;
+      const other = `${name}-other`;
+      const named = await storeWithPendingMigration(name, app);
+      if (fault === "unpublished") {
+        await t.draftStore(other, [storeManifest(other), init], t.workspaceId);
+      } else {
+        await t.publishStore(other, [storeManifest(other), init], t.workspaceId);
+      }
+      const files = findingsApp({ id: app, marker: app, store: name, minSchema: 2 })
+        .filter((file) => !file.path.endsWith(".sql"))
+        .map((file) => {
+          if (file.path !== "app.yaml" || !("text" in file)) return file;
+          const manifest = z.record(z.string(), z.unknown()).parse(JSON.parse(file.text));
+          return {
+            ...file,
+            text: JSON.stringify({
+              ...manifest,
+              actions: [],
+              dataStores: [
+                { name, minSchema: 2 },
+                { name: other, minSchema: 2 }
+              ]
+            })
+          };
+        });
+      expectStatus(await t.putApp(t.admin.id, app, files), 200);
+      const refused = await publishWith(t.admin.id, app, 2, [{ name, revision: named.store }]);
+      expectStatus(refused, fault === "unpublished" ? 404 : 409);
+      expect(t.refusal(refused).details).toMatchObject({
+        reason: fault === "unpublished" ? "data_store_unavailable" : "data_store_below_min_schema",
+        dataStore: other
+      });
+      expect((await asset(DATA_STORE_ASSET_KIND, name))?.publishedRevision).toBe(1);
+      expect(await record(name)).toMatchObject({ level: 1 });
+      expect((await asset("app", app))?.publishedRevision).toBeUndefined();
+    }
+  );
+
+  it.each(["read", "insert"] as const)(
+    "checks the publisher's sql action right data_store.%s before publishing a store",
+    async (missing) => {
+      const name = `golive-sql-${missing}`;
+      const app = `${name}-app`;
+      const named = await storeWithPendingMigration(name, app);
+      const storeId = required(await asset(DATA_STORE_ASSET_KIND, name)).id;
+      await t.withRight(t.kai.id, "app.publish", { workspaceId: t.workspaceId }, () =>
+        t.withRight(t.kai.id, "data_store.publish", { assetId: storeId }, () =>
+          t.withRight(
+            t.kai.id,
+            `data_store.${missing === "read" ? "insert" : "read"}`,
+            { assetId: storeId },
+            async () => {
+              const refused = await publishWith(t.kai.id, app, named.app, [
+                { name, revision: named.store }
+              ]);
+              expectStatus(refused, 403);
+              expect(t.refusal(refused).details).toMatchObject({ action: `data_store.${missing}` });
+            }
+          )
+        )
+      );
+      expect((await asset(DATA_STORE_ASSET_KIND, name))?.publishedRevision).toBe(1);
+      expect(await record(name)).toMatchObject({ level: 1 });
+      expect((await asset("app", app))?.publishedRevision).toBeUndefined();
+    }
+  );
+
+  it("checks the App's built files before publishing a store", async () => {
+    const name = "golive-no-files";
+    const app = `${name}-app`;
+    const named = await storeWithPendingMigration(name, app);
+    const revision = required(
+      await t.stores.configAssets.getConfigAssetRevision({
+        clientInstanceId,
+        kind: "app",
+        name: app,
+        revision: named.app
+      })
+    );
+    const sql = postgres(await fileTestDatabaseUrl(), { max: 1 });
+    try {
+      await sql`delete from file_sets where id = ${required(revision.fileSetId)}`;
+    } finally {
+      await sql.end();
+    }
+    const refused = await publishWith(t.admin.id, app, named.app, [
+      { name, revision: named.store }
+    ]);
+    expectStatus(refused, 422);
+    expect(t.refusal(refused).details).toEqual({
+      reason: "revision_files_removed",
+      revision: named.app
+    });
+    expect((await asset(DATA_STORE_ASSET_KIND, name))?.publishedRevision).toBe(1);
+    expect(await record(name)).toMatchObject({ level: 1 });
+    expect((await asset("app", app))?.publishedRevision).toBeUndefined();
+  });
+
+  it.each(["unpublished", "input", "use", "named-input", "named-valid"] as const)(
+    "checks the App's Workflow before publishing a store: %s",
+    async (fault) => {
+      const name = `golive-wf-${fault}`;
+      const app = `${name}-app`;
+      const workflow = `${name}-flow`;
+      const named = await storeWithPendingMigration(name, app);
+      const config = (requiredInput: boolean) => ({
+        name: workflow,
+        manifest: {
+          id: workflow,
+          name: "Review",
+          outputs: { type: "object", properties: {} },
+          inputs: {
+            type: "object",
+            properties: { page: { type: "string" } },
+            ...(requiredInput ? { required: ["page"] } : {})
+          },
+          steps: [
+            { id: "start", name: "Start", type: "trigger", triggers: [{ kind: "manual" }] },
+            { id: "result", name: "Result", type: "output", input: {} }
+          ]
+        }
+      });
+      const put = (expectedRevision: number | null, requiredInput: boolean) =>
+        t.expectOk(t.root.id, "assets.put", {
+          params: { kind: "workflow", name: workflow },
+          payload: { config: config(requiredInput), expectedRevision }
+        });
+      await put(null, fault === "input" || fault === "named-valid");
+      if (fault !== "unpublished") {
+        expectStatus(
+          await t.call(t.root.id, "assets.publish", {
+            params: { kind: "workflow", name: workflow },
+            payload: { revision: 1 }
+          }),
+          200
+        );
+      }
+      const jointly = fault === "named-input" || fault === "named-valid";
+      if (jointly) await put(1, fault === "named-input");
+      const files = [
+        ...findingsApp({ id: app, marker: app, store: name, minSchema: 2 }).map((file) => {
+          if (file.path !== "app.yaml" || !("text" in file)) return file;
+          const manifest = z.record(z.string(), z.unknown()).parse(JSON.parse(file.text));
+          return { ...file, text: JSON.stringify({ ...manifest, kit: "1.3.0" }) };
+        }),
+        {
+          path: "actions/review.action.yaml",
+          text: `workflow: ${workflow}\ninput:\n  schema: { type: object, properties: {} }\n  mapping: {}\n`
+        }
+      ];
+      expectStatus(await t.putApp(t.admin.id, app, files), 200);
+      const publish = (userId: string) =>
+        t.call(userId, "assets.publish", {
+          params: { kind: "app", name: app },
+          payload: {
+            revision: 2,
+            workspaceId: t.workspaceId,
+            audience: "workspace",
+            dataStores: [{ name, revision: named.store }],
+            ...(jointly ? { workflows: [{ name: workflow, revision: 2 }] } : {})
+          }
+        });
+      const check = async (userId: string) => {
+        const response = await publish(userId);
+        expectStatus(
+          response,
+          fault === "named-valid"
+            ? 200
+            : fault === "use"
+              ? 403
+              : fault === "unpublished"
+                ? 404
+                : 422
+        );
+        if (fault !== "named-valid") {
+          expect(t.refusal(response).details).toMatchObject(
+            fault === "use"
+              ? { action: "workflow.use" }
+              : {
+                  reason:
+                    fault === "unpublished" ? "workflow_unavailable" : "workflow_input_invalid"
+                }
+          );
+        }
+      };
+      if (fault === "use") {
+        const storeId = required(await asset(DATA_STORE_ASSET_KIND, name)).id;
+        await t.withRight(t.kai.id, "app.publish", { workspaceId: t.workspaceId }, () =>
+          t.withRight(t.kai.id, "data_store.publish", { assetId: storeId }, () =>
+            t.withRight(t.kai.id, "data_store.read", { assetId: storeId }, () =>
+              t.withRight(t.kai.id, "data_store.insert", { assetId: storeId }, () =>
+                check(t.kai.id)
+              )
+            )
+          )
+        );
+      } else await check(t.admin.id);
+      expect((await asset(DATA_STORE_ASSET_KIND, name))?.publishedRevision).toBe(
+        fault === "named-valid" ? named.store : 1
+      );
+      expect(await record(name)).toMatchObject({ level: fault === "named-valid" ? 2 : 1 });
+      expect((await asset("app", app))?.publishedRevision).toBe(
+        fault === "named-valid" ? 2 : undefined
+      );
+    }
+  );
 
   // GOLIVE-1 follow-up. Fails while the App's Publish waits only for the stores it names: a
   // store an earlier Publish made live and whose wait ran out was carried by no later one, and
