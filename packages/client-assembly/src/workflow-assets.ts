@@ -72,6 +72,7 @@ import {
   type WorkflowSourceLimits,
   workflowDefinitionRefusal,
   workflowOutsideIssues,
+  workflowOutsideSwitchRefusal,
   workflowStepFileIssues,
   workflowStepFilesRefusal,
   workflowKindIssues,
@@ -441,6 +442,11 @@ export function createWorkflowAssetKind(
       const parsed = workflowConfigSchema.parse(config);
       const result = parseStoredManifest(parsed.manifest);
       if (!result.ok) throw workflowDefinitionRefusal(parsed.name, result.issues);
+      // Starts by outside clients are a signed-in person's to turn on, and to keep on: a key
+      // that publishes Workflows could otherwise launder a Connection kept from outside
+      // through a Data Store (WF-OUT). Turning them off is anyone's publish.
+      const switched = workflowOutsideSwitchRefusal(result.manifest, actor);
+      if (switched) throw switched;
       await publishWorkflowOwnAccount(stores, {
         clientInstanceId,
         assetId,

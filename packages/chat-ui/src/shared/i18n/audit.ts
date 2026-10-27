@@ -270,6 +270,8 @@ export const audit = defineTranslations({
     "audit.reason.no_worker": "Nothing was free to run it.",
     "audit.reason.not_allowed": "Not allowed.",
     "audit.reason.not_found": "What it needed does not exist (any more).",
+    "audit.reason.outside_switch_person_only":
+      "Only a person signed in to Catalyst publishes a workflow that outside clients can start.",
     "audit.reason.output_rejected": "Some operations were left out to keep the sign-in safe.",
     "audit.reason.principal_inactive": "The account is switched off.",
     "audit.reason.rate_limited": "Too many requests in a short time.",
@@ -565,6 +567,8 @@ export const audit = defineTranslations({
     "audit.reason.no_worker": "Es war nichts frei, um es auszuführen.",
     "audit.reason.not_allowed": "Nicht erlaubt.",
     "audit.reason.not_found": "Was dafür nötig war, gibt es nicht (mehr).",
+    "audit.reason.outside_switch_person_only":
+      "Einen Workflow, den externe Clients starten können, veröffentlicht nur eine in Catalyst angemeldete Person.",
     "audit.reason.output_rejected":
       "Einige Operationen wurden ausgelassen, um die Anmeldung zu schützen.",
     "audit.reason.principal_inactive": "Das Konto ist ausgeschaltet.",
