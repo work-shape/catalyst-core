@@ -371,7 +371,11 @@ export interface WorkflowLoopConcurrency {
 }
 
 /** Which runs of a Workflow a list answers by their run key: one key, or the keys under a prefix. */
-export type WorkflowRunKeyFilter = { exact: string } | { prefix: string };
+/**
+ * Runs by their key: exactly, optionally only those one starter holds it for, or by a prefix.
+ */
+export type WorkflowRunKeyFilter =
+  { exact: string; startedBy?: OperationRunActor } | { prefix: string };
 
 /** Names one run of one instance. */
 export interface WorkflowRunRef {

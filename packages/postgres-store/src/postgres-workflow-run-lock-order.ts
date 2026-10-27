@@ -1,12 +1,11 @@
-import { and, eq, notInArray, sql } from "drizzle-orm";
+import { and, eq, notInArray } from "drizzle-orm";
 import {
   WORKFLOW_KEY_RELEASING_STATUSES,
-  type OperationRunActor,
   type WorkflowRun,
   type WorkflowRunsStore
 } from "@work-shape/catalyst-core";
 import type { PostgresConnection } from "./postgres-database";
-import { workflowRuns, workflowRunStarter } from "./schema/workflowRuns";
+import { workflowRuns, workflowRunStarterIs } from "./schema/workflowRuns";
 import { runColumns, runIs, mapRun } from "./postgres-workflow-run-mapping";
 
 type Input<Method extends keyof WorkflowRunsStore> = Parameters<WorkflowRunsStore[Method]>[0];
@@ -47,19 +46,6 @@ export async function lockWorkflowRun(
   return lock(ref.id);
 }
 
-/** The terms of `workflowRunStarter` that name this starter, as the key's index reads them. */
-function starterIs(startedBy: OperationRunActor) {
-  const values = [
-    startedBy.kind,
-    startedBy.id,
-    startedBy.delegatedActor?.kind ?? "",
-    startedBy.delegatedActor?.id ?? ""
-  ];
-  return workflowRunStarter(workflowRuns.startedBy).map(
-    (term, index) => sql`${term} = ${values[index]}`
-  );
-}
-
 export async function lockWorkflowRunByKey(
   db: PostgresConnection,
   input: Input<"lockRunByKey">
@@ -75,7 +61,7 @@ export async function lockWorkflowRunByKey(
         eq(workflowRuns.workflow, input.workflow),
         eq(workflowRuns.mode, input.mode),
         eq(workflowRuns.runKey, input.runKey),
-        ...starterIs(input.startedBy),
+        ...workflowRunStarterIs(workflowRuns.startedBy, input.startedBy),
         notInArray(workflowRuns.status, [...WORKFLOW_KEY_RELEASING_STATUSES])
       )
     )

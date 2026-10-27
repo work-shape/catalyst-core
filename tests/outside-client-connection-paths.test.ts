@@ -393,6 +393,40 @@ describe("a Workflow run read or started with a key", () => {
     expect(bySession.statusCode, bySession.body).toBe(200);
     const sessionRun = runSchema.parse(bySession.json()).id;
     expect([run.id, runSchema.parse(taken.json()).id]).not.toContain(sessionRun);
+    // Listed by the key a page at a time, the key finds its own run, though Tim's newer run
+    // in the app holds the key too, and a key only others hold is an empty last page.
+    await allow(t, tim.id, "workflow.read");
+    const reader = await keyOf(t, tim.id, ["workflow.read", "workflow.write", "workflow.use"]);
+    const listedBy = async (key: string) => {
+      const listed = await t.call(tim.id, "workflows.list_runs", {
+        params: { workflow: "notify-clients" },
+        query: { key, limit: "1" },
+        headers: reader
+      });
+      expect(listed.statusCode, listed.body).toBe(200);
+      return z
+        .object({ items: z.array(runSchema), nextCursor: z.string().optional() })
+        .parse(listed.json());
+    };
+    const readerOwn = await t.call(tim.id, "workflows.start", {
+      params: { workflow: "notify-clients" },
+      payload: { input: { note: NOTE }, key: "2026-10/mine" },
+      headers: reader
+    });
+    expect(readerOwn.statusCode, readerOwn.body).toBe(200);
+    expect(
+      (
+        await t.call(tim.id, "workflows.start", {
+          params: { workflow: "notify-clients" },
+          payload: { input: { note: NOTE }, key: "2026-10/mine" }
+        })
+      ).statusCode
+    ).toBe(200);
+    const mine = await listedBy("2026-10/mine");
+    expect(mine.items.map((item) => item.id)).toEqual([runSchema.parse(readerOwn.json()).id]);
+    expect(mine.nextCursor).toBeUndefined();
+    expect(await listedBy("2026-10/anna")).toEqual({ items: [] });
+
     // Root's own start with the key is still answered Root's run.
     const byRoot = await t.expectOk(t.root.id, "workflows.start", {
       params: { workflow: "notify-clients" },
