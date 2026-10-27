@@ -158,10 +158,9 @@ export function inspectPublicPackage(root) {
     // The bundler writes the source path of every module it bundled as a comment of its own.
     for (const [, modulePath] of text.matchAll(/^\/\/ (\S+\.[cm]?[jt]sx?)$/gmu)) {
       const fromPackage = posix.normalize(posix.join("packages", PUBLIC_TOOL_DIR, modulePath));
-      const allowed =
-        [PUBLIC_TOOL_DIR, ...BUNDLED_SOURCE_DIRS].some((dir) =>
-          fromPackage.startsWith(`packages/${dir}/src/`)
-        );
+      const allowed = [PUBLIC_TOOL_DIR, ...BUNDLED_SOURCE_DIRS].some((dir) =>
+        fromPackage.startsWith(`packages/${dir}/src/`)
+      );
       if (!allowed) {
         problems.push(`${file}: bundles ${modulePath}, which is outside the public packages`);
       }
