@@ -22,6 +22,12 @@ export const PREVIEW_REPORT_INTERVAL_MS = 5_000;
  * interface settles the report itself after this long.
  */
 export const PREVIEW_SETTLE_FALLBACK_MS = 12_000;
+/**
+ * While the page is visible and nothing changed, the report is sent again this often: it tells
+ * the instance the preview is still mounted, so a run of the agent knows someone looks. A run
+ * counts a preview as mounted for 60 seconds after its last report.
+ */
+export const PREVIEW_KEEP_ALIVE_MS = 30_000;
 /** Distinct failed calls kept apart; more are counted. A report lists ten entries at most. */
 const MAX_FAILED_CALLS = 50;
 
@@ -39,6 +45,8 @@ interface Timers {
   now(): number;
   /** Runs `run` after `ms`; the function returned cancels it. */
   after(run: () => void, ms: number): () => void;
+  /** Whether the person can see the page now. */
+  visible?(): boolean;
 }
 
 const browserTimers: Timers = {
@@ -46,13 +54,15 @@ const browserTimers: Timers = {
   after: (run, ms) => {
     const timer = setTimeout(run, ms);
     return () => clearTimeout(timer);
-  }
+  },
+  visible: () => typeof document === "undefined" || document.visibilityState === "visible"
 };
 
 /**
  * The reporter of one mounted preview. It sends once at once, which tells the instance a
  * preview is mounted; then when the report settled, and on each change after, never more
- * often than every 5 seconds. A send that fails is not repeated: the next change sends again.
+ * often than every 5 seconds, and every 30 seconds without a change while the page is visible.
+ * A send that fails is not repeated: the next change sends again.
  */
 export function createPreviewReporter(
   send: (report: PreviewReport) => Promise<unknown>,
@@ -70,6 +80,7 @@ export function createPreviewReporter(
   let cancelQueued: (() => void) | undefined;
   let cancelGreeting: (() => void) | undefined;
   let cancelFallback: (() => void) | undefined;
+  let cancelKeepAlive: (() => void) | undefined;
 
   const bridge = (): PreviewReportBridge =>
     greeted ? "connected" : greetingLate ? "not_connected" : "waiting";
@@ -101,10 +112,20 @@ export function createPreviewReporter(
     // it is there, since a run of the agent waits a few seconds for it. Later changes then go
     // out at most every 5 seconds.
     lastSentAt = settled ? timers.now() : undefined;
+    cancelKeepAlive?.();
+    cancelKeepAlive = timers.after(keepAlive, PREVIEW_KEEP_ALIVE_MS);
     send(report()).catch((error: unknown) => {
       // The frame's address expired or is not this viewer's: nothing more is kept of it.
       if (error instanceof ApiError && [401, 403, 404].includes(error.status)) stop();
     });
+  };
+
+  /** The same report again, while the page is visible and no change is on its way. */
+  const keepAlive = () => {
+    cancelKeepAlive = undefined;
+    if (stopped) return;
+    if (cancelQueued === undefined && (timers.visible?.() ?? true)) sendNow();
+    else cancelKeepAlive = timers.after(keepAlive, PREVIEW_KEEP_ALIVE_MS);
   };
 
   /** Sends now, or as soon as the interval since the last send allows. */
@@ -135,6 +156,7 @@ export function createPreviewReporter(
     cancelFallback?.();
     cancelGreeting?.();
     cancelQueued?.();
+    cancelKeepAlive?.();
   };
 
   const settle = () => {

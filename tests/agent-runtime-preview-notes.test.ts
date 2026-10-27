@@ -64,6 +64,7 @@ type Asked = { method: string; userId: string; fileSetId?: string };
 
 async function runOnce(input: {
   toolNames?: string[];
+  context?: RuntimeCallContext;
   source: (asked: Asked[]) => PreviewReportSource;
 }) {
   const store = (await createTestInstance()).stores;
@@ -133,11 +134,12 @@ async function runOnce(input: {
     })
   );
   const started = Date.now();
+  const runContext = input.context ?? context;
   const run = await runtime.start(
     { agentName: "builder", conversationId, message: { text: "Build the orders page" } },
-    context
+    runContext
   );
-  for await (const _event of runtime.observe(run.runId, context)) {
+  for await (const _event of runtime.observe(run.runId, runContext)) {
     /* drain */
   }
   const toolResultOf = (messages: ModelMessage[] | undefined) =>
@@ -244,6 +246,25 @@ describe("the run's note on what the preview did", () => {
         getPreviewReport: async () => undefined
       })
     });
+    expect(f.asked).toEqual([]);
+  });
+
+  it("reads no one's report for a run without a person, and says 'not viewed'", async () => {
+    const f = await runOnce({
+      context: { ...context, unattended: true },
+      source: (asked) => ({
+        previewViewedSince: async (key) => {
+          asked.push({ method: "viewed", userId: key.userId });
+          return true;
+        },
+        takePreviewReport: async (key) => {
+          asked.push({ method: "take", userId: key.userId });
+          return undefined;
+        },
+        getPreviewReport: async () => undefined
+      })
+    });
+    expect(f.toolResultOf(f.requests[1])).toContain("Preview of revision 4: not viewed.");
     expect(f.asked).toEqual([]);
   });
 });

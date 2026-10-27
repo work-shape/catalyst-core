@@ -53,7 +53,7 @@ function fixture(input: { viewed: boolean; report?: PreviewReport; arrivesOnTake
   const reports: PreviewReportSource = {
     takePreviewReport: async (key) => {
       calls.take += 1;
-      expect(key).toMatchObject({ ...viewer, fileSetId, notBefore: OPENED_AT.toISOString() });
+      expect(key).toMatchObject({ ...viewer, fileSetId });
       return input.report && calls.take >= (input.arrivesOnTake ?? 1)
         ? taken(input.report)
         : undefined;
@@ -81,7 +81,6 @@ function fixture(input: { viewed: boolean; report?: PreviewReport; arrivesOnTake
       viewer: unattended ? undefined : viewer,
       fileSetId,
       number: 2,
-      openedAt: OPENED_AT,
       signal: undefined
     });
   return { calls, afterOpen, elapsed: () => now - OPENED_AT.getTime() };

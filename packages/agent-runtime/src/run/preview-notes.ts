@@ -65,19 +65,17 @@ export class PreviewNotes {
     viewer: PreviewViewerKey | undefined;
     fileSetId: FileSetId;
     number: number | undefined;
-    openedAt: Date;
     signal: AbortSignal | undefined;
   }): Promise<string> {
     const revision = revisionLabel(input.number);
     const { viewer } = input;
     if (!viewer) return notViewed(revision);
     const started = this.clock.now().getTime();
+    // The file set is the one this open stored, so any report of it is of this revision. No
+    // time of this process is compared with the time the instance wrote the report at.
+    const kept = new Date(started - PREVIEW_REPORT_KEEP_MS).toISOString();
     const take = () =>
-      this.reports.takePreviewReport({
-        ...viewer,
-        fileSetId: input.fileSetId,
-        notBefore: input.openedAt.toISOString()
-      });
+      this.reports.takePreviewReport({ ...viewer, fileSetId: input.fileSetId, notBefore: kept });
     let taken = await take();
     if (!taken) {
       const viewed = await this.reports.previewViewedSince({
@@ -97,7 +95,7 @@ export class PreviewNotes {
     const unsettled = await this.reports.getPreviewReport({
       ...viewer,
       fileSetId: input.fileSetId,
-      notBefore: new Date(input.openedAt.getTime() - 1).toISOString()
+      notBefore: kept
     });
     return bounded(
       unsettled
