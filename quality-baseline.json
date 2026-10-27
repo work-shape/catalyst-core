@@ -334,7 +334,7 @@
       "target": "operations",
       "rule": "plain-changing",
       "scope": "conversation",
-      "count": 15,
+      "count": 16,
       "owner": "CONV-1"
     },
     {
@@ -820,6 +820,13 @@
       "to": 15,
       "reason": "apps.sessions.report (PREVIEW-STATUS-1a) keeps a preview's scrubbed diagnostics for its conversation; by design no audit event or Operation Run holds a report.",
       "acceptedBy": "architect (agent sees the preview, 2026-10-27)",
+      "date": "2026-10-27"
+    },
+    {
+      "key": "operations|plain-changing|conversation",
+      "to": 16,
+      "reason": "apps.sessions.capture (PREVIEW-SEE-1) stores a picture of a preview for the model of the one run that asked; spec check 77: a capture writes no audit event, so no Operation Run holds it.",
+      "acceptedBy": "architect (agent sees the preview, 2026-10-27; apps-and-pages check 77)",
       "date": "2026-10-27"
     }
   ]
