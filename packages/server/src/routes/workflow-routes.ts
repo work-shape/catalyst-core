@@ -15,6 +15,7 @@ import {
   type AuthenticatedIdentity,
   type OperationAuthorization,
   type OperationOrigin,
+  type OperationRunActor,
   type OperationResource,
   type ClientInstanceId,
   type PlatformStores,
@@ -502,18 +503,23 @@ function registerWorkflowRoutes(
           { exposeMessage: true }
         );
       }
+      // A run key can be a value a person would not show, such as a client's address: asked by
+      // its key, an outside client without the right finds only a run it started itself. The
+      // store pages those alone, so a page neither hides its own run nor hints at others'.
+      const ownOnly =
+        key !== undefined && !includeData && isOutsideCall(context.actor, context.origin);
       const listed = await required().listRuns({
         workflow: input.workflow,
-        ...(key ? { key } : {}),
+        ...(key
+          ? {
+              key: ownOnly && "exact" in key ? { ...key, startedBy: starterOf(context.actor) } : key
+            }
+          : {}),
         ...(context.paging ? { page: context.paging } : {})
       });
-      // A run key can be a value a person would not show, such as a client's address: asked by
-      // its key, an outside client without the right finds only a run it started itself, and
-      // the page leaves out the runs others started with the same key.
-      const runs =
-        key && !includeData && isOutsideCall(context.actor, context.origin)
-          ? listed.filter((run) => startedByThisCredential(run, context.actor))
-          : listed;
+      const runs = ownOnly
+        ? listed.filter((run) => startedByThisCredential(run, context.actor))
+        : listed;
       const roots = rootReads(context.access, context.actor);
       return withConnectionTitles(
         context.access,
@@ -718,6 +724,19 @@ const OUTSIDE_REFUSAL: OperationAuthorization = {
   reason: "no_grant",
   message: OUTSIDE_REFUSAL_MESSAGE
 };
+
+/** The caller as a run records who started it, and as its run key is held for. */
+function starterOf(actor: AuthenticatedIdentity): OperationRunActor {
+  if (isAuthenticatedServicePrincipal(actor)) {
+    return { kind: "service_principal", id: actor.id, label: actor.displayLabel };
+  }
+  return {
+    kind: "user",
+    id: actor.id,
+    label: actor.displayLabel,
+    ...(actor.delegatedActor ? { delegatedActor: actor.delegatedActor } : {})
+  };
+}
 
 function startedBy(run: WorkflowRunView, actor: AuthenticatedIdentity): boolean {
   const kind = isAuthenticatedServicePrincipal(actor) ? "service_principal" : "user";

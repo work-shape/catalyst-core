@@ -42,7 +42,7 @@ import {
 } from "@work-shape/catalyst-core";
 import { keysetFilter } from "./paging";
 import { type PostgresConnection } from "./postgres-database";
-import { workflowRuns, workflowStepRuns } from "./schema/workflowRuns";
+import { workflowRuns, workflowRunStarterIs, workflowStepRuns } from "./schema/workflowRuns";
 
 type Input<Method extends keyof WorkflowRunsStore> = Parameters<WorkflowRunsStore[Method]>[0];
 
@@ -191,7 +191,12 @@ async function listWorkflowRuns(
         input.key === undefined
           ? undefined
           : "exact" in input.key
-            ? eq(workflowRuns.runKey, input.key.exact)
+            ? and(
+                eq(workflowRuns.runKey, input.key.exact),
+                ...(input.key.startedBy
+                  ? workflowRunStarterIs(workflowRuns.startedBy, input.key.startedBy)
+                  : [])
+              )
             : // `starts_with` takes the prefix as it is written: `_` and `%` are no patterns.
               sql`starts_with(${workflowRuns.runKey}, ${input.key.prefix})`,
         keysetFilter(input.page, [workflowRuns.createdAt, workflowRuns.id], true)

@@ -56,6 +56,17 @@ export function workflowRunStarter(startedBy: AnyColumn | SQL) {
   ];
 }
 
+/** The terms of `workflowRunStarter` that name this starter, as the key's index reads them. */
+export function workflowRunStarterIs(startedBy: AnyColumn | SQL, starter: OperationRunActor) {
+  const values = [
+    starter.kind,
+    starter.id,
+    starter.delegatedActor?.kind ?? "",
+    starter.delegatedActor?.id ?? ""
+  ];
+  return workflowRunStarter(startedBy).map((term, index) => sql`${term} = ${values[index]}`);
+}
+
 /**
  * One row per run of a Workflow. It keeps the definition it executes and the id of that
  * revision, so a run that a worker picks up again after a restart never reads a newer one.
