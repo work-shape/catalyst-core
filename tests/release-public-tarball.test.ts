@@ -127,11 +127,14 @@ console.log(JSON.stringify(checkInstall(process.argv[1], process.argv[2], proces
     expect(result.output).toContain(`the manifest depends on the workspace package ${name}`);
   });
 
-  it("allows core's standalone hash helper", () => {
+  it("fails a bundle that holds core's hash helper", () => {
     const result = check(
       unpacked({ "dist/index.js": "// ../core/src/sha256.ts\nexport const hash = 1;\n" })
     );
-    expect(result.status).toBe(0);
+    expect(result.status).toBe(1);
+    expect(result.output).toContain(
+      "dist/index.js: bundles ../core/src/sha256.ts, which is outside the public packages"
+    );
   });
 
   it("fails a bundle that holds source outside the allowed entries", () => {
