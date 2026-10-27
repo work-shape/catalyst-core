@@ -3,8 +3,10 @@ apps.allow_draft_host  POST /api/v1/apps/draft-hosts
 apps.create_from_page  POST /api/v1/apps
 apps.get_from_page  GET /api/v1/conversations/:conversationId/pages/:pageId/app
 apps.preview  POST /api/v1/apps/:app/preview
+apps.preview_captures.pending  GET /api/v1/conversations/:conversationId/preview-captures
 apps.publish_review  GET /api/v1/apps/:app/publish-review
 apps.sessions.call_action  POST /api/v1/app-content-sessions/:pageSessionId/actions/:name
+apps.sessions.capture  POST /api/v1/app-content-sessions/:pageSessionId/captures/:captureId
 apps.sessions.context  POST /api/v1/app-content-sessions/:pageSessionId/context
 apps.sessions.get_workflow_run  POST /api/v1/app-content-sessions/:pageSessionId/workflow-runs/:runId
 apps.sessions.report  POST /api/v1/app-content-sessions/:pageSessionId/report

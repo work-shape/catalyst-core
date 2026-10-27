@@ -33,6 +33,7 @@ import {
   createAppPublishTool,
   createAppTryTools,
   APP_TRY_TOOL_NAMES,
+  PREVIEW_CAPTURE_TOOL_NAME,
   WORKSPACE_OPEN_TOOL_NAME,
   createAppSaveTool,
   createConnectionDraftTool,
@@ -83,6 +84,7 @@ const WRITE_FILE_TOOL = "workspace.write_file";
  */
 const APP_TOOLS = [
   WORKSPACE_OPEN_TOOL_NAME,
+  PREVIEW_CAPTURE_TOOL_NAME,
   APP_SAVE_TOOL_NAME,
   APP_PUBLISH_TOOL_NAME,
   ...APP_TRY_TOOL_NAMES,

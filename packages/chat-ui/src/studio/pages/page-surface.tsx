@@ -28,6 +28,7 @@ import { useFrameCallTexts } from "./frame-call-texts";
 import { FrameApprovalWait, type FrameWait } from "./frame-approval-wait";
 import { FrameTestRun, type FrameTestRunShown } from "./frame-test-run";
 import { createFrameCalls, frameSessionProof, type FrameAddress } from "./frame-calls";
+import { bytesToBase64, registerPreviewCaptureTarget } from "./preview-capture";
 import { createPreviewReporter, type PreviewReporter } from "./preview-report";
 import { DraftHostsNotice } from "./draft-hosts-notice";
 import {
@@ -553,10 +554,30 @@ export function LivePagePreview({
       })
     );
     reporterRef.current = reporter;
+    // The same frame answers a run that asks for a picture of it (PREVIEW-SEE-1).
+    const unregister = registerPreviewCaptureTarget({
+      conversationId,
+      fileSetId: proof.fileSetId,
+      capture: (requestId) =>
+        bridgeRef.current?.capture(requestId) ?? Promise.resolve({ unavailable: true }),
+      answer: (captureId, capture) =>
+        client.apps.sessions.capture({
+          params: { pageSessionId: proof.pageSessionId, captureId },
+          body: {
+            fileSetId: proof.fileSetId,
+            token: proof.token,
+            ...(conversationId === undefined ? {} : { conversationId }),
+            ...("image" in capture
+              ? { image: bytesToBase64(capture.image) }
+              : { unavailable: true as const })
+          }
+        })
+    });
     const frame = frameRef.current;
     const onLoad = () => reporter.frameLoaded();
     frame?.addEventListener("load", onLoad);
     return () => {
+      unregister();
       frame?.removeEventListener("load", onLoad);
       reporter.stop();
       if (reporterRef.current === reporter) reporterRef.current = undefined;

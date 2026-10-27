@@ -4,16 +4,24 @@ export {
   callResultMessage,
   contextMessage,
   createPageBridge,
+  FRAME_CAPTURE_TIMEOUT_MS,
   readPageMessage,
   themeMessage,
   workflowRunResultMessage,
-  type ArrivedMessage
+  type ArrivedMessage,
+  type FrameCapture
 } from "./bridge-host";
 export {
   AssetPreviewCardView,
   assetPreviewSurfaceAfterRunCalls,
   previewedDraftOfCall
 } from "./asset-preview";
+export {
+  answerPreviewCaptures,
+  bytesToBase64,
+  registerPreviewCaptureTarget,
+  type PreviewCaptureTarget
+} from "./preview-capture";
 export {
   createFrameCalls,
   frameCallFailure,

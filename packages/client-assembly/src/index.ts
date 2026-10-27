@@ -39,6 +39,7 @@ export {
   type SeedStandaloneAuthResult
 } from "./seed-auth";
 export { createJobWorker, type CreateJobWorkerInput } from "./job-worker";
+export { createPreviewCaptureObjectReader } from "./preview-capture-objects";
 export { runWorkerUntilStopped } from "./worker-lifecycle";
 export { workflowRunDatasetPort } from "./workflow-run-datasets";
 export {

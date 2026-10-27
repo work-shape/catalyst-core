@@ -56,7 +56,13 @@ export class PreviewReports {
     input: PreviewReportInput
   ): Promise<{ stored: boolean }> {
     const frame = await this.actions.reportingFrame(caller, input);
-    const conversationId = await this.conversationOf(frame, caller.user, input.conversationId);
+    const conversationId = await frameConversation(
+      this.options,
+      this.conversations,
+      frame,
+      caller.user,
+      input.conversationId
+    );
     // The session refused a proof whose file set id is malformed; this says so to the types.
     if (conversationId === undefined || !isFileSetId(input.fileSetId)) {
       return { stored: false };
@@ -77,35 +83,44 @@ export class PreviewReports {
     });
     return { stored };
   }
+}
 
-  private async conversationOf(
-    frame: ReportingFrame,
-    user: AuthenticatedUser,
-    named: string | undefined
-  ): Promise<ConversationId | undefined> {
-    if (frame.mode === "page") {
-      // The frame's check read it for the caller. A name the interface sent does not count.
-      return frame.conversationId;
-    }
-    if (frame.mode !== "draft" || named === undefined || frame.asset.name === "") {
-      return undefined;
-    }
-    const conversation = await this.conversations
-      .requireConversationAccess(asConversationId(named), user)
-      .catch(() => undefined);
-    if (!conversation) return undefined;
-    const { asset } = frame;
-    const subject = conversation.subject;
-    if (subject?.kind === asset.kind && subject.name === asset.name) return conversation.id;
-    // A draft the conversation created beside its subject, such as an App's form page.
-    const created = await this.options.stores.conversations.createdAsset({
-      clientInstanceId: this.options.clientInstanceId,
-      conversationId: conversation.id,
-      kind: asset.kind,
-      name: asset.name
-    });
-    return created ? conversation.id : undefined;
+
+/**
+ * The conversation a frame shows a preview of, for the caller. A Page of a conversation belongs
+ * to that conversation. A draft, of an App or of another kind such as a form page, belongs to
+ * the conversation the interface names, when the caller reads it and it is about that asset or
+ * created it. A published App, and a draft without such a conversation, belong to none.
+ */
+export async function frameConversation(
+  options: ResolvedChatServerOptions,
+  conversations: ConversationWorkflow,
+  frame: ReportingFrame,
+  user: AuthenticatedUser,
+  named: string | undefined
+): Promise<ConversationId | undefined> {
+  if (frame.mode === "page") {
+    // The frame's check read it for the caller. A name the interface sent does not count.
+    return frame.conversationId;
   }
+  if (frame.mode !== "draft" || named === undefined || frame.asset.name === "") {
+    return undefined;
+  }
+  const conversation = await conversations
+    .requireConversationAccess(asConversationId(named), user)
+    .catch(() => undefined);
+  if (!conversation) return undefined;
+  const { asset } = frame;
+  const subject = conversation.subject;
+  if (subject?.kind === asset.kind && subject.name === asset.name) return conversation.id;
+  // A draft the conversation created beside its subject, such as an App's form page.
+  const created = await options.stores.conversations.createdAsset({
+    clientInstanceId: options.clientInstanceId,
+    conversationId: conversation.id,
+    kind: asset.kind,
+    name: asset.name
+  });
+  return created ? conversation.id : undefined;
 }
 
 /**

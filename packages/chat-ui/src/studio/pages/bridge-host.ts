@@ -62,6 +62,7 @@ export function readPageMessage(
   }
   return parsed.data.type === "ready" ||
     parsed.data.type === "report" ||
+    parsed.data.type === "capture_result" ||
     parsed.data.session === session
     ? parsed.data
     : undefined;
@@ -148,12 +149,24 @@ function isPageWindow(value: unknown): value is PageWindow {
   return typeof value === "object" && value !== null && "postMessage" in value;
 }
 
+/** What the frame's guard answered when asked for a picture of the Page (PREVIEW-SEE-1). */
+export type FrameCapture =
+  { image: ArrayBuffer; width: number; height: number } | { unavailable: true };
+
+/** How long the guard has to draw the Page: images load again, and the run waits 10 seconds. */
+export const FRAME_CAPTURE_TIMEOUT_MS = 7_000;
+
 /** The interface's end of one mounted Page frame. */
 export interface PageBridge {
   /** Takes one message that arrived at the interface's window. */
   receive(event: ArrivedMessage): void;
   /** Tells the Page the look of the interface, once the Page has greeted. */
   sendLook(look: Pick<AppBridgeContext, "theme" | "mode">): void;
+  /**
+   * Asks the platform's guard in the frame for a picture of the Page as it is shown now. A
+   * frame that does not answer in time, or answers without a picture, cannot take one.
+   */
+  capture(requestId: string): Promise<FrameCapture>;
 }
 
 /**
@@ -192,6 +205,7 @@ export function createPageBridge(input: {
 }): PageBridge {
   let page: PageWindow | undefined;
   let storageWrites = Promise.resolve();
+  const captures = new Map<string, (answer: FrameCapture) => void>();
   /**
    * Posts to the window that sent a message, while it is still the frame's one child. Says
    * whether it was.
@@ -219,6 +233,15 @@ export function createPageBridge(input: {
       }
       if (message.type === "report") {
         input.onReport?.(message.report);
+        return;
+      }
+      if (message.type === "capture_result") {
+        const settle = captures.get(message.requestId);
+        settle?.(
+          message.image !== undefined && message.width !== undefined && message.height !== undefined
+            ? { image: message.image, width: message.width, height: message.height }
+            : { unavailable: true }
+        );
         return;
       }
       if (message.type === "ready") {
@@ -333,6 +356,31 @@ export function createPageBridge(input: {
           })
           .catch(() => undefined);
       }
+    },
+    capture(requestId) {
+      const frame = input.frame();
+      // The guard runs before the Page and needs no greeting: a Page without the kit answers too.
+      const to = frame?.length === 1 ? frame[0] : undefined;
+      if (!isPageWindow(to)) {
+        return Promise.resolve({ unavailable: true });
+      }
+      return new Promise<FrameCapture>((resolve) => {
+        const timer = setTimeout(() => settle({ unavailable: true }), FRAME_CAPTURE_TIMEOUT_MS);
+        const settle = (answer: FrameCapture) => {
+          clearTimeout(timer);
+          captures.delete(requestId);
+          resolve(answer);
+        };
+        captures.set(requestId, settle);
+        to.postMessage(
+          appBridgeHostMessageSchema.parse({
+            [APP_BRIDGE_MARK]: APP_BRIDGE_VERSION,
+            type: "capture",
+            requestId
+          }),
+          "*"
+        );
+      });
     },
     sendLook(look) {
       const frame = input.frame();

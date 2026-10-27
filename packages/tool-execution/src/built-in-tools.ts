@@ -6,6 +6,7 @@ import {
   type ToolAssemblyDefinition
 } from "@work-shape/catalyst-tool-sdk";
 import { z } from "zod";
+import { createPreviewCaptureTool, type PreviewCaptureToolOptions } from "./preview-capture-tool";
 import { createWorkspaceOpenTool, type WorkspaceOpenToolOptions } from "./workspace-open-tool";
 
 /** The part of the instance's `views` config the tool tells the agent about. */
@@ -51,6 +52,8 @@ const showViewOutputSchema = z.object({
 export interface BuiltInModuleTools {
   /** The `apps` module: opening a file or folder in the preview panel. */
   apps?: WorkspaceOpenToolOptions;
+  /** The `apps` module: looking at the preview the person has open (PREVIEW-SEE-1). */
+  previewCapture?: PreviewCaptureToolOptions;
 }
 
 export function createBuiltInToolDefinitions(
@@ -59,7 +62,8 @@ export function createBuiltInToolDefinitions(
 ): ToolAssemblyDefinition[] {
   return [
     createShowViewTool(views),
-    ...(modules.apps ? [createWorkspaceOpenTool(modules.apps)] : [])
+    ...(modules.apps ? [createWorkspaceOpenTool(modules.apps)] : []),
+    ...(modules.previewCapture ? [createPreviewCaptureTool(modules.previewCapture)] : [])
   ];
 }
 
