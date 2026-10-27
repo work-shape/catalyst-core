@@ -1,0 +1,53 @@
+{
+  "routes": [
+    "/",
+    "/build/agents",
+    "/build/connections",
+    "/build/data-stores",
+    "/build/guardrails",
+    "/build/knowledge-bases",
+    "/build/skills",
+    "/inbox",
+    "/settings/instance/access",
+    "/settings/instance/api-access",
+    "/settings/instance/audit",
+    "/settings/instance/infrastructure",
+    "/settings/instance/jobs",
+    "/settings/instance/limits",
+    "/settings/instance/modules",
+    "/settings/instance/operations",
+    "/settings/instance/usage",
+    "/settings/instance/users",
+    "/settings/instance/workspaces",
+    "/settings/workspace/general",
+    "/settings/workspace/members",
+    "/settings/workspace/usage",
+    "/settings/you/api-keys",
+    "/settings/you/confirmations",
+    "/settings/you/connect",
+    "/settings/you/connections",
+    "/settings/you/language-appearance",
+    "/settings/you/profile",
+    "/settings/you/security",
+    "/settings/you/usage",
+    "/w/{workspace}/agents",
+    "/w/{workspace}/apps",
+    "/w/{workspace}/workflows"
+  ],
+  "required": [],
+  "states": [
+    {
+      "name": "app-draft-head",
+      "setup": "/Users/felix/code/catalyst-ws/.scratch/appver-1/head-state.mjs"
+    },
+    {
+      "name": "app-history",
+      "setup": "/Users/felix/code/catalyst-ws/.scratch/appver-1/history-state.mjs"
+    }
+  ],
+  "modules": [],
+  "pr": 98,
+  "head": "8957cd208aaa51488b5d2d5bbc874ad6c1046871",
+  "base": "bc0b98888075bc0d4b3a4dee345f7625eb65e95e",
+  "tested": "f537b03698044149541e0405d4d6e722757129cf"
+}
