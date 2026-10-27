@@ -4,6 +4,7 @@ import { APP_MODES } from "@work-shape/catalyst-core";
 import { createHash, createHmac, hkdfSync, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import { FRAME_OPTIONS_HEADERS, frameAncestors } from "../http/framing";
+import { PREVIEW_CAPTURE_SOURCE } from "./preview-capture-source";
 
 // Serving a Page: the files of one file set, to the frame that shows it and to nobody else.
 //
@@ -899,6 +900,10 @@ const PAGE_GUARD_SOURCE = `(function (page) {
   // What the Page does is reported to the interface. A collector that fails leaves the Page.
   try {
     (${PREVIEW_COLLECTOR_SOURCE})(window, window.parent.parent);
+  } catch (error) {}
+  // A picture of the Page when a run asks for one (PREVIEW-SEE-1). It waits for the interface.
+  try {
+    (${PREVIEW_CAPTURE_SOURCE})(window, window.parent.parent);
   } catch (error) {}
 
   // The Page, now that everything above holds. The parser reads it from here on.

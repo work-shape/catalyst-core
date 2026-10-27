@@ -13,6 +13,7 @@ import { AppActionList } from "../apps/action-list";
 import { AppWorkflow } from "../apps/app-service";
 import { AppDraftTries } from "../apps/app-tries";
 import { DraftHosts } from "../apps/draft-hosts";
+import { PreviewCaptures } from "../apps/preview-captures";
 import { PreviewReports } from "../apps/preview-reports";
 import type { Route } from "../http/route";
 import type { ResolvedChatServerOptions } from "../types";
@@ -32,6 +33,7 @@ export function registerAppRoutes(route: Route, options: ResolvedChatServerOptio
   const draftHosts = new DraftHosts(options);
   const tries = new AppDraftTries(options, { apps: workflow, actions });
   const previewReports = new PreviewReports(options, actions);
+  const previewCaptures = new PreviewCaptures(options, actions);
 
   route.operation(apiOperations["apps.create_from_page"], {
     authorize: (input, { actor, access }) => workflow.authorizeCreate(actor, access, input),
@@ -145,6 +147,31 @@ export function registerAppRoutes(route: Route, options: ResolvedChatServerOptio
         token: body.token,
         conversationId: body.conversationId,
         report: body.report
+      }
+    );
+  });
+
+  // A run's request for a picture of the preview (PREVIEW-SEE-1): the caller's own pending
+  // requests, and the answer of their browser. Plain routes: no Operation Run, audit event or
+  // log line holds a request or a picture.
+  route(apiOperations["apps.preview_captures.pending"], async ({ user, params, reply }) => {
+    void reply.header("cache-control", "no-store");
+    return previewCaptures.pending({ user }, params.conversationId);
+  });
+
+  // The picture travels as base64 within the server's default body limit of 1 MiB.
+  route(apiOperations["apps.sessions.capture"], async ({ user, access, params, body, reply }) => {
+    void reply.header("cache-control", "no-store");
+    return previewCaptures.answer(
+      { user, access },
+      {
+        pageSessionId: params.pageSessionId,
+        captureId: params.captureId,
+        fileSetId: body.fileSetId,
+        token: body.token,
+        conversationId: body.conversationId,
+        image: body.image,
+        unavailable: body.unavailable
       }
     );
   });

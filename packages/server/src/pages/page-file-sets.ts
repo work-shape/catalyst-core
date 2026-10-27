@@ -7,6 +7,7 @@ import {
   fileSetObjectPrefix,
   normalizePageName,
   pageObjectPrefix,
+  previewCaptureObjectPrefix,
   pageRefusal,
   readObjectBytes,
   requireFileSetWithinLimits,
@@ -316,6 +317,9 @@ export async function deleteConversationPages(
   options: PagesContext,
   conversationId: ConversationId
 ): Promise<void> {
+  // The pictures its runs took of its previews (PREVIEW-SEE-1). Their artifact rows go with
+  // the conversation's artifacts.
+  await options.pages?.objects.deletePrefix(previewCaptureObjectPrefix(conversationId));
   const pageIds = await options.stores.pages.listConversationPageIds({
     clientInstanceId: options.clientInstanceId,
     conversationId

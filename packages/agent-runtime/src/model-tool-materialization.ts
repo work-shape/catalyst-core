@@ -4,6 +4,7 @@ import {
   KNOWLEDGE_OPERATION_PREFIX,
   KNOWLEDGE_QUERY_TOOL_NAME,
   KNOWLEDGE_SEARCH_TOOL_NAME,
+  PREVIEW_CAPTURE_TOOL_NAME,
   type AgentConfig,
   type DataToolDescriptor,
   type DataToolSource,
@@ -126,10 +127,17 @@ export function isUnofferedDataToolCall(toolName: string, offered: ReadonlySet<s
   );
 }
 
+/** Tools that answer with a picture for the model to look at (PREVIEW-SEE-1). */
+const IMAGE_RESULT_TOOL_NAMES: readonly string[] = [PREVIEW_CAPTURE_TOOL_NAME];
+
 export interface ModelToolMaterializationInput {
   agent: AgentConfig;
-  /** What the agent's model can do, as the gateway reports it. */
-  capabilities: Pick<ModelCapabilities, "nativeTools">;
+  /**
+   * What the agent's model can do, as the gateway reports it. A tool whose result is a picture
+   * is offered only to a model that reads images: without `imageInput` it is left out.
+   */
+  capabilities: Pick<ModelCapabilities, "nativeTools"> &
+    Partial<Pick<ModelCapabilities, "imageInput">>;
   toolRegistry: ModelToolRegistryView;
   /** The agent's data tools as `describeAgentDataTools` read them. Without them there are none. */
   dataTools?: readonly ToolDescriptor[];
@@ -144,7 +152,9 @@ export interface ModelToolMaterializationInput {
  */
 export function materializeModelTools(input: ModelToolMaterializationInput): ModelTool[] {
   const functionToolNames = input.agent.toolNames.filter(
-    (toolName) => toolName !== WEB_SEARCH_MODEL_TOOL_NAME
+    (toolName) =>
+      toolName !== WEB_SEARCH_MODEL_TOOL_NAME &&
+      (input.capabilities.imageInput === true || !IMAGE_RESULT_TOOL_NAMES.includes(toolName))
   );
   const releaseTools = input.toolRegistry.listDescriptorsForAgent(functionToolNames);
   const releaseNames = new Set(releaseTools.map((tool) => tool.name));

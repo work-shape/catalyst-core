@@ -112,6 +112,7 @@ import { createKnowledgeFiles } from "./knowledge-files";
 import { createInfrastructureWorkflow } from "./infrastructure";
 import { createInProcessAgentRunWorker, type AgentRunWorkerPlacement } from "./agent-run-jobs";
 import { createInstancePages, createInstanceWorkspaceOpen } from "./pages";
+import { createPreviewCaptureObjectReader } from "./preview-capture-objects";
 import type { KnowledgeWorkerPlacement } from "./knowledge";
 import { createJobWorker } from "./job-worker";
 import { createPlatformTools } from "./conversation-offer";
@@ -496,6 +497,16 @@ export async function createClientInstanceExecutionAssembly(
   const auditRecorder = new StoreBackedAuditRecorder({ clientInstanceId, store: store.audit });
   const managedObjects = resolveManagedObjectReaders([
     ...(workspaceManagedObjectReader ? [workspaceManagedObjectReader] : []),
+    // The pictures runs took of previews (PREVIEW-SEE-1), in the `files` store.
+    ...(pages
+      ? [
+          createPreviewCaptureObjectReader({
+            clientInstanceId,
+            files: store.files,
+            objects: pages.objects
+          })
+        ]
+      : []),
     ...capabilityContributions.flatMap((contribution) => contribution.managedObjects ?? [])
   ]);
   const jobRetries = capabilityContributions.flatMap(
@@ -647,7 +658,10 @@ export async function createClientInstanceExecutionAssembly(
   const tools = createToolDefinitions({
     config,
     tools: [
-      ...createBuiltInToolDefinitions(config.views, { apps: workspaceOpen }),
+      ...createBuiltInToolDefinitions(config.views, {
+        apps: workspaceOpen,
+        ...(workspaceOpen ? { previewCapture: { captures: store.pages } } : {})
+      }),
       ...(workspaceService ? createWorkspaceToolDefinitions({ service: workspaceService }) : []),
       ...createStructuredDataToolDefinitions({
         store,

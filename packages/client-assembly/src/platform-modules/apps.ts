@@ -1,5 +1,9 @@
 import { defineModule } from "@work-shape/catalyst-core";
-import { APP_PUBLISH_TOOL_NAME, APP_TRY_TOOL_NAMES } from "@work-shape/catalyst-tool-execution";
+import {
+  APP_PUBLISH_TOOL_NAME,
+  APP_TRY_TOOL_NAMES,
+  PREVIEW_CAPTURE_TOOL_NAME
+} from "@work-shape/catalyst-tool-execution";
 
 /**
  * Apps and their previews: the file sets a conversation keeps, their history, the route that
@@ -27,11 +31,19 @@ export const appsModule = defineModule({
     "apps.sessions.write_storage",
     "apps.sessions.get_workflow_run",
     "apps.sessions.report",
+    "apps.sessions.capture",
+    "apps.preview_captures.pending",
     "apps.try_action",
     "apps.publish_review"
   ],
   kinds: ["app"],
-  tools: ["workspace.open", "app.save", APP_PUBLISH_TOOL_NAME, ...APP_TRY_TOOL_NAMES],
+  tools: [
+    "workspace.open",
+    PREVIEW_CAPTURE_TOOL_NAME,
+    "app.save",
+    APP_PUBLISH_TOOL_NAME,
+    ...APP_TRY_TOOL_NAMES
+  ],
   jobKinds: ["page.bundle", "asset_repo.commit", "asset_repo.sweep"],
   commandWorkerJobKinds: ["page.bundle", "asset_repo.commit", "asset_repo.sweep"]
 });

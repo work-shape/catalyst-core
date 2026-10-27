@@ -7,6 +7,11 @@ export {
   type WorkspaceOpenToolOptions
 } from "./workspace-open-tool";
 export {
+  createPreviewCaptureTool,
+  PREVIEW_CAPTURE_TOOL_NAME,
+  type PreviewCaptureToolOptions
+} from "./preview-capture-tool";
+export {
   createAppSaveTool,
   APP_SAVE_TOOL_NAME,
   type AppSaveCalls,

@@ -15,6 +15,7 @@ import {
   type ConversationControllerState,
   type RunConnectionTarget
 } from "./conversation-controller-state";
+import { answerPreviewCaptures } from "../../studio/pages/preview-capture";
 import { rememberRunCursor, startRunConnectionManager } from "./run-connection-manager";
 
 export interface UseConversationControllerInput {
@@ -141,7 +142,10 @@ export function useConversationController({
       },
       refreshSnapshot,
       onTerminalObservation,
-      onToolCallCompleted
+      onToolCallCompleted,
+      onPreviewCaptureAsked: (askedIn) => {
+        answerPreviewCaptures(client, askedIn).catch(() => undefined);
+      }
     });
 
     return () => {
