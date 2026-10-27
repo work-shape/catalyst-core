@@ -146,17 +146,24 @@ async function capturePreview(
     const deadline =
       started + PREVIEW_CAPTURE_WAIT_MS + (state.status === "answering" ? ANSWERING_GRACE_MS : 0);
     const left = deadline - now().getTime();
-    if (left <= 0 || context.signal?.aborted) {
-      // An answer that comes later finds the request ended and is not taken.
+    const aborted = context.signal?.aborted === true;
+    if (left <= 0 || aborted) {
+      // An answer that comes later finds the request ended and is not taken. The request is
+      // ended only in the state last read: a browser that took it meanwhile gets the grace.
       const ended = await options.captures.settlePreviewCapture({
         clientInstanceId: context.clientInstanceId,
         id: asked.id,
-        from: ["pending", "answering"],
+        from: aborted ? ["pending", "answering"] : [state.status],
         outcome: { status: "refused", code: "preview_not_viewed" },
         answeredAt: now().toISOString()
       });
-      state = ended ? { status: "refused", code: "preview_not_viewed" } : await read();
-      break;
+      if (ended) {
+        state = { status: "refused", code: "preview_not_viewed" };
+        break;
+      }
+      state = await read();
+      if (aborted) break;
+      continue;
     }
     await wait(Math.min(POLL_MS, left), context.signal);
     state = await read();

@@ -348,6 +348,26 @@ describe("a picture of the preview", () => {
     }
   });
 
+  it("counts an operation it cannot resolve as one that reaches personal data", async () => {
+    const frame = await t.openPage(t.admin.id);
+    expectStatus(await report(t.admin.id, frame), 200);
+    const spy = vi.spyOn(t.operationCalls.registry, "resolveMany").mockResolvedValue(new Map());
+    try {
+      let listed: unknown;
+      const tool = toolWith(async () => {
+        listed = await pendingIds(t.admin.id, frame.conversationId);
+      });
+      const result = await succeeded(
+        tool.execute({}, contextFor(t.admin.id, frame.conversationId))
+      );
+      expect(spy).toHaveBeenCalled();
+      expect(listed).toEqual([]);
+      expect(result.output).toMatchObject({ captured: false, code: "preview_personal_data" });
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   it("counts three pictures a run and twenty a person an hour, and forgets requests after a day", async () => {
     const frame = await t.openPage(t.kai.id);
     if (!isFileSetId(frame.proof.fileSetId)) throw new Error("No file set id");
@@ -378,10 +398,23 @@ describe("a picture of the preview", () => {
     ]);
     // The same call asked again is the same request, not a new one.
     expect(await ask("run_limit_1", "a", start)).toEqual(outcomes[0]);
+    const later = [];
     for (let run = 2; run <= 18; run += 1) {
-      expect(await ask(`run_limit_${run}`, "a", start + run)).toHaveProperty("id");
+      const asked = await ask(`run_limit_${run}`, "a", start + run);
+      if (!("id" in asked)) throw new Error("Refused");
+      later.push(asked.id);
     }
     expect(await ask("run_limit_19", "a", start + 100)).toEqual({ refused: "capture_limit" });
+    // A request that was refused took no picture, and leaves the hour's count.
+    await t.stores.pages.settlePreviewCapture({
+      clientInstanceId,
+      id: later[0] ?? "",
+      from: ["pending"],
+      outcome: { status: "refused", code: "preview_not_viewed" },
+      answeredAt: new Date(start + 100).toISOString()
+    });
+    expect(await ask("run_limit_19", "a", start + 101)).toHaveProperty("id");
+    expect(await ask("run_limit_21", "a", start + 102)).toEqual({ refused: "capture_limit" });
     // An hour later the person may look again.
     expect(await ask("run_limit_20", "a", start + HOUR_MS + 1)).toHaveProperty("id");
 

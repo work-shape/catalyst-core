@@ -66,7 +66,8 @@ export const PREVIEW_CAPTURE_SOURCE = `function (win, host) {
   for (var at = 0; at < inheritedNames.length; at += 1) {
     INHERITED[inheritedNames[at]] = 1;
   }
-  var busy = false;
+  // Captures are taken one after another: a second request waits for the first.
+  var queue = win.Promise.resolve();
 
   function answer(requestId, picture) {
     var message = picture
@@ -89,20 +90,17 @@ export const PREVIEW_CAPTURE_SOURCE = `function (win, host) {
         return;
       }
       var requestId = data.requestId;
-      if (busy) {
-        answer(requestId, null);
-        return;
-      }
-      busy = true;
-      take().then(function (picture) {
-        busy = false;
-        answer(requestId, picture);
-      }, function () {
-        busy = false;
-        answer(requestId, null);
+      queue = queue.then(function () {
+        return take().then(function (picture) {
+          answer(requestId, picture);
+        }, function () {
+          answer(requestId, null);
+        });
+      }).then(null, function () {
+        // The queue goes on after an answer that could not be sent.
       });
     } catch (error) {
-      busy = false;
+      // A request that cannot be read is no request.
     }
   }]);
 
@@ -124,18 +122,23 @@ export const PREVIEW_CAPTURE_SOURCE = `function (win, host) {
       var full = Math.max(root.scrollHeight, body.scrollHeight, win.innerHeight || 0);
       var height = Math.max(1, Math.min(full - top, Math.floor(MAX_HEIGHT / scale)));
       var copied = copyDocument(root, width, full, top);
+      // Every step ends in an answer: an error here never reaches the page's own report.
       copied.then(function (svg) {
         var image = new win.Image();
         image.onload = function () {
-          encode(image, Math.max(1, Math.min(MAX_WIDTH, Math.round(width * scale))),
-            Math.max(1, Math.min(MAX_HEIGHT, Math.round(height * scale))), 0, 0, resolve, reject);
+          try {
+            encode(image, Math.max(1, Math.min(MAX_WIDTH, Math.round(width * scale))),
+              Math.max(1, Math.min(MAX_HEIGHT, Math.round(height * scale))), 0, 0, resolve, reject);
+          } catch (error) {
+            reject(error);
+          }
         };
         image.onerror = function () {
           reject(new Error("draw"));
         };
         image.src = "data:image/svg+xml;charset=utf-8," +
           encodeURIComponent(svg(width, height));
-      }, reject);
+      }).then(null, reject);
     });
   }
 
@@ -161,6 +164,14 @@ export const PREVIEW_CAPTURE_SOURCE = `function (win, host) {
     context.drawImage(image, 0, 0, width, height);
     // A tainted canvas throws here, as in Safari: no picture.
     canvas.toBlob(function (blob) {
+      try {
+        encoded(blob);
+      } catch (error) {
+        reject(error);
+      }
+    }, "image/webp", QUALITIES[step]);
+
+    function encoded(blob) {
       if (!blob || blob.type !== "image/webp") {
         reject(new Error("webp"));
         return;
@@ -179,7 +190,7 @@ export const PREVIEW_CAPTURE_SOURCE = `function (win, host) {
       } else {
         reject(new Error("size"));
       }
-    }, "image/webp", QUALITIES[step]);
+    }
   }
 
   // A copy of the document, every element with the styles it is drawn with, and a function
