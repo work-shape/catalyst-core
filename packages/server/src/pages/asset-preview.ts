@@ -32,7 +32,9 @@ export function kindPreviewOf(
   if (!options.pages?.contentKey || options.modules.offModuleOf("kind", kind) !== undefined) {
     return undefined;
   }
-  return options.configAssets.kinds.get(kind)?.preview;
+  const registered = options.configAssets.kinds.get(kind);
+  // Only a draft is previewed: a kind whose every write is live brings none.
+  return registered?.lifecycle === "draft_published" ? registered.preview : undefined;
 }
 
 /**

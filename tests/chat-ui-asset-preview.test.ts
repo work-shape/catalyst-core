@@ -37,7 +37,7 @@ describe("a save with a preview", () => {
       title: "Our forms",
       revision: 1
     });
-    // A later save names no title: the card names the asset.
+    // Without a title the card names the asset.
     expect(previewedDraftOfCall({ toolName: "platform.assets.put", result: savedAgain })).toEqual({
       kind: "form_page",
       name: "firm-look",
