@@ -1,3 +1,4 @@
+import { resolveFilePreviewCapability } from "@work-shape/catalyst-core";
 import { FileText } from "lucide-react";
 import { useState } from "react";
 import { Chip, Spinner } from "@work-shape/catalyst-ui";
@@ -5,6 +6,7 @@ import { useOptionalWorkspaceApiClient } from "../../shared/api/workspace-api-cl
 import { useTranslation } from "../../shared/i18n";
 import { apiErrorCode, apiErrorStatus } from "../../shared/workspace-utils";
 import { saveBlobAsFile } from "../files/conversation-file-content";
+import { rasterImageType, viewerObjectUrl, type FileViewer } from "../files/viewer-object-url";
 
 /** How long an opened source's address stays valid, for its tab to load it. */
 const OPENED_SOURCE_URL_MS = 60_000;
@@ -20,8 +22,9 @@ export interface KnowledgeCitation {
 /**
  * The chip of a cited Knowledge Base passage, "file name, p. 4". A click reads the file through
  * the API, with the reader's own session or token, and opens it at the page in a new tab; a
- * blocked tab saves it instead. A removed source says so and opens nothing. An answer in a
- * conversation names it, as its workspace is where the reader may use the Knowledge Base.
+ * blocked tab, or a file no viewer of ours shows, saves it instead. A removed source says so and
+ * opens nothing. An answer in a conversation names it, as its workspace is where the reader may
+ * use the Knowledge Base.
  */
 export function KnowledgeCitationChip({
   citation,
@@ -47,7 +50,13 @@ export function KnowledgeCitationChip({
         params: { knowledgeBase: citation.knowledgeBase, documentId: citation.documentId },
         ...(conversationId ? { query: { conversationId } } : {})
       });
-      const url = URL.createObjectURL(blob);
+      const viewer = citationViewer(citation.fileName, blob.type);
+      if (!viewer) {
+        saveBlobAsFile(blob, citation.fileName);
+        setState("idle");
+        return;
+      }
+      const url = viewerObjectUrl(blob, viewer);
       const tab = window.open(
         citation.page === undefined ? url : `${url}#page=${citation.page}`,
         "_blank"
@@ -88,4 +97,16 @@ export function KnowledgeCitationChip({
       </span>
     </Chip>
   );
+}
+
+/** The viewer a cited file opens in, by its name and the type it was fetched with; an SVG has none. */
+function citationViewer(fileName: string, mimeType: string): FileViewer | undefined {
+  const capability = resolveFilePreviewCapability({ filename: fileName, mimeType });
+  return capability === "native_pdf"
+    ? "pdf"
+    : capability === "native_image" && rasterImageType(mimeType)
+      ? "image"
+      : capability === "markdown" || capability === "text"
+        ? "text"
+        : undefined;
 }

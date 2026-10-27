@@ -1,5 +1,6 @@
 import type { ApiClient } from "@work-shape/catalyst-api-client";
 import { useEffect, useState } from "react";
+import { viewerObjectUrl, type FileViewer } from "./viewer-object-url";
 
 export type ConversationFileContentRef =
   { kind: "artifact"; artifactId: string } | { kind: "source_file"; fileId: string };
@@ -45,16 +46,17 @@ export function useConversationFileBlob({
   client,
   content,
   conversationId,
-  createObjectUrl = false,
   download = false,
-  enabled = true
+  enabled = true,
+  viewer
 }: {
   client: ApiClient;
   content: ConversationFileContentRef;
   conversationId: string;
-  createObjectUrl?: boolean;
   download?: boolean;
   enabled?: boolean;
+  /** The viewer the file is shown in; with one, a ready state carries its address. */
+  viewer?: FileViewer;
 }): ConversationFileBlobState {
   const [state, setState] = useState<ConversationFileBlobState>({ status: "loading" });
   const contentId = content.kind === "artifact" ? content.artifactId : content.fileId;
@@ -73,7 +75,7 @@ export function useConversationFileBlob({
         if (cancelled) {
           return;
         }
-        objectUrl = createObjectUrl ? URL.createObjectURL(blob) : undefined;
+        objectUrl = viewer ? viewerObjectUrl(blob, viewer) : undefined;
         setState({ status: "ready", blob, url: objectUrl });
       })
       .catch((error: unknown) => {
@@ -88,7 +90,7 @@ export function useConversationFileBlob({
         URL.revokeObjectURL(objectUrl);
       }
     };
-  }, [client, content.kind, contentId, conversationId, createObjectUrl, download, enabled]);
+  }, [client, content.kind, contentId, conversationId, download, enabled, viewer]);
 
   return state;
 }

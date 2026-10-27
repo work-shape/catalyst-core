@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { managedFileIdFromUrl, useAttachmentContentContext } from "../files/attachment-content";
 import { resolveFileType } from "../files/file-type";
 import { FileTypeIcon } from "../files/file-type-icon";
+import { viewerObjectUrl } from "../files/viewer-object-url";
 import { useTranslation } from "../../shared/i18n";
 
 /** File and image parts of a message: a file chip, or the image itself when it can be shown. */
@@ -78,7 +79,7 @@ function ImageFilePart({
         if (!active) {
           return;
         }
-        objectUrl = URL.createObjectURL(blob);
+        objectUrl = viewerObjectUrl(blob, "image");
         setImageUrl(objectUrl);
       })
       .catch(() => {

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../../shared/i18n";
 import { ArtifactPreviewFrame, ArtifactPreviewMessage } from "./artifact-preview-shell";
+import { viewerObjectUrl, type FileViewer } from "./viewer-object-url";
 import {
   artifactDisplayFilename,
   getArtifactPreviewKind,
@@ -19,7 +20,7 @@ export const ARTIFACT_PREVIEW_POLL_DELAYS_MS = [
 
 type ReadyArtifactPreview = Extract<ArtifactPreviewResponse, { status: "ready" }>;
 
-export type ArtifactSourceFallbackKind = "image" | "pdf" | "text";
+export type ArtifactSourceFallbackKind = FileViewer;
 
 export type ArtifactPreviewView =
   | {
@@ -464,7 +465,7 @@ function LazyArtifactPreviewPage({
     void client.conversations.artifacts
       .get_content({ params: { conversationId, artifactId: page.artifactId } })
       .then((blob) => {
-        objectUrl = URL.createObjectURL(blob);
+        objectUrl = viewerObjectUrl(blob, "image");
         if (active) {
           setUrl(objectUrl);
         } else {

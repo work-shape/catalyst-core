@@ -38,3 +38,4 @@ export {
   type SpreadsheetVisual
 } from "../../../packages/chat-ui/src/chat/files/spreadsheet-visuals";
 export { StructuredDataView } from "../../../packages/chat-ui/src/chat/files/structured-data-view";
+export { viewerObjectUrl } from "../../../packages/chat-ui/src/chat/files/viewer-object-url";
