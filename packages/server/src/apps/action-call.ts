@@ -34,6 +34,7 @@ import {
   type AuthenticatedIdentity,
   type AuthenticatedUser,
   type CollaborationWorkspaceId,
+  type ConversationId,
   type JsonObject,
   type OperationDefinition,
   type OperationDraftContext,
@@ -44,7 +45,8 @@ import {
 } from "@work-shape/catalyst-core";
 import { runOperation, type OperationOutcome } from "@work-shape/catalyst-tool-execution";
 import { z } from "zod";
-import { appContentView, checkAppContentToken } from "../pages/app-content";
+import { appContentView, checkAppContentToken, type AppContentClaims } from "../pages/app-content";
+import { kindPreviewOf } from "../pages/asset-preview";
 import { mayOpenAssetFileSet } from "../assets/asset-access";
 import { ConversationWorkflow } from "../conversations/conversation-service";
 import type { ResolvedChatServerOptions } from "../types";
@@ -108,6 +110,21 @@ export interface FrameSession extends ShownRevision {
    * Missing on a file set an earlier release built.
    */
   usesKit?: boolean;
+}
+
+/**
+ * The frame a report of a preview names: a Page of a conversation, or a revision of an asset,
+ * an App's or the preview of another kind's draft.
+ */
+export type ReportingFrame = { usesKit?: boolean } & (
+  | { mode: "page"; conversationId: ConversationId }
+  | { mode: "draft" | "published"; asset: { id: string; kind: string; name: string } }
+);
+
+/** A proof once its token and its file set were checked. */
+interface ProvenFrame {
+  checked: { claims: AppContentClaims };
+  fileSet: ServedFileSet;
 }
 
 export interface FrameSessionProof {
@@ -175,30 +192,15 @@ export class AppActionCalls {
     caller: { user: AuthenticatedUser; access: ActorAccess },
     proof: FrameSessionProof
   ): Promise<FrameSession> {
+    return this.sessionOf(caller, proof, await this.proven(caller, proof));
+  }
+
+  private async sessionOf(
+    caller: { user: AuthenticatedUser; access: ActorAccess },
+    proof: FrameSessionProof,
+    { checked, fileSet }: ProvenFrame
+  ): Promise<FrameSession> {
     const { options } = this;
-    const contentKey = options.pages?.contentKey;
-    if (!contentKey || !isFileSetId(proof.fileSetId)) {
-      throw sessionInvalid();
-    }
-    const checked = checkAppContentToken(contentKey, options.clientInstanceId, {
-      token: proof.token,
-      fileSetId: proof.fileSetId,
-      nowSeconds: Math.floor(Date.now() / 1000)
-    });
-    if (
-      !checked.ok ||
-      checked.claims.pageSessionId !== proof.pageSessionId ||
-      checked.claims.viewerId !== getSubjectUserId(caller.user)
-    ) {
-      throw sessionInvalid();
-    }
-    const fileSet = await options.stores.pages.getServedFileSet({
-      clientInstanceId: options.clientInstanceId,
-      fileSetId: proof.fileSetId
-    });
-    if (!fileSet) {
-      throw sessionInvalid();
-    }
     const shared = {
       viewer: caller.user,
       access: caller.access,
@@ -263,6 +265,81 @@ export class AppActionCalls {
             ? asset.activeRevisionId
             : (asset.revisionIds.at(-1) ?? asset.activeRevisionId)
     };
+  }
+
+  /**
+   * The frame a report names (PREVIEW-STATUS-1), for the signed-in caller, checked as a call's
+   * frame is: a Page or a revision of an App by `session`, and the preview of an asset whose
+   * kind brings one by the rule of the content route. A preview makes no call, so it has no
+   * session of its own: it is told apart here and nowhere else.
+   */
+  async reportingFrame(
+    caller: { user: AuthenticatedUser; access: ActorAccess },
+    proof: FrameSessionProof
+  ): Promise<ReportingFrame> {
+    const { options } = this;
+    const proven = await this.proven(caller, proof);
+    const asset = proven.fileSet.asset;
+    if (!asset || asset.kind === APP_ASSET_KIND) {
+      const session = await this.sessionOf(caller, proof, proven);
+      const usesKit = session.usesKit === undefined ? {} : { usesKit: session.usesKit };
+      if (session.mode === "page") {
+        if (session.conversationId === undefined) throw sessionInvalid();
+        return { mode: "page", conversationId: session.conversationId, ...usesKit };
+      }
+      return {
+        mode: session.mode,
+        asset: { id: session.appId ?? "", kind: APP_ASSET_KIND, name: session.appName ?? "" },
+        ...usesKit
+      };
+    }
+    if (
+      kindPreviewOf(options, asset.kind) === undefined ||
+      !mayOpenAssetFileSet(options.configAssets.kinds.get(asset.kind), caller.access, asset)
+    ) {
+      throw sessionInvalid();
+    }
+    return {
+      mode: appContentView(proven.checked.claims.mode, asset),
+      asset: { id: asset.id, kind: asset.kind, name: asset.name },
+      // The kind's own document greets the interface as the kit does.
+      usesKit: true
+    };
+  }
+
+  /**
+   * The file set a proof names, once its token was minted for this caller, this file set and
+   * this page session. Every refusal says the same and tells nothing of what exists.
+   */
+  private async proven(
+    caller: { user: AuthenticatedUser },
+    proof: FrameSessionProof
+  ): Promise<ProvenFrame> {
+    const { options } = this;
+    const contentKey = options.pages?.contentKey;
+    if (!contentKey || !isFileSetId(proof.fileSetId)) {
+      throw sessionInvalid();
+    }
+    const checked = checkAppContentToken(contentKey, options.clientInstanceId, {
+      token: proof.token,
+      fileSetId: proof.fileSetId,
+      nowSeconds: Math.floor(Date.now() / 1000)
+    });
+    if (
+      !checked.ok ||
+      checked.claims.pageSessionId !== proof.pageSessionId ||
+      checked.claims.viewerId !== getSubjectUserId(caller.user)
+    ) {
+      throw sessionInvalid();
+    }
+    const fileSet = await options.stores.pages.getServedFileSet({
+      clientInstanceId: options.clientInstanceId,
+      fileSetId: proof.fileSetId
+    });
+    if (!fileSet) {
+      throw sessionInvalid();
+    }
+    return { checked, fileSet };
   }
 
   /**

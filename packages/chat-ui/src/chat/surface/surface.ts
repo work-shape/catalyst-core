@@ -50,6 +50,11 @@ interface SurfaceSources {
    * own route to open on; without it the App opens where it starts.
    */
   app_view: { app: string; appPath?: string };
+  /**
+   * The draft of an asset whose kind brings a preview, such as a form page, at the revision a
+   * save of the conversation wrote. The renderer asks the instance for its address itself.
+   */
+  asset_preview: { conversationId: string; assetKind: string; name: string; revision: number };
   /** One item of the Inbox, by its id. The renderer reads the item's live state itself. */
   inbox_item: { itemId: string };
 }

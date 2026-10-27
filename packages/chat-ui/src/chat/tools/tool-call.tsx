@@ -28,6 +28,7 @@ import {
   readConnectionOffer
 } from "../../studio/build-area/connection-give-card";
 import { PageSaveCard } from "../../studio/pages/page-card";
+import { AssetPreviewCard, previewedDraftOfCall } from "../../studio/pages/asset-preview";
 import { builtPageName, isOpenToolName, readPageSave } from "../../studio/pages/page-save";
 import { ApprovalRequestCard } from "../approvals/approval-request-card";
 import { readApprovalRequestDisplay } from "../approvals/approval-request-model";
@@ -198,6 +199,12 @@ export function ToolCallPart({
   const appSaved = folded ? undefined : appSavedByCall({ toolName, result, isError });
   if (appSaved) {
     return <AppCard saved={appSaved} />;
+  }
+
+  // A save of a draft the person sees beside the chat, such as a form page: its card opens it.
+  const previewed = folded ? undefined : previewedDraftOfCall({ toolName, result, isError });
+  if (previewed) {
+    return <AssetPreviewCard draft={previewed} />;
   }
 
   const opened = standingAssetOpen({ toolName, toolCallId, result, isError });

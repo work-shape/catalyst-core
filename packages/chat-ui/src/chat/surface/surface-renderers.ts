@@ -1,6 +1,7 @@
 import { createElement, type ReactNode } from "react";
 import { AppPreview } from "../../studio/apps/app-preview";
 import { InboxItemPanel } from "../inbox/inbox-item-panel";
+import { assetPreviewSurfaceRendering } from "../../studio/pages/asset-preview";
 import {
   pageBuildingSurfaceRendering,
   pageSurfaceRendering
@@ -33,6 +34,7 @@ export const surfaceRenderers: SurfaceRenderers = {
   inbox_item: (surface) => ({ content: createElement(InboxItemPanel, { itemId: surface.itemId }) }),
   page: pageSurfaceRendering,
   page_building: pageBuildingSurfaceRendering,
+  asset_preview: assetPreviewSurfaceRendering,
   // An App fills the frame like a Page. The address stays the area's that shows the slot, so
   // the App's own moves are not written into it.
   app_view: (surface) => ({

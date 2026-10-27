@@ -454,6 +454,7 @@ export function LivePagePreview({
   url,
   route,
   address,
+  makesCalls = true,
   onPreviewIsNoApp
 }: {
   /** Names the frame for someone who does not see it. */
@@ -469,6 +470,11 @@ export function LivePagePreview({
    * They are made with the viewer's session and name this address. Without it none is made.
    */
   address?: FrameAddress;
+  /**
+   * Whether the document may call through the bridge. A preview of an asset's draft that a
+   * kind brings stands in for every call and is answered that it can make none.
+   */
+  makesCalls?: boolean;
   /** A call was refused because the frame is a preview of a conversation, which is no App. */
   onPreviewIsNoApp?: () => void;
 }) {
@@ -478,10 +484,10 @@ export function LivePagePreview({
   const texts = useFrameCallTexts();
   const calls = useMemo(
     () =>
-      address
+      address && makesCalls
         ? createFrameCalls(client, address, texts, onPreviewIsNoApp ? { onPreviewIsNoApp } : {})
         : undefined,
-    [client, address, texts, onPreviewIsNoApp]
+    [client, address, makesCalls, texts, onPreviewIsNoApp]
   );
   const callsRef = useRef(calls);
   const frameRef = useRef<HTMLIFrameElement>(null);

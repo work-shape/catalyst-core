@@ -92,6 +92,34 @@ export interface CapabilityAssetKindChecks {
    * alone. Throws `VALIDATION_FAILED` for files it refuses.
    */
   manifestOfFiles?(files: readonly { path: string; bytes: Uint8Array }[]): JsonObject;
+  /**
+   * How a revision of a kind whose files are read by `manifestOfFiles` looks, for its writers,
+   * beside the chat as a Page is shown. Only a kind with the lifecycle `draft_published` and
+   * the representation `files` brings one.
+   */
+  preview?: AssetKindPreview;
+}
+
+/**
+ * The preview of a revision: a document of the kind's own, which the instance serves in the
+ * frame of a Page, under the guard and the Content-Security-Policy of a Page. It reaches no
+ * address but the files below its own: the files of `files` and the revision's style sheets,
+ * images and fonts. It makes no call: it stands in for whatever it shows.
+ */
+export interface AssetKindPreview {
+  /** The HTML of the preview of one revision, from the manifest of its file set. */
+  document(input: { manifest: JsonObject }): Promise<string>;
+  /**
+   * The files the document loads, by path relative to it. A path is one no file of a revision
+   * of the kind can have: these answer first.
+   */
+  files: ReadonlyMap<string, AssetKindPreviewFile>;
+}
+
+/** One file of a preview: a script, a style sheet, an image or a font. */
+export interface AssetKindPreviewFile {
+  contentType: string;
+  bytes: Uint8Array;
 }
 
 /**

@@ -35,6 +35,7 @@ import {
 } from "../pages/app-content";
 import { draftHostsOffer, frameOutsideHosts } from "../apps/draft-hosts";
 import { mayOpenAssetFileSet } from "../assets/asset-access";
+import { kindPreviewOf, mintAssetPreview, servesInPreview } from "../pages/asset-preview";
 import { ConversationWorkflow } from "../conversations/conversation-service";
 import type { Route } from "../http/route";
 import { fileSetEntryPath, readFileSetFile } from "../pages/page-file-sets";
@@ -236,6 +237,12 @@ export function registerPageRoutes(route: Route, options: ResolvedChatServerOpti
     };
   });
 
+  // The preview of an asset's draft, for a kind that brings one: minted as the draft of an App.
+  route(apiOperations["assets.preview"], async ({ user, access, params, reply }) => {
+    void reply.header("cache-control", "no-store");
+    return mintAssetPreview(options, { user, access }, { kind: params.kind, name: params.name });
+  });
+
   route(apiOperations["app_content.files.get"], async ({ request, reply }) => {
     const nowSeconds = Math.floor(Date.now() / 1000);
     const address = parseContentAddress(wildcardOf(request.params));
@@ -267,12 +274,54 @@ export function registerPageRoutes(route: Route, options: ResolvedChatServerOpti
     }
     const requested = address.path;
     const cacheControl = appContentCacheControl(checked.claims.expiresAt - nowSeconds);
+    const destination = request.headers["sec-fetch-dest"];
+    // A revision of a kind that brings a preview is shown by the kind's document, never by
+    // a file of the revision: of those only style sheets, images and fonts are served.
+    const preview = fileSet.asset ? kindPreviewOf(options, fileSet.asset.kind) : undefined;
+    if (preview) {
+      if (requested === "") {
+        const html = "text/html; charset=utf-8";
+        if (!appContentDestinationAllowed(destination, html)) {
+          throw new AppError("FORBIDDEN", "A file of a Page is served to its frame only");
+        }
+        const shell = composePageShell(await preview.document({ manifest: fileSet.manifest }), {
+          persistent: false,
+          session: checked.claims.pageSessionId,
+          values: {}
+        });
+        void reply.headers(
+          appContentHeaders(interfaceOrigins, {
+            pageScriptHash: shell.pageScriptHash,
+            outsideHosts: []
+          })
+        );
+        return send(reply, html, cacheControl, shell.document);
+      }
+      const answer = (contentType: string, bytes: Uint8Array) => {
+        if (isHtmlContentType(contentType)) {
+          throw contentRefusal("file_unknown");
+        }
+        if (!appContentDestinationAllowed(destination, contentType)) {
+          throw new AppError("FORBIDDEN", "A file of a Page is served to its frame only");
+        }
+        return send(reply, contentType, cacheControl, Buffer.from(bytes));
+      };
+      const kitFile = preview.files.get(requested);
+      if (kitFile) {
+        return answer(kitFile.contentType, kitFile.bytes);
+      }
+      const own = fileSet.sourceFiles.find((candidate) => candidate.path === requested);
+      if (!own || !servesInPreview(own)) {
+        throw contentRefusal("file_unknown");
+      }
+      return answer(own.contentType, await readFileSetFile(options, fileSet, "src", own));
+    }
     const path = requested === "" ? fileSetEntryPath(fileSet) : requested;
     const file = fileSet.builtFiles.find((candidate) => candidate.path === path);
     if (!file) {
       throw contentRefusal("file_unknown");
     }
-    if (!appContentDestinationAllowed(request.headers["sec-fetch-dest"], file.contentType)) {
+    if (!appContentDestinationAllowed(destination, file.contentType)) {
       throw new AppError("FORBIDDEN", "A file of a Page is served to its frame only");
     }
     const bytes = await readFileSetFile(options, fileSet, "dist", file);
