@@ -239,8 +239,9 @@ export async function setupAppActions(
     const sourceFiles = pageFiles(
       Object.fromEntries(source.flatMap((file) => ("text" in file ? [[file.path, file.text]] : [])))
     );
-    const built = await buildPage({ files: sourceFiles });
-    if (built.status !== "built") throw new Error(JSON.stringify(built.errors));
+    const outcome = await buildPage({ files: sourceFiles });
+    const built = further.tamper?.(outcome) ?? outcome;
+    if (built.status !== "built") throw new Error(JSON.stringify(built));
     const stored = await storePageFileSet(
       { clientInstanceId, stores: t.stores, pages: { objects: t.objects } },
       {

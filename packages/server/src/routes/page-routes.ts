@@ -318,7 +318,8 @@ export function registerPageRoutes(route: Route, options: ResolvedChatServerOpti
     }
     const path = requested === "" ? fileSetEntryPath(fileSet) : requested;
     const file = fileSet.builtFiles.find((candidate) => candidate.path === path);
-    if (!file) {
+    // Build source maps are server diagnostics, even with a valid frame token.
+    if (!file || /\.map$/iu.test(path)) {
       throw contentRefusal("file_unknown");
     }
     if (!appContentDestinationAllowed(destination, file.contentType)) {

@@ -1,3 +1,4 @@
+import { runInNewContext } from "node:vm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PREVIEW_REPORT_MAX_BYTES } from "@work-shape/catalyst-asset-schemas";
 import {
@@ -11,7 +12,7 @@ import { createChatServerJobs } from "@work-shape/catalyst-server";
 import { clientInstanceId } from "./support/access-instance";
 import { expectStatus, type AppFile } from "./support/app-instance";
 import { setupAppActions, type AppActionsInstance, type Frame } from "./support/app-actions";
-import { testServerOptions } from "./support/test-instance";
+import { callTestPath, testServerOptions } from "./support/test-instance";
 
 // What a preview reports of itself (PREVIEW-STATUS-1) is kept for the agent of the conversation
 // the preview belongs to: scrubbed and bounded again on the server, one row per conversation
@@ -61,8 +62,21 @@ const kitSource = (): AppFile[] => [
 
 describe("what a preview reports of itself", () => {
   let t: AppActionsInstance;
+  let mapOverride: string | undefined;
   beforeAll(async () => {
-    t = await setupAppActions();
+    t = await setupAppActions({
+      tamper: (built) =>
+        built.status === "built" && mapOverride !== undefined
+          ? {
+              ...built,
+              files: built.files.map((file) =>
+                file.path.endsWith(".js.map")
+                  ? { ...file, bytes: new TextEncoder().encode(mapOverride) }
+                  : file
+              )
+            }
+          : built
+    });
   });
   afterAll(() => t.closeAll());
 
@@ -90,6 +104,153 @@ describe("what a preview reports of itself", () => {
       notBefore: notBefore.toISOString()
     });
   };
+
+  it("resolves a thrown App error against its own revision's map, without serving the map", async () => {
+    for (const padding of [0, 5]) {
+      const source: AppFile[] = [
+        {
+          path: "app.yaml",
+          text: JSON.stringify({
+            id: "broken-app",
+            name: "Broken app",
+            kit: "1.8.0",
+            entry: "index.html"
+          })
+        },
+        {
+          path: "index.html",
+          text: '<!doctype html><script type="module" src="./main.ts"></script>'
+        },
+        { path: "main.ts", text: 'import { App } from "./src/App"; App();' },
+        {
+          path: "src/App.tsx",
+          text:
+            "\n".repeat(padding) +
+            'export function App() {\n  throw new TypeError("Preview failed");\n}\n'
+        }
+      ];
+      const frame = await t.openPage(t.admin.id, source);
+      const prefix = `/app-content/${frame.proof.fileSetId}/${frame.proof.token}/`;
+      const script = await callTestPath(t.instance, "GET", `${prefix}main.js`, {
+        "sec-fetch-dest": "script"
+      });
+      expectStatus(script, 200);
+      expect(script.body).not.toContain("sourceMappingURL");
+      let position: RegExpExecArray | null = null;
+      try {
+        runInNewContext(script.body, {}, { filename: "preview-bundle.js" });
+      } catch (error) {
+        // A VM Error belongs to another realm. Read only its stack coordinates.
+        const stack =
+          error && typeof error === "object" && "stack" in error ? String(error.stack) : "";
+        position = /at \w+ \(preview-bundle\.js:(\d+):(\d+)\)/u.exec(stack);
+      }
+      if (!position) throw new Error("The built App did not throw with bundle coordinates");
+      const entry = {
+        kind: "error" as const,
+        message: "Uncaught TypeError: Preview failed",
+        file: "main.js",
+        line: Number(position[1]),
+        column: Number(position[2]),
+        count: 1
+      };
+      const input = { ...unscrubbed(), entries: [entry] };
+      expectStatus(await report(t.admin.id, frame, { report: input }), 200);
+      expect((await kept(frame.conversationId, frame.proof.fileSetId))?.report.entries).toEqual([
+        { ...entry, file: "src/App.tsx", line: padding + 2, column: 9 }
+      ]);
+      // A valid token still cannot expose the map to the public or the preview frame.
+      const map = await callTestPath(t.instance, "GET", `${prefix}main.js.map`, {
+        "sec-fetch-dest": "empty"
+      });
+      expectStatus(map, 404);
+      expect(map.body).not.toContain("src/App.tsx");
+      // Missing coordinates and missing maps preserve the existing bundle-location fallback.
+      const { column: _column, ...withoutColumn } = entry;
+      expectStatus(
+        await report(t.admin.id, frame, {
+          report: { ...input, entries: [withoutColumn, { ...entry, file: "old.js" }] }
+        }),
+        200
+      );
+      expect((await kept(frame.conversationId, frame.proof.fileSetId))?.report.entries).toEqual([
+        withoutColumn,
+        { ...entry, file: "old.js" }
+      ]);
+    }
+  });
+
+  it("leaves bundle coordinates for malformed maps and maps naming files outside the revision", async () => {
+    try {
+      for (const map of [
+        "not JSON",
+        JSON.stringify({ version: 3, sources: ["page:../secret.tsx"], names: [], mappings: "AAAA" })
+      ]) {
+        mapOverride = map;
+        const frame = await t.openPage(t.admin.id, kitSource());
+        const entry = {
+          kind: "error" as const,
+          message: "Error: failed",
+          file: "main.js",
+          line: 1,
+          column: 1,
+          count: 1
+        };
+        expectStatus(
+          await report(t.admin.id, frame, { report: { ...unscrubbed(), entries: [entry] } }),
+          200
+        );
+        expect((await kept(frame.conversationId, frame.proof.fileSetId))?.report.entries).toEqual([
+          entry
+        ]);
+      }
+    } finally {
+      mapOverride = undefined;
+    }
+  });
+
+  it("scrubs source filenames and reapplies the report's byte limit after mapping", async () => {
+    try {
+      for (const file of [`src/${"a".repeat(150)}.tsx`, "src/customer12345.tsx"]) {
+        mapOverride = JSON.stringify({
+          version: 3,
+          sources: [`page:${file}`],
+          names: [],
+          mappings: "AAAA"
+        });
+        const frame = await t.openPage(t.admin.id, [
+          ...kitSource(),
+          { path: file, text: "export {};" }
+        ]);
+        const entries = Array.from({ length: 10 }, (_, index) => ({
+          kind: "error" as const,
+          message: `failure ${index}`,
+          file: "main.js",
+          line: 1,
+          column: 1,
+          count: 1
+        }));
+        expectStatus(
+          await report(t.admin.id, frame, { report: { ...unscrubbed(), entries } }),
+          200
+        );
+        const stored = (await kept(frame.conversationId, frame.proof.fileSetId))?.report;
+        expect(new TextEncoder().encode(JSON.stringify(stored)).byteLength).toBeLessThanOrEqual(
+          PREVIEW_REPORT_MAX_BYTES
+        );
+        if (file.includes("12345")) {
+          expect(stored?.entries).toHaveLength(10);
+          expect(stored?.entries[0]).toEqual({ kind: "error", message: "failure 0", count: 1 });
+        } else {
+          expect(stored?.entries[0]).toMatchObject({ file, line: 1, column: 1 });
+          expect(stored?.entries.length).toBeLessThan(10);
+          expect((stored?.entries.length ?? 0) + (stored?.more ?? 0)).toBe(10);
+        }
+      }
+    } finally {
+      mapOverride = undefined;
+    }
+  });
 
   it("keeps a Page's report in its conversation, scrubbed again and under 2 KB", async () => {
     const frame = await t.openPage(t.admin.id);

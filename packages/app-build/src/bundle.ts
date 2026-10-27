@@ -376,7 +376,9 @@ async function bundleEntries(input: {
     target: "es2022",
     jsx: "automatic",
     minify: true,
-    sourcemap: false,
+    // External maps are diagnostics for the server; no sourceMappingURL reaches the frame.
+    sourcemap: "external",
+    sourcesContent: false,
     legalComments: "none",
     metafile: true,
     logLevel: "silent",

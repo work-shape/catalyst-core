@@ -12,6 +12,7 @@ import {
 import { ConversationWorkflow } from "../conversations/conversation-service";
 import type { ResolvedChatServerOptions } from "../types";
 import type { AppActionCalls, FrameSessionProof, ReportingFrame } from "./action-call";
+import { previewSourceLocations } from "./preview-source-locations";
 
 // What a preview reports of itself (PREVIEW-STATUS-1), kept for the agent of the conversation
 // the preview belongs to, per person whose browser showed it: a run reads only the report of the
@@ -60,12 +61,18 @@ export class PreviewReports {
     if (conversationId === undefined || !isFileSetId(input.fileSetId)) {
       return { stored: false };
     }
+    const fileSet = await this.options.stores.pages.getServedFileSet({
+      clientInstanceId: this.options.clientInstanceId,
+      fileSetId: input.fileSetId
+    });
+    const bounded = keptReport(input.report, frame.usesKit);
+    const report = fileSet ? await previewSourceLocations(this.options, fileSet, bounded) : bounded;
     const stored = await this.options.stores.pages.putPreviewReport({
       clientInstanceId: this.options.clientInstanceId,
       conversationId,
       fileSetId: input.fileSetId,
       userId: asUserId(getSubjectUserId(caller.user)),
-      report: keptReport(input.report, frame.usesKit),
+      report,
       reportedAt: this.now().toISOString()
     });
     return { stored };

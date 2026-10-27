@@ -47298,6 +47298,11 @@
                   "minimum": 0,
                   "maximum": 10000000
                 },
+                "column": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 10000000
+                },
                 "count": {
                   "type": "integer",
                   "minimum": 1,

@@ -434,6 +434,7 @@ export const PREVIEW_COLLECTOR_SOURCE = `function (win, host) {
   var errorMessage = getter(errorEventPrototype, "message");
   var errorFile = getter(errorEventPrototype, "filename");
   var errorLine = getter(errorEventPrototype, "lineno");
+  var errorColumn = getter(errorEventPrototype, "colno");
   var errorValue = getter(errorEventPrototype, "error");
   var rejectionPrototype = win.PromiseRejectionEvent ? win.PromiseRejectionEvent.prototype : null;
   var rejectionReason = getter(rejectionPrototype, "reason");
@@ -487,15 +488,18 @@ export const PREVIEW_COLLECTOR_SOURCE = `function (win, host) {
   function bounded(value) {
     return typeof value === "string" ? apply(slice, value, [0, MAX_CHARS]) : undefined;
   }
-  function add(kind, message, file, line) {
+  function add(kind, message, file, line, column) {
     message = bounded(message) || "";
     file = bounded(file) || undefined;
     line = typeof line === "number" && line >= 0 && line <= MAX_COUNT && floor(line) === line
       ? line
       : undefined;
+    column = typeof column === "number" && column > 0 && column <= MAX_COUNT && floor(column) === column
+      ? column
+      : undefined;
     for (var index = 0; index < entries.length; index += 1) {
       var entry = entries[index];
-      if (entry.kind === kind && entry.message === message && entry.file === file && entry.line === line) {
+      if (entry.kind === kind && entry.message === message && entry.file === file && entry.line === line && entry.column === column) {
         if (entry.count < MAX_COUNT) {
           entry.count += 1;
         }
@@ -516,6 +520,9 @@ export const PREVIEW_COLLECTOR_SOURCE = `function (win, host) {
     }
     if (line !== undefined) {
       added.line = line;
+    }
+    if (column !== undefined) {
+      added.column = column;
     }
     entries[entries.length] = added;
     changed();
@@ -561,6 +568,9 @@ export const PREVIEW_COLLECTOR_SOURCE = `function (win, host) {
       if (entry.line !== undefined) {
         copy.line = entry.line;
       }
+      if (entry.column !== undefined) {
+        copy.column = entry.column;
+      }
       listed[index] = copy;
     }
     var report = { settled: true, entries: listed, more: more };
@@ -601,10 +611,14 @@ export const PREVIEW_COLLECTOR_SOURCE = `function (win, host) {
     }
     var value = errorValue(event);
     var message = errorMessage(event);
-    add("error", message || (value === undefined ? "Error" : text(value)), errorFile(event), errorLine(event));
+    add("error", message || (value === undefined ? "Error" : text(value)), errorFile(event), errorLine(event), errorColumn(event));
   }), true]);
   apply(listen, win, ["unhandledrejection", guarded(function (event) {
-    add("rejection", text(rejectionPrototype ? rejectionReason(event) : event.reason));
+    var reason = rejectionPrototype ? rejectionReason(event) : event.reason;
+    var stack = reason && typeof reason.stack === "string" ? reason.stack : "";
+    // V8: "at fn (url:line:column)"; Firefox/WebKit: "fn@url:line:column".
+    var frame = apply(exec, /^(?:[^\\n]*\\n\\s*at [^\\n]*?|[^\\n]*?@)(https?:\\/\\/[^\\s)]+|about:srcdoc):(\\d+):(\\d+)\\)?(?:\\n|$)/i, [stack]);
+    add("rejection", text(reason), frame && frame[1], frame ? +frame[2] : undefined, frame ? +frame[3] : undefined);
   }), true]);
   apply(listen, win, ["securitypolicyviolation", guarded(function (event) {
     var directive = violatedDirective(event);

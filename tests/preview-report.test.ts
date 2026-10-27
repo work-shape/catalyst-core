@@ -203,7 +203,8 @@ describe("the guard's collector in a Page", () => {
       new window.ErrorEvent("error", {
         message: "Uncaught TypeError: rows.map is not a function",
         filename: "https://chat.example.org/app-content/fs_1/token.mac/assets/main.js",
-        lineno: 12
+        lineno: 12,
+        colno: 3456
       })
     );
     const rejection = new window.Event("unhandledrejection");
@@ -234,6 +235,7 @@ describe("the guard's collector in a Page", () => {
           message: "Uncaught TypeError: rows.map is not a function",
           file: "https://chat.example.org/app-content/fs_1/token.mac/assets/main.js",
           line: 12,
+          column: 3456,
           count: 1
         },
         { kind: "rejection", message: "Error: load failed", count: 1 },
@@ -246,6 +248,35 @@ describe("the guard's collector in a Page", () => {
         }
       ]
     });
+  });
+
+  it.each([
+    "Error: load failed\n    at App (https://chat.example.org/app-content/fs_1/token.mac/app.js:1:3456)\n    at next (https://chat.example.org/app-content/fs_1/token.mac/app.js:1:4000)",
+    "App@https://chat.example.org/app-content/fs_1/token.mac/app.js:1:3456\nnext@https://chat.example.org/app-content/fs_1/token.mac/app.js:1:4000"
+  ])("keeps only the top rejection frame's coordinates", (stack) => {
+    const { window, advance, reports } = collectorIn("<body><p>Orders</p></body>");
+    const reason = new window.Error("load failed");
+    reason.stack = stack;
+    const event = new window.Event("unhandledrejection");
+    Object.assign(event, { reason });
+    window.dispatchEvent(event);
+    window.dispatchEvent(new window.Event("load"));
+    advance(1_600);
+    expect(reports()[0]?.entries).toEqual([
+      {
+        kind: "rejection",
+        message: "Error: load failed",
+        count: 1,
+        file: "https://chat.example.org/app-content/fs_1/token.mac/app.js",
+        line: 1,
+        column: 3456
+      }
+    ]);
+    const report = reports()[0];
+    if (!report) throw new Error("The guard reported nothing");
+    const bounded = boundPreviewReport({ ...report, loaded: true, bridge: "connected" });
+    expect(bounded.entries[0]).toMatchObject({ file: "app.js", line: 1, column: 3456 });
+    expect(JSON.stringify(bounded)).not.toContain("token.mac");
   });
 
   it("counts repeats, keeps 10 entries and reports again a second after a change", () => {
