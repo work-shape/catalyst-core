@@ -494,6 +494,7 @@ function ToolStatusIcon({ state }: { state: "running" | "completed" | "failed" }
 export function CompactToolCall({
   actionLabel,
   detailSections,
+  outcome,
   state,
   statusLabel,
   summary,
@@ -505,6 +506,8 @@ export function CompactToolCall({
 }: {
   actionLabel?: string;
   detailSections: ToolDetailSection[];
+  /** What the call came to, shown under its row whether the row is open or not. */
+  outcome?: ReactNode;
   state: "running" | "completed" | "failed";
   statusLabel: string;
   summary: string | undefined;
@@ -546,6 +549,7 @@ export function CompactToolCall({
           aria-hidden="true"
         />
       </button>
+      {outcome ? <div className="border-t px-2.5 py-2">{outcome}</div> : null}
       {surfacedArtifacts.length > 0 ? (
         <div className="border-t bg-muted/20 px-2.5 py-2">
           <ToolArtifactList artifacts={surfacedArtifacts} />

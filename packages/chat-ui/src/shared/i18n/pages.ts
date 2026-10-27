@@ -13,6 +13,17 @@ export const pages = defineTranslations({
     "pages.callWaits": "This action is waiting for an approval.",
     "pages.callWaitsOpen": "Open in Inbox",
     "pages.buildErrorsOne": "1 build error",
+    "pages.captureGone": "The picture is no longer available.",
+    "pages.captureOpen": "Open the picture of the preview",
+    "pages.captureRefusedLimit":
+      "The agent has already looked at the preview as often as it may in this run or this hour.",
+    "pages.captureRefusedNotViewed":
+      "The agent could not look at the preview because it was not open.",
+    "pages.captureRefusedPersonalData":
+      "The preview shows data from a personal connection, so no picture of it was taken.",
+    "pages.captureRefusedUnavailable":
+      "The browser that had the preview open cannot take a picture of it. Safari does not allow it.",
+    "pages.captureTitle": "Picture of the preview",
     "pages.cardBuilding": "Building the preview",
     "pages.cardErrors": "The preview could not be built",
     "pages.cardFailed": "The preview could not be opened",
@@ -69,6 +80,17 @@ export const pages = defineTranslations({
     "pages.callWaits": "Diese Aktion wartet auf eine Freigabe.",
     "pages.callWaitsOpen": "Im Eingang öffnen",
     "pages.buildErrorsOne": "1 Build-Fehler",
+    "pages.captureGone": "Das Bild ist nicht mehr verfügbar.",
+    "pages.captureOpen": "Bild der Vorschau öffnen",
+    "pages.captureRefusedLimit":
+      "Der Agent hat die Vorschau in diesem Lauf oder in dieser Stunde schon so oft angesehen, wie er darf.",
+    "pages.captureRefusedNotViewed":
+      "Der Agent konnte die Vorschau nicht ansehen, weil sie nicht geöffnet war.",
+    "pages.captureRefusedPersonalData":
+      "Die Vorschau zeigt Daten aus einer persönlichen Verbindung, deshalb wurde kein Bild davon aufgenommen.",
+    "pages.captureRefusedUnavailable":
+      "Der Browser, in dem die Vorschau offen war, kann kein Bild davon aufnehmen. Safari erlaubt das nicht.",
+    "pages.captureTitle": "Bild der Vorschau",
     "pages.cardBuilding": "Die Vorschau wird gebaut",
     "pages.cardErrors": "Die Vorschau konnte nicht gebaut werden",
     "pages.cardFailed": "Die Vorschau konnte nicht geöffnet werden",

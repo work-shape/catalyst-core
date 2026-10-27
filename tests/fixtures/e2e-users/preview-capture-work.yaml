@@ -1,0 +1,9 @@
+# The member of e2e/preview-capture-work.spec.ts, whose conversations fill its rail.
+- email: e2e-preview-captures@example.test
+  displayLabel: E2E Preview Captures
+  passwordEnvName: E2E_PREVIEW_CAPTURES_PASSWORD
+  developmentPassword: e2e-preview-captures-password
+  roles:
+    - user
+  permissionRefs:
+    - demo-tools
