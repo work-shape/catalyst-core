@@ -1,5 +1,5 @@
 import type { SafeConfig } from "@work-shape/catalyst-api-client";
-import { isPlatformRunFailureCode, platformToolFailureReason } from "@work-shape/catalyst-core";
+import { isPlatformRunFailureCode, platformToolFailure } from "@work-shape/catalyst-core";
 
 // Where the conversation offers "Problem an Workshape melden" (PLATFORM-REPORT), with the same
 // classification the server applies again from its own records.
@@ -24,21 +24,17 @@ export interface PlatformFailure {
   at?: string;
 }
 
-/**
- * The platform failure of a stored tool result's output: an error whose `details.reason` names
- * a platform reason, as `workspace.exec` writes it. A refusal or a failure of what the command
- * ran has none.
- */
-export function platformFailureOfToolOutput(output: unknown): PlatformFailure | undefined {
-  if (typeof output !== "object" || output === null) return undefined;
-  const error: unknown = Reflect.get(output, "error");
-  const reason = platformToolFailureReason(error);
-  if (!reason) return undefined;
-  const details: unknown =
-    typeof error === "object" && error !== null ? Reflect.get(error, "details") : undefined;
-  const at: unknown =
-    typeof details === "object" && details !== null ? Reflect.get(details, "at") : undefined;
-  return { errorCode: reason, ...(typeof at === "string" ? { at } : {}) };
+/** The platform failure of a stored tool result: see `platformToolFailure`. */
+export function platformFailureOfToolResult(
+  toolName: string,
+  output: unknown
+): PlatformFailure | undefined {
+  const error: unknown =
+    typeof output === "object" && output !== null ? Reflect.get(output, "error") : undefined;
+  const failure = platformToolFailure(toolName, error);
+  return failure
+    ? { errorCode: failure.reason, ...(failure.at ? { at: failure.at } : {}) }
+    : undefined;
 }
 
 /** The platform failure of a run that ended failed, from its error code. */

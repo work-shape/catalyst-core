@@ -3,7 +3,7 @@ import { readAssistantModelFallback } from "@work-shape/catalyst-core";
 import type { UIMessage } from "ai";
 import { readToolDisplayPayloadFromToolResult } from "../../shared/domain-ui-widgets";
 import {
-  platformFailureOfToolOutput,
+  platformFailureOfToolResult,
   type PlatformFailure
 } from "../platform-report/platform-report-model";
 import {
@@ -117,7 +117,8 @@ function withPlatformFailures(uiMessages: UIMessage[], messages: Message[]): UIM
   for (const message of messages) {
     const runId = readCompatibleMessageRunId(message);
     if (!runId || failures.has(runId)) continue;
-    const failure = platformFailureOfToolOutput(readCompatiblePersistedToolResult(message)?.output);
+    const result = readCompatiblePersistedToolResult(message);
+    const failure = result && platformFailureOfToolResult(result.toolName, result.output);
     if (failure) failures.set(runId, failure);
   }
   if (failures.size === 0) return uiMessages;

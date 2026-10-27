@@ -22,14 +22,44 @@ export function isPlatformRunFailureCode(code: string | undefined): boolean {
   return code !== undefined && PLATFORM_RUN_FAILURE_CODES.includes(code);
 }
 
+/** The tool whose failures name a platform reason. */
+export const PLATFORM_FAILURE_TOOL = "workspace.exec";
+
+/** A tool's failure that was the platform's, with what of it a report may carry. */
+export interface PlatformToolFailure {
+  reason: PlatformToolFailureReason;
+  /** The workspace command, where its id has the platform's own form. */
+  commandId?: string;
+  /** When it failed, where the result says so as a time. */
+  at?: string;
+}
+
+const COMMAND_ID = /^wcmd_[A-Za-z0-9_-]{1,80}$/u;
+
+function field(value: unknown, key: string): unknown {
+  return typeof value === "object" && value !== null ? Reflect.get(value, key) : undefined;
+}
+
 /**
- * The platform reason of a failed tool's error, read from `details.reason` as `workspace.exec`
- * writes it. Anything else, a refusal or a failure of what the command ran, has none.
+ * The platform failure of a failed tool's error: only `workspace.exec` names one, in
+ * `details.reason`. Anything else, a refusal, a failure of what the command ran or another
+ * tool's error that repeats such a word, has none. The command id and the time are taken only
+ * in the form the platform writes them, since a report carries them out of the instance.
  */
-export function platformToolFailureReason(error: unknown): PlatformToolFailureReason | undefined {
-  if (typeof error !== "object" || error === null) return undefined;
-  const details = (error as { details?: unknown }).details;
-  if (typeof details !== "object" || details === null) return undefined;
-  const reason = (details as { reason?: unknown }).reason;
-  return PLATFORM_TOOL_FAILURE_REASONS.find((known) => known === reason);
+export function platformToolFailure(
+  toolName: string,
+  error: unknown
+): PlatformToolFailure | undefined {
+  if (toolName !== PLATFORM_FAILURE_TOOL) return undefined;
+  const details = field(error, "details");
+  const reason = PLATFORM_TOOL_FAILURE_REASONS.find((known) => known === field(details, "reason"));
+  if (!reason) return undefined;
+  const commandId = field(details, "commandId");
+  const at = field(details, "at");
+  const time = typeof at === "string" && at.length <= 40 ? new Date(at) : undefined;
+  return {
+    reason,
+    ...(typeof commandId === "string" && COMMAND_ID.test(commandId) ? { commandId } : {}),
+    ...(time && !Number.isNaN(time.getTime()) ? { at: time.toISOString() } : {})
+  };
 }

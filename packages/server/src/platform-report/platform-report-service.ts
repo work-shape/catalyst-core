@@ -10,7 +10,7 @@ import {
   getSubjectUserId,
   isAuthenticatedServicePrincipal,
   isPlatformRunFailureCode,
-  platformToolFailureReason,
+  platformToolFailure,
   readToolResultMetadata,
   type AgentRun,
   type AuthenticatedIdentity,
@@ -20,6 +20,7 @@ import {
   type OperationExecutionContext
 } from "@work-shape/catalyst-core";
 import { requireConversationAccess } from "../conversations/conversation-access";
+import { isFirstPartyPerson } from "../users/operation-settings-service";
 import type { ChatServerOptions } from "../types";
 
 // "Problem an Workshape melden" (PLATFORM-REPORT). A person who reads a conversation reports a
@@ -46,19 +47,23 @@ export function platformReportAvailable(
   return Boolean(options.config.support.email && options.mail);
 }
 
-/** Only a person sends a report. */
+/**
+ * Only a person in their own session at the interface sends a report: never a service, a key,
+ * a delegated actor, an agent, an App or a Workflow, which would write to the operator in the
+ * person's name.
+ */
 export function authorizePlatformReport(
   _input: unknown,
-  { actor }: { actor: AuthenticatedIdentity }
+  { actor, origin }: { actor: AuthenticatedIdentity; origin: OperationExecutionContext["origin"] }
 ): OperationAuthorization {
-  return isAuthenticatedServicePrincipal(actor)
-    ? {
+  return isFirstPartyPerson(actor) && origin.kind === "user"
+    ? { allowed: true }
+    : {
         allowed: false,
         action: "platform_report.send",
         reason: "no_grant",
-        message: "Only a person reports a platform problem"
-      }
-    : { allowed: true };
+        message: "A platform problem is reported by a person in the interface"
+      };
 }
 
 /** The platform failure of a run, as its records say: the code, the time and the command. */
@@ -88,16 +93,12 @@ function runPlatformFailure(
     const result = readToolResultMetadata(message.metadata);
     if (!result || result.runId !== run.id || !isRecord(result.result)) continue;
     if (result.result.status === "success") continue;
-    const reason = platformToolFailureReason(result.result.error);
-    if (!reason) continue;
-    const details = isRecord(result.result.error) ? result.result.error.details : undefined;
-    const commandId =
-      isRecord(details) && typeof details.commandId === "string" ? details.commandId : undefined;
-    const at = isRecord(details) && typeof details.at === "string" ? details.at : undefined;
+    const failure = platformToolFailure(result.toolName, result.result.error);
+    if (!failure) continue;
     return {
-      errorCode: reason,
-      failedAt: at ?? message.createdAt,
-      ...(commandId ? { commandId } : {})
+      errorCode: failure.reason,
+      failedAt: failure.at ?? message.createdAt,
+      ...(failure.commandId ? { commandId: failure.commandId } : {})
     };
   }
   return undefined;
@@ -184,26 +185,30 @@ export class PlatformReportWorkflow {
     }
     const report = created.record;
     const note = input.note?.trim();
-    const result = await mail.sender.send({
-      template: "platform-report",
-      to: { email: supportEmail },
-      ...(replyTo ? { replyTo } : {}),
-      locale: this.options.config.localization.defaultLocale,
-      params: {
-        instance: {
-          id: this.options.config.clientInstance.id,
-          displayName: this.options.config.clientInstance.displayName,
-          environment: this.options.config.clientInstance.environment,
-          appUrl: mail.appUrl
-        },
-        runId: run.id,
-        ...(failure.commandId ? { commandId: failure.commandId } : {}),
-        errorCode: failure.errorCode,
-        failedAt: failure.failedAt,
-        reportedAt,
-        ...(note ? { note } : {})
-      }
-    });
+    const send = async () =>
+      mail.sender.send({
+        template: "platform-report",
+        to: { email: supportEmail },
+        ...(replyTo ? { replyTo } : {}),
+        locale: this.options.config.localization.defaultLocale,
+        params: {
+          instance: {
+            id: this.options.config.clientInstance.id,
+            displayName: this.options.config.clientInstance.displayName,
+            environment: this.options.config.clientInstance.environment,
+            appUrl: mail.appUrl
+          },
+          runId: run.id,
+          ...(failure.commandId ? { commandId: failure.commandId } : {}),
+          errorCode: failure.errorCode,
+          failedAt: failure.failedAt,
+          reportedAt,
+          ...(note ? { note } : {})
+        }
+      });
+    // A sender answers a transport's failure as its result; one that throws failed before the
+    // transport, so nothing left and the person may send it again.
+    const result = await send().catch(() => ({ ok: false as const, failure: "unsent" as const }));
     await context.audit.record({
       type: "agent_run.platform_reported",
       status: result.ok ? "success" : "failed",
@@ -239,6 +244,7 @@ export class PlatformReportWorkflow {
         reason: "no_reply_address"
       });
     }
-    return { email: record.email, displayLabel: record.displayLabel };
+    // The address alone: the operator learns no more of the person than where to answer.
+    return { email: record.email };
   }
 }

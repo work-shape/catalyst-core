@@ -13,13 +13,15 @@ export const platformReport = defineTranslations({
     "platformReport.instance": "Instance",
     "platformReport.time": "Time",
     "platformReport.timeNow": "Time of the failure and of this report",
+    "platformReport.alsoSent":
+      "With it go the instance's id, environment and address and the id of the failed command.",
     "platformReport.notSent":
       "Not included: what was written in the conversation, its files and any logs.",
     "platformReport.noteLabel": "What were you doing? (optional)",
     "platformReport.noteHint": "Do not paste personal data or data of clients.",
     "platformReport.noteTooLong": "Keep it to {max} characters.",
     "platformReport.replyToMe": "Answer to me",
-    "platformReport.replyToMeHint": "Workshape can reply to {email}.",
+    "platformReport.replyToMeHint": "Workshape then gets your address {email} to reply to.",
     "platformReport.send": "Send",
     "platformReport.sent": "Reported to Workshape",
     "platformReport.alreadyReported": "You reported this problem already.",
@@ -37,13 +39,16 @@ export const platformReport = defineTranslations({
     "platformReport.instance": "Instanz",
     "platformReport.time": "Zeitpunkt",
     "platformReport.timeNow": "Zeitpunkt des Fehlers und dieser Meldung",
+    "platformReport.alsoSent":
+      "Dazu kommen Kennung, Umgebung und Adresse der Instanz und die Kennung des fehlgeschlagenen Befehls.",
     "platformReport.notSent":
       "Nicht dabei: was in der Unterhaltung steht, ihre Dateien und Protokolle.",
     "platformReport.noteLabel": "Was hast du gerade gemacht? (optional)",
     "platformReport.noteHint": "Füge keine personenbezogenen Daten und keine Daten von Kunden ein.",
     "platformReport.noteTooLong": "Höchstens {max} Zeichen.",
     "platformReport.replyToMe": "Antwort an mich",
-    "platformReport.replyToMeHint": "Workshape kann dir an {email} antworten.",
+    "platformReport.replyToMeHint":
+      "Workshape bekommt dann deine Adresse {email}, um dir zu antworten.",
     "platformReport.send": "Senden",
     "platformReport.sent": "An Workshape gemeldet",
     "platformReport.alreadyReported": "Du hast dieses Problem schon gemeldet.",

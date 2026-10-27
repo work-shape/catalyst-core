@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
   AGENT_RUN_COMMAND_NOT_TAKEN_CODE,
+  PERSONAL_API_KEY_ACTIONS,
   PLATFORM_REPORTS_PER_HOUR,
   createAssistantFinalMetadata,
   createPlatformId,
@@ -12,7 +13,9 @@ import {
 import {
   CaptureMailTransport,
   TemplateMailSender,
-  type MailSenderIdentity
+  type MailSendResult,
+  type MailSenderIdentity,
+  type MailTransport
 } from "@work-shape/catalyst-mail";
 import { createJobWorker } from "@work-shape/catalyst-client-assembly";
 import { createChatServerJobs } from "@work-shape/catalyst-server";
@@ -21,6 +24,7 @@ import {
   setupAccessInstance,
   type AccessInstance
 } from "./support/access-instance";
+import { issuePersonalKey, personalKeyServer, personalKeyToken } from "./support/personal-api-keys";
 import { testServerOptions } from "./support/test-instance";
 import { withTestSql } from "./support/test-sql";
 
@@ -79,14 +83,46 @@ function requestLine(request: unknown) {
   );
 }
 
-async function setup(support: string | null = SUPPORT): Promise<AccessInstance> {
+/** Delivers to the capture, after answering the first `unsent` deliveries with a failure. */
+class FailingFirst implements MailTransport {
+  constructor(
+    private readonly capture: CaptureMailTransport,
+    private failures: { failure: "unsent" | "uncertain"; count: number }
+  ) {}
+
+  async deliver(
+    mail: Parameters<MailTransport["deliver"]>[0],
+    sender: Parameters<MailTransport["deliver"]>[1]
+  ): Promise<MailSendResult> {
+    if (this.failures.count > 0) {
+      this.failures.count -= 1;
+      return { ok: false, reason: "provider down", failure: this.failures.failure };
+    }
+    return this.capture.deliver(mail, sender);
+  }
+}
+
+interface SetupOptions {
+  /** Instance takes personal API keys. */
+  keys?: boolean;
+  /** The first deliveries fail so. */
+  failFirst?: { failure: "unsent" | "uncertain"; count: number };
+}
+
+async function setup(
+  support: string | null = SUPPORT,
+  options: SetupOptions = {}
+): Promise<AccessInstance> {
   transport = new CaptureMailTransport();
   logged = [];
+  const delivery = options.failFirst ? new FailingFirst(transport, options.failFirst) : transport;
   t = await setupAccessInstance({
-    server: (_stores, config) => ({
+    ...(options.keys ? { modules: { personalApiKeys: { enabled: true } } } : {}),
+    server: (stores, config) => ({
+      ...(options.keys ? personalKeyServer(stores) : {}),
       config: { ...config, support: support ? { email: support } : {} },
       mail: {
-        sender: new TemplateMailSender(transport, identity),
+        sender: new TemplateMailSender(delivery, identity),
         appUrl: "https://chat.instance.example.test",
         listCaptured: () => transport.list()
       },
@@ -96,7 +132,7 @@ async function setup(support: string | null = SUPPORT): Promise<AccessInstance> 
   return t;
 }
 
-type Failure = "tool" | "run" | "none";
+type Failure = "tool" | "run" | "none" | "other-tool";
 
 /** A conversation of `user` with one run that failed as `failure` says. */
 async function failedRun(at: AccessInstance, user: UserRecord, failure: Failure = "tool") {
@@ -124,7 +160,7 @@ async function failedRun(at: AccessInstance, user: UserRecord, failure: Failure 
     correlationId: "corr_platform_report"
   });
   const result: ToolExecutionResult =
-    failure === "tool"
+    failure === "tool" || failure === "other-tool"
       ? {
           status: "failed",
           error: {
@@ -152,7 +188,12 @@ async function failedRun(at: AccessInstance, user: UserRecord, failure: Failure 
     text: "",
     metadata: createToolResultMetadata({
       runId: run.id,
-      toolCall: { toolCallId: "call_1", toolName: "workspace.exec", input: { command: COMMAND } },
+      toolCall: {
+        toolCallId: "call_1",
+        // Another tool may pass on an outside error that uses the same words: not the platform's.
+        toolName: failure === "other-tool" ? "crm.search" : "workspace.exec",
+        input: { command: COMMAND }
+      },
       result,
       modelOutput: { text: "tool output" }
     })
@@ -311,6 +352,59 @@ describe("platform problem reports", () => {
     // Another person who reads the conversation is not this one: Lena cannot read Kai's.
     expect((await report(at, at.lena, target)).statusCode).toBe(404);
     expect(transport.list()).toHaveLength(1);
+  });
+
+  it("takes no failure another tool names, and no run of another conversation", async () => {
+    const at = await setup();
+    const other = await failedRun(at, at.kai, "other-tool");
+    const refused = await report(at, at.kai, other);
+    expect(refused.statusCode).toBe(409);
+    const own = await failedRun(at, at.kai);
+    const elsewhere = await failedRun(at, at.kai);
+    // Both conversations are Kai's: a run is still reported only in its own.
+    const crossed = await report(at, at.kai, {
+      conversationId: own.conversationId,
+      runId: elsewhere.runId
+    });
+    expect(crossed.statusCode).toBe(404);
+    expect(transport.list()).toHaveLength(0);
+  });
+
+  it("sends one mail when one run is reported twice at once", async () => {
+    const at = await setup();
+    const target = await failedRun(at, at.kai);
+    const answers = await Promise.all([report(at, at.kai, target), report(at, at.kai, target)]);
+    expect(answers.map((answer) => answer.statusCode).sort()).toEqual([200, 409]);
+    expect(transport.list()).toHaveLength(1);
+  });
+
+  it("lets a report be sent again whose mail did not leave, and not one that may have", async () => {
+    const unsent = await setup(SUPPORT, { failFirst: { failure: "unsent", count: 1 } });
+    const target = await failedRun(unsent, unsent.kai);
+    expect((await report(unsent, unsent.kai, target)).statusCode).toBe(500);
+    expect(transport.list()).toHaveLength(0);
+    expect((await report(unsent, unsent.kai, target)).statusCode).toBe(200);
+    expect(transport.list()).toHaveLength(1);
+    await t?.instance.close();
+
+    const uncertain = await setup(SUPPORT, { failFirst: { failure: "uncertain", count: 1 } });
+    const again = await failedRun(uncertain, uncertain.kai);
+    expect((await report(uncertain, uncertain.kai, again)).statusCode).toBe(500);
+    expect((await report(uncertain, uncertain.kai, again)).statusCode).toBe(409);
+  });
+
+  it("refuses a personal API key", async () => {
+    const at = await setup(SUPPORT, { keys: true });
+    const target = await failedRun(at, at.root);
+    const { secret } = await issuePersonalKey(at, [...PERSONAL_API_KEY_ACTIONS], at.root.id);
+    const headers = await personalKeyToken(at, secret);
+    const refused = await at.call(at.root.id, "platform_report.send", {
+      params: target,
+      payload: { note: NOTE },
+      headers
+    });
+    expect(refused.statusCode, refused.body).toBe(403);
+    expect(transport.list()).toHaveLength(0);
   });
 
   it("takes a few reports per person and hour", async () => {

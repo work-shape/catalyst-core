@@ -21,7 +21,7 @@ export const platformReportOperations = {
     effect: "changing",
     body: sendPlatformReportRequestSchema,
     response: json(platformReportSchema),
-    errors: ["NOT_FOUND", "CONFLICT"],
+    errors: ["NOT_FOUND", "CONFLICT", "FORBIDDEN", "VALIDATION_FAILED"],
     rateClass: "write"
   })
 };

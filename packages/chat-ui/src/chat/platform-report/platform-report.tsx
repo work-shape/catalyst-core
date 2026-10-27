@@ -188,6 +188,7 @@ function PlatformReportDialog({
             <KeyValue label={t("platformReport.instance")}>{setup.instanceName}</KeyValue>
             <KeyValue label={t("platformReport.time")}>{time}</KeyValue>
           </KeyValueList>
+          <p className="text-caption text-muted-foreground">{t("platformReport.alsoSent")}</p>
           <p className="text-caption text-muted-foreground">{t("platformReport.notSent")}</p>
         </section>
         <Field

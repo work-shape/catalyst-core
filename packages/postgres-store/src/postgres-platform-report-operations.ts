@@ -23,7 +23,7 @@ export function createPostgresPlatformReportStore(db: PostgresConnection): Platf
               eq(productUsers.id, input.authorUserId)
             )
           )
-          .for("update");
+          .for("no key update");
         if (!author) throw new Error("The author of a platform report was not found");
         const own = and(
           eq(platformReports.clientInstanceId, input.clientInstanceId),
