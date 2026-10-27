@@ -73,7 +73,7 @@ describe("api operation catalog", () => {
     expect(artifact).toEqual(JSON.parse(JSON.stringify(createOpenApiDocument())));
   });
 
-  it("declares personal-key scopes only for following own calls and requests", () => {
+  it("declares personal-key scopes only for own calls and requests and the read-only infrastructure check", () => {
     const alternatives = Object.values(apiOperations).flatMap((operation) =>
       "personalKeyScope" in operation ? [[operation.id, operation.personalKeyScope]] : []
     );
@@ -81,8 +81,14 @@ describe("api operation catalog", () => {
       ["approval_requests.list_mine", "me:read"],
       ["approval_requests.count_pending", "me:read"],
       ["approval_requests.withdraw", "config_assets:write"],
+      ["instance.infrastructure.check", "infrastructure:check"],
       ["operations.get_run", "me:read"]
     ]);
+    expect(apiOperations["instance.infrastructure.check"]).toMatchObject({
+      auth: "user",
+      requires: ["system.view"],
+      effect: "reading"
+    });
     for (const [id, scope] of alternatives) {
       const operation = Object.values(apiOperations).find((candidate) => candidate.id === id);
       if (!operation) throw new Error("The operation must exist");
