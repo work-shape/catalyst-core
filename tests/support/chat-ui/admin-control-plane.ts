@@ -25,6 +25,7 @@ export {
   personalKeyActionOffer,
   personalKeyDraftProblem,
   personalKeyExpiryOf,
+  personalKeyInstanceOffer,
   personalKeyRequest,
   personalKeyScopeParts,
   personalKeyState,

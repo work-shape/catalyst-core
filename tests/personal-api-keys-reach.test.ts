@@ -3,10 +3,16 @@ import { z } from "zod";
 import {
   apiOperations,
   issueSessionTokenRequestSchema,
-  operationPathParamNames
+  operationPathParamNames,
+  type Operation
 } from "@work-shape/catalyst-api-contract";
-import { PERSONAL_API_KEY_ACTIONS } from "@work-shape/catalyst-core";
-import { errorSchema } from "./support/access-instance";
+import {
+  PERSONAL_API_KEY_ACTIONS,
+  operationScopesOfPersonalApiKey,
+  personalApiKeyCovers,
+  requirePersonalApiKeyScopes
+} from "@work-shape/catalyst-core";
+import { errorSchema, SERVICE_HEADER } from "./support/access-instance";
 import { testOperations, type TestOperationName } from "./support/operations";
 import {
   agentConfig,
@@ -20,7 +26,8 @@ const KEY_OPERATION_SCOPES = new Set([
   "me:read",
   "config_assets:read",
   "config_assets:write",
-  "config_assets:publish"
+  "config_assets:publish",
+  "infrastructure:check"
 ]);
 
 function isTestOperation(name: string): name is TestOperationName {
@@ -30,6 +37,99 @@ function isTestOperation(name: string): name is TestOperationName {
 const namesSchema = z.object({ items: z.array(z.object({ name: z.string() })) });
 
 describe("what a personal key reaches", () => {
+  it("adds only the infrastructure check for system.view, never administration or Data Store rows", () => {
+    expect(requirePersonalApiKeyScopes(["system.view"])).toEqual([{ action: "system.view" }]);
+    expect(operationScopesOfPersonalApiKey(["system.view"])).toEqual([
+      "me:read",
+      "infrastructure:check"
+    ]);
+    expect(new Set(operationScopesOfPersonalApiKey(PERSONAL_API_KEY_ACTIONS))).toEqual(
+      KEY_OPERATION_SCOPES
+    );
+    expect(
+      Object.values<Operation>(apiOperations)
+        .filter(
+          (operation) =>
+            operation.scope === "infrastructure:check" ||
+            ("personalKeyScope" in operation &&
+              operation.personalKeyScope === "infrastructure:check")
+        )
+        .map((operation) => operation.id)
+    ).toEqual(["instance.infrastructure.check"]);
+    expect(
+      personalApiKeyCovers(["system.view:some-workspace"], "system.view", undefined, undefined)
+    ).toBe(false);
+    for (const scope of ["system.view:some-workspace", "system.view:some-workspace/store"]) {
+      expect(() => requirePersonalApiKeyScopes([scope])).toThrow("no scope");
+      expect(operationScopesOfPersonalApiKey([scope])).toEqual(["me:read"]);
+    }
+  });
+
+  it("checks as the person with their current system.view right, never from the key's scope alone", async () => {
+    const t = await setup();
+    const create = await t.call(t.kai.id, "me.api_keys.create", {
+      payload: { name: "Model checks", scopes: ["system.view"], expiresAt: inDays(1) }
+    });
+    expect(create.statusCode).toBe(422);
+    expect(errorSchema.parse(create.json()).error.message).toContain("system.view");
+    const grant = await t.expectOk(t.root.id, "permissions.grant", {
+      payload: {
+        holderKind: "user",
+        holderId: t.kai.id,
+        action: "system.view",
+        effect: "allow",
+        scopeKind: "instance"
+      }
+    });
+    const grantId = z.object({ id: z.string() }).parse(grant.json()).id;
+    const headers = await t.tokenFor((await t.issue(["system.view"])).secret);
+    await t.expectOk(t.kai.id, "instance.infrastructure.check", { headers });
+    await t.expectOk(t.root.id, "permissions.revoke", { params: { grantId } });
+    const denied = await t.expectOk(t.root.id, "permissions.grant", {
+      payload: {
+        holderKind: "user",
+        holderId: t.kai.id,
+        action: "system.view",
+        effect: "deny",
+        scopeKind: "instance"
+      }
+    });
+    const denyId = z.object({ id: z.string() }).parse(denied.json()).id;
+    const deniedCheck = await t.call(t.kai.id, "instance.infrastructure.check", { headers });
+    expect(deniedCheck.statusCode).toBe(403);
+    expect(errorSchema.parse(deniedCheck.json()).error.details).toMatchObject({
+      action: "system.view",
+      reason: "denied"
+    });
+    await t.expectOk(t.root.id, "permissions.revoke", { params: { grantId: denyId } });
+    const refused = await t.call(t.kai.id, "instance.infrastructure.check", { headers });
+    expect(refused.statusCode).toBe(403);
+    expect(errorSchema.parse(refused.json()).error).toMatchObject({
+      message: expect.stringContaining("system.view"),
+      details: { action: "system.view", reason: "no_grant" }
+    });
+  });
+
+  it("requires a personal key's scope even for a superadmin and still refuses service keys", async () => {
+    const t = await setup();
+    const narrow = await t.tokenFor((await t.issue(["agent.read"], t.root.id)).secret);
+    const refused = await t.call(t.root.id, "instance.infrastructure.check", { headers: narrow });
+    expect(refused.statusCode).toBe(403);
+    const headers = await t.tokenFor((await t.issue(["system.view"], t.root.id)).secret);
+    await t.expectOk(t.root.id, "instance.infrastructure.check", { headers });
+    // The adjacent GET and modules routes do not inherit the exception.
+    for (const operation of ["instance.infrastructure.get", "instance.modules.list"] as const) {
+      expect((await t.call(t.root.id, operation, { headers })).statusCode).toBe(403);
+    }
+    const service = await t.call(t.root.id, "instance.infrastructure.check", {
+      headers: { [SERVICE_HEADER]: "model-checker" }
+    });
+    expect(service.statusCode).toBe(403);
+    expect(errorSchema.parse(service.json()).error.message).toBe(
+      "Service principals cannot access user-scoped routes"
+    );
+  });
+
   it("refuses Run live once over HTTP for a superadmin's key token, while asset reads still work", async () => {
     const t = await setup();
     await t.putAgent(t.root.id, "helper");

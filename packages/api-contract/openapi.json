@@ -18835,6 +18835,11 @@
             "sessionToken": [
               "user_admin:read"
             ]
+          },
+          {
+            "accessToken": [
+              "infrastructure:check"
+            ]
           }
         ],
         "parameters": [],
@@ -40863,6 +40868,7 @@
           "governance:write",
           "user_admin:read",
           "user_admin:write",
+          "infrastructure:check",
           "api_access:read",
           "api_access:write",
           "config_assets:read",
@@ -44124,6 +44130,7 @@
                 "governance:write",
                 "user_admin:read",
                 "user_admin:write",
+                "infrastructure:check",
                 "api_access:read",
                 "api_access:write",
                 "config_assets:read",

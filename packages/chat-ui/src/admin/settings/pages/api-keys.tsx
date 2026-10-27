@@ -44,6 +44,7 @@ import {
   instanceUrl,
   isCompleteConnectCode,
   personalKeyActionOffer,
+  personalKeyInstanceOffer,
   personalKeyRequest,
   personalKeyUseOffer,
   setupKeyActions,
@@ -58,6 +59,8 @@ import { isRefusal, refusalAskingInstanceAdmin } from "../ask-instance-admin";
 interface KeyOffer {
   actions: string[];
   useActions: string[];
+  /** The instance level: `system.view` where the person holds it, never ticked in advance. */
+  instanceActions: string[];
   /** What the key `catalyst setup` asks for starts with ticked (`setupKeyActions`). */
   setupActions: string[];
   /** The workspaces whose own assets the person holds a right on: a key can be limited to one. */
@@ -85,6 +88,7 @@ export function ApiKeysPage() {
   const offer: KeyOffer = {
     actions: personalKeyActionOffer(context),
     useActions: personalKeyUseOffer(context),
+    instanceActions: personalKeyInstanceOffer(context),
     setupActions: setupKeyActions(context),
     workspaces: (context?.workspaces ?? []).map((workspace) =>
       workspace.kind === "personal"
@@ -221,6 +225,7 @@ function NewKeyDialog({
           draft={draft}
           actions={offer.actions}
           useActions={offer.useActions}
+          instanceActions={offer.instanceActions}
           workspaces={offer.workspaces}
           onChange={(next) => {
             setDraft(next);
@@ -395,6 +400,7 @@ export function ConnectCodeConfirm({
         draft={draft}
         actions={offer.actions}
         useActions={offer.useActions}
+        instanceActions={offer.instanceActions}
         workspaces={offer.workspaces}
         onChange={(next) => {
           setDraft(next);

@@ -64,9 +64,27 @@ export function personalKeyUseOffer(context: PlatformContext | undefined): strin
 }
 
 /**
+ * The instance level a new key may carry: `system.view`, for the read-only check of the
+ * instance's providers that `catalyst models check` runs. It is offered only to a person who
+ * holds the right now; the instance checks it again at issuance and at every call.
+ */
+const PERSONAL_KEY_INSTANCE_ACTIONS = ["system.view"] as const;
+
+export function personalKeyInstanceOffer(context: PlatformContext | undefined): string[] {
+  return PERSONAL_KEY_INSTANCE_ACTIONS.filter((action) =>
+    (context?.instanceActions ?? []).includes(action)
+  );
+}
+
+/** Whether an action is of the whole instance, which no workspace or asset narrows. */
+export function isPersonalKeyInstanceAction(action: string): boolean {
+  return PERSONAL_KEY_INSTANCE_ACTIONS.some((instanceAction) => instanceAction === action);
+}
+
+/**
  * What the key `catalyst setup` asks for starts with: the reading, writing and publishing
  * rights the person holds among the ones offered, and the use level without `connection.use`.
- * Deleting is ticked by hand, and so is `connection.use`: with it the results of a
+ * Deleting is ticked by hand, and so are the instance level and `connection.use`: with it the results of a
  * Connection's calls exposed to outside clients are copied to the computer that holds the key,
  * a choice of its own that starts off (connections-and-secrets.md, Exposure to outside
  * clients).
@@ -104,6 +122,16 @@ export interface PersonalKeyLimit {
 }
 
 /**
+ * The actions a key limited this way carries: a key limited to a workspace leaves out the
+ * instance level, so narrowing a key never hands it a right of the whole instance.
+ */
+function actionsWithin(actions: readonly string[], limit: PersonalKeyLimit): string[] {
+  return limit.workspaceId.trim()
+    ? actions.filter((action) => !isPersonalKeyInstanceAction(action))
+    : [...actions];
+}
+
+/**
  * The scopes of a new key: each chosen action, limited to the workspace where one is given, as
  * `agent.write:<workspace id>`, and within it to one asset, `agent.write:<workspace id>/<id>`.
  */
@@ -114,7 +142,9 @@ export function buildPersonalKeyScopes(
   const workspaceId = limit.workspaceId.trim();
   const assetName = limit.assetName.trim();
   const resource = workspaceId && (assetName ? `${workspaceId}/${assetName}` : workspaceId);
-  return actions.map((action) => (resource ? `${action}:${resource}` : action));
+  return actionsWithin(actions, limit).map((action) =>
+    resource ? `${action}:${resource}` : action
+  );
 }
 
 /** A scope of an issued key, read back: its action, and the workspace and asset it is limited to. */
@@ -230,7 +260,7 @@ export function personalKeyDraftProblem(
   draft: PersonalKeyDraft
 ): PersonalKeyDraftProblem | undefined {
   if (!draft.name.trim()) return "name";
-  if (draft.actions.length === 0) return "scopes";
+  if (actionsWithin(draft.actions, draft).length === 0) return "scopes";
   if (draft.workspaceId && draft.assetName.trim() && !isScopeAssetName(draft.assetName)) {
     return "assetName";
   }
