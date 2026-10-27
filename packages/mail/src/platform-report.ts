@@ -66,14 +66,17 @@ const copy: Record<LocaleCode, ReportCopy> = {
 
 /** One line of a label or an id: a line break or control character could forge another line. */
 function oneLine(value: string): string {
-  return value.replace(/[\s\p{Cc}]+/gu, " ").trim();
+  return value.replace(/[\s\p{Cc}\p{Cf}]+/gu, " ").trim();
 }
 
-/** The note keeps its lines and tabs; other control characters go. */
+/**
+ * The note keeps its lines and tabs; other control characters go, and so do format characters
+ * such as direction overrides, which could make the note read otherwise than it is.
+ */
 function noteText(value: string): string {
   return value
     .replace(/\r\n?/gu, "\n")
-    .replace(/[^\P{Cc}\n\t]/gu, "")
+    .replace(/[^\P{Cc}\n\t]|\p{Cf}/gu, "")
     .trim();
 }
 
