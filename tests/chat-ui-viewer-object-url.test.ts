@@ -4,12 +4,16 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
 import { createApiClient } from "@work-shape/catalyst-api-client";
-import type { KnowledgeCitationSource } from "@work-shape/catalyst-core";
+import {
+  SUPPORTED_IMAGE_MIME_TYPES,
+  type KnowledgeCitationSource
+} from "@work-shape/catalyst-core";
 import { UiRoot, uiLabelsEn } from "@work-shape/catalyst-ui";
 import { TranslationProvider } from "./support/chat-ui/shared";
 import {
   AssistantSourcePart,
   SourceFilePreview,
+  rasterImageType,
   viewerObjectUrl,
   WorkspaceApiClientProvider
 } from "./support/chat-ui";
@@ -74,6 +78,23 @@ async function settle() {
 }
 
 describe("a blob: address for a fetched file", () => {
+  it("recognises only supported raster MIME essences", () => {
+    for (const type of SUPPORTED_IMAGE_MIME_TYPES) {
+      expect(rasterImageType(` ${type.toUpperCase()}; charset=binary `)).toBe(type);
+    }
+    for (const type of [
+      undefined,
+      "",
+      "image/svg+xml",
+      "image/avif",
+      "application/pdf",
+      "image/png,text/html",
+      "image/png;x=1,text/html"
+    ]) {
+      expect(rasterImageType(type)).toBeUndefined();
+    }
+  });
+
   it("takes the type its viewer expects, and a raster type for any image", async () => {
     const page = new Blob([HTML], { type: "text/html" });
     expect(viewerObjectUrl(page, "pdf")).toBe("blob:catalyst/file-1");

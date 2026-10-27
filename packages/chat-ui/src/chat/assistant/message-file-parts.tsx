@@ -4,7 +4,7 @@ import { managedFileIdFromUrl, useAttachmentContentContext } from "../files/atta
 import { resolveFileType } from "../files/file-type";
 import { FileTypeIcon } from "../files/file-type-icon";
 import { useImageFailed } from "../files/image-failure";
-import { viewerObjectUrl } from "../files/viewer-object-url";
+import { rasterImageType, viewerObjectUrl } from "../files/viewer-object-url";
 import { useTranslation } from "../../shared/i18n";
 
 /** File and image parts of a message: a file chip, or the image itself when it can be shown. */
@@ -16,8 +16,9 @@ export function FilePart() {
   }
   const mimeType = filePartMimeType(file);
   const url = filePartUrl(file);
-  if (isSupportedImageMimeType(mimeType)) {
-    return <ImageFilePart data={url} filename={file.filename} mimeType={mimeType} />;
+  const imageType = rasterImageType(mimeType);
+  if (imageType) {
+    return <ImageFilePart data={url} filename={file.filename} mimeType={imageType} />;
   }
   return (
     <div className="chat-message-block my-2 inline-flex max-w-full items-center gap-2 rounded-md border bg-card px-3 py-2 text-sm shadow-xs">
@@ -126,15 +127,6 @@ export function ImageFilePart({
 
 function isDirectImageUrl(value: string | undefined): value is string {
   return Boolean(value && /^(https:\/\/|blob:|data:image\/)/u.test(value));
-}
-
-function isSupportedImageMimeType(value: string | undefined): value is string {
-  return (
-    value === "image/png" ||
-    value === "image/jpeg" ||
-    value === "image/webp" ||
-    value === "image/gif"
-  );
 }
 
 function filePartMimeType(file: { mediaType?: string; mimeType?: string }): string | undefined {

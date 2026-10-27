@@ -72,6 +72,9 @@ export {
 } from "../../../packages/chat-ui/src/chat/assistant/thread-time";
 export { ToolActivityLabelsProvider } from "../../../packages/chat-ui/src/chat/assistant/tool-activity";
 export { ThreadMessage } from "../../../packages/chat-ui/src/chat/assistant/assistant-message";
-export { ImageFilePart } from "../../../packages/chat-ui/src/chat/assistant/message-file-parts";
+export {
+  FilePart,
+  ImageFilePart
+} from "../../../packages/chat-ui/src/chat/assistant/message-file-parts";
 export { AssistantToolRegistry } from "../../../packages/chat-ui/src/chat/assistant/assistant-tool-registry";
 export { readCompatiblePersistedToolResult } from "../../../packages/chat-ui/src/chat/assistant/assistant-message-compat";

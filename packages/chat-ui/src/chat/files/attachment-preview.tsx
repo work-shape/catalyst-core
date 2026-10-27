@@ -7,7 +7,7 @@ import { useOpenConversationFile } from "./conversation-file-presentation";
 import { resolveFileType } from "./file-type";
 import { FileTypeIcon } from "./file-type-icon";
 import { useImageFailed } from "./image-failure";
-import { viewerObjectUrl } from "./viewer-object-url";
+import { rasterImageType, viewerObjectUrl } from "./viewer-object-url";
 import { useTranslation } from "../../shared/i18n";
 
 /** `row` renders the file as a full-width list entry inside a grouped attachment card. */
@@ -276,12 +276,15 @@ function useAttachmentImageUrl(attachment: AttachmentSnapshot): string | undefin
 }
 
 function imageSourceFromAttachment(attachment: AttachmentSnapshot): AttachmentImageSource {
+  if (!isImageAttachment(attachment)) {
+    return { kind: "none" };
+  }
   const contentSource = imageSourceFromContent(attachment.content);
   if (contentSource.kind !== "none") {
     return contentSource;
   }
 
-  if (isImageMimeType(attachment.contentType) && attachment.file) {
+  if (rasterImageType(attachment.contentType) && attachment.file) {
     return {
       kind: "file",
       file: attachment.file
@@ -311,7 +314,7 @@ function imageSourceFromContent(
     }
 
     const data = typeof part.data === "string" ? part.data : undefined;
-    if (part.type === "file" && isImageMimeType(part.mimeType) && data) {
+    if (part.type === "file" && rasterImageType(part.mimeType) && data) {
       return data.startsWith("vivd-file://")
         ? {
             kind: "managed",
@@ -334,21 +337,5 @@ export function isImageAttachment(attachment: {
   contentType?: string;
   name?: string;
 }): boolean {
-  return (
-    attachment.type === "image" ||
-    isImageMimeType(attachment.contentType) ||
-    isImageFilename(attachment.name)
-  );
-}
-
-function isImageMimeType(value: string | undefined): boolean {
-  return normalizedMimeType(value)?.startsWith("image/") ?? false;
-}
-
-function normalizedMimeType(value: string | undefined): string | undefined {
-  return value?.split(";", 1)[0]?.trim().toLowerCase();
-}
-
-function isImageFilename(value: string | undefined): boolean {
-  return /\.(gif|jpe?g|png|webp)$/iu.test(value ?? "");
+  return Boolean(rasterImageType(attachment.contentType));
 }

@@ -5,6 +5,7 @@ import {
   SUPPORTED_IMAGE_MIME_TYPES
 } from "@work-shape/catalyst-core";
 import { resolveFileType, type FileType } from "../files/file-type";
+import { rasterImageType } from "../files/viewer-object-url";
 
 export const WORKSPACE_PROMOTED_ARTIFACTS_DATA_TYPE = "data-workspace-promoted-artifacts";
 
@@ -370,13 +371,7 @@ function readSafeMimeType(value: unknown): string | undefined {
 function readSafeImageMimeType(
   value: unknown
 ): ToolArtifactPreviewImagePageRef["mimeType"] | undefined {
-  const mimeType = readSafeMimeType(value);
-  return mimeType === "image/png" ||
-    mimeType === "image/jpeg" ||
-    mimeType === "image/webp" ||
-    mimeType === "image/gif"
-    ? mimeType
-    : undefined;
+  return typeof value === "string" ? rasterImageType(value) : undefined;
 }
 
 function readSafeImageFormat(value: unknown): ToolArtifactImagePagesPreview["format"] | undefined {
