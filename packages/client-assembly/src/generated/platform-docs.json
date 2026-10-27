@@ -860,6 +860,8 @@
         "",
         "The Workflow runs with its own account, which may read what you cannot, and its result is copied to that computer. So a tool may start it only while every Connection the Workflow reads, through another Workflow too, allows outside clients on the Connection's page. Publishing with the switch on is refused while one does not, and names it; a start is refused if one stops allowing it later. A Workflow that reads a Knowledge Base, calls an App's action or calls the platform's own API is never started from outside; a Data Store and sending mail are allowed. A tool reads the result of a run only when a tool started that run, not of runs a person, a schedule or an App started.",
         "",
+        "A start can carry a run key, such as `2026-09/1402`: a repeat of the start with the same key answers the run that is open or done instead of starting another. A key is held per starter, so a rotated API key, or a person signed in versus their own API key, is another starter, and a retry under it starts a new run.",
+        "",
         "## Who may do what",
         "",
         "An administrator gives these rights under **Settings > Instance > Access** (\"Einstellungen › Instanz › Zugriff\"), for one Workflow:",
