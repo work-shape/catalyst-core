@@ -97,6 +97,9 @@ export const workflowRuns = pgTable(
     // Minimized: kind, id and label of who started the run.
     startedBy: jsonb("started_by").$type<OperationRunActor>().notNull(),
     operationRunId: text("operation_run_id").$type<OperationRunId>(),
+    // The Workflow run whose operation step or agent's tool started this run, copied to every
+    // continuation. Null on every other run, and on runs opened before it was kept.
+    starterRunId: text("starter_run_id").$type<WorkflowRunId>(),
     parentRunId: text("parent_run_id").$type<WorkflowRunId>(),
     parentStepRunId: text("parent_step_run_id").$type<WorkflowStepRunId>(),
     rootRunId: text("root_run_id").$type<WorkflowRunId>(),

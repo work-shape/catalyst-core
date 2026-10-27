@@ -6,6 +6,7 @@ import type {
   AuthenticatedIdentity,
   AuthenticatedUser,
   JsonObject,
+  OperationOrigin,
   OperationRunId,
   StorePage,
   WorkflowAgentTranscript,
@@ -39,6 +40,11 @@ export interface WorkflowRunsPort {
     key?: string;
     startedBy: AuthenticatedIdentity;
     operationRunId?: OperationRunId;
+    /**
+     * Where the call came from, as the operation path recorded it. A Workflow run whose
+     * operation step or agent step's agent made it is the run's starter (WF-OUT).
+     */
+    callOrigin?: OperationOrigin;
     correlationId: string;
     /**
      * An outside client starts it: the trigger must name `outside`, and every Connection

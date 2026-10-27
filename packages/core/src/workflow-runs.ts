@@ -111,6 +111,13 @@ export interface WorkflowRun
   /** The Operation Run of the call that started the run. */
   operationRunId?: OperationRunId;
   /**
+   * The Workflow run whose operation step, or agent step's agent, made the call that started
+   * this run, kept unchanged on every later history (WF-OUT). The Operation Run of that call
+   * is neither carried to a continuation nor kept beyond its age, so this is what names it.
+   * Missing on a run no Workflow run started this way, and on runs opened before it was kept.
+   */
+  starterRunId?: WorkflowRunId;
+  /**
    * Where a test run was started from besides a person's own start: the action of an App's
    * draft whose click started it (DP-1). Names only, no value. Missing on every other run.
    */
@@ -185,6 +192,7 @@ export type NewWorkflowRun = Pick<
   | "startedBy"
   | "scheduledFor"
   | "operationRunId"
+  | "starterRunId"
   | "startedFrom"
   | "runKey"
   | "labels"

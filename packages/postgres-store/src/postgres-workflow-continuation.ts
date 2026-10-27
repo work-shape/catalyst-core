@@ -32,6 +32,7 @@ export async function createWorkflowRun(
       itemIndex: run.itemIndex ?? null,
       itemLabel: run.itemLabel ?? null,
       operationRunId: run.operationRunId ?? null,
+      starterRunId: run.starterRunId ?? null,
       startedFrom: run.startedFrom ?? null,
       deadlineAt: new Date(run.deadlineAt),
       limits: run.limits,

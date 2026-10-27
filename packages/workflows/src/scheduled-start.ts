@@ -20,6 +20,7 @@ export type RunOrigin = Pick<WorkflowRun, "trigger" | "startedBy" | "correlation
   Pick<
     Partial<WorkflowRun>,
     | "operationRunId"
+    | "starterRunId"
     | "startedFrom"
     | "scheduledFor"
     | "deadlineAt"
