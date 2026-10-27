@@ -10,7 +10,7 @@ import {
   createPlatformId,
   type AuditEventStore
 } from "@work-shape/catalyst-core";
-import { and, desc, eq, gte, inArray, lt, sql as drizzleSql } from "drizzle-orm";
+import { and, desc, eq, gte, lt, sql as drizzleSql } from "drizzle-orm";
 import { type PostgresConnection } from "./postgres-database";
 import { removePersonCounters } from "./postgres-usage-counters";
 import { mapAuditEvent, mapModelUsageEvent } from "./rows";
@@ -19,7 +19,6 @@ import {
   auditEvents,
   collaborationWorkspaces,
   conversations,
-  configAssets,
   modelUsageEvents,
   productUsers
 } from "./schema";
