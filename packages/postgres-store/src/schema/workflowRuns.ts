@@ -1,5 +1,5 @@
 import { WORKFLOW_RETENTION_VERSION } from "../workflow-retention-version";
-import { sql } from "drizzle-orm";
+import { sql, type AnyColumn, type SQL } from "drizzle-orm";
 import {
   bigint,
   boolean,
@@ -41,6 +41,20 @@ import type {
   WorkflowStepRunStatus,
   WorkflowTriggerKind
 } from "@work-shape/catalyst-core";
+
+/**
+ * Who started a run, as its run key is held for: the person or Service Principal, and the API
+ * key a person started it with. A child run carries its root's starter. The label is left out,
+ * because it changes when the person or the key is renamed.
+ */
+export function workflowRunStarter(startedBy: AnyColumn | SQL) {
+  return [
+    sql`(${startedBy} ->> 'kind')`,
+    sql`(${startedBy} ->> 'id')`,
+    sql`coalesce(${startedBy} -> 'delegatedActor' ->> 'kind', '')`,
+    sql`coalesce(${startedBy} -> 'delegatedActor' ->> 'id', '')`
+  ];
+}
 
 /**
  * One row per run of a Workflow. It keeps the definition it executes and the id of that
@@ -154,11 +168,19 @@ export const workflowRuns = pgTable(
     uniqueIndex("workflow_runs_scheduled_for_idx")
       .on(table.clientInstanceId, table.workflow, table.scheduledFor)
       .where(sql`${table.scheduledFor} is not null`),
-    // A run key exists once per Workflow and mode among the runs that are open or `done`: a
-    // start that meets it starts nothing and is answered that run. A run that ended `failed`,
-    // `cancelled` or `limit_reached` leaves the index and so gives its key up.
-    uniqueIndex("workflow_runs_active_run_key_idx")
-      .on(table.clientInstanceId, table.workflow, table.mode, table.runKey)
+    // A run key exists once per Workflow, mode and starter among the runs that are open or
+    // `done`: a start that meets it starts nothing and is answered that run. Another starter's
+    // run with the same key is not met, so a key tells no one whether someone else holds it. A
+    // run that ended `failed`, `cancelled` or `limit_reached` leaves the index and so gives its
+    // key up.
+    uniqueIndex("workflow_runs_active_starter_run_key_idx")
+      .on(
+        table.clientInstanceId,
+        table.workflow,
+        table.mode,
+        ...workflowRunStarter(table.startedBy),
+        table.runKey
+      )
       .where(
         sql`${table.runKey} is not null and ${table.status} not in ('failed', 'cancelled', 'limit_reached', 'continued')`
       ),

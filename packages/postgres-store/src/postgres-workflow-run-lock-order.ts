@@ -1,11 +1,12 @@
-import { and, eq, notInArray } from "drizzle-orm";
+import { and, eq, notInArray, sql } from "drizzle-orm";
 import {
   WORKFLOW_KEY_RELEASING_STATUSES,
+  type OperationRunActor,
   type WorkflowRun,
   type WorkflowRunsStore
 } from "@work-shape/catalyst-core";
 import type { PostgresConnection } from "./postgres-database";
-import { workflowRuns } from "./schema/workflowRuns";
+import { workflowRuns, workflowRunStarter } from "./schema/workflowRuns";
 import { runColumns, runIs, mapRun } from "./postgres-workflow-run-mapping";
 
 type Input<Method extends keyof WorkflowRunsStore> = Parameters<WorkflowRunsStore[Method]>[0];
@@ -46,11 +47,24 @@ export async function lockWorkflowRun(
   return lock(ref.id);
 }
 
+/** The terms of `workflowRunStarter` that name this starter, as the key's index reads them. */
+function starterIs(startedBy: OperationRunActor) {
+  const values = [
+    startedBy.kind,
+    startedBy.id,
+    startedBy.delegatedActor?.kind ?? "",
+    startedBy.delegatedActor?.id ?? ""
+  ];
+  return workflowRunStarter(workflowRuns.startedBy).map(
+    (term, index) => sql`${term} = ${values[index]}`
+  );
+}
+
 export async function lockWorkflowRunByKey(
   db: PostgresConnection,
   input: Input<"lockRunByKey">
 ): Promise<WorkflowRun | undefined> {
-  // The predicate of `workflow_runs_active_run_key_idx`: the run that holds the key, read again
+  // The predicate of `workflow_runs_active_starter_run_key_idx`: the run that holds the key, read again
   // behind its lock, so one that ended `failed` while this waited is no longer it.
   const [row] = await db
     .select(runColumns)
@@ -61,6 +75,7 @@ export async function lockWorkflowRunByKey(
         eq(workflowRuns.workflow, input.workflow),
         eq(workflowRuns.mode, input.mode),
         eq(workflowRuns.runKey, input.runKey),
+        ...starterIs(input.startedBy),
         notInArray(workflowRuns.status, [...WORKFLOW_KEY_RELEASING_STATUSES])
       )
     )

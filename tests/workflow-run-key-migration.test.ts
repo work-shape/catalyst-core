@@ -18,6 +18,7 @@ const journalSchema = z.object({
 // Found by their names, so their numbers may change when another migration lands first.
 const KEY_MIGRATION = "workflow_run_keys";
 const INDEX_MIGRATION = "workflow_run_key_indexes";
+const STARTER_MIGRATION = "workflow_run_keys_per_starter";
 
 describe("Workflow run key migrations (EW-13k)", () => {
   afterEach(async () => {
@@ -75,6 +76,55 @@ describe("Workflow run key migrations (EW-13k)", () => {
       // A run that ends failed leaves the index, and a new run then takes the key.
       await sql`update workflow_runs set status = 'failed' where id = 'wfr_done'`;
       await sql`update workflow_runs set run_key = '2026-09/1' where id = 'wfr_open'`;
+    } finally {
+      await sql.end();
+    }
+  });
+
+  it("holds a key once per starter after the per-starter migration: a person, each of their API keys, a Service Principal", async () => {
+    const url = await fixtures.database(
+      `run_key_starters_${globalThis.crypto.randomUUID()}`,
+      false
+    );
+    createdDatabases.push(url);
+    const sql = postgres(url, { max: 1, onnotice() {} });
+    const ada = { kind: "user", id: "usr_1", label: "Ada" };
+    const keyOf = (id: string) => ({
+      kind: "api_key",
+      id,
+      displayLabel: `Key ${id}`,
+      authSource: "personal-api-key"
+    });
+    const keyed = (id: string, startedBy: postgres.JSONValue) =>
+      startRun(sql, id, "running", "live", { key: "2026-09/1", startedBy });
+    try {
+      await applyMigrationsBefore(sql, STARTER_MIGRATION);
+      await keyed("wfr_ada", ada);
+      // Before: one key per Workflow and mode, whoever started the run.
+      await expect(
+        keyed("wfr_bo", { kind: "user", id: "usr_2", label: "Bo" })
+      ).rejects.toMatchObject({ code: "23505" });
+
+      await applyMigration(sql, (await entryNamed(STARTER_MIGRATION)).tag);
+
+      await keyed("wfr_bo", { kind: "user", id: "usr_2", label: "Bo" });
+      await keyed("wfr_ada_key", { ...ada, delegatedActor: keyOf("key_1") });
+      await keyed("wfr_ada_key_2", { ...ada, delegatedActor: keyOf("key_2") });
+      await keyed("wfr_spn", { kind: "service_principal", id: "usr_1", label: "Runner" });
+      // The same starter holds it once, whatever its label says now.
+      await expect(keyed("wfr_ada_again", { ...ada, label: "Ada L." })).rejects.toMatchObject({
+        code: "23505"
+      });
+      await expect(
+        keyed("wfr_ada_key_again", {
+          ...ada,
+          delegatedActor: { ...keyOf("key_1"), displayLabel: "Renamed" }
+        })
+      ).rejects.toMatchObject({ code: "23505" });
+      const indexes = await sql<{ name: string }[]>`
+        select c.relname as name from pg_index i join pg_class c on c.oid = i.indexrelid
+        where c.relname in ('workflow_runs_active_run_key_idx', 'workflow_runs_active_starter_run_key_idx')`;
+      expect(indexes).toEqual([{ name: "workflow_runs_active_starter_run_key_idx" }]);
     } finally {
       await sql.end();
     }
@@ -299,8 +349,9 @@ async function startRun(
   id: string,
   status: string,
   mode = "live",
-  input: { key?: string; parentStep?: string } = {}
+  input: { key?: string; parentStep?: string; startedBy?: postgres.JSONValue } = {}
 ): Promise<void> {
+  const startedBy = input.startedBy ?? { kind: "user", id: "usr_1", label: "Ada" };
   await sql`
     insert into workflow_runs (
       id, client_instance_id, workflow, definition_revision_id, mode, trigger, status,
@@ -309,7 +360,7 @@ async function startRun(
     ) values (
       ${id}, 'instance', 'monthly', 'rev_1', ${mode}, 'manual', ${status},
       '{}'::jsonb, '{}'::jsonb, 'spn_1', 'runner', 'Runner',
-      '{"kind":"user","id":"usr_1","label":"Ada"}'::jsonb,
+      ${sql.json(startedBy)},
       ${id}, now() + interval '1 hour', 'corr', now(), ${input.key ?? null},
       ${input.parentStep ? "key_holder" : null}, ${input.parentStep ?? null}, ${input.parentStep ? 1 : 0}
     )`;

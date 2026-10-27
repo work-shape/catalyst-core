@@ -2,7 +2,6 @@ import { apiOperations } from "@work-shape/catalyst-api-contract";
 import {
   AppError,
   CONNECTION_OPERATION_PREFIX,
-  appWorkflowRefusalError,
   createPersonLabelLookup,
   requireUnmarkedConversation,
   WORKFLOW_ACTIONS,
@@ -278,25 +277,13 @@ function registerWorkflowRoutes(
   }
 
   /**
-   * A run a start or a test answers: one already holding its key may be somebody else's. An
-   * outside client that may not read the Workflow is answered that run only where this very
-   * credential started it. Any other is told what a Workflow that is not there tells it
-   * (`missing`), so a run key names no run of a Workflow the credential cannot see.
+   * A run a start or a test answers: the new run, or the one its starter already holds the key
+   * with. A key is held per starter, so another person's or credential's run never answers.
    */
   async function startedRun(
     run: WorkflowRunView,
-    context: { access: ActorAccess; actor: AuthenticatedIdentity; origin: OperationOrigin },
-    missing: () => AppError
+    context: { access: ActorAccess; actor: AuthenticatedIdentity; origin: OperationOrigin }
   ) {
-    if (
-      isOutsideCall(context.actor, context.origin) &&
-      !startedByThisCredential(run, context.actor) &&
-      !context.access.authorize(WORKFLOW_ACTIONS.read, await resourceOf(run.workflow)).allowed
-    ) {
-      throw missing();
-    }
-    // The right to read run data opens a run held by its key only where the run may answer
-    // this caller: an outside client gets no data of a run that answers none.
     const readable = await runDataReadable(
       run,
       context,
@@ -372,8 +359,7 @@ function registerWorkflowRoutes(
           // Exposure to outside clients). Asked here, where the call runs, after any wait.
           outside: isOutsideCall(context.actor, context.origin)
         }),
-        context,
-        () => appWorkflowRefusalError("workflow_unavailable", input.workflow)
+        context
       )
   });
 
@@ -476,11 +462,7 @@ function registerWorkflowRoutes(
               }
             : {})
         }),
-        context,
-        () =>
-          revision === "draft"
-            ? noWorkflowDraftError(input.workflow)
-            : appWorkflowRefusalError("workflow_unavailable", input.workflow)
+        context
       );
     }
   });
@@ -526,8 +508,8 @@ function registerWorkflowRoutes(
         ...(context.paging ? { page: context.paging } : {})
       });
       // A run key can be a value a person would not show, such as a client's address: asked by
-      // its key, an outside client without the right finds only a run it started itself. One
-      // key names one run, so this leaves no page short.
+      // its key, an outside client without the right finds only a run it started itself, and
+      // the page leaves out the runs others started with the same key.
       const runs =
         key && !includeData && isOutsideCall(context.actor, context.origin)
           ? listed.filter((run) => startedByThisCredential(run, context.actor))

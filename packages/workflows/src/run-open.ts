@@ -47,7 +47,8 @@ export interface StartWorkflowRunInput {
   input: unknown;
   /**
    * The run key (`workflowRunKeySchema`). Where a run of the Workflow that is open or `done`
-   * holds it, the start starts nothing and answers that run.
+   * holds it for the same starter (the person, their API key, or the Service Principal), the
+   * start starts nothing and answers that run. Another starter's key is a key no run holds.
    */
   key?: string;
   /** Who starts the run. Its right opened the start; the run acts as its own principal. */
@@ -107,8 +108,8 @@ export function createRunOpening(options: {
   /**
    * Writes a run with the step run of its trigger and the audit of its start. Answers
    * nothing where the run names a due time of a schedule that has its run. Where it names a
-   * run key that a run of the Workflow and mode holds, it starts nothing and answers that
-   * run, held until the transaction ends: the insert meets the key's unique index, and the
+   * run key that a run of the Workflow and mode holds for the same starter, it starts nothing
+   * and answers that run, held until the transaction ends: the insert meets the key's unique index, and the
    * holder is read behind it in the same transaction, never checked before.
    */
   async function openRun(
@@ -126,7 +127,8 @@ export function createRunOpening(options: {
         clientInstanceId,
         workflow: prepared.published.manifest.id,
         mode,
-        runKey
+        runKey,
+        startedBy: started.startedBy
       });
       if (holder) return holder;
     }

@@ -35,7 +35,7 @@ export interface WorkflowRunsPort {
   start(input: {
     workflow: string;
     input: unknown;
-    /** The run key: a run of the Workflow that is open or done and holds it answers the start. */
+    /** The run key: a run of the Workflow that is open or done and holds it for the same starter answers the start. */
     key?: string;
     startedBy: AuthenticatedIdentity;
     operationRunId?: OperationRunId;
@@ -57,7 +57,7 @@ export interface WorkflowRunsPort {
   test(input: {
     workflow: string;
     input: unknown;
-    /** The run key: a run of the Workflow that is open or done and holds it answers the start. */
+    /** The run key: a run of the Workflow that is open or done and holds it for the same starter answers the start. */
     key?: string;
     startedBy: AuthenticatedUser;
     operationRunId?: OperationRunId;

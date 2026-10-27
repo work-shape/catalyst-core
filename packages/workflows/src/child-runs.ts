@@ -61,7 +61,7 @@ function startInputJsonSchema(inputs: JsonObject | undefined): JsonObject {
         minLength: 1,
         maxLength: WORKFLOW_RUN_KEY_MAX_LENGTH,
         description:
-          "The run key. A run of this Workflow that is open or done and holds it answers the start, which then starts nothing."
+          "The run key. A run of this Workflow that the same starter started with it, open or done, answers the start, which then starts nothing."
       }
     }
   };

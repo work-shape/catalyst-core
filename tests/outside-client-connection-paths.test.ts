@@ -331,7 +331,7 @@ describe("a Workflow run read or started with a key", () => {
     expect(runSchema.parse(read.json()).outputPreview).toBeDefined();
   });
 
-  it("answers a key that may start a Workflow and not read it what a missing Workflow answers for another person's run key", async () => {
+  it("answers a key another person's run key as a key no run holds, and its own key with its run", async () => {
     // A Workflow outside clients may start, over crm exposed to them.
     const definitions = publishedDefinitions();
     const opened = notifyClients();
@@ -356,43 +356,49 @@ describe("a Workflow run read or started with a key", () => {
     // `workflows.start` takes the operation scope that a write right gives a key.
     for (const action of ["workflow.write", "workflow.use"]) await allow(t, tim.id, action);
     const headers = await keyOf(t, tim.id, ["workflow.write", "workflow.use"]);
-    const startWith = (workflow: string, key: string) =>
+    const startWith = (key: string) =>
       t.call(tim.id, "workflows.start", {
-        params: { workflow },
+        params: { workflow: "notify-clients" },
         payload: { input: { note: NOTE }, key },
         headers
       });
-    // The two answers differ in the Workflow they name and their correlation id alone.
-    const asAnswered = (body: string, workflow: string) => {
-      const { error } = z
-        .object({ error: z.object({ correlationId: z.string() }).loose() })
-        .parse(JSON.parse(body.replaceAll(workflow, "<workflow>")));
-      return { ...error, correlationId: undefined };
-    };
+    // The two answers differ in the run they started, its call, its key and its times alone.
+    const ownFields = ["id", "rootRunId", "operationRunId", "createdAt", "startedAt", "deadlineAt"];
+    const asAnswered = (body: string, key: string) =>
+      Object.fromEntries(
+        Object.entries(
+          z.record(z.string(), z.unknown()).parse(JSON.parse(body.replaceAll(key, "<key>")))
+        ).filter(([field]) => !ownFields.includes(field))
+      );
 
-    const taken = await startWith("notify-clients", "2026-10/anna");
-    const missing = await startWith("no-such-workflow", "2026-10/anna");
-    expect(missing.statusCode, missing.body).toBe(404);
-    expect(taken.statusCode, taken.body).toBe(404);
-    expect(asAnswered(taken.body, "notify-clients")).toEqual(
-      asAnswered(missing.body, "no-such-workflow")
+    const taken = await startWith("2026-10/anna");
+    const unknown = await startWith("2026-10/nobody");
+    expect(unknown.statusCode, unknown.body).toBe(200);
+    expect(taken.statusCode, taken.body).toBe(200);
+    expect(asAnswered(taken.body, "2026-10/anna")).toEqual(
+      asAnswered(unknown.body, "2026-10/nobody")
     );
     expect(taken.body).not.toContain(run.id);
     expect(taken.body).not.toContain("Root");
 
     // A run key of its own answers the key its run, a second time too.
-    const own = await startWith("notify-clients", "2026-10/tim");
-    expect(own.statusCode, own.body).toBe(200);
-    const again = await startWith("notify-clients", "2026-10/tim");
+    const again = await startWith("2026-10/anna");
     expect(again.statusCode, again.body).toBe(200);
-    expect(runSchema.parse(again.json()).id).toBe(runSchema.parse(own.json()).id);
-    // Tim signed in to the app is answered the run as before.
+    expect(runSchema.parse(again.json()).id).toBe(runSchema.parse(taken.json()).id);
+    // Tim signed in to the app is another starter than his key: his own run, not Root's.
     const bySession = await t.call(tim.id, "workflows.start", {
       params: { workflow: "notify-clients" },
       payload: { input: { note: NOTE }, key: "2026-10/anna" }
     });
     expect(bySession.statusCode, bySession.body).toBe(200);
-    expect(runSchema.parse(bySession.json()).id).toBe(run.id);
+    const sessionRun = runSchema.parse(bySession.json()).id;
+    expect([run.id, runSchema.parse(taken.json()).id]).not.toContain(sessionRun);
+    // Root's own start with the key is still answered Root's run.
+    const byRoot = await t.expectOk(t.root.id, "workflows.start", {
+      params: { workflow: "notify-clients" },
+      payload: { input: { note: NOTE }, key: "2026-10/anna" }
+    });
+    expect(runSchema.parse(byRoot.json()).id).toBe(run.id);
   });
 
   it("gives a key the result and step outputs of a published run it started, and another key neither", async () => {
