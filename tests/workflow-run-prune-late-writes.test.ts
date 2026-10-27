@@ -43,6 +43,14 @@ async function runThread(f: Fixture) {
         (sql) =>
           sql`update operation_runs set conversation_id = ${threadId} where id = ${operationRunId}`
       ),
+    /** A step of the run made the call: origin `workflow`, in no thread. */
+    stepHolds: (operationRunId: string) =>
+      withTestSql(
+        (sql) =>
+          sql`update operation_runs set origin_kind = 'workflow',
+            origin = ${sql.json({ kind: "workflow", workflowRunId: runId, stepRunId: "wfstep_1" })}
+            where id = ${operationRunId}`
+      ),
     prune: () =>
       f.app.stores.workflowRuns.markRunDataPruned({
         clientInstanceId: f.clientInstanceId,
@@ -154,6 +162,38 @@ describe("a held call of a pruned Workflow run", () => {
     expect(JSON.stringify([approved, rejected, failed])).not.toMatch(
       /Carla|Dora|Erik|carla-deploy|dora-deploy|erik-deploy/
     );
+  });
+
+  it("of the run's own steps keeps no answer or comment written after the prune", async () => {
+    const f = await fixture();
+    const run = await runThread(f);
+    const gina = await f.hold("gina-deploy", "key-gina");
+    const hans = await f.hold("hans-deploy", "key-hans");
+    for (const held of [gina, hans]) await run.stepHolds(held.runId);
+    expect(
+      (await f.decide("approver", gina.requestId, "approve", "Gina confirmed")).statusCode
+    ).toBe(200);
+    expect(await run.prune()).toBe(true);
+    // The queued request lost the comment with the prune; its input stays to run the call.
+    expect((await f.stored(gina.requestId)).decision).not.toHaveProperty("comment");
+
+    await f.runJobs();
+    expect((await f.decide("approver", hans.requestId, "reject", "Hans is away")).statusCode).toBe(
+      200
+    );
+
+    expect(f.executed).toEqual(["requester:gina-deploy"]);
+    const approved = await rowsOf(gina.runId, gina.requestId);
+    expect(approved.call).toMatchObject({ status: "done", output: null });
+    expect(approved.request).toMatchObject({
+      status: "approved",
+      apply_result: { execution: "done" },
+      payload: { inputRemoved: true }
+    });
+    const rejected = await rowsOf(hans.runId, hans.requestId);
+    expect(rejected.call?.status).toBe("denied");
+    expect(rejected.request?.status).toBe("rejected");
+    expect(JSON.stringify([approved, rejected])).not.toMatch(/Gina|Hans|gina-deploy|hans-deploy/);
   });
 
   it("tells its pruned thread nothing of a decision; a thread of a run not pruned is told", async () => {

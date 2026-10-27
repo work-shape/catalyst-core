@@ -9,7 +9,6 @@ import {
   isNotNull,
   lt,
   ne,
-  not,
   notExists,
   notInArray,
   or,
@@ -424,9 +423,9 @@ export function workflowRetention(
           // What the run's ended calls answered goes; a read keeps only its counts. These are the
           // calls its threads' agents made and those of its own steps (origin `workflow`). The
           // calls stay for their audit age with ids, status, hashes and sizes, and their
-          // decisions and denials without a comment. A call still running keeps its recovery
-          // marker. What a
-          // call or decision writes after this keeps no more (`postgres-pruned-run`).
+          // decisions and denials without a comment, a call still running included. A running
+          // call keeps its output, the recovery marker of a paged read. What a call or decision
+          // writes after this keeps no more (`postgres-pruned-run`).
           const ownCalls = tx
             .select({ id: operationRuns.id })
             .from(operationRuns)
@@ -440,7 +439,8 @@ export function workflowRetention(
           await tx
             .update(operationRuns)
             .set({
-              output: sql`case when ${operationRuns.effect} = 'reading' then ${operationRuns.output} end`,
+              output: sql`case when ${operationRuns.effect} = 'reading' or ${operationRuns.status} = 'running'
+                then ${operationRuns.output} end`,
               decision: sql`${operationRuns.decision} - 'comment'`,
               // A declined call's denial names who declined it, not what they wrote.
               error: sql`${operationRuns.error} #- '{denial,comment}'`
@@ -454,22 +454,24 @@ export function workflowRetention(
                     inArray(operationRuns.conversationId, threads)
                   ),
                   inArray(operationRuns.id, ownCalls)
-                ),
-                ne(operationRuns.status, "running")
+                )
               )
             );
-          // A settled request of a thread, or of a call of the run's steps, keeps who decided
-          // and when, without the decider's comment. One that held a call keeps which call it
-          // was and what came of it; its input and sign-in context go. Another kind's payload,
-          // such as a skill change, is the asset change it applied and stays. A request still
-          // pending, or approved and not yet carried out, needs its input: the path that ends it
-          // minimizes it then, and drops the comment where the run is pruned by then.
-          const settled = and(
+          // The requests of a thread, or of a call of the run's steps.
+          const ofRun = and(
             eq(approvalRequests.clientInstanceId, ref.clientInstanceId),
             or(
               inArray(sql`${approvalRequests.origin}->>'conversationId'`, threads),
               inArray(sql`${approvalRequests.payload}->>'runId'`, ownCalls)
-            ),
+            )
+          );
+          // A settled request keeps who decided and when. One that held a call keeps which call
+          // it was and what came of it; its input and sign-in context go. Another kind's payload,
+          // such as a skill change, is the asset change it applied and stays. A request still
+          // pending, or approved and not yet carried out, needs its input: the path that ends it
+          // minimizes it then.
+          const settled = and(
+            ofRun,
             ne(approvalRequests.status, "pending"),
             sql`coalesce(${approvalRequests.applyResult}->>'execution', '') <> 'queued'`
           );
@@ -490,14 +492,15 @@ export function workflowRetention(
             .update(approvalRequests)
             .set({
               payload: minimizedHeldCall,
-              decision: sql`${approvalRequests.decision} - 'comment'`,
               applyResult: minimizedHeldCallResult(approvalRequests.applyResult)
             })
             .where(and(settled, heldCall));
+          // No request keeps the decider's comment, one whose call has yet to run included: the
+          // call runs without it.
           await tx
             .update(approvalRequests)
             .set({ decision: sql`${approvalRequests.decision} - 'comment'` })
-            .where(and(settled, not(heldCall), sql`${approvalRequests.decision} ? 'comment'`));
+            .where(and(ofRun, sql`${approvalRequests.decision} ? 'comment'`));
         }
         return marked.length > 0;
       });
