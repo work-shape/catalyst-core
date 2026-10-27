@@ -34,6 +34,7 @@ const builtFiles = [
   { path: "index.html", bytes: text(INDEX_HTML) },
   { path: "sub/deeper/page.html", bytes: text(NESTED_HTML) },
   { path: "assets/main.js", bytes: text(MAIN_JS) },
+  { path: "assets/main.js.map", bytes: text('{"version":3,"sources":["src/App.tsx"]}') },
   { path: "assets/style.css", bytes: text("h1 { color: rgb(1, 2, 3); }") },
   { path: "assets/icon.svg", bytes: text(ICON_SVG) }
 ];
@@ -226,6 +227,19 @@ afterEach(() => {
 });
 
 describe("the content route of a Page", () => {
+  it("never serves stored source maps, including to a frame with a valid token", async () => {
+    const started = await startInstance();
+    const { instance } = started;
+    const { url } = (await preview(instance, await withPage(started))).json<Preview>();
+    for (const destination of ["script", "empty", "iframe"]) {
+      const response = await callTestPath(instance, "GET", `${url}assets/main.js.map`, {
+        "sec-fetch-dest": destination
+      });
+      expect(response.statusCode).toBe(404);
+      expect(response.body).not.toContain("src/App.tsx");
+    }
+  });
+
   it("serves the files of the file set its token was made for, each with the header set", async () => {
     const started = await startInstance();
     const { instance } = started;
@@ -794,7 +808,7 @@ describe("pages.preview", () => {
     ]);
     const detail = await instance.call("pages.get", { params }, "user-1");
     expect(detail.json<{ fileSets: object[] }>().fileSets).toMatchObject([
-      { id: page.fileSet.id, number: 1, sourceFileCount: 2, builtFileCount: 5 }
+      { id: page.fileSet.id, number: 1, sourceFileCount: 2, builtFileCount: builtFiles.length }
     ]);
     const file = await instance.call(
       "pages.files.get",

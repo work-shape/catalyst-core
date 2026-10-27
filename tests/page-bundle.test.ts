@@ -69,7 +69,9 @@ function Home() {
 
     expect([...files.keys()].sort()).toEqual([
       "app.css",
+      "app.css.map",
       "app.js",
+      "app.js.map",
       "assets/logo.svg",
       "index.html"
     ]);
@@ -82,6 +84,11 @@ function Home() {
     expect(script).not.toMatch(/import\(/u);
     expect(script).not.toMatch(/https?:\/\//u);
     expect(script).not.toContain("@work-shape/catalyst-app-kit");
+    expect(script).not.toContain("sourceMappingURL");
+    expect(files.get("app.css")).not.toContain("sourceMappingURL");
+    const map = JSON.parse(files.get("app.js.map") ?? "{}");
+    expect(map.sources).toContain("page:src/routes/index.tsx");
+    expect(map.sourcesContent).toBeUndefined();
     const html = files.get("index.html") ?? "";
     expect(html).toContain('<script type="module" src="./app.js"></script>');
     expect(html).toContain('<link rel="stylesheet" href="./app.css">');
@@ -113,7 +120,13 @@ body { font-family: Bungee; }`
     );
     expect(files.get("app.css")).toContain(stylesheet);
     expect(files.get("app.css")).toContain(font);
-    expect([...files.keys()].sort()).toEqual(["app.css", "app.js", "index.html"]);
+    expect([...files.keys()].sort()).toEqual([
+      "app.css",
+      "app.css.map",
+      "app.js",
+      "app.js.map",
+      "index.html"
+    ]);
   });
 
   it.each(["1.4.0", "1.5.1"])(
@@ -461,7 +474,13 @@ describe("a plain HTML Page", () => {
     });
     const files = built(result);
 
-    expect([...files.keys()].sort()).toEqual(["index.html", "index.inline-1.js", "src/main.js"]);
+    expect([...files.keys()].sort()).toEqual([
+      "index.html",
+      "index.inline-1.js",
+      "index.inline-1.js.map",
+      "src/main.js",
+      "src/main.js.map"
+    ]);
     expect(files.get("index.html")).toContain(
       '<script type="module" src="./src/main.js"></script>'
     );

@@ -70,6 +70,7 @@ const guardReportSchema = z.strictObject({
         message: z.string().max(APP_BRIDGE_REPORT_MAX_CHARS),
         file: z.string().max(APP_BRIDGE_REPORT_MAX_CHARS).optional(),
         line: reportCount.optional(),
+        column: reportCount.optional(),
         count: reportCount.min(1)
       })
     )
