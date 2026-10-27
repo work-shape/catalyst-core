@@ -199,7 +199,9 @@ export async function finishPausedStep(input: {
     answeredNow.push(call.toolCallId);
   }
   const rest = pending.slice(next).map(toModelToolCall);
-  if (rest.length === 0) return { kind: "answered", answeredToolCallIds: answeredNow, subagents };
+  // An open answered as the run resumes gets no note: its report is noted with a later request.
+  if (rest.length === 0)
+    return { kind: "answered", answeredToolCallIds: answeredNow, subagents, opened: [] };
   const outcome = await input.toolDispatch.dispatchToolCalls(
     input.runId,
     input.startInput,

@@ -334,10 +334,9 @@ describe("the interface's report of a preview", () => {
         entries: [{ kind: "console", message: `Kunde "${NAME}" ${IBAN} ${MAIL}`, count: 3 }]
       })
     );
-    // At most one report every 5 seconds.
-    advance(PREVIEW_REPORT_INTERVAL_MS - 1);
-    expect(sent).toHaveLength(1);
-    advance(1);
+    // The settled report follows the mount at once: a run of the agent waits for it.
+    advance(0);
+    expect(sent).toHaveLength(2);
     expect(sent[1]).toEqual({
       settled: true,
       loaded: true,
@@ -348,6 +347,18 @@ describe("the interface's report of a preview", () => {
         { kind: "call", message: "save", code: "data_store_needs_app", count: 2 }
       ],
       more: 0
+    });
+    // After it, at most one report every 5 seconds.
+    reporter.callFailed("load", "forbidden");
+    advance(PREVIEW_REPORT_INTERVAL_MS - 1);
+    expect(sent).toHaveLength(2);
+    advance(1);
+    expect(sent).toHaveLength(3);
+    expect(sent[2]?.entries.at(-1)).toEqual({
+      kind: "call",
+      message: "load",
+      code: "forbidden",
+      count: 1
     });
   });
 

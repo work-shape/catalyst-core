@@ -21,6 +21,7 @@ import {
   pages,
   pageBuilds,
   previewReports,
+  previewViewerReports,
   agentRuns,
   agentTryConversations,
   assetCheckouts
@@ -273,14 +274,16 @@ async function markLockedConversationDeleted(
       )
     );
   // What its previews reported is diagnostics of the conversation and goes with it.
-  await tx
-    .delete(previewReports)
-    .where(
-      and(
-        eq(previewReports.clientInstanceId, input.clientInstanceId),
-        eq(previewReports.conversationId, input.conversationId)
-      )
-    );
+  for (const reports of [previewViewerReports, previewReports]) {
+    await tx
+      .delete(reports)
+      .where(
+        and(
+          eq(reports.clientInstanceId, input.clientInstanceId),
+          eq(reports.conversationId, input.conversationId)
+        )
+      );
+  }
   const [row] = await tx
     .update(conversations)
     .set({

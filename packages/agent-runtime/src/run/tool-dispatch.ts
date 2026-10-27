@@ -1,5 +1,11 @@
 import { WEB_FETCH_TOOL_NAME } from "@work-shape/catalyst-web-access";
-import { forbiddenPreviewTool, parseConnectionOperationName } from "@work-shape/catalyst-core";
+import {
+  WORKSPACE_OPEN_TOOL_NAME,
+  forbiddenPreviewTool,
+  isFileSetId,
+  parseConnectionOperationName,
+  type FileSetId
+} from "@work-shape/catalyst-core";
 import type {
   AgentRunId,
   ChatMessage,
@@ -36,7 +42,7 @@ const DEFAULT_REPEATED_TOOL_CALL_LIMIT = 3;
  * answered once the step's calls are through and its subagent ended.
  */
 export type ToolDispatchOutcome =
-  | { kind: "answered"; subagents: StartedSubagent[] }
+  | { kind: "answered"; subagents: StartedSubagent[]; opened: OpenedPreview[] }
   | { kind: "stopped" }
   | {
       kind: "paused";
@@ -46,6 +52,31 @@ export type ToolDispatchOutcome =
       answeredToolCallIds: string[];
       subagents: StartedSubagent[];
     };
+
+/** A revision a `workspace.open` call of the step showed in the preview, by its result. */
+export interface OpenedPreview {
+  toolCallId: string;
+  fileSetId: FileSetId;
+  number?: number;
+}
+
+/** The revision a call opened in the preview, when it was a `workspace.open` that showed one. */
+function openedPreview(
+  toolCall: ModelToolCall,
+  result: ToolExecutionResult
+): OpenedPreview | undefined {
+  if (toolCall.toolName !== WORKSPACE_OPEN_TOOL_NAME || result.status !== "success") return;
+  const output = result.output;
+  if (typeof output !== "object" || output === null) return;
+  const fileSetId = "fileSetId" in output ? output.fileSetId : undefined;
+  const number = "number" in output ? output.number : undefined;
+  if (typeof fileSetId !== "string" || !isFileSetId(fileSetId)) return;
+  return {
+    toolCallId: toolCall.toolCallId,
+    fileSetId,
+    ...(typeof number === "number" ? { number } : {})
+  };
+}
 
 export class ToolDispatch {
   constructor(
@@ -69,6 +100,7 @@ export class ToolDispatch {
   ): Promise<ToolDispatchOutcome> {
     const answeredToolCallIds: string[] = [];
     const subagents: StartedSubagent[] = [];
+    const opened: OpenedPreview[] = [];
     for (const toolCall of toolCalls) {
       if (context.signal?.aborted) return { kind: "stopped" };
       const webRefusal = await this.webFetchRefusal(runId, toolCall.toolName, state, input);
@@ -124,8 +156,10 @@ export class ToolDispatch {
       }
       await this.answerToolCall(runId, input, context, toolCall, result, messages);
       answeredToolCallIds.push(toolCall.toolCallId);
+      const preview = openedPreview(toolCall, result.result);
+      if (preview) opened.push(preview);
     }
-    return { kind: "answered", subagents };
+    return { kind: "answered", subagents, opened };
   }
 
   async webFetchRefusal(

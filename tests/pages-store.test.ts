@@ -162,9 +162,12 @@ describe("the file sets of a Page", () => {
       "listPageFileSets",
       "listPages",
       "mutateAppUserStorage",
+      "previewViewedSince",
       "prunePreviewReports",
       "putPreviewReport",
-      "removeDraftHostAllowances"
+      "removeDraftHostAllowances",
+      // Marks which report a run's model read; the report and the file set stay as they are.
+      "takePreviewReport"
     ]);
     const saved = await save("Offer");
     const sameId = db.store.pages.createPageFileSet({

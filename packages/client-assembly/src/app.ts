@@ -801,6 +801,8 @@ export async function createClientInstanceExecutionAssembly(
     },
     // A run reads how its subagents ended at the end of the step that started them.
     subagents: store.childAgentRuns,
+    // What the browser of a run's person reported of the previews it opened (PREVIEW-STATUS-1).
+    previewReports: store.pages,
     webAccess: config.webAccess,
     // MODEL-REGION-3: with Connections on, a conversation holding personal data keeps every
     // model request on a route in the list. The readers below are wired either way.

@@ -6,6 +6,9 @@ import {
   WORKFLOW_STEP_DATA_MAX_BYTES,
   forbiddenPreviewTool,
   SUBJECT_TOOL_PREFIX,
+  WORKSPACE_OPEN_TOOL_NAME,
+  asUserId,
+  getRuntimeSubjectUserId,
   systemClock,
   unknownToJsonValue,
   type AgentConfig,
@@ -14,6 +17,7 @@ import {
   type AgentRunId,
   type AgentRunResumeState,
   type LocaleCode,
+  type PreviewViewerKey,
   type PausedToolCall,
   type RuntimeAssetSnapshot,
   type RuntimeCallContext,
@@ -46,7 +50,8 @@ import {
 } from "./model-input";
 import { isCancellationRequested, type RunEvents } from "./run-events";
 import { answerSubagents, finishPausedStep, pauseRun, resumedModelMessages } from "./resume-entry";
-import type { ToolDispatch } from "./tool-dispatch";
+import type { OpenedPreview, ToolDispatch } from "./tool-dispatch";
+import { PreviewNotes, noteBeforeRequest, noteOnToolResult } from "./preview-notes";
 import { isRunAgentCall } from "./subagents";
 import { withToolResultRead } from "./tool-result-read";
 import type { LocalAgentRuntimeOptions } from "./run-events";
@@ -56,12 +61,21 @@ const DEFAULT_MAX_STEPS = 64;
 const UNREAD_ANCESTOR_ROUTE = "unread-ancestor";
 
 export class TurnLoop {
+  private readonly previewNotes: PreviewNotes | undefined;
+
   constructor(
     private readonly options: LocalAgentRuntimeOptions,
     private readonly modelInput: ModelInput,
     private readonly toolDispatch: ToolDispatch,
     private readonly runEvents: RunEvents
-  ) {}
+  ) {
+    this.previewNotes = options.previewReports
+      ? new PreviewNotes({
+          reports: options.previewReports,
+          ...(options.clock ? { clock: options.clock } : {})
+        })
+      : undefined;
+  }
 
   async executeRun(
     state: RunState,
@@ -223,6 +237,7 @@ export class TurnLoop {
     };
     const userMessage: ModelMessage = { role: "user", content: userContent };
     return {
+      ...this.previewNotesOf(agent, input, context),
       modelSelection,
       ancestorRoutes: (input.ancestors ?? []).map((ancestor) => this.routeOf(assets, ancestor)),
       tools,
@@ -234,6 +249,92 @@ export class TurnLoop {
       userMessage,
       maxSteps: agent.maxSteps ?? this.options.maxSteps ?? DEFAULT_MAX_STEPS
     };
+  }
+
+  /**
+   * Whether the run notes what its previews reported (PREVIEW-STATUS-1), and whose browser's
+   * reports it reads: the person whose turn it serves, never another member of the
+   * conversation. A run with no person, such as a scheduled start, reads none, and every open
+   * of it is "not viewed". A subagent and a Workflow step's agent note nothing.
+   */
+  private previewNotesOf(
+    agent: AgentConfig,
+    input: StartAgentRunInput,
+    context: RuntimeCallContext
+  ): Pick<RunSetup, "previewNotes"> {
+    if (
+      !this.previewNotes ||
+      !agent.toolNames.includes(WORKSPACE_OPEN_TOOL_NAME) ||
+      context.subagent ||
+      context.workflowAgent ||
+      input.workflowAgent
+    ) {
+      return {};
+    }
+    return {
+      previewNotes: {
+        viewer: context.unattended
+          ? undefined
+          : {
+              clientInstanceId: context.clientInstanceId,
+              conversationId: input.conversationId,
+              userId: asUserId(getRuntimeSubjectUserId(context))
+            }
+      }
+    };
+  }
+
+  /**
+   * Notes on the result of the step's last open what the person's browser reported of that
+   * revision, as the model reads it. Waits at most 6 seconds, and only while the person has a
+   * preview mounted. A report that cannot be read leaves the result as it is.
+   */
+  private async noteOpenedPreview(
+    runId: AgentRunId,
+    setup: RunSetup,
+    context: RuntimeCallContext,
+    opened: readonly OpenedPreview[],
+    openedAt: Date,
+    messages: ModelMessage[]
+  ): Promise<void> {
+    const last = opened.at(-1);
+    if (!this.previewNotes || !setup.previewNotes || !last) return;
+    try {
+      const note = await this.previewNotes.afterOpen({
+        viewer: setup.previewNotes.viewer,
+        fileSetId: last.fileSetId,
+        number: last.number,
+        openedAt,
+        signal: context.signal
+      });
+      noteOnToolResult(messages, last.toolCallId, note);
+    } catch {
+      this.previewNoteUnavailable(runId);
+    }
+  }
+
+  /** Notes, once, a report the person's browser sent since the last one the run's model read. */
+  private async noteLaterPreview(
+    runId: AgentRunId,
+    setup: RunSetup,
+    messages: ModelMessage[]
+  ): Promise<void> {
+    const viewer = setup.previewNotes?.viewer;
+    if (!this.previewNotes || !viewer) return;
+    try {
+      const note = await this.previewNotes.later(viewer);
+      if (note) noteBeforeRequest(messages, note);
+    } catch {
+      this.previewNoteUnavailable(runId);
+    }
+  }
+
+  /** The store's error names no value; the run goes on without the note. */
+  private previewNoteUnavailable(runId: AgentRunId): void {
+    this.options.logger?.warn(
+      { type: "agent_run.preview_note_unavailable", runId },
+      "A preview report could not be read; the run goes on without its note"
+    );
   }
 
   /**
@@ -556,6 +657,7 @@ export class TurnLoop {
       // The step boundary: all results of the last step are in. A new run's first request
       // goes out with its input alone, so a refused continuation rebuilds it in full.
       if (step > 0 || input.resume) await this.takeSteers(state, runId, input, context, messages);
+      await this.noteLaterPreview(runId, setup, messages);
       const modelResult = await callAcceptingContinuation();
       carriesEarlierContinuation = false;
       const { modelSelection, compactThresholdTokens } = model.current;
@@ -691,6 +793,7 @@ export class TurnLoop {
         modelInputFrom = { kind: "message", messageId: stepMessage.id };
       }
 
+      const openedAt = (this.options.clock ?? systemClock).now();
       const outcome = await this.toolDispatch.dispatchToolCalls(
         runId,
         input,
@@ -728,6 +831,7 @@ export class TurnLoop {
         });
         return;
       }
+      await this.noteOpenedPreview(runId, setup, context, outcome.opened, openedAt, messages);
       if (outcome.subagents.length > 0) {
         const settled = await answerSubagents({
           runId,
@@ -794,6 +898,8 @@ interface RunSetup extends ModelSetup {
   systemMessage: ModelMessage;
   userMessage: ModelMessage;
   maxSteps: number;
+  /** Set where the run notes what its previews reported: whose browser's reports it reads. */
+  previewNotes?: { viewer: PreviewViewerKey | undefined };
 }
 
 /** The model a run's calls go to now, and the fallback it may still switch to once. */

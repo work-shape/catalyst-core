@@ -51,7 +51,7 @@ const browserTimers: Timers = {
 
 /**
  * The reporter of one mounted preview. It sends once at once, which tells the instance a
- * preview is mounted; then when the report settled and on each change after, never more
+ * preview is mounted; then when the report settled, and on each change after, never more
  * often than every 5 seconds. A send that fails is not repeated: the next change sends again.
  */
 export function createPreviewReporter(
@@ -97,7 +97,10 @@ export function createPreviewReporter(
   const sendNow = () => {
     cancelQueued = undefined;
     if (stopped) return;
-    lastSentAt = timers.now();
+    // The mount is told at once and does not count: the settled report follows it as soon as
+    // it is there, since a run of the agent waits a few seconds for it. Later changes then go
+    // out at most every 5 seconds.
+    lastSentAt = settled ? timers.now() : undefined;
     send(report()).catch((error: unknown) => {
       // The frame's address expired or is not this viewer's: nothing more is kept of it.
       if (error instanceof ApiError && [401, 403, 404].includes(error.status)) stop();
