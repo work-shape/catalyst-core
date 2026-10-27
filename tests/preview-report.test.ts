@@ -285,6 +285,7 @@ describe("the interface's report of a preview", () => {
     visible: () => boolean = () => true
   ) {
     let clock = 0;
+    let becameVisible: (() => void) | undefined;
     const timers = new Map<number, { at: number; run: () => void }>();
     let id = 0;
     const sent: PreviewReport[] = [];
@@ -301,7 +302,13 @@ describe("the interface's report of a preview", () => {
           timers.set(own, { at: clock + ms, run });
           return () => timers.delete(own);
         },
-        visible
+        visible,
+        onVisible: (run) => {
+          becameVisible = run;
+          return () => {
+            becameVisible = undefined;
+          };
+        }
       }
     );
     const advance = (ms: number) => {
@@ -315,7 +322,7 @@ describe("the interface's report of a preview", () => {
       }
       clock = until;
     };
-    return { reporter, sent, advance };
+    return { reporter, sent, advance, becameVisible: () => becameVisible?.() };
   }
   const guard = (report: Partial<AppBridgeGuardReport> = {}): AppBridgeGuardReport => ({
     settled: true,
@@ -369,7 +376,7 @@ describe("the interface's report of a preview", () => {
 
   it("tells the instance every 30 seconds that a visible preview is still mounted", () => {
     let visible = true;
-    const { reporter, sent, advance } = reporterWithClock(undefined, () => visible);
+    const { reporter, sent, advance, becameVisible } = reporterWithClock(undefined, () => visible);
     reporter.frameLoaded();
     reporter.greeted();
     reporter.guardReport(guard());
@@ -383,8 +390,9 @@ describe("the interface's report of a preview", () => {
     visible = false;
     advance(PREVIEW_KEEP_ALIVE_MS * 3);
     expect(sent).toHaveLength(3);
+    // Back on the page, it is told at once.
     visible = true;
-    advance(PREVIEW_KEEP_ALIVE_MS);
+    becameVisible();
     expect(sent).toHaveLength(4);
     reporter.stop();
     advance(PREVIEW_KEEP_ALIVE_MS * 3);
