@@ -370,6 +370,11 @@ export type WorkflowFailureReason =
   | "durationLimit"
   /** A `workflow` step's run key is held by a run in its own call chain. */
   | "runKeyCycle"
+  /**
+   * A credential published the workflow, and its reach, or that of the run that starts it, is
+   * closed to outside clients now: a person publishes it again (WF-OUT).
+   */
+  | "reachPersonOnly"
   | "other";
 
 export interface WorkflowFailure {

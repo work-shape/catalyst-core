@@ -117,6 +117,8 @@ export const workflows = defineTranslations({
     "workflows.advice.outputInvalid":
       "Running it again ends the same way: whoever builds the workflow has to change what it returns.",
     "workflows.advice.policy": "An administrator can allow it in the policy of the instance.",
+    "workflows.advice.reachPersonOnly":
+      "A person signed in to Catalyst publishes the workflow again, or has the operations it calls exposed to outside clients on the Connection's page.",
     "workflows.advice.runKeyCycle":
       "Running it again ends the same way: whoever builds the workflow has to give the started workflow a different key, or stop it from calling back into its own chain.",
     "workflows.advice.stepLimit":
@@ -383,6 +385,8 @@ export const workflows = defineTranslations({
     "workflows.reason.other": "The step failed.",
     "workflows.reason.outputInvalid": "The result does not have the form the workflow promises.",
     "workflows.reason.policy": "The policy of the instance does not allow this step in a workflow.",
+    "workflows.reason.reachPersonOnly":
+      "The workflow was published with an API key or a technical account, and it, or the workflow that starts it, reads data that is not open to outside clients.",
     "workflows.reason.runKeyCycle":
       "The key for the workflow this step starts is held by a run in its own call chain.",
     "workflows.reason.runKeyCycleNamed":
@@ -835,6 +839,8 @@ export const workflows = defineTranslations({
     "workflows.advice.outputInvalid":
       "Ein neuer Lauf endet genauso: Wer den Workflow baut, muss ändern, was er zurückgibt.",
     "workflows.advice.policy": "Ein Administrator kann es in den Richtlinien der Instanz erlauben.",
+    "workflows.advice.reachPersonOnly":
+      "Eine in Catalyst angemeldete Person veröffentlicht den Workflow erneut, oder lässt die Operationen, die er aufruft, auf der Seite der Verbindung für externe Clients freigeben.",
     "workflows.advice.runKeyCycle":
       "Ein neuer Lauf endet genauso: Wer den Workflow baut, muss dem gestarteten Workflow einen anderen Schlüssel geben oder verhindern, dass er in seine eigene Aufrufkette zurückruft.",
     "workflows.advice.stepLimit":
@@ -1114,6 +1120,8 @@ export const workflows = defineTranslations({
     "workflows.reason.outputInvalid": "Das Ergebnis hat nicht die Form, die der Workflow zusagt.",
     "workflows.reason.policy":
       "Die Richtlinien der Instanz erlauben diesen Schritt in einem Workflow nicht.",
+    "workflows.reason.reachPersonOnly":
+      "Der Workflow wurde mit einem API-Schlüssel oder einem technischen Konto veröffentlicht, und er oder der Workflow, der ihn startet, liest Daten, die nicht für externe Clients freigegeben sind.",
     "workflows.reason.runKeyCycle":
       "Den Schlüssel für den Workflow, den dieser Schritt startet, hält ein Lauf in seiner eigenen Aufrufkette.",
     "workflows.reason.runKeyCycleNamed":

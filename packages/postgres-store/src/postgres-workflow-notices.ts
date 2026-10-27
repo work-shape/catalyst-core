@@ -1,10 +1,12 @@
 import { countWorkflowFailures } from "./postgres-workflow-failure-counts";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { asUserId, type WorkflowNoticesStore } from "@work-shape/catalyst-core";
 import type { PostgresConnection } from "./postgres-database";
 import {
   workflowRevisionPublishers as publishers,
-  workflowFailureNotices as notices
+  workflowFailureNotices as notices,
+  configAssetPublications,
+  configAssetRevisions
 } from "./schema";
 
 export function createPostgresWorkflowNoticesStore(db: PostgresConnection): WorkflowNoticesStore {
@@ -23,6 +25,34 @@ export function createPostgresWorkflowNoticesStore(db: PostgresConnection): Work
           )
         );
       return row ? asUserId(row.userId) : undefined;
+    },
+    async publishedByCredential(input) {
+      const [row] = await db
+        .select({ actor: configAssetPublications.actor })
+        .from(configAssetPublications)
+        .innerJoin(
+          configAssetRevisions,
+          and(
+            eq(configAssetRevisions.assetId, configAssetPublications.assetId),
+            eq(configAssetRevisions.revision, configAssetPublications.revision)
+          )
+        )
+        .where(
+          and(
+            eq(configAssetRevisions.id, input.revisionId),
+            eq(configAssetPublications.clientInstanceId, input.clientInstanceId)
+          )
+        )
+        .orderBy(desc(configAssetPublications.number))
+        .limit(1);
+      const actor = row?.actor;
+      return (
+        actor !== null &&
+        actor !== undefined &&
+        (actor.principalKind === "service" ||
+          actor.credentialId !== undefined ||
+          actor.delegatedActor?.kind === "api_key")
+      );
     },
     async failureCount(input) {
       const counts = await countWorkflowFailures(db, {

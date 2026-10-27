@@ -59,7 +59,7 @@ export interface WorkflowDefinitionSource {
 export const WORKFLOW_DEFINITION_PAGE_SIZE = 200;
 
 /** Operation discovery consumes every page; an empty/short page ends the walk. */
-export async function* workflowDefinitionPages(source: WorkflowDefinitionSource) {
+export async function* workflowDefinitionPages(source: Pick<WorkflowDefinitionSource, "list">) {
   let after: StorePage["after"];
   while (true) {
     const items = await source.list({

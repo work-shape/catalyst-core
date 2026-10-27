@@ -189,6 +189,7 @@ export {
 export {
   WORKFLOW_OUTSIDE_SWITCH_PERSON_ONLY,
   WORKFLOW_REACH_PERSON_ONLY,
+  workflowCallerReachRefusal,
   workflowOutsideIssues,
   workflowOutsideSwitchRefusal,
   workflowReachRefusal

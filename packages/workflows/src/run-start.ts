@@ -15,6 +15,7 @@ import type { WorkflowDefinitionRevision } from "./definition-source";
 import { jsonBytes, jsonObjectSchema, unstorableTextPaths } from "./json";
 import type { WorkflowRunLimits } from "./limits";
 import { secretOperationSteps, type WorkflowOperationCalls } from "./operation-step";
+import { workflowStartReachRefusal } from "./outside-reach";
 import { workflowRunPrincipal } from "./run-identity";
 
 /** What a start is checked against: the instance, its operations and the bounds of a run. */
@@ -35,7 +36,10 @@ export interface PreparedStart {
   principal: WorkflowRun["principal"];
 }
 
-/** The check every start of a run passes, by hand or by a schedule, before a run exists. */
+/**
+ * The check every start of a run passes, by hand, by a schedule, by an App, by a parent or from
+ * outside, before a run exists.
+ */
 export function createStartCheck(options: StartCheckOptions) {
   const { clientInstanceId, stores, operationCalls, limits } = options;
   /**
@@ -123,6 +127,17 @@ export function createStartCheck(options: StartCheckOptions) {
           ...(account ? { principalDisplayLabel: account.displayLabel } : {})
         }
       );
+    }
+    // A revision a credential published starts only while its reach is open to outside
+    // clients, asked now: a child or a Connection's exposure changes after the publish
+    // (WF-OUT). A person's test run of a draft is the person's act.
+    if (mode !== "test") {
+      const reach = await workflowStartReachRefusal(published, {
+        clientInstanceId,
+        stores,
+        definitions: options.definitions
+      });
+      if (reach) throw reach;
     }
     return { published, trigger, input: runInput.data, principal };
   };

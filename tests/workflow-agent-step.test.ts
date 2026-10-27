@@ -64,6 +64,11 @@ interface FixtureOptions {
   principalUses?: boolean;
   /** The Workflow runs as its own account: its definition names no `runAs`. */
   ownAccount?: boolean;
+  /**
+   * The agent step also lists the fixture Connection's operation, exposed to Workflows and not
+   * to outside clients: the Workflow's reach is closed to them (WF-OUT).
+   */
+  closedReach?: boolean;
   /** Runs after the Workflow run started and before a job claims it. */
   beforeJobs?: (started: {
     app: TestInstance;
@@ -239,7 +244,14 @@ async function fixture(
           settings: { url: "http://127.0.0.1:45454" },
           authScheme: "none",
           secretHandle: undefined,
-          operations: [{ name: "change", effect: "changing", exposure: ["agent"], enabled: true }]
+          operations: [
+            {
+              name: "change",
+              effect: "changing",
+              exposure: options.closedReach ? ["agent", "workflow"] : ["agent"],
+              enabled: true
+            }
+          ]
         })
       }
     ]
@@ -309,7 +321,11 @@ async function fixture(
     runAs: "workflow-runner",
     inputs: { type: "object", properties: { text: { type: "string" } } },
     outputs: outputSchema,
-    tools: options.webTools ? [calledToolName, "web_search", "web_fetch"] : [calledToolName],
+    tools: options.webTools
+      ? [calledToolName, "web_search", "web_fetch"]
+      : options.closedReach
+        ? [calledToolName, toolName]
+        : [calledToolName],
     steps: [
       { id: "start", name: "Start", type: "trigger", triggers: [{ kind: "manual" }] },
       {
@@ -461,6 +477,74 @@ describe("Workflow Child Agent Runs (CR-2)", () => {
         workflow: "agent-target"
       })
     ).toEqual([expect.objectContaining({ mode: "live", operationRunId: call.id })]);
+  });
+
+  it("refuses an agent's tool start of a Workflow a credential published, from a run whose reach is closed", async () => {
+    const f = await fixture("workflow", false, "user-1", { closedReach: true });
+    const step = await f.ended("done");
+    const child = required(
+      await f.app.stores.childAgentRuns.readWorkflowAgentRun({
+        clientInstanceId: f.clientInstanceId,
+        stepRunId: step.id
+      })
+    );
+    const target = required(
+      await f.app.stores.configAssets.getConfigAsset({
+        clientInstanceId: f.clientInstanceId,
+        kind: "workflow",
+        name: "agent-target"
+      })
+    );
+    // As a personal API key's publish records itself (WF-OUT).
+    const publishedBy = (actor: string) =>
+      withTestSql(
+        (sql) =>
+          sql`update config_asset_publications set actor = ${sql.json(JSON.parse(actor))} where asset_id = ${target.id}`
+      );
+    await publishedBy(
+      JSON.stringify({ displayLabel: "Owner", roles: [], credentialId: "key_1", userId: "user-1" })
+    );
+    const execution = await createTestInstance({ execution: f.input });
+    const calls = getTestExecution(execution).operationCalls;
+    const parent = required(
+      await f.app.stores.workflowRuns.readRun({ clientInstanceId: f.clientInstanceId, id: f.runId })
+    );
+    const actor = required(await workflowRunActor(f.app.stores.apiAccess, parent));
+    const call = (toolCallId: string) =>
+      runOperation(
+        {
+          operation: workflowStartToolName,
+          effect: "changing",
+          input: {},
+          actor,
+          origin: {
+            kind: "agent",
+            agentName: child.agentName,
+            agentRunId: child.id,
+            conversationId: child.conversationId,
+            toolCallId: asToolCallId(toolCallId),
+            toolName: workflowStartToolName
+          },
+          correlationId: toolCallId
+        },
+        calls.deps,
+        { unattended: true }
+      );
+    const refused = await call("start-refused");
+    expect(refused.result).toMatchObject({
+      status: "failed",
+      error: { details: { reason: "reach_person_only", workflow: "agent-target" } }
+    });
+    const runs = () =>
+      f.app.stores.workflowRuns.listRuns({
+        clientInstanceId: f.clientInstanceId,
+        workflow: "agent-target"
+      });
+    expect(await runs()).toEqual([]);
+    // Published by a person, the agent's tool starts it as before.
+    await publishedBy(JSON.stringify({ displayLabel: "Owner", roles: [], userId: "user-1" }));
+    expect((await call("start-person")).result.status).toBe("done");
+    expect(await runs()).toHaveLength(1);
   });
 
   it("keeps web tools for a published Workflow child without a conversation row", async () => {

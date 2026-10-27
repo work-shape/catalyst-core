@@ -28,7 +28,12 @@ import type { RunOrigin } from "./scheduled-start";
 import { assertRunLinkIsAcyclic } from "./child-run-links";
 import { workflowResource } from "./workflow-resource";
 import { childDefinition } from "./child-definition";
-import { workflowOutsideBlockers, workflowOutsideRefusal } from "./outside-reach";
+import {
+  workflowOutsideBlockers,
+  workflowOutsideRefusal,
+  workflowOriginReachRefusal,
+  workflowParentReachRefusal
+} from "./outside-reach";
 
 /** A start must record its durable run promptly; overdue Operation Runs can be recovered. */
 const WORKFLOW_START_OPERATION_TIMEOUT_MS = 30_000;
@@ -112,6 +117,21 @@ export function createWorkflowStartSource(options: {
     });
     if (blockers.length > 0) throw workflowOutsideRefusal(child.id);
   }
+  /**
+   * A child a credential published starts only from runs whose reach is open to outside
+   * clients: a closed one may hand it a Connection's data to copy into a Data Store (WF-OUT).
+   */
+  async function requireOpenStarter(
+    revision: NonNullable<Awaited<ReturnType<WorkflowDefinitionSource["read"]>>>,
+    runId: string
+  ): Promise<void> {
+    const refusal = await workflowParentReachRefusal(revision, runId, {
+      clientInstanceId,
+      stores,
+      definitions
+    });
+    if (refusal) throw refusal;
+  }
   async function resolve(name: string, readers?: OperationResolutionStores) {
     const match = /^workflow\.([a-z][a-z0-9_-]{0,62})\.start$/u.exec(name);
     const workflow = match?.[1];
@@ -190,6 +210,16 @@ export function createWorkflowStartSource(options: {
           step?.stepType !== "workflow" ||
           step.runId !== origin.workflowRunId
         ) {
+          // An operation step or an agent's tool in a run hands the run's data on as input,
+          // as a `workflow` step does: the agent of an agent step calls with its own origin.
+          if (published) {
+            const refusal = await workflowOriginReachRefusal(published, origin, {
+              clientInstanceId,
+              stores,
+              definitions
+            });
+            if (refusal) throw refusal;
+          }
           const call = await stores.operationRuns.get({ clientInstanceId, id: context.runId });
           const run = await options.start(
             {
@@ -220,6 +250,7 @@ export function createWorkflowStartSource(options: {
           });
         }
         await requireOutsideChild(step.runId, revision.manifest);
+        await requireOpenStarter(revision, step.runId);
         const prepared = await options.prepare(revision, inputs);
         const run = await stores.transaction(async (tx) => {
           // Keyed starts may link existing runs. Serialize their guard reads through the

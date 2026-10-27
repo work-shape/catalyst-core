@@ -71,6 +71,7 @@ import {
   WorkflowStepFailure,
   type WorkflowSourceLimits,
   workflowDefinitionRefusal,
+  workflowCallerReachRefusal,
   workflowOutsideIssues,
   workflowOutsideSwitchRefusal,
   workflowReachRefusal,
@@ -491,7 +492,7 @@ export function createWorkflowAssetKind(
         createWorkflowAssetDefinitions({ clientInstanceId, configAssets: stores.configAssets })
       );
       // What it reaches is named to the publisher only where they may read it.
-      const reader: Parameters<typeof workflowOutsideIssues>[1] = {
+      const reader: Parameters<typeof workflowCallerReachRefusal>[2] = {
         clientInstanceId,
         configAssets: stores.configAssets,
         definitions: createWorkflowAssetDefinitions({
@@ -538,6 +539,10 @@ export function createWorkflowAssetKind(
       // for an outside Workflow to read (WF-OUT). The scan is the start's.
       const reach = await workflowReachRefusal(result.manifest, actor, reader);
       if (reach) throw reach;
+      // Nor what a live Workflow with a closed reach starts, directly or through others: that
+      // parent can hand it a closed Connection's data as input, for it to copy into a Data Store.
+      const callers = await workflowCallerReachRefusal(result.manifest, actor, reader);
+      if (callers) throw callers;
       await reschedule(stores, replaced, config);
     },
     // Account revocation is part of the delete, never a best-effort after-write task.
