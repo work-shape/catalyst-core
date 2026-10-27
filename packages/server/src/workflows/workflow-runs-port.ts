@@ -67,6 +67,8 @@ export interface WorkflowRunsPort {
     key?: string;
     startedBy: AuthenticatedUser;
     operationRunId?: OperationRunId;
+    /** Where the call came from: a Workflow run behind it is the run's starter (WF-OUT). */
+    callOrigin?: OperationOrigin;
     correlationId: string;
     revision?: WorkflowRunStartedFrom["workflowRevision"];
     /** An outside client starts it: its dataset inputs must come from runs that answer one. */

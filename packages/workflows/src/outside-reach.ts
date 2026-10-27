@@ -3,6 +3,7 @@ import {
   CONNECTION_ASSET_KIND,
   DATA_STORE_OPERATION_PREFIX,
   KNOWLEDGE_OPERATION_PREFIX,
+  WORKFLOW_ASSET_KIND,
   WORKFLOW_OPERATION_PREFIX,
   WORKFLOW_OUTSIDE_TRIGGER,
   isAuthenticatedServicePrincipal,
@@ -19,7 +20,7 @@ import {
   type WorkflowRunId
 } from "@work-shape/catalyst-core";
 import { z } from "zod";
-import { indexWorkflowSteps } from "./definition";
+import { indexWorkflowSteps, parseWorkflowManifest } from "./definition";
 import { WORKFLOW_OUTSIDE_NOT_EXPOSED, type WorkflowDefinitionIssue } from "./definition-issue";
 import {
   workflowDefinitionPages,
@@ -508,10 +509,10 @@ export async function workflowRunOfOrigin(
  * history keeps it), or its parent. A run opened before the starter was kept reads it, as
  * before, from the Operation Run of its first history's start while that call is kept.
  */
-async function starterOf(
+export async function workflowRunStarter(
   run: Pick<WorkflowRun, "id" | "starterRunId" | "parentRunId" | "operationRunId" | "continuation">,
   deps: StartReachDeps
-): Promise<string | undefined> {
+): Promise<WorkflowRunId | undefined> {
   if (run.starterRunId !== undefined) return run.starterRunId;
   if (run.parentRunId !== undefined) return run.parentRunId;
   let operationRunId = run.operationRunId;
@@ -530,6 +531,31 @@ async function starterOf(
     id: operationRunId
   });
   return call ? workflowRunOfOrigin(call.origin, deps) : undefined;
+}
+
+const manifestOfConfigSchema = z.object({ manifest: z.unknown() });
+
+/**
+ * The definition a run started on: the copy it keeps, or, once retention cleared that copy,
+ * the revision it names, which never changes. A starter that ended long ago is still asked.
+ */
+async function runDefinition(
+  run: Pick<WorkflowRun, "id" | "workflow" | "definitionRevisionId">,
+  deps: StartReachDeps
+): Promise<WorkflowManifest | undefined> {
+  const { clientInstanceId } = deps;
+  const kept = await deps.stores.workflowRuns.readRunDefinition({ clientInstanceId, id: run.id });
+  if (kept) return kept;
+  const revision = await deps.stores.configAssets.getConfigAssetRevisionById({
+    clientInstanceId,
+    kind: WORKFLOW_ASSET_KIND,
+    name: run.workflow,
+    revisionId: run.definitionRevisionId
+  });
+  const parsed = parseWorkflowManifest(
+    manifestOfConfigSchema.safeParse(revision?.config).data?.manifest
+  );
+  return parsed.ok ? parsed.manifest : undefined;
 }
 
 const publishedByCredential = (
@@ -595,8 +621,7 @@ export async function workflowParentReachRefusal(
   for (let runId: string | undefined = startingRunId; runId !== undefined && !seen.has(runId);) {
     seen.add(runId);
     const run = await deps.stores.workflowRuns.readRun({ clientInstanceId, id: runId });
-    const definition =
-      run && (await deps.stores.workflowRuns.readRunDefinition({ clientInstanceId, id: run.id }));
+    const definition = run && (await runDefinition(run, deps));
     // A run, or its definition, that cannot be read counts as closed: the rule never guesses
     // open. A starter the walk names is a run that started this one.
     if (!run || !definition || (await closedReach(definition, deps))) {
@@ -608,7 +633,7 @@ export async function workflowParentReachRefusal(
         { exposeMessage: true }
       );
     }
-    runId = await starterOf(run, deps);
+    runId = await workflowRunStarter(run, deps);
   }
   return undefined;
 }
@@ -623,6 +648,6 @@ export async function workflowContinuationReachRefusal(
   deps: StartReachDeps
 ): Promise<AppError | undefined> {
   if (!(await publishedByCredential(deps, revision))) return undefined;
-  const starter = await starterOf(run, deps);
+  const starter = await workflowRunStarter(run, deps);
   return starter === undefined ? undefined : workflowParentReachRefusal(revision, starter, deps);
 }
