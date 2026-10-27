@@ -343,6 +343,11 @@ export interface WorkflowAssetKind
     carried(config: JsonObject, before: unknown, beforeHasFiles: boolean): JsonObject;
     /** The files a config holds itself, as a read of the folder answers them. */
     filesOfConfig(config: unknown): { path: string; bytes: Uint8Array }[];
+    /**
+     * Edits an existing manifest on a config write, preserving its source annotations.
+     * Undefined asks the server to use filesOfConfig and log a content-free fallback.
+     */
+    editManifest?(config: unknown, bytes: Uint8Array): Uint8Array | undefined;
     /** Whether stored bytes say what the config says at their path. */
     matchesConfig(config: unknown, file: { path: string; bytes: Uint8Array }): boolean;
   };
