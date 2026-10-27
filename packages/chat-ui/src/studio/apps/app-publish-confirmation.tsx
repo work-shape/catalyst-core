@@ -209,7 +209,10 @@ export function useAppPublishConfirmation(
     ? {
         ...reviewed,
         workflows: reviewed.workflows.filter(({ name }) => call.workflows.includes(name)),
-        dataStores: reviewed.dataStores.filter(({ name }) => call.dataStores.includes(name))
+        // A store still being updated is waited for though the agent names it not.
+        dataStores: reviewed.dataStores.filter(
+          ({ name, pending }) => !pending || call.dataStores.includes(name)
+        )
       }
     : undefined;
   return {

@@ -264,7 +264,9 @@ export interface AppPublishTogetherRead {
   workflows: readonly AppPublishTogetherWorkflow[];
   /**
    * The Data Stores the draft binds whose draft is not published, each with the migrations
-   * it would apply: the Publish names each with the revision shown. Empty as `workflows` is.
+   * it would apply: the Publish names each with the revision shown. And those live that are
+   * still applying migrations the App needs (`pending` false): the Publish waits for them and
+   * names none. Empty as `workflows` is.
    */
   dataStores: readonly AppPublishTogetherStore[];
   retry(): void;
@@ -308,7 +310,7 @@ export function useAppPublishTogether(
   return {
     status: "ready",
     workflows: review.workflows.filter((workflow) => workflow.pending),
-    dataStores: review.dataStores.filter((store) => store.pending),
+    dataStores: review.dataStores,
     retry
   };
 }

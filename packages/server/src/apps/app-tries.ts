@@ -231,8 +231,9 @@ export class AppDraftTries {
 
   /**
    * The Data Stores the App's draft binds whose draft is not published (GOLIVE-1), as one
-   * Publish of the App would publish them: each with its live level, the level the App asks of
-   * it and the migrations its draft would apply. A store whose draft does not reach that level
+   * Publish of the App would publish them, and those live whose migrations have not reached
+   * the level the App asks yet, which it waits for: each with its live level, the level the App
+   * asks of it and the migrations its draft would apply. A store whose draft does not reach that level
    * either is refused, on its own line where it is pending and on the App's where it is not.
    * Each is read with the reader's right to read it, as a Workflow is.
    */
@@ -265,7 +266,15 @@ export class AppDraftTries {
         );
         (item.pending ? item.refusals : appItem.refusals).push(refusal);
       }
-      if (!item.pending) continue;
+      // A live store an earlier Publish left below the level the App needs is listed too:
+      // the Publish waits for its migrations and does not name it.
+      const migrating =
+        !item.pending &&
+        item.refusals.length === 0 &&
+        minSchema !== undefined &&
+        liveLevel < minSchema &&
+        draft.level >= minSchema;
+      if (!item.pending && !migrating) continue;
       reviewed.push({
         ...item,
         liveLevel,

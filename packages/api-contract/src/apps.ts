@@ -303,6 +303,8 @@ export const appPublishReviewSchema = z.object({
    * The Data Stores the App's draft binds whose draft is not published (GOLIVE-1): one Publish
    * of the App publishes each it names in `dataStores` first and applies its migrations. Each
    * says the level the store is at, the level the App needs and the migrations it would apply.
+   * A store that is live and still applying migrations the App needs is listed with `pending`
+   * false: it is not named, and the Publish waits for it.
    */
   dataStores: z
     .array(

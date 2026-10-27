@@ -20,7 +20,8 @@ import { useAppsHost } from "./apps-host";
 
 // "Published with it" in an App's Publish question (DP-3, GOLIVE-1): the Workflows with
 // changes their live revision does not have, children first, and then the Data Stores whose
-// draft is not published, which the one Publish makes live with the App. Each Workflow says
+// draft is not published, which the one Publish makes live with the App, and those live and
+// still being updated, which it waits for. Each Workflow says
 // whether it is new, who changed it last and how its last test run ended; each store how many
 // changes to its tables it applies. Both say what would refuse their publish now.
 
@@ -30,7 +31,11 @@ export function appPublishTogetherNamed(read: AppPublishTogetherRead): AppPublis
     name,
     revision: draftRevision
   });
-  return { workflows: read.workflows.map(named), dataStores: read.dataStores.map(named) };
+  // A store that is live and still updating is waited for, not published again.
+  return {
+    workflows: read.workflows.map(named),
+    dataStores: read.dataStores.filter(({ pending }) => pending).map(named)
+  };
 }
 
 /** Whether the question may be sent: all is read and nothing would be refused. */
@@ -124,11 +129,19 @@ function TogetherItem({ workflow }: { workflow: AppPublishTogetherWorkflow }) {
   );
 }
 
-/** A Data Store published with the App: new or changed, and the changes to its tables. */
+/**
+ * A Data Store published with the App: new or changed, and the changes to its tables. One that
+ * is live and still being updated, which the Publish waits for, says so.
+ */
 function TogetherStore({ store }: { store: AppPublishTogetherStore }) {
   const { locale, t } = useTranslation();
   const host = useAppsHost();
   const isNew = store.publishedRevision === undefined;
+  const badge = !store.pending
+    ? "apps.publishTogetherUpdating"
+    : isNew
+      ? "apps.publishTogetherNew"
+      : "apps.publishTogetherChanged";
   const count = store.pendingMigrations.length;
   return (
     <li className="grid min-w-0 gap-1" data-data-store={store.name}>
@@ -136,8 +149,8 @@ function TogetherStore({ store }: { store: AppPublishTogetherStore }) {
         <span className="wrap-anywhere">
           {t("apps.publishTogetherDataStore", { title: store.title })}
         </span>
-        <Badge tone={isNew ? "accent" : "neutral"} size="sm">
-          {t(isNew ? "apps.publishTogetherNew" : "apps.publishTogetherChanged")}
+        <Badge tone={isNew && store.pending ? "accent" : "neutral"} size="sm">
+          {t(badge)}
         </Badge>
       </span>
       {count > 0 || store.lastChangedBy ? (
