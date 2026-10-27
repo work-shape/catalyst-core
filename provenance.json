@@ -1,0 +1,23 @@
+{
+  "routes": [],
+  "required": [],
+  "states": [
+    {
+      "name": "live-history",
+      "setup": "/private/tmp/claude-501/-Users-felixpahlke-code-catalyst/a2ce655e-be6a-4606-83fd-3c646e25be76/scratchpad/appver-lane/states/live-history.mjs"
+    },
+    {
+      "name": "changed-history",
+      "setup": "/private/tmp/claude-501/-Users-felixpahlke-code-catalyst/a2ce655e-be6a-4606-83fd-3c646e25be76/scratchpad/appver-lane/states/changed-history.mjs"
+    },
+    {
+      "name": "revert-history",
+      "setup": "/private/tmp/claude-501/-Users-felixpahlke-code-catalyst/a2ce655e-be6a-4606-83fd-3c646e25be76/scratchpad/appver-lane/states/revert-history.mjs"
+    }
+  ],
+  "modules": [],
+  "pr": 106,
+  "head": "c4c9b0f74de764deb2d846d4fa9ec42f9d035162",
+  "base": "88331f70bbe938386dbcdb627e22c8588cc73ff0",
+  "tested": "8cdfe710ec97ff2fd8b3dff3f439948713378fd0"
+}
