@@ -16,6 +16,10 @@
       "class": "decision",
       "reason": "A decision on a held call cannot itself be held."
     },
+    "apps.sessions.capture": {
+      "class": "conversation",
+      "reason": "A picture of a preview for the model of the one run that asked for it, kept as an artifact of its conversation, not a governance event: no audit event or Operation Run holds it (PREVIEW-SEE-1)."
+    },
     "apps.sessions.report": {
       "class": "conversation",
       "reason": "A preview's report is diagnostics kept 24 hours for its conversation, not a governance event: no audit event or Operation Run holds it (PREVIEW-STATUS-1a)."
@@ -142,6 +146,8 @@
     "approval_requests.withdraw": "own",
     "apps.get_from_page": "conversation_access",
     "apps.preview": "asset_right",
+    "apps.preview_captures.pending": "conversation_access",
+    "apps.sessions.capture": "asset_right",
     "apps.sessions.context": "asset_right",
     "apps.sessions.get_workflow_run": "asset_right",
     "apps.sessions.report": "asset_right",

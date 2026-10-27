@@ -47,7 +47,8 @@ const SECRET_NAMED_ENV_READ =
 
 /**
  * Hosts that address nothing outside the machine or the test: loopback, the reserved test
- * names, and the `http://schemas.` names of XML namespaces, which are identifiers. So is the
+ * names, and the `http://schemas.` and `http://www.w3.org/` names of XML namespaces (SVG and
+ * XHTML among them), which are identifiers. So is the
  * start of the first line of a Git LFS pointer file, `version https://git-lfs`: it is compared
  * with the bytes of a file and ends before any domain, so the host is `git-lfs` and no more.
  * The same line written out to its domain is the address of a real host and is still found.
@@ -57,6 +58,7 @@ function isAddressOfNothing(url: string, host: string): boolean {
     ["127.0.0.1", "localhost", "0.0.0.0", "example.com"].includes(host) ||
     /\.(?:test|example|localhost|invalid)$/u.test(host) ||
     url.toLowerCase().startsWith("http://schemas.") ||
+    url.toLowerCase() === "http://www.w3.org" ||
     url === "https://git-lfs"
   );
 }

@@ -139,6 +139,8 @@ describe("the file sets of a Page", () => {
     expect(Object.keys(db.store.pages).sort()).toEqual([
       // A draft host allowance belongs to a person and a host, not to a file set.
       "allowDraftHost",
+      // A run's request for a picture of a preview, and its answer: about a file set, not of it.
+      "claimPreviewCapture",
       // A file set of an asset is stored, read and deleted as one of a Page is.
       "createAssetFileSet",
       // The build calls are about the row a save waits on, not about a file set.
@@ -154,6 +156,7 @@ describe("the file sets of a Page", () => {
       "getPage",
       "getPageBuild",
       "getPageFileSet",
+      "getPreviewCapture",
       // A preview's report is diagnostics about a file set in a conversation, not the file set.
       "getPreviewReport",
       "getServedFileSet",
@@ -162,12 +165,16 @@ describe("the file sets of a Page", () => {
       "listPageFileSets",
       "listPages",
       "mutateAppUserStorage",
+      "pendingPreviewCaptures",
       "previewViewedSince",
       "prunePreviewReports",
       "putPreviewReport",
       "removeDraftHostAllowances",
+      "requestPreviewCapture",
+      "settlePreviewCapture",
       // Marks which report a run's model read; the report and the file set stay as they are.
-      "takePreviewReport"
+      "takePreviewReport",
+      "viewedPreview"
     ]);
     const saved = await save("Offer");
     const sameId = db.store.pages.createPageFileSet({

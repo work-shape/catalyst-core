@@ -139,13 +139,24 @@ export const PREVIEW_CAPTURE_SOURCE = `function (win, host) {
     });
   }
 
+  // The colour the browser paints behind the page: the root's background, else the body's, else
+  // the white of a page without one.
+  function canvasColour() {
+    var roots = [doc.documentElement, doc.body];
+    for (var i = 0; i < roots.length; i += 1) {
+      var colour = roots[i] ? computed(roots[i]).backgroundColor : "";
+      if (colour && colour !== "transparent" && colour !== "rgba(0, 0, 0, 0)") return colour;
+    }
+    return "white";
+  }
+
   // Draws the image at the size asked and encodes it, smaller each time it is too large.
   function encode(image, width, height, step, shrunk, resolve, reject) {
     var canvas = doc.createElement("canvas");
     canvas.width = width;
     canvas.height = height;
     var context = canvas.getContext("2d");
-    context.fillStyle = "#ffffff";
+    context.fillStyle = canvasColour();
     context.fillRect(0, 0, width, height);
     context.drawImage(image, 0, 0, width, height);
     // A tainted canvas throws here, as in Safari: no picture.
