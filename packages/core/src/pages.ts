@@ -13,6 +13,12 @@ import type { PreviewReport } from "@work-shape/catalyst-asset-schemas";
 // A Page is a folder of files a conversation owns. Each save is a file set: the source files,
 // the built files, the validated manifest and the kit version, stored once and never changed.
 
+/**
+ * The agent's tool that shows a folder of its workspace in the preview beside the conversation.
+ * Named here because the run notes what that preview reported on the tool's result.
+ */
+export const WORKSPACE_OPEN_TOOL_NAME = "workspace.open";
+
 export type PageId = Brand<string, "PageId">;
 export type FileSetId = Brand<string, "FileSetId">;
 
@@ -344,17 +350,37 @@ export interface DraftHostAllowanceKey {
   userId: UserId;
 }
 
-/** The report of one preview, for one conversation and one file set (PREVIEW-STATUS-1). */
+/**
+ * The report of one preview (PREVIEW-STATUS-1): of one file set, in one conversation, as one
+ * person's browser showed it. Each viewer has a report of their own: a run reads only that of
+ * the person whose turn it serves.
+ */
 export interface PreviewReportKey {
   clientInstanceId: ClientInstanceId;
   conversationId: ConversationId;
   fileSetId: FileSetId;
+  /** The person whose browser showed the preview. */
+  userId: UserId;
 }
 
 /** A kept report and when it was written. */
 export interface StoredPreviewReport {
   report: PreviewReport;
   reportedAt: string;
+}
+
+/** A settled report a run took for the note it gives its model, and which revision it is of. */
+export interface TakenPreviewReport extends StoredPreviewReport {
+  fileSetId: FileSetId;
+  /** The file set's number among those of its Page or App. */
+  number: number;
+}
+
+/** The reports of one conversation as one person's browser showed them. */
+export interface PreviewViewerKey {
+  clientInstanceId: ClientInstanceId;
+  conversationId: ConversationId;
+  userId: UserId;
 }
 
 export interface PagesStore {
@@ -370,6 +396,17 @@ export interface PagesStore {
   getPreviewReport(
     input: PreviewReportKey & { notBefore: string }
   ): Promise<StoredPreviewReport | undefined>;
+  /** Whether the person's browser reported any preview of the conversation after `since`. */
+  previewViewedSince(input: PreviewViewerKey & { since: string }): Promise<boolean>;
+  /**
+   * A settled report for a run's note, which counts as noted from then on. With `fileSetId`:
+   * that file set's report written at or after `notBefore`, noted before or not. Without: the
+   * newest report written after `notBefore` that reads otherwise than when it was last noted,
+   * and every other such report counts as noted with it.
+   */
+  takePreviewReport(
+    input: PreviewViewerKey & { notBefore: string; fileSetId?: FileSetId }
+  ): Promise<TakenPreviewReport | undefined>;
   /** Removes every report written before `before`. Answers how many went. */
   prunePreviewReports(input: {
     clientInstanceId: ClientInstanceId;

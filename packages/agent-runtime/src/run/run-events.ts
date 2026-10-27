@@ -26,6 +26,7 @@ import {
   type StartAgentRunInput
 } from "@work-shape/catalyst-core";
 import type { SubagentOutcomeReader } from "./subagents";
+import type { PreviewReportSource } from "./preview-notes";
 import type { ModelCall, ModelCompletion, ModelGateway } from "@work-shape/catalyst-model-provider";
 import type { RunState, RunFailureError } from "../run-state";
 import type {
@@ -120,6 +121,14 @@ export interface LocalAgentRuntimeOptions {
     runId: AgentRunId;
     conversationId: ConversationId;
   }) => Promise<SteeredUserMessage[]>;
+  /**
+   * What the browser of a run's person reported of the conversation's previews
+   * (PREVIEW-STATUS-1). After a `workspace.open` the run waits at most 6 seconds for the opened
+   * revision's report, only while that person has a preview of the conversation mounted, and
+   * notes it on the open's result; a later report is noted once before a later model request.
+   * Without it a run notes nothing.
+   */
+  previewReports?: PreviewReportSource;
 }
 
 export interface LocalAgentRuntimeEffect {

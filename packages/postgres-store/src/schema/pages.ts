@@ -161,10 +161,9 @@ export const draftHostAllowances = pgTable(
 );
 
 /**
- * What a preview last reported of itself (PREVIEW-STATUS-1): one row per conversation and file
- * set, replaced by each report. Diagnostics, scrubbed and bounded before they are written. A
- * row is removed 24 hours after it was written, when the conversation is deleted or expires,
- * and with the conversation or the file set.
+ * What a preview last reported of itself before reports were kept per viewer (PREVIEW-STATUS-1a):
+ * no longer written or read. Its rows go with the 24-hour removal and with their conversation,
+ * and a later migration drops the table once no supported release writes it.
  */
 export const previewReports = pgTable(
   "preview_reports",
@@ -190,5 +189,49 @@ export const previewReports = pgTable(
     index("preview_reports_file_set_idx").on(table.fileSetId),
     // The hourly removal of rows past 24 hours.
     index("preview_reports_reported_at_idx").on(table.reportedAt)
+  ]
+);
+
+/**
+ * What a preview last reported of itself (PREVIEW-STATUS-1): one row per conversation, file set
+ * and person whose browser showed it, replaced by each report of that person. Diagnostics,
+ * scrubbed and bounded before they are written. A run reads only the row of the person whose
+ * turn it serves. A row is removed 24 hours after it was written, when the conversation is
+ * deleted or expires, and with the conversation, the file set or the account.
+ */
+export const previewViewerReports = pgTable(
+  "preview_viewer_reports",
+  {
+    clientInstanceId: text("client_instance_id").$type<ClientInstanceId>().notNull(),
+    conversationId: text("conversation_id")
+      .$type<ConversationId>()
+      .notNull()
+      .references(() => conversations.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .$type<UserId>()
+      .notNull()
+      .references(() => productUsers.id, { onDelete: "cascade" }),
+    fileSetId: text("file_set_id")
+      .$type<FileSetId>()
+      .notNull()
+      .references(() => fileSets.id, { onDelete: "cascade" }),
+    report: jsonb("report").$type<PreviewReport>().notNull(),
+    reportedAt: timestamp("reported_at", { withTimezone: true }).notNull(),
+    // The MD5 of the report as a run last noted it: a later report that reads the same is not
+    // noted again. Empty until a run noted one.
+    notedDigest: text("noted_digest")
+  },
+  (table) => [
+    // Also what a run's reads of one person's reports in a conversation use.
+    primaryKey({
+      name: "preview_viewer_reports_pk",
+      columns: [table.conversationId, table.userId, table.fileSetId]
+    }),
+    // The delete of a file set finds its rows.
+    index("preview_viewer_reports_file_set_idx").on(table.fileSetId),
+    // The delete of an account finds its rows.
+    index("preview_viewer_reports_user_idx").on(table.userId),
+    // The hourly removal of rows past 24 hours.
+    index("preview_viewer_reports_reported_at_idx").on(table.reportedAt)
   ]
 );

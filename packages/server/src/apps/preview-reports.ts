@@ -1,22 +1,22 @@
 import { APP_ASSET_KIND } from "@work-shape/catalyst-api-contract";
 import {
-  PREVIEW_REPORT_KEEP_MS,
   asConversationId,
+  asUserId,
   boundPreviewReport,
+  getSubjectUserId,
   isFileSetId,
   type ActorAccess,
   type AuthenticatedUser,
   type ConversationId,
-  type FileSetId,
-  type PreviewReport,
-  type StoredPreviewReport
+  type PreviewReport
 } from "@work-shape/catalyst-core";
 import { ConversationWorkflow } from "../conversations/conversation-service";
 import type { ResolvedChatServerOptions } from "../types";
 import type { AppActionCalls, FrameSession, FrameSessionProof } from "./action-call";
 
 // What a preview reports of itself (PREVIEW-STATUS-1), kept for the agent of the conversation
-// the preview belongs to. A report is diagnostics written in the person's browser by a page an
+// the preview belongs to, per person whose browser showed it: a run reads only the report of the
+// person whose turn it serves, never another member's. A report is diagnostics written in the person's browser by a page an
 // agent wrote, so it is read as data of unknown shape: its shape was checked by the route, and
 // it is scrubbed and bounded here again, whatever the browser did. It is not a governance
 // event: no audit event, log line or Operation Run holds one, and nothing here logs it.
@@ -64,23 +64,11 @@ export class PreviewReports {
       clientInstanceId: this.options.clientInstanceId,
       conversationId,
       fileSetId: input.fileSetId,
+      userId: asUserId(getSubjectUserId(caller.user)),
       report: keptReport(input.report, session.usesKit),
       reportedAt: this.now().toISOString()
     });
     return { stored };
-  }
-
-  /** The report of one file set in one conversation, while it is younger than 24 hours. */
-  read(
-    conversationId: ConversationId,
-    fileSetId: FileSetId
-  ): Promise<StoredPreviewReport | undefined> {
-    return this.options.stores.pages.getPreviewReport({
-      clientInstanceId: this.options.clientInstanceId,
-      conversationId,
-      fileSetId,
-      notBefore: new Date(this.now().getTime() - PREVIEW_REPORT_KEEP_MS).toISOString()
-    });
   }
 
   private async conversationOf(

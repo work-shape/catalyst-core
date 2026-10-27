@@ -24,8 +24,10 @@ import {
 } from "./postgres-draft-host-allowances";
 import {
   getPreviewReport,
+  previewViewedSince,
   prunePreviewReports,
-  putPreviewReport
+  putPreviewReport,
+  takePreviewReport
 } from "./postgres-preview-reports";
 import { publishedRevisions } from "./postgres-config-asset-revisions";
 import { type PostgresConnection } from "./postgres-database";
@@ -598,6 +600,8 @@ export function createPostgresPagesStore(db: PostgresConnection): PagesStore {
     removeDraftHostAllowances: (input) => removeDraftHostAllowances(db, input),
     putPreviewReport: (input) => putPreviewReport(db, input),
     getPreviewReport: (input) => getPreviewReport(db, input),
+    previewViewedSince: (input) => previewViewedSince(db, input),
+    takePreviewReport: (input) => takePreviewReport(db, input),
     prunePreviewReports: (input) => prunePreviewReports(db, input),
     ensurePage: (input) => ensurePage(db, input),
     createPageFileSet: (input) => createPageFileSet(db, input),

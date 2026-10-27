@@ -1,6 +1,11 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PREVIEW_REPORT_MAX_BYTES } from "@work-shape/catalyst-asset-schemas";
-import { asConversationId, isFileSetId, type PreviewReport } from "@work-shape/catalyst-core";
+import {
+  asConversationId,
+  asUserId,
+  isFileSetId,
+  type PreviewReport
+} from "@work-shape/catalyst-core";
 import { createJobWorker } from "@work-shape/catalyst-client-assembly";
 import { createChatServerJobs } from "@work-shape/catalyst-server";
 import { clientInstanceId } from "./support/access-instance";
@@ -70,12 +75,18 @@ describe("what a preview reports of itself", () => {
       params: { pageSessionId: frame.pageSessionId },
       payload: { ...frame.proof, ...body }
     });
-  const kept = (conversationId: string, fileSetId: string, notBefore = new Date(0)) => {
+  const kept = (
+    conversationId: string,
+    fileSetId: string,
+    notBefore = new Date(0),
+    userId = t.admin.id
+  ) => {
     if (!isFileSetId(fileSetId)) throw new Error("No file set id");
     return t.stores.pages.getPreviewReport({
       clientInstanceId,
       conversationId: asConversationId(conversationId),
       fileSetId,
+      userId: asUserId(userId),
       notBefore: notBefore.toISOString()
     });
   };
@@ -235,9 +246,84 @@ describe("what a preview reports of itself", () => {
         clientInstanceId,
         conversationId: asConversationId(other.conversationId),
         fileSetId: other.proof.fileSetId,
+        userId: asUserId(t.admin.id),
         report: unscrubbed(),
         reportedAt: new Date().toISOString()
       })
     ).toBe(false);
+  });
+  it("keeps each viewer's report apart, and a run takes only its own person's, once", async () => {
+    const frame = await t.openPage(t.admin.id);
+    if (!isFileSetId(frame.proof.fileSetId)) throw new Error("No file set id");
+    const conversationId = asConversationId(frame.conversationId);
+    const fileSetId = frame.proof.fileSetId;
+    const admin = { clientInstanceId, conversationId, userId: asUserId(t.admin.id) };
+    const kai = { clientInstanceId, conversationId, userId: asUserId(t.kai.id) };
+    const start = new Date(Date.now() - 1000).toISOString();
+    const clean: PreviewReport = {
+      settled: true,
+      loaded: true,
+      bridge: "connected",
+      empty: false,
+      entries: [],
+      more: 0
+    };
+    const broken: PreviewReport = {
+      ...clean,
+      entries: [{ kind: "error", message: "Uncaught TypeError: x is undefined", count: 1 }]
+    };
+    const put = (viewer: typeof admin, report: PreviewReport) =>
+      t.stores.pages.putPreviewReport({
+        ...viewer,
+        fileSetId,
+        report,
+        reportedAt: new Date().toISOString()
+      });
+
+    // Another member views the same revision: the run of the admin's turn does not see it.
+    expect(await put(kai, broken)).toBe(true);
+    expect(await t.stores.pages.previewViewedSince({ ...admin, since: start })).toBe(false);
+    expect(await t.stores.pages.takePreviewReport({ ...admin, notBefore: start })).toBeUndefined();
+    expect(
+      await t.stores.pages.takePreviewReport({ ...admin, fileSetId, notBefore: start })
+    ).toBeUndefined();
+
+    // The admin's own view is a row of its own beside it.
+    expect(await put(admin, clean)).toBe(true);
+    expect(await t.stores.pages.previewViewedSince({ ...admin, since: start })).toBe(true);
+    expect(await t.stores.pages.takePreviewReport({ ...admin, notBefore: start })).toMatchObject({
+      fileSetId,
+      number: 1,
+      report: clean
+    });
+    expect((await kept(frame.conversationId, fileSetId, new Date(0), t.kai.id))?.report).toEqual(
+      broken
+    );
+
+    // Noted once: the same report again, as after a reload, is not noted again; a new one is.
+    expect(await t.stores.pages.takePreviewReport({ ...admin, notBefore: start })).toBeUndefined();
+    await put(admin, clean);
+    expect(await t.stores.pages.takePreviewReport({ ...admin, notBefore: start })).toBeUndefined();
+    await put(admin, broken);
+    expect(
+      (await t.stores.pages.takePreviewReport({ ...admin, notBefore: start }))?.report
+    ).toEqual(broken);
+    // The open of a revision reads its report, noted or not; an unsettled one it does not take.
+    expect(
+      (await t.stores.pages.takePreviewReport({ ...admin, fileSetId, notBefore: start }))?.report
+    ).toEqual(broken);
+    await put(admin, { ...clean, settled: false });
+    expect(
+      await t.stores.pages.takePreviewReport({ ...admin, fileSetId, notBefore: start })
+    ).toBeUndefined();
+
+    // Kai's report goes with the conversation as the admin's does.
+    expectStatus(
+      await t.call(t.admin.id, "conversations.delete", {
+        params: { conversationId: frame.conversationId }
+      }),
+      200
+    );
+    expect(await kept(frame.conversationId, fileSetId, new Date(0), t.kai.id)).toBeUndefined();
   });
 });
