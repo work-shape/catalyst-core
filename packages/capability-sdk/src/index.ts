@@ -1,6 +1,7 @@
 import {
   AppError,
   ATTACHMENT_CREATE_OUTCOMES,
+  type AssetScope,
   defineJobHandler,
   defineJobKind,
   isAppError,
@@ -161,6 +162,8 @@ export interface ClientInstanceCapabilityPlatformStores {
   configAssets: Pick<ConfigAssetStore, "listPublishedConfigAssets">;
   /** The capability's own records. It reaches no other capability's. */
   records: ClientInstanceCapabilityRecords;
+  /** The published revisions of the asset kinds the capability brings, and of no other kind. */
+  assets: ClientInstanceCapabilityAssets;
   /** The Operation Runs of the operations the capability contributes, and no others. */
   operationRuns: ClientInstanceCapabilityOperationRuns;
   /**
@@ -197,8 +200,61 @@ export type ClientInstanceCapabilityRecords = {
 };
 export type { CapabilityRecord };
 
+/** An asset of a kind the capability brings, as its published revision holds it. */
+export interface CapabilityPublishedAsset {
+  id: string;
+  kind: string;
+  name: string;
+  /** The owner: the instance, or one workspace. */
+  scope: AssetScope;
+  revision: number;
+  /** The config of the published revision. */
+  config: JsonObject;
+  /** The file set of the published revision, for a kind whose revisions hold files. */
+  fileSetId?: string;
+}
+
+/** One source file of a revision of an asset. */
+export interface CapabilityAssetFile {
+  /** Relative to the asset's folder, with `/` between segments. */
+  path: string;
+  bytes: Uint8Array;
+}
+
+/**
+ * The published revisions of the asset kinds a capability brings (EW-9c), such as a form page
+ * whose files the capability hands to a host of its own. A kind it does not bring is refused.
+ */
+export interface ClientInstanceCapabilityAssets {
+  /**
+   * The assets of the kind that have a published revision, in the byte order of their names:
+   * at most `limit`, after `afterName` where it is given, only those of `names` where given.
+   */
+  listPublished(input: {
+    kind: string;
+    names?: readonly string[];
+    afterName?: string;
+    limit: number;
+  }): Promise<CapabilityPublishedAsset[]>;
+  /**
+   * The source files of one file set of the asset, each checked against the hash its file set
+   * holds. Refused for a file set of another asset.
+   */
+  readFiles(input: {
+    kind: string;
+    name: string;
+    fileSetId: string;
+  }): Promise<CapabilityAssetFile[]>;
+}
+
 export interface ClientInstanceCapabilityOperationRuns {
   get(id: OperationRunId): Promise<OperationRun | undefined>;
+  /**
+   * The Workflow whose step started a run of the capability's own operations, by its name, with
+   * the owner of that Workflow: what a step's input is read against, such as a workspace's
+   * default. `undefined` for a run no Workflow step started.
+   */
+  workflowOf(id: OperationRunId): Promise<{ name: string; scope: AssetScope } | undefined>;
   /**
    * Ends a run of one of the capability's own operations with `completion: async` that is
    * still `running`. The transaction that ends it queues every Workflow step that waits for

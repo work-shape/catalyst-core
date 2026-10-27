@@ -294,22 +294,6 @@ export interface WorkflowAssetKind
     stores: PlatformStores;
   }): Promise<void>;
   /**
-   * The config a revision holds, made from the manifest its build validated. A kind whose
-   * revisions hold files brings it: only the kind knows what its config is beside the manifest.
-   */
-  configOfFiles?(input: {
-    name: string;
-    manifest: JsonObject;
-    /** The config of the draft the write replaces, where there is one. */
-    current?: JsonObject;
-  }): Record<string, unknown>;
-  /**
-   * Reads the source files of a write into the manifest of their file set, for a kind whose
-   * files are not built as a Page: nothing is bundled, and the set holds the source files
-   * alone. Throws `VALIDATION_FAILED` for files it refuses.
-   */
-  manifestOfFiles?(files: readonly { path: string; bytes: Uint8Array }[]): JsonObject;
-  /**
    * Set by a kind whose revision is a config and may hold files beside it: the config stays
    * the one place its text is read from, and the files the config cannot hold are kept in a
    * file set the revision names. Such a kind is written as its config or as its whole folder

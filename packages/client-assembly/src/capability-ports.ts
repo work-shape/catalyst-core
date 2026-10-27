@@ -1,10 +1,16 @@
+import { sha256Hex } from "@work-shape/catalyst-core/sha256";
 import {
   AppError,
+  fileSetFileObjectKey,
+  isFileSetId,
+  readObjectBytes,
   type ClientInstanceId,
+  type ObjectStorage,
   type OperationRunId,
   type PlatformStores
 } from "@work-shape/catalyst-core";
 import type {
+  ClientInstanceCapabilityAssets,
   ClientInstanceCapabilityBrand,
   ClientInstanceCapabilityMail,
   ClientInstanceCapabilityPlatformStores,
@@ -20,20 +26,33 @@ import { createInlineImageLoader, type MailSender } from "@work-shape/catalyst-m
 
 // The ports one capability gets of the platform's records (ADR-0033): its own records, the
 // Operation Runs of its own operations, the files of the Workflow runs those serve, the
-// instance's mailer and how the instance presents itself outside.
+// published revisions of its own asset kinds, the instance's mailer and how the instance
+// presents itself outside.
+
+type ScopedStores = Pick<
+  ClientInstanceCapabilityPlatformStores,
+  "records" | "operationRuns" | "runFiles" | "assets"
+>;
 
 export function capabilityStoresOf(input: {
   clientInstanceId: ClientInstanceId;
   capability: string;
-  store: Pick<PlatformStores, "capabilityRecords" | "operationRuns" | "workflowRuns">;
+  store: Pick<
+    PlatformStores,
+    "capabilityRecords" | "operationRuns" | "workflowRuns" | "configAssets" | "pages"
+  >;
   /** The capability's async operations, known once it is created. */
   operations: () => ReadonlySet<string>;
+  /** The asset kinds the capability brings, known once it is created; none where absent. */
+  kinds?: () => ReadonlySet<string>;
+  /** The `files` object store, where the instance has one: the file sets of assets lie there. */
+  objects?: ObjectStorage;
   /**
    * The files of Workflow runs, once the process has its store of files. Absent where the
    * instance runs no Workflows or keeps no files: the capability then gets no `runFiles`.
    */
   runFiles?: () => WorkflowRunFiles | undefined;
-}): Pick<ClientInstanceCapabilityPlatformStores, "records" | "operationRuns" | "runFiles"> {
+}): ScopedStores {
   const { clientInstanceId, capability, store } = input;
   const own = { clientInstanceId, capability };
   const records: ClientInstanceCapabilityRecords = {
@@ -48,10 +67,87 @@ export function capabilityStoresOf(input: {
     const run = await store.operationRuns.get({ clientInstanceId, id });
     return run && input.operations().has(run.operation) ? run : undefined;
   }
+  function requireOwnKind(kind: string) {
+    if (!input.kinds?.().has(kind)) {
+      throw new AppError("FORBIDDEN", `The capability brings no asset kind '${kind}'`);
+    }
+  }
+  const assets: ClientInstanceCapabilityAssets = {
+    async listPublished({ kind, names, afterName, limit }) {
+      requireOwnKind(kind);
+      const found = await store.configAssets.listPublishedConfigAssets({
+        clientInstanceId,
+        kind,
+        ...(names ? { names } : {}),
+        ...(afterName === undefined ? {} : { afterName }),
+        limit
+      });
+      return found.flatMap((asset) =>
+        asset.publishedRevision === undefined || asset.publishedConfig === undefined
+          ? []
+          : [
+              {
+                id: asset.id,
+                kind: asset.kind,
+                name: asset.name,
+                scope: asset.scope,
+                revision: asset.publishedRevision,
+                config: asset.publishedConfig,
+                ...(asset.publishedFileSetId ? { fileSetId: asset.publishedFileSetId } : {})
+              }
+            ]
+      );
+    },
+    async readFiles({ kind, name, fileSetId }) {
+      requireOwnKind(kind);
+      const asset = await store.configAssets.getConfigAsset({ clientInstanceId, kind, name });
+      const fileSet =
+        asset?.status === "active" && isFileSetId(fileSetId)
+          ? await store.pages.getAssetFileSet({ clientInstanceId, assetId: asset.id, fileSetId })
+          : undefined;
+      if (!fileSet) {
+        throw new AppError("NOT_FOUND", `No file set of ${kind} '${name}' has this id`);
+      }
+      const objects = input.objects;
+      if (!objects) {
+        throw new AppError("CONFLICT", "This instance has no store of files", {
+          reason: "files_unavailable"
+        });
+      }
+      return Promise.all(
+        fileSet.sourceFiles.map(async (file) => {
+          const bytes = await readObjectBytes(
+            objects,
+            fileSetFileObjectKey(fileSet.owner, fileSet.id, "src", file.path)
+          );
+          if (bytes.byteLength !== file.bytes || sha256Hex(bytes) !== file.sha256) {
+            throw new AppError("INTERNAL", "A stored file does not match its file set");
+          }
+          return { path: file.path, bytes };
+        })
+      );
+    }
+  };
   return {
     records,
+    assets,
     operationRuns: {
       get: ownRun,
+      async workflowOf(id) {
+        const run = await ownRun(id);
+        if (run?.origin.kind !== "workflow") return undefined;
+        const workflowRun = await store.workflowRuns.readRun({
+          clientInstanceId,
+          id: run.origin.workflowRunId
+        });
+        if (!workflowRun) return undefined;
+        const workflow = await store.configAssets.getConfigAsset({
+          clientInstanceId,
+          kind: "workflow",
+          name: workflowRun.workflow
+        });
+        return workflow ? { name: workflow.name, scope: workflow.scope } : undefined;
+      },
       async finish({ id, end }) {
         if (end.status !== "done" && end.status !== "failed") {
           throw new AppError("VALIDATION_FAILED", "A capability ends its runs as done or failed");

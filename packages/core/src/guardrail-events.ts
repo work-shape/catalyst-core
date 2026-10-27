@@ -16,6 +16,7 @@ export const GUARDRAIL_EVENTS = [
   "agent.before_publish",
   "workflow.before_publish",
   "data_store.before_publish",
+  "form_page.before_publish",
   "approval_request.before_create"
 ] as const;
 export type GuardrailEvent = (typeof GUARDRAIL_EVENTS)[number];

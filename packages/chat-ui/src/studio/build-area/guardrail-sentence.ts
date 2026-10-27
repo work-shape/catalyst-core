@@ -60,7 +60,8 @@ const ORIGIN_PHRASES: Record<string, TranslationKey> = {
 const PUBLISH_EVENTS: Record<string, TranslationKey> = {
   "app.before_publish": "guardrails.runs.appPublish",
   "workflow.before_publish": "guardrails.runs.workflowPublish",
-  "data_store.before_publish": "guardrails.runs.dataStorePublish"
+  "data_store.before_publish": "guardrails.runs.dataStorePublish",
+  "form_page.before_publish": "guardrails.runs.formPagePublish"
 };
 
 const OUTCOMES_ON_CHECK: Record<GuardrailOutcomeName, TranslationKey> = {

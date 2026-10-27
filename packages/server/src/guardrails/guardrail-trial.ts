@@ -151,14 +151,16 @@ const ASSET_EVENTS: readonly GuardrailEvent[] = [
   "asset.before_write",
   "app.before_publish",
   "workflow.before_publish",
-  "data_store.before_publish"
+  "data_store.before_publish",
+  "form_page.before_publish"
 ];
 
 /** The kind a publish event is about. */
 const PUBLISH_KINDS: Partial<Record<GuardrailEvent, string>> = {
   "app.before_publish": "app",
   "workflow.before_publish": "workflow",
-  "data_store.before_publish": "data_store"
+  "data_store.before_publish": "data_store",
+  "form_page.before_publish": "form_page"
 };
 
 /**

@@ -55,6 +55,7 @@ export const GUARDRAIL_CHECKABLE_FIELDS = {
   "agent.before_publish": ["name", "content"],
   "workflow.before_publish": ["name", "content"],
   "data_store.before_publish": ["name", "content"],
+  "form_page.before_publish": ["name", "content"],
   "approval_request.before_create": ["summary", "newContent"]
 } as const satisfies Record<GuardrailEvent, readonly string[]>;
 
@@ -71,6 +72,7 @@ export const GUARDRAIL_FILTER_KEYS = {
   "agent.before_publish": ["origin", "agent", "workspace"],
   "workflow.before_publish": ["origin", "agent", "workspace"],
   "data_store.before_publish": ["origin", "agent", "workspace"],
+  "form_page.before_publish": ["origin", "agent", "workspace"],
   "approval_request.before_create": ["kind"]
 } as const satisfies Record<GuardrailEvent, readonly (keyof GuardrailFilter)[]>;
 
@@ -88,7 +90,7 @@ export type GuardrailOutcome = (typeof GUARDRAIL_OUTCOMES)[number];
 
 /**
  * The events where something can wait for an approval: a call of an operation, which an
- * asset write and the publish of an App, a Workflow or a Data Store are too. A request for an approval
+ * asset write and the publish of an App, a Workflow, a Data Store or a form page are too. A request for an approval
  * cannot wait for another.
  */
 export const GUARDRAIL_APPROVAL_EVENTS = [
@@ -97,7 +99,8 @@ export const GUARDRAIL_APPROVAL_EVENTS = [
   "app.before_publish",
   "agent.before_publish",
   "workflow.before_publish",
-  "data_store.before_publish"
+  "data_store.before_publish",
+  "form_page.before_publish"
 ] as const satisfies readonly GuardrailEvent[];
 
 /**

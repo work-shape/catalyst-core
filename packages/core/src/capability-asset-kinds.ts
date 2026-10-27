@@ -76,6 +76,22 @@ export interface CapabilityAssetKindChecks {
     confirmProcessing?: string;
     stores: PlatformStores;
   }): Promise<void>;
+  /**
+   * The config a revision holds, made from the manifest its build validated. A kind whose
+   * revisions hold files brings it: only the kind knows what its config is beside the manifest.
+   */
+  configOfFiles?(input: {
+    name: string;
+    manifest: JsonObject;
+    /** The config of the draft the write replaces, where there is one. */
+    current?: JsonObject;
+  }): Record<string, unknown>;
+  /**
+   * Reads the source files of a write into the manifest of their file set, for a kind whose
+   * files are not built as a Page: nothing is bundled, and the set holds the source files
+   * alone. Throws `VALIDATION_FAILED` for files it refuses.
+   */
+  manifestOfFiles?(files: readonly { path: string; bytes: Uint8Array }[]): JsonObject;
 }
 
 /**
