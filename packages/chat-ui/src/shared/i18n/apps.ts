@@ -483,7 +483,7 @@ export const apps = defineTranslations({
     "apps.publishTogetherWorkflow": "Workflow „{title}“",
     "apps.publishTogetherNew": "Neu",
     "apps.publishTogetherChanged": "Geändert",
-    "apps.publishTogetherUpdating": "Wird umgestellt",
+    "apps.publishTogetherUpdating": "Wird aktualisiert",
     "apps.publishTogetherChangedBy": "Zuletzt geändert von {name}",
     "apps.publishTogetherLastTest": "Letzter Testlauf",
     "apps.publishTogetherNotTested": "Noch nicht getestet",

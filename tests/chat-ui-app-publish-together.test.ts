@@ -3,6 +3,9 @@ import { describe, expect, it } from "vitest";
 import {
   appManifestSummary,
   appPublishCall,
+  appPublishConfirmationReady,
+  appPublishConfirmationTogether,
+  AppPublishConfirmationView,
   appPublishTogetherNamed,
   PublishDialog
 } from "@work-shape/catalyst-chat-ui/apps";
@@ -262,7 +265,7 @@ describe("GOLIVE-1: the App's Publish question names the Data Stores it publishe
     };
     const markup = dialog(ready([], [updating]), "de");
     expect(markup).toContain("Datenspeicher „Kunden“");
-    expect(markup).toContain("Wird umgestellt");
+    expect(markup).toContain("Wird aktualisiert");
     expect(markup).not.toContain("Geändert");
     expect(held(markup)).toBe(false);
     expect(appPublishTogetherNamed(ready([], [updating, store]))).toEqual({
@@ -283,6 +286,109 @@ describe("GOLIVE-1: the App's Publish question names the Data Stores it publishe
         }
       })
     ).toMatchObject({ workflows: [], dataStores: ["pruefergebnisse"] });
+  });
+});
+
+describe("GOLIVE-1: the agent's App publish shows the bound stores still being updated", () => {
+  const updating: Store = {
+    ...store,
+    name: "kunden",
+    title: "Kunden",
+    publishedRevision: 3,
+    pending: false
+  };
+  // A store whose draft is not published, which this publish does not name.
+  const unrelated: Store = { ...store, name: "notizen", title: "Notizen" };
+  const call = (dataStores: string[] = [], workflows: string[] = []) => ({
+    dataStores,
+    workflows
+  });
+  const confirmation = (together: Together, locale: "en" | "de" = "en") =>
+    render(
+      createElement(AppPublishConfirmationView, {
+        offer: {
+          selected: "workspace",
+          choices: ["self", "workspace"],
+          label: "Everyone in Sales"
+        },
+        selected: "workspace",
+        workspaceName: "Sales",
+        narrative: { status: "ready", narrative: { summary: "Visits opens.", warnings: [] } },
+        storedData: undefined,
+        together,
+        disabled: false,
+        onChange: noop
+      }),
+      locale
+    );
+  const allowed = (together: Together) =>
+    appPublishConfirmationReady({
+      offer: { selected: "workspace", choices: ["workspace"], label: "Everyone in Sales" },
+      selected: "workspace",
+      narrative: { status: "ready", narrative: { summary: "Visits opens.", warnings: [] } },
+      readsStoredData: false,
+      storedData: { status: "loading" },
+      together
+    });
+
+  it("shows a live store still being updated where the agent names no store, and nothing else", () => {
+    const together = appPublishConfirmationTogether(call(), ready([parent], [updating, unrelated]));
+    expect(together.workflows).toEqual([]);
+    expect(together.dataStores.map(({ name }) => name)).toEqual(["kunden"]);
+
+    const markup = confirmation(together);
+    expect(markup).toContain("Published with it");
+    expect(markup).toContain("Data store “Kunden”");
+    expect(markup).toContain("Being updated");
+    expect(markup).not.toContain("Notizen");
+    expect(markup).not.toContain("Visit log");
+    const german = confirmation(together, "de");
+    expect(german).toContain("Datenspeicher „Kunden“");
+    expect(german).toContain("Wird aktualisiert");
+    expect(german).not.toContain("Wird umgestellt");
+    expect(allowed(together)).toBe(true);
+  });
+
+  it("shows nothing where the App binds no store being updated and the agent names none", () => {
+    const together = appPublishConfirmationTogether(call(), ready([parent], [unrelated]));
+    expect(together).toMatchObject({ status: "ready", workflows: [], dataStores: [] });
+    expect(confirmation(together)).not.toContain("Published with it");
+    expect(allowed(together)).toBe(true);
+  });
+
+  it("keeps the store and Workflow the agent names, with the revision the review shows", () => {
+    const together = appPublishConfirmationTogether(
+      call(["pruefergebnisse"], ["visit-log"]),
+      ready([child, parent], [store, updating, unrelated])
+    );
+    expect(together.dataStores.map(({ name }) => name)).toEqual(["pruefergebnisse", "kunden"]);
+    expect(appPublishTogetherNamed(together)).toEqual({
+      workflows: [{ name: "visit-log", revision: 1 }],
+      dataStores: [{ name: "pruefergebnisse", revision: 3 }]
+    });
+    const markup = confirmation(together);
+    expect(markup).toContain("1 new change to its tables");
+    expect(markup).toContain("Being updated");
+  });
+
+  it("holds Allow while the App's review loads, and offers to read it again where it failed", () => {
+    const loading = appPublishConfirmationTogether(call(), {
+      status: "loading",
+      workflows: [],
+      dataStores: [],
+      retry: noop
+    });
+    expect(allowed(loading)).toBe(false);
+    const failed = appPublishConfirmationTogether(call(), {
+      status: "failed",
+      workflows: [],
+      dataStores: [],
+      retry: noop
+    });
+    expect(allowed(failed)).toBe(false);
+    const markup = confirmation(failed);
+    expect(markup).toContain("What is published with the app could not be read.");
+    expect(markup).toContain("Try again");
   });
 });
 
