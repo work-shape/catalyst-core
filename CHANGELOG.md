@@ -7,6 +7,37 @@ The entries of the next release are files in `changes/unreleased/`, one per chan
 adds such a file and does not edit this one (see "Changelog" in README.md). The release folds them
 in, and `pnpm changelog` prints the next release's section as it will read.
 
+## 0.8.0-rc.15 — 2026-10-27
+
+### Added
+
+- A capability's asset kind can read its own files into its manifest and config, and its kind's publish can carry a guardrail: `form_page.before_publish` is the first, for the form pages of outside forms.
+- Capabilities reach the published revisions and files of the asset kinds they bring, and the scope of the Workflow an Operation Run serves.
+- The shipped guardrail "Publishing needs an instance admin's approval" holds a form page's publish as a `form_page_publish` request, which a holder of `app.approve` decides.
+- A Page or App draft preview reports on itself to its conversation. The report says whether the frame loaded, whether the kit greeted within 5 seconds, and whether the page drew anything. It lists uncaught errors, unhandled rejections, `console.error` calls, content policy violations, and failed calls by action name and refusal code. Each report holds at most 10 distinct entries with counts, 200 characters per message and 2 KB in all. Quoted text over 24 characters, digit runs, address queries, mail addresses and IBANs are scrubbed in the browser and again on the server. No audit event, log line or Operation Run holds a report. Only the latest report per conversation and file set is kept, for 24 hours.
+
+### Changed
+
+- Workshaper hands over at the end of a build step in up to four short parts: what is done, the person's one next step, what it does next, and what must be settled and by whom. The person's step is a card or a link to the place, never a click path in words; a publish step ends with the publish card, which carries the App's pending Workflows and Data Stores, and Workshaper carries on once it is answered. It names a need only an administrator or Workshape can meet before it starts building.
+
+### Fixed
+
+- Check an App's stored files, bound Data Stores, SQL action rights and Workflow contracts before publishing its named Data Stores. A refusal from these pre-checks leaves the stores unchanged. The checks use the named revisions and run again when the App goes live.
+- Check only rendered mail fields when testing notice digests for sensitive content, avoiding false failures from random message identifiers.
+- **Apps:** At a phone's width the draft's head of a published App showed neither "Live: version n" nor "Draft: changed since version n": the head gave the state up for its buttons. The state now keeps its own line above the tabs there, as the state of an App never published did, and stands at the end of the tab row on a wide screen for every App alike.
+- **Apps:** History no longer counts a save that became a version as a draft save too. An App saved once and published once shows "Version 1" alone; under each version are only the saves made after it, and a publish of an earlier version again is its own version, with "Publish again" on an earlier one. The list and the draft head name the same states the same way: "Draft · not published" and "Draft: changed" in place of "Draft only" and "Unpublished changes", and the draft line says "Version 4 published by …" instead of "Published by …".
+- Creating a personal API key or confirming a CLI connect code now says, beside the choice to use Connections, that the results of these calls are copied to the computer that holds the key. The choice stays off by default.
+- A Workflow test run started with a personal API key now says in its own words why it stopped: the key was revoked or expired, the key lacks a right the person holds, or the step needs a right no key can carry. Each says what to do next, in English and German.
+- **Apps:** Checkout previews name the App for readers without write access and keep save actions for writers. Previews of unreadable Apps show a neutral state without revealing the App's name or claiming it is unsaved.
+- Align publish tool guidance with the build handover: offer the confirmation card at the end of a build step that leads to going live, and include pending Data Stores alongside Workflows when publishing an App.
+- Outside-start publish refusals name only readable Connections, Knowledge Bases and child Workflows, and operations from readable definitions; they count the rest. An outside client reads a child run under an outside-started root with its existing run-data rights, and only where it started the root or may read the root's run data. A Workflow step refused for Connection exposure points to the exposure setting instead of asking for a grant.
+- Only a person signed in to Catalyst publishes a Workflow that outside clients (CLI, MCP) can start, or one that reads data not open to them. A personal API key, a Service Principal's credential or a run is refused with `outside_switch_person_only` when the revision has that switch on, also where the published revision has it on already, and with `reach_person_only` when the revision, through its child Workflows too, calls a Connection operation not exposed to outside clients, reads a Knowledge Base or calls another closed operation, whatever the switch says. The refusal names only what the publisher may read. A key still writes drafts, and publishes a Workflow whose reach is open to outside clients with the switch off. Before, a key that may publish Workflows could publish a Workflow copying a Connection's data into a Data Store, or re-publish a child an outside Workflow starts, and read through an outside Workflow data the Connection keeps from outside clients.
+
+### Database
+
+- Migration 0159 adds `preview_reports`: one report per conversation and file set. Rows are removed with their conversation or file set, and an hourly job deletes rows older than 24 hours.
+- A Workflow run key is held per starter: the person, each of their API keys, or the Service Principal that started the run; a child run holds its key for its root's starter. A start with a key another starter holds is a new run, answered exactly as a key no run holds, so a key no longer tells whether someone else uses it. A repeat by the same starter still answers its run. Migration `0160_workflow_run_keys_per_starter` replaces the run key's unique index with one per starter, built concurrently.
+
 ## 0.8.0-rc.14 — 2026-10-27
 
 ### Added
