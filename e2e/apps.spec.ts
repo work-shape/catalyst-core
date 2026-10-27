@@ -288,7 +288,7 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   };
   await memberListReady();
   await expect(memberArea).toContainText(appName);
-  await expect(memberArea).not.toContainText("Unpublished changes");
+  await expect(memberArea).not.toContainText("Draft: changed");
   // The App is a card with one main action. The id and the way to the draft are a builder's,
   // and the menu holds what a member does beside opening.
   const memberCard = memberArea.getByRole("listitem").filter({ hasText: appName });

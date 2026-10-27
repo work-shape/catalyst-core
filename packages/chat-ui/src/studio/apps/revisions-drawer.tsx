@@ -195,6 +195,20 @@ export function RevisionsDrawerView({
       : undefined;
   // The newest version is the live one while something is published.
   const liveNumber = publishedRevision === undefined ? undefined : publications?.[0]?.number;
+  // A draft gone back to an earlier version is marked on the newest version of it.
+  const draftNumber =
+    draftRevision === publishedRevision
+      ? undefined
+      : publications?.find(({ revision }) => revision === draftRevision)?.number;
+  // A version's save is its row, not a draft save: publishing it again goes from there.
+  const publishable = (revision: ConfigAssetRevision | undefined) =>
+    // A revision that holds nothing, as a delete leaves it, cannot be served.
+    onPublish !== undefined &&
+    revision !== undefined &&
+    revision.revision !== publishedRevision &&
+    revision.config !== null
+      ? revision
+      : undefined;
   const saveRows = (saves: readonly ConfigAssetRevision[]) => (
     <List className="-mx-2">
       {saves.map((revision) => (
@@ -214,9 +228,8 @@ export function RevisionsDrawerView({
           descriptionWraps
           actionsVisible
           actions={
-            // A revision that holds nothing, as a delete leaves it, cannot be served.
-            onPublish && revision.revision !== publishedRevision && revision.config !== null ? (
-              <Button variant="ghost" size="sm" onClick={() => onPublish(revision)}>
+            publishable(revision) ? (
+              <Button variant="ghost" size="sm" onClick={() => onPublish?.(revision)}>
                 {t("apps.publishThisRevision")}
               </Button>
             ) : undefined
@@ -263,40 +276,55 @@ export function RevisionsDrawerView({
         ) : (
           // The rows bring their own inset: pulled out by it, their text shares the title's edge.
           <ol aria-label={t("apps.revisions")} className="-mx-2 grid gap-1">
-            {history.versions.map(({ publication, saves }) => (
-              <li key={publication.number} data-version={publication.number} className="grid">
-                <List>
-                  <ListRow
-                    title={t("apps.version", { number: publication.number })}
-                    chips={
-                      publication.number === liveNumber ? (
-                        <Badge tone="success" size="sm">
-                          {t("apps.publishedBadge")}
-                        </Badge>
-                      ) : null
-                    }
-                    description={[
-                      publication.actor
-                        ? t("apps.versionPublishedBy", {
-                            name: personName(publication.actor.displayLabel, t),
-                            date: formatMomentShort(publication.publishedAt, locale)
-                          })
-                        : t("apps.versionPublished", {
-                            date: formatMomentShort(publication.publishedAt, locale)
-                          }),
-                      ...(publication.note ? [publication.note] : [])
-                    ].join(" · ")}
-                    descriptionWraps
-                  />
-                </List>
-                {folded(
-                  saves.length === 1
-                    ? t("apps.savesOne")
-                    : t("apps.saves", { count: saves.length }),
-                  saves
-                )}
-              </li>
-            ))}
+            {history.versions.map(({ publication, saves }) => {
+              const again = publishable(
+                revisions?.find(({ revision }) => revision === publication.revision)
+              );
+              return (
+                <li key={publication.number} data-version={publication.number} className="grid">
+                  <List>
+                    <ListRow
+                      title={t("apps.version", { number: publication.number })}
+                      chips={
+                        publication.number === liveNumber ? (
+                          <Badge tone="success" size="sm">
+                            {t("apps.publishedBadge")}
+                          </Badge>
+                        ) : publication.number === draftNumber ? (
+                          <Badge size="sm">{t("apps.draft")}</Badge>
+                        ) : null
+                      }
+                      description={[
+                        publication.actor
+                          ? t("apps.versionPublishedBy", {
+                              name: personName(publication.actor.displayLabel, t),
+                              date: formatMomentShort(publication.publishedAt, locale)
+                            })
+                          : t("apps.versionPublished", {
+                              date: formatMomentShort(publication.publishedAt, locale)
+                            }),
+                        ...(publication.note ? [publication.note] : [])
+                      ].join(" · ")}
+                      descriptionWraps
+                      actionsVisible
+                      actions={
+                        again ? (
+                          <Button variant="ghost" size="sm" onClick={() => onPublish?.(again)}>
+                            {t("apps.publishThisVersion")}
+                          </Button>
+                        ) : undefined
+                      }
+                    />
+                  </List>
+                  {folded(
+                    saves.length === 1
+                      ? t("apps.savesOne")
+                      : t("apps.saves", { count: saves.length }),
+                    saves
+                  )}
+                </li>
+              );
+            })}
             {history.before.length > 0 ? (
               <li className="grid">
                 {folded(

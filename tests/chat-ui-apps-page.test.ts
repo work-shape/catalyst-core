@@ -103,13 +103,13 @@ describe("the Apps page", () => {
     // The list is the one of the open workspace: no row names it.
     expect(markup).not.toContain("Nordlicht Beratung");
     expect(markup).toContain(">Published<");
-    expect(markup).toContain("Unpublished changes");
+    expect(markup).toContain("Draft: changed");
     expect(markup).toContain('href="/w/cw_1/apps/angebotsrechner"');
     expect(markup).toContain('aria-label="Actions for Angebotsrechner"');
     // No card shows an App's id: an App without a name goes by it as its title alone. One
     // without a publish opens its draft.
     expect(markup).not.toContain("font-mono");
-    expect(markup).toContain("Draft only");
+    expect(markup).toContain("Draft · not published");
     expect(markup).toContain('href="/w/cw_1/app-drafts/urlaubsplaner"');
   });
 
@@ -149,7 +149,7 @@ describe("the Apps page", () => {
     // The menu keeps what a member may do beside opening: copying the link.
     expect(memberCards[0]).toContain('aria-label="Actions for Angebotsrechner"');
     // Nothing is published of the second one: its card says so and opens nothing.
-    expect(memberCards[1]).toContain("Draft only");
+    expect(memberCards[1]).toContain("Draft · not published");
     expect(memberCards[1]).not.toContain("<a ");
     expect(memberCards[1]).not.toContain("<button");
     expect(memberCards[1]).not.toContain('data-card-target=""');
@@ -167,7 +167,7 @@ describe("the Apps page", () => {
     const markup = render(appsPage([summary()], { ...NO_APP_RIGHTS, publish: true }));
 
     expect(markup).toContain(">Published<");
-    expect(markup).not.toContain("Unpublished changes");
+    expect(markup).not.toContain("Draft: changed");
   });
 
   it("shows whoever only uses Apps the App, without its revision, its id or its workspace", () => {
@@ -196,7 +196,7 @@ describe("the Apps page", () => {
       appsPage([summary({ publishedRevision: undefined, draftRevision: undefined })], NO_APP_RIGHTS)
     );
 
-    expect(markup).toContain("Draft only");
+    expect(markup).toContain("Draft · not published");
   });
 
   it("tells a builder how an App comes to be, with the agent and two examples", () => {

@@ -125,7 +125,7 @@ export function AppStateBadge({
     </Badge>
   ) : (
     <Badge tone="neutral" size="sm" dot>
-      {t("apps.draftOnly")}
+      {t("apps.draftNotPublished")}
     </Badge>
   );
 }

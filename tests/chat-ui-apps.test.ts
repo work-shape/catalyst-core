@@ -451,10 +451,10 @@ describe("the draft of an App (layout 3)", () => {
 
     expect(headed(live)).toContain("Live: version 4 · since Oct 12");
     expect(draftLine(headed(live))).toBe(
-      "Draft · reads live data · changes are simulated · Published by Anna Beispiel"
+      "Draft · reads live data · changes are simulated · Version 4 published by Anna Beispiel"
     );
     expect(draftLine(headed(live, "de"))).toBe(
-      "Entwurf · liest Live-Daten · Änderungen werden simuliert · Veröffentlicht von Anna Beispiel"
+      "Entwurf · liest Live-Daten · Änderungen werden simuliert · Version 4 veröffentlicht von Anna Beispiel"
     );
     // A version without a person, as one from before versions were recorded, names nobody.
     expect(
@@ -667,16 +667,48 @@ describe("the history of an App", () => {
     );
 
   it("folds the saves under the version each came after, the newest version first", () => {
+    // Revisions 1 and 3 are versions: neither is also a draft save. The way back to revision 1
+    // is version 3 of its own, and the save that became version 2 is not folded under 1.
     expect(appHistory(publications, revisions, true)).toEqual({
       versions: [
         { publication: publications[0], saves: [revisions[0]] },
         { publication: publications[1], saves: [revisions[1]] },
-        { publication: publications[2], saves: [revisions[2], revisions[3]] }
+        { publication: publications[2], saves: [revisions[3]] }
       ],
-      before: [revisions[4]]
+      before: []
     });
     // A save older than every version read waits for the versions further back.
     expect(appHistory(publications.slice(0, 2), revisions, false).before).toEqual([]);
+  });
+
+  it("reads one save published once as version 1 alone", () => {
+    expect(appHistory([publication(1, 1, 1)], [revision(1)], true)).toEqual({
+      versions: [{ publication: publication(1, 1, 1), saves: [] }],
+      before: []
+    });
+  });
+
+  it("folds under each version only the saves after it, and keeps earlier saves before 1", () => {
+    // Saved 1, 2 and 3; published 2 as version 1 and 4 as version 2; saved 5 since.
+    const second = [publication(2, 4, 4), publication(1, 2, 2)];
+    const saves = [revision(5), revision(4), revision(3), revision(2), revision(1)];
+    expect(appHistory(second, saves, true)).toEqual({
+      versions: [
+        { publication: second[0], saves: [saves[0]] },
+        { publication: second[1], saves: [saves[2]] }
+      ],
+      before: [saves[4]]
+    });
+  });
+
+  it("reads a revert as a version of its own, with the saves after it under it", () => {
+    // Published 1, then 2, then 1 again; saved 3 since.
+    const reverted = [publication(3, 1, 3), publication(2, 2, 2), publication(1, 1, 1)];
+    const saves = [revision(4), revision(2), revision(1)];
+    const history = appHistory(reverted, saves, true);
+    expect(history.versions.map(({ publication: { number } }) => number)).toEqual([3, 2, 1]);
+    expect(history.versions.map(({ saves: folded }) => folded)).toEqual([[saves[0]], [], []]);
+    expect(history.before).toEqual([]);
   });
 
   it("names each version, who published it and when, and the saves after it, without a revision number", () => {
@@ -693,9 +725,10 @@ describe("the history of an App", () => {
     expect(markup).toContain("Published by Jana Petersen · ");
     // The version from before versions were recorded names nobody.
     expect(markup).toMatch(/data-version="1"(?:(?!data-version).)*Published · /u);
-    expect(markup.match(/>1 draft save</gu)).toHaveLength(2);
-    expect(markup).toContain(">2 draft saves<");
-    expect(markup).toContain(">1 draft save before version 1<");
+    expect(markup.match(/>1 draft save</gu)).toHaveLength(3);
+    expect(markup).not.toContain("before version 1");
+    // A save a version made live is that version's row, not a draft save as well.
+    expect(markup).not.toMatch(/data-revision="[13]"/u);
     expect(markup).toContain("Workshaper for Jana Petersen");
     expect(markup).toMatch(/data-revision="2"(?:(?!data-revision).)*Saved from the preview/u);
     expect(markup).toMatch(/data-revision="5"(?:(?!data-revision).)*>Draft</u);
@@ -703,18 +736,44 @@ describe("the history of an App", () => {
     expect(markup).not.toContain("Publish this save");
     const german = drawer(undefined, "de");
     expect(german).toContain("Veröffentlicht von Jana Petersen · ");
-    expect(german).toContain(">2 Entwurfsstände<");
-    expect(german).toContain(">1 Entwurfsstand vor Version 1<");
+    expect(german).toContain(">1 Entwurfsstand<");
     expect(german).toContain("Workshaper für Jana Petersen");
     expect(german).toContain("Aus der Vorschau gespeichert");
   });
 
-  it("lets a holder of the publish right publish every save but the live one", () => {
+  it("lets a holder of the publish right publish every save and version but the live one", () => {
     const markup = drawer(() => undefined);
 
-    expect(markup.match(/Publish this save/gu)).toHaveLength(4);
-    expect(markup).not.toMatch(/data-revision="1"(?:(?!data-revision).)*Publish this save/u);
-    expect(drawer(() => undefined, "de")).toContain("Diesen Stand veröffentlichen");
+    expect(markup.match(/Publish this save/gu)).toHaveLength(3);
+    // Version 2 may be published again; versions 3 and 1 are the live revision.
+    expect(markup.match(/Publish this version again/gu)).toHaveLength(1);
+    expect(markup).toMatch(/data-version="2"(?:(?!data-version).)*Publish this version again/u);
+    const german = drawer(() => undefined, "de");
+    expect(german).toContain("Diesen Stand veröffentlichen");
+    expect(german).toContain("Diese Version erneut veröffentlichen");
+  });
+
+  it("says before version 1 only the saves that never became a version", () => {
+    const markup = render(
+      createElement(RevisionsDrawerView, {
+        open: true,
+        name: "Angebotsrechner",
+        publications: [publication(1, 2, 2)],
+        revisions: [revision(2), revision(1)],
+        failed: false,
+        hasMore: false,
+        loadingMore: false,
+        draftRevision: 2,
+        publishedRevision: 2,
+        onLoadMore() {},
+        onRetry() {},
+        onClose() {}
+      }),
+      "de"
+    );
+    expect(markup).toContain("Version 1");
+    expect(markup).toContain(">1 Entwurfsstand vor Version 1<");
+    expect(markup.match(/data-revision="/gu)).toHaveLength(1);
   });
 
   it("lists the saves of an App never published as they are", () => {

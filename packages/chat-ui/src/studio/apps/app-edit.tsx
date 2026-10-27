@@ -597,7 +597,10 @@ export function AppEditFrame({
               {t("apps.draftSimulates")}
               {liveVersion?.by === undefined
                 ? null
-                : ` · ${t("apps.publishedBy", { name: personName(liveVersion.by, t) })}`}
+                : ` · ${t("apps.liveVersionBy", {
+                    number: liveVersion.number,
+                    name: personName(liveVersion.by, t)
+                  })}`}
             </Banner>
           ) : null}
           {/* The head is one row; what the reader may not do is said in a line under it. */}
