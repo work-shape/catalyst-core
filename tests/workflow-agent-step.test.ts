@@ -1017,6 +1017,82 @@ describe("Workflow Child Agent Runs (CR-2)", () => {
     expect(changed).toEqual(["one"]);
   });
 
+  // A run an outside client started answers it, so an agent step's call needs `outside` beside
+  // `agent`, asked again when the approved call runs: the Connection's admin took `outside` back
+  // while the call waited. Fails without the check per call: the approved call changed "one".
+  it("refuses an approved call whose Connection lost outside while it waited, in a run started from outside", async () => {
+    const exposed = (clientInstanceId: ClientInstanceId, app: TestInstance, outside: boolean) =>
+      applyAtCurrentRevisions(app.stores.configAssets, {
+        clientInstanceId,
+        mutations: [
+          {
+            type: "upsert",
+            kind: "connection",
+            name: "fixture",
+            config: connection("fixture", {
+              settings: { url: "http://127.0.0.1:45454" },
+              authScheme: "none",
+              secretHandle: undefined,
+              operations: [
+                {
+                  name: "change",
+                  effect: "changing",
+                  exposure: outside ? ["agent", "outside"] : ["agent"],
+                  enabled: true
+                }
+              ]
+            })
+          }
+        ]
+      });
+    const f = await fixture("approval", false, "user-1", {
+      // As an outside client's start writes the run, with the Connection exposed to outside.
+      beforeJobs: async ({ app, clientInstanceId, runId }) => {
+        await withTestSql(
+          (sql) => sql`update workflow_runs set trigger = 'outside' where id = ${runId}`
+        );
+        await exposed(clientInstanceId, app, true);
+      }
+    });
+    await waitUntil(async () => (await f.steps()).some((step) => step.agent?.runId), "child start");
+    const step = required((await f.steps()).find((step) => step.stepId === "analyse"));
+    const child = required(
+      await f.app.stores.childAgentRuns.readWorkflowAgentRun({
+        clientInstanceId: f.clientInstanceId,
+        stepRunId: step.id
+      })
+    );
+    await waitUntil(
+      async () =>
+        (
+          await f.app.stores.agentRuns.getAgentRun({
+            clientInstanceId: f.clientInstanceId,
+            runId: child.id
+          })
+        )?.status === "waiting_for_decision",
+      "agent approval pause"
+    );
+    await exposed(f.clientInstanceId, f.app, false);
+    const call = required(
+      (await f.app.stores.operationRuns.list({ clientInstanceId: f.clientInstanceId })).find(
+        (call) => call.origin.kind === "agent" && call.origin.agentRunId === child.id
+      )
+    );
+    const decision = await f.app.call("approval_requests.decide", {
+      params: { requestId: required(call.approvalRequestId) },
+      payload: { decision: "approve" }
+    });
+    expect(decision.statusCode, decision.body).toBe(200);
+    await waitUntil(
+      async () =>
+        (await f.app.stores.operationRuns.list({ clientInstanceId: f.clientInstanceId })).some(
+          (run) => run.id === call.id && run.status === "denied"
+        ),
+      "approved call refused"
+    );
+    expect(changed).toEqual([]);
+  });
+
   it("cancels the Agent Run of a step that waits for an approval with its Workflow run", async () => {
     const f = await fixture("approval");
     await waitUntil(async () => (await f.steps()).some((step) => step.agent?.runId), "child start");

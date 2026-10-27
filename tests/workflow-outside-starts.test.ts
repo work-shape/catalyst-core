@@ -4,7 +4,7 @@ import { WORKFLOW_ASSET_KIND } from "@work-shape/catalyst-core";
 import { clientInstanceId, errorSchema, type AccessInstance } from "./support/access-instance";
 import { operationOf } from "./support/connection-operations";
 import { issuePersonalKey, personalKeyToken } from "./support/personal-api-keys";
-import { runSchema, type WorkflowFixture } from "./support/workflow-instance";
+import { runSchema, stepRunsSchema, type WorkflowFixture } from "./support/workflow-instance";
 import { NOTE, notifyClients, readyWorkflows } from "./support/workflow-runs";
 
 // A Workflow runs as its own principal under exposure `workflow`, so a key that starts it would
@@ -47,10 +47,13 @@ function withTriggers(id: string, triggers: { kind: string }[]) {
   return { ...manifest, id, name: id, steps: [{ ...trigger, triggers }, ...rest] };
 }
 
+const CRM_TITLE = "Kundenregister";
+
 /** The crm Connection with both operations exposed to Workflows, and to outside where asked. */
 async function seedCrm(t: WorkflowFixture, outside: boolean) {
   const exposure = outside ? ["workflow", "outside"] : ["workflow"];
   await t.seed("crm", {
+    displayName: CRM_TITLE,
     operations: [
       operationOf("echo", { exposure }),
       operationOf("write", { effect: "changing", exposure })
@@ -292,5 +295,90 @@ describe("a Workflow started from outside", () => {
     });
     expect(read.statusCode, read.body).toBe(200);
     expect(runSchema.parse(read.json()).outputPreview).toBeUndefined();
+  });
+
+  // The scan at the start passed, and the Connection's admin took `outside` back while the run
+  // waited for its step: the step's call is asked again and refused. Fails without the check
+  // per call: the step called crm under `workflow` alone.
+  it("refuses a step's Connection call where outside was taken back after the start", async () => {
+    const { t, tim, headers } = await ready();
+    await seedCrm(t, true);
+    const opened = withTriggers("notify-clients", [{ kind: "manual" }, { kind: "outside" }]);
+    expect((await publish(t, opened)).statusCode).toBe(200);
+    const started = await startBy(t, tim.id, "notify-clients", headers);
+    expect(started.statusCode, started.body).toBe(200);
+    expect(t.executed).toEqual([]);
+
+    await seedCrm(t, false);
+    const run = await t.finish(runSchema.parse(started.json()).id);
+    expect(run.status).toBe("failed");
+    expect(run.error).toMatchObject({ action: "connection_exposure:outside" });
+    expect(t.executed).toEqual([]);
+
+    // A run Tim starts in the app answers no outside client and calls crm under `workflow`.
+    const bySession = await startBy(t, tim.id, "notify-clients");
+    const own = await t.finish(runSchema.parse(bySession.json()).id);
+    expect(own.status).toBe("done");
+  });
+
+  // A failure of a run no outside client started names the Connection it ended at, by name, by
+  // title and in its sentence. A key reads the run and none of that. Fails without the strip:
+  // the key read 'crm' and the Connection's title.
+  it("names a key no Connection in the failure of a run no outside client started", async () => {
+    const { t, tim, headers } = await ready();
+    await seedCrm(t, true);
+    await allow(t, tim.id, "connection.read");
+    const opened = withTriggers("notify-clients", [{ kind: "manual" }, { kind: "outside" }]);
+    expect((await publish(t, opened)).statusCode).toBe(200);
+
+    const runOf = async () => {
+      const started = await startBy(t, tim.id, "notify-clients");
+      expect(started.statusCode, started.body).toBe(200);
+      return t.finish(runSchema.parse(started.json()).id);
+    };
+    const reads = async (runId: string, withHeaders?: Record<string, string>) => {
+      const run = await t.call(tim.id, "workflows.get_run", {
+        params: { runId },
+        ...(withHeaders ? { headers: withHeaders } : {})
+      });
+      const steps = await t.call(tim.id, "workflows.list_step_runs", {
+        params: { runId },
+        ...(withHeaders ? { headers: withHeaders } : {})
+      });
+      expect(run.statusCode, run.body).toBe(200);
+      expect(steps.statusCode, steps.body).toBe(200);
+      return {
+        run: runSchema.parse(run.json()).error,
+        steps: stepRunsSchema.parse(steps.json()).items
+      };
+    };
+
+    // The outside system is down: the sentence names the operation of crm.
+    t.setBehaviour(() => Promise.reject(new Error("The outside system is down")));
+    const down = await runOf();
+    expect(down.status).toBe("failed");
+    const downInApp = await reads(down.id);
+    expect(JSON.stringify(downInApp)).toContain("connection.crm.echo");
+    const downByKey = await reads(down.id, headers);
+    expect(downByKey.run?.code).toBe(downInApp.run?.code);
+    expect(JSON.stringify(downByKey)).not.toContain("crm");
+
+    // The run's account may no longer use crm: the failure names it.
+    const grants = await t.stores.access.listGrants({
+      clientInstanceId,
+      holderKind: "service_principal",
+      holderId: t.principal.id,
+      action: "connection.use"
+    });
+    for (const grant of grants)
+      await t.stores.access.deleteGrant({ clientInstanceId, grantId: grant.id });
+    const refused = await runOf();
+    expect(refused.status).toBe("failed");
+    const refusedInApp = await reads(refused.id);
+    expect(refusedInApp.run).toMatchObject({ connection: "crm", connectionTitle: CRM_TITLE });
+    const refusedByKey = await reads(refused.id, headers);
+    expect(refusedByKey.run).toMatchObject({ action: "connection.use" });
+    expect(JSON.stringify(refusedByKey)).not.toContain("crm");
+    expect(JSON.stringify(refusedByKey)).not.toContain(CRM_TITLE);
   });
 });

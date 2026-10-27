@@ -3,6 +3,7 @@ import {
   WORKFLOW_RUN_KEY_MAX_LENGTH,
   WORKFLOW_RUN_MAX_DEPTH,
   WORKFLOW_START_KEY_INPUT,
+  answersOutsideClient,
   auditActorFromIdentity,
   isWorkflowRunEnded,
   requireUnmarkedConversation,
@@ -27,11 +28,7 @@ import type { RunOrigin } from "./scheduled-start";
 import { assertRunLinkIsAcyclic } from "./child-run-links";
 import { workflowResource } from "./workflow-resource";
 import { childDefinition } from "./child-definition";
-import {
-  WORKFLOW_OUTSIDE_TRIGGER,
-  workflowOutsideBlockers,
-  workflowOutsideRefusal
-} from "./outside-reach";
+import { workflowOutsideBlockers, workflowOutsideRefusal } from "./outside-reach";
 
 /** A start must record its durable run promptly; overdue Operation Runs can be recovered. */
 const WORKFLOW_START_OPERATION_TIMEOUT_MS = 30_000;
@@ -98,18 +95,10 @@ export function createWorkflowStartSource(options: {
    * A live run an outside client started asks its child again at the child's start: the child
    * may have been published, or a Connection's exposure changed, since the root was started.
    */
-  /** Whether a live run's root is a run an outside client started. */
-  async function startedFromOutside(
+  const startedFromOutside = (
     readers: Pick<PlatformStores, "workflowRuns">,
     run: Pick<WorkflowRun, "id" | "rootRunId" | "mode" | "trigger">
-  ): Promise<boolean> {
-    if (run.mode !== "live") return false;
-    const root =
-      run.rootRunId === run.id
-        ? run
-        : await readers.workflowRuns.readRun({ clientInstanceId, id: run.rootRunId });
-    return root?.trigger === WORKFLOW_OUTSIDE_TRIGGER;
-  }
+  ) => answersOutsideClient(readers.workflowRuns, clientInstanceId, run);
   async function requireOutsideChild(
     parentRunId: string,
     child: Pick<WorkflowManifest, "id" | "steps" | "tools">

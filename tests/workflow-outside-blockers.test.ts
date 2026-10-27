@@ -5,7 +5,7 @@ import type {
   JsonObject,
   WorkflowManifest
 } from "@work-shape/catalyst-core";
-import { workflowOutsideBlockers } from "@work-shape/catalyst-workflows";
+import { workflowOutsideBlockers, workflowOutsideIssues } from "@work-shape/catalyst-workflows";
 import { clientInstanceId } from "./support/access-instance";
 
 // What keeps a Workflow from being started from outside, read from its definition: the scan
@@ -109,5 +109,34 @@ describe("what keeps a Workflow from outside clients", () => {
       ])
     );
     expect(blockers).toHaveLength(7);
+  });
+
+  // A child Workflow's account may use Connections its parent's publisher may not see: the
+  // refusal names only those the publisher may read and counts the rest. Fails without the
+  // check: it named 'payroll' to a publisher who may not read it.
+  it("names to a publisher only the Connections they may read", async () => {
+    const child = {
+      ...manifest(["connection.payroll.read", "connection.hr.read"]),
+      id: "payroll-sync"
+    };
+    const [issue] = await workflowOutsideIssues(
+      manifest(["connection.crm.write", "workflow.payroll-sync.start"]),
+      {
+        ...deps,
+        definitions: {
+          read: (id) =>
+            Promise.resolve(
+              id === child.id
+                ? ({ manifest: child } as Awaited<ReturnType<typeof deps.definitions.read>>)
+                : undefined
+            )
+        },
+        readable: (connection) => Promise.resolve(connection === "crm")
+      }
+    );
+    expect(issue?.code).toBe("outside_not_exposed");
+    expect(issue?.message).toContain("the Connection 'crm'; 2 Connections you may not read");
+    expect(issue?.message).not.toContain("payroll");
+    expect(issue?.message).not.toContain("hr'");
   });
 });

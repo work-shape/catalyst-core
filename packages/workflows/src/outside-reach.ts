@@ -4,6 +4,7 @@ import {
   DATA_STORE_OPERATION_PREFIX,
   KNOWLEDGE_OPERATION_PREFIX,
   WORKFLOW_OPERATION_PREFIX,
+  WORKFLOW_OUTSIDE_TRIGGER,
   parseConnectionOperationName,
   type ClientInstanceId,
   type ConfigAssetStore,
@@ -26,8 +27,7 @@ import { workflowOperationNames } from "./needed-rights";
 // exposed to `outside`. The Connection's admin stays the one who decides whether its data
 // leaves the instance; the Workflow's publisher decides only whether the Workflow does.
 
-/** The trigger kind that lets an outside client start a Workflow. */
-export const WORKFLOW_OUTSIDE_TRIGGER = "outside";
+export { WORKFLOW_OUTSIDE_TRIGGER };
 
 /** Whether the definition's trigger lets an outside client start it. */
 export function startsFromOutside(manifest: Pick<WorkflowManifest, "steps">): boolean {
@@ -202,28 +202,47 @@ export function workflowNotOutsideRefusal(workflow: string): AppError {
 
 /**
  * What a publish is refused for: a revision outside clients may start that reads data not
- * exposed to them, with what blocks it by name. The publisher may read the Connections the
- * Workflow's account uses. The start asks again, since a Connection or a child changes later.
+ * exposed to them, with what blocks it by name. A Connection is named only where the publisher
+ * may read it (`readable`): a child Workflow's account may use Connections the publisher may
+ * not see, and those are counted. The start asks again, since a Connection or a child changes
+ * later.
  */
 export async function workflowOutsideIssues(
   manifest: Pick<WorkflowManifest, "id" | "steps" | "tools">,
-  deps: Parameters<typeof workflowOutsideBlockers>[1]
+  deps: Parameters<typeof workflowOutsideBlockers>[1] & {
+    readable(connection: string): Promise<boolean>;
+  }
 ): Promise<WorkflowDefinitionIssue[]> {
   if (!startsFromOutside(manifest)) return [];
   const blockers = await workflowOutsideBlockers(manifest, deps);
   if (blockers.length === 0) return [];
-  const named = (kind: WorkflowOutsideBlocker["kind"], one: string, many: string) => {
-    const names = blockers.flatMap((blocker) =>
-      blocker.kind === kind ? [`'${blocker.name}'`] : []
-    );
-    if (names.length === 0) return [];
-    return [`${names.length === 1 ? one : many} ${names.join(", ")}`];
-  };
+  const namesOf = (kind: WorkflowOutsideBlocker["kind"]) =>
+    blockers.flatMap((blocker) => (blocker.kind === kind ? [blocker.name] : []));
+  const listed = (names: readonly string[], one: string, many: string) =>
+    names.length === 0
+      ? []
+      : [`${names.length === 1 ? one : many} ${names.map((name) => `'${name}'`).join(", ")}`];
+  const connections = namesOf("connection");
+  const shown = await Promise.all(connections.map((name) => deps.readable(name)));
+  const hidden = shown.filter((readable) => !readable).length;
   const parts = [
-    ...named("connection", "the Connection", "the Connections"),
-    ...named("knowledge_base", "the Knowledge Base", "the Knowledge Bases"),
-    ...named("workflow", "the unpublished child Workflow", "the unpublished child Workflows"),
-    ...named("operation", "the operation", "the operations")
+    ...listed(
+      connections.filter((_name, index) => shown[index]),
+      "the Connection",
+      "the Connections"
+    ),
+    ...(hidden === 0
+      ? []
+      : [
+          hidden === 1 ? "a Connection you may not read" : `${hidden} Connections you may not read`
+        ]),
+    ...listed(namesOf("knowledge_base"), "the Knowledge Base", "the Knowledge Bases"),
+    ...listed(
+      namesOf("workflow"),
+      "the unpublished child Workflow",
+      "the unpublished child Workflows"
+    ),
+    ...listed(namesOf("operation"), "the operation", "the operations")
   ];
   const [trigger] = manifest.steps;
   return [

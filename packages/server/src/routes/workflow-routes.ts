@@ -1,11 +1,13 @@
 import { apiOperations } from "@work-shape/catalyst-api-contract";
 import {
   AppError,
+  CONNECTION_OPERATION_PREFIX,
   appWorkflowRefusalError,
   createPersonLabelLookup,
   requireUnmarkedConversation,
   WORKFLOW_ACTIONS,
   WORKFLOW_ASSET_KIND,
+  WORKFLOW_OUTSIDE_TRIGGER,
   isAuthenticatedServicePrincipal,
   isOutsideCall,
   type AccessResource,
@@ -23,8 +25,6 @@ import {
 } from "@work-shape/catalyst-core";
 import { paginate, pageScope, readablePage, storePage } from "../http/paging";
 
-/** The trigger kind of a run an outside client started (`@work-shape/catalyst-workflows`). */
-const WORKFLOW_OUTSIDE_TRIGGER = "outside";
 import { decide } from "../assets/asset-access";
 import type { ModuleRoutes, RouteRegistration } from "../http/route";
 import { listedWorkflowActions, workflowOf } from "../workflows/workflow-listing";
@@ -607,8 +607,9 @@ function registerWorkflowRoutes(
           );
           if (!outputsReadable) {
             // What a step read or wrote is the run's data: its input, its datasets, its agent.
-            const { agent: _agent, datasets: _datasets, ...rest } = summary;
-            return withoutIterationLabel(rest);
+            // `source` names the Connection, Data Store or App the step called.
+            const { agent: _agent, datasets: _datasets, source: _source, ...rest } = summary;
+            return withoutConnection(withoutIterationLabel(rest));
           }
           if (run.hasAgentSteps && !mayReadData) return summary;
           // The mail a simulated or test send would send, subject and body, is the run's data.
@@ -673,6 +674,8 @@ function answersOutside(run: WorkflowRunView, actor: AuthenticatedIdentity): boo
 
 const OUTSIDE_REFUSAL_ACTION = "connection_exposure:outside";
 const OUTSIDE_REFUSAL_MESSAGE = "This run's data is not exposed to outside clients";
+const OUTSIDE_FAILURE_MESSAGE =
+  "The run failed at a step whose data is not exposed to outside clients";
 
 /** The refusal of a read of run data by an outside client of a run that answers none. */
 const OUTSIDE_REFUSAL: OperationAuthorization = {
@@ -722,15 +725,40 @@ function toRunResource(run: WorkflowRunView, includeData = true) {
 
 /**
  * A run with its labels, its run key and the label of the loop item that started it only
- * where the run's data is for the caller: each is a value a step or the trigger read.
+ * where the run's data is for the caller: each is a value a step or the trigger read. Its
+ * failure names no Connection then either.
  */
-function forCaller<Resource extends { itemLabel?: string; labels?: unknown; runKey?: string }>(
-  resource: Resource,
-  readable: boolean
-): Omit<Resource, "itemLabel" | "labels" | "runKey"> {
+function forCaller<
+  Resource extends {
+    itemLabel?: string;
+    labels?: unknown;
+    runKey?: string;
+    error?: WorkflowRunError;
+  }
+>(resource: Resource, readable: boolean): Omit<Resource, "itemLabel" | "labels" | "runKey"> {
   if (readable) return resource;
   const { itemLabel: _label, labels: _labels, runKey: _key, ...rest } = resource;
-  return rest;
+  return withoutConnection(rest);
+}
+
+/**
+ * A run or step run whose failure names no Connection, as an outside client reads it of a run
+ * that answers none: the Connections such a run read are not exposed to it. Its sentence goes
+ * too, since a Connection's call failure names the Connection in it; the code stays.
+ */
+function withoutConnection<View extends { error?: WorkflowRunError }>(view: View): View {
+  if (!view.error) return view;
+  const { connection: _connection, operation, message: _message, ...error } = view.error;
+  return {
+    ...view,
+    error: {
+      ...error,
+      message: OUTSIDE_FAILURE_MESSAGE,
+      ...(operation === undefined || operation.startsWith(CONNECTION_OPERATION_PREFIX)
+        ? {}
+        : { operation })
+    }
+  };
 }
 
 /** A step run without the label of its loop item, a field of the items a step read. */
