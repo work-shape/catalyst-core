@@ -157,10 +157,10 @@ test("a Page built in chat shows beside the conversation, changes with the next 
   await expect(builtPage(page).getByRole("textbox", { name: "Rows as JSON" })).toBeVisible();
   await builtPage(page).getByText("Overview", { exact: true }).click();
   await expect(builtPage(page).getByRole("heading", { name: "Revenue this year" })).toBeVisible();
-  await expect(card).toHaveCount(2);
-  await expect(card.last()).toHaveAttribute("data-revision", "2");
-  await expect(card.last()).toContainText("Shown");
-  await expect(card.first().getByRole("button", { name: "Open" })).toBeVisible();
+  // One card per Page folder (APPCARD-1): the earlier save is a line in the run's work.
+  await expect(card).toHaveCount(1);
+  await expect(card).toHaveAttribute("data-revision", "2");
+  await expect(card).toContainText("Shown");
 
   // The files of revision 2 say which one the save changed, and open on it.
   await surface.getByRole("radio", { name: "Files" }).click();
@@ -185,11 +185,11 @@ test("a Page built in chat shows beside the conversation, changes with the next 
     2, 1
   ]);
 
-  // After a reload the conversation shows its cards, and a card opens its revision.
+  // After a reload the conversation shows its card, and the card opens its revision.
   await page.reload();
-  await expect(card).toHaveCount(2);
+  await expect(card).toHaveCount(1);
   await expect(pageSurface(page)).toBeHidden();
-  await card.last().getByRole("button", { name: "Open" }).click();
+  await card.getByRole("button", { name: "Open" }).click();
   await expectShownRevision(pageSurface(page), 2);
   await expect(builtPage(page).getByRole("heading", { name: "Revenue this year" })).toBeVisible();
 
