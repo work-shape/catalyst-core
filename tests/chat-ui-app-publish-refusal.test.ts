@@ -111,6 +111,7 @@ const DATA_STORE_REFUSALS: Record<DataStoreRefusal, Record<string, unknown>> = {
     level: 2,
     failure: "column exists"
   },
+  data_store_job_exhausted: { dataStore: "belege", title: "Belege" },
   data_store_migrating: { dataStore: "belege", title: "Belege", level: 2, minSchema: 3 }
 };
 
@@ -428,6 +429,18 @@ describe("the sentence of a publish refused for a Data Store published with the 
       )?.message
     ).toBe(
       "Eine Änderung am Datenspeicher „Prüfergebnisse“ ließ sich nicht anwenden. Die App ist nicht veröffentlicht."
+    );
+  });
+
+  it("explains that an exhausted job needs a manual retry, in German and English", () => {
+    const exhausted = refused(409, "CONFLICT", { reason: "data_store_job_exhausted", ...store });
+    expect(appPublishRefusal(exhausted, de, opensAll)).toEqual({
+      message:
+        "Die Einrichtung oder Umstellung des Datenspeichers „Prüfergebnisse“ wurde abgebrochen und wird nicht mehr automatisch versucht. Bitte einen Administrator, den Auftrag unter System > Jobs erneut zu starten. Veröffentliche danach die App erneut.",
+      action: { label: "Datenspeicher öffnen", ...toStore }
+    });
+    expect(appPublishRefusal(exhausted, en)?.message).toBe(
+      "Creating or updating the Data Store ‘Prüfergebnisse’ stopped and will not be retried automatically. Ask an administrator to retry the job under System > Jobs, then publish the App again."
     );
   });
 

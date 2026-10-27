@@ -11,6 +11,7 @@ import {
   type JobHandler,
   type JobWorker,
   type Logger,
+  type PlatformStores,
   type RegisteredJobHandler
 } from "@work-shape/catalyst-core";
 import { describe, expect, it, vi } from "vitest";
@@ -261,40 +262,88 @@ describe("job executor", () => {
     expect(events.map((event) => event.subject)).toEqual([job.id]);
   });
 
-  it("rolls the dead mark back with a failing onExhausted and buries the job without it", async () => {
-    const clientInstanceId = db.clientInstance("exhausted_fails");
-    const kind = kindOf("test.exhausted_fails", { maxAttempts: 1 });
-    const only = worker(db.store, clientInstanceId, [
-      defineJobHandler({
-        kind,
-        slots: 1,
-        async run() {
-          throw new Error("always");
-        },
-        async onExhausted(job, stores) {
-          await stores.audit.appendAuditEvent({
-            clientInstanceId,
-            type: "test.exhausted",
-            status: "failed",
-            subject: job.id,
-            correlationId: job.correlationId
-          });
-          throw new Error("cannot bury");
-        }
-      })
-    ]);
-    await db.store.jobs.enqueue(kind, { n: 1 }, { clientInstanceId });
-
+  it("runs onExhausted on a non-retryable failure and leaves a kind without the hook unchanged", async () => {
+    const clientInstanceId = db.clientInstance("non_retryable_exhausted");
+    const called: string[] = [];
+    const kinds = [kindOf("test.with_hook"), kindOf("test.without_hook")];
+    const only = worker(
+      db.store,
+      clientInstanceId,
+      kinds.map((kind, index) =>
+        defineJobHandler({
+          kind,
+          slots: 1,
+          async run() {
+            throw new NonRetryableJobError("Cannot continue");
+          },
+          ...(index === 0
+            ? {
+                async onExhausted(job: Job<Numbered>, stores: PlatformStores) {
+                  called.push(job.kind);
+                  await stores.audit.appendAuditEvent({
+                    clientInstanceId,
+                    type: "test.given_up",
+                    status: "failed",
+                    subject: job.id,
+                    correlationId: job.correlationId
+                  });
+                }
+              }
+            : {})
+        })
+      )
+    );
+    for (const kind of kinds) await db.store.jobs.enqueue(kind, { n: 1 }, { clientInstanceId });
     await only.runDue();
-
-    expect(await onlyJob(clientInstanceId)).toMatchObject({
-      status: "dead",
-      error_code: "EXHAUSTED_HANDLER_FAILED"
-    });
+    expect(called).toEqual(["test.with_hook"]);
     expect(
-      await db.store.audit.listAuditEvents({ clientInstanceId, type: "test.exhausted" })
-    ).toEqual([]);
+      (await jobs(clientInstanceId)).map(({ status, attempts }) => ({ status, attempts }))
+    ).toEqual([
+      { status: "failed", attempts: 1 },
+      { status: "failed", attempts: 1 }
+    ]);
+    expect(
+      await db.store.audit.listAuditEvents({ clientInstanceId, type: "test.given_up" })
+    ).toHaveLength(1);
   });
+
+  it.each([false, true])(
+    "rolls back a failing onExhausted and ends the job without it (non-retryable: %s)",
+    async (nonRetryable) => {
+      const clientInstanceId = db.clientInstance("exhausted_fails");
+      const kind = kindOf("test.exhausted_fails", { maxAttempts: 1 });
+      const only = worker(db.store, clientInstanceId, [
+        defineJobHandler({
+          kind,
+          slots: 1,
+          async run() {
+            throw nonRetryable ? new NonRetryableJobError("always") : new Error("always");
+          },
+          async onExhausted(job, stores) {
+            await stores.audit.appendAuditEvent({
+              clientInstanceId,
+              type: "test.exhausted",
+              status: "failed",
+              subject: job.id,
+              correlationId: job.correlationId
+            });
+            throw new Error("cannot bury");
+          }
+        })
+      ]);
+      await db.store.jobs.enqueue(kind, { n: 1 }, { clientInstanceId });
+
+      await only.runDue();
+
+      expect(await onlyJob(clientInstanceId)).toMatchObject({
+        status: nonRetryable ? "failed" : "dead",
+        error_code: "EXHAUSTED_HANDLER_FAILED"
+      });
+      expect(
+        await db.store.audit.listAuditEvents({ clientInstanceId, type: "test.exhausted" })
+      ).toEqual([]);
+    }
+  );
 
   it("releases a job on stop: claimable at once, with the attempt count from before the claim", async () => {
     const clientInstanceId = db.clientInstance("stop");

@@ -80,7 +80,9 @@ interface ActiveJob {
 }
 
 /** How an attempt ends. `exhausted` runs the handler's `onExhausted` in the same transaction. */
-type Outcome = { type: "ended"; ending: JobEnding } | { type: "exhausted"; ending: JobEnding };
+type Outcome =
+  | { type: "ended"; ending: JobEnding }
+  | { type: "exhausted"; ending: JobEnding & { status: "failed" | "dead" } };
 
 /** What one pass leaves running: the attempts it started. Each settles its own job. */
 interface Pass {
@@ -186,14 +188,14 @@ export function createPostgresJobWorker(input: CreatePostgresJobWorkerInput): Jo
     const failure = { errorCode: code, errorMessage: message };
     // A tick has one attempt and the next tick is its retry, so it fails and is never dead.
     if (error instanceof NonRetryableJobError || isTick(row))
-      return { type: "ended", ending: { status: "failed", ...failure } };
+      return { type: "exhausted", ending: { status: "failed", ...failure } };
     if (row.attempts < row.maxAttempts)
       return { type: "ended", ending: { status: "retry", kind: handler.kind, ...failure } };
     return { type: "exhausted", ending: { status: "dead", ...failure } };
   }
 
   /**
-   * Settles and, when `onExhausted` itself fails, marks the job dead without it: its
+   * Settles and, when `onExhausted` itself fails, ends the job without it: its
    * transaction rolled back, and a job that cannot be buried would be found again at every poll.
    */
   async function settleOrBury(lease: JobLease, outcome: Outcome, bound?: BoundJob): Promise<void> {
@@ -209,9 +211,9 @@ export function createPostgresJobWorker(input: CreatePostgresJobWorkerInput): Jo
       await settle(lease, {
         type: "ended",
         ending: {
-          status: "dead",
+          status: outcome.ending.status,
           errorCode: "EXHAUSTED_HANDLER_FAILED",
-          errorMessage: "The last attempt failed and onExhausted failed after it"
+          errorMessage: "The job failed and onExhausted failed after it"
         }
       });
     }
@@ -341,8 +343,7 @@ export function createPostgresJobWorker(input: CreatePostgresJobWorkerInput): Jo
             errorCode: "LEASE_EXPIRED",
             errorMessage: "The lease expired without a heartbeat"
           };
-          if (ending.status === "dead" && withHandler)
-            await bindOrUndefined(handler, row)?.onExhausted?.(txStores);
+          if (withHandler) await bindOrUndefined(handler, row)?.onExhausted?.(txStores);
           await endJobAttempt(tx, row.id, ending);
           await enqueueTickAfter(tx, row, ending);
         });

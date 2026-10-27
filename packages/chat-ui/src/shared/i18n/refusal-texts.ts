@@ -16,6 +16,8 @@ export const refusals = defineTranslations({
       "The app does not use the data store “{dataStore}”, so it is not published with it. Open the dialog again to see what goes live.",
     "refusals.dataStoreDraftBelowMinSchema":
       "The app needs a newer version of the data store “{dataStore}” than its draft has. Ask the agent to extend the data store.",
+    "refusals.dataStoreJobExhausted":
+      "Creating or updating the Data Store ‘{dataStore}’ stopped and will not be retried automatically. Ask an administrator to retry the job under System > Jobs, then publish the App again.",
     "refusals.dataStoreMigrationFailed":
       "The change “{migration}” to the data store “{dataStore}” could not be applied. The app is not published.",
     "refusals.dataStoreMigrationFailedUnnamed":
@@ -104,6 +106,8 @@ export const refusals = defineTranslations({
       "Die App nutzt den Datenspeicher „{dataStore}“ nicht, darum wird er nicht mit ihr veröffentlicht. Öffne den Dialog noch einmal, um zu sehen, was live geht.",
     "refusals.dataStoreDraftBelowMinSchema":
       "Die App braucht eine neuere Fassung des Datenspeichers „{dataStore}“, als sein Entwurf hat. Bitte den Agenten, den Datenspeicher zu ergänzen.",
+    "refusals.dataStoreJobExhausted":
+      "Die Einrichtung oder Umstellung des Datenspeichers „{dataStore}“ wurde abgebrochen und wird nicht mehr automatisch versucht. Bitte einen Administrator, den Auftrag unter System > Jobs erneut zu starten. Veröffentliche danach die App erneut.",
     "refusals.dataStoreMigrationFailed":
       "Die Änderung „{migration}“ am Datenspeicher „{dataStore}“ ließ sich nicht anwenden. Die App ist nicht veröffentlicht.",
     "refusals.dataStoreMigrationFailedUnnamed":

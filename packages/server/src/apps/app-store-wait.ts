@@ -63,12 +63,18 @@ export async function awaitStoreLevels(
       if (record.status === "ready" && record.level >= store.level) continue;
       if (record.failure) {
         const number = record.level + 1;
-        throw dataStoreRefusalError("data_store_migration_failed", store.name, {
-          title: store.title,
-          migration: store.migrations.get(number) ?? String(number),
-          level: record.level,
-          failure: record.failure.message
-        });
+        throw dataStoreRefusalError(
+          record.failure.code === "job_exhausted"
+            ? "data_store_job_exhausted"
+            : "data_store_migration_failed",
+          store.name,
+          {
+            title: store.title,
+            migration: store.migrations.get(number) ?? String(number),
+            level: record.level,
+            failure: record.failure.message
+          }
+        );
       }
       still.push(store);
     }

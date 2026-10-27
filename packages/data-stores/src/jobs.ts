@@ -145,6 +145,40 @@ async function failAttempt(
   throw new NonRetryableJobError(message, { reason: code });
 }
 
+/** A lost final lease has no failAttempt: keep its outcome on the subject as well. */
+async function recordExhausted(job: Job<StorePayload>, stores: PlatformStores): Promise<void> {
+  const record = await stores.dataStores.getDataStore({
+    clientInstanceId: job.clientInstanceId,
+    id: job.payload.storeId,
+    lock: true
+  });
+  // Keep a more specific failure written by failAttempt, and never resurrect a retired store.
+  if (!record || record.status === "retired" || record.failure) return;
+  await stores.dataStores.putDataStore({
+    ...record,
+    failure: {
+      code: "job_exhausted",
+      message:
+        "Die Einrichtung oder Umstellung des Datenspeichers wurde abgebrochen und wird nicht mehr automatisch versucht. Bitte einen Administrator, den Auftrag unter System > Jobs erneut zu starten. Veröffentliche danach die App erneut."
+    },
+    updatedAt: new Date().toISOString()
+  });
+}
+
+/** Manual retry starts from the current published revision, without the old failure. */
+const restoreStore: NonNullable<JobRetry["restoreSubject"]> = async (job, stores) => {
+  if (!job.subject) return false;
+  const record = await stores.dataStores.getDataStore({
+    clientInstanceId: job.clientInstanceId,
+    id: job.subject,
+    lock: true
+  });
+  if (!record || record.status === "retired") return false;
+  const { failure: _cleared, ...kept } = record;
+  await stores.dataStores.putDataStore({ ...kept, updatedAt: new Date().toISOString() });
+  return true;
+};
+
 /** The secrets of a store, each made where an earlier attempt did not get that far. */
 function storeSecrets(runtime: DataStoreRuntime, control: JobControl, storeId: string) {
   return control.transaction(async (stores) => ({
@@ -642,12 +676,14 @@ export function createDataStoreJobs(runtime: DataStoreRuntime): {
       defineJobHandler({
         kind: provisionJob,
         slots: DATA_STORE_JOB_SLOTS,
-        run: (job, control) => provision(runtime, job, control)
+        run: (job, control) => provision(runtime, job, control),
+        onExhausted: recordExhausted
       }),
       defineJobHandler({
         kind: migrateJob,
         slots: DATA_STORE_JOB_SLOTS,
-        run: (job, control) => migrate(runtime, job, control)
+        run: (job, control) => migrate(runtime, job, control),
+        onExhausted: recordExhausted
       }),
       ...[measureSizeJob, measureSizeTickJob].map((kind) =>
         defineJobHandler({
@@ -703,6 +739,10 @@ export function createDataStoreJobs(runtime: DataStoreRuntime): {
       })
     ],
     // Each reads the record, and the published revision, anew.
-    retries: [{ kind: provisionJob }, { kind: migrateJob }, { kind: dropJob }]
+    retries: [
+      { kind: provisionJob, restoreSubject: restoreStore },
+      { kind: migrateJob, restoreSubject: restoreStore },
+      { kind: dropJob }
+    ]
   };
 }
