@@ -84,6 +84,25 @@ export function appWorkspaceName(
   return stored ?? open?.name ?? "";
 }
 
+/**
+ * What the agent's App publish shows as published with it, from the App's own review: the
+ * Workflows and the stores whose draft the call names, and every bound store that is live and
+ * still being updated, which the Publish waits for whether or not the call names it. A store
+ * whose draft is not published and that the call does not name is not part of this publish.
+ */
+export function appPublishConfirmationTogether(
+  call: Pick<AppPublishCall, "workflows" | "dataStores">,
+  reviewed: AppPublishTogetherRead
+): AppPublishTogetherRead {
+  return {
+    ...reviewed,
+    workflows: reviewed.workflows.filter(({ name }) => call.workflows.includes(name)),
+    dataStores: reviewed.dataStores.filter(
+      ({ name, pending }) => !pending || call.dataStores.includes(name)
+    )
+  };
+}
+
 /** What the confirmation card holds for an App publish: the question, and what Allow sends. */
 export interface AppPublishConfirmationAsk {
   node: ReactNode;
@@ -103,7 +122,7 @@ export function appPublishConfirmationReady(input: {
   narrative: PublishNarrativeRead;
   readsStoredData: boolean | undefined;
   storedData: AppPublishDataRead;
-  /** The stores and Workflows the call makes live with the App. Absent where it names none. */
+  /** The stores and Workflows the call makes live with the App, or that it waits for. */
   together?: AppPublishTogetherRead;
 }): boolean {
   if (input.offer === undefined || input.offer.selected !== input.selected) return false;
@@ -134,7 +153,7 @@ export function AppPublishConfirmationView({
   narrative: PublishNarrativeRead;
   /** The lines on stored data. Absent where the revision reads none. */
   storedData: AppPublishDataRead | undefined;
-  /** The Workflows the call makes live with the App. Absent where it names none. */
+  /** The stores and Workflows the call makes live with the App, or that it waits for. */
   together?: AppPublishTogetherRead | undefined;
   disabled: boolean;
   onChange(audience: AppAudience): void;
@@ -201,20 +220,13 @@ export function useAppPublishConfirmation(
   const readsStoredData = question.readsStoredData;
   const storedData = useAppPublishData(call.app, call.revision, readsStoredData === true);
   const selected = settled ? (read ?? offer?.selected) : undefined;
-  // The stores and Workflows the agent named go live with the App on Allow: each as the
-  // review shows it.
-  const names = call.workflows.length + call.dataStores.length > 0;
-  const reviewed = useAppPublishTogether(call.app, call.revision, names);
-  const together = names
-    ? {
-        ...reviewed,
-        workflows: reviewed.workflows.filter(({ name }) => call.workflows.includes(name)),
-        // A store still being updated is waited for though the agent names it not.
-        dataStores: reviewed.dataStores.filter(
-          ({ name, pending }) => !pending || call.dataStores.includes(name)
-        )
-      }
-    : undefined;
+  // What goes live with the App on Allow, and what the Publish waits for, each as the review
+  // shows it: read for every App publish, since a bound store still being updated holds the
+  // Publish though the agent names nothing.
+  const together = appPublishConfirmationTogether(
+    call,
+    useAppPublishTogether(call.app, call.revision)
+  );
   return {
     audience: selected,
     ready: appPublishConfirmationReady({
@@ -223,7 +235,7 @@ export function useAppPublishConfirmation(
       narrative: question.narrative,
       readsStoredData,
       storedData,
-      ...(together ? { together } : {})
+      together
     }),
     node: (
       <AppPublishConfirmationView

@@ -25,6 +25,7 @@ export { AppAudienceChange, appPublishMaySend } from "./app-publish-question";
 export {
   appPublishCall,
   appPublishConfirmationReady,
+  appPublishConfirmationTogether,
   AppPublishConfirmationView,
   appWorkspaceName
 } from "./app-publish-confirmation";
