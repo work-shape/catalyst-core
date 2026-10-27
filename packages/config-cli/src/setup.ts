@@ -1,4 +1,4 @@
-import { sha256Hex as sha256 } from "@work-shape/catalyst-core/sha256";
+import { sha256Hex as sha256 } from "./sha256";
 import { lstat, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { homedir, hostname } from "node:os";
 import { dirname, join } from "node:path";

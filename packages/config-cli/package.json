@@ -52,7 +52,6 @@
     "@work-shape/catalyst-api-client": "workspace:*",
     "@work-shape/catalyst-api-contract": "workspace:*",
     "@work-shape/catalyst-asset-schemas": "workspace:*",
-    "@work-shape/catalyst-core": "workspace:*",
     "tsup": "^8.5.1",
     "typescript": "^6.0.3"
   }
