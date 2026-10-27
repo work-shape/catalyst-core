@@ -454,16 +454,28 @@ export type AppFromPage = NonNullable<AppFromPageResponse["app"]>;
 /** An App the reader may write and could put a Page into, with the Page it is updated from. */
 export type AppLinkCandidate = NonNullable<AppFromPageResponse["candidate"]>;
 
+/** What a preview is to the reader, whatever they may write: an App they may read, or not. */
+type PreviewIdentity = AppFromPageResponse["preview"];
+
+/** What the instance said about a Page: the App the reader may write, and what the preview is. */
+export interface AppFromPageRead {
+  app: AppFromPage | undefined;
+  /** Absent until the instance answered, and where the asking failed. */
+  preview?: PreviewIdentity;
+  settled: boolean;
+}
+
 /**
- * The App a Page was saved as, where the reader may write it: one request when the surface of
- * the Page opens, and one more after each write to an App. `settled` once the instance
- * answered or the asking failed, which leaves the Page without an App to update.
+ * The App a Page was saved as, where the reader may write it, and what the preview is to the
+ * reader: one request when the surface of the Page opens, and one more after each write to an
+ * App. `settled` once the instance answered or the asking failed; a failed asking leaves the
+ * Page without an App to update and without a `preview`.
  */
 export function useAppFromPage(
   conversationId: string,
   pageId: string,
   enabled: boolean
-): { app: AppFromPage | undefined; settled: boolean } {
+): AppFromPageRead {
   const { client } = useWorkspaceApiClient();
   const keys = useAppKeys();
   const query = useQuery({
@@ -473,7 +485,11 @@ export function useAppFromPage(
     enabled,
     retry: retryUnlessGone
   });
-  return { app: query.data?.app ?? undefined, settled: enabled && !query.isPending };
+  return {
+    app: query.data?.app ?? undefined,
+    ...(query.data ? { preview: query.data.preview } : {}),
+    settled: enabled && !query.isPending
+  };
 }
 
 /** The source files of one revision as its Files side asked for them. */

@@ -18,7 +18,7 @@ import {
   type OperationBeforeEvent,
   type Page
 } from "@work-shape/catalyst-core";
-import { accessResource, decide, type AssetCall } from "../assets/asset-access";
+import { accessResource, decide, readsAssetDraft, type AssetCall } from "../assets/asset-access";
 import {
   APP_CONTENT_TOKEN_TTL_SECONDS,
   appContentPath,
@@ -171,7 +171,7 @@ export class AppWorkflow {
   /**
    * The App of a Page, for one caller who reads the Page: among the Apps that are updated from
    * it and that the caller may write, the one the caller wrote from it last, and without one
-   * the earliest. Nothing for a caller who may write none of them, whether or not one exists.
+   * the earliest. The preview separately names a readable App, without offering its draft.
    * With `app`, also what putting the Page into that App would meet.
    */
   async fromPage(
@@ -181,9 +181,10 @@ export class AppWorkflow {
     const page = await this.requirePage(caller.user, input);
     const kind = this.kind();
     const viewerId = getSubjectUserId(caller.user);
-    // Every App of the Page is read, in parts, and the caller's right decides on each: an App
-    // the caller may write is found however many of other people come before it.
+    // Scan every batch: a readable or writable App may follow Apps hidden from this caller.
+    const readable: ConfigAssetFromPage[] = [];
     const writable: ConfigAssetFromPage[] = [];
+    let linked = false;
     for (let offset = 0; ; offset += APPS_FROM_PAGE_BATCH) {
       const part = await this.options.configAssets.store.listConfigAssetsFromPage({
         clientInstanceId: this.options.clientInstanceId,
@@ -192,7 +193,12 @@ export class AppWorkflow {
         limit: APPS_FROM_PAGE_BATCH,
         offset
       });
-      writable.push(...part.filter(({ asset }) => this.mayWrite(caller.access, asset)));
+      linked ||= part.length > 0;
+      const visible = part.filter(
+        ({ asset }) => this.previewTitle(caller.access, asset) !== undefined
+      );
+      readable.push(...visible);
+      writable.push(...visible.filter(({ asset }) => this.mayWrite(caller.access, asset)));
       if (part.length < APPS_FROM_PAGE_BATCH) {
         break;
       }
@@ -201,7 +207,16 @@ export class AppWorkflow {
       writable.find(({ savedBy }) => savedBy?.subjectUserId === viewerId) ?? writable.at(0);
     const asset = found?.asset;
     const origin = asset?.revisionOrigin;
+    const previewApp =
+      found ??
+      readable.find(({ savedBy }) => savedBy?.subjectUserId === viewerId) ??
+      readable.at(0);
+    const previewTitle = previewApp && this.previewTitle(caller.access, previewApp.asset);
     return {
+      preview:
+        previewTitle !== undefined
+          ? { kind: "app" as const, title: previewTitle }
+          : { kind: linked ? ("neutral" as const) : ("unsaved" as const) },
       app:
         asset && asset.scope.kind === "workspace"
           ? {
@@ -216,6 +231,27 @@ export class AppWorkflow {
         ? {}
         : { candidate: await this.candidate(caller.access, page, input.app) })
     };
+  }
+
+  /** A preview names the same revision the App's record lets this caller read. */
+  private previewTitle(access: ActorAccess, asset: ConfigAssetRecord): string | undefined {
+    const kind = this.kind();
+    const resource = accessResource(
+      kind.kind,
+      asset.name,
+      asset.scope,
+      asset.id,
+      asset.appAvailability
+    );
+    if (readsAssetDraft(kind, access, resource)) return titleOf(asset);
+    if (
+      asset.publishedConfig !== undefined &&
+      liveRevisionId(asset, kind) !== undefined &&
+      access.authorize(kind.actions.read, resource).allowed
+    ) {
+      return titleOf({ ...asset, config: asset.publishedConfig });
+    }
+    return undefined;
   }
 
   /** An App by its id, for a caller who may write it, with the Page it is updated from. */

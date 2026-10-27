@@ -4,6 +4,7 @@ import { createTranslationContext } from "./support/chat-ui/shared";
 import {
   NO_APP_RIGHTS,
   pageAppChoice,
+  previewNeedsApp,
   previewStanding,
   previewStateLine,
   SaveAsAppDialogView,
@@ -60,18 +61,45 @@ describe("Save to draft", () => {
       locale
     );
 
-  it("offers the update of the App a Page was saved as, and Save as app for every other Page", () => {
-    expect(pageAppChoice(host(), { app, settled: true })).toEqual({ kind: "update", app });
-    expect(pageAppChoice(host(), { app: undefined, settled: true })).toEqual({ kind: "save" });
-    // The instance names an App only to whoever may write it, so the update needs no right of
-    // the open workspace; Save as app does.
+  const named = { kind: "app", title: "Angebotsrechner" } as const;
+  const unsaved = { kind: "unsaved" } as const;
+  const neutral = { kind: "neutral" } as const;
+
+  it("offers the update of the App a Page was saved as, and Save as app for a Page no App holds", () => {
+    expect(pageAppChoice(host(), { app, preview: named, settled: true })).toEqual({
+      kind: "update",
+      app
+    });
+    expect(pageAppChoice(host(), { app: undefined, preview: unsaved, settled: true })).toEqual({
+      kind: "save"
+    });
+    // The instance names a writable App only to whoever may write it, so the update needs no
+    // right of the open workspace; Save as app does.
     const reader = host({ rights: { ...NO_APP_RIGHTS, read: true } });
-    expect(pageAppChoice(reader, { app, settled: true })).toEqual({ kind: "update", app });
-    expect(pageAppChoice(reader, { app: undefined, settled: true })).toEqual({ kind: "none" });
+    expect(pageAppChoice(reader, { app, preview: named, settled: true })).toEqual({
+      kind: "update",
+      app
+    });
+    expect(pageAppChoice(reader, { app: undefined, preview: unsaved, settled: true })).toEqual({
+      kind: "none"
+    });
   });
 
-  it("offers neither before the instance said whether the Page has an App, nor with the module off", () => {
+  // Fails without the reader's standing of PREVIEW-1: a checkout whose App the reader may only
+  // read, or not see, offered Save as app to whoever may write Apps in the open workspace.
+  it("offers no save for the checkout of an App the reader may not write, whatever the workspace allows", () => {
+    expect(pageAppChoice(host(), { app: undefined, preview: named, settled: true })).toEqual({
+      kind: "none"
+    });
+    expect(pageAppChoice(host(), { app: undefined, preview: neutral, settled: true })).toEqual({
+      kind: "none"
+    });
+  });
+
+  it("offers neither before the instance said whether the Page has an App, where it could not say, nor with the module off", () => {
     expect(pageAppChoice(host(), { app: undefined, settled: false })).toEqual({ kind: "none" });
+    // A read that failed settles without a preview: the Page may still be an App's checkout.
+    expect(pageAppChoice(host(), { app: undefined, settled: true })).toEqual({ kind: "none" });
     expect(pageAppChoice(host({ enabled: false }), { app, settled: true })).toEqual({
       kind: "none"
     });
@@ -186,26 +214,58 @@ describe("the state line of a preview", () => {
     draftRevision: 3,
     draftFromPage: true
   };
+  const named = { kind: "app", title: "Umsatzübersicht" } as const;
+  const lineOfApp = {
+    en: "Preview of “Umsatzübersicht” · data stores and workflows run only in the app",
+    de: "Vorschau von „Umsatzübersicht“ · Datenspeicher und Workflows laufen nur in der App"
+  };
 
   it("names a folder no App holds as not saved, and an App's checkout as a preview of the App", () => {
-    const unsaved = previewStanding(host, { app: undefined, settled: true });
+    const unsaved = previewStanding(host, {
+      app: undefined,
+      preview: { kind: "unsaved" },
+      settled: true
+    });
     expect(unsaved).toEqual({ kind: "unsaved" });
     expect(previewStateLine(unsaved, t)).toBe("Preview · not saved yet");
     expect(previewStateLine(unsaved, de)).toBe("Vorschau · noch nicht gespeichert");
 
-    const checkout = previewStanding(host, { app, settled: true });
-    expect(checkout).toEqual({ kind: "app", app });
-    expect(previewStateLine(checkout, t)).toBe(
-      "Preview of “Umsatzübersicht” · data stores and workflows run only in the app"
-    );
-    expect(previewStateLine(checkout, de)).toBe(
-      "Vorschau von „Umsatzübersicht“ · Datenspeicher und Workflows laufen nur in der App"
-    );
+    const checkout = previewStanding(host, { app, preview: named, settled: true });
+    expect(checkout).toEqual({ kind: "app", title: "Umsatzübersicht", app });
+    expect(previewStateLine(checkout, t)).toBe(lineOfApp.en);
+    expect(previewStateLine(checkout, de)).toBe(lineOfApp.de);
   });
 
-  it("says nothing before the instance answered, nor where no Apps are offered", () => {
+  // Fails without the reader's standing of PREVIEW-1: the checkout of an App the reader may read
+  // and not write read as "not saved yet", because the instance named only Apps one may write.
+  it("names the App to whoever may only read it, without the way to its draft", () => {
+    const reading = previewStanding(host, { app: undefined, preview: named, settled: true });
+    expect(reading).toEqual({ kind: "app", title: "Umsatzübersicht", app: undefined });
+    expect(previewStateLine(reading, t)).toBe(lineOfApp.en);
+    expect(previewStateLine(reading, de)).toBe(lineOfApp.de);
+  });
+
+  it("calls the checkout of an App the reader may not see a preview, and names nothing", () => {
+    const hidden = previewStanding(host, {
+      app: undefined,
+      preview: { kind: "neutral" },
+      settled: true
+    });
+    expect(hidden).toEqual({ kind: "neutral" });
+    expect(previewStateLine(hidden, t)).toBe("Preview");
+    expect(previewStateLine(hidden, de)).toBe("Vorschau");
+  });
+
+  it("says nothing before the instance answered, and no more than a preview where it could not say", () => {
     expect(previewStanding(host, { app, settled: false })).toEqual({ kind: "unknown" });
     expect(previewStateLine({ kind: "unknown" }, t)).toBeUndefined();
+    const failed = previewStanding(host, { app: undefined, settled: true });
+    expect(failed).toEqual({ kind: "neutral" });
+    expect(previewStateLine(failed, t)).toBe("Preview");
+    expect(previewStateLine(failed, de)).toBe("Vorschau");
+  });
+
+  it("says nothing where no Apps are offered", () => {
     expect(previewStanding({ enabled: false, workspace }, { app, settled: true })).toEqual({
       kind: "unknown"
     });
@@ -213,6 +273,24 @@ describe("the state line of a preview", () => {
       previewStanding({ enabled: true, workspace: undefined }, { app, settled: true })
     ).toEqual({ kind: "unknown" });
     expect(previewStanding(undefined, { app, settled: true })).toEqual({ kind: "unknown" });
+  });
+
+  it("leads to the App after a refused call only whoever may write it, and to Save as app only for a Page no App holds", () => {
+    const writer = previewStanding(host, { app, preview: named, settled: true });
+    expect(previewNeedsApp(writer, false)).toEqual({ message: "pages.needsApp", app });
+    const unsaved = previewStanding(host, {
+      app: undefined,
+      preview: { kind: "unsaved" },
+      settled: true
+    });
+    expect(previewNeedsApp(unsaved, true)).toEqual({ message: "pages.needsAppUnsaved" });
+    expect(previewNeedsApp(unsaved, false)).toEqual({ message: "pages.needsAppNoWay" });
+    const reading = previewStanding(host, { app: undefined, preview: named, settled: true });
+    expect(previewNeedsApp(reading, true)).toEqual({ message: "pages.needsAppNoWay" });
+    expect(previewNeedsApp({ kind: "neutral" }, true)).toEqual({ message: "pages.needsAppNoWay" });
+    expect(previewNeedsApp({ kind: "unknown" }, true)).toEqual({ message: "pages.needsAppNoWay" });
+    expect(t("pages.needsAppNoWay")).toBe("This preview reaches no data stores.");
+    expect(de("pages.needsAppNoWay")).toBe("Diese Vorschau erreicht keine Datenspeicher.");
   });
 });
 

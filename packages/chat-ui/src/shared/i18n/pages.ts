@@ -35,6 +35,7 @@ export const pages = defineTranslations({
     "pages.loadFailed": "The preview could not be loaded.",
     "pages.loading": "The preview is loading",
     "pages.needsApp": "This preview reaches no data stores. To test with real data:",
+    "pages.needsAppNoWay": "This preview reaches no data stores.",
     "pages.needsAppUnsaved":
       "This preview reaches no data stores. To test with real data, save it as an app.",
     "pages.notSavedToApp": "The draft of {title} was not changed. The agent says why.",
@@ -90,6 +91,7 @@ export const pages = defineTranslations({
     "pages.loadFailed": "Die Vorschau konnte nicht geladen werden.",
     "pages.loading": "Die Vorschau wird geladen",
     "pages.needsApp": "Diese Vorschau erreicht keine Datenspeicher. Zum Testen mit echten Daten:",
+    "pages.needsAppNoWay": "Diese Vorschau erreicht keine Datenspeicher.",
     "pages.needsAppUnsaved":
       "Diese Vorschau erreicht keine Datenspeicher. Zum Testen mit echten Daten speichere sie als App.",
     "pages.notSavedToApp": "Der Entwurf von {title} wurde nicht geändert. Der Agent sagt, warum.",

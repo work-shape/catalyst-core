@@ -114,7 +114,7 @@ export const appOperations = {
     id: "apps.get_from_page",
     method: "GET",
     path: "/api/v1/conversations/:conversationId/pages/:pageId/app",
-    summary: "Read the App a Page is updated into, where the caller may write it",
+    summary: "Read the preview state of a Page and the App the caller may update",
     tag: "Apps",
     auth: "user",
     scope: "conversation:read",

@@ -10535,7 +10535,7 @@
     "/api/v1/conversations/{conversationId}/pages/{pageId}/app": {
       "get": {
         "operationId": "apps.get_from_page",
-        "summary": "Read the App a Page is updated into, where the caller may write it",
+        "summary": "Read the preview state of a Page and the App the caller may update",
         "tags": [
           "Apps"
         ],
@@ -38405,6 +38405,50 @@
       "AppFromPage": {
         "type": "object",
         "properties": {
+          "preview": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "app"
+                  },
+                  "title": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "title"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "unsaved"
+                  }
+                },
+                "required": [
+                  "kind"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "neutral"
+                  }
+                },
+                "required": [
+                  "kind"
+                ]
+              }
+            ]
+          },
           "app": {
             "anyOf": [
               {
@@ -38485,6 +38529,7 @@
           }
         },
         "required": [
+          "preview",
           "app"
         ]
       },
