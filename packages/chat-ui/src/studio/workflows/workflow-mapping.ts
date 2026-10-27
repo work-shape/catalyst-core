@@ -1,8 +1,10 @@
 import type { Asset } from "@work-shape/catalyst-api-client";
 import {
+  CONNECTION_EXPOSURE_ACTION_PREFIX,
   WORKFLOW_ACTIONS,
   WORKFLOW_RUN_MODES,
   WORKFLOW_TRIGGER_KINDS,
+  parseConnectionOperationName,
   type WorkflowBlockStepRunView,
   type WorkflowKind,
   type WorkflowLoopCounts,
@@ -22,6 +24,7 @@ import type {
   WorkflowDatasetColumn,
   WorkflowDatasetColumnKind,
   WorkflowDatasetView,
+  WorkflowFailure,
   WorkflowFailureReason,
   WorkflowListItem,
   WorkflowOutputPreview,
@@ -190,9 +193,43 @@ function cycleWorkflowOf(error: ErrorResource): string | undefined {
     : undefined;
 }
 
+/**
+ * A refusal because the step's operation is not open to the run: `FORBIDDEN` with the action
+ * `connection_exposure:<exposure>`, which no grant carries, so it is never read as a missing
+ * right. The engine's sentence starts with the operation it refused; only a Connection's name
+ * that has the form of one is read from it, for the sentence that says where to open it.
+ */
+function notExposedOf(
+  error: ErrorResource
+): Pick<WorkflowFailure, "exposure" | "connection"> | undefined {
+  if (error.code !== "FORBIDDEN" || !error.action?.startsWith(CONNECTION_EXPOSURE_ACTION_PREFIX)) {
+    return undefined;
+  }
+  const surface = error.action.slice(CONNECTION_EXPOSURE_ACTION_PREFIX.length);
+  const operation = /^'([^'\s]+)' /u.exec(error.message)?.[1];
+  const connection =
+    error.connection ??
+    (operation === undefined ? undefined : parseConnectionOperationName(operation)?.connection);
+  return {
+    ...(surface === "workflow" || surface === "outside" ? { exposure: surface } : {}),
+    ...(connection === undefined ? {} : { connection })
+  };
+}
+
 function toFailure(error: ErrorResource | undefined) {
   if (error === undefined) return {};
   const workflow = cycleWorkflowOf(error);
+  const notExposed = notExposedOf(error);
+  if (notExposed !== undefined) {
+    return {
+      failure: {
+        reason: "notExposed" as const,
+        detail: error.message,
+        ...notExposed,
+        ...(error.connectionTitle === undefined ? {} : { connectionTitle: error.connectionTitle })
+      }
+    };
+  }
   return {
     failure: {
       reason: FAILURE_REASONS[error.code] ?? "other",

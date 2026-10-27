@@ -1,12 +1,14 @@
 import { batchResultError } from "./batch-result";
 import {
   AppError,
+  CONNECTION_EXPOSURE_ACTION_PREFIX,
   CONNECTION_TRANSIENT_CALL_REASONS,
   CONNECTION_ACTIONS,
   JobDeferredError,
   isAppError,
   isAuthenticatedServicePrincipal,
   operationDenialError,
+  parseConnectionOperationName,
   PERSONAL_API_KEY_ACTIONS,
   WORKFLOW_ERROR_CODES,
   workflowStepIdempotencyKey,
@@ -637,6 +639,17 @@ function refusedRight(
 ): RefusedRight {
   const on = source === undefined ? "" : ` on '${source}'`;
   return (action, principalSide, outsideKeyScope) => {
+    if (action?.startsWith(CONNECTION_EXPOSURE_ACTION_PREFIX)) {
+      // No grant opens it, so the sentence never asks for one (WF-OUT).
+      return {
+        code: "FORBIDDEN",
+        message: notExposedSentence(
+          operation,
+          action.slice(CONNECTION_EXPOSURE_ACTION_PREFIX.length),
+          testRun
+        )
+      };
+    }
     const right = action === undefined ? "the right it needs" : `the right '${action}'`;
     if (testRun && !principalSide && outsideKeyScope) {
       // A key carries only the actions its owner can name on it; any other, such as
@@ -667,6 +680,31 @@ function refusedRight(
           message: `You do not hold ${right}${on} to call '${operation}'. A test run acts as the person testing, bounded by the principal '${principal}'`
         };
   };
+}
+
+/**
+ * The sentence of a step refused because its operation is not open to the surface: to
+ * Workflows, or to outside clients where one started the run. The Connection's admin opens it
+ * on the Connection's page; an operation of no Connection no exposure opens, so only the run
+ * side is offered: starts by outside clients off, or a test run signed in to the app.
+ */
+function notExposedSentence(operation: string, exposure: string, testRun: boolean): string {
+  const connection = parseConnectionOperationName(operation) !== undefined;
+  if (exposure !== "outside") {
+    const surface = exposure === "workflow" ? "Workflows" : `'${exposure}'`;
+    return connection
+      ? `'${operation}' is not exposed to ${surface}. Expose it to ${surface} on the Connection's page`
+      : `'${operation}' is not open to ${surface}`;
+  }
+  const started = testRun
+    ? "an outside client started the test run"
+    : "an outside client started this run";
+  const runSide = testRun
+    ? "start the test run signed in to the app"
+    : "turn off starts by outside clients in the Workflow's settings";
+  return connection
+    ? `'${operation}' is not exposed to outside clients, and ${started}. Expose it to outside clients on the Connection's page, or ${runSide}`
+    : `'${operation}' reads data that is not open to outside clients, and ${started}. To run this step, ${runSide}`;
 }
 
 function isApprovalUnavailable(denial: OperationDenial): boolean {

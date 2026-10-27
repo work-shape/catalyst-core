@@ -481,7 +481,7 @@ function failedConnection(
 export function failureHappened(
   failure: Pick<
     WorkflowFailure,
-    "reason" | "action" | "connection" | "connectionTitle" | "workflow" | "operation"
+    "reason" | "action" | "connection" | "connectionTitle" | "workflow" | "operation" | "exposure"
   > & {
     detail?: string;
   },
@@ -495,6 +495,7 @@ export function failureHappened(
   if (failure.operation !== undefined && failure.reason === "confirmationUnattended") {
     return t("workflows.reason.confirmationUnattendedNamed", { operation: failure.operation });
   }
+  if (failure.reason === "notExposed") return notExposedHappened(failure.exposure, connection, t);
   if (failure.action !== undefined && failure.reason === "missingRight") {
     if (failure.action === CONNECTION_ACTIONS.use) {
       if (connection === undefined) {
@@ -545,7 +546,10 @@ export function runFailedBecause(
  * to give the missing right, never to ask an administrator (C7).
  */
 export function failureAdvice(
-  failure: Pick<WorkflowFailure, "reason" | "action" | "connection" | "connectionTitle">,
+  failure: Pick<
+    WorkflowFailure,
+    "reason" | "action" | "connection" | "connectionTitle" | "exposure"
+  >,
   t: (key: TranslationKey, values?: Record<string, string>) => string,
   {
     account,
@@ -555,6 +559,7 @@ export function failureAdvice(
   }: FailureNames & { administers: boolean; place: string }
 ): string {
   const connection = failedConnection(failure, known);
+  if (failure.reason === "notExposed") return notExposedAdvice(failure.exposure, connection, t);
   if (failure.reason !== "missingRight" || !administers) {
     return t(failureSentences(failure.reason).advice, { place });
   }
@@ -564,6 +569,57 @@ export function failureAdvice(
   return failure.action === CONNECTION_ACTIONS.use && connection !== undefined
     ? t("workflows.advice.connectionUseAdmin", { account, connection, place })
     : t("workflows.advice.missingRightAdminAccount", { account, place });
+}
+
+/**
+ * What happened to a step whose operation is not open to the run. Its Connection is named
+ * where the screen or the failure knows it; without one the step reads data of no Connection,
+ * which no exposure opens.
+ */
+function notExposedHappened(
+  exposure: WorkflowFailure["exposure"],
+  connection: string | undefined,
+  t: (key: TranslationKey, values?: Record<string, string>) => string
+): string {
+  if (exposure === "outside") {
+    return connection === undefined
+      ? t("workflows.reason.notExposedOutsideOfStep")
+      : t("workflows.reason.notExposedOutside", { connection });
+  }
+  if (exposure === "workflow") {
+    return connection === undefined
+      ? t("workflows.reason.notExposedWorkflowOfStep")
+      : t("workflows.reason.notExposedWorkflow", { connection });
+  }
+  return t("workflows.reason.notExposed");
+}
+
+/**
+ * What opens a step whose operation is not open to the run: the Connection's exposure, in the
+ * words of its page, never a right. An outside client's run is also run without one, from here.
+ */
+function notExposedAdvice(
+  exposure: WorkflowFailure["exposure"],
+  connection: string | undefined,
+  t: (key: TranslationKey, values?: Record<string, string>) => string
+): string {
+  if (exposure === "outside") {
+    return connection === undefined
+      ? t("workflows.advice.notExposedOutsideOfStep")
+      : t("workflows.advice.notExposedOutside", {
+          connection,
+          field: t("connections.operationExposure"),
+          surface: t("connections.exposureOutside")
+        });
+  }
+  if (exposure === "workflow" && connection !== undefined) {
+    return t("workflows.advice.notExposedWorkflow", {
+      connection,
+      field: t("connections.operationExposure"),
+      surface: t("connections.exposureWorkflow")
+    });
+  }
+  return t("workflows.advice.notExposed");
 }
 
 /** What happened, and what the reader can do about it, for why something did not end as done. */

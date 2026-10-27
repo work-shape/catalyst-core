@@ -338,6 +338,11 @@ type WorkflowStepRunStatus = Exclude<WorkflowRunStatus, "limit_reached" | "conti
  */
 export type WorkflowFailureReason =
   | "missingRight"
+  /**
+   * What the step calls is not open to the run: not exposed to Workflows, or to outside clients
+   * where one started the run. No right opens it; the Connection's exposure does.
+   */
+  | "notExposed"
   /** In a test run: the person testing lacks a right a step needs. */
   | "testerMissingRight"
   | "policy"
@@ -367,8 +372,13 @@ export interface WorkflowFailure {
   detail: string;
   /** On a missing right: the action the account of the Workflow does not hold. */
   action?: string;
-  /** On a refused `connection.use`: the Connection the step called, where the instance names it. */
+  /**
+   * On a refused `connection.use`, or an operation not exposed: the Connection the step called,
+   * where the instance names it.
+   */
   connection?: string;
+  /** On `notExposed`: what the operation is not open to, Workflows or outside clients. */
+  exposure?: "workflow" | "outside";
   /** That Connection's title, where the reader may read or use it. */
   connectionTitle?: string;
   /** On a run key held in the call chain: the name of the Workflow the step would start. */

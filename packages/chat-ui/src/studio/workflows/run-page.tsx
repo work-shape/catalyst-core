@@ -415,11 +415,12 @@ export function WorkflowRunPageView({
                   ? undefined
                   : Math.max(0, Math.round((now.getTime() - read.silentSince) / 1000))
               }
-              // A missing right is fixed outside the step: the run says where, with its account.
+              // A missing right or exposure is fixed outside the step: the run says where.
               showFailure={
                 run.failure !== undefined &&
                 (run.status === "limit_reached" ||
                   run.failure.reason === "missingRight" ||
+                  run.failure.reason === "notExposed" ||
                   !failedStepHeld)
               }
               // The canvas draws the published definition. A run keeps the revision it started

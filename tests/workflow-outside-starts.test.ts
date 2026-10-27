@@ -313,12 +313,64 @@ describe("a Workflow started from outside", () => {
     const run = await t.finish(runSchema.parse(started.json()).id);
     expect(run.status).toBe("failed");
     expect(run.error).toMatchObject({ action: "connection_exposure:outside" });
+    // No grant opens it, so the sentence names what does and asks for no right.
+    expect(run.error?.message).toBe(
+      "'connection.crm.echo' is not exposed to outside clients, and an outside client started this run. Expose it to outside clients on the Connection's page, or turn off starts by outside clients in the Workflow's settings"
+    );
     expect(t.executed).toEqual([]);
 
     // A run Tim starts in the app answers no outside client and calls crm under `workflow`.
     const bySession = await startBy(t, tim.id, "notify-clients");
     const own = await t.finish(runSchema.parse(bySession.json()).id);
     expect(own.status).toBe("done");
+  });
+
+  // A step refused for exposure was worded as a right the Workflow's account lacks, which no
+  // grant gives. Fails without the wording: the sentence asked an administrator to grant
+  // 'connection_exposure:outside' or 'connection_exposure:workflow'.
+  it("words a step refused for exposure as the Connection's to open, never as a right to grant", async () => {
+    const { t, tim, headers } = await ready();
+    await seedCrm(t, false);
+    const draft = withTriggers("notify-clients", [{ kind: "manual" }]);
+    const written = await t.call(t.root.id, "assets.put", {
+      params: { kind: WORKFLOW_ASSET_KIND, name: draft.id },
+      payload: { config: { name: draft.id, manifest: draft }, expectedRevision: null }
+    });
+    expect(written.statusCode, written.body).toBe(200);
+    revisions.set(draft.id, z.object({ revision: z.number() }).parse(written.json()).revision);
+
+    // Tim's key test-runs the draft: crm is not exposed to outside clients.
+    const tested = await t.call(tim.id, "workflows.test", {
+      params: { workflow: draft.id },
+      payload: { input: { note: NOTE } },
+      headers
+    });
+    expect(tested.statusCode, tested.body).toBe(200);
+    const test = await t.finish(runSchema.parse(tested.json()).id);
+    expect(test.status).toBe("failed");
+    expect(test.error).toMatchObject({ code: "FORBIDDEN", action: "connection_exposure:outside" });
+    expect(test.error?.message).toBe(
+      "'connection.crm.echo' is not exposed to outside clients, and an outside client started the test run. Expose it to outside clients on the Connection's page, or start the test run signed in to the app"
+    );
+
+    // Published, then crm's operations are taken off Workflows: a run in the app is refused.
+    expect((await publish(t, draft)).statusCode).toBe(200);
+    await t.seed("crm", {
+      displayName: CRM_TITLE,
+      operations: [
+        operationOf("echo", { exposure: ["agent"] }),
+        operationOf("write", { effect: "changing", exposure: ["agent"] })
+      ]
+    });
+    const started = await startBy(t, tim.id, draft.id);
+    expect(started.statusCode, started.body).toBe(200);
+    const run = await t.finish(runSchema.parse(started.json()).id);
+    expect(run.status).toBe("failed");
+    expect(run.error).toMatchObject({ code: "FORBIDDEN", action: "connection_exposure:workflow" });
+    expect(run.error?.message).toBe(
+      "'connection.crm.echo' is not exposed to Workflows. Expose it to Workflows on the Connection's page"
+    );
+    expect(t.executed).toEqual([]);
   });
 
   // A failure of a run no outside client started names the Connection it ended at, by name, by
