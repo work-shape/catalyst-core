@@ -10,6 +10,7 @@ import type { PostgresTransaction } from "./postgres-database";
 import {
   agentRuns,
   approvalRequests,
+  configAssetPublications,
   configAssetRevisions,
   connectionBindings,
   conversationFollowUps,
@@ -41,6 +42,7 @@ export const ERASED_PERSON_COPIES = [
   "operation_runs.decision",
   "workflow_runs.started_by",
   "config_asset_revisions.actor",
+  "config_asset_publications.actor",
   "feedback.handled_by_label",
   "shipped_guardrail_switches.switched_by_label",
   "live_once_switches.switched_by_label",
@@ -266,6 +268,20 @@ export async function eraseStoredPersonCopies(
         sql`${configAssetRevisions.actor}->>'userId' = ${userId}`,
         sql`(${configAssetRevisions.actor}->>'displayLabel' <> ''
           or ${configAssetRevisions.actor} ? 'externalUserId')`
+      )
+    );
+
+  await tx
+    .update(configAssetPublications)
+    .set({
+      actor: sql`jsonb_set(${configAssetPublications.actor}, '{displayLabel}', '""') - 'externalUserId'`
+    })
+    .where(
+      and(
+        eq(configAssetPublications.clientInstanceId, clientInstanceId),
+        sql`${configAssetPublications.actor}->>'userId' = ${userId}`,
+        sql`(${configAssetPublications.actor}->>'displayLabel' <> ''
+          or ${configAssetPublications.actor} ? 'externalUserId')`
       )
     );
 

@@ -19,6 +19,8 @@ describe("publications backfill (APPVER-1)", () => {
         CREATE TABLE config_asset_revisions (
           id text PRIMARY KEY, asset_id text NOT NULL REFERENCES config_assets(id), revision integer NOT NULL
         );
+        CREATE TABLE product_users (id text PRIMARY KEY, client_instance_id text NOT NULL);
+        INSERT INTO product_users VALUES ('usr_root', 'instance');
         CREATE TABLE audit_events (
           id text PRIMARY KEY, client_instance_id text NOT NULL, type text NOT NULL, status text NOT NULL,
           actor jsonb, created_at timestamptz NOT NULL, metadata jsonb NOT NULL
@@ -27,10 +29,12 @@ describe("publications backfill (APPVER-1)", () => {
           ('credited', 'instance', 'app', 'credited', 'credited_3', '2026-10-01', '2026-10-20'),
           ('pruned', 'instance', 'workflow', 'pruned', 'pruned_2', '2026-10-01', '2026-10-21'),
           ('recreated', 'instance', 'app', 'recreated', 'recreated_1', '2026-10-10', '2026-10-22'),
+          ('erased', 'instance', 'app', 'erased', 'erased_1', '2026-10-01', '2026-10-24'),
           ('draft', 'instance', 'app', 'draft', NULL, '2026-10-01', '2026-10-23');
         INSERT INTO config_asset_revisions VALUES
           ('credited_2', 'credited', 2), ('credited_3', 'credited', 3),
-          ('pruned_2', 'pruned', 2), ('recreated_1', 'recreated', 1), ('draft_1', 'draft', 1);
+          ('pruned_2', 'pruned', 2), ('recreated_1', 'recreated', 1), ('draft_1', 'draft', 1),
+          ('erased_1', 'erased', 1);
         INSERT INTO audit_events VALUES
           ('e1', 'instance', 'app.published', 'success', '{"displayLabel":"Old","roles":[]}', '2026-10-05',
             '{"kind":"app","name":"credited","revision":3}'),
@@ -43,7 +47,9 @@ describe("publications backfill (APPVER-1)", () => {
           ('e5', 'other', 'app.published', 'success', '{"displayLabel":"Elsewhere","roles":[]}', '2026-10-09',
             '{"kind":"app","name":"credited","revision":3}'),
           ('e6', 'instance', 'app.published', 'success', '{"displayLabel":"Before","roles":[]}', '2026-10-02',
-            '{"kind":"app","name":"recreated","revision":1}');
+            '{"kind":"app","name":"recreated","revision":1}'),
+          ('e7', 'instance', 'app.published', 'success', '{"displayLabel":"Erika","userId":"usr_gone","roles":[]}', '2026-10-03',
+            '{"kind":"app","name":"erased","revision":1}');
       `);
       const source = await readFile(
         "packages/postgres-store/migrations/0158_config_asset_publications.sql",
@@ -63,6 +69,14 @@ describe("publications backfill (APPVER-1)", () => {
           number: 1,
           by: "Root",
           at: new Date("2026-10-06").toISOString()
+        },
+        // The event of a person whose account is gone gives the time and names nobody.
+        {
+          asset_id: "erased",
+          revision: 1,
+          number: 1,
+          by: null,
+          at: new Date("2026-10-03").toISOString()
         },
         // No retained event: the asset's last change, and nobody named.
         {

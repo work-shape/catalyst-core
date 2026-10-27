@@ -232,7 +232,7 @@ test("the builder of a Workflow edits it with the agent and publishes or discard
       expectedRevision: await assetRevision(page, assetUrlOf(id))
     });
     await expect(bar).toHaveAttribute("data-workflow-draft", "ahead");
-    await expect(await lastWorkLine(page)).toHaveText(/^Saved version \d+$/u);
+    await expect(await lastWorkLine(page)).toHaveText("Draft saved");
     await shootSurface(page, "workflow-from-page", async () => {
       await expect(bar).toHaveAttribute("data-workflow-draft", "ahead");
       await expect(workflowPage.getByText("What the run returns.")).toBeVisible();

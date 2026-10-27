@@ -249,6 +249,7 @@ export const unusedConfigAssetStore: ConfigAssetStore = {
   listConfigAssetsFromPage: unsupported,
   getConfigAssetPageOrigin: unsupported,
   listConfigAssetRevisions: unsupported,
+  listConfigAssetPublications: unsupported,
   getConfigAssetRevision: unsupported,
   getConfigAssetRevisionById: unsupported,
   applyConfigAssetMutations: unsupported,
@@ -272,7 +273,6 @@ export const unusedConfigAssetStore: ConfigAssetStore = {
   setAgentUse: unsupported
 };
 export const unusedAuditEventStore: AuditEventStore = {
-  getAssetPublication: unsupported,
   appendAuditEvent: unsupported,
   listAuditEvents: unsupported,
   deleteAuditEventsOlderThan: unsupported

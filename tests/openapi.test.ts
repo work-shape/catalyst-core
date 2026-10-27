@@ -33,7 +33,7 @@ const schemeNames = (id: keyof typeof apiOperations) =>
   documentedOperation(id).security.flatMap((requirement) => Object.keys(requirement));
 
 describe("the released OpenAPI document", () => {
-  it("lists the twelve asset operations at their addresses and none of the five they replace", () => {
+  it("lists the thirteen asset operations at their addresses and none of the five they replace", () => {
     const listed = Object.entries(released.paths).flatMap(([path, methods]) =>
       Object.entries(methods).map(
         ([method, operation]) => `${operation.operationId}  ${method.toUpperCase()} ${path}`
@@ -49,6 +49,7 @@ describe("the released OpenAPI document", () => {
       "assets.get  GET /api/v1/assets/{kind}/{name}",
       "assets.list  GET /api/v1/assets/{kind}",
       "assets.list_live_once  GET /api/v1/assets/{kind}/{name}/run-live-once",
+      "assets.publications.list  GET /api/v1/assets/{kind}/{name}/publications",
       "assets.publish  POST /api/v1/assets/{kind}/{name}/publish",
       "assets.put  PUT /api/v1/assets/{kind}/{name}",
       "assets.revert  POST /api/v1/assets/{kind}/{name}/revert",

@@ -144,7 +144,7 @@ describe("where the data of an App draft comes from", () => {
   it("asks nothing of a draft never published, and shows no lines cached for its name", async () => {
     const { container, sourceReads } = await mountDraft(undefined, true);
     await headShown(container);
-    expect(container.textContent).toContain("Not published yet");
+    expect(container.textContent).toContain("Draft · not published");
     await act(async () => new Promise((resolve) => setTimeout(resolve, 20)));
     expect(sourceReads).toEqual([]);
     expect(container.querySelector(LABEL)).toBeNull();
