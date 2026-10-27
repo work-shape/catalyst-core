@@ -7,6 +7,7 @@ import {
 } from "@work-shape/catalyst-api-contract";
 import {
   AppError,
+  DATA_STORE_ACTIONS,
   DATA_STORE_ASSET_KIND,
   WORKFLOW_ACTIONS,
   appReachesDataStore,
@@ -253,8 +254,8 @@ export class AppDraftTries {
       // The App's own publish refuses a store that is not there for it.
       if (asset?.status !== "active" || !appReachesDataStore(app.scope, asset.scope)) continue;
       const { item, config } = await this.item(context, asset);
-      const liveLevel =
-        (await stores.dataStores.getDataStore({ clientInstanceId, id: asset.id }))?.level ?? 0;
+      const record = await stores.dataStores.getDataStore({ clientInstanceId, id: asset.id });
+      const liveLevel = record?.level ?? 0;
       const draft = storeMigrationsOf(config);
       if (config && minSchema !== undefined && draft.level < minSchema) {
         const refusal = refusalOf(
@@ -275,6 +276,34 @@ export class AppDraftTries {
         liveLevel < minSchema &&
         draft.level >= minSchema;
       if (!item.pending && !migrating) continue;
+      // The Publish waits only for a store its publisher may publish; one whose job ended in a
+      // failure is no longer being updated, and the Publish refuses it.
+      const mayPublish =
+        migrating &&
+        context.access.authorize(
+          DATA_STORE_ACTIONS.publish,
+          accessResource(DATA_STORE_ASSET_KIND, name, asset.scope, asset.id)
+        ).allowed;
+      if (migrating && !mayPublish) {
+        item.refusals.push({
+          reason: "no_grant",
+          message: `You may not publish the Data Store '${name}'.`,
+          right: DATA_STORE_ACTIONS.publish
+        });
+      }
+      if (mayPublish && record?.failure) {
+        const number = liveLevel + 1;
+        item.refusals.push(
+          refusalOf(
+            dataStoreRefusalError("data_store_migration_failed", name, {
+              title: item.title,
+              migration: draft.migrations.get(number) ?? String(number),
+              level: liveLevel,
+              failure: record.failure.message
+            })
+          )
+        );
+      }
       reviewed.push({
         ...item,
         liveLevel,

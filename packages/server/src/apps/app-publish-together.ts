@@ -1,5 +1,6 @@
 import {
   AppError,
+  DATA_STORE_ACTIONS,
   DATA_STORE_ASSET_KIND,
   WORKFLOW_ASSET_KIND,
   type ActorAccess,
@@ -13,7 +14,7 @@ import {
   type OperationOrigin,
   type PolicyTarget
 } from "@work-shape/catalyst-core";
-import { transactionalAssetCall, type AssetCall } from "../assets/asset-access";
+import { accessResource, transactionalAssetCall, type AssetCall } from "../assets/asset-access";
 import { AssetWorkflow } from "../assets/asset-service";
 import type { AssetAddress } from "../assets/asset-target";
 import { publishEvents } from "../guardrails/asset-guardrail-events";
@@ -26,6 +27,7 @@ import {
   requireStoreLevels,
   storesStillMigrating,
   workflowsPublishedWith,
+  type StoreStillMigrating,
   type StorePublishedWith
 } from "./app-closure";
 import {
@@ -185,11 +187,15 @@ export class AppPublishTogether {
    */
   async publish(call: AssetCall, input: PublishTogetherInput) {
     const members = await this.members(input);
-    // A store published stays published: the App's own checks come first, so a refusal of
-    // its audience, its revision or the set publishes no store. Its Workflows' checks cannot:
-    // a Workflow's asks that its children are live, which they are only further down.
-    if (members.stores.length > 0) await this.assets.drafts.checkPublish(call, input);
-    const storesPublished = await this.publishStores(call, input, members.stores);
+    const migrating = await this.storesToAwait(call, input, members.stores);
+    // A store published stays published, and a wait takes up to a minute: the App's own checks
+    // come first, so a refusal of its audience, its revision or the set publishes no store and
+    // waits for none. Its Workflows' checks cannot: a Workflow's asks that its children are
+    // live, which they are only further down.
+    if (members.stores.length > 0 || migrating.length > 0) {
+      await this.assets.drafts.checkPublish(call, input);
+    }
+    const storesPublished = await this.publishStores(call, members.stores, migrating);
     if (members.workflows.length === 0) {
       const published = await this.assets.drafts.publish(call, input);
       return storesPublished.length === 0
@@ -223,8 +229,8 @@ export class AppPublishTogether {
    */
   private async publishStores(
     call: AssetCall,
-    input: PublishTogetherInput,
-    named: readonly StorePublishedWith[]
+    named: readonly StorePublishedWith[],
+    migrating: readonly StoreStillMigrating[]
   ) {
     const { clientInstanceId } = this.options;
     const read = (id: string) =>
@@ -236,15 +242,33 @@ export class AppPublishTogether {
       published.push(pointersOf(member, await this.assets.drafts.publish(call, addressOf(member))));
       awaited.push(awaitedOf(store));
     }
-    const app = input.kind === APP_ASSET_KIND ? await this.appRevision(input) : undefined;
-    if (app) {
-      const skip = new Set(named.map(({ name }) => name));
-      for (const store of await storesStillMigrating(this.options, app, skip)) {
-        awaited.push(awaitedOf(store));
-      }
-    }
+    awaited.push(...migrating.map(awaitedOf));
     if (awaited.length > 0) await awaitStoreLevels(read, awaited, this.clock);
     return published;
+  }
+
+  /**
+   * The live stores the App binds that an earlier Publish left below the level it needs, which
+   * this one waits for. Only those the caller may publish: the wait's refusal names the store's
+   * title, its level and its failure, and a store's level is told only to one who may publish
+   * it. Any other is refused by the App's own publish, as before.
+   */
+  private async storesToAwait(
+    call: AssetCall,
+    input: PublishTogetherInput,
+    named: readonly StorePublishedWith[]
+  ): Promise<StoreStillMigrating[]> {
+    const app = input.kind === APP_ASSET_KIND ? await this.appRevision(input) : undefined;
+    if (!app) return [];
+    const skip = new Set(named.map(({ name }) => name));
+    const migrating = await storesStillMigrating(this.options, app, skip);
+    return migrating.filter(
+      (store) =>
+        call.access.authorize(
+          DATA_STORE_ACTIONS.publish,
+          accessResource(DATA_STORE_ASSET_KIND, store.name, store.asset.scope, store.asset.id)
+        ).allowed
+    );
   }
 
   /** The App's revision the call names, or nothing where its own publish refuses it. */
