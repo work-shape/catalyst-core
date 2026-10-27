@@ -14,6 +14,7 @@ import {
   requireOwnTranscript,
   subjectUnavailable
 } from "../../conversations/platform-asset-subject";
+import { kindPreviewOf } from "../../pages/asset-preview";
 import { type AssetCallScope, namedBy, ASSET_WRITE_OPERATION } from "./scope";
 
 /** The kind a save proposes a change of, instead of writing a draft. */
@@ -38,6 +39,10 @@ export function putCalls(
     creatableKinds,
     otherName
   } = scope;
+  /** Says of a kind that brings a preview that the person sees the draft beside the chat. */
+  const previewed = (kind: string) =>
+    kindPreviewOf(options, kind) ? { preview: true as const } : {};
+
   /**
    * A save without a revision: it creates the asset the call names, as `assets.put` with no
    * revision creates one, with the right, the checks and the audit of the person, and notes it
@@ -120,7 +125,8 @@ export function putCalls(
       name: named.name,
       title: titleOf(named.kind, named.name, read.config, context.locale),
       ...ownerOf(kind, conversation),
-      ...(beside ? { besideSubject: true as const } : {})
+      ...(beside ? { besideSubject: true as const } : {}),
+      ...previewed(named.kind)
     };
   }
 
@@ -200,7 +206,13 @@ export function putCalls(
               draftRevision: written.revision,
               publishedRevision
             }
-          : { saved: true, revision: written.revision };
+          : {
+              saved: true,
+              revision: written.revision,
+              ...(kindPreviewOf(options, subject.kind)
+                ? { kind: subject.kind, name: subject.name, preview: true as const }
+                : {})
+            };
       } catch (error) {
         const refused = platformAssetWriteRefusal(error);
         if (refused) return refused;

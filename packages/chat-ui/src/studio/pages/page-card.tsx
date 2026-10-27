@@ -22,6 +22,7 @@ import {
   type PageSave
 } from "./page-save";
 import { BuildErrorList } from "./page-surface";
+import { assetPreviewSurfaceAfterRunCalls } from "./asset-preview";
 
 /**
  * The card of one open in the thread. A built revision reopens beside the conversation from
@@ -177,7 +178,7 @@ interface WatchedRun {
 
 const FINISHED_RUN_STATES = new Set<string>(ENDED_AGENT_RUN_STATUSES);
 /** The surfaces of what a run opened. */
-const PREVIEW_KINDS: ReadonlySet<string> = new Set(["page", "page_building"]);
+const PREVIEW_KINDS: ReadonlySet<string> = new Set(["page", "page_building", "asset_preview"]);
 
 /**
  * Shows what a run opens beside the conversation: from the start of the open, as what builds,
@@ -208,13 +209,16 @@ export function useAutoOpenPageSurface(
       watchedRunIds.current.add(runId);
     }
     const { parts } = activeRun.projection;
-    const next = pageSurfaceAfterRunCalls({
-      conversationId,
-      parts,
-      handled: handledCalls.current,
-      current: panel.open ? panel.entry : undefined,
-      t
-    });
+    // A save of a draft with a preview, such as a form page, opens its draft as a Page opens.
+    const next =
+      pageSurfaceAfterRunCalls({
+        conversationId,
+        parts,
+        handled: handledCalls.current,
+        current: panel.open ? panel.entry : undefined,
+        t
+      }) ??
+      assetPreviewSurfaceAfterRunCalls({ conversationId, parts, handled: handledCalls.current });
     const kept = savedDraftCalls(parts.filter((part) => part.toolName === APP_SAVE_TOOL_NAME))
       .map((callId) => `${callId}:kept`)
       .filter((key) => !handledCalls.current.has(key));

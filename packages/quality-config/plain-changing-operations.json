@@ -145,6 +145,7 @@
     "apps.sessions.context": "asset_right",
     "apps.sessions.get_workflow_run": "asset_right",
     "apps.sessions.report": "asset_right",
+    "assets.preview": "asset_right",
     "branding.get": "public",
     "captured_mail.list": "public",
     "config.get": "own",

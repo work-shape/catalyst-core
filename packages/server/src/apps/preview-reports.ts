@@ -1,4 +1,3 @@
-import { APP_ASSET_KIND } from "@work-shape/catalyst-api-contract";
 import {
   asConversationId,
   asUserId,
@@ -12,7 +11,7 @@ import {
 } from "@work-shape/catalyst-core";
 import { ConversationWorkflow } from "../conversations/conversation-service";
 import type { ResolvedChatServerOptions } from "../types";
-import type { AppActionCalls, FrameSession, FrameSessionProof } from "./action-call";
+import type { AppActionCalls, FrameSessionProof, ReportingFrame } from "./action-call";
 
 // What a preview reports of itself (PREVIEW-STATUS-1), kept for the agent of the conversation
 // the preview belongs to, per person whose browser showed it: a run reads only the report of the
@@ -46,16 +45,17 @@ export class PreviewReports {
 
   /**
    * Keeps the report of the frame the proof names, for the signed-in caller it was minted for.
-   * A Page of a conversation reports into that conversation. The draft of an App reports into
-   * the conversation the interface names, when the caller reads it and it is about this App. A
+   * A Page of a conversation reports into that conversation. The draft of an App, and the
+   * preview of another kind's draft such as a form page, report into the conversation the
+   * interface names, when the caller reads it and it is about this asset or created it. A
    * published App, and a draft without such a conversation, report nowhere.
    */
   async report(
     caller: { user: AuthenticatedUser; access: ActorAccess },
     input: PreviewReportInput
   ): Promise<{ stored: boolean }> {
-    const session = await this.actions.session(caller, input);
-    const conversationId = await this.conversationOf(session, caller.user, input.conversationId);
+    const frame = await this.actions.reportingFrame(caller, input);
+    const conversationId = await this.conversationOf(frame, caller.user, input.conversationId);
     // The session refused a proof whose file set id is malformed; this says so to the types.
     if (conversationId === undefined || !isFileSetId(input.fileSetId)) {
       return { stored: false };
@@ -65,31 +65,39 @@ export class PreviewReports {
       conversationId,
       fileSetId: input.fileSetId,
       userId: asUserId(getSubjectUserId(caller.user)),
-      report: keptReport(input.report, session.usesKit),
+      report: keptReport(input.report, frame.usesKit),
       reportedAt: this.now().toISOString()
     });
     return { stored };
   }
 
   private async conversationOf(
-    session: FrameSession,
+    frame: ReportingFrame,
     user: AuthenticatedUser,
     named: string | undefined
   ): Promise<ConversationId | undefined> {
-    if (session.mode === "page") {
-      // The session checked that the caller reads it. A name the interface sent does not count.
-      return session.conversationId;
+    if (frame.mode === "page") {
+      // The frame's check read it for the caller. A name the interface sent does not count.
+      return frame.conversationId;
     }
-    if (session.mode !== "draft" || named === undefined || session.appName === undefined) {
+    if (frame.mode !== "draft" || named === undefined || frame.asset.name === "") {
       return undefined;
     }
     const conversation = await this.conversations
       .requireConversationAccess(asConversationId(named), user)
       .catch(() => undefined);
-    const subject = conversation?.subject;
-    return conversation && subject?.kind === APP_ASSET_KIND && subject.name === session.appName
-      ? conversation.id
-      : undefined;
+    if (!conversation) return undefined;
+    const { asset } = frame;
+    const subject = conversation.subject;
+    if (subject?.kind === asset.kind && subject.name === asset.name) return conversation.id;
+    // A draft the conversation created beside its subject, such as an App's form page.
+    const created = await this.options.stores.conversations.createdAsset({
+      clientInstanceId: this.options.clientInstanceId,
+      conversationId: conversation.id,
+      kind: asset.kind,
+      name: asset.name
+    });
+    return created ? conversation.id : undefined;
   }
 }
 

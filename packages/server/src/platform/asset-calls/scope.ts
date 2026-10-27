@@ -25,6 +25,7 @@ import {
   ownerOf,
   subjectUnavailable
 } from "../../conversations/platform-asset-subject";
+import { kindPreviewOf } from "../../pages/asset-preview";
 import type { AssetWorkflowOptions } from "../../types";
 
 // What the families of the agent's asset calls share: the conversation a call came from, the
@@ -256,9 +257,15 @@ export function createAssetCallScope(options: AssetWorkflowOptions) {
     ...(input.files === undefined ? {} : { files: input.files })
   });
 
-  /** The kinds a first save of a conversation creates, as far as they exist here. */
+  /**
+   * The kinds a first save of a conversation creates, as far as they exist here: the platform's
+   * own, and a kind whose draft the person sees beside the chat (EW-9c2), such as a form page.
+   */
   const creatableKinds = () =>
-    existingKinds().filter((kind) => CREATED_FROM_CHAT.includes(kind.kind));
+    existingKinds().filter(
+      (kind) =>
+        CREATED_FROM_CHAT.includes(kind.kind) || kindPreviewOf(options, kind.kind) !== undefined
+    );
 
   /** The one issue of a config that names another asset than the conversation is about. */
   const otherName = (subject: ConversationSubject, config: Record<string, unknown>) =>

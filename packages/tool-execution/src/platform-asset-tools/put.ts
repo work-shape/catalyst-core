@@ -83,6 +83,8 @@ const putOutputSchema = z.union([
     title: z.string().optional(),
     workspaceId: z.string().optional(),
     besideSubject: z.literal(true).optional(),
+    /** The kind brings a preview: the person sees the draft beside the chat. */
+    preview: z.literal(true).optional(),
     href: z.string().optional()
   }),
   z.object({ saved: z.literal(false), issues: z.array(issueSchema) }),
@@ -143,7 +145,7 @@ export function createPutAssetTool(calls: PlatformAssetPutCalls): AnyToolDefinit
         kind: kindSchema
           .optional()
           .describe(
-            "To create: workflow, data_store, agent or skill. Else a draft this conversation created."
+            "To create: workflow, data_store, agent, skill, or a kind of a capability whose draft is shown beside the chat, such as form_page. Else a draft this conversation created."
           ),
         name: nameSchema
           .optional()

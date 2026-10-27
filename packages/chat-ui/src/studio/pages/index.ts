@@ -10,6 +10,11 @@ export {
   type ArrivedMessage
 } from "./bridge-host";
 export {
+  AssetPreviewCardView,
+  assetPreviewSurfaceAfterRunCalls,
+  previewedDraftOfCall
+} from "./asset-preview";
+export {
   createFrameCalls,
   frameCallFailure,
   frameSessionProof,

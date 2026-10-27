@@ -15,6 +15,7 @@ const rendered: Record<Surface["kind"], boolean> = {
   page: true,
   page_building: true,
   app_view: true,
+  asset_preview: true,
   inbox_item: true
 };
 
@@ -41,7 +42,7 @@ const toolDisplay: Surface = {
 
 describe("surface slot frame", () => {
   it("declares nine kinds and renders each of them", () => {
-    expect(Object.keys(rendered)).toHaveLength(6);
+    expect(Object.keys(rendered)).toHaveLength(7);
     expect(Object.values(rendered).every((hasRenderer) => hasRenderer)).toBe(true);
   });
 

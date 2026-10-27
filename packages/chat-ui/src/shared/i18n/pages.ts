@@ -17,6 +17,7 @@ export const pages = defineTranslations({
     "pages.cardErrors": "The preview could not be built",
     "pages.cardFailed": "The preview could not be opened",
     "pages.cardFoldedPreview": "Preview updated",
+    "pages.draftSaved": "Draft saved",
     "pages.errorPlace": "{file}, line {line}",
     "pages.errorsKeepShown":
       "The preview still shows the last version. Ask the agent to fix the errors.",
@@ -47,6 +48,7 @@ export const pages = defineTranslations({
     "pages.showFileList": "All files",
     "pages.stateOfApp": "Preview of “{app}” · data stores and workflows run only in the app",
     "pages.stateUnsaved": "Preview · not saved yet",
+    "pages.stateDraftPreview": "Preview of the draft · with sample content, nothing is sent",
     "pages.shown": "Shown",
     "pages.testRunDraft": "Test run of the draft · Workflow draft",
     "pages.testRunPublished": "Test run · published Workflow",
@@ -71,6 +73,7 @@ export const pages = defineTranslations({
     "pages.cardErrors": "Die Vorschau konnte nicht gebaut werden",
     "pages.cardFailed": "Die Vorschau konnte nicht geöffnet werden",
     "pages.cardFoldedPreview": "Vorschau aktualisiert",
+    "pages.draftSaved": "Entwurf gespeichert",
     "pages.errorPlace": "{file}, Zeile {line}",
     "pages.errorsKeepShown":
       "Die Vorschau zeigt weiter den letzten Stand. Bitte den Agenten, die Fehler zu beheben.",
@@ -103,6 +106,7 @@ export const pages = defineTranslations({
     "pages.showFileList": "Alle Dateien",
     "pages.stateOfApp": "Vorschau von „{app}“ · Datenspeicher und Workflows laufen nur in der App",
     "pages.stateUnsaved": "Vorschau · noch nicht gespeichert",
+    "pages.stateDraftPreview": "Vorschau des Entwurfs · mit Beispielinhalt, nichts wird gesendet",
     "pages.shown": "Angezeigt",
     "pages.testRunDraft": "Testlauf des Entwurfs · Workflow-Entwurf",
     "pages.testRunPublished": "Testlauf · veröffentlichter Workflow",
