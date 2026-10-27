@@ -1,0 +1,61 @@
+{
+  "routes": [
+    "/",
+    "/build/agents",
+    "/build/connections",
+    "/build/data-stores",
+    "/build/guardrails",
+    "/build/knowledge-bases",
+    "/build/skills",
+    "/inbox",
+    "/settings/instance/access",
+    "/settings/instance/api-access",
+    "/settings/instance/audit",
+    "/settings/instance/infrastructure",
+    "/settings/instance/jobs",
+    "/settings/instance/limits",
+    "/settings/instance/modules",
+    "/settings/instance/operations",
+    "/settings/instance/usage",
+    "/settings/instance/users",
+    "/settings/instance/workspaces",
+    "/settings/workspace/general",
+    "/settings/workspace/members",
+    "/settings/workspace/usage",
+    "/settings/you/api-keys",
+    "/settings/you/confirmations",
+    "/settings/you/connect",
+    "/settings/you/connections",
+    "/settings/you/language-appearance",
+    "/settings/you/profile",
+    "/settings/you/security",
+    "/settings/you/usage",
+    "/w/{workspace}/agents",
+    "/w/{workspace}/apps",
+    "/w/{workspace}/workflows"
+  ],
+  "required": [],
+  "states": [
+    {
+      "name": "preview-writer",
+      "setup": "/Users/felixpahlke/code/catalyst/tmp/lane/lanes/preview-1-reader/shot-states/writer.mjs"
+    },
+    {
+      "name": "preview-reader",
+      "setup": "/Users/felixpahlke/code/catalyst/tmp/lane/lanes/preview-1-reader/shot-states/reader.mjs"
+    },
+    {
+      "name": "preview-forbidden",
+      "setup": "/Users/felixpahlke/code/catalyst/tmp/lane/lanes/preview-1-reader/shot-states/forbidden.mjs"
+    },
+    {
+      "name": "preview-unsaved",
+      "setup": "/Users/felixpahlke/code/catalyst/tmp/lane/lanes/preview-1-reader/shot-states/unsaved.mjs"
+    }
+  ],
+  "modules": [],
+  "pr": 109,
+  "head": "aea7f44bba814ca9de52b5cca1e5e0af88f3ec91",
+  "base": "217687ebde3388907236a61361f68a04c250ca0f",
+  "tested": "aea7f44bba814ca9de52b5cca1e5e0af88f3ec91"
+}
