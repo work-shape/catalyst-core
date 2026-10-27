@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { isJsonObject, isRecord, type JsonValue } from "@work-shape/catalyst-core";
+import { isRecord } from "@work-shape/catalyst-asset-schemas";
+import { isJsonObject, isRecord as coreIsRecord, type JsonValue } from "@work-shape/catalyst-core";
 
 describe("record guards", () => {
+  it("keeps core imports on the shared asset-schemas guard", () => {
+    expect(coreIsRecord).toBe(isRecord);
+  });
+
   it("accepts any non-null object except arrays, without checking its values or prototype", () => {
     const objects: unknown[] = [
       {},

@@ -1,3 +1,4 @@
+import { isRecord } from "@work-shape/catalyst-asset-schemas";
 import { sha256Hex as sha256 } from "@work-shape/catalyst-core/sha256";
 import {
   lstat,
@@ -234,9 +235,7 @@ function safeTarget(directory: string, path: string): string {
   }
   return target;
 }
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
+
 function isNodeError(error: unknown): error is NodeJS.ErrnoException {
   return error instanceof Error && "code" in error;
 }
