@@ -16,6 +16,10 @@
       "class": "decision",
       "reason": "A decision on a held call cannot itself be held."
     },
+    "apps.sessions.report": {
+      "class": "conversation",
+      "reason": "A preview's report is diagnostics kept 24 hours for its conversation, not a governance event: no audit event or Operation Run holds it (PREVIEW-STATUS-1a)."
+    },
     "connect_codes.redeem": {
       "class": "identity",
       "reason": "This operation establishes the actor."
@@ -140,6 +144,7 @@
     "apps.preview": "asset_right",
     "apps.sessions.context": "asset_right",
     "apps.sessions.get_workflow_run": "asset_right",
+    "apps.sessions.report": "asset_right",
     "branding.get": "public",
     "captured_mail.list": "public",
     "config.get": "own",

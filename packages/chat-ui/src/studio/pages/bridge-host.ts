@@ -5,6 +5,7 @@ import {
   appBridgeHostMessageSchema,
   appBridgePageMessageSchema,
   type AppBridgeContext,
+  type AppBridgeGuardReport,
   type AppBridgeHostMessage,
   type AppBridgePageMessage
 } from "@work-shape/catalyst-api-client";
@@ -42,7 +43,7 @@ export interface ArrivedMessage {
 /**
  * The message of the Page shown in `frame`, or nothing. A message counts when it came from the
  * one frame inside the holding document, carries no origin, has exactly the shape of a bridge
- * message, and, unless it is the greeting, names `session`.
+ * message, and, unless it is the greeting or the guard's report, names `session`.
  */
 export function readPageMessage(
   event: ArrivedMessage,
@@ -59,7 +60,11 @@ export function readPageMessage(
   if (!parsed.success) {
     return undefined;
   }
-  return parsed.data.type === "ready" || parsed.data.session === session ? parsed.data : undefined;
+  return parsed.data.type === "ready" ||
+    parsed.data.type === "report" ||
+    parsed.data.session === session
+    ? parsed.data
+    : undefined;
 }
 
 /** The answer to a Page's greeting. */
@@ -178,6 +183,12 @@ export function createPageBridge(input: {
    * (DP-1), as it stands now. The host marks it over the frame: the Page need not.
    */
   onTestRun?(run: FrameTestRun): void;
+  /** The Page greeted: its kit is there (PREVIEW-STATUS-1). */
+  onGreeted?(): void;
+  /** The platform's guard in the Page reported what the Page did (PREVIEW-STATUS-1). */
+  onReport?(report: AppBridgeGuardReport): void;
+  /** A call of the Page failed, by the name it called and the code it was answered. */
+  onCallFailed?(name: string, code: string): void;
 }): PageBridge {
   let page: PageWindow | undefined;
   let storageWrites = Promise.resolve();
@@ -206,8 +217,13 @@ export function createPageBridge(input: {
       if (!message || !isPageWindow(source)) {
         return;
       }
+      if (message.type === "report") {
+        input.onReport?.(message.report);
+        return;
+      }
       if (message.type === "ready") {
         page = source;
+        input.onGreeted?.();
         const calls = input.calls?.();
         if (!calls) {
           source.postMessage(contextMessage(input.session, input.context()), "*");
@@ -273,6 +289,10 @@ export function createPageBridge(input: {
           .catch(() => undefined);
       } else if (message.type === "connection_call") {
         // Retired: a Page of an older kit is told at once that a named action is the way.
+        input.onCallFailed?.(
+          `${message.connection}.${message.operation}`,
+          APP_BRIDGE_CONNECTION_CALL_REMOVED.code
+        );
         post(
           source,
           callResultMessage(input.session, message.requestId, {
@@ -290,6 +310,7 @@ export function createPageBridge(input: {
           // The Page always gets an answer to a call, so that it never waits for nothing.
           .catch((): FrameCallAnswer => ({ ok: false, error: NOT_MADE }))
           .then((result) => {
+            if (!result.ok) input.onCallFailed?.(message.name, result.error.code);
             const told = post(source, callResultMessage(input.session, requestId, result));
             // A frame that was replaced meanwhile has nobody waiting on the call.
             if (

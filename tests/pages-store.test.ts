@@ -154,12 +154,16 @@ describe("the file sets of a Page", () => {
       "getPage",
       "getPageBuild",
       "getPageFileSet",
+      // A preview's report is diagnostics about a file set in a conversation, not the file set.
+      "getPreviewReport",
       "getServedFileSet",
       "listConversationPageIds",
       "listDraftHostAllowances",
       "listPageFileSets",
       "listPages",
       "mutateAppUserStorage",
+      "prunePreviewReports",
+      "putPreviewReport",
       "removeDraftHostAllowances"
     ]);
     const saved = await save("Offer");

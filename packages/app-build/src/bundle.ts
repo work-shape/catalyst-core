@@ -10,6 +10,7 @@ import {
   KIT_STYLESHEET_FILE,
   htmlPageHead,
   kitFilePath,
+  importsKitClient,
   kitImportPath,
   kitStylesPlainPages,
   rendersKitComponents
@@ -189,7 +190,8 @@ async function buildReactPage(
     DEFAULT_ENTRY,
     encoder.encode(reactDocument(manifest, { withStyles: built.has("app.css") }))
   );
-  return finish(manifest, built, routes.pages);
+  // The entry mounts the App through the kit.
+  return finish(manifest, built, routes.pages, true);
 }
 
 async function buildHtmlPage(
@@ -269,6 +271,7 @@ async function buildHtmlPage(
   }
   const bundled = new Set<string>();
   const componentEntries = new Set<string>();
+  let usesKit = false;
   if (entries.size > 0) {
     const bundle = await bundleEntries({
       kitVersion: manifest.kit,
@@ -285,6 +288,7 @@ async function buildHtmlPage(
     }
     bundle.inputs.forEach((path) => bundled.add(path));
     bundle.componentEntries.forEach((path) => componentEntries.add(path));
+    usesKit = bundle.usesKit;
   }
   if (kitStylesPlainPages(manifest.kit)) {
     // The build supplies the base look and theme; an author may also link the kit's fonts.
@@ -303,13 +307,14 @@ async function buildHtmlPage(
       built.set(file.path, file.bytes);
     }
   }
-  return finish(manifest, built, undefined);
+  return finish(manifest, built, undefined, usesKit);
 }
 
 function finish(
   manifest: PageManifest,
   built: Map<string, Uint8Array>,
-  pages: PageRoute[] | undefined
+  pages: PageRoute[] | undefined,
+  usesKit: boolean
 ): PageBuildResult {
   let total = 0;
   for (const bytes of built.values()) {
@@ -332,7 +337,8 @@ function finish(
     manifest: {
       ...authored,
       entry: manifest.entry ?? DEFAULT_ENTRY,
-      ...(pages ? { pages } : {})
+      ...(pages ? { pages } : {}),
+      usesKit
     },
     files: [...built].map(([path, bytes]) => ({ path, bytes }))
   };
@@ -345,6 +351,8 @@ type Bundle =
       inputs: string[];
       /** The entries whose script renders components of the kit. */
       componentEntries: string[];
+      /** A script imports the kit's client, which greets the interface. */
+      usesKit: boolean;
     }
   | { status: "errors"; errors: PageBuildError[] };
 
@@ -399,6 +407,9 @@ async function bundleEntries(input: {
         output.imports.some((imported) => rendersKitComponents(imported.path))
           ? [withoutNamespace(output.entryPoint)]
           : []
+      ),
+      usesKit: Object.values(result.metafile?.outputs ?? {}).some((output) =>
+        output.imports.some((imported) => importsKitClient(imported.path))
       )
     };
   } catch (error) {

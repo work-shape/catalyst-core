@@ -2,6 +2,7 @@ import {
   APP_ACTION_CALL_STATUSES,
   APP_MODES,
   OPERATION_EFFECTS,
+  previewReportSchema,
   WORKFLOW_RUN_STATUSES,
   WORKFLOW_TEST_REVISIONS
 } from "@work-shape/catalyst-asset-schemas";
@@ -21,6 +22,14 @@ export const appModeSchema = z.enum(APP_MODES);
 export type AppMode = z.infer<typeof appModeSchema>;
 
 export { appInterfacePath } from "@work-shape/catalyst-asset-schemas";
+export {
+  boundPreviewReport,
+  previewReportSchema,
+  type PreviewReport,
+  type PreviewReportBridge,
+  type PreviewReportEntry,
+  type UnboundPreviewReport
+} from "@work-shape/catalyst-asset-schemas";
 
 export const createAppFromPageRequestSchema = z
   .object({
@@ -198,6 +207,23 @@ export const appStorageWriteRequestSchema = z
   .strict();
 
 export const appSessionContextRequestSchema = z.object(pageSessionProof).strict();
+
+/**
+ * What a preview reports of itself (PREVIEW-STATUS-1), scrubbed and bounded by the interface.
+ * A Page of a conversation reports into its conversation. The draft of an App reports into the
+ * conversation the interface names, when that conversation is about the App; a published App
+ * reports nowhere.
+ */
+export const appPreviewReportRequestSchema = z
+  .object({
+    ...pageSessionProof,
+    conversationId: z.string().min(1).max(200).optional(),
+    report: previewReportSchema
+  })
+  .strict();
+
+/** Whether the report was kept. Nothing is kept for a frame that reports into no conversation. */
+export const appPreviewReportResponseSchema = z.object({ stored: z.boolean() }).strict();
 
 /** What each action of the shown manifest would come to for the caller now. */
 export const appSessionContextSchema = z.object({

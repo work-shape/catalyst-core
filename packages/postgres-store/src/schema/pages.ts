@@ -21,6 +21,7 @@ import type {
   PageBuildRequest,
   PageBuildResult,
   PageId,
+  PreviewReport,
   UserId
 } from "@work-shape/catalyst-core";
 import { configAssets } from "./configAssets";
@@ -156,5 +157,38 @@ export const draftHostAllowances = pgTable(
     uniqueIndex("draft_host_allowances_page_idx").on(table.pageId, table.userId, table.host),
     // The delete of an account finds its rows.
     index("draft_host_allowances_user_idx").on(table.userId)
+  ]
+);
+
+/**
+ * What a preview last reported of itself (PREVIEW-STATUS-1): one row per conversation and file
+ * set, replaced by each report. Diagnostics, scrubbed and bounded before they are written. A
+ * row is removed 24 hours after it was written, when the conversation is deleted or expires,
+ * and with the conversation or the file set.
+ */
+export const previewReports = pgTable(
+  "preview_reports",
+  {
+    clientInstanceId: text("client_instance_id").$type<ClientInstanceId>().notNull(),
+    conversationId: text("conversation_id")
+      .$type<ConversationId>()
+      .notNull()
+      .references(() => conversations.id, { onDelete: "cascade" }),
+    fileSetId: text("file_set_id")
+      .$type<FileSetId>()
+      .notNull()
+      .references(() => fileSets.id, { onDelete: "cascade" }),
+    report: jsonb("report").$type<PreviewReport>().notNull(),
+    reportedAt: timestamp("reported_at", { withTimezone: true }).notNull()
+  },
+  (table) => [
+    primaryKey({
+      name: "preview_reports_pk",
+      columns: [table.conversationId, table.fileSetId]
+    }),
+    // The delete of a file set finds its rows.
+    index("preview_reports_file_set_idx").on(table.fileSetId),
+    // The hourly removal of rows past 24 hours.
+    index("preview_reports_reported_at_idx").on(table.reportedAt)
   ]
 );

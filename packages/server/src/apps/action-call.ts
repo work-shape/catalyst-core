@@ -103,6 +103,11 @@ export interface ShownRevision {
 /** The frame a call comes from, once its address and its viewer were checked. */
 export interface FrameSession extends ShownRevision {
   viewer: AuthenticatedUser;
+  /**
+   * Whether a script of the shown folder imports the kit's client, as its build recorded it.
+   * Missing on a file set an earlier release built.
+   */
+  usesKit?: boolean;
 }
 
 export interface FrameSessionProof {
@@ -199,7 +204,10 @@ export class AppActionCalls {
       access: caller.access,
       pageSessionId: proof.pageSessionId,
       actions: compiledActionsOf(fileSet.manifest),
-      dataStores: declaredDataStoresOf(fileSet.manifest)
+      dataStores: declaredDataStoresOf(fileSet.manifest),
+      ...(typeof fileSet.manifest.usesKit === "boolean"
+        ? { usesKit: fileSet.manifest.usesKit }
+        : {})
     };
     if (!fileSet.asset) {
       const conversation = await this.conversations

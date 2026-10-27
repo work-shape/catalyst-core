@@ -37,6 +37,13 @@ export { PageSaveCardView } from "./page-card";
 export { changedSourcePaths, defaultOpenPath, PageFilesView } from "./page-files";
 export { PageHostProvider } from "./page-host";
 export {
+  PREVIEW_GREETING_MS,
+  PREVIEW_REPORT_INTERVAL_MS,
+  PREVIEW_SETTLE_FALLBACK_MS,
+  createPreviewReporter,
+  type PreviewReporter
+} from "./preview-report";
+export {
   codeColouring,
   HIGHLIGHT_MAX_CHARS,
   HIGHLIGHT_MAX_LINES,

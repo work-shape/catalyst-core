@@ -196,7 +196,13 @@ export const builtPageManifestSchema = pageManifestSchema
     pages: z
       .array(z.strictObject({ path: z.string().min(1).max(512) }))
       .max(1000)
-      .optional()
+      .optional(),
+    /**
+     * Whether a script of the folder imports the kit's client, which greets the interface. A
+     * preview of a folder that does not reads "no bridge used" (PREVIEW-STATUS-1). Missing on
+     * a build of an earlier release.
+     */
+    usesKit: z.boolean().optional()
   })
   // A build is not trusted to have checked this: an action reaches the Connection or the Data
   // Store the manifest lists.

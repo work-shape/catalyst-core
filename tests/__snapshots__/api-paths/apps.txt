@@ -7,6 +7,7 @@ apps.publish_review  GET /api/v1/apps/:app/publish-review
 apps.sessions.call_action  POST /api/v1/app-content-sessions/:pageSessionId/actions/:name
 apps.sessions.context  POST /api/v1/app-content-sessions/:pageSessionId/context
 apps.sessions.get_workflow_run  POST /api/v1/app-content-sessions/:pageSessionId/workflow-runs/:runId
+apps.sessions.report  POST /api/v1/app-content-sessions/:pageSessionId/report
 apps.sessions.write_storage  POST /api/v1/app-content-sessions/:pageSessionId/storage
 apps.try_action  POST /api/v1/apps/:app/draft-actions/:action/tries
 apps.update_from_page  POST /api/v1/apps/:app/update-from-page

@@ -154,7 +154,8 @@ export {
   APP_CONTENT_VIEWER_CHECK_MAX_ENTRIES,
   APP_CONTENT_VIEWER_CHECK_SECONDS,
   createAppContentViewerChecks,
-  deriveAppContentKey
+  deriveAppContentKey,
+  PREVIEW_COLLECTOR_SOURCE
 } from "./pages/app-content";
 export { storePageFileSet } from "./pages/page-file-sets";
 export {
