@@ -1,0 +1,722 @@
+[
+  {
+    "file": "0001-390-en-light-page.png",
+    "label": "/",
+    "width": 390,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:27368/w/cws_a513b142-7151-462b-b386-ba79d7324c06"
+  },
+  {
+    "file": "0002-390-en-dark-page.png",
+    "label": "/",
+    "width": 390,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:27368/w/cws_a513b142-7151-462b-b386-ba79d7324c06"
+  },
+  {
+    "file": "0003-390-de-light-page.png",
+    "label": "/",
+    "width": 390,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:27368/w/cws_a513b142-7151-462b-b386-ba79d7324c06"
+  },
+  {
+    "file": "0004-390-de-dark-page.png",
+    "label": "/",
+    "width": 390,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:27368/w/cws_a513b142-7151-462b-b386-ba79d7324c06"
+  },
+  {
+    "file": "0005-1440-en-light-page.png",
+    "label": "/",
+    "width": 1440,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:27368/w/cws_a513b142-7151-462b-b386-ba79d7324c06"
+  },
+  {
+    "file": "0006-1440-en-dark-page.png",
+    "label": "/",
+    "width": 1440,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:27368/w/cws_a513b142-7151-462b-b386-ba79d7324c06"
+  },
+  {
+    "file": "0007-1440-de-light-page.png",
+    "label": "/",
+    "width": 1440,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:27368/w/cws_a513b142-7151-462b-b386-ba79d7324c06"
+  },
+  {
+    "file": "0008-1440-de-dark-page.png",
+    "label": "/",
+    "width": 1440,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:27368/w/cws_a513b142-7151-462b-b386-ba79d7324c06"
+  },
+  {
+    "file": "0009-390-en-light-page.png",
+    "label": "/build/agents",
+    "width": 390,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:27368/build/agents"
+  },
+  {
+    "file": "0010-390-en-dark-page.png",
+    "label": "/build/agents",
+    "width": 390,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:27368/build/agents"
+  },
+  {
+    "file": "0011-390-de-light-page.png",
+    "label": "/build/agents",
+    "width": 390,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:27368/build/agents"
+  },
+  {
+    "file": "0012-390-de-dark-page.png",
+    "label": "/build/agents",
+    "width": 390,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:27368/build/agents"
+  },
+  {
+    "file": "0013-1440-en-light-page.png",
+    "label": "/build/agents",
+    "width": 1440,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:27368/build/agents"
+  },
+  {
+    "file": "0014-1440-en-dark-page.png",
+    "label": "/build/agents",
+    "width": 1440,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:27368/build/agents"
+  },
+  {
+    "file": "0015-1440-de-light-page.png",
+    "label": "/build/agents",
+    "width": 1440,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:27368/build/agents"
+  },
+  {
+    "file": "0016-1440-de-dark-page.png",
+    "label": "/build/agents",
+    "width": 1440,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:27368/build/agents"
+  },
+  {
+    "file": "0017-390-en-light-page.png",
+    "label": "/build/connections",
+    "width": 390,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:27368/build/connections"
+  },
+  {
+    "file": "0018-390-en-dark-page.png",
+    "label": "/build/connections",
+    "width": 390,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:27368/build/connections"
+  },
+  {
+    "file": "0019-390-de-light-page.png",
+    "label": "/build/connections",
+    "width": 390,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:27368/build/connections"
+  },
+  {
+    "file": "0020-390-de-dark-page.png",
+    "label": "/build/connections",
+    "width": 390,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:27368/build/connections"
+  },
+  {
+    "file": "0021-1440-en-light-page.png",
+    "label": "/build/connections",
+    "width": 1440,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:27368/build/connections"
+  },
+  {
+    "file": "0022-1440-en-dark-page.png",
+    "label": "/build/connections",
+    "width": 1440,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:27368/build/connections"
+  },
+  {
+    "file": "0023-1440-de-light-page.png",
+    "label": "/build/connections",
+    "width": 1440,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:27368/build/connections"
+  },
+  {
+    "file": "0024-1440-de-dark-page.png",
+    "label": "/build/connections",
+    "width": 1440,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:27368/build/connections"
+  },
+  {
+    "file": "0025-390-en-light-page.png",
+    "label": "/build/data-stores",
+    "width": 390,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:27368/build/data-stores"
+  },
+  {
+    "file": "0026-390-en-dark-page.png",
+    "label": "/build/data-stores",
+    "width": 390,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:27368/build/data-stores"
+  },
+  {
+    "file": "0027-390-de-light-page.png",
+    "label": "/build/data-stores",
+    "width": 390,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:27368/build/data-stores"
+  },
+  {
+    "file": "0028-390-de-dark-page.png",
+    "label": "/build/data-stores",
+    "width": 390,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:27368/build/data-stores"
+  },
+  {
+    "file": "0029-1440-en-light-page.png",
+    "label": "/build/data-stores",
+    "width": 1440,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:27368/build/data-stores"
+  },
+  {
+    "file": "0030-1440-en-dark-page.png",
+    "label": "/build/data-stores",
+    "width": 1440,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:27368/build/data-stores"
+  },
+  {
+    "file": "0031-1440-de-light-page.png",
+    "label": "/build/data-stores",
+    "width": 1440,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:27368/build/data-stores"
+  },
+  {
+    "file": "0032-1440-de-dark-page.png",
+    "label": "/build/data-stores",
+    "width": 1440,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:27368/build/data-stores"
+  },
+  {
+    "file": "0033-390-en-light-page.png",
+    "label": "/build/guardrails",
+    "width": 390,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:27368/build/guardrails"
+  },
+  {
+    "file": "0034-390-en-dark-page.png",
+    "label": "/build/guardrails",
+    "width": 390,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:27368/build/guardrails"
+  },
+  {
+    "file": "0035-390-de-light-page.png",
+    "label": "/build/guardrails",
+    "width": 390,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:27368/build/guardrails"
+  },
+  {
+    "file": "0036-390-de-dark-page.png",
+    "label": "/build/guardrails",
+    "width": 390,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:27368/build/guardrails"
+  },
+  {
+    "file": "0037-1440-en-light-page.png",
+    "label": "/build/guardrails",
+    "width": 1440,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:27368/build/guardrails"
+  },
+  {
+    "file": "0038-1440-en-dark-page.png",
+    "label": "/build/guardrails",
+    "width": 1440,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:27368/build/guardrails"
+  },
+  {
+    "file": "0039-1440-de-light-page.png",
+    "label": "/build/guardrails",
+    "width": 1440,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:27368/build/guardrails"
+  },
+  {
+    "file": "0040-1440-de-dark-page.png",
+    "label": "/build/guardrails",
+    "width": 1440,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:27368/build/guardrails"
+  },
+  {
+    "file": "0041-390-en-light-page.png",
+    "label": "/build/skills",
+    "width": 390,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:27368/build/skills"
+  },
+  {
+    "file": "0042-390-en-dark-page.png",
+    "label": "/build/skills",
+    "width": 390,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:27368/build/skills"
+  },
+  {
+    "file": "0043-390-de-light-page.png",
+    "label": "/build/skills",
+    "width": 390,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:27368/build/skills"
+  },
+  {
+    "file": "0044-390-de-dark-page.png",
+    "label": "/build/skills",
+    "width": 390,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:27368/build/skills"
+  },
+  {
+    "file": "0045-1440-en-light-page.png",
+    "label": "/build/skills",
+    "width": 1440,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:27368/build/skills"
+  },
+  {
+    "file": "0046-1440-en-dark-page.png",
+    "label": "/build/skills",
+    "width": 1440,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:27368/build/skills"
+  },
+  {
+    "file": "0047-1440-de-light-page.png",
+    "label": "/build/skills",
+    "width": 1440,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:27368/build/skills"
+  },
+  {
+    "file": "0048-1440-de-dark-page.png",
+    "label": "/build/skills",
+    "width": 1440,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:27368/build/skills"
+  },
+  {
+    "file": "0049-390-en-light-end.png",
+    "label": "chat thread",
+    "width": 390,
+    "locale": "en",
+    "theme": "light",
+    "position": "end",
+    "url": "http://127.0.0.1:27368/w/cws_114ba177-633d-4ea6-9ed6-d43a1feeef61/c/conv_4eccc4ba-2e34-47e8-975b-4f0631ad8845"
+  },
+  {
+    "file": "0050-390-en-light-scrolled.png",
+    "label": "chat thread",
+    "width": 390,
+    "locale": "en",
+    "theme": "light",
+    "position": "scrolled",
+    "url": "http://127.0.0.1:27368/w/cws_114ba177-633d-4ea6-9ed6-d43a1feeef61/c/conv_4eccc4ba-2e34-47e8-975b-4f0631ad8845"
+  },
+  {
+    "file": "0051-390-en-dark-end.png",
+    "label": "chat thread",
+    "width": 390,
+    "locale": "en",
+    "theme": "dark",
+    "position": "end",
+    "url": "http://127.0.0.1:27368/w/cws_114ba177-633d-4ea6-9ed6-d43a1feeef61/c/conv_4eccc4ba-2e34-47e8-975b-4f0631ad8845"
+  },
+  {
+    "file": "0052-390-en-dark-scrolled.png",
+    "label": "chat thread",
+    "width": 390,
+    "locale": "en",
+    "theme": "dark",
+    "position": "scrolled",
+    "url": "http://127.0.0.1:27368/w/cws_114ba177-633d-4ea6-9ed6-d43a1feeef61/c/conv_4eccc4ba-2e34-47e8-975b-4f0631ad8845"
+  },
+  {
+    "file": "0053-390-de-light-end.png",
+    "label": "chat thread",
+    "width": 390,
+    "locale": "de",
+    "theme": "light",
+    "position": "end",
+    "url": "http://127.0.0.1:27368/w/cws_114ba177-633d-4ea6-9ed6-d43a1feeef61/c/conv_4eccc4ba-2e34-47e8-975b-4f0631ad8845"
+  },
+  {
+    "file": "0054-390-de-light-scrolled.png",
+    "label": "chat thread",
+    "width": 390,
+    "locale": "de",
+    "theme": "light",
+    "position": "scrolled",
+    "url": "http://127.0.0.1:27368/w/cws_114ba177-633d-4ea6-9ed6-d43a1feeef61/c/conv_4eccc4ba-2e34-47e8-975b-4f0631ad8845"
+  },
+  {
+    "file": "0055-390-de-dark-end.png",
+    "label": "chat thread",
+    "width": 390,
+    "locale": "de",
+    "theme": "dark",
+    "position": "end",
+    "url": "http://127.0.0.1:27368/w/cws_114ba177-633d-4ea6-9ed6-d43a1feeef61/c/conv_4eccc4ba-2e34-47e8-975b-4f0631ad8845"
+  },
+  {
+    "file": "0056-390-de-dark-scrolled.png",
+    "label": "chat thread",
+    "width": 390,
+    "locale": "de",
+    "theme": "dark",
+    "position": "scrolled",
+    "url": "http://127.0.0.1:27368/w/cws_114ba177-633d-4ea6-9ed6-d43a1feeef61/c/conv_4eccc4ba-2e34-47e8-975b-4f0631ad8845"
+  },
+  {
+    "file": "0057-1440-en-light-end.png",
+    "label": "chat thread",
+    "width": 1440,
+    "locale": "en",
+    "theme": "light",
+    "position": "end",
+    "url": "http://127.0.0.1:27368/w/cws_114ba177-633d-4ea6-9ed6-d43a1feeef61/c/conv_4eccc4ba-2e34-47e8-975b-4f0631ad8845"
+  },
+  {
+    "file": "0058-1440-en-light-scrolled.png",
+    "label": "chat thread",
+    "width": 1440,
+    "locale": "en",
+    "theme": "light",
+    "position": "scrolled",
+    "url": "http://127.0.0.1:27368/w/cws_114ba177-633d-4ea6-9ed6-d43a1feeef61/c/conv_4eccc4ba-2e34-47e8-975b-4f0631ad8845"
+  },
+  {
+    "file": "0059-1440-en-dark-end.png",
+    "label": "chat thread",
+    "width": 1440,
+    "locale": "en",
+    "theme": "dark",
+    "position": "end",
+    "url": "http://127.0.0.1:27368/w/cws_114ba177-633d-4ea6-9ed6-d43a1feeef61/c/conv_4eccc4ba-2e34-47e8-975b-4f0631ad8845"
+  },
+  {
+    "file": "0060-1440-en-dark-scrolled.png",
+    "label": "chat thread",
+    "width": 1440,
+    "locale": "en",
+    "theme": "dark",
+    "position": "scrolled",
+    "url": "http://127.0.0.1:27368/w/cws_114ba177-633d-4ea6-9ed6-d43a1feeef61/c/conv_4eccc4ba-2e34-47e8-975b-4f0631ad8845"
+  },
+  {
+    "file": "0061-1440-de-light-end.png",
+    "label": "chat thread",
+    "width": 1440,
+    "locale": "de",
+    "theme": "light",
+    "position": "end",
+    "url": "http://127.0.0.1:27368/w/cws_114ba177-633d-4ea6-9ed6-d43a1feeef61/c/conv_4eccc4ba-2e34-47e8-975b-4f0631ad8845"
+  },
+  {
+    "file": "0062-1440-de-light-scrolled.png",
+    "label": "chat thread",
+    "width": 1440,
+    "locale": "de",
+    "theme": "light",
+    "position": "scrolled",
+    "url": "http://127.0.0.1:27368/w/cws_114ba177-633d-4ea6-9ed6-d43a1feeef61/c/conv_4eccc4ba-2e34-47e8-975b-4f0631ad8845"
+  },
+  {
+    "file": "0063-1440-de-dark-end.png",
+    "label": "chat thread",
+    "width": 1440,
+    "locale": "de",
+    "theme": "dark",
+    "position": "end",
+    "url": "http://127.0.0.1:27368/w/cws_114ba177-633d-4ea6-9ed6-d43a1feeef61/c/conv_4eccc4ba-2e34-47e8-975b-4f0631ad8845"
+  },
+  {
+    "file": "0064-1440-de-dark-scrolled.png",
+    "label": "chat thread",
+    "width": 1440,
+    "locale": "de",
+    "theme": "dark",
+    "position": "scrolled",
+    "url": "http://127.0.0.1:27368/w/cws_114ba177-633d-4ea6-9ed6-d43a1feeef61/c/conv_4eccc4ba-2e34-47e8-975b-4f0631ad8845"
+  },
+  {
+    "file": "0065-390-en-light-end.png",
+    "label": "attachments",
+    "width": 390,
+    "locale": "en",
+    "theme": "light",
+    "position": "end",
+    "url": "http://127.0.0.1:27368/w/cws_fab86445-e306-477b-850f-1dbea07a01c8/c/conv_5067f685-1164-4902-b2dd-046586df45e6"
+  },
+  {
+    "file": "0066-390-en-light-scrolled.png",
+    "label": "attachments",
+    "width": 390,
+    "locale": "en",
+    "theme": "light",
+    "position": "scrolled",
+    "url": "http://127.0.0.1:27368/w/cws_fab86445-e306-477b-850f-1dbea07a01c8/c/conv_5067f685-1164-4902-b2dd-046586df45e6"
+  },
+  {
+    "file": "0067-390-en-dark-end.png",
+    "label": "attachments",
+    "width": 390,
+    "locale": "en",
+    "theme": "dark",
+    "position": "end",
+    "url": "http://127.0.0.1:27368/w/cws_49a95764-447c-4ae0-ab33-05df345f4a4f/c/conv_69d1c69e-697a-48d6-8a09-31df64376617"
+  },
+  {
+    "file": "0068-390-en-dark-scrolled.png",
+    "label": "attachments",
+    "width": 390,
+    "locale": "en",
+    "theme": "dark",
+    "position": "scrolled",
+    "url": "http://127.0.0.1:27368/w/cws_49a95764-447c-4ae0-ab33-05df345f4a4f/c/conv_69d1c69e-697a-48d6-8a09-31df64376617"
+  },
+  {
+    "file": "0069-390-de-light-end.png",
+    "label": "attachments",
+    "width": 390,
+    "locale": "de",
+    "theme": "light",
+    "position": "end",
+    "url": "http://127.0.0.1:27368/w/cws_16049e3f-f974-4278-bbdc-fb71fd53f227/c/conv_aa19936d-2798-45ad-882b-11e67703396d"
+  },
+  {
+    "file": "0070-390-de-light-scrolled.png",
+    "label": "attachments",
+    "width": 390,
+    "locale": "de",
+    "theme": "light",
+    "position": "scrolled",
+    "url": "http://127.0.0.1:27368/w/cws_16049e3f-f974-4278-bbdc-fb71fd53f227/c/conv_aa19936d-2798-45ad-882b-11e67703396d"
+  },
+  {
+    "file": "0071-390-de-dark-end.png",
+    "label": "attachments",
+    "width": 390,
+    "locale": "de",
+    "theme": "dark",
+    "position": "end",
+    "url": "http://127.0.0.1:27368/w/cws_feb9ef26-46b1-4fc9-9f30-84c677f0d2cd/c/conv_ae215744-8b5a-44f8-ae7f-b331b9637be5"
+  },
+  {
+    "file": "0072-390-de-dark-scrolled.png",
+    "label": "attachments",
+    "width": 390,
+    "locale": "de",
+    "theme": "dark",
+    "position": "scrolled",
+    "url": "http://127.0.0.1:27368/w/cws_feb9ef26-46b1-4fc9-9f30-84c677f0d2cd/c/conv_ae215744-8b5a-44f8-ae7f-b331b9637be5"
+  },
+  {
+    "file": "0073-1440-en-light-end.png",
+    "label": "attachments",
+    "width": 1440,
+    "locale": "en",
+    "theme": "light",
+    "position": "end",
+    "url": "http://127.0.0.1:27368/w/cws_f69c5c96-cc89-4fe8-b41e-702e6256a199/c/conv_44e85dbf-30e9-4310-bf2b-fe53624413b8"
+  },
+  {
+    "file": "0074-1440-en-light-scrolled.png",
+    "label": "attachments",
+    "width": 1440,
+    "locale": "en",
+    "theme": "light",
+    "position": "scrolled",
+    "url": "http://127.0.0.1:27368/w/cws_f69c5c96-cc89-4fe8-b41e-702e6256a199/c/conv_44e85dbf-30e9-4310-bf2b-fe53624413b8"
+  },
+  {
+    "file": "0075-1440-en-dark-end.png",
+    "label": "attachments",
+    "width": 1440,
+    "locale": "en",
+    "theme": "dark",
+    "position": "end",
+    "url": "http://127.0.0.1:27368/w/cws_1b37c83e-3ca8-498d-8dec-9434332dce3b/c/conv_5003456e-7efc-4239-b985-78e9a10ea3ba"
+  },
+  {
+    "file": "0076-1440-en-dark-scrolled.png",
+    "label": "attachments",
+    "width": 1440,
+    "locale": "en",
+    "theme": "dark",
+    "position": "scrolled",
+    "url": "http://127.0.0.1:27368/w/cws_1b37c83e-3ca8-498d-8dec-9434332dce3b/c/conv_5003456e-7efc-4239-b985-78e9a10ea3ba"
+  },
+  {
+    "file": "0077-1440-de-light-end.png",
+    "label": "attachments",
+    "width": 1440,
+    "locale": "de",
+    "theme": "light",
+    "position": "end",
+    "url": "http://127.0.0.1:27368/w/cws_7082e87d-517a-4ff1-b325-534d9c127752/c/conv_9240903c-306f-4e40-9b09-da2fb10f1071"
+  },
+  {
+    "file": "0078-1440-de-light-scrolled.png",
+    "label": "attachments",
+    "width": 1440,
+    "locale": "de",
+    "theme": "light",
+    "position": "scrolled",
+    "url": "http://127.0.0.1:27368/w/cws_7082e87d-517a-4ff1-b325-534d9c127752/c/conv_9240903c-306f-4e40-9b09-da2fb10f1071"
+  },
+  {
+    "file": "0079-1440-de-dark-end.png",
+    "label": "attachments",
+    "width": 1440,
+    "locale": "de",
+    "theme": "dark",
+    "position": "end",
+    "url": "http://127.0.0.1:27368/w/cws_f3a2bf7c-d8d9-41cd-a226-c1b4925086a6/c/conv_52f7a48c-786d-4de6-80be-ddd545e2c9d4"
+  },
+  {
+    "file": "0080-1440-de-dark-scrolled.png",
+    "label": "attachments",
+    "width": 1440,
+    "locale": "de",
+    "theme": "dark",
+    "position": "scrolled",
+    "url": "http://127.0.0.1:27368/w/cws_f3a2bf7c-d8d9-41cd-a226-c1b4925086a6/c/conv_52f7a48c-786d-4de6-80be-ddd545e2c9d4"
+  }
+]

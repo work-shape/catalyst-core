@@ -1,0 +1,23 @@
+{
+  "routes": [
+    "/",
+    "/build/agents",
+    "/build/connections",
+    "/build/data-stores",
+    "/build/guardrails",
+    "/build/knowledge-bases",
+    "/build/skills"
+  ],
+  "required": [],
+  "states": [
+    {
+      "name": "attachments",
+      "setup": "/Users/felixpahlke/code/catalyst/tmp/lane/raster-image-check/attachments.mjs"
+    }
+  ],
+  "modules": [],
+  "pr": 126,
+  "head": "b4aab7883b4621c4eeece52f536adc3e9d5ffb98",
+  "base": "67f96d9699fd7179c22f1ae0c713c834124b30cf",
+  "tested": "b4aab7883b4621c4eeece52f536adc3e9d5ffb98"
+}
