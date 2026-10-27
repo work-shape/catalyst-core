@@ -8,6 +8,7 @@ import type { PostgresConnection } from "./postgres-database";
 import { conversations } from "./schema/conversations";
 import { fileSets, previewReports, previewViewerReports } from "./schema/pages";
 import { productUsers } from "./schema/users";
+import { prunePreviewCaptures } from "./postgres-preview-captures";
 
 // What a preview last reported of itself (PREVIEW-STATUS-1): one row per conversation, file set
 // and person whose browser showed it, kept for 24 hours. A failed statement is answered with a
@@ -206,5 +207,11 @@ export async function prunePreviewReports(
       )
     )
     .returning({ fileSetId: previewReports.fileSetId });
-  return removed.length + former.length;
+  // The capture requests of a run (PREVIEW-SEE-1) count limits of an hour at most; their
+  // pictures stay with their conversation.
+  const captures = await prunePreviewCaptures(db, {
+    clientInstanceId: input.clientInstanceId,
+    before
+  });
+  return removed.length + former.length + captures;
 }

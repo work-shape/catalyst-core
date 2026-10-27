@@ -235,3 +235,58 @@ export const previewViewerReports = pgTable(
     index("preview_viewer_reports_reported_at_idx").on(table.reportedAt)
   ]
 );
+
+/**
+ * The pictures of a preview a run asked for (PREVIEW-SEE-1): one row per tool call, which the
+ * person's browser answers. It holds where the request stands and, once answered, the managed
+ * artifact of the picture, never the picture itself. The rows count the limits per run and per
+ * person and hour, and are removed 24 hours after the request, when the conversation is deleted
+ * or expires, and with the conversation, the file set or the account. The picture is an
+ * artifact of the conversation and stays under its retention.
+ */
+export const previewCaptures = pgTable(
+  "preview_captures",
+  {
+    id: text("id").primaryKey(),
+    clientInstanceId: text("client_instance_id").$type<ClientInstanceId>().notNull(),
+    conversationId: text("conversation_id")
+      .$type<ConversationId>()
+      .notNull()
+      .references(() => conversations.id, { onDelete: "cascade" }),
+    // The person whose turn the run serves: only their browser may answer.
+    userId: text("user_id")
+      .$type<UserId>()
+      .notNull()
+      .references(() => productUsers.id, { onDelete: "cascade" }),
+    runId: text("run_id").notNull(),
+    toolCallId: text("tool_call_id").notNull(),
+    // The revision the person had open when the run asked: only a frame of it may answer.
+    fileSetId: text("file_set_id")
+      .$type<FileSetId>()
+      .notNull()
+      .references(() => fileSets.id, { onDelete: "cascade" }),
+    status: text("status").$type<"pending" | "answering" | "captured" | "refused">().notNull(),
+    code: text("code"),
+    artifactId: text("artifact_id"),
+    width: integer("width"),
+    height: integer("height"),
+    requestedAt: timestamp("requested_at", { withTimezone: true }).notNull(),
+    answeredAt: timestamp("answered_at", { withTimezone: true })
+  },
+  (table) => [
+    check(
+      "preview_captures_status_check",
+      sql`${table.status} in ('pending', 'answering', 'captured', 'refused')`
+    ),
+    // One request per tool call: a call carried out again finds its first request.
+    uniqueIndex("preview_captures_tool_call_idx").on(table.runId, table.toolCallId),
+    // The limit per person and hour.
+    index("preview_captures_user_idx").on(table.userId, table.requestedAt),
+    // What the person's browser is asked to answer in a conversation.
+    index("preview_captures_conversation_idx").on(table.conversationId, table.userId),
+    // The delete of a file set finds its rows.
+    index("preview_captures_file_set_idx").on(table.fileSetId),
+    // The hourly removal of rows past 24 hours.
+    index("preview_captures_requested_at_idx").on(table.requestedAt)
+  ]
+);
