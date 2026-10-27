@@ -143,13 +143,12 @@ export function AppAudienceChange({
 /** The sentence under "Details" on who gets the revision, by the chosen audience. */
 export function appPublishBody(
   audience: AppAudience | undefined,
-  revision: number,
   workspaceName: string,
   t: TranslationContextValue["t"]
 ): string {
-  if (audience === "self") return t("apps.publishBodySelf", { number: revision });
-  if (audience === "instance") return t("apps.publishBodyInstance", { number: revision });
-  return t("apps.publishBody", { number: revision, workspace: workspaceName });
+  if (audience === "self") return t("apps.publishBodySelf");
+  if (audience === "instance") return t("apps.publishBodyInstance");
+  return t("apps.publishBody", { workspace: workspaceName });
 }
 
 /** Where a publish sent from the dialog stands. */

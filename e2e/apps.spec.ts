@@ -206,7 +206,7 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   // The revision sentence stands behind Details since PUBQ-1.
   await publishDialog.getByRole("button", { name: "Details", exact: true }).click();
   await expect(publishDialog).toContainText(
-    "Everyone in Sales team gets version 1 when they open the app."
+    "Everyone in Sales team gets this state when they open the app."
   );
   if (shotsDir) {
     await mkdir(shotsDir, { recursive: true });
@@ -218,8 +218,8 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   await publishDialog.getByRole("button", { name: "Publish", exact: true }).click();
   await expect(publishDialog).toBeHidden();
   // The head says what was published, not that a draft is open (ACCEPT-FIX-2 C5).
-  await expect(edit).toContainText("Published · version 1");
-  await expect(edit).not.toContainText("Draft · version 1");
+  await expect(edit).toContainText("Live: version 1 · since");
+  await expect(edit).not.toContainText("Draft: changed since");
   if (shotsDir) {
     await page.screenshot({
       path: join(shotsDir, "app-published-head-light-en-1440.png"),
@@ -389,7 +389,7 @@ test("a Page is saved as an App, published, opened by a second member and deep l
     }
     await memberCard.getByRole("link", { name: "Edit", exact: true }).click();
     const memberEdit = memberPage.getByTestId("app-edit");
-    await expect(memberEdit).toContainText("Draft · version 2");
+    await expect(memberEdit).toContainText("Draft: changed since version 1");
     // The conversation subject keeps the server's separate read requirement. The editor
     // above needs write alone; grant read on this App too before starting its conversation.
     const readable = await requestWithOrigin(
@@ -410,7 +410,7 @@ test("a Page is saved as an App, published, opened by a second member and deep l
     expect(readable.ok(), await readable.text()).toBe(true);
     grants.push(idSchema.parse(await readable.json()).id);
     await memberPage.reload();
-    await expect(memberEdit).toContainText("Draft · version 2");
+    await expect(memberEdit).toContainText("Draft: changed since version 1");
     await memberPage.getByTestId("dock-page-action").click();
     await expect(memberPage).toHaveURL(
       (url) => url.pathname === draftPathOf(appPath) && url.searchParams.has("chat")
@@ -429,7 +429,9 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   await memberContext.close();
   await page.reload();
   const draftReady = async () => {
-    await expect(edit).toContainText(/(?:Draft · version|Entwurf · Version) 2/u);
+    await expect(edit).toContainText(
+      /(?:Draft: changed since version|Entwurf: geändert seit Version) 1/u
+    );
     await expect(
       appIn(page, "app-edit").getByRole("heading", { name: DRAFT_HEADING })
     ).toBeVisible();
@@ -469,12 +471,13 @@ test("a Page is saved as an App, published, opened by a second member and deep l
     });
   }
   await edit.getByRole("tab", { name: "Preview" }).click();
-  // The revisions of the App, with the way to publish one of them.
+  // The history of the App: its versions, with the saves after each folded under it and the
+  // way to publish one of them.
   const openRevisions = async () => {
     await edit.getByRole("button", { name: "More actions" }).click();
-    await page.getByRole("menuitem", { name: "Versions" }).click();
+    await page.getByRole("menuitem", { name: "History" }).click();
   };
-  const revisions = page.getByRole("dialog", { name: "Versions" });
+  const revisions = page.getByRole("dialog", { name: "History" });
   // Escape closes the drawer at once, while the menu it was opened from is still closing and
   // still listens for the key.
   await openRevisions();
@@ -483,7 +486,13 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   await expect(revisions).toBeHidden();
   await expect(page.getByRole("menu")).toHaveCount(0);
   await openRevisions();
-  await expect(revisions).toContainText("Publish this version");
+  await expect(revisions).toContainText("Version 1");
+  // The newest version's saves: the draft written since it was published.
+  await revisions
+    .getByRole("button", { name: /^\d+ draft saves?$/u })
+    .first()
+    .click();
+  await expect(revisions.getByRole("button", { name: "Publish this save" })).toBeVisible();
   if (shotsDir) {
     await page.screenshot({
       path: join(shotsDir, "app-revisions-light-en-1440.png"),
@@ -535,7 +544,7 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   );
   await builderPage.goto(draftPathOf(appPath));
   const builderEdit = builderPage.getByTestId("app-edit");
-  await expect(builderEdit).toContainText("Draft · version 2");
+  await expect(builderEdit).toContainText("Draft: changed since version 1");
   await expect(builderEdit.getByRole("button", { name: "Publish", exact: true })).toBeDisabled();
   await expect(builderEdit).toContainText("You need the right “app.publish” to publish.");
   await shoot(builderPage, "app-draft-no-publish", [["light", "en", 1440]], async () => {
@@ -586,7 +595,7 @@ test("a Page is saved as an App, published, opened by a second member and deep l
   await draftReady();
   await discard.click();
   const discardDialog = page.getByRole("dialog", { name: `Discard the draft of “${appName}”?` });
-  await expect(discardDialog).toContainText("published version 1");
+  await expect(discardDialog).toContainText("The draft goes back to what is live.");
   await discardDialog.getByRole("button", { name: "Discard", exact: true }).click();
   await expect(discardDialog).toBeHidden();
   await expect(

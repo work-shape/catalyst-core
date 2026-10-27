@@ -1,5 +1,6 @@
+import { randomUUID } from "node:crypto";
 import { appAudienceWidens, asCollaborationWorkspaceId } from "@work-shape/catalyst-core";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, max } from "drizzle-orm";
 import {
   AppError,
   asClientInstanceId,
@@ -13,6 +14,7 @@ import type { PostgresConnection, PostgresTransaction } from "./postgres-databas
 import type { ConfigAssetRow } from "./rows";
 import {
   collaborationWorkspaces,
+  configAssetPublications,
   configAssetRevisions,
   configAssets,
   configAssetAvailability,
@@ -216,13 +218,30 @@ export async function publishConfigAssetRevision(
           .where(eq(configAssetRevisions.id, asset.publishedRevisionId))
           .limit(1)
       : [];
+    const now = new Date();
     await tx
       .update(configAssets)
-      .set({ publishedRevisionId: target.id, updatedAt: new Date() })
+      .set({ publishedRevisionId: target.id, updatedAt: now })
       .where(eq(configAssets.id, asset.id));
+    // Numbered under the lock of the asset's row, which every publish of it takes first.
+    const [last] = await tx
+      .select({ number: max(configAssetPublications.number) })
+      .from(configAssetPublications)
+      .where(eq(configAssetPublications.assetId, asset.id));
+    const publication = (last?.number ?? 0) + 1;
+    await tx.insert(configAssetPublications).values({
+      id: `publication_${randomUUID()}`,
+      clientInstanceId: input.clientInstanceId,
+      assetId: asset.id,
+      revision: input.revision,
+      number: publication,
+      actor: input.actor ?? null,
+      publishedAt: now
+    });
     return {
       assetId: asset.id,
       revision: input.revision,
+      publication,
       ...(publishWidens === undefined ? {} : { publishWidens }),
       ...(replaced ? { replacedRevision: replaced.revision } : {}),
       ...(target.fileSetId ? { fileSetId: target.fileSetId } : {})

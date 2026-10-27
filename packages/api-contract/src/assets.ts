@@ -253,8 +253,20 @@ export const workflowStepFactSchema = workflowOperationFactSchema.partial().exte
 });
 
 export const assetSchema = z.object({
-  /** The retained publish event for the live revision, for a reader of an App draft. */
-  publication: z.object({ at: z.string().datetime(), by: z.string().optional() }).optional(),
+  /**
+   * Of a live App, for a reader of its draft: its version, the number of the publish that made
+   * it live, when and by whom. Members read this number, never a revision's.
+   */
+  liveVersion: z
+    .object({
+      number: z.number().int().positive(),
+      publishedAt: timestampSchema,
+      /** The name of who published, as the account is now; empty for one that is gone. */
+      by: z.string().optional()
+    })
+    .optional(),
+  /** Of a live App, for a reader of its draft: whether the draft is another revision than the live one. */
+  draftChangedSinceLive: z.boolean().optional(),
   id: z.string(),
   kind: z.string(),
   name: z.string(),

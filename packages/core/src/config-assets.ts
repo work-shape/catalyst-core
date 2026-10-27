@@ -185,7 +185,11 @@ export type ConfigAssetRevisionOrigin =
       pageId: string;
       /** The number of the Page revision the files were copied from. */
       fileSetNumber: number;
-    };
+      /** The agent of that conversation saved the Page into the asset, not a person's step. */
+      byAgent?: true;
+    }
+  /** An agent's tool call in the conversation wrote the revision, for the person it acts for. */
+  | { kind: "agent_run"; conversationId: string };
 
 /** An asset whose Page is a given one, with who wrote it from that Page last. */
 export interface ConfigAssetFromPage {
@@ -209,6 +213,21 @@ export interface ConfigAssetRevisionRecord {
   origin?: ConfigAssetRevisionOrigin;
   globalVersion: number;
   createdAt: string;
+}
+
+/**
+ * One publish of a `draft_published` asset: the revision it made live, numbered from 1 per
+ * asset. A way back to an earlier revision is a publication of its own. Members count these,
+ * never revisions.
+ */
+export interface ConfigAssetPublicationRecord {
+  assetId: string;
+  number: number;
+  revision: number;
+  /** Absent where it is not known, as for the publications the migration wrote. */
+  actor: AuditActor | null;
+  publishedAt: string;
+  note?: string;
 }
 
 /**
@@ -565,6 +584,13 @@ export interface ConfigAssetStore {
     /** Orders the revisions from the latest down, and reads `page.after` in that order. */
     newestFirst?: boolean;
   }): Promise<ConfigAssetRevisionRecord[]>;
+  /** The publications of one asset, the newest first: the first is the live one while it is. */
+  listConfigAssetPublications(input: {
+    clientInstanceId: ClientInstanceId;
+    assetId: string;
+    /** Reads `page.after` as a publication number. */
+    page?: StorePage;
+  }): Promise<ConfigAssetPublicationRecord[]>;
   /** One revision of one asset, read without the others. */
   getConfigAssetRevision(input: {
     clientInstanceId: ClientInstanceId;
@@ -629,13 +655,16 @@ export interface ConfigAssetStore {
     assetIds: Record<string, string>;
   }>;
   /**
-   * Moves the published pointer of one asset to the revision of that number, in one
-   * transaction. Refuses a number the asset has no content for with `NOT_FOUND`.
+   * Moves the published pointer of one asset to the revision of that number and records the
+   * publication, numbered after the asset's last, in one transaction. Refuses a number the
+   * asset has no content for with `NOT_FOUND`.
    */
   publishConfigAssetRevision(input: {
     clientInstanceId: ClientInstanceId;
     kind: ConfigAssetKind;
     name: string;
+    /** Who published, as the publication names them; absent for a release's own publish. */
+    actor?: AuditActor;
     /**
      * The id of the asset whose right the caller checked. The name is resolved again under
      * the lock, and an asset of another id there, one created after the name was removed, is
@@ -669,6 +698,8 @@ export interface ConfigAssetStore {
     assetId: string;
     revision: number;
     publishWidens?: boolean;
+    /** The number of the publication this publish recorded. */
+    publication: number;
     /** The number the pointer named before, absent on the first publish. */
     replacedRevision?: number;
     fileSetId?: FileSetId;

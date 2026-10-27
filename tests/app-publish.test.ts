@@ -194,71 +194,119 @@ describe("an App with a draft and a published revision", () => {
     expect(removed.audit.map((event) => event.type)).toContain("config_asset.deleted");
   });
 
-  it("names the live publisher and publish time, separately from the draft author, only after an authorized read", async () => {
-    const name = "publication-credit";
+  it("numbers every publish as a version of the App, a way back included, and no draft save", async () => {
+    const name = "publication-versions";
     await created(name, "saved by Admin");
     const read = (userId: string) =>
       t.call(userId, "assets.get", {
         params: { kind: "app", name },
         query: { workspaceId: t.workspaceId }
       });
-    expect((await read(t.admin.id)).json()).not.toHaveProperty("publication");
-    const published = await traced(t.root.id, "assets.publish", {
+    const versions = async () => {
+      const response = await t.call(t.admin.id, "assets.publications.list", {
+        params: { kind: "app", name },
+        query: { workspaceId: t.workspaceId }
+      });
+      expectStatus(response, 200);
+      return z
+        .object({
+          items: z.array(
+            z.object({
+              number: z.number(),
+              revision: z.number(),
+              actor: z.object({ displayLabel: z.string() }).nullable(),
+              publishedAt: z.string()
+            })
+          )
+        })
+        .parse(response.json())
+        .items.map(({ number, revision, actor }) => ({
+          number,
+          revision,
+          by: actor?.displayLabel
+        }));
+    };
+    const before = (await read(t.admin.id)).json();
+    expect(before).not.toHaveProperty("liveVersion");
+    expect(before).not.toHaveProperty("draftChangedSinceLive");
+    expect(await versions()).toEqual([]);
+
+    const first = await traced(t.root.id, "assets.publish", {
       params: { kind: "app", name },
       payload: { revision: 1, workspaceId: t.workspaceId }
     });
-    expectStatus(published.response, 200);
-    const event = published.audit.find((row) => row.type === "app.published");
-    expect(event).toBeDefined();
-    await t.putApp(t.admin.id, name, appFiles("newer draft by Admin"));
-    // A later audit row about another App must not supply the credit.
-    await t.stores.audit.appendAuditEvent({
-      clientInstanceId,
-      type: "app.published",
-      status: "success",
-      correlationId: randomUUID(),
-      actor: { displayLabel: "Someone else", roles: [] },
-      metadata: { kind: "app", name: "another-app", revision: 1 }
+    expectStatus(first.response, 200);
+    expect(first.audit.find((row) => row.type === "app.published")?.metadata).toMatchObject({
+      revision: 1,
+      publication: 1
     });
     expect((await read(t.admin.id)).json()).toMatchObject({
-      draftRevision: 2,
       publishedRevision: 1,
-      publication: { by: "Root", at: event?.createdAt }
+      liveVersion: { number: 1, by: "Root" },
+      draftChangedSinceLive: false
     });
-    // A member's published-only read does not acquire the draft's publication detail.
-    expect((await read(t.kai.id)).json()).not.toHaveProperty("publication");
+
+    // Saves of the draft are no versions: the live one stays, and the draft says it changed.
+    await t.putApp(t.admin.id, name, appFiles("newer draft by Admin"));
+    await t.putApp(t.admin.id, name, appFiles("newest draft by Admin"));
+    expect(await versions()).toEqual([{ number: 1, revision: 1, by: "Root" }]);
+    expect((await read(t.admin.id)).json()).toMatchObject({
+      draftRevision: 3,
+      publishedRevision: 1,
+      liveVersion: { number: 1 },
+      draftChangedSinceLive: true
+    });
+
+    expectStatus(await t.publish(t.admin.id, name, 3), 200);
+    // The way back to an earlier revision is a version of its own.
+    expectStatus(await t.publish(t.admin.id, name, 1), 200);
+    expect(await versions()).toEqual([
+      { number: 3, revision: 1, by: "Admin" },
+      { number: 2, revision: 3, by: "Admin" },
+      { number: 1, revision: 1, by: "Root" }
+    ]);
+    expect((await read(t.admin.id)).json()).toMatchObject({
+      publishedRevision: 1,
+      liveVersion: { number: 3, by: "Admin" },
+      draftChangedSinceLive: true
+    });
+
+    // A member's published-only read does not acquire the draft's version detail, nor its history.
+    const member = (await read(t.kai.id)).json();
+    expect(member).not.toHaveProperty("liveVersion");
+    expect(member).not.toHaveProperty("draftChangedSinceLive");
+    expectStatus(
+      await t.call(t.kai.id, "assets.publications.list", {
+        params: { kind: "app", name },
+        query: { workspaceId: t.workspaceId }
+      }),
+      403
+    );
     expectStatus(await read(t.lena.id), 403);
-    // Attribution is optional: an unavailable audit read cannot stop editing the App.
-    const lookup = vi
-      .spyOn(t.stores.audit, "getAssetPublication")
-      .mockRejectedValueOnce(new Error("unavailable"));
-    try {
-      const withoutCredit = await read(t.admin.id);
-      expectStatus(withoutCredit, 200);
-      expect(withoutCredit.json()).toMatchObject({ publishedRevision: 1 });
-      expect(withoutCredit.json()).not.toHaveProperty("publication");
-    } finally {
-      lookup.mockRestore();
-    }
-    // Audit keeps the name of a publisher whose account is gone; the page names them as a
-    // deleted account (ERASE-ACTOR-IDS).
-    const gone = vi.spyOn(t.stores.audit, "getAssetPublication").mockResolvedValueOnce({
-      at: event?.createdAt ?? "",
-      by: "Erika Mustermann",
-      byUserId: "usr_00000000-0000-4000-8000-000000000000"
+  });
+
+  it("names a publisher whose account is gone as a deleted account", async () => {
+    const name = "publication-gone";
+    await created(name, "saved by Admin");
+    const app = await stored(name);
+    await t.stores.configAssets.publishConfigAssetRevision({
+      clientInstanceId,
+      kind: "app",
+      name,
+      assetId: app?.id ?? "",
+      revision: 1,
+      revisionId: app?.activeRevisionId ?? "",
+      actor: {
+        displayLabel: "Erika Mustermann",
+        userId: "usr_00000000-0000-4000-8000-000000000000",
+        roles: []
+      }
     });
-    try {
-      expect((await read(t.admin.id)).json()).toMatchObject({ publication: { by: "" } });
-    } finally {
-      gone.mockRestore();
-    }
-    expect(
-      await t.stores.audit.getAssetPublication({
-        clientInstanceId,
-        assetId: "missing",
-        revision: 1
-      })
-    ).toBeUndefined();
+    const read = await t.call(t.admin.id, "assets.get", {
+      params: { kind: "app", name },
+      query: { workspaceId: t.workspaceId }
+    });
+    expect(read.json()).toMatchObject({ liveVersion: { number: 1, by: "" } });
   });
 
   it("serves a member the published revision, moves with a publish and goes back with a publish of the earlier number", async () => {

@@ -29,6 +29,7 @@ export {
   appWorkspaceName
 } from "./app-publish-confirmation";
 export { AppDeleteDialog, AppDetailsDialog, appLink } from "./app-header";
+export { appHistory } from "./app-history";
 export {
   appManifestSummary,
   appReadsStoredData,

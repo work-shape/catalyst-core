@@ -236,7 +236,7 @@ export function PublishDialog({
     (together !== undefined && !appPublishTogetherReady(together));
   // The live revision for its own audience again changes nothing: Publish waits for a change.
   const changes = appPublishMaySend(ask, offer, selected);
-  const body = appPublishBody(offer ? selected : undefined, ask.revision, workspace.name, t);
+  const body = appPublishBody(offer ? selected : undefined, workspace.name, t);
   const lists = (
     <KeyValueList>
       <KeyValue label={t("apps.publishConnections")}>

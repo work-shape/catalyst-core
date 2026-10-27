@@ -15,6 +15,7 @@ import {
   ApiError,
   type Asset,
   type AssetSummary,
+  type ConfigAssetPublication,
   type ConfigAssetRevision,
   type OperationOutcome
 } from "@work-shape/catalyst-api-client";
@@ -530,6 +531,12 @@ export interface AppRevisionPage {
   nextCursor?: string;
 }
 
+/** One page of the versions of an App, the newest first. */
+export interface AppPublicationPage {
+  items: ConfigAssetPublication[];
+  nextCursor?: string;
+}
+
 /** The changes a person makes to the Apps of one workspace. */
 export interface AppWrites {
   /** Saves the newest revision of a Page as the draft of a new App. */
@@ -577,6 +584,8 @@ export interface AppWrites {
    */
   runLiveOnce(app: string, action: string, expectedRevision: number): Promise<unknown>;
   revisions(app: string, cursor: string | undefined): Promise<AppRevisionPage>;
+  /** One page of the App's versions, the newest first. */
+  publications(app: string, cursor: string | undefined): Promise<AppPublicationPage>;
 }
 
 export function useAppWrites(workspaceId: string | undefined): AppWrites {
@@ -650,6 +659,11 @@ export function useAppWrites(workspaceId: string | undefined): AppWrites {
         ).finally(changed),
       revisions: (app, cursor) =>
         client.assets.revisions.list({
+          params: params(app),
+          query: { limit: APP_REVISIONS_PAGE_SIZE, workspaceId, ...(cursor ? { cursor } : {}) }
+        }),
+      publications: (app, cursor) =>
+        client.assets.publications.list({
           params: params(app),
           query: { limit: APP_REVISIONS_PAGE_SIZE, workspaceId, ...(cursor ? { cursor } : {}) }
         })

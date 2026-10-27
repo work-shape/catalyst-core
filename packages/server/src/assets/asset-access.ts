@@ -35,6 +35,11 @@ export interface AssetCall {
    * none cannot write an asset that has a repository.
    */
   runId?: OperationRunId;
+  /**
+   * The conversation whose agent makes the call, for the person it acts for. A revision it
+   * writes says so, and the history names it the agent's.
+   */
+  agentConversationId?: ConversationId;
   /** The workspace the call is made in: the conversation's for a call of an agent. */
   workspaceId?: CollaborationWorkspaceId;
   /** The language the request names, where a person's request made the call. */

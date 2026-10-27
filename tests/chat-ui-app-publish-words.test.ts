@@ -14,8 +14,8 @@ import { renderToStaticMarkup, TranslationProvider } from "./chat-ui-render-harn
 // what is published. A Personal Workspace is named after its owner ("Mara's workspace"); the
 // name stored on its row, "Personal workspace" in every language, is never shown beside it.
 // An App published before SHARE-1 is live for its workspace, and the instance's label for that
-// carries the stored name. After a publish the head says "Published · version 1", not
-// "Draft · version 1".
+// carries the stored name. After a publish the head says "Live: version 1 · since …", with the
+// number of the publish and never a revision's (APPVER-1).
 
 const render = (node: ReactNode, locale: "en" | "de" = "en") =>
   renderToStaticMarkup(createElement(TranslationProvider, { locale, children: node }));
@@ -100,6 +100,8 @@ describe("the confirmation of an agent's App publish", () => {
 });
 
 describe("the head of an App's draft", () => {
+  // The revisions are 7 and 9: a version number in the head is never one of them.
+  const live = { number: 4, publishedAt: "2026-10-26T09:00:00.000Z" };
   const head = (
     revisions: { draftRevision: number; publishedRevision?: number },
     locale: "en" | "de" = "en"
@@ -110,24 +112,32 @@ describe("the head of an App's draft", () => {
         workspace: { id: "cw_mara", name: "Maras Arbeitsbereich" },
         rights: ALL,
         ...revisions,
+        ...(revisions.publishedRevision === undefined ? {} : { liveVersion: live }),
         children: null,
         onBack: noop
       }),
       locale
     );
 
-  it("says the App is published once its draft is what is published", () => {
-    const german = head({ draftRevision: 1, publishedRevision: 1 }, "de");
-    expect(german).toContain("Veröffentlicht · Version 1");
-    expect(german).not.toContain("Entwurf · Version 1");
-    const english = head({ draftRevision: 1, publishedRevision: 1 });
-    expect(english).toContain("Published · version 1");
-    expect(english).not.toContain("Draft · version 1");
+  it("says which version is live and since when once its draft is what is published", () => {
+    const german = head({ draftRevision: 7, publishedRevision: 7 }, "de");
+    expect(german).toContain("Live: Version 4 · seit 26. Okt.");
+    expect(german).not.toContain("Entwurf: geändert");
+    const english = head({ draftRevision: 7, publishedRevision: 7 });
+    expect(english).toContain("Live: version 4 · since Oct 26");
+    expect(english).not.toMatch(/version 7|Version 7/u);
   });
 
-  it("names the draft's number while the draft is ahead, and says when nothing is published", () => {
-    expect(head({ draftRevision: 2, publishedRevision: 1 })).toContain("Draft · version 2");
-    expect(head({ draftRevision: 1 }, "de")).toContain("Entwurf · nicht veröffentlicht");
+  it("says the draft changed since the live version, and when nothing is published", () => {
+    const ahead = head({ draftRevision: 9, publishedRevision: 7 });
+    expect(ahead).toContain("Live: version 4 · since Oct 26");
+    expect(ahead).toContain("Draft: changed since version 4");
+    expect(ahead).not.toMatch(/version [79]\b/u);
+    expect(head({ draftRevision: 9, publishedRevision: 7 }, "de")).toContain(
+      "Entwurf: geändert seit Version 4"
+    );
+    expect(head({ draftRevision: 1 }, "de")).toContain("Entwurf · noch nicht veröffentlicht");
+    expect(head({ draftRevision: 1 })).toContain("Draft · not published");
   });
 
   it("says what publishing does to stored data only while the draft is not yet published", () => {
@@ -141,6 +151,7 @@ describe("the head of an App's draft", () => {
           workspace: { id: "cw_mara", name: "Maras Arbeitsbereich" },
           rights: ALL,
           ...revisions,
+          ...(revisions.publishedRevision === undefined ? {} : { liveVersion: live }),
           draftConfig: reading,
           children: null,
           onBack: noop
@@ -153,7 +164,7 @@ describe("the head of an App's draft", () => {
     );
     // Published: the line about "once published" is gone.
     const published = withFact({ draftRevision: 1, publishedRevision: 1 });
-    expect(published).toContain("Veröffentlicht · Version 1");
+    expect(published).toContain("Live: Version 4");
     expect(published).not.toContain('data-testid="app-stored-data-fact"');
   });
 });

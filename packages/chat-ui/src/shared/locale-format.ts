@@ -33,6 +33,19 @@ export function formatMomentShort(value: string, locale: LocaleCode): string {
 }
 
 /**
+ * The day of a moment in a badge: "26. Okt.", "Oct 26", with the year where it is not this
+ * year's.
+ */
+export function formatDayShort(value: string, locale: LocaleCode, now = new Date()): string {
+  const date = new Date(value);
+  return date.toLocaleDateString(locale, {
+    day: "numeric",
+    month: "short",
+    ...(date.getFullYear() === now.getFullYear() ? {} : { year: "numeric" })
+  });
+}
+
+/**
  * A short moment with the name of the reader's zone it is shown in, such as "18. Okt. 2026,
  * 23:34 MESZ": where a schedule names its own zone, the reader can compare the two.
  */

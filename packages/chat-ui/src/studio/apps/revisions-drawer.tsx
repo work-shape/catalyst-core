@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import type { ConfigAssetRevision } from "@work-shape/catalyst-api-client";
+import type { ConfigAssetPublication, ConfigAssetRevision } from "@work-shape/catalyst-api-client";
 import {
   Badge,
   Button,
+  Disclosure,
+  DisclosureContent,
+  DisclosureTrigger,
   Drawer,
   EmptyState,
   InlineError,
@@ -10,15 +13,16 @@ import {
   ListRow,
   SkeletonList
 } from "@work-shape/catalyst-ui";
-import { formatDateTime } from "../../shared/locale-format";
-import { useTranslation } from "../../shared/i18n";
-import type { AppRevisionPage } from "./app-data";
+import { formatMomentShort } from "../../shared/locale-format";
+import { useTranslation, type TranslationContextValue } from "../../shared/i18n";
+import type { AppPublicationPage, AppRevisionPage } from "./app-data";
+import { appHistory, savedByAgent } from "./app-history";
 import { personName } from "../../shared/person-name";
 
 /**
- * The revisions of one App beside its draft: who saved each and when, the newest first and
- * page by page, with the two pointers marked. A holder of the publish right makes any of them
- * the published one; the screen asks before it does.
+ * The history of one App beside its draft: one row per version, the newest first, with the
+ * draft saves made after it folded under it, page by page. A holder of the publish right makes
+ * any save the published one; the screen asks before it does.
  */
 export function RevisionsDrawer({
   open,
@@ -26,6 +30,7 @@ export function RevisionsDrawer({
   draftRevision,
   publishedRevision,
   load,
+  loadPublications,
   onPublish,
   onClose
 }: {
@@ -34,44 +39,39 @@ export function RevisionsDrawer({
   name: string;
   draftRevision: number;
   publishedRevision: number | undefined;
-  /** One page of the history, the newest first. `cursor` continues after an earlier page. */
+  /** One page of the saves, the newest first. `cursor` continues after an earlier page. */
   load(cursor: string | undefined): Promise<AppRevisionPage>;
+  /** One page of the versions, the newest first. */
+  loadPublications(cursor: string | undefined): Promise<AppPublicationPage>;
   /** Absent for a reader who may not publish. */
   onPublish?: (revision: ConfigAssetRevision) => void;
   onClose(): void;
 }) {
-  const [revisions, setRevisions] = useState<ConfigAssetRevision[]>();
-  const [nextCursor, setNextCursor] = useState<string>();
+  const [read, setRead] = useState<HistoryRead>();
   const [loadingMore, setLoadingMore] = useState(false);
   const [failed, setFailed] = useState(false);
   // Counts the reader's asks to read the history again after a read that failed.
   const [attempt, setAttempt] = useState(0);
 
-  // `load` is a new function with every render of the screen; the opening is what reads.
-  const loadRef = useRef(load);
+  // The loaders are new functions with every render of the screen; the opening is what reads.
+  const loadRef = useRef({ load, loadPublications });
   useEffect(() => {
-    loadRef.current = load;
-  }, [load]);
-  // Read with every opening, and again when a pointer moved: a publish changes the marks.
+    loadRef.current = { load, loadPublications };
+  }, [load, loadPublications]);
+  // Read with every opening, and again when a pointer moved: a publish adds a version.
   useEffect(() => {
     if (!open) {
       return;
     }
     let current = true;
-    setRevisions(undefined);
-    setNextCursor(undefined);
+    setRead(undefined);
     setFailed(false);
-    loadRef.current(undefined).then(
-      (page) => {
-        if (current) {
-          setRevisions(page.items);
-          setNextCursor(page.nextCursor);
-        }
+    readHistory(loadRef.current, undefined).then(
+      (next) => {
+        if (current) setRead(next);
       },
       () => {
-        if (current) {
-          setFailed(true);
-        }
+        if (current) setFailed(true);
       }
     );
     return () => {
@@ -82,9 +82,7 @@ export function RevisionsDrawer({
   const loadMore = async () => {
     setLoadingMore(true);
     try {
-      const page = await loadRef.current(nextCursor);
-      setRevisions((known) => [...(known ?? []), ...page.items]);
-      setNextCursor(page.nextCursor);
+      setRead(await readHistory(loadRef.current, read));
       setFailed(false);
     } catch {
       setFailed(true);
@@ -97,9 +95,11 @@ export function RevisionsDrawer({
     <RevisionsDrawerView
       open={open}
       name={name}
-      revisions={revisions}
+      publications={read?.publications}
+      revisions={read?.revisions}
+      publicationsComplete={read !== undefined && read.publicationsCursor === undefined}
       failed={failed}
-      hasMore={nextCursor !== undefined}
+      hasMore={read?.revisionsCursor !== undefined}
       loadingMore={loadingMore}
       draftRevision={draftRevision}
       publishedRevision={publishedRevision}
@@ -113,11 +113,53 @@ export function RevisionsDrawer({
   );
 }
 
+/** What the drawer read so far of both lists, and where each continues. */
+interface HistoryRead {
+  publications: ConfigAssetPublication[];
+  publicationsCursor: string | undefined;
+  revisions: ConfigAssetRevision[];
+  revisionsCursor: string | undefined;
+}
+
+/**
+ * The next page of saves after `known`, and as many pages of versions as it takes to place
+ * them: a save older than the oldest version read belongs to one further back.
+ */
+async function readHistory(
+  loaders: {
+    load(cursor: string | undefined): Promise<AppRevisionPage>;
+    loadPublications(cursor: string | undefined): Promise<AppPublicationPage>;
+  },
+  known: HistoryRead | undefined
+): Promise<HistoryRead> {
+  const [saves, first] = await Promise.all([
+    loaders.load(known?.revisionsCursor),
+    known ? undefined : loaders.loadPublications(undefined)
+  ]);
+  const read: HistoryRead = {
+    publications: known?.publications ?? first?.items ?? [],
+    publicationsCursor: known ? known.publicationsCursor : first?.nextCursor,
+    revisions: [...(known?.revisions ?? []), ...saves.items],
+    revisionsCursor: saves.nextCursor
+  };
+  const oldestSave = read.revisions.at(-1)?.createdAt;
+  while (read.publicationsCursor !== undefined && oldestSave !== undefined) {
+    const oldestVersion = read.publications.at(-1)?.publishedAt;
+    if (oldestVersion !== undefined && Date.parse(oldestVersion) <= Date.parse(oldestSave)) break;
+    const page = await loaders.loadPublications(read.publicationsCursor);
+    read.publications = [...read.publications, ...page.items];
+    read.publicationsCursor = page.nextCursor;
+  }
+  return read;
+}
+
 /** The drawer for a given part of the history. */
 export function RevisionsDrawerView({
   open,
   name,
+  publications,
   revisions,
+  publicationsComplete = true,
   failed,
   hasMore,
   loadingMore,
@@ -130,8 +172,12 @@ export function RevisionsDrawerView({
 }: {
   open: boolean;
   name: string;
-  /** The revisions read so far. Absent until the first page arrived. */
+  /** The versions read so far, the newest first. Absent until the first page arrived. */
+  publications: readonly ConfigAssetPublication[] | undefined;
+  /** The saves read so far, the newest first. Absent until the first page arrived. */
   revisions: readonly ConfigAssetRevision[] | undefined;
+  /** Every version is read, so a save older than all of them came before the first. */
+  publicationsComplete?: boolean;
   failed: boolean;
   hasMore: boolean;
   loadingMore: boolean;
@@ -143,6 +189,50 @@ export function RevisionsDrawerView({
   onClose(): void;
 }) {
   const { locale, t } = useTranslation();
+  const history =
+    publications && revisions
+      ? appHistory(publications, revisions, publicationsComplete)
+      : undefined;
+  // The newest version is the live one while something is published.
+  const liveNumber = publishedRevision === undefined ? undefined : publications?.[0]?.number;
+  const saveRows = (saves: readonly ConfigAssetRevision[]) => (
+    <List className="-mx-2">
+      {saves.map((revision) => (
+        <ListRow
+          key={revision.revision}
+          data-revision={revision.revision}
+          title={saveAuthor(revision, t)}
+          chips={
+            revision.revision === draftRevision ? <Badge size="sm">{t("apps.draft")}</Badge> : null
+          }
+          description={[
+            ...(revision.origin?.kind === "page" && !savedByAgent(revision) && revision.actor
+              ? [personName(revision.actor.displayLabel, t)]
+              : []),
+            formatMomentShort(revision.createdAt, locale)
+          ].join(" · ")}
+          descriptionWraps
+          actionsVisible
+          actions={
+            // A revision that holds nothing, as a delete leaves it, cannot be served.
+            onPublish && revision.revision !== publishedRevision && revision.config !== null ? (
+              <Button variant="ghost" size="sm" onClick={() => onPublish(revision)}>
+                {t("apps.publishThisRevision")}
+              </Button>
+            ) : undefined
+          }
+        />
+      ))}
+    </List>
+  );
+  const folded = (label: string, saves: readonly ConfigAssetRevision[]) =>
+    saves.length === 0 ? null : (
+      <Disclosure className="px-2">
+        <DisclosureTrigger>{label}</DisclosureTrigger>
+        {/* Kept in the page while folded, so a long history keeps its rows in one place. */}
+        <DisclosureContent keepMounted>{saveRows(saves)}</DisclosureContent>
+      </Disclosure>
+    );
   return (
     <Drawer
       open={open}
@@ -154,59 +244,70 @@ export function RevisionsDrawerView({
         {failed ? (
           <InlineError className="flex flex-wrap items-center justify-between gap-2">
             <span>{t("apps.revisionsFailed")}</span>
-            {revisions === undefined ? (
+            {history === undefined ? (
               <Button variant="outline" size="sm" onClick={onRetry}>
                 {t("tryAgain")}
               </Button>
             ) : null}
           </InlineError>
         ) : null}
-        {revisions === undefined ? (
+        {history === undefined ? (
           failed ? null : (
             <SkeletonList rows={4} />
           )
-        ) : revisions.length === 0 ? (
+        ) : history.versions.length === 0 && history.before.length === 0 ? (
           <EmptyState layout="inline">{t("apps.revisionsEmpty")}</EmptyState>
+        ) : history.versions.length === 0 ? (
+          // Nothing was published: the saves are the whole history, and nothing to fold under.
+          saveRows(history.before)
         ) : (
           // The rows bring their own inset: pulled out by it, their text shares the title's edge.
-          <List aria-label={t("apps.revisions")} className="-mx-2">
-            {revisions.map((revision) => {
-              const isPublished = revision.revision === publishedRevision;
-              return (
-                <ListRow
-                  key={revision.revision}
-                  data-revision={revision.revision}
-                  title={t("apps.revision", { number: revision.revision })}
-                  chips={
-                    <>
-                      {isPublished ? (
+          <ol aria-label={t("apps.revisions")} className="-mx-2 grid gap-1">
+            {history.versions.map(({ publication, saves }) => (
+              <li key={publication.number} data-version={publication.number} className="grid">
+                <List>
+                  <ListRow
+                    title={t("apps.version", { number: publication.number })}
+                    chips={
+                      publication.number === liveNumber ? (
                         <Badge tone="success" size="sm">
                           {t("apps.publishedBadge")}
                         </Badge>
-                      ) : null}
-                      {revision.revision === draftRevision ? (
-                        <Badge size="sm">{t("apps.draft")}</Badge>
-                      ) : null}
-                    </>
-                  }
-                  description={[
-                    ...(revision.actor ? [personName(revision.actor.displayLabel, t)] : []),
-                    formatDateTime(revision.createdAt, locale)
-                  ].join(" · ")}
-                  descriptionWraps
-                  actionsVisible
-                  actions={
-                    // A revision that holds nothing, as a delete leaves it, cannot be served.
-                    onPublish && !isPublished && revision.config !== null ? (
-                      <Button variant="ghost" size="sm" onClick={() => onPublish(revision)}>
-                        {t("apps.publishThisRevision")}
-                      </Button>
-                    ) : undefined
-                  }
-                />
-              );
-            })}
-          </List>
+                      ) : null
+                    }
+                    description={[
+                      publication.actor
+                        ? t("apps.versionPublishedBy", {
+                            name: personName(publication.actor.displayLabel, t),
+                            date: formatMomentShort(publication.publishedAt, locale)
+                          })
+                        : t("apps.versionPublished", {
+                            date: formatMomentShort(publication.publishedAt, locale)
+                          }),
+                      ...(publication.note ? [publication.note] : [])
+                    ].join(" · ")}
+                    descriptionWraps
+                  />
+                </List>
+                {folded(
+                  saves.length === 1
+                    ? t("apps.savesOne")
+                    : t("apps.saves", { count: saves.length }),
+                  saves
+                )}
+              </li>
+            ))}
+            {history.before.length > 0 ? (
+              <li className="grid">
+                {folded(
+                  history.before.length === 1
+                    ? t("apps.savesBeforeFirstOne")
+                    : t("apps.savesBeforeFirst", { count: history.before.length }),
+                  history.before
+                )}
+              </li>
+            ) : null}
+          </ol>
         )}
         {hasMore ? (
           <Button
@@ -222,4 +323,12 @@ export function RevisionsDrawerView({
       </div>
     </Drawer>
   );
+}
+
+/** Who made a save: the person, their agent for them, or the preview it was saved from. */
+function saveAuthor(revision: ConfigAssetRevision, t: TranslationContextValue["t"]): string {
+  const person = personName(revision.actor?.displayLabel, t);
+  if (savedByAgent(revision)) return t("apps.saveByAgent", { name: person });
+  if (revision.origin?.kind === "page") return t("apps.saveFromPreview");
+  return person;
 }

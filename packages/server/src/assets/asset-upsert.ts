@@ -223,7 +223,7 @@ export async function upsertAsset(
       // The default is set for the first asset only, so the instance has none before.
       ...(setsDefault ? { baseDefaultAgentName: null } : {}),
       ...placement,
-      ...(write.origin ? { origin: write.origin } : {}),
+      ...revisionOrigin(call, write.origin),
       mutations
     },
     { previous: current, config: toJsonObject(next) }
@@ -269,4 +269,18 @@ export async function upsertAsset(
       ...(kind.writeWarnings?.(next, write.warningFiles) ?? [])
     ]
   };
+}
+
+/**
+ * Where the revision came from, with the agent named where an agent's call wrote it: a Page
+ * it saved, or its own write. What an approval applied stays the approval's.
+ */
+function revisionOrigin(
+  call: AssetCall,
+  origin: ConfigAssetRevisionOrigin | undefined
+): { origin?: ConfigAssetRevisionOrigin } {
+  const conversationId = call.agentConversationId;
+  if (conversationId === undefined) return origin ? { origin } : {};
+  if (origin === undefined) return { origin: { kind: "agent_run", conversationId } };
+  return { origin: origin.kind === "page" ? { ...origin, byAgent: true } : origin };
 }

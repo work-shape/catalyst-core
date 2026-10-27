@@ -12,6 +12,7 @@ import {
   AppHeader,
   AppStateBadge,
   AppDataSourcesButton,
+  type AppLiveVersion,
   CopyAppLinkButton,
   CopyAppLinkItem
 } from "./app-header";
@@ -86,6 +87,7 @@ export function AppView({ app, appPath }: { app: string; appPath?: string }) {
         workspace={workspace}
         rights={rights}
         publishedRevision={published}
+        liveVersion={record.app?.liveVersion}
         onBack={() => host.showRoute({ kind: "apps", collaborationWorkspaceId: workspace.id })}
         onEdit={() => host.showRoute({ kind: "app-edit", ...address })}
         onDetails={() => setDetailsOpen(true)}
@@ -134,6 +136,7 @@ export function AppViewFrame({
   workspace,
   rights,
   publishedRevision,
+  liveVersion,
   children,
   onBack,
   onEdit,
@@ -152,6 +155,8 @@ export function AppViewFrame({
   rights: AppRights;
   /** The number of the revision shown, once it is known. */
   publishedRevision: number | undefined;
+  /** The live version, as the head of a builder names it. */
+  liveVersion?: AppLiveVersion | undefined;
   /** The App's frame, or what stands in its place. */
   children: ReactNode;
   onBack(): void;
@@ -190,6 +195,7 @@ export function AppViewFrame({
             publishedRevision === undefined || !appBuilder(rights) ? undefined : (
               <AppStateBadge
                 state={{ kind: "published", revision: publishedRevision, draftAhead: false }}
+                liveVersion={liveVersion}
               />
             )
           }
