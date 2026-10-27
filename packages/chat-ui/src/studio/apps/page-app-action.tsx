@@ -1,7 +1,12 @@
 import { useState } from "react";
 import { Banner, Button, RegistryIcon } from "@work-shape/catalyst-ui";
 import { useTranslation, type TranslationContextValue } from "../../shared/i18n";
-import { useAppFromPage, type AppFromPage, type AppLinkCandidate } from "./app-data";
+import {
+  useAppFromPage,
+  type AppFromPage,
+  type AppFromPageRead,
+  type AppLinkCandidate
+} from "./app-data";
 import { useAppsHost, type AppsHost } from "./apps-host";
 import { PageHeaderAction } from "./page-header-action";
 import { SaveAsAppAction } from "./save-as-app-dialog";
@@ -12,13 +17,15 @@ type PageAppChoice = { kind: "none" } | { kind: "save" } | { kind: "update"; app
 
 /**
  * Which of the two the header of a Page offers. A Page whose App the reader may write offers
- * the update of that App, whatever the reader may do in the open workspace. Every other Page
- * offers Save as app to whoever may write Apps there. Until the instance said whether the Page
- * has an App it offers neither, so one action never turns into the other under the pointer.
+ * the update of that App, whatever the reader may do in the open workspace. A Page no App holds
+ * offers Save as app to whoever may write Apps there. A Page held by an App the reader may only
+ * read, or not even that, offers nothing: saving it as a new App would copy someone else's App.
+ * Until the instance said what the Page is, or where it could not say, it offers neither, so one
+ * action never turns into the other under the pointer.
  */
 export function pageAppChoice(
   host: Pick<AppsHost, "enabled" | "rights" | "workspace"> | undefined,
-  read: { app: AppFromPage | undefined; settled: boolean }
+  read: AppFromPageRead
 ): PageAppChoice {
   if (!host?.enabled || !host.workspace || !read.settled) {
     return { kind: "none" };
@@ -26,25 +33,39 @@ export function pageAppChoice(
   if (read.app) {
     return { kind: "update", app: read.app };
   }
-  return host.rights.write ? { kind: "save" } : { kind: "none" };
+  return host.rights.write && read.preview?.kind === "unsaved"
+    ? { kind: "save" }
+    : { kind: "none" };
 }
 
 /**
  * What a preview is (PREVIEW-1): a folder no App holds, or the checkout of an App, which looks
- * like the App but reaches no Data Store and runs no Workflow of it. `unknown` until the
+ * like the App but reaches no Data Store and runs no Workflow of it. The App is named to whoever
+ * may read it; `app` is there only where the reader may also write it. `neutral` where the App
+ * may not be named to the reader, or where the instance could not say. `unknown` until the
  * instance said, and where no Apps are offered.
  */
 type PreviewStanding =
-  { kind: "unknown" } | { kind: "unsaved" } | { kind: "app"; app: AppFromPage };
+  | { kind: "unknown" }
+  | { kind: "unsaved" }
+  | { kind: "neutral" }
+  | { kind: "app"; title: string; app: AppFromPage | undefined };
 
 export function previewStanding(
   host: Pick<AppsHost, "enabled" | "workspace"> | undefined,
-  read: { app: AppFromPage | undefined; settled: boolean }
+  read: AppFromPageRead
 ): PreviewStanding {
   if (!host?.enabled || !host.workspace || !read.settled) {
     return { kind: "unknown" };
   }
-  return read.app ? { kind: "app", app: read.app } : { kind: "unsaved" };
+  if (read.app) {
+    return { kind: "app", title: read.app.title, app: read.app };
+  }
+  const preview = read.preview;
+  if (preview?.kind === "app") {
+    return { kind: "app", title: preview.title, app: undefined };
+  }
+  return preview?.kind === "unsaved" ? { kind: "unsaved" } : { kind: "neutral" };
 }
 
 /** The line under the name of a preview that says what it is, by its standing. */
@@ -52,11 +73,16 @@ export function previewStateLine(
   standing: PreviewStanding,
   t: TranslationContextValue["t"]
 ): string | undefined {
-  return standing.kind === "app"
-    ? t("pages.stateOfApp", { app: standing.app.title })
-    : standing.kind === "unsaved"
-      ? t("pages.stateUnsaved")
-      : undefined;
+  switch (standing.kind) {
+    case "app":
+      return t("pages.stateOfApp", { app: standing.title });
+    case "unsaved":
+      return t("pages.stateUnsaved");
+    case "neutral":
+      return t("pages.preview");
+    default:
+      return undefined;
+  }
 }
 
 /** The Page of a conversation that a preview shows. */
@@ -121,23 +147,47 @@ export function PreviewNeedsAppNotice(props: PreviewOfPage) {
   return appsOffered(useAppsHost()) ? <PreviewNeedsAppNoticeOf {...props} /> : null;
 }
 
+/**
+ * What the notice of a refused call says, and whether it leads to the App. The way to the App is
+ * its draft page, which only whoever may write the App can use. Save as app is named only for a
+ * Page no App holds, to whoever may write Apps here. Everyone else reads what the preview cannot
+ * do and no way they could not take.
+ */
+export function previewNeedsApp(
+  standing: PreviewStanding,
+  mayWriteApps: boolean
+):
+  | { message: "pages.needsApp"; app: AppFromPage }
+  | {
+      message: "pages.needsAppUnsaved" | "pages.needsAppNoWay";
+    } {
+  if (standing.kind === "app" && standing.app) {
+    return { message: "pages.needsApp", app: standing.app };
+  }
+  return {
+    message:
+      standing.kind === "unsaved" && mayWriteApps ? "pages.needsAppUnsaved" : "pages.needsAppNoWay"
+  };
+}
+
 function PreviewNeedsAppNoticeOf(props: PreviewOfPage) {
   const { t } = useTranslation();
-  const { standing, openApp } = usePreviewStanding(props);
+  const { host, standing, openApp } = usePreviewStanding(props);
+  const notice = previewNeedsApp(standing, host?.rights.write === true);
   return (
     <Banner
       layout="page"
       className="shrink-0"
       data-testid="preview-needs-app"
       action={
-        standing.kind === "app" ? (
-          <Button variant="outline" size="sm" onClick={() => openApp(standing.app)}>
+        "app" in notice ? (
+          <Button variant="outline" size="sm" onClick={() => openApp(notice.app)}>
             {t("apps.openApp")}
           </Button>
         ) : undefined
       }
     >
-      {t(standing.kind === "app" ? "pages.needsApp" : "pages.needsAppUnsaved")}
+      {t(notice.message)}
     </Banner>
   );
 }
@@ -148,9 +198,10 @@ interface PageAppActionProps extends PreviewOfPage {
 }
 
 /**
- * The actions about Apps in the header of a Page. Where the Page is an App's checkout: Open
- * app, the header's main action, and Save to draft beside it. Everywhere else Save as app.
- * Without the Apps of a workspace it is nothing and asks the instance nothing.
+ * The actions about Apps in the header of a Page. Where the Page is the checkout of an App the
+ * reader may write: Open app, the header's main action, and Save to draft beside it. Where no
+ * App holds the Page: Save as app. The checkout of an App the reader may not write offers
+ * nothing. Without the Apps of a workspace it is nothing and asks the instance nothing.
  */
 export function PageAppAction(props: PageAppActionProps) {
   return appsOffered(useAppsHost()) ? <PageAppActionOf {...props} /> : null;

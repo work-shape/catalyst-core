@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it, vi, afterEach } from "vitest";
 import { z } from "zod";
+import { appFromPageSchema } from "@work-shape/catalyst-api-contract";
 import { clientInstanceId, errorSchema } from "./support/access-instance";
 import {
   appFiles,
@@ -165,7 +166,7 @@ describe("an App updated from the Page it was saved from", () => {
     expect((await shown(t.kai.id, "budget", "published")).body).toContain("third state");
   });
 
-  it("tells a reader of the Page who may not write the App nothing, and refuses the call", async () => {
+  it("offers no draft update to a reader of the Page who may not write the App, and refuses the call", async () => {
     const page = await t.storePage("seen by kai", {}, { shared: true });
     await save(t.admin.id, page, "seen");
     await t.storePage("seen by kai, later", {}, page);
@@ -190,6 +191,85 @@ describe("an App updated from the Page it was saved from", () => {
       "operation.denied:denied"
     ]);
     expect(await stored("seen")).toMatchObject({ revision: 1 });
+  });
+
+  it("names only a readable App in the preview, and keeps draft rights separate", async () => {
+    const page = await t.storePage("preview permissions", {}, { shared: true });
+    const read = async (userId: string) => {
+      const response = await t.expectOk(userId, "apps.get_from_page", {
+        params: page,
+        query: { app: "preview-rights" }
+      });
+      const body: unknown = response.json();
+      const answer = appFromPageSchema.parse(body);
+      if (answer.preview.kind === "neutral") {
+        // Check the raw response too: schema parsing must not hide an unexpected name field.
+        expect(body).toEqual({ preview: { kind: "neutral" }, app: null, candidate: null });
+      }
+      return answer;
+    };
+    expect((await read(t.admin.id)).preview).toEqual({ kind: "unsaved" });
+    const made = await save(t.admin.id, page, "preview-rights", "Quarterly forecast");
+
+    // Writers retain the draft action and its optimistic revision.
+    expect(await read(t.admin.id)).toMatchObject({
+      preview: { kind: "app", title: "Quarterly forecast" },
+      app: { name: made.name, draftRevision: 1, draftFromPage: true }
+    });
+    // Reading the conversation alone names no App, and does not claim it is unsaved.
+    expect(await read(t.kai.id)).toEqual({
+      preview: { kind: "neutral" },
+      app: null,
+      candidate: null
+    });
+    const grant = (action: string, effect: "allow" | "deny") =>
+      t.stores.access.createGrant({
+        clientInstanceId,
+        holderKind: "user",
+        holderId: t.kai.id,
+        action,
+        effect,
+        scopeKind: "asset",
+        scopeId: made.id,
+        grantedBy: t.admin.id
+      });
+    const allowed = await grant("app.read", "allow");
+    // Read alone cannot reveal a draft-only title before the App has a published revision.
+    expect((await read(t.kai.id)).preview).toEqual({ kind: "neutral" });
+    expectStatus(await t.publish(t.admin.id, made.name, 1), 200);
+    // Read alone reveals only the name, with no draft revision or writable candidate.
+    expect(await read(t.kai.id)).toEqual({
+      preview: { kind: "app", title: "Quarterly forecast" },
+      app: null,
+      candidate: null
+    });
+    expectStatus(await update(t.kai.id, page, made.name, 1), 403);
+
+    // A new draft title is still private to builders; readers keep the published title.
+    expectStatus(
+      await t.putApp(
+        t.admin.id,
+        made.name,
+        appFiles("next draft", {
+          name: "Unannounced forecast"
+        })
+      ),
+      200
+    );
+    expect((await read(t.admin.id)).preview).toEqual({
+      kind: "app",
+      title: "Unannounced forecast"
+    });
+    expect((await read(t.kai.id)).preview).toEqual({ kind: "app", title: "Quarterly forecast" });
+
+    // Revoking read access removes the name on the next request.
+    await t.stores.access.deleteGrant({ clientInstanceId, grantId: allowed.id });
+    await grant("app.read", "deny");
+    expect(await read(t.kai.id)).toEqual({
+      preview: { kind: "neutral" },
+      app: null,
+      candidate: null
+    });
   });
 
   it("refuses a writer of the App who does not read the Page", async () => {
