@@ -43,8 +43,33 @@ export interface WorkflowMessageMail {
   params: WorkflowMessageMailParams;
 }
 
+/**
+ * A report of a run that failed for a platform reason, to the operator's support address
+ * (PLATFORM-REPORT): ids, the error code, the instance and the times, and the person's note if
+ * they wrote one. Never anything of the conversation, its files or a log.
+ */
+export interface PlatformReportMail {
+  template: "platform-report";
+  params: {
+    instance: { id: string; displayName: string; environment: string; appUrl?: string };
+    runId: string;
+    /** The workspace command that failed, where a tool's failure names one. */
+    commandId?: string;
+    errorCode: string;
+    /** When the run or the command failed. */
+    failedAt: string;
+    reportedAt: string;
+    /** What the person wrote, as they wrote it. */
+    note?: string;
+  };
+}
+
 export type MailTemplate =
-  PasswordResetMail | PlatformInvitationMail | WorkflowNoticeMail | WorkflowMessageMail;
+  | PasswordResetMail
+  | PlatformInvitationMail
+  | WorkflowNoticeMail
+  | WorkflowMessageMail
+  | PlatformReportMail;
 export type MailTemplateId = MailTemplate["template"];
 
 /** A platform mail to one person. */
@@ -66,7 +91,18 @@ export type WorkflowMessageMailMessage = WorkflowMessageMail & {
   locale: LocaleCode;
 };
 
-export type MailMessage = SinglePersonMailMessage | WorkflowMessageMailMessage;
+/**
+ * A platform report to the operator. Its From is always the instance's system sender; Reply-To
+ * names the person only where they asked for an answer.
+ */
+export type PlatformReportMailMessage = PlatformReportMail & {
+  to: MailRecipient;
+  replyTo?: MailRecipient;
+  locale: LocaleCode;
+};
+
+export type MailMessage =
+  SinglePersonMailMessage | WorkflowMessageMailMessage | PlatformReportMailMessage;
 
 /**
  * How a send ended. A failure says whether the mail went out:

@@ -43,6 +43,7 @@ import { conversation } from "./conversation";
 import { dataStores } from "./data-stores";
 import { dock } from "./dock";
 import { feedback } from "./feedback";
+import { platformReport } from "./platform-report";
 import { files } from "./files";
 import { guardrails } from "./guardrails";
 import { inbox } from "./inbox";
@@ -119,6 +120,7 @@ export const translations = combineTranslations(common)
   .and(dataStores)
   .and(dock)
   .and(feedback)
+  .and(platformReport)
   .and(files)
   .and(guardrails)
   .and(inbox)

@@ -899,6 +899,26 @@ requests always get the same answer, whether or not an account exists. At most t
 mails an hour go to one mailbox, and at most 200 an hour are sent for requests from one client
 address.
 
+### Platform problem reports
+
+When a run or a tool fails for a platform reason (the sandbox did not start, no worker took the
+command, the worker or its runner failed), the conversation offers to report it to the
+operator. The report goes to `support.email`; without that address, or without mail, the
+action is not shown.
+
+```yaml
+support:
+  email: support@operator.example.com
+```
+
+The mail goes from the instance's own sender above, never from the person. It holds the run's
+id, the error code, the instance and the time, and an optional note the person writes. It
+holds nothing of the conversation, its files or logs. Reply-To is the person's address only
+when they ask for an answer. A person reports one run once and at most five runs an hour. The
+instance keeps who reported which run with which code for 90 days, to hold those limits; the
+note is in the mail and nowhere else, and the audit records only the run, the report and the
+code.
+
 ## Managed OAuth clients
 
 An operator can register one app at a provider and let every catalogue part that asks for it

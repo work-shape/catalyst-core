@@ -3,6 +3,7 @@ import {
   isJsonObject,
   type ClientInstanceId,
   type JsonObject,
+  type PlatformToolFailureReason,
   type ToolExecutionContext,
   type ToolHandlerResult,
   type WorkspaceCommand,
@@ -215,10 +216,10 @@ function skillMountFailureResult(
 
 /**
  * The reasons of a command the platform failed to run, as the agent reads them in
- * `details.reason`. The sandbox did not start, or the worker or the runner failed: none of it
- * is the command's doing, nor the person's to fix.
+ * `details.reason` (`PLATFORM_TOOL_FAILURE_REASONS`). The conversation reads the same reason
+ * to offer a report to the operator.
  */
-type WorkspacePlatformFailureReason = "sandbox_unavailable" | "no_worker" | "platform_error";
+type WorkspacePlatformFailureReason = PlatformToolFailureReason;
 
 /** The codes of a command that failed for the platform, not for what it ran. */
 const PLATFORM_FAILURE_REASONS: Partial<Record<string, WorkspacePlatformFailureReason>> = {

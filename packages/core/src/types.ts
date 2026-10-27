@@ -36,6 +36,8 @@ export * from "./connection-bindings";
 export * from "./approval-requests";
 export * from "./notices";
 export * from "./feedback";
+export * from "./platform-failures";
+export * from "./platform-reports";
 export * from "./web-source";
 export * from "./structured-data";
 export * from "./structured-result";

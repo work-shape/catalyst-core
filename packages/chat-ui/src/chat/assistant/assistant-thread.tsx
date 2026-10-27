@@ -38,6 +38,11 @@ import { findRunActivity, shouldShowRunActivity } from "./thread-activity";
 import { ToolSubjectsProvider } from "./tool-subjects";
 import { FoldedCardsProvider } from "../conversation/card-fold-context";
 import { messageFeedbackSetup } from "../feedback/message-feedback";
+import {
+  PlatformReportAction,
+  platformReportSetup,
+  type PlatformFailure
+} from "../platform-report/platform-report";
 import { startGreeting, startStarters, type ConversationStart } from "../dock/subject-starters";
 import { creationTargetLine } from "../dock/creation-target";
 
@@ -67,6 +72,7 @@ export function AssistantThread({
   showContextIndicator,
   contextSnapshot,
   notice,
+  noticeReport,
   usageNote,
   onNewConversationForPersonalData,
   newConversationPrivate,
@@ -120,6 +126,8 @@ export function AssistantThread({
       }
     | undefined;
   notice: string | undefined;
+  /** Where the notice is a run's platform failure: the run, to report it to the operator. */
+  noticeReport?: { runId: string; failure: PlatformFailure };
   /** The quiet note at 80 percent of the person's own spend limit. */
   usageNote?: { text: string; dismiss(): void };
   /**
@@ -178,6 +186,7 @@ export function AssistantThread({
   onSubmitMessage?: (text: string) => boolean;
 }) {
   const { t } = useTranslation();
+  const platformReport = platformReportSetup(config, conversationId);
   const agent = getSelectedAgent(config, selectedAgentName);
   const initialPrompts = agent?.initialPrompts ?? [];
   // A conversation names what a tool call touched from the agents the person is offered,
@@ -277,6 +286,7 @@ export function AssistantThread({
                               conversationRunning={conversationRunning}
                               activeRunId={activeRunId}
                               feedback={messageFeedbackSetup(config, conversationId)}
+                              platformReport={platformReport}
                             />
                           </>
                         )}
@@ -312,7 +322,22 @@ export function AssistantThread({
                 ) : null}
                 {notice ? (
                   // Something went wrong with what was sent, so it is announced at once.
-                  <Banner tone="warning" role="alert" className="mb-2">
+                  <Banner
+                    tone="warning"
+                    role="alert"
+                    className="mb-2"
+                    action={
+                      platformReport && noticeReport ? (
+                        <PlatformReportAction
+                          key={noticeReport.runId}
+                          setup={platformReport}
+                          runId={noticeReport.runId}
+                          failure={noticeReport.failure}
+                          variant="outline"
+                        />
+                      ) : undefined
+                    }
+                  >
                     {notice}
                   </Banner>
                 ) : null}

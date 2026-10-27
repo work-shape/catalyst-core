@@ -15,6 +15,7 @@ import { resolveRequestLocale } from "./request-context";
 import type { ChatServerOptions } from "../types";
 import { readInstanceAdminName } from "../users/instance-admin-contact";
 import { withTwoFactorState } from "../http/two-factor-gate";
+import { platformReportAvailable } from "../platform-report/platform-report-service";
 
 export function registerConfigRoutes(route: Route, options: ChatServerOptions): void {
   route(apiOperations["health.get"], () => ({
@@ -59,6 +60,8 @@ export function registerConfigRoutes(route: Route, options: ChatServerOptions): 
     });
     return {
       ...config,
+      // "Problem an Workshape melden" needs both the operator's address and platform mail.
+      platformReport: { available: platformReportAvailable(options) },
       features: {
         ...config.features,
         attachments: {

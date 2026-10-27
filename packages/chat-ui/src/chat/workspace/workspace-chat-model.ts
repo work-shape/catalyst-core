@@ -94,6 +94,7 @@ import {
   workspaceScopedConfigFor
 } from "./workspace-chat-state";
 import { isConversationGone } from "../conversation/conversation-gone";
+import { platformFailureOfRunError } from "../platform-report/platform-report";
 import type { WorkspaceChatModel, WorkspaceChatModelInput } from "./workspace-chat-types";
 import { createWorkspaceConversationActions } from "./workspace-conversation-actions";
 import { useWorkspaceDraft, useWorkspaceDraftController } from "./workspace-drafts";
@@ -441,6 +442,13 @@ export function useWorkspaceChatModel({
     (endedRunId !== undefined && endedRunId === answeredRunId
       ? undefined
       : controllerTerminalNotice);
+  // A run that ended for a platform reason offers a report beside its notice (PLATFORM-REPORT).
+  const noticeFailure =
+    notice === undefined && visibleNotice !== undefined && endedRunId !== undefined
+      ? platformFailureOfRunError(controller.error)
+      : undefined;
+  const noticeReport =
+    noticeFailure && endedRunId ? { runId: endedRunId, failure: noticeFailure } : undefined;
 
   const {
     showConversationInActiveCollaborationWorkspace,
@@ -1151,6 +1159,7 @@ export function useWorkspaceChatModel({
       messagesLoaded,
       snapshotStatus: selectedConversationId ? controller.snapshotStatus : "ready",
       notice: visibleNotice,
+      ...(noticeReport ? { noticeReport } : {}),
       draft: activeDraft.draft,
       composerFocusRequestId: chrome.composerFocusRequestId,
       locale: activeLocale,

@@ -18,6 +18,7 @@ import * as dataScopesTables from "./schema/dataScopes";
 import * as dataStoresTables from "./schema/dataStores";
 import * as executionWorkspacesTables from "./schema/executionWorkspaces";
 import * as feedbackTables from "./schema/feedback";
+import * as platformReportsTables from "./schema/platformReports";
 import * as filesTables from "./schema/files";
 import * as followUpsTables from "./schema/followUps";
 import * as guardrailsTables from "./schema/guardrails";
@@ -53,6 +54,7 @@ export * from "./schema/dataScopes";
 export * from "./schema/dataStores";
 export * from "./schema/executionWorkspaces";
 export * from "./schema/feedback";
+export * from "./schema/platformReports";
 export * from "./schema/files";
 export * from "./schema/followUps";
 export * from "./schema/guardrails";
@@ -89,6 +91,7 @@ export const schema = {
   ...dataStoresTables,
   ...executionWorkspacesTables,
   ...feedbackTables,
+  ...platformReportsTables,
   ...filesTables,
   ...followUpsTables,
   ...guardrailsTables,
