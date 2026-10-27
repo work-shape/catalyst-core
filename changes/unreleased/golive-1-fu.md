@@ -1,6 +1,0 @@
----
-section: Fixed
----
-
-- **Apps:** An App's Publish that carries Data Stores asks the App's own checks (its audience, its revision and the asset set) before it publishes any store, so their refusal leaves every store as it was (GOLIVE-1 follow-up). A Publish of the App also waits for a bound store that is live and still applying the migrations the App's `minSchema` needs, which an earlier Publish whose wait ran out (`data_store_migrating`) left behind: publishing again carries on instead of refusing with `data_store_below_min_schema`. It waits only for a store the publisher may publish (`data_store.publish`); a store whose job ended in a failure is refused at once with `data_store_migration_failed`. `apps.publish_review` lists such a store with `pending: false`; the dialog shows it as "Being updated" / "Wird umgestellt" and the dialog, the agent and `catalyst app publish` do not name it in `dataStores`.
-- **Data Stores:** A provisioning or migrate attempt that fails and is tried again no longer writes its failure onto the store's record; only the last attempt's failure is written and audited. An App's Publish waiting on the store no longer refuses with `data_store_migration_failed` while the job still has attempts left.
