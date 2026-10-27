@@ -1,4 +1,4 @@
-import { and, eq, gt, gte, lt, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, lt, sql } from "drizzle-orm";
 import type {
   PagesStore,
   StoredPreviewReport,
@@ -7,6 +7,7 @@ import type {
 import type { PostgresConnection } from "./postgres-database";
 import { conversations } from "./schema/conversations";
 import { fileSets, previewReports, previewViewerReports } from "./schema/pages";
+import { productUsers } from "./schema/users";
 
 // What a preview last reported of itself (PREVIEW-STATUS-1): one row per conversation, file set
 // and person whose browser showed it, kept for 24 hours. A failed statement is answered with a
@@ -40,13 +41,21 @@ export async function putPreviewReport(
           .select({
             clientInstanceId: sql`${input.clientInstanceId}`.as("client_instance_id"),
             conversationId: conversations.id,
-            userId: sql`${input.userId}`.as("user_id"),
+            userId: productUsers.id,
             fileSetId: fileSets.id,
             report: sql`${JSON.stringify(input.report)}::jsonb`.as("report"),
             reportedAt: sql`${reportedAt.toISOString()}::timestamptz`.as("reported_at"),
             notedDigest: sql`null::text`.as("noted_digest")
           })
           .from(conversations)
+          // A viewer who is no person of the instance, or whose account went, keeps nothing.
+          .innerJoin(
+            productUsers,
+            and(
+              eq(productUsers.id, input.userId),
+              eq(productUsers.clientInstanceId, input.clientInstanceId)
+            )
+          )
           .innerJoin(
             fileSets,
             and(
@@ -127,8 +136,27 @@ export async function takePreviewReport(
   input: Input<"takePreviewReport">
 ): Promise<TakenPreviewReport | undefined> {
   const notBefore = new Date(input.notBefore);
+  // The one row taken: the opened file set's, or the newest not noted yet. Only that row counts
+  // as noted; another waits for the next request.
+  const chosen = db
+    .select({ fileSetId: table.fileSetId })
+    .from(table)
+    .where(
+      and(
+        eq(table.clientInstanceId, input.clientInstanceId),
+        eq(table.conversationId, input.conversationId),
+        eq(table.userId, input.userId),
+        settled,
+        gt(table.reportedAt, notBefore),
+        input.fileSetId === undefined
+          ? sql`${table.notedDigest} is distinct from ${reportDigest}`
+          : eq(table.fileSetId, input.fileSetId)
+      )
+    )
+    .orderBy(desc(table.reportedAt))
+    .limit(1);
   try {
-    const rows = await db
+    const [row] = await db
       .update(table)
       .set({ notedDigest: reportDigest })
       .from(fileSets)
@@ -138,13 +166,7 @@ export async function takePreviewReport(
           eq(table.clientInstanceId, input.clientInstanceId),
           eq(table.conversationId, input.conversationId),
           eq(table.userId, input.userId),
-          settled,
-          ...(input.fileSetId === undefined
-            ? [
-                gt(table.reportedAt, notBefore),
-                sql`${table.notedDigest} is distinct from ${reportDigest}`
-              ]
-            : [eq(table.fileSetId, input.fileSetId), gte(table.reportedAt, notBefore)])
+          inArray(table.fileSetId, chosen)
         )
       )
       .returning({
@@ -153,8 +175,7 @@ export async function takePreviewReport(
         report: table.report,
         reportedAt: table.reportedAt
       });
-    const [newest] = rows.sort((a, b) => b.reportedAt.getTime() - a.reportedAt.getTime());
-    return newest && { ...newest, reportedAt: newest.reportedAt.toISOString() };
+    return row && { ...row, reportedAt: row.reportedAt.toISOString() };
   } catch {
     throw withoutValues("take");
   }

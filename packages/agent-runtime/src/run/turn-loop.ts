@@ -293,18 +293,17 @@ export class TurnLoop {
     runId: AgentRunId,
     setup: RunSetup,
     context: RuntimeCallContext,
+    state: RunState,
     opened: readonly OpenedPreview[],
-    openedAt: Date,
     messages: ModelMessage[]
   ): Promise<void> {
     const last = opened.at(-1);
-    if (!this.previewNotes || !setup.previewNotes || !last) return;
+    if (!this.previewNotes || !setup.previewNotes || !last || stopping(context, state)) return;
     try {
       const note = await this.previewNotes.afterOpen({
         viewer: setup.previewNotes.viewer,
         fileSetId: last.fileSetId,
         number: last.number,
-        openedAt,
         signal: context.signal
       });
       noteOnToolResult(messages, last.toolCallId, note);
@@ -317,10 +316,13 @@ export class TurnLoop {
   private async noteLaterPreview(
     runId: AgentRunId,
     setup: RunSetup,
+    context: RuntimeCallContext,
+    state: RunState,
     messages: ModelMessage[]
   ): Promise<void> {
     const viewer = setup.previewNotes?.viewer;
-    if (!this.previewNotes || !viewer) return;
+    // A run that stops takes nothing: what it took would be noted without a model reading it.
+    if (!this.previewNotes || !viewer || stopping(context, state)) return;
     try {
       const note = await this.previewNotes.later(viewer);
       if (note) noteBeforeRequest(messages, note);
@@ -657,7 +659,7 @@ export class TurnLoop {
       // The step boundary: all results of the last step are in. A new run's first request
       // goes out with its input alone, so a refused continuation rebuilds it in full.
       if (step > 0 || input.resume) await this.takeSteers(state, runId, input, context, messages);
-      await this.noteLaterPreview(runId, setup, messages);
+      await this.noteLaterPreview(runId, setup, context, state, messages);
       const modelResult = await callAcceptingContinuation();
       carriesEarlierContinuation = false;
       const { modelSelection, compactThresholdTokens } = model.current;
@@ -793,7 +795,6 @@ export class TurnLoop {
         modelInputFrom = { kind: "message", messageId: stepMessage.id };
       }
 
-      const openedAt = (this.options.clock ?? systemClock).now();
       const outcome = await this.toolDispatch.dispatchToolCalls(
         runId,
         input,
@@ -831,7 +832,9 @@ export class TurnLoop {
         });
         return;
       }
-      await this.noteOpenedPreview(runId, setup, context, outcome.opened, openedAt, messages);
+      // The last step's open gets no note: no model request follows it.
+      if (step + 1 < maxSteps)
+        await this.noteOpenedPreview(runId, setup, context, state, outcome.opened, messages);
       if (outcome.subagents.length > 0) {
         const settled = await answerSubagents({
           runId,
@@ -969,6 +972,11 @@ interface StepEntry {
   ): Promise<
     { messages: ModelMessage[]; providerContinuation?: ModelCompletion["continuation"] } | undefined
   >;
+}
+
+/** The run was cancelled or is stopping: nothing more is read for its model. */
+function stopping(context: RuntimeCallContext, state: RunState): boolean {
+  return context.signal?.aborted === true || isCancellationRequested(state.getStatus());
 }
 
 function toPausedToolCall(toolCall: ModelToolCall): PausedToolCall {

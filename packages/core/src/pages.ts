@@ -399,10 +399,10 @@ export interface PagesStore {
   /** Whether the person's browser reported any preview of the conversation after `since`. */
   previewViewedSince(input: PreviewViewerKey & { since: string }): Promise<boolean>;
   /**
-   * A settled report for a run's note, which counts as noted from then on. With `fileSetId`:
-   * that file set's report written at or after `notBefore`, noted before or not. Without: the
-   * newest report written after `notBefore` that reads otherwise than when it was last noted,
-   * and every other such report counts as noted with it.
+   * A settled report written after `notBefore` for a run's note, which counts as noted from
+   * then on. With `fileSetId`: that file set's report, noted before or not. Without: the newest
+   * report that reads otherwise than when it was last noted; another such report waits for the
+   * next take.
    */
   takePreviewReport(
     input: PreviewViewerKey & { notBefore: string; fileSetId?: FileSetId }

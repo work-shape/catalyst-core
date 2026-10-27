@@ -19,6 +19,7 @@ import {
 } from "@work-shape/catalyst-asset-schemas";
 import {
   PREVIEW_GREETING_MS,
+  PREVIEW_KEEP_ALIVE_MS,
   PREVIEW_REPORT_INTERVAL_MS,
   PREVIEW_SETTLE_FALLBACK_MS,
   createPreviewReporter
@@ -279,7 +280,10 @@ describe("the guard's collector in a Page", () => {
 });
 
 describe("the interface's report of a preview", () => {
-  function reporterWithClock(answer: () => Promise<unknown> = () => Promise.resolve()) {
+  function reporterWithClock(
+    answer: () => Promise<unknown> = () => Promise.resolve(),
+    visible: () => boolean = () => true
+  ) {
     let clock = 0;
     const timers = new Map<number, { at: number; run: () => void }>();
     let id = 0;
@@ -296,7 +300,8 @@ describe("the interface's report of a preview", () => {
           const own = id;
           timers.set(own, { at: clock + ms, run });
           return () => timers.delete(own);
-        }
+        },
+        visible
       }
     );
     const advance = (ms: number) => {
@@ -360,6 +365,30 @@ describe("the interface's report of a preview", () => {
       code: "forbidden",
       count: 1
     });
+  });
+
+  it("tells the instance every 30 seconds that a visible preview is still mounted", () => {
+    let visible = true;
+    const { reporter, sent, advance } = reporterWithClock(undefined, () => visible);
+    reporter.frameLoaded();
+    reporter.greeted();
+    reporter.guardReport(guard());
+    advance(0);
+    expect(sent).toHaveLength(2);
+    advance(PREVIEW_KEEP_ALIVE_MS);
+    // The same report again: nothing changed, so a run does not note it twice.
+    expect(sent).toHaveLength(3);
+    expect(sent[2]).toEqual(sent[1]);
+    // A hidden page says nothing; once unmounted, nothing more goes out.
+    visible = false;
+    advance(PREVIEW_KEEP_ALIVE_MS * 3);
+    expect(sent).toHaveLength(3);
+    visible = true;
+    advance(PREVIEW_KEEP_ALIVE_MS);
+    expect(sent).toHaveLength(4);
+    reporter.stop();
+    advance(PREVIEW_KEEP_ALIVE_MS * 3);
+    expect(sent).toHaveLength(4);
   });
 
   it("says the kit did not greet within 5 seconds, and settles a frame whose guard never did", () => {
