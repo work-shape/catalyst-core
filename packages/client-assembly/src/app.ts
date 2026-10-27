@@ -410,6 +410,7 @@ export async function createClientInstanceExecutionAssembly(
   // The mailer is made after the capabilities; their port sends through it once it is.
   let capabilityMailer: ChatServerOptions["mail"];
   const capabilityOperationNames = new Map<string, Set<string>>();
+  const capabilityKindNames = new Map<string, Set<string>>();
   // The files of Workflow runs live in the store of files, made after the capabilities.
   const keepsRunFiles =
     modules.isEnabled("workflows") && config.infrastructure.objectStorage.files !== undefined;
@@ -428,9 +429,12 @@ export async function createClientInstanceExecutionAssembly(
         capability,
         store,
         operations: () => capabilityOperationNames.get(capability) ?? new Set<string>(),
+        kinds: () => capabilityKindNames.get(capability) ?? new Set<string>(),
+        ...(pages ? { objects: pages.objects } : {}),
         ...(keepsRunFiles ? { runFiles: () => capabilityRunFiles } : {})
       }),
     operationNames: capabilityOperationNames,
+    kindNames: capabilityKindNames,
     logger,
     capabilitiesConfig: config.capabilities,
     modules,
@@ -902,16 +906,24 @@ function assertGuardrailsCheck(
 async function createCapabilityContributions(
   capabilities: readonly ClientInstanceCapability[],
   context: Omit<Parameters<ClientInstanceCapability["create"]>[0], "stores"> & {
-    stores: Omit<ClientInstanceCapabilityPlatformStores, "records" | "operationRuns" | "runFiles">;
+    stores: Omit<
+      ClientInstanceCapabilityPlatformStores,
+      "records" | "operationRuns" | "runFiles" | "assets"
+    >;
     /** The stores bound to one capability (ADR-0033). */
     scoped: (
       capability: string
-    ) => Pick<ClientInstanceCapabilityPlatformStores, "records" | "operationRuns" | "runFiles">;
+    ) => Pick<
+      ClientInstanceCapabilityPlatformStores,
+      "records" | "operationRuns" | "runFiles" | "assets"
+    >;
     /** Filled with the operations each capability contributes, by capability name. */
     operationNames: Map<string, Set<string>>;
+    /** Filled with the asset kinds each capability brings, by capability name. */
+    kindNames: Map<string, Set<string>>;
   }
 ): Promise<ClientInstanceCapabilityContribution[]> {
-  const { scoped, operationNames, ...shared } = context;
+  const { scoped, operationNames, kindNames, ...shared } = context;
   const contributions: ClientInstanceCapabilityContribution[] = [];
   for (const capability of capabilities) {
     // The name scopes the capability's records and runs, so two of one name would share them.
@@ -930,6 +942,10 @@ async function createCapabilityContributions(
           .filter((operation) => operation.completion !== undefined)
           .map((operation) => operation.name)
       )
+    );
+    kindNames.set(
+      capability.name,
+      new Set((contribution.assetKinds ?? []).map((kind) => kind.kind))
     );
     contributions.push(contribution);
   }

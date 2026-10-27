@@ -81,6 +81,7 @@
 {"name":"feedback.handled","legacy":false,"audited":true,"phases":["after"]}
 {"name":"feedback.pruned","legacy":false,"audited":true,"phases":["after"]}
 {"name":"feedback.received","legacy":false,"audited":true,"phases":["after"]}
+{"name":"form_page.before_publish","legacy":false,"audited":false,"phases":["before"]}
 {"name":"governance.audit_events_viewed","legacy":true,"audited":true,"phases":["after"]}
 {"name":"governance.config_assets_viewed","legacy":true,"audited":true,"phases":["after"]}
 {"name":"governance.config_assets_write_authorized","legacy":true,"audited":true,"phases":["after"]}

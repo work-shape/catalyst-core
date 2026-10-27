@@ -21,6 +21,15 @@ const OUTSIDE_FORM_AUDIT = {
 };
 
 export const outsideFormEvents = {
+  // Guardrails answer here before a form page's revision goes live (EW-9c): its files are then
+  // served to anyone holding a form's link. The subject is the form page.
+  "form_page.before_publish": {
+    name: "form_page.before_publish",
+    subject: "config_asset",
+    legacy: false,
+    audited: false,
+    phases: ["before"]
+  },
   "outside_form.requested": { ...OUTSIDE_FORM_AUDIT, name: "outside_form.requested" },
   "outside_form.mail_failed": { ...OUTSIDE_FORM_AUDIT, name: "outside_form.mail_failed" }
 } satisfies Record<string, PlatformEventDefinition>;

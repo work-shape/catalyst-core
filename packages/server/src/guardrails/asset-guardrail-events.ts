@@ -34,8 +34,8 @@ import { withGivenTools, type AgentGiveChecked } from "../assets/agent-drafts";
 import type { AssetWorkflowOptions } from "../types";
 
 // The before-events of the asset operations: `asset.before_write` for each asset a call saves
-// or brings back, `app.before_publish`, `workflow.before_publish` and
-// `data_store.before_publish` for a revision a call makes live. Their guardrails read the
+// or brings back, `app.before_publish`, `workflow.before_publish`, `data_store.before_publish`
+// and `form_page.before_publish` for a revision a call makes live. Their guardrails read the
 // asset's name and the text of its definition or its files. The text is handed to them and kept
 // nowhere. A file that is no text is read by a pattern as its printable runs, so text hidden
 // beside a NUL byte is still found and a photo adds next to nothing; a judge reads the long
@@ -229,13 +229,15 @@ export async function giveToolsEvents(
 const PUBLISH_EVENTS: Readonly<Record<string, OperationBeforeEvent["name"]>> = {
   app: "app.before_publish",
   [WORKFLOW_ASSET_KIND]: "workflow.before_publish",
-  [DATA_STORE_ASSET_KIND]: "data_store.before_publish"
+  [DATA_STORE_ASSET_KIND]: "data_store.before_publish",
+  // The kind of the capability `outside-forms` (EW-9c).
+  form_page: "form_page.before_publish"
 };
 
 /**
- * `app.before_publish`, `workflow.before_publish` or `data_store.before_publish` of the
- * revision a publish makes live, with the text of that revision: a Data Store's are its
- * migrations. Another kind has no publish event yet.
+ * `app.before_publish`, `workflow.before_publish`, `data_store.before_publish` or
+ * `form_page.before_publish` of the revision a publish makes live, with the text of that
+ * revision: a Data Store's are its migrations. Another kind has no publish event yet.
  */
 export async function publishEvents(
   options: RevisionOptions,

@@ -254,6 +254,7 @@ const HIT_MOMENTS: Record<string, TranslationKey> = {
   "agent.before_publish": "guardrails.hitAtPublish",
   "workflow.before_publish": "guardrails.hitAtPublish",
   "data_store.before_publish": "guardrails.hitAtPublish",
+  "form_page.before_publish": "guardrails.hitAtPublish",
   "approval_request.before_create": "guardrails.hitAtApprovalRequest"
 };
 

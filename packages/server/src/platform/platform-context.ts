@@ -118,9 +118,10 @@ export function readActionsOnSingleAssets(options: ContextOptions, context: Call
   if (!hasAuthScope(context.actor, SCOPE_OF_VERB.read)) {
     return [];
   }
-  return options.configAssets.kinds.kinds
-    .map((kind) => kind.actions.read)
-    .filter((action) => context.access.holdsGrantAt(action, ["asset", "workspace"]));
+  // Kinds may share their rights, as a form page shares an App's.
+  return [...new Set(options.configAssets.kinds.kinds.map((kind) => kind.actions.read))].filter(
+    (action) => context.access.holdsGrantAt(action, ["asset", "workspace"])
+  );
 }
 
 /**

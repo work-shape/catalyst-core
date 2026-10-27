@@ -172,5 +172,25 @@ describe("capability records", () => {
         end: { status: "done", finishedAt: at, output: { value: { answers: {} } } }
       })
     ).resolves.toMatchObject({ status: "done" });
+    // A run no Workflow started serves no Workflow's owner.
+    await expect(operationRuns.workflowOf(own)).resolves.toBeUndefined();
+  });
+
+  it("reads published assets only of the kinds the capability brings", async () => {
+    const clientInstanceId = db.clientInstance("assets");
+    const { assets } = capabilityStoresOf({
+      clientInstanceId,
+      capability: "forms",
+      store: db.store,
+      operations: () => new Set(),
+      kinds: () => new Set(["form_page"])
+    });
+    await expect(assets.listPublished({ kind: "form_page", limit: 10 })).resolves.toEqual([]);
+    await expect(assets.listPublished({ kind: "app", limit: 10 })).rejects.toMatchObject({
+      code: "FORBIDDEN"
+    });
+    await expect(
+      assets.readFiles({ kind: "app", name: "any", fileSetId: "fs_1" })
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 });
