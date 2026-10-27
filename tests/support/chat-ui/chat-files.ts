@@ -9,7 +9,10 @@ export {
   shouldUseLiveArtifactPreviewState
 } from "../../../packages/chat-ui/src/chat/files/artifact-preview";
 export { ArtifactPreviewMessage } from "../../../packages/chat-ui/src/chat/files/artifact-preview-shell";
-export { managedFileIdFromAttachmentContent } from "../../../packages/chat-ui/src/chat/files/attachment-preview";
+export {
+  isImageAttachment,
+  managedFileIdFromAttachmentContent
+} from "../../../packages/chat-ui/src/chat/files/attachment-preview";
 export {
   ConversationFileDownloadButton,
   conversationFileFromArtifact,
@@ -38,4 +41,7 @@ export {
   type SpreadsheetVisual
 } from "../../../packages/chat-ui/src/chat/files/spreadsheet-visuals";
 export { StructuredDataView } from "../../../packages/chat-ui/src/chat/files/structured-data-view";
-export { viewerObjectUrl } from "../../../packages/chat-ui/src/chat/files/viewer-object-url";
+export {
+  rasterImageType,
+  viewerObjectUrl
+} from "../../../packages/chat-ui/src/chat/files/viewer-object-url";

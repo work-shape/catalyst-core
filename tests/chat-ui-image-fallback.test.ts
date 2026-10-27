@@ -142,7 +142,7 @@ function Thread({ messages }: { messages: Message[] }) {
 }
 
 /** A sent message with one image attached, as a saved conversation holds it. */
-function sentWithImage(fileId: string, filename: string): Message {
+function sentWithImage(fileId: string, filename: string, mimeType = "image/png"): Message {
   return {
     id: `msg_${fileId}`,
     conversationId: "conv_1",
@@ -161,7 +161,7 @@ function sentWithImage(fileId: string, filename: string): Message {
               fileId,
               attachmentId: `att_${fileId}`,
               filename,
-              mimeType: "image/png",
+              mimeType,
               byteSize: SVG.length,
               status: "ready",
               readable: true
@@ -182,6 +182,23 @@ function sentThread(message: Message) {
 }
 
 describe("an attached image that does not decode", () => {
+  it.each(["image/svg+xml", "image/avif", "application/pdf"])(
+    "shows %s as an attachment chip without fetching an image",
+    async (mimeType) => {
+      await show(sentThread(sentWithImage("file_plan", "plan.png", mimeType)));
+      expect(host.querySelector("img")).toBeNull();
+      expect(host.querySelector('button[aria-label="Open preview for plan.png"]')).not.toBeNull();
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(blobTypes()).toEqual([]);
+    }
+  );
+
+  it("shows a raster attachment with a MIME parameter as an image", async () => {
+    fetchMock.mockImplementation(async () => png());
+    await show(sentThread(sentWithImage("file_photo", "photo.png", "IMAGE/PNG; charset=binary")));
+    expect(host.querySelector("img")?.getAttribute("src")).toBe("blob:catalyst/file-1");
+  });
+
   it("shows the file chip, which still opens the file, and never retypes the bytes", async () => {
     await show(sentThread(sentWithImage("file_plan", "plan.png")));
     expect(host.querySelector("img")?.getAttribute("src")).toBe("blob:catalyst/file-1");

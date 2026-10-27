@@ -24,6 +24,6 @@ describe("sent message attachment grouping", () => {
         { type: "document", name: "1. Datenschutz.pdf" },
         { type: "file", name: "photo.jpeg" }
       ])
-    ).toEqual({ images: [1, 3], files: [0, 2] });
+    ).toEqual({ images: [1], files: [0, 2, 3] });
   });
 });
