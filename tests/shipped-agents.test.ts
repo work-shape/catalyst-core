@@ -113,6 +113,10 @@ describe("the agent that ships with the platform", () => {
       "answer from the docs page getting-started/local-agent, never from your own tools"
     );
     expect(config.instructions).toContain("A key reads no Data Store rows");
+    // A person could not tell at the end of a build what was done and what was theirs to do.
+    expect(config.instructions).toContain("up to four short parts");
+    expect(config.instructions).toContain("never describe a click path in words");
+    expect(config.instructions).toContain("each pending Data Store in dataStores");
     const listed = listSchema.parse(
       (await app.call("assets.list", { params: { kind: "agent" } })).json()
     ).items;
