@@ -539,6 +539,7 @@ insert into findings values (1, '101', 'A'), (3, '103', 'C');`
         ).toHaveLength(1);
         await kb.publish(db.store, {
           access: access("all"),
+          actor: person,
           assetId,
           revision,
           config,

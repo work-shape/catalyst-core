@@ -82,7 +82,9 @@ export function registerKnowledgeProcessingVolumeTest(
       scope: asset.scope,
       config
     });
-    expect(lines.join("\n")).toContain(`Reprocess ${volume + 1} affected contents`);
+    expect(lines.join("\n")).toContain(
+      `${(volume + 1).toLocaleString("en-US")} documents are read again`
+    );
     // Counts and identities are checked again at publish; a changed set invalidates confirmation.
     const confirmation = required(lines.join("\n").match(/confirmProcessing: '([a-f0-9]+)'/u)?.[1]);
     await world.sql`update catalyst_kb.documents set withdrawn_at=now() where id='scale-1'`;
@@ -91,7 +93,9 @@ export function registerKnowledgeProcessingVolumeTest(
       scope: asset.scope,
       config
     });
-    expect(fresh.join("\n")).toContain(`Reprocess ${volume} affected contents`);
+    expect(fresh.join("\n")).toContain(
+      `${volume.toLocaleString("en-US")} documents are read again`
+    );
     expect(fresh.join("\n")).not.toContain(confirmation);
   });
 }

@@ -7,7 +7,7 @@ import {
 } from "@work-shape/catalyst-core";
 import { required } from "./support/assertions";
 import { clientInstanceId, useDataStoreInstance } from "./support/data-store-instance";
-import { useKnowledgeSync } from "./support/knowledge-sync";
+import { knowledgePublisher, useKnowledgeSync } from "./support/knowledge-sync";
 
 describe("reading sources immediately after publishing a Knowledge Base", () => {
   const { start } = useDataStoreInstance();
@@ -96,6 +96,7 @@ describe("reading connector sources during initial provisioning", () => {
     await world.instance.stores.transaction(async (stores) => {
       await world.knowledge.publish(stores, {
         access,
+        actor: knowledgePublisher,
         assetId: asset.id,
         revision: 1,
         config,

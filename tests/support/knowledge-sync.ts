@@ -17,6 +17,7 @@ import {
   type KnowledgeExtractor,
   StoreBackedAuditRecorder,
   KNOWLEDGE_BASE_ASSET_KIND,
+  type AuthenticatedUser,
   type ConnectorContext,
   type DocumentSourceCapability,
   type KnowledgeFiles,
@@ -56,6 +57,17 @@ function context(signal: AbortSignal): ConnectorContext {
 }
 
 // Opt in only when a test publishes stores: migration claims otherwise add unrelated transactions.
+/** Who a test publishes a Knowledge Base as: a re-index the publish starts is counted for them. */
+export const knowledgePublisher: AuthenticatedUser = {
+  id: "publisher",
+  externalUserId: "publisher",
+  displayLabel: "Publisher",
+  clientInstanceId,
+  roles: ["superadmin"],
+  permissionRefs: [],
+  authSource: "test"
+};
+
 export function useKnowledgeSync({
   withDataStoreJobs = false,
   firstPassStop,
@@ -410,6 +422,7 @@ export function useKnowledgeSync({
       await instance.stores.transaction(async (stores) => {
         await knowledge.publish(stores, {
           access,
+          actor: knowledgePublisher,
           assetId: record.id,
           revision: updated.revision,
           config,

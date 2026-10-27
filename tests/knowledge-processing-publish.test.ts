@@ -3,7 +3,7 @@ import { z } from "zod";
 import { AppError, createActorAccess, enqueueKnowledgeIndex } from "@work-shape/catalyst-core";
 import { eventually, required } from "./support/assertions";
 import { clientInstanceId } from "./support/data-store-instance";
-import { useKnowledgeSync } from "./support/knowledge-sync";
+import { knowledgePublisher, useKnowledgeSync } from "./support/knowledge-sync";
 const params = { kind: "knowledge_base", name: "sync-test" };
 
 function publisherAccess() {
@@ -55,9 +55,12 @@ describe("confirmed, selective processing at publish (KB 80)", () => {
       expect(publish.body).toContain("knowledge_processing_confirmation_required");
       const get = await world.instance.api.call("assets.get", { params });
       expect(get.statusCode, get.body).toBe(200);
-      expect(get.body).toContain("Reprocess 1 affected contents");
-      // The same statement as fields, which a reader renders in its own language. The English
-      // sentence stays, and `line` names it among the lines.
+      // In the reader's language, here the instance's German.
+      expect(get.body).toContain(
+        "1 Dokument wird mit den neuen Einstellungen noch einmal gelesen."
+      );
+      // The same statement as fields, which a reader renders in its own words; `line` names the
+      // sentence among the lines.
       const read = z
         .object({
           publishQuestion: z.array(z.string()),
@@ -70,7 +73,7 @@ describe("confirmed, selective processing at publish (KB 80)", () => {
         .parse(get.json());
       expect(read.publishProcessing).toMatchObject({ count: 1, cost: { kind: "estimate" } });
       expect(read.publishQuestion[read.publishProcessing.line]).toContain(
-        "Reprocess 1 affected contents"
+        "1 Dokument wird mit den neuen Einstellungen noch einmal gelesen."
       );
     }
   );
@@ -107,8 +110,9 @@ describe("confirmed, selective processing at publish (KB 80)", () => {
       scope: asset.scope,
       config: asset.publishedConfig
     });
-    expect(lines.join("\n")).toContain("Reprocess 1 affected contents");
-    expect(lines.join("\n")).toContain("0.500000–2.000000 USD");
+    expect(lines.join("\n")).toContain(
+      "1 document is read again with the new settings. Reading them is free. Embedding the results costs an estimated 0.50 USD to 2.00 USD, possibly more."
+    );
     const review = await world.knowledge.publishReview({
       assetId: asset.id,
       scope: asset.scope,
@@ -118,7 +122,19 @@ describe("confirmed, selective processing at publish (KB 80)", () => {
       count: 1,
       cost: { kind: "estimate", min: 0.5, max: 2, currency: "USD" }
     });
-    expect(review.lines[review.processing?.line ?? -1]).toContain("Reprocess 1 affected contents");
+    expect(review.lines[review.processing?.line ?? -1]).toContain(
+      "1 document is read again with the new settings."
+    );
+    // A German reader reads the same sentence in German.
+    const german = await world.knowledge.publishReview({
+      assetId: asset.id,
+      scope: asset.scope,
+      config: asset.publishedConfig,
+      locale: "de"
+    });
+    expect(german.lines[german.processing?.line ?? -1]).toBe(
+      "1 Dokument wird mit den neuen Einstellungen noch einmal gelesen. Das Lesen ist kostenlos. Das Einbetten der Ergebnisse kostet geschätzt 0,50 USD bis 2,00 USD, möglicherweise mehr."
+    );
   });
   it("can confirm a failed upload with no passage or source-size estimate", async () => {
     const world = await setup();
@@ -152,14 +168,23 @@ describe("confirmed, selective processing at publish (KB 80)", () => {
       scope: asset.scope,
       config
     });
-    expect(lines.join("\n")).toContain("1 contents without size estimates");
-    expect(lines.join("\n")).toContain("file limit conservatively");
-    expect(lines.join("\n")).toMatch(/0\.000000–[1-9]\d*\.\d{6} USD/u);
+    expect(lines.join("\n")).toContain("1 document is read again with the new settings.");
+    // Without a passage or source size, the upper estimate assumes the file size limit.
+    const review = await world.knowledge.publishReview({
+      assetId: asset.id,
+      scope: asset.scope,
+      config
+    });
+    expect(review.processing?.cost).toMatchObject({ kind: "estimate", min: 0 });
+    expect(
+      review.processing?.cost.kind === "estimate" && review.processing.cost.max
+    ).toBeGreaterThan(0);
     const confirmation = required(lines.join("\n").match(/confirmProcessing: '([a-f0-9]+)'/u)?.[1]);
     const publish = () =>
       world.instance.stores.transaction((stores) =>
         world.knowledge.publish(stores, {
           access: publisherAccess(),
+          actor: knowledgePublisher,
           assetId: asset.id,
           revision,
           config,
@@ -218,6 +243,7 @@ describe("confirmed, selective processing at publish (KB 80)", () => {
       return world.instance.stores.transaction(async (stores) => {
         await world.knowledge.publish(stores, {
           access,
+          actor: knowledgePublisher,
           assetId: current.id,
           revision,
           config,
@@ -244,7 +270,9 @@ describe("confirmed, selective processing at publish (KB 80)", () => {
       })
       .parse(missing);
     expect(refusal.details.count).toBe(2);
-    expect(refusal.message).toContain("0 (keyword only)");
+    expect(refusal.message).toContain(
+      "2 Dokumente werden mit den neuen Einstellungen noch einmal gelesen. Das kostet nichts, weil nichts eingebettet wird."
+    );
     expect(
       await world.sql`select ch.content_sha256,ch.id,ch.text,ch.xmin::text as xmin,c.xmin::text as content_xmin from catalyst_kb.chunks ch join catalyst_kb.contents c on c.sha256=ch.content_sha256 order by ch.id`
     ).toEqual(before);
