@@ -26,6 +26,7 @@ import {
   WORKFLOW_REACH_PERSON_ONLY,
   startsFromOutside,
   workflowContinuationReachRefusal,
+  workflowRunStarter,
   workflowNotOutsideRefusal,
   workflowOutsideBlockers,
   workflowOutsideRefusal
@@ -215,13 +216,24 @@ export function createContinuation(options: {
       previousRunId: run.id,
       number: (run.continuation?.number ?? 1) + 1
     };
+    // A run opened before the starter was kept reads it once more from its first history's
+    // start call, while that call is kept, and its successors keep it from now on.
+    const starterRunId =
+      run.starterRunId ??
+      (run.parentRunId === undefined
+        ? await workflowRunStarter(run, {
+            clientInstanceId,
+            stores: tx,
+            definitions: options.definitions
+          })
+        : undefined);
     const origin = {
       trigger: run.trigger,
       startedBy: run.startedBy,
       correlationId: run.correlationId,
       // The Operation Run of the first history's start stays with it (its id is unique); the
       // run whose call started it goes on with every history, so the reach walk finds it.
-      ...(run.starterRunId === undefined ? {} : { starterRunId: run.starterRunId }),
+      ...(starterRunId === undefined ? {} : { starterRunId }),
       ...(run.runKey === undefined ? {} : { runKey: run.runKey }),
       ...(run.startedFrom === undefined ? {} : { startedFrom: run.startedFrom }),
       labels: run.labels ?? {},

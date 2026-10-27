@@ -245,6 +245,8 @@ describe("the agent projections of Workflow testing", () => {
       input: { note: "test" },
       startedBy: user,
       operationRunId: context.runId,
+      // A Workflow run behind the call would be the run's starter; a chat agent is none.
+      callOrigin: context.origin,
       correlationId: context.correlationId,
       // An agent's test runs the draft; only an App's draft may run the published revision.
       revision: "draft"

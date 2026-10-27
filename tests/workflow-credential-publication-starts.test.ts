@@ -7,6 +7,7 @@ import { operationOf } from "./support/connection-operations";
 import { issuePersonalKey, personalKeyToken } from "./support/personal-api-keys";
 import { runSchema, type WorkflowFixture } from "./support/workflow-instance";
 import { MemoryObjectStorage } from "./support/memory-object-storage";
+import { withTestSql } from "./support/test-sql";
 import {
   NOTE,
   holdingFirst,
@@ -846,6 +847,81 @@ describe("a run an operation step started, after its start call is gone", () => 
     expect(parts.map((part) => part.status)).toEqual(["continued", "continued", "failed"]);
     expect(parts.at(-1)?.error).toMatchObject({ code: "reach_person_only" });
     expect(parts.at(-1)?.error?.message).toContain("the Workflow that starts it");
+  }, 60_000);
+
+  /** Runs passes of `worker` until keep-going has `count` histories, or one ended. */
+  const until = async (t: WorkflowFixture, worker: { runDue(): Promise<unknown> }, count = 99) => {
+    for (let pass = 0; pass < 300; pass++) {
+      const parts = await histories(t);
+      if (parts.length >= count || parts.some((run) => ["failed", "done"].includes(run.status)))
+        return parts;
+      await worker.runDue();
+    }
+    return histories(t);
+  };
+
+  it("asks a starter whose kept definition retention cleared by the revision it names", async () => {
+    const { t, key } = await ready();
+    await expose(t, "crm", true);
+    await expose(t, "erp", true);
+    await publish(t, looping(), key);
+    await publish(t, starter("crm"));
+    const starterId = await startStarter(t);
+    const worker = t.worker();
+    expect((await until(t, worker, 2)).map((part) => part.status)).toEqual([
+      "continued",
+      expect.not.stringMatching(/continued|failed|done/u)
+    ]);
+    expect((await t.stores.workflowRuns.readRun({ clientInstanceId, id: starterId }))?.status).toBe(
+      "done"
+    );
+    // Retention clears the ended starter's definition and its start call; its revision stays.
+    await withTestSql(
+      (sql) => sql`update workflow_runs set definition = null where id = ${starterId}`
+    );
+    await t.stores.operationRuns.deleteWithoutConversationOlderThan({
+      clientInstanceId,
+      days: 0,
+      limit: 1000
+    });
+    const parts = await until(t, worker);
+    expect(parts.length).toBeGreaterThan(2);
+    expect(parts.map((part) => part.status)).toEqual([
+      ...parts.slice(1).map(() => "continued"),
+      "done"
+    ]);
+  }, 60_000);
+
+  it("keeps the starter a run opened before it was kept reads from its start call, at its next continuation", async () => {
+    const { t, key } = await ready();
+    await expose(t, "hr", false);
+    await expose(t, "erp", true);
+    await publish(t, KEEPER, key);
+    await publish(t, looping([CHILD_STEP]));
+    await publish(t, starter("hr", 3));
+    const starterId = await startStarter(t);
+    const worker = t.worker();
+    const [first] = await until(t, worker, 1);
+    expect(first?.status).not.toBe("continued");
+    // As a run an earlier release opened: no starter kept.
+    await withTestSql(
+      (sql) => sql`update workflow_runs set starter_run_id = null where id = ${first?.id ?? ""}`
+    );
+    expect(await until(t, worker, 2)).toHaveLength(2);
+    // Its start call is pruned once the second history has the starter.
+    await t.stores.operationRuns.deleteWithoutConversationOlderThan({
+      clientInstanceId,
+      days: 0,
+      limit: 1000
+    });
+    const parts = await until(t, worker);
+    expect(parts.map((part) => part.status)).toEqual(["continued", "continued", "failed"]);
+    expect(parts.map((part) => part.starterRunId)).toEqual([undefined, starterId, starterId]);
+    const child = (await stepRunsOf(t, parts[2]?.id ?? "")).find((step) => step.stepId === "child");
+    expect(child?.error?.code).toBe("reach_person_only");
+    expect(
+      await t.stores.workflowRuns.listRuns({ clientInstanceId, workflow: "keep-clients" })
+    ).toEqual([]);
   }, 60_000);
 
   it("refuses a key's Workflow that a run starts by the platform's own start operation", async () => {

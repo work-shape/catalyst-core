@@ -450,6 +450,7 @@ function registerWorkflowRoutes(
           ...(input.key === undefined ? {} : { key: input.key }),
           startedBy: actor,
           operationRunId: context.runId,
+          callOrigin: origin,
           correlationId: context.correlationId,
           // Its dataset inputs are held to what an outside client may read.
           ...(isOutsideCall(actor, origin) ? { outside: true } : {}),
