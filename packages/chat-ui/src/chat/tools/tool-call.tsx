@@ -30,6 +30,10 @@ import {
 import { PageSaveCard } from "../../studio/pages/page-card";
 import { AssetPreviewCard, previewedDraftOfCall } from "../../studio/pages/asset-preview";
 import { builtPageName, isOpenToolName, readPageSave } from "../../studio/pages/page-save";
+import {
+  PreviewCaptureOutcomeView,
+  readPreviewCapture
+} from "../../studio/pages/preview-capture-picture";
 import { ApprovalRequestCard } from "../approvals/approval-request-card";
 import { readApprovalRequestDisplay } from "../approvals/approval-request-model";
 import { useConnectionToolSubject } from "../assistant/tool-subjects";
@@ -282,6 +286,27 @@ export function ToolCallPart({
         statusLabel={statusLabel}
         artifacts={artifacts}
         surfacedArtifacts={surfacedArtifacts}
+        toolTitle={toolDisplay.title}
+        subject={subject}
+        toolName={toolName}
+        result={result}
+      />
+    );
+  }
+
+  // A picture the agent took of the preview stands small on its row and opens in the file
+  // viewer; a refusal says why in the person's words (PREVIEW-SEE-2).
+  const capture = readPreviewCapture({ toolName, result, isError });
+  if (capture) {
+    return (
+      <CompactToolCall
+        actionLabel={actionLabel}
+        detailSections={detailSections}
+        outcome={<PreviewCaptureOutcomeView outcome={capture} />}
+        state={state}
+        statusLabel={statusLabel}
+        summary={undefined}
+        surfacedArtifacts={[]}
         toolTitle={toolDisplay.title}
         subject={subject}
         toolName={toolName}

@@ -146,7 +146,8 @@ const TOOL_TITLES_BY_LOCALE: Record<LocaleCode, Record<string, string>> = {
     "workspace.write_file": "Write file",
     "workspace.edit_file": "Edit file",
     "workspace.promote_artifact": "Prepare download",
-    "workspace.preview_images": "Preview images"
+    "workspace.preview_images": "Preview images",
+    "preview.capture": "Look at the preview"
   },
   de: {
     "platform.context": "Angebot der Plattform prüfen",
@@ -174,7 +175,8 @@ const TOOL_TITLES_BY_LOCALE: Record<LocaleCode, Record<string, string>> = {
     "workspace.write_file": "Datei schreiben",
     "workspace.edit_file": "Datei bearbeiten",
     "workspace.promote_artifact": "Download vorbereiten",
-    "workspace.preview_images": "Vorschau laden"
+    "workspace.preview_images": "Vorschau laden",
+    "preview.capture": "Vorschau ansehen"
   }
 };
 

@@ -16,6 +16,7 @@ export {
   assetPreviewSurfaceAfterRunCalls,
   previewedDraftOfCall
 } from "./asset-preview";
+export { readPreviewCapture } from "./preview-capture-picture";
 export {
   answerPreviewCaptures,
   bytesToBase64,
