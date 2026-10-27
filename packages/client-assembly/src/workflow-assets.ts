@@ -73,6 +73,7 @@ import {
   workflowDefinitionRefusal,
   workflowOutsideIssues,
   workflowOutsideSwitchRefusal,
+  workflowReachRefusal,
   workflowStepFileIssues,
   workflowStepFilesRefusal,
   workflowKindIssues,
@@ -489,9 +490,8 @@ export function createWorkflowAssetKind(
         result.manifest,
         createWorkflowAssetDefinitions({ clientInstanceId, configAssets: stores.configAssets })
       );
-      // Started from outside, it may read only what is exposed to outside (named here; asked
-      // again at every start, since a Connection or a child changes after this publish).
-      const outside = await workflowOutsideIssues(result.manifest, {
+      // What it reaches is named to the publisher only where they may read it.
+      const reader: Parameters<typeof workflowOutsideIssues>[1] = {
         clientInstanceId,
         configAssets: stores.configAssets,
         definitions: createWorkflowAssetDefinitions({
@@ -528,8 +528,16 @@ export function createWorkflowAssetKind(
             access.authorize(`${kind}.use`, resource).allowed
           );
         }
-      });
+      };
+      // Started from outside, it may read only what is exposed to outside (named here; asked
+      // again at every start, since a Connection or a child changes after this publish).
+      const outside = await workflowOutsideIssues(result.manifest, reader);
       if (outside.length > 0) throw workflowDefinitionRefusal(result.manifest.id, outside);
+      // A credential publishes only what reaches data open to outside clients, whatever the
+      // switch: otherwise a key fills a Data Store from a Connection kept from outside clients
+      // for an outside Workflow to read (WF-OUT). The scan is the start's.
+      const reach = await workflowReachRefusal(result.manifest, actor, reader);
+      if (reach) throw reach;
       await reschedule(stores, replaced, config);
     },
     // Account revocation is part of the delete, never a best-effort after-write task.

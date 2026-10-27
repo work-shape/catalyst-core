@@ -3,6 +3,7 @@ import { z } from "zod";
 import { platformContextSchema } from "@work-shape/catalyst-api-contract";
 import { WORKFLOW_ASSET_KIND } from "@work-shape/catalyst-core";
 import { clientInstanceId, errorSchema } from "./support/access-instance";
+import { operationOf } from "./support/connection-operations";
 import { inDays, issuePersonalKey, personalKeyToken } from "./support/personal-api-keys";
 import type { WorkflowFixture } from "./support/workflow-instance";
 import { notifyClients, readyWorkflows } from "./support/workflow-runs";
@@ -42,6 +43,15 @@ describe("the use level of a personal key", () => {
     for (const action of [...AUTHORING, "connection.use"]) {
       await t.allow({ kind: "user", id: tim.id }, action);
     }
+    // A key publishes only a Workflow whose reach is open to outside clients (WF-OUT): crm's
+    // operations are exposed to them, so the use level is what these publishes ask.
+    const exposure = ["workflow", "outside"];
+    await t.seed("crm", {
+      operations: [
+        operationOf("echo", { exposure }),
+        operationOf("write", { effect: "changing", exposure })
+      ]
+    });
     return { t, tim };
   }
 

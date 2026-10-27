@@ -67,6 +67,8 @@ export const workflowRights = defineTranslations({
     "workflowRights.refusedAccountInactive":
       "This workflow runs as a technical account that is missing or switched off. An administrator manages the accounts under {place}.",
     "workflowRights.refusedPersonOnly": "Only a person can publish a workflow.",
+    "workflowRights.refusedReachPersonOnly":
+      "This workflow reads data that is not shared with outside clients, so only a person signed in to Catalyst publishes it. Publish it here.",
     "workflowRights.refusedOutsidePersonOnly":
       "Outside clients can start this workflow, so only a person signed in to Catalyst publishes it. Publish it here, or turn off starts by outside clients before publishing it with an API key.",
     "workflowRights.refusedLends":
@@ -138,6 +140,8 @@ export const workflowRights = defineTranslations({
     "workflowRights.refusedAccountInactive":
       "Dieser Workflow läuft als Technisches Konto, das fehlt oder ausgeschaltet ist. Die Konten verwaltet ein Administrator unter {place}.",
     "workflowRights.refusedPersonOnly": "Nur eine Person kann einen Workflow veröffentlichen.",
+    "workflowRights.refusedReachPersonOnly":
+      "Dieser Workflow liest Daten, die nicht für externe Clients freigegeben sind, darum veröffentlicht ihn nur eine in Catalyst angemeldete Person. Veröffentliche ihn hier.",
     "workflowRights.refusedOutsidePersonOnly":
       "Externe Clients können diesen Workflow starten, darum veröffentlicht ihn nur eine in Catalyst angemeldete Person. Veröffentliche ihn hier, oder schalte den Start durch externe Clients aus, bevor du ihn mit einem API-Schlüssel veröffentlichst.",
     "workflowRights.refusedLends":

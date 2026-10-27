@@ -188,8 +188,10 @@ export {
 } from "./outside-reach";
 export {
   WORKFLOW_OUTSIDE_SWITCH_PERSON_ONLY,
+  WORKFLOW_REACH_PERSON_ONLY,
   workflowOutsideIssues,
-  workflowOutsideSwitchRefusal
+  workflowOutsideSwitchRefusal,
+  workflowReachRefusal
 } from "./outside-reach";
 
 export { createWorkflowSourceCache } from "./source-cache";

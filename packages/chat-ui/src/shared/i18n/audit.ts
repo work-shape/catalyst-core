@@ -274,6 +274,8 @@ export const audit = defineTranslations({
       "Only a person signed in to Catalyst publishes a workflow that outside clients can start.",
     "audit.reason.output_rejected": "Some operations were left out to keep the sign-in safe.",
     "audit.reason.principal_inactive": "The account is switched off.",
+    "audit.reason.reach_person_only":
+      "Only a person signed in to Catalyst publishes a workflow that reads data not shared with outside clients.",
     "audit.reason.rate_limited": "Too many requests in a short time.",
     "audit.reason.recipient_not_allowed": "A recipient's domain is not allowed.",
     "audit.reason.stopped": "Someone stopped it.",
@@ -572,6 +574,8 @@ export const audit = defineTranslations({
     "audit.reason.output_rejected":
       "Einige Operationen wurden ausgelassen, um die Anmeldung zu schützen.",
     "audit.reason.principal_inactive": "Das Konto ist ausgeschaltet.",
+    "audit.reason.reach_person_only":
+      "Einen Workflow, der nicht für externe Clients freigegebene Daten liest, veröffentlicht nur eine in Catalyst angemeldete Person.",
     "audit.reason.rate_limited": "Zu viele Anfragen in kurzer Zeit.",
     "audit.reason.recipient_not_allowed": "Die Domain eines Empfängers ist nicht erlaubt.",
     "audit.reason.stopped": "Jemand hat es angehalten.",
