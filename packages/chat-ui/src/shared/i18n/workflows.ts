@@ -39,6 +39,21 @@ export const workflows = defineTranslations({
       "You may not do this: a test run acts as you, and you lack a right.",
     "workflows.reason.testerMissingRightNamed":
       "You may not do this: a test run acts as you, and you lack the right “{right}”.",
+    "workflows.reason.testerKeyUnusable":
+      "The API key this test run was started with has been revoked or has expired, so the run stopped.",
+    "workflows.advice.testerKeyUnusable":
+      "Test the workflow again here in the app, or start the test run with a key that is still valid.",
+    "workflows.reason.testerKeyScope":
+      "The API key this test run was started with may not do this. You hold the right yourself, the key does not.",
+    "workflows.reason.testerKeyScopeNamed":
+      "The API key this test run was started with lacks the right “{right}”, which you hold yourself.",
+    "workflows.advice.testerKeyScope":
+      "Test the workflow here in the app, or start the test run with a key that has this right.",
+    "workflows.reason.testerKeyCannotCarry":
+      "No API key can be given the right this step needs, so a test run started with a key cannot run it.",
+    "workflows.reason.testerKeyCannotCarryNamed":
+      "No API key can be given the right “{right}”, so a test run started with a key cannot run this step.",
+    "workflows.advice.testerKeyCannotCarry": "Test the workflow here in the app.",
     "workflows.test.button": "Test run",
     "workflows.test.title": "Test “{name}”?",
     "workflows.test.body":
@@ -725,6 +740,21 @@ export const workflows = defineTranslations({
       "Du darfst das nicht: Ein Testlauf handelt als du, und dir fehlt ein Recht.",
     "workflows.reason.testerMissingRightNamed":
       "Du darfst das nicht: Ein Testlauf handelt als du, und dir fehlt das Recht „{right}“.",
+    "workflows.reason.testerKeyUnusable":
+      "Der API-Schlüssel, mit dem dieser Testlauf gestartet wurde, wurde widerrufen oder ist abgelaufen. Deshalb wurde der Lauf gestoppt.",
+    "workflows.advice.testerKeyUnusable":
+      "Teste den Workflow hier in der App erneut, oder starte den Testlauf mit einem Schlüssel, der noch gültig ist.",
+    "workflows.reason.testerKeyScope":
+      "Der API-Schlüssel, mit dem dieser Testlauf gestartet wurde, darf das nicht. Du selbst hast das Recht, der Schlüssel nicht.",
+    "workflows.reason.testerKeyScopeNamed":
+      "Dem API-Schlüssel, mit dem dieser Testlauf gestartet wurde, fehlt das Recht „{right}“, das du selbst hast.",
+    "workflows.advice.testerKeyScope":
+      "Teste den Workflow hier in der App, oder starte den Testlauf mit einem Schlüssel, der dieses Recht hat.",
+    "workflows.reason.testerKeyCannotCarry":
+      "Kein API-Schlüssel kann das Recht erhalten, das dieser Schritt braucht. Ein Testlauf, der mit einem Schlüssel gestartet wurde, kann ihn deshalb nicht ausführen.",
+    "workflows.reason.testerKeyCannotCarryNamed":
+      "Kein API-Schlüssel kann das Recht „{right}“ erhalten. Ein Testlauf, der mit einem Schlüssel gestartet wurde, kann diesen Schritt deshalb nicht ausführen.",
+    "workflows.advice.testerKeyCannotCarry": "Teste den Workflow hier in der App.",
     "workflows.test.button": "Testlauf",
     "workflows.test.title": "„{name}“ testen?",
     "workflows.test.body":

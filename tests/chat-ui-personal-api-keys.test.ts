@@ -329,6 +329,24 @@ describe("You > API keys", () => {
     expect(renderConfirm("en").match(/aria-checked="true"/gu)).toBeNull();
   });
 
+  it("says beside connection.use alone that its results are copied to the computer that holds the key", () => {
+    const english = renderConfirm("en", true);
+    const copies = "The results of these calls are copied to the computer that holds the key.";
+    expect(english.split(copies).length - 1).toBe(1);
+    // The sentence describes the connection.use box, which stays off for `catalyst setup`.
+    const root = document.createElement("div");
+    root.innerHTML = english;
+    const sentence = required(
+      [...root.querySelectorAll("p")].find((line) => line.textContent === copies)
+    );
+    const box = required(root.querySelector(`[aria-describedby~="${sentence.id}"]`));
+    expect(box.closest("div")?.textContent).toContain("Use connections");
+    expect(box.getAttribute("aria-checked")).toBe("false");
+    expect(renderConfirm("de")).toContain(
+      "Die Ergebnisse dieser Aufrufe werden auf den Computer kopiert, auf dem der Schlüssel liegt."
+    );
+  });
+
   it("shows what a connect code asks for with the warning, in English and German", () => {
     const render = (locale: "en" | "de") => renderConfirm(locale);
     const english = render("en");

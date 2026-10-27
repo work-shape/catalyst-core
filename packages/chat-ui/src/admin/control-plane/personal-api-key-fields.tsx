@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { CONNECTION_ACTIONS } from "@work-shape/catalyst-core";
 import { Checkbox, Field, Input, Picker, PickerButton, Select } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../../shared/i18n";
 import { actionLabel } from "../access/right-words";
@@ -67,6 +68,11 @@ export function PersonalKeyFields({
         <Checkbox
           key={action}
           label={actionLabel(action, t)}
+          // Off by default: what the key's calls to a Connection return leaves the instance
+          // (connections-and-secrets.md, Exposure to outside clients).
+          {...(action === CONNECTION_ACTIONS.use
+            ? { description: t("personalApiKeys.connectionUseCopies") }
+            : {})}
           checked={draft.actions.includes(action)}
           onCheckedChange={toggle(action)}
         />

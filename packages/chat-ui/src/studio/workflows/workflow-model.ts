@@ -12,7 +12,7 @@ import {
   resolveBuildRights,
   type AssetRights
 } from "../../shared/build-rights";
-import { actionLabel } from "../../admin/access/right-words";
+import { actionLabel, knownActionLabel } from "../../admin/access/right-words";
 import { canManageServicePrincipals } from "../../shared/governance";
 import type { TranslationKey } from "../../shared/i18n";
 import { startFormUsable } from "./start-form";
@@ -513,6 +513,14 @@ export function failureHappened(
   }
   if (failure.action !== undefined && failure.reason === "testerMissingRight") {
     return t("workflows.reason.testerMissingRightNamed", { right: actionLabel(failure.action, t) });
+  }
+  // The right the key lacks is named only by the words the rights screens use for it.
+  const right = failure.action === undefined ? undefined : knownActionLabel(failure.action, t);
+  if (right !== undefined && failure.reason === "testerKeyScope") {
+    return t("workflows.reason.testerKeyScopeNamed", { right });
+  }
+  if (right !== undefined && failure.reason === "testerKeyCannotCarry") {
+    return t("workflows.reason.testerKeyCannotCarryNamed", { right });
   }
   // The work goes on, and its owner's sentence says so, such as "Abgleich läuft weiter".
   if (failure.reason === "stillRunning" && failure.detail) {
