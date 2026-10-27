@@ -9,7 +9,7 @@ import {
 } from "react";
 import { createApiClient, type ApiClient, type LocaleCode } from "@work-shape/catalyst-api-client";
 
-interface WorkspaceApiClientContextValue {
+export interface WorkspaceApiClientContextValue {
   apiBaseUrl: string;
   client: ApiClient;
   /** Stops this session's HTTP requests; the returned callback resumes them if sign-out fails. */

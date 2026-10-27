@@ -108,6 +108,7 @@ function AssistantRuntimePane({
     messagesLoaded,
     snapshotStatus,
     notice,
+    noticeReport,
     draft,
     composerFocusRequestId,
     locale,
@@ -453,6 +454,7 @@ function AssistantRuntimePane({
               showContextIndicator={showContextIndicator}
               contextSnapshot={contextSnapshot}
               notice={visibleNotice}
+              noticeReport={visibleNotice === notice ? noticeReport : undefined}
               usageNote={usageNote}
               onNewConversationForPersonalData={
                 noModelForPersonalData ? chat.startNewConversation : undefined

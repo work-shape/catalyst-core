@@ -47,16 +47,20 @@ import {
   useMessageFeedback,
   type MessageFeedbackSetup
 } from "../feedback/message-feedback";
+import { PlatformReportAction, type PlatformReportSetup } from "../platform-report/platform-report";
 
 export function ThreadMessage({
   conversationRunning,
   activeRunId,
-  feedback
+  feedback,
+  platformReport
 }: {
   conversationRunning?: boolean;
   activeRunId?: string;
   /** Where the module `feedback` is on: the action under each finished answer. */
   feedback?: MessageFeedbackSetup;
+  /** Where the instance takes platform problem reports: the action under a failed tool's answer. */
+  platformReport?: PlatformReportSetup;
 }) {
   const role = useAuiState((state) => state.message.role);
 
@@ -73,6 +77,7 @@ export function ThreadMessage({
       activeRunId={activeRunId}
       conversationRunning={conversationRunning}
       feedback={feedback}
+      platformReport={platformReport}
     />
   );
 }
@@ -105,11 +110,13 @@ function ApprovalDecisionMessage() {
 function AssistantMessage({
   activeRunId,
   conversationRunning,
-  feedback
+  feedback,
+  platformReport
 }: {
   activeRunId?: string;
   conversationRunning?: boolean;
   feedback?: MessageFeedbackSetup;
+  platformReport?: PlatformReportSetup;
 }) {
   const { t } = useTranslation();
   const messageId = useAuiState((state) => state.message.id);
@@ -154,6 +161,14 @@ function AssistantMessage({
   const finalTextIndex = findFinalAssistantTextPartIndex(messageParts);
   // Only a finished run's answer takes feedback: it names the run the comment is about.
   const messageFeedback = useMessageFeedback(feedback, messageRunning ? undefined : completedRunId);
+  // A finished answer whose run hit a platform failure offers a report (PLATFORM-REPORT).
+  const runPlatformFailure = useAuiState(
+    (state) =>
+      (state.message.metadata.custom as AssistantUiMessageCustomMetadata | undefined)
+        ?.platformFailure
+  );
+  const platformFailure =
+    platformReport && completedRunId && !messageRunning ? runPlatformFailure : undefined;
   const toolUIs = useAuiState((state) => state.tools.toolUIs);
   // An earlier save of an App or preview of a folder, in this or another message, is a line in
   // the run's work: the newest one is the card (APPCARD-1).
@@ -272,13 +287,27 @@ function AssistantMessage({
         </p>
       ) : null}
       {!messageRunning ? (
-        <div className="mt-1 flex min-h-8 items-center gap-1 opacity-100 md:opacity-0 md:transition-opacity md:group-hover/message:opacity-100 md:group-focus-within/message:opacity-100">
+        <div
+          className={cn(
+            "mt-1 flex min-h-8 flex-wrap items-center gap-1 opacity-100",
+            // A report of a platform problem stays in sight; the other actions show on hover.
+            !platformFailure &&
+              "md:opacity-0 md:transition-opacity md:group-hover/message:opacity-100 md:group-focus-within/message:opacity-100"
+          )}
+        >
           <ActionBarPrimitive.Copy asChild>
             <IconButton label={t("copy")}>
               <CopiedState />
             </IconButton>
           </ActionBarPrimitive.Copy>
           {messageFeedback ? <MessageFeedbackAction state={messageFeedback} /> : null}
+          {platformReport && completedRunId && platformFailure ? (
+            <PlatformReportAction
+              setup={platformReport}
+              runId={completedRunId}
+              failure={platformFailure}
+            />
+          ) : null}
         </div>
       ) : null}
       {messageFeedback ? <MessageFeedbackPanel state={messageFeedback} /> : null}

@@ -10,6 +10,7 @@ import type {
   SinglePersonMailMessage,
   WorkflowNoticeMail
 } from "./types";
+import { renderPlatformReport } from "./platform-report";
 import { renderWorkflowMessage } from "./workflow-message";
 
 interface MailCopy {
@@ -99,6 +100,9 @@ export function renderMail(
 ): RenderedMail {
   if (message.template === "workflow-message") {
     return renderWorkflowMessage(message, identity, logo);
+  }
+  if (message.template === "platform-report") {
+    return renderPlatformReport(message);
   }
   const resolved = resolveCopy(message, identity.productName);
   const link = message.params.link;

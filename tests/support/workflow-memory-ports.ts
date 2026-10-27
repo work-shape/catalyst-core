@@ -215,6 +215,9 @@ export const unusedPlatformStores: PlatformStores = {
   get feedback() {
     return unsupported();
   },
+  get platformReports() {
+    return unsupported();
+  },
   transaction: unsupported,
   readSnapshot: unsupported,
   get close() {

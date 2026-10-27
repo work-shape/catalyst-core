@@ -3,6 +3,10 @@ import { readAssistantModelFallback } from "@work-shape/catalyst-core";
 import type { UIMessage } from "ai";
 import { readToolDisplayPayloadFromToolResult } from "../../shared/domain-ui-widgets";
 import {
+  platformFailureOfToolOutput,
+  type PlatformFailure
+} from "../platform-report/platform-report-model";
+import {
   readApprovalDecisionEvent,
   readApprovalRequestDisplay
 } from "../approvals/approval-request-model";
@@ -91,13 +95,44 @@ export function toUiMessages(
   const visibleMessages = activeRun
     ? withoutRunResponseMessages(messages, activeRun.run.id)
     : messages;
-  const projectedMessages = toPersistedUiMessages(visibleMessages, completedRunProjections);
+  const projectedMessages = withPlatformFailures(
+    toPersistedUiMessages(visibleMessages, completedRunProjections),
+    visibleMessages
+  );
   const activeRunMessages = activeRun ? toActiveRunUiMessages(activeRun) : [];
   const activeRunMessage = activeRunMessages.at(-1);
   if (!activeRunMessage || leftNothingToShow(activeRun, activeRunMessage)) {
     return [...projectedMessages, ...activeRunMessages.slice(0, -1)];
   }
   return [...projectedMessages, ...activeRunMessages];
+}
+
+/**
+ * The finished answer of a run whose tool failed for a platform reason names that failure, so
+ * the answer offers a report (PLATFORM-REPORT). The thread's parts keep only a failed tool's
+ * text, so the failure is read from the stored results.
+ */
+function withPlatformFailures(uiMessages: UIMessage[], messages: Message[]): UIMessage[] {
+  const failures = new Map<string, PlatformFailure>();
+  for (const message of messages) {
+    const runId = readCompatibleMessageRunId(message);
+    if (!runId || failures.has(runId)) continue;
+    const failure = platformFailureOfToolOutput(readCompatiblePersistedToolResult(message)?.output);
+    if (failure) failures.set(runId, failure);
+  }
+  if (failures.size === 0) return uiMessages;
+  return uiMessages.map((message) => {
+    const custom: unknown =
+      typeof message.metadata === "object" && message.metadata !== null
+        ? Reflect.get(message.metadata, "custom")
+        : undefined;
+    if (typeof custom !== "object" || custom === null) return message;
+    const runId: unknown = Reflect.get(custom, "completedRunId");
+    const failure = typeof runId === "string" ? failures.get(runId) : undefined;
+    return failure
+      ? { ...message, metadata: { custom: { ...custom, platformFailure: failure } } }
+      : message;
+  });
 }
 
 /**

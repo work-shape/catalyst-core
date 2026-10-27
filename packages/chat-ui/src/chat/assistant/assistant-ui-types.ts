@@ -1,6 +1,7 @@
 import type { AgentRunProjection } from "@work-shape/catalyst-api-client";
 import type { StoredModelFallback } from "@work-shape/catalyst-core";
 import { type ApprovalDecisionEvent } from "../approvals/approval-request-model";
+import type { PlatformFailure } from "../platform-report/platform-report-model";
 
 export interface AssistantUiActiveRun {
   run: {
@@ -19,6 +20,8 @@ export interface AssistantUiMessageCustomMetadata {
   /** The run switched to its binding's fallback, which wrote the answer. */
   modelFallback?: StoredModelFallback;
   approvalDecision?: AssistantUiApprovalDecision;
+  /** A tool of the finished run failed for a platform reason (PLATFORM-REPORT). */
+  platformFailure?: PlatformFailure;
 }
 
 /** An Approval Request decision in the history: a status line, never a chat message. */

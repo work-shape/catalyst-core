@@ -1,6 +1,7 @@
 import { createScheduledPromptHandler } from "./conversations/scheduled-start-job";
 import { createNoticeMailJobs } from "./notices/notice-mail";
 import { createFeedbackJobs } from "./feedback/feedback-jobs";
+import { createPlatformReportJobs } from "./platform-report/platform-report-jobs";
 import {
   PREVIEW_REPORT_KEEP_MS,
   asCollaborationWorkspaceId,
@@ -362,6 +363,10 @@ export function createChatServerJobs(
   const feedbackJobs = createFeedbackJobs(options, now);
   handlers.push(...feedbackJobs.handlers);
   schedules.push(...feedbackJobs.schedules);
+
+  const platformReportJobs = createPlatformReportJobs(options, now);
+  handlers.push(...platformReportJobs.handlers);
+  schedules.push(...platformReportJobs.schedules);
 
   const connectionJobs = createConnectionDiscoveryJobs(options);
   handlers.push(...connectionJobs.handlers);

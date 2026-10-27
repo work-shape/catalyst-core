@@ -361,6 +361,18 @@ export const feedbackConfigSchema = z
   .prefault({});
 
 /**
+ * Where the operator of the platform takes problem reports (PLATFORM-REPORT). With `email`
+ * set and platform mail configured, a run or a tool that failed for a platform reason offers
+ * "Problem an Workshape melden": the run's id, the error code, the instance and the time go to
+ * this address as a system mail, with the person's note if they write one. Unset, nothing is
+ * offered and nothing is sent.
+ */
+export const supportConfigSchema = z
+  .object({ email: z.string().trim().email().optional() })
+  .strict()
+  .prefault({});
+
+/**
  * Apps of the module `apps`. `draftHosts.enabled: true` lets a person who builds an App allow
  * an outside host its draft lists for their own view of that draft, with one click, before the
  * draft is published (DRAFT-HOSTS-1). Off, the default, a draft connects only to the hosts of
@@ -558,6 +570,8 @@ export const clientInstanceConfigSchema = z.object({
   feedback: feedbackConfigSchema,
   /** Read with the module `apps` on. */
   apps: appsConfigSchema,
+  /** The operator's support address for platform problem reports. */
+  support: supportConfigSchema,
   rateLimits: rateLimitsConfigSchema,
   capabilities: z.record(z.string(), z.unknown()).default({}),
   usage: z

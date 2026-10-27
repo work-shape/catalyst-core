@@ -125,6 +125,12 @@ export const safeConfigSchema = z.object({
   /** Written feedback on agent messages: whether the comment may carry its exchange. */
   feedback: z.object({ exchangeSnapshot: z.boolean() }).optional(),
   /**
+   * Whether a run that failed for a platform reason offers a report to the operator: release
+   * config names a support address and the instance sends platform mail. Absent in the answer
+   * of an API from before the report; the interface reads that as false.
+   */
+  platformReport: z.object({ available: z.boolean() }).optional(),
+  /**
    * Knowledge Bases on this instance. `semanticSearch`: the knowledge module is on and release
    * config names a default embedding binding, so a Knowledge Base can search by meaning; a new
    * one made in the interface then starts with `[semantic, keyword]`, else with `[keyword]`.

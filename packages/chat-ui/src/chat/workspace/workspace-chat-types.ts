@@ -33,6 +33,7 @@ import type { ChatFileDropzoneController } from "../files/chat-file-dropzone";
 import { type AgentSelectableModel, type ReasoningEffort } from "./agent-model-selection";
 import { type WorkspaceDock } from "./use-workspace-dock";
 import type { WorkspaceView } from "./workspace-rail";
+import type { PlatformFailure } from "../platform-report/platform-report";
 
 export interface WorkspaceChatModelInput {
   administration: ChatShellAdministration | undefined;
@@ -290,6 +291,8 @@ export interface SelectedChatModel {
   /** How far the selected conversation's thread is; "ready" while no conversation is selected. */
   snapshotStatus: ConversationControllerState["snapshotStatus"];
   notice: string | undefined;
+  /** Where the notice is a run's platform failure: the run, to report it to the operator. */
+  noticeReport?: { runId: string; failure: PlatformFailure };
   draft: string;
   composerFocusRequestId: number;
   locale: LocaleCode;
