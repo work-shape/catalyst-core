@@ -340,6 +340,12 @@ export type WorkflowFailureReason =
   | "missingRight"
   /** In a test run: the person testing lacks a right a step needs. */
   | "testerMissingRight"
+  /** In a test run a personal API key started: the key was revoked or expired since. */
+  | "testerKeyUnusable"
+  /** In a test run a personal API key started: the person holds the right, the key does not. */
+  | "testerKeyScope"
+  /** In a test run a personal API key started: a step needs a right no key can carry. */
+  | "testerKeyCannotCarry"
   | "policy"
   | "guardrail"
   | "needsApproval"

@@ -30,6 +30,8 @@ export const personalApiKeys = defineTranslations({
     "personalApiKeys.useLevel": "Use",
     "personalApiKeys.useLevelHint":
       "Use the Connections, Data Stores, Knowledge Bases and Workflows you may use. Needed to publish a Workflow whose technical account uses them.",
+    "personalApiKeys.connectionUseCopies":
+      "The results of these calls are copied to the computer that holds the key.",
     "personalApiKeys.instanceLevel": "Instance",
     "personalApiKeys.instanceLevelHint":
       "Lets the key run only the read-only check of the instance's providers, as catalyst models check does. It works only while you hold this right yourself, and not on a key limited to a workspace.",
@@ -98,6 +100,8 @@ export const personalApiKeys = defineTranslations({
     "personalApiKeys.useLevel": "Verwenden",
     "personalApiKeys.useLevelHint":
       "Verbindungen, Datenspeicher, Wissensbasen und Workflows verwenden, die du verwenden darfst. Nötig, um einen Workflow zu veröffentlichen, dessen technisches Konto sie verwendet.",
+    "personalApiKeys.connectionUseCopies":
+      "Die Ergebnisse dieser Aufrufe werden auf den Computer kopiert, auf dem der Schlüssel liegt.",
     "personalApiKeys.instanceLevel": "Instanz",
     "personalApiKeys.instanceLevelHint":
       "Erlaubt dem Schlüssel nur die lesende Prüfung der Anbieter der Instanz, wie catalyst models check sie ausführt. Das wirkt nur, solange du dieses Recht selbst hast, und nicht bei einem Schlüssel, der auf einen Arbeitsbereich begrenzt ist.",

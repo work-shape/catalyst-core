@@ -823,6 +823,63 @@ describe("what a run says about how it ended", () => {
     );
   });
 
+  it("says why a test run a personal API key started failed, in words and with a next step", () => {
+    const failed = (code: string, action?: string) =>
+      toWorkflowRun({
+        ...run,
+        status: "failed",
+        error: { code, message: "The instance's sentence", ...(action ? { action } : {}) }
+      }).failure;
+    const unusable = failed("tester_key_unusable");
+    const scope = failed("tester_key_scope", "connection.use");
+    const cannotCarry = failed("tester_key_cannot_carry", "mail_sender.use");
+    expect(unusable).toMatchObject({ reason: "testerKeyUnusable" });
+    expect(scope).toMatchObject({ reason: "testerKeyScope", action: "connection.use" });
+    expect(cannotCarry).toMatchObject({ reason: "testerKeyCannotCarry" });
+
+    expect(unusable && failureHappened(unusable, t)).toBe(
+      "The API key this test run was started with has been revoked or has expired, so the run stopped."
+    );
+    // The right the key lacks reads as the rights screens name it, never as its id.
+    expect(scope && failureHappened(scope, t)).toBe(
+      "The API key this test run was started with lacks the right “Use connections”, which you hold yourself."
+    );
+    expect(scope && failureHappened(scope, de)).toBe(
+      "Dem API-Schlüssel, mit dem dieser Testlauf gestartet wurde, fehlt das Recht „Verbindungen verwenden“, das du selbst hast."
+    );
+    expect(cannotCarry && failureHappened(cannotCarry, de)).not.toContain("mail_sender.use");
+    // A right this interface has no words for is not named at all.
+    expect(failureHappened({ reason: "testerKeyCannotCarry", action: "x.unknown" }, t)).toBe(
+      t("workflows.reason.testerKeyCannotCarry")
+    );
+    expect(failureHappened({ reason: "testerKeyScope" }, de)).toBe(
+      de("workflows.reason.testerKeyScope")
+    );
+
+    // The run's page says what happened and what to do, and keeps the instance's sentence
+    // behind the technical details.
+    for (const [code, advice] of [
+      [
+        "tester_key_unusable",
+        "Test the workflow again here in the app, or start the test run with a key that is still valid."
+      ],
+      [
+        "tester_key_scope",
+        "Test the workflow here in the app, or start the test run with a key that has this right."
+      ],
+      ["tester_key_cannot_carry", "Test the workflow here in the app."]
+    ] as const) {
+      const html = page({
+        ...run,
+        status: "failed",
+        error: { code, message: "The instance's sentence" }
+      });
+      expect(html).toContain(advice);
+      expect(html).not.toContain(t("workflows.reason.other"));
+      expect(html).not.toContain(code);
+    }
+  });
+
   it("names the Workflow whose run key is held in the step's own call chain, and nothing else", () => {
     const cycle = {
       code: "run_key_cycle",
