@@ -47,6 +47,8 @@ interface Timers {
   after(run: () => void, ms: number): () => void;
   /** Whether the person can see the page now. */
   visible?(): boolean;
+  /** Runs `run` each time the page becomes visible; the function returned stops it. */
+  onVisible?(run: () => void): () => void;
 }
 
 const browserTimers: Timers = {
@@ -55,7 +57,15 @@ const browserTimers: Timers = {
     const timer = setTimeout(run, ms);
     return () => clearTimeout(timer);
   },
-  visible: () => typeof document === "undefined" || document.visibilityState === "visible"
+  visible: () => typeof document === "undefined" || document.visibilityState === "visible",
+  onVisible: (run) => {
+    if (typeof document === "undefined") return () => undefined;
+    const listener = () => {
+      if (document.visibilityState === "visible") run();
+    };
+    document.addEventListener("visibilitychange", listener);
+    return () => document.removeEventListener("visibilitychange", listener);
+  }
 };
 
 /**
@@ -81,6 +91,7 @@ export function createPreviewReporter(
   let cancelGreeting: (() => void) | undefined;
   let cancelFallback: (() => void) | undefined;
   let cancelKeepAlive: (() => void) | undefined;
+  let stopWatchingVisibility: (() => void) | undefined;
 
   const bridge = (): PreviewReportBridge =>
     greeted ? "connected" : greetingLate ? "not_connected" : "waiting";
@@ -157,6 +168,7 @@ export function createPreviewReporter(
     cancelGreeting?.();
     cancelQueued?.();
     cancelKeepAlive?.();
+    stopWatchingVisibility?.();
   };
 
   const settle = () => {
@@ -166,6 +178,10 @@ export function createPreviewReporter(
   };
 
   cancelFallback = timers.after(settle, PREVIEW_SETTLE_FALLBACK_MS);
+  // A person who comes back to the page is told at once, not at the next keep-alive.
+  stopWatchingVisibility = timers.onVisible?.(() => {
+    if (!stopped && cancelQueued === undefined) sendNow();
+  });
   sendNow();
 
   return {

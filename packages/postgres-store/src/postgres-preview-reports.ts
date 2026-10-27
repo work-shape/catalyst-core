@@ -136,6 +136,13 @@ export async function takePreviewReport(
   input: Input<"takePreviewReport">
 ): Promise<TakenPreviewReport | undefined> {
   const notBefore = new Date(input.notBefore);
+  const takeable = and(
+    settled,
+    gt(table.reportedAt, notBefore),
+    input.fileSetId === undefined
+      ? sql`${table.notedDigest} is distinct from ${reportDigest}`
+      : eq(table.fileSetId, input.fileSetId)
+  );
   // The one row taken: the opened file set's, or the newest not noted yet. Only that row counts
   // as noted; another waits for the next request.
   const chosen = db
@@ -146,11 +153,7 @@ export async function takePreviewReport(
         eq(table.clientInstanceId, input.clientInstanceId),
         eq(table.conversationId, input.conversationId),
         eq(table.userId, input.userId),
-        settled,
-        gt(table.reportedAt, notBefore),
-        input.fileSetId === undefined
-          ? sql`${table.notedDigest} is distinct from ${reportDigest}`
-          : eq(table.fileSetId, input.fileSetId)
+        takeable
       )
     )
     .orderBy(desc(table.reportedAt))
@@ -166,7 +169,10 @@ export async function takePreviewReport(
           eq(table.clientInstanceId, input.clientInstanceId),
           eq(table.conversationId, input.conversationId),
           eq(table.userId, input.userId),
-          inArray(table.fileSetId, chosen)
+          inArray(table.fileSetId, chosen),
+          // Asked again of the row as it is once locked: a take or a report that came between
+          // finds it noted or changed, and nothing is taken twice or unsettled.
+          takeable
         )
       )
       .returning({
