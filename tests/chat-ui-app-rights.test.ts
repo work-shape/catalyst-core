@@ -430,7 +430,7 @@ describe("the Apps list", () => {
     });
     await shows(granted, "Fees");
     expect(controlNamed(granted, t("apps.edit"))).toBeDefined();
-    expect(granted.textContent).toContain(t("apps.unpublishedChanges"));
+    expect(granted.textContent).toContain(t("apps.draftChanged"));
 
     // An instance that says nothing of the row leaves the workspace's rights.
     const unsaid = await mount(createElement(AppsPage), context, { rows: [appRow()] });

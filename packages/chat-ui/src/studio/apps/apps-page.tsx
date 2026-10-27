@@ -388,7 +388,7 @@ function AppCard({
             {builder || state.kind === "draft_only" ? <AppStateBadge state={state} /> : null}
             {rights.write && state.kind === "published" && state.draftAhead ? (
               <Badge tone="warning" size="sm">
-                {t("apps.unpublishedChanges")}
+                {t("apps.draftChanged")}
               </Badge>
             ) : null}
           </div>

@@ -87,11 +87,20 @@ describe("a person whose account is gone (ERASE-ACTOR-IDS)", () => {
               publishedAt: "2026-10-01T10:00:00.000Z"
             }
           ],
-          revisions: [revision],
+          // Revision 1 is version 1; revision 2 is a draft save after it.
+          revisions: [
+            {
+              ...revision,
+              revision: 2,
+              operation: "update",
+              createdAt: "2026-10-01T11:00:00.000Z"
+            },
+            revision
+          ],
           failed: false,
           hasMore: false,
           loadingMore: false,
-          draftRevision: 1,
+          draftRevision: 2,
           publishedRevision: 1,
           onLoadMore() {},
           onRetry() {},
@@ -99,12 +108,12 @@ describe("a person whose account is gone (ERASE-ACTOR-IDS)", () => {
         },
         locale
       );
-      // The one who published version 1, and the one who saved what it is.
+      // The one who published version 1, and the one who saved the draft after it.
       expect(markup).toContain(
         locale === "de" ? `Veröffentlicht von ${LABEL.de} · ` : `Published by ${LABEL.en} · `
       );
       expect(markup).toMatch(
-        new RegExp(`data-revision="1"(?:(?!data-revision).)*${LABEL[locale]}`, "u")
+        new RegExp(`data-revision="2"(?:(?!data-revision).)*${LABEL[locale]}`, "u")
       );
       expect(markup).not.toContain(GONE);
     });

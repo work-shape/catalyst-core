@@ -793,7 +793,7 @@
         "",
         "An agent never publishes. A person decides.",
         "",
-        "Later changes go to the draft again. The App shows **Unpublished changes** (\"Unveröffentlichte Änderungen\") until you publish them. **Discard** (\"Verwerfen\") throws the draft away, and **Revisions** (\"Revisionen\") under **More actions** (\"Weitere Aktionen\") shows every saved state.",
+        "Later changes go to the draft again. The App shows **Draft: changed** (\"Entwurf: geändert\") until you publish them. **Discard** (\"Verwerfen\") throws the draft away. **History** (\"Verlauf\") under **More actions** (\"Weitere Aktionen\") lists every version, each publish of the App, with the draft saves made after it folded under it.",
         "",
         "## Who may do what",
         "",
