@@ -190,6 +190,8 @@ export function workflowPublishRefusal(error: unknown, t: Translate): string | u
       return workflowAccountRefusal(error, t);
     case "user_only":
       return t("workflowRights.refusedPersonOnly");
+    case "outside_switch_person_only":
+      return t("workflowRights.refusedOutsidePersonOnly");
     case "no_grant":
     case "denied":
       // The publisher lacks a right the account holds: the rule of no escalation.

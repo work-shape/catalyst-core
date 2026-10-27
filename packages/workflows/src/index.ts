@@ -186,6 +186,10 @@ export {
   workflowOutsideBlockers,
   type WorkflowOutsideBlocker
 } from "./outside-reach";
-export { workflowOutsideIssues } from "./outside-reach";
+export {
+  WORKFLOW_OUTSIDE_SWITCH_PERSON_ONLY,
+  workflowOutsideIssues,
+  workflowOutsideSwitchRefusal
+} from "./outside-reach";
 
 export { createWorkflowSourceCache } from "./source-cache";

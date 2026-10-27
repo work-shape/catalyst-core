@@ -5,7 +5,10 @@ import {
   KNOWLEDGE_OPERATION_PREFIX,
   WORKFLOW_OPERATION_PREFIX,
   WORKFLOW_OUTSIDE_TRIGGER,
+  isAuthenticatedServicePrincipal,
+  isOutsideCall,
   parseConnectionOperationName,
+  type AuthenticatedIdentity,
   type ClientInstanceId,
   type ConfigAssetStore,
   type WorkflowManifest
@@ -35,6 +38,36 @@ export function startsFromOutside(manifest: Pick<WorkflowManifest, "steps">): bo
   return (
     trigger?.type === "trigger" &&
     trigger.triggers.some(({ kind }) => kind === WORKFLOW_OUTSIDE_TRIGGER)
+  );
+}
+
+/** The reason a publish of a Workflow outside clients may start is refused to a credential. */
+export const WORKFLOW_OUTSIDE_SWITCH_PERSON_ONLY = "outside_switch_person_only";
+
+/**
+ * The refusal of a publish of a revision outside clients may start, made by a credential: a
+ * personal API key (from the CLI, `config push --publish`, an App published with it, or its
+ * person's Inbox confirmation of such a call), a Service Principal's credential or a run.
+ * Nothing for a person signed in to Catalyst, an agent in their chat included, or for a
+ * revision with the switch off, so a key turns the switch off as it publishes anything else.
+ *
+ * A key's publish with the switch on is refused even where the published revision has it on
+ * already: the new revision could read a Data Store that a scheduled Workflow the key also
+ * published fills from a Connection kept from outside clients, and Data Stores count as open
+ * (connections-and-secrets.md, Workflows started from outside).
+ */
+export function workflowOutsideSwitchRefusal(
+  manifest: Pick<WorkflowManifest, "id" | "steps">,
+  actor: AuthenticatedIdentity
+): AppError | undefined {
+  if (!startsFromOutside(manifest)) return undefined;
+  const person = !isAuthenticatedServicePrincipal(actor) && !isOutsideCall(actor, { kind: "user" });
+  if (person) return undefined;
+  return new AppError(
+    "FORBIDDEN",
+    `The Workflow '${manifest.id}' can be started by outside clients, so only a person signed in to Catalyst publishes it: publish it in Catalyst, or turn off starts by outside clients (CLI, MCP) in its settings before publishing it with an API key`,
+    { reason: WORKFLOW_OUTSIDE_SWITCH_PERSON_ONLY, workflow: manifest.id },
+    { exposeMessage: true }
   );
 }
 
