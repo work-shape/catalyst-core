@@ -14,6 +14,12 @@ import { mapApprovalRequest } from "./rows";
 import { approvalRequests, operationRuns } from "./schema";
 import { appendApprovalDecision } from "./postgres-conversation-operations";
 import { lockAgentRunConversations } from "./postgres-agent-run-locks";
+import {
+  heldCallRequest,
+  jsonb,
+  minimizedHeldCallResult,
+  requestOfPrunedRun
+} from "./postgres-pruned-run";
 
 async function createApprovalRequest(
   db: PostgresConnection,
@@ -349,14 +355,27 @@ async function transition(
         `Approval request is ${row.status}; it is no longer ${expectedStatus}`
       );
     const outcome = await input.resolve(mapApprovalRequest(row), stores);
+    const decision = outcome.decision
+      ? { ...outcome.decision, ...(outcome.reversion ? { reversion: outcome.reversion } : {}) }
+      : null;
     const [updated] = await tx
       .update(approvalRequests)
       .set({
         status: outcome.status,
-        decision: outcome.decision
-          ? { ...outcome.decision, ...(outcome.reversion ? { reversion: outcome.reversion } : {}) }
-          : null,
-        applyResult: outcome.applyResult ?? null,
+        // A request of a Workflow run whose values are pruned, decided or carried out after the
+        // prune, keeps what the prune left: no decider's comment, and of a held call's result
+        // no more than which call it was and how it ended.
+        decision:
+          decision?.comment === undefined
+            ? decision
+            : sql`case when ${requestOfPrunedRun} then ${jsonb(decision)} - 'comment'
+                else ${jsonb(decision)} end`,
+        applyResult:
+          outcome.applyResult === undefined
+            ? null
+            : sql`case when ${requestOfPrunedRun} and ${heldCallRequest}
+                then ${minimizedHeldCallResult(jsonb(outcome.applyResult))}
+                else ${jsonb(outcome.applyResult)} end`,
         ...(outcome.payload ? { payload: outcome.payload } : {}),
         updatedAt: new Date()
       })

@@ -29,7 +29,8 @@ import {
   type SetConversationSubjectInput,
   type UserId
 } from "@work-shape/catalyst-core";
-import { and, asc, desc, eq, gt, inArray, isNull, ne, notExists, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNull, ne, not, notExists, or, sql } from "drizzle-orm";
+import { isPrunedRunThread } from "./postgres-pruned-run";
 import { type PostgresConnection, type PostgresTransaction } from "./postgres-database";
 import { writeAssistantMessageContinuations } from "./postgres-model-provider-continuation-writes";
 import { mapConversation, mapMessage, type MessageRow } from "./rows";
@@ -454,11 +455,12 @@ export async function appendApprovalDecision(
     eq(conversations.id, input.conversationId),
     eq(conversations.status, "active")
   );
-  // Serialize with deletion/retention; a decision must never resurrect erased history.
+  // Serialize with deletion/retention; a decision must never resurrect erased history. A thread
+  // of a Workflow run whose values are pruned is told nothing more: its messages went with them.
   const [conversation] = await db
     .select({ id: conversations.id })
     .from(conversations)
-    .where(identity)
+    .where(and(identity, not(isPrunedRunThread)))
     .for("update")
     .limit(1);
   if (!conversation) {

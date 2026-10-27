@@ -5,6 +5,7 @@ import {
   WAITING_OPERATION_RUN_STATUSES,
   type ClientInstanceId,
   type OperationRun,
+  type OperationRunDecision,
   type OperationRunStatus,
   type OperationRunStore
 } from "@work-shape/catalyst-core";
@@ -33,6 +34,7 @@ import { operationRuns } from "./schema/operationRuns";
 import { approvalRequests } from "./schema/approvals";
 import { agentRuns } from "./schema/agentRuns";
 import { workflowRuns } from "./schema/workflowRuns";
+import { callOfPrunedRun, jsonb } from "./postgres-pruned-run";
 
 const OPEN_RUN_STATUSES = [
   "running",
@@ -49,6 +51,31 @@ const NO_PENDING_REQUEST = sql`not exists (
 )`;
 
 type OperationRunRow = typeof operationRuns.$inferSelect;
+
+// A call of a Workflow run whose values are pruned, such as one approved before the prune and
+// executed after it, keeps what the prune left: a changing call's answer and a decider's
+// comment are not written. The call itself runs as any other.
+
+/** The answer of an ended call as written. */
+const outputOf = (output: OperationRunRow["output"] | undefined) =>
+  output === undefined
+    ? undefined
+    : sql`case when ${operationRuns.effect} <> 'reading' and ${callOfPrunedRun} then null
+        else ${jsonb(output)} end`;
+
+/** The error of an ended call as written: a denial's comment is a decider's comment. */
+function errorOf(error: OperationRunRow["error"]): OperationRunRow["error"] | SQL {
+  if (typeof error?.denial !== "object" || !("comment" in error.denial)) return error;
+  return sql`case when ${callOfPrunedRun} then ${jsonb(error)} #- '{denial,comment}'
+    else ${jsonb(error)} end`;
+}
+
+/** A decision as written. */
+function decisionOf(decision: OperationRunDecision): OperationRunDecision | SQL {
+  if (decision.comment === undefined) return decision;
+  const { comment: _comment, ...kept } = decision;
+  return sql`case when ${callOfPrunedRun} then ${jsonb(kept)} else ${jsonb(decision)} end`;
+}
 type Input<Method extends keyof OperationRunStore> = Parameters<OperationRunStore[Method]>[0];
 
 async function createOperationRun(
@@ -277,16 +304,16 @@ async function finishOperationRun(
           : { finishedAt }),
       ...(end.status === "done"
         ? {
-            output: end.output,
+            output: outputOf(end.output),
             resultBytes: end.resultBytes,
             resultRef: end.resultRef,
             // A run that was approved keeps the decision it was taken with.
-            ...(end.decision ? { decision: end.decision } : {}),
+            ...(end.decision ? { decision: decisionOf(end.decision) } : {}),
             usage: end.usage
           }
         : {}),
       ...(end.status === "failed" ? { error: end.error } : {}),
-      ...(end.status === "denied" ? { error: { ...end.error, denial: end.denial } } : {})
+      ...(end.status === "denied" ? { error: errorOf({ ...end.error, denial: end.denial }) } : {})
     })
     .where(
       and(
@@ -368,7 +395,12 @@ async function resumeOperationRun(
   const startedAt = new Date(input.startedAt);
   const [row] = await db
     .update(operationRuns)
-    .set({ status: "running", decision: input.decision, startedAt, updatedAt: startedAt })
+    .set({
+      status: "running",
+      decision: decisionOf(input.decision),
+      startedAt,
+      updatedAt: startedAt
+    })
     // Only a run that still waits and whose time has not run out is taken, so an approval and
     // the expiry of the same run never both win. A confirmed call has had its decision in time
     // and waits only for the worker of its Agent Run.
@@ -407,8 +439,8 @@ async function endWaitingOperationRun(
       status: end.status,
       finishedAt,
       updatedAt: finishedAt,
-      error: end.status === "denied" ? { ...end.error, denial: end.denial } : end.error,
-      ...(input.decision ? { decision: input.decision } : {})
+      error: errorOf(end.status === "denied" ? { ...end.error, denial: end.denial } : end.error),
+      ...(input.decision ? { decision: decisionOf(input.decision) } : {})
     })
     .where(and(identity(input), inArray(operationRuns.status, WAITING_OPERATION_RUN_STATUSES)))
     .returning();
@@ -725,7 +757,7 @@ export function createPostgresOperationRunsStore(
         if (!resumesAgent && waitingStatus === "pending_approval") return seen;
         const [row] = await tx
           .update(operationRuns)
-          .set({ decision: input.decision, updatedAt: sql`now()` })
+          .set({ decision: decisionOf(input.decision), updatedAt: sql`now()` })
           .where(
             and(
               identity(input),

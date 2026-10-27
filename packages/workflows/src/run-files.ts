@@ -72,6 +72,26 @@ export function createWorkflowRunFiles(options: {
 }): WorkflowRunFiles {
   const { clientInstanceId, stores, objects, now } = options;
 
+  /**
+   * Without attachment handlers, the copies in a run thread have nobody else to remove them: as
+   * a handler alone would, their bytes and what was prepared from them are deleted from the
+   * files store, the one store the engine knows, and their records are marked deleted, so they
+   * go with the run's values. A file another conversation still names stays.
+   */
+  async function releaseWithoutHandler(conversationId: ConversationId) {
+    const deletion = await stores.files.listConversationManagedObjectsForDeletion({
+      clientInstanceId,
+      conversationId
+    });
+    for (const objectKey of [...deletion.fileObjectKeys, ...deletion.artifactObjectKeys])
+      await objects.delete(objectKey);
+    await stores.files.markConversationManagedObjectsDeleted({
+      clientInstanceId,
+      conversationId,
+      deletedAt: now().toISOString()
+    });
+  }
+
   return {
     async create({ run, filename, mimeType, content }) {
       if (isWorkflowRunEnded(run.status)) {
@@ -169,7 +189,8 @@ export function createWorkflowRunFiles(options: {
         runId
       })) {
         if (signal?.aborted) return false;
-        await options.releaseThread?.(conversationId);
+        if (options.releaseThread) await options.releaseThread(conversationId);
+        else await releaseWithoutHandler(conversationId);
       }
       await objects.deletePrefix(runFilesPrefix(runId));
       for (;;) {

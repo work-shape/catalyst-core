@@ -137,6 +137,10 @@ export const operationRuns = pgTable(
     index("operation_runs_conversation_idx")
       .on(table.clientInstanceId, table.conversationId)
       .where(sql`${table.conversationId} is not null`),
+    // The calls of a Workflow run's own steps, whose answers go with the run's values.
+    index("operation_runs_workflow_run_idx")
+      .on(table.clientInstanceId, sql`(${table.origin}->>'workflowRunId')`)
+      .where(sql`${table.originKind} = 'workflow'`),
     index("operation_runs_approval_request_idx")
       .on(table.approvalRequestId)
       .where(sql`${table.approvalRequestId} is not null`),

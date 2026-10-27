@@ -13,9 +13,9 @@ import { withTestSql } from "./support/test-sql";
 import { readyWorkflows, start } from "./support/workflow-runs";
 import type { WorkflowFixture } from "./support/workflow-instance";
 
-// What a run thread keeps once its Workflow run's values are pruned, beyond its messages: the
-// tool calls its agent made, the requests they held, and copies of files no handler removed.
-// Each keeps what audit needs (ids, status, hashes, sizes, who decided and when) and nothing
+// What a Workflow run keeps once its values are pruned, beyond its threads' messages: the tool
+// calls its agents and its own steps made, the requests they held, and copies of files in its
+// threads. Each keeps what audit needs (ids, status, hashes, sizes, who decided and when) and nothing
 // the run carried.
 
 let open: WorkflowFixture | undefined;
@@ -214,6 +214,52 @@ async function prepared(options: { attachmentHandler: boolean }) {
     return ids;
   }
 
+  /**
+   * The calls of the run's own steps (origin `workflow`, no thread): a changing one another
+   * person approved with a comment, and a read that kept its counts.
+   */
+  async function stepCallsOf(target: WorkflowRun, client: string) {
+    const ids = {
+      changing: createPlatformId("oprun"),
+      reading: createPlatformId("oprun"),
+      declined: createPlatformId("oprun"),
+      approved: createPlatformId("apr")
+    };
+    const actor = { kind: "service_principal", id: "svc_workflow", label: "Workflow" };
+    const origin = { kind: "workflow", workflowRunId: target.id, stepRunId: "wfstep_1" };
+    const decidedAt = "2026-09-01T10:00:00.000Z";
+    await withTestSql(async (sql) => {
+      await sql`insert into operation_runs (id, client_instance_id, operation, effect, actor_kind,
+          actor_id, actor, origin_kind, origin, input_hash, status, decision, approval_request_id,
+          output, result_bytes, correlation_id, created_at, updated_at)
+        values
+          (${ids.changing}, ${clientInstanceId}, 'crm.update', 'changing', 'service_principal',
+            'svc_workflow', ${sql.json(actor)}, 'workflow', ${sql.json(origin)}, 'sha256:in-4',
+            'done',
+            ${sql.json({ mode: "approval", by: "usr_reviewer", byLabel: "Rita Reviewer", at: decidedAt, comment: `${client} confirmed` })},
+            ${ids.approved}, ${sql.json({ value: { customer: client, status: "updated" } })}, 64,
+            'corr-4', now(), now()),
+          (${ids.reading}, ${clientInstanceId}, 'crm.search', 'reading', 'service_principal',
+            'svc_workflow', ${sql.json(actor)}, 'workflow', ${sql.json(origin)}, 'sha256:in-5',
+            'done', null, null, ${sql.json({ value: { pages: 1, rows: 3, bytes: 512 } })}, null,
+            'corr-5', now(), now()),
+          (${ids.declined}, ${clientInstanceId}, 'crm.update', 'changing', 'service_principal',
+            'svc_workflow', ${sql.json(actor)}, 'workflow', ${sql.json(origin)}, 'sha256:in-6',
+            'denied', null, null, null, null, 'corr-6', now(), now())`;
+      await sql`update operation_runs set error = ${sql.json({ code: "DECLINED", message: "The call was declined", denial: { kind: "declined", by: "usr_reviewer", comment: `${client} is on leave` } })}
+        where id = ${ids.declined}`;
+      await sql`insert into approval_requests (id, client_instance_id, kind, summary, payload,
+          requested_by, status, decision, apply_result, created_at, updated_at)
+        values (${ids.approved}, ${clientInstanceId}, 'operation_call', 'crm.update',
+          ${sql.json({ runId: ids.changing, operation: "crm.update", effect: "changing", input: { customer: client }, actor: { id: "svc_workflow", label: "Workflow", authSource: "service" }, origin, expiresAt: "2026-09-02T10:00:00.000Z" })},
+          ${sql.json({ id: "svc_workflow", displayLabel: "Workflow" })}, 'approved',
+          ${sql.json({ approved: true, decidedBy: "usr_reviewer", decidedByLabel: "Rita Reviewer", decidedAt, comment: `${client} confirmed` })},
+          ${sql.json({ runId: ids.changing, requestId: ids.approved, execution: "done", output: { customer: client } })},
+          now(), now())`;
+    });
+    return ids;
+  }
+
   async function pruneValues(run: WorkflowRun) {
     await withTestSql(
       (sql) =>
@@ -228,7 +274,7 @@ async function prepared(options: { attachmentHandler: boolean }) {
     });
   }
 
-  return { t, objects, threadOf, copyInto, callsIn, pruneValues, readRun };
+  return { t, objects, threadOf, copyInto, callsIn, stepCallsOf, pruneValues, readRun };
 }
 
 async function rowsOf(conversationId: ConversationId) {
@@ -353,7 +399,66 @@ describe("a pruned Workflow run's threads", () => {
     ).not.toContain("Carla");
   });
 
-  it("keep no name of a file copy no attachment handler removed, only its key, size and sha256", async () => {
+  it("leave its own steps' calls no answer and their requests no comment or input", async () => {
+    const { t, stepCallsOf, pruneValues, readRun } = await prepared({ attachmentHandler: true });
+    const run = await readRun();
+    const other = await readRun();
+    const ids = await stepCallsOf(run, "Anna Example");
+    const otherIds = await stepCallsOf(other, "Bert Example");
+    const stepRows = (of: typeof ids) =>
+      withTestSql(async (sql) => ({
+        calls: await sql`select * from operation_runs
+          where id in (${of.changing}, ${of.reading}, ${of.declined}) order by effect, status`,
+        request: (await sql`select * from approval_requests where id = ${of.approved}`)[0]
+      }));
+    const otherBefore = await stepRows(otherIds);
+
+    expect(await pruneValues(run)).toBe(true);
+
+    const left = await stepRows(ids);
+    expect(left.calls).toMatchObject([
+      {
+        effect: "changing",
+        status: "denied",
+        error: { code: "DECLINED", denial: { kind: "declined", by: "usr_reviewer" } }
+      },
+      {
+        effect: "changing",
+        status: "done",
+        output: null,
+        result_bytes: 64,
+        decision: { mode: "approval", by: "usr_reviewer", at: "2026-09-01T10:00:00.000Z" }
+      },
+      { effect: "reading", output: { value: { pages: 1, rows: 3, bytes: 512 } } }
+    ]);
+    expect(left.request).toMatchObject({
+      status: "approved",
+      decision: { approved: true, decidedBy: "usr_reviewer" },
+      apply_result: { runId: ids.changing, requestId: ids.approved, execution: "done" },
+      payload: { runId: ids.changing, inputRemoved: true }
+    });
+    expect(JSON.stringify(left)).not.toContain("Anna");
+    // The other run's step calls are as they were.
+    expect(await stepRows(otherIds)).toEqual(otherBefore);
+
+    // A run pruned by the previous retention version is cleaned on its repair.
+    const repaired = await readRun();
+    const repairedIds = await stepCallsOf(repaired, "Carla Example");
+    await withTestSql(
+      (sql) => sql`update workflow_runs set status = 'done', finished_at = now(),
+        data_pruned_at = now(), data_prune_version = 3 where id = ${repaired.id}`
+    );
+    expect(
+      await t.stores.workflowRuns.markRunDataPruned({
+        clientInstanceId,
+        id: repaired.id,
+        prunedAt: new Date().toISOString()
+      })
+    ).toBe(true);
+    expect(JSON.stringify(await stepRows(repairedIds))).not.toContain("Carla");
+  });
+
+  it("keep no file copy no attachment handler removed: its bytes and records go", async () => {
     const { t, objects, threadOf, copyInto, pruneValues, readRun } = await prepared({
       attachmentHandler: false
     });
@@ -386,35 +491,23 @@ describe("a pruned Workflow run's threads", () => {
     expect(await pruneValues(run)).toBe(true);
 
     const left = await rowsOf(thread);
-    const own = {
-      attachments: left.attachments.filter((row) => row.file_id === copy.id),
-      artifacts: left.artifacts.filter((row) => row.source_file_id === copy.id),
-      files: left.files.filter((row) => row.id === copy.id)
-    };
-    expect(JSON.stringify(own)).not.toContain("contract-anna");
+    // The copy, what was prepared from it and their bytes are gone.
+    expect(left.attachments.filter((row) => row.file_id === copy.id)).toEqual([]);
+    expect(left.artifacts).toEqual([]);
+    expect(
+      await t.stores.files.getManagedFile({ clientInstanceId, fileId: copy.id })
+    ).toBeUndefined();
+    await expect(objects.get(copy.objectKey)).rejects.toThrow();
     expect(JSON.stringify([left.attachments, left.artifacts])).not.toMatch(
       /contract-anna|shared-bert/
     );
-    expect(own.attachments).toHaveLength(1);
-    expect(own.attachments[0]).toMatchObject({
-      file_id: copy.id,
-      byte_size: pdf.byteLength,
-      checksum: copy.checksum,
-      processing_metadata: {}
-    });
-    expect(own.artifacts).toHaveLength(1);
-    expect(own.artifacts[0]).toMatchObject({ filename: null, metadata: {} });
-    // The bytes no handler removed are still named by their key, so they can be found.
-    expect(own.files).toEqual([
-      expect.objectContaining({
-        id: copy.id,
-        object_key: copy.objectKey,
-        byte_size: pdf.byteLength,
-        checksum: copy.checksum
-      })
-    ]);
-    expect(left.files.find((row) => row.id === shared.id)?.filename).toBe("shared-bert.pdf");
-    expect(objects.size).toBe(objectsBefore);
+    // A file the chat names too keeps its name and bytes.
+    expect(
+      (await t.stores.files.getManagedFile({ clientInstanceId, fileId: shared.id }))?.filename
+    ).toBe("shared-bert.pdf");
+    await expect(objects.get(shared.objectKey)).resolves.toBeDefined();
+    // Of the bytes, only the run thread's copy and what was prepared from it went.
+    expect(objects.size).toBe(objectsBefore - 3);
     // The chat's copies are as they were.
     expect(await rowsOf(chat)).toEqual(chatBefore);
   });
