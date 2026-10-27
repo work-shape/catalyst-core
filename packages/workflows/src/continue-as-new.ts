@@ -23,13 +23,16 @@ import type { createRunOpening } from "./run-open";
 import { principalActor } from "./run-identity";
 import {
   WORKFLOW_OUTSIDE_TRIGGER,
+  WORKFLOW_REACH_PERSON_ONLY,
   startsFromOutside,
+  workflowContinuationReachRefusal,
   workflowNotOutsideRefusal,
   workflowOutsideBlockers,
   workflowOutsideRefusal
 } from "./outside-reach";
 
 type Loop = Extract<WorkflowStep, { type: "loop" }>;
+const reachSchema = z.object({ reason: z.literal(WORKFLOW_REACH_PERSON_ONLY) });
 const inputIssues = z.object({
   issues: z.array(
     z.object({ path: z.array(z.union([z.string(), z.number()])), message: z.string() })
@@ -175,6 +178,13 @@ export function createContinuation(options: {
             "The published revision no longer has the checkpointed loop"
           );
       }
+      // A child a credential published goes on only under runs whose reach is open (WF-OUT).
+      const starter = await workflowContinuationReachRefusal(published, run, {
+        clientInstanceId,
+        stores: tx,
+        definitions: options.definitions
+      });
+      if (starter) throw starter;
       prepared = await options.prepare(
         {
           ...published,
@@ -186,12 +196,16 @@ export function createContinuation(options: {
       if (!isAppError(caught)) throw caught;
       const issues = inputIssues.safeParse(caught.details);
       const path = issues.success ? issues.data.issues[0]?.path.map(String) : undefined;
-      error = {
-        code: "continuation_invalid",
-        message: path
-          ? `The successor input does not fit${valuePosition(input, path)}`
-          : "The successor could not start on the published revision"
-      };
+      const reach = reachSchema.safeParse(caught.details);
+      // What a person does about it is the same as at a start: the run says so.
+      error = reach.success
+        ? { code: WORKFLOW_REACH_PERSON_ONLY, message: caught.message }
+        : {
+            code: "continuation_invalid",
+            message: path
+              ? `The successor input does not fit${valuePosition(input, path)}`
+              : "The successor could not start on the published revision"
+          };
     }
     if (!run.continuation) await tx.workflowRuns.markContinuation({ clientInstanceId, id: run.id });
     // A continued history releases its key but does not wake a parent or report a failure.

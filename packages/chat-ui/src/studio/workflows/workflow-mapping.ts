@@ -61,6 +61,7 @@ const FAILURE_REASONS: Readonly<Record<string, WorkflowFailureReason>> = {
   loop_items_not_a_list: "dataMismatch",
   run_key_invalid: "dataMismatch",
   run_key_cycle: "runKeyCycle",
+  reach_person_only: "reachPersonOnly",
   output_not_json: "dataMismatch",
   output_invalid: "outputInvalid",
   step_data_too_large: "tooMuchData",

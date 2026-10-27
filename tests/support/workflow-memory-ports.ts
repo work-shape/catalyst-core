@@ -9,7 +9,8 @@ import type {
   ApiAccessStore,
   ConfigAssetStore,
   AuditEventStore,
-  OperationRegistry
+  OperationRegistry,
+  WorkflowNoticesStore
 } from "@work-shape/catalyst-core";
 import type { RunOperationDeps } from "@work-shape/catalyst-tool-execution";
 function unsupported(): never {
@@ -276,6 +277,13 @@ export const unusedAuditEventStore: AuditEventStore = {
   appendAuditEvent: unsupported,
   listAuditEvents: unsupported,
   deleteAuditEventsOlderThan: unsupported
+};
+export const unusedWorkflowNoticesStore: WorkflowNoticesStore = {
+  recordPublisher: unsupported,
+  publisher: unsupported,
+  publishedByCredential: unsupported,
+  failureCount: unsupported,
+  markNotified: unsupported
 };
 export const unusedOperationRegistry: OperationRegistry = {
   register: unsupported,

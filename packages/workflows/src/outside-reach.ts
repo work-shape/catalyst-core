@@ -11,12 +11,20 @@ import {
   type AuthenticatedIdentity,
   type ClientInstanceId,
   type ConfigAssetStore,
-  type WorkflowManifest
+  type AgentRunId,
+  type OperationOrigin,
+  type PlatformStores,
+  type WorkflowManifest,
+  type WorkflowRun
 } from "@work-shape/catalyst-core";
 import { z } from "zod";
 import { indexWorkflowSteps } from "./definition";
 import { WORKFLOW_OUTSIDE_NOT_EXPOSED, type WorkflowDefinitionIssue } from "./definition-issue";
-import type { WorkflowDefinitionSource } from "./definition-source";
+import {
+  workflowDefinitionPages,
+  type WorkflowDefinitionRevision,
+  type WorkflowDefinitionSource
+} from "./definition-source";
 import { workflowOperationNames } from "./needed-rights";
 
 // A Workflow started from outside (an API key, a Service Principal's credential, the CLI or
@@ -108,6 +116,19 @@ function startedWorkflow(name: string): string | undefined {
   return name.startsWith(WORKFLOW_OPERATION_PREFIX) ? match?.[1] : undefined;
 }
 
+/** The Workflows a run of the definition starts: by a `workflow` step or an agent's tool. */
+function childWorkflowsOf(definition: Pick<WorkflowManifest, "id" | "steps" | "tools">) {
+  const children = new Set<string>();
+  for (const { step } of indexWorkflowSteps(definition).values()) {
+    if (step.type === "workflow") children.add(step.workflow);
+  }
+  for (const name of workflowOperationNames(definition)) {
+    const child = startedWorkflow(name);
+    if (child !== undefined) children.add(child);
+  }
+  return children;
+}
+
 /** `knowledge.<id>.<operation>`: the Knowledge Base any of its operations names. */
 function knowledgeBaseOf(name: string): string | undefined {
   if (!name.startsWith(KNOWLEDGE_OPERATION_PREFIX)) return undefined;
@@ -167,16 +188,9 @@ async function scanOutsideBlockers(
   async function visit(definition: Pick<WorkflowManifest, "id" | "steps" | "tools">) {
     if (seen.has(definition.id)) return;
     seen.add(definition.id);
-    const children = new Set<string>();
-    for (const { step } of indexWorkflowSteps(definition).values()) {
-      if (step.type === "workflow") children.add(step.workflow);
-    }
+    const children = childWorkflowsOf(definition);
     for (const name of workflowOperationNames(definition)) {
-      const child = startedWorkflow(name);
-      if (child !== undefined) {
-        children.add(child);
-        continue;
-      }
+      if (startedWorkflow(name) !== undefined) continue;
       const operation = parseConnectionOperationName(name);
       if (operation) {
         // An operation that is gone or unreadable counts as closed: the rule never guesses open.
@@ -358,4 +372,253 @@ export async function workflowReachRefusal(
     { reason: WORKFLOW_REACH_PERSON_ONLY, workflow: manifest.id },
     { exposeMessage: true }
   );
+}
+
+/**
+ * Every live Workflow that starts the one of this id, through any number of Workflows between,
+ * each by its published revision: the Workflows whose runs may hand it their data as input.
+ */
+async function liveCallersOf(
+  workflow: string,
+  deps: Pick<OutsideReader, "configAssets"> & {
+    definitions: Pick<WorkflowDefinitionSource, "read" | "list">;
+  }
+): Promise<WorkflowDefinitionRevision[]> {
+  const startedBy = new Map<string, WorkflowDefinitionRevision[]>();
+  for await (const page of workflowDefinitionPages(deps.definitions)) {
+    for (const { id } of page) {
+      let revision: WorkflowDefinitionRevision | undefined;
+      try {
+        revision = await deps.definitions.read(id, deps.configAssets);
+      } catch (error) {
+        // A published definition that cannot be read starts no run, so it hands nothing on.
+        if (error instanceof AppError) continue;
+        throw error;
+      }
+      if (!revision) continue;
+      for (const child of childWorkflowsOf(revision.manifest)) {
+        startedBy.set(child, [...(startedBy.get(child) ?? []), revision]);
+      }
+    }
+  }
+  const callers = new Map<string, WorkflowDefinitionRevision>();
+  const pending = [workflow];
+  for (let next = pending.pop(); next !== undefined; next = pending.pop()) {
+    for (const caller of startedBy.get(next) ?? []) {
+      if (caller.manifest.id === workflow || callers.has(caller.manifest.id)) continue;
+      callers.set(caller.manifest.id, caller);
+      pending.push(caller.manifest.id);
+    }
+  }
+  return [...callers.values()];
+}
+
+/**
+ * The refusal of a publish by a credential of a Workflow that a live Workflow with a reach
+ * closed to outside clients starts, directly or through others (WF-OUT): such a parent can read
+ * a Connection kept from outside clients and pass what it read to this one as its input, which
+ * this one, published by a key, could write to a Data Store an outside Workflow reads. The
+ * callers are named only where the publisher may read them, the others counted. Nothing for a
+ * person, or where every Workflow that starts it reaches only data open to outside clients.
+ */
+export async function workflowCallerReachRefusal(
+  manifest: Pick<WorkflowManifest, "id">,
+  actor: AuthenticatedIdentity,
+  deps: OutsideReader & { definitions: Pick<WorkflowDefinitionSource, "read" | "list"> }
+): Promise<AppError | undefined> {
+  if (publishesAsPerson(actor)) return undefined;
+  const closed: string[] = [];
+  for (const caller of await liveCallersOf(manifest.id, deps)) {
+    if ((await workflowOutsideBlockers(caller.manifest, deps)).length > 0)
+      closed.push(caller.manifest.id);
+  }
+  if (closed.length === 0) return undefined;
+  const visible = await Promise.all(closed.map((name) => deps.readable("workflow", name)));
+  const named = closed.filter((_, index) => visible[index]);
+  const hidden = closed.length - named.length;
+  const parts = [
+    ...(named.length > 0
+      ? [
+          `the ${named.length === 1 ? "Workflow" : "Workflows"} ${named.map((name) => `'${name}'`).join(", ")}`
+        ]
+      : []),
+    ...(hidden > 0
+      ? [hidden === 1 ? "a Workflow you may not read" : `${hidden} Workflows you may not read`]
+      : [])
+  ];
+  return new AppError(
+    "FORBIDDEN",
+    `The Workflow '${manifest.id}' is started by Workflows that read data not exposed to outside clients and may pass it on to it (${parts.join("; ")}), so only a person signed in to Catalyst publishes it: publish it in Catalyst`,
+    { reason: WORKFLOW_REACH_PERSON_ONLY, workflow: manifest.id },
+    { exposeMessage: true }
+  );
+}
+
+/** What a start asks of the revision it starts, and of the runs that start it. */
+interface StartReachDeps {
+  clientInstanceId: ClientInstanceId;
+  stores: Pick<
+    PlatformStores,
+    "agentRuns" | "configAssets" | "operationRuns" | "workflowNotices" | "workflowRuns"
+  >;
+  definitions: Pick<WorkflowDefinitionSource, "read">;
+}
+
+/** How deep a subagent may sit under the agent step that started it, and some to spare. */
+const AGENT_RUN_DEPTH = 8;
+
+/**
+ * The Workflow run a call was made from, by its origin: a step of the run, or an agent step's
+ * agent (or one of its subagents) acting in it. Nothing for a call no Workflow run made, such
+ * as one of a person, an agent in their chat or an App.
+ */
+async function workflowRunOfOrigin(
+  origin: OperationOrigin,
+  deps: Pick<StartReachDeps, "clientInstanceId" | "stores">
+): Promise<string | undefined> {
+  const { clientInstanceId } = deps;
+  if (origin.kind === "workflow") return origin.workflowRunId;
+  if (origin.kind !== "agent") return undefined;
+  let runId: AgentRunId | undefined = origin.agentRunId;
+  for (let depth = 0; runId !== undefined && depth < AGENT_RUN_DEPTH; depth += 1) {
+    const run = await deps.stores.agentRuns.getAgentRun({ clientInstanceId, runId });
+    if (!run) return undefined;
+    if (run.workflowStepRunId !== undefined) {
+      const step = await deps.stores.workflowRuns.getStepRun({
+        clientInstanceId,
+        id: run.workflowStepRunId
+      });
+      return step?.runId;
+    }
+    runId = run.parentRunId;
+  }
+  return undefined;
+}
+
+/**
+ * The run that started this one: its parent, or the Workflow run whose operation step or
+ * agent's tool made the call that started it (such a run is one of its own, with no parent).
+ */
+async function starterOf(
+  run: Pick<WorkflowRun, "parentRunId" | "operationRunId">,
+  deps: StartReachDeps
+): Promise<string | undefined> {
+  if (run.parentRunId !== undefined) return run.parentRunId;
+  if (run.operationRunId === undefined) return undefined;
+  const call = await deps.stores.operationRuns.get({
+    clientInstanceId: deps.clientInstanceId,
+    id: run.operationRunId
+  });
+  return call ? workflowRunOfOrigin(call.origin, deps) : undefined;
+}
+
+const publishedByCredential = (
+  deps: StartReachDeps,
+  revision: Pick<WorkflowDefinitionRevision, "revisionId">
+) =>
+  deps.stores.workflowNotices.publishedByCredential({
+    clientInstanceId: deps.clientInstanceId,
+    revisionId: revision.revisionId
+  });
+
+const closedReach = async (
+  manifest: Pick<WorkflowManifest, "id" | "steps" | "tools">,
+  deps: StartReachDeps
+) =>
+  (
+    await workflowOutsideBlockers(manifest, {
+      clientInstanceId: deps.clientInstanceId,
+      configAssets: deps.stores.configAssets,
+      definitions: deps.definitions
+    })
+  ).length > 0;
+
+/**
+ * The refusal of a start of a revision a credential published whose reach is closed to outside
+ * clients now (WF-OUT): a child it starts was published since to read a Connection kept from
+ * outside clients, or a Connection's admin took `outside` off an operation it calls. The
+ * publish asked the same scan; the start is the boundary, so a schedule, a start by hand, an
+ * App, a parent or an outside client starts it only while it reaches open data. It names no
+ * Connection: the starter may not be one who may read them.
+ */
+export async function workflowStartReachRefusal(
+  revision: WorkflowDefinitionRevision,
+  deps: StartReachDeps
+): Promise<AppError | undefined> {
+  if (!(await publishedByCredential(deps, revision))) return undefined;
+  if (!(await closedReach(revision.manifest, deps))) return undefined;
+  const { id } = revision.manifest;
+  return new AppError(
+    "CONFLICT",
+    `The Workflow '${id}' was published with an API key or a technical account, and it now reads data that is not exposed to outside clients, so it is not started: a person signed in to Catalyst publishes it again in Catalyst`,
+    { reason: WORKFLOW_REACH_PERSON_ONLY, workflow: id },
+    { exposeMessage: true }
+  );
+}
+
+/**
+ * The refusal of a start of a revision a credential published by a run (a `workflow` step or
+ * an agent's tool) whose own reach, or that of a run above it, is closed to outside clients
+ * (WF-OUT): that run may hand it, as input, what it read from a Connection kept from outside
+ * clients, and the child, published by a key, may write it to a Data Store an outside Workflow
+ * reads. Asked of the runs' own definitions now, so a parent a person publishes later does not
+ * open it either.
+ */
+export async function workflowParentReachRefusal(
+  revision: WorkflowDefinitionRevision,
+  startingRunId: string,
+  deps: StartReachDeps
+): Promise<AppError | undefined> {
+  if (!(await publishedByCredential(deps, revision))) return undefined;
+  const { clientInstanceId } = deps;
+  const seen = new Set<string>();
+  for (let runId: string | undefined = startingRunId; runId !== undefined && !seen.has(runId);) {
+    seen.add(runId);
+    const run = await deps.stores.workflowRuns.readRun({ clientInstanceId, id: runId });
+    if (!run) break;
+    const definition = await deps.stores.workflowRuns.readRunDefinition({
+      clientInstanceId,
+      id: run.id
+    });
+    // A run whose definition cannot be read counts as closed: the rule never guesses open.
+    if (!definition || (await closedReach(definition, deps))) {
+      const { id } = revision.manifest;
+      return new AppError(
+        "CONFLICT",
+        `The Workflow '${id}' was published with an API key or a technical account, and the Workflow that starts it reads data that is not exposed to outside clients, so it does not start it: a person signed in to Catalyst publishes '${id}' again in Catalyst`,
+        { reason: WORKFLOW_REACH_PERSON_ONLY, workflow: id },
+        { exposeMessage: true }
+      );
+    }
+    runId = await starterOf(run, deps);
+  }
+  return undefined;
+}
+
+/**
+ * The same refusal for a start by a call a Workflow run made: an operation step's, or an agent
+ * step's agent's tool, which hands the run's data on as input as a `workflow` step does.
+ */
+export async function workflowOriginReachRefusal(
+  revision: WorkflowDefinitionRevision,
+  origin: OperationOrigin,
+  deps: StartReachDeps
+): Promise<AppError | undefined> {
+  if (!(await publishedByCredential(deps, revision))) return undefined;
+  const starter = await workflowRunOfOrigin(origin, deps);
+  return starter === undefined ? undefined : workflowParentReachRefusal(revision, starter, deps);
+}
+
+/**
+ * The same refusal for a run that goes on as a new history (continue-as-new) of a revision a
+ * credential published: asked of the runs that started it, as at its first start.
+ */
+export async function workflowContinuationReachRefusal(
+  revision: WorkflowDefinitionRevision,
+  run: Pick<WorkflowRun, "parentRunId" | "operationRunId">,
+  deps: StartReachDeps
+): Promise<AppError | undefined> {
+  if (!(await publishedByCredential(deps, revision))) return undefined;
+  const starter = await starterOf(run, deps);
+  return starter === undefined ? undefined : workflowParentReachRefusal(revision, starter, deps);
 }

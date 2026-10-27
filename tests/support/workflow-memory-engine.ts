@@ -9,6 +9,7 @@ import {
   unusedApiAccessStore,
   unusedConfigAssetStore,
   unusedAuditEventStore,
+  unusedWorkflowNoticesStore,
   unusedOperationRegistry,
   unusedRunOperationDeps
 } from "./workflow-memory-ports";
@@ -21,6 +22,7 @@ import {
   type ActorAccess,
   type ApiAccessStore,
   type AuditEventStore,
+  type WorkflowNoticesStore,
   type AuthenticatedUser,
   type Authorizer,
   type ConfigAssetStore,
@@ -424,6 +426,11 @@ export async function memoryWorkflowEngine(
     configAssets: port<ConfigAssetStore>(unusedConfigAssetStore, {
       async getConfigAsset() {
         return undefined;
+      }
+    }),
+    workflowNotices: port<WorkflowNoticesStore>(unusedWorkflowNoticesStore, {
+      async publishedByCredential() {
+        return false;
       }
     }),
     audit: port<AuditEventStore>(unusedAuditEventStore, {
