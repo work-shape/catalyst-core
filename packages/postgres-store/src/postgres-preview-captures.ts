@@ -75,7 +75,9 @@ export async function requestPreviewCapture(
       const [counted] = await tx
         .select({
           run: sql<number>`count(*) filter (where ${previewCaptures.runId} = ${input.runId})::int`,
-          hour: sql<number>`count(*) filter (where ${previewCaptures.userId} = ${input.userId} and ${previewCaptures.requestedAt} > ${new Date(requestedAt.getTime() - HOUR_MS).toISOString()}::timestamptz)::int`
+          // A run counts every request, which bounds the time it spends waiting; the hour counts
+          // the pictures a person's browser took or is taking, not the requests refused.
+          hour: sql<number>`count(*) filter (where ${previewCaptures.userId} = ${input.userId} and ${previewCaptures.status} <> 'refused' and ${previewCaptures.requestedAt} > ${new Date(requestedAt.getTime() - HOUR_MS).toISOString()}::timestamptz)::int`
         })
         .from(previewCaptures)
         .where(

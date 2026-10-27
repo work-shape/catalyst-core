@@ -253,6 +253,37 @@ describe("preview.capture", () => {
     expect(elapsed()).toBeLessThanOrEqual(15_000);
   });
 
+  it("does not end a request the browser took just before the wait ended", async () => {
+    const store = fakeStore({ "user-1": fileSetId });
+    const settle = store.settlePreviewCapture;
+    let raced = false;
+    store.settlePreviewCapture = (input) => {
+      const [row] = [...store.rows.values()];
+      // The browser claims the request between the tool's last read and its end of the wait.
+      if (row && !raced && row.state.status === "pending") {
+        raced = true;
+        row.state = { status: "answering" };
+      }
+      return settle(input);
+    };
+    const { run, elapsed } = harness(store, (waits) => {
+      const [row] = [...store.rows.values()];
+      if (row?.state.status === "answering" && waits > 36) {
+        row.state = {
+          status: "captured",
+          artifactId: asManagedArtifactId("artifact_raced"),
+          width: 640,
+          height: 480,
+          number: 3
+        };
+      }
+    });
+    const result = await succeeded(run(contextFor("user-1")));
+    expect(raced).toBe(true);
+    expect(result.output).toMatchObject({ captured: true, width: 640 });
+    expect(elapsed()).toBeGreaterThan(10_000);
+  });
+
   it("passes on the browser's and the store's refusals in plain words", async () => {
     const store = fakeStore({ "user-1": fileSetId });
     const { run } = harness(store, () => {
@@ -301,6 +332,20 @@ describe("the picture's bounds", () => {
     expect(isPreviewCaptureWithinBounds(png)).toBeUndefined();
     const cut = webp(800, 600, 100).subarray(0, 90);
     expect(isPreviewCaptureWithinBounds(cut)).toBeUndefined();
+    // An extended WebP is taken when still, and refused when it announces an animation.
+    const extended = (flags: number) => {
+      const bytes = new Uint8Array(64);
+      const view = new DataView(bytes.buffer);
+      bytes.set(new TextEncoder().encode("RIFF"), 0);
+      view.setUint32(4, bytes.byteLength - 8, true);
+      bytes.set(new TextEncoder().encode("WEBPVP8X"), 8);
+      view.setUint32(16, 10, true);
+      bytes[20] = flags;
+      bytes.set([799 & 0xff, 799 >> 8, 0, 599 & 0xff, 599 >> 8, 0], 24);
+      return bytes;
+    };
+    expect(isPreviewCaptureWithinBounds(extended(0x10))).toEqual({ width: 800, height: 600 });
+    expect(isPreviewCaptureWithinBounds(extended(0x12))).toBeUndefined();
   });
 });
 

@@ -43,7 +43,7 @@ const uint32 = (bytes: Uint8Array, at: number) =>
 /**
  * The size of a WebP image as its header states it, or nothing when the bytes are no complete
  * WebP file: a RIFF container of type WEBP whose length is the file's, with a `VP8 `, `VP8L`
- * or `VP8X` chunk. The image is not decoded.
+ * or still `VP8X` chunk. The image is not decoded.
  */
 export function readWebpSize(bytes: Uint8Array): { width: number; height: number } | undefined {
   if (bytes.byteLength < 30 || ascii(bytes, 0, 4) !== "RIFF" || ascii(bytes, 8, 4) !== "WEBP") {
@@ -52,6 +52,8 @@ export function readWebpSize(bytes: Uint8Array): { width: number; height: number
   if (uint32(bytes, 4) + 8 !== bytes.byteLength) return undefined;
   const chunk = ascii(bytes, 12, 4);
   if (chunk === "VP8X") {
+    // An animation is no picture of a page: the flag that announces one refuses the file.
+    if (((bytes[20] ?? 0) & 0x02) !== 0) return undefined;
     return { width: 1 + uint24(bytes, 24), height: 1 + uint24(bytes, 27) };
   }
   if (chunk === "VP8 ") {

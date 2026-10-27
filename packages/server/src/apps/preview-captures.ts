@@ -219,7 +219,11 @@ export class PreviewCaptures {
     );
     if (names.length === 0) return false;
     const definitions = await this.options.operationCalls.registry.resolveMany(names);
-    return [...definitions.values()].some((definition) => definition.personalConnection === true);
+    // An operation that cannot be resolved counts as personal: the refusal fails closed.
+    return names.some((name) => {
+      const definition = definitions.get(name);
+      return definition === undefined || definition.personalConnection === true;
+    });
   }
 
   private settle(
