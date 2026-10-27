@@ -1,3 +1,4 @@
+import { isRecord } from "@work-shape/catalyst-asset-schemas";
 import { resolve } from "node:path";
 import yaml from "js-yaml";
 import {
@@ -839,10 +840,6 @@ function refuseRevisionFlags(values: RepositoryCommandValues, verb: string): voi
   if (values.revision !== undefined) {
     throw new RepositoryUsageError(`--revision is not an option of '${verb}'.`);
   }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function writeOut(target: Pick<ConfigCommandOptions, "stdout">, text: string): void {

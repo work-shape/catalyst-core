@@ -6,6 +6,7 @@ import {
 import {
   CONFIG_ASSET_KINDS,
   agentConfigSchema,
+  isRecord,
   skillConfigSchema,
   type AgentConfig,
   type SkillConfig
@@ -759,9 +760,7 @@ export function formatCommandError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-export function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
+export { isRecord } from "@work-shape/catalyst-asset-schemas";
 
 export function writeOutput(options: ConfigCommandOptions, text: string): void {
   (options.stdout ?? ((value) => process.stdout.write(value)))(`${text}\n`);

@@ -1,3 +1,4 @@
+import { isRecord } from "@work-shape/catalyst-asset-schemas";
 import { setTimeout as defaultSleep } from "node:timers/promises";
 import { randomUUID } from "node:crypto";
 import {
@@ -332,10 +333,6 @@ function readApiError(payload: unknown): {
     ...(typeof payload.error.message === "string" ? { message: payload.error.message } : {}),
     ...(payload.error.details === undefined ? {} : { details: payload.error.details })
   };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 export function redactSecret(message: string, secret: string): string {
