@@ -203,7 +203,46 @@ describe("client instance app vertical slice", () => {
 
     expect(content.statusCode).toBe(200);
     expect(content.headers["content-type"]).toContain("image/gif");
+    expect(content.headers["content-disposition"]).toMatch(/^inline;/);
+    expect(content.headers["x-content-type-options"]).toBe("nosniff");
     expect(content.payload).toBe("GIF89a");
+
+    await app.close();
+  });
+
+  it("serves a file a browser would run as an attachment, never inline on the API origin", async () => {
+    const app = await createTestInstance({
+      config: createTestConfig(),
+      env: {},
+      capabilities: [createTestAttachmentCapability()],
+      tools: []
+    });
+    const created = await app.call("conversations.create", { payload: { title: "HTML upload" } });
+    const conversation = z.object({ id: z.string() }).parse(created.json());
+    // The name says PDF, which the route shows inline; the type the browser is sent says HTML.
+    const upload = createMultipartFilePayload({
+      fieldName: "file",
+      filename: "invoice.pdf",
+      contentType: "text/html",
+      content: "<script>alert(document.cookie)</script>"
+    });
+    const uploaded = await app.call("conversations.draft_attachments.upload", {
+      params: { conversationId: conversation.id },
+      headers: upload.headers,
+      payload: upload.payload
+    });
+    const { attachment } = z
+      .object({ attachment: z.object({ fileId: z.string() }) })
+      .parse(uploaded.json());
+
+    const content = await app.call("conversations.files.get_content", {
+      params: { conversationId: conversation.id, fileId: attachment.fileId }
+    });
+
+    expect(content.statusCode).toBe(200);
+    expect(content.headers["content-type"]).toContain("text/html");
+    expect(content.headers["content-disposition"]).toMatch(/^attachment;/);
+    expect(content.headers["x-content-type-options"]).toBe("nosniff");
 
     await app.close();
   });
@@ -220,6 +259,7 @@ describe("client instance app vertical slice", () => {
       costs: config.usage.costs
     });
     const readArtifacts: Array<{ clientInstanceId: string; artifactId: string }> = [];
+    const artifactTypes = new Map<string, string>();
     const server = await createTestInstance({
       server: {
         config,
@@ -241,7 +281,7 @@ describe("client instance app vertical slice", () => {
             readArtifacts.push(input);
             return {
               bytes: new TextEncoder().encode("final,report\n"),
-              mimeType: "text/csv"
+              mimeType: artifactTypes.get(input.artifactId) ?? "text/csv"
             };
           }
         }
@@ -299,6 +339,39 @@ describe("client instance app vertical slice", () => {
       });
       expect(wrongConversation.statusCode).toBe(404);
       expect(readArtifacts).toHaveLength(1);
+
+      // The agent names an artifact's file and type. An image a browser would run as a document
+      // is shown inline nowhere on the API origin; a raster image is.
+      for (const [filename, mimeType, disposition] of [
+        ["chart.svg", "image/svg+xml", "attachment"],
+        ["chart.png", "text/html", "attachment"],
+        ["chart.png", "application/xhtml+xml", "attachment"],
+        // A browser reads a list of types and takes the last.
+        ["chart.png", "image/png;x=1,text/html", "attachment"],
+        ["chart.png", 'image/png; x="a,text/html"', "attachment"],
+        ["chart.png", "IMAGE/PNG; x=1", "inline"],
+        ["report.pdf", "application/pdf", "inline"]
+      ] as const) {
+        const image = await store.files.createManagedArtifact({
+          clientInstanceId,
+          conversationId: conversation.id,
+          kind: "workspace.file",
+          objectKey: `execution-workspaces/private/${filename}`,
+          filename,
+          mimeType,
+          byteSize: 13,
+          checksum: `sha256:${mimeType}`,
+          metadata: { source: "execution_workspace" }
+        });
+        artifactTypes.set(image.id, mimeType);
+        const shown = await server.call("conversations.artifacts.get_content", {
+          params: { conversationId: conversation.id, artifactId: image.id },
+          query: { inline: "true" }
+        });
+        expect(shown.statusCode, `${filename} ${mimeType}`).toBe(200);
+        expect(shown.headers["content-disposition"]).toMatch(new RegExp(`^${disposition};`));
+        expect(shown.headers["x-content-type-options"]).toBe("nosniff");
+      }
     } finally {
       await server.close();
     }

@@ -16,6 +16,7 @@ import {
   type ManagedArtifactRecord
 } from "@work-shape/catalyst-core";
 import { ConversationWorkflow } from "../conversations/conversation-service";
+import { displaysInline } from "../http/download";
 import type { Route } from "../http/route";
 import { conversationIdParam, requirePathParam } from "./request-context";
 import type { ChatServerOptions } from "../types";
@@ -56,14 +57,16 @@ export function registerConversationFileRoutes(route: Route, options: ChatServer
       ) {
         throw new AppError("VALIDATION_FAILED", "This attachment cannot be displayed inline");
       }
+      const contentType = file.mimeType ?? "application/octet-stream";
       return reply
-        .header("content-type", file.mimeType ?? "application/octet-stream")
+        .header("content-type", contentType)
         .header("content-length", String(file.bytes.byteLength))
         .header("cache-control", "private, max-age=60")
+        .header("x-content-type-options", "nosniff")
         .header(
           "content-disposition",
           contentDisposition(
-            download ? "attachment" : "inline",
+            !download && displaysInline(contentType) ? "inline" : "attachment",
             sentAttachment?.filename ?? file.filename
           )
         )
@@ -101,9 +104,13 @@ export function registerConversationFileRoutes(route: Route, options: ChatServer
         .header("content-type", artifact.mimeType)
         .header("content-length", String(artifact.bytes.byteLength))
         .header("cache-control", "private, max-age=60")
+        .header("x-content-type-options", "nosniff")
         .header(
           "content-disposition",
-          contentDisposition(inline ? "inline" : "attachment", filename)
+          contentDisposition(
+            inline && displaysInline(artifact.mimeType) ? "inline" : "attachment",
+            filename
+          )
         )
         .send(Buffer.from(artifact.bytes));
     }

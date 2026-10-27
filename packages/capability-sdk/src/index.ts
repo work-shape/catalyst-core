@@ -506,6 +506,7 @@ export interface ClientInstanceAttachmentHandler {
   readConversationFile(input: ReadConversationFileInput): Promise<ReadConversationFileResult>;
   blockingDraftAttachmentMessage(attachments: readonly DraftAttachment[]): string | undefined;
   createAttachmentManifest(attachments: readonly ConversationAttachment[]): AttachmentManifest;
+  /** A wish: the platform serves only raster images, PDF and plain text inline, the rest as attachment. */
   isInlineDisplayMimeType(mimeType: string): boolean;
 }
 
