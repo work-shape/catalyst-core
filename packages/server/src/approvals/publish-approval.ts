@@ -48,8 +48,8 @@ import {
   type PublishNarrator
 } from "../publish-narrative/publish-narrator";
 
-// A publish that a guardrail holds waits as a request of its own kind, `app_publish` or
-// `workflow_publish`, which the holders of the kind's `approve` right decide and nobody else.
+// A publish that a guardrail holds waits as a request of its own kind, `app_publish`,
+// `workflow_publish` or `form_page_publish`, which the holders of the kind's `approve` right decide and nobody else.
 // The request freezes what it publishes: approving makes exactly that revision live, and the
 // request cannot be approved once the draft or the live revision moved. Spec:
 // events-workflows-and-guardrails.md, Publishing needs a person's click.
@@ -60,10 +60,12 @@ const AGENT_APPROVE: PlatformAction = "agent.approve";
 /** The approval kind of a held publish and the right that decides it, by the asset kind. */
 const PUBLISH_APPROVALS: Readonly<Record<string, { kind: string; approve: PlatformAction }>> = {
   [APP_ASSET_KIND]: { kind: "app_publish", approve: APP_ACTIONS.approve },
-  [WORKFLOW_ASSET_KIND]: { kind: "workflow_publish", approve: WORKFLOW_ACTIONS.approve }
+  [WORKFLOW_ASSET_KIND]: { kind: "workflow_publish", approve: WORKFLOW_ACTIONS.approve },
+  // The kind of the capability `outside-forms`, which takes the App rights (EW-9c).
+  form_page: { kind: "form_page_publish", approve: APP_ACTIONS.approve }
 };
 
-/** The approval kinds of a held publish: an App's, a Workflow's and a workspace agent's. */
+/** The approval kinds of a held publish: an App's, a Workflow's, a form page's and a workspace agent's. */
 export const PUBLISH_APPROVAL_KINDS: readonly string[] = [
   ...Object.values(PUBLISH_APPROVALS).map(({ kind }) => kind),
   AGENT_PUBLISH_APPROVAL_KIND

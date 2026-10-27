@@ -330,16 +330,21 @@ export interface ShippedGuardrail {
 }
 
 /**
- * Every publish of an App or a Workflow, and of an agent a workspace owns, waits for an
- * approval, which a holder of the kind's `approve` right gives with their own Publish (GR-PUB-1,
- * WS-PUB-1b).
+ * Every publish of an App, a Workflow or a form page, and of an agent a workspace owns, waits
+ * for an approval, which a holder of the kind's `approve` right gives with their own Publish
+ * (GR-PUB-1, WS-PUB-1b, EW-9c).
  */
 export const PUBLISH_APPROVAL_GUARDRAIL = {
   name: "publishing-needs-approval",
   displayName: "Publishing needs an instance admin's approval",
   reason:
-    "A new revision of an App, a Workflow or a workspace's agent goes live once an instance admin approved it.",
-  on: ["app.before_publish", "workflow.before_publish", "agent.before_publish"],
+    "A new revision of an App, a Workflow, a form page or a workspace's agent goes live once an instance admin approved it.",
+  on: [
+    "app.before_publish",
+    "workflow.before_publish",
+    "form_page.before_publish",
+    "agent.before_publish"
+  ],
   workspaceOwnedOnly: ["agent.before_publish"],
   outcome: "require_approval"
 } as const satisfies ShippedGuardrail;

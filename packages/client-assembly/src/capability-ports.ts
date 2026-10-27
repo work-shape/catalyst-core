@@ -102,11 +102,14 @@ export function capabilityStoresOf(input: {
       requireOwnKind(kind);
       const asset = await store.configAssets.getConfigAsset({ clientInstanceId, kind, name });
       const fileSet =
-        asset?.status === "active" && isFileSetId(fileSetId)
+        // The published revision's files alone: a draft is not the capability's to read.
+        asset?.status === "active" &&
+        asset.publishedFileSetId === fileSetId &&
+        isFileSetId(fileSetId)
           ? await store.pages.getAssetFileSet({ clientInstanceId, assetId: asset.id, fileSetId })
           : undefined;
       if (!fileSet) {
-        throw new AppError("NOT_FOUND", `No file set of ${kind} '${name}' has this id`);
+        throw new AppError("NOT_FOUND", `${kind} '${name}' has no published file set of this id`);
       }
       const objects = input.objects;
       if (!objects) {
