@@ -126,7 +126,7 @@ function BlobArtifactPreview({
     client,
     conversationId,
     content: { kind: "artifact", artifactId: artifact.artifactId },
-    createObjectUrl: previewKind === "pdf" || previewKind === "image"
+    ...(previewKind === "pdf" || previewKind === "image" ? { viewer: previewKind } : {})
   });
 
   if (state.status === "loading") {

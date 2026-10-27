@@ -6,6 +6,7 @@ import { managedFileIdFromUrl, useAttachmentContentContext } from "./attachment-
 import { useOpenConversationFile } from "./conversation-file-presentation";
 import { resolveFileType } from "./file-type";
 import { FileTypeIcon } from "./file-type-icon";
+import { viewerObjectUrl } from "./viewer-object-url";
 import { useTranslation } from "../../shared/i18n";
 
 /** `row` renders the file as a full-width list entry inside a grouped attachment card. */
@@ -223,7 +224,7 @@ function useAttachmentImageUrl(attachment: AttachmentSnapshot): string | undefin
         setObjectUrl(undefined);
         return undefined;
       }
-      const nextUrl = URL.createObjectURL(sourceFile);
+      const nextUrl = viewerObjectUrl(sourceFile, "image");
       setObjectUrl(nextUrl);
       return () => URL.revokeObjectURL(nextUrl);
     }
@@ -244,7 +245,7 @@ function useAttachmentImageUrl(attachment: AttachmentSnapshot): string | undefin
         if (!active) {
           return;
         }
-        nextUrl = URL.createObjectURL(blob);
+        nextUrl = viewerObjectUrl(blob, "image");
         setObjectUrl(nextUrl);
       })
       .catch(() => {

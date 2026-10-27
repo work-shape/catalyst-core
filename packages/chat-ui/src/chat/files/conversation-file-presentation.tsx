@@ -453,7 +453,7 @@ export function SourceFilePreview({
     conversationId,
     content: { kind: "source_file", fileId },
     download: previewKind !== "image",
-    createObjectUrl: previewKind !== "spreadsheet",
+    ...(previewKind === "pdf" || previewKind === "image" ? { viewer: previewKind } : {}),
     enabled: !office && !directUrl
   });
 
