@@ -652,3 +652,24 @@ export interface WorkflowRunsStore {
    */
   readLoopCounts(ref: WorkflowStepRunRef): Promise<WorkflowLoopCounts | undefined>;
 }
+
+/** The trigger kind of a run an outside client started, and of a Workflow that admits one. */
+export const WORKFLOW_OUTSIDE_TRIGGER = "outside";
+
+/**
+ * Whether what a live run reads answers an outside client: its root was started by one. A
+ * test run answers the person testing, whose own key's calls are asked by `isOutsideCall`.
+ */
+export async function answersOutsideClient(
+  workflowRuns: Pick<WorkflowRunsStore, "readRun">,
+  clientInstanceId: ClientInstanceId,
+  run: Pick<WorkflowRun, "id" | "rootRunId" | "mode" | "trigger">
+): Promise<boolean> {
+  if (run.mode !== "live") return false;
+  const root =
+    run.rootRunId === run.id
+      ? run
+      : await workflowRuns.readRun({ clientInstanceId, id: run.rootRunId });
+  // A root that cannot be read counts as one an outside client started: never guess open.
+  return root === undefined || root.trigger === WORKFLOW_OUTSIDE_TRIGGER;
+}

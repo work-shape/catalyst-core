@@ -31,6 +31,8 @@ import {
 import {
   ASSET_OWNER_KINDS,
   AppError,
+  CONNECTION_ACTIONS,
+  CONNECTION_ASSET_KIND,
   ObjectNotFound,
   fileSetFileObjectKey,
   type ObjectStorage,
@@ -41,6 +43,7 @@ import {
   defineAssetKind,
   enqueueKnowledgeWorkflowSourceEnd,
   parseConnectionOperationName,
+  type AccessResource,
   type ClientInstanceId,
   type ConfigAssetRecord,
   type ConfigAssetStore,
@@ -489,7 +492,25 @@ export function createWorkflowAssetKind(
         definitions: createWorkflowAssetDefinitions({
           clientInstanceId,
           configAssets: stores.configAssets
-        })
+        }),
+        // The refusal names a child's Connection only to a publisher who may read or use it.
+        async readable(connection) {
+          const asset = await stores.configAssets.getConfigAsset({
+            clientInstanceId,
+            kind: CONNECTION_ASSET_KIND,
+            name: connection
+          });
+          if (asset?.status !== "active") return false;
+          const resource: AccessResource = {
+            kind: asset.kind,
+            name: asset.name,
+            assetId: asset.id,
+            ...(asset.scope.kind === "workspace" ? { workspaceId: asset.scope.workspaceId } : {})
+          };
+          return [CONNECTION_ACTIONS.read, CONNECTION_ACTIONS.use].some(
+            (right) => access.authorize(right, resource).allowed
+          );
+        }
       });
       if (outside.length > 0) throw workflowDefinitionRefusal(result.manifest.id, outside);
       await reschedule(stores, replaced, config);

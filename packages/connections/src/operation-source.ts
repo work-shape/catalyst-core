@@ -2,6 +2,7 @@ import {
   CONNECTION_ACTIONS,
   CONNECTION_ASSET_KIND,
   CONNECTION_EXPOSURE_ACTION_PREFIX,
+  answersOutsideClient,
   connectionOperationName,
   exposureOfOrigin,
   isAuthenticatedServicePrincipal,
@@ -109,6 +110,40 @@ export function connectionExposureDenial(
 }
 
 /**
+ * Whether the call is a step of a Workflow Run whose root an outside client started: an
+ * operation step's, or a tool call of an agent step's Agent Run. What it reads answers that
+ * client, so the operation needs `outside` beside its surface's exposure. A step whose run
+ * cannot be read counts as answering one: the rule never guesses open.
+ */
+async function answersOutside(
+  deps: ConnectionOperationSourceDeps,
+  origin: OperationOrigin
+): Promise<boolean> {
+  const { clientInstanceId, stores } = deps;
+  let runId: string;
+  if (origin.kind === "workflow") {
+    runId = origin.workflowRunId;
+  } else if (origin.kind === "agent") {
+    const agentRun = await stores.agentRuns.getAgentRun({
+      clientInstanceId,
+      runId: origin.agentRunId
+    });
+    if (!agentRun) return true;
+    if (!agentRun.workflowStepRunId) return false;
+    const step = await stores.workflowRuns.getStepRun({
+      clientInstanceId,
+      id: agentRun.workflowStepRunId
+    });
+    if (!step) return true;
+    runId = step.runId;
+  } else {
+    return false;
+  }
+  const run = await stores.workflowRuns.readRun({ clientInstanceId, id: runId });
+  return !run || (await answersOutsideClient(stores.workflowRuns, clientInstanceId, run));
+}
+
+/**
  * The operation's own check of the caller. A personal context is checked first, independently
  * of grants and even for obsolete stored exposure. Then exposure is asked, so an operation that
  * is not exposed to the caller's surface never reaches the policy and files no approval. Then
@@ -131,6 +166,15 @@ async function authorizeCall(
   }
   const unexposed = connectionExposureDenial(operation, context.origin, context.actor);
   if (unexposed) return unexposed;
+  // Asked at every call, after a wait or an approval too: the Connection's admin may have taken
+  // `outside` back since the start's scan let the run through.
+  if (!operation.exposure.includes("outside") && (await answersOutside(deps, context.origin))) {
+    return {
+      allowed: false,
+      action: `${CONNECTION_EXPOSURE_ACTION_PREFIX}outside`,
+      reason: "no_grant"
+    };
+  }
   const resource = resourceOf(connection);
   const decision = keyCoversUse(context, resource)
     ? context.access.authorize(CONNECTION_ACTIONS.use, resource)
