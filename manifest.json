@@ -1,0 +1,362 @@
+[
+  {
+    "file": "0001-390-en-light-page.png",
+    "label": "live-history",
+    "width": 390,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:22230/w/cws_fb59b436-46b9-4f27-920e-185d4ce327b3/app-drafts/urlaubsplaner"
+  },
+  {
+    "file": "0002-390-en-dark-page.png",
+    "label": "live-history",
+    "width": 390,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:22230/w/cws_fb59b436-46b9-4f27-920e-185d4ce327b3/app-drafts/urlaubsplaner"
+  },
+  {
+    "file": "0003-390-de-light-page.png",
+    "label": "live-history",
+    "width": 390,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:22230/w/cws_fb59b436-46b9-4f27-920e-185d4ce327b3/app-drafts/urlaubsplaner"
+  },
+  {
+    "file": "0004-390-de-dark-page.png",
+    "label": "live-history",
+    "width": 390,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:22230/w/cws_fb59b436-46b9-4f27-920e-185d4ce327b3/app-drafts/urlaubsplaner"
+  },
+  {
+    "file": "0005-1440-en-light-page.png",
+    "label": "live-history",
+    "width": 1440,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:22230/w/cws_fb59b436-46b9-4f27-920e-185d4ce327b3/app-drafts/urlaubsplaner"
+  },
+  {
+    "file": "0006-1440-en-dark-page.png",
+    "label": "live-history",
+    "width": 1440,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:22230/w/cws_fb59b436-46b9-4f27-920e-185d4ce327b3/app-drafts/urlaubsplaner"
+  },
+  {
+    "file": "0007-1440-de-light-page.png",
+    "label": "live-history",
+    "width": 1440,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:22230/w/cws_fb59b436-46b9-4f27-920e-185d4ce327b3/app-drafts/urlaubsplaner"
+  },
+  {
+    "file": "0008-1440-de-dark-page.png",
+    "label": "live-history",
+    "width": 1440,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:22230/w/cws_fb59b436-46b9-4f27-920e-185d4ce327b3/app-drafts/urlaubsplaner"
+  },
+  {
+    "file": "0009-390-en-light-page.png",
+    "label": "changed-history",
+    "width": 390,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:22230/w/cws_fb59b436-46b9-4f27-920e-185d4ce327b3/app-drafts/buchhaltungsanalyse"
+  },
+  {
+    "file": "0010-390-en-dark-page.png",
+    "label": "changed-history",
+    "width": 390,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:22230/w/cws_fb59b436-46b9-4f27-920e-185d4ce327b3/app-drafts/buchhaltungsanalyse"
+  },
+  {
+    "file": "0011-390-de-light-page.png",
+    "label": "changed-history",
+    "width": 390,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:22230/w/cws_fb59b436-46b9-4f27-920e-185d4ce327b3/app-drafts/buchhaltungsanalyse"
+  },
+  {
+    "file": "0012-390-de-dark-page.png",
+    "label": "changed-history",
+    "width": 390,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:22230/w/cws_fb59b436-46b9-4f27-920e-185d4ce327b3/app-drafts/buchhaltungsanalyse"
+  },
+  {
+    "file": "0013-1440-en-light-page.png",
+    "label": "changed-history",
+    "width": 1440,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:22230/w/cws_fb59b436-46b9-4f27-920e-185d4ce327b3/app-drafts/buchhaltungsanalyse"
+  },
+  {
+    "file": "0014-1440-en-dark-page.png",
+    "label": "changed-history",
+    "width": 1440,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:22230/w/cws_fb59b436-46b9-4f27-920e-185d4ce327b3/app-drafts/buchhaltungsanalyse"
+  },
+  {
+    "file": "0015-1440-de-light-page.png",
+    "label": "changed-history",
+    "width": 1440,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:22230/w/cws_fb59b436-46b9-4f27-920e-185d4ce327b3/app-drafts/buchhaltungsanalyse"
+  },
+  {
+    "file": "0016-1440-de-dark-page.png",
+    "label": "changed-history",
+    "width": 1440,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:22230/w/cws_fb59b436-46b9-4f27-920e-185d4ce327b3/app-drafts/buchhaltungsanalyse"
+  },
+  {
+    "file": "0017-390-en-light-page.png",
+    "label": "revert-history",
+    "width": 390,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:22230/w/cws_fb59b436-46b9-4f27-920e-185d4ce327b3/app-drafts/fahrtenbuch"
+  },
+  {
+    "file": "0018-390-en-dark-page.png",
+    "label": "revert-history",
+    "width": 390,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:22230/w/cws_fb59b436-46b9-4f27-920e-185d4ce327b3/app-drafts/fahrtenbuch"
+  },
+  {
+    "file": "0019-390-de-light-page.png",
+    "label": "revert-history",
+    "width": 390,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:22230/w/cws_fb59b436-46b9-4f27-920e-185d4ce327b3/app-drafts/fahrtenbuch"
+  },
+  {
+    "file": "0020-390-de-dark-page.png",
+    "label": "revert-history",
+    "width": 390,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:22230/w/cws_fb59b436-46b9-4f27-920e-185d4ce327b3/app-drafts/fahrtenbuch"
+  },
+  {
+    "file": "0021-1440-en-light-page.png",
+    "label": "revert-history",
+    "width": 1440,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:22230/w/cws_fb59b436-46b9-4f27-920e-185d4ce327b3/app-drafts/fahrtenbuch"
+  },
+  {
+    "file": "0022-1440-en-dark-page.png",
+    "label": "revert-history",
+    "width": 1440,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:22230/w/cws_fb59b436-46b9-4f27-920e-185d4ce327b3/app-drafts/fahrtenbuch"
+  },
+  {
+    "file": "0023-1440-de-light-page.png",
+    "label": "revert-history",
+    "width": 1440,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:22230/w/cws_fb59b436-46b9-4f27-920e-185d4ce327b3/app-drafts/fahrtenbuch"
+  },
+  {
+    "file": "0024-1440-de-dark-page.png",
+    "label": "revert-history",
+    "width": 1440,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:22230/w/cws_fb59b436-46b9-4f27-920e-185d4ce327b3/app-drafts/fahrtenbuch"
+  },
+  {
+    "file": "0025-390-en-light-page.png",
+    "label": "changed",
+    "width": 390,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:22230/w/cws_fb59b436-46b9-4f27-920e-185d4ce327b3/app-drafts/buchhaltungsanalyse"
+  },
+  {
+    "file": "0026-390-en-dark-page.png",
+    "label": "changed",
+    "width": 390,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:22230/w/cws_fb59b436-46b9-4f27-920e-185d4ce327b3/app-drafts/buchhaltungsanalyse"
+  },
+  {
+    "file": "0027-390-de-light-page.png",
+    "label": "changed",
+    "width": 390,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:22230/w/cws_fb59b436-46b9-4f27-920e-185d4ce327b3/app-drafts/buchhaltungsanalyse"
+  },
+  {
+    "file": "0028-390-de-dark-page.png",
+    "label": "changed",
+    "width": 390,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:22230/w/cws_fb59b436-46b9-4f27-920e-185d4ce327b3/app-drafts/buchhaltungsanalyse"
+  },
+  {
+    "file": "0029-1440-en-light-page.png",
+    "label": "changed",
+    "width": 1440,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:22230/w/cws_fb59b436-46b9-4f27-920e-185d4ce327b3/app-drafts/buchhaltungsanalyse"
+  },
+  {
+    "file": "0030-1440-en-dark-page.png",
+    "label": "changed",
+    "width": 1440,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:22230/w/cws_fb59b436-46b9-4f27-920e-185d4ce327b3/app-drafts/buchhaltungsanalyse"
+  },
+  {
+    "file": "0031-1440-de-light-page.png",
+    "label": "changed",
+    "width": 1440,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:22230/w/cws_fb59b436-46b9-4f27-920e-185d4ce327b3/app-drafts/buchhaltungsanalyse"
+  },
+  {
+    "file": "0032-1440-de-dark-page.png",
+    "label": "changed",
+    "width": 1440,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:22230/w/cws_fb59b436-46b9-4f27-920e-185d4ce327b3/app-drafts/buchhaltungsanalyse"
+  },
+  {
+    "file": "0033-390-en-light-page.png",
+    "label": "list",
+    "width": 390,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:22230/w/cws_fb59b436-46b9-4f27-920e-185d4ce327b3/apps"
+  },
+  {
+    "file": "0034-390-en-dark-page.png",
+    "label": "list",
+    "width": 390,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:22230/w/cws_fb59b436-46b9-4f27-920e-185d4ce327b3/apps"
+  },
+  {
+    "file": "0035-390-de-light-page.png",
+    "label": "list",
+    "width": 390,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:22230/w/cws_fb59b436-46b9-4f27-920e-185d4ce327b3/apps"
+  },
+  {
+    "file": "0036-390-de-dark-page.png",
+    "label": "list",
+    "width": 390,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:22230/w/cws_fb59b436-46b9-4f27-920e-185d4ce327b3/apps"
+  },
+  {
+    "file": "0037-1440-en-light-page.png",
+    "label": "list",
+    "width": 1440,
+    "locale": "en",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:22230/w/cws_fb59b436-46b9-4f27-920e-185d4ce327b3/apps"
+  },
+  {
+    "file": "0038-1440-en-dark-page.png",
+    "label": "list",
+    "width": 1440,
+    "locale": "en",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:22230/w/cws_fb59b436-46b9-4f27-920e-185d4ce327b3/apps"
+  },
+  {
+    "file": "0039-1440-de-light-page.png",
+    "label": "list",
+    "width": 1440,
+    "locale": "de",
+    "theme": "light",
+    "position": "page",
+    "url": "http://127.0.0.1:22230/w/cws_fb59b436-46b9-4f27-920e-185d4ce327b3/apps"
+  },
+  {
+    "file": "0040-1440-de-dark-page.png",
+    "label": "list",
+    "width": 1440,
+    "locale": "de",
+    "theme": "dark",
+    "position": "page",
+    "url": "http://127.0.0.1:22230/w/cws_fb59b436-46b9-4f27-920e-185d4ce327b3/apps"
+  }
+]
