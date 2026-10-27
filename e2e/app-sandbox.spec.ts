@@ -52,24 +52,56 @@ function appFrame(page: Page): FrameLocator {
   return page.getByTestId("page-preview-frame").contentFrame().frameLocator("iframe");
 }
 
-test("agent-style localStorage renders, survives reloads and stays private to the person and App", async ({
+test("kit storage survives reloads and stays private to the person and App; browser storage is refused at save", async ({
   page,
   browser,
   baseURL,
   pageErrors
-}, testInfo) => {
+}) => {
   test.setTimeout(180_000);
   await signIn(page, admin);
+  // APPRULES-1: the build refuses browser storage and names the kit's storage as the fix.
+  const refusedName = `sandbox-${randomUUID().slice(0, 8)}`;
+  const workspace = await requestWithOrigin(page, "post", `${apiOrigin}/api/v1/workspaces`, {
+    data: { name: `Sandbox ${randomUUID()}` }
+  });
+  expect(workspace.ok()).toBe(true);
+  const refused = await requestWithOrigin(
+    page,
+    "put",
+    `${apiOrigin}/api/v1/assets/app/${refusedName}`,
+    {
+      data: {
+        workspaceId: z.object({ id: z.string() }).parse(await workspace.json()).id,
+        expectedRevision: null,
+        files: [
+          {
+            path: "app.yaml",
+            text: `id: ${refusedName}\nname: Refused\nkit: 1.6.0\nentry: index.html\n`
+          },
+          {
+            path: "index.html",
+            text: '<!doctype html><title>Refused</title><script type="module" src="./main.js"></script>'
+          },
+          {
+            path: "main.js",
+            text: 'document.title = localStorage.getItem("leave-date") || "No date";'
+          }
+        ]
+      },
+      timeout: 90_000
+    }
+  );
+  expect(refused.ok()).toBe(false);
+  expect(await refused.text()).toContain("browser_storage");
+
   const app = await saveApp(
     page,
-    '<h1>Leave requests</h1><p id="saved"></p><output id="burst"></output><button id="save">Keep date</button><button id="kit">Save with kit</button><output id="kit-result"></output>',
+    '<h1>Leave requests</h1><p id="saved"></p><button id="save">Keep date</button>',
     `import { storage } from "@work-shape/catalyst-app-kit";
-// The pattern agents and customers write: reading storage at module evaluation must not throw.
-const current = window.localStorage.getItem("leave-date") || "No date";
-document.querySelector("#saved").textContent = current;
-document.querySelector("#burst").textContent = localStorage.getItem("burst") || "";
-document.querySelector("#save").addEventListener("click", () => { for (let index = 0; index < 100; index++) { if (index % 2 === 0) localStorage.setItem("burst", String(index)); else localStorage.setItem("leave-date", index === 99 ? "2026-11-01" : String(index)); } document.querySelector("#saved").textContent = "2026-11-01"; });
-document.querySelector("#kit").addEventListener("click", async () => { await storage.set("filters", { status: "open" }); document.querySelector("#kit-result").textContent = JSON.stringify(await storage.get("filters")); });`
+const saved = document.querySelector("#saved");
+saved.textContent = (await storage.get("leave-date")) ?? "No date";
+document.querySelector("#save").addEventListener("click", async () => { await storage.set("leave-date", "2026-11-01"); saved.textContent = (await storage.get("leave-date")) ?? "No date"; });`
   );
   const otherContext = await browser.newContext({ baseURL });
   await pageErrors.watch(otherContext);
@@ -90,7 +122,7 @@ document.querySelector("#kit").addEventListener("click", async () => { await sto
     const publishedPath = `/w/${app.workspaceId}/apps/${app.name}`;
     await page.goto(publishedPath);
     await expect(appFrame(page).locator("#saved")).toHaveText("No date");
-    // A persistence response, not a sleep or the optimistic DOM change, is the reload barrier.
+    // A persistence response, not a sleep or the DOM change, is the reload barrier.
     const kept = page.waitForResponse(
       (response) =>
         response.url().endsWith("/storage") &&
@@ -98,22 +130,13 @@ document.querySelector("#kit").addEventListener("click", async () => { await sto
         response.status() === 200
     );
     await appFrame(page).getByRole("button", { name: "Keep date" }).click();
-    const saved = await kept;
-    expect(saved.request().postDataJSON()).toMatchObject({
-      mutation: { type: "batch", clear: false, values: { burst: "98", "leave-date": "2026-11-01" } }
-    });
-    expect(saved.headers()["operation-run-id"]).toBeTruthy();
+    await kept;
+    await expect(appFrame(page).locator("#saved")).toHaveText("2026-11-01");
     await page.reload();
     await expect(appFrame(page).locator("#saved")).toHaveText("2026-11-01");
-    await expect(appFrame(page).locator("#burst")).toHaveText("98");
-    await appFrame(page).getByRole("button", { name: "Save with kit" }).click();
-    await expect(appFrame(page).locator("#kit-result")).toHaveText('{"status":"open"}');
-    if (process.env.E2E_SHOTS_DIR) {
-      await page.screenshot({ path: testInfo.outputPath("accept-fix-2-storage.png") });
-    }
     await otherPage.goto(publishedPath);
     await expect(appFrame(otherPage).locator("#saved")).toHaveText("No date");
-    // A new browser session of the same person reads the server snapshot, too.
+    // A new browser session of the same person reads the server's value, too.
     const samePerson = await browser.newContext({ baseURL });
     try {
       await pageErrors.watch(samePerson);
@@ -127,8 +150,8 @@ document.querySelector("#kit").addEventListener("click", async () => { await sto
     const second = await saveApp(
       page,
       '<p id="saved"></p>',
-      'document.querySelector("#saved").textContent = localStorage.getItem("leave-date") || "No date";',
-      "1.1.0"
+      `import { storage } from "@work-shape/catalyst-app-kit";
+document.querySelector("#saved").textContent = (await storage.get("leave-date")) ?? "No date";`
     );
     await page.goto(second.path);
     await expect(appFrame(page).locator("#saved")).toHaveText("No date");
