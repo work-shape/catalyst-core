@@ -541,8 +541,9 @@ export function AppEditFrame({
                 <Badge size="sm">{t("apps.draft")}</Badge>
               )
             }
-            // A draft nobody published says so whatever the room: it runs nowhere yet.
-            keepState={known && publishedRevision === undefined}
+            // What is live and whether the draft changed since stay in view whatever the room:
+            // at a phone's width they take their own line above the tabs.
+            keepState={known}
             backHref={workspaceRoutePath({ kind: "apps", collaborationWorkspaceId: workspace.id })}
             onBack={onBack}
             secondaryActions={
