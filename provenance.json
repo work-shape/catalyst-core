@@ -1,0 +1,53 @@
+{
+  "routes": [
+    "/",
+    "/build/agents",
+    "/build/connections",
+    "/build/data-stores",
+    "/build/guardrails",
+    "/build/knowledge-bases",
+    "/build/skills",
+    "/inbox",
+    "/settings/instance/access",
+    "/settings/instance/api-access",
+    "/settings/instance/audit",
+    "/settings/instance/infrastructure",
+    "/settings/instance/jobs",
+    "/settings/instance/limits",
+    "/settings/instance/modules",
+    "/settings/instance/operations",
+    "/settings/instance/usage",
+    "/settings/instance/users",
+    "/settings/instance/workspaces",
+    "/settings/workspace/general",
+    "/settings/workspace/members",
+    "/settings/workspace/usage",
+    "/settings/you/api-keys",
+    "/settings/you/confirmations",
+    "/settings/you/connect",
+    "/settings/you/connections",
+    "/settings/you/language-appearance",
+    "/settings/you/profile",
+    "/settings/you/security",
+    "/settings/you/usage",
+    "/w/{workspace}/agents",
+    "/w/{workspace}/apps",
+    "/w/{workspace}/workflows"
+  ],
+  "required": [],
+  "states": [
+    {
+      "name": "capture",
+      "setup": "/Users/felixpahlke/code/catalyst/tmp/lane/preview-see-2/shots-state.mjs"
+    },
+    {
+      "name": "capture-open",
+      "setup": "/Users/felixpahlke/code/catalyst/tmp/lane/preview-see-2/shots-state-open.mjs"
+    }
+  ],
+  "modules": [],
+  "pr": 125,
+  "head": "2aef71f50774e46a2d04196d7fbd4eaf0db18db1",
+  "base": "acaa9536c981b368e2d4805fc15c6109b9e5ced6",
+  "tested": "0885320ace7aec631ed91116a46efd83189109ec"
+}
