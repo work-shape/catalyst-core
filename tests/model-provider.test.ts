@@ -4,7 +4,8 @@ import {
   DeterministicModelProvider,
   OPENAI_RESPONSES_STRING_MAX_CHARS,
   OpenAiCompatibleChatProvider,
-  type ModelAdapterStreamEvent
+  type ModelAdapterStreamEvent,
+  type ModelMessage
 } from "@work-shape/catalyst-model-provider";
 import { ServerSentEventDataLineParser } from "../packages/model-provider/src/openai-compatible-stream";
 
@@ -1875,6 +1876,33 @@ describe("OpenAI-compatible model provider", () => {
     expect(again.toolCalls).toMatchObject([{ toolName: "connection.mail.list", input: {} }]);
     const other = await complete(refusedTurn('{"message":"operation_disabled"}'));
     expect(other.toolCalls).toEqual([]);
+  });
+
+  it("reads a deterministic command's input without the note the run added after it", async () => {
+    // Fails without the change: a later preview report the run added to the person's message
+    // (PREVIEW-STATUS-1) made the command's input invalid JSON, so the call wrote nothing.
+    const complete = (content: ModelMessage["content"]) =>
+      new DeterministicModelProvider("local").complete({
+        providerId: "local",
+        model: "deterministic-local",
+        messages: [{ role: "user", content }],
+        tools: [{ name: "notes.record", description: "Records a note" }]
+      });
+    const note = "Later preview report of revision 1: loaded, bridge connected, no errors.";
+    const command = '/tool notes.record {"text":"a } and a \\" in it","rows":[1,{"n":2}]}';
+    const input = { text: 'a } and a " in it', rows: [1, { n: 2 }] };
+
+    const inText = await complete(`${command}\n\n${note}`);
+    expect(inText.toolCalls).toMatchObject([{ toolName: "notes.record", input }]);
+    expect(inText.toolCalls[0]?.inputParseError).toBeUndefined();
+    const inPart = await complete([
+      { type: "text", text: command },
+      { type: "text", text: note }
+    ]);
+    expect(inPart.toolCalls).toMatchObject([{ toolName: "notes.record", input }]);
+    // A broken input stays broken.
+    const broken = await complete('/tool notes.record {"text":');
+    expect(broken.toolCalls[0]?.inputParseError?.code).toBe("invalid_json");
   });
 
   it("streams the deterministic provider's answer in pieces", async () => {

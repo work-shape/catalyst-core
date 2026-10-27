@@ -166,8 +166,35 @@ function parseToolCommand(content: string, tools: ModelTool[]): ModelToolCall | 
   return {
     toolCallId: createPlatformId("toolcall"),
     toolName,
-    ...parseToolInput(json || "{}")
+    ...parseToolInput(leadingJson(json) || "{}")
   };
+}
+
+/**
+ * The input a command names: its first JSON object or array. What follows is no part of it,
+ * such as a note the run added to the person's message before the request (a later preview
+ * report). Other text is read whole, so a broken input stays a broken input.
+ */
+function leadingJson(text: string): string {
+  if (!text.startsWith("{") && !text.startsWith("[")) return text;
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let index = 0; index < text.length; index += 1) {
+    const character = text[index];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (character === "\\") escaped = true;
+      else if (character === '"') inString = false;
+    } else if (character === '"') {
+      inString = true;
+    } else if (character === "{" || character === "[") {
+      depth += 1;
+    } else if ((character === "}" || character === "]") && --depth === 0) {
+      return text.slice(0, index + 1);
+    }
+  }
+  return text;
 }
 
 /** What a call of a personal Connection is refused with while the person has not signed in. */

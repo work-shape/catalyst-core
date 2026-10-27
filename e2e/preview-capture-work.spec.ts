@@ -241,6 +241,34 @@ function thumbnail(scope: Locator): Locator {
   return scope.getByTestId("preview-capture-thumbnail");
 }
 
+/**
+ * Where `target` stands once the page's animations that end have ended and two looks a moment
+ * apart agree. A slow browser is still opening the run's work when the row is first visible.
+ */
+async function settledBox(
+  target: Locator
+): Promise<{ x: number; y: number; width: number; height: number } | null> {
+  await target.evaluate((node) =>
+    Promise.all(
+      node.ownerDocument
+        .getAnimations()
+        .filter((animation) => animation.effect?.getComputedTiming().endTime !== Infinity)
+        .map((animation) => animation.finished.catch(() => undefined))
+    )
+  );
+  let last = await target.boundingBox();
+  await expect
+    .poll(async () => {
+      await target.page().waitForTimeout(200);
+      const now = await target.boundingBox();
+      const still = JSON.stringify(now) === JSON.stringify(last);
+      last = now;
+      return still;
+    })
+    .toBe(true);
+  return last;
+}
+
 /** Whether the picture in `scope` decoded at the size the run took it. */
 async function expectDecoded(scope: Locator): Promise<void> {
   const image = scope.locator("img").first();
@@ -373,14 +401,16 @@ test("a picture that answers late keeps its place, and the run's work scrolls to
   // While the picture is on its way the frame holds its room and opens nothing.
   await expect(button).toBeVisible();
   await expect(button).toBeDisabled();
-  const waiting = await button.boundingBox();
+  // The run's work opens with an animation that moves the rows: its place is taken once it
+  // stands still, so only the picture can move it.
+  const waiting = await settledBox(button);
   await page.waitForTimeout(1_000);
   await expect(button).toBeDisabled();
   await expect(button.locator("img")).toHaveCount(0);
   release();
   await expectDecoded(button);
   await expect(button).toBeEnabled();
-  expect(await button.boundingBox()).toEqual(waiting);
+  expect(await settledBox(button)).toEqual(waiting);
 
   // Scrolled to the end, the last refusal stands whole above the composer.
   const thread = page.locator(".chat-thread-inset");
