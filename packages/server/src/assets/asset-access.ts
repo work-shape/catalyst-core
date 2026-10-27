@@ -40,6 +40,8 @@ export interface AssetCall {
    * writes says so, and the history names it the agent's.
    */
   agentConversationId?: ConversationId;
+  /** The agent making the tool call, used to snapshot its display name on save. */
+  agentName?: string;
   /** The workspace the call is made in: the conversation's for a call of an agent. */
   workspaceId?: CollaborationWorkspaceId;
   /** The language the request names, where a person's request made the call. */

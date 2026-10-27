@@ -382,6 +382,7 @@ export function AppEdit({ app }: { app: string }) {
       ) : null}
       {draft !== undefined ? (
         <RevisionsDrawer
+          key={asset?.id}
           open={revisionsOpen}
           name={name}
           draftRevision={draft}

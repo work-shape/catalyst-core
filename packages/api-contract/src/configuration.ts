@@ -287,9 +287,8 @@ export const configAssetConfigSchema = z.record(z.string(), z.unknown());
 
 export const configAssetRevisionSchema = z.object({
   /**
-   * The id of the asset the revision counts. It stays the same from the first revision to
-   * the delete and across a name that is created again, so a caller that keeps it knows a
-   * later asset of the same name and number for another one.
+   * The identity of the asset the revision counts. An App deleted and created again under
+   * the same name has another id, even when its revision numbers start at 1 again.
    */
   assetId: z.string(),
   revision: z.number().int().positive(),
@@ -310,9 +309,14 @@ export const configAssetRevisionSchema = z.object({
         /** The number of the Page revision the files were copied from. */
         fileSetNumber: z.number().int().positive(),
         /** The conversation's agent saved the Page, not a person from its preview. */
-        byAgent: z.literal(true).optional()
+        byAgent: z.literal(true).optional(),
+        agentDisplayName: z.string().optional()
       }),
-      z.object({ kind: z.literal("agent_run"), conversationId: z.string() })
+      z.object({
+        kind: z.literal("agent_run"),
+        conversationId: z.string(),
+        agentDisplayName: z.string().optional()
+      })
     ])
     .optional(),
   globalVersion: z.number().int().positive(),
@@ -329,7 +333,8 @@ export const configAssetPublicationSchema = z.object({
   revision: z.number().int().positive(),
   /** Null where it is not known, as for a publish from before the versions were recorded. */
   actor: auditActorSchema.nullable(),
-  publishedAt: timestampSchema,
+  /** Absent where the historical publish time is unknown. */
+  publishedAt: timestampSchema.optional(),
   note: z.string().optional()
 });
 

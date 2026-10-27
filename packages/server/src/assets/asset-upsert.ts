@@ -1,3 +1,4 @@
+import { agentConfigSchema, resolveLocalizedString } from "@work-shape/catalyst-config-schema";
 import { assertReferencesWithinOwners } from "./asset-owner-references";
 import {
   AppError,
@@ -208,6 +209,9 @@ export async function upsertAsset(
     ...(write.availableIn === undefined ? {} : { availableIn: write.availableIn }),
     ...(target.address.workspaceId === undefined ? {} : { madeIn: target.address.workspaceId })
   });
+  const savingAgent = agentConfigSchema.safeParse(
+    call.agentName === undefined ? undefined : findDefinition(stored.set, "agent", call.agentName)
+  );
   let pageLinked = false;
   const { pageLink } = write;
   const result = await host.apply(
@@ -223,7 +227,17 @@ export async function upsertAsset(
       // The default is set for the first asset only, so the instance has none before.
       ...(setsDefault ? { baseDefaultAgentName: null } : {}),
       ...placement,
-      ...revisionOrigin(call, write.origin),
+      ...revisionOrigin(
+        call,
+        write.origin,
+        !savingAgent.success
+          ? undefined
+          : resolveLocalizedString(
+              savingAgent.data.displayName,
+              call.runtime?.locale ?? options.config.localization.defaultLocale,
+              options.config.localization.defaultLocale
+            )
+      ),
       mutations
     },
     { previous: current, config: toJsonObject(next) }
@@ -277,10 +291,12 @@ export async function upsertAsset(
  */
 function revisionOrigin(
   call: AssetCall,
-  origin: ConfigAssetRevisionOrigin | undefined
+  origin: ConfigAssetRevisionOrigin | undefined,
+  agentDisplayName: string | undefined
 ): { origin?: ConfigAssetRevisionOrigin } {
   const conversationId = call.agentConversationId;
   if (conversationId === undefined) return origin ? { origin } : {};
-  if (origin === undefined) return { origin: { kind: "agent_run", conversationId } };
-  return { origin: origin.kind === "page" ? { ...origin, byAgent: true } : origin };
+  const agent = agentDisplayName ? { agentDisplayName } : {};
+  if (origin === undefined) return { origin: { kind: "agent_run", conversationId, ...agent } };
+  return { origin: origin.kind === "page" ? { ...origin, byAgent: true, ...agent } : origin };
 }

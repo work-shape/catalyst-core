@@ -460,6 +460,10 @@ describe("the draft of an App (layout 3)", () => {
     expect(
       draftLine(headed({ liveVersion: { number: 1, publishedAt: "2026-10-12T14:05:00.000Z" } }))
     ).toBe("Draft · reads live data · changes are simulated");
+    const undated = headed({ liveVersion: { number: 1 } });
+    expect(undated).toContain("Live: version 1");
+    expect(undated).not.toContain("· since");
+    expect(headed({ liveVersion: { number: 1 } }, "de")).not.toContain("· seit");
     // A draft never published says so in the head, and the line says what a draft does.
     const never = headed({ publishedRevision: undefined }, "de");
     expect(never).toContain("Entwurf · noch nicht veröffentlicht");
@@ -635,7 +639,9 @@ describe("the history of an App", () => {
     publication(1, 1, 1)
   ];
   const revisions = [
-    revision(5, { origin: { kind: "agent_run", conversationId: "conv_1" } }),
+    revision(5, {
+      origin: { kind: "agent_run", conversationId: "conv_1", agentDisplayName: "Report assistant" }
+    }),
     revision(4),
     revision(3),
     revision(2, {
@@ -729,7 +735,7 @@ describe("the history of an App", () => {
     expect(markup).not.toContain("before version 1");
     // A save a version made live is that version's row, not a draft save as well.
     expect(markup).not.toMatch(/data-revision="[13]"/u);
-    expect(markup).toContain("Workshaper for Jana Petersen");
+    expect(markup).toContain("Report assistant for Jana Petersen");
     expect(markup).toMatch(/data-revision="2"(?:(?!data-revision).)*Saved from the preview/u);
     expect(markup).toMatch(/data-revision="5"(?:(?!data-revision).)*>Draft</u);
     expect(markup).not.toMatch(/Version [45]/u);
@@ -737,8 +743,59 @@ describe("the history of an App", () => {
     const german = drawer(undefined, "de");
     expect(german).toContain("Veröffentlicht von Jana Petersen · ");
     expect(german).toContain(">1 Entwurfsstand<");
-    expect(german).toContain("Workshaper für Jana Petersen");
+    expect(german).toContain("Report assistant für Jana Petersen");
     expect(german).toContain("Aus der Vorschau gespeichert");
+  });
+
+  it("keeps old agent saves neutral and does not infer chronology from an unknown publish time", () => {
+    const unknown = { ...publication(1, 2, 2), publishedAt: undefined };
+    const saves = [
+      revision(4, { origin: { kind: "agent_run", conversationId: "conv_old" } }),
+      revision(3, {
+        origin: {
+          kind: "page",
+          conversationId: "conv_old",
+          pageId: "page_1",
+          fileSetNumber: 1,
+          byAgent: true,
+          agentDisplayName: "Page helper"
+        }
+      }),
+      revision(2),
+      revision(1)
+    ];
+    expect(appHistory([unknown], saves, true)).toEqual({
+      versions: [{ publication: unknown, saves: [] }],
+      before: [saves[0], saves[1], saves[3]]
+    });
+    for (const locale of ["en", "de"] as const) {
+      const markup = render(
+        createElement(RevisionsDrawerView, {
+          open: true,
+          name: "Angebotsrechner",
+          publications: [unknown],
+          revisions: saves,
+          failed: false,
+          hasMore: false,
+          loadingMore: false,
+          draftRevision: 4,
+          publishedRevision: 2,
+          onLoadMore() {},
+          onRetry() {},
+          onClose() {}
+        }),
+        locale
+      );
+      expect(markup).toContain(
+        locale === "en" ? "Agent for Jana Petersen" : "Agent für Jana Petersen"
+      );
+      expect(markup).toContain(
+        locale === "en" ? "Page helper for Jana Petersen" : "Page helper für Jana Petersen"
+      );
+      expect(markup).not.toContain("Workshaper");
+      expect(markup).not.toContain("Invalid Date");
+      expect(markup).not.toMatch(/before version 1|vor Version 1/u);
+    }
   });
 
   it("lets a holder of the publish right publish every save and version but the live one", () => {

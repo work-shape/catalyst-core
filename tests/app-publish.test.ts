@@ -12,6 +12,7 @@ import {
   withScopes,
   type AppInstance
 } from "./support/app-instance";
+import { withTestSql } from "./support/test-sql";
 import type { TestCallInput, TestOperationName } from "./support/operations";
 
 afterEach(() => vi.useRealTimers());
@@ -283,6 +284,73 @@ describe("an App with a draft and a published revision", () => {
       403
     );
     expectStatus(await read(t.lena.id), 403);
+  });
+
+  it("starts a recreated App's history with its new identity, even under the same name", async () => {
+    const name = "recreated-history";
+    await created(name, "old App");
+    const old = await stored(name);
+    if (!old) throw new Error("Missing old App");
+    expectStatus(await t.publish(t.admin.id, name, 1), 200);
+    expectStatus(await t.publish(t.admin.id, name, 1), 200);
+    await t.expectOk(t.admin.id, "assets.delete", {
+      params: { kind: "app", name },
+      payload: { expectedRevision: 1, workspaceId: t.workspaceId }
+    });
+    await created(name, "new App");
+    const fresh = await stored(name);
+    if (!fresh) throw new Error("Missing new App");
+    expect(fresh.id).not.toBe(old.id);
+    const history = async () =>
+      (
+        await t.expectOk(t.admin.id, "assets.publications.list", {
+          params: { kind: "app", name },
+          query: { workspaceId: t.workspaceId }
+        })
+      ).json<{ items: { number: number }[] }>().items;
+    expect(await history()).toEqual([]);
+    expect(
+      await t.stores.configAssets.listConfigAssetPublications({ clientInstanceId, assetId: old.id })
+    ).toEqual([]);
+    const revisions = await t.stores.configAssets.listConfigAssetRevisions({
+      clientInstanceId,
+      kind: "app",
+      name
+    });
+    expect(revisions).toHaveLength(1);
+    expect(revisions[0]).toMatchObject({ assetId: fresh.id, revision: 1 });
+    expectStatus(await t.publish(t.admin.id, name, 1), 200);
+    expect((await history()).map(({ number }) => number)).toEqual([1]);
+  });
+
+  it("omits an unknown publication date from the history and live version, then dates a new publish", async () => {
+    const name = "unknown-publish-time";
+    await created(name, "historical App");
+    expectStatus(await t.publish(t.admin.id, name, 1), 200);
+    const app = await stored(name);
+    await withTestSql(async (sql) => {
+      await sql`UPDATE config_asset_publications SET published_at_known = false WHERE asset_id = ${app?.id ?? ""}`;
+    });
+    const read = async () =>
+      (
+        await t.expectOk(t.admin.id, "assets.get", {
+          params: { kind: "app", name },
+          query: { workspaceId: t.workspaceId }
+        })
+      ).json<{ liveVersion: { number: number; publishedAt?: string } }>();
+    const history = (
+      await t.expectOk(t.admin.id, "assets.publications.list", {
+        params: { kind: "app", name },
+        query: { workspaceId: t.workspaceId }
+      })
+    ).json<{ items: { publishedAt?: string }[] }>();
+    expect(history.items[0]).not.toHaveProperty("publishedAt");
+    expect((await read()).liveVersion).not.toHaveProperty("publishedAt");
+    expectStatus(await t.publish(t.admin.id, name, 1), 200);
+    expect((await read()).liveVersion).toMatchObject({
+      number: 2,
+      publishedAt: expect.any(String)
+    });
   });
 
   it("names a publisher whose account is gone as a deleted account", async () => {

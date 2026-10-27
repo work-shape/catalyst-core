@@ -13,7 +13,7 @@ interface AppHistoryVersion {
 /** The history of an App as far as it was read: its versions, the newest first. */
 export interface AppHistory {
   versions: AppHistoryVersion[];
-  /** The saves before the first publish that it did not make live, once it was read. */
+  /** Unpublished saves before the first known publish, or of uncertain chronology. */
   before: ConfigAssetRevision[];
 }
 
@@ -39,7 +39,8 @@ export function appHistory(
     if (published.has(revision.revision)) continue;
     const saved = Date.parse(revision.createdAt);
     const version = versions.find(
-      ({ publication }) => Date.parse(publication.publishedAt) <= saved
+      ({ publication }) =>
+        publication.publishedAt !== undefined && Date.parse(publication.publishedAt) <= saved
     );
     if (version) version.saves.push(revision);
     else if (publicationsComplete) before.push(revision);

@@ -39903,8 +39903,7 @@
               }
             },
             "required": [
-              "number",
-              "publishedAt"
+              "number"
             ]
           },
           "draftChangedSinceLive": {
@@ -42053,8 +42052,7 @@
         "required": [
           "number",
           "revision",
-          "actor",
-          "publishedAt"
+          "actor"
         ]
       },
       "ConfigAssetReferences": {
@@ -42241,6 +42239,9 @@
                   "byAgent": {
                     "type": "boolean",
                     "const": true
+                  },
+                  "agentDisplayName": {
+                    "type": "string"
                   }
                 },
                 "required": [
@@ -42258,6 +42259,9 @@
                     "const": "agent_run"
                   },
                   "conversationId": {
+                    "type": "string"
+                  },
+                  "agentDisplayName": {
                     "type": "string"
                   }
                 },

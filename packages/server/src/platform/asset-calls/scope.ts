@@ -108,7 +108,13 @@ export function createAssetCallScope(options: AssetWorkflowOptions) {
       access: await accessOf(options, context.user),
       audit,
       correlationId: context.correlationId,
-      ...(context.toolRequest ? { agentConversationId: context.toolRequest.conversationId } : {}),
+      ...(context.toolRequest
+        ? {
+            agentConversationId: context.toolRequest.conversationId,
+            agentName: context.toolRequest.agentName
+          }
+        : {}),
+      ...(context.locale ? { runtime: { locale: context.locale } } : {}),
       ...(runId ? { runId } : {})
     };
   }
