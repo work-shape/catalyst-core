@@ -239,6 +239,12 @@ describe("the preview of a draft of a kind that brings one", () => {
       expectedRevision: first.saved ? first.revision : 0,
       files
     });
-    expect(second).toMatchObject({ saved: true, kind: KIND, name: "chat-look", preview: true });
+    expect(second).toMatchObject({
+      saved: true,
+      kind: KIND,
+      name: "chat-look",
+      title: "Sample </script><b>",
+      preview: true
+    });
   });
 });

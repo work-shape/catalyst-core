@@ -1,4 +1,10 @@
-import { AppError, moduleOffError, type ToolExecutionContext } from "@work-shape/catalyst-core";
+import {
+  AppError,
+  moduleOffError,
+  type Conversation,
+  type ConversationSubject,
+  type ToolExecutionContext
+} from "@work-shape/catalyst-core";
 import {
   platformAssetWriteRefusal,
   type PlatformAssetCalls,
@@ -42,6 +48,21 @@ export function putCalls(
   /** Says of a kind that brings a preview that the person sees the draft beside the chat. */
   const previewed = (kind: string) =>
     kindPreviewOf(options, kind) ? { preview: true as const } : {};
+
+  /** What a save of a draft with a preview answers beside its revision: what the card names. */
+  async function previewedSave(
+    context: ToolExecutionContext,
+    conversation: Conversation,
+    saved: ConversationSubject
+  ) {
+    const read = await readAsset(context, conversation, saved);
+    return {
+      kind: saved.kind,
+      name: saved.name,
+      title: titleOf(saved.kind, saved.name, read.config, context.locale),
+      preview: true as const
+    };
+  }
 
   /**
    * A save without a revision: it creates the asset the call names, as `assets.put` with no
@@ -210,7 +231,7 @@ export function putCalls(
               saved: true,
               revision: written.revision,
               ...(kindPreviewOf(options, subject.kind)
-                ? { kind: subject.kind, name: subject.name, preview: true as const }
+                ? await previewedSave(context, conversation, subject)
                 : {})
             };
       } catch (error) {
