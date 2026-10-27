@@ -15,7 +15,8 @@ import {
   type OperationOrigin,
   type PlatformStores,
   type WorkflowManifest,
-  type WorkflowRun
+  type WorkflowRun,
+  type WorkflowRunId
 } from "@work-shape/catalyst-core";
 import { z } from "zod";
 import { indexWorkflowSteps } from "./definition";
@@ -472,12 +473,18 @@ const AGENT_RUN_DEPTH = 8;
  * agent (or one of its subagents) acting in it. Nothing for a call no Workflow run made, such
  * as one of a person, an agent in their chat or an App.
  */
-async function workflowRunOfOrigin(
+export async function workflowRunOfOrigin(
   origin: OperationOrigin,
   deps: Pick<StartReachDeps, "clientInstanceId" | "stores">
-): Promise<string | undefined> {
+): Promise<WorkflowRunId | undefined> {
   const { clientInstanceId } = deps;
-  if (origin.kind === "workflow") return origin.workflowRunId;
+  if (origin.kind === "workflow") {
+    const run = await deps.stores.workflowRuns.readRun({
+      clientInstanceId,
+      id: origin.workflowRunId
+    });
+    return run?.id;
+  }
   if (origin.kind !== "agent") return undefined;
   let runId: AgentRunId | undefined = origin.agentRunId;
   for (let depth = 0; runId !== undefined && depth < AGENT_RUN_DEPTH; depth += 1) {
@@ -496,18 +503,31 @@ async function workflowRunOfOrigin(
 }
 
 /**
- * The run that started this one: its parent, or the Workflow run whose operation step or
- * agent's tool made the call that started it (such a run is one of its own, with no parent).
+ * The run that started this one: the Workflow run whose operation step or agent's tool made
+ * the call that started it (such a run is one of its own, with no parent, and every later
+ * history keeps it), or its parent. A run opened before the starter was kept reads it, as
+ * before, from the Operation Run of its first history's start while that call is kept.
  */
 async function starterOf(
-  run: Pick<WorkflowRun, "parentRunId" | "operationRunId">,
+  run: Pick<WorkflowRun, "id" | "starterRunId" | "parentRunId" | "operationRunId" | "continuation">,
   deps: StartReachDeps
 ): Promise<string | undefined> {
+  if (run.starterRunId !== undefined) return run.starterRunId;
   if (run.parentRunId !== undefined) return run.parentRunId;
-  if (run.operationRunId === undefined) return undefined;
+  let operationRunId = run.operationRunId;
+  const first = run.continuation?.rootRunId;
+  if (operationRunId === undefined && first !== undefined && first !== run.id) {
+    const history = await deps.stores.workflowRuns.readRun({
+      clientInstanceId: deps.clientInstanceId,
+      id: first
+    });
+    if (history?.starterRunId !== undefined) return history.starterRunId;
+    operationRunId = history?.operationRunId;
+  }
+  if (operationRunId === undefined) return undefined;
   const call = await deps.stores.operationRuns.get({
     clientInstanceId: deps.clientInstanceId,
-    id: run.operationRunId
+    id: operationRunId
   });
   return call ? workflowRunOfOrigin(call.origin, deps) : undefined;
 }
@@ -575,13 +595,11 @@ export async function workflowParentReachRefusal(
   for (let runId: string | undefined = startingRunId; runId !== undefined && !seen.has(runId);) {
     seen.add(runId);
     const run = await deps.stores.workflowRuns.readRun({ clientInstanceId, id: runId });
-    if (!run) break;
-    const definition = await deps.stores.workflowRuns.readRunDefinition({
-      clientInstanceId,
-      id: run.id
-    });
-    // A run whose definition cannot be read counts as closed: the rule never guesses open.
-    if (!definition || (await closedReach(definition, deps))) {
+    const definition =
+      run && (await deps.stores.workflowRuns.readRunDefinition({ clientInstanceId, id: run.id }));
+    // A run, or its definition, that cannot be read counts as closed: the rule never guesses
+    // open. A starter the walk names is a run that started this one.
+    if (!run || !definition || (await closedReach(definition, deps))) {
       const { id } = revision.manifest;
       return new AppError(
         "CONFLICT",
@@ -596,26 +614,12 @@ export async function workflowParentReachRefusal(
 }
 
 /**
- * The same refusal for a start by a call a Workflow run made: an operation step's, or an agent
- * step's agent's tool, which hands the run's data on as input as a `workflow` step does.
- */
-export async function workflowOriginReachRefusal(
-  revision: WorkflowDefinitionRevision,
-  origin: OperationOrigin,
-  deps: StartReachDeps
-): Promise<AppError | undefined> {
-  if (!(await publishedByCredential(deps, revision))) return undefined;
-  const starter = await workflowRunOfOrigin(origin, deps);
-  return starter === undefined ? undefined : workflowParentReachRefusal(revision, starter, deps);
-}
-
-/**
  * The same refusal for a run that goes on as a new history (continue-as-new) of a revision a
  * credential published: asked of the runs that started it, as at its first start.
  */
 export async function workflowContinuationReachRefusal(
   revision: WorkflowDefinitionRevision,
-  run: Pick<WorkflowRun, "parentRunId" | "operationRunId">,
+  run: Pick<WorkflowRun, "id" | "starterRunId" | "parentRunId" | "operationRunId" | "continuation">,
   deps: StartReachDeps
 ): Promise<AppError | undefined> {
   if (!(await publishedByCredential(deps, revision))) return undefined;

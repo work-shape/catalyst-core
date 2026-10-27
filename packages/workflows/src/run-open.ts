@@ -15,6 +15,7 @@ import {
   type WorkflowRunId,
   type AuthenticatedUser,
   type ClientInstanceId,
+  type OperationOrigin,
   type OperationRunId,
   type PlatformStores,
   type WorkflowRun,
@@ -25,12 +26,17 @@ import {
 } from "@work-shape/catalyst-core";
 import { workflowDeadlineJobKind, workflowDeadlineKey } from "./run-deadline";
 import { codeStepIssues, workflowStepFilesRefusal, type WorkflowStepFiles } from "./code-step";
-import type { WorkflowDefinitionRevision } from "./definition-source";
+import type { WorkflowDefinitionRevision, WorkflowDefinitionSource } from "./definition-source";
 import { workflowRunBounds, type WorkflowLimitContext } from "./run-limits";
 import type { PreparedStart } from "./run-start";
 import type { RunOrigin } from "./scheduled-start";
 import { workflowResource } from "./workflow-resource";
-import { WORKFLOW_OUTSIDE_TRIGGER, workflowOutsideDatasetRefusal } from "./outside-reach";
+import {
+  WORKFLOW_OUTSIDE_TRIGGER,
+  workflowOutsideDatasetRefusal,
+  workflowParentReachRefusal,
+  workflowRunOfOrigin
+} from "./outside-reach";
 
 // How a run comes to exist: its row, the step run of its trigger and the audit of its start,
 // in one transaction. A start by hand, a test run of a draft and a due time of a schedule all
@@ -55,6 +61,12 @@ export interface StartWorkflowRunInput {
   startedBy: AuthenticatedIdentity;
   /** The Operation Run of the call that starts the run. */
   operationRunId?: OperationRunId;
+  /**
+   * Where the call that starts the run came from, as the operation path recorded it, never
+   * read from a request body. Where it is an operation step of a Workflow run, or an agent
+   * step's agent in one, that run is the new run's starter (WF-OUT).
+   */
+  callOrigin?: OperationOrigin;
   correlationId: string;
   /** Trusted Workflow call origin, never read from a start request body. */
   datasetInputRunId?: WorkflowRunId;
@@ -91,6 +103,7 @@ export function createRunOpening(options: {
   clientInstanceId: ClientInstanceId;
   stores: PlatformStores;
   authorizer: Authorizer;
+  definitions: Pick<WorkflowDefinitionSource, "read">;
   /** What a run's bounds are made from: the defaults, the ceilings and the step slots. */
   limits: WorkflowLimitContext;
   now(): Date;
@@ -299,6 +312,21 @@ export function createRunOpening(options: {
     if (input.key !== undefined && !workflowRunKeySchema.safeParse(input.key).success) {
       throw runKeyRefusal();
     }
+    // An operation step or an agent's tool in a run hands the run's data on as input, as a
+    // `workflow` step does. The run started keeps that run as its starter for every later
+    // history, which neither its Operation Run (not carried on, pruned by age) nor a parent
+    // tells; a revision a credential published starts only under starters whose reach is open.
+    const starterRunId = input.callOrigin
+      ? await workflowRunOfOrigin(input.callOrigin, { clientInstanceId, stores })
+      : undefined;
+    if (starterRunId !== undefined) {
+      const refusal = await workflowParentReachRefusal(revision, starterRunId, {
+        clientInstanceId,
+        stores,
+        definitions: options.definitions
+      });
+      if (refusal) throw refusal;
+    }
     const prepared = await options.prepareStart(revision, input.input, mode);
     const scripts = await codeStepIssues(revision, options.stepFiles);
     if (scripts.length > 0) throw workflowStepFilesRefusal(revision.manifest.id, scripts);
@@ -325,6 +353,7 @@ export function createRunOpening(options: {
                 : {})
             },
             ...(input.operationRunId ? { operationRunId: input.operationRunId } : {}),
+            ...(starterRunId === undefined ? {} : { starterRunId }),
             ...(input.key === undefined ? {} : { runKey: input.key }),
             ...(input.startedFrom ? { startedFrom: input.startedFrom } : {}),
             actor: auditActorFromIdentity(startedBy),

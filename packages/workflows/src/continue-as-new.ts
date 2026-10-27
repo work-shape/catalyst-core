@@ -219,6 +219,9 @@ export function createContinuation(options: {
       trigger: run.trigger,
       startedBy: run.startedBy,
       correlationId: run.correlationId,
+      // The Operation Run of the first history's start stays with it (its id is unique); the
+      // run whose call started it goes on with every history, so the reach walk finds it.
+      ...(run.starterRunId === undefined ? {} : { starterRunId: run.starterRunId }),
       ...(run.runKey === undefined ? {} : { runKey: run.runKey }),
       ...(run.startedFrom === undefined ? {} : { startedFrom: run.startedFrom }),
       labels: run.labels ?? {},

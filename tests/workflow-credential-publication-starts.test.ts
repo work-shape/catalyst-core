@@ -7,7 +7,14 @@ import { operationOf } from "./support/connection-operations";
 import { issuePersonalKey, personalKeyToken } from "./support/personal-api-keys";
 import { runSchema, type WorkflowFixture } from "./support/workflow-instance";
 import { MemoryObjectStorage } from "./support/memory-object-storage";
-import { NOTE, notifyClients, readyWorkflows, stepRunsOf } from "./support/workflow-runs";
+import {
+  NOTE,
+  holdingFirst,
+  notifyClients,
+  reach,
+  readyWorkflows,
+  stepRunsOf
+} from "./support/workflow-runs";
 
 // A Workflow a credential published (a personal API key, a Service Principal's credential or a
 // run) reaches only data open to outside clients (WF-OUT), and the publish asks it once. The
@@ -625,4 +632,305 @@ describe("a continuation of a child a credential published", () => {
     expect(parts.at(-1)?.error).toMatchObject({ code: "reach_person_only" });
     expect(parts.at(-1)?.error?.message).toContain("the Workflow that starts it");
   });
+});
+
+describe("a run an operation step started, after its start call is gone", () => {
+  let open: WorkflowFixture | undefined;
+  const hanging: (() => void)[] = [];
+  afterEach(async () => {
+    for (const letGo of hanging.splice(0)) letGo();
+    await open?.instance.close();
+    open = undefined;
+  });
+
+  const ready = async () => {
+    const t = await readyWorkflows(
+      (fixture) => {
+        open = fixture;
+      },
+      { personalKeys: true, definitions: "assets", datasetObjects: new MemoryObjectStorage() }
+    );
+    await t.allow({ kind: "service_principal", id: t.principal.id }, "workflow.use");
+    t.state.centralSettings = [{ operation: "connection.erp.write", value: "allow" }];
+    const key = await personalKeyToken(t, (await issuePersonalKey(t, SCOPES, t.root.id)).secret);
+    return { t, key };
+  };
+
+  const expose = (t: WorkflowFixture, connection: string, outside: boolean) => {
+    const exposure = outside ? ["workflow", "outside"] : ["workflow"];
+    return t.seed(connection, {
+      displayName: connection,
+      operations: [
+        operationOf("echo", { exposure }),
+        operationOf("write", { effect: "changing", exposure })
+      ]
+    });
+  };
+
+  async function publish(
+    t: WorkflowFixture,
+    manifest: { id: string } & Record<string, unknown>,
+    headers?: Record<string, string>
+  ) {
+    const written = await t.call(t.root.id, "assets.put", {
+      params: { kind: WORKFLOW_ASSET_KIND, name: manifest.id },
+      payload: { config: { name: manifest.id, manifest }, expectedRevision: null },
+      ...(headers ? { headers } : {})
+    });
+    expect(written.statusCode, written.body).toBe(200);
+    const published = await t.call(t.root.id, "assets.publish", {
+      params: { kind: WORKFLOW_ASSET_KIND, name: manifest.id },
+      payload: { revision: revisionSchema.parse(written.json()).revision },
+      ...(headers ? { headers } : {})
+    });
+    expect(published.statusCode, published.body).toBe(200);
+  }
+
+  const CHILD_STEP = {
+    id: "child",
+    name: "Keep them",
+    type: "workflow",
+    workflow: "keep-clients",
+    input: { clients: { value: [] } }
+  };
+
+  /**
+   * Writes erp once per item of its input, five step runs a history, each the next
+   * continuation; then runs `after` in its last history. Started by hand: an operation step
+   * starts it as a run of its own.
+   */
+  const looping = (after: JsonValue[] = []) => ({
+    id: "keep-going",
+    name: "Keep going",
+    runAs: "workflow-runner",
+    limits: { stepRuns: 5 },
+    inputs: {
+      type: "object",
+      properties: { items: { type: "array" }, offset: { type: "integer" } },
+      required: ["items"]
+    },
+    outputs: { type: "object" },
+    steps: [
+      { id: "start", name: "Start", type: "trigger", triggers: [{ kind: "manual" }] },
+      {
+        id: "each",
+        name: "For each",
+        type: "loop",
+        items: { step: "start", path: "input.items" },
+        continueAsNew: { position: "offset" },
+        onItemFailure: "continue",
+        steps: [
+          {
+            id: "send",
+            name: "Write",
+            type: "operation",
+            operation: "connection.erp.write",
+            input: { client: ref("each", "id") }
+          }
+        ]
+      },
+      ...after,
+      { id: "result", name: "Result", type: "output", input: {} }
+    ]
+  });
+
+  /**
+   * Reads `connection`, then starts keep-going by an operation step (no parent link) with
+   * `items` items: one history each.
+   */
+  const starter = (connection: string, items = 8) => ({
+    id: "read-then-start",
+    name: "Read then start",
+    runAs: "workflow-runner",
+    inputs: { type: "object" },
+    outputs: { type: "object" },
+    steps: [
+      { id: "start", name: "Start", type: "trigger", triggers: [{ kind: "manual" }] },
+      {
+        id: "clients",
+        name: "Read the clients",
+        type: "operation",
+        operation: `connection.${connection}.echo`,
+        input: { text: { value: "clients" } }
+      },
+      {
+        id: "go",
+        name: "Start keep-going",
+        type: "operation",
+        operation: "workflow.keep-going.start",
+        input: {
+          items: { value: Array.from({ length: items }, (_, index) => ({ id: `item-${index}` })) }
+        }
+      },
+      { id: "result", name: "Result", type: "output", input: {} }
+    ]
+  });
+
+  const startStarter = async (t: WorkflowFixture) => {
+    const started = await t.call(t.root.id, "workflows.start", {
+      params: { workflow: "read-then-start" },
+      payload: { input: {} }
+    });
+    expect(started.statusCode, started.body).toBe(200);
+    return runSchema.parse(started.json()).id;
+  };
+
+  const histories = async (t: WorkflowFixture) =>
+    (await t.stores.workflowRuns.listRuns({ clientInstanceId, workflow: "keep-going" })).sort(
+      (a, b) => (a.continuation?.number ?? 1) - (b.continuation?.number ?? 1)
+    );
+
+  it("refuses a key's child that its third history starts, under a starter whose reach is closed", async () => {
+    const { t, key } = await ready();
+    await expose(t, "hr", false);
+    await expose(t, "erp", true);
+    // The key publishes the child while nothing starts it.
+    await publish(t, KEEPER, key);
+    await publish(t, looping([CHILD_STEP]));
+    await publish(t, starter("hr", 3));
+    const starterId = await startStarter(t);
+    const worker = t.worker();
+    for (let pass = 0; pass < 300; pass++) {
+      await worker.runDue();
+      if ((await histories(t)).some((run) => run.status === "failed" || run.status === "done"))
+        break;
+    }
+    const parts = await histories(t);
+    expect(parts.map((part) => part.status)).toEqual(["continued", "continued", "failed"]);
+    // Every history keeps the run whose operation step started the first; only the first
+    // keeps that call.
+    expect(parts.map((part) => part.starterRunId)).toEqual([starterId, starterId, starterId]);
+    expect(parts.map((part) => part.operationRunId !== undefined)).toEqual([true, false, false]);
+    const child = (await stepRunsOf(t, parts[2]?.id ?? "")).find((step) => step.stepId === "child");
+    expect(child?.error?.code).toBe("reach_person_only");
+    expect(
+      await t.stores.workflowRuns.listRuns({ clientInstanceId, workflow: "keep-clients" })
+    ).toEqual([]);
+    // The API names no starter run.
+    const read = await t.call(t.root.id, "workflows.get_run", {
+      params: { runId: parts[2]?.id ?? "" }
+    });
+    expect(read.body).not.toContain("starterRunId");
+  }, 60_000);
+
+  it("fails a key's Workflow at its second continuation once the run that started it reads closed data", async () => {
+    const { t, key } = await ready();
+    await expose(t, "crm", true);
+    await expose(t, "erp", true);
+    // The key's Workflow reaches erp, open, and nothing starts it when the key publishes it.
+    await publish(t, looping(), key);
+    await publish(t, starter("crm"));
+    await startStarter(t);
+    const worker = t.worker();
+    for (let pass = 0; pass < 300 && (await histories(t)).length < 2; pass++) await worker.runDue();
+    expect((await histories(t)).map((part) => part.status)).toEqual([
+      "continued",
+      expect.not.stringMatching(/continued|failed|done/u)
+    ]);
+    // The first history's start call is pruned by age: only the starter it kept tells.
+    await t.stores.operationRuns.deleteWithoutConversationOlderThan({
+      clientInstanceId,
+      days: 0,
+      limit: 1000
+    });
+    const call = (await histories(t))[0]?.operationRunId ?? "";
+    expect(await t.stores.operationRuns.get({ clientInstanceId, id: call })).toBeUndefined();
+    // crm's admin takes outside back while the second history runs.
+    await expose(t, "crm", false);
+    for (let pass = 0; pass < 300; pass++) {
+      await worker.runDue();
+      if ((await histories(t)).some((run) => run.status === "failed" || run.status === "done"))
+        break;
+    }
+    const parts = await histories(t);
+    expect(parts.map((part) => part.status)).toEqual(["continued", "continued", "failed"]);
+    expect(parts.at(-1)?.error).toMatchObject({ code: "reach_person_only" });
+    expect(parts.at(-1)?.error?.message).toContain("the Workflow that starts it");
+  }, 60_000);
+
+  it("refuses a key's Workflow that a run starts by the platform's own start operation", async () => {
+    const { t, key } = await ready();
+    await expose(t, "erp", true);
+    await publish(t, looping(), key);
+    // Calls the platform API, which no outside client is open to: its reach is closed.
+    const caller = {
+      id: "start-by-api",
+      name: "Start by API",
+      runAs: "workflow-runner",
+      inputs: { type: "object" },
+      outputs: { type: "object" },
+      steps: [
+        { id: "start", name: "Start", type: "trigger", triggers: [{ kind: "manual" }] },
+        {
+          id: "go",
+          name: "Start keep-going",
+          type: "operation",
+          operation: "workflows.start",
+          input: { workflow: { value: "keep-going" }, input: { value: { items: [] } } }
+        },
+        { id: "result", name: "Result", type: "output", input: {} }
+      ]
+    };
+    await publish(t, caller);
+    const started = await t.call(t.root.id, "workflows.start", {
+      params: { workflow: "start-by-api" },
+      payload: { input: {} }
+    });
+    expect(started.statusCode, started.body).toBe(200);
+    const { id } = runSchema.parse(started.json());
+    expect((await t.finish(id)).status).toBe("failed");
+    const go = (await stepRunsOf(t, id)).find((step) => step.stepId === "go");
+    // A platform operation's refusal keeps its code and names the reason.
+    expect(go?.error).toMatchObject({
+      code: "CONFLICT",
+      message: expect.stringContaining("reach_person_only")
+    });
+    expect(await histories(t)).toEqual([]);
+  }, 60_000);
+
+  it("refuses the child of a run whose start call was pruned, by the starter it kept", async () => {
+    const { t, key } = await ready();
+    await expose(t, "hr", false);
+    await expose(t, "erp", true);
+    await publish(t, KEEPER, key);
+    // Writes erp once, then starts the key's child.
+    await publish(t, {
+      ...looping([CHILD_STEP]),
+      limits: { stepRuns: 100 },
+      steps: [
+        { id: "start", name: "Start", type: "trigger", triggers: [{ kind: "manual" }] },
+        {
+          id: "send",
+          name: "Write",
+          type: "operation",
+          operation: "connection.erp.write",
+          input: { client: { value: "item-0" } }
+        },
+        CHILD_STEP,
+        { id: "result", name: "Result", type: "output", input: {} }
+      ]
+    });
+    await publish(t, starter("hr"));
+    const held = holdingFirst(t, "write", hanging);
+    await startStarter(t);
+    const worker = await reach(t, held.inCall);
+    const [run] = await histories(t);
+    const call = run?.operationRunId ?? "";
+    // The start call has ended and is pruned by age while the run it started goes on.
+    await t.stores.operationRuns.deleteWithoutConversationOlderThan({
+      clientInstanceId,
+      days: 0,
+      limit: 1000
+    });
+    expect(await t.stores.operationRuns.get({ clientInstanceId, id: call })).toBeUndefined();
+    held.letGo();
+    await worker.stop();
+    const ended = await t.finish(run?.id ?? "", t.worker());
+    expect(ended.status).toBe("failed");
+    const child = (await stepRunsOf(t, ended.id)).find((step) => step.stepId === "child");
+    expect(child?.error?.code).toBe("reach_person_only");
+    expect(
+      await t.stores.workflowRuns.listRuns({ clientInstanceId, workflow: "keep-clients" })
+    ).toEqual([]);
+  }, 60_000);
 });

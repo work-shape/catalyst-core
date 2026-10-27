@@ -355,6 +355,9 @@ function registerWorkflowRoutes(
           ...(input.key === undefined ? {} : { key: input.key }),
           startedBy: context.actor,
           operationRunId: context.runId,
+          // An operation step or an agent's tool in a Workflow run calls it too: that run is
+          // the started run's starter (WF-OUT).
+          callOrigin: context.origin,
           correlationId: context.correlationId,
           // An outside client starts only a Workflow exposed to it (connections-and-secrets.md,
           // Exposure to outside clients). Asked here, where the call runs, after any wait.
@@ -764,6 +767,9 @@ function toRunResource(run: WorkflowRunView, includeData = true) {
     principal,
     outputPreview,
     hasAgentSteps: _hasAgentSteps,
+    // The run that started it by a call: the reach check reads it, the API names no run that
+    // the caller may not read.
+    starterRunId: _starter,
     datasets,
     ...resource
   } = run;

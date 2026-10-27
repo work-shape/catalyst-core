@@ -476,7 +476,10 @@ describe("Workflow Child Agent Runs (CR-2)", () => {
         clientInstanceId: f.clientInstanceId,
         workflow: "agent-target"
       })
-    ).toEqual([expect.objectContaining({ mode: "live", operationRunId: call.id })]);
+    ).toEqual([
+      // The run keeps the Workflow run behind the agent's call, for every later history.
+      expect.objectContaining({ mode: "live", operationRunId: call.id, starterRunId: f.runId })
+    ]);
   });
 
   it("refuses an agent's tool start of a Workflow a credential published, from a run whose reach is closed", async () => {

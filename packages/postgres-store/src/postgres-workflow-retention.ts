@@ -86,6 +86,8 @@ const runGovernance = {
   principalLabel: true,
   startedBy: true,
   operationRunId: true,
+  // The id of the run whose call started it: lineage the reach check reads, not a value.
+  starterRunId: true,
   // Names of the App, its revision and its action: governance, not a value of the run.
   startedFrom: true,
   parentRunId: true,

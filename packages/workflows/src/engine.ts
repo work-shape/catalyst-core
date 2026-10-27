@@ -754,6 +754,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     clientInstanceId,
     stores,
     authorizer: operationCalls.deps.authorizer,
+    definitions,
     limits: limitContext,
     now,
     stepFiles,

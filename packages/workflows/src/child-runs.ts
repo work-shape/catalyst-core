@@ -31,7 +31,6 @@ import { childDefinition } from "./child-definition";
 import {
   workflowOutsideBlockers,
   workflowOutsideRefusal,
-  workflowOriginReachRefusal,
   workflowParentReachRefusal
 } from "./outside-reach";
 
@@ -212,14 +211,7 @@ export function createWorkflowStartSource(options: {
         ) {
           // An operation step or an agent's tool in a run hands the run's data on as input,
           // as a `workflow` step does: the agent of an agent step calls with its own origin.
-          if (published) {
-            const refusal = await workflowOriginReachRefusal(published, origin, {
-              clientInstanceId,
-              stores,
-              definitions
-            });
-            if (refusal) throw refusal;
-          }
+          // The start asks the run behind the call, and the run keeps it (run-open.ts).
           const call = await stores.operationRuns.get({ clientInstanceId, id: context.runId });
           const run = await options.start(
             {
@@ -228,6 +220,7 @@ export function createWorkflowStartSource(options: {
               ...(key === undefined ? {} : { key }),
               startedBy: context.actor,
               operationRunId: context.runId,
+              callOrigin: origin,
               correlationId: context.correlationId,
               ...(origin.kind === "workflow" && step?.runId === origin.workflowRunId
                 ? { datasetInputRunId: step.runId }
