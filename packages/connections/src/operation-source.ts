@@ -112,8 +112,9 @@ export function connectionExposureDenial(
 /**
  * Whether the call is a step of a Workflow Run whose root an outside client started: an
  * operation step's, or a tool call of an agent step's Agent Run. What it reads answers that
- * client, so the operation needs `outside` beside its surface's exposure. A step whose run
- * cannot be read counts as answering one: the rule never guesses open.
+ * client, so the operation needs `outside` beside its surface's exposure. A run's rows stay
+ * while its steps call, so a call naming no stored run, such as an agent preview's, is in none;
+ * an agent step whose step run is gone counts as answering one.
  */
 async function answersOutside(
   deps: ConnectionOperationSourceDeps,
@@ -128,8 +129,7 @@ async function answersOutside(
       clientInstanceId,
       runId: origin.agentRunId
     });
-    if (!agentRun) return true;
-    if (!agentRun.workflowStepRunId) return false;
+    if (!agentRun?.workflowStepRunId) return false;
     const step = await stores.workflowRuns.getStepRun({
       clientInstanceId,
       id: agentRun.workflowStepRunId
@@ -140,7 +140,9 @@ async function answersOutside(
     return false;
   }
   const run = await stores.workflowRuns.readRun({ clientInstanceId, id: runId });
-  return !run || (await answersOutsideClient(stores.workflowRuns, clientInstanceId, run));
+  return (
+    run !== undefined && (await answersOutsideClient(stores.workflowRuns, clientInstanceId, run))
+  );
 }
 
 /**
