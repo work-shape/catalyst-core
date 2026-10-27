@@ -556,6 +556,35 @@ export class AssetDraftWorkflow {
   }
 
   /**
+   * What a publish asks before it moves anything: the right, the audience of an App, the
+   * revision and what it lends, and the set as it would be were this revision the asset's
+   * content, checked as a write of it. An App's Publish asks it before it publishes the Data
+   * Stores named with it (GOLIVE-1), so a refusal here publishes none of them.
+   */
+  async checkPublish(
+    call: AssetCall,
+    input: AssetAddress & { revision: number; audience?: AppAudience }
+  ) {
+    const target = await this.host.target(input);
+    const { kind, name } = target;
+    call.access.require(publishAction(kind), target.resource);
+    await this.host.authorizeEditing(call, "put");
+    const asset = requireActive(target);
+    const { audience, personalWorkspace } =
+      kind.kind === "app"
+        ? await prepareAppPublication(this.options, call, asset, input.audience)
+        : { audience: undefined, personalWorkspace: undefined };
+    const revision = await liveRevision(this.options, call, target, input.revision);
+    const stored = await loadStoredAssets(this.options);
+    validateAssetSet(
+      this.options.configAssets.kinds.kinds,
+      withDefinition(stored.set, kind.kind, name, revision.config),
+      withoutDefinition(stored.set, kind.kind, name)
+    );
+    return { target, asset, audience, personalWorkspace, revision };
+  }
+
+  /**
    * Makes one revision the one the asset's users are served, in one transaction. The number is
    * one of this asset; naming an earlier one is the way back. The references of that revision
    * are checked against the instance as it is now, as a write's are.
@@ -564,26 +593,12 @@ export class AssetDraftWorkflow {
     call: AssetCall,
     input: AssetAddress & { revision: number; confirmProcessing?: string; audience?: AppAudience }
   ) {
-    const target = await this.host.target(input);
-    const { kind, name } = target;
-    const right = publishAction(kind);
-    call.access.require(right, target.resource);
-    await this.host.authorizeEditing(call, "put");
-    const asset = requireActive(target);
-    const { audience, personalWorkspace } =
-      kind.kind === "app"
-        ? await prepareAppPublication(this.options, call, asset, input.audience)
-        : { audience: undefined, personalWorkspace: undefined };
-    const revision = await liveRevision(this.options, call, target, input.revision);
-    const { config } = revision;
-    // The set as it would be were this revision the asset's content, checked as a write of it.
-    const stored = await loadStoredAssets(this.options);
-    const without = withoutDefinition(stored.set, kind.kind, name);
-    validateAssetSet(
-      this.options.configAssets.kinds.kinds,
-      withDefinition(stored.set, kind.kind, name, config),
-      without
+    const { target, asset, audience, personalWorkspace, revision } = await this.checkPublish(
+      call,
+      input
     );
+    const { kind, name } = target;
+    const { config } = revision;
     const publishReview = audience ? appPublishReview(asset, kind, config, audience) : undefined;
     const move = (store: Pick<ConfigAssetStore, "publishConfigAssetRevision">) =>
       store.publishConfigAssetRevision({

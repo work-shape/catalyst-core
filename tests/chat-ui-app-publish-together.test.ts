@@ -251,6 +251,26 @@ describe("GOLIVE-1: the App's Publish question names the Data Stores it publishe
     });
   });
 
+  // GOLIVE-1 follow-up: a store an earlier Publish made live, still applying its migrations.
+  it("shows a live store still being updated, in German, and sends it not", () => {
+    const updating = {
+      ...store,
+      name: "kunden",
+      title: "Kunden",
+      publishedRevision: 3,
+      pending: false
+    };
+    const markup = dialog(ready([], [updating]), "de");
+    expect(markup).toContain("Datenspeicher „Kunden“");
+    expect(markup).toContain("Wird umgestellt");
+    expect(markup).not.toContain("Geändert");
+    expect(held(markup)).toBe(false);
+    expect(appPublishTogetherNamed(ready([], [updating, store]))).toEqual({
+      workflows: [],
+      dataStores: [{ name: "pruefergebnisse", revision: 3 }]
+    });
+  });
+
   it("reads the stores an agent's publish names, for its confirmation", () => {
     expect(
       appPublishCall({

@@ -234,3 +234,61 @@ export function requireStoreLevels(stores: readonly StorePublishedWith[]): void 
     }
   }
 }
+
+/** A Data Store the App's revision binds whose live revision is still being applied. */
+export interface StoreStillMigrating {
+  name: string;
+  title: string;
+  asset: ConfigAssetRecord;
+  /** The level the store's record is at now. */
+  recordLevel: number;
+  /** The level its live revision brings it to: the number of that revision's last migration. */
+  level: number;
+  /** The names of the live revision's migrations, by number. */
+  migrations: ReadonlyMap<number, string>;
+}
+
+/**
+ * The Data Stores the App's revision binds that are live and not yet at the level the App
+ * needs, where their live revision reaches it (GOLIVE-1): an earlier Publish of the App
+ * published them and its wait ran out. A Publish of the App waits for them as for a store it
+ * publishes, so publishing again carries on. A store named in `skip` is published by the
+ * Publish itself; one that is not there for the App or whose live revision stays below is
+ * refused by the App's own publish.
+ */
+export async function storesStillMigrating(
+  options: Pick<AssetWorkflowOptions, "clientInstanceId" | "configAssets" | "stores">,
+  app: { scope: AssetScope; config: JsonObject },
+  skip: ReadonlySet<string> = new Set()
+): Promise<StoreStillMigrating[]> {
+  const { clientInstanceId } = options;
+  const migrating: StoreStillMigrating[] = [];
+  for (const { name, minSchema } of declaredDataStoresOf(app.config.manifest)) {
+    if (minSchema === undefined || skip.has(name)) continue;
+    const asset = await options.configAssets.store.getConfigAsset({
+      clientInstanceId,
+      kind: DATA_STORE_ASSET_KIND,
+      name
+    });
+    if (
+      asset?.status !== "active" ||
+      asset.publishedConfig === undefined ||
+      !appReachesDataStore(app.scope, asset.scope)
+    ) {
+      continue;
+    }
+    const record = await options.stores.dataStores.getDataStore({ clientInstanceId, id: asset.id });
+    if (!record || record.status === "retired" || record.level >= minSchema) continue;
+    const { level, migrations } = storeMigrationsOf(asset.publishedConfig);
+    if (level < minSchema) continue;
+    migrating.push({
+      name,
+      title: assetTitle(asset.publishedConfig, name),
+      asset,
+      recordLevel: record.level,
+      level,
+      migrations
+    });
+  }
+  return migrating;
+}

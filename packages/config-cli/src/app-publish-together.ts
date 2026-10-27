@@ -2,10 +2,11 @@ import type { AppPublishReview } from "@work-shape/catalyst-api-contract";
 import { ConfigApiError, type ConfigApi } from "./api";
 
 // What one Publish of an App's draft makes live with it (DP-3, GOLIVE-1): the Data Stores it
-// binds whose draft is not published, with the migrations each would apply, and the pending
-// Workflows its actions reach, children first, read from `apps.publish_review`. The publish
-// names each with the revision shown here: the instance publishes the stores and applies their
-// migrations first, then the Workflows and the App, or neither the App nor its Workflows.
+// binds whose draft is not published, with the migrations each would apply, those live that
+// still apply migrations, which the publish waits for, and the pending Workflows its actions
+// reach, children first, read from `apps.publish_review`. The publish names each it makes live
+// with the revision shown here: the instance publishes the stores and applies their migrations
+// first, then the Workflows and the App, or neither the App nor its Workflows.
 
 /** The stores and Workflows a publish names, and the lines that say so before the question. */
 export interface PublishTogether {
@@ -34,12 +35,15 @@ export async function appPublishTogether(api: ConfigApi, app: string): Promise<P
   const pending = review.workflows.filter((workflow) => workflow.pending);
   const stores = review.dataStores;
   if (pending.length === 0 && stores.length === 0) return NONE;
+  // A store that is live and still applying migrations is waited for, not published again.
   const storeLines = stores.map(
     (store) =>
       `  Data Store '${store.title}' (${store.name}): ${
-        store.publishedRevision === undefined
-          ? `new, revision ${store.draftRevision}`
-          : `revision ${store.draftRevision} in place of ${store.publishedRevision}`
+        !store.pending
+          ? `live at revision ${store.draftRevision}, still applying migrations: the publish waits for it`
+          : store.publishedRevision === undefined
+            ? `new, revision ${store.draftRevision}`
+            : `revision ${store.draftRevision} in place of ${store.publishedRevision}`
       }, at level ${store.liveLevel}${
         store.pendingMigrations.length > 0
           ? `, applies ${migrationCount(store.pendingMigrations.length)}: ${store.pendingMigrations.join(", ")}`
@@ -66,7 +70,9 @@ export async function appPublishTogether(api: ConfigApi, app: string): Promise<P
   ];
   return {
     workflows: pending.map(({ name, draftRevision }) => ({ name, revision: draftRevision })),
-    dataStores: stores.map(({ name, draftRevision }) => ({ name, revision: draftRevision })),
+    dataStores: stores
+      .filter((store) => store.pending)
+      .map(({ name, draftRevision }) => ({ name, revision: draftRevision })),
     lines: [
       stores.length > 0
         ? "Publishes together: the Data Stores and their migrations first, then the Workflows and the App, or neither the App nor its Workflows:"

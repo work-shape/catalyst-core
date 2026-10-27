@@ -104,8 +104,10 @@ function writeOutcome(
 }
 
 /**
- * Ends an attempt that failed: the failure is written onto the record and audited, and the
- * job is given another attempt only where the database was busy or away.
+ * Ends an attempt that failed. The job is given another attempt only where the database was
+ * busy or away; the failure of the last attempt is written onto the record and audited. One
+ * that is tried again leaves the record as it is: who waits on the record (an App's Publish,
+ * GOLIVE-1) reads a failure there as the job's outcome.
  */
 async function failAttempt(
   runtime: DataStoreRuntime,
@@ -119,11 +121,13 @@ async function failAttempt(
     throw new AppError("CONFLICT", "The work on a Data Store was stopped");
   }
   const { code, message } = failure;
-  const record = await writeOutcome(runtime, control, job.payload.storeId, (current) =>
-    Promise.resolve({ ...current, failure: { code, message } })
-  );
   const retried = failure.retryable && control.attempt < job.maxAttempts;
-  if (record && !retried) {
+  const record = retried
+    ? undefined
+    : await writeOutcome(runtime, control, job.payload.storeId, (current) =>
+        Promise.resolve({ ...current, failure: { code, message } })
+      );
+  if (record) {
     await runtime.auditRecorder.record({
       type: event,
       status: "failed",

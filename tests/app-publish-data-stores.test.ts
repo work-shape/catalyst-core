@@ -249,6 +249,119 @@ describe("GOLIVE-1: an App's Publish carries the Data Stores it binds", () => {
     expect(await record("golive-broken")).toMatchObject({ level: 2 });
   });
 
+  // GOLIVE-1 follow-up. Fails while the App's own checks run after its stores are published:
+  // the store went live for an App the set refused.
+  it("asks the App's own checks before it publishes a store, so their refusal publishes none", async () => {
+    await t.publishStore("golive-first", [storeManifest("golive-first"), init], t.workspaceId);
+    const store = await t.draftStore(
+      "golive-first",
+      [storeManifest("golive-first"), init, addNote],
+      t.workspaceId
+    );
+    // The App names a second Connection, which is gone by the time the App is published.
+    const crm = required(await asset("connection", "crm"));
+    const gone = "connection:golive-gone";
+    const made = await t.stores.configAssets.applyConfigAssetMutations({
+      clientInstanceId,
+      baseRevisions: { [gone]: null },
+      mutations: [
+        {
+          type: "upsert",
+          kind: "connection",
+          name: "golive-gone",
+          config: { ...crm.config, name: "golive-gone" }
+        }
+      ]
+    });
+    const files = findingsApp({
+      id: "golive-first-app",
+      marker: "golive-first-app",
+      store: "golive-first",
+      minSchema: 2
+    }).map((file) => {
+      if (file.path !== "app.yaml" || !("text" in file)) return file;
+      const manifest = z.record(z.string(), z.unknown()).parse(JSON.parse(file.text));
+      return {
+        ...file,
+        text: JSON.stringify({ ...manifest, connections: ["crm", "golive-gone"] })
+      };
+    });
+    const written = await t.putApp(t.admin.id, "golive-first-app", files);
+    expectStatus(written, 200);
+    const { revision } = z.object({ revision: z.number() }).parse(written.json());
+    await t.stores.configAssets.applyConfigAssetMutations({
+      clientInstanceId,
+      baseRevisions: { [gone]: required(made.revisions[gone]) },
+      mutations: [{ type: "delete", kind: "connection", name: "golive-gone", scope: crm.scope }]
+    });
+
+    const refused = await publishWith(t.admin.id, "golive-first-app", revision, [
+      { name: "golive-first", revision: store }
+    ]);
+
+    expectStatus(refused, 422);
+    expect(JSON.stringify(t.refusal(refused))).toContain("golive-gone");
+    expect((await asset(DATA_STORE_ASSET_KIND, "golive-first"))?.publishedRevision).toBe(1);
+    expect(await record("golive-first")).toMatchObject({ level: 1 });
+    expect((await asset("app", "golive-first-app"))?.publishedRevision).toBeUndefined();
+  });
+
+  // GOLIVE-1 follow-up. Fails while the App's Publish waits only for the stores it names: a
+  // store an earlier Publish made live and whose wait ran out was carried by no later one, and
+  // the App was refused with data_store_below_min_schema.
+  it("waits for a live store still applying the migrations the App needs, and lists it in the review", async () => {
+    const named = await storeWithPendingMigration("golive-again", "golive-again-app");
+    const storeAsset = required(await asset(DATA_STORE_ASSET_KIND, "golive-again"));
+    const stored = required(
+      await t.stores.configAssets.getConfigAssetRevision({
+        clientInstanceId,
+        kind: DATA_STORE_ASSET_KIND,
+        name: "golive-again",
+        revision: named.store
+      })
+    );
+    // As an earlier Publish of the App left it: the store's pointer moved, its migration not
+    // applied yet.
+    await t.stores.configAssets.publishConfigAssetRevision({
+      clientInstanceId,
+      kind: DATA_STORE_ASSET_KIND,
+      name: "golive-again",
+      assetId: storeAsset.id,
+      revision: named.store,
+      revisionId: stored.id
+    });
+
+    const read = await review("golive-again-app");
+    expect(read.dataStores).toEqual([
+      expect.objectContaining({
+        name: "golive-again",
+        pending: false,
+        liveLevel: 1,
+        minSchema: 2,
+        pendingMigrations: ["add_note"],
+        refusals: []
+      })
+    ]);
+    expect(read.ready).toBe(true);
+
+    // Publishing again names no store and waits for it; the store's migrate job is queued
+    // while the Publish waits.
+    const publishing = publishWith(t.admin.id, "golive-again-app", named.app, []);
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    expectStatus(
+      await t.call(t.admin.id, "assets.publish", {
+        params: { kind: DATA_STORE_ASSET_KIND, name: "golive-again" },
+        payload: { revision: named.store, workspaceId: t.workspaceId }
+      }),
+      200
+    );
+
+    expectStatus(await publishing, 200);
+    expect(await record("golive-again")).toMatchObject({ status: "ready", level: 2 });
+    expect((await asset("app", "golive-again-app"))?.publishedRevision).toBe(named.app);
+    expect((await review("golive-again-app")).dataStores).toEqual([]);
+  });
+
   // Rights: the App's dialog never publishes a store its publisher may not publish.
   it("refuses a publisher without data_store.publish on the store before anything changes", async () => {
     const named = await storeWithPendingMigration("golive-rights", "golive-rights-app");

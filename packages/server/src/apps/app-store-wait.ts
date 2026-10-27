@@ -41,7 +41,9 @@ export const realStoreWaitClock: StoreWaitClock = {
 /**
  * Waits until every store is ready at its level. It refuses with `data_store_migration_failed`
  * as soon as a store's record holds a failure, naming the migration after the last applied
- * one (a store's publish clears the failure an earlier attempt left), and with `data_store_migrating` once the time is up.
+ * one, and with `data_store_migrating` once the time is up. A failure on the record is the
+ * job's outcome: an attempt that is tried again writes none, and a store's publish clears the
+ * one an earlier job left.
  * A store whose record is gone or retired is `data_store_unavailable`.
  */
 export async function awaitStoreLevels(

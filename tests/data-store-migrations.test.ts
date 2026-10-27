@@ -17,7 +17,7 @@ import {
 // migration is held to its transaction and to its role whatever its text says.
 
 describe("the migrations of a Data Store", () => {
-  const { db, publish, recordOf, settle, published, call, connect } =
+  const { db, jobs, setup, publish, recordOf, settle, published, call, connect } =
     useDataStoreWorld("data_store_migrations");
 
   it("applies new migrations forward and never changes an applied one", async () => {
@@ -478,5 +478,29 @@ describe("the migrations of a Data Store", () => {
     ]);
 
     expect((await settle(world, world.id, 2)).failure).toBeUndefined();
+  });
+  // GOLIVE-1 follow-up: an App's Publish reads a failure on the record as the job's outcome.
+  // Fails while an attempt that is tried again writes its failure: the Publish refused with
+  // data_store_migration_failed while the job still had attempts left.
+  it("writes the failure of an attempt onto the record only when no attempt follows", async () => {
+    const away = new URL(db.databaseUrl);
+    away.hostname = "127.0.0.1";
+    away.port = "1";
+    const world = await setup("away", {}, away.toString());
+    const id = await publish(world, [manifest(), init]);
+
+    await world.worker.runDue();
+    const [tried] = await jobs.jobs(world.clientInstanceId);
+    expect(tried).toMatchObject({ status: "queued", attempts: 1 });
+    expect((await recordOf(world, id)).failure).toBeUndefined();
+
+    // The last attempt, due now.
+    await db.sql`update platform_jobs set attempts = max_attempts - 1, run_after = now()
+      where client_instance_id = ${world.clientInstanceId}`;
+    await world.worker.runDue();
+    expect(await recordOf(world, id)).toMatchObject({
+      status: "provisioning",
+      failure: { code: "provisioning_failed" }
+    });
   });
 });

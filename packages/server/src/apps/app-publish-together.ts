@@ -3,8 +3,10 @@ import {
   DATA_STORE_ASSET_KIND,
   WORKFLOW_ASSET_KIND,
   type ActorAccess,
+  type AssetScope,
   type AuthenticatedIdentity,
   type ConfigAssetRecord,
+  type JsonObject,
   type OperationApproval,
   type OperationAuthorization,
   type OperationBeforeEvent,
@@ -22,10 +24,16 @@ import {
   assetTitle,
   dataStoresPublishedWith,
   requireStoreLevels,
+  storesStillMigrating,
   workflowsPublishedWith,
   type StorePublishedWith
 } from "./app-closure";
-import { awaitStoreLevels, realStoreWaitClock, type StoreWaitClock } from "./app-store-wait";
+import {
+  awaitStoreLevels,
+  realStoreWaitClock,
+  type StoreAwaited,
+  type StoreWaitClock
+} from "./app-store-wait";
 import { publishMemberRights } from "../approvals/publish-approval";
 
 // One Publish of an App makes the Data Store and Workflow drafts it names live with it (DP-3,
@@ -177,7 +185,11 @@ export class AppPublishTogether {
    */
   async publish(call: AssetCall, input: PublishTogetherInput) {
     const members = await this.members(input);
-    const storesPublished = await this.publishStores(call, members.stores);
+    // A store published stays published: the App's own checks come first, so a refusal of
+    // its audience, its revision or the set publishes no store. Its Workflows' checks cannot:
+    // a Workflow's asks that its children are live, which they are only further down.
+    if (members.stores.length > 0) await this.assets.drafts.checkPublish(call, input);
+    const storesPublished = await this.publishStores(call, input, members.stores);
     if (members.workflows.length === 0) {
       const published = await this.assets.drafts.publish(call, input);
       return storesPublished.length === 0
@@ -204,29 +216,58 @@ export class AppPublishTogether {
   /**
    * Publishes each store as its own Publish does, in its own transaction: the pointer, the
    * record and the migrate job. Then waits until each is ready at the level of the revision
-   * published. A store published here stays published whatever follows: its migrations only go
-   * forward, and publishing the App again carries on from there.
+   * published, and so is each live store the App binds whose migrations an earlier Publish
+   * left below the level the App needs. A store published here stays published whatever
+   * follows: its migrations only go forward, and publishing the App again carries on from
+   * there.
    */
-  private async publishStores(call: AssetCall, named: readonly StorePublishedWith[]) {
-    if (named.length === 0) return [];
+  private async publishStores(
+    call: AssetCall,
+    input: PublishTogetherInput,
+    named: readonly StorePublishedWith[]
+  ) {
     const { clientInstanceId } = this.options;
     const read = (id: string) =>
       this.options.stores.dataStores.getDataStore({ clientInstanceId, id });
     const published = [];
-    const awaited = [];
+    const awaited: StoreAwaited[] = [];
     for (const store of named) {
       const member = { ...store, kind: DATA_STORE_ASSET_KIND };
       published.push(pointersOf(member, await this.assets.drafts.publish(call, addressOf(member))));
-      awaited.push({
-        name: store.name,
-        title: store.title,
-        storeId: store.asset.id,
-        level: store.level,
-        migrations: store.migrations
-      });
+      awaited.push(awaitedOf(store));
     }
-    await awaitStoreLevels(read, awaited, this.clock);
+    const app = input.kind === APP_ASSET_KIND ? await this.appRevision(input) : undefined;
+    if (app) {
+      const skip = new Set(named.map(({ name }) => name));
+      for (const store of await storesStillMigrating(this.options, app, skip)) {
+        awaited.push(awaitedOf(store));
+      }
+    }
+    if (awaited.length > 0) await awaitStoreLevels(read, awaited, this.clock);
     return published;
+  }
+
+  /** The App's revision the call names, or nothing where its own publish refuses it. */
+  private async appRevision(
+    input: PublishTogetherInput
+  ): Promise<{ scope: AssetScope; config: JsonObject } | undefined> {
+    const { clientInstanceId, configAssets } = this.options;
+    const app = await configAssets.store.getConfigAsset({
+      clientInstanceId,
+      kind: APP_ASSET_KIND,
+      name: input.name
+    });
+    const revision = app
+      ? await configAssets.store.getConfigAssetRevision({
+          clientInstanceId,
+          kind: APP_ASSET_KIND,
+          name: input.name,
+          revision: input.revision
+        })
+      : undefined;
+    return app && revision?.config && revision.assetId === app.id
+      ? { scope: app.scope, config: revision.config }
+      : undefined;
   }
 
   /** The stores and Workflows the call names to publish with an App, checked and ordered. */
@@ -243,23 +284,9 @@ export class AppPublishTogether {
         { exposeMessage: true }
       );
     }
-    const { clientInstanceId, configAssets } = this.options;
-    const app = await configAssets.store.getConfigAsset({
-      clientInstanceId,
-      kind: APP_ASSET_KIND,
-      name: input.name
-    });
-    const revision = app
-      ? await configAssets.store.getConfigAssetRevision({
-          clientInstanceId,
-          kind: APP_ASSET_KIND,
-          name: input.name,
-          revision: input.revision
-        })
-      : undefined;
     // Nothing of the App to make live: its own publish refuses that.
-    if (!app || !revision?.config || revision.assetId !== app.id) return NONE;
-    const of = { scope: app.scope, config: revision.config };
+    const of = await this.appRevision(input);
+    if (!of) return NONE;
     const workflows = input.workflows?.length
       ? await workflowsPublishedWith(this.options, of, input.workflows)
       : [];
@@ -272,6 +299,18 @@ export class AppPublishTogether {
       workflows: workflows.map((workflow) => ({ ...workflow, kind: WORKFLOW_ASSET_KIND }))
     };
   }
+}
+
+/** What the wait reads of a store: the level of the revision that is or goes live. */
+function awaitedOf(store: {
+  name: string;
+  title: string;
+  asset: ConfigAssetRecord;
+  level: number;
+  migrations: ReadonlyMap<number, string>;
+}): StoreAwaited {
+  const { name, title, level, migrations } = store;
+  return { name, title, storeId: store.asset.id, level, migrations };
 }
 
 /** One member of the answer: where its pointers are after its publish. */
