@@ -1,4 +1,5 @@
 import type { UsageSummary } from "@work-shape/catalyst-api-client";
+import { PERSONAL_AGENTS_KEY } from "@work-shape/catalyst-core";
 import type { TranslationContextValue, TranslationKey } from "../../shared/i18n";
 
 const PURPOSE_LABELS: Record<string, TranslationKey> = {
@@ -25,7 +26,20 @@ export function usageCaller(
   agentLabel: (agentName: string) => string | undefined
 ): string {
   const label = event.purpose === undefined ? undefined : PURPOSE_LABELS[event.purpose];
-  return label ? t(label) : (agentLabel(event.agentName) ?? event.agentName);
+  return label ? t(label) : usageAgentLabel(event.agentName, t, agentLabel);
+}
+
+/**
+ * An agent as the Usage page names it: by the name people know it by, its id where the instance
+ * no longer offers it, and people's own agents in a shared workspace as one row.
+ */
+export function usageAgentLabel(
+  agentName: string,
+  t: TranslationContextValue["t"],
+  agentLabel: (agentName: string) => string | undefined
+): string {
+  if (agentName === PERSONAL_AGENTS_KEY) return t("usageReports.personalAgents");
+  return agentLabel(agentName) ?? agentName;
 }
 
 /** A region this version has no name for is shown as it was recorded. */

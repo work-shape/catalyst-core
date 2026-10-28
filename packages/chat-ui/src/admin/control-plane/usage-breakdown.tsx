@@ -25,6 +25,7 @@ import {
   type TranslationContextValue,
   type TranslationKey
 } from "../../shared/i18n";
+import { usageAgentLabel } from "./usage-attribution-labels";
 import { formatBillableCost } from "./usage-cost-format";
 
 // The Breakdown of the Usage page (LU-3, limits spec 3.3, view 2): a period, one dimension to
@@ -145,7 +146,7 @@ function usageBreakdownLabel(
       if (row.key === breakdown.personalWorkspacesKey) return t("usageReports.personalWorkspaces");
       return row.name ?? t("usageReports.deletedWorkspace");
     case "agent":
-      return agentLabel(row.key) ?? row.key;
+      return usageAgentLabel(row.key, t, agentLabel);
     case "origin": {
       const label = ORIGIN_LABELS[row.key];
       return label ? t(label) : row.key;

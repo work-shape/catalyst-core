@@ -10,6 +10,7 @@ import {
   type RecentModelUsage,
   AppError,
   KNOWLEDGE_INGESTION_PURPOSES,
+  PERSONAL_AGENTS_KEY,
   createPlatformId
 } from "@work-shape/catalyst-core";
 import { type PostgresConnection } from "./postgres-database";
@@ -126,6 +127,27 @@ function written(event: ModelUsageEventRecordInput, id: string): SQL {
 }
 
 /**
+ * The agent an event names. A person's own agent ("Only me", owned by a Personal Workspace) run
+ * in a chat of a shared workspace is named by the one key `PERSONAL_AGENTS_KEY`: the event still
+ * counts to the workspace, but neither its Owners nor the Usage page read which agent it was.
+ * Decided once, as the event is written, so every later sum of it reads the same key. It reads
+ * `attributed_workspace`.
+ */
+function agentNameOf(event: ModelUsageEventRecordInput): SQL {
+  if (event.agentName === undefined || event.purpose !== undefined) {
+    return drizzleSql`${event.agentName ?? null}`;
+  }
+  return drizzleSql`case
+    when exists (
+      select 1 from config_assets own
+      join collaboration_workspaces home on home.id = own.scope_id and home.kind = 'personal'
+      where own.client_instance_id = ${event.clientInstanceId}
+        and own.kind = 'agent' and own.name = ${event.agentName}
+    ) and not exists (select 1 from attributed_workspace where kind = 'personal')
+    then ${PERSONAL_AGENTS_KEY}::text else ${event.agentName}::text end`;
+}
+
+/**
  * The insert of an event. It reads `attributed_user`, `attributed_workspace` and `written`. An event made
  * for a user keeps what leads back to them, its conversation, run, operation and correlation
  * id, only while that user's row exists and is open. Where the account is being deleted or
@@ -153,7 +175,7 @@ function insertEvent(input: {
     )
     select
       ${input.id}, ${event.clientInstanceId}, ${personal(event.conversationId)},
-      ${personal(event.agentRunId)}, ${event.agentName ?? null}, ${event.purpose ?? null}, ${event.workflowRunId ?? null},
+      ${personal(event.agentRunId)}, ${agentNameOf(event)}, ${event.purpose ?? null}, ${event.workflowRunId ?? null},
       ${event.providerId}, ${event.model}, ${event.region ?? null}, ${event.bindingId ?? null},
       ${event.inputTokens}::int, ${event.cachedInputTokens ?? null}::int,
       ${event.outputTokens}::int, ${event.totalTokens}::int, ${event.webSearchCallCount}::int,

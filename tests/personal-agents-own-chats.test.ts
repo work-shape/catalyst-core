@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import {
+  usageBreakdownSchema,
+  usageSummarySchema,
+  workspaceUsageSchema
+} from "@work-shape/catalyst-api-contract";
+import {
   asAgentRunId,
   asClientInstanceId,
   asCollaborationWorkspaceId,
@@ -8,6 +13,7 @@ import {
   asUserId,
   chatReadOnlyBy,
   mayUseOwnInChat,
+  PERSONAL_AGENTS_KEY,
   type AgentRuntime,
   type AuthenticatedUser,
   type CollaborationWorkspaceId
@@ -18,6 +24,7 @@ import {
   setupAccessInstance,
   type AccessInstance
 } from "./support/access-instance";
+import { ModelUsageGovernance } from "@work-shape/catalyst-usage-governance";
 import { applyAtCurrentRevisions } from "./support/asset-revisions";
 import { waitUntil } from "./support/assertions";
 import { createMultipartFilePayload } from "./support/chat-server-attachment-harness";
@@ -493,6 +500,109 @@ describe("an agent of Only me beyond the chat its owner chose it in", () => {
           event.type === "tool_call_failed" && JSON.stringify(event).includes("agent_not_available")
       )
     ).toBe(true);
+  });
+});
+
+describe("an agent of Only me in the usage of a team", () => {
+  it("counts to the team without its name, for the team's Owner and the Usage page alike", async () => {
+    const usageOf = (store: AccessInstance["stores"]["usage"]) =>
+      new ModelUsageGovernance({ store, costs: {}, budget: {}, safeguards: {} });
+    const t = await setupAccessInstance({
+      storedAssetSource: true,
+      server: (stores) => ({ usageGovernance: usageOf(stores.usage) })
+    });
+    instances.push(t);
+    const team = await t.sharedWorkspace("TEAM");
+    await t.stores.workspaces.addMembership({
+      clientInstanceId,
+      collaborationWorkspaceId: team,
+      userId: asUserId(t.lena.id),
+      role: "owner"
+    });
+    await t.stores.workspaces.addMembership({
+      clientInstanceId,
+      collaborationWorkspaceId: team,
+      userId: asUserId(t.kai.id),
+      role: "member"
+    });
+    const kaiHome = (
+      await t.stores.workspaces.ensurePersonalWorkspace({
+        clientInstanceId,
+        userId: asUserId(t.kai.id)
+      })
+    ).id;
+    await applyAtCurrentRevisions(t.stores.configAssets, {
+      clientInstanceId,
+      initialAgentAvailability: "hidden",
+      mutations: [
+        {
+          type: "upsert",
+          kind: "agent",
+          name: OWN,
+          config: agent(OWN, { displayName: "Kais Steuer" }),
+          scope: { kind: "workspace", workspaceId: kaiHome }
+        }
+      ]
+    });
+    const usage = usageOf(t.stores.usage);
+    const call = (agentName: string, workspaceId: string, tokens: number) =>
+      usage.recordModelUsage({
+        clientInstanceId,
+        attribution: {
+          kind: "agent_run",
+          conversationId: asConversationId(`conv_${crypto.randomUUID()}`),
+          runId: asAgentRunId(`run_${crypto.randomUUID()}`),
+          agentName,
+          userId: t.kai.id,
+          workspaceId
+        },
+        providerId: "local",
+        model: "local",
+        correlationId: `corr_${crypto.randomUUID()}`,
+        inputTokens: tokens,
+        cachedInputTokens: 0,
+        outputTokens: tokens,
+        totalTokens: tokens * 2,
+        source: "provider_reported"
+      });
+    await call(OWN, team, 1_000);
+    await call("test_agent", team, 300);
+    // In his Personal Workspace it counts to every Personal Workspace's one row, as before.
+    await call(OWN, kaiHome, 50);
+    const today = new Date().toISOString().slice(0, 10);
+    const tomorrow = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
+    const period = { from: today, to: tomorrow };
+
+    const owner = workspaceUsageSchema.parse(
+      (
+        await t.expectOk(t.lena.id, "workspaces.usage.get", {
+          params: { collaborationWorkspaceId: team },
+          query: { ...period, groupBy: "agent" }
+        })
+      ).json()
+    );
+    expect(JSON.stringify(owner)).not.toContain(OWN);
+    expect(owner.breakdown.rows.map((row) => [row.key, row.totalTokens])).toEqual([
+      [PERSONAL_AGENTS_KEY, 2_000],
+      ["test_agent", 600]
+    ]);
+
+    const instanceView = usageBreakdownSchema.parse(
+      (
+        await t.expectOk(t.admin.id, "usage.breakdown.get", {
+          query: { ...period, groupBy: "agent", workspace: team }
+        })
+      ).json()
+    );
+    expect(instanceView.rows.map((row) => row.key)).toEqual([PERSONAL_AGENTS_KEY, "test_agent"]);
+    const summary = usageSummarySchema.parse(
+      (await t.expectOk(t.admin.id, "usage.get_summary")).json()
+    );
+    const inTeam = summary.recentEvents.filter((event) => event.workspace?.key === team);
+    expect(inTeam.map((event) => event.agentName).sort()).toEqual([
+      PERSONAL_AGENTS_KEY,
+      "test_agent"
+    ]);
   });
 });
 
