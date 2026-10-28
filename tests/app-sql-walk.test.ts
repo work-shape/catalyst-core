@@ -139,7 +139,7 @@ describe("an App on a Data Store, from its folder to a member's row", () => {
       reason: { kind: "forbidden", action: "data_store.read" }
     });
   });
-  it("ACCEPT-FIX-11 B-1: an instance App owned by one person's workspace opens for another member and reads its stored data", async () => {
+  it("ACCEPT-FIX-11 B-1: an App of one person's workspace already live for the instance still opens for another member and reads its stored data", async () => {
     const owner = await t.stores.workspaces.ensurePersonalWorkspace({
       clientInstanceId,
       userId: t.admin.id
@@ -188,10 +188,24 @@ describe("an App on a Data Store, from its folder to a member's row", () => {
     expectStatus(
       await t.call(t.admin.id, "assets.publish", {
         params: { kind: "app", name: "personal-ledger-app" },
-        payload: { workspaceId: owner.id, revision: 1, audience: "instance" }
+        payload: { workspaceId: owner.id, revision: 1, audience: "self" }
       }),
       200
     );
+    // No publish makes such an App live for everyone any more (MOVE-1, check 65); one that
+    // already is keeps running until its next publish, as it was left here.
+    const app = await t.stores.configAssets.getConfigAsset({
+      clientInstanceId,
+      kind: "app",
+      name: "personal-ledger-app"
+    });
+    await t.stores.configAssets.setAgentAvailability({
+      clientInstanceId,
+      kind: "app",
+      agentName: "personal-ledger-app",
+      ...(app ? { expectedAssetId: app.id } : {}),
+      availability: { mode: "all", personalWorkspaces: false, collaborationWorkspaceIds: [] }
+    });
     const preview = await t.call(t.lena.id, "apps.preview", {
       params: { app: "personal-ledger-app" },
       payload: { mode: "published" }

@@ -8,10 +8,13 @@ import {
   asCollaborationWorkspaceId,
   type ActorAccess,
   type AppAudience,
+  type AssetOwnerReach,
   type ConfigAssetRecord,
-  type LocaleCode
+  type LocaleCode,
+  ownerReachRefusal
 } from "@work-shape/catalyst-core";
 import type { AssetWorkflowOptions } from "../types";
+import { assertOwnerReach } from "../assets/asset-owner-references";
 import { workspaceDisplayName } from "../publish-narrative/workspace-name";
 
 /** Only an instance publish right may offer or dispatch an instance audience. An asset or
@@ -63,7 +66,16 @@ export async function appAudienceReview(
     : undefined;
   const choices: AppAudience[] = ["self"];
   if (workspace?.kind !== "personal") choices.push("workspace");
-  if (access.authorize("app.publish").allowed) choices.push("instance");
+  // "Alle" only for an App of the instance or a Shared Workspace (MOVE-1, `assertOwnerReach`).
+  const owner: AssetOwnerReach =
+    asset.scope.kind === "instance"
+      ? { kind: "instance" }
+      : { kind: "workspace", workspaceId: asset.scope.workspaceId, workspaceKind: workspace?.kind };
+  if (
+    access.authorize("app.publish").allowed &&
+    ownerReachRefusal(owner, { kind: "app_audience", audience: "instance" }) === undefined
+  )
+    choices.push("instance");
   const suggested = audience ?? live ?? "self";
   const selected = choices.includes(suggested)
     ? suggested
@@ -142,17 +154,21 @@ function appAudiencePerson(
 }
 
 /** Resolve omission once for the committing path: first publishes are private; later ones
- * preserve the live audience without asking a right for a choice the person never made. */
+ * preserve the live audience without asking a right for a choice the person never made. An
+ * App of a Personal Workspace is never published for the whole instance: one already live so
+ * keeps running, and the rule meets it at its next publish (MOVE-1). */
 export async function prepareAppPublication(
   options: Pick<AssetWorkflowOptions, "stores" | "clientInstanceId">,
   call: { actor: AuthenticatedIdentity; access: ActorAccess },
   asset: ConfigAssetRecord,
-  chosen?: AppAudience
+  chosen: AppAudience | undefined,
+  locale: LocaleCode
 ) {
   const audience =
     chosen ??
     (asset.publishedRevisionId ? (asset.appAvailability?.audience ?? "workspace") : "self");
   requireAppAudience(call.access, chosen);
+  await assertOwnerReach(options, asset, { kind: "app_audience", audience }, locale);
   const person = appAudiencePerson(call.actor, asset, chosen, audience);
   const personalWorkspace = person
     ? await options.stores.workspaces.ensurePersonalWorkspace({

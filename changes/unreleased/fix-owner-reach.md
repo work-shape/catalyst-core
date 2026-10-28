@@ -1,0 +1,6 @@
+---
+section: Fixed
+---
+
+- **Rights:** Something shared never relies on or exposes something a Personal Workspace owns. One check, `assertOwnerReach` (the decision `ownerReachRefusal` in core), now refuses: offering a Personal Workspace's agent, subagent, Knowledge Base or Connection in a Shared Workspace, in every Personal Workspace or everywhere (`assets.set_availability`, `owner_reach`); widening such a Knowledge Base as an agent's dependency; creating such an agent with `availableIn` `all` or another workspace; publishing such an App for the whole instance, which the Publish dialog no longer offers (`app_instance_needs_shared_workspace`, MOVE-1 check 65); and an instance Workflow naming such a Data Store, Knowledge Base or App (`invalid_scope`). A Shared Workspace's asset offered in another workspace or to the whole instance is allowed as before. What is shared today keeps running until its next change; `scripts/preflight-owner-reach.sql` counts it read-only, and `scripts/preflight-reference-owners.sql` now counts an instance Workflow's references to a Personal Workspace.
+- **Chat:** The refusals say "Nur ich" / "Only me" and the next step: create it in a team or for everyone, or ask an admin.

@@ -131,6 +131,69 @@ describe("SHARE-1 audience on App availability", () => {
     }
   });
 
+  it("check 65 (G3): a Personal Workspace's App is never for the whole instance, a Shared Workspace's still is", async () => {
+    const personal = await t.stores.workspaces.ensurePersonalWorkspace({
+      clientInstanceId,
+      userId: t.admin.id
+    });
+    const params = { kind: "app", name: "personal-only" };
+    expectStatus(
+      await t.call(t.admin.id, "assets.put", {
+        params,
+        payload: { workspaceId: personal.id, files: appFiles("personal-only", { id: "only" }) }
+      }),
+      200
+    );
+    const read = await t.call(t.admin.id, "assets.get", {
+      params,
+      query: { workspaceId: personal.id, audience: "instance" }
+    });
+    expectStatus(read, 200);
+    // The instance publish right is held; the place, not the right, leaves "Alle" out.
+    expect(audienceRead.parse(read.json()).appAudience.choices).toEqual(["self"]);
+    const publishPersonal = (audience?: "self" | "instance", locale = "en") =>
+      t.call(t.admin.id, "assets.publish", {
+        params,
+        payload: { workspaceId: personal.id, revision: 1, ...(audience ? { audience } : {}) },
+        headers: { "accept-language": locale }
+      });
+    for (const locale of ["en", "de"]) {
+      const refused = await publishPersonal("instance", locale);
+      expectStatus(refused, 422);
+      const { error } = z
+        .object({ error: z.object({ message: z.string(), details: z.unknown() }) })
+        .parse(refused.json());
+      expect(error.details).toMatchObject({
+        reason: "app_instance_needs_shared_workspace",
+        asset: { kind: "app", name: "personal-only" }
+      });
+      expect(error.message).toContain(locale === "de" ? "„Nur ich“" : `"Only me"`);
+    }
+    const stored = async () =>
+      t.stores.configAssets.getConfigAsset({ clientInstanceId, ...params });
+    expect((await stored())?.publishedRevision).toBeUndefined();
+    // An App already live for everyone from a Personal Workspace keeps running; the rule meets it
+    // at its next publish, which keeps the live audience unless asked (MOVE-1).
+    expectStatus(await publishPersonal("self"), 200);
+    const app = await stored();
+    await t.stores.configAssets.setAgentAvailability({
+      clientInstanceId,
+      kind: "app",
+      agentName: params.name,
+      ...(app ? { expectedAssetId: app.id } : {}),
+      availability: { mode: "all", personalWorkspaces: false, collaborationWorkspaceIds: [] }
+    });
+    expect((await stored())?.appAvailability?.audience).toBe("instance");
+    expectStatus(await publishPersonal(), 422);
+    expectStatus(await publishPersonal("self"), 200);
+    // SHARE-1: an App of a Shared Workspace goes to the whole instance.
+    expectStatus(
+      await t.putApp(t.admin.id, "shared-all", appFiles("shared-all", { id: "shared" })),
+      200
+    );
+    expectStatus(await publish(t.admin.id, "shared-all", "instance"), 200);
+  });
+
   it("check 56: instance audience is absent without the instance publish right and a forged request is refused", async () => {
     expectStatus(await t.putApp(t.kai.id, "rights", appFiles("rights", { id: "rights" })), 200);
     const read = await get(t.kai.id, "rights");

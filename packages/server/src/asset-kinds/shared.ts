@@ -130,7 +130,10 @@ export interface WorkflowAssetKind
   readRunsAs?(config: JsonObject): Promise<string | undefined>;
   /** The Workflow schedule, using the engine's cron and clock. */
   readSchedule?(config: JsonObject): { timeZone: string; nextDueAt?: string };
-  /** Workspace targets an instance-owned source may name; every Workflow call checks its principal. */
+  /**
+   * Kinds of a Shared Workspace an instance-owned source may name; every Workflow call checks
+   * its principal. Never a Personal Workspace's (`assertOwnerReach`).
+   */
   readonly crossOwnerReferences?: readonly string[];
   /** Adjusts what an interactive save sends before it is validated. */
   prepareInteractiveUpsert(input: {

@@ -82,7 +82,12 @@ WITH RECURSIVE revisions AS (
   JOIN config_assets t ON t.client_instance_id = s.client_instance_id
     AND t.kind = r.kind AND t.name = r.name AND t.status = 'active'
   WHERE t.scope_kind = 'workspace'
-    AND NOT (s.kind = 'workflow' AND t.kind IN ('app', 'data_store', 'knowledge_base'))
+    -- An instance Workflow may name a Shared Workspace's App, Data Store or Knowledge Base,
+    -- never a Personal Workspace's (assertOwnerReach).
+    AND NOT (s.kind = 'workflow' AND s.scope_kind = 'instance'
+      AND t.kind IN ('app', 'data_store', 'knowledge_base')
+      AND EXISTS (SELECT 1 FROM collaboration_workspaces w
+        WHERE w.id = t.scope_id AND w.kind = 'shared'))
     AND (s.scope_kind <> 'workspace' OR s.scope_id IS DISTINCT FROM t.scope_id)
 )
 SELECT instances.client_instance_id, count(refused.source_name) AS refused_references,

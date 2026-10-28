@@ -1,9 +1,16 @@
 import {
   AppError,
   asCollaborationWorkspaceId,
+  assetScopesEqual,
   INSTANCE_ASSET_SCOPE,
+  ownerReachRefusal,
+  type AgentAvailability,
+  type AppAudience,
+  type AssetOwnerReach,
   type AssetScope,
   type ClientInstanceId,
+  type CollaborationWorkspace,
+  type OwnerReachUse,
   type PlatformStores,
   type LocaleCode,
   type ConfigAssetRecord
@@ -24,18 +31,165 @@ interface Owned {
   definition: unknown;
 }
 
+/** What the owner check reads: the workspaces of one instance. */
+export interface OwnerReachOptions {
+  clientInstanceId: ClientInstanceId;
+  stores: Pick<PlatformStores, "workspaces">;
+}
+
+/** An asset as the owner check names it. */
+interface ReachSource {
+  kind: string;
+  name: string;
+  scope: AssetScope;
+}
+
+/** What a source does with its owner's reach, as the server is asked it. */
+type OwnerReachRequest =
+  | {
+      kind: "reference";
+      target: ReachSource;
+      acrossOwners: boolean;
+      /**
+       * The source is an asset the writer did not write and may not read: the refusal tells
+       * nothing about it, including its name, kind or owner.
+       */
+      sourceUnread: boolean;
+    }
+  | { kind: "availability"; availability: AgentAvailability }
+  | { kind: "app_audience"; audience: AppAudience };
+
+/** Reads each workspace once for one check, however many pairs name it. */
+function workspaceReader(options: OwnerReachOptions) {
+  const read = new Map<string, Promise<CollaborationWorkspace | undefined>>();
+  return (workspaceId: string) => {
+    let workspace = read.get(workspaceId);
+    if (!workspace) {
+      workspace = options.stores.workspaces.getWorkspace(
+        options.clientInstanceId,
+        asCollaborationWorkspaceId(workspaceId)
+      );
+      read.set(workspaceId, workspace);
+    }
+    return workspace;
+  };
+}
+
+type WorkspaceReader = ReturnType<typeof workspaceReader>;
+
+async function ownerReach(
+  scope: AssetScope,
+  workspaces: WorkspaceReader
+): Promise<AssetOwnerReach> {
+  if (scope.kind === "instance") return { kind: "instance" };
+  const workspace = await workspaces(scope.workspaceId);
+  return { kind: "workspace", workspaceId: scope.workspaceId, workspaceKind: workspace?.kind };
+}
+
+/**
+ * The one owner check (2026-10-28): something shared never relies on or exposes something a
+ * Personal Workspace owns. The decision is `ownerReachRefusal` in core; this reads the owners'
+ * workspaces and refuses in the caller's language, with the next step. Every reference a write
+ * or publish checks, every availability that offers an agent, Knowledge Base or Connection, an
+ * agent's place at creation and an App's audience at publish come through here, and so must a
+ * move of an asset to another owner.
+ */
+export async function assertOwnerReach(
+  options: OwnerReachOptions,
+  source: ReachSource,
+  use: OwnerReachRequest,
+  locale: LocaleCode,
+  workspaces: WorkspaceReader = workspaceReader(options)
+): Promise<void> {
+  const owner = await ownerReach(source.scope, workspaces);
+  const decided: OwnerReachUse =
+    use.kind === "reference"
+      ? {
+          kind: "reference",
+          target: await ownerReach(use.target.scope, workspaces),
+          acrossOwners: use.acrossOwners
+        }
+      : use;
+  const refusal = ownerReachRefusal(owner, decided);
+  if (refusal === undefined) return;
+  const de = locale === "de";
+  const label = `${assetKindLabel(source.kind, locale)} '${source.name}'`;
+  if (use.kind === "reference" && decided.kind === "reference") {
+    if (use.sourceUnread) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        de
+          ? "Dieses Asset kann nicht erstellt werden, weil ein Asset eines anderen Eigentümers darauf verweist. Ein Asset darf nur auf Assets im selben Arbeitsbereich oder in der Instanz verweisen."
+          : "This asset cannot be created because an asset of another owner references it. An asset may reference only assets of its own workspace or the instance.",
+        { reason: "invalid_scope" }
+      );
+    }
+    const personal =
+      decided.target.kind === "workspace" && decided.target.workspaceKind !== "shared";
+    const ownerName = async (scope: AssetScope) => {
+      if (scope.kind === "instance") return de ? "Instanz" : "the instance";
+      const workspace = await workspaces(scope.workspaceId);
+      return de
+        ? `Arbeitsbereich '${workspace?.name ?? "unbekannt"}'`
+        : `workspace '${workspace?.name ?? "unknown"}'`;
+    };
+    const sourceName = await ownerName(source.scope);
+    const sourceOwner = de
+      ? `${source.scope.kind === "instance" ? "zur" : "zum"} ${sourceName}`
+      : sourceName;
+    const targetName = await ownerName(use.target.scope);
+    const target = `${assetKindLabel(use.target.kind, locale)} '${use.target.name}'`;
+    throw new AppError(
+      "VALIDATION_FAILED",
+      de
+        ? `${label} gehört ${sourceOwner} und verweist auf ${target} im ${targetName}. ${
+            personal
+              ? `${target} liegt unter „Nur ich“, in einem persönlichen Arbeitsbereich: Was einem Team oder Allen gehört, darf sich nicht darauf stützen. Ein Asset darf nur auf Assets im selben Arbeitsbereich oder in der Instanz verweisen. Lege das in einem Team-Arbeitsbereich oder für Alle an, oder bitte einen Admin darum.`
+              : "Ein Asset darf nur auf Assets im selben Arbeitsbereich oder in der Instanz verweisen; ein Asset der Instanz darf nicht auf Assets eines Arbeitsbereichs verweisen."
+          }`
+        : `${label} owned by ${sourceOwner} references ${target} owned by ${targetName}. ${
+            personal
+              ? `${target} is in a Personal Workspace ("Only me"): what belongs to a team or to everyone may not rely on it. An asset may reference only assets of its own workspace or the instance. Create it in a Shared Workspace or for everyone, or ask an admin.`
+              : "An asset may reference only assets of its own workspace or the instance; an instance-owned asset cannot reference workspace assets."
+          }`,
+      {
+        reason: refusal,
+        reference: {
+          kind: use.target.kind,
+          name: use.target.name,
+          owner: use.target.scope,
+          ...(personal ? { reach: "personal" } : {})
+        },
+        owner: source.scope
+      }
+    );
+  }
+  throw new AppError(
+    "VALIDATION_FAILED",
+    refusal === "app_instance_needs_shared_workspace"
+      ? de
+        ? `${label} liegt unter „Nur ich“, in einem persönlichen Arbeitsbereich, und kann darum nicht für Alle sein. Baue sie in einem Team-Arbeitsbereich, oder bitte einen Admin darum.`
+        : `${label} is in a Personal Workspace ("Only me"), so it cannot be for everyone. Build it in a Shared Workspace, or ask an admin.`
+      : de
+        ? `${label} liegt unter „Nur ich“, in einem persönlichen Arbeitsbereich, und wird nur dort genutzt, nicht in einem Team oder von Allen. Lege das in einem Team-Arbeitsbereich oder für Alle an, oder bitte einen Admin darum.`
+        : `${label} is in a Personal Workspace ("Only me") and is used only there, not in a team or by everyone. Create it in a Shared Workspace or for everyone, or ask an admin.`,
+    { reason: refusal, asset: { kind: source.kind, name: source.name }, owner: source.scope }
+  );
+}
+
 /**
  * Check owner pairs when writing their source or creating their target. Owners never change,
- * so editing an existing target leaves legacy pairs running.
- * Workflows may reach workspace Apps, Data Stores and Knowledge Bases: their principal's
- * grants are checked at run time. Guardrail filters are absent from the reference inventory.
+ * so editing an existing target leaves legacy pairs running. Each pair is decided by
+ * `assertOwnerReach`: an instance Workflow may also reach a Shared Workspace's Apps, Data
+ * Stores and Knowledge Bases, whose grants are checked at run time, never a Personal
+ * Workspace's. Guardrail filters are absent from the reference inventory.
  */
 export async function assertReferencesWithinOwners(
   kinds: readonly WorkflowAssetKind[],
   mutations: readonly OwnedWrite[],
   assets: readonly ConfigAssetRecord[],
   locale: LocaleCode,
-  options: { clientInstanceId: ClientInstanceId; stores: Pick<PlatformStores, "workspaces"> }
+  options: OwnerReachOptions
 ): Promise<void> {
   const key = (kind: string, name: string) => `${kind}:${name}`;
   const owned = new Map<string, Owned>(
@@ -65,6 +219,7 @@ export async function assertReferencesWithinOwners(
   }
   if (touched.size === 0) return;
   const kindsByName = new Map(kinds.map((kind) => [kind.kind, kind]));
+  const workspaces = workspaceReader(options);
   for (const [at, asset] of owned) {
     const kind = kindsByName.get(asset.kind);
     const references = kind?.references;
@@ -72,49 +227,20 @@ export async function assertReferencesWithinOwners(
     for (const reference of references(asset.definition)) {
       const named = owned.get(key(reference.kind, reference.name));
       if (!named || (!touched.has(at) && !created.has(key(named.kind, named.name)))) continue;
-      if (asset.scope.kind === "instance" && kind?.crossOwnerReferences?.includes(named.kind))
-        continue;
-      if (named.scope.kind === "workspace" && !sameWorkspace(asset.scope, named.scope)) {
-        // A reverse reference can come from an asset the writer may not read. Tell nothing
-        // about that source, including its name, kind or owner.
-        if (!touched.has(at)) {
-          throw new AppError(
-            "VALIDATION_FAILED",
-            locale === "de"
-              ? "Dieses Asset kann nicht erstellt werden, weil ein Asset eines anderen Eigentümers darauf verweist. Ein Asset darf nur auf Assets im selben Arbeitsbereich oder in der Instanz verweisen."
-              : "This asset cannot be created because an asset of another owner references it. An asset may reference only assets of its own workspace or the instance.",
-            { reason: "invalid_scope" }
-          );
-        }
-        const ownerName = async (scope: AssetScope) => {
-          if (scope.kind === "instance") return locale === "de" ? "Instanz" : "the instance";
-          const workspace = await options.stores.workspaces.getWorkspace(
-            options.clientInstanceId,
-            asCollaborationWorkspaceId(scope.workspaceId)
-          );
-          return locale === "de"
-            ? `Arbeitsbereich '${workspace?.name ?? "unbekannt"}'`
-            : `workspace '${workspace?.name ?? "unknown"}'`;
-        };
-        const sourceName = await ownerName(asset.scope);
-        const sourceOwner =
-          locale === "de"
-            ? `${asset.scope.kind === "instance" ? "zur" : "zum"} ${sourceName}`
-            : sourceName;
-        const targetName = await ownerName(named.scope);
-        const targetOwner = locale === "de" ? `im ${targetName}` : targetName;
-        throw new AppError(
-          "VALIDATION_FAILED",
-          locale === "de"
-            ? `${assetKindLabel(asset.kind, locale)} '${asset.name}' gehört ${sourceOwner} und verweist auf ${assetKindLabel(named.kind, locale)} '${named.name}' ${targetOwner}. Ein Asset darf nur auf Assets im selben Arbeitsbereich oder in der Instanz verweisen; ein Asset der Instanz darf nicht auf Assets eines Arbeitsbereichs verweisen.`
-            : `${assetKindLabel(asset.kind, locale)} '${asset.name}' owned by ${sourceOwner} references ${assetKindLabel(named.kind, locale)} '${named.name}' owned by ${targetOwner}. An asset may reference only assets of its own workspace or the instance; an instance-owned asset cannot reference workspace assets.`,
-          {
-            reason: "invalid_scope",
-            reference: { kind: named.kind, name: named.name, owner: named.scope },
-            owner: asset.scope
-          }
-        );
-      }
+      // The same owner, or the instance: nothing to read.
+      if (named.scope.kind === "instance" || assetScopesEqual(asset.scope, named.scope)) continue;
+      await assertOwnerReach(
+        options,
+        asset,
+        {
+          kind: "reference",
+          target: named,
+          acrossOwners: kind.crossOwnerReferences?.includes(named.kind) === true,
+          sourceUnread: !touched.has(at)
+        },
+        locale,
+        workspaces
+      );
     }
   }
 }
@@ -148,8 +274,4 @@ export function assertDefaultOwnedByInstance(
       { reason: "default_owned_by_workspace" }
     );
   }
-}
-
-function sameWorkspace(scope: AssetScope, workspace: AssetScope & { kind: "workspace" }): boolean {
-  return scope.kind === "workspace" && scope.workspaceId === workspace.workspaceId;
 }

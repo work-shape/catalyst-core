@@ -141,9 +141,22 @@ const PUBLISH_REFUSALS: [reason: string, details: Record<string, unknown>][] = [
       owner: { kind: "workspace", workspaceId: "ws-1" }
     }
   ],
+  [
+    "invalid_scope",
+    {
+      reference: {
+        kind: "data_store",
+        name: "belege",
+        owner: { kind: "workspace", workspaceId: "ws-2" },
+        reach: "personal"
+      },
+      owner: { kind: "instance" }
+    }
+  ],
   ["publish_subject_unreadable", {}],
   ["input_too_large_to_hold", {}],
   ["app_instance_needs_shared_workspace", {}],
+  ["owner_reach", { asset: { kind: "agent", name: "helper" } }],
   ["no_grant", { action: "data_store.read" }],
   ["denied", { action: "workflow.use" }],
   // A store's Publish.
@@ -261,6 +274,27 @@ describe("the refusals of the publish paths, in the reader's language", () => {
     expect(appPublishRefusal(error, de, { workspaceId: "ws-1" })?.action).toBeUndefined();
     // No level or migration is named to a person.
     expect(appPublishRefusal(error, de)?.message).not.toMatch(/\d|minSchema|Level/u);
+  });
+
+  it("tells what is “Only me” with the ladder's words and the next step", () => {
+    const say = (details: Record<string, unknown>, t = de) => tellRefusal(details, t)?.message;
+    const reference = { kind: "skill", name: "notes", owner: { kind: "workspace" } };
+    expect(say({ reason: "invalid_scope", reference: { ...reference, reach: "personal" } })).toBe(
+      "Das nutzt etwas, das „Nur ich“ ist. Was ein Team oder Alle nutzen, darf sich nicht darauf stützen. Lege es im Team oder für Alle an, oder bitte einen Admin darum."
+    );
+    // Another Shared Workspace's asset keeps its sentence.
+    expect(say({ reason: "invalid_scope", reference })).toBe(
+      "Das nutzt etwas aus einem anderen Arbeitsbereich. Es darf nur nutzen, was zum eigenen Arbeitsbereich oder zur ganzen Instanz gehört."
+    );
+    expect(say({ reason: "owner_reach" })).toBe(
+      "Das ist „Nur ich“ und kann darum keinem Team und nicht Allen angeboten werden. Lege es im Team oder für Alle an, oder bitte einen Admin darum."
+    );
+    expect(say({ reason: "owner_reach" }, en)).toBe(
+      "This is “Only me”, so it cannot be offered to a team or to everyone. Create it in the team or for everyone, or ask an admin."
+    );
+    expect(say({ reason: "app_instance_needs_shared_workspace" })).toBe(
+      "Diese App ist „Nur ich“ und kann darum nicht für Alle sein. Baue sie in einem Team, oder bitte einen Admin darum."
+    );
   });
 
   it("words the store refusals of an App as written", () => {
