@@ -47,6 +47,8 @@ import { AGENTS_BUILD_PATH, buildRouteOfLocation } from "./shared/build-route";
 import { useRailApps } from "./studio/apps/rail-apps";
 import { InboxArea } from "./chat/inbox";
 import { ScheduledPage } from "./chat/scheduled/scheduled-page";
+import { ProjectsArea } from "./chat/projects/projects-area";
+import { ProjectChangeDialogs, type ProjectChange } from "./chat/projects/project-move-dialog";
 import { LoginPanel } from "./chat/login-panel";
 import { TwoFactorSetupScreen } from "./chat/two-factor-setup-screen";
 import { operationRunHref, operationRunsHref } from "./shared/operations-model";
@@ -202,6 +204,8 @@ function ChatWorkspaceContent({
   // Build and Try in the dock on an agent's page.
   const agentTry = useAgentTry({ client: model.selectedChat.client, dock });
   const [paletteOpen, setPaletteOpen] = useState(false);
+  // A conversation's menu asked to move it into a project or out of one (PRJ-1).
+  const [projectChange, setProjectChange] = useState<ProjectChange>();
   const [passwordSetupToken, setPasswordSetupToken] = useState(readPasswordSetupToken);
   // A tab an OAuth sign-in of a Connection came back to shows its outcome alone.
   const [signInLanding, leaveSignInLanding] = useSignInLanding();
@@ -239,6 +243,12 @@ function ChatWorkspaceContent({
   // there for this person: the model leads a closed one to the chat.
   const workflowsRoute = isWorkflowsRoute(model.route.route) ? model.route.route : undefined;
   const scheduledRoute = model.route.route.kind === "scheduled" ? model.route.route : undefined;
+  // With the module off the model leads a Projects address to the chat; nothing shows meanwhile.
+  const projectsRoute =
+    model.projects.enabled &&
+    (model.route.route.kind === "projects" || model.route.route.kind === "project")
+      ? model.route.route
+      : undefined;
   // The published Apps of the open workspace, under the Apps row of the rail.
   const railAppsWorkspaceId = model.collaborationWorkspace.activeCollaborationWorkspaceId;
   const railApps = useRailApps({
@@ -687,6 +697,18 @@ function ChatWorkspaceContent({
             apps={rail.apps}
             workflows={rail.workflows}
             scheduled={rail.scheduled}
+            projects={rail.projects}
+            projectActions={
+              rail.projects
+                ? {
+                    // Only its author moves a conversation into a project (PRJ-1).
+                    canMoveIn: (conversation) =>
+                      conversation.createdByUserId === model.auth.user?.id,
+                    moveIn: (conversation) => setProjectChange({ kind: "move", conversation }),
+                    remove: (conversation) => setProjectChange({ kind: "remove", conversation })
+                  }
+                : undefined
+            }
             publishedApps={railApps.apps}
             morePublishedApps={railApps.more}
             openAppName={appsRoute?.kind === "app" ? appsRoute.app : undefined}
@@ -974,6 +996,34 @@ function ChatWorkspaceContent({
                                               )
                                             ) : undefined
                                           }
+                                          projectsArea={
+                                            projectsRoute &&
+                                            activeWorkspace &&
+                                            activeWorkspaceName ? (
+                                              <ProjectsArea
+                                                route={projectsRoute}
+                                                workspace={{
+                                                  id: activeWorkspace.id,
+                                                  name: activeWorkspaceName,
+                                                  kind: activeWorkspace.kind,
+                                                  defaultConversationVisibility:
+                                                    activeWorkspace.defaultConversationVisibility
+                                                }}
+                                                onOpenRoute={model.route.showRoute}
+                                                onOpenConversation={(
+                                                  collaborationWorkspaceId,
+                                                  conversationId
+                                                ) =>
+                                                  model.route.showRoute({
+                                                    kind: "conversation",
+                                                    collaborationWorkspaceId,
+                                                    conversationId
+                                                  })
+                                                }
+                                                onStartChat={model.projects.startChat}
+                                              />
+                                            ) : undefined
+                                          }
                                           scheduledArea={
                                             scheduledRoute ? (
                                               <ScheduledPage
@@ -1040,6 +1090,11 @@ function ChatWorkspaceContent({
             </DockAgentWorkContext.Provider>
           </div>
         </div>
+        <ProjectChangeDialogs
+          change={projectChange}
+          workspaceName={activeWorkspaceName ?? ""}
+          onClose={() => setProjectChange(undefined)}
+        />
         <ConversationPalette
           open={paletteOpen}
           apiBaseUrl={model.auth.apiBaseUrl}

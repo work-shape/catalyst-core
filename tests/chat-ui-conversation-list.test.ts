@@ -101,6 +101,7 @@ describe("workspace rail without a Chat row", () => {
 
   it("has no Chat row: New chat is the one entry for a chat", () => {
     expect(railSections.map((section) => section.id)).toEqual([
+      "projects",
       "agents",
       "apps",
       "workflows",

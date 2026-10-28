@@ -123,7 +123,8 @@ export async function startProductConversationRun({
   idempotencyKey,
   locale,
   text,
-  visibility
+  visibility,
+  projectId
 }: {
   agentName?: string;
   modelBindingId?: string;
@@ -136,6 +137,8 @@ export async function startProductConversationRun({
   text: string;
   /** A new conversation that starts private, where its workspace's members would read it. */
   visibility?: "private";
+  /** A new conversation that starts in this project, with the project's audience (PRJ-1). */
+  projectId?: string;
 }): Promise<StartConversationRunResponse> {
   const request = runStartRequest({
     agentName,
@@ -162,7 +165,8 @@ export async function startProductConversationRun({
         title: firstLineTitle(text),
         locale,
         ...(collaborationWorkspaceId ? { collaborationWorkspaceId } : {}),
-        ...(visibility ? { visibility } : {})
+        ...(visibility ? { visibility } : {}),
+        ...(projectId ? { projectId } : {})
       }
     }
   });

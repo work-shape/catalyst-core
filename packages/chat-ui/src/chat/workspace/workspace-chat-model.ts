@@ -229,6 +229,9 @@ export function useWorkspaceChatModel({
   // workspace's view of it is not there yet while the workspace's agents load.
   const instanceModules = configQuery.data?.modules;
   const appsEnabled = collaborationWorkspacesAvailable && instanceModules?.apps?.enabled === true;
+  // Projects are on in every workspace once the instance's module is (PRJ-1).
+  const projectsEnabled =
+    collaborationWorkspacesAvailable && instanceModules?.projects?.enabled === true;
   const platformContextQuery = usePlatformContextQuery({
     apiBaseUrl,
     authScope: WORKSPACE_AUTH_SCOPE,
@@ -472,6 +475,7 @@ export function useWorkspaceChatModel({
     startDockedChat,
     selectConversation,
     startRevisionRun,
+    startConversationInProject,
     leaveRevisionInComposer
   } = createWorkspaceConversationActions({
     client,
@@ -753,6 +757,7 @@ export function useWorkspaceChatModel({
   // an address of the Workflows for a person who may read none.
   const areaClosed =
     (view === "apps" && instanceModules !== undefined && !appsEnabled) ||
+    (view === "projects" && instanceModules !== undefined && !projectsEnabled) ||
     (view === "workflows" && workflowsOpen === "closed");
   const { goToDefaultChat } = routeState;
   useEffect(() => {
@@ -1073,6 +1078,7 @@ export function useWorkspaceChatModel({
       apps: appsRowShown(appsEnabled, workspaceAgentsQuery.data),
       workflows: workflowsRowShown(workflowsOpen, platformContextQuery.data),
       scheduled: collaborationWorkspacesAvailable,
+      projects: projectsEnabled,
       view,
       creatingConversation: false,
       deletingConversation: deleteConversationMutation.isPending,
@@ -1098,7 +1104,8 @@ export function useWorkspaceChatModel({
           (nextView === "agents" ||
             nextView === "apps" ||
             nextView === "workflows" ||
-            nextView === "scheduled") &&
+            nextView === "scheduled" ||
+            nextView === "projects") &&
           activeCollaborationWorkspaceId
         ) {
           routeState.showRoute({
@@ -1109,6 +1116,10 @@ export function useWorkspaceChatModel({
         }
         routeState.selectWorkspaceView(nextView);
       }
+    },
+    projects: {
+      enabled: projectsEnabled,
+      startChat: startConversationInProject
     },
     agents: {
       status: agentListStatus({

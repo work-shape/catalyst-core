@@ -74,10 +74,14 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
   );
 });
 
-export type TextareaVariant = "plain" | "code";
+export type TextareaVariant = "plain" | "code" | "composer";
 
 export interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
-  /** `code` sets the monospaced style for instructions, identifiers and structured text. */
+  /**
+   * `code` sets the monospaced style for instructions, identifiers and structured text.
+   * `composer` is the message field inside a `ComposerFrame`: the frame is its edge, so it has
+   * none of its own, and it grows to the composer's cap and scrolls from there.
+   */
   variant?: TextareaVariant;
   invalid?: boolean;
 }
@@ -100,8 +104,9 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
       ref={ref}
       {...control}
       className={cn(
-        "flex min-h-16 px-3 py-2 placeholder:text-muted-foreground",
-        fieldFrameClassName,
+        variant === "composer"
+          ? "mt-0.5 max-h-(--layout-composer-max) min-h-8.5 min-w-0 resize-none bg-transparent px-2 pt-1 pb-1.5 text-sm leading-6 outline-none placeholder:text-muted-foreground"
+          : ["flex min-h-16 px-3 py-2 placeholder:text-muted-foreground", fieldFrameClassName],
         variant === "code" && "font-mono text-code",
         className
       )}

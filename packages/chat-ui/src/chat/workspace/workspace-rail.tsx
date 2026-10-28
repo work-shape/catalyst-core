@@ -64,6 +64,17 @@ interface WorkspaceRailProps {
   workflows?: boolean;
   /** The session has workspaces: the Scheduled row shows. */
   scheduled?: boolean;
+  /** The Projects module is on and the session has workspaces: the Projects row shows. */
+  projects?: boolean;
+  /**
+   * Present while projects are on: a conversation's menu moves it into a project, for its
+   * author, and takes it out of one (PRJ-1).
+   */
+  projectActions?: {
+    canMoveIn(conversation: ConversationListItem): boolean;
+    moveIn(conversation: ConversationListItem): void;
+    remove(conversation: ConversationListItem): void;
+  };
   /**
    * The published Apps the person may open, most recently used first. The first
    * `RAIL_APPS_LIMIT` fold under the Apps row, whose caret opens and folds them; the row
@@ -103,6 +114,7 @@ interface WorkspaceRailProps {
 export function WorkspaceRail(props: WorkspaceRailProps) {
   const { t } = useTranslation();
   const sections = shownRailSections(props.sections ?? railSections, {
+    projects: props.projects,
     agents: props.agents,
     inbox: props.inbox,
     apps: props.apps,
@@ -320,7 +332,8 @@ function RecentConversations({
   onReloadConversations,
   onRenameConversation,
   onMoveConversation,
-  onDeleteConversation
+  onDeleteConversation,
+  projectActions
 }: WorkspaceRailProps) {
   const { t } = useTranslation();
   // The collapsed strip hides the list with its label.
@@ -352,6 +365,16 @@ function RecentConversations({
             onMove={
               canMoveConversation
                 ? () => onMoveConversation(conversation.id, conversation.title)
+                : undefined
+            }
+            onMoveToProject={
+              projectActions?.canMoveIn(conversation)
+                ? () => projectActions.moveIn(conversation)
+                : undefined
+            }
+            onRemoveFromProject={
+              projectActions && conversation.projectId
+                ? () => projectActions.remove(conversation)
                 : undefined
             }
             onDelete={() => onDeleteConversation(conversation.id)}

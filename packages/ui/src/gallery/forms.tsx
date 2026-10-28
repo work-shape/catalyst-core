@@ -287,7 +287,7 @@ export const formsGallery: GalleryGroup = {
             </span>
           </ComposerFrame>
           <ComposerFrame className="flex items-end gap-1">
-            <Textarea aria-label={text.composerMessage} className="min-h-9 flex-1" />
+            <Textarea aria-label={text.composerMessage} variant="composer" className="flex-1" />
             <Button variant="solid" size="icon" aria-label={text.send}>
               <Send aria-hidden="true" />
             </Button>

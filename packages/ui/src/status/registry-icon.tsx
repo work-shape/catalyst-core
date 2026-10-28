@@ -9,6 +9,7 @@ import {
   Database,
   FileText,
   Flag,
+  Folder,
   GitBranch,
   Globe,
   Inbox,
@@ -39,7 +40,7 @@ export type IconFamily = "file" | "service" | "skill" | "tool";
 /**
  * The icons the library ships: one per family, one per kind of asset (`agent`, `skill`,
  * `connection`, `workflow`, `app`, `datastore`, `guardrail`, `knowledge_base`), the same
- * everywhere a kind is shown, `inbox` for the Inbox, `guide` for the platform's guide to itself,
+ * everywhere a kind is shown, `inbox` for the Inbox, `project` for a project, `guide` for the platform's guide to itself,
  * `prompt` for a request an agent's author wrote,
  * one per kind of part of a graph, one per category of what a part touches and one per file type
  * (`spreadsheet`, `document`, `presentation`, `pdf`, `image`, `archive`, `text`, and `file` for
@@ -64,6 +65,7 @@ export const genericIcons = {
   mail: Mail,
   manual: Play,
   notify: Bell,
+  project: Folder,
   prompt: MessageSquareText,
   repeat: Repeat,
   result: Flag,

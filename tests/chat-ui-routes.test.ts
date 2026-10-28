@@ -46,6 +46,12 @@ const addresses: [path: string, route: WorkspaceRoute, view: Area][] = [
   ],
   ["/settings/instance/users", { kind: "settings", group: "instance", page: "users" }, "settings"],
   ["/w/cw_1/scheduled", { kind: "scheduled", collaborationWorkspaceId: "cw_1" }, "scheduled"],
+  ["/w/cw_1/projects", { kind: "projects", collaborationWorkspaceId: "cw_1" }, "projects"],
+  [
+    "/w/cw_1/p/projekt-nord-4k2p",
+    { kind: "project", collaborationWorkspaceId: "cw_1", project: "projekt-nord-4k2p" },
+    "projects"
+  ],
   ["/inbox", { kind: "inbox" }, "inbox"],
   ["/inbox/apr_1", { kind: "inbox-item", itemId: "apr_1" }, "inbox"],
   ["/admin", { kind: "administration" }, "settings"],
@@ -71,6 +77,7 @@ describe("area route table", () => {
       "apps",
       "workflows",
       "scheduled",
+      "projects",
       "settings",
       "inbox",
       "build",

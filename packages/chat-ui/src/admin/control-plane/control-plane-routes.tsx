@@ -10,6 +10,7 @@ export function ControlPlaneRoutes({
   appsArea,
   workflowsArea,
   scheduledArea,
+  projectsArea,
   children
 }: {
   controlPlane: ControlPlaneModel;
@@ -26,6 +27,8 @@ export function ControlPlaneRoutes({
   workflowsArea?: ReactNode;
   /** The Scheduled page, present while its route is open. */
   scheduledArea?: ReactNode;
+  /** The Projects page or one project's, present while its route is open and the module is on. */
+  projectsArea?: ReactNode;
   /** What shows where no area is open. */
   children?: ReactNode;
 }) {
@@ -49,6 +52,10 @@ export function ControlPlaneRoutes({
 
   if (scheduledArea) {
     return <>{scheduledArea}</>;
+  }
+
+  if (projectsArea) {
+    return <>{projectsArea}</>;
   }
 
   if (build) {
