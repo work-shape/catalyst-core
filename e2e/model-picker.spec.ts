@@ -10,6 +10,7 @@ import { expect, test } from "./test";
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
 
 const superadmin = { email: "e2e-superadmin@example.test", password: "e2e-superadmin-password" };
+test.describe.configure({ retries: 0 });
 
 /** The one column the conversation lives in, on the chat route and in the dock. */
 const chatColumn = (page: Page) => page.locator("[data-dock-chat]");
@@ -176,12 +177,17 @@ async function expectPanelsShowWhole(page: Page, shot: string): Promise<void> {
  * at a time.
  */
 async function expectKeyboardLevels(page: Page): Promise<void> {
+  // Keep the pointer out of the menu: this part exercises keyboard entry, while the next
+  // part deliberately crosses the hover rows. A stationary pointer can open a panel as
+  // the menu appears underneath it.
+  await page.mouse.move(0, 0);
   await chatColumn(page).getByRole("button", { name: "Select model" }).focus();
   await page.keyboard.press("Enter");
   const picker = page.getByRole("dialog", { name: "Select model" });
   const modelRow = picker.getByRole("button", { name: /^Model/u });
   const selected = picker.getByRole("option", { selected: true });
   await expect(modelRow).toBeFocused();
+  await expect(selected).toHaveCount(0);
   await page.keyboard.press("ArrowRight");
   await expect(selected).toBeFocused();
   await page.keyboard.press("ArrowLeft");
