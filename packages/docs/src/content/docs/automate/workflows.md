@@ -17,6 +17,10 @@ Open one to see its page:
 - The **Runs** tab ("Läufe") lists every run, with what each step did.
 - The trigger says when it runs: **Started by hand only** ("Startet nur von Hand") or the schedule, such as "Every day, 07:00 AM" ("Jeden Tag, …").
 
+You can also ask the Workshaper why a previous run failed or how long its steps took. It reads recent runs with `workflows.list_runs`, opens one with `workflows.get_run` and reads its steps with `workflows.list_step_runs`. It can inspect an existing run without starting another. Start and finish times show elapsed time for the run and each completed step; a run's error identifies the failing step when available.
+
+The agent reads with your rights, through the same operations as the run page. Viewing history needs **View workflows**, without requiring edit rights. Run inputs and outputs appear only where those operations let you read them. A run started by someone else follows the same rules, including the restrictions on reads through API credentials described below. If access is refused, the agent explains that in a sentence.
+
 ## Make or change a Workflow
 
 A new Workflow is created with the CLI (`catalyst workflow put <name> --from … --if-revision new`); see [the CLI](/configure/cli/). After that, change it with **Edit with the agent** ("Mit dem Agenten bearbeiten") on its page. A chat opens that is about this Workflow: describe what should change, and every change the agent saves becomes the next draft.

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 import {
   asAgentRunId,
   asClientInstanceId,
@@ -13,19 +14,26 @@ import {
   type AuthenticatedUser,
   type Conversation,
   type OperationExecutionContext,
-  type PlatformStores
+  type PlatformStores,
+  type WorkflowRunView,
+  type WorkflowStepRunView
 } from "@work-shape/catalyst-core";
 import { createPlatformTools, platformModules } from "@work-shape/catalyst-client-assembly";
 import {
   createWorkflowRoutes,
+  createAuditingEventEmitter,
   registerModuleOperations,
   type WorkflowRunsPort
 } from "@work-shape/catalyst-server";
 import {
   createWorkflowTestTools,
+  createToolOperationRunner,
   registerToolOperations,
+  ToolRegistry,
   WORKFLOW_TEST_TOOL_NAMES
 } from "@work-shape/catalyst-tool-execution";
+import { createMemoryOperationRunStore } from "./support/memory-operation-runs";
+import { silentTestLogger } from "./support/model-gateway";
 
 const clientInstanceId = asClientInstanceId("workflow-test-tools");
 const user: AuthenticatedUser = {
@@ -85,7 +93,7 @@ async function fixture() {
   ]);
   const binding = await registry.resolve("workflows.test");
   if (!binding) throw new Error("The Workflow test operation is missing");
-  const context: OperationExecutionContext = {
+  const context: OperationExecutionContext & { actor: AuthenticatedUser } = {
     actor: user,
     origin: {
       kind: "agent",
@@ -108,11 +116,51 @@ async function fixture() {
     },
     audit: new NoopAuditRecorder()
   };
-  return { binding, context, test, stores, getConversation, createdAsset, workflows };
+  const runTool = createToolOperationRunner(
+    {
+      clientInstanceId,
+      registry,
+      resolveResource: (resource) => Promise.resolve({ resource }),
+      runs: createMemoryOperationRunStore(),
+      authorizer: { forActor: () => Promise.resolve(context.access) },
+      events: createAuditingEventEmitter(context.audit),
+      audit: context.audit,
+      policy: {
+        instanceDefaults: { reading: "allow", changing: "confirm" },
+        centralSettings: () => []
+      },
+      agentToolNames: () => WORKFLOW_TEST_TOOL_NAMES,
+      logger: silentTestLogger
+    },
+    new ToolRegistry({ tools: createWorkflowTestTools() })
+  );
+  const call = (toolName: string, input: unknown) =>
+    runTool(
+      {
+        toolName,
+        input,
+        agentName: "builder",
+        agentRunId: asAgentRunId("agent-run"),
+        conversationId: conversation.id,
+        toolCallId: createPlatformId<"ToolCallId">("tool")
+      },
+      { clientInstanceId, user: context.actor, correlationId: "history" }
+    );
+  return {
+    binding,
+    context,
+    test,
+    stores,
+    getConversation,
+    createdAsset,
+    workflows,
+    registry,
+    call
+  };
 }
 
 describe("the agent projections of Workflow testing", () => {
-  it("offers only test and result reads to platform agents, and hides them with the module off", async () => {
+  it("offers testing and run history to platform agents, and hides them with the module off", async () => {
     const t = await fixture();
     for (const enabled of [true, false]) {
       const modules = createModuleRegistry(platformModules).snapshot({ workflows: { enabled } });
@@ -131,6 +179,7 @@ describe("the agent projections of Workflow testing", () => {
         expect(offer?.toolNames).not.toContain("workflows.start");
       }
       expect(registry.has("workflows.test")).toBe(enabled);
+      expect(registry.has("workflows.list_runs")).toBe(enabled);
       expect(registry.has("assets.run_live_once")).toBe(false);
     }
   });
@@ -200,7 +249,11 @@ describe("the agent projections of Workflow testing", () => {
     expect(test?.inputSchema.safeParse({ workflow: "subject-workflow", input: {} }).success).toBe(
       true
     );
-    for (const operation of ["workflows.get_run", "workflows.list_step_runs"]) {
+    for (const operation of [
+      "workflows.list_runs",
+      "workflows.get_run",
+      "workflows.list_step_runs"
+    ]) {
       const read = await registry.resolve(operation);
       expect(read).toMatchObject({ effect: "reading", module: "workflows" });
       expect(read?.recordsEveryCall).toBeUndefined();
@@ -347,5 +400,178 @@ describe("the agent projections of Workflow testing", () => {
       )
     ).rejects.toThrow("engine reached");
     expect(getConversation).not.toHaveBeenCalled();
+  });
+});
+
+describe("the agent reads Workflow run history with the run page's rights", () => {
+  async function history() {
+    const t = await fixture();
+    const stamp = "2026-10-27T08:00:00.000Z";
+    const runId = createPlatformId<"WorkflowRunId">("wfr");
+    const stepId = createPlatformId<"WorkflowStepRunId">("wfs");
+    const run: WorkflowRunView = {
+      id: runId,
+      clientInstanceId,
+      workflow: "historical-workflow",
+      definitionRevisionId: "published-revision",
+      mode: "live",
+      trigger: "outside",
+      status: "failed",
+      principal: {
+        id: createPlatformId<"ServicePrincipalId">("sp"),
+        name: "runner",
+        displayLabel: "Runner"
+      },
+      startedBy: { kind: "user", id: "another-starter", label: "Another starter" },
+      rootRunId: runId,
+      depth: 0,
+      stepRunCount: 1,
+      deadlineAt: "2026-10-27T09:00:00.000Z",
+      limits: { durationMs: 60_000, stepRuns: 10, loopItems: 10 },
+      waitedMs: 0,
+      correlationId: "previous-run",
+      createdAt: stamp,
+      startedAt: stamp,
+      finishedAt: "2026-10-27T08:00:02.000Z",
+      error: { code: "FORBIDDEN", message: "The step was refused", stepRunId: stepId },
+      outputPreview: { text: "private run output", truncated: false },
+      hasAgentSteps: true
+    };
+    const step: WorkflowStepRunView = {
+      id: stepId,
+      clientInstanceId,
+      runId,
+      stepId: "read",
+      stepType: "agent",
+      key: "read",
+      status: "failed",
+      attempt: 1,
+      createdAt: stamp,
+      startedAt: stamp,
+      finishedAt: run.finishedAt,
+      error: run.error,
+      inputPreview: { text: "private step input", truncated: false },
+      outputPreview: { text: "private step output", truncated: false }
+    };
+    vi.mocked(t.workflows.readRun).mockResolvedValue(run);
+    vi.mocked(t.workflows.listRuns).mockResolvedValue([run]);
+    vi.mocked(t.workflows.listStepRuns).mockResolvedValue([step]);
+    return { ...t, run, step };
+  }
+
+  it.each([false, true])(
+    "lists and opens another starter's historical run as a reader, with run-data right=%s",
+    async (readData) => {
+      const t = await history();
+      t.context.access.authorize = (action) =>
+        action === "workflow.read" || (readData && action === "workflow.read_run_data")
+          ? { allowed: true, source: "grant" }
+          : { allowed: false, reason: "no_grant" };
+      const calls = [
+        ["workflows.list_runs", { workflow: t.run.workflow, limit: "1" }],
+        ["workflows.get_run", { runId: t.run.id }],
+        ["workflows.list_step_runs", { runId: t.run.id }]
+      ] as const;
+      for (const [name, input] of calls) {
+        const operation = await t.registry.resolve(name);
+        if (!operation) throw new Error(`Missing ${name}`);
+        const page = await operation.execute(input, { ...t.context, origin: { kind: "user" } });
+        const answer = await t.call(name, input);
+        expect(answer).toMatchObject({ status: "success", output: page });
+        expect(JSON.stringify(answer).includes("private")).toBe(readData);
+      }
+      expect(await t.call("workflows.list_runs", { workflow: t.run.workflow })).toMatchObject({
+        output: {
+          items: [
+            {
+              id: t.run.id,
+              status: "failed",
+              trigger: "outside",
+              startedBy: { id: "another-starter" },
+              startedAt: t.run.startedAt,
+              finishedAt: t.run.finishedAt,
+              error: { stepRunId: t.step.id }
+            }
+          ]
+        }
+      });
+      expect(t.workflows.listStepRuns).toHaveBeenCalledWith(
+        expect.objectContaining({ runId: t.run.id, includeAgentData: readData })
+      );
+      expect(t.getConversation).not.toHaveBeenCalled();
+      expect(t.test).not.toHaveBeenCalled();
+    }
+  );
+
+  it("refuses all history reads without the person's Workflow read right", async () => {
+    const t = await history();
+    t.context.access.authorize = () => ({ allowed: false, reason: "no_grant" });
+    for (const [name, input] of [
+      ["workflows.list_runs", { workflow: t.run.workflow }],
+      ["workflows.get_run", { runId: t.run.id }],
+      ["workflows.list_step_runs", { runId: t.run.id }]
+    ] as const) {
+      expect(await t.call(name, input)).toMatchObject({
+        status: "failed",
+        error: { code: "not_allowed", message: expect.any(String) }
+      });
+    }
+    expect(t.workflows.listRuns).not.toHaveBeenCalled();
+    expect(t.workflows.listStepRuns).not.toHaveBeenCalled();
+  });
+
+  it("pages recent runs newest first and follows the operation's cursor", async () => {
+    const t = await history();
+    const newer = {
+      ...t.run,
+      id: createPlatformId<"WorkflowRunId">("wfr"),
+      createdAt: "2026-10-28T08:00:00.000Z"
+    };
+    vi.mocked(t.workflows.listRuns).mockResolvedValue([t.run, newer]);
+    const first = await t.call("workflows.list_runs", { workflow: t.run.workflow, limit: "1" });
+    expect(first).toMatchObject({ status: "success", output: { items: [{ id: newer.id }] } });
+    if (first.status !== "success") throw new Error("The run list was refused");
+    const { nextCursor } = z.object({ nextCursor: z.string() }).parse(first.output);
+    expect(
+      await t.call("workflows.list_runs", {
+        workflow: t.run.workflow,
+        limit: "1",
+        cursor: nextCursor
+      })
+    ).toMatchObject({
+      status: "success",
+      output: { items: [{ id: t.run.id }] }
+    });
+    expect(t.workflows.listRuns).toHaveBeenLastCalledWith({
+      workflow: t.run.workflow,
+      page: { limit: 2, after: [newer.createdAt, newer.id] }
+    });
+  });
+
+  it("preserves WF-OUT restrictions for an agent serving an API credential", async () => {
+    const t = await history();
+    // Even all Workflow rights give an outside credential no data of a manually started run.
+    t.run.trigger = "manual";
+    t.context.actor = {
+      ...user,
+      delegatedActor: {
+        kind: "api_key",
+        id: createPlatformId<"ApiCredentialId">("key"),
+        displayLabel: "Reader key",
+        authSource: "test"
+      }
+    };
+    for (const [name, input] of [
+      ["workflows.list_runs", { workflow: t.run.workflow }],
+      ["workflows.get_run", { runId: t.run.id }],
+      ["workflows.list_step_runs", { runId: t.run.id }]
+    ] as const) {
+      const operation = await t.registry.resolve(name);
+      if (!operation) throw new Error(`Missing ${name}`);
+      const page = await operation.execute(input, { ...t.context, origin: { kind: "cli" } });
+      const answer = await t.call(name, input);
+      expect(answer).toMatchObject({ status: "success", output: page });
+      expect(JSON.stringify(answer)).not.toContain("private");
+    }
   });
 });
