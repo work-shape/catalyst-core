@@ -2,11 +2,15 @@ import {
   asUserId,
   personalDataConversation,
   createOperationRegistry,
+  getSubjectUserId,
   isAgentAvailableInWorkspace,
   isAuthenticatedServicePrincipal,
+  mayUseOwnInChat,
   type ApprovalRequestHandler,
   type AuthenticatedIdentity,
-  type CollaborationWorkspaceId
+  type CollaborationWorkspace,
+  type CollaborationWorkspaceId,
+  type ConversationId
 } from "@work-shape/catalyst-core";
 import type { RunOperationDeps } from "@work-shape/catalyst-tool-execution";
 import {
@@ -32,6 +36,7 @@ import { holdsWorkspaceBundle } from "../workspaces/workspace-access";
 import {
   agentUseRefusal,
   callerAccess,
+  ownedByPersonalWorkspaceOf,
   recordAgentUseRefusal
 } from "../workspaces/agent-availability";
 import { createPublishNarrator } from "../publish-narrative/publish-narrator";
@@ -265,6 +270,38 @@ export function createOperationCalls(options: OperationCallsOptions): OperationC
 }
 
 /**
+ * Whether the agent is the actor's own ("Nur ich") and the call is in the chat its run was
+ * chosen in: one only the actor reads, which the choice marked as personal. A subagent's call,
+ * in its own thread, and a call without the chat never count.
+ */
+async function ownAgentInOwnChat(
+  options: OperationCallsOptions,
+  input: { agentName: string; actor?: AuthenticatedIdentity; conversationId?: ConversationId },
+  workspace: CollaborationWorkspace
+): Promise<boolean> {
+  const { actor, conversationId } = input;
+  if (actor === undefined || conversationId === undefined || isAuthenticatedServicePrincipal(actor))
+    return false;
+  const { clientInstanceId } = options;
+  const [conversation, asset] = await Promise.all([
+    options.stores.conversations.getConversation(clientInstanceId, conversationId),
+    options.stores.configAssets.getConfigAsset({
+      clientInstanceId,
+      kind: "agent",
+      name: input.agentName
+    })
+  ]);
+  return (
+    conversation !== undefined &&
+    asset !== undefined &&
+    conversation.collaborationWorkspaceId === workspace.id &&
+    conversation.personalDataAt !== undefined &&
+    mayUseOwnInChat(actor, conversation, workspace) &&
+    (await ownedByPersonalWorkspaceOf(options, asset.scope, getSubjectUserId(actor)))
+  );
+}
+
+/**
  * Whether an agent is available in a workspace now, by the rule a new run is started under
  * (`getWorkspaceAssetSnapshot`), and with an actor whether that person may use it there
  * (`agent.use`, AGENT-USE-1). With a correlation id, a refusal of `agent.use` is recorded as a
@@ -277,6 +314,7 @@ async function agentAvailableTo(
     workspaceId: CollaborationWorkspaceId;
     actor?: AuthenticatedIdentity;
     correlationId?: string;
+    conversationId?: ConversationId;
   }
 ): Promise<boolean> {
   const { clientInstanceId } = options;
@@ -286,7 +324,8 @@ async function agentAvailableTo(
   ]);
   if (
     workspace === undefined ||
-    !isAgentAvailableInWorkspace(availability.get(input.agentName), workspace)
+    (!isAgentAvailableInWorkspace(availability.get(input.agentName), workspace) &&
+      !(await ownAgentInOwnChat(options, input, workspace)))
   )
     return false;
   if (input.actor === undefined) return true;

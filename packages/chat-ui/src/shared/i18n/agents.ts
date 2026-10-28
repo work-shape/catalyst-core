@@ -9,6 +9,7 @@ export const agents = defineTranslations({
       "No agent is available in this workspace yet. Create one in Studio, or make an existing one available here.",
     "agents.loadFailed": "The agents could not be loaded.",
     "agents.openStudio": "Open Studio",
+    "agents.ownChatsOnly": "Only in your own chats: others read this chat.",
     "agents.startChat": "Start chat",
     "agents.startChatWith": "Start chat with {name}",
     "agents.title": "Agents"
@@ -21,6 +22,7 @@ export const agents = defineTranslations({
       "In diesem Arbeitsbereich ist noch kein Agent verfügbar. Lege im Studio einen an oder gib einen vorhandenen hier frei.",
     "agents.loadFailed": "Die Agenten konnten nicht geladen werden.",
     "agents.openStudio": "Studio öffnen",
+    "agents.ownChatsOnly": "Nur in deinen eigenen Chats: Diesen Chat lesen auch andere.",
     "agents.startChat": "Chat starten",
     "agents.startChatWith": "Chat starten mit {name}",
     "agents.title": "Agenten"

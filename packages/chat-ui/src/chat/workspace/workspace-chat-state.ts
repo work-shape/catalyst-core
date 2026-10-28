@@ -20,30 +20,73 @@ export function workspaceScopedConfigFor(input: {
   collaborationWorkspacesAvailable: boolean;
   workspaceAgents: CollaborationWorkspaceAgents | undefined;
   instanceViewApplies: boolean;
-}): { config: SafeConfig | undefined; agentsLoading: boolean; workspaceScoped: boolean } {
+  /**
+   * The chat on screen, or the new one, is the person's own that nobody else reads: their own
+   * agents ("Nur ich") are offered in it. Elsewhere they are listed greyed.
+   */
+  ownChat: boolean;
+}): {
+  config: SafeConfig | undefined;
+  agentsLoading: boolean;
+  workspaceScoped: boolean;
+  /** The person's own agents this chat cannot choose, as others read it. */
+  ownAgentsElsewhere: SafeConfig["agents"];
+} {
   const { config } = input;
   if (!config || !input.collaborationWorkspacesAvailable) {
-    return { config, agentsLoading: false, workspaceScoped: false };
+    return { config, agentsLoading: false, workspaceScoped: false, ownAgentsElsewhere: [] };
   }
   if (input.workspaceAgents) {
+    const own = input.workspaceAgents.ownChatAgents ?? [];
     return {
       config: {
         ...config,
-        agents: input.workspaceAgents.items,
+        agents: input.ownChat
+          ? [...input.workspaceAgents.items, ...own]
+          : input.workspaceAgents.items,
         defaultAgentName: input.workspaceAgents.defaultAgentName
       },
       agentsLoading: false,
-      workspaceScoped: true
+      workspaceScoped: true,
+      ownAgentsElsewhere: input.ownChat ? [] : own
     };
   }
   if (input.instanceViewApplies) {
-    return { config, agentsLoading: false, workspaceScoped: false };
+    return { config, agentsLoading: false, workspaceScoped: false, ownAgentsElsewhere: [] };
   }
   return {
     config: { ...config, agents: [], defaultAgentName: undefined },
     agentsLoading: true,
-    workspaceScoped: true
+    workspaceScoped: true,
+    ownAgentsElsewhere: []
   };
+}
+
+/**
+ * Whether only the person reads the chat on screen, as the server decides it for their own
+ * agents: one they created, in their Personal Workspace or private in a team. Before it exists,
+ * the new chat is theirs where the workspace starts chats only its person reads.
+ */
+export function isOwnChat(input: {
+  userId: string | undefined;
+  workspace:
+    { id: string; kind: "personal" | "shared"; defaultConversationVisibility: string } | undefined;
+  conversation:
+    { collaborationWorkspaceId: string; createdByUserId: string; visibility: string } | undefined;
+  /** A conversation is open, whether or not it has arrived. */
+  conversationOpen: boolean;
+}): boolean {
+  const { userId, workspace, conversation } = input;
+  if (userId === undefined || workspace === undefined) return false;
+  if (!input.conversationOpen) {
+    return workspace.kind === "personal" || workspace.defaultConversationVisibility === "private";
+  }
+  return (
+    conversation !== undefined &&
+    conversation.collaborationWorkspaceId === workspace.id &&
+    conversation.createdByUserId === userId &&
+    (workspace.kind === "personal" || conversation.visibility === "private")
+  );
 }
 
 /**

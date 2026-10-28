@@ -171,6 +171,7 @@ export function useCollaborationWorkspaceAgentsQuery(
     queryFn: async () => {
       let defaultAgentName: string | undefined;
       let visibleSections: CollaborationWorkspaceAgents["visibleSections"] = [];
+      let ownChatAgents: CollaborationWorkspaceAgents["ownChatAgents"];
       const items = await listAll(async (paging) => {
         const page = await input.client.workspaces.agents.list({
           params: { collaborationWorkspaceId: input.collaborationWorkspaceId ?? "" },
@@ -178,9 +179,15 @@ export function useCollaborationWorkspaceAgentsQuery(
         });
         defaultAgentName = page.defaultAgentName;
         visibleSections = page.visibleSections;
+        ownChatAgents = page.ownChatAgents;
         return page;
       });
-      return { defaultAgentName, visibleSections, items };
+      return {
+        defaultAgentName,
+        visibleSections,
+        items,
+        ...(ownChatAgents ? { ownChatAgents } : {})
+      };
     },
     placeholderData: (previousData) => previousData,
     enabled: input.enabled && Boolean(input.collaborationWorkspaceId)

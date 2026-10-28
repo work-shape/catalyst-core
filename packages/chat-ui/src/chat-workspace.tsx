@@ -75,7 +75,7 @@ import { useToolDisplayPanel } from "./chat/tools/tool-display-panel";
 import { uiLabelsFor } from "./shared/ui-labels";
 import { MarkdownLinkPolicyProvider } from "./chat/markdown/markdown-text";
 import { ViewPolicyProvider } from "./chat/views/view-policy";
-import { agentChipDisplayFor } from "./chat/workspace/agent-selector";
+import { agentChipDisplayFor, OwnAgentsElsewhereContext } from "./chat/workspace/agent-selector";
 import { ClientBrandingHeader, mailBrandFrom } from "./chat/workspace/client-branding";
 import { ConversationPalette } from "./chat/workspace/conversation-palette";
 import { RouteNotFound } from "./chat/workspace/route-not-found";
@@ -1199,7 +1199,9 @@ function ChatWorkspaceContent({
         ownOrigins={instanceOrigins(model.auth.apiBaseUrl)}
       >
         <DocsAddressProvider address={model.config.config.ui.docsUrl}>
-          {workspace}
+          <OwnAgentsElsewhereContext value={model.config.ownAgentsElsewhere}>
+            {workspace}
+          </OwnAgentsElsewhereContext>
         </DocsAddressProvider>
       </MarkdownLinkPolicyProvider>
     </ViewPolicyProvider>

@@ -27,7 +27,7 @@ import {
   CollaborationWorkspaceWorkflow,
   type WorkspaceChangeCall
 } from "../workspaces/collaboration-workspace-service";
-import { agentWriter } from "../workspaces/agent-availability";
+import { agentWriter, ownAgents } from "../workspaces/agent-availability";
 import { requireWorkspaceAccess } from "../workspaces/workspace-access";
 import { findWorkspaceFiles } from "../workspaces/workspace-files";
 import { deletionState } from "./deletion-answer";
@@ -200,20 +200,33 @@ export function registerCollaborationWorkspaceRoutes(
         access,
         collaborationWorkspaceId(params)
       );
+      const view = {
+        requestedLocale: resolveRequestLocale(options, request),
+        reasoningEffortsOfBinding: (bindingId: string) =>
+          options.modelGateway.capabilities({ bindingId }).reasoningEfforts,
+        connections: await agentConnections(options),
+        mayWriteAgent: agentWriter({ user, access }, assets)
+      };
       const { defaultAgentName, agents } = createSafeConfigView(
         options.config,
         assets,
         options.modules,
-        {
-          requestedLocale: resolveRequestLocale(options, request),
-          reasoningEffortsOfBinding: (bindingId) =>
-            options.modelGateway.capabilities({ bindingId }).reasoningEfforts,
-          connections: await agentConnections(options),
-          mayWriteAgent: agentWriter({ user, access }, assets)
-        }
+        view
       );
+      // The caller's own agents ("Nur ich"), offered in no workspace: the chat lists them for a
+      // chat only the caller reads, and greys them elsewhere. The run start decides again.
+      const offered = new Set(agents.map((agent) => agent.name));
+      const own = (await ownAgents(options, { user, access })).filter(
+        (agent) => !offered.has(agent.name)
+      );
+      const ownChatAgents =
+        own.length === 0
+          ? []
+          : createSafeConfigView(options.config, { ...assets, agents: own }, options.modules, view)
+              .agents;
       return {
         defaultAgentName,
+        ...(ownChatAgents.length > 0 ? { ownChatAgents } : {}),
         visibleSections: await workspaceSections(
           options,
           collaborationWorkspaceId(params),

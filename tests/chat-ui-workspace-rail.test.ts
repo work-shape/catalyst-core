@@ -14,6 +14,7 @@ import {
   workspaceSendBlock,
   activeAgentNameFor,
   conversationAgentPickFor,
+  isOwnChat,
   workspaceScopedConfigFor
 } from "./support/chat-ui";
 
@@ -493,6 +494,7 @@ describe("workspace-scoped agents", () => {
       collaborationWorkspacesAvailable: true,
       workspaceAgents: undefined,
       instanceViewApplies: false,
+      ownChat: false,
       ...input
     });
 
@@ -529,8 +531,65 @@ describe("workspace-scoped agents", () => {
     expect(scoped({ instanceViewApplies: true })).toEqual({
       config: instanceConfig,
       agentsLoading: false,
-      workspaceScoped: false
+      workspaceScoped: false,
+      ownAgentsElsewhere: []
     });
+  });
+
+  it("offers the person's own agents in a chat only they read, and greys them elsewhere", () => {
+    const workspaceAgents = {
+      defaultAgentName: "contracts",
+      visibleSections: [],
+      items: [agent("contracts")],
+      ownChatAgents: [agent("kai-tax")]
+    };
+    const own = scoped({ workspaceAgents, ownChat: true });
+    expect(own.config?.agents.map((entry) => entry.name)).toEqual(["contracts", "kai-tax"]);
+    expect(own.config?.defaultAgentName).toBe("contracts");
+    expect(own.ownAgentsElsewhere).toEqual([]);
+
+    const read = scoped({ workspaceAgents, ownChat: false });
+    expect(read.config?.agents.map((entry) => entry.name)).toEqual(["contracts"]);
+    expect(read.ownAgentsElsewhere.map((entry) => entry.name)).toEqual(["kai-tax"]);
+  });
+
+  it("calls a chat the person's own only where nobody else reads it", () => {
+    const team = {
+      id: "cw_team",
+      kind: "shared" as const,
+      defaultConversationVisibility: "workspace"
+    };
+    const privateTeam = { ...team, defaultConversationVisibility: "private" };
+    const home = {
+      id: "cw_home",
+      kind: "personal" as const,
+      defaultConversationVisibility: "workspace"
+    };
+    const chat = (workspace: { id: string }, visibility: string, createdByUserId = "kai") => ({
+      collaborationWorkspaceId: workspace.id,
+      createdByUserId,
+      visibility
+    });
+    const own = (input: Partial<Parameters<typeof isOwnChat>[0]>) =>
+      isOwnChat({
+        userId: "kai",
+        workspace: team,
+        conversation: undefined,
+        conversationOpen: true,
+        ...input
+      });
+
+    expect(own({ conversation: chat(team, "private") })).toBe(true);
+    expect(own({ workspace: home, conversation: chat(home, "workspace") })).toBe(true);
+    expect(own({ conversation: chat(team, "workspace") })).toBe(false);
+    expect(own({ conversation: chat(team, "private", "lena") })).toBe(false);
+    // Until the open chat has arrived nothing of the person's own is offered in it.
+    expect(own({})).toBe(false);
+    // A new chat is the person's own where the workspace starts chats only they read.
+    expect(own({ conversationOpen: false, workspace: home })).toBe(true);
+    expect(own({ conversationOpen: false, workspace: privateTeam })).toBe(true);
+    expect(own({ conversationOpen: false })).toBe(false);
+    expect(own({ conversationOpen: false, userId: undefined, workspace: home })).toBe(false);
   });
 
   it("falls back to the workspace default when the picked agent is not offered there", () => {

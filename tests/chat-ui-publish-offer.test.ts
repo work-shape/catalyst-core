@@ -160,14 +160,15 @@ describe("the field of the publish dialog", () => {
     );
   });
 
-  it("offers an agent of Only me no choice, and says why", () => {
+  it("offers an agent of Only me in its owner's own chats, with nothing to choose", () => {
     const html = markup(
       publishOffer({ owner: { kind: "mine" }, saved: NOWHERE, maySet: true }),
       "own"
     );
-    expect(html).not.toContain('role="radio"');
-    expect(html).toContain(
-      "Das ist „Nur ich“ und kann darum keinem Team und nicht allen angeboten werden."
-    );
+    expect(html).toContain("Wählbar in:");
+    expect(html).toContain("In deinen eigenen Chats");
+    expect(html).toContain("die sonst niemand liest");
+    expect(html).toContain('disabled=""');
+    expect(html).not.toContain("Noch in keinem Chat");
   });
 });

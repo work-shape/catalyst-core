@@ -1,8 +1,20 @@
-import { forwardRef, useState, type ComponentPropsWithoutRef } from "react";
+import {
+  createContext,
+  forwardRef,
+  useContext,
+  useState,
+  type ComponentPropsWithoutRef
+} from "react";
 import { ChevronDown } from "lucide-react";
 import type { SafeConfig } from "@work-shape/catalyst-api-client";
 import { Avatar, Button, cn, Picker, type PickerOption } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../../shared/i18n";
+
+/**
+ * The person's own agents ("Nur ich") that the chat on screen cannot choose, as others read it.
+ * Every agent chip lists them greyed, with the reason.
+ */
+export const OwnAgentsElsewhereContext = createContext<SafeConfig["agents"]>([]);
 
 /** The start page introduces the agent; the header of a conversation only keeps its icon. */
 type AgentChipPlacement = "header" | "start-page";
@@ -51,6 +63,7 @@ export function AgentSelector({
 }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
+  const elsewhere = useContext(OwnAgentsElsewhereContext);
   const selectedAgent = agents.find((agent) => agent.name === selectedAgentName) ?? agents[0];
 
   const { showName } = display;
@@ -58,7 +71,7 @@ export function AgentSelector({
   if (!selectedAgent) {
     return null;
   }
-  if (showName && agents.length === 1) {
+  if (showName && agents.length === 1 && elsewhere.length === 0) {
     return (
       <div className={chipClassName(true)} title={selectedAgent.displayName}>
         <AgentChipContent agentLabel={selectedAgent.displayName} showName />
@@ -68,7 +81,15 @@ export function AgentSelector({
   return (
     <Picker
       label={t("selectAgent")}
-      options={agentPickerOptions(agents, display.showDescriptions)}
+      options={[
+        ...agentPickerOptions(agents, display.showDescriptions),
+        ...elsewhere.map((agent) => ({
+          value: agent.name,
+          label: agent.displayName,
+          disabled: true,
+          disabledReason: t("agents.ownChatsOnly")
+        }))
+      ]}
       value={selectedAgent.name}
       open={open}
       // Without a name the icon gives no hint that it opens anything, so a mouse

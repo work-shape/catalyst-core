@@ -4,9 +4,9 @@ import { createHash } from "node:crypto";
 import {
   AppError,
   getSubjectUserId,
+  mayUseOwnInChat,
   type ActorAccess,
   type AuthenticatedUser,
-  type CollaborationWorkspaceId,
   type Conversation,
   type JsonObject,
   type LocaleCode
@@ -15,7 +15,7 @@ import { ConversationWorkflow } from "../conversations/conversation-service";
 import { readMultipartFile, stageMultipartFile } from "../http/multipart-upload";
 import type { Route } from "../http/route";
 import { conversationIdParam, requirePathParam, resolveRequestLocale } from "./request-context";
-import { getWorkspaceAssetSnapshot } from "../workspaces/agent-availability";
+import { getWorkspaceAssetSnapshot, ownAgents } from "../workspaces/agent-availability";
 import { ProjectFileService } from "../projects/project-files";
 import type { ChatServerOptions } from "../types";
 
@@ -61,7 +61,7 @@ export function registerDraftAttachmentRoutes(route: Route, options: ChatServerO
           conversations,
           user,
           access,
-          conversation.collaborationWorkspaceId,
+          conversation,
           query.agentName
         );
         const service = attachments(options);
@@ -122,20 +122,28 @@ export function registerDraftAttachmentRoutes(route: Route, options: ChatServerO
 
 /**
  * Whether the agent chosen for the next message has the workspace tools, so that any file may
- * come along: the server checks the agent in the conversation's workspace.
+ * come along: the server checks the agent in the conversation's workspace, or the caller's own
+ * agent ("Nur ich") in a chat only they read.
  */
 async function workspaceToolsFor(
   options: ChatServerOptions,
   conversations: ConversationWorkflow,
   user: AuthenticatedUser,
   access: ActorAccess,
-  collaborationWorkspaceId: CollaborationWorkspaceId,
+  conversation: Conversation,
   agentName: string | undefined
 ): Promise<boolean> {
   if (agentName === undefined) return false;
-  const workspace = await conversations.resolveTargetWorkspace(user, collaborationWorkspaceId);
+  const workspace = await conversations.resolveTargetWorkspace(
+    user,
+    conversation.collaborationWorkspaceId
+  );
   const assets = await getWorkspaceAssetSnapshot(options, workspace, access);
-  const agent = assets.agents.find((candidate) => candidate.name === agentName);
+  const agent =
+    assets.agents.find((candidate) => candidate.name === agentName) ??
+    (mayUseOwnInChat(user, conversation, workspace)
+      ? (await ownAgents(options, { user, access }, agentName))[0]
+      : undefined);
   if (!agent) throw new AppError("NOT_FOUND", "The selected agent is not available");
   return (
     options.config.executionWorkspaces?.enabled === true &&
@@ -176,7 +184,7 @@ export async function addDraftAttachmentFromBytes(
     new ConversationWorkflow(options),
     input.user,
     input.access,
-    input.conversation.collaborationWorkspaceId,
+    input.conversation,
     input.agentName
   );
   const bytes = input.bytes;

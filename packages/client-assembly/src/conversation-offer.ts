@@ -18,6 +18,7 @@ import {
   asCollaborationWorkspaceId,
   getSubjectUserId,
   isAuthenticatedServicePrincipal,
+  mayUseOwnInChat,
   dataStoreOperationName,
   resolvePolicy,
   type PolicyDefaults,
@@ -223,15 +224,15 @@ async function personalSkillNames(
 ): Promise<string[]> {
   const { user, runId, clientInstanceId } = request;
   const { agentRuns, configAssets, workspaces } = input.stores;
-  if (!user || !runId || !agentRuns || !configAssets) return [];
-  if (
-    isAuthenticatedServicePrincipal(user) ||
-    user.delegatedActor !== undefined ||
-    user.keyScopes !== undefined
-  ) {
-    return [];
-  }
-  if (conversation.kind !== "chat" || conversation.status !== "active") return [];
+  if (!user || !runId || !agentRuns || !configAssets || !workspaces) return [];
+  // Only a chat no one but its person reads, as for a personal Connection: one they created,
+  // in their own Personal Workspace or private. A team-visible chat, or one another person
+  // created, gets none, as the skill's text would reach its other readers.
+  const workspace = await workspaces.getWorkspace(
+    clientInstanceId,
+    conversation.collaborationWorkspaceId
+  );
+  if (!mayUseOwnInChat(user, conversation, workspace)) return [];
   const person = getSubjectUserId(user);
   const run = await agentRuns.getAgentRun({ clientInstanceId, runId });
   const authorization = run?.authorization;
@@ -248,22 +249,6 @@ async function personalSkillNames(
     authorization.subjectUserId !== person ||
     authorization.principal.kind !== "user" ||
     authorization.principal.id !== person
-  ) {
-    return [];
-  }
-  // Only a chat no one but its person reads, as for a personal Connection: one they created,
-  // in their own Personal Workspace or private. A team-visible chat, or one another person
-  // created, gets none, as the skill's text would reach its other readers.
-  if (conversation.createdByUserId !== person || !workspaces) return [];
-  const workspace = await workspaces.getWorkspace(
-    clientInstanceId,
-    conversation.collaborationWorkspaceId
-  );
-  if (
-    !workspace ||
-    (workspace.kind === "personal"
-      ? workspace.personalUserId !== person
-      : conversation.visibility !== "private")
   ) {
     return [];
   }
