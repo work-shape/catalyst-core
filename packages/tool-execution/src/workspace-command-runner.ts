@@ -280,6 +280,7 @@ export class LocalWorkspaceCommandRunner {
     let projectMount: PreparedProjectFolder | undefined;
     let projectDirectory: string | undefined;
     const projectFileChanges: ProjectCommandFileChange[] = [];
+    const projectFileWarnings: string[] = [];
     try {
       const workspace = await this.requireWorkspace(command);
       hydrated = await this.hydrateWorkspace(workspace, command);
@@ -289,7 +290,9 @@ export class LocalWorkspaceCommandRunner {
       projectDirectory = this.processExecutor.mountsProjectFolder
         ? join(hydrated.executionDirectory, `project-${randomUUID()}`)
         : join(hydrated.workspaceDirectory, "project");
-      projectMount = await this.projectFolders?.prepare(command, projectDirectory);
+      projectMount = await this.projectFolders?.prepare(command, projectDirectory, {
+        allowMissingDirectory: !this.processExecutor.mountsProjectFolder
+      });
       if (projectMount && this.processExecutor.mountsProjectFolder) {
         await mkdir(join(hydrated.workspaceDirectory, "project"), { recursive: true });
       }
@@ -308,9 +311,6 @@ export class LocalWorkspaceCommandRunner {
           ? projectMount.directory
           : undefined
       );
-      if (projectMount) {
-        await this.projectFolders?.sync(command, projectMount, projectFileChanges);
-      }
       const scannedFiles = await this.scanWorkspaceFiles(hydrated.workspaceDirectory, command);
       const syncedFiles = await this.syncChangedFiles(
         workspace,
@@ -325,11 +325,27 @@ export class LocalWorkspaceCommandRunner {
         syncedFiles,
         hydrated.workspaceDirectory
       );
+      if (projectMount) {
+        try {
+          await this.projectFolders?.sync(
+            command,
+            projectMount,
+            projectFileChanges,
+            projectFileWarnings
+          );
+        } catch (error) {
+          projectFileWarnings.push(
+            `Project changes could not be saved (${toWorkspaceCommandError(error).code}). Conversation files were saved.`
+          );
+          throw error;
+        }
+      }
       const output = commandOutputFromProcess(
         processResult,
         changedFiles,
         promotedArtifacts,
-        projectFileChanges
+        projectFileChanges,
+        projectFileWarnings
       );
       const processError = this.processError(command, processResult);
       return {
@@ -344,7 +360,8 @@ export class LocalWorkspaceCommandRunner {
               processResult,
               changedFiles,
               promotedArtifacts,
-              projectFileChanges
+              projectFileChanges,
+              projectFileWarnings
             )
           : undefined,
         error: toWorkspaceCommandError(error)
@@ -685,7 +702,8 @@ function commandOutputFromProcess(
   processResult: ProcessResult,
   changedFiles: WorkspaceCommandChangedFile[],
   promotedArtifacts: WorkspaceCommandPromotedArtifact[],
-  projectFileChanges: ProjectCommandFileChange[]
+  projectFileChanges: ProjectCommandFileChange[],
+  projectFileWarnings: string[]
 ): WorkspaceCommandOutput {
   return {
     exitCode: processResult.exitCode,
@@ -695,6 +713,7 @@ function commandOutputFromProcess(
     changedFiles,
     promotedArtifacts,
     ...(projectFileChanges.length > 0 ? { projectFileChanges } : {}),
+    ...(projectFileWarnings.length > 0 ? { projectFileWarnings } : {}),
     truncated: processResult.truncated
   };
 }

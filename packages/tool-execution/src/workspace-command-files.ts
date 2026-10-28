@@ -170,6 +170,7 @@ export async function ensureStandardWorkspaceDirectories(
 }
 
 interface WorkspaceScanOptions {
+  excludedPaths?: ReadonlySet<string>;
   skipProjectDirectory?: boolean;
   maxBytes?: number;
   maxFileBytes?: number;
@@ -209,6 +210,7 @@ export async function* iterateWorkspaceFiles(
       const absolutePath = join(directory, entry.name);
       const workspacePath = relative(workspaceDirectory, absolutePath).split("\\").join("/");
       if ((options.skipProjectDirectory ?? true) && workspacePath === "project") continue;
+      if (options.excludedPaths?.has(workspacePath)) continue;
       if (entry.isSymbolicLink()) {
         throw new WorkspaceRunnerFailure(
           "WORKSPACE_SYMLINK_REJECTED",

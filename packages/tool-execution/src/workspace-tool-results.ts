@@ -80,6 +80,7 @@ export function commandToExecOutput(command: WorkspaceCommand, workspaceId: Exec
     changedFiles: (output?.changedFiles ?? []).map(publicChangedFile),
     promotedArtifacts: output?.promotedArtifacts ?? [],
     ...(output?.projectFileChanges ? { projectFileChanges: output.projectFileChanges } : {}),
+    ...(output?.projectFileWarnings ? { projectFileWarnings: output.projectFileWarnings } : {}),
     truncated: output?.truncated ?? {
       stdout: false,
       stderr: false

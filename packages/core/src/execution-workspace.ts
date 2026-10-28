@@ -109,6 +109,7 @@ export interface WorkspaceCommandOutput {
   changedFiles: WorkspaceCommandChangedFile[];
   promotedArtifacts: WorkspaceCommandPromotedArtifact[];
   projectFileChanges?: ProjectCommandFileChange[];
+  projectFileWarnings?: string[];
   truncated: {
     stdout: boolean;
     stderr: boolean;

@@ -528,13 +528,24 @@ export class ProjectFileService implements ProjectFolderPort, ProjectCommandFold
     });
     if (
       !run?.ownerUserId ||
-      run.conversationId !== command.conversationId ||
       run.ownerUserId !== command.ownerUserId ||
       run.workflowStepRunId ||
       run.principalId ||
       (run.authorization && run.authorization.principal.kind !== "user")
     )
       return undefined;
+    if (run.conversationId !== command.conversationId) {
+      const thread = await this.options.stores.conversations.getConversation(
+        this.options.clientInstanceId,
+        run.conversationId
+      );
+      if (
+        thread?.kind !== "run_thread" ||
+        thread.status !== "active" ||
+        thread.parentConversationId !== command.conversationId
+      )
+        return undefined;
+    }
     const person = await this.options.stores.users.getUser({
       clientInstanceId: this.options.clientInstanceId,
       userId: asUserId(run.ownerUserId)
@@ -552,15 +563,6 @@ export class ProjectFileService implements ProjectFolderPort, ProjectCommandFold
     return folder
       ? { folder, userId: person.id, ...(run.locale ? { locale: run.locale } : {}) }
       : undefined;
-  }
-
-  async readVersion(folder: ConversationProjectFolder, file: ProjectFile): Promise<Uint8Array> {
-    const version = await this.storedVersion(
-      folder.projectId,
-      requirePath(file.path),
-      file.version
-    );
-    return readObjectBytes(this.objects(), version.objectKey);
   }
 
   async removeVersion(

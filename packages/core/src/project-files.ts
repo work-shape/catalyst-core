@@ -315,7 +315,6 @@ export interface ProjectCommandFolderRequest {
 /** The runner uses the same version writer as the file tools, with a snapshot of each read. */
 export interface ProjectCommandFolderPort extends ProjectFolderPort {
   folderOfCommand(command: ProjectCommandFolderRequest): Promise<ProjectCommandFolder | undefined>;
-  readVersion(folder: ConversationProjectFolder, file: ProjectFile): Promise<Uint8Array>;
   /** A concurrent edit wins over a deletion: nothing is deleted and no change is returned. */
   removeVersion(
     folder: ConversationProjectFolder,
