@@ -1,4 +1,4 @@
-import { Building2, Lock, X } from "lucide-react";
+import { Building2, Lock, UserRound, X } from "lucide-react";
 import { useId, type MouseEventHandler, type ReactNode } from "react";
 import { cn } from "../cn";
 import { useUiLabels } from "../ui-root";
@@ -111,9 +111,12 @@ export function Chip({
 }
 
 export interface ScopeChipProps {
-  /** Whether the object belongs to the whole instance or to one workspace. */
-  scope: "instance" | "workspace";
-  /** The instance's or the workspace's name. */
+  /**
+   * Where the object sits: on the whole instance, in one workspace, or in the reader's own
+   * Personal Workspace, which nobody else sees.
+   */
+  scope: "instance" | "workspace" | "personal";
+  /** The instance's or the workspace's name, or the reader's word for their own place. */
   name: string;
   /** The workspace's emoji. */
   emoji?: string | null;
@@ -127,13 +130,15 @@ export interface ScopeChipProps {
   className?: string;
 }
 
-/** The chip that says where an object lives: on the instance or in a workspace. */
+/** The chip that says where an object lives: on the instance, in a workspace, or the reader's own. */
 export function ScopeChip({ scope, name, emoji, accent, readOnlyLabel, ...props }: ScopeChipProps) {
   return (
     <Chip
       leading={
         scope === "instance" ? (
           <Building2 aria-hidden="true" className="text-muted-foreground" />
+        ) : scope === "personal" ? (
+          <UserRound aria-hidden="true" className="text-muted-foreground" />
         ) : (
           // Inside the pill a radius of 8 would read as a person's circle, so it is 4 here.
           <Avatar

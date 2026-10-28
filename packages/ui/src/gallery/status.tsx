@@ -281,6 +281,8 @@ export const statusGallery: GalleryGroup = {
               readOnlyLabel={text.readOnly}
             />
             <ScopeChip scope="workspace" name={text.workspaceMarketing} href="#scope" />
+            <ScopeChip scope="personal" name={text.onlyMe} />
+            <ScopeChip scope="personal" size="sm" name={text.onlyMe} />
           </Samples>
         </>
       )
