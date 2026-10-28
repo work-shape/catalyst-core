@@ -17,6 +17,8 @@ export const workspace = defineTranslations({
     runCommandNotTaken:
       "The reply was stopped because code could not be run. Code execution is unavailable right now. This is a problem of the platform, not of your input. Try again later.",
     runInterrupted: "The reply was interrupted. Please send your message again.",
+    runTimedOut:
+      "The reply was interrupted. It does not continue on its own. The steps already done are kept: write “continue” and the agent picks up where it left off.",
     runRateLimited:
       "The model is overloaded right now, so the reply was interrupted. It does not continue on its own. The steps already done are kept: in about a minute, write “continue” and the agent picks up where it left off.",
     runPersonalDataModelRegion:
@@ -78,6 +80,8 @@ export const workspace = defineTranslations({
     runCommandNotTaken:
       "Die Antwort wurde gestoppt, weil Code gerade nicht ausgeführt werden kann. Das ist ein Problem der Plattform, nicht deiner Eingabe. Versuche es später erneut.",
     runInterrupted: "Die Antwort wurde unterbrochen. Bitte sende deine Nachricht erneut.",
+    runTimedOut:
+      "Die Antwort wurde unterbrochen. Sie geht nicht von selbst weiter. Die erledigten Schritte bleiben erhalten: Schreib „weiter“, dann macht der Agent dort weiter, wo er aufgehört hat.",
     runRateLimited:
       "Das Modell ist gerade überlastet, deshalb wurde die Antwort unterbrochen. Sie geht nicht von selbst weiter. Die erledigten Schritte bleiben erhalten: Schreib in etwa einer Minute „weiter“, dann macht der Agent dort weiter, wo er aufgehört hat.",
     runPersonalDataModelRegion:

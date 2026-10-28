@@ -1570,6 +1570,8 @@ describe("OpenAI-compatible model provider", () => {
     });
     await expect(stream.next()).rejects.toMatchObject({
       code: "TIMEOUT",
+      kind: "timeout",
+      retryable: true,
       message: "Model provider stream ended before the completion marker"
     });
   });
@@ -1618,6 +1620,8 @@ describe("OpenAI-compatible model provider", () => {
     });
     await expect(stream.next()).rejects.toMatchObject({
       code: "TIMEOUT",
+      kind: "timeout",
+      retryable: true,
       message: "Model provider stream ended before response.completed"
     });
   });

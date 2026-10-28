@@ -148,6 +148,30 @@ describe("chat UI conversation controller", () => {
       }
     });
 
+    it("explains a timed-out stream in both languages, live and after a reload", () => {
+      const error = {
+        code: "TIMEOUT",
+        message: "Model provider stream ended before response.completed",
+        category: "app_error"
+      } as const;
+      const live = applyRunObservationToControllerState(
+        createControllerStateFromSnapshot(
+          createSnapshot({ lastSequence: 1, text: "Answer so far" })
+        ),
+        createObservation({ sequence: 2, type: "run_failed", payload: { error } })
+      ).state;
+      const reloaded = createControllerStateFromSnapshot(
+        createSnapshot({ lastSequence: 2, text: "Answer so far", runStatus: "failed", error })
+      );
+      for (const state of [live, reloaded]) {
+        expect(state.activeRun?.projection.text).toBe("Answer so far");
+        expect(notices(state)).toEqual({
+          en: "The reply was interrupted. It does not continue on its own. The steps already done are kept: write “continue” and the agent picks up where it left off.",
+          de: "Die Antwort wurde unterbrochen. Sie geht nicht von selbst weiter. Die erledigten Schritte bleiben erhalten: Schreib „weiter“, dann macht der Agent dort weiter, wo er aufgehört hat."
+        });
+      }
+    });
+
     describe("a reached usage limit that the run names", () => {
       const advice = {
         en: "Your answer so far is kept. Ask an administrator of this instance to check the usage limits.",
