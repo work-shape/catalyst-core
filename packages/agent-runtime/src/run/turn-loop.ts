@@ -23,6 +23,7 @@ import {
   type LocaleCode,
   type PreviewViewerKey,
   type PausedToolCall,
+  type ProjectInstructions,
   type RuntimeAssetSnapshot,
   type RuntimeCallContext,
   type StartAgentRunInput,
@@ -141,6 +142,7 @@ export class TurnLoop {
     // orientation on the platform and the skills the platform ships. The asset tools come from
     // the offer alone, which may hold back one the definition lists.
     const offer = await this.offerOf(runId, listed, input, context);
+    const projectInstructions = await this.projectInstructionsOf(runId, input, context);
     const { agent, dataTools } = await this.agentToolsOf(runId, listed, offer, input, context);
     const modelSelection = this.modelInput.getModelSelectionForAgent(
       agent,
@@ -194,7 +196,8 @@ export class TurnLoop {
           agentSkillChangesEnabled: this.options.agentSkillChangesEnabled,
           ...(offer?.orientation ? { orientation: offer.orientation } : {}),
           ...(offer?.subject ? { subject: { ...offer, subject: offer.subject } } : {}),
-          ...(offer?.projectFolder ? { projectFolder: offer.projectFolder } : {})
+          ...(offer?.projectFolder ? { projectFolder: offer.projectFolder } : {}),
+          ...(projectInstructions ? { projectInstructions } : {})
         }
       )
     };
@@ -231,6 +234,25 @@ export class TurnLoop {
           user: context.user,
           runId
         });
+  }
+
+  /**
+   * The project's instructions for the run (PRJ-3), read once at its start and recorded on it;
+   * a run that goes on after a pause takes the version it recorded. A Workflow step and a
+   * preview take none.
+   */
+  private async projectInstructionsOf(
+    runId: AgentRunId,
+    input: StartAgentRunInput,
+    context: RuntimeCallContext
+  ): Promise<ProjectInstructions | undefined> {
+    if (input.workflowAgent || input.preview) return undefined;
+    return this.options.conversationOffer?.projectInstructionsOf?.({
+      clientInstanceId: context.clientInstanceId,
+      conversationId: input.conversationId,
+      ...(context.user ? { user: context.user } : {}),
+      runId
+    });
   }
 
   /**

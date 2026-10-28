@@ -12010,6 +12010,72 @@
         "x-catalyst-rate-class": "write"
       }
     },
+    "/api/v1/conversations/{conversationId}/project-instructions": {
+      "get": {
+        "operationId": "conversations.project_instructions.get",
+        "summary": "Say whether the instructions of a chat's project changed since the chat's last run took them",
+        "tags": [
+          "Projects"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "conversation:read"
+            ]
+          },
+          {
+            "sessionToken": [
+              "conversation:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationProjectInstructions"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-rate-class": "read"
+      }
+    },
     "/api/v1/conversations/{conversationId}/resources": {
       "get": {
         "operationId": "conversations.resources.list",
@@ -46220,6 +46286,33 @@
           "createdAt",
           "updatedAt",
           "retainedUntil"
+        ]
+      },
+      "ConversationProjectInstructions": {
+        "type": "object",
+        "properties": {
+          "projectId": {
+            "type": "string"
+          },
+          "projectTitle": {
+            "type": "string"
+          },
+          "currentVersion": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "usedVersion": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "changed": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "changed"
         ]
       },
       "ConversationResourceListItem": {

@@ -13,6 +13,7 @@ import {
   projectFileConflictPath,
   projectFileMimeType,
   projectFileObjectPrefix,
+  PROJECT_INSTRUCTIONS_PATH,
   readObjectBytes,
   type AuthenticatedUser,
   type Conversation,
@@ -257,6 +258,49 @@ export class ProjectFileService implements ProjectFolderPort {
       : change;
   }
 
+  /**
+   * Whether the instructions of a chat's project changed since the chat's last run took them
+   * (PRJ-3), from outside this chat: by a person on the page or another chat's agent. Only the
+   * versions; the text is read through the project's files.
+   */
+  async conversationInstructions(user: AuthenticatedUser, conversationId: string) {
+    const conversation = await requireChatConversationAccess(
+      this.options,
+      asConversationId(conversationId),
+      user
+    );
+    if (conversation.projectId === undefined || !this.options.modules.isEnabled("projects")) {
+      return { changed: false };
+    }
+    const project = await this.readable(user, conversation.projectId);
+    const [versions, run] = await Promise.all([
+      this.options.stores.projectFiles.listProjectFileVersions({
+        clientInstanceId: this.options.clientInstanceId,
+        projectId: project.id,
+        path: PROJECT_INSTRUCTIONS_PATH
+      }),
+      this.options.stores.agentRuns.getLatestConversationAgentRun({
+        clientInstanceId: this.options.clientInstanceId,
+        conversationId: conversation.id
+      })
+    ]);
+    const newest = versions[0];
+    const currentVersion = newest && !newest.deleted ? newest.version : undefined;
+    const used = run?.project?.projectId === project.id ? run.project : undefined;
+    const changed =
+      used !== undefined &&
+      newest !== undefined &&
+      used.instructionsVersion !== currentVersion &&
+      newest.conversationId !== conversation.id;
+    return {
+      projectId: project.id,
+      projectTitle: project.title,
+      ...(currentVersion === undefined ? {} : { currentVersion }),
+      ...(used?.instructionsVersion === undefined ? {} : { usedVersion: used.instructionsVersion }),
+      changed
+    };
+  }
+
   /** "Save to project": a file of a chat in a project, kept in that project's folder. */
   async saveFromConversation(
     user: AuthenticatedUser,
@@ -479,6 +523,22 @@ export class ProjectFileService implements ProjectFolderPort {
     const file = await this.current(folder.projectId, path);
     if (!file) return undefined;
     return { file, bytes: await readObjectBytes(this.objects(), file.objectKey) };
+  }
+
+  async readVersion(
+    folder: ConversationProjectFolder,
+    rawPath: string,
+    version: number
+  ): Promise<Uint8Array | undefined> {
+    const path = normalizeProjectFilePath(rawPath);
+    if (!path) throw invalidPath();
+    const kept = await this.options.stores.projectFiles.getProjectFileVersion({
+      clientInstanceId: this.options.clientInstanceId,
+      projectId: folder.projectId,
+      path,
+      version
+    });
+    return kept?.objectKey ? readObjectBytes(this.objects(), kept.objectKey) : undefined;
   }
 
   async write(

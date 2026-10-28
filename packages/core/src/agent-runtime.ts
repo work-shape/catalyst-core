@@ -142,6 +142,17 @@ export interface AgentRun {
   heartbeatAt?: ISODateString;
   cancellationRequestedAt?: ISODateString;
   cancellationReason?: string;
+  /**
+   * The project the run's chat was in when the run started, and the version of its `AGENTS.md`
+   * the run took (PRJ-3). No version: the project had no instructions then.
+   */
+  project?: AgentRunProjectRecord;
+}
+
+/** What a run in a project recorded of it: the project's id and its instructions' version. */
+export interface AgentRunProjectRecord {
+  projectId: string;
+  instructionsVersion?: number;
 }
 
 export interface ActiveRunSummary {
@@ -697,6 +708,12 @@ export interface AgentRunStore {
     conversationId: ConversationId;
   }): Promise<ConversationRunAgent[]>;
   updateAgentRunStatus(input: UpdateAgentRunStatusInput): Promise<AgentRun>;
+  /** Records the project and the instructions' version a run took at its start (PRJ-3). */
+  recordAgentRunProject(input: {
+    clientInstanceId: ClientInstanceId;
+    runId: AgentRunId;
+    project: AgentRunProjectRecord;
+  }): Promise<void>;
   /**
    * The first step of an `agent_run.execute` job: moves a queued run to running under the
    * job's lease. A run is executed only by the attempt this resolves `claimed` for.

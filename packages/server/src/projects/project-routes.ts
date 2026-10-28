@@ -78,6 +78,10 @@ export function registerProjectRoutes(route: Route, options: ChatServerOptions):
     files.versions(user, params.projectId, query.path)
   );
 
+  route(apiOperations["conversations.project_instructions.get"], ({ user, params }) =>
+    files.conversationInstructions(user, params.conversationId)
+  );
+
   route(apiOperations["projects.files.get_content"], async ({ user, params, query, reply }) => {
     const file = await files.content(user, params.projectId, query.path, query.version);
     const download = query.download === "true";

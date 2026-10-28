@@ -1,5 +1,6 @@
 import {
   addFromProjectRequestSchema,
+  conversationProjectInstructionsSchema,
   createProjectRequestSchema,
   deleteProjectFileRequestSchema,
   moveProjectFilesRequestSchema,
@@ -226,6 +227,22 @@ export const projectOperations = {
     response: json(projectFileChangeSchema),
     errors: ["NOT_FOUND", "CONFLICT", "VALIDATION_FAILED"],
     rateClass: "write"
+  }),
+  // The project's instructions (PRJ-3): whether they changed since a chat's last run.
+  "conversations.project_instructions.get": defineOperation({
+    id: "conversations.project_instructions.get",
+    method: "GET",
+    path: "/api/v1/conversations/:conversationId/project-instructions",
+    summary:
+      "Say whether the instructions of a chat's project changed since the chat's last run took them",
+    tag: "Projects",
+    auth: "user",
+    scope: "conversation:read",
+    requires: [],
+    effect: "reading",
+    response: json(conversationProjectInstructionsSchema),
+    errors: ["NOT_FOUND"],
+    rateClass: "read"
   }),
   "conversations.project_files.save": defineRegisteredOperation({
     id: "conversations.project_files.save",

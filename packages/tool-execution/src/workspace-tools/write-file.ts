@@ -16,7 +16,11 @@ import {
   storeTextFile
 } from "./stored-text-file";
 import { resolveWorkspaceHandle } from "./workspace";
-import { projectFolderTarget, writeProjectFolderFile } from "./project-folder";
+import {
+  projectFolderTarget,
+  projectInstructionsFloor,
+  writeProjectFolderFile
+} from "./project-folder";
 
 export function workspaceWriteFileTool(deps: WorkspaceToolDependencies) {
   return defineTool({
@@ -31,6 +35,9 @@ export function workspaceWriteFileTool(deps: WorkspaceToolDependencies) {
     effect: "changing",
     // Runs on the agent's own call. Without a mode the instance default for changes would apply.
     permission: { mode: "allow" },
+    // The project's instructions enter every run of everyone in the project (PRJ-3): the agent
+    // changes them only with the person's click, whatever a setting says.
+    policyFloor: (_call, input) => projectInstructionsFloor(deps, input.path),
     description: `Create a text file in /workspace or replace its whole content, at most ${WORKSPACE_WRITE_FILE_MAX_BYTES / 1024} KiB. Parent folders are created. To change part of a file use workspace.edit_file. Search, move, delete and scripts stay with workspace.exec.`,
     inputSchema: workspaceWriteFileInputSchema,
     inputJsonSchema: workspaceWriteFileInputJsonSchema,

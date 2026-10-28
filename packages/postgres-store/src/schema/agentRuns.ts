@@ -63,7 +63,12 @@ export const agentRuns = pgTable(
     cancellationRequestedAt: timestamp("cancellation_requested_at", { withTimezone: true }),
     cancellationReason: text("cancellation_reason"),
     // What a run that waits for a decision keeps to go on; null otherwise (EW-2a).
-    resumeState: jsonb("resume_state").$type<AgentRunResumeState>()
+    resumeState: jsonb("resume_state").$type<AgentRunResumeState>(),
+    // The project the run's chat was in at its start, and the version of its AGENTS.md the
+    // run took (PRJ-3); no version where the project had none. No foreign key: the record
+    // outlives the project, as an id.
+    projectId: text("project_id"),
+    projectInstructionsVersion: integer("project_instructions_version")
   },
   (table) => [
     check(

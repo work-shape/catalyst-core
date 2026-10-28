@@ -261,7 +261,17 @@ export function mapAgentRun(row: AgentRunRow | undefined): AgentRun {
     leaseExpiresAt: row.leaseExpiresAt?.toISOString(),
     heartbeatAt: row.heartbeatAt?.toISOString(),
     cancellationRequestedAt: row.cancellationRequestedAt?.toISOString(),
-    cancellationReason: row.cancellationReason ?? undefined
+    cancellationReason: row.cancellationReason ?? undefined,
+    ...(row.projectId
+      ? {
+          project: {
+            projectId: row.projectId,
+            ...(row.projectInstructionsVersion === null
+              ? {}
+              : { instructionsVersion: row.projectInstructionsVersion })
+          }
+        }
+      : {})
   };
 }
 

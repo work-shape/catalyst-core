@@ -34,7 +34,12 @@ import {
   type ModuleSnapshot,
   type PlatformStores,
   type ProjectFolderPort,
+  type ProjectInstructions,
+  type AuditRecorder,
+  auditActorFromUser,
+  PROJECT_INSTRUCTIONS_PATH,
   projectFolderManifest,
+  projectInstructionsText,
   type ToolExecutionContext
 } from "@work-shape/catalyst-core";
 import {
@@ -132,8 +137,12 @@ interface ConversationOfferInput {
   stores: {
     conversations: Pick<PlatformStores["conversations"], "getConversation"> &
       Partial<Pick<PlatformStores["conversations"], "listConversationDataStores">>;
-    /** The run an offer is for: whether it is its person's own (SCOPE-MYCHATS). */
-    agentRuns?: Pick<PlatformStores["agentRuns"], "getAgentRun">;
+    /**
+     * The run an offer is for: whether it is its person's own (SCOPE-MYCHATS). Where the run
+     * records the project's instructions it took (PRJ-3).
+     */
+    agentRuns?: Pick<PlatformStores["agentRuns"], "getAgentRun"> &
+      Partial<Pick<PlatformStores["agentRuns"], "recordAgentRunProject">>;
     /** The skills a person switched on for their own chats (SCOPE-MYCHATS). */
     configAssets?: Pick<PlatformStores["configAssets"], "listPersonalChatSkills">;
     /**
@@ -156,6 +165,8 @@ interface ConversationOfferInput {
   hasTool(toolName: string): boolean;
   /** The folder of the project a chat is in (PRJ-2): its manifest goes into the run's prompt. */
   projectFolder?: () => ProjectFolderPort | undefined;
+  /** Where a run's read of the project's instructions is audited, by project and version. */
+  audit?: AuditRecorder;
   /**
    * The right a person needs to be offered a tool, by tool: a listed tool whose right the
    * person of the run lacks is withheld from the model. Asked of the instance's authorizer.
@@ -401,8 +412,74 @@ function createConversationOffer(input: ConversationOfferInput): ConversationOff
         ...(holds ? { orientation: PLATFORM_ORIENTATION } : {}),
         ...(folder ? { projectFolder: folder } : {})
       };
-    }
+    },
+    projectInstructionsOf: (request) => projectInstructionsOf(input, request)
   };
+}
+
+/**
+ * The project's instructions a run takes at its start (PRJ-3): the chat's project's `AGENTS.md`
+ * where the person of the run reads the project, as its file tools reach it; a subagent's thread
+ * reaches its root chat's. The run records the project and the version it took, and the read is
+ * audited by the two ids. A run that goes on after a pause recorded them already and takes that
+ * version again, so a change during the run is used from the next one.
+ */
+async function projectInstructionsOf(
+  input: ConversationOfferInput,
+  request: Parameters<NonNullable<ConversationOfferSource["projectInstructionsOf"]>>[0]
+): Promise<ProjectInstructions | undefined> {
+  const port = input.projectFolder?.();
+  const runs = input.stores.agentRuns;
+  if (!port) return undefined;
+  const folder = await port.folderOf({
+    clientInstanceId: request.clientInstanceId,
+    conversationId: request.conversationId,
+    ...(request.user ? { user: request.user } : {})
+  });
+  if (!folder) return undefined;
+  const run = await runs?.getAgentRun({
+    clientInstanceId: request.clientInstanceId,
+    runId: request.runId
+  });
+  const recorded = run?.project?.projectId === folder.projectId ? run.project : undefined;
+  let version: number | undefined;
+  let bytes: Uint8Array | undefined;
+  if (recorded) {
+    version = recorded.instructionsVersion;
+    bytes =
+      version === undefined
+        ? undefined
+        : await port.readVersion(folder, PROJECT_INSTRUCTIONS_PATH, version);
+  } else {
+    const current = await port.read(folder, PROJECT_INSTRUCTIONS_PATH);
+    version = current?.file.version;
+    bytes = current?.bytes;
+    if (run) {
+      await runs?.recordAgentRunProject?.({
+        clientInstanceId: request.clientInstanceId,
+        runId: request.runId,
+        project: {
+          projectId: folder.projectId,
+          ...(version === undefined ? {} : { instructionsVersion: version })
+        }
+      });
+    }
+    if (version !== undefined && request.user) {
+      // The project and the version: never the path or the text.
+      await input.audit?.record({
+        type: "project.instructions_read",
+        status: "success",
+        actor: auditActorFromUser(request.user),
+        subject: folder.projectId,
+        correlationId: run?.correlationId ?? request.runId,
+        metadata: { version, runId: request.runId }
+      });
+    }
+  }
+  if (version === undefined || !bytes) return undefined;
+  const { text, truncated } = projectInstructionsText(new TextDecoder().decode(bytes));
+  if (text.trim() === "") return undefined;
+  return { projectId: folder.projectId, title: folder.title, version, text, truncated };
 }
 
 /**
@@ -458,6 +535,7 @@ export function createPlatformTools(
     | "policy"
     | "toolRights"
     | "projectFolder"
+    | "audit"
   > & {
     /**
      * The Connections of the instance, where the module `connections` is on: the agent's draft
@@ -537,6 +615,7 @@ export function createPlatformTools(
       ...(input.policy ? { policy: input.policy } : {}),
       ...(input.toolRights ? { toolRights: input.toolRights } : {}),
       ...(input.projectFolder ? { projectFolder: input.projectFolder } : {}),
+      ...(input.audit ? { audit: input.audit } : {}),
       authorizer: () => attached.authorizer,
       hasTool: (toolName) => attached.tools?.has(toolName) ?? false
     }),

@@ -1,0 +1,20 @@
+# The two people of the project instructions spec (PRJ-3), used by no other spec: one writes a
+# shared project's AGENTS.md and allows their agent's change of it, the other is a member whose
+# chat in the project then says the instructions changed. The labels sort after every other for
+# the reason in e2e-app.yaml.
+- email: e2e-project-instructions@example.test
+  displayLabel: E2E Zz Project Instructions
+  passwordEnvName: E2E_PROJECT_INSTRUCTIONS_PASSWORD
+  developmentPassword: e2e-project-instructions-password
+  roles:
+    - user
+  permissionRefs:
+    - demo-tools
+- email: e2e-project-instructions-member@example.test
+  displayLabel: E2E Zz Project Instructions Member
+  passwordEnvName: E2E_PROJECT_INSTRUCTIONS_MEMBER_PASSWORD
+  developmentPassword: e2e-project-instructions-member-password
+  roles:
+    - user
+  permissionRefs:
+    - demo-tools

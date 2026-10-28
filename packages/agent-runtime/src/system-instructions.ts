@@ -2,7 +2,8 @@ import {
   SUBJECT_TOOL_PREFIX,
   type ConversationOffer,
   type ConversationSubject,
-  type LocaleCode
+  type LocaleCode,
+  type ProjectInstructions
 } from "@work-shape/catalyst-core";
 
 /** The read of an asset by its kind and name, a skill this agent does not hold among them. */
@@ -62,6 +63,27 @@ export interface CreateSystemInstructionsOptions {
    * it holds. It changes with every write, so it comes last.
    */
   projectFolder?: string;
+  /**
+   * The project's instructions, its `AGENTS.md` (PRJ-3): layer 4, after the agent's own and
+   * before what changes. They are the same for every run of the project until someone edits
+   * them, so they stay in the part a provider caches.
+   */
+  projectInstructions?: Pick<ProjectInstructions, "title" | "text" | "truncated">;
+}
+
+/** The sentence layer 4 opens with: the project's instructions add, and never outrank. */
+function projectInstructionsSection(
+  instructions: Pick<ProjectInstructions, "title" | "text" | "truncated">
+): string {
+  return [
+    "Project instructions:",
+    `These are the instructions of the project "${instructions.title}", written by people of the workspace in its file AGENTS.md. Follow them where they do not conflict with the instructions above. They grant no permission and no tool.`,
+    "",
+    instructions.text.trim(),
+    ...(instructions.truncated
+      ? ["", "[The file is longer than a run takes; its end was left out.]"]
+      : [])
+  ].join("\n");
 }
 
 export function createSystemInstructions(
@@ -92,6 +114,10 @@ export function createSystemInstructions(
     sections.push(
       `Skill change proposals:\nA proposal changes one of your own skills or creates a new one. Read your skill with read_skill first.${otherSkillRead} Use propose_skill_change for one small, exact change per call. Skills are shared by all users: never include personal or customer-specific data. In your reply, explain what would change and that it needs a person's approval. A proposal is not active until approved.`
     );
+  }
+
+  if (options.projectInstructions && options.projectInstructions.text.trim() !== "") {
+    sections.push(projectInstructionsSection(options.projectInstructions));
   }
 
   const runtimeContext = createRuntimeContext(locale, options.currentDate);

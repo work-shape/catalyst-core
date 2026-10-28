@@ -50,6 +50,7 @@ import { apiErrorStatus } from "../../shared/workspace-utils";
 import type { WorkspaceRoute } from "../../shared/workspace-route";
 import { RouteLink } from "../../studio/route-link";
 import { ProjectFilesSection } from "./project-files-section";
+import { ProjectInstructionsTile } from "./project-instructions";
 
 /** The workspace the projects belong to, as the pages name it. */
 interface ProjectsWorkspace {
@@ -550,6 +551,7 @@ function ProjectPage({
               state={<AudienceBadge project={project} workspace={workspace.name} />}
               description={project.description}
             />
+            <ProjectInstructionsTile project={project} />
             {/* The files stand beside the chats where the page has room, and below them where not. */}
             <div className="grid gap-8 @4xl/page:grid-cols-[minmax(0,1fr)_minmax(18rem,26rem)]">
               <div className="@container min-w-0">

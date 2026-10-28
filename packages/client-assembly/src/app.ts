@@ -633,6 +633,7 @@ export async function createClientInstanceExecutionAssembly(
     dataToolDescribeTimeoutMs: config.runtime.dataToolDescribeTimeoutMs,
     toolRights: mailSendToolRights(config),
     projectFolder: () => projectFiles,
+    audit: auditRecorder,
     policy: {
       instanceDefaults: config.policy.defaults,
       centralSettings: () => operationCalls.deps.policy.centralSettings()
