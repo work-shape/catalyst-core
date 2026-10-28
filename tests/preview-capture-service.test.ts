@@ -6,6 +6,7 @@ import {
   forwardedPath
 } from "@work-shape/catalyst-preview-capture";
 import { createInstancePreviewCaptureClient } from "@work-shape/catalyst-client-assembly";
+import { createEnvironmentSecretResolver } from "@work-shape/catalyst-core";
 import { readFileSync } from "node:fs";
 import { parse } from "yaml";
 
@@ -13,9 +14,17 @@ const token = "fixture-service-token-".repeat(3);
 const origin = "https://interface.example";
 const prefix = "/app-content/fset_00000000-0000-0000-0000-000000000000/proof.mac/";
 describe("server capture boundaries", () => {
-  it("starts dark and refuses a client with no service credential", () => {
-    expect(createInstancePreviewCaptureClient({})).toBeUndefined();
-    expect(() => createInstancePreviewCaptureClient({ PREVIEW_CAPTURE_ENABLED: "true" })).toThrow();
+  it("starts dark and refuses a client with no service credential", async () => {
+    const secrets = createEnvironmentSecretResolver({
+      env: {},
+      readSecretFile: async () => {
+        throw new Error("No secret file");
+      }
+    });
+    expect(await createInstancePreviewCaptureClient({}, secrets)).toBeUndefined();
+    await expect(
+      createInstancePreviewCaptureClient({ PREVIEW_CAPTURE_ENABLED: "true" }, secrets)
+    ).rejects.toThrow();
   });
   it.each([
     "DATABASE_URL",
@@ -26,10 +35,10 @@ describe("server capture boundaries", () => {
     "BETTER_AUTH_SECRET",
     "CHAT_SESSION_TOKEN_SECRET",
     "APP_CONTENT_KEY"
-  ])("refuses %s in the service environment", (key) => {
-    expect(() =>
+  ])("refuses %s in the service environment", async (key) => {
+    await expect(
       captureEnvironment({ PREVIEW_CAPTURE_SERVICE_TOKEN: token, [key]: "forbidden" })
-    ).toThrow();
+    ).rejects.toThrow();
   });
   it("accepts only a fixed-origin GET of the capture's files or versioned kit", () => {
     expect(forwardedPath("GET", origin + prefix + "main.js", origin, prefix)).toBe(

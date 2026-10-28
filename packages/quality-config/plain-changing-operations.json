@@ -144,6 +144,7 @@
     "approval_requests.list_mine": "own",
     "approval_requests.revert": "own",
     "approval_requests.withdraw": "own",
+    "apps.captures.call": "public",
     "apps.get_from_page": "conversation_access",
     "apps.preview": "asset_right",
     "apps.preview_captures.pending": "conversation_access",

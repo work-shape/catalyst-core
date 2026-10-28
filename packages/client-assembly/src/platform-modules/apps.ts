@@ -20,6 +20,7 @@ export const appsModule = defineModule({
     "pages.preview",
     "app_content.files.get",
     "app_kit.files.get",
+    "apps.captures.call",
     "apps.create_from_page",
     "apps.actions.list",
     "apps.update_from_page",
@@ -45,6 +46,6 @@ export const appsModule = defineModule({
     APP_PUBLISH_TOOL_NAME,
     ...APP_TRY_TOOL_NAMES
   ],
-  jobKinds: ["page.bundle", "asset_repo.commit", "asset_repo.sweep"],
+  jobKinds: ["page.bundle", "preview.capture", "asset_repo.commit", "asset_repo.sweep"],
   commandWorkerJobKinds: ["page.bundle", "asset_repo.commit", "asset_repo.sweep"]
 });

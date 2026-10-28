@@ -97,7 +97,10 @@ export async function createInstancePages(input: {
   return {
     objects: await createFilesStore(input.config, input.infrastructure.context),
     contentKey: deriveAppContentKey(secret),
-    previewCaptureService: createInstancePreviewCaptureClient(input.env ?? {})
+    previewCaptureService: await createInstancePreviewCaptureClient(
+      input.env ?? {},
+      input.infrastructure.secrets
+    )
   };
 }
 
