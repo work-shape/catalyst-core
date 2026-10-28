@@ -70,10 +70,11 @@ const agentEdits = {
   subagentNames: [],
   skillNames: [],
   knowledgeBases: [],
-  initialPrompts: []
-  // `shipped` is server-carried: only the release seed writes it, and a working copy leaves it
-  // out.
-} satisfies Required<Omit<AgentConfig, "shipped">>;
+  initialPrompts: [],
+  additionalInstructions: "Other"
+  // `shipped` and `shippedNewer` are server-carried: only the release seed writes them, and a
+  // working copy leaves them out.
+} satisfies Required<Omit<AgentConfig, "shipped" | "shippedNewer">>;
 const skill = {
   name: "guide",
   title: "Guide",
@@ -311,7 +312,7 @@ describe("config schema round trips", () => {
       origin: "release",
       icon: "book"
     };
-    expect([...Object.keys(agentEdits), "shipped"].sort()).toEqual(
+    expect([...Object.keys(agentEdits), "shipped", "shippedNewer"].sort()).toEqual(
       Object.keys(agentConfigSchema.shape).sort()
     );
     expect([...Object.keys(skillEdits), ...Object.keys(carried)].sort()).toEqual(
@@ -320,9 +321,13 @@ describe("config schema round trips", () => {
     expect(canonicalizeAgentConfig(agent)).toEqual(agentConfigSchema.parse(agent));
     // A shipped agent such as Workshaper is pulled like any agent; what the release shipped of
     // it stays on the instance and is never a local change.
-    expect(canonicalizeAgentConfig({ ...agent, shipped: { instructions: "As shipped." } })).toEqual(
-      canonicalizeAgentConfig(agent)
-    );
+    expect(
+      canonicalizeAgentConfig({
+        ...agent,
+        shipped: { instructions: "As shipped." },
+        shippedNewer: ["instructions"]
+      })
+    ).toEqual(canonicalizeAgentConfig(agent));
     expect(canonicalizeSkillConfig({ ...skill, ...carried })).toEqual(skill);
     for (const key of Object.keys(skillEdits)) {
       const without = Object.fromEntries(Object.entries(skill).filter(([name]) => name !== key));

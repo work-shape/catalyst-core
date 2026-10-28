@@ -25,7 +25,9 @@ const agentSchema = z.object({
     toolNames: z.array(z.string()),
     skillNames: z.array(z.string()),
     welcomeMessage: z.unknown().optional(),
-    shipped: z.record(z.string(), z.unknown()).optional()
+    additionalInstructions: z.string().optional(),
+    shipped: z.record(z.string(), z.unknown()).optional(),
+    shippedNewer: z.array(z.string()).optional()
   })
 });
 const listSchema = z.object({
@@ -187,6 +189,98 @@ describe("the agent that ships with the platform", () => {
     expect(
       await seedShippedAgents({ clientInstanceId, stores: app.stores, agents: [next] })
     ).toEqual({ retained: [], created: [], updated: [] });
+  });
+
+  it("names a field the instance changed and the release changed too, until a person decides", async () => {
+    const app = await start(true);
+    const before = await read(app);
+    await change(app, {
+      ...before.config,
+      instructions: "Our own instructions.",
+      additionalInstructions: "Answer in short sentences."
+    });
+    const next: ShippedAgent = {
+      name: NAME,
+      displayName: { en: "Workshaper", de: "Workshaper" },
+      instructions: "The next release's instructions.",
+      toolNames: before.config.toolNames,
+      skillNames: [],
+      initialPrompts: []
+    };
+    await seedShippedAgents({ clientInstanceId, stores: app.stores, agents: [next] });
+    const after = await read(app);
+    expect(after.config.instructions).toBe("Our own instructions.");
+    // A release never ships or touches what the instance added.
+    expect(after.config.additionalInstructions).toBe("Answer in short sentences.");
+    expect(after.config.shippedNewer).toEqual(["instructions"]);
+
+    // A save that leaves the list out, such as a config push, keeps it. A save cannot name a
+    // field the seed did not, and keeping one's own takes it out.
+    const { shippedNewer: _listed, ...withoutList } = after.config;
+    await change(app, { ...withoutList, description: "Ours." });
+    expect((await read(app)).config.shippedNewer).toEqual(["instructions"]);
+    await change(app, { ...after.config, shippedNewer: ["instructions", "displayName"] });
+    expect((await read(app)).config.shippedNewer).toEqual(["instructions"]);
+    await change(app, { ...after.config, shippedNewer: [] });
+    expect((await read(app)).config.shippedNewer).toEqual([]);
+    // The next release forgets the decided list.
+    await seedShippedAgents({ clientInstanceId, stores: app.stores, agents: [next] });
+    expect((await read(app)).config.shippedNewer).toBeUndefined();
+  });
+
+  it("moves a pending draft onto the release, keeping what the draft changed", async () => {
+    const app = await start(true);
+    const shipped = await read(app);
+    const release = (instructions: string): ShippedAgent => ({
+      name: NAME,
+      displayName: { en: "Workshaper", de: "Workshaper" },
+      instructions,
+      toolNames: shipped.config.toolNames,
+      skillNames: [],
+      initialPrompts: []
+    });
+    // Instructions that name no tool this test instance lacks, so a save of them validates.
+    await seedShippedAgents({
+      clientInstanceId,
+      stores: app.stores,
+      agents: [release("This release's instructions.")]
+    });
+    const before = await read(app);
+    const saved = await app.call("assets.put", {
+      params: { kind: "agent", name: NAME },
+      payload: {
+        config: { ...before.config, additionalInstructions: "Our addition." },
+        expectedRevision: before.revision,
+        expectedDraftRevision: null
+      }
+    });
+    expect(saved.statusCode, saved.body).toBe(200);
+    const next = release("The next release's instructions.");
+    await seedShippedAgents({ clientInstanceId, stores: app.stores, agents: [next] });
+    const live = await read(app);
+    const draft = z
+      .object({
+        draft: z.object({
+          revision: z.number(),
+          stale: z.boolean(),
+          config: z.looseObject({ instructions: z.string(), additionalInstructions: z.string() })
+        })
+      })
+      .parse((await app.call("agents.draft.get", { params: { name: NAME } })).json()).draft;
+    // Before, the draft stayed on the old live revision and its publish wrote the old
+    // release's instructions back as the instance's own.
+    expect(draft.stale).toBe(false);
+    expect(draft.config.instructions).toBe(next.instructions);
+    expect(draft.config.additionalInstructions).toBe("Our addition.");
+    const published = await app.call("assets.publish", {
+      params: { kind: "agent", name: NAME },
+      payload: { revision: draft.revision }
+    });
+    expect(published.statusCode, published.body).toBe(200);
+    const after = await read(app);
+    expect(after.revision).toBeGreaterThan(live.revision);
+    expect(after.config.instructions).toBe(next.instructions);
+    expect(after.config.additionalInstructions).toBe("Our addition.");
   });
 
   it("refuses deleting it", async () => {

@@ -1,4 +1,5 @@
 import {
+  agentRunInstructions,
   asCollaborationWorkspaceId,
   isJsonObject,
   type AccessResource,
@@ -289,11 +290,15 @@ function readsAgent(
  * version is compared with nothing, so it names no fields, and its lists are all it has.
  */
 function agentDifference(
-  live: JsonObject,
-  next: JsonObject,
+  liveConfig: JsonObject,
+  nextConfig: JsonObject,
   first: boolean,
   readable: boolean
 ): JsonObject {
+  // The instructions as the agent runs with them: what the instance added to a shipped
+  // agent's is part of them.
+  const live = withRunInstructions(liveConfig);
+  const next = withRunInstructions(nextConfig);
   const fields = REVIEWED_FIELDS.flatMap((field) => {
     const before = live[field];
     const after = next[field];
@@ -382,4 +387,17 @@ function isEmpty(value: JsonValue | undefined): boolean {
 function sameValue(a: JsonValue | undefined, b: JsonValue | undefined): boolean {
   if (isEmpty(a) && isEmpty(b)) return true;
   return JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+}
+
+/** The definition with `instructions` as the agent runs with them. */
+function withRunInstructions(config: JsonObject): JsonObject {
+  const { instructions, additionalInstructions } = config;
+  if (typeof instructions !== "string") return config;
+  return {
+    ...config,
+    instructions: agentRunInstructions({
+      instructions,
+      ...(typeof additionalInstructions === "string" ? { additionalInstructions } : {})
+    })
+  };
 }

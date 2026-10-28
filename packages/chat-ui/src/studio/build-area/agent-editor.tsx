@@ -213,6 +213,12 @@ export function AgentEditor({
     canEdit,
     onReset: update
   });
+  // A shipped agent's instructions keep the platform's text, which each release refreshes:
+  // the instance's own goes into its additions. The text opens for a change on request, and
+  // stays open where it is the instance's already.
+  const [platformTextOpen, setPlatformTextOpen] = useState(false);
+  const platformTextLocked =
+    shipped.shipped && !platformTextOpen && shipped.asShipped("instructions");
   const changedFields = countChangedFields(form, state.baseline);
   const dirty = changedFields > 0 || availabilityChanged || useEdit.changed;
   const latest = draft?.latest;
@@ -414,21 +420,61 @@ export function AgentEditor({
             "instructions",
             proposed.around(
               "instructions",
-              <Field
-                label={t("configSystemPrompt")}
-                hint={t("configSystemPromptHint")}
-                required={canEdit("instructions")}
-              >
-                <Textarea
-                  variant="code"
-                  className="min-h-72"
-                  value={form.instructions}
-                  readOnly={!canEdit("instructions")}
-                  onChange={(event) => update({ instructions: event.target.value })}
-                />
-              </Field>
+              <div className="grid gap-2">
+                <Field
+                  label={t(
+                    shipped.shipped ? "agentDraft.platformInstructions" : "configSystemPrompt"
+                  )}
+                  hint={t(
+                    !shipped.shipped
+                      ? "configSystemPromptHint"
+                      : platformTextLocked
+                        ? "agentDraft.platformInstructionsHint"
+                        : "agentDraft.platformInstructionsEditHint"
+                  )}
+                  required={canEdit("instructions")}
+                >
+                  <Textarea
+                    variant="code"
+                    className={shipped.shipped ? "min-h-40" : "min-h-72"}
+                    value={form.instructions}
+                    readOnly={!canEdit("instructions") || platformTextLocked}
+                    onChange={(event) => update({ instructions: event.target.value })}
+                  />
+                </Field>
+                {platformTextLocked && canEdit("instructions") ? (
+                  <div>
+                    <Button
+                      variant="link"
+                      size="sm"
+                      data-platform-text-edit=""
+                      onClick={() => setPlatformTextOpen(true)}
+                    >
+                      {t("agentDraft.platformInstructionsEdit")}
+                    </Button>
+                  </div>
+                ) : null}
+              </div>
             )
           )}
+          {shipped.shipped || form.additionalInstructions.trim()
+            ? proposed.around(
+                "additionalInstructions",
+                <Field
+                  label={t("agentDraft.additionalInstructions")}
+                  hint={t("agentDraft.additionalInstructionsHint")}
+                >
+                  <Textarea
+                    variant="code"
+                    className="min-h-40"
+                    data-additional-instructions=""
+                    value={form.additionalInstructions}
+                    readOnly={!canEdit("instructions")}
+                    onChange={(event) => update({ additionalInstructions: event.target.value })}
+                  />
+                </Field>
+              )
+            : null}
           {proposed.around(
             "maxSteps",
             showMaxSteps ? (

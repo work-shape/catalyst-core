@@ -82,9 +82,49 @@ describe("the page of an agent that ships with the platform", () => {
     expect(page(config, [])).not.toContain("Reset to shipped");
   });
 
+  it("keeps the platform's instructions closed and takes the instance's own as additions", () => {
+    const markup = page(
+      {
+        name: "workshaper",
+        ...shippedFields,
+        additionalInstructions: "Answer in short sentences.",
+        shipped: shippedFields
+      },
+      ["instructions"]
+    );
+    expect(markup).toContain("Platform instructions");
+    expect(markup).toContain("Change platform text");
+    expect(markup).toMatch(/<textarea[^>]*readOnly=""[^>]*>As shipped\.<\/textarea>/u);
+    expect(markup).toContain("Additions of this instance");
+    expect(markup).toMatch(
+      /<textarea[^>]*data-additional-instructions=""[^>]*>Answer in short sentences\.<\/textarea>/u
+    );
+    expect(markup).not.toMatch(/data-additional-instructions=""[^>]*readOnly/u);
+  });
+
+  it("offers a release's new version of a field the instance changed, to take or keep", () => {
+    const config = {
+      name: "workshaper",
+      ...shippedFields,
+      instructions: "Our own.",
+      shipped: { ...shippedFields, instructions: "The new release's text." },
+      shippedNewer: ["instructions"]
+    };
+    const markup = page(config, ["instructions"]);
+    expect(markup).toContain('data-shipped-newer="instructions"');
+    expect(markup).toContain("The platform has a new version of this field.");
+    expect(markup).toContain("The new release&#x27;s text.");
+    expect(markup).toContain("Take new version");
+    expect(markup).toContain("Keep mine");
+    expect(markup).not.toContain("Reset to shipped");
+    // Who may not change the field reads both versions and decides nothing.
+    expect(page(config, [])).not.toContain("Keep mine");
+  });
+
   it("shows any other agent as before", () => {
     const markup = page({ name: "assistant", ...shippedFields }, ["instructions"]);
     expect(markup).not.toContain("Ships with the platform");
     expect(markup).not.toContain("data-shipped-group");
+    expect(markup).not.toContain("Additions of this instance");
   });
 });

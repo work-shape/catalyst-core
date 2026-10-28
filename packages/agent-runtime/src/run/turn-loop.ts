@@ -12,6 +12,7 @@ import {
   getRuntimeSubjectUserId,
   systemClock,
   unknownToJsonValue,
+  agentRunInstructions,
   type AgentConfig,
   type AgentRunModelOrigin,
   type KnowledgeCitationSource,
@@ -225,7 +226,7 @@ export class TurnLoop {
     const systemMessage: ModelMessage = {
       role: "system",
       content: createSystemInstructions(
-        agent.instructions +
+        agentRunInstructions(agent) +
           (input.workflowAgent
             ? `\nReturn only JSON matching this output schema: ${JSON.stringify(input.workflowAgent.outputSchema)}`
             : ""),

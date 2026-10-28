@@ -133,6 +133,10 @@ export function createAgentAssetKind(options: AgentAssetKindOptions): WorkflowAs
     },
 
     // What a shipped agent was shipped as is the release seed's alone: every write keeps it.
+    // Which fields a release shipped anew is the seed's to add: a write may only take one out,
+    // by taking the new version or keeping its own. A write that leaves the list out, such as
+    // a config push, keeps it; one that empties it stores the empty list, so that publishing
+    // the draft it saved does not bring the list back. The next release seed drops it.
     keepStored({ current, next }) {
       const shipped = readDefinitionField(current, "shipped");
       if (current === undefined && typeof next.name === "string" && shippedNames.has(next.name)) {
@@ -142,8 +146,14 @@ export function createAgentAssetKind(options: AgentAssetKindOptions): WorkflowAs
           { reason: "shipped_agent_name" }
         );
       }
-      const { shipped: _sent, ...rest } = next;
-      return shipped === undefined ? rest : { ...rest, shipped };
+      const { shipped: _sent, shippedNewer: sentNewer, ...rest } = next;
+      if (shipped === undefined) return rest;
+      const stored = readDefinitionField(current, "shippedNewer");
+      if (!Array.isArray(stored)) return { ...rest, shipped };
+      const newer = Array.isArray(sentNewer)
+        ? sentNewer.filter((field) => stored.includes(field))
+        : stored;
+      return { ...rest, shipped, shippedNewer: newer };
     },
 
     assertStoredDeletable({ current }) {
@@ -184,9 +194,11 @@ export function createAgentAssetKind(options: AgentAssetKindOptions): WorkflowAs
       const editableFields = new Set<AgentEditableField>(policy().editableAgentFields);
       // `next` is validated, with the definition's defaults filled in; `current` is as stored.
       const stored = withDefinitionDefaults(current);
+      const changed = (field: string) =>
+        !configValuesEqual(readDefinitionField(stored, field), readDefinitionField(next, field));
+      // What the instance adds to the instructions is changed by who may change them.
       const changedFields = AGENT_EDITABLE_FIELDS.filter(
-        (field) =>
-          !configValuesEqual(readDefinitionField(stored, field), readDefinitionField(next, field))
+        (field) => changed(field) || (field === "instructions" && changed("additionalInstructions"))
       );
       const changedSettings = changedModelSettings(modelBindingsListed, current, next);
       if (changedSettings.length > 0 && !access.authorize(MODEL_SETTINGS_RIGHT).allowed) {
