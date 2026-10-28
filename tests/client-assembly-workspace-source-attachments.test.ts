@@ -12,6 +12,7 @@ import { describe, expect, it } from "vitest";
 import {
   AppError,
   asClientInstanceId,
+  asConversationId,
   createPlatformId,
   type Conversation,
   type ConversationAttachment,
@@ -30,6 +31,122 @@ import {
 import { createFilesystemObjectStorage } from "@work-shape/catalyst-object-storage";
 
 describe("execution workspace source attachments", () => {
+  const sourceFiles = [
+    {
+      extension: "html",
+      mimeType: "text/html",
+      content: "<script>globalThis.sourceRan = true</script>"
+    },
+    { extension: "css", mimeType: "text/css", content: "body { color: red; }" },
+    { extension: "js", mimeType: "text/javascript", content: "globalThis.sourceRan = true;" },
+    {
+      extension: "svg",
+      mimeType: "image/svg+xml",
+      content: '<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"/>'
+    },
+    {
+      extension: "xml",
+      mimeType: "application/xml",
+      content: '<?xml version="1.0"?><source>Text</source>'
+    },
+    { extension: "md", mimeType: "text/markdown", content: "# Source" }
+  ];
+
+  it("advertises source code and detects its extension despite generic browser MIME types", () => {
+    for (const { extension, mimeType } of sourceFiles) {
+      const format = extension === "md" ? "markdown" : extension;
+      expect(WORKSPACE_SOURCE_ACCEPTED_FILE_TYPES).toContain(`.${extension}`);
+      expect(WORKSPACE_SOURCE_ACCEPTED_FILE_TYPES).toContain(mimeType);
+      for (const browserMime of [undefined, "application/octet-stream", "text/plain", mimeType]) {
+        expect(
+          detectWorkspaceSourceFileFormat(`SOURCE.${extension.toUpperCase()}`, browserMime)
+        ).toBe(format);
+      }
+      expect(detectWorkspaceSourceFileFormat("source", `${mimeType}; charset=utf-8`)).toBe(format);
+    }
+    expect(detectWorkspaceSourceFileFormat("source", "application/javascript")).toBe("js");
+    expect(detectWorkspaceSourceFileFormat("source", "text/xml")).toBe("xml");
+  });
+
+  it("keeps source code readable as raw bytes and serves sent sources only as downloads", async () => {
+    const root = await mkdtemp(join(tmpdir(), "catalyst-source-code-"));
+    const app = await createTestInstance({
+      config: createWorkspaceAttachmentConfig({ root }),
+      capabilities: [],
+      tools: []
+    });
+    try {
+      const created = await app.call("conversations.create", {
+        payload: { title: "Source files" }
+      });
+      expect(created.statusCode).toBe(200);
+      const conversationId = asConversationId(created.json().id);
+      const handler = createExecutionWorkspaceSourceAttachmentHandler({
+        clientInstanceId: asClientInstanceId("workspace-source-local"),
+        files: app.stores.files,
+        objectStore: createFilesystemObjectStorage(root),
+        markDeletedOnDelete: true
+      });
+      for (const { extension, mimeType, content } of sourceFiles) {
+        const filename = `source.${extension}`;
+        const uploaded = await uploadFile(app, conversationId, {
+          filename,
+          contentType: mimeType,
+          content
+        });
+        expect(uploaded.statusCode, uploaded.body).toBe(200);
+        const { attachment } = uploaded.json<{ attachment: DraftAttachment }>();
+        expect(attachment).toMatchObject({
+          status: "ready",
+          format: extension === "md" ? "markdown" : extension
+        });
+
+        // The agent's importer reads the original managed file, without rendering or conversion.
+        const source = await handler.readConversationFile({
+          conversationId,
+          fileId: attachment.fileId
+        });
+        expect(new TextDecoder().decode(source.bytes)).toBe(content);
+        const manifest = handler.createAttachmentManifest([attachment]);
+        expect(manifest.attachments[0]).toMatchObject({
+          fileId: attachment.fileId,
+          kind: "workspace_source",
+          modelContext: { text: expect.stringContaining("workspace.import_files") }
+        });
+
+        const inline = await app.call("conversations.files.get_content", {
+          params: { conversationId, fileId: attachment.fileId }
+        });
+        expect(inline.statusCode).toBe(422);
+
+        // Downloads are available only after the attachment belongs to a sent message.
+        const message = await app.stores.conversations.appendMessage({
+          clientInstanceId: asClientInstanceId("workspace-source-local"),
+          conversationId,
+          role: "user",
+          text: "Read this source file"
+        });
+        await app.stores.files.claimReadyDraftAttachmentsForMessage({
+          clientInstanceId: asClientInstanceId("workspace-source-local"),
+          conversationId,
+          messageId: message.id,
+          claimedAt: new Date().toISOString()
+        });
+        const downloaded = await app.call("conversations.files.get_content", {
+          params: { conversationId, fileId: attachment.fileId },
+          query: { download: "true" }
+        });
+        expect(downloaded.statusCode, downloaded.body).toBe(200);
+        expect(downloaded.headers["content-disposition"]).toMatch(/^attachment;/u);
+        expect(downloaded.headers["x-content-type-options"]).toBe("nosniff");
+        expect(downloaded.body).toBe(content);
+      }
+    } finally {
+      await app.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("accepts chat Markdown and TXT without document processing and advertises them in the picker", async () => {
     const root = await mkdtemp(join(tmpdir(), "catalyst-text-upload-"));
     const app = await createTestInstance({
