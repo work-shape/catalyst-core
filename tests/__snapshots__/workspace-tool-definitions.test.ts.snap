@@ -249,6 +249,12 @@ exports[`workspace tool definitions > offers the same tools, in the same order, 
             "additionalProperties": false
           }
         },
+        "projectFileWarnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
         "projectFileChanges": {
           "type": "array",
           "items": {

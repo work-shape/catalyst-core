@@ -7,6 +7,7 @@ import {
   asUserId,
   asToolCallId,
   authenticatedUserFromRecord,
+  createPlatformId,
   StoreBackedAuditRecorder,
   type CollaborationWorkspaceId,
   type ProjectCommandFolderPort,
@@ -129,7 +130,12 @@ async function harness(
     ...(input.executor ? { processExecutor: input.executor } : {}),
     auditRecorder: new StoreBackedAuditRecorder({ clientInstanceId, store: t.stores.audit })
   });
-  async function exec(c: Chat, command: string, withRun = true): Promise<WorkspaceCommand> {
+  async function exec(
+    c: Chat,
+    command: string,
+    withRun = true,
+    timeoutSeconds = 30
+  ): Promise<WorkspaceCommand> {
     const workspace = await t.stores.executionWorkspaces.ensureExecutionWorkspace({
       clientInstanceId,
       conversationId: c.conversation.id,
@@ -141,7 +147,7 @@ async function harness(
       ownerUserId: c.run.ownerUserId ?? "",
       ...(withRun ? { agentRunId: c.run.id } : {}),
       command,
-      limits: { timeoutSeconds: 30 },
+      limits: { timeoutSeconds },
       expectedOutputs: []
     });
     const held = await t.stores.executionWorkspaces.claimWorkspaceCommand({
@@ -245,7 +251,7 @@ for (const docker of [false, true]) {
         origin: "agent"
       });
       const tool = await h.service.exec(
-        { command: "printf tool > project/from-tool.md" },
+        { command: "printf tool > project/from-tool.md\nprintf blocked > project/AGENTS.md" },
         {
           clientInstanceId,
           correlationId: "project-tool-result",
@@ -272,6 +278,10 @@ for (const docker of [false, true]) {
       ).toContainEqual(
         expect.objectContaining({ path: "from-tool.md", version: 1, change: "created" })
       );
+      expect(workspaceExecOutputSchema.parse(tool.output).projectFileWarnings).toEqual([
+        "AGENTS.md ändert der Agent nur über die Bestätigung"
+      ]);
+      expect(await text(c, "AGENTS.md")).toBeUndefined();
       const unchanged = await h.exec(c, "test -f project/input.md");
       expect(unchanged.output?.projectFileChanges).toBeUndefined();
       const events = await t.stores.audit.listAuditEvents({
@@ -289,6 +299,63 @@ for (const docker of [false, true]) {
         }))
       );
       expect(JSON.stringify(audited)).not.toContain("input.md");
+    });
+
+    it.each(["replace", "delete"])(
+      "keeps top-level AGENTS.md unchanged on %s and reports the confirmation rule",
+      async (change) => {
+        const c = await chat(await project());
+        await seed(c, "AGENTS.md", "approved instructions");
+        const h = await start();
+        const result = await h.exec(
+          c,
+          [
+            "set -eu",
+            change === "delete" ? "rm project/AGENTS.md" : "printf unapproved > project/AGENTS.md",
+            "mkdir -p project/notes",
+            "printf ordinary > project/notes/AGENTS.md"
+          ].join("\n")
+        );
+        expect(result.status, JSON.stringify(result.error)).toBe("completed");
+        expect(result.output?.projectFileWarnings).toEqual([
+          "AGENTS.md ändert der Agent nur über die Bestätigung"
+        ]);
+        expect(await text(c, "AGENTS.md")).toBe("approved instructions");
+        expect(await text(c, "notes/AGENTS.md")).toBe("ordinary");
+        expect(
+          await t.stores.projectFiles.listProjectFileVersions({
+            clientInstanceId,
+            projectId: c.conversation.projectId ?? "",
+            path: "AGENTS.md"
+          })
+        ).toHaveLength(1);
+        expect(result.output?.projectFileChanges?.some((file) => file.path === "AGENTS.md")).toBe(
+          false
+        );
+      }
+    );
+
+    it("saves the chat and project changes left by a timed-out command", async () => {
+      const c = await chat(await project());
+      const h = await start();
+      const result = await h.exec(
+        c,
+        "printf partial > project/partial.md\nprintf chat > chat.txt\nsleep 30",
+        true,
+        2
+      );
+      expect(result.status).toBe("failed");
+      expect(result.error?.code).toBe("WORKSPACE_COMMAND_TIMEOUT");
+      expect(await text(c, "partial.md")).toBe("partial");
+      expect(result.output?.projectFileChanges).toContainEqual(
+        expect.objectContaining({ path: "partial.md", version: 1 })
+      );
+      expect(
+        await t.stores.executionWorkspaces.listWorkspaceFiles({
+          clientInstanceId,
+          workspaceId: result.workspaceId
+        })
+      ).toContainEqual(expect.objectContaining({ path: "chat.txt" }));
     });
 
     it("provides no project folder without a readable project or a person's run", async () => {
@@ -381,10 +448,22 @@ describe("project snapshot writeback", () => {
   it("rejects links in the project scan and never scans project/ into conversation files", async () => {
     const c = await chat(await project());
     const h = await harness();
-    const linked = await h.exec(c, "ln -s / project/outside");
+    const linked = await h.exec(c, "ln -s / project/outside\nprintf chat > own.txt");
     expect(linked.status).toBe("failed");
     expect(linked.error?.code).toBe("WORKSPACE_SYMLINK_REJECTED");
+    expect(linked.output?.projectFileWarnings).toContain(
+      "Project changes could not be saved (WORKSPACE_SYMLINK_REJECTED). Conversation files were saved."
+    );
     expect(await files.list(await folder(c))).toEqual([]);
+    expect(linked.output?.changedFiles).toContainEqual(
+      expect.objectContaining({ path: "own.txt" })
+    );
+    expect(
+      await t.stores.executionWorkspaces.listWorkspaceFiles({
+        clientInstanceId,
+        workspaceId: linked.workspaceId
+      })
+    ).toContainEqual(expect.objectContaining({ path: "own.txt" }));
     const noProject = await chat();
     const skipped = await h.exec(
       noProject,
@@ -428,31 +507,103 @@ describe("project snapshot writeback", () => {
     }
   });
 
-  it("gives a subagent its root chat's folder and a Workflow step thread none", async () => {
+  it("gives a real child run its root chat's folder through the root execution workspace", async () => {
     const root = await chat(await project());
-    const thread = await chat();
-    const get = t.stores.conversations.getConversation.bind(t.stores.conversations);
-    vi.spyOn(t.stores.conversations, "getConversation").mockImplementation(async (instance, id) => {
-      if (id === thread.conversation.id)
-        return {
-          ...thread.conversation,
-          kind: "run_thread",
-          parentConversationId: root.conversation.id
-        };
-      return get(instance, id);
+    const started = await t.stores.childAgentRuns.startSubagentRun({
+      clientInstanceId,
+      parentRunId: root.run.id,
+      parentOperationRunId: createPlatformId<"OperationRunId">("oprun"),
+      agentName: "assistant",
+      description: "Child",
+      task: "Write a project file",
+      correlationId: "project-mount-child"
+    });
+    if (started.status !== "started") throw new Error("No child run");
+    const conversation = await t.stores.conversations.getConversation(
+      clientInstanceId,
+      started.threadId
+    );
+    if (!conversation) throw new Error("No child thread");
+    const h = await harness();
+    const result = await h.exec(
+      { conversation, run: started.run },
+      "printf child > project/child.md"
+    );
+    expect(result.status, JSON.stringify(result.error)).toBe("completed");
+    expect(started.run.conversationId).toBe(started.threadId);
+    expect(result.conversationId).toBe(root.conversation.id);
+    expect(result.agentRunId).toBe(started.run.id);
+    expect(await text(root, "child.md")).toBe("child");
+    expect(
+      (
+        await t.stores.projectFiles.listProjectFileVersions({
+          clientInstanceId,
+          projectId: root.conversation.projectId ?? "",
+          path: "child.md"
+        })
+      )[0]
+    ).toMatchObject({ runId: started.run.id, conversationId: root.conversation.id });
+    const unrelated = await chat(await project());
+    expect(
+      await files.folderOfCommand({ ...result, conversationId: unrelated.conversation.id })
+    ).toBeUndefined();
+  });
+
+  it("gives a Workflow step run no project mount", async () => {
+    const c = await chat(await project());
+    vi.spyOn(t.stores.agentRuns, "getAgentRun").mockResolvedValue({
+      ...c.run,
+      workflowStepRunId: "workflow-step"
     });
     const h = await harness();
-    expect((await h.exec(thread, "printf child > project/child.md")).status).toBe("completed");
-    expect(await text(root, "child.md")).toBe("child");
-    vi.mocked(t.stores.conversations.getConversation).mockImplementation(async (instance, id) => {
-      if (id === thread.conversation.id)
-        return {
-          ...thread.conversation,
-          kind: "run_thread",
-          projectId: root.conversation.projectId
-        };
-      return get(instance, id);
+    expect((await h.exec(c, "test ! -e project")).output?.exitCode).toBe(0);
+  });
+
+  it("fails without project deletions when a Docker snapshot directory disappears", async () => {
+    const c = await chat(await project());
+    await seed(c, "keep.md", "original");
+    const local = new LocalWorkspaceCommandProcessExecutor();
+    const h = await harness({
+      executor: {
+        mountsProjectFolder: true,
+        async execute(input) {
+          const result = await local.execute(input);
+          if (!input.projectDirectory) throw new Error("Missing bind source");
+          await rm(input.projectDirectory, { recursive: true });
+          return result;
+        }
+      }
     });
-    expect((await h.exec(thread, "test ! -e project")).output?.exitCode).toBe(0);
+    const result = await h.exec(c, "printf chat > chat.txt");
+    expect(result.error?.code).toBe("WORKSPACE_PROJECT_MOUNT_FAILED");
+    expect(await text(c, "keep.md")).toBe("original");
+    expect(
+      await t.stores.projectFiles.listProjectFileVersions({
+        clientInstanceId,
+        projectId: c.conversation.projectId ?? "",
+        path: "keep.md"
+      })
+    ).toHaveLength(1);
+    expect(result.output?.projectFileChanges).toBeUndefined();
+    expect(result.output?.changedFiles).toContainEqual(
+      expect.objectContaining({ path: "chat.txt" })
+    );
+  });
+
+  it("records local removal of the project directory as deletions except for AGENTS.md", async () => {
+    const c = await chat(await project());
+    await seed(c, "delete.md", "original");
+    await seed(c, "AGENTS.md", "approved");
+    const h = await harness();
+    const result = await h.exec(c, "rm -rf project");
+    expect(result.status, JSON.stringify(result.error)).toBe("completed");
+    expect(result.output?.projectFileChanges).toEqual([
+      expect.objectContaining({ path: "delete.md", change: "deleted", version: 2 })
+    ]);
+    expect(await text(c, "delete.md")).toBeUndefined();
+    expect(await text(c, "AGENTS.md")).toBe("approved");
+    expect(result.output?.projectFileWarnings).toEqual([
+      "AGENTS.md ändert der Agent nur über die Bestätigung"
+    ]);
   });
 });

@@ -1,5 +1,6 @@
 import {
   normalizeProjectFilePath,
+  PROJECT_INSTRUCTIONS_PATH,
   type ProjectCommandFileChange,
   type ProjectCommandFolder,
   type ProjectCommandFolderPort,
@@ -20,6 +21,7 @@ const CACHE_DIRECTORY = "catalyst-project-files";
 export interface PreparedProjectFolder extends ProjectCommandFolder {
   directory: string;
   baseline: Map<string, ProjectFile>;
+  allowMissingDirectory: boolean;
 }
 
 /** A command gets its own snapshot. Only the immutable bytes are shared by commands. */
@@ -32,7 +34,8 @@ export class ProjectFolderMounts {
 
   async prepare(
     command: WorkspaceCommand,
-    directory: string
+    directory: string,
+    options: { allowMissingDirectory: boolean }
   ): Promise<PreparedProjectFolder | undefined> {
     const access = await this.options.port.folderOfCommand(command);
     if (!access) return undefined;
@@ -48,13 +51,14 @@ export class ProjectFolderMounts {
       await writeFile(target, bytes, { flag: "wx", mode: 0o600 });
       baseline.set(file.path, file);
     }
-    return { ...access, directory, baseline };
+    return { ...access, directory, baseline, ...options };
   }
 
   async sync(
     command: WorkspaceCommand,
     mount: PreparedProjectFolder,
-    changed: ProjectCommandFileChange[]
+    changed: ProjectCommandFileChange[],
+    warnings: string[]
   ): Promise<void> {
     // Membership, audience or chat assignment may have changed while the command ran.
     const current = await this.options.port.folderOfCommand(command);
@@ -65,8 +69,12 @@ export class ProjectFolderMounts {
     try {
       if (!(await lstat(mount.directory)).isDirectory()) throw projectMountFailure();
     } catch (error) {
-      if (hasCode(error, "ENOENT")) present = false;
+      if (hasCode(error, "ENOENT") && mount.allowMissingDirectory) present = false;
+      else if (hasCode(error, "ENOENT")) throw projectMountFailure();
       else throw error;
+    }
+    if (await instructionsChanged(mount)) {
+      warnings.push("AGENTS.md ändert der Agent nur über die Bestätigung");
     }
     const limits = this.options.port.limits;
     const scanned: Omit<ScannedWorkspaceFile, "bytes">[] = [];
@@ -79,6 +87,7 @@ export class ProjectFolderMounts {
         command,
         {
           skipProjectDirectory: false,
+          excludedPaths: new Set([PROJECT_INSTRUCTIONS_PATH]),
           maxBytes: limits.maxProjectBytes,
           maxFileBytes: limits.maxFileBytes,
           maxFiles: limits.maxFiles
@@ -106,7 +115,8 @@ export class ProjectFolderMounts {
     }
     // An edit by another command wins over this command's deletion (the PRJ-2 conflict rule).
     for (const file of mount.baseline.values()) {
-      if (found.has(file.path) || !command.agentRunId) continue;
+      if (file.path === PROJECT_INSTRUCTIONS_PATH || found.has(file.path) || !command.agentRunId)
+        continue;
       const result = await this.options.port.removeVersion(mount.folder, {
         path: file.path,
         replaces: file.version,
@@ -153,8 +163,8 @@ export class ProjectFolderMounts {
     } catch (error) {
       if (!hasCode(error, "ENOENT")) throw projectMountFailure();
     }
-    const bytes = await this.options.port.readVersion(access.folder, file);
-    if (bytes.byteLength !== file.byteSize || sha256Hex(bytes) !== file.checksum) {
+    const bytes = await this.options.port.readVersion(access.folder, file.path, file.version);
+    if (!bytes || bytes.byteLength !== file.byteSize || sha256Hex(bytes) !== file.checksum) {
       throw projectMountFailure();
     }
     const filling = join(this.cacheDirectory, `.fill-${randomUUID()}`);
@@ -165,6 +175,20 @@ export class ProjectFolderMounts {
       await rm(filling, { force: true });
     }
     return bytes;
+  }
+}
+
+/** Commands may read instructions, but all changes to them require the confirmation card. */
+async function instructionsChanged(mount: PreparedProjectFolder): Promise<boolean> {
+  const before = mount.baseline.get(PROJECT_INSTRUCTIONS_PATH);
+  const path = join(mount.directory, PROJECT_INSTRUCTIONS_PATH);
+  try {
+    const info = await lstat(path);
+    if (!info.isFile() || !before || info.size !== before.byteSize) return true;
+    return sha256Hex(await readFile(path)) !== before.checksum;
+  } catch (error) {
+    if (hasCode(error, "ENOENT")) return before !== undefined;
+    throw error;
   }
 }
 

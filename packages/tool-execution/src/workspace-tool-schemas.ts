@@ -221,6 +221,7 @@ export const workspaceExecOutputSchema = z.object({
   durationMs: z.number().nullable(),
   changedFiles: z.array(changedFileOutputSchema),
   promotedArtifacts: z.array(promotedArtifactOutputSchema),
+  projectFileWarnings: z.array(z.string()).optional(),
   projectFileChanges: z
     .array(
       z.object({
