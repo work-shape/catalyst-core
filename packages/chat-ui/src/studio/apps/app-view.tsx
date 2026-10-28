@@ -1,6 +1,6 @@
 import { Pencil } from "lucide-react";
 import { useCallback, useState, type ReactNode } from "react";
-import type { AppPreviewResponse } from "@work-shape/catalyst-api-client";
+import type { Asset, AppPreviewResponse } from "@work-shape/catalyst-api-client";
 import { Banner, Button, DropdownMenuItem } from "@work-shape/catalyst-ui";
 import { CopyIdItem } from "../copy-id-item";
 import { useTranslation } from "../../shared/i18n";
@@ -85,6 +85,7 @@ export function AppView({ app, appPath }: { app: string; appPath?: string }) {
       <AppViewFrame
         name={name}
         unassignedScopes={shown?.unassignedScopes}
+        editors={record.app?.appEditors}
         description={appDescription(record.app?.config)}
         workspace={workspace}
         rights={rights}
@@ -135,6 +136,7 @@ export function AppView({ app, appPath }: { app: string; appPath?: string }) {
 export function AppViewFrame({
   name,
   description,
+  editors,
   app,
   draftShown,
   workspace,
@@ -152,6 +154,7 @@ export function AppViewFrame({
   name: string;
   /** What the App does, in one line after its name. */
   description?: string;
+  editors?: Asset["appEditors"];
   /** The id of the App, which its link carries. */
   app: string;
   /** The instance showed this reader the draft: only then is there one to edit. */
@@ -175,7 +178,7 @@ export function AppViewFrame({
 }) {
   const { t } = useTranslation();
   // The head's "Chat" talks about the App where its draft is what the builder sees.
-  const editWithAgent = useAppEditWithAgent(draftShown ? app : undefined, rights);
+  const editWithAgent = useAppEditWithAgent(draftShown ? app : undefined, rights, editors);
   const hasSources = dataSources !== undefined && dataSources.length > 0;
   // What stays in the head beside where the data comes from: Edit is the builder's next step,
   // and the shell's "Chat" stands before it. Copying the link is all a reader without the read
@@ -197,6 +200,7 @@ export function AppViewFrame({
         <AppHeader
           name={name}
           description={description}
+          editingLine={editWithAgent.editingLine}
           // The number of a revision is a builder's: whoever uses the App is shown the App.
           state={
             publishedRevision === undefined || !appBuilder(rights) ? undefined : (

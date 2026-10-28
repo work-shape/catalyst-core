@@ -15,7 +15,10 @@ import {
   assetRepoBundles,
   configAssetRevisions,
   configAssets,
-  configAssetState
+  configAssetState,
+  conversations,
+  collaborationWorkspaceMemberships,
+  productUsers
 } from "./schema";
 
 // The ledger of the repositories of assets. Postgres says which bundles make a repository and
@@ -437,6 +440,81 @@ export async function getAssetCheckout(
         baseRevision: row.baseRevision
       }
     : undefined;
+}
+
+/** A presence hint for co-members, independent of access to their private transcripts. */
+export async function listOpenAssetCheckouts(
+  db: PostgresConnection,
+  input: Parameters<ConfigAssetStore["listOpenAssetCheckouts"]>[0]
+): ReturnType<ConfigAssetStore["listOpenAssetCheckouts"]> {
+  const members = collaborationWorkspaceMemberships;
+  const rows = await db
+    .select({
+      userId: productUsers.id,
+      displayLabel: productUsers.displayLabel,
+      since: assetCheckouts.updatedAt
+    })
+    .from(assetCheckouts)
+    .innerJoin(configAssets, eq(configAssets.id, assetCheckouts.assetId))
+    .innerJoin(configAssetRevisions, eq(configAssetRevisions.id, configAssets.activeRevisionId))
+    .innerJoin(
+      conversations,
+      and(
+        eq(conversations.id, assetCheckouts.conversationId),
+        eq(conversations.clientInstanceId, assetCheckouts.clientInstanceId),
+        eq(conversations.collaborationWorkspaceId, configAssets.scopeId)
+      )
+    )
+    .innerJoin(
+      members,
+      and(
+        eq(members.clientInstanceId, input.clientInstanceId),
+        eq(members.collaborationWorkspaceId, configAssets.scopeId),
+        eq(members.userId, conversations.createdByUserId)
+      )
+    )
+    .innerJoin(
+      productUsers,
+      and(
+        eq(productUsers.id, members.userId),
+        eq(productUsers.clientInstanceId, input.clientInstanceId)
+      )
+    )
+    .where(
+      and(
+        eq(assetCheckouts.clientInstanceId, input.clientInstanceId),
+        eq(assetCheckouts.assetId, input.assetId),
+        eq(configAssets.status, "active"),
+        eq(assetCheckouts.baseRevision, configAssetRevisions.revision),
+        eq(assetCheckouts.baseCommit, configAssetRevisions.commit),
+        // A repository save advances the base and writes both timestamps together. Only an
+        // explicit checkout after that save opens the hint again.
+        gt(assetCheckouts.updatedAt, configAssetRevisions.createdAt),
+        eq(conversations.kind, "chat"),
+        eq(conversations.status, "active"),
+        isNull(conversations.deletedAt),
+        gt(conversations.retainedUntil, new Date()),
+        gt(conversations.updatedAt, input.activeAfter),
+        ne(productUsers.id, input.viewerId),
+        eq(productUsers.status, "active"),
+        isNull(productUsers.deletionRequestedAt),
+        sql`exists (select 1 from ${collaborationWorkspaceMemberships} viewer
+        where viewer.client_instance_id = ${input.clientInstanceId}
+        and viewer.collaboration_workspace_id = ${configAssets.scopeId}
+        and viewer.user_id = ${input.viewerId})`
+      )
+    )
+    .orderBy(asc(assetCheckouts.updatedAt), asc(productUsers.id));
+  const people = new Map<string, { displayLabel: string; since: string }>();
+  for (const row of rows) {
+    if (!row.displayLabel.trim() || row.displayLabel.includes("@")) continue;
+    const previous = people.get(row.userId);
+    people.set(row.userId, {
+      displayLabel: row.displayLabel,
+      since: previous?.since ?? row.since.toISOString()
+    });
+  }
+  return [...people.values()];
 }
 
 /** A repository write of a batch, with the asset as the batch found it under its lock. */

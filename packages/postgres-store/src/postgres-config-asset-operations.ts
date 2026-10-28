@@ -32,6 +32,7 @@ import {
   listAssetsWithoutCommits,
   getAssetRepoSave,
   getAssetCheckout,
+  listOpenAssetCheckouts,
   setAssetCheckout,
   listAssetRepoBundles,
   nameAssetRepoSaveBundle
@@ -825,6 +826,7 @@ export function createPostgresConfigAssetsStore(
     getAssetRepoSave: (input) => getAssetRepoSave(db, input),
     answerAssetRepoSave: (input) => answerAssetRepoSave(db, input),
     sweepAssetRepoSaves: (input) => sweepAssetRepoSaves(own(), input),
+    listOpenAssetCheckouts: (input) => listOpenAssetCheckouts(db, input),
     getAssetCheckout: (input) => getAssetCheckout(db, input),
     setAssetCheckout: (input) => setAssetCheckout(db, input),
     async listAgentAvailability(

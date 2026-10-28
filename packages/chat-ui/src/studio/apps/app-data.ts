@@ -127,6 +127,7 @@ export function useApp(workspaceId: string, app: string, enabled: boolean): AppR
         signal
       }),
     enabled,
+    refetchInterval: (query) => (query.state.data?.allowed?.includes("write") ? 30_000 : false),
     retry: retryUnlessGone
   });
   return {

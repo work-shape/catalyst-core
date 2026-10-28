@@ -1,6 +1,10 @@
 import { History, Trash2 } from "lucide-react";
 import { useId, useState, type ReactNode } from "react";
-import type { AppPreviewResponse, ConfigAssetRevision } from "@work-shape/catalyst-api-client";
+import type {
+  Asset,
+  AppPreviewResponse,
+  ConfigAssetRevision
+} from "@work-shape/catalyst-api-client";
 import {
   Banner,
   Badge,
@@ -215,6 +219,7 @@ export function AppEdit({ app }: { app: string }) {
     <>
       <AppEditFrame
         name={name}
+        editors={record.app?.appEditors}
         description={appDescription(asset?.config)}
         app={app}
         workspace={workspace}
@@ -422,6 +427,7 @@ export function appDraftIsAhead(
 export function AppEditFrame({
   name,
   description,
+  editors,
   app,
   workspace,
   rights,
@@ -445,6 +451,7 @@ export function AppEditFrame({
   name: string;
   /** What the App does, in one line after its name. */
   description?: string;
+  editors?: Asset["appEditors"];
   /** The id of the App. With it the head offers "Edit with the agent" and "Copy ID". */
   app?: string;
   workspace: AppsWorkspace;
@@ -483,7 +490,7 @@ export function AppEditFrame({
   const hasSources = dataSources !== undefined && dataSources.length > 0;
   const ahead = draftChangedSinceLive ?? appDraftIsAhead(draftRevision, publishedRevision);
   const missingRight = known && !rights.publish;
-  const editWithAgent = useAppEditWithAgent(app, rights);
+  const editWithAgent = useAppEditWithAgent(app, rights, editors);
   const shownView = view ?? "preview";
   // Preview, Files and Actions are views of the one App: tabs under its head. Files and Actions
   // fold under "Technical details" until a developer role is named (UX audit ruling 3).
@@ -518,6 +525,7 @@ export function AppEditFrame({
           <AppHeader
             name={name}
             description={description}
+            editingLine={editWithAgent.editingLine}
             state={
               known ? (
                 // What is live, by its version, and whether the draft changed since.

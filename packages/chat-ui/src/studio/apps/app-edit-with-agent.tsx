@@ -1,10 +1,11 @@
 import { MessageSquarePlus } from "lucide-react";
 import { useState, type ReactNode } from "react";
-import { ApiError } from "@work-shape/catalyst-api-client";
+import { ApiError, type Asset } from "@work-shape/catalyst-api-client";
 import { Button, Dialog, type PageHeaderAction } from "@work-shape/catalyst-ui";
 import { instanceSentence } from "../build-area/build-refusals";
 import { useOfferDockPageChat } from "../../shared/dock-page-chat";
 import { useTranslation } from "../../shared/i18n";
+import { formatMomentShort, formatTimeOfDay } from "../../shared/locale-format";
 import type { AppRights } from "./app-model";
 import { useAppsHost } from "./apps-host";
 
@@ -19,9 +20,38 @@ import { useAppsHost } from "./apps-host";
  */
 export function useAppEditWithAgent(
   app: string | undefined,
-  rights: Pick<AppRights, "write">
-): { dialog: ReactNode; editInChat: PageHeaderAction | undefined } {
-  const { t } = useTranslation();
+  rights: Pick<AppRights, "write">,
+  editors?: Asset["appEditors"]
+): {
+  dialog: ReactNode;
+  editInChat: PageHeaderAction | undefined;
+  editingLine: string | undefined;
+} {
+  const { t, locale } = useTranslation();
+  const editingLine =
+    rights.write && editors?.length
+      ? editors
+          .map((editor) =>
+            t("apps.beingEdited", {
+              name: editor.displayLabel,
+              since: formatMomentShort(editor.since, locale)
+            })
+          )
+          .join(" · ")
+      : undefined;
+  const actionEditors =
+    editingLine &&
+    editors
+      ?.map((editor) =>
+        t("apps.editorSince", {
+          name: editor.displayLabel,
+          since:
+            new Date(editor.since).toDateString() === new Date().toDateString()
+              ? formatTimeOfDay(editor.since, locale)
+              : formatMomentShort(editor.since, locale)
+        })
+      )
+      .join(" · ");
   const host = useAppsHost();
   const [error, setError] = useState<string>();
   const [starting, setStarting] = useState(false);
@@ -45,7 +75,9 @@ export function useAppEditWithAgent(
     !offered || startInChat === undefined
       ? undefined
       : {
-          label: t("apps.editInChat"),
+          label: actionEditors
+            ? `${t("apps.editInChat")} · ${actionEditors}`
+            : t("apps.editInChat"),
           icon: <MessageSquarePlus aria-hidden="true" />,
           loading: starting,
           disabled: starting,
@@ -58,6 +90,7 @@ export function useAppEditWithAgent(
         };
   return {
     editInChat,
+    editingLine,
     dialog: (
       <Dialog
         open={error !== undefined}
