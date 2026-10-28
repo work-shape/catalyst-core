@@ -1,3 +1,4 @@
+import { detectWorkspaceSourceFileType } from "./workspace-source-file-type";
 import { resolveUploadFileContent } from "@work-shape/catalyst-capability-sdk";
 import {
   AppError,
@@ -137,8 +138,12 @@ export function createExecutionWorkspaceSourceAttachmentHandler(
     acceptedFileTypes: WORKSPACE_SOURCE_ACCEPTED_FILE_TYPES,
     acceptsFile(file) {
       return (
-        detectWorkspaceSourceFileFormat(file.filename, file.mimeType) !== undefined &&
-        !input.capabilityAttachmentHandlers?.some((handler) => handler.acceptsFile(file))
+        (file.workspaceToolsAvailable ||
+          detectWorkspaceSourceFileFormat(file.filename, file.mimeType) !== undefined) &&
+        !input.capabilityAttachmentHandlers?.some(
+          (handler) =>
+            handler.acceptsFile(file) && handler.acceptsFile(workspaceSourceRoutingInput(file))
+        )
       );
     },
     listDraftAttachments(conversationId) {
@@ -304,7 +309,7 @@ function createWorkspaceSourceAttachmentManifest(
           readable: false,
           modelContext: {
             section: "Attached source artifacts",
-            text: `- ${attachment.filename} (fileId: ${attachment.fileId}, status: ready, size: ${attachment.byteSize} bytes, format: ${attachment.format ?? "file"}). Use workspace.import_files({ "files": [{ "fileId": "${attachment.fileId}" }] }) before workspace.exec when you need to inspect, convert, or edit this file in the execution workspace; use the returned importedFiles[].path exactly; do not guess or shorten filenames.`
+            text: `- ${attachment.filename} (fileId: ${attachment.fileId}, status: ready, size: ${attachment.byteSize} bytes, type: ${attachment.processingMetadata.detectedType ?? "unknown binary data"}). Use workspace.import_files({ "files": [{ "fileId": "${attachment.fileId}" }] }) before workspace.exec when you need to inspect, convert, or edit this file in the execution workspace; use the returned importedFiles[].path exactly; do not guess or shorten filenames.`
           },
           metadata: {
             fileId: attachment.fileId,
@@ -349,6 +354,7 @@ class ExecutionWorkspaceSourceAttachmentService {
 
   async uploadDraftAttachment(input: {
     locale?: LocaleCode;
+    workspaceToolsAvailable?: boolean;
     conversationId: ConversationId;
     ownerUserId: string;
     filename: string;
@@ -366,12 +372,22 @@ class ExecutionWorkspaceSourceAttachmentService {
         "File exceeds the configured workspace source upload size limit"
       );
     }
+    if (input.content.byteSize === 0) {
+      throw new AppError("VALIDATION_FAILED", "Empty files cannot be attached");
+    }
+    if (safeObjectFilename(input.filename).startsWith("~$")) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        "Microsoft Word temporary owner files are not readable documents. Upload the original .docx file instead of the '~$' lock file."
+      );
+    }
+    const detectedType = detectWorkspaceSourceFileType(input.content.headerBytes);
     const format = detectWorkspaceSourceFileFormat(input.filename, input.mimeType);
-    if (!format) {
+    if (!input.workspaceToolsAvailable && !format) {
       throw new AppError("VALIDATION_FAILED", unsupportedAttachmentMessage(input.locale));
     }
 
-    if (format === "docx") {
+    if (!input.workspaceToolsAvailable && format === "docx") {
       const header = input.content.headerBytes;
       if (header[0] !== 0x50 || header[1] !== 0x4b || header[2] !== 0x03 || header[3] !== 0x04)
         throw new AppError(
@@ -409,8 +425,9 @@ class ExecutionWorkspaceSourceAttachmentService {
       byteSize: input.content.byteSize,
       checksum,
       status: "ready",
-      format,
+      format: format ?? detectedType.extension,
       processingMetadata: {
+        detectedType: detectedType.description,
         source: WORKSPACE_SOURCE_METADATA_SOURCE
       },
       warnings: [],
@@ -573,4 +590,32 @@ function safeObjectFilename(filename: string): string {
   const normalized = filename.replaceAll("\\", "/");
   const basename = posixPath.basename(normalized).trim();
   return basename && basename !== "." && basename !== ".." ? basename : "source.bin";
+}
+
+/** Select specialized readers using signatures when unrestricted workspace intake is allowed.
+ * Original names and browser media types are kept on the stored attachment. */
+export function workspaceSourceRoutingInput<
+  Input extends {
+    filename: string;
+    mimeType?: string;
+    workspaceToolsAvailable?: boolean;
+    content: { headerBytes: Uint8Array };
+  }
+>(input: Input): Input {
+  if (!input.workspaceToolsAvailable) return input;
+  const detected = detectWorkspaceSourceFileType(input.content.headerBytes);
+  // DOCX is itself a ZIP package; a bounded prefix need not contain its word/ entries.
+  if (detected.extension === "zip" && extensionFromFilename(input.filename) === "docx")
+    return input;
+  // Text formats need their language-specific reader; a signature cannot distinguish Markdown.
+  const declaredFormat = detectWorkspaceSourceFileFormat(input.filename, input.mimeType);
+  if (
+    detected.extension === "txt" &&
+    declaredFormat &&
+    ["txt", "markdown", "md", "html", "css", "js", "svg", "xml", "json", "csv"].includes(
+      declaredFormat
+    )
+  )
+    return input;
+  return { ...input, filename: `upload.${detected.extension}`, mimeType: detected.mimeType };
 }

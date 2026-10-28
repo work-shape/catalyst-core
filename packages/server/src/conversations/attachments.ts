@@ -10,6 +10,8 @@ import type {
 import { ATTACHMENT_CREATE_OUTCOMES } from "@work-shape/catalyst-core";
 
 export interface UploadDraftAttachmentInput {
+  /** Set by the server after checking the selected agent in this workspace. */
+  workspaceToolsAvailable?: boolean;
   locale?: LocaleCode;
   conversationId: ConversationId;
   ownerUserId: string;

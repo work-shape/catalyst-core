@@ -493,6 +493,8 @@ export interface ClientInstanceCapabilityRetentionInput {
 }
 
 export interface UploadDraftAttachmentInput {
+  /** Set by the server after checking the selected agent in this workspace. */
+  workspaceToolsAvailable?: boolean;
   locale?: LocaleCode;
   conversationId: ConversationId;
   ownerUserId: string;
@@ -531,7 +533,10 @@ export interface ClientInstanceAttachmentHandler {
   maxFileBytes: number;
   acceptedFileTypes: string[];
   acceptsFile(
-    input: Pick<UploadDraftAttachmentInput, "filename" | "mimeType" | "content">
+    input: Pick<
+      UploadDraftAttachmentInput,
+      "filename" | "mimeType" | "content" | "workspaceToolsAvailable"
+    >
   ): boolean;
   listDraftAttachments(conversationId: ConversationId): Promise<DraftAttachment[]>;
   uploadDraftAttachment(input: UploadDraftAttachmentInput): Promise<UploadDraftAttachmentResult>;
@@ -907,7 +912,7 @@ export function createUploadFileContent(bytes: Uint8Array): UploadFileContent {
   return {
     byteSize: bytes.byteLength,
     checksum: createManagedObjectChecksum(bytes),
-    headerBytes: bytes.slice(0, 16),
+    headerBytes: bytes.slice(0, 8192),
     async *openStream() {
       yield bytes;
     }

@@ -146,3 +146,5 @@ export {
   createInstancePreviewCaptureClient,
   runClientInstancePreviewCaptureService
 } from "./preview-capture-service";
+
+export { detectWorkspaceSourceFileType } from "./workspace-source-file-type";

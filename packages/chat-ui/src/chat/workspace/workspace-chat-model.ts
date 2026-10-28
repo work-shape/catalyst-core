@@ -501,7 +501,18 @@ export function useWorkspaceChatModel({
     setPrivateStartIn
   });
 
+  const activeAgentName = activeAgentNameFor(
+    config,
+    conversationAgentPickFor({
+      conversationId: selectedConversationId,
+      pickedIn: conversationAgentPicks,
+      thread: threadQuery.data,
+      forNew: newConversationAgentName
+    })
+  );
+
   const draftAttachmentController = useDraftAttachmentController({
+    agentName: activeAgentName,
     enabled: attachmentsEnabled,
     apiBaseUrl,
     authScope: WORKSPACE_AUTH_SCOPE,
@@ -522,15 +533,6 @@ export function useWorkspaceChatModel({
     config?.localization.supportedLocales ?? preferences.supportedFallbackLocales;
   const { resolvedThemeMode, theme, toggleTheme, themePreference, selectThemePreference } =
     useWorkspaceTheme(config?.ui);
-  const activeAgentName = activeAgentNameFor(
-    config,
-    conversationAgentPickFor({
-      conversationId: selectedConversationId,
-      pickedIn: conversationAgentPicks,
-      thread: threadQuery.data,
-      forNew: newConversationAgentName
-    })
-  );
   // A pick in an open conversation applies to it alone; elsewhere it is for the new one.
   const selectAgentName = (agentName: string | undefined) => {
     if (selectedConversationId === undefined || agentName === undefined) {

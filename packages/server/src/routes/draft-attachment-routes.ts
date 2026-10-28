@@ -4,6 +4,7 @@ import { ConversationWorkflow } from "../conversations/conversation-service";
 import { readMultipartFile, stageMultipartFile } from "../http/multipart-upload";
 import type { Route } from "../http/route";
 import { conversationIdParam, requirePathParam, resolveRequestLocale } from "./request-context";
+import { getWorkspaceAssetSnapshot } from "../workspaces/agent-availability";
 import type { ChatServerOptions } from "../types";
 
 export function registerDraftAttachmentRoutes(route: Route, options: ChatServerOptions): void {
@@ -17,7 +18,7 @@ export function registerDraftAttachmentRoutes(route: Route, options: ChatServerO
 
   route(
     apiOperations["conversations.draft_attachments.upload"],
-    async ({ user, params, request }) => {
+    async ({ user, access, params, query, request }) => {
       const conversationId = conversationIdParam(params);
       await conversations.requireConversationAccess(conversationId, user);
       const file = await readMultipartFile(request);
@@ -31,10 +32,26 @@ export function registerDraftAttachmentRoutes(route: Route, options: ChatServerO
         }
         // Receiving the body can take minutes. Check again before any bytes are stored, so that
         // a Conversation deleted in the meantime does not receive objects nothing cleans up.
-        await conversations.requireConversationAccess(conversationId, user);
+        const conversation = await conversations.requireConversationAccess(conversationId, user);
+        let workspaceToolsAvailable = false;
+        if (query.agentName !== undefined) {
+          const workspace = await conversations.resolveTargetWorkspace(
+            user,
+            conversation.collaborationWorkspaceId
+          );
+          const assets = await getWorkspaceAssetSnapshot(options, workspace, access);
+          const agent = assets.agents.find((candidate) => candidate.name === query.agentName);
+          if (!agent) throw new AppError("NOT_FOUND", "The selected agent is not available");
+          workspaceToolsAvailable =
+            options.config.executionWorkspaces?.enabled === true &&
+            ["workspace.import_files", "workspace.exec"].every((tool) =>
+              (agent.toolNames ?? []).includes(tool)
+            );
+        }
         const service = attachments(options);
         const { attachment, outcome } = await service.uploadDraftAttachment({
           conversationId,
+          workspaceToolsAvailable,
           locale: resolveRequestLocale(options, request),
           ownerUserId: getSubjectUserId(user),
           filename: file.filename,

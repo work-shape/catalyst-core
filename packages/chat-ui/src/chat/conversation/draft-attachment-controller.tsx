@@ -16,6 +16,7 @@ export interface DraftAttachmentControllerInput {
   authScope: string;
   client: ApiClient;
   selectedConversationId: string | undefined;
+  agentName?: string;
   /** The open workspace; files waiting for a first message belong to it. */
   collaborationWorkspaceId: string | undefined;
   isAuthenticated: boolean;
@@ -212,6 +213,7 @@ export function useDraftAttachmentController(
           uploadFileWithRetry(file, (readFile) =>
             input.client.conversations.draft_attachments.upload({
               params: { conversationId: conversation.id },
+              query: { agentName: input.agentName },
               file: readFile
             })
           )
@@ -294,6 +296,7 @@ export function useDraftAttachmentController(
         uploadFileWithRetry(file, (readFile) =>
           input.client.conversations.draft_attachments.upload({
             params: { conversationId },
+            query: { agentName: input.agentName },
             file: readFile
           })
         )

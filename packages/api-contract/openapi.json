@@ -9427,6 +9427,15 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "agentName",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
           }
         ],
         "requestBody": {
