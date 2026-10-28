@@ -368,7 +368,7 @@ function RecentProjects({
       data-testid="rail-projects"
       labelAction={
         onCreateProject ? (
-          <IconButton size="sm" label={t("projects.new")} onClick={onCreateProject}>
+          <IconButton size="sm" label={t("projects.railNew")} onClick={onCreateProject}>
             <Plus aria-hidden="true" />
           </IconButton>
         ) : undefined
