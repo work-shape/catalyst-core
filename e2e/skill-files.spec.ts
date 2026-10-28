@@ -27,7 +27,9 @@ test.use({
 
 // The skill editor's folder in Studio: a file is uploaded into a folder, a new script is
 // written in place, a file is replaced and one deleted, and a file the instance refuses, a
-// text file too, is named by its path. Each save is read back over the API byte for byte.
+// text file too, is named by its path. The skill is the instance's, so each save writes its one
+// shared draft (SKILL-DRAFT-1), which is read back over the API byte for byte; Publish makes the
+// last one live.
 
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
 /** Where the pictures of the editor go. Unset, none is taken. */
@@ -38,6 +40,7 @@ const superadminUser = {
 };
 const NAME = "e2e_skill_files";
 const skillPath = `${apiBaseUrl}/api/v1/assets/skill/${NAME}`;
+const draftPath = `${apiBaseUrl}/api/v1/skills/${NAME}/draft`;
 
 /** A small PDF: its second line holds bytes that are no text. */
 const PDF = Buffer.concat([
@@ -78,8 +81,16 @@ async function removeSkill(page: Page): Promise<void> {
   }
 }
 
-/** The folder of the skill as the instance holds it, by path. */
+/** The folder of the skill's draft as the instance holds it, by path. */
 async function folder(page: Page) {
+  const response = await page.request.get(`${draftPath}?files=true`);
+  expect(response.ok()).toBe(true);
+  const read = z.object({ draft: folderSchema }).parse(await response.json()).draft;
+  return { revision: read.revision, files: new Map(read.files.map((file) => [file.path, file])) };
+}
+
+/** The live skill's folder, by path. */
+async function liveFolder(page: Page) {
   const response = await page.request.get(`${skillPath}?files=true`);
   expect(response.ok()).toBe(true);
   const read = folderSchema.parse(await response.json());
@@ -122,9 +133,9 @@ async function save(page: Page): Promise<void> {
   const written = page.waitForResponse(
     (response) => response.request().method() === "PUT" && response.url() === skillPath
   );
-  await page.getByRole("button", { name: "Save changes", exact: true }).click();
+  await page.getByRole("button", { name: "Save draft", exact: true }).click();
   expect((await written).ok()).toBe(true);
-  await expect(page.getByRole("button", { name: "Save changes", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Save draft", exact: true })).toHaveCount(0);
 }
 
 test("a skill's files are uploaded, written, replaced and deleted, and a refused one is named", async ({
@@ -171,6 +182,8 @@ test("a skill's files are uploaded, written, replaced and deleted, and a refused
     let held = await folder(page);
     expect(held.files.get("assets/form.pdf")?.sha256).toBe(sha256(PDF));
     expect(held.files.get("scripts/fill_form.py")?.text).toBe("print('filled')\n");
+    // The live skill stays as it was until the draft is published.
+    expect([...(await liveFolder(page)).files.keys()]).toEqual(["SKILL.md"]);
 
     // After a reload the page reads the files the index names, and shows a script's text.
     await page.reload();
@@ -210,7 +223,7 @@ test("a skill's files are uploaded, written, replaced and deleted, and a refused
     const refused = page.waitForResponse(
       (response) => response.request().method() === "PUT" && response.url() === skillPath
     );
-    await page.getByRole("button", { name: "Save changes", exact: true }).click();
+    await page.getByRole("button", { name: "Save draft", exact: true }).click();
     expect((await refused).status()).toBe(422);
     await expect(page.locator("#files [data-field-refusal]")).toHaveText(
       "scripts/tool is a compiled program. A skill holds scripts as text, not programs."
@@ -238,12 +251,28 @@ test("a skill's files are uploaded, written, replaced and deleted, and a refused
     const pointer = page.waitForResponse(
       (response) => response.request().method() === "PUT" && response.url() === skillPath
     );
-    await page.getByRole("button", { name: "Save changes", exact: true }).click();
+    await page.getByRole("button", { name: "Save draft", exact: true }).click();
     expect((await pointer).status()).toBe(422);
     await expect(page.locator("#files [data-field-refusal]")).toHaveText(
       "references/pointer.md is a Git LFS pointer, not the file itself. Upload the file itself."
     );
     expect((await folder(page)).revision).toBe(held.revision);
+
+    // Publish makes the last draft live: the PDF beside SKILL.md.
+    await page.getByRole("button", { name: "Delete" }).click();
+    await expect(page.locator('[data-skill-file="references/pointer.md"]')).toHaveCount(0);
+    await page.locator("[data-skill-publish]").click();
+    const published = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" && response.url() === `${skillPath}/publish`
+    );
+    await page.getByRole("dialog").getByRole("button", { name: "Publish", exact: true }).click();
+    expect((await published).ok()).toBe(true);
+    await expect(page.locator("[data-agent-draft-badge]")).toHaveCount(0);
+    const live = await liveFolder(page);
+    expect(live.revision).toBe(2);
+    expect([...live.files.keys()]).toEqual(["SKILL.md", "assets/form.pdf"]);
+    expect(live.files.get("assets/form.pdf")?.sha256).toBe(sha256(PDF_2));
   } finally {
     await removeSkill(page);
   }
