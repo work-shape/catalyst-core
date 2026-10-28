@@ -17,8 +17,7 @@ import {
   parseClientInstanceConfig
 } from "@work-shape/catalyst-config-schema";
 import { createSkillFolderReader } from "@work-shape/catalyst-server";
-import { createSkillSourceVersion } from "@work-shape/catalyst-tool-execution";
-import { runSkillMounts } from "../packages/tool-execution/src/run-skills";
+import { createSkillSourceVersion, runSkillMounts } from "@work-shape/catalyst-tool-execution";
 import { DeterministicModelProvider } from "@work-shape/catalyst-model-provider";
 import { json } from "./support/skill-change-fixture";
 import { clientInstanceId, skill } from "./support/access-instance";
@@ -292,12 +291,15 @@ describe("a shared skill's draft", () => {
         }
       );
       expect(mounts).toHaveLength(1);
-      const mount = mounts[0]!;
+      const mount = mounts[0];
+      if (!mount) throw new Error("Skill mount missing");
       const files = await createSkillFolderReader({
         clientInstanceId: t.instance,
         stores: t.app.stores
       }).read({ clientInstanceId: t.instance, ...mount });
-      return Buffer.from(files.find((file) => file.path === "SKILL.md")!.bytes).toString("utf8");
+      const manifest = files.find((file) => file.path === "SKILL.md");
+      if (!manifest) throw new Error("Skill manifest missing");
+      return Buffer.from(manifest.bytes).toString("utf8");
     };
     expect(await mountedText(preview)).toContain("DRAFT-RULE");
     // Queued commands retain the admitted content after a later save or publish.
