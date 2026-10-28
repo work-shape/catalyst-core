@@ -15,7 +15,13 @@ export interface SkillChoice {
    * Skills the reader sees that this agent cannot use, such as their own for an agent of
    * everyone: shown greyed with the reason instead of hidden (SCOPE-WORDS).
    */
-  unusable?: readonly ({ name: string; title: string; reason: string } & SkillFacts)[];
+  unusable?: readonly ({
+    name: string;
+    title: string;
+    reason: string;
+    /** "Für alle teilen…": shares the skill up to the agent's place (SHARE-1). */
+    share?: { label: string; onSelect(): void };
+  } & SkillFacts)[];
 }
 
 /** The skills an agent works with: one chip per chosen skill and the chooser. */
@@ -78,6 +84,7 @@ export function AgentSkills({
                   value: skill.name,
                   label: skill.title || skill.name,
                   disabledReason: skill.reason,
+                  ...(skill.share === undefined ? {} : { disabledAction: skill.share }),
                   keywords: skill.name,
                   leading: <SkillIcon icon={skill.icon} />
                 }))

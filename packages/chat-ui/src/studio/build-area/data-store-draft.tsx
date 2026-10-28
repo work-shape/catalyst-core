@@ -58,13 +58,14 @@ export function DataStoreDraftPage({
   title,
   description,
   publish,
-  remove
+  remove,
+  shareItem
 }: BuildAssetViewProps & { title: string; description: string | undefined }) {
   const { t } = useTranslation();
   const migrations = useMemo(() => migrationsOf(asset.config), [asset.config]);
   const tables = useMemo(() => draftTablesOf(migrations), [migrations]);
   const agentWorking = useDockAgentWorksOn("data_store", asset.name);
-  const head = useDataStoreMenu({ id: asset.name, title, published: false, remove });
+  const head = useDataStoreMenu({ id: asset.name, title, published: false, remove, shareItem });
   return (
     <Page
       ref={page.ref}

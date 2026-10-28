@@ -105,11 +105,12 @@ function PublishedDataStorePage({
   source,
   title,
   publish,
-  remove
+  remove,
+  shareItem
 }: BuildAssetViewProps & { source: DataStoreSource; title: string }) {
   const { t } = useTranslation();
   usePageShown(page, "asset");
-  const head = useDataStoreMenu({ id: asset.name, title, published: true, remove });
+  const head = useDataStoreMenu({ id: asset.name, title, published: true, remove, shareItem });
   const agentWorking = useDockAgentWorksOn("data_store", asset.name);
   const read = source.useStoreState(asset.name);
   const state = read.status === "ready" ? read.data : undefined;

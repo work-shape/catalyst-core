@@ -539,6 +539,7 @@ function ChatWorkspaceContent({
   const appsHost: AppsHost = {
     enabled: model.apps.enabled,
     rights: model.apps.rights,
+    ...(model.apps.places ? { places: model.apps.places } : {}),
     // A Builder who is no member opens an App draft of the workspace, and nothing else of it.
     workspace:
       activeWorkspace && activeWorkspaceName !== undefined
@@ -572,6 +573,7 @@ function ChatWorkspaceContent({
     model.workflows.access === "open"
       ? {
           rights: model.workflows.rights,
+          ...(model.workflows.places ? { places: model.workflows.places } : {}),
           ...(model.workflows.instanceTimeZone
             ? { instanceTimeZone: model.workflows.instanceTimeZone }
             : {}),

@@ -254,12 +254,15 @@ export function useDataStoreMenu({
   id,
   title,
   published,
-  remove
+  remove,
+  shareItem
 }: {
   id: string;
   title: string;
   published: boolean;
   remove: (() => Promise<string | undefined>) | undefined;
+  /** "Teilen…" (SHARE-1), where the store can go further up. */
+  shareItem?: ReactNode;
 }): { menu: ReactNode; dialog: ReactNode; failure: ReactNode } {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
@@ -278,6 +281,7 @@ export function useDataStoreMenu({
   return {
     menu: (
       <>
+        {shareItem}
         <CopyIdItem id={id} />
         {onDelete === undefined ? null : (
           <>

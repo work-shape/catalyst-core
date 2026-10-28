@@ -60,6 +60,7 @@ import { refusals } from "./refusal-texts";
 import { rights } from "./rights";
 import { scheduled } from "./scheduled";
 import { settings } from "./settings";
+import { share } from "./share";
 import { signIn } from "./sign-in";
 import { skillFiles } from "./skill-files";
 import { skillImport } from "./skill-import";
@@ -140,6 +141,7 @@ export const translations = combineTranslations(common)
   .and(rights)
   .and(scheduled)
   .and(settings)
+  .and(share)
   .and(signIn)
   .and(skillFiles)
   .and(skillImport)

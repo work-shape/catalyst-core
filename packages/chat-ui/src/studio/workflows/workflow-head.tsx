@@ -7,6 +7,7 @@ import type { WorkflowEdit } from "./workflow-draft";
 import type { WorkflowView } from "./workflow-views";
 import { workflowRightsOn } from "./workflow-model";
 import { WorkflowRemoveDialog, WorkflowRemoveItem } from "./workflow-remove";
+import { useWorkflowShare } from "./workflow-share";
 import { useWorkflowsHost } from "./workflows-host";
 import { BackLink, TitlePlaceholder, routeLink, type OpenRoute } from "./workflows-frame";
 
@@ -53,6 +54,7 @@ export function WorkflowHead({
   const [removing, setRemoving] = useState(false);
   const mayDelete =
     workflow !== undefined && host !== undefined && workflowRightsOn(host.rights, workflow).delete;
+  const share = useWorkflowShare({ workspaceId, workflowId, workflow, onOpenRoute });
   const address = { collaborationWorkspaceId: workspaceId, workflow: workflowId };
   const lead = [
     workflow?.description,
@@ -89,12 +91,13 @@ export function WorkflowHead({
           ) : undefined
         }
         menu={
-          edit === undefined && !mayDelete ? undefined : (
+          edit === undefined && !mayDelete && share.item === undefined ? undefined : (
             <>
+              {share.item}
               {edit === undefined ? null : <CopyIdItem id={workflowId} />}
               {mayDelete ? (
                 <WorkflowRemoveItem
-                  separated={edit !== undefined}
+                  separated={edit !== undefined || share.item !== undefined}
                   onSelect={() => setRemoving(true)}
                 />
               ) : null}
@@ -102,6 +105,7 @@ export function WorkflowHead({
           )
         }
       />
+      {share.dialog}
       {removing && workflow !== undefined ? (
         <WorkflowRemoveDialog
           workflow={workflowId}
