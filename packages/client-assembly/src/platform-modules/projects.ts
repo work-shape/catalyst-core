@@ -24,6 +24,7 @@ export const projectsModule = defineModule({
     "projects.files.purge",
     "projects.files.restore",
     "conversations.project_files.save",
+    "conversations.project_instructions.get",
     "conversations.draft_attachments.add_from_project"
   ],
   ui: ["rail.projects", "workspace.projects", "workspace.project"]
