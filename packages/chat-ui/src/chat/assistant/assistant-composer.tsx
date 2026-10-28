@@ -141,6 +141,22 @@ export function AssistantComposer({
       threadRuntime.getState().isRunning,
     [composerRuntime, onSubmitMessage, threadRuntime]
   );
+  // A picture or file may go without text: in an open conversation once one is ready, on the
+  // start page as soon as one waits to upload with the message.
+  const attachmentsGoAlone =
+    !submitBlocked &&
+    !queuesFollowUp &&
+    (onSubmitMessage
+      ? localUploadingAttachments.length > 0
+      : attachments.some((attachment) => attachment.status === "ready"));
+  const sendWithoutText = useCallback(() => {
+    if (onSubmitMessage) {
+      onSubmitMessage("");
+      return;
+    }
+    // The thread runtime's own send needs text; the ready attachments join the message.
+    void threadRuntime.append({ role: "user", content: [] });
+  }, [onSubmitMessage, threadRuntime]);
   const queueSend = useCallback(() => {
     const { text } = composerRuntime.getState();
     if (shouldQueueSend({ sendBlock, sendQueued, text, runtimeReady: runtimeReady() })) {
@@ -190,6 +206,11 @@ export function AssistantComposer({
         queueFollowUp(otherMode);
         return;
       }
+      if (attachmentsGoAlone && composerRuntime.getState().text.trim().length === 0) {
+        event.preventDefault();
+        sendWithoutText();
+        return;
+      }
       if (submitBlocked || !runtimeReady()) {
         event.preventDefault();
         queueSend();
@@ -203,12 +224,14 @@ export function AssistantComposer({
       onSubmitMessage(composerRuntime.getState().text);
     },
     [
+      attachmentsGoAlone,
       composerRuntime,
       onSubmitMessage,
       queueFollowUp,
       queueSend,
       queuesFollowUp,
       runtimeReady,
+      sendWithoutText,
       submitBlocked
     ]
   );
@@ -365,6 +388,15 @@ export function AssistantComposer({
             rows={1}
             submitMode={onSubmitMessage ? "none" : "enter"}
             onKeyDown={handleKeyDown}
+            // A pasted picture uploads like a picked file. The library's own paste keeps it in
+            // the browser, where the message goes without it.
+            addAttachmentOnPaste={false}
+            onPaste={(event) => {
+              const files = [...event.clipboardData.files];
+              if (!attachmentsEnabled || files.length === 0) return;
+              event.preventDefault();
+              onFilesSelected(files);
+            }}
           />
           <div
             ref={composerControlsRef}
@@ -405,6 +437,7 @@ export function AssistantComposer({
               onQueueFollowUp={() => queueFollowUp()}
               onQueueSend={queueSend}
               onSubmitMessage={onSubmitMessage}
+              onSendWithoutText={attachmentsGoAlone ? sendWithoutText : undefined}
             />
           </div>
         </ComposerFrame>

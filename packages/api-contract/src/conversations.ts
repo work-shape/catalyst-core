@@ -861,7 +861,11 @@ export const startConversationRunRequestSchema = z.object({
   reasoningEffort: reasoningEffortSchema.optional(),
   locale: localeCodeSchema.optional(),
   message: z.object({
-    text: z.string().min(1)
+    text: z
+      .string()
+      .describe(
+        "The message. It may be empty when the conversation's ready draft attachments go with it; a message with neither text nor attachments is refused."
+      )
   })
 });
 

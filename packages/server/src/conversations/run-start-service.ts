@@ -298,6 +298,10 @@ export class RunStartWorkflow {
       }
       const attachmentManifest =
         attachments?.createAttachmentManifest(draftAttachments) ?? createEmptyAttachmentManifest();
+      // A picture or file may go alone; a message needs one of the two.
+      if (!command.dispatchFollowUpId && attachmentManifest.attachments.length === 0) {
+        requireMessageText(command.text);
+      }
       const userMessageId = createPlatformId<"MessageId">("msg");
       const runId = createPlatformId<"AgentRunId">("run");
       const startedAt = new Date().toISOString();
@@ -498,6 +502,8 @@ export class RunStartWorkflow {
     run: AgentRun;
     runId: AgentRunId;
   }> {
+    // A new conversation holds no attachments yet: its first message needs text.
+    requireMessageText(command.text);
     let runStartCommand: RunStartCommand | undefined;
     if (command.idempotencyKey) {
       const claim = await this.claimOrResolveRunStartCommand({
@@ -677,5 +683,11 @@ export class RunStartWorkflow {
       throw new AppError("INTERNAL", "Agent run input message was not persisted");
     }
     return message;
+  }
+}
+
+function requireMessageText(text: string): void {
+  if (!text.trim()) {
+    throw new AppError("VALIDATION_FAILED", "A message needs text or an attachment.");
   }
 }

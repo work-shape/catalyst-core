@@ -595,6 +595,10 @@ function UserMessage() {
   const activeAnchorId = useThreadViewport((state) => state.topAnchorTurn?.anchorId);
   const viewportStore = useThreadViewportStore();
   const anchorMarkerRef = useRef<HTMLDivElement>(null);
+  // A picture or file sent alone stands above the message without an empty bubble under it.
+  const hasContent = useAuiState((state) =>
+    state.message.parts.some((part) => part.type !== "text" || part.text.trim().length > 0)
+  );
 
   // Offset the viewport's scroll target without adding space between turns.
   useLayoutEffect(() => {
@@ -616,20 +620,24 @@ function UserMessage() {
         aria-hidden="true"
       />
       <MessageAttachments />
-      <div className="chat-user-message-bubble max-w-[min(42rem,88%)] rounded-2xl rounded-tr-md bg-secondary px-4 py-2.5 text-sm leading-6 text-foreground [overflow-wrap:anywhere]">
-        <CollapsibleUserContent>
-          <MessagePrimitive.Parts
-            components={{ Text: UserTextPart, File: FilePart, Image: ImagePart }}
-          />
-        </CollapsibleUserContent>
-      </div>
-      <div className="flex min-h-8 items-center gap-1 opacity-100 md:absolute md:right-0 md:top-full md:opacity-0 md:transition-opacity md:group-hover/message:opacity-100 md:group-focus-within/message:opacity-100">
-        <ActionBarPrimitive.Copy asChild>
-          <IconButton label={t("copy")}>
-            <CopiedState />
-          </IconButton>
-        </ActionBarPrimitive.Copy>
-      </div>
+      {hasContent ? (
+        <>
+          <div className="chat-user-message-bubble max-w-[min(42rem,88%)] rounded-2xl rounded-tr-md bg-secondary px-4 py-2.5 text-sm leading-6 text-foreground [overflow-wrap:anywhere]">
+            <CollapsibleUserContent>
+              <MessagePrimitive.Parts
+                components={{ Text: UserTextPart, File: FilePart, Image: ImagePart }}
+              />
+            </CollapsibleUserContent>
+          </div>
+          <div className="flex min-h-8 items-center gap-1 opacity-100 md:absolute md:right-0 md:top-full md:opacity-0 md:transition-opacity md:group-hover/message:opacity-100 md:group-focus-within/message:opacity-100">
+            <ActionBarPrimitive.Copy asChild>
+              <IconButton label={t("copy")}>
+                <CopiedState />
+              </IconButton>
+            </ActionBarPrimitive.Copy>
+          </div>
+        </>
+      ) : null}
     </MessagePrimitive.Root>
   );
 }

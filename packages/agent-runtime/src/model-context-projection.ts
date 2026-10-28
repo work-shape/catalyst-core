@@ -574,13 +574,8 @@ async function createUserMessageContent(
   if (imageParts.length === 0) {
     return projectedText;
   }
-  return [
-    {
-      type: "text",
-      text: projectedText
-    },
-    ...imageParts
-  ];
+  // A picture sent alone goes without a text part: providers refuse an empty one.
+  return projectedText ? [{ type: "text", text: projectedText }, ...imageParts] : imageParts;
 }
 
 function appendAttachmentManifestForModel(
@@ -591,11 +586,11 @@ function appendAttachmentManifestForModel(
     return text;
   }
   const sections = groupAttachmentModelContext(attachmentManifest.attachments);
-  const lines = [
-    text,
-    ...sections.flatMap(([section, sectionLines]) => ["", `[${section}]`, ...sectionLines])
+  const blocks = [
+    ...(text ? [text] : []),
+    ...sections.map(([section, sectionLines]) => [`[${section}]`, ...sectionLines].join("\n"))
   ];
-  return lines.join("\n");
+  return blocks.join("\n\n");
 }
 
 function groupAttachmentModelContext(

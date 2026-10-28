@@ -447,6 +447,64 @@ describe("model context projection", () => {
     expect(JSON.stringify(metadata)).not.toContain("iVBOR");
   });
 
+  it.each([
+    ["with its attachment lines", true],
+    ["without any line of text", false]
+  ])("projects a picture sent without text %s", async (_case, withModelContext) => {
+    const imageBytes = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+    // The manifest as the message's metadata stores it.
+    const attachmentManifest: JsonObject = {
+      version: 1,
+      attachments: [
+        {
+          kind: "image",
+          fileId: "file_screenshot",
+          attachmentId: "att_screenshot",
+          filename: "screenshot.png",
+          mimeType: "image/png",
+          byteSize: imageBytes.byteLength,
+          status: "ready",
+          readable: false,
+          modelVisibility: { type: "image", mimeType: "image/png" },
+          ...(withModelContext
+            ? {
+                modelContext: {
+                  section: "Attached images",
+                  text: "- screenshot.png (fileId: file_screenshot)"
+                }
+              }
+            : {}),
+          metadata: { fileId: "file_screenshot", filename: "screenshot.png" }
+        }
+      ]
+    };
+    const projected = await projectAgentVisibleHistory(
+      [
+        createMessage("user", "", {
+          agentRuntime: { version: 1, kind: "user_message", attachmentManifest }
+        })
+      ],
+      {
+        ...modelContextOptions(),
+        clientInstanceId: asClientInstanceId("projection-client"),
+        fileReader: {
+          async readFile() {
+            return { bytes: imageBytes, mimeType: "image/png" };
+          }
+        }
+      }
+    );
+
+    const content = projected[0]?.content ?? "";
+    expect(modelContentImages(content)[0]?.data).toEqual(imageBytes);
+    // Providers refuse an empty text part, and the lines start the message without a gap.
+    expect(Array.isArray(content) && content.filter((part) => part.type === "text")).toEqual(
+      withModelContext
+        ? [{ type: "text", text: "[Attached images]\n- screenshot.png (fileId: file_screenshot)" }]
+        : []
+    );
+  });
+
   it("loads model-visible image artifacts without storing base64 in history metadata", async () => {
     const runId = asAgentRunId("run_projection_image");
     const artifactId = asManagedArtifactId("art_page_image");
