@@ -1,0 +1,21 @@
+{
+  "codeBase": "97ebd3975821fbba47d5e13ee52c2c521331ca83",
+  "branch": "fix/t13-stream-interruption",
+  "browserSpec": "e2e/chat-stream-interruption.spec.ts",
+  "localRun": "2 passed, Chromium, retries=0",
+  "variants": {
+    "locale": [
+      "de",
+      "en"
+    ],
+    "width": [
+      1280,
+      390
+    ],
+    "theme": [
+      "light",
+      "dark"
+    ]
+  },
+  "fixture": "Synthetic persisted TIMEOUT run; real adapter retry covered by Vitest"
+}
