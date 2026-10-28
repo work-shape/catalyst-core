@@ -37,6 +37,7 @@ import {
   readDataStoreUse
 } from "@work-shape/catalyst-chat-ui/data-store-use";
 import { required } from "./support/assertions";
+import { withTestSql } from "./support/test-sql";
 import { clientInstanceId, useDataStoreInstance } from "./support/data-store-instance";
 import type { DataStoreInstance } from "./support/data-store-instance";
 import { seed, store } from "./support/reference-owners";
@@ -241,7 +242,8 @@ describe("data_store.use", () => {
     conversation: Conversation,
     owner: AuthenticatedUser,
     toolCallId: string,
-    output: unknown
+    output: unknown,
+    toolName: string = DATA_STORE_USE_TOOL_NAME
   ) {
     const message = await world.stores.conversations.appendMessage({
       clientInstanceId,
@@ -265,7 +267,7 @@ describe("data_store.use", () => {
       text: "",
       metadata: createToolResultMetadata({
         runId: run.id,
-        toolCall: { toolCallId, toolName: DATA_STORE_USE_TOOL_NAME, input: {} },
+        toolCall: { toolCallId, toolName, input: {} },
         result: { status: "success", output: toolOutputOf(output) },
         modelOutput: { text: "" }
       })
@@ -299,7 +301,6 @@ describe("data_store.use", () => {
     });
     const output = outputOf(result);
     expect(output).not.toHaveProperty("awaitsPerson");
-    expect(output).not.toHaveProperty("othersRead");
     expect(await listed(world, chat)).toEqual(["own-store"]);
     const events = await audited(world);
     expect(events).toHaveLength(1);
@@ -334,7 +335,6 @@ describe("data_store.use", () => {
       status: "success",
       output: { name: "team-figures", added: false, awaitsPerson: true }
     });
-    expect(outputOf(result)).not.toHaveProperty("othersRead");
     expect(await listed(world, chat)).toEqual([]);
     expect(await audited(world)).toHaveLength(0);
     expect((await offerOf(world, chat, [...PLATFORM_TOOL_NAMES]))?.toolNames).not.toContain(
@@ -377,15 +377,53 @@ describe("data_store.use", () => {
       expect.arrayContaining(readTools("team-figures"))
     );
 
-    // In a conversation of the team that its members read, another member's click on the
-    // admin's call is refused: only the person whose turn asked may confirm it.
-    const shared = await conversationOf(admin, team.id);
-    const asked = await use(world, shared, admin, "team-figures");
-    await storedCall(world, shared, admin, asked.toolCallId, outputOf(asked.result));
-    const theirs = await click(world, shared, "team-figures", asked.toolCallId, "member");
+    // A call of another person's turn, even in the member's own conversation, is not theirs
+    // to confirm: only the person whose turn asked may.
+    const theirsChat = await conversationOf(member, team.id, "private");
+    await storedCall(world, theirsChat, admin, "tc_admins_turn", output);
+    const theirs = await click(world, theirsChat, "team-figures", "tc_admins_turn", "member");
     expect(theirs.statusCode, theirs.body).toBe(422);
-    expect(await listed(world, shared)).toEqual([]);
-    expect(member.id).not.toBe(admin.id);
+    expect(await listed(world, theirsChat)).toEqual([]);
+  });
+
+  it("accepts a click only on a waiting data_store.use of the person's own top-level run", async () => {
+    const { world, admin, adminsSpace, conversationOf } = await setup();
+    const chat = await conversationOf(admin, adminsSpace.id);
+    const asked = await use(world, chat, admin, "team-figures");
+    const output = outputOf(asked.result);
+    // The same answer stored for another tool is no waiting use.
+    const elsewhere = await conversationOf(admin, adminsSpace.id);
+    await storedCall(world, elsewhere, admin, "tc_other_tool", output, "data_store.describe");
+    const other = await click(world, elsewhere, "team-figures", "tc_other_tool", "admin");
+    expect(other.statusCode, other.body).toBe(422);
+    expect(other.json<{ error: { details?: unknown } }>().error.details).toEqual({
+      reason: "data_store_use_not_pending"
+    });
+    expect(await listed(world, elsewhere)).toEqual([]);
+
+    const run = await storedCall(world, chat, admin, asked.toolCallId, output);
+    const lineage = async (change: "subagent" | "workflow step" | "own") =>
+      withTestSql(async (sql) => {
+        const other = change === "subagent" ? createPlatformId("run") : null;
+        await sql`
+          update agent_runs
+          set parent_run_id = ${other}, root_run_id = ${other},
+              parent_operation_run_id = ${other === null ? null : "oprun_parent"},
+              depth = ${other === null ? 0 : 1},
+              workflow_step_run_id = ${change === "workflow step" ? "wsr_step" : null}
+          where id = ${run.id}`;
+      });
+    for (const change of ["subagent", "workflow step"] as const) {
+      await lineage(change);
+      const refusedClick = await click(world, chat, "team-figures", asked.toolCallId, "admin");
+      expect(refusedClick.statusCode, `${change}: ${refusedClick.body}`).toBe(422);
+      expect(await listed(world, chat)).toEqual([]);
+    }
+    // The very call, as the person's own top-level turn, adds the store.
+    await lineage("own");
+    const added = await click(world, chat, "team-figures", asked.toolCallId, "admin");
+    expect(added.statusCode, added.body).toBe(200);
+    expect(await listed(world, chat)).toEqual(["team-figures"]);
   });
 
   it("refuses a store the person may not read as plainly as one that does not exist", async () => {
@@ -403,16 +441,78 @@ describe("data_store.use", () => {
     expect(await listed(world, chat)).toEqual([]);
   });
 
-  it("says on the card that others read a conversation its workspace shares", async () => {
-    const { world, admin, team, conversationOf } = await setup();
+  it("adds no store to a conversation others read, by the tool or by a click", async () => {
+    const { world, admin, team, teamStore, conversationOf } = await setup();
     const shared = await conversationOf(admin, team.id, "workspace");
-    expect((await use(world, shared, admin, "team-figures")).result).toMatchObject({
-      output: { awaitsPerson: true, othersRead: true }
+    expect((await use(world, shared, admin, "team-figures")).result).toMatchObject(
+      refused("start a chat of their own")
+    );
+    // A waiting call in it, as one asked before the tool refused here, is not confirmed either.
+    await storedCall(world, shared, admin, "tc_shared", {
+      name: "team-figures",
+      title: "team-figures",
+      added: false,
+      awaitsPerson: true,
+      readTools: readTools("team-figures")
     });
+    const clicked = await click(world, shared, "team-figures", "tc_shared", "admin");
+    expect(clicked.statusCode, clicked.body).toBe(409);
+    expect(clicked.json<{ error: { details?: unknown } }>().error.details).toEqual({
+      reason: "data_store_conversation_shared"
+    });
+    // Nor does the store write a row for it, whoever calls it.
+    expect(
+      await world.stores.conversations.addConversationDataStore({
+        clientInstanceId,
+        conversationId: shared.id,
+        assetId: teamStore.id,
+        addedByUserId: admin.id,
+        addedAt: new Date().toISOString()
+      })
+    ).toBe(false);
+    expect(await listed(world, shared)).toEqual([]);
+    expect(await audited(world)).toHaveLength(0);
+
+    // The admin's own conversation in the team still gets the card.
     const own = await conversationOf(admin, team.id, "private");
-    const result = (await use(world, own, admin, "team-figures")).result;
-    expect(result).toMatchObject({ output: { awaitsPerson: true } });
-    expect(outputOf(result)).not.toHaveProperty("othersRead");
+    expect((await use(world, own, admin, "team-figures")).result).toMatchObject({
+      output: { awaitsPerson: true }
+    });
+  });
+
+  it("keeps a conversation that reads a store private when it moves", async () => {
+    const { world, owner, ownersSpace, team, conversationOf } = await setup();
+    const chat = await conversationOf(owner, ownersSpace.id);
+    expect((await use(world, chat, owner, "own-store")).result).toMatchObject({
+      output: { added: true }
+    });
+    const move = (visibility?: ConversationVisibility) =>
+      world.api.call(
+        "conversations.move",
+        {
+          params: { conversationId: chat.id },
+          payload: { collaborationWorkspaceId: team.id, ...(visibility ? { visibility } : {}) }
+        },
+        "owner"
+      );
+    const shown = await move("workspace");
+    expect(shown.statusCode, shown.body).toBe(422);
+    expect(shown.json<{ error: { details?: unknown } }>().error.details).toEqual({
+      reason: "data_store_conversation_private"
+    });
+    // The store refuses it too, under the conversation's lock.
+    await expect(
+      world.stores.conversations.moveConversation({
+        clientInstanceId,
+        conversationId: chat.id,
+        fromCollaborationWorkspaceId: ownersSpace.id,
+        toCollaborationWorkspaceId: team.id,
+        visibility: "workspace"
+      })
+    ).rejects.toThrow("stays private");
+    const moved = await move();
+    expect(moved.statusCode, moved.body).toBe(200);
+    expect(moved.json<{ visibility: string }>().visibility).toBe("private");
   });
 
   it("refuses every call that is not the person's own turn, before it reads anything", async () => {
@@ -679,7 +779,6 @@ describe("the Data Store card", () => {
     title: "Team figures",
     added: false,
     awaitsPerson: true,
-    othersRead: true,
     readTools: readTools("team-figures")
   };
   const render = (node: ReturnType<typeof createElement>) =>
@@ -689,8 +788,7 @@ describe("the Data Store card", () => {
     expect(readDataStoreUse({ output: answer })).toEqual({
       name: "team-figures",
       title: "Team figures",
-      added: false,
-      othersRead: true
+      added: false
     });
     expect(readDataStoreUse({ message: "refused" })).toBeUndefined();
     expect(
@@ -698,22 +796,13 @@ describe("the Data Store card", () => {
     ).toBe(true);
   });
 
-  it("asks in German, says that others see the answers, and shows the store once added", () => {
+  it("asks in German and shows the store once added", () => {
     const use = required(readDataStoreUse(answer));
     const open = render(
       createElement(DataStoreUseCardView, { use, state: "open", onConfirm: () => undefined })
     );
     expect(open).toContain("„Team figures“ in diesem Chat lesen?");
     expect(open).toContain("Erlauben");
-    expect(open).toContain("Wer diesen Chat sonst liest, sieht die Antworten");
-    const own = render(
-      createElement(DataStoreUseCardView, {
-        use: { ...use, othersRead: false },
-        state: "open",
-        onConfirm: () => undefined
-      })
-    );
-    expect(own).not.toContain("Wer diesen Chat sonst liest");
     const added = render(createElement(DataStoreUseCardView, { use, state: "added" }));
     expect(added).toContain('data-state="added"');
     expect(added).toContain("„Team figures“ wird in diesem Chat gelesen.");

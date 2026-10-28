@@ -43470,10 +43470,6 @@
           "added": {
             "type": "boolean"
           },
-          "othersRead": {
-            "type": "boolean",
-            "const": true
-          },
           "readTools": {
             "type": "array",
             "items": {

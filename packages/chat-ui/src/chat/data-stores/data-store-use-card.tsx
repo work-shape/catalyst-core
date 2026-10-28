@@ -7,7 +7,7 @@ import { toolAnswer } from "../conversation/subject-run";
 
 // A Data Store added to the conversation for reading (STORE-USE-1), as a card. The person's own
 // store was added at once: the card says so. Any other store waits for the person's click: the
-// card asks, and in a conversation others read it says that they see the answers from the store.
+// card asks. A conversation others read gets no store: the tool refuses there.
 // The click adds the store with the person's own rights and then tells the conversation, as the
 // person, so the agent goes on in the same turn of work.
 
@@ -18,7 +18,6 @@ export interface DataStoreUse {
   name: string;
   title: string;
   added: boolean;
-  othersRead: boolean;
 }
 
 function textOf(value: unknown): string | undefined {
@@ -33,8 +32,7 @@ export function readDataStoreUse(result: unknown): DataStoreUse | undefined {
   return {
     name,
     title: textOf(answer.title) ?? name,
-    added: answer.added && answer.awaitsPerson !== true,
-    othersRead: answer.othersRead === true
+    added: answer.added && answer.awaitsPerson !== true
   };
 }
 
@@ -139,11 +137,6 @@ export function DataStoreUseCardView({
           </p>
           {added ? null : (
             <p className="text-caption text-muted-foreground">{t("dataStores.useBody")}</p>
-          )}
-          {added || !use.othersRead ? null : (
-            <p className="text-caption text-foreground" data-testid="data-store-use-others">
-              {t("dataStores.useOthersRead")}
-            </p>
           )}
         </div>
         {added || onConfirm === undefined ? null : (

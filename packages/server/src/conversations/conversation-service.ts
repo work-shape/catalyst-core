@@ -1,5 +1,5 @@
 import type { AuditRecorder, StorePage } from "@work-shape/catalyst-core";
-import { auditActorFromUser } from "@work-shape/catalyst-core";
+import { auditActorFromUser, dataStoreConversationPrivateError } from "@work-shape/catalyst-core";
 import {
   AppError,
   personalConversationPrivateError,
@@ -439,6 +439,18 @@ export class ConversationWorkflow {
     if (conversation.collaborationWorkspaceId === command.collaborationWorkspaceId) {
       throw new AppError("VALIDATION_FAILED", "Conversation already belongs to this workspace");
     }
+    // A conversation that reads a Data Store a person added stays private, as one about an
+    // asset does: its transcript holds the answers from the store (STORE-USE-1).
+    const readsStores =
+      (
+        await this.options.stores.conversations.listConversationDataStores({
+          clientInstanceId: this.options.clientInstanceId,
+          conversationId
+        })
+      ).length > 0;
+    if (readsStores && destination.kind !== "personal" && command.visibility === "workspace") {
+      throw dataStoreConversationPrivateError();
+    }
     if (
       conversation.subject &&
       destination.kind !== "personal" &&
@@ -457,6 +469,7 @@ export class ConversationWorkflow {
         : (command.visibility ??
           (conversation.visibility === "private" ||
           conversation.subject ||
+          readsStores ||
           conversation.personalDataAt
             ? "private"
             : destination.defaultConversationVisibility));
