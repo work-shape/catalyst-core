@@ -42,6 +42,8 @@ export interface FlowGroupProps extends Omit<HTMLAttributes<HTMLDivElement>, "ti
   /** Called by a press on the head, Enter and Space. With it the group takes the focus. */
   onOpen?(): void;
   handles?: ReactNode;
+  /** Drawn over the open body, such as the names of its lanes and the lines between them. */
+  overlay?: ReactNode;
   headRef?: Ref<HTMLDivElement>;
   /** The nodes the group holds. A canvas leaves this empty and lays its nodes over the body. */
   children?: ReactNode;
@@ -69,6 +71,7 @@ export function FlowGroup({
   label,
   onOpen,
   handles,
+  overlay,
   headRef,
   children,
   className,
@@ -192,6 +195,7 @@ export function FlowGroup({
           {children}
         </div>
       )}
+      {collapsed ? null : overlay}
       {handles}
       {collapsed && presentation.badge !== "" ? (
         <span

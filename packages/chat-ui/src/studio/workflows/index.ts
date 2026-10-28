@@ -30,7 +30,14 @@ export { draftChanges, withRemovedSteps } from "./draft-changes";
 export { draftValueOf, earlierFields, mappingOf, pickedSchema, rowsOf } from "./mapping-rows";
 export { editIssues, issuePlace, moveRefusal, useWorkflowEditing } from "./workflow-editing";
 export { stepOutputRows } from "./step-output";
-export { countsLine, placedSteps, workflowGraph, type CanvasRun } from "./workflow-canvas-model";
+export {
+  conditionChain,
+  countsLine,
+  placedSteps,
+  workflowGraph,
+  type CanvasRun
+} from "./workflow-canvas-model";
+export { formatDuration, replayMoments, stepRunsAt, timelineRows } from "./run-replay-model";
 export {
   workflowSteps,
   toWorkflow,

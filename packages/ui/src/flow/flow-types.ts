@@ -38,6 +38,19 @@ export interface FlowCounts {
   running?: number;
 }
 
+/**
+ * One path of a `parallel` group. Its parts stand in a column of their own under its name, the
+ * columns side by side, and the group goes on where they join.
+ */
+export interface FlowLane {
+  id: string;
+  label: string;
+  /** How far the path has come, shown beside its name and on the lines into and out of it. */
+  status?: FlowStatus;
+  /** At the end of the name, such as how long the path took. */
+  meta?: string;
+}
+
 /** A button on a node or in the head of a group. The canvas reports its press with the node's id. */
 export interface FlowAction {
   label: string;
@@ -47,6 +60,8 @@ interface FlowItemBase {
   id: string;
   /** The group this part stands in. */
   parentId?: string;
+  /** The lane of that group the part stands in, where the group has lanes. */
+  lane?: string;
   /** A key of the icon registry. An unknown key shows `iconFallback`, then a generic icon. */
   icon?: string;
   /** The generic icon shown when no icon is registered under `icon`. */
@@ -96,6 +111,13 @@ export interface FlowGraphGroup extends FlowItemBase {
   note?: string;
   /** The group starts folded to its head. */
   defaultCollapsed?: boolean;
+  /**
+   * The paths of a `parallel` group, in their order. Its parts name theirs as `lane`; a part
+   * that names none stands under the paths.
+   */
+  lanes?: readonly FlowLane[];
+  /** Where the lanes join, such as "Goes on when all have ended". */
+  joinLabel?: string;
 }
 
 export interface FlowGraphEdge {

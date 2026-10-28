@@ -26,6 +26,7 @@ export type {
   FlowGraphEdge,
   FlowGraphGroup,
   FlowGraphNode,
+  FlowLane,
   FlowStatus
 } from "./flow-types";
 

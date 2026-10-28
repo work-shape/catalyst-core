@@ -4,8 +4,10 @@ import type {
   FlowGraphEdge,
   FlowGraphGroup,
   FlowGraphNode,
+  FlowLane,
   FlowStatus
 } from "@work-shape/catalyst-ui";
+import type { WorkflowConditionOutput } from "@work-shape/catalyst-core";
 import { formatElapsed, formatMoment } from "../../shared/locale-format";
 import type { TranslationContextValue } from "../../shared/i18n";
 import { NO_RECIPIENT_NAMES, recipientsLine, type RecipientNames } from "./recipient-names";
@@ -52,6 +54,8 @@ interface Ends {
 interface Place {
   /** The group the part stands in. */
   parentId: string | undefined;
+  /** In a parallel block: the path the part stands on, which is its lane on the canvas. */
+  lane?: string;
   /** Inside a loop: the counts of the loop's own steps, by step id. Deeper steps have none. */
   counts: Readonly<Record<string, WorkflowLoopCounts>> | undefined;
   /** Inside a loop, at any depth: a step has one step run per item, so none of its own. */
@@ -305,6 +309,83 @@ export function mailFooter(
     : t("workflows.mail.sentToAt", { count, time });
 }
 
+/** The counts of a block's own steps added up: how far the block is as a whole. */
+function summed(
+  counts: Readonly<Record<string, WorkflowLoopCounts>> | undefined
+): WorkflowLoopCounts | undefined {
+  if (counts === undefined) return undefined;
+  const all = Object.values(counts);
+  if (all.length === 0) return undefined;
+  return all.reduce(
+    (sum, part) => ({
+      total: sum.total + part.total,
+      done: sum.done + part.done,
+      failed: sum.failed + part.failed,
+      running: sum.running + part.running
+    }),
+    { total: 0, done: 0, failed: 0, running: 0 }
+  );
+}
+
+/**
+ * A condition and the conditions that stand alone in its `else`, one inside the other: the
+ * tests of one multi-way fork, in the order they are made.
+ */
+export function conditionChain(step: WorkflowStepView): WorkflowStepView[] {
+  const chain = [step];
+  for (let test = step; ;) {
+    const otherwise = test.branches?.find((branch) => branch.id === "else")?.steps;
+    const only = otherwise?.length === 1 ? otherwise[0] : undefined;
+    if (only?.kind !== "condition") return chain;
+    chain.push(only);
+    test = only;
+  }
+}
+
+/** A path of a condition. */
+type ConditionPath = WorkflowConditionOutput["taken"];
+
+/** One way out of a fork: the exit it leaves by, its words, and the steps on it. */
+interface ForkPath {
+  exit: string;
+  label: string;
+  steps: readonly WorkflowStepView[];
+}
+
+/**
+ * The exit of a path of a condition further down a chain: the condition's id and the path,
+ * so a place on it names the condition it belongs to. The first condition's are `then` and
+ * `else`.
+ */
+function chainExit(conditionId: string, path: ConditionPath): string {
+  return `${conditionId}:${path}`;
+}
+
+/** The ways out of a chain of conditions: each test's `then`, then the last `else`. */
+function forkPaths(chain: readonly WorkflowStepView[], t: Translate): ForkPath[] {
+  const pathOf = (test: WorkflowStepView, id: ConditionPath) =>
+    test.branches?.find((branch) => branch.id === id);
+  const paths = chain.map((test, index) => {
+    const then = pathOf(test, "then");
+    return {
+      exit: index === 0 ? "then" : chainExit(test.id, "then"),
+      label:
+        index === 0
+          ? (then?.name ?? t("workflows.canvas.exitThen"))
+          : t("workflows.canvas.exitElseIf", { name: test.name }),
+      steps: then?.steps ?? []
+    };
+  });
+  const last = chain.at(-1) ?? chain[0];
+  const otherwise = last === undefined ? undefined : pathOf(last, "else");
+  paths.push({
+    exit: chain.length === 1 || last === undefined ? "else" : chainExit(last.id, "else"),
+    label: otherwise?.name ?? t("workflows.canvas.exitElse"),
+    steps: otherwise?.steps ?? []
+  });
+  return paths;
+}
+
 /** The drawing of a Workflow: a graph of the canvas that always names its groups. */
 export type WorkflowGraph = FlowGraph & { groups: FlowGraphGroup[] };
 
@@ -374,6 +455,7 @@ export function workflowGraph(
   const base = (step: WorkflowStepView, place: Place) => ({
     id: step.id,
     ...(place.parentId === undefined ? {} : { parentId: place.parentId }),
+    ...(place.lane === undefined ? {} : { lane: place.lane }),
     ...stepIcon(step),
     eyebrow: stepEyebrow(step, t),
     title: stepTitle(step, text, instanceTimeZone),
@@ -391,8 +473,10 @@ export function workflowGraph(
     if (place.skipped) {
       return { status: "skipped" };
     }
+    // A step of a block that runs once has a step run of its own, which says more than counts.
+    const stepRun = place.repeated ? undefined : stepRuns.get(step.id);
     const counts = place.counts?.[step.id];
-    if (counts !== undefined) {
+    if (counts !== undefined && stepRun === undefined) {
       // C4: the counts of a loop's own steps. A total of none says nothing yet.
       const line = countsLine(counts, text, place.ended);
       return {
@@ -400,7 +484,6 @@ export function workflowGraph(
         ...(line === "" ? {} : { footer: line })
       };
     }
-    const stepRun = place.repeated ? undefined : stepRuns.get(step.id);
     if (stepRun === undefined) {
       // Of a run that has ended, a step without a step run was not reached. A step of a loop
       // has one per entry and none of its own, so its place says nothing here.
@@ -443,6 +526,84 @@ export function workflowGraph(
     };
   };
 
+  /** The step runs a block made directly on one of its paths. */
+  const onPath = (block: WorkflowStepRunView, path: string) =>
+    (run?.stepRuns ?? []).filter(
+      (stepRun) =>
+        stepRun.containerStepRunId === block.id &&
+        stepRun.branch === path &&
+        stepRun.iteration === undefined
+    );
+
+  /**
+   * How one path of a parallel block went, for its lane: its state and how long it took, from
+   * its first step's start to its last step's end. A block that repeats in a loop has a step
+   * run per item and its lanes say nothing.
+   */
+  const lane = (
+    branch: { id: string; steps: readonly WorkflowStepView[] },
+    block: WorkflowStepRunView | undefined,
+    skipped: boolean
+  ): Pick<FlowLane, "status" | "meta"> => {
+    if (run === undefined) return {};
+    if (block === undefined) return skipped ? { status: "skipped" } : {};
+    const made = onPath(block, branch.id);
+    const blockEnded = stepRunEnded(block);
+    if (made.length === 0) return blockEnded ? { status: "skipped" } : {};
+    const going = made.filter((stepRun) => !stepRunEnded(stepRun));
+    const through = going.length === 0 && (blockEnded || made.length >= branch.steps.length);
+    const status: FlowStatus = made.some((stepRun) => stepRun.status === "failed")
+      ? "failed"
+      : !through
+        ? going.some((stepRun) => stepRun.status === "waiting")
+          ? "waiting"
+          : "running"
+        : made.some((stepRun) => stepRun.status === "done")
+          ? "done"
+          : "skipped";
+    const starts = made.flatMap((stepRun) =>
+      stepRun.startedAt === undefined ? [] : [stepRun.startedAt]
+    );
+    const ends = made.flatMap((stepRun) =>
+      stepRun.finishedAt === undefined ? [] : [Date.parse(stepRun.finishedAt)]
+    );
+    const start = starts.sort()[0];
+    if (start === undefined) return { status };
+    const end = through && ends.length > 0 ? new Date(Math.max(...ends)) : run.now;
+    return { status, meta: formatElapsed(start, end, locale) };
+  };
+
+  /**
+   * The path of a chain of conditions the run took, by its exit: the first test that held, or
+   * the last `else`. A condition says it by `taken`, or by the path its first step run is on;
+   * the next test of the chain having run says its `else` was taken.
+   */
+  const takenPath = (
+    chain: readonly WorkflowStepView[],
+    paths: readonly ForkPath[],
+    place: Place
+  ): string | undefined => {
+    if (run === undefined || place.repeated || place.skipped) return undefined;
+    for (const [index, test] of chain.entries()) {
+      const decided = stepRuns.get(test.id);
+      const next = chain[index + 1];
+      const taken =
+        decided === undefined
+          ? undefined
+          : (decided.taken ??
+            onPathAny(decided)?.branch ??
+            (next !== undefined && stepRuns.has(next.id) ? "else" : undefined));
+      if (taken === undefined) return undefined;
+      if (taken === "then") return paths[index]?.exit;
+      if (next === undefined) return paths.at(-1)?.exit;
+    }
+    return undefined;
+  };
+  const onPathAny = (block: WorkflowStepRunView) =>
+    (run?.stepRuns ?? []).find(
+      (stepRun) => stepRun.containerStepRunId === block.id && stepRun.branch !== undefined
+    );
+
   const sequence = (list: readonly WorkflowStepView[], place: Place): Ends => {
     let first: string | undefined;
     let last: Ends["last"] = [];
@@ -477,15 +638,21 @@ export function workflowGraph(
     const straight: Ends = { first: step.id, last: [{ source: step.id, skipped: false }] };
 
     if (step.kind === "loop" || step.kind === "parallel") {
-      const counts = stepRun?.loop;
+      // A loop counts its items; a parallel block counts the step runs of its own steps.
+      const counts = step.kind === "loop" ? stepRun?.loop : summed(stepRun?.bodyCounts);
       const through = counts === undefined ? 0 : counts.done + counts.failed;
       const took = stepRun === undefined ? undefined : duration(stepRun);
       const note =
         counts === undefined
           ? undefined
-          : [took, countsLine(counts, text, stepRun !== undefined && stepRunEnded(stepRun), false)]
-              .filter((part) => part)
-              .join(" · ");
+          : step.kind === "parallel"
+            ? took
+            : [
+                took,
+                countsLine(counts, text, stepRun !== undefined && stepRunEnded(stepRun), false)
+              ]
+                .filter((part) => part)
+                .join(" · ");
       groups.push({
         ...base(step, place),
         kind: step.kind,
@@ -495,10 +662,13 @@ export function workflowGraph(
           ? {}
           : {
               counts,
-              countsLabel: t("workflows.run.count", {
-                done: through.toLocaleString(locale),
-                total: counts.total.toLocaleString(locale)
-              }),
+              countsLabel: t(
+                step.kind === "loop" ? "workflows.run.count" : "workflows.canvas.stepsCount",
+                {
+                  done: through.toLocaleString(locale),
+                  total: counts.total.toLocaleString(locale)
+                }
+              ),
               ...(counts.failed > 0
                 ? {
                     failedLabel: t("workflows.run.countFailed", {
@@ -507,15 +677,29 @@ export function workflowGraph(
                   }
                 : {}),
               ...(note ? { note } : {}),
-              action: {
-                label:
-                  counts.failed > 0
-                    ? t("workflows.canvas.showFailed", {
-                        count: counts.failed.toLocaleString(locale)
-                      })
-                    : t("workflows.canvas.showEntries")
-              }
-            })
+              ...(step.kind === "loop"
+                ? {
+                    action: {
+                      label:
+                        counts.failed > 0
+                          ? t("workflows.canvas.showFailed", {
+                              count: counts.failed.toLocaleString(locale)
+                            })
+                          : t("workflows.canvas.showEntries")
+                    }
+                  }
+                : {})
+            }),
+        ...(step.kind === "parallel"
+          ? {
+              lanes: (step.branches ?? []).map((branch) => ({
+                id: branch.id,
+                label: branch.name ?? branch.id,
+                ...lane(branch, stepRun, place.skipped || state.status === "skipped")
+              })),
+              joinLabel: t("workflows.canvas.joinAll")
+            }
+          : {})
       });
       const inside: Place = {
         parentId: step.id,
@@ -531,44 +715,48 @@ export function workflowGraph(
         sequence(step.steps, inside);
       } else {
         // The paths of a parallel block have no order among them: no edge joins two of them.
+        // Each is a lane of the block, side by side with the others.
         for (const branch of step.branches ?? []) {
-          sequence(branch.steps, inside);
+          sequence(branch.steps, { ...inside, lane: branch.id });
         }
       }
       return straight;
     }
 
     if (step.kind === "condition") {
-      const branches = step.branches ?? [];
-      const taken = stepRun?.taken;
+      // A condition in the `else` of another is one more way out of the same fork.
+      const chain = conditionChain(step);
+      const paths = forkPaths(chain, t);
+      const taken = takenPath(chain, paths, place);
+      // A test of the chain that failed says so on the fork; otherwise the first test speaks.
+      const failed = chain.find(
+        (test) => !place.repeated && stepRuns.get(test.id)?.status === "failed"
+      );
+      const decided = failed === undefined ? state : ran(failed, place);
       nodes.push({
         ...base(step, place),
         kind: "condition",
         ...described,
-        exits: branches.map((branch) => ({
-          id: branch.id,
-          label:
-            branch.name ??
-            t(branch.id === "then" ? "workflows.canvas.exitThen" : "workflows.canvas.exitElse")
-        })),
-        ...(state.status === undefined ? {} : { status: state.status })
+        exits: paths.map((path) => ({ id: path.exit, label: path.label })),
+        ...(decided.status === undefined ? {} : { status: decided.status }),
+        ...(decided.meta === undefined ? {} : { meta: decided.meta })
       });
       const last: Ends["last"][number][] = [];
-      for (const branch of branches) {
-        const skipped = place.skipped || (taken !== undefined && taken !== branch.id);
-        const path = sequence(branch.steps, { ...place, skipped });
-        if (path.first === undefined) {
+      for (const path of paths) {
+        const skipped = place.skipped || (taken !== undefined && taken !== path.exit);
+        const ends = sequence(path.steps, { ...place, skipped });
+        if (ends.first === undefined) {
           // A path without steps leaves the condition where the block ends.
-          last.push({ source: step.id, sourceExit: branch.id, skipped });
+          last.push({ source: step.id, sourceExit: path.exit, skipped });
           continue;
         }
         edges.push({
           source: step.id,
-          sourceExit: branch.id,
-          target: path.first,
+          sourceExit: path.exit,
+          target: ends.first,
           ...(skipped ? { state: "skipped" as const } : {})
         });
-        last.push(...path.last.map((end) => ({ ...end, skipped: end.skipped || skipped })));
+        last.push(...ends.last.map((end) => ({ ...end, skipped: end.skipped || skipped })));
       }
       return { first: step.id, last };
     }

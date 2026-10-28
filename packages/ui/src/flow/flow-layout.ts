@@ -7,6 +7,7 @@ import type {
   FlowGraphGroup,
   FlowGraphNode,
   FlowInsertPlace,
+  FlowLane,
   FlowStatus
 } from "./flow-types";
 
@@ -42,9 +43,29 @@ export interface FlowPoint {
   y: number;
 }
 
+/** The head of one lane of a group, from the group's own corner. */
+export interface FlowLaneBox extends FlowBox {
+  id: string;
+  /** Where the lane's last part ends; the bottom of its head where it holds none. */
+  bottom: number;
+}
+
+/** Where the lanes of an open group stand, from the group's own corner. */
+export interface FlowLaneLayout {
+  /** Side by side; otherwise one under the other, where two would not fit beside each other. */
+  side: boolean;
+  lanes: readonly FlowLaneBox[];
+  /** Where the paths leave the group's head. */
+  fork: FlowPoint;
+  /** Where the paths come together again. */
+  join: FlowPoint;
+}
+
 export interface FlowLayout {
   /** Where every part that shows stands, in the graph's own measures. */
   boxes: ReadonlyMap<string, FlowBox>;
+  /** The lanes of every open group that has lanes, by the group's id. */
+  lanes: ReadonlyMap<string, FlowLaneLayout>;
   /** The parts that show, in the order of the flow. A group stands before what it holds. */
   order: readonly string[];
   edges: readonly FlowLaidOutEdge[];
@@ -87,6 +108,17 @@ const ROOM_GAPS: Record<FlowInsertRoom, Record<FlowDirection, number>> = {
 };
 /** At the end of a group's body, for its insert point. */
 const END_ROOM = 44;
+/** The name of a lane above its parts. */
+const LANE_HEAD = 30;
+/** Between the head of a group with lanes and the names of its lanes, for the lines that fork. */
+const LANE_FORK = 20;
+/** Between the longest lane and the point where the lanes join, and under that point. */
+const LANE_JOIN = 22;
+const LANE_JOIN_TAIL = 26;
+/** Between two lanes that stand side by side. */
+const LANE_GAP = 14;
+/** A lane is at least this wide, so that a short name and its lines have room. */
+const LANE_MIN_WIDTH = 150;
 
 type Item = (FlowGraphNode | FlowGraphGroup) & { group: boolean };
 
@@ -97,6 +129,8 @@ interface Placed {
   routes: Map<string, FlowPoint[]>;
   width: number;
   height: number;
+  /** The lanes of a group's body, from the body's own origin. */
+  lanes?: FlowLaneLayout;
 }
 
 /** An edge as one level's layout sees it: between two members of the level. */
@@ -111,8 +145,10 @@ interface Join {
 /**
  * Lays a graph out without stored positions. The top level runs in `direction`. A group is one
  * part of the level it stands in, as large as its head and what it holds; inside, its parts run
- * top to bottom whatever the direction, so a group stays narrow. Groups nest to any depth. An
- * edge to or from something inside a folded group is drawn to the group.
+ * top to bottom whatever the direction, so a group stays narrow. A group with lanes stands
+ * them side by side left to right, each a column of its own, and one under the other top to
+ * bottom, where two columns would not fit. Groups nest to any depth. An edge to or from
+ * something inside a folded group is drawn to the group.
  */
 export function layoutFlow({
   graph,
@@ -251,7 +287,115 @@ export function layoutFlow({
     };
   };
 
+  /** Some of a level's parts, with the edges among them, top to bottom. */
+  const placeColumn = (ids: readonly string[], joins: readonly Join[]): Placed => {
+    const columnSizes = new Map(ids.map((id) => [id, sizeOf(id)]));
+    const among = joins.filter((join) => ids.includes(join.from) && ids.includes(join.to));
+    return among.length === 0
+      ? stack(ids, columnSizes, "vertical", bodyGap)
+      : rank(ids, columnSizes, among, "vertical", bodyGap);
+  };
+
+  /** The body of a group with lanes: a column per lane, and what names no lane under them. */
+  const placeLanes = (scope: string, lanes: readonly FlowLane[]): Placed => {
+    const ids = members.get(scope) ?? [];
+    const joins = scopeEdges.get(scope) ?? [];
+    const known = new Set(lanes.map((lane) => lane.id));
+    const laneOf = (id: string) => items.get(id)?.lane;
+    const columns = lanes.map((lane) => ({
+      id: lane.id,
+      body: placeColumn(
+        ids.filter((id) => laneOf(id) === lane.id),
+        joins
+      )
+    }));
+    const loose = ids.filter((id) => {
+      const lane = laneOf(id);
+      return lane === undefined || !known.has(lane);
+    });
+    const positions = new Map<string, FlowBox>();
+    const routes = new Map<string, FlowPoint[]>();
+    const put = (body: Placed, x: number, y: number) => {
+      for (const [id, box] of body.positions) {
+        positions.set(id, { ...box, x: box.x + x, y: box.y + y });
+      }
+      for (const [id, points] of body.routes) {
+        routes.set(
+          id,
+          points.map((point) => ({ x: point.x + x, y: point.y + y }))
+        );
+      }
+    };
+    const heads: FlowLaneBox[] = [];
+    const side = direction === "horizontal";
+    let width: number;
+    let joinY: number;
+    if (side) {
+      const tallest = Math.max(0, ...columns.map((column) => column.body.height));
+      const top = LANE_FORK + LANE_HEAD;
+      let x = 0;
+      for (const { id, body } of columns) {
+        const column = Math.max(body.width, LANE_MIN_WIDTH);
+        put(body, x + (column - body.width) / 2, top);
+        heads.push({
+          id,
+          x,
+          y: LANE_FORK,
+          width: column,
+          height: LANE_HEAD,
+          bottom: top + body.height
+        });
+        x += column + LANE_GAP;
+      }
+      width = Math.max(0, x - LANE_GAP);
+      joinY = top + tallest + LANE_JOIN;
+    } else {
+      width = Math.max(LANE_MIN_WIDTH, ...columns.map((column) => column.body.width));
+      let y = 0;
+      for (const { id, body } of columns) {
+        put(body, (width - body.width) / 2, y + LANE_HEAD);
+        heads.push({ id, x: 0, y, width, height: LANE_HEAD, bottom: y + LANE_HEAD + body.height });
+        y += LANE_HEAD + body.height + bodyGap;
+      }
+      joinY = Math.max(0, y - bodyGap) + LANE_JOIN;
+    }
+    let height = joinY + LANE_JOIN_TAIL;
+    if (loose.length > 0) {
+      const rest = placeColumn(loose, joins);
+      width = Math.max(width, rest.width);
+      put(rest, (width - rest.width) / 2, height + bodyGap);
+      height += bodyGap + rest.height;
+    }
+    // The lanes stand centred in a body that something under them makes wider.
+    const shift = (width - (heads.at(-1)?.x ?? 0) - (heads.at(-1)?.width ?? 0)) / 2;
+    if (side && shift > 0) {
+      for (const head of heads) {
+        head.x += shift;
+      }
+      for (const [id, box] of positions) {
+        if (!loose.includes(id)) positions.set(id, { ...box, x: box.x + shift });
+      }
+    }
+    return {
+      positions,
+      routes,
+      width,
+      height,
+      lanes: {
+        side,
+        lanes: heads,
+        fork: { x: width / 2, y: -FLOW_GROUP_PADDING },
+        join: { x: width / 2, y: joinY }
+      }
+    };
+  };
+
   const placeScope = (scope: string | undefined): Placed => {
+    const scopeItem = scope === undefined ? undefined : items.get(scope);
+    const lanes = scopeItem !== undefined && "lanes" in scopeItem ? scopeItem.lanes : undefined;
+    if (scope !== undefined && lanes !== undefined && lanes.length > 0) {
+      return placeLanes(scope, lanes);
+    }
     const ids = members.get(scope) ?? [];
     const scopeSizes = new Map(ids.map((id) => [id, sizeOf(id)]));
     const along: FlowDirection = scope === undefined ? direction : "vertical";
@@ -263,6 +407,7 @@ export function layoutFlow({
 
   const root = placeScope(undefined);
   const boxes = new Map<string, FlowBox>();
+  const laneLayouts = new Map<string, FlowLaneLayout>();
   const routes = new Map<string, FlowPoint[]>();
   const order: string[] = [];
   const settle = (placed: Placed, originX: number, originY: number, along: FlowDirection) => {
@@ -284,12 +429,23 @@ export function layoutFlow({
       const body = placedScopes.get(id);
       if (body && !collapsed?.has(id)) {
         const head = absolute.height - body.height - endRoom - 2 * FLOW_GROUP_PADDING;
-        settle(
-          body,
-          absolute.x + (absolute.width - body.width) / 2,
-          absolute.y + head + FLOW_GROUP_PADDING,
-          "vertical"
-        );
+        const left = (absolute.width - body.width) / 2;
+        const top = head + FLOW_GROUP_PADDING;
+        if (body.lanes) {
+          const move = (point: FlowPoint) => ({ x: point.x + left, y: point.y + top });
+          laneLayouts.set(id, {
+            side: body.lanes.side,
+            lanes: body.lanes.lanes.map((lane) => ({
+              ...lane,
+              x: lane.x + left,
+              y: lane.y + top,
+              bottom: lane.bottom + top
+            })),
+            fork: move(body.lanes.fork),
+            join: move(body.lanes.join)
+          });
+        }
+        settle(body, absolute.x + left, absolute.y + top, "vertical");
       }
     }
   };
@@ -297,6 +453,7 @@ export function layoutFlow({
 
   return {
     boxes,
+    lanes: laneLayouts,
     order,
     edges: edges.map((edge) => ({ ...edge, waypoints: routes.get(edge.id) })),
     bounds: { x: 0, y: 0, width: root.width, height: root.height }

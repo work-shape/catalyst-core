@@ -266,6 +266,166 @@ function quarterClose(locale: LocaleCode): SampleWorkflow {
   };
 }
 
+/** An analysis step of "Monthly analysis": an AI step that reads the bookings. */
+function analysis(locale: LocaleCode, id: string, name: Words, description: Words): WorkflowStep {
+  return {
+    id,
+    type: "agent",
+    name: say(locale, name),
+    description: say(locale, description),
+    instructions: `${id}.md`,
+    input: { bookings: { ref: { step: "load", path: "items" } } },
+    inputSchema: OBJECT,
+    outputSchema: OBJECT
+  };
+}
+
+/** A notice to the tax team, as the paths of the risk fork send it. */
+function tell(locale: LocaleCode, id: string, name: Words): WorkflowStep {
+  return {
+    id,
+    type: "notify",
+    name: say(locale, name),
+    to: { users: ["sample-reviewer"] },
+    channels: ["inbox"],
+    title: { value: "Analysis ready" },
+    text: { value: "Open the run to read the analysis." }
+  };
+}
+
+/**
+ * "Monthly analysis": one load step, three analyses at the same time, one of them two steps
+ * long, and a fork of three ways by the risk they found: the Workflow of the run view's
+ * timeline (T31), where the reader sees which analyses ran together and which took longest.
+ */
+function monthlyAnalysis(locale: LocaleCode): SampleWorkflow {
+  return {
+    manifest: {
+      ...base(
+        locale,
+        "monthly-analysis",
+        { en: "Monthly analysis", de: "Monatsanalyse" },
+        {
+          en: "Loads the month's bookings, analyses revenue, costs and risks at the same time and tells the tax team.",
+          de: "Lädt die Buchungen des Monats, analysiert Umsatz, Kosten und Risiken gleichzeitig und informiert das Steuerteam."
+        }
+      ),
+      steps: [
+        trigger(locale, "0 7 2 * *"),
+        {
+          id: "load",
+          type: "operation",
+          name: say(locale, { en: "Load the bookings", de: "Buchungen laden" }),
+          description: say(locale, {
+            en: "Fetches every booking of the month before.",
+            de: "Holt alle Buchungen des Vormonats."
+          }),
+          operation: "connection.bookings.list_bookings",
+          input: {}
+        },
+        {
+          id: "analyses",
+          type: "parallel",
+          name: say(locale, { en: "Analyses", de: "Analysen" }),
+          branches: [
+            {
+              id: "revenue",
+              name: say(locale, { en: "Revenue", de: "Umsatz" }),
+              steps: [
+                analysis(
+                  locale,
+                  "revenue_trend",
+                  { en: "Analyse the revenue", de: "Umsatz analysieren" },
+                  {
+                    en: "Compares the revenue with the months before.",
+                    de: "Vergleicht den Umsatz mit den Vormonaten."
+                  }
+                )
+              ]
+            },
+            {
+              id: "costs",
+              name: say(locale, { en: "Costs", de: "Kosten" }),
+              steps: [
+                {
+                  id: "cost_groups",
+                  type: "code",
+                  name: say(locale, { en: "Group the costs", de: "Kosten gruppieren" }),
+                  description: say(locale, {
+                    en: "Sums the costs per account.",
+                    de: "Summiert die Kosten je Konto."
+                  }),
+                  file: "groups.ts",
+                  input: { bookings: { ref: { step: "load", path: "items" } } },
+                  inputSchema: OBJECT,
+                  outputSchema: OBJECT
+                },
+                analysis(
+                  locale,
+                  "cost_outliers",
+                  { en: "Find outliers", de: "Ausreißer finden" },
+                  {
+                    en: "Looks for costs far from the usual.",
+                    de: "Sucht Kosten, die weit vom Üblichen abweichen."
+                  }
+                )
+              ]
+            },
+            {
+              id: "risks",
+              name: say(locale, { en: "Risks", de: "Risiken" }),
+              steps: [
+                analysis(
+                  locale,
+                  "risk_rating",
+                  { en: "Rate the risks", de: "Risiken bewerten" },
+                  {
+                    en: "Rates how risky the month's bookings are.",
+                    de: "Bewertet, wie riskant die Buchungen des Monats sind."
+                  }
+                )
+              ]
+            }
+          ]
+        },
+        {
+          id: "high_risk",
+          type: "condition",
+          name: say(locale, { en: "High risk?", de: "Hohes Risiko?" }),
+          when: { ref: { step: "analyses", path: "risks.level" }, op: "equals", value: "high" },
+          then: [tell(locale, "warn_team", { en: "Warn the tax team", de: "Steuerteam warnen" })],
+          else: [
+            {
+              id: "medium_risk",
+              type: "condition",
+              name: say(locale, { en: "Medium risk?", de: "Mittleres Risiko?" }),
+              when: {
+                ref: { step: "analyses", path: "risks.level" },
+                op: "equals",
+                value: "medium"
+              },
+              then: [
+                tell(locale, "mark_review", {
+                  en: "Mark for review",
+                  de: "Zur Prüfung vormerken"
+                })
+              ],
+              else: []
+            }
+          ]
+        },
+        {
+          id: "result",
+          type: "output",
+          name: say(locale, { en: "Analysis of the month", de: "Analyse des Monats" }),
+          input: {}
+        }
+      ]
+    },
+    readings: { load: BOOKINGS }
+  };
+}
+
 /** The Workflow a step of "Quarter close" starts. */
 function sendReminders(locale: LocaleCode): SampleWorkflow {
   return {
@@ -340,5 +500,11 @@ function emptyDraft(locale: LocaleCode): SampleWorkflow {
 
 /** The sample Workflows in one language, in the order of the list. */
 export function sampleWorkflows(locale: LocaleCode): readonly SampleWorkflow[] {
-  return [monthlyCheck(locale), quarterClose(locale), sendReminders(locale), emptyDraft(locale)];
+  return [
+    monthlyCheck(locale),
+    quarterClose(locale),
+    monthlyAnalysis(locale),
+    sendReminders(locale),
+    emptyDraft(locale)
+  ];
 }

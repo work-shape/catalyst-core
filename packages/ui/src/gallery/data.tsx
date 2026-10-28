@@ -31,6 +31,7 @@ import { Avatar } from "../status/avatar";
 import { chartGalleryEntry } from "./chart";
 import { mailPreviewEntry } from "./mail";
 import { levelMeterGalleryEntry } from "./level-meter";
+import { timelineGalleryEntry } from "./timeline";
 import { qrCodeGalleryEntry } from "./qr-code";
 import { stepsGalleryEntry } from "./steps";
 import type { GalleryText } from "./text";
@@ -654,6 +655,7 @@ export const dataGallery: GalleryGroup = {
     },
     stepsGalleryEntry,
     levelMeterGalleryEntry,
+    timelineGalleryEntry,
     qrCodeGalleryEntry,
     chartGalleryEntry
   ]

@@ -2,6 +2,7 @@ import { chartGalleryText, type ChartGalleryText } from "./text-chart";
 import { flowGalleryText, type FlowGalleryText } from "./text-flow";
 import { layoutGalleryText, type LayoutGalleryText } from "./text-layout";
 import { levelMeterGalleryText, type LevelMeterGalleryText } from "./text-level-meter";
+import { timelineGalleryText, type TimelineGalleryText } from "./text-timeline";
 import { mailGalleryText, type MailGalleryText } from "./text-mail";
 import { progressGalleryText, type ProgressGalleryText } from "./text-progress";
 import { qrCodeGalleryText, type QrCodeGalleryText } from "./text-qr-code";
@@ -19,6 +20,7 @@ export interface GalleryText
     ChartGalleryText,
     ProgressGalleryText,
     LevelMeterGalleryText,
+    TimelineGalleryText,
     QrCodeGalleryText,
     StepsGalleryText,
     SkillsGalleryText,
@@ -543,6 +545,7 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     ...chartGalleryText.en,
     ...progressGalleryText.en,
     ...levelMeterGalleryText.en,
+    ...timelineGalleryText.en,
     ...qrCodeGalleryText.en,
     ...stepsGalleryText.en,
     ...skillsGalleryText.en,
@@ -834,6 +837,7 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     ...chartGalleryText.de,
     ...progressGalleryText.de,
     ...levelMeterGalleryText.de,
+    ...timelineGalleryText.de,
     ...qrCodeGalleryText.de,
     ...stepsGalleryText.de,
     ...skillsGalleryText.de,

@@ -70,8 +70,17 @@ export function stepPlaceOf(place: FlowInsertPlace): StepPlace {
   switch (place.kind) {
     case "edge":
       return { kind: "after", step: place.source };
-    case "exit":
-      return { kind: "first", block: place.nodeId, path: place.exitId };
+    case "exit": {
+      // An exit of a condition further down a chain names that condition before its path.
+      const split = place.exitId.lastIndexOf(":");
+      return split < 0
+        ? { kind: "first", block: place.nodeId, path: place.exitId }
+        : {
+            kind: "first",
+            block: place.exitId.slice(0, split),
+            path: place.exitId.slice(split + 1)
+          };
+    }
     case "end":
       return { kind: "last", block: place.groupId };
   }
