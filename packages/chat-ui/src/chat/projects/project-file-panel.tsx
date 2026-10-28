@@ -20,11 +20,13 @@ import {
   KeyValueList,
   List,
   ListRow,
+  Select,
   SkeletonList,
   Spinner
 } from "@work-shape/catalyst-ui";
 import {
   loadProjectFileBlob,
+  useProjectFilesQuery,
   useProjectFileVersionsQuery,
   useProjectFileWrites
 } from "../../shared/api/project-files";
@@ -39,6 +41,8 @@ import {
   formatProjectBytes,
   PROJECT_FILE_TEXT_PREVIEW_MAX_BYTES,
   projectFileName,
+  projectMoveTargets,
+  projectParentFolder,
   projectFilePreviewKind
 } from "./project-files-model";
 
@@ -255,20 +259,27 @@ export function ProjectFileMoveDialog({
   const { t } = useTranslation();
   const formId = useId();
   const writes = useProjectFileWrites(projectId, t("projectFiles.held"));
+  const files = useProjectFilesQuery(projectId);
   const folder = from?.endsWith("/") ?? false;
   const [value, setValue] = useState("");
+  const [into, setInto] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string>();
   useEffect(() => {
-    setValue(from?.replace(/\/$/u, "") ?? "");
+    setValue(from === undefined ? "" : projectFileName(from));
+    setInto(from === undefined ? "" : projectParentFolder(from));
     setError(undefined);
   }, [from]);
+  // Every folder of the project, the top level first: a file goes to the top level from here.
+  const targets = projectMoveTargets(files.data?.items.map((file) => file.path) ?? [], from ?? "");
+  if (!targets.includes(into)) targets.push(into);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!from) return;
-    const target = value.trim().replace(/^\/+|\/+$/gu, "");
-    if (target === "") return;
+    const name = value.trim().replace(/^\/+|\/+$/gu, "");
+    if (name === "") return;
+    const target = `${into}${name}`;
     const to = folder ? `${target}/` : target;
     if (to === from) {
       onClose();
@@ -316,6 +327,19 @@ export function ProjectFileMoveDialog({
           submit(event).catch(() => undefined);
         }}
       >
+        <Field label={t("projectFiles.moveInto")}>
+          <Select
+            value={into}
+            data-testid="project-file-move-folder"
+            onChange={(event) => setInto(event.currentTarget.value)}
+          >
+            {targets.map((target) => (
+              <option key={target} value={target}>
+                {target === "" ? t("projectFiles.topLevel") : target.replace(/\/$/u, "")}
+              </option>
+            ))}
+          </Select>
+        </Field>
         <Field label={t("projectFiles.renameField")} hint={t("projectFiles.renameHint")}>
           <Input
             value={value}

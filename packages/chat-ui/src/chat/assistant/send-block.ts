@@ -144,3 +144,8 @@ export function createQueuedSendSettler(): (state: QueuedSendState) => QueuedSen
     return step;
   };
 }
+
+/** Whether a file waits in the composer for the message; the note of an unpacked .zip is none. */
+export function holdsFiles(attachments: readonly { status: string }[]): boolean {
+  return attachments.some((attachment) => attachment.status !== "unpacked");
+}

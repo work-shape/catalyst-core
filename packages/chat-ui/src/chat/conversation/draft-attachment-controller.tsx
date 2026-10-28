@@ -64,6 +64,8 @@ type LocalUploadingConversationAttachment = LocalUploadingAttachment & { convers
 /** `uploadedAs` names the draft attachment a file became on a send that failed for another. */
 type StagedFile = LocalUploadingAttachment & { file: File; uploadedAs?: string };
 const MAX_CONCURRENT_UPLOADS = 2;
+// The line about an unpacked .zip stays this long where its upload was.
+const UNPACKED_NOTE_MS = 6000;
 const UPLOAD_ATTEMPTS = 3;
 const GATEWAY_FAILURE_STATUSES = [0, 502, 503, 504];
 // A dropped folder can run into the instance's limit on changing calls. Each file waits as
@@ -191,6 +193,7 @@ export function useDraftAttachmentController(
         status: "uploading"
       }
     ]);
+    let unpackedId: string | undefined;
     try {
       const outcome = await unpackZipIntoProject({
         client: input.client,
@@ -202,6 +205,25 @@ export function useDraftAttachmentController(
       });
       if (outcome.status === "refused") {
         input.onError(projectUploadRefusalText(outcome.refusal, t, locale));
+      } else if (outcome.status === "unpacked") {
+        // The upload's chip says where the files went for a moment, then goes.
+        setLocalUploadingAttachments((current) =>
+          current.map((attachment) =>
+            attachment.id === localId
+              ? {
+                  ...attachment,
+                  status: "unpacked",
+                  note: t(
+                    outcome.files === 1
+                      ? "projectFiles.zipUnpackedOne"
+                      : "projectFiles.zipUnpacked",
+                    { count: outcome.files, folder: outcome.folder }
+                  )
+                }
+              : attachment
+          )
+        );
+        unpackedId = localId;
       }
     } catch (error) {
       input.onError(
@@ -211,9 +233,17 @@ export function useDraftAttachmentController(
       );
     } finally {
       invalidateProjectFiles(queryClient, input.apiBaseUrl, projectId);
-      setLocalUploadingAttachments((current) =>
-        current.filter((attachment) => attachment.id !== localId)
-      );
+      if (unpackedId === undefined) {
+        setLocalUploadingAttachments((current) =>
+          current.filter((attachment) => attachment.id !== localId)
+        );
+      } else {
+        setTimeout(() => {
+          setLocalUploadingAttachments((current) =>
+            current.filter((attachment) => attachment.id !== localId)
+          );
+        }, UNPACKED_NOTE_MS);
+      }
     }
   }
 

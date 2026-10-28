@@ -4,7 +4,7 @@ import {
   useComposerRuntime,
   useThreadRuntime
 } from "@assistant-ui/react";
-import { AlertCircle, Paperclip, RotateCcw, X } from "lucide-react";
+import { AlertCircle, FolderCheck, Paperclip, RotateCcw, X } from "lucide-react";
 import type { FormEvent, KeyboardEvent } from "react";
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import type { DraftAttachment } from "@work-shape/catalyst-api-client";
@@ -19,7 +19,7 @@ import { useComposerFocusRequest } from "./composer-focus-request";
 import { ModelPicker } from "./model-picker";
 import { useTranslation, type TranslationContextValue } from "../../shared/i18n";
 import { FollowUpQueue, useFollowUpQueue } from "./follow-up-queue";
-import { shouldQueueSend, type SendBlock } from "./send-block";
+import { holdsFiles, shouldQueueSend, type SendBlock } from "./send-block";
 import { ComposerAction } from "./composer-action";
 import { followUpModeOfSend } from "./follow-up-shortcut";
 import { AddFromProjectButton } from "../projects/add-from-project";
@@ -29,8 +29,12 @@ export interface LocalUploadingAttachment {
   filename: string;
   byteSize: number;
   mimeType?: string;
-  /** A file waits in the composer of a new conversation and uploads once the message is sent. */
-  status: "uploading" | "staged";
+  /**
+   * A file waits in the composer of a new conversation and uploads once the message is sent. An
+   * unpacked .zip leaves a line (`note`) where its upload was, for a moment: nothing to send.
+   */
+  status: "uploading" | "staged" | "unpacked";
+  note?: string;
 }
 
 export function AssistantComposer({
@@ -148,7 +152,7 @@ export function AssistantComposer({
     !submitBlocked &&
     !queuesFollowUp &&
     (onSubmitMessage
-      ? localUploadingAttachments.length > 0
+      ? holdsFiles(localUploadingAttachments)
       : attachments.some((attachment) => attachment.status === "ready"));
   const sendWithoutText = useCallback(() => {
     if (onSubmitMessage) {
@@ -457,6 +461,7 @@ type AttachmentChipStatus = DraftAttachment["status"] | LocalUploadingAttachment
 interface AttachmentChipItem {
   id: string;
   filename: string;
+  note?: string;
   mimeType?: string;
   byteSize: number;
   status: AttachmentChipStatus;
@@ -485,6 +490,7 @@ function DraftAttachmentList({
     ...localUploadingAttachments.map((attachment) => ({
       id: attachment.id,
       filename: attachment.filename,
+      ...(attachment.note === undefined ? {} : { note: attachment.note }),
       mimeType: attachment.mimeType,
       byteSize: attachment.byteSize,
       status: attachment.status,
@@ -504,8 +510,9 @@ function DraftAttachmentList({
     (left, right) => attachmentAttentionRank(left.status) - attachmentAttentionRank(right.status)
   );
 
-  const totalBytes = items.reduce((sum, item) => sum + item.byteSize, 0);
-  const failedCount = items.filter(
+  const files = items.filter((item) => item.status !== "unpacked");
+  const totalBytes = files.reduce((sum, item) => sum + item.byteSize, 0);
+  const failedCount = files.filter(
     (item) => item.status === "failed" || item.status === "unsupported"
   ).length;
 
@@ -534,15 +541,15 @@ function DraftAttachmentList({
 
   return (
     <div className="grid gap-1.5">
-      {items.length > 1 ? (
+      {files.length > 1 ? (
         <div className="flex items-center justify-between gap-2 px-1 text-xs text-muted-foreground">
           <span className="flex min-w-0 items-center gap-1.5">
             <Paperclip size={13} className="shrink-0" aria-hidden="true" />
             <span className="truncate">
-              {items.length === 1
+              {files.length === 1
                 ? t("attachmentsSummaryOne", { size: formatFileSize(totalBytes) })
                 : t("attachmentsSummary", {
-                    count: items.length,
+                    count: files.length,
                     size: formatFileSize(totalBytes)
                   })}
               {failedCount > 0 ? ` · ${t("attachmentsFailedCount", { count: failedCount })}` : null}
@@ -575,17 +582,33 @@ function DraftAttachmentList({
           }}
           onScroll={syncOverflow}
         >
-          {items.map((item) => (
-            <AttachmentChip
-              key={item.id}
-              filename={item.filename}
-              mimeType={item.mimeType}
-              byteSize={item.byteSize}
-              status={item.status}
-              onRemove={item.removable ? () => onRemoveAttachment(item.id) : undefined}
-              onRetry={item.retryable ? () => onRetryAttachment(item.id) : undefined}
-            />
-          ))}
+          {items.map((item) =>
+            item.note !== undefined ? (
+              <span
+                key={item.id}
+                role="status"
+                data-testid="zip-unpacked-note"
+                className="flex min-w-0 items-center gap-2 rounded-lg border border-border bg-muted/45 px-2.5 py-2 text-label text-foreground sm:col-span-2"
+              >
+                <FolderCheck
+                  size={16}
+                  className="shrink-0 text-muted-foreground"
+                  aria-hidden="true"
+                />
+                <span className="truncate">{item.note}</span>
+              </span>
+            ) : (
+              <AttachmentChip
+                key={item.id}
+                filename={item.filename}
+                mimeType={item.mimeType}
+                byteSize={item.byteSize}
+                status={item.status}
+                onRemove={item.removable ? () => onRemoveAttachment(item.id) : undefined}
+                onRetry={item.retryable ? () => onRetryAttachment(item.id) : undefined}
+              />
+            )
+          )}
         </div>
       </div>
     </div>
@@ -596,7 +619,9 @@ function attachmentAttentionRank(status: AttachmentChipStatus): number {
   if (status === "failed" || status === "unsupported") {
     return 0;
   }
-  return status === "ready" || status === "staged" || status === "deleted" ? 2 : 1;
+  return status === "ready" || status === "staged" || status === "deleted" || status === "unpacked"
+    ? 2
+    : 1;
 }
 
 function attachmentFadeMask(overflow: { above: boolean; below: boolean }): string | undefined {

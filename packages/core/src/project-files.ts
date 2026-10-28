@@ -166,8 +166,10 @@ export type WriteProjectFileVersionResult =
     }
   /** The file changed since `replaces`, and nothing was written. */
   | { status: "conflict"; path: string; currentVersion: number }
-  /** The content is the current version's: nothing was written. */
+  /** The content is the current version's, whichever version the write named: nothing was written. */
   | { status: "unchanged"; file: ProjectFile }
+  /** The write names a version of a file that is no longer in the project (purged or moved). */
+  | { status: "gone"; path: string }
   /** A deletion of a file that is not there. */
   | { status: "missing"; path: string }
   | { status: "over_limit"; limit: ProjectFileLimit; limits: ProjectFileLimits };

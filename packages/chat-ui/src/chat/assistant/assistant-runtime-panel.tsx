@@ -44,6 +44,7 @@ import {
 } from "./product-run-transport";
 import {
   draftAttachmentsKey,
+  holdsFiles,
   resolveSendBlock,
   visibleSendRefusal,
   type QueuedSend,
@@ -180,8 +181,13 @@ function AssistantRuntimePane({
   // thread runtime, which would show it there at once, sends nothing meanwhile.
   const runtimeSendBlocked = Boolean(sendDisabledReason) || conversationRunning;
   const [queuedSend, setQueuedSend] = useState<QueuedSend | undefined>(undefined);
+  const holdsLocalFiles = holdsFiles(localUploadingAttachments);
   const attachmentsKey = useMemo(
-    () => draftAttachmentsKey([...localUploadingAttachments, ...draftAttachments]),
+    () =>
+      draftAttachmentsKey([
+        ...localUploadingAttachments.filter((attachment) => attachment.status !== "unpacked"),
+        ...draftAttachments
+      ]),
     [draftAttachments, localUploadingAttachments]
   );
   const queueSend = useCallback(
@@ -234,7 +240,7 @@ function AssistantRuntimePane({
 
       const trimmedText = text.trim();
       // Files waiting in the composer may go without text.
-      const nothingToSend = !trimmedText && localUploadingAttachments.length === 0;
+      const nothingToSend = !trimmedText && !holdsLocalFiles;
       if (nothingToSend || rootSubmitPendingRef.current || sendDisabledReason) {
         return true;
       }
@@ -291,7 +297,7 @@ function AssistantRuntimePane({
       client,
       collaborationWorkspaceId,
       docked,
-      localUploadingAttachments.length,
+      holdsLocalFiles,
       locale,
       onMessageSubmitted,
       onRunStarted,

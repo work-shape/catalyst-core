@@ -225,7 +225,16 @@ async function writeVersion(
   if (input.content === null) {
     if (!current || !live) return { status: "missing", path: input.path };
     if (!seen) return { status: "conflict", path: input.path, currentVersion };
+  } else if (live && current.checksum === input.content.checksum) {
+    // The bytes the file has already: no new version and no conflict copy, whatever version the
+    // writer had seen.
+    const file = fileOf(current);
+    if (file) return { status: "unchanged", file };
   } else if (!seen) {
+    // A write over a file that is gone for good: there is no file to put a copy beside.
+    if (!current && input.replaces !== undefined && input.replaces > 0) {
+      return { status: "gone", path: input.path };
+    }
     if (input.conflictPath === undefined) {
       return { status: "conflict", path: input.path, currentVersion };
     }
@@ -245,9 +254,6 @@ async function writeVersion(
       currentVersion,
       releasedObjectKeys: copy.releasedObjectKeys
     };
-  } else if (live && current.checksum === input.content.checksum) {
-    const file = fileOf(current);
-    if (file) return { status: "unchanged", file };
   }
 
   if (input.content !== null) {

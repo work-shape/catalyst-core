@@ -646,6 +646,48 @@ describe("project files", () => {
       expect(versions.items.map((item) => item.by?.label)).toEqual(["Lena", "Kai"]);
     });
 
+    it("makes no version or copy for the bytes a file has, and refuses a stale write over a purged file", async () => {
+      const project = await createProject(t.kai.id, team, "Werkstatt 2");
+      const chat = await startChat(t.kai.id, team, { projectId: project.id });
+      const write = (content: string, replacesVersion: number) =>
+        tool(t.kai, chat, "workspace.write_file", {
+          path: "project/liste.md",
+          content,
+          replacesVersion
+        });
+      await write("eins\n", 0);
+      expect(await write("zwei\n", 1)).toMatchObject({ output: { project: { version: 2 } } });
+
+      // Exactly the current bytes under an old version: nothing new, no conflict copy.
+      expect(await write("zwei\n", 1)).toMatchObject({
+        status: "success",
+        output: { project: { change: "unchanged", version: 2 } }
+      });
+      expect((await files(t.kai.id, project.id)).items.map((file) => file.path)).toEqual([
+        "liste.md"
+      ]);
+      expect(
+        (
+          await t.expectOk(t.kai.id, "projects.files.versions", {
+            params: { projectId: project.id },
+            query: { path: "liste.md" }
+          })
+        ).json()
+      ).toMatchObject({ items: [{ version: 2 }, { version: 1 }] });
+
+      await t.expectOk(t.kai.id, "projects.files.purge", {
+        params: { projectId: project.id },
+        payload: { path: "liste.md" }
+      });
+      const gone = await write("drei\n", 2);
+      expect(gone.status).toBe("failed");
+      expect(gone.error?.message).toContain("no longer in the project");
+      expect(gone.error?.message).toContain("Nothing was written");
+      expect((await files(t.kai.id, project.id)).items).toEqual([]);
+      // A new file is still written.
+      expect(await write("neu\n", 0)).toMatchObject({ output: { project: { change: "created" } } });
+    });
+
     it("reaches only the chat's own project, and nothing for a person outside its audience", async () => {
       const kaisChat = await startChat(t.kai.id, team, { projectId: kaisPrivate.id });
       // A path that names another project is a path in this one's folder: no way out.

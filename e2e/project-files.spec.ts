@@ -224,6 +224,11 @@ test("a .zip in the composer of a project's chat lands as a folder of the projec
   const { zip } = await uploadsOnDisk(testInfo.outputPath("uploads"));
   await page.locator('input[type="file"]').setInputFiles(zip);
   await expect(page.getByText("angebote.zip")).toHaveCount(0);
+  // Where its upload chip was, a line says where the files went; it holds nothing to send.
+  const unpacked = page.getByTestId("zip-unpacked-note");
+  await expect(unpacked).toHaveText("2 Dateien in „angebote“ abgelegt");
+  await shot(page, "composer-zip-unpacked", unpacked);
+  await expect(unpacked).toHaveCount(0, { timeout: 15_000 });
 
   // One that climbs out of its folder is refused with a sentence, and puts nothing in.
   const unsafe = new JSZip();
@@ -243,4 +248,74 @@ test("a .zip in the composer of a project's chat lands as a folder of the projec
   await expect(files.getByTestId("project-file-row")).toHaveCount(2);
   await expect(files).not.toContainText("boese");
   await shot(page, "composer-zip-folder", files);
+});
+
+test("a folder of a project moves to the top level by drag and by the move menu", async ({
+  page
+}, testInfo) => {
+  test.setTimeout(90_000);
+  const suffix = Date.now();
+  const title = `Ordner verschieben ${String(suffix)}`;
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await signIn(page, creator);
+  const created = await requestWithOrigin(page, "post", `${apiOrigin}/api/v1/workspaces`, {
+    data: { name: `Umzug Team ${String(suffix)}`, defaultConversationVisibility: "workspace" }
+  });
+  expect(created.ok()).toBe(true);
+  const workspaceId = idSchema.parse(await created.json()).id;
+  await page.goto(`/w/${workspaceId}/projects`);
+  await page.getByRole("button", { name: "Neues Projekt" }).click();
+  const dialog = page.getByRole("dialog", { name: "Neues Projekt" });
+  await dialog.getByLabel("Name").fill(title);
+  await dialog.getByRole("button", { name: "Projekt anlegen" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: title })).toBeVisible();
+  const files = page.getByTestId("project-files");
+  const { folder } = await uploadsOnDisk(testInfo.outputPath("uploads"));
+  await upload(page, "Ordner hochladen", folder);
+  await expect(files.locator('[data-testid="project-file-upload"][data-state="done"]')).toHaveCount(
+    2
+  );
+  await files.getByRole("button", { name: "unterlagen", exact: true }).click();
+  await files.getByRole("button", { name: "plaene", exact: true }).click();
+  const folderRow = (path: string) => files.locator(`[data-folder="${path}"] > div`).first();
+  await expect(folderRow("unterlagen/plaene/")).toBeVisible();
+  await shot(page, "project-folder-tree", files);
+
+  // Dragged: the top level shows while a folder is dragged, and takes it.
+  const handle = folderRow("unterlagen/plaene/");
+  await handle.hover();
+  await page.mouse.down();
+  const box = await handle.boundingBox();
+  if (!box) throw new Error("The folder has no box");
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2 + 12, { steps: 4 });
+  const top = files.getByTestId("file-tree-root-drop");
+  await expect(top).toHaveText("Hier ablegen: auf die oberste Ebene verschieben");
+  await top.hover();
+  await expect(top).toHaveAttribute("data-drop-over", "");
+  if (shotsDir) {
+    await mkdir(shotsDir, { recursive: true });
+    await page.screenshot({
+      path: join(shotsDir, "project-folder-drag-de-1280.png"),
+      animations: "disabled"
+    });
+  }
+  await page.mouse.up();
+  await expect(files.locator('[data-folder="plaene/"]')).toBeVisible();
+  await expect(files.locator('[data-folder="unterlagen/plaene/"]')).toHaveCount(0);
+
+  // The move menu: into a folder, then to the top level again.
+  const moveFolder = async (path: string, into: string) => {
+    await folderRow(path).hover();
+    await folderRow(path).getByRole("button", { name: "Ordner umbenennen/verschieben" }).click();
+    const menu = page.getByRole("dialog", { name: "Ordner umbenennen/verschieben" });
+    await menu.getByLabel("Ordner").selectOption({ label: into });
+    if (shotsDir && into === "Oberste Ebene") await shot(page, "project-folder-move-menu", menu);
+    await menu.getByRole("button", { name: "Speichern" }).click();
+    await expect(menu).toBeHidden();
+  };
+  await moveFolder("plaene/", "unterlagen");
+  await expect(files.locator('[data-folder="unterlagen/plaene/"]')).toBeVisible();
+  await moveFolder("unterlagen/plaene/", "Oberste Ebene");
+  await expect(files.locator('[data-folder="plaene/"]')).toBeVisible();
+  await expect(files.locator('[data-folder="unterlagen/plaene/"]')).toHaveCount(0);
 });

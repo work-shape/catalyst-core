@@ -7,6 +7,9 @@ import {
   formatProjectBytes,
   isSkippedUploadPath,
   projectFilePreviewKind,
+  projectMoveTargets,
+  projectParentFolder,
+  projectPathInFolder,
   readProjectFileChange,
   runLimited,
   takenUploadPaths,
@@ -67,6 +70,28 @@ describe("the file tree", () => {
     expect(
       notes?.kind === "folder" ? notes.children.map((node) => `${node.kind}:${node.path}`) : []
     ).toEqual(["folder:notes/deep/", "file:notes/a.md", "file:notes/b.md"]);
+  });
+});
+
+describe("moving a file or folder", () => {
+  const paths = ["plan.md", "unterlagen/vertrag.md", "unterlagen/neu/a.md", "bilder/logo.png"];
+
+  it("offers the top level and every folder, a folder never itself or below itself", () => {
+    expect(projectMoveTargets(paths, "plan.md")).toEqual([
+      "",
+      "bilder/",
+      "unterlagen/",
+      "unterlagen/neu/"
+    ]);
+    expect(projectMoveTargets(paths, "unterlagen/")).toEqual(["", "bilder/"]);
+  });
+
+  it("puts a file or folder into a folder, or on the top level, keeping its name", () => {
+    expect(projectPathInFolder("unterlagen/neu/", "")).toBe("neu/");
+    expect(projectPathInFolder("unterlagen/vertrag.md", "")).toBe("vertrag.md");
+    expect(projectPathInFolder("plan.md", "bilder/")).toBe("bilder/plan.md");
+    expect(projectParentFolder("unterlagen/neu/")).toBe("unterlagen/");
+    expect(projectParentFolder("plan.md")).toBe("");
   });
 });
 

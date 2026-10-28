@@ -317,6 +317,33 @@ export function projectFileName(path: string): string {
   return trimmed.slice(trimmed.lastIndexOf("/") + 1);
 }
 
+/** The folder a path lies in, ending in `/`; `""` at the top level. */
+export function projectParentFolder(path: string): string {
+  const trimmed = path.replace(/\/+$/u, "");
+  return trimmed.slice(0, trimmed.lastIndexOf("/") + 1);
+}
+
+/**
+ * The folders of a project, each ending in `/`, that a file or folder may be moved into: the
+ * top level is `""`. A folder never goes into itself or below itself.
+ */
+export function projectMoveTargets(paths: readonly string[], moving: string): string[] {
+  const folders = new Set<string>([""]);
+  for (const path of paths) {
+    const segments = path.split("/").slice(0, -1);
+    segments.forEach((_, index) => folders.add(`${segments.slice(0, index + 1).join("/")}/`));
+  }
+  return [...folders]
+    .filter((folder) => !(moving.endsWith("/") && folder.startsWith(moving)))
+    .sort((left, right) => left.localeCompare(right, undefined, { numeric: true }));
+}
+
+/** Where a file or folder lies once it is put into `toFolder`; a folder's path ends in `/`. */
+export function projectPathInFolder(path: string, toFolder: string): string {
+  const name = projectFileName(path);
+  return `${toFolder}${name}${path.endsWith("/") ? "/" : ""}`;
+}
+
 /** How a file's content is shown: as text, in an image or PDF viewer, or not at all. */
 export type ProjectFilePreviewKind = "text" | "image" | "pdf" | "none";
 
