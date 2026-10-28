@@ -481,7 +481,8 @@ describe("a module that is off", () => {
       ["feedback", false, "modules.feedback.enabled"],
       ["workshaper", false, "modules.workshaper.enabled"],
       ["guardrails", true, "modules.guardrails.enabled"],
-      ["outsideForms", false, "modules.outsideForms.enabled"]
+      ["outsideForms", false, "modules.outsideForms.enabled"],
+      ["projects", false, "modules.projects.enabled"]
     ]);
     expect(items[0]).toMatchObject({
       shipped: true,

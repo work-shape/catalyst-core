@@ -1,5 +1,6 @@
 import {
   ACTIONS,
+  PROJECT_ACTIONS,
   ROLE_GRANT_SCOPE_KINDS,
   ROLE_PENDING_CHANGES,
   ROLE_PENDING_DECISIONS,
@@ -58,11 +59,20 @@ export const ROLE_DEFAULT_ACTIONS: Record<BuiltInRole, readonly PlatformAction[]
   admin: ACTIONS.filter(
     (action) =>
       action !== "assets.release" &&
+      !isMembershipOnlyAction(action) &&
       !isSuperadminGrantedAction(action) &&
       !SUPERADMIN_DEFAULT_ACTIONS.some((candidate) => candidate === action)
   ),
-  superadmin: ACTIONS.filter((action) => action !== "assets.release")
+  // A project is reached through membership alone: no role holds its rights (PRJ-1).
+  superadmin: ACTIONS.filter(
+    (action) => action !== "assets.release" && !isMembershipOnlyAction(action)
+  )
 };
+
+/** The rights only membership of a workspace carries, a project's (permissions.ts). */
+function isMembershipOnlyAction(action: string): boolean {
+  return PROJECT_ACTIONS.some((candidate) => candidate === action);
+}
 
 export function isBuiltInRole(role: string): role is BuiltInRole {
   return BUILT_IN_ROLES.some((candidate) => candidate === role);

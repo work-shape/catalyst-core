@@ -108,6 +108,9 @@ modules:
   # Personal API keys are on: You > API keys issues one with the scopes a person ticks.
   personalApiKeys:
     enabled: true
+  # Projects are on: the projects spec makes a shared and a private one.
+  projects:
+    enabled: true
 # The addresses a Connection of the suite may reach. Nothing listens on the first and the `test`
 # connector type contacts nothing: the entry is what lets a test of a Connection answer ready.
 # The second is replaced by the runner with free loopback ports for the sample MCP servers

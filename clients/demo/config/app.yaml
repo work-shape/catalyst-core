@@ -77,6 +77,10 @@ modules:
     enabled: true
   guardrails:
     enabled: true
+  # Projects: named folders of chat work in each workspace, shared with it or only for their
+  # maker (PRJ-1).
+  projects:
+    enabled: true
 # The file area per conversation and the commands an agent runs in it. The commands run in the
 # Docker sandbox, so the Compose files start a workspace command worker and build its runner image.
 executionWorkspaces:

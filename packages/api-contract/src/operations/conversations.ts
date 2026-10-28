@@ -48,7 +48,9 @@ export const conversationOperations = {
     query: listQuerySchema.extend({
       collaborationWorkspaceId: z.string().optional(),
       /** Keeps the conversations whose title contains this text, without regard to case. */
-      query: z.string().trim().min(1).max(CONVERSATION_TITLE_QUERY_MAX_CHARS).optional()
+      query: z.string().trim().min(1).max(CONVERSATION_TITLE_QUERY_MAX_CHARS).optional(),
+      /** Keeps the conversations of this project of the workspace (PRJ-1). */
+      projectId: z.string().min(1).optional()
     }),
     response: page(conversationListItemSchema, ["updatedAt", "id"], true),
     errors: ["NOT_FOUND"],

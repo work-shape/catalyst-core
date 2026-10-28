@@ -1,6 +1,7 @@
 import {
   AppError,
   getSubjectUserId,
+  inProjectAudience,
   isAppError,
   type AuthenticatedUser,
   type Conversation,
@@ -11,8 +12,9 @@ import { requireWorkspaceToWorkIn } from "../workspaces/workspace-access";
 
 /**
  * The single read check of a Conversation: it is active, the user reaches its Collaboration
- * Workspace, and a private one is its author's. A holder of a bundle who is no member reaches
- * only their own private ones. Every refusal reads as a Conversation that does not exist, so an
+ * Workspace, and a private one is its author's. One in a project is read by the project's
+ * audience. A holder of a bundle who is no member reaches only their own private ones outside
+ * any project. Every refusal reads as a Conversation that does not exist, so an
  * answer never tells a closed one from one that never was.
  */
 export async function requireConversationAccess(
@@ -48,6 +50,25 @@ export async function requireConversationAccess(
       throw new AppError("NOT_FOUND", "Conversation is not available");
     }
     throw error;
+  }
+  // In a project the project's audience decides, not the conversation's own visibility, which
+  // its writers keep equal to it (PRJ-1). A project is reached through membership alone: a
+  // holder of a bundle who is no member reads none of its conversations.
+  if (conversation.projectId !== undefined) {
+    const project = member
+      ? await options.stores.projects.getProject({
+          clientInstanceId: options.clientInstanceId,
+          projectId: conversation.projectId
+        })
+      : undefined;
+    if (
+      !project ||
+      project.collaborationWorkspaceId !== conversation.collaborationWorkspaceId ||
+      !inProjectAudience(project, getSubjectUserId(user))
+    ) {
+      throw new AppError("NOT_FOUND", "Conversation is not available");
+    }
+    return conversation;
   }
   const ownPrivate =
     conversation.visibility === "private" &&

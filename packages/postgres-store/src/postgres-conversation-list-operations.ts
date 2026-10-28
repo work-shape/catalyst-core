@@ -1,4 +1,4 @@
-import { and, desc, eq, exists, ilike, inArray, notExists, or } from "drizzle-orm";
+import { and, desc, eq, exists, ilike, inArray, isNull, notExists, or } from "drizzle-orm";
 import {
   ACTIVE_AGENT_RUN_STATUSES,
   asAgentRunId,
@@ -23,6 +23,7 @@ export type ListConversationsInput = {
   collaborationWorkspaceId: Conversation["collaborationWorkspaceId"];
   scope: ConversationListScope;
   titleQuery?: string;
+  projectId?: string;
   page?: StorePage;
 };
 
@@ -51,6 +52,7 @@ export function listedConversations(db: PostgresConnection, input: ListConversat
     input.titleQuery === undefined
       ? undefined
       : ilike(conversations.title, containsPattern(input.titleQuery)),
+    input.projectId === undefined ? undefined : eq(conversations.projectId, input.projectId),
     keysetFilter(input.page, [conversations.updatedAt, conversations.id], true),
     ...(scope.kind === "lifecycle"
       ? []
@@ -58,7 +60,9 @@ export function listedConversations(db: PostgresConnection, input: ListConversat
           scope.kind === "author"
             ? and(
                 eq(conversations.visibility, "private"),
-                eq(conversations.createdByUserId, scope.userId)
+                eq(conversations.createdByUserId, scope.userId),
+                // A project is reached through membership alone (PRJ-1).
+                isNull(conversations.projectId)
               )
             : or(
                 eq(conversations.visibility, "workspace"),

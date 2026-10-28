@@ -27,7 +27,8 @@ export function registerConversationRoutes(route: Route, options: ChatServerOpti
         : asCollaborationWorkspaceId(collaborationWorkspaceId),
       user,
       paging,
-      query.query
+      query.query,
+      query.projectId
     );
   });
 
@@ -39,7 +40,8 @@ export function registerConversationRoutes(route: Route, options: ChatServerOpti
         : undefined,
       ...(body.subject ? { subject: body.subject } : {}),
       ...(body.visibility ? { visibility: body.visibility } : {}),
-      ...(body.creationTarget ? { creationTarget: body.creationTarget } : {})
+      ...(body.creationTarget ? { creationTarget: body.creationTarget } : {}),
+      ...(body.projectId ? { projectId: body.projectId } : {})
     };
     const callContext = withRequestLocale(context, options, request, body.locale);
     return body.checkout

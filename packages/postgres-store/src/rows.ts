@@ -144,7 +144,8 @@ export function mapConversation(row: ConversationRow | undefined): Conversation 
     ...(row.subjectKind === null || row.subjectName === null
       ? {}
       : { subject: { kind: row.subjectKind, name: row.subjectName } }),
-    ...(row.creationTarget === null ? {} : { creationTarget: row.creationTarget })
+    ...(row.creationTarget === null ? {} : { creationTarget: row.creationTarget }),
+    ...(row.projectId === null ? {} : { projectId: row.projectId })
   };
 }
 

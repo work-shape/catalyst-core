@@ -18,6 +18,7 @@ import { OPERATIONS_ACTIONS } from "./contract-values/operations";
 import { FEEDBACK_ACTIONS } from "./contract-values/feedback";
 import { ADMINISTRATION_ACTIONS } from "./contract-values/administration";
 import { WORKSPACE_ACTIONS } from "./contract-values/workspace";
+import { PROJECT_ACTIONS } from "./contract-values/project";
 
 export const AUTH_SCOPE_WILDCARD = "*" as const;
 
@@ -81,7 +82,8 @@ export const ACTIONS = [
   ...OPERATIONS_ACTIONS,
   ...FEEDBACK_ACTIONS,
   ...ADMINISTRATION_ACTIONS,
-  ...WORKSPACE_ACTIONS
+  ...WORKSPACE_ACTIONS,
+  ...PROJECT_ACTIONS
 ] as const;
 
 export type PlatformAction = (typeof ACTIONS)[number];
@@ -1187,3 +1189,6 @@ export const AGENT_PREVIEW_SOURCES = ["draft", "live"] as const;
 export const PREVIEW_CAPTURE_SIZES = ["phone", "tablet", "desktop"] as const;
 export const PREVIEW_CAPTURE_STATUSES = ["pending", "answering", "captured", "refused"] as const;
 export const SERVER_PREVIEW_CAPTURE_REFUSALS = ["capture_busy", "capture_failed"] as const;
+
+/** A project: its rights, kind, audiences and limits (PRJ-1). */
+export * from "./contract-values/project";

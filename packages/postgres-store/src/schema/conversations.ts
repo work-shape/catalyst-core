@@ -20,6 +20,7 @@ import type {
   ModelProviderTurnContinuation
 } from "@work-shape/catalyst-core";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
+import { configAssets } from "./configAssets";
 import { collaborationWorkspaces } from "./workspaces";
 
 export const conversations = pgTable(
@@ -54,10 +55,18 @@ export const conversations = pgTable(
     subjectName: text("subject_name"),
     // Where the first saves create an agent, skill or guardrail: 'instance' for a conversation
     // started under Studio's scope "Instance", else null. Set at insert only, never updated.
-    creationTarget: text("creation_target").$type<ConversationCreationTarget>()
+    creationTarget: text("creation_target").$type<ConversationCreationTarget>(),
+    // The project of its own workspace a chat is in (PRJ-1). Its writers keep the project in
+    // the conversation's workspace under its row lock; a key cannot say that cheaply. A
+    // project with conversations in it cannot be removed under them.
+    projectId: text("project_id").references(() => configAssets.id, { onDelete: "restrict" })
   },
   (table) => [
     check("conversations_kind_check", sql`${table.kind} in ('chat', 'run_thread')`),
+    check(
+      "conversations_project_chat_check",
+      sql`${table.projectId} is null or ${table.kind} = 'chat'`
+    ),
     check(
       "conversations_creation_target_check",
       sql`${table.creationTarget} is null or ${table.creationTarget} = 'instance'`
@@ -102,7 +111,11 @@ export const conversations = pgTable(
       table.status,
       table.updatedAt,
       table.id
-    )
+    ),
+    // The conversations of a project page, newest first.
+    index("conversations_project_updated_idx")
+      .on(table.clientInstanceId, table.projectId, table.status, table.updatedAt, table.id)
+      .where(sql`${table.projectId} is not null`)
   ]
 );
 

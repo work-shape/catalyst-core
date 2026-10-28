@@ -29,7 +29,8 @@ const verbOnKindKeys = {
   workflow: "rights.verbOnWorkflows",
   data_store: "rights.verbOnDataStores",
   knowledge_base: "rights.verbOnKnowledgeBases",
-  guardrail: "rights.verbOnGuardrails"
+  guardrail: "rights.verbOnGuardrails",
+  project: "rights.verbOnProjects"
 } as const satisfies Record<string, TranslationKey>;
 
 type RightKind = keyof typeof verbOnKindKeys;

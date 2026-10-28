@@ -218,6 +218,9 @@ export const unusedPlatformStores: PlatformStores = {
   get platformReports() {
     return unsupported();
   },
+  get projects() {
+    return unsupported();
+  },
   transaction: unsupported,
   readSnapshot: unsupported,
   get close() {

@@ -46,6 +46,7 @@ import { registerInfrastructureRoutes } from "./routes/infrastructure-routes";
 import { registerApiAccessAdministrationRoutes } from "./routes/api-access-administration-routes";
 import { registerPersonalApiKeyRoutes } from "./routes/personal-api-key-routes";
 import { registerFeedbackRoutes } from "./feedback/feedback-routes";
+import { registerProjectRoutes } from "./projects/project-routes";
 import { registerPlatformReportRoutes } from "./platform-report/platform-report-routes";
 import { registerUsageLimitRoutes } from "./usage/usage-limits-routes";
 import { registerUsageReportRoutes } from "./usage/usage-report-routes";
@@ -311,6 +312,7 @@ export async function createChatServer(
   registerApiAccessAdministrationRoutes(route, options);
   registerPersonalApiKeyRoutes(route, options);
   registerFeedbackRoutes(route, options);
+  registerProjectRoutes(route, options);
   registerPlatformReportRoutes(route, options);
   registerUsageLimitRoutes(route, options);
   registerUsageReportRoutes(route, options);

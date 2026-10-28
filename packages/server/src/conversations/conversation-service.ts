@@ -23,6 +23,8 @@ import {
   asAgentRunId,
   asUserId,
   DATA_STORE_USE_TOOL_NAME,
+  conversationVisibilityInProject,
+  moduleOffError,
   getSubjectUserId,
   isAppError,
   readToolResultMetadata
@@ -32,6 +34,7 @@ import { z } from "zod";
 import { getModelSelectionForConversationTitles } from "@work-shape/catalyst-config-schema";
 import { CollaborationWorkspaceWorkflow } from "../workspaces/collaboration-workspace-service";
 import { requireWorkspaceToWorkIn } from "../workspaces/workspace-access";
+import { projectNotAvailable, requireProjectAccess } from "../projects/project-access";
 import { attemptConversationDataCleanup } from "../deletion/conversation-cleanup";
 import { requireChatConversationAccess, requireConversationAccess } from "./conversation-access";
 import { assertConversationIdle } from "./conversation-idle";
@@ -76,6 +79,8 @@ export interface CreateConversationCommand {
    * here only, and never changed (studio-chat-entry.md, section 4a).
    */
   creationTarget?: ConversationCreationTarget;
+  /** A project of the workspace the user is in the audience of; the conversation takes it. */
+  projectId?: string;
 }
 
 export interface MoveConversationCommand {
@@ -100,8 +105,23 @@ export class ConversationWorkflow {
     collaborationWorkspaceId: CollaborationWorkspaceId | undefined,
     user: AuthenticatedUser,
     page?: StorePage,
-    titleQuery?: string
+    titleQuery?: string,
+    projectId?: string
   ): Promise<ConversationListItem[]> {
+    if (projectId !== undefined) {
+      requireProjectsOn(this.options);
+      const project = await requireProjectAccess(this.options, user, projectId);
+      if (collaborationWorkspaceId && project.collaborationWorkspaceId !== collaborationWorkspaceId)
+        throw projectNotAvailable();
+      return this.options.stores.conversations.listConversationsWithActiveRun({
+        clientInstanceId: this.options.clientInstanceId,
+        collaborationWorkspaceId: project.collaborationWorkspaceId,
+        scope: { kind: "viewer", userId: getSubjectUserId(user) },
+        projectId: project.id,
+        titleQuery,
+        page
+      });
+    }
     if (!collaborationWorkspaceId) {
       const personal = (
         await this.options.stores.workspaces.listWorkspacesForUser({
@@ -132,6 +152,13 @@ export class ConversationWorkflow {
       user,
       command.collaborationWorkspaceId
     );
+    const project =
+      command.projectId === undefined
+        ? undefined
+        : await this.projectToStartIn(user, workspace, {
+            ...command,
+            projectId: command.projectId
+          });
     if (command.subject) {
       await requireReadableSubject(this.options, user, command.subject);
     }
@@ -143,9 +170,10 @@ export class ConversationWorkflow {
       // The transcript of a conversation about an asset holds the asset's definition, and a
       // member of the workspace need not hold the read right on it: it is its creator's alone,
       // as every conversation of a holder of a bundle who is no member is.
-      visibility:
-        (command.subject || command.visibility === "private" || !member) &&
-        workspace.kind !== "personal"
+      visibility: project
+        ? project.visibility
+        : (command.subject || command.visibility === "private" || !member) &&
+            workspace.kind !== "personal"
           ? "private"
           : workspace.defaultConversationVisibility,
       title: command.title ?? "New conversation",
@@ -154,7 +182,8 @@ export class ConversationWorkflow {
         this.options.config.retention.conversationDays
       ).toISOString(),
       ...(command.subject ? { subject: command.subject } : {}),
-      ...(command.creationTarget ? { creationTarget: command.creationTarget } : {})
+      ...(command.creationTarget ? { creationTarget: command.creationTarget } : {}),
+      ...(project ? { projectId: project.id } : {})
     });
 
     await this.options.auditRecorder.record({
@@ -168,10 +197,116 @@ export class ConversationWorkflow {
         ...(conversation.subject
           ? { subjectKind: conversation.subject.kind, subjectName: conversation.subject.name }
           : {}),
-        ...(conversation.creationTarget ? { creationTarget: conversation.creationTarget } : {})
+        ...(conversation.creationTarget ? { creationTarget: conversation.creationTarget } : {}),
+        ...(conversation.projectId ? { projectId: conversation.projectId } : {})
       }
     });
     return conversation;
+  }
+
+  /**
+   * The project a new conversation starts in, with the visibility it takes: the project's
+   * audience, or `workspace` in a Personal Workspace. Only someone in its audience starts one
+   * there, and no private chat is started in a shared project.
+   */
+  private async projectToStartIn(
+    user: AuthenticatedUser,
+    workspace: CollaborationWorkspace,
+    command: CreateConversationCommand & { projectId: string }
+  ): Promise<{ id: string; visibility: ConversationVisibility }> {
+    requireProjectsOn(this.options);
+    // The store holds the project in the conversation's workspace.
+    const project = await requireProjectAccess(this.options, user, command.projectId);
+    const visibility: ConversationVisibility =
+      workspace.kind === "personal"
+        ? "workspace"
+        : conversationVisibilityInProject(project.audience);
+    if (visibility === "workspace" && workspace.kind !== "personal") {
+      if (command.visibility === "private") throw sharedProjectConversationError();
+      if (command.subject) throw subjectConversationPrivateError();
+    }
+    return { id: project.id, visibility };
+  }
+
+  /**
+   * Puts the user's conversation into a project of its workspace, or takes one out with
+   * `null` (PRJ-1, section 3). Only its author moves it in, and only into a project they are in
+   * the audience of; it then takes the project's audience. Anyone who reads it may take it out;
+   * it keeps its visibility. A conversation that must stay private does not enter a shared
+   * project.
+   */
+  async setConversationProject(
+    conversationId: ConversationId,
+    user: AuthenticatedUser,
+    context: { correlationId: string; audit: AuditRecorder },
+    projectId: string | null
+  ): Promise<Conversation> {
+    const conversation = await this.requireChatConversationAccess(conversationId, user);
+    const current = conversation.projectId ?? null;
+    if (current === projectId) return conversation;
+    let visibility = conversation.visibility;
+    if (projectId !== null) {
+      if (conversation.createdByUserId !== getSubjectUserId(user)) {
+        throw new AppError(
+          "VALIDATION_FAILED",
+          "Only the author of a conversation moves it into a project",
+          { reason: "project_author_only" },
+          { exposeMessage: true }
+        );
+      }
+      if (
+        await this.options.stores.agentTryConversations.get({
+          clientInstanceId: this.options.clientInstanceId,
+          conversationId
+        })
+      ) {
+        throw new AppError(
+          "VALIDATION_FAILED",
+          "A preview conversation stays with its agent",
+          { reason: "preview_conversation_private" },
+          { exposeMessage: true }
+        );
+      }
+      // The store holds the project in the conversation's workspace.
+      const project = await requireProjectAccess(this.options, user, projectId);
+      const workspace = await this.options.stores.workspaces.getWorkspace(
+        this.options.clientInstanceId,
+        conversation.collaborationWorkspaceId
+      );
+      if (!workspace) throw projectNotAvailable();
+      visibility =
+        workspace.kind === "personal"
+          ? "workspace"
+          : conversationVisibilityInProject(project.audience);
+      // Personal data keeps it private as well; the store decides that under the row lock.
+      if (visibility === "workspace" && workspace.kind !== "personal" && conversation.subject) {
+        throw subjectConversationPrivateError();
+      }
+    }
+    if (visibility !== conversation.visibility) {
+      await assertConversationIdle(this.options, conversationId);
+    }
+    const updated = await this.options.stores.conversations.setConversationProject({
+      clientInstanceId: this.options.clientInstanceId,
+      conversationId,
+      expectedProjectId: current,
+      projectId,
+      visibility
+    });
+    await context.audit.record({
+      type: "conversation.project_set",
+      status: "success",
+      actor: auditActorFromUser(user),
+      subject: conversationId,
+      correlationId: context.correlationId,
+      metadata: {
+        ...(current === null ? {} : { fromProjectId: current }),
+        ...(projectId === null ? {} : { toProjectId: projectId }),
+        previousVisibility: conversation.visibility,
+        visibility
+      }
+    });
+    return updated;
   }
 
   /**
@@ -456,12 +591,7 @@ export class ConversationWorkflow {
       destination.kind !== "personal" &&
       command.visibility === "workspace"
     ) {
-      throw new AppError(
-        "VALIDATION_FAILED",
-        "A conversation about an asset stays private: its transcript holds the asset's definition",
-        { reason: "subject_conversation_private" },
-        { exposeMessage: true }
-      );
+      throw subjectConversationPrivateError();
     }
     const visibility: ConversationVisibility =
       destination.kind === "personal"
@@ -769,4 +899,27 @@ export class ConversationWorkflow {
 
 function toAuditErrorMetadata(error: unknown): JsonObject {
   return { errorCode: isAppError(error) ? error.code : "INTERNAL" };
+}
+
+function subjectConversationPrivateError(): AppError {
+  return new AppError(
+    "VALIDATION_FAILED",
+    "A conversation about an asset stays private: its transcript holds the asset's definition",
+    { reason: "subject_conversation_private" },
+    { exposeMessage: true }
+  );
+}
+
+function sharedProjectConversationError(): AppError {
+  return new AppError(
+    "VALIDATION_FAILED",
+    "A conversation in a shared project is read by the whole workspace; start a private one outside the project",
+    { reason: "project_conversation_shared" },
+    { exposeMessage: true }
+  );
+}
+
+/** Projects exist only where the module is on; elsewhere nothing enters one. */
+function requireProjectsOn(options: Pick<ChatServerOptions, "modules">): void {
+  if (!options.modules.isEnabled("projects")) throw moduleOffError("projects");
 }

@@ -140,7 +140,8 @@ const KIND_WORDS = {
   workflow: { en: "workflows", de: "Workflows" },
   data_store: { en: "data stores", de: "Datenspeicher" },
   knowledge_base: { en: "knowledge bases", de: "Wissensbasen" },
-  guardrail: { en: "guardrails", de: "Leitplanken" }
+  guardrail: { en: "guardrails", de: "Leitplanken" },
+  project: { en: "projects", de: "Projekte" }
 } as const satisfies Record<string, Words>;
 
 type RightVerb = keyof typeof RIGHT_VERB_WORDS;

@@ -1191,6 +1191,20 @@
       "when": 1793199477645,
       "tag": "0169_conversation_data_stores",
       "breakpoints": true
+    },
+    {
+      "idx": 170,
+      "version": "7",
+      "when": 1793202832044,
+      "tag": "0170_projects",
+      "breakpoints": true
+    },
+    {
+      "idx": 171,
+      "version": "7",
+      "when": 1793202839182,
+      "tag": "0171_project_conversations_index",
+      "breakpoints": true
     }
   ]
 }

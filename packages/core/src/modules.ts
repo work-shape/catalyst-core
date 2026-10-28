@@ -19,7 +19,8 @@ export const MODULE_NAMES = [
   "feedback",
   "workshaper",
   "guardrails",
-  "outsideForms"
+  "outsideForms",
+  "projects"
 ] as const;
 
 export type ModuleName = (typeof MODULE_NAMES)[number];

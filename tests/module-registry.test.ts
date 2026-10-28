@@ -435,7 +435,9 @@ describe("the snapshot in a running instance", () => {
       workshaper: { enabled: true },
       // Without a switch, guardrails stay on for one transition release.
       guardrails: { enabled: true },
-      outsideForms: { enabled: false }
+      outsideForms: { enabled: false },
+      // And it has projects.
+      projects: { enabled: true }
     });
     expect(safe.features).toEqual({
       attachments: { enabled: false, accept: "" },
@@ -491,7 +493,8 @@ describe("the snapshot in a running instance", () => {
         feedback: { enabled: false },
         workshaper: { enabled: false },
         guardrails: { enabled: true },
-        outsideForms: { enabled: false }
+        outsideForms: { enabled: false },
+        projects: { enabled: false }
       });
       expect(answer.features.resources).toEqual({ enabled: false });
     } finally {
