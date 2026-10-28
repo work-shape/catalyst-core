@@ -870,8 +870,21 @@ export const checkAssetMoveResponseSchema = z.object({
     /** The team's members, or everyone where the asset is offered. */
     users: z.enum(ASSET_MOVE_USERS),
     /** Whether the caller still edits it there. */
-    callerEdits: z.boolean()
-  })
+    callerEdits: z.boolean(),
+    /**
+     * The grants the move takes away, since editing follows the new place: on the moved
+     * assets, every grant to change them and every grant to read or use them that reaches
+     * beyond the new place's readers; and what a moved Workflow's run account holds at the old.
+     */
+    grantsDropped: z.object({
+      onAssets: z.number().int().nonnegative(),
+      runAccounts: z.number().int().nonnegative()
+    })
+  }),
+  /** The rows that go with each moved Data Store, with a sentence that says who reads them. */
+  data: z.array(
+    z.object({ kind: z.string(), name: z.string(), title: z.string(), sentence: z.string() })
+  )
 });
 
 /** A move made (`moved`), or filed as a request an admin decides in the Inbox (`requested`). */

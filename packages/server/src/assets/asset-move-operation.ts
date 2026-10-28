@@ -56,12 +56,10 @@ export async function checkAssetMove(
   call: AssetCall,
   input: AssetMoveInput
 ): Promise<AssetMoveView> {
-  const plan = await planAssetMove(
-    moveOptions(options),
-    input,
-    localeOf(options, call),
-    call.actor
-  );
+  const plan = await planAssetMove(moveOptions(options), input, localeOf(options, call), {
+    actor: call.actor,
+    access: call.access
+  });
   return assetMoveView(plan, call.access);
 }
 
@@ -76,7 +74,10 @@ export async function moveAsset(
   input: AssetMoveInput
 ): Promise<AssetMoveResult> {
   const locale = localeOf(options, call);
-  const plan = await planAssetMove(moveOptions(options), input, locale, call.actor);
+  const plan = await planAssetMove(moveOptions(options), input, locale, {
+    actor: call.actor,
+    access: call.access
+  });
   requireBreaksAccepted(plan, input.acceptBreaks, locale);
   if (holdsMoveTarget(call.access, plan)) {
     await executeAssetMove(options, plan, {
@@ -102,13 +103,23 @@ export async function moveAsset(
     page: { limit: 1 }
   });
   if (open) {
+    const de = locale === "de";
+    // Somebody else's request is theirs: it is not answered as this caller's, nor named by id.
+    if (open.requestedBy.id !== actor.id)
+      throw new AppError(
+        "VALIDATION_FAILED",
+        de
+          ? `${open.requestedBy.displayLabel} hat schon angefragt, dieses Asset zu teilen. Die Anfrage wird zuerst entschieden.`
+          : `${open.requestedBy.displayLabel} has already asked to share this asset. That request is decided first.`,
+        { reason: "move_request_open", requestedBy: open.requestedBy.displayLabel }
+      );
     if (sameTarget(open.payload, plan))
       return { status: "requested", requestId: open.id, ...assetMoveView(plan, call.access) };
     throw new AppError(
       "VALIDATION_FAILED",
-      locale === "de"
-        ? "Für dieses Asset wartet schon eine Anfrage zum Teilen an einen anderen Ort. Ziehe sie zurück oder warte, bis sie entschieden ist."
-        : "A request to share this asset to another place is already waiting. Withdraw it, or wait until it is decided.",
+      de
+        ? "Du hast schon angefragt, dieses Asset an einen anderen Ort zu teilen. Ziehe die Anfrage zurück oder warte, bis sie entschieden ist."
+        : "You have already asked to share this asset to another place. Withdraw that request, or wait until it is decided.",
       { reason: "move_request_open", requestId: open.id }
     );
   }
@@ -124,18 +135,19 @@ export async function moveAsset(
       kind,
       // The name of the operation. The Inbox words the item in the reader's language.
       summary: "assets.move",
-      payload: assetMoveRequestPayload(plan, input.acceptBreaks === true, locale)
+      payload: assetMoveRequestPayload(plan, actor.id, input.acceptBreaks === true, locale)
     }
   );
   return { status: "requested", requestId: request.id, ...assetMoveView(plan, call.access) };
 }
 
 /**
- * What a request holds: the ids, kinds and names of what moves, from where to where. No
- * content. `subject` is what lists and the reviewer's narrower right are matched on.
+ * What a request holds: the ids, kinds and names of what moves, from where to where, and who
+ * asked. No content. `subject` is what lists and the reviewer's narrower right are matched on.
  */
 function assetMoveRequestPayload(
   plan: AssetMovePlan,
+  requesterId: string,
   acceptBreaks: boolean,
   locale: LocaleCode
 ): JsonObject {
@@ -156,6 +168,8 @@ function assetMoveRequestPayload(
       name: record.name,
       assetId: record.id
     })),
+    // Built here, never from the caller's input: who is asked again when it is decided.
+    requesterId,
     acceptBreaks,
     locale
   };

@@ -16,10 +16,12 @@ import { z } from "zod";
 import {
   assetMoveApprovalKind,
   assetMoveView,
-  executeAssetMove,
   movableKinds,
   moveTargetResource,
   planAssetMove,
+  requesterRefusal,
+  writeAssetMove,
+  type AssetMoveWriteStores,
   type AssetMoveOptions,
   type AssetMovePlan
 } from "../assets/asset-move";
@@ -41,6 +43,7 @@ const payloadSchema = z.object({
   members: z
     .array(z.object({ kind: z.string().min(1), name: z.string().min(1), assetId: z.string() }))
     .min(1),
+  requesterId: z.string().min(1),
   acceptBreaks: z.boolean(),
   locale: z.enum(localeCodes)
 });
@@ -58,6 +61,40 @@ export function createAssetMoveApprovalHandlers(
   return movableKinds(options.kinds).map((kind) =>
     handlerFor(options, kind.kind, writeOf(options, kind.kind))
   );
+}
+
+/**
+ * The stores of the decision's transaction a move writes through, so the move commits or rolls
+ * back with the decision. A store that reaches none of them cannot apply a move.
+ */
+function moveStoresOf(context: ApprovalRequestContext): AssetMoveWriteStores {
+  const stores = context.transaction;
+  const moveConfigAssets = stores?.configAssets.moveConfigAssets;
+  const listActiveConfigAssets = stores?.configAssets.listActiveConfigAssets;
+  if (
+    !stores ||
+    !moveConfigAssets ||
+    !listActiveConfigAssets ||
+    !stores.audit ||
+    !stores.access ||
+    !stores.apiAccess ||
+    !stores.workspaces
+  )
+    throw new AppError(
+      "INTERNAL",
+      "The decision's transaction does not reach the stores of a move"
+    );
+  const { configAssets } = stores;
+  return {
+    configAssets: {
+      moveConfigAssets: (input) => moveConfigAssets.call(configAssets, input),
+      listActiveConfigAssets: (input) => listActiveConfigAssets.call(configAssets, input)
+    },
+    audit: stores.audit,
+    access: stores.access,
+    apiAccess: stores.apiAccess,
+    workspaces: stores.workspaces
+  };
 }
 
 function writeOf(options: AssetMoveOptions, kind: string): PlatformAction {
@@ -147,30 +184,15 @@ function handlerFor(
     },
     async isStale(payload, context): Promise<boolean | ApprovalStaleness> {
       if (await applied(payload, context)) return false;
-      let planned: AssetMovePlan;
-      try {
-        planned = await plan(payload);
-      } catch (error) {
-        if (!(error instanceof AppError)) throw error;
-        const details: { reason?: unknown } = error.details ?? {};
-        const reason = typeof details.reason === "string" ? details.reason : "move_refused";
-        return { result: { reason, message: error.message } };
-      }
-      const filed = new Set(payload.members.map((member) => member.assetId));
-      if (
-        planned.members.length !== filed.size ||
-        planned.members.some((member) => !filed.has(member.record.id))
-      )
-        return { result: { reason: "move_changed" } satisfies JsonObject };
-      if (planned.breaks.length > 0 && !payload.acceptBreaks)
-        return { result: { reason: "move_breaks" } satisfies JsonObject };
-      return false;
+      const stale = await staleness(payload);
+      return stale ? { result: stale } : false;
     },
     isApplied: applied,
     async apply(payload, approver, context): Promise<JsonObject> {
       if (await applied(payload, context)) return { status: "moved" };
       const planned = await plan(payload);
-      await executeAssetMove(options, planned, {
+      const stores = moveStoresOf(context);
+      await writeAssetMove(stores, options.clientInstanceId, planned, {
         actor: auditActorFromUser(approver),
         correlationId: context.correlationId,
         requestId: context.requestId
@@ -184,4 +206,38 @@ function handlerFor(
       };
     }
   };
+
+  /** Why a request no longer moves what it was filed for, or undefined while it still does. */
+  async function staleness(payload: AssetMovePayload): Promise<JsonObject | undefined> {
+    let planned: AssetMovePlan;
+    try {
+      planned = await plan(payload);
+    } catch (error) {
+      if (!(error instanceof AppError)) throw error;
+      const details: { reason?: unknown } = error.details ?? {};
+      const reason = typeof details.reason === "string" ? details.reason : "move_refused";
+      return { reason, message: error.message };
+    }
+    const filed = new Set(payload.members.map((member) => member.assetId));
+    if (
+      planned.members.length !== filed.size ||
+      planned.members.some((member) => !filed.has(member.record.id))
+    )
+      return {
+        reason: "move_changed",
+        message:
+          payload.locale === "de"
+            ? "Was mitgehen würde, hat sich seit der Anfrage geändert. Es wurde nichts geteilt; die Anfrage kann neu gestellt werden."
+            : "What would go along changed since the request. Nothing was shared; the request can be filed again."
+      };
+    if (planned.breaks.length > 0 && !payload.acceptBreaks)
+      return {
+        reason: "move_breaks",
+        message:
+          payload.locale === "de"
+            ? "Das Teilen würde jetzt etwas kaputt machen, das bei der Anfrage nicht bestätigt wurde. Es wurde nichts geteilt."
+            : "Sharing would now break something the request did not confirm. Nothing was shared."
+      };
+    return requesterRefusal(options, planned, payload.requesterId);
+  }
 }

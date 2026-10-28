@@ -67,6 +67,8 @@ export const assetEvents = {
             properties: { assetId: { type: "string" }, kind: { type: "string" } }
           }
         },
+        /** The grants that went with the move: edit rights follow the new place. */
+        droppedGrantIds: { type: "array", items: { type: "string" } },
         requestId: { type: "string" },
         operationRunId: { type: "string" }
       }
