@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { act, createElement } from "react";
+import { act, createElement, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "@work-shape/catalyst-api-client";
@@ -8,9 +8,12 @@ import { UiRoot, uiLabelsDe } from "@work-shape/catalyst-ui";
 import { CONDITION_WAIT_MS, required } from "./support/assertions";
 import {
   AssetShareDialog,
+  readMemberships,
   shareSubmitHeld,
   shareSubmitLabel,
   shareTargets,
+  shareWorkspaces,
+  useAssetShare,
   TranslationProvider,
   type AssetShareCheck,
   type AssetShareSource
@@ -90,6 +93,165 @@ describe("the rungs a share offers", () => {
     });
     expect(shareSubmitHeld({ status: "ready", check: breaking }, false)).toBe(true);
     expect(shareSubmitHeld({ status: "ready", check: breaking }, true)).toBe(false);
+  });
+});
+
+describe("the teams a person with no right in them is offered", () => {
+  // Studio names a team only where the person holds a right on its assets. Their own workspaces
+  // are the memberships: the instance lets them share into any team they belong to, and files a
+  // request where they lack the right there.
+  const noRights: typeof workspaces = [];
+  const memberships = [
+    { id: MINE, name: "Kais Arbeitsbereich", member: true as const, personal: true as const },
+    { id: TEAM, name: "Controlling", member: true as const }
+  ];
+
+  it("adds the memberships the page does not name, and keeps the page's own entry", () => {
+    expect(shareWorkspaces(noRights, memberships)).toEqual(memberships);
+    expect(shareWorkspaces(workspaces, memberships)).toBe(workspaces);
+    const renamed = [{ id: TEAM, name: "Studio-Name", member: true }];
+    expect(shareWorkspaces(renamed, memberships)).toEqual([...renamed, memberships[0]]);
+  });
+
+  it("offers their team beside Alle from their Personal Workspace", () => {
+    const from = { kind: "workspace" as const, workspaceId: MINE };
+    // Known to the page alone, the team is missing: only Alle is left.
+    expect(shareTargets(from, shareWorkspaces(workspaces.slice(0, 1), []))).toEqual([
+      { kind: "instance" }
+    ]);
+    expect(shareTargets(from, shareWorkspaces(noRights, memberships))).toEqual([
+      { kind: "workspace", workspaceId: TEAM, name: "Controlling" },
+      { kind: "instance" }
+    ]);
+    // An App goes to a team and never to Alle.
+    expect(
+      shareTargets(from, shareWorkspaces(noRights, memberships), { toEveryone: false })
+    ).toEqual([{ kind: "workspace", workspaceId: TEAM, name: "Controlling" }]);
+  });
+
+  it("reads the memberships from the person's workspace list, apart from a team they only administer", async () => {
+    const row = (id: string, name: string, kind: string, membershipRole: string | null) => ({
+      id,
+      name,
+      kind,
+      membershipRole
+    });
+    const list = vi.fn().mockResolvedValue({
+      items: [
+        row(MINE, "Kais Arbeitsbereich", "personal", "owner"),
+        row(TEAM, "Controlling", "shared", "member"),
+        // A superadmin acts as Owner of every team: that is no membership.
+        row("cws_other", "Vertrieb", "shared", null)
+      ]
+    });
+    expect(await readMemberships({ list })).toEqual(memberships);
+  });
+});
+
+describe("the share of a page that names no team of the person", () => {
+  let root: Root;
+  let container: HTMLDivElement;
+
+  beforeEach(() => {
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    container = document.createElement("div");
+    document.body.append(container);
+    root = createRoot(container);
+  });
+
+  afterEach(async () => {
+    await act(async () => root.unmount());
+    container.remove();
+    vi.unstubAllGlobals();
+  });
+
+  it("offers the team they belong to beside Alle, asking the memberships once however often the page renders", async () => {
+    const memberships = vi.fn().mockResolvedValue([
+      { id: MINE, name: "Kais Arbeitsbereich", member: true, personal: true },
+      { id: TEAM, name: "Controlling", member: true }
+    ]);
+    let seen: ReturnType<typeof useAssetShare> | undefined;
+    let renders = 0;
+    function Page(): ReactNode {
+      renders += 1;
+      // A page may build its source anew on every render, as Studio's data does.
+      const source: AssetShareSource = {
+        check: () => Promise.resolve(check()),
+        move: () => Promise.resolve({ status: "requested" }),
+        memberships
+      };
+      seen = useAssetShare({
+        source,
+        subject: {
+          kind: "skill",
+          name: "steuer",
+          title: "Steuerprüfung",
+          owner: { kind: "workspace", workspaceId: MINE }
+        },
+        canShare: true,
+        workspaces: [],
+        onMoved: () => undefined
+      });
+      return null;
+    }
+    await act(async () => {
+      root.render(
+        createElement(TranslationProvider, { locale: "de", children: null }, createElement(Page))
+      );
+    });
+    await vi.waitFor(
+      () =>
+        expect(seen?.targets).toEqual([
+          { kind: "workspace", workspaceId: TEAM, name: "Controlling" },
+          { kind: "instance" }
+        ]),
+      { timeout: CONDITION_WAIT_MS }
+    );
+    expect(seen?.item).toBeDefined();
+    expect(memberships).toHaveBeenCalledTimes(1);
+    expect(renders).toBeLessThan(6);
+  });
+
+  it("asks nothing of a reader who may not share, and offers Alle where the memberships fail", async () => {
+    const memberships = vi.fn().mockRejectedValue(new Error("offline"));
+    let seen: ReturnType<typeof useAssetShare> | undefined;
+    function Page({ canShare }: { canShare: boolean }): ReactNode {
+      seen = useAssetShare({
+        source: {
+          check: () => Promise.resolve(check()),
+          move: () => Promise.resolve({ status: "requested" }),
+          memberships
+        },
+        subject: {
+          kind: "skill",
+          name: "steuer",
+          title: "Steuerprüfung",
+          owner: { kind: "workspace", workspaceId: MINE }
+        },
+        canShare,
+        workspaces: workspaces.slice(0, 1),
+        onMoved: () => undefined
+      });
+      return null;
+    }
+    const render = (canShare: boolean) =>
+      act(async () => {
+        root.render(
+          createElement(
+            TranslationProvider,
+            { locale: "de", children: null },
+            createElement(Page, { canShare })
+          )
+        );
+      });
+    await render(false);
+    expect(memberships).not.toHaveBeenCalled();
+    expect(seen?.targets).toEqual([]);
+    await render(true);
+    await vi.waitFor(() => expect(memberships).toHaveBeenCalledTimes(1), {
+      timeout: CONDITION_WAIT_MS
+    });
+    expect(seen?.targets).toEqual([{ kind: "instance" }]);
   });
 });
 

@@ -1,4 +1,4 @@
-import type { ApiClient } from "@work-shape/catalyst-api-client";
+import { listAll, type ApiClient } from "@work-shape/catalyst-api-client";
 import type { BuildWorkspace } from "../../shared/build-rights";
 import type { AssetOwner } from "./asset-place";
 
@@ -45,6 +45,13 @@ export interface AssetShareSource {
     to: AssetShareTarget,
     acceptBreaks: boolean
   ): Promise<AssetShareResult>;
+  /**
+   * The reader's own workspaces: the Personal one and every team they are a member of, whatever
+   * rights they hold in it. Studio's list names only a workspace where the reader holds a right
+   * on its assets, yet the instance lets them share into any team they belong to, and files a
+   * request where they lack the right there. Without it the dialog offers what the page knows.
+   */
+  memberships?(): Promise<readonly BuildWorkspace[]>;
 }
 
 /** The value a target is chosen by in the dialog. */
@@ -81,6 +88,19 @@ export function shareTargets(
       name: workspace.name
     }));
   return [...teams, ...everyone];
+}
+
+/**
+ * The workspaces a share is offered from: those the page names, and the reader's own that it
+ * does not, such as a team where they hold no right on its assets. The page's entry wins.
+ */
+export function shareWorkspaces(
+  known: readonly BuildWorkspace[],
+  memberships: readonly BuildWorkspace[]
+): readonly BuildWorkspace[] {
+  const named = new Set(known.map((workspace) => workspace.id));
+  const rest = memberships.filter((workspace) => !named.has(workspace.id));
+  return rest.length === 0 ? known : [...known, ...rest];
 }
 
 /** What the dialog knows of the move to the chosen target. */
@@ -120,6 +140,26 @@ export function shareUsedTitle(
 }
 
 /**
+ * The reader's own workspaces from the instance's list: the Personal one and each team they are
+ * a member of. A team a superadmin only acts in is no membership.
+ */
+export async function readMemberships(workspaces: {
+  list(input: { query: { limit: number; cursor?: string } }): Promise<{
+    items: { id: string; name: string; kind: string; membershipRole: string | null }[];
+    nextCursor?: string;
+  }>;
+}): Promise<readonly BuildWorkspace[]> {
+  return (await listAll((paging) => workspaces.list({ query: paging })))
+    .filter((workspace) => workspace.membershipRole !== null)
+    .map((workspace): BuildWorkspace => ({
+      id: workspace.id,
+      name: workspace.name,
+      member: true,
+      ...(workspace.kind === "personal" ? { personal: true as const } : {})
+    }));
+}
+
+/**
  * The source on the instance's operations: `assets.move_check` for the dialog, `assets.move` for
  * the click. `changed` hears that something moved, so the lists read it at its new place.
  */
@@ -136,6 +176,7 @@ export function createAssetShareSource(
     ...(subject.id === undefined ? {} : { expectedAssetId: subject.id })
   });
   return {
+    memberships: () => readMemberships(client.workspaces),
     check: (subject, to) =>
       client.assets.move_check({
         params: { kind: subject.kind, name: subject.name },

@@ -1,11 +1,12 @@
 import { Share2 } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { DropdownMenuItem } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../../shared/i18n";
 import { AssetShareDialog } from "./asset-share-dialog";
 import {
   shareTargetOwner,
   shareTargets,
+  shareWorkspaces,
   type AssetShareSource,
   type AssetShareSubject,
   type AssetShareTarget
@@ -50,9 +51,33 @@ export function useAssetShare({
   const { t } = useTranslation();
   const known = useKnownWorkspaces();
   const [opened, setOpened] = useState<{ count: number; target?: AssetShareTarget }>();
+  // The reader's own workspaces, asked once the page may share: Studio names a team only where
+  // they hold a right on its assets, and without one they may still ask to share into it. A
+  // page may build its source anew on every render, so the asking follows the owner alone.
+  const [memberships, setMemberships] = useState<readonly BuildWorkspace[]>([]);
+  const sourceNow = useRef(source);
+  sourceNow.current = source;
+  const mayAsk = source?.memberships !== undefined && canShare;
+  const owner = subject?.owner.kind === "workspace" ? subject.owner.workspaceId : undefined;
+  useEffect(() => {
+    const ask = sourceNow.current;
+    if (!mayAsk || owner === undefined || !ask?.memberships) return undefined;
+    let current = true;
+    ask.memberships().then(
+      (own) => {
+        if (current) setMemberships(own);
+      },
+      () => undefined
+    );
+    return () => {
+      current = false;
+    };
+  }, [mayAsk, owner]);
   const targets =
     source && subject && canShare
-      ? shareTargets(subject.owner, workspaces ?? known, { toEveryone })
+      ? shareTargets(subject.owner, shareWorkspaces(workspaces ?? known, memberships), {
+          toEveryone
+        })
       : [];
   const open = (target?: AssetShareTarget) =>
     setOpened((before) => ({ count: (before?.count ?? 0) + 1, ...(target ? { target } : {}) }));
