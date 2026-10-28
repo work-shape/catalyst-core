@@ -1,4 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { chmod, mkdtemp, readdir, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { describe, expect, it, onTestFinished, vi } from "vitest";
 import { z } from "zod";
 import {
   createConfigAssetSource,
@@ -18,7 +21,13 @@ import {
   type ToolExecutionContext,
   type UserRecord
 } from "@work-shape/catalyst-core";
-import { createReadSkillTool } from "@work-shape/catalyst-tool-execution";
+import { createSkillFolderReader } from "@work-shape/catalyst-server";
+import {
+  createReadSkillTool,
+  LocalWorkspaceCommandProcessExecutor,
+  LocalWorkspaceCommandRunner,
+  WorkspaceCommandService
+} from "@work-shape/catalyst-tool-execution";
 import {
   clientInstanceId,
   setupAccessInstance,
@@ -26,6 +35,8 @@ import {
   type AccessInstance
 } from "./support/access-instance";
 import { applyAtCurrentRevisions } from "./support/asset-revisions";
+import { MemoryObjectStorage } from "./support/memory-object-storage";
+import { inlineCommandResults } from "./support/workspace-command-jobs";
 
 // SCOPE-MYCHATS: a person switches on "In meinen Chats verwenden" for a skill of their own
 // Personal Workspace, and in their own chats every agent may read it, as its own skills. It
@@ -58,7 +69,16 @@ async function setup() {
         type: "upsert",
         kind: "skill",
         name: KAI_SKILL,
-        config: skill(KAI_SKILL, "Kai's checklist."),
+        config: {
+          ...skill(KAI_SKILL, "Kai's checklist."),
+          resources: [
+            {
+              path: "references/private.txt",
+              mediaType: "text/plain",
+              content: "Kai's private notes."
+            }
+          ]
+        },
         scope: { kind: "workspace", workspaceId: kaiHome }
       },
       {
@@ -151,6 +171,27 @@ function runSkills(t: AccessInstance) {
   });
   platform.registry([readSkill, ...platform.tools], new Set());
   return {
+    conversationOffer: platform.conversationOffer,
+    async storedRun(conversation: Conversation, user: UserRecord) {
+      const message = await t.stores.conversations.appendMessage({
+        clientInstanceId,
+        conversationId: conversation.id,
+        role: "user",
+        text: "Read my skill's file."
+      });
+      const run = await t.stores.agentRuns.createAgentRun({
+        id: createPlatformId<"AgentRunId">("run"),
+        clientInstanceId,
+        conversationId: conversation.id,
+        ownerUserId: user.id,
+        inputMessageId: message.id,
+        agentName: "assistant",
+        authorization: authorizationOf(user),
+        correlationId: "corr_my_chats"
+      });
+      runs.set(run.id, run);
+      return run;
+    },
     record(run: AgentRun) {
       runs.set(run.id, run);
       return run;
@@ -193,6 +234,66 @@ function runSkills(t: AccessInstance) {
   };
 }
 
+/** The command service and local sandbox, with the same offer and mounts as the assembly. */
+async function workspaceCommands(
+  t: AccessInstance,
+  skills: ReturnType<typeof runSkills>,
+  markPersonalData = true
+) {
+  const root = await mkdtemp(join(tmpdir(), "personal-skill-mount-"));
+  onTestFinished(async () => {
+    const open = async (directory: string): Promise<void> => {
+      await chmod(directory, 0o700);
+      for (const entry of await readdir(directory, { withFileTypes: true })) {
+        if (entry.isDirectory()) await open(join(directory, entry.name));
+      }
+    };
+    await open(root);
+    await rm(root, { recursive: true, force: true });
+  });
+  const objects = new MemoryObjectStorage();
+  const executor = new LocalWorkspaceCommandProcessExecutor();
+  const started = vi.spyOn(executor, "execute");
+  const runner = new LocalWorkspaceCommandRunner({
+    store: t.stores,
+    byteStore: objects,
+    tempRootDirectory: root,
+    processExecutor: executor,
+    skillFolders: createSkillFolderReader({ clientInstanceId, stores: t.stores })
+  });
+  const service = new WorkspaceCommandService({
+    store: t.stores,
+    objectStore: objects,
+    skills: {
+      assetSource: createConfigAssetSource({ store: t.stores.configAssets, clientInstanceId }),
+      conversationOffer: skills.conversationOffer,
+      ...(markPersonalData ? { conversations: t.stores.conversations } : {})
+    },
+    commandResults: inlineCommandResults(t.stores, { runner })
+  });
+  return {
+    started,
+    exec(run: AgentRun, user: AuthenticatedUser) {
+      return service.exec(
+        { command: `cat "$WORKSPACE_DIR/../skills/${KAI_SKILL}/references/private.txt"` },
+        {
+          clientInstanceId,
+          correlationId: "corr_my_chats_command",
+          user,
+          toolRequest: {
+            toolName: "workspace.exec",
+            toolCallId: createPlatformId<"ToolCallId">("toolcall"),
+            agentRunId: run.id,
+            conversationId: run.conversationId,
+            agentName: "assistant",
+            input: {}
+          }
+        }
+      );
+    }
+  };
+}
+
 async function chatOf(
   t: AccessInstance,
   user: UserRecord,
@@ -211,6 +312,87 @@ async function chatOf(
 }
 
 describe("a person's skill in their own chats", () => {
+  it("runs no command with personal skills if no mark setter is available", async () => {
+    const { t, kaiHome } = await setup();
+    const skills = runSkills(t);
+    const run = await skills.storedRun(await chatOf(t, t.kai, kaiHome), t.kai);
+    expect((await switchOn(t, t.kai.id, KAI_SKILL)).statusCode).toBe(200);
+    const commands = await workspaceCommands(t, skills, false);
+
+    await expect(commands.exec(run, personOf(t.kai))).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(commands.started).not.toHaveBeenCalled();
+    expect(
+      (await t.stores.conversations.getConversation(clientInstanceId, run.conversationId))
+        ?.personalDataAt
+    ).toBeUndefined();
+  });
+
+  it("marks the chat before a workspace command reads a personal skill's file, then refuses a move to a team", async () => {
+    const { t, kaiHome } = await setup();
+    const skills = runSkills(t);
+    const run = await skills.storedRun(await chatOf(t, t.kai, kaiHome), t.kai);
+    expect((await switchOn(t, t.kai.id, KAI_SKILL)).statusCode).toBe(200);
+    const commands = await workspaceCommands(t, skills);
+    const conversation = () =>
+      t.stores.conversations.getConversation(clientInstanceId, run.conversationId);
+    expect((await conversation())?.personalDataAt).toBeUndefined();
+    // Observe the mark before the sandbox can return any of the skill's content.
+    let markedBeforeContent: string | undefined;
+    commands.started.mockImplementationOnce(async (input) => {
+      markedBeforeContent = (await conversation())?.personalDataAt;
+      return new LocalWorkspaceCommandProcessExecutor().execute(input);
+    });
+
+    expect(await commands.exec(run, personOf(t.kai))).toMatchObject({
+      status: "success",
+      output: { status: "completed", exitCode: 0, stdoutPreview: "Kai's private notes." }
+    });
+    expect(commands.started).toHaveBeenCalledOnce();
+    expect(markedBeforeContent).toBeDefined();
+    expect((await conversation())?.personalDataAt).toBeDefined();
+    const team = await t.sharedWorkspace("Team");
+    await expect(
+      t.stores.conversations.moveConversation({
+        clientInstanceId,
+        conversationId: run.conversationId,
+        fromCollaborationWorkspaceId: kaiHome,
+        toCollaborationWorkspaceId: team,
+        visibility: "workspace"
+      })
+    ).rejects.toMatchObject({ details: { reason: "personal_conversation_private" } });
+  });
+
+  it("runs no command if the chat becomes team-visible after the personal skill is offered", async () => {
+    const { t, kaiHome } = await setup();
+    const skills = runSkills(t);
+    const run = await skills.storedRun(await chatOf(t, t.kai, kaiHome), t.kai);
+    expect((await switchOn(t, t.kai.id, KAI_SKILL)).statusCode).toBe(200);
+    const commands = await workspaceCommands(t, skills);
+    const team = await t.sharedWorkspace("Team");
+    const offerOf = skills.conversationOffer.offerOf.bind(skills.conversationOffer);
+    vi.spyOn(skills.conversationOffer, "offerOf").mockImplementationOnce(async (request) => {
+      const offer = await offerOf(request);
+      expect(offer?.personalSkillNames).toEqual([KAI_SKILL]);
+      await t.stores.conversations.moveConversation({
+        clientInstanceId,
+        conversationId: run.conversationId,
+        fromCollaborationWorkspaceId: kaiHome,
+        toCollaborationWorkspaceId: team,
+        visibility: "workspace"
+      });
+      return offer;
+    });
+
+    await expect(commands.exec(run, personOf(t.kai))).rejects.toMatchObject({
+      details: { reason: "personal_connection_context" }
+    });
+    expect(commands.started).not.toHaveBeenCalled();
+    expect(
+      (await t.stores.conversations.getConversation(clientInstanceId, run.conversationId))
+        ?.personalDataAt
+    ).toBeUndefined();
+  });
+
   it("is switched by its owner alone, and lists only the person's own skills", async () => {
     const { t } = await setup();
 
