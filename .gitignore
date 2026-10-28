@@ -21,3 +21,8 @@ test-results/
 packages/docs/src/content/docs/reference/api/
 # Lint fixtures tests/chat-ui-import-boundary.test.ts writes while it runs.
 tests/support/.chat-ui-imports-*/
+
+# Generated peer for the preview capture container proof.
+.capture-fixture.mjs
+packages/preview-capture/schemas.tgz
+packages/preview-capture/core.tgz

@@ -1,12 +1,18 @@
 import { randomUUID } from "node:crypto";
-import { and, desc, eq, gt, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNull, isNotNull, sql } from "drizzle-orm";
 import {
   asManagedArtifactId,
+  serverPreviewCaptureJob,
+  subjectDedupeKey,
   PREVIEW_CAPTURE_REFUSALS,
+  PREVIEW_CAPTURES_PER_RUN,
+  PREVIEW_CAPTURES_PER_HOUR,
   type PagesStore,
   type PreviewCaptureRefusal,
   type PreviewCaptureState
 } from "@work-shape/catalyst-core";
+import { agentRuns } from "./schema/agentRuns";
+import { enqueueJob } from "./jobs/store";
 import type { PostgresConnection } from "./postgres-database";
 import { fileSets, previewCaptures, previewViewerReports } from "./schema/pages";
 
@@ -61,6 +67,32 @@ export async function requestPreviewCapture(
       await tx.execute(
         sql`select pg_advisory_xact_lock(hashtextextended(${JSON.stringify(["preview-captures", input.clientInstanceId, input.userId])}, 0))`
       );
+      if (input.server) {
+        const deadline = new Date(input.server.deadline).getTime();
+        const [run] = await tx
+          .select()
+          .from(agentRuns)
+          .where(
+            and(
+              eq(agentRuns.clientInstanceId, input.clientInstanceId),
+              eq(agentRuns.id, input.runId)
+            )
+          )
+          .for("share");
+        if (
+          !run ||
+          run.status !== "running" ||
+          run.ownerUserId !== input.userId ||
+          run.conversationId !== input.conversationId ||
+          run.principalId ||
+          run.authorizationContext?.principal.kind !== "user" ||
+          run.authorizationContext.delegatedActor ||
+          run.authorizationContext.subjectUserId !== input.userId ||
+          deadline <= Date.now() ||
+          deadline > Date.now() + 25_000
+        )
+          throw new Error("No live person run");
+      }
       const [asked] = await tx
         .select({ id: previewCaptures.id })
         .from(previewCaptures)
@@ -86,7 +118,12 @@ export async function requestPreviewCapture(
             sql`(${previewCaptures.runId} = ${input.runId} or ${previewCaptures.userId} = ${input.userId})`
           )
         );
-      if ((counted?.run ?? 0) >= input.perRun || (counted?.hour ?? 0) >= input.perHour) {
+      if (
+        (counted?.run ?? 0) >=
+          (input.server ? Math.min(PREVIEW_CAPTURES_PER_RUN, input.perRun) : input.perRun) ||
+        (counted?.hour ?? 0) >=
+          (input.server ? Math.min(PREVIEW_CAPTURES_PER_HOUR, input.perHour) : input.perHour)
+      ) {
         return { refused: "capture_limit" as const };
       }
       const id = `pcap_${randomUUID()}`;
@@ -99,8 +136,21 @@ export async function requestPreviewCapture(
         toolCallId: input.toolCallId,
         fileSetId: input.fileSetId,
         status: "pending",
-        requestedAt
+        requestedAt,
+        ...(input.server ? { serverRequest: input.server } : {})
       });
+      if (input.server)
+        await enqueueJob(
+          tx,
+          serverPreviewCaptureJob,
+          { captureId: id },
+          {
+            clientInstanceId: input.clientInstanceId,
+            subject: id,
+            dedupeKey: subjectDedupeKey(serverPreviewCaptureJob.kind, id),
+            concurrencyKey: id
+          }
+        );
       return { id };
     });
   } catch {
@@ -122,6 +172,7 @@ export async function pendingPreviewCaptures(
           eq(previewCaptures.conversationId, input.conversationId),
           eq(previewCaptures.userId, input.userId),
           eq(previewCaptures.status, "pending"),
+          isNull(previewCaptures.serverRequest),
           gt(previewCaptures.requestedAt, new Date(input.notBefore))
         )
       )
@@ -148,6 +199,7 @@ export async function claimPreviewCapture(
           eq(previewCaptures.userId, input.userId),
           eq(previewCaptures.fileSetId, input.fileSetId),
           eq(previewCaptures.status, "pending"),
+          isNull(previewCaptures.serverRequest),
           gt(previewCaptures.requestedAt, new Date(input.notBefore))
         )
       )
@@ -254,4 +306,101 @@ export async function prunePreviewCaptures(
     )
     .returning({ id: previewCaptures.id });
   return removed.length;
+}
+
+export async function getServerPreviewCapture(
+  db: PostgresConnection,
+  input: Input<"getServerPreviewCapture">
+): Promise<Awaited<ReturnType<PagesStore["getServerPreviewCapture"]>>> {
+  try {
+    const [row] = await db
+      .select()
+      .from(previewCaptures)
+      .where(
+        and(
+          eq(previewCaptures.clientInstanceId, input.clientInstanceId),
+          eq(previewCaptures.id, input.id),
+          isNotNull(previewCaptures.serverRequest)
+        )
+      );
+    return row?.serverRequest
+      ? {
+          id: row.id,
+          conversationId: row.conversationId,
+          userId: row.userId,
+          runId: row.runId,
+          fileSetId: row.fileSetId,
+          status: row.status,
+          settings: row.serverRequest
+        }
+      : undefined;
+  } catch {
+    throw withoutValues("read");
+  }
+}
+export async function claimServerPreviewCapture(
+  db: PostgresConnection,
+  input: Input<"claimServerPreviewCapture">
+): Promise<Awaited<ReturnType<PagesStore["claimServerPreviewCapture"]>>> {
+  try {
+    const [row] = await db
+      .update(previewCaptures)
+      .set({ status: "answering" })
+      .where(
+        and(
+          eq(previewCaptures.clientInstanceId, input.clientInstanceId),
+          eq(previewCaptures.id, input.id),
+          eq(previewCaptures.status, "pending"),
+          isNotNull(previewCaptures.serverRequest)
+        )
+      )
+      .returning();
+    return row?.serverRequest
+      ? {
+          id: row.id,
+          conversationId: row.conversationId,
+          userId: row.userId,
+          runId: row.runId,
+          fileSetId: row.fileSetId,
+          status: row.status,
+          settings: row.serverRequest
+        }
+      : undefined;
+  } catch {
+    throw withoutValues("claim");
+  }
+}
+export async function finishServerPreviewCapture(
+  db: PostgresConnection,
+  input: Input<"finishServerPreviewCapture">
+): Promise<boolean> {
+  try {
+    const { outcome } = input;
+    const rows = await db
+      .update(previewCaptures)
+      .set(
+        outcome.status === "captured"
+          ? {
+              status: "captured",
+              artifactId: outcome.artifactId,
+              width: outcome.width,
+              height: outcome.height,
+              serverDiagnostics: outcome.diagnostics,
+              answeredAt: new Date(input.answeredAt)
+            }
+          : { status: "refused", code: outcome.code, answeredAt: new Date(input.answeredAt) }
+      )
+      .where(
+        and(
+          eq(previewCaptures.clientInstanceId, input.clientInstanceId),
+          eq(previewCaptures.id, input.id),
+          inArray(previewCaptures.status, ["pending", "answering"]),
+          isNotNull(previewCaptures.serverRequest)
+        )
+      )
+      .returning({ id: previewCaptures.id });
+    return rows.length > 0;
+  } catch {
+    throw withoutValues("end");
+  }
 }

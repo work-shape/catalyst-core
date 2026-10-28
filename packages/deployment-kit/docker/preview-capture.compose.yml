@@ -1,0 +1,48 @@
+# Opt-in overlay, shipped dark. Include alongside the deployment's Compose file only
+# after supplying a preview-capture image and API configuration. Never use env_file here.
+services:
+  api:
+    networks:
+      default: {}
+      preview-capture: {}
+    environment:
+      PREVIEW_CAPTURE_ENABLED: ${PREVIEW_CAPTURE_ENABLED:-false}
+      PREVIEW_CAPTURE_SERVICE_ORIGIN: http://preview-capture:4120
+      PREVIEW_CAPTURE_SERVICE_TOKEN: ${PREVIEW_CAPTURE_SERVICE_TOKEN:?capture service token required}
+  preview-capture:
+    profiles: [preview-capture]
+    image: ${PREVIEW_CAPTURE_IMAGE:?capture image required}
+    restart: unless-stopped
+    init: true
+    user: "10001:10001"
+    read_only: true
+    tmpfs:
+      - /tmp:size=192m,mode=1777
+    shm_size: 256m
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+      - seccomp=${PREVIEW_CAPTURE_SECCOMP:?path to preview-capture-seccomp.json required}
+    pids_limit: 192
+    cpus: 1.5
+    mem_limit: ${PREVIEW_CAPTURE_MEMORY:-768m}
+    networks: [preview-capture]
+    environment:
+      PREVIEW_CAPTURE_SERVICE_TOKEN: ${PREVIEW_CAPTURE_SERVICE_TOKEN}
+      PREVIEW_CAPTURE_API_ORIGIN: http://api:4100
+      PREVIEW_CAPTURE_INTERFACE_ORIGIN: ${PREVIEW_CAPTURE_INTERFACE_ORIGIN:?interface origin required}
+      PREVIEW_CAPTURE_CONCURRENCY: ${PREVIEW_CAPTURE_CONCURRENCY:-2}
+    healthcheck:
+      test:
+        [
+          CMD,
+          node,
+          -e,
+          "fetch('http://127.0.0.1:4120/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+networks:
+  preview-capture:
+    internal: true

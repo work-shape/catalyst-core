@@ -198,3 +198,36 @@ jobs:
         run: |
           echo "$RESULTS" | jq -e 'to_entries | all(.value.result == "success")' >/dev/null \
             || { echo "$RESULTS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'; exit 1; }
+
+  preview-capture:
+    name: preview capture isolation
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @work-shape/catalyst-asset-schemas build
+      - run: pnpm --filter @work-shape/catalyst-asset-schemas pack --out packages/preview-capture/schemas.tgz
+      - run: pnpm --filter @work-shape/catalyst-core build
+      - run: pnpm --filter @work-shape/catalyst-core pack --out packages/preview-capture/core.tgz
+      - run: pnpm --filter @work-shape/catalyst-preview-capture build
+      - run: docker build -t catalyst-srv1-preview-capture packages/preview-capture
+      - run: node tests/support/build-capture-fixture.mjs
+      - run: pnpm exec vitest run tests/preview-capture-service.browser.test.ts
+        env:
+          CAPTURE_BROWSER_TESTS: "1"
+      - name: Capture proof
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: preview-capture-proof
+          path: .tmp/capture-proof/
+          include-hidden-files: true
+          if-no-files-found: error

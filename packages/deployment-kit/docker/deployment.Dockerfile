@@ -351,3 +351,22 @@ RUN test "$(id -u)" = "10001" \
   && catalyst-page-build --check \
   && catalyst-asset-repo --check
 CMD ["/bin/sh"]
+
+# An isolated service: do not inherit api or copy /app (which contains the deployment).
+FROM deps AS preview-capture-packages
+RUN node node_modules/@work-shape/catalyst-deployment-kit/docker/copy-packages.mjs \
+    --from . --to /opt/preview-capture @work-shape/catalyst-preview-capture
+
+FROM node:24-bookworm-slim AS preview-capture
+WORKDIR /opt/preview-capture
+ENV NODE_ENV=production PLAYWRIGHT_BROWSERS_PATH=/opt/browsers HOME=/tmp
+COPY --from=preview-capture-packages /opt/preview-capture ./
+RUN capture_cli="$(node --input-type=module -e 'import {createRequire} from "node:module"; import {dirname,join} from "node:path"; process.stdout.write(join(dirname(createRequire(import.meta.resolve("@work-shape/catalyst-preview-capture")).resolve("playwright/package.json")),"cli.js"))')" \
+ && node "$capture_cli" install --with-deps --only-shell chromium \
+ && apt-get install -y --no-install-recommends fonts-noto-core fonts-noto-color-emoji \
+ && rm -rf /var/lib/apt/lists/* \
+ && groupadd --gid 10001 capture \
+ && useradd --uid 10001 --gid 10001 --home-dir /tmp --no-create-home capture
+USER 10001:10001
+EXPOSE 4120
+CMD ["node", "node_modules/@work-shape/catalyst-preview-capture/dist/cli.js"]

@@ -327,6 +327,7 @@ export class AppActionCalls {
     });
     if (
       !checked.ok ||
+      checked.claims.pageSessionId.startsWith("capture:") ||
       checked.claims.pageSessionId !== proof.pageSessionId ||
       checked.claims.viewerId !== getSubjectUserId(caller.user)
     ) {

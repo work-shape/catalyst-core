@@ -148,7 +148,7 @@ export type {
   ConversationRetentionOptions,
   ExecutionWorkspaceCleanupJobOptions
 } from "./types";
-export { appKitFilesOf, loadAppKitFiles } from "./app-kit-runtime";
+export { appKitFilesOf } from "./app-kit-runtime";
 export { loadViewRuntimeFiles } from "./view-runtime";
 import { holdsAppContentToken } from "./pages/app-content";
 import { holdsSignInCallback } from "./connections/sign-in-callback";
@@ -431,3 +431,17 @@ export {
   type AuditReader,
   type AuditSubjectLookups
 } from "./routes/audit-subjects";
+
+export {
+  requestServerPreviewCapture,
+  createServerPreviewCaptureJobs,
+  captureAddressActive
+} from "./apps/server-preview-captures";
+
+export {
+  composePageShell,
+  appContentHeaders,
+  mintAppContentToken,
+  appContentPath,
+  loadAppKitFiles
+} from "./capture-content";

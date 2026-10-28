@@ -1,3 +1,4 @@
+import { createServerPreviewCaptureJobs } from "./apps/server-preview-captures";
 import { createScheduledPromptHandler } from "./conversations/scheduled-start-job";
 import { createNoticeMailJobs } from "./notices/notice-mail";
 import { createFeedbackJobs } from "./feedback/feedback-jobs";
@@ -88,6 +89,7 @@ export function createChatServerJobs(
   const usageReconciliation = createUsageReconciliation(options, now);
 
   const handlers: RegisteredJobHandler[] = [
+    ...createServerPreviewCaptureJobs(options),
     createScheduledPromptHandler(options, now),
     createFollowUpDispatchHandler(options),
     defineJobHandler({
