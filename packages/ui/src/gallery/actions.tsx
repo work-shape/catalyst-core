@@ -7,6 +7,8 @@ import { IconButton, type IconButtonSize } from "../actions/icon-button";
 import { RunLiveOnce, type RunLiveOnceState } from "../actions/run-live-once";
 import { TextLink } from "../actions/text-link";
 import { Starter, StarterList } from "../actions/starter";
+import { Choice, ChoiceList } from "../actions/choice";
+import { Badge } from "../status/badge";
 import { SkillIcon } from "../status/skill-icon";
 import { TargetBadge } from "../status/target-badge";
 import { Samples, type GalleryGroup } from "./entry";
@@ -224,6 +226,30 @@ export const actionsGallery: GalleryGroup = {
               disabled
             />
           </StarterList>
+        </div>
+      )
+    },
+    {
+      name: "Choice",
+      components: ["Choice", "ChoiceList"],
+      render: (text) => (
+        <div className="grid max-w-md gap-6" data-gallery-sample="choices">
+          <ChoiceList label={text.choiceQuestion}>
+            <Choice
+              title={text.choiceOnlyMe}
+              hint={text.choiceOnlyMeHint}
+              mark={
+                <Badge tone="accent" size="sm">
+                  {text.choiceRecommended}
+                </Badge>
+              }
+            />
+            <Choice title={text.choiceTeam} hint={text.choiceTeamHint} />
+          </ChoiceList>
+          <ChoiceList label={text.choiceQuestion}>
+            <Choice title={text.choiceOnlyMe} hint={text.choiceOnlyMeHint} chosen disabled />
+            <Choice title={text.choiceTeam} hint={text.choiceTeamHint} disabled />
+          </ChoiceList>
         </div>
       )
     },

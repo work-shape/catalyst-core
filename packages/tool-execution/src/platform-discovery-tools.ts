@@ -130,7 +130,9 @@ export interface PlatformAssetFound {
 }
 
 /** One Page or file a search found, and the conversation it lives in. */
-export type PlatformFileFound = FoundFile & {
+export type PlatformFileFound = Omit<FoundFile, "conversation"> & {
+  /** The conversation it lives in, with the path of its page: a link opens it. */
+  conversation: FoundFile["conversation"] & { href: string };
   /** Set on what lives in the conversation the agent runs in, the one it can open. */
   inThisConversation?: true;
 };
@@ -276,7 +278,7 @@ const listFilesOutputSchema = z.object({
       mimeType: z.string().optional(),
       bytes: z.number(),
       updatedAt: z.string(),
-      conversation: z.object({ id: z.string(), title: z.string() }),
+      conversation: z.object({ id: z.string(), title: z.string(), href: z.string() }),
       inThisConversation: z.literal(true).optional()
     })
   ),
@@ -402,7 +404,7 @@ export function createPlatformDiscoveryTools(
       effect: listFiles.effect,
       description: [
         "Find the previews and files in this workspace's conversations that the user may see: folders shown with workspace.open ('page'), uploads ('upload') and files an agent made ('generated_file'), newest first, with name, type, size, change time and conversation, never their content. What the user may not see is not listed: say you know none of that name.",
-        `At most ${PLATFORM_ASSET_LIST_MAX}; 'truncated' says there are more, so search narrower. Only what is marked 'inThisConversation' can be read here; for anything else, tell the user which conversation holds it.`
+        `At most ${PLATFORM_ASSET_LIST_MAX}; 'truncated' says there are more, so search narrower. Only what is marked 'inThisConversation' can be read here; for anything else, link the conversation that holds it, [its title](href) with its href, and offer to go on there.`
       ].join(" "),
       inputSchema: z.object({
         kind: z.enum(FOUND_FILE_KINDS).optional().describe("Only previews, uploads or made files."),

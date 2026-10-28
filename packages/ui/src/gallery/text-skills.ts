@@ -34,6 +34,12 @@ export interface SkillsGalleryText {
   starterPdfHint: string;
   starterGuide: string;
   starterGuideHint: string;
+  choiceQuestion: string;
+  choiceRecommended: string;
+  choiceOnlyMe: string;
+  choiceOnlyMeHint: string;
+  choiceTeam: string;
+  choiceTeamHint: string;
 }
 
 export const skillsGalleryText: Record<"en" | "de", SkillsGalleryText> = {
@@ -74,7 +80,13 @@ export const skillsGalleryText: Record<"en" | "de", SkillsGalleryText> = {
     starterPdf: "Pull figures out of a PDF",
     starterPdfHint: "Into a table",
     starterGuide: "Ask how this platform works",
-    starterGuideHint: "Agents, skills and Connections"
+    starterGuideHint: "Agents, skills and Connections",
+    choiceQuestion: "Who should be able to use the overview?",
+    choiceRecommended: "Recommended",
+    choiceOnlyMe: "Only me",
+    choiceOnlyMeHint: "You can share it later",
+    choiceTeam: "My whole team",
+    choiceTeamHint: "Everyone sees the same figures"
   },
   de: {
     skillIconSizes:
@@ -118,6 +130,12 @@ export const skillsGalleryText: Record<"en" | "de", SkillsGalleryText> = {
     starterPdf: "Zahlen aus einem PDF ziehen",
     starterPdfHint: "In eine Tabelle",
     starterGuide: "Fragen, wie die Plattform funktioniert",
-    starterGuideHint: "Agenten, Skills und Connections"
+    starterGuideHint: "Agenten, Skills und Connections",
+    choiceQuestion: "Wer soll die Übersicht nutzen können?",
+    choiceRecommended: "Empfohlen",
+    choiceOnlyMe: "Nur ich",
+    choiceOnlyMeHint: "Teilen kannst du sie später",
+    choiceTeam: "Mein ganzes Team",
+    choiceTeamHint: "Alle sehen dieselben Zahlen"
   }
 };

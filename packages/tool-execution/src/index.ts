@@ -28,6 +28,7 @@ export {
 export { createWorkflowTestTools, WORKFLOW_TEST_TOOL_NAMES } from "./workflow-test-tools";
 export { CONNECTION_DRAFT_TOOL_NAME, createConnectionDraftTool } from "./connection-draft-tool";
 export { CONNECTION_OFFER_TOOL_NAME, createConnectionOfferTool } from "./connection-offer-tool";
+export { createAskQuestionTool, type AskedQuestion } from "./ask-question-tool";
 export {
   CONNECTION_PROPOSE_TOOL_NAME,
   createConnectionProposeTool,

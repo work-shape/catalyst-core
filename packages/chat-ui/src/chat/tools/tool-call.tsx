@@ -28,6 +28,8 @@ import {
   readConnectionOffer
 } from "../../studio/build-area/connection-give-card";
 import { PageSaveCard } from "../../studio/pages/page-card";
+import { ASK_QUESTION_TOOL_NAME, readAskedQuestion } from "../questions/question";
+import { QuestionCard } from "../questions/question-card";
 import { AssetPreviewCard, previewedDraftOfCall } from "../../studio/pages/asset-preview";
 import { builtPageName, isOpenToolName, readPageSave } from "../../studio/pages/page-save";
 import {
@@ -238,6 +240,15 @@ export function ToolCallPart({
           : undefined;
   if (connectionDraft) {
     return <ConnectionDraftCard draft={connectionDraft} />;
+  }
+
+  // The agent's question to the person: a card whose options answer it (ASK-1).
+  const asked =
+    toolName === ASK_QUESTION_TOOL_NAME && state === "completed"
+      ? readAskedQuestion(result)
+      : undefined;
+  if (asked) {
+    return <QuestionCard toolCallId={toolCallId} asked={asked} />;
   }
 
   // The agent's offer of a Connection's tools: a card whose button gives them to an agent.

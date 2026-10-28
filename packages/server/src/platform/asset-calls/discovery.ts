@@ -1,4 +1,4 @@
-import { AppError } from "@work-shape/catalyst-core";
+import { AppError, conversationInterfacePath } from "@work-shape/catalyst-core";
 import {
   PLATFORM_ASSET_LIST_MAX,
   type PlatformAssetCalls
@@ -47,11 +47,22 @@ export function discoveryCalls(
         page: { limit: PLATFORM_ASSET_LIST_MAX + 1 }
       });
       return {
-        files: found
-          .slice(0, PLATFORM_ASSET_LIST_MAX)
-          .map((file) =>
-            file.conversation.id === conversation.id ? { ...file, inThisConversation: true } : file
-          ),
+        files: found.slice(0, PLATFORM_ASSET_LIST_MAX).map((file) => {
+          // A link to the conversation that holds it, where the person goes on with it.
+          const found = {
+            ...file,
+            conversation: {
+              ...file.conversation,
+              href: conversationInterfacePath({
+                workspaceId: conversation.collaborationWorkspaceId,
+                conversationId: file.conversation.id
+              })
+            }
+          };
+          return file.conversation.id === conversation.id
+            ? { ...found, inThisConversation: true as const }
+            : found;
+        }),
         truncated: found.length > PLATFORM_ASSET_LIST_MAX
       };
     },
