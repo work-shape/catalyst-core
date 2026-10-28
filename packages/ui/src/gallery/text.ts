@@ -173,6 +173,7 @@ export interface GalleryText
   agentContractsHint: string;
   agentPayroll: string;
   agentPayrollReason: string;
+  agentPayrollAction: string;
   createAgent: string;
   workspaceMarketing: string;
   workspaceFinance: string;
@@ -449,6 +450,7 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     agentContractsHint: "Compares a contract with the template",
     agentPayroll: "Payroll assistant",
     agentPayrollReason: "Needs a connection that is not set up",
+    agentPayrollAction: "Set up…",
     createAgent: "Create new agent",
     workspaceMarketing: "Marketing",
     workspaceFinance: "Finance",
@@ -732,6 +734,7 @@ export const galleryText: Record<GalleryLanguage, GalleryText> = {
     agentContractsHint: "Vergleicht einen Vertrag mit der Vorlage",
     agentPayroll: "Lohn-Assistent",
     agentPayrollReason: "Braucht eine Verbindung, die nicht eingerichtet ist",
+    agentPayrollAction: "Einrichten…",
     createAgent: "Neuen Agenten erstellen",
     workspaceMarketing: "Marketing",
     workspaceFinance: "Finanzen",

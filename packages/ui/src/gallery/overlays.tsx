@@ -396,7 +396,12 @@ function agentOptions(text: GalleryText): (PickerOption | PickerOptionGroup)[] {
       heading: text.pickerGroupInstance,
       options: [
         agent("contracts", text.agentContracts, text.agentContractsHint),
-        { ...agent("payroll", text.agentPayroll), disabledReason: text.agentPayrollReason }
+        {
+          ...agent("payroll", text.agentPayroll),
+          disabledReason: text.agentPayrollReason,
+          // The gallery shows the step; it leads nowhere here.
+          disabledAction: { label: text.agentPayrollAction, onSelect: () => undefined }
+        }
       ]
     }
   ];

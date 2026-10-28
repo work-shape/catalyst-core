@@ -40,6 +40,7 @@ export {
   type PickerCreateRow,
   type PickerMoreRow,
   type PickerMultipleProps,
+  type PickerDisabledAction,
   type PickerOption,
   type PickerOptionGroup,
   type PickerProps,
