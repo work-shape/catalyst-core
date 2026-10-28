@@ -68,6 +68,31 @@ export function useAvailabilityChoice(
   const onlyMine = workspaces.some((workspace) => workspace.personal && workspace.id === owner);
   if (asset === undefined || !maySet) return undefined;
   const scope = owner === undefined ? {} : { workspaceId: owner };
+  const saveAvailability = (
+    next: AgentAvailabilityForm,
+    revision: number,
+    makeDependenciesAvailable: boolean
+  ) =>
+    placement.setAvailability
+      .mutateAsync({
+        kind,
+        name: asset.name,
+        assetId: asset.id,
+        loaded: saved,
+        ...next,
+        // Only an agent uses other assets: what it uses is read for its live revision.
+        ...(kind === "agent" ? { expectedRevision: revision } : {}),
+        ...(kind === "agent" && makeDependenciesAvailable
+          ? { makeDependenciesAvailable: true }
+          : {})
+      })
+      .then(
+        (stored) => {
+          setSaved(stored);
+          return undefined;
+        },
+        (error: unknown) => apiErrorMessage(error, t("configChangeSaveFailed"))
+      );
   return {
     saved,
     ...(onlyMine ? { fixedReason: t("build.availabilityOnlyMine") } : {}),
@@ -91,31 +116,36 @@ export function useAvailabilityChoice(
                   query: { ...scope, ...availabilityPreviewQuery(form) },
                   signal
                 })
-              ).dependencyAvailability ?? null
+              ).dependencyAvailability ?? null,
+            // A definition that does not validate lists nothing: its publish refuses it.
+            readFor: async (
+              config: Record<string, unknown>,
+              form: AgentAvailabilityForm,
+              signal: AbortSignal
+            ) => {
+              const answer = await client.assets.validate({
+                params: { kind },
+                body: { config, availability: form, ...scope },
+                signal
+              });
+              return answer.valid ? (answer.dependencyAvailability ?? null) : null;
+            }
           }
         }
       : {}),
     save: (next, { makeDependenciesAvailable }) =>
-      placement.setAvailability
-        .mutateAsync({
-          kind,
-          name: asset.name,
-          assetId: asset.id,
-          loaded: saved,
-          ...next,
-          // Only an agent uses other assets: what it uses is read for its live revision.
-          ...(kind === "agent" ? { expectedRevision: asset.revision } : {}),
-          ...(kind === "agent" && makeDependenciesAvailable
-            ? { makeDependenciesAvailable: true }
-            : {})
-        })
-        .then(
-          (stored) => {
-            setSaved(stored);
-            return undefined;
-          },
-          (error: unknown) => apiErrorMessage(error, t("configChangeSaveFailed"))
-        )
+      saveAvailability(next, asset.revision, makeDependenciesAvailable),
+    saveAfterPublish: async (next, { makeDependenciesAvailable }) => {
+      let revision: number;
+      try {
+        // The publish made a new live revision: what the agent uses is read for it.
+        revision = (await client.assets.get({ params: { kind, name: asset.name }, query: scope }))
+          .revision;
+      } catch (error) {
+        return apiErrorMessage(error, t("configChangeSaveFailed"));
+      }
+      return saveAvailability(next, revision, makeDependenciesAvailable);
+    }
   };
 }
 

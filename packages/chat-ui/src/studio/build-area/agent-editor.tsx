@@ -45,7 +45,14 @@ import { AgentUseFields, useAgentUseEdit, type AgentUseChoice } from "./agent-us
 import { AgentCreateReview, type AgentCreateCheck } from "./agent-create-review";
 import type { DependencyConsent } from "../../shared/api/asset-writes";
 import { AgentKnowledge, type KnowledgeBaseChoice } from "./agent-knowledge";
-import { AVAILABILITY_SECTION_ID } from "./asset-place";
+import { AVAILABILITY_SECTION_ID, useKnownWorkspaces } from "./asset-place";
+import {
+  offerChange,
+  publishOffer,
+  type PublishOfferOwner,
+  type PublishOfferValue
+} from "./publish-offer";
+import { PublishOfferField, useOfferDependencies } from "./publish-offer-field";
 import { AgentDataStores, type DataStoreChoice } from "./agent-data-stores";
 import { heldDataStores, isAgentDataStoreToolName } from "./agent-data-stores-model";
 import { AgentModels, modelBindingLabel } from "./agent-models";
@@ -142,6 +149,30 @@ export function AgentEditor({
   // missing where the agent is.
   const [publishDependencies, setPublishDependencies] = useState(false);
   const [preflight, setPreflight] = useState(false);
+  // Offering is part of publishing (OFFER-ON-PUBLISH): the dialog asks where a chat can choose
+  // the agent, and sets the answer through the availability's own operation before it publishes.
+  const knownWorkspaces = useKnownWorkspaces();
+  const offerOwner: PublishOfferOwner =
+    frame.owner === undefined
+      ? { kind: "instance" }
+      : knownWorkspaces.some((workspace) => workspace.personal && workspace.id === frame.owner)
+        ? { kind: "mine" }
+        : { kind: "team", workspaceId: frame.owner };
+  const offer = publishOffer({
+    owner: offerOwner,
+    saved: availability?.saved ?? frame.asset?.availability,
+    maySet: availability !== undefined && availability.fixedReason === undefined
+  });
+  const [offerValue, setOfferValue] = useState<PublishOfferValue>("own");
+  const offerTo = offerChange(offer, offerValue);
+  // What the draft would use that members could not use where the answer offers it, read for
+  // the draft the dialog publishes. Where the answer keeps the place, the publish read says it.
+  const readOfferDependencies = availability?.dependencies?.readFor;
+  const offerRead = useOfferDependencies(
+    deciding === "publish" && held !== null && offerTo !== undefined && readOfferDependencies
+      ? { read: readOfferDependencies, config: held.config, form: offerTo }
+      : undefined
+  );
   // A new agent's create that waits for the reader's answer to what it would leave missing.
   const [creating, setCreating] = useState<{
     config: Record<string, unknown>;
@@ -784,6 +815,7 @@ export function AgentEditor({
             }
             onClick={() => {
               setPublishDependencies(false);
+              setOfferValue(offer.kind === "choice" ? offer.preselected : "own");
               setPreflight(true);
               setDeciding("publish");
               draft
@@ -876,11 +908,28 @@ export function AgentEditor({
         : {})}
     />
   );
-  // What the dialog lists, as the publish preflight read it for the draft it publishes.
+  // What the dialog lists, as the publish preflight read it for the draft it publishes, or as
+  // it was read for the place the answer offers it in.
   const reviewed =
     held === null
       ? undefined
       : (latest?.revision === held.revision ? latest : held).dependencyAvailability;
+  const listed = offerTo === undefined ? reviewed : offerRead.data;
+  // The publish first, then where it is offered: a publish that waits or is refused offers
+  // nothing. What the draft uses is made available where the answer offers it.
+  const offerAfterPublish = availability?.saveAfterPublish;
+  const publish = (revision: number) =>
+    draft?.decide("publish", revision, {
+      makeDependenciesAvailable: offerTo === undefined && publishDependencies,
+      // The workspaces the list in this dialog was read for.
+      expectedAvailability: reviewed?.availability ?? null,
+      ...(offerTo !== undefined && offerAfterPublish
+        ? {
+            afterPublish: () =>
+              offerAfterPublish(offerTo, { makeDependenciesAvailable: publishDependencies })
+          }
+        : {})
+    });
   const decision =
     held === null ? null : (
       <>
@@ -890,25 +939,29 @@ export function AgentEditor({
           title={t("build.publishTitle", { name: liveTitle })}
           confirmLabel={t("build.publish")}
           loading={busy === "publish"}
-          confirmDisabled={preflight}
+          confirmDisabled={preflight || offerRead.isPending}
           onConfirm={() => {
-            draft
-              ?.decide("publish", held.revision, {
-                makeDependenciesAvailable: publishDependencies,
-                // The workspaces the list in this dialog was read for.
-                expectedAvailability: reviewed?.availability ?? null
-              })
-              .finally(() => setDeciding(undefined))
+            publish(held.revision)
+              ?.finally(() => setDeciding(undefined))
               .catch(() => undefined);
           }}
           onClose={() => setDeciding(undefined)}
         >
-          <div className="grid gap-3">
+          <div className="grid gap-4">
             <p>
               {t("agentDraft.publishDescription", { revision: held.revision, name: liveTitle })}
             </p>
+            <PublishOfferField
+              offer={offer}
+              value={offerValue}
+              disabled={busy === "publish"}
+              onValueChange={(next) => {
+                setOfferValue(next);
+                setPublishDependencies(false);
+              }}
+            />
             <MissingDependencies
-              dependencies={preflight ? undefined : reviewed}
+              dependencies={preflight ? undefined : listed}
               workspaceName={(id) =>
                 availability?.workspaces.find((workspace) => workspace.id === id)?.name
               }
