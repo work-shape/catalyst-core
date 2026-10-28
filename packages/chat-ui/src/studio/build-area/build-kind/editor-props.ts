@@ -63,6 +63,11 @@ export interface BuildAssetEditorProps {
    * the instance's own. What the asset may name is read from it and from the instance.
    */
   owner?: string;
+  /**
+   * Where the asset sits and, where it differs, who uses it, for the page head. Absent while a
+   * new asset is written.
+   */
+  place?: ReactNode;
   /** The way back to the kind's list, for the start of the page head. */
   back: ReactNode;
   /** The page's own actions, for the end of the page head: History and the menu with Delete. */

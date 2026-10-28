@@ -20,6 +20,7 @@ import { AGENTS_BUILD_PATH } from "../../shared/build-route";
 import { useConnectionToolChoice } from "./connection-tools";
 import { useKnowledgeBaseSource } from "./knowledge-base-source";
 import { useOwnedChoices } from "./owned-choices";
+import { assetPlace, useKnownWorkspaces } from "./asset-place";
 import { skillFacts } from "./skill-facts";
 
 /** How many skills of each owner one page of an agent's chooser asks the instance for. */
@@ -94,6 +95,48 @@ function AgentAssetEditor(frame: BuildAssetEditorProps) {
     { kind: "skill", owner, search: skillSearch, limit: SKILL_CHOICE_PAGE_SIZE },
     (skill) => ({ name: skill.name, title: skill.title, ...skillFacts(skill) })
   ).choices;
+  // The reader's own skills, which an agent of everyone or of a team cannot use: the chooser
+  // shows them greyed with the reason, so nobody wonders where they went (SCOPE-WORDS).
+  const workspaces = useKnownWorkspaces();
+  const mine = workspaces.find((workspace) => workspace.personal)?.id;
+  const otherPlace = mine !== undefined && owner !== mine;
+  const ownSkills = useQuery({
+    queryKey: [
+      ...workspaceQueryKeys.assets(apiBaseUrl, authScope),
+      "choice",
+      "skill",
+      "mine",
+      mine ?? "",
+      skillSearch
+    ],
+    queryFn: ({ signal }) =>
+      client.assets.list({
+        params: { kind: "skill" },
+        query: {
+          limit: SKILL_CHOICE_PAGE_SIZE,
+          workspaceId: mine ?? "",
+          ...(skillSearch ? { text: skillSearch } : {})
+        },
+        signal
+      }),
+    enabled: otherPlace,
+    retry: false
+  });
+  const ownerName =
+    owner === undefined
+      ? undefined
+      : assetPlace({ kind: "workspace", workspaceId: owner }, workspaces, t).name;
+  const unusable = otherPlace
+    ? (ownSkills.data?.items ?? []).map((skill) => ({
+        name: skill.name,
+        title: skill.title,
+        ...skillFacts(skill),
+        reason:
+          ownerName === undefined
+            ? t("build.skillOnlyMine")
+            : t("build.skillOnlyMineIn", { workspace: ownerName })
+      }))
+    : [];
   // The Knowledge Bases are offered where the instance has the kind: its module is on.
   const context = usePlatformContextQuery({ ...api, enabled: true }).data;
   const knowledgeOn = context?.kinds.some((kind) => kind.kind === "knowledge_base") ?? false;
@@ -178,7 +221,8 @@ function AgentAssetEditor(frame: BuildAssetEditorProps) {
       skillChoice={{
         options: skills?.items ?? [],
         ...(skills?.more === undefined ? {} : { more: skills.more }),
-        onSearch: (text) => setSkillSearch(text.trim())
+        onSearch: (text) => setSkillSearch(text.trim()),
+        unusable
       }}
       knowledgeChoice={
         knowledgeOn

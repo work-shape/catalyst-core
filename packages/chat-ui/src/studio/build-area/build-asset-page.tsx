@@ -49,7 +49,14 @@ import {
   usePublishQuestion
 } from "./build-publish-question";
 import { readBuildRefusal, readRefusalDetails, type BuildWriteOutcome } from "./build-refusals";
-import { AGENT_ASSET_KIND, buildWorkspaceName, type BuildRights } from "../../shared/build-rights";
+import { AGENT_ASSET_KIND, type BuildRights } from "../../shared/build-rights";
+import {
+  AssetPlaceLine,
+  agentAudience,
+  assetPlace,
+  refusalPlaceOf,
+  useKnownWorkspaces
+} from "./asset-place";
 
 /**
  * Whether a publish was refused because what it processes or embeds again changed after the
@@ -234,6 +241,7 @@ function useCreate({
   onCreated(name: string): void;
 }): (content: AssetContent, dependencyConsent?: DependencyConsent) => Promise<BuildWriteOutcome> {
   const { locale, t } = useTranslation();
+  const refusalPlace = refusalPlaceOf(useKnownWorkspaces());
   return async (written, dependencyConsent) => {
     // A page opened empty makes the id from the name the reader gave.
     const name = start.name || createdName(entry.kind, written, locale);
@@ -283,7 +291,7 @@ function useCreate({
       onCreated(name);
       return { ok: true, revision: stored.revision };
     } catch (error) {
-      const outcome = readBuildRefusal(error, t, locale);
+      const outcome = readBuildRefusal(error, t, locale, refusalPlace);
       // A create that meets a conflict found the id taken, or held by a deleted asset
       // whose history the reader may not read.
       return !outcome.ok && outcome.conflict
@@ -592,15 +600,25 @@ function LoadedAssetPage({
   const shipped = shippedTitle !== undefined;
   const owner = stored.scope.kind === "workspace" ? stored.scope.workspaceId : undefined;
   const canWrite = !shipped && mayOnAsset(source.rights, "write", stored);
-  const workspaceName =
-    owner === undefined
-      ? undefined
-      : buildWorkspaceName(source.rights, owner, t("build.scopePersonal"));
+  const workspaces = useKnownWorkspaces();
+  const place = assetPlace(stored.scope, workspaces, t);
   const readOnlyReason = shipped
     ? t("build.readOnlyPlatform")
-    : workspaceName !== undefined
-      ? t("build.readOnlyWorkspace", { workspace: workspaceName })
-      : t("build.readOnlyInstance");
+    : place.rung === "workspace"
+      ? t("build.readOnlyWorkspace", { workspace: place.name })
+      : place.rung === "all"
+        ? t("build.readOnlyInstance")
+        : t("build.readOnly");
+  // Where the asset sits and, for an agent offered more narrowly, who uses it: in the head.
+  const placeLine = (
+    <AssetPlaceLine
+      owner={stored.scope}
+      audience={
+        entry.kind === AGENT_ASSET_KIND ? agentAudience(stored, workspaces, t, locale) : undefined
+      }
+    />
+  );
+  const refusalPlace = refusalPlaceOf(workspaces);
   const canDelete = !shipped && state.canDelete && mayOnAsset(source.rights, "delete", stored);
   // A kind with drafts answers its two pointers. The saved draft is ahead of what is
   // published, or nothing is published yet.
@@ -630,7 +648,7 @@ function LoadedAssetPage({
 
   /** Reads what a write was refused for, and remembers a conflict for the notice. */
   const refusalOf = (error: unknown): BuildWriteOutcome => {
-    const outcome = readBuildRefusal(error, t, locale);
+    const outcome = readBuildRefusal(error, t, locale, refusalPlace);
     // A draft somebody else wrote is the agent page's to say: the live agent may be as read.
     if (!outcome.ok && outcome.conflict && !outcome.draft) {
       setConflict((known) => (outcome.deleted ? "deleted" : (known ?? "saved")));
@@ -722,7 +740,7 @@ function LoadedAssetPage({
       setStored({ ...stored, ...pointers });
       setFailure(undefined);
     } catch (error) {
-      const outcome = readBuildRefusal(error, t, locale);
+      const outcome = readBuildRefusal(error, t, locale, refusalPlace);
       setFailure(
         confirmation && confirmationOutdated(error)
           ? t("build.publishConfirmationChanged")
@@ -778,6 +796,7 @@ function LoadedAssetPage({
           ) : undefined
         }}
         {...(owner === undefined ? {} : { owner })}
+        place={placeLine}
         onUnsavedChange={heardUnsaved}
         actions={{
           primaryAction: canPublish ? (

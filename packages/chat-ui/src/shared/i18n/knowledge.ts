@@ -2,10 +2,10 @@ import { defineTranslations } from "./translation-area";
 
 export const knowledge = defineTranslations({
   en: {
-    "knowledge.kind": "Knowledge bases",
+    "knowledge.kind": "Knowledge",
     "knowledge.description":
       "A knowledge base holds documents, or describes tables of a data store. An agent that has it answers from them and says where the answer comes from.",
-    "knowledge.search": "Search knowledge bases",
+    "knowledge.search": "Search knowledge",
     "knowledge.new": "New knowledge base",
     "knowledge.titleLabel": "Name",
     "knowledge.create": "Create knowledge base",
@@ -158,9 +158,9 @@ export const knowledge = defineTranslations({
     "knowledge.agentNone": "No knowledge base chosen.",
     "knowledge.agentChoose": "Choose knowledge bases",
     "knowledge.agentNoteWorkspace":
-      "Lists the knowledge bases of this agent's workspace and of the instance. One of another workspace is not offered here.",
+      "Lists the knowledge bases of this agent's workspace and those for everyone. One of another workspace is not offered here.",
     "knowledge.agentNoteInstance":
-      "Lists the instance's knowledge bases. One that a workspace owns is not offered here.",
+      "Lists the knowledge bases for everyone. One that belongs to a workspace is not offered here.",
     "knowledge.agentUnpublished": "Not published yet: it answers once it is published",
     "knowledge.fromLabel": "Where does its knowledge come from?",
     "knowledge.fromUpload": "Upload files",
@@ -174,8 +174,9 @@ export const knowledge = defineTranslations({
       "Files you add: {formats}. Agents search them for words.",
     "knowledge.holdsDocumentsDescriptionSemantic":
       "Files you add: {formats}. Agents search them by meaning and for words.",
-    "knowledge.holdsTables": "Tables of a data store",
-    "knowledge.holdsTablesDescription": "Agents read the rows of the tables you describe with SQL.",
+    "knowledge.holdsTables": "Knowledge from your data",
+    "knowledge.holdsTablesDescription":
+      "It describes tables of a data store. Agents read their rows with SQL.",
     "knowledge.sourceDocumentsDescription":
       "It keeps its documents in a store of its own and searches them for words. You add files under Documents, and folders through a synced source.",
     "knowledge.sourceDocumentsDescriptionSemantic":
@@ -288,10 +289,10 @@ export const knowledge = defineTranslations({
     "knowledge.addedMany": "{count} documents added. They are being indexed."
   },
   de: {
-    "knowledge.kind": "Wissensbasen",
+    "knowledge.kind": "Wissen",
     "knowledge.description":
       "Eine Wissensbasis enthält Dokumente oder beschreibt Tabellen eines Datenspeichers. Ein Agent, der sie hat, antwortet daraus und sagt, woher die Antwort kommt.",
-    "knowledge.search": "Wissensbasen durchsuchen",
+    "knowledge.search": "Wissen durchsuchen",
     "knowledge.new": "Neue Wissensbasis",
     "knowledge.titleLabel": "Name",
     "knowledge.create": "Wissensbasis anlegen",
@@ -447,9 +448,9 @@ export const knowledge = defineTranslations({
     "knowledge.agentNone": "Keine Wissensbasis gewählt.",
     "knowledge.agentChoose": "Wissensbasen wählen",
     "knowledge.agentNoteWorkspace":
-      "Hier stehen die Wissensbasen aus dem Arbeitsbereich dieses Agenten und die der Instanz. Eine aus einem anderen Arbeitsbereich steht hier nicht zur Wahl.",
+      "Hier stehen die Wissensbasen aus dem Arbeitsbereich dieses Agenten und die für alle. Eine aus einem anderen Arbeitsbereich steht hier nicht zur Wahl.",
     "knowledge.agentNoteInstance":
-      "Hier stehen die Wissensbasen der Instanz. Eine, die einem Arbeitsbereich gehört, steht hier nicht zur Wahl.",
+      "Hier stehen die Wissensbasen für alle. Eine, die einem Arbeitsbereich gehört, steht hier nicht zur Wahl.",
     "knowledge.agentUnpublished":
       "Noch nicht veröffentlicht: Sie antwortet, sobald sie veröffentlicht ist",
     "knowledge.fromLabel": "Woher kommt ihr Wissen?",
@@ -464,9 +465,9 @@ export const knowledge = defineTranslations({
       "Dateien, die du hinzufügst: {formats}. Agenten durchsuchen sie nach Wörtern.",
     "knowledge.holdsDocumentsDescriptionSemantic":
       "Dateien, die du hinzufügst: {formats}. Agenten durchsuchen sie nach Bedeutung und nach Wörtern.",
-    "knowledge.holdsTables": "Tabellen eines Datenspeichers",
+    "knowledge.holdsTables": "Wissen aus deinen Daten",
     "knowledge.holdsTablesDescription":
-      "Agenten lesen die Zeilen der Tabellen, die du beschreibst, mit SQL.",
+      "Sie beschreibt Tabellen eines Datenspeichers. Agenten lesen deren Zeilen mit SQL.",
     "knowledge.sourceDocumentsDescription":
       "Sie hält ihre Dokumente in einem eigenen Speicher und durchsucht sie nach Wörtern. Dateien fügst du unter Dokumente hinzu, Ordner über eine synchronisierte Quelle.",
     "knowledge.sourceDocumentsDescriptionSemantic":

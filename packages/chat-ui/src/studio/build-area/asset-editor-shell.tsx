@@ -25,6 +25,7 @@ import {
   type BuildWriteOutcome
 } from "./build-refusals";
 import { scrollToSection } from "./build-scroll";
+import { AssetPlaceRow } from "./asset-place";
 
 type AssetLanguage = keyof LocalizedPair;
 
@@ -266,6 +267,7 @@ export function AssetEditorShell({
         noValidate={!canWrite}
         onSubmit={submit}
       >
+        {frame.place === undefined ? null : <AssetPlaceRow>{frame.place}</AssetPlaceRow>}
         {canWrite ? null : (
           <Banner tone="info" className="mb-3" data-build-read-only="">
             {readOnlyReason ?? t("build.readOnly")} <DocsReference to="buildReadOnly" />

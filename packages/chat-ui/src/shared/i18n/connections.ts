@@ -202,8 +202,6 @@ export const connections = defineTranslations({
     "connections.operationsDescription":
       "What this connection can do in the outside system, and who may call it.",
     "connections.operationsEmpty": "This connection has no accepted operation.",
-    "connections.scopeInstance": "Instance",
-    "connections.scopeWorkspace": "Workspace",
     "connections.search": "Search connections",
     "connections.settingsTitle": "Settings",
     "connections.settingsDescription":
@@ -482,8 +480,6 @@ export const connections = defineTranslations({
     "connections.operationsDescription":
       "Was diese Verbindung im externen System tun kann und wer es aufrufen darf.",
     "connections.operationsEmpty": "Diese Verbindung hat keine akzeptierte Operation.",
-    "connections.scopeInstance": "Instanz",
-    "connections.scopeWorkspace": "Arbeitsbereich",
     "connections.search": "Verbindungen durchsuchen",
     "connections.settingsTitle": "Einstellungen",
     "connections.settingsDescription":

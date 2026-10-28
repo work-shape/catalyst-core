@@ -489,7 +489,7 @@ describe("Knowledge Bases of documents", () => {
       expect(label).toBeDefined();
       expect(page).toContain("Where does its knowledge come from?");
       expect(page).toMatch(new RegExp(`id="${label}" class="text-label">.*?Upload files<`, "u"));
-      expect(page).toContain("Tables of a data store");
+      expect(page).toContain("Knowledge from your data");
       expect(page).not.toContain("Choose a data store");
       // It goes live on create: no section waits for a publish, and the save bar says so.
       expect(page).toContain("Goes live when it is created, available in no workspace");

@@ -4,7 +4,7 @@ import { demoCompany } from "@work-shape/catalyst-demo/seed";
 
 // ACCEPT-1c: asked for a personal reminder, the demo's agent named it `hr-weekly-document-reminder`.
 // The agent reads the places it may build in by their names (platform context), and the demo
-// called its HR place "Personal", the word the interface uses for a person's own scope. No
+// called its HR place "Personal", then the word the interface used for a person's own scope. No
 // Shared Workspace the demo seeds may be named like that scope in either language.
 
 /** Every Shared Workspace the demo's company seeds, by the name people and the agent read. */
@@ -22,7 +22,7 @@ const workspaceNames = Object.values(demoCompany).flatMap((value: unknown) =>
 describe("the workspaces of the demo", () => {
   it("are never named like a person's own scope", () => {
     const scope = [createTranslationContext("en"), createTranslationContext("de")].map(({ t }) =>
-      t("build.scopePersonal").toLocaleLowerCase()
+      t("build.placeMine").toLocaleLowerCase()
     );
     expect(workspaceNames).toContain(demoCompany.hrWorkspace.name);
     for (const name of workspaceNames) {

@@ -78,11 +78,20 @@ export const refusals = defineTranslations({
     "refusals.liveMoved":
       "Who the app is live for changed in the meantime. Check it again, then publish.",
     "refusals.referenceOutOfScope":
-      "This uses something from another workspace. It may only use what belongs to its own workspace or to the whole instance.",
+      "This uses something from another workspace. It can only use what belongs to its own workspace or is for everyone. Make that item there, or ask an admin to.",
     "refusals.referenceOnlyMine":
       "This uses something that is “Only me”. What a team or everyone uses may not rely on it. Create it in the team or for everyone, or ask an admin.",
     "refusals.offerOnlyMine":
       "This is “Only me”, so it cannot be offered to a team or to everyone. Create it in the team or for everyone, or ask an admin.",
+    "refusals.referenceForAll":
+      "This is for everyone, but it uses {target}. Something for everyone can only use what is for everyone too. Make that item under “Everyone”, or ask an admin to.",
+    "refusals.referenceForWorkspace":
+      "This belongs to {source} and uses {target}. It can only use what belongs to {source} or is for everyone. Make that item in {source}, or ask an admin to.",
+    "refusals.referenceForMine":
+      "This is yours alone and uses {target}. It can only use what is yours or for everyone. Make that item under “Only me”.",
+    "refusals.referenceTargetMine": "something only you have",
+    "refusals.referenceTargetWorkspace": "something of {workspace}",
+    "refusals.referenceTargetOther": "something of another workspace",
     "refusals.publishSubjectUnreadable":
       "This request does not say what it publishes, so nobody can decide it.",
     "refusals.inputTooLargeToHold":
@@ -174,11 +183,20 @@ export const refusals = defineTranslations({
     "refusals.liveMoved":
       "Für wen die App live ist, hat sich inzwischen geändert. Prüfe es noch einmal und veröffentliche dann.",
     "refusals.referenceOutOfScope":
-      "Das nutzt etwas aus einem anderen Arbeitsbereich. Es darf nur nutzen, was zum eigenen Arbeitsbereich oder zur ganzen Instanz gehört.",
+      "Das verwendet etwas aus einem anderen Arbeitsbereich. Es kann nur verwenden, was zum eigenen Arbeitsbereich gehört oder für alle ist. Lege es dort an oder bitte einen Admin darum.",
     "refusals.referenceOnlyMine":
       "Das nutzt etwas, das „Nur ich“ ist. Was ein Team oder Alle nutzen, darf sich nicht darauf stützen. Lege es im Team oder für Alle an, oder bitte einen Admin darum.",
     "refusals.offerOnlyMine":
       "Das ist „Nur ich“ und kann darum keinem Team und nicht Allen angeboten werden. Lege es im Team oder für Alle an, oder bitte einen Admin darum.",
+    "refusals.referenceForAll":
+      "Das ist für alle, verwendet aber {target}. Was für alle ist, kann nur verwenden, was auch für alle ist. Lege es unter „Alle“ an oder bitte einen Admin darum.",
+    "refusals.referenceForWorkspace":
+      "Das gehört zu {source} und verwendet {target}. Es kann nur verwenden, was zu {source} gehört oder für alle ist. Lege es in {source} an oder bitte einen Admin darum.",
+    "refusals.referenceForMine":
+      "Das gehört nur dir und verwendet {target}. Es kann nur verwenden, was dir gehört oder für alle ist. Lege es unter „Nur ich“ an.",
+    "refusals.referenceTargetMine": "etwas, das nur dir gehört",
+    "refusals.referenceTargetWorkspace": "etwas aus {workspace}",
+    "refusals.referenceTargetOther": "etwas aus einem anderen Arbeitsbereich",
     "refusals.publishSubjectUnreadable":
       "Diese Anfrage sagt nicht, was sie veröffentlicht. Darum kann niemand sie entscheiden.",
     "refusals.inputTooLargeToHold":

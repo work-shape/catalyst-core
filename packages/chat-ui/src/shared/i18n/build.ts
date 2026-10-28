@@ -85,12 +85,19 @@ export const build = defineTranslations({
       "An asset with the id {name} was deleted, and you may not read its history. Go back and choose another one.",
     "build.nameTaken": "The id {name} is taken. Go back and choose another one.",
     "build.openHistory": "Open history",
-    "build.scopeFilter": "Scope",
-    "build.scopeInstance": "Instance",
-    "build.scopePersonal": "Personal",
+    "build.placeFilter": "Where",
+    "build.placeAll": "Everyone",
+    "build.placeMine": "Only me",
+    "build.placeOtherWorkspace": "Another workspace",
+    "build.usedIn": "Used in {names}",
+    "build.usedNowhere": "Offered nowhere yet",
+    "build.usedByEachOwn": "everyone for themselves",
+    "build.usedWithRight": "Only people with the right to use it",
+    "build.skillOnlyMine": "Only yours. An agent for everyone cannot use it.",
+    "build.skillOnlyMineIn": "Only yours. An agent of {workspace} cannot use it.",
     "build.noAccess":
       "Studio is not available to you. It opens for people who hold a right on an agent or a skill.",
-    "build.noneInScope": "Nothing in {scope} yet.",
+    "build.noneInPlace": "Nothing under “{place}” yet.",
     "build.noSkillsChosen": "No skills chosen.",
     "build.platform": "Platform",
     "build.pendingApproval":
@@ -101,9 +108,9 @@ export const build = defineTranslations({
     "build.saveWaits": "Saving sends a request. It takes effect only once it is approved.",
     "build.saveWaitsFor": "Saving sends a request. It takes effect once {names} approves it.",
     "build.readOnlyInstance":
-      "Belongs to the instance. Only a person who may edit on the whole instance can change it.",
+      "This is for everyone. Only a person who may build for everyone can change it.",
     "build.readOnlyWorkspace":
-      "Belongs to the workspace {workspace}. Only a person who may edit in this workspace can change it.",
+      "Belongs to {workspace}. Only a person who may build in {workspace} can change it.",
     "build.readOnlyPlatform":
       "Ships with the platform and is updated with each release. To change it, copy it and edit the copy.",
     "build.restored": "Version {number} restored.",
@@ -256,12 +263,19 @@ export const build = defineTranslations({
       "Ein Asset mit der Kennung {name} wurde gelöscht, und du darfst seinen Verlauf nicht lesen. Geh zurück und wähle eine andere.",
     "build.nameTaken": "Die Kennung {name} ist vergeben. Geh zurück und wähle eine andere.",
     "build.openHistory": "Verlauf öffnen",
-    "build.scopeFilter": "Geltungsbereich",
-    "build.scopeInstance": "Instanz",
-    "build.scopePersonal": "Persönlich",
+    "build.placeFilter": "Wo",
+    "build.placeAll": "Alle",
+    "build.placeMine": "Nur ich",
+    "build.placeOtherWorkspace": "Anderer Arbeitsbereich",
+    "build.usedIn": "Genutzt in {names}",
+    "build.usedNowhere": "Noch nirgends angeboten",
+    "build.usedByEachOwn": "jeder für sich",
+    "build.usedWithRight": "Nur wer das Recht dazu hat",
+    "build.skillOnlyMine": "Gehört nur dir. Ein Agent für alle kann ihn nicht verwenden.",
+    "build.skillOnlyMineIn": "Gehört nur dir. Ein Agent von {workspace} kann ihn nicht verwenden.",
     "build.noAccess":
       "Studio steht dir nicht zur Verfügung. Es öffnet sich für Personen mit einem Recht an einem Agenten oder einem Skill.",
-    "build.noneInScope": "Noch nichts in {scope}.",
+    "build.noneInPlace": "Unter „{place}“ gibt es noch nichts.",
     "build.noSkillsChosen": "Keine Skills ausgewählt.",
     "build.platform": "Plattform",
     "build.pendingApproval":
@@ -272,10 +286,9 @@ export const build = defineTranslations({
     "build.saveWaits": "Speichern schickt eine Anfrage. Wirksam wird sie erst nach einer Freigabe.",
     "build.saveWaitsFor":
       "Speichern schickt eine Anfrage. Wirksam wird sie erst nach Freigabe durch {names}.",
-    "build.readOnlyInstance":
-      "Gehört zur Instanz. Ändern kann es nur, wer in der ganzen Instanz bearbeiten darf.",
+    "build.readOnlyInstance": "Das ist für alle. Ändern kann es nur, wer für alle bauen darf.",
     "build.readOnlyWorkspace":
-      "Gehört zum Arbeitsbereich {workspace}. Ändern kann es nur, wer in diesem Arbeitsbereich bearbeiten darf.",
+      "Gehört zu {workspace}. Ändern kann es nur, wer in {workspace} bauen darf.",
     "build.readOnlyPlatform":
       "Kommt mit der Plattform und wird mit jedem Release aktualisiert. Um es zu ändern, kopiere es und bearbeite die Kopie.",
     "build.restored": "Version {number} wiederhergestellt.",

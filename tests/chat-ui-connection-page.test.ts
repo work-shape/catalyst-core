@@ -199,7 +199,7 @@ describe("Connection page", () => {
     // The head names the Connection only; its id is behind "Copy ID" in the head's menu.
     expect(markup).not.toContain(">Connection<");
     expect(markup).not.toContain(">sample-business<");
-    expect(markup).toContain(">Instance<");
+    expect(markup).toContain(">Everyone<");
     expect(markup).toContain(
       "This connection comes with the instance&#x27;s setup. The team that runs this instance changes it there; it cannot be changed here."
     );
@@ -229,7 +229,7 @@ describe("Connection page", () => {
         scope: { kind: "workspace", workspaceId: "ws_1" }
       }
     });
-    expect(other).toContain(">Workspace<");
+    expect(other).toContain(">Another workspace<");
     expect(other).toContain("This connection is disabled. Nothing can call it.");
     expect(markup).not.toContain("data-connection-disabled");
   });

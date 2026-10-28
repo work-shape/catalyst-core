@@ -284,7 +284,7 @@ describe("the refusals of the publish paths, in the reader's language", () => {
     );
     // Another Shared Workspace's asset keeps its sentence.
     expect(say({ reason: "invalid_scope", reference })).toBe(
-      "Das nutzt etwas aus einem anderen Arbeitsbereich. Es darf nur nutzen, was zum eigenen Arbeitsbereich oder zur ganzen Instanz gehört."
+      "Das verwendet etwas aus einem anderen Arbeitsbereich. Es kann nur verwenden, was zum eigenen Arbeitsbereich gehört oder für alle ist. Lege es dort an oder bitte einen Admin darum."
     );
     expect(say({ reason: "owner_reach" })).toBe(
       "Das ist „Nur ich“ und kann darum keinem Team und nicht Allen angeboten werden. Lege es im Team oder für Alle an, oder bitte einen Admin darum."

@@ -206,7 +206,7 @@ async function until(check: () => void): Promise<void> {
 }
 
 const scopeButton = () =>
-  document.querySelector<HTMLButtonElement>('button[aria-label^="Scope: "]');
+  document.querySelector<HTMLButtonElement>('button[aria-label^="Where: "]');
 const shown = (name: string) => document.body.textContent?.includes(name) ?? false;
 /** The reads of a page of the list, not the look whether an owner has any. */
 const pageReads = (reads: { owner: string; limit: string | null }[]) =>
@@ -218,7 +218,7 @@ describe("the owner Studio's Skills list opens on", () => {
     window.localStorage.setItem(STORAGE_KEY, PERSONAL);
     const page = await mountSkills({ instance: ["house-style"], personal: [] });
 
-    await until(() => expect(scopeButton()?.getAttribute("aria-label")).toBe("Scope: Instance"));
+    await until(() => expect(scopeButton()?.getAttribute("aria-label")).toBe("Where: Everyone"));
     await until(() => expect(shown("house-style")).toBe(true));
     // The empty list of the Personal Workspace was never read, so it never showed.
     expect(pageReads(page.reads)).toEqual(["instance"]);
@@ -229,13 +229,13 @@ describe("the owner Studio's Skills list opens on", () => {
   it("holds for Skills alone: Agents then opens where Studio is set (ACCEPT-2e C-1)", async () => {
     window.localStorage.setItem(STORAGE_KEY, PERSONAL);
     const page = await mountSkills({ instance: ["house-style"], personal: [] });
-    await until(() => expect(scopeButton()?.getAttribute("aria-label")).toBe("Scope: Instance"));
+    await until(() => expect(scopeButton()?.getAttribute("aria-label")).toBe("Where: Everyone"));
     await until(() => expect(shown("house-style")).toBe(true));
 
     await page.go("agents");
 
     await until(() => expect(page.agentReads).toContain(PERSONAL));
-    await until(() => expect(scopeButton()?.getAttribute("aria-label")).toBe("Scope: Personal"));
+    await until(() => expect(scopeButton()?.getAttribute("aria-label")).toBe("Where: Only me"));
     expect(page.agentReads).not.toContain("instance");
     expect(readLastBuildScope()).toBe(PERSONAL);
     // A new agent starts where Studio is set, under the Personal Workspace's own name.
@@ -245,11 +245,11 @@ describe("the owner Studio's Skills list opens on", () => {
         ?.click()
     );
     const availability = () => document.querySelector("[data-new-asset-availability]");
-    await until(() => expect(availability()?.textContent).toContain("Personal workspace"));
+    await until(() => expect(availability()?.textContent).toContain("Only me"));
     expect(availability()?.textContent).not.toContain("Felix Pahlke");
     // Back on Skills, the list still shows the owner it opened on.
     await page.go("skills");
-    await until(() => expect(scopeButton()?.getAttribute("aria-label")).toBe("Scope: Instance"));
+    await until(() => expect(scopeButton()?.getAttribute("aria-label")).toBe("Where: Everyone"));
   });
 
   it("stays the owner Studio is set to when that has some", async () => {
@@ -257,7 +257,7 @@ describe("the owner Studio's Skills list opens on", () => {
     const page = await mountSkills({ instance: ["house-style"], personal: ["my-notes"] });
 
     await until(() => expect(shown("my-notes")).toBe(true));
-    expect(scopeButton()?.getAttribute("aria-label")).toBe("Scope: Personal");
+    expect(scopeButton()?.getAttribute("aria-label")).toBe("Where: Only me");
     expect(pageReads(page.reads)).toEqual([PERSONAL]);
   });
 
@@ -266,27 +266,27 @@ describe("the owner Studio's Skills list opens on", () => {
     const page = await mountSkills({ instance: ["house-style"], personal: [] });
     await until(() => expect(shown("house-style")).toBe(true));
 
-    await pickScope("Personal");
+    await pickScope("Only me");
 
-    await until(() => expect(scopeButton()?.getAttribute("aria-label")).toBe("Scope: Personal"));
+    await until(() => expect(scopeButton()?.getAttribute("aria-label")).toBe("Where: Only me"));
     await until(() => expect(pageReads(page.reads)).toContain(PERSONAL));
     // Nothing moves the reader off the empty owner they chose.
     await act(async () => new Promise((resolve) => setTimeout(resolve, 50)));
-    expect(scopeButton()?.getAttribute("aria-label")).toBe("Scope: Personal");
+    expect(scopeButton()?.getAttribute("aria-label")).toBe("Where: Only me");
     expect(window.localStorage.getItem(STORAGE_KEY)).toBe(PERSONAL);
   });
 
   it("is the reader's pick on another list, when Skills opens after it", async () => {
     showOwnerInStudio(undefined);
     const page = await mountSkills({ instance: ["house-style"], personal: [] }, "agents");
-    await until(() => expect(scopeButton()?.getAttribute("aria-label")).toBe("Scope: Instance"));
-    await pickScope("Personal");
-    await until(() => expect(scopeButton()?.getAttribute("aria-label")).toBe("Scope: Personal"));
+    await until(() => expect(scopeButton()?.getAttribute("aria-label")).toBe("Where: Everyone"));
+    await pickScope("Only me");
+    await until(() => expect(scopeButton()?.getAttribute("aria-label")).toBe("Where: Only me"));
 
     await page.go("skills");
     await until(() => expect(pageReads(page.reads)).toContain(PERSONAL));
     await act(async () => new Promise((resolve) => setTimeout(resolve, 50)));
-    expect(scopeButton()?.getAttribute("aria-label")).toBe("Scope: Personal");
+    expect(scopeButton()?.getAttribute("aria-label")).toBe("Where: Only me");
     expect(shown("house-style")).toBe(false);
   });
 });
@@ -324,7 +324,7 @@ describe("a list other than Skills", () => {
 
     await until(() => expect(page.agentReads).toContain(PERSONAL));
     await act(async () => new Promise((resolve) => setTimeout(resolve, 50)));
-    expect(scopeButton()?.getAttribute("aria-label")).toBe("Scope: Personal");
+    expect(scopeButton()?.getAttribute("aria-label")).toBe("Where: Only me");
     expect(page.agentReads).not.toContain("instance");
     expect(shown("helper")).toBe(false);
   });

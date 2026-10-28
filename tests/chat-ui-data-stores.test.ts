@@ -464,14 +464,15 @@ describe("Data Stores in Build", () => {
       }
     );
 
-    expect(list).toContain('<option value="data-stores" selected="">Data stores</option>');
+    expect(list).toContain('<option value="data-stores" selected="">Data</option>');
     expect(list).toContain(">Visit log<");
     expect(list).toContain("Every visit of a page of the public site.");
     expect(list).toContain('href="/build/data-stores/visit-log"');
-    // One chip says whose a row is: "Personal" alone for the reader's own store.
-    expect(list).toContain(">Personal<");
+    // One chip says where each row sits, in the ladder's words: "Everyone" for the instance's
+    // store, "Only me" for the reader's own, and never a second chip of the kind.
+    expect(list.split(">Everyone<")).toHaveLength(2);
+    expect(list.split(">Only me<")).toHaveLength(2);
     expect(list).not.toContain(">Workspace<");
-    expect(list).not.toContain(">Instance<");
     expect(list).not.toContain(">visit-log<");
     for (const said of [
       'data-data-store-row-state="ready"',
@@ -567,13 +568,13 @@ describe("Data Stores in Build", () => {
 
     // Where a picker chooses the owner, an empty one offers the agent under the picker.
     const scoped = render({ kindPath: "data-stores" }, { scoped: true, buildWithAgent: noop });
-    expect(scoped).toContain('aria-label="Scope: Personal"');
+    expect(scoped).toContain('aria-label="Where: Only me"');
     expect(scoped).toContain(">Build one with the agent</button>");
     expect(scoped).toContain("Hours per project");
     expect(scoped).not.toContain("New data store");
 
     const off = render({ kindPath: "data-stores" }, { on: false });
-    expect(off).not.toContain("Data stores");
+    expect(off).not.toContain('value="data-stores"');
 
     expect(render({ kindPath: "data-stores" }, { locale: "de" })).toContain(
       "Noch keine Datenspeicher."

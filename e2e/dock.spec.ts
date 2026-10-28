@@ -175,7 +175,7 @@ async function openSharedWorkspace(page: Page, name: string): Promise<string> {
 /** Studio's Agents under one scope: the instance, or a workspace by its name. */
 async function agentsUnder(page: Page, scope: string): Promise<void> {
   await page.goto("/build/agents");
-  const picker = page.getByRole("button", { name: /^(?:Scope|Geltungsbereich): / });
+  const picker = page.getByRole("button", { name: /^(?:Where|Wo): / });
   await picker.click();
   await page.getByRole("option", { name: scope, exact: true }).click();
   await expect(picker).toHaveAccessibleName(new RegExp(`: ${scope}$`, "u"));
@@ -200,7 +200,7 @@ test("Chat opens the dock from a list, and brings its conversation back after a 
     await expect(chatColumn(page)).toHaveAttribute("data-chat-mode", "dock");
     await expect(chatColumn(page)).toContainText("What should the new agent do?");
     await expect(chatColumn(page).locator("[data-dock-creation-target]")).toHaveText(
-      `New agents are created in “${team}”.`
+      `New agents are created under “${team}”.`
     );
     // The page head offers no second Chat while the dock is open.
     await expect(studioChatAction(page)).toHaveCount(0);
