@@ -118,7 +118,7 @@ export async function pushConfig(options: ConfigCommandOptions): Promise<number>
     ) {
       writeError(
         options,
-        `The skill draft changed. Read it again before saving. (${asset.key}) Run 'catalyst config pull' first, then push again.`
+        `The skill draft changed. Read it again before saving. (${asset.key}) Commit or stash local edits in git first: the pull overwrites the local files. Run 'catalyst config pull' first, then push again.`
       );
       return 1;
     }
