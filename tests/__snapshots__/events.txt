@@ -138,6 +138,7 @@
 {"name":"project.created","legacy":false,"audited":true,"phases":["after"]}
 {"name":"project.file_purged","legacy":false,"audited":true,"phases":["after"]}
 {"name":"project.instructions_read","legacy":false,"audited":true,"phases":["after"]}
+{"name":"project.setup_changed","legacy":false,"audited":true,"phases":["after"]}
 {"name":"role.created","legacy":true,"audited":true,"phases":["after"]}
 {"name":"role.deleted","legacy":true,"audited":true,"phases":["after"]}
 {"name":"role.pending_decided","legacy":true,"audited":true,"phases":["after"]}

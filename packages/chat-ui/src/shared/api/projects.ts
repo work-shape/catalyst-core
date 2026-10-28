@@ -1,9 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback } from "react";
 import {
   completedOutput,
   type ApiClient,
   type ConversationListItem,
   type ProjectAudienceView,
+  type ProjectSetupView,
   type ProjectView
 } from "@work-shape/catalyst-api-client";
 import { WORKSPACE_AUTH_SCOPE } from "../../chat/workspace/workspace-chat-state";
@@ -29,7 +31,9 @@ const projectQueryKeys = {
   mine: (apiBaseUrl: string) => ["projects", apiBaseUrl, "mine"] as const,
   one: (apiBaseUrl: string, name: string) => ["projects", apiBaseUrl, "one", name] as const,
   conversations: (apiBaseUrl: string, projectId: string) =>
-    ["projects", apiBaseUrl, "conversations", projectId] as const
+    ["projects", apiBaseUrl, "conversations", projectId] as const,
+  setup: (apiBaseUrl: string, projectId: string) =>
+    ["projects", apiBaseUrl, "setup", projectId] as const
 };
 
 /** The projects of the workspace the person is in the audience of, newest change first. */
@@ -157,6 +161,50 @@ export function useSetConversationProjectMutation(heldMessage: string) {
           queryKey: workspaceQueryKeys.thread(apiBaseUrl, WORKSPACE_AUTH_SCOPE, conversation.id)
         })
         .catch(() => undefined);
+    }
+  });
+}
+
+/**
+ * A project's default agent and skills (PRJ-7), with the agents and skills the person may choose
+ * for it: those the project's audience cannot use come greyed, with the reason.
+ */
+export function useProjectSetupQuery(projectId: string | undefined) {
+  const { apiBaseUrl, client } = useWorkspaceApiClient();
+  return useQuery({
+    queryKey: projectQueryKeys.setup(apiBaseUrl, projectId ?? ""),
+    queryFn: ({ signal }) =>
+      requireClient(client).projects.setup.get({ params: { projectId: projectId ?? "" }, signal }),
+    enabled: client !== undefined && projectId !== undefined
+  });
+}
+
+/** Reads a project's choices again, after an asset moved and may now be usable there. */
+export function useRefreshProjectSetup() {
+  const { apiBaseUrl } = useWorkspaceApiClient();
+  const queryClient = useQueryClient();
+  return useCallback(
+    (projectId: string) => {
+      queryClient
+        .invalidateQueries({ queryKey: projectQueryKeys.setup(apiBaseUrl, projectId) })
+        .catch(() => undefined);
+    },
+    [apiBaseUrl, queryClient]
+  );
+}
+
+/** Sets a project's default agent and skills; the answer is the project's setup as it is now. */
+export function useSetProjectSetupMutation(projectId: string, heldMessage: string) {
+  const { apiBaseUrl, client } = useWorkspaceApiClient();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { defaultAgent: string | null; skills: string[] }) =>
+      completedOutput(
+        await requireClient(client).projects.setup.set({ params: { projectId }, body: input }),
+        heldMessage
+      ),
+    onSuccess: (setup: ProjectSetupView) => {
+      queryClient.setQueryData(projectQueryKeys.setup(apiBaseUrl, projectId), setup);
     }
   });
 }

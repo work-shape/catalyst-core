@@ -131,7 +131,7 @@ export function ProjectInstructionsTile({ project }: { project: ProjectView }) {
     <>
       <Card
         padding="md"
-        className="mb-8 min-w-0"
+        className="min-w-0"
         data-testid="project-instructions-tile"
         data-state={file ? "written" : "empty"}
       >

@@ -68,9 +68,9 @@ export interface ConversationOffer {
   subject?: ConversationSubject;
   toolNames: readonly string[];
   /**
-   * The skills that ship with the platform and are offered here, by name. They are stored
-   * skills like any other and read from the store: a skill a release no longer ships is
-   * offered nowhere.
+   * The skills that ship with the platform and are offered here, and those the chat's project
+   * attaches (PRJ-7), by name. They are stored skills like any other and read from the store:
+   * a skill a release no longer ships is offered nowhere.
    */
   skillNames: readonly string[];
   /**

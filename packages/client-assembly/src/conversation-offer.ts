@@ -35,6 +35,7 @@ import {
   type PlatformStores,
   type ProjectFolderPort,
   type ProjectInstructions,
+  type ProjectSkillsPort,
   type AuditRecorder,
   auditActorFromUser,
   PROJECT_INSTRUCTIONS_PATH,
@@ -165,6 +166,8 @@ interface ConversationOfferInput {
   hasTool(toolName: string): boolean;
   /** The folder of the project a chat is in (PRJ-2): its manifest goes into the run's prompt. */
   projectFolder?: () => ProjectFolderPort | undefined;
+  /** The skills of the project a chat is in (PRJ-7): offered beside its agent's own. */
+  projectSkills?: () => ProjectSkillsPort | undefined;
   /** Where a run's read of the project's instructions is audited, by project and version. */
   audit?: AuditRecorder;
   /**
@@ -233,9 +236,30 @@ async function personalSkillNames(
   request: OfferRequest,
   conversation: OfferedConversation
 ): Promise<string[]> {
+  const person = await ownRunPerson(input, request, conversation);
+  if (person === undefined || !input.stores.configAssets) return [];
+  return (
+    await input.stores.configAssets.listPersonalChatSkills({
+      clientInstanceId: request.clientInstanceId,
+      userId: person
+    })
+  )
+    .filter((skill) => skill.inMyChats)
+    .map((skill) => skill.name);
+}
+
+/**
+ * The person of a run that may be offered what is theirs alone (SCOPE-MYCHATS): the rules of
+ * `personalSkillNames`. Nothing for any other run.
+ */
+async function ownRunPerson(
+  input: ConversationOfferInput,
+  request: OfferRequest,
+  conversation: OfferedConversation
+): Promise<string | undefined> {
   const { user, runId, clientInstanceId } = request;
   const { agentRuns, configAssets, workspaces } = input.stores;
-  if (!user || !runId || !agentRuns || !configAssets || !workspaces) return [];
+  if (!user || !runId || !agentRuns || !configAssets || !workspaces) return undefined;
   // Only a chat no one but its person reads, as for a personal Connection: one they created,
   // in their own Personal Workspace or private. A team-visible chat, or one another person
   // created, gets none, as the skill's text would reach its other readers.
@@ -243,7 +267,7 @@ async function personalSkillNames(
     clientInstanceId,
     conversation.collaborationWorkspaceId
   );
-  if (!mayUseOwnInChat(user, conversation, workspace)) return [];
+  if (!mayUseOwnInChat(user, conversation, workspace)) return undefined;
   const person = getSubjectUserId(user);
   const run = await agentRuns.getAgentRun({ clientInstanceId, runId });
   const authorization = run?.authorization;
@@ -261,11 +285,34 @@ async function personalSkillNames(
     authorization.principal.kind !== "user" ||
     authorization.principal.id !== person
   ) {
-    return [];
+    return undefined;
   }
-  return (await configAssets.listPersonalChatSkills({ clientInstanceId, userId: person }))
-    .filter((skill) => skill.inMyChats)
-    .map((skill) => skill.name);
+  return person;
+}
+
+/**
+ * The skills of the chat's project (PRJ-7): those its audience may use, and the person's own
+ * only where the run may be offered what is theirs alone, as their own chats are. Reading one
+ * of those marks the chat personal, as `read_skill` marks any of the person's own.
+ */
+async function projectSkillNames(
+  input: ConversationOfferInput,
+  request: OfferRequest,
+  conversation: OfferedConversation
+): Promise<{ shared: string[]; own: string[] }> {
+  const port = input.projectSkills?.();
+  if (!port) return { shared: [], own: [] };
+  const skills = await port.skillsOf({
+    clientInstanceId: request.clientInstanceId,
+    conversationId: request.conversationId,
+    ...(request.user ? { user: request.user } : {})
+  });
+  if (!skills) return { shared: [], own: [] };
+  const own =
+    skills.own.length > 0 && (await ownRunPerson(input, request, conversation)) !== undefined
+      ? skills.own
+      : [];
+  return { shared: skills.shared, own };
 }
 
 /**
@@ -313,9 +360,22 @@ function createConversationOffer(input: ConversationOfferInput): ConversationOff
       const holds = holdsPlatformTools(agentToolNames);
       // A skill nobody can read is not listed: it would promise what no tool answers.
       const readsSkills = input.hasTool(READ_SKILL_TOOL);
-      const skillNames = holds && readsSkills ? offeredSkillNames(subject, input.modules) : [];
+      const project = readsSkills
+        ? await projectSkillNames(input, request, conversation)
+        : { shared: [], own: [] };
+      const skillNames = [
+        ...new Set([
+          ...(holds && readsSkills ? offeredSkillNames(subject, input.modules) : []),
+          ...project.shared
+        ])
+      ];
       const ownSkillNames = readsSkills
-        ? await personalSkillNames(input, request, conversation)
+        ? [
+            ...new Set([
+              ...(await personalSkillNames(input, request, conversation)),
+              ...project.own
+            ])
+          ]
         : [];
       const subjectRowNames =
         holds && subject?.kind === DATA_STORE_ASSET_KIND
@@ -535,6 +595,7 @@ export function createPlatformTools(
     | "policy"
     | "toolRights"
     | "projectFolder"
+    | "projectSkills"
     | "audit"
   > & {
     /**
@@ -615,6 +676,7 @@ export function createPlatformTools(
       ...(input.policy ? { policy: input.policy } : {}),
       ...(input.toolRights ? { toolRights: input.toolRights } : {}),
       ...(input.projectFolder ? { projectFolder: input.projectFolder } : {}),
+      ...(input.projectSkills ? { projectSkills: input.projectSkills } : {}),
       ...(input.audit ? { audit: input.audit } : {}),
       authorizer: () => attached.authorizer,
       hasTool: (toolName) => attached.tools?.has(toolName) ?? false

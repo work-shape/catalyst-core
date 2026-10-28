@@ -48,6 +48,7 @@ import { registerPersonalApiKeyRoutes } from "./routes/personal-api-key-routes";
 import { registerFeedbackRoutes } from "./feedback/feedback-routes";
 import { registerProjectRoutes } from "./projects/project-routes";
 export { ProjectFileService } from "./projects/project-files";
+export { ProjectSetupService } from "./projects/project-setup";
 import { registerPlatformReportRoutes } from "./platform-report/platform-report-routes";
 import { registerUsageLimitRoutes } from "./usage/usage-limits-routes";
 import { registerUsageReportRoutes } from "./usage/usage-report-routes";

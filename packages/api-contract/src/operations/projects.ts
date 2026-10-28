@@ -16,8 +16,10 @@ import {
   restoreProjectFileRequestSchema,
   saveToProjectRequestSchema,
   projectSchema,
+  projectSetupSchema,
   projectsSchema,
-  setConversationProjectRequestSchema
+  setConversationProjectRequestSchema,
+  setProjectSetupRequestSchema
 } from "../projects";
 import { conversationSchema, draftAttachmentUploadResponseSchema } from "../conversations";
 import { blob, defineOperation, defineRegisteredOperation, json } from "./define-operation";
@@ -86,6 +88,38 @@ export const projectOperations = {
     body: createProjectRequestSchema,
     response: json(projectSchema),
     errors: ["NOT_FOUND"],
+    rateClass: "write"
+  }),
+  // A project's default agent and skills (PRJ-7), with what the caller may choose of them.
+  "projects.setup.get": defineOperation({
+    id: "projects.setup.get",
+    method: "GET",
+    path: "/api/v1/project-settings/:projectId/setup",
+    summary:
+      "Read a project's default agent and skills, with the agents and skills the caller may choose for it",
+    tag: "Projects",
+    auth: "user",
+    scope: "conversation:read",
+    requires: [],
+    effect: "reading",
+    response: json(projectSetupSchema),
+    errors: ["NOT_FOUND"],
+    rateClass: "read"
+  }),
+  "projects.setup.set": defineRegisteredOperation({
+    id: "projects.setup.set",
+    method: "PUT",
+    path: "/api/v1/project-settings/:projectId/setup",
+    summary:
+      "Set the agent a new chat in a project starts with and the skills every run in it is offered",
+    tag: "Projects",
+    auth: "user",
+    scope: "conversation:write",
+    requires: [],
+    effect: "changing",
+    body: setProjectSetupRequestSchema,
+    response: json(projectSetupSchema),
+    errors: ["NOT_FOUND", "CONFLICT", "VALIDATION_FAILED"],
     rateClass: "write"
   }),
   "conversations.set_project": defineRegisteredOperation({

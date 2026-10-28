@@ -14,3 +14,5 @@ projects.files.versions  GET /api/v1/project-files/:projectId/versions
 projects.get  GET /api/v1/projects/:projectName
 projects.list  GET /api/v1/workspaces/:collaborationWorkspaceId/projects
 projects.list_mine  GET /api/v1/projects
+projects.setup.get  GET /api/v1/project-settings/:projectId/setup
+projects.setup.set  PUT /api/v1/project-settings/:projectId/setup

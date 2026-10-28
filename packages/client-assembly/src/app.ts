@@ -20,6 +20,7 @@ import {
   createChatServer,
   createChatServerJobs,
   ProjectFileService,
+  ProjectSetupService,
   workflowAssetKindOf
 } from "@work-shape/catalyst-server";
 import type { ChatAttachmentService, ChatServerOptions } from "@work-shape/catalyst-server";
@@ -623,6 +624,14 @@ export async function createClientInstanceExecutionAssembly(
     });
     approvalRequestHandlers.set(handler.kind, handler);
   }
+  // The default agent and skills of projects (PRJ-7): a run in a project is offered its skills.
+  const projectSetup = new ProjectSetupService({
+    stores: store,
+    clientInstanceId,
+    config,
+    modules,
+    configAssets
+  });
   const platformTools = createPlatformTools({
     stores: store,
     catalogueStores: store,
@@ -633,6 +642,7 @@ export async function createClientInstanceExecutionAssembly(
     dataToolDescribeTimeoutMs: config.runtime.dataToolDescribeTimeoutMs,
     toolRights: mailSendToolRights(config),
     projectFolder: () => projectFiles,
+    projectSkills: () => projectSetup,
     audit: auditRecorder,
     policy: {
       instanceDefaults: config.policy.defaults,

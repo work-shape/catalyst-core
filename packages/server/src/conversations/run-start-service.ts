@@ -18,6 +18,7 @@ import {
   type Conversation,
   type CollaborationWorkspace,
   type ConversationId,
+  type Project,
   type ReasoningEffortConfig,
   type RuntimeCallContext,
   type RunStartCommand,
@@ -31,6 +32,8 @@ import {
   defaultReasoningEffortForAgentBinding,
   isModelBindingUserSelectableForAgent,
   mayUseOwnInChat,
+  conversationVisibilityInProject,
+  isAppError,
   modelRouteAllowedForPersonalData,
   PersonalDataModelRegionError,
   reasoningEffortChoiceForBinding,
@@ -55,6 +58,8 @@ import { createConversationTitle } from "./conversation-title";
 import { generateConversationTitleJob } from "../jobs/job-kinds";
 import type { ChatServerOptions } from "../types";
 import { ConversationWorkflow, type CreateConversationCommand } from "./conversation-service";
+import { requireProjectAccess } from "../projects/project-access";
+import { ProjectSetupService } from "../projects/project-setup";
 
 /** The chat a run is for, as far as whether only its person reads it. */
 interface OwnChatCandidate {
@@ -64,23 +69,25 @@ interface OwnChatCandidate {
 }
 
 /**
- * The chat a first message will create, as `createConversation` sets who reads it: private where
- * asked or about an asset, else the workspace's default. One in a project is left out: its
- * project decides, so the caller's own agent is chosen there once the chat exists.
+ * The chat a first message will create, as `createConversation` sets who reads it: in a project
+ * the project's audience (PRJ-7), else private where asked or about an asset, else the
+ * workspace's default. A project the caller does not read leaves it out: the create refuses.
  */
 function newChatOf(
   user: AuthenticatedUser,
   workspace: CollaborationWorkspace,
-  command: CreateConversationCommand
+  command: CreateConversationCommand,
+  project: Project | undefined
 ): OwnChatCandidate | undefined {
-  if (command.projectId !== undefined) return undefined;
+  if (command.projectId !== undefined && project === undefined) return undefined;
   return {
     conversation: {
       kind: "chat",
       status: "active",
       createdByUserId: getSubjectUserId(user),
-      visibility:
-        workspace.kind !== "personal" && (command.subject || command.visibility === "private")
+      visibility: project
+        ? conversationVisibilityInProject(project.audience)
+        : workspace.kind !== "personal" && (command.subject || command.visibility === "private")
           ? "private"
           : workspace.defaultConversationVisibility
     }
@@ -123,12 +130,34 @@ export class RunStartWorkflow {
   private readonly options: ChatServerOptions;
   private readonly conversations: ConversationWorkflow;
 
+  private readonly projectSetup: ProjectSetupService;
+
   constructor(
     options: ChatServerOptions,
     private readonly transact: PlatformStores["transaction"] = options.stores.transaction
   ) {
     this.options = options;
     this.conversations = new ConversationWorkflow(options);
+    this.projectSetup = new ProjectSetupService(options);
+  }
+
+  /**
+   * The project a new chat is made in, where the caller reads it and it is in the target
+   * workspace. Nothing otherwise: the create refuses such a project itself.
+   */
+  private async projectOf(
+    user: AuthenticatedUser,
+    workspace: CollaborationWorkspace,
+    projectId: string | undefined
+  ): Promise<Project | undefined> {
+    if (projectId === undefined || !this.options.modules.isEnabled("projects")) return undefined;
+    try {
+      const project = await requireProjectAccess(this.options, user, projectId);
+      return project.collaborationWorkspaceId === workspace.id ? project : undefined;
+    } catch (error) {
+      if (isAppError(error) && error.code === "NOT_FOUND") return undefined;
+      throw error;
+    }
   }
 
   /**
@@ -593,16 +622,22 @@ export class RunStartWorkflow {
         user,
         command.collaborationWorkspaceId
       );
+      const project = await this.projectOf(user, workspace, command.projectId);
+      // A chat in a project starts with its default agent where none was named and the caller
+      // may choose it now; otherwise the workspace's default (PRJ-7).
+      const agentName =
+        command.agentName ??
+        (project ? await this.projectSetup.defaultAgentFor(user, project) : undefined);
       await this.resolveRunSelection(
         workspace,
-        command.agentName,
+        agentName,
         command.modelBindingId,
         command.reasoningEffort,
         { user, access: command.access, correlationId: context.correlationId },
         false,
         undefined,
         false,
-        newChatOf(user, workspace, command)
+        newChatOf(user, workspace, command, project)
       );
       const conversation = await this.conversations.createConversation(user, context, {
         title: command.title ?? createConversationTitle(command.text),
@@ -614,6 +649,7 @@ export class RunStartWorkflow {
       });
       const started = await this.startMessageRun(conversation.id, user, context, {
         ...command,
+        ...(agentName === undefined ? {} : { agentName }),
         followUp: undefined,
         idempotencyKey: undefined
       });
