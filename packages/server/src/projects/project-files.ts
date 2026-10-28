@@ -49,6 +49,8 @@ interface WriteInput {
   mimeType?: string;
   /** Reuses an object a kept version names, for a restore. */
   stored?: { objectKey: string; byteSize: number; checksum: string; mimeType: string };
+  /** The kept version `stored` comes from, read again under the project's lock. */
+  restores?: number;
   replaces?: number;
   origin: ProjectFileOrigin;
   userId: string;
@@ -245,7 +247,7 @@ export class ProjectFileService implements ProjectFolderPort {
     const change = await this.changeOrRefuse(project, {
       path,
       bytes: version.objectKey ? new Uint8Array() : null,
-      ...(version.objectKey ? { stored: storedOf(version) } : {}),
+      ...(version.objectKey ? { stored: storedOf(version), restores: version.version } : {}),
       ...(input.replaces === undefined ? {} : { replaces: input.replaces }),
       origin: "person",
       userId: getSubjectUserId(user)
@@ -567,6 +569,7 @@ export class ProjectFileService implements ProjectFolderPort {
         projectId: folder.projectId,
         path: input.path,
         ...(input.replaces === undefined ? {} : { replaces: input.replaces }),
+        ...(input.restores === undefined ? {} : { restores: input.restores }),
         content,
         origin: input.origin,
         byUserId: input.userId,

@@ -199,6 +199,21 @@ async function writeVersion(
   tx: PostgresTransaction,
   input: WriteProjectFileVersionInput
 ): Promise<WriteProjectFileVersionResult> {
+  if (input.restores !== undefined && input.content !== null) {
+    const kept = await tx
+      .select({ version: projectFileVersions.version })
+      .from(projectFileVersions)
+      .where(
+        and(
+          eq(projectFileVersions.projectId, input.projectId),
+          eq(projectFileVersions.path, input.path),
+          eq(projectFileVersions.version, input.restores),
+          eq(projectFileVersions.objectKey, input.content.objectKey)
+        )
+      )
+      .limit(1);
+    if (kept.length === 0) return { status: "missing", path: input.path };
+  }
   const current = await currentRow(tx, input.projectId, input.path);
   const live = current?.objectKey != null;
   const currentVersion = current?.currentVersion ?? 0;
@@ -219,7 +234,8 @@ async function writeVersion(
       ...input,
       path: copyPath,
       replaces: 0,
-      conflictPath: undefined
+      conflictPath: undefined,
+      restores: undefined
     });
     if (copy.status !== "written") return copy;
     return {

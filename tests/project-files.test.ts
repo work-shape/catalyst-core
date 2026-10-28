@@ -77,7 +77,13 @@ const versionsSchema = z.object({
 const resultSchema = z.object({
   status: z.string(),
   output: z.record(z.string(), z.unknown()).optional(),
-  error: z.object({ message: z.string() }).optional()
+  error: z.object({ message: z.string() }).optional(),
+  auditSummary: z
+    .object({
+      subject: z.string().optional(),
+      metadata: z.record(z.string(), z.unknown()).optional()
+    })
+    .optional()
 });
 
 describe("project files", () => {
@@ -257,6 +263,47 @@ describe("project files", () => {
       "liesmich.md"
     );
     expect((await content(t.kai.id, kaisPrivate.id, "geheim.md")).body).toBe("nur Kai");
+  });
+
+  it("restores only a version that is still kept when the project's lock is taken", async () => {
+    await uploaded(t.kai.id, shared.id, "frist.md", "eins");
+    const read = await t.stores.projectFiles.getProjectFileVersion({
+      clientInstanceId,
+      projectId: shared.id,
+      path: "frist.md",
+      version: 1
+    });
+    if (!read?.objectKey || !read.checksum || !read.mimeType) throw new Error("No version 1");
+    // A purge lands between the restore's read and its write: the write finds nothing to restore.
+    await t.stores.projectFiles.purgeProjectFile({
+      clientInstanceId,
+      projectId: shared.id,
+      path: "frist.md"
+    });
+    const restored = await t.stores.projectFiles.writeProjectFileVersion({
+      clientInstanceId,
+      projectId: shared.id,
+      path: "frist.md",
+      content: {
+        objectKey: read.objectKey,
+        byteSize: read.byteSize,
+        checksum: read.checksum,
+        mimeType: read.mimeType
+      },
+      restores: 1,
+      origin: "person",
+      byUserId: t.kai.id,
+      at: new Date().toISOString(),
+      limits: LIMITS
+    });
+    expect(restored).toEqual({ status: "missing", path: "frist.md" });
+    await expect(
+      t.stores.projectFiles.getProjectFile({
+        clientInstanceId,
+        projectId: shared.id,
+        path: "frist.md"
+      })
+    ).resolves.toBeUndefined();
   });
 
   it("keeps every change as a version, shows who made each, and undoes one by its version", async () => {
@@ -539,6 +586,9 @@ describe("project files", () => {
         status: "success",
         output: { workspaceId: `project:${project.id}`, version: 1, contentPreview: "- Angebot\n" }
       });
+      // The read is recorded by the project and the version, never by the path.
+      expect(read.auditSummary).toMatchObject({ subject: project.id, metadata: { version: 1 } });
+      expect(JSON.stringify(read.auditSummary)).not.toContain("checkliste");
       const edited = await tool(t.lena, lenasChat, "workspace.edit_file", {
         path: "project/checkliste.md",
         edits: [{ oldText: "- Angebot\n", newText: "- Angebot\n- Termin\n" }]

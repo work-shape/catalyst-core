@@ -108,6 +108,12 @@ export interface WriteProjectFileVersionInput {
    * changes nothing and answers `conflict`; a deletion is never kept as a copy.
    */
   conflictPath?: string;
+  /**
+   * The kept version a restore makes the newest. It is read again under the project's lock: a
+   * purge or the prune of the oldest version since it was read leaves nothing to restore, and
+   * the write answers `missing`.
+   */
+  restores?: number;
 }
 
 export type ProjectFileLimit = "files" | "file_bytes" | "project_bytes";

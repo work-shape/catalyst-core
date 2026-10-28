@@ -21,6 +21,11 @@ export function answerTextRead(
     mimeType?: string;
     /** A file of the project folder: its version. */
     version?: number;
+    /**
+     * What the audit record names instead of the path: a project file's path can name a client,
+     * so its read is recorded by the project and the version.
+     */
+    auditSubject?: string;
   },
   bytes: Uint8Array
 ): ToolHandlerResult<z.infer<typeof workspaceReadFileOutputSchema>> {
@@ -65,8 +70,9 @@ export function answerTextRead(
     {
       auditSummary: {
         action: "workspace.read_file",
-        subject: file.path,
+        subject: file.auditSubject ?? file.path,
         metadata: {
+          ...(file.version !== undefined ? { version: file.version } : {}),
           byteSize: file.byteSize,
           startLine: range.startLine,
           endLine: range.endLine,
