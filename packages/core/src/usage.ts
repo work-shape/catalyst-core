@@ -16,6 +16,7 @@ import type {
   ModelUsageEventId,
   UserId
 } from "./ids";
+import type { AssetScope } from "./asset-kinds";
 import type { ModelUsageRefusal } from "./errors";
 import type { JsonObject } from "./json";
 import type { StorePage } from "./paging";
@@ -153,6 +154,8 @@ export interface AgentRunModelAttribution {
   conversationId: ConversationId;
   runId: AgentRunId;
   agentName: string;
+  /** The owning scope read with the run's agent, before any later move of that asset. */
+  agentScope?: AssetScope;
   userId?: string;
   workspaceId?: string;
   /** The Operation Run of the tool call that made the model call, where a tool made it. */
@@ -228,6 +231,8 @@ export interface ModelUsageEventRecordInput extends ModelTokenUsage {
   workflowRunId?: string;
   /** The agent of the run. A call the product made for itself carries its purpose here too. */
   agentName?: string;
+  /** Input only: the run's captured owning scope decides whether its agent name is private. */
+  agentScope?: AssetScope;
   purpose?: ModelSystemPurpose;
   providerId: string;
   model: string;

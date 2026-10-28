@@ -131,18 +131,22 @@ function written(event: ModelUsageEventRecordInput, id: string): SQL {
  * in a chat of a shared workspace is named by the one key `PERSONAL_AGENTS_KEY`: the event still
  * counts to the workspace, but neither its Owners nor the Usage page read which agent it was.
  * Decided once, as the event is written, so every later sum of it reads the same key. It reads
- * `attributed_workspace`.
+ * `attributed_workspace` and the owning scope captured with the run's agent; it never reads
+ * a different agent or a later move of the asset.
  */
 function agentNameOf(event: ModelUsageEventRecordInput): SQL {
-  if (event.agentName === undefined || event.purpose !== undefined) {
+  if (
+    event.agentName === undefined ||
+    event.purpose !== undefined ||
+    event.agentScope?.kind !== "workspace"
+  ) {
     return drizzleSql`${event.agentName ?? null}`;
   }
   return drizzleSql`case
     when exists (
-      select 1 from config_assets own
-      join collaboration_workspaces home on home.id = own.scope_id and home.kind = 'personal'
-      where own.client_instance_id = ${event.clientInstanceId}
-        and own.kind = 'agent' and own.name = ${event.agentName}
+      select 1 from collaboration_workspaces home
+      where home.client_instance_id = ${event.clientInstanceId}
+        and home.id = ${event.agentScope.workspaceId} and home.kind = 'personal'
     ) and not exists (select 1 from attributed_workspace where kind = 'personal')
     then ${PERSONAL_AGENTS_KEY}::text else ${event.agentName}::text end`;
 }

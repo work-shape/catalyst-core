@@ -7,6 +7,7 @@ import {
   getRuntimeSubjectUserId,
   requirePersonalDataModelRoute,
   type AgentConfig,
+  type AssetScope,
   type AgentRunId,
   type ChatMessage,
   type ModelBindingConfig,
@@ -323,7 +324,8 @@ export class ModelInput {
     state: RunState,
     runEvents: RunEvents,
     /** The run switches to another model when this one's route fails (`ModelCall.hasFallback`). */
-    hasFallback = false
+    hasFallback = false,
+    agentScope?: AssetScope
   ) {
     const { capabilities } = modelSelection;
     // MODEL-REGION-3: a conversation with personal data keeps every request on an allowed
@@ -384,6 +386,7 @@ export class ModelInput {
             conversationId: input.conversationId,
             runId,
             agentName: input.agentName,
+            ...(agentScope ? { agentScope } : {}),
             // A published step's run acts as its principal and counts to its Workflow Run; a
             // draft test's run acts as the tester and counts to them (check 103).
             ...(input.workflowAgent && !context.workflowDraft

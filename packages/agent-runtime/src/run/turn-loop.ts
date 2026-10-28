@@ -15,6 +15,7 @@ import {
   unknownToJsonValue,
   agentRunInstructions,
   type AgentConfig,
+  type AssetScope,
   type AgentRunModelOrigin,
   type KnowledgeCitationSource,
   type AgentRunId,
@@ -205,6 +206,7 @@ export class TurnLoop {
     return {
       ...this.previewNotesOf(agent, input, context),
       modelSelection,
+      agentScope: input.workflowAgent ? undefined : assets.agentKeys?.get(input.agentName)?.scope,
       ancestorRoutes: (input.ancestors ?? []).map((ancestor) => this.routeOf(assets, ancestor)),
       tools,
       offeredDataTools,
@@ -724,7 +726,8 @@ export class TurnLoop {
           request.withoutContinuation ? undefined : providerContinuation,
           state,
           this.runEvents,
-          model.fallback !== undefined
+          model.fallback !== undefined,
+          setup.agentScope
         );
       } catch (error) {
         const to = model.fallback;
@@ -1027,6 +1030,8 @@ interface ModelSetup {
 
 /** What every step of a run uses. Its own fields are those of the binding chosen for the run. */
 interface RunSetup extends ModelSetup {
+  /** The owning scope read with the agent; every call of this run keeps it. */
+  agentScope?: AssetScope;
   /** The routes of the runs above a subagent, nearest first; none for any other run. */
   ancestorRoutes: NonNullable<RuntimeCallContext["modelRoutes"]>;
   /** The data tools the run was offered; a Data Store a step added widens it (`reoffer`). */

@@ -23,6 +23,7 @@ import {
   PERSONAL_AGENTS_KEY,
   servicePrincipalAsRunUser,
   type AgentRuntime,
+  type AssetScope,
   type AuthenticatedIdentity,
   type AuthenticatedUser,
   type CollaborationWorkspaceId
@@ -737,6 +738,85 @@ describe("an agent of Only me beyond the chat its owner chose it in", () => {
 });
 
 describe("an agent of Only me in the usage of a team", () => {
+  it.each(["instance", "workspace", "unknown"] as const)(
+    "keeps a %s agent's own name when a personal agent now has that name",
+    async (scopeKind) => {
+      const { t, team } = await setup();
+      // The run captured its agent before that name belonged to Kai's personal agent.
+      // Names are unique per instance today; a move or replacement can reuse one mid-run.
+      const agentScope: AssetScope | undefined =
+        scopeKind === "unknown"
+          ? undefined
+          : scopeKind === "instance"
+            ? { kind: "instance" }
+            : { kind: "workspace", workspaceId: team };
+      const usage = new ModelUsageGovernance({
+        store: t.stores.usage,
+        costs: {},
+        budget: {},
+        safeguards: {}
+      });
+      const event = await usage.recordModelUsage({
+        clientInstanceId,
+        attribution: {
+          kind: "agent_run",
+          conversationId: asConversationId(`conv_${randomUUID()}`),
+          runId: asAgentRunId(`run_${randomUUID()}`),
+          agentName: OWN,
+          agentScope,
+          userId: t.kai.id,
+          workspaceId: team
+        },
+        providerId: "local",
+        model: "local",
+        correlationId: randomUUID(),
+        inputTokens: 10,
+        outputTokens: 10,
+        totalTokens: 20,
+        source: "provider_reported"
+      });
+      expect(event.agentName).toBe(OWN);
+      const today = new Date().toISOString().slice(0, 10);
+      const tomorrow = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
+      const rows = await t.stores.usage.summarizeModelUsageBreakdown({
+        clientInstanceId,
+        from: today,
+        to: tomorrow,
+        groupBy: "agent",
+        filter: { workspace: team }
+      });
+      expect(rows.map((row) => [row.key, row.totalTokens])).toEqual([[OWN, 20]]);
+    }
+  );
+
+  it("carries a personal agent's owning scope from a real run into admitted team usage", async () => {
+    const { app, instanceId, home } = await ownAgentInstance();
+    const ownChat = await app.stores.conversations.getConversation(
+      instanceId,
+      asConversationId(home.id)
+    );
+    if (!ownChat) throw new Error("Own chat not found");
+    const team = await app.stores.workspaces.createWorkspace({
+      clientInstanceId: instanceId,
+      kind: "shared",
+      name: "TEAM",
+      creatorUserId: asUserId(ownChat.createdByUserId)
+    });
+    const created = await app.call("conversations.create", {
+      payload: { title: "Own in team", collaborationWorkspaceId: team.id, visibility: "private" }
+    });
+    expect(created.statusCode, created.body).toBe(200);
+    const conversationId = created.json<{ id: string }>().id;
+    await runToEnd(app, instanceId, conversationId, OWN, "Meine Steuer.");
+    const events = (
+      await app.stores.usage.listModelUsageEvents({ clientInstanceId: instanceId })
+    ).filter((event) => event.conversationId === conversationId && event.purpose === undefined);
+    expect(events.length).toBeGreaterThan(0);
+    expect(events.every((event) => event.agentName === PERSONAL_AGENTS_KEY)).toBe(true);
+    expect(events.every((event) => event.collaborationWorkspaceId === team.id)).toBe(true);
+    expect(events.every((event) => event.status === "settled")).toBe(true);
+  });
+
   it("counts to the team without its name, for the team's Owner and the Usage page alike", async () => {
     const usageOf = (store: AccessInstance["stores"]["usage"]) =>
       new ModelUsageGovernance({ store, costs: {}, budget: {}, safeguards: {} });
@@ -786,6 +866,8 @@ describe("an agent of Only me in the usage of a team", () => {
           conversationId: asConversationId(`conv_${crypto.randomUUID()}`),
           runId: asAgentRunId(`run_${crypto.randomUUID()}`),
           agentName,
+          agentScope:
+            agentName === OWN ? { kind: "workspace", workspaceId: kaiHome } : { kind: "instance" },
           userId: t.kai.id,
           workspaceId
         },
