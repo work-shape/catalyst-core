@@ -922,6 +922,7 @@ function usageEventOrigin(
   | "agentRunId"
   | "workflowRunId"
   | "agentName"
+  | "agentScope"
   | "purpose"
   | "userId"
   | "collaborationWorkspaceId"
@@ -942,6 +943,7 @@ function usageEventOrigin(
         ? { purpose: "workflow_step", workflowRunId: attribution.workflowRunId }
         : {}),
       agentName: attribution.agentName,
+      ...(attribution.agentScope ? { agentScope: attribution.agentScope } : {}),
       ...(attribution.operationRunId ? { operationRunId: attribution.operationRunId } : {})
     };
   }
