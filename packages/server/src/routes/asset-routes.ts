@@ -24,6 +24,7 @@ import {
 import { publishPolicyFloor } from "../approvals/publish-approval";
 import { AssetWorkflow } from "../assets/asset-service";
 import { adoptAssetRepositories } from "../assets/asset-repo-adoption";
+import { checkAssetMove, moveAsset } from "../assets/asset-move-operation";
 import { AppPublishTogether } from "../apps/app-publish-together";
 
 import { ConfigAssetWorkflow } from "../config-assets/config-asset-service";
@@ -213,6 +214,26 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
     changeClass: "reversible",
     module: ASSET_WRITE_MODULE,
     execute: (input, context) => setAssetAvailability(options, context, input)
+  });
+
+  // "Teilen mit…" (SHARE-1): up the ladder Nur ich → Team → Alle, with what the asset uses.
+  // The write on the asset where it lies admits the call; the right at the target decides
+  // whether it moves at once or waits as a request in the Inbox.
+  route.operation(apiOperations["assets.move_check"], {
+    authorize: (input, { access }) => workflow.authorizeWrite(access, input),
+    resource: assetResource,
+    policyTargets: (input) => workflow.policyTargets(input),
+    execute: (input, context) => checkAssetMove(options, context, input)
+  });
+
+  route.operation(apiOperations["assets.move"], {
+    authorize: (input, { access }) => workflow.authorizeWrite(access, input),
+    resource: assetResource,
+    policyTargets: (input) => workflow.policyTargets(input),
+    // Nothing moves back down: who reads and edits it afterwards is the target's.
+    changeClass: "irreversible",
+    module: ASSET_WRITE_MODULE,
+    execute: (input, context) => moveAsset(options, context, input)
   });
 
   route.operation(apiOperations["agents.use.set"], {

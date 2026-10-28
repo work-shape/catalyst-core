@@ -940,6 +940,23 @@ export interface ConfigAssetStore {
     skillName: string;
     inMyChats: boolean;
   }): Promise<PersonalChatSkill>;
+  /**
+   * Gives the named assets a new owner, all of them or none (SHARE-1): one transaction, under
+   * the lock every write of the set takes, sets their owning workspace and nothing else. Their
+   * ids, names, revisions, pointers, drafts, availability and grants stay; nothing is copied.
+   * Each asset must still be active, owned by `from` and at the revisions it was planned at,
+   * else the move is refused with `CONFLICT` and the reason `asset_moved_meanwhile`.
+   */
+  moveConfigAssets(input: {
+    clientInstanceId: ClientInstanceId;
+    to: AssetScope;
+    assets: readonly {
+      id: string;
+      from: AssetScope;
+      activeRevisionId: string;
+      publishedRevisionId?: string;
+    }[];
+  }): Promise<{ version: number }>;
 }
 
 /** A skill of a person's Personal Workspace, and whether their own chats use it. */

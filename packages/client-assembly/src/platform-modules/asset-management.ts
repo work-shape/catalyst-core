@@ -17,6 +17,7 @@ export const assetManagementModule = defineModule({
     "assets.run_live_once",
     "assets.set_default",
     "assets.set_availability",
+    "assets.move",
     "agents.use.set",
     "agents.draft.discard",
     "agents.give_tools",

@@ -177,6 +177,22 @@ export const CONNECTION_HEALTH_STATES = [
 ] as const;
 export type ConnectionHealth = (typeof CONNECTION_HEALTH_STATES)[number];
 
+/**
+ * Sharing an asset up the ladder (SHARE-1): its rungs, Nur ich (a Personal Workspace), Team (a
+ * Shared Workspace) and Alle (the instance); whether a move is made at once or as a request; how
+ * it ended; and who edits and uses the asset at its new owner.
+ */
+export const ASSET_OWNER_RUNGS = ["personal", "team", "everyone"] as const;
+export type AssetOwnerRung = (typeof ASSET_OWNER_RUNGS)[number];
+export const ASSET_MOVE_PATHS = ["direct", "request"] as const;
+export type AssetMovePath = (typeof ASSET_MOVE_PATHS)[number];
+export const ASSET_MOVE_STATUSES = ["moved", "requested"] as const;
+export type AssetMoveStatus = (typeof ASSET_MOVE_STATUSES)[number];
+export const ASSET_MOVE_EDITORS = ["workspace_builders", "instance_builders"] as const;
+export type AssetMoveEditors = (typeof ASSET_MOVE_EDITORS)[number];
+export const ASSET_MOVE_USERS = ["workspace_members", "everyone_where_offered"] as const;
+export type AssetMoveUsers = (typeof ASSET_MOVE_USERS)[number];
+
 export const GRANT_HOLDER_KINDS = ["user", "service_principal", "role", "group"] as const;
 export type GrantHolderKind = (typeof GRANT_HOLDER_KINDS)[number];
 
