@@ -55,7 +55,83 @@ describe("HMAC chat session tokens", () => {
       kind: "user",
       id: `${clientInstanceId}:external-123`
     });
+    // The host acting for the person, though the token names no actor of its own.
+    expect(user.delegatedActor).toEqual({
+      kind: "service_principal",
+      id: "demo",
+      displayLabel: "demo",
+      authSource: "session-token"
+    });
     expect(user.scopes).toEqual([...CHAT_SESSION_AUTH_SCOPES]);
+  });
+
+  // The host mints a token for any person with one server credential, and identity linking
+  // maps it onto the person's own sign-in: nothing proves the person is present, so the
+  // credential that verified the token names the host, not a field the host fills in.
+  it("names the issuer as the delegated actor of a token signed without one, with chat scopes only", async () => {
+    const clientInstanceId = asClientInstanceId("demo-local");
+    const options = {
+      secret: "a-development-secret-with-enough-length",
+      clientInstanceId,
+      issuer: "demo",
+      ttlSeconds: 900
+    };
+    const adapter = new HmacSessionTokenAuthAdapter(options);
+    // Signed by hand as a token in flight from before the verifier named the host.
+    const now = Math.floor(Date.now() / 1000);
+    const token = signedToken(
+      {
+        sub: "kai",
+        displayLabel: "Kai",
+        roles: ["user"],
+        permissionRefs: [],
+        clientInstanceId,
+        authSource: "embed",
+        iss: "demo",
+        iat: now,
+        exp: now + 300
+      },
+      options.secret
+    );
+
+    const user = await adapter.authenticate({
+      headers: { authorization: `Bearer ${token}` },
+      clientInstanceId,
+      correlationId: "corr_unnamed"
+    });
+
+    expect(user.delegatedActor).toEqual({
+      kind: "service_principal",
+      id: "demo",
+      displayLabel: "demo",
+      authSource: "embed"
+    });
+    expect(user.principal).toMatchObject({ kind: "user", id: `${clientInstanceId}:kai` });
+    expect(user.scopes).toEqual([...CHAT_SESSION_AUTH_SCOPES]);
+
+    // The default actor never widens the scopes: a first-party scope still needs a signed one.
+    const widened = signedToken(
+      {
+        sub: "kai",
+        displayLabel: "Kai",
+        roles: ["user"],
+        permissionRefs: [],
+        clientInstanceId,
+        authSource: "embed",
+        iss: "demo",
+        iat: now,
+        exp: now + 300,
+        scopes: ["config_assets:read"]
+      },
+      options.secret
+    );
+    await expect(
+      adapter.authenticate({
+        headers: { authorization: `Bearer ${widened}` },
+        clientInstanceId,
+        correlationId: "corr_widened"
+      })
+    ).rejects.toMatchObject({ code: "VALIDATION_FAILED" });
   });
 
   it("rejects broad bearer scopes during chat session token issuance", () => {

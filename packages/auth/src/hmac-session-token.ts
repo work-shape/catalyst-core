@@ -20,6 +20,15 @@ import type { AuthAdapter, AuthRequest, AuthRequestHeaders } from "./types";
  */
 type SessionTokenDelegatedActor = Extract<DelegatedActor, { kind: "service_principal" }>;
 
+/**
+ * Who a verified session token is: always the embedding host acting for the person. The host
+ * mints a token for any `externalUserId` with one server credential, so nothing proves the
+ * person is present; every gate that refuses a delegated actor refuses every embed token.
+ */
+type SessionTokenIdentity = AuthenticatedUser & {
+  delegatedActor: SessionTokenDelegatedActor;
+};
+
 export interface SessionTokenInput {
   externalUserId: string;
   displayLabel: string;
@@ -115,7 +124,7 @@ export class HmacSessionTokenAuthAdapter implements AuthAdapter {
     this.options = options;
   }
 
-  async authenticate(request: AuthRequest): Promise<AuthenticatedUser> {
+  async authenticate(request: AuthRequest): Promise<SessionTokenIdentity> {
     const token = extractBearerToken(request.headers);
     if (!token) {
       throw new AppError("UNAUTHENTICATED", "Missing bearer token");
@@ -132,13 +141,22 @@ export class HmacSessionTokenAuthAdapter implements AuthAdapter {
       throw new AppError("UNAUTHENTICATED", "Chat session token is expired");
     }
 
-    const delegatedActor = claims.delegatedActor;
-    if (!isSessionTokenDelegatedActor(delegatedActor)) {
+    const signedActor = claims.delegatedActor;
+    if (!isSessionTokenDelegatedActor(signedActor)) {
       throw new AppError(
         "UNAUTHENTICATED",
         "Chat session token names a delegated actor other than a service principal"
       );
     }
+    // A token the host signed without an actor is still the host acting for the person, never
+    // the person themself: the credential that verified it says so, not a field the host fills.
+    // The scopes stay those of the actor as signed, so this default never widens them.
+    const delegatedActor: SessionTokenDelegatedActor = signedActor ?? {
+      kind: "service_principal",
+      id: this.options.issuer,
+      displayLabel: this.options.issuer,
+      authSource: claims.authSource
+    };
 
     const clientInstanceId = asClientInstanceId(claims.clientInstanceId);
     const id = `${claims.clientInstanceId}:${claims.sub}`;
@@ -155,13 +173,13 @@ export class HmacSessionTokenAuthAdapter implements AuthAdapter {
       authSource: claims.authSource,
       correlationId: claims.correlationId ?? request.correlationId,
       subjectUserId: id,
-      principal: delegatedActor
+      principal: signedActor
         ? {
             kind: "service",
-            id: delegatedActor.id,
-            displayLabel: delegatedActor.displayLabel ?? delegatedActor.id,
+            id: signedActor.id,
+            displayLabel: signedActor.displayLabel ?? signedActor.id,
             clientInstanceId,
-            authSource: delegatedActor.authSource
+            authSource: signedActor.authSource
           }
         : {
             kind: "user",
@@ -172,7 +190,7 @@ export class HmacSessionTokenAuthAdapter implements AuthAdapter {
             authSource: claims.authSource
           },
       delegatedActor,
-      scopes: normalizeSessionTokenScopes(claims.scopes, delegatedActor)
+      scopes: normalizeSessionTokenScopes(claims.scopes, signedActor)
     };
   }
 }
