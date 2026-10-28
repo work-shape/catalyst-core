@@ -8,6 +8,7 @@ import {
   asClientInstanceId,
   asConversationId,
   asToolCallId,
+  asUserId,
   isJsonObject,
   StoreBackedAuditRecorder,
   unknownToJsonValue,
@@ -79,7 +80,12 @@ export function json(input: unknown): JsonObject {
   if (!isJsonObject(value)) throw new Error("Expected object");
   return value;
 }
-export async function fixture(guardrails?: Record<string, unknown>) {
+// Legacy live-write/recovery checks use a personal skill, which is still live on save.
+// Shared-skill checks explicitly select the draft lifecycle.
+export async function fixture(
+  guardrails?: Record<string, unknown>,
+  scope: "personal" | "shared" = "personal"
+) {
   const config = createTestConfig({
     tools: [{ name: "read_skill" }, { name: "propose_skill_change" }]
   });
@@ -88,6 +94,19 @@ export async function fixture(guardrails?: Record<string, unknown>) {
     allowSkillCreation: true
   };
   const store = (await createTestInstance()).stores;
+  const ownerUser =
+    scope === "personal"
+      ? await store.users.createUser({ clientInstanceId, displayLabel: "Personal skill owner" })
+      : undefined;
+  const personal = ownerUser
+    ? await store.workspaces.ensurePersonalWorkspace({
+        clientInstanceId,
+        userId: asUserId(ownerUser.id)
+      })
+    : undefined;
+  const owner = personal
+    ? { kind: "workspace" as const, workspaceId: personal.id }
+    : { kind: "instance" as const };
   const agent = agentConfigSchema.parse({
     name: "assistant",
     displayName: "Assistant",
@@ -98,8 +117,8 @@ export async function fixture(guardrails?: Record<string, unknown>) {
   await applyAtCurrentRevisions(store.configAssets, {
     clientInstanceId,
     mutations: [
-      { type: "upsert", kind: "agent", name: agent.name, config: json(agent) },
-      { type: "upsert", kind: "skill", name: skill.name, config: json(skill) },
+      { type: "upsert", kind: "agent", name: agent.name, scope: owner, config: json(agent) },
+      { type: "upsert", kind: "skill", name: skill.name, scope: owner, config: json(skill) },
       { type: "setDefaultAgent", agentName: agent.name }
     ]
   });
@@ -194,6 +213,7 @@ export async function fixture(guardrails?: Record<string, unknown>) {
   };
   return {
     config,
+    owner,
     store,
     source,
     handler,

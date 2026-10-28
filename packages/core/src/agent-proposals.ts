@@ -50,6 +50,10 @@ export interface AgentProposalStore {
     Map<string, Pick<AgentProposal, "revision" | "baseRevision" | "author" | "updatedAt">>
   >;
   get(input: AgentProposalAddress): Promise<AgentProposal | undefined>;
+  /** A retained revision of a pending draft, for undo; publish/discard consumes its history. */
+  getRevision(
+    input: AgentProposalAddress & { revision: number }
+  ): Promise<Pick<AgentProposal, "config" | "fileSetId"> | undefined>;
   /** A missing pending head is null, independently of the live revision. */
   save(
     input: AgentProposalAddress & {

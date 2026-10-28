@@ -426,8 +426,8 @@ export class ApprovalRequestWorkflow implements ApprovalRequestCreator {
     const updated = await this.options.store.transitionApprovedApprovalRequest({
       clientInstanceId: this.options.clientInstanceId,
       requestId,
-      resolve: async (approved) => {
-        const handlerContext = this.handlerContext(approved, context);
+      resolve: async (approved, stores) => {
+        const handlerContext = this.handlerContext(approved, context, stores);
         // The revision a revert writes back may predate a guardrail: it is read like a write.
         const refusal = await this.guardrailRefusal(
           (await handler.revertEvents?.(approved, handlerContext)) ?? [],

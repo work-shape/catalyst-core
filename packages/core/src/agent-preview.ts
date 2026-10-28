@@ -1,3 +1,4 @@
+import { isFileSetId, type FileSetId } from "./pages";
 import { isJsonObject, type JsonObject } from "./json";
 import {
   agentConfigSchema,
@@ -19,7 +20,15 @@ export const agentPreviewSchema = z.object({
    * without a draft, or one the person may not write, is read live.
    */
   skills: z
-    .array(z.object({ revision: z.number().int().positive(), config: skillConfigSchema }))
+    .array(
+      z.object({
+        revision: z.number().int().positive(),
+        config: skillConfigSchema,
+        fileSetId: z
+          .custom<FileSetId>((value) => typeof value === "string" && isFileSetId(value))
+          .optional()
+      })
+    )
     .optional()
 });
 

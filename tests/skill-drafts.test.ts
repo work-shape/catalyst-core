@@ -8,14 +8,25 @@ import {
   asClientInstanceId,
   asConversationId,
   asUserId,
+  asToolCallId,
+  type AgentPreview,
   readUserMessageMetadata
 } from "@work-shape/catalyst-core";
+import {
+  createSkillChangePreview,
+  parseClientInstanceConfig
+} from "@work-shape/catalyst-config-schema";
+import { createSkillFolderReader } from "@work-shape/catalyst-server";
+import { createSkillSourceVersion } from "@work-shape/catalyst-tool-execution";
+import { runSkillMounts } from "../packages/tool-execution/src/run-skills";
 import { DeterministicModelProvider } from "@work-shape/catalyst-model-provider";
+import { json } from "./support/skill-change-fixture";
 import { clientInstanceId, skill } from "./support/access-instance";
 import { setupWorkspaceHolder } from "./support/asset-operations";
 import { drainRunEvents, injectStartConversationRun } from "./support/chat-server-run-harness";
-import { createTestConfig } from "./support/fixtures";
+import { createTestConfig, createTestUser } from "./support/fixtures";
 import { useSkillCliWorlds } from "./support/skill-config-cli";
+import { createStoredConfigAssetSource } from "./support/static-config-asset-source";
 import { createTestInstance } from "./support/test-instance";
 
 // SKILL-DRAFT-1: a skill the instance or a Shared Workspace owns has one shared draft. A write
@@ -45,15 +56,31 @@ beforeEach(() => {
 });
 afterEach(() => vi.restoreAllMocks());
 
-async function runFixture() {
+async function runFixture(blockPublish = false) {
   const config = createTestConfig({
     toolNames: ["read_skill"],
     tools: [{ name: "read_skill", enabled: true }]
   });
+  if (blockPublish)
+    config.guardrails = parseClientInstanceConfig({
+      ...config,
+      guardrails: {
+        stop_skill_publish: {
+          displayName: "Review skill publishing",
+          on: "skill.before_publish",
+          outcome: "block",
+          check: { kind: "pattern", pattern: ".", reason: "Publish blocked for review." }
+        }
+      }
+    }).guardrails;
   config.modules = { assetManagement: { enabled: true } };
   config.conversationTitles.enabled = false;
   config.administration.agentConfiguration.enabled = true;
   config.administration.agentConfiguration.allowSkillEditing = true;
+  config.administration.agentConfiguration.agentSkillChanges = {
+    enabled: true,
+    allowSkillCreation: true
+  };
   const app = await createTestInstance({ config, env: {}, tools: [] });
   const instance = asClientInstanceId(config.clientInstance.id);
   const ok = async (response: ReturnType<typeof app.call>) => {
@@ -123,6 +150,66 @@ async function runFixture() {
 }
 
 describe("a shared skill's draft", () => {
+  it.each([false, true])(
+    "approves into the draft and publishes through the guard (blocked: %s)",
+    async (blockPublish) => {
+      const t = await runFixture(blockPublish);
+      const user = (await t.app.stores.users.listUsers({ clientInstanceId: t.instance }))[0];
+      if (!user) throw new Error("Approver missing");
+      const before = skill(SKILL.name, "LIVE-RULE");
+      const operations = [
+        {
+          type: "replace_text" as const,
+          target: "root",
+          oldText: "LIVE-RULE",
+          newText: "APPROVED-RULE"
+        }
+      ];
+      const request = await t.app.stores.approvals.createApprovalRequest({
+        clientInstanceId: t.instance,
+        requestedBy: { id: user.id, displayLabel: user.displayLabel },
+        kind: "skill_change",
+        summary: "Change the house rules",
+        payload: json({
+          agentName: "test_agent",
+          skillName: SKILL.name,
+          operations,
+          baseSourceVersion: createSkillSourceVersion(before),
+          preview: createSkillChangePreview(before, operations)
+        })
+      });
+      const approved = await t.ok(
+        t.app.call("approval_requests.decide", {
+          params: { requestId: request.id },
+          payload: { decision: "approve" }
+        })
+      );
+      expect(approved.json()).toMatchObject({
+        status: "approved",
+        applyResult: { draftRevision: 1, publishedRevision: 1 }
+      });
+      const live = () =>
+        t.app.stores.configAssets.getConfigAsset({ clientInstanceId: t.instance, ...SKILL });
+      expect(await live()).toMatchObject({ revision: 1, config: { content: "LIVE-RULE" } });
+      const draft = draftSchema.parse(
+        (await t.ok(t.app.call("skills.draft.get", { params: { name: SKILL.name } }))).json()
+      ).draft;
+      expect(draft).toMatchObject({ revision: 1, config: { content: "APPROVED-RULE" } });
+      const blocked = await t.app.call("assets.publish", {
+        params: SKILL,
+        payload: { revision: 1 }
+      });
+      if (blockPublish) {
+        expect(blocked.statusCode, blocked.body).toBe(403);
+        expect(blocked.body).toContain("Review skill publishing");
+        expect(await live()).toMatchObject({ revision: 1, config: { content: "LIVE-RULE" } });
+      } else {
+        expect(blocked.statusCode, blocked.body).toBe(200);
+        expect(await live()).toMatchObject({ revision: 2, config: { content: "APPROVED-RULE" } });
+      }
+    }
+  );
+
   it("leaves a live agent's run on the live skill until it is published", async () => {
     const t = await runFixture();
     const conversation = (await t.ok(t.app.call("conversations.create", { payload: {} }))).json<{
@@ -181,6 +268,41 @@ describe("a shared skill's draft", () => {
       drafted.messages.findLast((message) => message.role === "user")?.metadata
     )?.preview;
     expect(preview?.skills?.map((frozen) => frozen.revision)).toEqual([1]);
+    const mountedText = async (frozen: AgentPreview | undefined) => {
+      const mounts = await runSkillMounts(
+        {
+          assetSource: createStoredConfigAssetSource({
+            store: t.app.stores.configAssets,
+            clientInstanceId: t.instance
+          })
+        },
+        {
+          clientInstanceId: t.instance,
+          correlationId: "try-skill-folder",
+          user: createTestUser("user-1", t.instance),
+          agentPreview: frozen,
+          toolRequest: {
+            toolName: "workspace.exec",
+            toolCallId: asToolCallId("call_mount"),
+            agentName: "test_agent",
+            agentRunId: asAgentRunId("run_mount"),
+            conversationId: asConversationId(tryId),
+            input: {}
+          }
+        }
+      );
+      expect(mounts).toHaveLength(1);
+      const mount = mounts[0]!;
+      const files = await createSkillFolderReader({
+        clientInstanceId: t.instance,
+        stores: t.app.stores
+      }).read({ clientInstanceId: t.instance, ...mount });
+      return Buffer.from(files.find((file) => file.path === "SKILL.md")!.bytes).toString("utf8");
+    };
+    expect(await mountedText(preview)).toContain("DRAFT-RULE");
+    // Queued commands retain the admitted content after a later save or publish.
+    await t.saveDraft("LATER-RULE", 1);
+    expect(await mountedText(preview)).toContain("DRAFT-RULE");
 
     // Without the write right on the skill the same person's Try reads it live.
     const conversation = await t.app.stores.conversations.getConversation(
@@ -205,6 +327,11 @@ describe("a shared skill's draft", () => {
     const live = await t.readsSkill(tryId);
     expect(live.text).toContain("LIVE-RULE");
     expect(live.text).not.toContain("DRAFT-RULE");
+    const livePreview = readUserMessageMetadata(
+      live.messages.findLast((message) => message.role === "user")?.metadata
+    )?.preview;
+    expect(await mountedText(livePreview)).toContain("LIVE-RULE");
+    expect(await mountedText(livePreview)).not.toContain("LATER-RULE");
   });
 });
 
@@ -306,6 +433,31 @@ describe("the rights on a shared skill's draft", () => {
 
 describe("catalyst and a shared skill's draft", () => {
   const { fixture } = useSkillCliWorlds();
+
+  it("refuses a changed skill draft locally with the server's sentence before any write", async () => {
+    const f = await fixture();
+    const source = await f.copy();
+    expect(await f.run(source, "push")).toMatchObject({ code: 0 });
+    expect(await f.run(source, "pull")).toMatchObject({ code: 0 });
+    const changed = await f.world.api.call("assets.put", {
+      params: { kind: "skill", name: "form" },
+      payload: {
+        workspaceId: f.workspaceId,
+        config: skill("form", "Changed in Studio."),
+        expectedRevision: 1
+      }
+    });
+    expect(changed.statusCode, changed.body).toBe(200);
+    const manifest = join(source, "skills/form/SKILL.md");
+    await writeFile(manifest, `${await readFile(manifest, "utf8")}\nLocal change.\n`);
+    f.calls.length = 0;
+    const refused = await f.run(source, "push");
+    expect(refused.code).toBe(1);
+    expect(refused.err).toContain("The skill draft changed. Read it again before saving");
+    expect(
+      f.calls.filter((call) => ["assets.sync", "assets.put"].includes(call.operation))
+    ).toEqual([]);
+  });
 
   it("pushes a change as the draft, publishes it by command, and with push --publish", async () => {
     const f = await fixture();

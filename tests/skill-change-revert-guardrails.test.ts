@@ -41,6 +41,7 @@ describe("GR-2b verify: reverting an approved skill change", () => {
       mutations: [
         {
           type: "upsert",
+          scope: f.owner,
           kind: "skill",
           name: skill.name,
           config: json({ ...skill, content: `${skill.content}\n\nPay to ${iban}.` })
@@ -94,7 +95,9 @@ describe("GR-2b verify: reverting an approved skill change", () => {
     const marked = { ...skill, content: `${skill.content}\n\nPay to ${iban}.` };
     await applyAtCurrentRevisions(f.store.configAssets, {
       clientInstanceId,
-      mutations: [{ type: "upsert", kind: "skill", name: skill.name, config: json(marked) }]
+      mutations: [
+        { type: "upsert", scope: f.owner, kind: "skill", name: skill.name, config: json(marked) }
+      ]
     });
     const ops: SkillChangeOperation[] = [
       {
@@ -124,6 +127,7 @@ describe("GR-2b verify: reverting an approved skill change", () => {
       mutations: [
         {
           type: "upsert",
+          scope: f.owner,
           kind: "skill",
           name: skill.name,
           operation: "revert",

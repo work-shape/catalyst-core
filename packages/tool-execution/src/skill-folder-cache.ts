@@ -177,7 +177,7 @@ export class SkillFolderCache {
     // The revision is part of the key: a version covers what the agent reads, and two
     // revisions of one version can still differ in the bytes of their SKILL.md.
     const revisionKey = sha256Hex(
-      `skill\0${mount.name}\0${String(mount.revision)}\0${mount.sourceVersion}`
+      `skill\0${mount.name}\0${String(mount.revision)}\0${mount.sourceVersion}${mount.draft ? "\0draft" : ""}`
     ).slice(0, 40);
     return join(this.rootDirectory, instanceKey, revisionKey);
   }
@@ -202,7 +202,8 @@ export class SkillFolderCache {
         clientInstanceId,
         name: mount.name,
         revision: mount.revision,
-        sourceVersion: mount.sourceVersion
+        sourceVersion: mount.sourceVersion,
+        ...(mount.draft ? { draft: mount.draft } : {})
       });
     } catch {
       throw skillMountFailure(mount.name, "not_readable");

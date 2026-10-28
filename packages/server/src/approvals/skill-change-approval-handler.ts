@@ -17,6 +17,7 @@ import {
   auditActorFromUser,
   isJsonObject,
   unknownToJsonValue,
+  type ActorAccess,
   type ApprovalRequest,
   type ApprovalRequestContext,
   type ApprovalRequestHandler,
@@ -33,6 +34,14 @@ import {
   applyValidatedConfigAssetMutations,
   type ConfigAssetWriterOptions
 } from "../assets/config-asset-writer";
+
+import { accessResource } from "../assets/asset-access";
+import { writesSharedDraft } from "../assets/shared-drafts";
+import {
+  applySkillChangeDraft,
+  revertSkillChangeDraft,
+  skillDraftBefore
+} from "./skill-change-draft";
 
 const previewSchema = z.object({
   skillName: z.string(),
@@ -116,7 +125,9 @@ export function createSkillChangeApprovalHandler(
       if (context.status !== "pending") {
         return toJsonObject(data.preview);
       }
-      const skill = await options.configAssets.source.getSkill(data.skillName);
+      const skill = context.viewer
+        ? await currentSkill(data.skillName, context.viewer.access)
+        : await options.configAssets.source.getSkill(data.skillName);
       try {
         return toJsonObject(createSkillChangePreview(skill, data.operations));
       } catch {
@@ -142,7 +153,7 @@ export function createSkillChangeApprovalHandler(
       if (!agent || (!creation && !agent.skillNames.includes(data.skillName))) {
         return true;
       }
-      const skill = await options.configAssets.source.getSkill(data.skillName);
+      const skill = await currentSkill(data.skillName);
       if (await workspaceFilesChanged(skill, data.baseSourceVersion)) return true;
       try {
         applySkillChange(skill, data.operations);
@@ -161,7 +172,7 @@ export function createSkillChangeApprovalHandler(
       // A change already written, whose approval failed to be recorded, is recovered as it is.
       if (await findProducedRevision(data.skillName, context.requestId)) return [];
       // The skill whole: the snapshot leaves its resources out, and the guardrails read them.
-      const current = await options.configAssets.source.getSkill(data.skillName);
+      const current = await currentSkill(data.skillName);
       // A change that no longer applies was found stale before this is asked.
       const skill = applySkillChange(current, data.operations);
       return [
@@ -177,9 +188,24 @@ export function createSkillChangeApprovalHandler(
     },
     // The skill as the revert writes it back: the revision before the change, read like a new
     // write. Reverting a created skill deletes it and writes no content.
-    async revertEvents(request) {
+    async revertEvents(request, context) {
       const data = validatePayload(request.payload);
       if (data.operations[0]?.type === "create_skill") return [];
+      if (typeof request.applyResult?.draftRevision === "number") {
+        const before = await skillDraftBefore(options, request, context);
+        return before
+          ? [
+              {
+                name: "asset.before_write",
+                subject: { kind: "skill", name: data.skillName },
+                checkable: () => ({
+                  name: data.skillName,
+                  content: guardrailFieldOf(guardrailStringsOf(before.config))
+                })
+              }
+            ]
+          : [];
+      }
       const history = await listSkillRevisions(data.skillName);
       // An undo already written, whose status was not recorded, is recovered as it is.
       if (revertedBy(history, request.id)) return [];
@@ -234,6 +260,19 @@ export function createSkillChangeApprovalHandler(
         });
       }
       const skill = applySkillChange(snapshot.skill, data.operations);
+      if (
+        snapshot.live?.status === "active" &&
+        (await writesSharedDraft(options, "skill", snapshot.live.scope))
+      ) {
+        return applySkillChangeDraft(
+          options,
+          context,
+          user,
+          snapshot.live,
+          snapshot.draft,
+          toJsonObject(skill)
+        );
+      }
       const mutations: ConfigAssetMutation[] = [
         {
           type: "upsert",
@@ -278,6 +317,10 @@ export function createSkillChangeApprovalHandler(
       context: ApprovalRequestContext
     ) {
       const data = validatePayload(request.payload);
+      if (typeof request.applyResult?.draftRevision === "number") {
+        await revertSkillChangeDraft(options, request, context, user);
+        return { skillName: data.skillName, reverted: true };
+      }
       const snapshot = await loadMutationSnapshot(data);
       const history = await listSkillRevisions(data.skillName);
       const applied = findRequestRevision(history, request.id);
@@ -352,6 +395,26 @@ export function createSkillChangeApprovalHandler(
     }
   };
 
+  async function currentSkill(name: string, access?: ActorAccess) {
+    const live = await store.getConfigAsset({
+      clientInstanceId: options.clientInstanceId,
+      kind: "skill",
+      name
+    });
+    if (live?.status !== "active") return undefined;
+    const mayReadDraft =
+      access === undefined ||
+      access.authorize("skill.write", accessResource("skill", name, live.scope, live.id)).allowed;
+    const draft =
+      mayReadDraft && (await writesSharedDraft(options, "skill", live.scope))
+        ? await options.stores.agentProposals.get({
+            clientInstanceId: options.clientInstanceId,
+            agentId: live.id
+          })
+        : undefined;
+    return skillConfigSchema.parse(draft?.config ?? live.config);
+  }
+
   /** Text operations may rebase; the workspace files the proposing agent saw must stay the same. */
   async function workspaceFilesChanged(
     skill: SkillConfig | undefined,
@@ -396,18 +459,30 @@ export function createSkillChangeApprovalHandler(
       read("skill", names.skillName),
       read("agent", names.agentName)
     ]);
+    const draft =
+      skill?.status === "active" && (await writesSharedDraft(options, "skill", skill.scope))
+        ? await options.stores.agentProposals.get({
+            clientInstanceId: options.clientInstanceId,
+            agentId: skill.id
+          })
+        : undefined;
     const revisions = new Map([
       [`skill:${names.skillName}`, skill?.revision ?? null],
       [`agent:${names.agentName}`, agent?.revision ?? null]
     ]);
     return {
+      live: skill,
+      draft,
       // Mutations use the stored definition, never the degraded runtime copy.
       agent: agent?.status === "active" ? agentConfigSchema.parse(agent.config) : undefined,
       /**
        * The skill whole, with its resources, which the snapshot leaves out: the content of the
        * revision read above, so a change is made from what its base names.
        */
-      skill: skill?.status === "active" ? skillConfigSchema.parse(skill.config) : undefined,
+      skill:
+        skill?.status === "active"
+          ? skillConfigSchema.parse(draft?.config ?? skill.config)
+          : undefined,
       /** The last revision of the asset, a deleted one's included, or `null` for none. */
       revisionOf: (kind: (typeof CONFIG_ASSET_KINDS)[number], name: string) =>
         revisions.get(`${kind}:${name}`) ?? null,

@@ -69,6 +69,7 @@ describe("skill change approval workflow", () => {
       mutations: [
         {
           type: "upsert",
+          scope: f.owner,
           kind: "agent",
           name: f.agent.name,
           config: reverted.config,
@@ -279,7 +280,9 @@ describe("skill change approval workflow", () => {
       const before = { ...skill, files: change === "add" ? [] : [entry] };
       await applyAtCurrentRevisions(f.store.configAssets, {
         clientInstanceId,
-        mutations: [{ type: "upsert", kind: "skill", name: skill.name, config: json(before) }]
+        mutations: [
+          { type: "upsert", scope: f.owner, kind: "skill", name: skill.name, config: json(before) }
+        ]
       });
       const request = await f.workflow.createRequest(requester, context, {
         kind: "skill_change",
@@ -298,7 +301,9 @@ describe("skill change approval workflow", () => {
       };
       await applyAtCurrentRevisions(f.store.configAssets, {
         clientInstanceId,
-        mutations: [{ type: "upsert", kind: "skill", name: skill.name, config: json(after) }]
+        mutations: [
+          { type: "upsert", scope: f.owner, kind: "skill", name: skill.name, config: json(after) }
+        ]
       });
       expect(await f.approve(request.id)).toMatchObject({ status: "superseded" });
       expect(await f.revisions()).toHaveLength(3);
@@ -313,6 +318,7 @@ describe("skill change approval workflow", () => {
       mutations: [
         {
           type: "upsert",
+          scope: f.owner,
           kind: "skill",
           name: skill.name,
           config: json({ ...skill, content: "Other content" })
@@ -348,6 +354,7 @@ describe("skill change approval workflow", () => {
       mutations: [
         {
           type: "upsert",
+          scope: f.owner,
           kind: "agent",
           name: f.agent.name,
           config: json({ ...f.agent, skillNames: [] })
@@ -358,7 +365,7 @@ describe("skill change approval workflow", () => {
     await applyAtCurrentRevisions(f.store.configAssets, {
       clientInstanceId,
       mutations: [
-        { type: "delete", kind: "agent", name: f.agent.name },
+        { type: "delete", scope: f.owner, kind: "agent", name: f.agent.name },
         { type: "setDefaultAgent", agentName: undefined }
       ]
     });
@@ -381,6 +388,7 @@ describe("skill change approval workflow", () => {
       mutations: [
         {
           type: "upsert",
+          scope: f.owner,
           kind: "agent",
           name: f.agent.name,
           config: json({ ...f.agent, skillNames: [] })
@@ -453,7 +461,9 @@ describe("skill change approval workflow", () => {
       };
       await applyAtCurrentRevisions(f.store.configAssets, {
         clientInstanceId,
-        mutations: [{ type: "upsert", kind: "agent", name: stored.name, config: json(stored) }]
+        mutations: [
+          { type: "upsert", scope: f.owner, kind: "agent", name: stored.name, config: json(stored) }
+        ]
       });
       expect((await f.source.getSnapshot()).agents[0]).toMatchObject({
         toolNames: f.agent.toolNames,
@@ -477,6 +487,7 @@ describe("skill change approval workflow", () => {
       mutations: [
         {
           type: "upsert",
+          scope: f.owner,
           kind: "agent",
           name: f.agent.name,
           config: json({ ...f.agent, modelProviderId: "removed_model" })
@@ -535,6 +546,7 @@ describe("skill change approval workflow", () => {
           mutations: [
             {
               type: "upsert",
+              scope: f.owner,
               kind: "skill",
               name: skill.name,
               config: json({ ...skill, content: "Concurrent work" })
@@ -565,6 +577,7 @@ describe("skill change approval workflow", () => {
       mutations: [
         {
           type: "upsert",
+          scope: f.owner,
           kind: "skill",
           name: skill.name,
           config: json({ ...skill, content: "Newer work" })
@@ -590,6 +603,7 @@ describe("skill change approval workflow", () => {
       mutations: [
         {
           type: "upsert",
+          scope: f.owner,
           kind: "agent",
           name: "other",
           config: json({ ...f.agent, name: "other", skillNames: ["new_skill"] })
@@ -623,6 +637,7 @@ describe("skill change approval workflow", () => {
         mutations: [
           {
             type: "upsert",
+            scope: f.owner,
             kind: "agent",
             name: "other",
             config: json({ ...f.agent, name: "other", skillNames: ["new_skill"] })

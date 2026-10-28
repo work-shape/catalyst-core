@@ -63,7 +63,7 @@ export interface WorkspaceSkillSource {
 }
 
 /**
- * The skills a workspace command of this run mounts, each at the revision that is live now:
+ * The skills a workspace command of this run mounts, at their frozen Try draft or live revision:
  * exactly those `read_skill` lets the run read (`runSkillOffer`, of skills that exist), in the
  * order of their names. None for a call outside an agent run.
  */
@@ -82,6 +82,16 @@ export async function runSkillMounts(
   const mounts: WorkspaceCommandSkillMount[] = [];
   for (const name of [...allowed.names].filter((candidate) => existing.has(candidate)).sort()) {
     if (!isMountableSkillName(name)) continue;
+    const draft = context.agentPreview?.skills?.find((skill) => skill.config.name === name);
+    if (draft) {
+      mounts.push({
+        name,
+        revision: draft.revision,
+        sourceVersion: createSkillSourceVersion(draft.config),
+        draft: { config: draft.config, ...(draft.fileSetId ? { fileSetId: draft.fileSetId } : {}) }
+      });
+      continue;
+    }
     const live = await source.assetSource.getSkillRevision(name);
     if (!live || live.skill.name !== name) continue;
     mounts.push({
