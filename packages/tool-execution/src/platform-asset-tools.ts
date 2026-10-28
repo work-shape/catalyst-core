@@ -1,5 +1,6 @@
 import { AppError } from "@work-shape/catalyst-core";
 import type { AnyToolDefinition } from "@work-shape/catalyst-tool-sdk";
+import type { AppEditCalls } from "./app-edit-tool";
 import type { AppSaveCalls } from "./app-save-tool";
 import { createGetAssetTool, type PlatformAssetGetCalls } from "./platform-asset-tools/get";
 import { createOpenAssetTool, type PlatformAssetOpenCalls } from "./platform-asset-tools/open";
@@ -44,6 +45,7 @@ export { platformAssetWriteRefusal } from "./platform-asset-tools/refusal";
 export interface PlatformAssetCalls
   extends
     AppSaveCalls,
+    AppEditCalls,
     PlatformAssetGetCalls,
     PlatformAssetOpenCalls,
     PlatformAssetPutCalls,

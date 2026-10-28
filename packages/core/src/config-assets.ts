@@ -858,6 +858,8 @@ export interface ConfigAssetStore {
     conversationId: ConversationId;
     folder: string;
   }): Promise<AssetCheckout | undefined>;
+  /** Binds a loaded working copy to its immutable base revision; moves no asset pointer. */
+  setAssetCheckout(input: AssetCheckout & { clientInstanceId: ClientInstanceId }): Promise<void>;
   /** Availability of active assets of one kind that have a record, keyed by name. */
   listAgentAvailability(input: {
     clientInstanceId: ClientInstanceId;

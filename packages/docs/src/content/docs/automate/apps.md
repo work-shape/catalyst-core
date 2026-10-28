@@ -31,6 +31,12 @@ You can also save it yourself:
 
 After that, each change you ask for in the same chat goes into the App's draft once the agent saves it again. The preview's header says what you look at: "Preview · not saved yet" ("Vorschau · noch nicht gespeichert") before the first save, and afterwards that it is a preview of the App, whose Data Stores and Workflows run only in the App itself. **Open app** ("App öffnen") takes you to the App's draft with the chat beside it. When the agent's save did not reach the draft, for example because someone changed the draft elsewhere, **Save to draft** ("Im Entwurf speichern") in the preview's header puts what the preview shows now into the draft (**Replace draft**, "Entwurf ersetzen", where the draft changed). Saving publishes nothing: others see the change once you publish.
 
+## Change an existing App from a new chat
+
+Start a chat in the App's workspace and ask the Workshaper to change it. The agent loads the current draft with all its files, opens its preview and saves your change as a new draft. The conversation that built the App can be deleted; the App keeps its own files.
+
+Nobody locks the App while editing. If somebody saves a newer draft before your agent saves, its save is refused and names who saved and when. The agent reloads the current draft and applies your change again. The newer draft stays intact until that succeeds. You need the right to edit the App and a conversation of your own.
+
 ## Try it safely
 
 Open **Apps** in the main rail and the App, then **Edit** ("Bearbeiten"). The draft opens on its **Preview**. **Technical details** ("Technische Details") beside it shows two more tabs, **Files** and **Actions** ("Aktionen"); your browser keeps them open until you fold them again.

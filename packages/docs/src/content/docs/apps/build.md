@@ -24,6 +24,12 @@ A quick preview may show data the agent wrote into it. Live data comes through n
 
 An App that shows what a Workflow made gets it as fields, not prose: the Workflow's `agent` step returns structured JSON through its `outputSchema`, and the App lays out each field itself. A large result can come without its output (`outputTruncated`); the App then says where the run's result is, never a generic error. See [Actions that start a Workflow](/apps/workflow-actions/#the-runs-output).
 
+## Edit an existing App from any conversation
+
+Call `app.edit` with the App's `name` (id) from discovery. It needs `app.write`, a private conversation in the App's workspace, and loads the current draft's complete source into `apps/<name>/`. It opens the saved preview and makes the App the conversation's subject. Read the loaded files, change that folder, call `workspace.open` on it and save with `app.save` on the same path. The original build conversation is not needed.
+
+The folder is a working copy, without a lock. A save succeeds only while its base revision and commit are still the draft; its base moves atomically with a successful save. A refused save says who saved and when. Report that, call `app.edit` again to load the newer draft, redo your change on those files, then open and save again. Reload replaces the whole App folder, including unsaved files, and leaves other workspace files alone. Never force the old copy over a newer draft. Automatic merging and git history in the working folder are later slices.
+
 ## The folder
 
 ```text

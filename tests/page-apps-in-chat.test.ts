@@ -2,12 +2,13 @@ import { randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { APP_ASSET_KIND } from "@work-shape/catalyst-api-contract";
 import {
   createPlatformAssetCalls,
   createSandboxAssetRepo,
+  createPageBuildClient,
   type AssetRepoCommitRunner
 } from "@work-shape/catalyst-server";
 import {
@@ -17,14 +18,20 @@ import {
   createPlatformId,
   createToolResultMetadata,
   isAppError,
+  readObjectBytes,
   type CentralPolicySetting,
   type ToolExecutionContext,
   type UserRecord
 } from "@work-shape/catalyst-core";
 import {
   createAppSaveTool,
+  createAppEditTool,
+  createWorkspaceOpenTool,
+  WorkspaceCommandService,
   LocalWorkspaceCommandProcessExecutor
 } from "@work-shape/catalyst-tool-execution";
+import { withTestSql } from "./support/test-sql";
+import { MemoryObjectStorage } from "./support/memory-object-storage";
 import { agent, clientInstanceId } from "./support/access-instance";
 import { appFiles, expectStatus, setupAppInstance, type AppInstance } from "./support/app-instance";
 import { assetRepoCommandFromSource } from "./support/asset-repo";
@@ -43,6 +50,7 @@ describe("app.save in a conversation", () => {
   let t: AppInstance;
   let calls: ReturnType<typeof createPlatformAssetCalls>;
   let scratch: string;
+  const workspaceObjects = new MemoryObjectStorage();
   const commitFails = { next: false };
   const settings: CentralPolicySetting[] = [];
 
@@ -62,13 +70,14 @@ describe("app.save in a conversation", () => {
     };
     t = await setupAppInstance({
       commits,
+      workspaceObjects,
       server: () => ({ operations: { centralPolicySettings: () => settings } })
     });
     // The server, and with it its options, is built on the first request.
     await t.instance.call("health.get");
     const options = testServerOptions(t.instance);
     if (!options) throw new Error("The instance has no server options");
-    calls = createPlatformAssetCalls(options);
+    calls = createPlatformAssetCalls(options, workspaceObjects);
   });
   afterAll(async () => {
     await t.close();
@@ -207,7 +216,7 @@ describe("app.save in a conversation", () => {
     expect(await stored("from-shared")).toBeUndefined();
   });
 
-  it("writes the App's next draft only from the same folder in the same conversation", async () => {
+  it("requires a checkout before a different conversation can save an App's draft", async () => {
     const conversationId = await conversationOf(t.admin, "private");
     await t.storePage("first", {}, { conversationId });
     const created = await calls.saveApp(await contextOf(t.admin, conversationId), {
@@ -237,6 +246,248 @@ describe("app.save in a conversation", () => {
       message: expect.stringContaining("never wrote")
     });
     expect(await stored("bound-app")).toMatchObject({ revision: 2 });
+  });
+
+  const checkoutOf = (conversationId: string, folder: string) =>
+    t.stores.configAssets.getAssetCheckout({
+      clientInstanceId,
+      conversationId: asConversationId(conversationId),
+      folder
+    });
+  async function workspaceOf(conversationId: string) {
+    const workspace = await t.stores.executionWorkspaces.findExecutionWorkspaceOfActiveConversation(
+      { clientInstanceId, conversationId: asConversationId(conversationId) }
+    );
+    if (!workspace) throw new Error("No execution workspace");
+    return workspace;
+  }
+  async function filesOf(conversationId: string) {
+    const workspace = await workspaceOf(conversationId);
+    return t.stores.executionWorkspaces.listWorkspaceFiles({
+      clientInstanceId,
+      workspaceId: workspace.id
+    });
+  }
+  async function changeAndOpen(conversationId: string, path: string, marker: string) {
+    const context = await contextOf(t.admin, conversationId, "workspace.open");
+    const service = new WorkspaceCommandService({ store: t.stores, fileStore: workspaceObjects });
+    expect(
+      await service.writeFile(
+        {
+          path: `${path}/index.html`,
+          content: `<!doctype html><title>Offers</title><p>${marker}</p>`
+        },
+        context
+      )
+    ).toMatchObject({ status: "success" });
+    const open = createWorkspaceOpenTool({
+      workspace: service.dependencies,
+      builds: createPageBuildClient({ stores: t.stores, pollIntervalMs: 20 })
+    });
+    expect(await open.execute({ path }, context)).toMatchObject({
+      status: "success",
+      output: { pageId: expect.any(String) }
+    });
+  }
+
+  it("loads all draft files in chat 2, saves there, refuses chat 1 naming the save, and reloads to reapply", async () => {
+    const first = await conversationOf(t.admin, "private");
+    await t.storePage("first chat", {}, { conversationId: first });
+    await calls.saveApp(await contextOf(t.admin, first), {
+      page: "Offers",
+      name: "two-chats",
+      title: "Two chats"
+    });
+    const app = await stored("two-chats");
+    expect(await checkoutOf(first, "Offers")).toMatchObject({
+      baseRevision: 1,
+      baseCommit: app?.commit
+    });
+    const second = await conversationOf(t.admin, "private");
+    const tool = createAppEditTool(calls);
+    const result = await tool.execute(
+      { name: "two-chats" },
+      await contextOf(t.admin, second, "app.edit")
+    );
+    expect(result).toMatchObject({
+      status: "success",
+      output: { path: "apps/two-chats", revision: 1 }
+    });
+    expect(await subjectOf(second)).toEqual({ kind: "app", name: "two-chats" });
+    const path = "apps/two-chats";
+    const loaded = await filesOf(second);
+    expect(loaded.map((file) => file.path).sort()).toEqual([
+      `${path}/app.yaml`,
+      `${path}/index.html`
+    ]);
+    const html = loaded.find((file) => file.path.endsWith("index.html"));
+    if (!html) throw new Error("No source HTML");
+    expect(
+      new TextDecoder().decode(await readObjectBytes(workspaceObjects, html.objectKey))
+    ).toContain("first chat");
+    expect(await checkoutOf(second, path)).toMatchObject({ assetId: app?.id, baseRevision: 1 });
+    await changeAndOpen(second, path, "second chat change");
+    expect(
+      await calls.saveApp(await contextOf(t.admin, second), { ...later, page: path })
+    ).toMatchObject({ saved: true, revision: 2, name: "two-chats" });
+    const moved = await stored("two-chats");
+    expect(await checkoutOf(second, path)).toMatchObject({
+      baseRevision: 2,
+      baseCommit: moved?.commit
+    });
+    const savedBy = await t.stores.configAssets.getConfigAssetRevision({
+      clientInstanceId,
+      kind: "app",
+      name: "two-chats",
+      revision: 2
+    });
+    await t.storePage("stale first chat", {}, { conversationId: first });
+    const refused = await calls.saveApp(await contextOf(t.admin, first), later);
+    expect(refused).toMatchObject({
+      saved: false,
+      message: expect.stringContaining(t.admin.displayLabel)
+    });
+    if (!savedBy) throw new Error("No saved revision");
+    expect(refused).toMatchObject({ message: expect.stringContaining(savedBy.createdAt) });
+    expect(refused).toMatchObject({ message: expect.stringContaining("app.edit") });
+    expect(await stored("two-chats")).toMatchObject({ revision: 2, fileSetId: moved?.fileSetId });
+    expect(await checkoutOf(first, "Offers")).toMatchObject({ baseRevision: 1 });
+    await calls.editApp(await contextOf(t.admin, first, "app.edit"), { name: "two-chats" });
+    const reloaded = (await filesOf(first)).find((file) => file.path === `${path}/index.html`);
+    if (!reloaded) throw new Error("No reloaded source file");
+    expect(
+      new TextDecoder().decode(await readObjectBytes(workspaceObjects, reloaded.objectKey))
+    ).toContain("second chat change");
+    await changeAndOpen(first, path, "second chat change plus reapplied first change");
+    expect(
+      await calls.saveApp(await contextOf(t.admin, first), { ...later, page: path })
+    ).toMatchObject({ saved: true, revision: 3 });
+    const preview = z.object({ url: z.string() }).parse(
+      (
+        await t.expectOk(t.admin.id, "apps.preview", {
+          params: { app: "two-chats" },
+          payload: { mode: "draft" }
+        })
+      ).json()
+    );
+    expect(await t.open(preview.url)).toMatchObject({
+      status: 200,
+      body: expect.stringContaining("second chat change plus reapplied first change")
+    });
+  });
+
+  it("copies nested binary sources and reloads the whole folder, removing files the draft no longer has", async () => {
+    const buildChat = await conversationOf(t.admin, "private");
+    await t.storePage("draft", {}, { conversationId: buildChat });
+    await calls.saveApp(await contextOf(t.admin, buildChat), {
+      page: "Offers",
+      name: "binary-edit",
+      title: "Binary"
+    });
+    expectStatus(
+      await t.putApp(t.admin.id, "binary-edit", [
+        ...appFiles("draft"),
+        { path: "images/mark.bin", base64: Buffer.from([0, 1, 255, 42]).toString("base64") }
+      ]),
+      200
+    );
+    const chat = await conversationOf(t.admin, "private");
+    const edited = await calls.editApp(await contextOf(t.admin, chat, "app.edit"), {
+      name: "binary-edit"
+    });
+    const binary = (await filesOf(chat)).find((file) => file.path.endsWith("images/mark.bin"));
+    if (!binary) throw new Error("No binary source file");
+    expect(await readObjectBytes(workspaceObjects, binary.objectKey)).toEqual(
+      new Uint8Array([0, 1, 255, 42])
+    );
+    const service = new WorkspaceCommandService({ store: t.stores, fileStore: workspaceObjects });
+    await service.writeFile(
+      { path: `${edited.path}/extra.txt`, content: "unsaved" },
+      await contextOf(t.admin, chat)
+    );
+    await service.writeFile(
+      { path: "notes/keep.txt", content: "unrelated" },
+      await contextOf(t.admin, chat)
+    );
+    expectStatus(await t.putApp(t.admin.id, "binary-edit", appFiles("updated draft")), 200);
+    await calls.editApp(await contextOf(t.admin, chat, "app.edit"), { name: "binary-edit" });
+    expect((await filesOf(chat)).map((file) => file.path).sort()).toEqual([
+      `${edited.path}/app.yaml`,
+      `${edited.path}/index.html`,
+      "notes/keep.txt"
+    ]);
+    expect(await checkoutOf(chat, edited.path)).toMatchObject({ baseRevision: 3 });
+  });
+
+  it("refuses app.edit without app.write, across workspaces, and in a shared transcript before copying files or changing the subject", async () => {
+    expectStatus(await t.putApp(t.admin.id, "edit-rights", appFiles("private source")), 200);
+    for (const [user, where, code] of [
+      [t.kai, "private", "FORBIDDEN"],
+      [t.admin, "personal", "NOT_FOUND"],
+      [t.admin, "shared", "CONFLICT"]
+    ] as const) {
+      const chat = await conversationOf(user, where);
+      expect(
+        await refusal(
+          calls.editApp(await contextOf(user, chat, "app.edit"), { name: "edit-rights" })
+        )
+      ).toMatchObject({ code });
+      expect(await subjectOf(chat)).toBeUndefined();
+      expect(
+        await t.stores.executionWorkspaces.findExecutionWorkspaceOfActiveConversation({
+          clientInstanceId,
+          conversationId: asConversationId(chat)
+        })
+      ).toBeUndefined();
+    }
+  });
+
+  it("creates the checkout on an old build chat's first save", async () => {
+    const chat = await conversationOf(t.admin, "private");
+    await t.storePage("legacy build", {}, { conversationId: chat });
+    await calls.saveApp(await contextOf(t.admin, chat), {
+      page: "Offers",
+      name: "legacy-checkout",
+      title: "Legacy"
+    });
+    await withTestSql((sql) => sql`delete from asset_checkouts where conversation_id = ${chat}`);
+    await t.storePage("legacy next", {}, { conversationId: chat });
+    expect(await calls.saveApp(await contextOf(t.admin, chat), later)).toMatchObject({
+      saved: true,
+      revision: 2
+    });
+    expect(await checkoutOf(chat, "Offers")).toMatchObject({ baseRevision: 2 });
+  });
+
+  it("refuses a draft moved after the save read its base, with the concurrent saver named", async () => {
+    const chat = await conversationOf(t.admin, "private");
+    await t.storePage("base", {}, { conversationId: chat });
+    await calls.saveApp(await contextOf(t.admin, chat), {
+      page: "Offers",
+      name: "save-race",
+      title: "Race"
+    });
+    await t.storePage("our pending change", {}, { conversationId: chat });
+    const getCheckout = t.stores.configAssets.getAssetCheckout.bind(t.stores.configAssets);
+    const spy = vi
+      .spyOn(t.stores.configAssets, "getAssetCheckout")
+      .mockImplementationOnce(async (input) => {
+        const base = await getCheckout(input);
+        expectStatus(await t.putApp(t.admin.id, "save-race", appFiles("concurrent winner")), 200);
+        return base;
+      });
+    try {
+      const result = await calls.saveApp(await contextOf(t.admin, chat), later);
+      expect(result).toMatchObject({
+        saved: false,
+        message: expect.stringContaining(t.admin.displayLabel)
+      });
+      expect(result).toMatchObject({ message: expect.stringContaining("app.edit") });
+      expect(await stored("save-race")).toMatchObject({ revision: 2 });
+      expect(await checkoutOf(chat, "Offers")).toMatchObject({ baseRevision: 1 });
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it("records the saving agent's display name for Page and direct saves, without rewriting old revisions", async () => {

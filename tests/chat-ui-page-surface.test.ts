@@ -51,6 +51,40 @@ const refused = {
 };
 
 describe("a call of workspace.open", () => {
+  it("opens an app.edit checkout at its returned folder in the existing preview surface", () => {
+    const next = pageSurfaceAfterRunCalls({
+      conversationId: "chat-2",
+      handled: new Set(),
+      current: undefined,
+      t,
+      parts: [
+        {
+          type: "tool_call",
+          toolCallId: "edit-1",
+          toolName: "app.edit",
+          input: { name: "offers" },
+          state: "output_available",
+          output: {
+            output: {
+              ...built.output,
+              name: "offers",
+              title: "Offers",
+              path: "apps/offers",
+              revision: 2
+            }
+          }
+        }
+      ]
+    });
+    expect(next).toMatchObject({
+      kind: "page",
+      path: "apps/offers",
+      title: "Offers",
+      pageId: "page-1",
+      fileSetId: "set-2"
+    });
+  });
+
   it("is a build while it has no answer, a revision when it stored one", () => {
     expect(readPageSave({ args: { path: " Offers " }, result: undefined })).toEqual({
       state: "building",

@@ -134,12 +134,10 @@ export const draftNotWritten = (
   message
 });
 
-export const DRAFT_CHANGED_ELSEWHERE =
+const DRAFT_CHANGED_ELSEWHERE =
   "The App's draft was changed elsewhere since this folder last wrote it, so this save did not write over it. Tell the person: Save to draft in the preview replaces the draft with what the preview shows.";
-export const DRAFT_MOVED_TO_OTHER_PAGE =
-  "Another folder was put into this App since this one last wrote it, so its draft is now written from that folder and this save did not change it. Tell the person: Save to draft in the preview puts this folder into the App again.";
 export const DRAFT_OF_OTHER_FOLDER =
-  "This conversation is about an App that this folder never wrote, so this save did not change it. Save the folder the App was made from, or ask the person to start a new conversation for a new App.";
+  "This folder never wrote or checked out this App, so this save did not change it. Call app.edit to load the current draft into this conversation, then change and save the returned path.";
 
 const issueMessagesSchema = z.object({ issues: z.array(z.object({ message: z.string() })) });
 

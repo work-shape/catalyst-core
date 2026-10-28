@@ -1,3 +1,9 @@
+export {
+  APP_EDIT_TOOL_NAME,
+  createAppEditTool,
+  type AppEditCalls,
+  type AppEdited
+} from "./app-edit-tool";
 export * from "./tool-registry";
 export * from "./built-in-tools";
 export {

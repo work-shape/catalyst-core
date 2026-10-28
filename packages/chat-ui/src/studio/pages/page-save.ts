@@ -9,7 +9,11 @@ import type { PageBuildError, Surface, SurfaceOf } from "../../chat/surface/surf
 export const FORMER_OPEN_TOOL_NAME = "page.save";
 
 /** The tools whose calls open a revision in the preview. */
-const OPEN_TOOL_NAMES: ReadonlySet<string> = new Set(["workspace.open", FORMER_OPEN_TOOL_NAME]);
+const OPEN_TOOL_NAMES: ReadonlySet<string> = new Set([
+  "workspace.open",
+  "app.edit",
+  FORMER_OPEN_TOOL_NAME
+]);
 
 /** Whether a call of `toolName` opens a revision in the preview. */
 export function isOpenToolName(toolName: string | undefined): boolean {
@@ -94,6 +98,7 @@ export function readPageSave(input: {
   const container = isRecord(input.result) ? input.result : {};
   const output = isRecord(container.output) ? container.output : container;
   const { pageId, fileSetId, number, title } = output;
+  const openedName = typeof output.path === "string" ? output.path : name;
   if (
     typeof pageId === "string" &&
     typeof fileSetId === "string" &&
@@ -104,7 +109,7 @@ export function readPageSave(input: {
     const app = readSaveApp(output.app);
     return {
       state: "built",
-      name,
+      name: openedName,
       pageId,
       fileSetId,
       number,

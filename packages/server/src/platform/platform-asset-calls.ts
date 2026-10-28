@@ -1,3 +1,5 @@
+import type { ObjectStorage } from "@work-shape/catalyst-core";
+import { appEditCalls } from "./asset-calls/app-edit";
 import type { PlatformAssetCalls } from "@work-shape/catalyst-tool-execution";
 import type { AssetWorkflowOptions } from "../types";
 import { appSaveCalls } from "./asset-calls/app-save";
@@ -19,10 +21,14 @@ import { subjectCalls } from "./asset-calls/subject";
 // `platform.context.get` has. Each family of calls is a file of its own under `asset-calls/`,
 // over one scope; a new family is one more line below.
 
-export function createPlatformAssetCalls(options: AssetWorkflowOptions): PlatformAssetCalls {
+export function createPlatformAssetCalls(
+  options: AssetWorkflowOptions,
+  workspaceObjects?: ObjectStorage
+): PlatformAssetCalls {
   const scope = createAssetCallScope(options);
   return {
     ...appSaveCalls(scope),
+    ...appEditCalls(scope, workspaceObjects),
     ...discoveryCalls(scope),
     ...putCalls(scope),
     ...skillCalls(scope),
