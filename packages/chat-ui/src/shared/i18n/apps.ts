@@ -126,6 +126,8 @@ export const apps = defineTranslations({
     "apps.edit": "Edit",
     "apps.editNamed": "Edit {name}",
     "apps.editInChat": "Edit in chat",
+    "apps.beingEdited": "Being edited by {name} since {since}",
+    "apps.editorSince": "{name} since {since}",
     "apps.editWithAgentClose": "Close",
     "apps.editWithAgentFailed": "The conversation could not be started.",
     "apps.editWithAgentRefused": "This app is not available to you for editing with the agent.",
@@ -398,6 +400,8 @@ export const apps = defineTranslations({
     "apps.edit": "Bearbeiten",
     "apps.editNamed": "{name} bearbeiten",
     "apps.editInChat": "Im Chat bearbeiten",
+    "apps.beingEdited": "Wird bearbeitet von {name} seit {since}",
+    "apps.editorSince": "{name} seit {since}",
     "apps.editWithAgentClose": "Schließen",
     "apps.editWithAgentFailed": "Die Unterhaltung konnte nicht gestartet werden.",
     "apps.editWithAgentRefused":

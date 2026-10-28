@@ -141,6 +141,7 @@ export function AppStateBadge({
 export function AppHeader({
   name,
   description,
+  editingLine,
   state,
   keepState = false,
   secondaryActions,
@@ -153,6 +154,8 @@ export function AppHeader({
   name: string;
   /** What the App does, in one line after its name. */
   description?: string;
+  /** Other people currently editing this draft; remains readable at phone width. */
+  editingLine?: string;
   /** The badge after the name: the published or the draft revision. */
   state?: ReactNode;
   /**
@@ -172,30 +175,37 @@ export function AppHeader({
   const { t } = useTranslation();
   const stateUnderHead = keepState && tabs !== undefined;
   const head = (
-    <PageHeader
-      variant="detail"
-      className={cn("shrink-0", tabs !== undefined && "border-b-0")}
-      back={
-        <PageHeaderBack
-          href={backHref}
-          label={t("apps.backToList")}
-          onClick={(event) => {
-            if (opensHere(event)) {
-              event.preventDefault();
-              onBack();
-            }
-          }}
-        >
-          {t("apps.title")}
-        </PageHeaderBack>
-      }
-      title={name}
-      description={description}
-      state={stateUnderHead ? undefined : state}
-      secondaryActions={secondaryActions}
-      primaryAction={primaryAction}
-      menu={menu}
-    />
+    <>
+      <PageHeader
+        variant="detail"
+        className={cn("shrink-0", tabs !== undefined && "border-b-0")}
+        back={
+          <PageHeaderBack
+            href={backHref}
+            label={t("apps.backToList")}
+            onClick={(event) => {
+              if (opensHere(event)) {
+                event.preventDefault();
+                onBack();
+              }
+            }}
+          >
+            {t("apps.title")}
+          </PageHeaderBack>
+        }
+        title={name}
+        description={description}
+        state={stateUnderHead ? undefined : state}
+        secondaryActions={secondaryActions}
+        primaryAction={primaryAction}
+        menu={menu}
+      />
+      {editingLine ? (
+        <p role="status" className="px-(--layout-gutter) py-2 text-caption text-muted-foreground">
+          {editingLine}
+        </p>
+      ) : null}
+    </>
   );
   return tabs === undefined ? (
     head

@@ -425,7 +425,22 @@ export class AssetReadWorkflow {
       target.kind.kind === "app" && !publishedOnly && asset.publishedRevision !== undefined
         ? await this.liveVersion(asset.id, asset.publishedRevision)
         : undefined;
+    // Read-only presence: existing checkout/conversation retention and region, no new payload
+    // or audit record. Only a writer reads it; the store names current workspace co-members.
+    const appEditors =
+      target.kind.kind === "app" &&
+      !address.revision &&
+      allowed.includes("write") &&
+      !isAuthenticatedServicePrincipal(call.actor)
+        ? await this.options.configAssets.store.listOpenAssetCheckouts({
+            clientInstanceId: this.options.clientInstanceId,
+            assetId: asset.id,
+            viewerId: getSubjectUserId(call.actor),
+            activeAfter: new Date(Date.now() - 24 * 60 * 60 * 1000)
+          })
+        : undefined;
     return {
+      ...(appEditors ? { appEditors } : {}),
       ...(saveApproval ? { saveApproval } : {}),
       ...(agentStatus ?? {}),
       ...(draftSummary ? { agentDraft: draftSummary } : {}),

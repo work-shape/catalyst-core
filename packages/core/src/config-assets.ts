@@ -858,6 +858,17 @@ export interface ConfigAssetStore {
     conversationId: ConversationId;
     folder: string;
   }): Promise<AssetCheckout | undefined>;
+  /**
+   * Unsaved working copies of the current draft in chats active after `activeAfter`.
+   * Names only active co-members of the asset's workspace, excluding the viewer; no chat data.
+   * A save closes the hint even though it advances the checkout's base.
+   */
+  listOpenAssetCheckouts(input: {
+    clientInstanceId: ClientInstanceId;
+    assetId: string;
+    viewerId: string;
+    activeAfter: Date;
+  }): Promise<{ displayLabel: string; since: string }[]>;
   /** Binds a loaded working copy to its immutable base revision; moves no asset pointer. */
   setAssetCheckout(input: AssetCheckout & { clientInstanceId: ClientInstanceId }): Promise<void>;
   /** Availability of active assets of one kind that have a record, keyed by name. */

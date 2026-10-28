@@ -492,6 +492,102 @@ describe("app.save in a conversation", () => {
     ).toMatchObject({ saved: true, name: "edit-in-chat" });
   });
 
+  it("names only visible co-editors of a current unsaved checkout and clears after save or 24 hours idle", async () => {
+    const name = "checkout-presence";
+    const buildChat = await conversationOf(t.admin, "private");
+    await t.storePage("presence draft", {}, { conversationId: buildChat });
+    await calls.saveApp(await contextOf(t.admin, buildChat), { ...later, name });
+    // B can write this App; A's transcript stays private and unreadable to B.
+    const asset = await stored(name);
+    if (!asset) throw new Error("No App");
+    await t.grant(t.kai.id, "app.write", { assetId: asset.id });
+    const read = async (user = t.kai) =>
+      (
+        await t.expectOk(user.id, "assets.get", {
+          params: { kind: "app", name },
+          query: { workspaceId: t.workspaceId }
+        })
+      ).json();
+    expect(await read()).toMatchObject({ appEditors: [] });
+    const opened = idSchema.parse(
+      (
+        await t.expectOk(t.admin.id, "conversations.create", {
+          payload: {
+            collaborationWorkspaceId: t.workspaceId,
+            subject: { kind: "app", name },
+            checkout: true
+          }
+        })
+      ).json()
+    );
+    const editors = () => read().then((app) => app.appEditors);
+    expect(await editors()).toEqual([
+      {
+        displayLabel: t.admin.displayLabel,
+        since: expect.any(String)
+      }
+    ]);
+    expect(await read(t.admin)).toMatchObject({ appEditors: [] });
+    expectStatus(
+      await t.call(t.kai.id, "conversations.thread.get", { params: { conversationId: opened.id } }),
+      404
+    );
+    // Exactly 24 hours without activity is closed, even with a current base.
+    await withTestSql(
+      (sql) =>
+        sql`update conversations set updated_at = ${new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()} where id = ${opened.id}`
+    );
+    expect(await editors()).toEqual([]);
+    await withTestSql(
+      (sql) =>
+        sql`update conversations set updated_at = ${new Date().toISOString()} where id = ${opened.id}`
+    );
+    expect(await editors()).toHaveLength(1);
+    // Losing shared membership hides the name even from a viewer with an App-specific right.
+    await withTestSql(
+      (sql) =>
+        sql`delete from collaboration_workspace_memberships where user_id = ${t.kai.id} and collaboration_workspace_id = ${t.workspaceId}`
+    );
+    expect(await editors()).toEqual([]);
+    await t.stores.workspaces.addMembership({
+      clientInstanceId,
+      collaborationWorkspaceId: t.workspaceId,
+      userId: t.kai.id,
+      role: "member"
+    });
+    const path = `apps/${name}`;
+    await changeAndOpen(opened.id, path, "saved presence draft");
+    expect(
+      await calls.saveApp(await contextOf(t.admin, opened.id), { ...later, page: path })
+    ).toMatchObject({ saved: true });
+    // The saving checkout has advanced to the new draft, but is no longer open.
+    expect(await editors()).toEqual([]);
+    await calls.editApp(await contextOf(t.admin, opened.id, "app.edit"), { name });
+    expect(await editors()).toHaveLength(1);
+    // A newer draft from another chat supersedes the working copy.
+    const other = idSchema.parse(
+      (
+        await t.expectOk(t.admin.id, "conversations.create", {
+          payload: {
+            collaborationWorkspaceId: t.workspaceId,
+            subject: { kind: "app", name },
+            checkout: true
+          }
+        })
+      ).json()
+    );
+    await changeAndOpen(other.id, path, "newer draft");
+    expect(
+      await calls.saveApp(await contextOf(t.admin, other.id), { ...later, page: path })
+    ).toMatchObject({ saved: true });
+    expect(await editors()).toEqual([]);
+    const published = await t.expectOk(t.kai.id, "assets.get", {
+      params: { kind: "app", name },
+      query: { workspaceId: t.workspaceId, revision: "1" }
+    });
+    expect(published.json()).not.toHaveProperty("appEditors");
+  });
+
   it("makes no conversation for Edit in chat where the person may not change the App", async () => {
     expectStatus(await t.putApp(t.admin.id, "edit-in-chat-rights", appFiles("kept")), 200);
     const count = async (userId: string) =>

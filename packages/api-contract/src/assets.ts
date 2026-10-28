@@ -332,6 +332,15 @@ export const assetSchema = z.object({
    * warnings for the revision this read returns.
    */
   publishNarrative: publishNarrativeSchema.optional(),
+  /** Other visible workspace members with an unsaved checkout of this App's current draft. */
+  appEditors: z
+    .array(
+      z.strictObject({
+        displayLabel: z.string(),
+        since: z.iso.datetime()
+      })
+    )
+    .optional(),
   appAudience: z
     .object({
       selected: appAudienceSchema,
