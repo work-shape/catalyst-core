@@ -98,7 +98,7 @@ import {
   type WorkflowTriggerKind
 } from "@work-shape/catalyst-core";
 import { dataStoresModule, knowledgeModule } from "@work-shape/catalyst-data-stores";
-import { workflowsModule } from "@work-shape/catalyst-workflows";
+import { parseWorkflowManifest, workflowsModule } from "@work-shape/catalyst-workflows";
 import { createTestConfig } from "./support/fixtures";
 
 // The names two lines of work build on side by side: Workflows and Data Stores. Each test
@@ -195,6 +195,13 @@ const manifest: WorkflowManifest = {
       title: { value: "Summary" },
       text: { ref: { step: "summarise", path: "summary" } }
     },
+    {
+      id: "check_failures",
+      name: "Check failures",
+      type: "condition",
+      when: { ref: { step: "each_client", path: "failed" }, op: "greater_than", value: 0 },
+      then: [{ id: "independent", name: "Independent checks", type: "parallel", branches: [] }]
+    },
     { id: "result", name: "Result", type: "output", input: { findings: { value: 0 } } }
   ]
 };
@@ -212,10 +219,12 @@ describe("the names of a Workflow", () => {
       "output",
       "agent",
       "notify",
-      "workflow"
+      "workflow",
+      "condition",
+      "parallel"
     ]);
     expect(WORKFLOW_TRIGGER_KINDS).toEqual(["manual", "schedule", "parent", "outside"]);
-    // The reserved block types have a shape and are in no list of what a definition may name.
+    // Every executable block is part of the shared step-type contract.
     expectTypeOf<
       Exclude<WorkflowStep["type"], (typeof WORKFLOW_RESERVED_STEP_TYPES)[number]>
     >().toEqualTypeOf<WorkflowStepType>();
@@ -223,6 +232,7 @@ describe("the names of a Workflow", () => {
   });
 
   it("reads a definition with every step type as one manifest", () => {
+    expect(parseWorkflowManifest(manifest)).toMatchObject({ ok: true });
     const steps: readonly WorkflowStep[] = manifest.steps;
     const types = new Set(steps.flatMap((step) => stepTypes(step)));
 
@@ -744,7 +754,15 @@ describe("the modules workflows and dataStores", () => {
 });
 
 function stepTypes(step: WorkflowStep): WorkflowStep["type"][] {
-  return step.type === "loop" ? [step.type, ...step.steps.flatMap(stepTypes)] : [step.type];
+  const lists =
+    step.type === "loop"
+      ? [step.steps]
+      : step.type === "condition"
+        ? [step.then, step.else ?? []]
+        : step.type === "parallel"
+          ? step.branches.map((branch) => branch.steps)
+          : [];
+  return [step.type, ...lists.flatMap((steps) => steps.flatMap(stepTypes))];
 }
 
 function jobKindOf(kind: string) {

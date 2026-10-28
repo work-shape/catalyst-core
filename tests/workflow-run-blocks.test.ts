@@ -18,7 +18,7 @@ import {
 } from "./support/workflow-runs";
 
 // What a Workflow Run does with the blocks of its definition and with its revision: a loop
-// whose items fail, a cancel inside a loop, a reserved block, a definition that changes while
+// whose items fail, a cancel inside a loop, a definition that changes while
 // the run is going, and the list of the Workflows with their latest runs.
 
 let open: WorkflowFixture | undefined;

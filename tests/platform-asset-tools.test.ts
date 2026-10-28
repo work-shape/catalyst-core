@@ -536,7 +536,7 @@ describe("a conversation about a Workflow", () => {
         .object({ valid: z.boolean(), issues: issuesSchema })
         .parse(await t.call(id, "platform.assets.validate", { config: configOf([notRun]) }));
       expect(checked.valid).toBe(false);
-      expect(checked.issues).toMatchObject([{ path: "steps.ask", code: "not_supported_yet" }]);
+      expect(checked.issues).toMatchObject([{ path: "steps.1.type", code: "not_supported_yet" }]);
       const refused = writeSchema.parse(
         await t.call(id, "platform.assets.put", {
           config: configOf([notRun]),
