@@ -132,11 +132,42 @@ export function useSkillWorlds(): {
   };
 }
 
-export const put = (
-  { api }: SkillWorld,
+/**
+ * Writes a skill and, where the write was its shared draft, publishes that draft: these tests
+ * read the folder live (SKILL-DRAFT-1). The answer is the put's own.
+ */
+export const put = async (
+  world: SkillWorld | Pick<SkillWorld, "api">,
   payload: JsonObject,
   address: Address = SKILL
-): ReturnType<TestInstance["call"]> => api.call("assets.put", { params: address, payload });
+): ReturnType<TestInstance["call"]> => {
+  const written = await world.api.call("assets.put", { params: address, payload });
+  await publishDraftOf(world, written, address, payload.workspaceId);
+  return written;
+};
+
+/** Publishes the draft revision a write answered, if it answered one. */
+export async function publishDraftOf(
+  { api }: Pick<SkillWorld, "api">,
+  written: Awaited<ReturnType<TestInstance["call"]>>,
+  address: Address = SKILL,
+  workspaceId?: unknown
+): Promise<void> {
+  if (written.statusCode !== 200) return;
+  const { draftRevision } = z
+    .object({ draftRevision: z.number().optional() })
+    .loose()
+    .parse(written.json());
+  if (draftRevision === undefined) return;
+  const published = await api.call("assets.publish", {
+    params: address,
+    payload: {
+      revision: draftRevision,
+      ...(typeof workspaceId === "string" ? { workspaceId } : {})
+    }
+  });
+  expect(published.statusCode, published.body).toBe(200);
+}
 
 export async function get(
   { api }: SkillWorld,

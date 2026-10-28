@@ -7,6 +7,7 @@ import type { AccessInstanceOptions } from "./support/access-instance";
 import type { CentralPolicySetting } from "@work-shape/catalyst-core";
 import { agent, skill } from "./support/access-instance";
 import { setupWorkspaceHolder } from "./support/asset-operations";
+import { publishSkillDraft } from "./support/agent-draft-publication";
 import { withTestSql } from "./support/test-sql";
 import { resetFileTestDatabase } from "./support/test-database";
 
@@ -458,6 +459,8 @@ describe("the preview of a held asset save", () => {
           workspaceId: t.kaiTeam
         }
       });
+      // The team's skill changes live by the publish of its draft (SKILL-DRAFT-1).
+      await publishSkillDraft(t, `kai-leave-${testNumber}`, t.kaiTeam);
       const stale = (await preview(t.admin.id, requestId)).asset;
       expect(stale.isStale).toBe(true);
       // ACCEPT-FIX-12 C-2: this is the version Kai saw, not the later admin save.
@@ -513,6 +516,8 @@ describe("the preview of a held asset save", () => {
           workspaceId: t.kaiTeam
         }
       });
+      // The team's skill changes live by the publish of its draft (SKILL-DRAFT-1).
+      await publishSkillDraft(t, `kai-leave-${testNumber}`, t.kaiTeam);
       expect((await preview(t.admin.id, outdatedId)).asset.isStale).toBe(true);
       await t.expectOk(t.admin.id, "approval_requests.decide", {
         params: { requestId: outdatedId },
@@ -567,6 +572,8 @@ describe("the preview of a held asset save", () => {
           workspaceId: t.kaiTeam
         }
       });
+      // The team's skill changes live by the publish of its draft (SKILL-DRAFT-1).
+      await publishSkillDraft(t, `kai-leave-${testNumber}`, t.kaiTeam);
       await t.expectOk(t.admin.id, "approval_requests.decide", {
         params: { requestId },
         payload: { decision: "reject" }

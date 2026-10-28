@@ -301,7 +301,15 @@ describe("a delete in a release", () => {
       items: [
         { type: "delete", kind: "agent", name: "rel-never-there", status: "absent" },
         { type: "delete", kind: "agent", name: "rel-old", status: "absent" },
-        { type: "put", kind: "skill", name: "rel-guide", status: "applied", revision: 2 }
+        // The instance's skill is written as its draft (SKILL-DRAFT-1).
+        {
+          type: "put",
+          kind: "skill",
+          name: "rel-guide",
+          status: "applied",
+          revision: 1,
+          draftRevision: 1
+        }
       ]
     });
     expect(await t.stored("agent", "rel-never-there")).toBeUndefined();

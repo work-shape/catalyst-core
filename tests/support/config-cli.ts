@@ -437,6 +437,36 @@ export async function instanceHolding(
   return { fetchImpl, fixture };
 }
 
+/**
+ * A person publishes the draft a release push wrote of an agent or a skill the instance owns
+ * (SKILL-DRAFT-1): the release's key writes drafts, and publishes none itself.
+ */
+export async function publishPushedDraft(
+  fixture: Awaited<ReturnType<typeof createFixture>>,
+  kind: "agent" | "skill",
+  name: string
+): Promise<void> {
+  const { clientInstanceId, store } = fixture;
+  const live = await store.configAssets.getConfigAsset({ clientInstanceId, kind, name });
+  if (!live) throw new Error(`No ${kind} ${name}`);
+  const draft = await store.agentProposals.get({ clientInstanceId, agentId: live.id });
+  if (!draft) throw new Error(`No draft of ${kind} ${name}`);
+  await store.configAssets.applyConfigAssetMutations({
+    clientInstanceId,
+    baseRevisions: { [`${kind}:${name}`]: draft.baseRevision },
+    mutations: [
+      {
+        type: "upsert",
+        kind,
+        name,
+        config: draft.config,
+        agentPublish: draft.revision,
+        ...(draft.fileSetId === undefined ? {} : { fileSetId: draft.fileSetId })
+      }
+    ]
+  });
+}
+
 /** An instance without assets, reached under another address. The addresses are recorded. */
 export async function emptyInstanceBehind(
   baseUrl: string,

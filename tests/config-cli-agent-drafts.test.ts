@@ -228,7 +228,7 @@ describe("catalyst config and agent drafts (Platform Access 66)", () => {
     const pulled = await cliAs(t.instance, { user: t.admin.id }, other).run(["config", "pull"]);
     expect(pulled.code, pulled.err).toBe(0);
     expect(pulled.out).toMatch(
-      /Pending agent drafts, not live[^\n]*\n {2}agent:kai-helper: draft revision 1 by Admin at \S+/u
+      /Pending drafts, not live[^\n]*\n {2}agent:kai-helper: draft revision 1 by Admin at \S+/u
     );
     expect(await readFile(agentFile(other), "utf8")).toContain(
       `instructions: ${String(before.config?.instructions)}`
@@ -315,21 +315,6 @@ describe("catalyst config and agent drafts (Platform Access 66)", () => {
       /Agent 'kai-helper' has draft revision 1 by Root at \S+\. Read it with 'catalyst agent show kai-helper'; the put writes over it with --if-draft-revision 1\./u
     );
     expect(await draft()).toMatchObject({ revision: 1, config: { instructions: "Root's draft." } });
-    expect(
-      (
-        await cli.run([
-          "skill",
-          "put",
-          "x",
-          "--from",
-          mine,
-          "--if-revision",
-          "1",
-          "--if-draft-revision",
-          "1"
-        ])
-      ).err
-    ).toContain("--if-draft-revision names the draft of an agent.");
 
     // The pull records the draft revision and names Root; the push after it writes over it.
     const pulled = await cli.run(["config", "pull", "--only", AGENT_KEY]);

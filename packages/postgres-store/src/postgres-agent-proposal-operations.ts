@@ -5,7 +5,9 @@ import {
   createPlatformId,
   type AgentProposal,
   type AgentProposalSource,
-  type AgentProposalStore
+  type AgentProposalStore,
+  type ClientInstanceId,
+  type FileSetId
 } from "@work-shape/catalyst-core";
 import { type PostgresConnection, type PostgresTransaction } from "./postgres-database";
 import { agentProposalRevisions, agentProposals } from "./schema/agentProposals";
@@ -38,7 +40,8 @@ const authorJoin = and(
 function mapProposal(
   row: ProposalRow,
   config: AgentProposal["config"],
-  authorLabel?: string | null
+  authorLabel?: string | null,
+  fileSetId?: FileSetId | null
 ): AgentProposal {
   return {
     id: row.id,
@@ -55,6 +58,7 @@ function mapProposal(
     baseRevision: row.baseRevision,
     revision: row.revision,
     config,
+    ...(fileSetId ? { fileSetId } : {}),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString()
   };
@@ -68,6 +72,7 @@ export async function getAgentProposal(
     .select({
       proposal: agentProposals,
       config: agentProposalRevisions.config,
+      fileSetId: agentProposalRevisions.fileSetId,
       authorLabel: productUsers.displayLabel
     })
     .from(agentProposals)
@@ -81,7 +86,9 @@ export async function getAgentProposal(
     .leftJoin(productUsers, authorJoin)
     .where(ofAgent(input))
     .limit(1);
-  return found ? mapProposal(found.proposal, found.config, found.authorLabel) : undefined;
+  return found
+    ? mapProposal(found.proposal, found.config, found.authorLabel, found.fileSetId)
+    : undefined;
 }
 
 /**
@@ -165,9 +172,10 @@ export async function saveAgentProposal(
       proposalId: row.id,
       revision: row.revision,
       config: input.config,
+      fileSetId: input.fileSetId ?? null,
       createdAt: savedAt
     });
-    return mapProposal(row, input.config);
+    return mapProposal(row, input.config, undefined, input.fileSetId);
   });
 }
 
@@ -183,6 +191,31 @@ export async function removeAgentProposal(
     await tx.delete(agentProposalRevisions).where(eq(agentProposalRevisions.proposalId, row.id));
     return true;
   });
+}
+
+/**
+ * Drops the pending drafts of the assets a batch deletes, in one statement: the counter rows
+ * stay, as with `removeAgentProposal`.
+ */
+export async function removeAgentProposals(
+  tx: PostgresTransaction,
+  input: { clientInstanceId: ClientInstanceId; agentIds: readonly string[] }
+): Promise<void> {
+  if (!input.agentIds.length) return;
+  await tx.delete(agentProposalRevisions).where(
+    inArray(
+      agentProposalRevisions.proposalId,
+      tx
+        .select({ id: agentProposals.id })
+        .from(agentProposals)
+        .where(
+          and(
+            eq(agentProposals.clientInstanceId, input.clientInstanceId),
+            inArray(agentProposals.agentId, [...input.agentIds])
+          )
+        )
+    )
+  );
 }
 
 export function createPostgresAgentProposalStore(db: PostgresConnection): AgentProposalStore {

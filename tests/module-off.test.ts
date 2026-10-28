@@ -494,7 +494,7 @@ describe("a module that is off", () => {
     expect(items[1]).toMatchObject({ shipped: true, operationCount: 1, toolCount: 0 });
     // The exact asset-management count was formerly asserted by the Modules browser journey.
     expect(items.find((item) => item.name === "assetManagement")).toMatchObject({
-      operationCount: 15
+      operationCount: 16
     });
   });
 

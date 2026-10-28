@@ -1,7 +1,7 @@
 import { listActiveConfigAssets } from "./postgres-config-asset-page";
 import { getConfigAssetState } from "./postgres-config-asset-state";
 import { appAvailabilityColumn } from "./app-availability";
-import { removeAgentProposal } from "./postgres-agent-proposal-operations";
+import { removeAgentProposals } from "./postgres-agent-proposal-operations";
 import { chunksOf, type WrittenAsset } from "./config-asset-batch";
 import {
   writeAgentDraft,
@@ -330,6 +330,7 @@ async function applyConfigAssetMutations(
         createdAt: now
       });
     };
+    const draftsDeleted: string[] = [];
     for (const mutation of input.mutations) {
       if (mutation.type === "setDefaultAgent") {
         defaultAgentName = mutation.agentName;
@@ -354,12 +355,8 @@ async function applyConfigAssetMutations(
           continue;
         }
         appendRevision(key, asset, { operation: "delete", config: null, ...kept(key) }, "deleted");
-        if (asset.kind === "agent") {
-          await removeAgentProposal(tx, {
-            clientInstanceId: input.clientInstanceId,
-            agentId: asset.id
-          });
-        }
+        // An agent's draft, or a shared skill's, goes with the asset (SKILL-DRAFT-1).
+        if (asset.kind === "agent" || asset.kind === "skill") draftsDeleted.push(asset.id);
         asset.deleted = true;
         asset.created = false;
         continue;
@@ -390,7 +387,8 @@ async function applyConfigAssetMutations(
           clientInstanceId: input.clientInstanceId,
           agentId: asset.id,
           liveRevision: current.get(key)?.revision.revision ?? 0,
-          revision: mutation.agentPublish
+          revision: mutation.agentPublish,
+          kind: mutation.kind
         });
       }
       const written = repo.writtenColumns(mutation);
@@ -456,6 +454,10 @@ async function applyConfigAssetMutations(
         });
       }
     }
+    await removeAgentProposals(tx, {
+      clientInstanceId: input.clientInstanceId,
+      agentIds: draftsDeleted
+    });
 
     const all = [...assets.values()];
     const writtenRows = all.filter((asset) => asset.written);

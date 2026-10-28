@@ -1,13 +1,25 @@
-import { FolderInput } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { FolderInput, Send, Undo2 } from "lucide-react";
+import { useEffect, useId, useState, type ReactNode } from "react";
 import { SKILL_SUMMARY_MAX_LENGTH, assetAddressFromName } from "@work-shape/catalyst-core";
-import { Field, Input, Textarea } from "@work-shape/catalyst-ui";
+import {
+  Button,
+  ConfirmDialog,
+  DropdownMenuItem,
+  Field,
+  Input,
+  Textarea
+} from "@work-shape/catalyst-ui";
+import { actionLabel } from "../../admin/access/right-words";
+import type { AssetFileEntry } from "../../shared/api/asset-writes";
 import { useTranslation } from "../../shared/i18n";
+import { AgentDraftBadge, AgentDraftNotice } from "./agent-draft";
+import { useDraftFollow, type AgentDraftSource, type SharedDraft } from "./agent-draft-source";
 import { AssetEditorShell, useAssetForm, type AssetSection } from "./asset-editor-shell";
 import { FieldRefusals } from "./asset-form-fields";
 import { countChangedFields } from "./asset-form-model";
 import type { BuildAssetEditorProps } from "./build-asset-kind";
-import { refusalsOf } from "./build-refusals";
+import type { DraftDecision } from "./build-data";
+import { refusalsOf, type BuildWriteOutcome } from "./build-refusals";
 import { SkillFileList, SkillFilePane, type SkillFileSelection } from "./skill-files";
 import { SkillReplaceDialog } from "./skill-import";
 import { SkillMyChats, type SkillMyChatsParts } from "./skill-my-chats";
@@ -19,6 +31,7 @@ import {
 import {
   freeSkillFilePath,
   isUnread,
+  skillConfigToForm,
   skillFileOfBytes,
   skillFilePath,
   skillFolderChanged,
@@ -42,7 +55,8 @@ export function SkillEditor({
   frame,
   initialForm,
   editable: instanceEditable,
-  badges
+  badges,
+  draft
 }: {
   frame: BuildAssetEditorProps;
   initialForm: SkillFormState;
@@ -50,16 +64,46 @@ export function SkillEditor({
   editable: boolean;
   /** What the page head says of the skill beside its title, such as who ships it. */
   badges?: ReactNode;
+  /**
+   * The one shared draft of a skill a team or the instance owns (SKILL-DRAFT-1), for a reader
+   * who may change it: the form starts from the draft, and saves write it. Absent for a new
+   * skill, a skill of a Personal Workspace, which is live on save, and a reader.
+   */
+  draft?: AgentDraftSource;
 }) {
   const { t } = useTranslation();
   const state = useAssetForm(initialForm);
   const { form, setForm, outcome, amend } = state;
   const [saving, setSaving] = useState(false);
+  // The draft the form was started from or last saved as. A save names it, and Publish and
+  // Discard decide it.
+  const [held, setHeld] = useState<SharedDraft | null>(draft?.latest ?? null);
+  const [deciding, setDeciding] = useState<DraftDecision>();
+  const publishReasonId = useId();
   const [selected, setSelected] = useState<SkillFileSelection>("root");
   const [folderRead, setFolderRead] = useState<FolderRead>("idle");
   const [readAttempt, setReadAttempt] = useState(0);
   const editable = frame.canWrite && instanceEditable;
   const { folder } = frame;
+  const changes = countChangedFields(form, state.baseline);
+  const { behind, busy, answer, stale } = useDraftFollow(draft, {
+    held,
+    setHeld,
+    dirty: changes > 0,
+    saving,
+    reload: frame.reload,
+    take: (newer) => {
+      setSelected("root");
+      amend(() => withReadFiles(skillConfigToForm(newer.config), newer.files ?? []));
+    },
+    onRead: frame.draft?.onRead
+  });
+  const asset = frame.asset;
+  // A save of the draft names the draft revision the page holds.
+  const draftWrite =
+    asset !== undefined && draft !== undefined
+      ? { expectedDraftRevision: held?.revision ?? null }
+      : undefined;
   // "Replace from folder" is open, with the folder an import handed over where it found the
   // skill's address taken.
   const [replacing, setReplacing] = useState<{ initial?: SkillImport } | undefined>(() => {
@@ -111,13 +155,27 @@ export function SkillEditor({
       })
     }));
 
-  /** Writes the whole folder, or the config alone, where the files beside it stay. */
+  /**
+   * Writes the whole folder, or the config alone, where the files beside it stay. A skill with
+   * a shared draft writes the draft, and the live skill stays as it is.
+   */
   const write = async (written: SkillFormState, wholeFolder: boolean) => {
     setSaving(true);
-    const { stored, ...answer } =
+    const config = skillFormToConfig(written);
+    const saved: BuildWriteOutcome & {
+      stored?: readonly AssetFileEntry[];
+      draftRevision?: number;
+    } =
       folder !== undefined && wholeFolder
-        ? await folder.save(skillFormToFolder(written))
-        : { ...(await frame.save(skillFormToConfig(written))), stored: undefined };
+        ? await folder.save(skillFormToFolder(written), draftWrite)
+        : await frame.save(config, draftWrite);
+    const { stored, draftRevision, ...answer } = saved;
+    if (answer.ok && asset !== undefined && draft !== undefined && draftRevision !== undefined) {
+      setHeld(draft.saved({ revision: draftRevision, config, liveRevision: asset.revision }));
+    } else if (!answer.ok && answer.conflict && answer.draft) {
+      // The page reads the draft again and says who wrote it.
+      await draft?.reread().catch(() => undefined);
+    }
     setSaving(false);
     state.setOutcome(answer);
     return { answer, stored };
@@ -294,20 +352,72 @@ export function SkillEditor({
     }
   ];
 
+  const publishRight = frame.draft?.canPublish ? undefined : actionLabel("skill.publish", t);
+  const liveTitle = liveSkillTitle(asset) ?? (form.title.trim() || form.name);
   const shellWith = (myChats: SkillMyChatsParts) => (
     <AssetEditorShell
-      frame={{ ...frame, canWrite: editable }}
+      frame={{
+        ...frame,
+        canWrite: editable,
+        saveBlocked: frame.saveBlocked === true || behind !== undefined
+      }}
       title={form.title.trim() || form.name || t("configNewSkill")}
       description={form.summary.trim()}
       badges={
-        myChats.badge ? (
-          <>
-            {badges}
-            {myChats.badge}
-          </>
-        ) : (
-          badges
-        )
+        <>
+          {held === null ? null : <AgentDraftBadge draft={held} />}
+          {badges}
+          {myChats.badge}
+        </>
+      }
+      primaryAction={
+        draft !== undefined && held !== null && !stale ? (
+          <Button
+            data-skill-publish=""
+            disabled={
+              !frame.draft?.canPublish || changes > 0 || busy !== undefined || behind !== undefined
+            }
+            aria-describedby={frame.draft?.canPublish ? undefined : publishReasonId}
+            title={
+              frame.draft?.canPublish
+                ? changes > 0
+                  ? t("build.publishSaveFirst")
+                  : undefined
+                : t("agentDraft.publishNeedsRight", { right: publishRight ?? "" })
+            }
+            onClick={() => setDeciding("publish")}
+          >
+            <Send aria-hidden="true" />
+            {t("build.publish")}
+          </Button>
+        ) : undefined
+      }
+      menu={
+        draft !== undefined && held !== null && !frame.saveBlocked ? (
+          <DropdownMenuItem
+            icon={<Undo2 aria-hidden="true" />}
+            disabled={busy !== undefined}
+            onSelect={() => setDeciding("discard")}
+          >
+            <span data-skill-discard="">{t("agentDraft.discard")}</span>
+          </DropdownMenuItem>
+        ) : undefined
+      }
+      notices={
+        draft !== undefined ? (
+          <AgentDraftNotice
+            kind="skill"
+            draft={held}
+            behind={behind}
+            name={liveTitle}
+            publishRight={publishRight}
+            publishReasonId={publishReasonId}
+            answer={answer}
+            onLoad={() => {
+              frame.reload?.().catch(() => undefined);
+            }}
+          />
+        ) : undefined
       }
       headActions={
         editable && folder !== undefined && frame.asset !== undefined
@@ -321,13 +431,23 @@ export function SkillEditor({
           : undefined
       }
       sections={
-        // The switch stands below the skill's details, above its files.
-        sections.flatMap((section) =>
-          section.id === "details" && myChats.section ? [section, myChats.section] : [section]
-        )
+        // The switch stands below the skill's details, above its files. While Publish or
+        // Discard is on its way nothing is typed: either reads the page again.
+        sections
+          .flatMap((section) =>
+            section.id === "details" && myChats.section ? [section, myChats.section] : [section]
+          )
+          .map((section) => ({
+            ...section,
+            body: (
+              <fieldset disabled={busy !== undefined} className="contents">
+                {section.body}
+              </fieldset>
+            )
+          }))
       }
       control={{
-        changes: countChangedFields(form, state.baseline),
+        changes,
         submit,
         discard: () => {
           state.discard();
@@ -336,12 +456,56 @@ export function SkillEditor({
       }}
       outcome={outcome}
       saving={saving}
-      saveLabel={frame.asset ? t("configSaveChanges") : t("configCreateSkill")}
+      saveLabel={
+        frame.asset === undefined
+          ? t("configCreateSkill")
+          : draft !== undefined
+            ? t("agentDraft.saveDraft")
+            : t("configSaveChanges")
+      }
+      {...(draft !== undefined ? { saveHint: t("agentDraft.saveHintSkill") } : {})}
     />
   );
+  const decision =
+    draft === undefined || held === null ? null : (
+      <>
+        <ConfirmDialog
+          open={deciding === "publish"}
+          tone="primary"
+          title={t("build.publishTitle", { name: liveTitle })}
+          confirmLabel={t("build.publish")}
+          loading={busy === "publish"}
+          onConfirm={() => {
+            draft
+              .decide("publish", held.revision)
+              .finally(() => setDeciding(undefined))
+              .catch(() => undefined);
+          }}
+          onClose={() => setDeciding(undefined)}
+        >
+          {t("agentDraft.publishDescriptionSkill", { revision: held.revision, name: liveTitle })}
+        </ConfirmDialog>
+        <ConfirmDialog
+          open={deciding === "discard"}
+          title={t("agentDraft.discardTitle", { name: liveTitle })}
+          confirmLabel={t("agentDraft.discard")}
+          loading={busy === "discard"}
+          onConfirm={() => {
+            draft
+              .decide("discard", held.revision)
+              .finally(() => setDeciding(undefined))
+              .catch(() => undefined);
+          }}
+          onClose={() => setDeciding(undefined)}
+        >
+          {t("agentDraft.discardDescription", { revision: held.revision })}
+        </ConfirmDialog>
+      </>
+    );
   return (
     <>
       <SkillMyChats frame={frame}>{shellWith}</SkillMyChats>
+      {decision}
       {replacing ? (
         <SkillReplaceDialog
           title={form.title.trim() || form.name}
@@ -356,4 +520,11 @@ export function SkillEditor({
       ) : null}
     </>
   );
+}
+
+/** The skill's title as people who use it know it now: the live one, not the form's. */
+function liveSkillTitle(asset: BuildAssetEditorProps["asset"]): string | undefined {
+  if (asset === undefined) return undefined;
+  const { title } = asset.config;
+  return typeof title === "string" && title !== "" ? title : asset.name;
 }

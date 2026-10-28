@@ -9,9 +9,10 @@ import {
   type ConfigAssetStore,
   type JsonObject
 } from "@work-shape/catalyst-core";
-import { configValuesEqual } from "../asset-kinds/shared";
+import { configValuesEqual, type WorkflowAssetKind } from "../asset-kinds/shared";
 import { afterWrite, clearLiveOnceSwitches } from "./asset-after-write";
 import { agentDraftAuthor } from "./agent-drafts";
+import { writesSharedDraft } from "./shared-drafts";
 import {
   findDefinition,
   validateAssetSet,
@@ -169,18 +170,27 @@ export async function upsertAsset(
     stores: options.stores,
     actor: call.actor
   });
+  // An agent's write, and a team's or the instance's skill's, goes to its one shared draft
+  // (AD-1, SKILL-DRAFT-1); its publish and a give of tools write the live revision.
+  const toDraft =
+    target.asset?.status === "active" &&
+    write.agentPublish === undefined &&
+    write.agentToolsGiven === undefined &&
+    (await writesSharedDraft(options, kind.kind, target.scope));
+  // A skill's config written alone keeps the folder of the draft it changes, not the live one's.
+  const draftFolder =
+    toDraft && kind.kind === "skill" && write.fileSet === undefined && target.asset
+      ? await draftFolderOf(options, kind, target.asset.id, toJsonObject(next))
+      : undefined;
   const mutations: ConfigAssetMutation[] = [
     {
       type: "upsert",
       kind: kind.kind,
       name,
-      config: toJsonObject(next),
+      config: draftFolder?.config ?? toJsonObject(next),
       scope: target.scope,
       ...(write.operation ? { operation: write.operation } : {}),
-      ...(kind.kind === "agent" &&
-      target.asset?.status === "active" &&
-      write.agentPublish === undefined &&
-      write.agentToolsGiven === undefined
+      ...(toDraft
         ? {
             agentDraft: {
               expectedDraftRevision: write.expectedDraftRevision ?? null,
@@ -188,6 +198,7 @@ export async function upsertAsset(
             }
           }
         : {}),
+      ...(draftFolder?.fileSetId === undefined ? {} : { fileSetId: draftFolder.fileSetId }),
       ...(write.agentPublish === undefined ? {} : { agentPublish: write.agentPublish }),
       ...(write.agentToolsGiven === undefined
         ? {}
@@ -252,7 +263,7 @@ export async function upsertAsset(
       revision: draftRevision,
       draftRevision,
       publishedRevision: target.asset?.revision,
-      warnings: toolWarnings
+      warnings: [...toolWarnings, ...(kind.writeWarnings?.(next, write.warningFiles) ?? [])]
     };
   const revision = result.revisions[assetKey(kind.kind, name)];
   if (revision === undefined)
@@ -299,4 +310,30 @@ function revisionOrigin(
   const agent = agentDisplayName ? { agentDisplayName } : {};
   if (origin === undefined) return { origin: { kind: "agent_run", conversationId, ...agent } };
   return { origin: origin.kind === "page" ? { ...origin, byAgent: true, ...agent } : origin };
+}
+
+/**
+ * The config and file set of a skill's draft write that sends its config alone: the files the
+ * config does not hold are those of the pending draft, where there is one, as a config write of
+ * the live skill keeps the live one's (`withRevisionFiles`). None where no draft is pending:
+ * the writer carries the live folder then.
+ */
+export async function draftFolderOf(
+  options: AssetWorkflowOptions,
+  kind: WorkflowAssetKind,
+  assetId: string,
+  config: JsonObject
+): Promise<{ config: JsonObject; fileSetId?: FileSet["id"] } | undefined> {
+  const hook = kind.revisionFiles;
+  if (!hook) return undefined;
+  const draft = await options.stores.agentProposals.get({
+    clientInstanceId: options.clientInstanceId,
+    agentId: assetId
+  });
+  if (!draft) return undefined;
+  const carried = hook.carried(config, draft.config, draft.fileSetId !== undefined);
+  return {
+    config: carried,
+    ...(draft.fileSetId !== undefined && "files" in carried ? { fileSetId: draft.fileSetId } : {})
+  };
 }

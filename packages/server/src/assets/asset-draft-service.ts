@@ -156,7 +156,8 @@ export class AssetDraftWorkflow {
     call: AssetCall,
     target: AssetTarget,
     sent: readonly AssetFileInput[],
-    expectedRevision: number | null
+    expectedRevision: number | null,
+    expectedDraftRevision?: number | null
   ) {
     const { kind, name } = target;
     const files = decodeAssetFiles(sent);
@@ -175,6 +176,7 @@ export class AssetDraftWorkflow {
       ...read,
       files,
       expectedRevision,
+      ...(expectedDraftRevision === undefined ? {} : { expectedDraftRevision }),
       auditFiles: entries,
       warningFiles: files
     });
@@ -192,7 +194,8 @@ export class AssetDraftWorkflow {
     call: AssetCall,
     target: AssetTarget,
     sent: Record<string, unknown>,
-    expectedRevision: number | null
+    expectedRevision: number | null,
+    expectedDraftRevision?: number | null
   ) {
     const { kind } = target;
     const hook = kind.revisionFiles;
@@ -235,7 +238,8 @@ export class AssetDraftWorkflow {
     const { written } = await this.writeFolder(call, target, {
       ...read,
       files,
-      expectedRevision
+      expectedRevision,
+      ...(expectedDraftRevision === undefined ? {} : { expectedDraftRevision })
     });
     return written;
   }
@@ -256,6 +260,8 @@ export class AssetDraftWorkflow {
       files: readonly { path: string; bytes: Uint8Array }[];
       extras: readonly string[];
       expectedRevision: number | null;
+      /** The draft revision the caller read, of a kind with one shared draft (SKILL-DRAFT-1). */
+      expectedDraftRevision?: number | null;
       /** What the event of a folder write names of its files. */
       auditFiles?: readonly { path: string; sha256: string; bytes: number }[];
       /** The files of a folder write, for the kind's warnings alone. */
@@ -290,6 +296,9 @@ export class AssetDraftWorkflow {
         kind.revisionFiles?.indexed(toJsonObject(write.config), fileSet) ?? write.config;
       const written = await this.host.upsert(call, target, config, {
         expectedRevision: write.expectedRevision,
+        ...(write.expectedDraftRevision === undefined
+          ? {}
+          : { expectedDraftRevision: write.expectedDraftRevision }),
         audit: "config_asset.updated",
         ...(write.auditFiles ? { auditFiles: write.auditFiles } : {}),
         ...(write.warningFiles ? { warningFiles: write.warningFiles } : {}),

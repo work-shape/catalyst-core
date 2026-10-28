@@ -106,10 +106,14 @@ export interface BuildAssetEditorProps {
    */
   folder?: {
     read(): Promise<AssetFileRead[]>;
-    /** A save that was made answers the files it stored, each with its hash. */
+    /**
+     * A save that was made answers the files it stored, each with its hash. A save of a skill
+     * with a shared draft names the draft revision the page read and answers the one it wrote.
+     */
     save(
-      files: readonly AssetFileWrite[]
-    ): Promise<BuildWriteOutcome & { stored?: readonly AssetFileEntry[] }>;
+      files: readonly AssetFileWrite[],
+      write?: { expectedDraftRevision: number | null }
+    ): Promise<BuildWriteOutcome & { stored?: readonly AssetFileEntry[]; draftRevision?: number }>;
   };
 }
 
@@ -125,6 +129,11 @@ interface BuildDraftFrame {
   state?: ReactNode;
   /** The reader may publish the asset: for an agent, its draft. */
   canPublish?: boolean;
+  /**
+   * A save of the asset writes its one shared draft, which a publish makes live: an agent's,
+   * and a skill's that a team or the instance owns (SKILL-DRAFT-1).
+   */
+  shared?: boolean;
   /**
    * Hears which draft revision of the agent the page shows, or that it shows none: a restore
    * from the History names it.

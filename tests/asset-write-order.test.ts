@@ -377,39 +377,43 @@ describe("what a committed write answers", () => {
 
   // Fails without the change: the put read the asset again after its commit and answered the
   // revision of whoever wrote next, so its caller's next save went over that write unseen.
+  // A memo is live on save; a team's skill is written as its draft (SKILL-DRAFT-1).
   it("answers a put the revision it wrote, not the one a later write gave the asset", async () => {
-    await t.put(t.kai.id, "skill", "kai-mine", t.kaiTeam);
+    await t.expectOk(t.kai.id, "assets.put", {
+      params: { kind: "memo", name: "kai-mine" },
+      payload: { config: memo("kai-mine"), expectedRevision: null, ...inKai() }
+    });
     race("after", () =>
       t.stores.configAssets.applyConfigAssetMutations({
         clientInstanceId,
-        baseRevisions: { "skill:kai-mine": 2 },
+        baseRevisions: { "memo:kai-mine": 2 },
         mutations: [
           {
             type: "upsert",
-            kind: "skill",
+            kind: "memo",
             name: "kai-mine",
-            config: skill("kai-mine", "Theirs."),
+            config: memo("kai-mine", "Theirs."),
             scope: kaiScope()
           }
         ]
       })
     );
     const mine = await t.expectOk(t.kai.id, "assets.put", {
-      params: { kind: "skill", name: "kai-mine" },
-      payload: { config: skill("kai-mine", "Mine."), expectedRevision: 1, ...inKai() }
+      params: { kind: "memo", name: "kai-mine" },
+      payload: { config: memo("kai-mine", "Mine."), expectedRevision: 1, ...inKai() }
     });
     expect(mine.json()).toMatchObject({ revision: 2 });
-    expect(await t.stored("skill", "kai-mine")).toMatchObject({ revision: 3 });
+    expect(await t.stored("memo", "kai-mine")).toMatchObject({ revision: 3 });
 
     // The next save from that answer is refused: the other write is not gone over.
     const next = await t.call(t.kai.id, "assets.put", {
-      params: { kind: "skill", name: "kai-mine" },
-      payload: { config: skill("kai-mine", "Mine again."), expectedRevision: 2, ...inKai() }
+      params: { kind: "memo", name: "kai-mine" },
+      payload: { config: memo("kai-mine", "Mine again."), expectedRevision: 2, ...inKai() }
     });
     expect(next.statusCode).toBe(412);
-    expect(await t.stored("skill", "kai-mine")).toMatchObject({
+    expect(await t.stored("memo", "kai-mine")).toMatchObject({
       revision: 3,
-      config: { content: "Theirs." }
+      config: { text: "Theirs." }
     });
   });
 

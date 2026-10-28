@@ -699,7 +699,7 @@ describe("what the dialogs send", () => {
       expect(grantVerbs(kind)).toEqual(
         kind === "agent"
           ? ["read", "use", "write", "publish", "approve", "delete"]
-          : ["read", "write", "delete"]
+          : ["read", "write", "publish", "delete"]
       );
       expect(grantScopeKinds(kind)).toEqual(["workspace", "asset"]);
     }

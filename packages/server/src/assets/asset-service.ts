@@ -10,6 +10,7 @@ import type {
 import type { AssetUpsert } from "./asset-upsert";
 import { publishAgentDraft, publishFirstVersion } from "./agent-publication";
 import { AgentDraftWorkflow } from "./agent-drafts";
+import { SkillDraftWorkflow } from "./skill-drafts";
 import { AssetDraftWorkflow } from "./asset-draft-service";
 import { readDefinitionName, type WorkflowAssetKind } from "../asset-kinds/shared";
 import { decide, deleteDecision, type AssetCall } from "./asset-access";
@@ -51,6 +52,8 @@ export class AssetWorkflow {
   /** The writes of a kind with a draft or with files. */
   readonly drafts: AssetDraftWorkflow;
   readonly agentDrafts: AgentDraftWorkflow;
+  /** The shared draft of a team's or the instance's skill (SKILL-DRAFT-1). */
+  readonly skillDrafts: SkillDraftWorkflow;
   /** The list, the asset, one revision of it and its history. */
   readonly reads: AssetReadWorkflow;
   private readonly scope: AssetVerbScope;
@@ -86,6 +89,28 @@ export class AssetWorkflow {
         });
       }
     });
+    this.skillDrafts = new SkillDraftWorkflow(options, {
+      target: (address) => this.target(address),
+      publish: async (call, target, draft) => {
+        // A person's change of the live skill: the editing switch and its record, as a save.
+        await authorizeInteractiveWrite(
+          options,
+          call.actor,
+          call,
+          call.audit,
+          draft.author.release
+        );
+        return this.upsert(call, target, draft.config, {
+          expectedRevision: draft.baseRevision,
+          agentPublish: draft.revision,
+          releaseDraft: draft.author.release,
+          audit: "config_asset.updated",
+          ...(draft.fileSetId !== undefined && target.asset
+            ? { fileSet: { assetId: target.asset.id, fileSetId: draft.fileSetId } }
+            : {})
+        });
+      }
+    });
     this.reads = new AssetReadWorkflow(options, {
       target: (address) => this.target(address),
       kind: (kind) => this.kind(kind),
@@ -100,6 +125,7 @@ export class AssetWorkflow {
       options,
       drafts: this.drafts,
       agentDrafts: this.agentDrafts,
+      skillDrafts: this.skillDrafts,
       reads: this.reads,
       target: (address) => this.target(address),
       within: (within) => new AssetWorkflow(within).scope,

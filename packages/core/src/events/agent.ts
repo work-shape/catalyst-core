@@ -9,6 +9,15 @@ export const agentEvents = {
     audited: false,
     phases: ["before"]
   },
+  // Guardrails answer here before the shared draft of a team's or the instance's skill goes
+  // live (SKILL-DRAFT-1). The subject is the skill. No guardrail is bound to it by default.
+  "skill.before_publish": {
+    name: "skill.before_publish",
+    subject: "config_asset",
+    legacy: false,
+    audited: false,
+    phases: ["before"]
+  },
   // A start or a message refused for want of `agent.use` (AGENT-USE-1): who, which agent, where
   // and through which entry, never what the message said.
   "agent.use_refused": {

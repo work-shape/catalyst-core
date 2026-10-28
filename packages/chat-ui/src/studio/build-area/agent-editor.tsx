@@ -1,6 +1,6 @@
 import { Send, Star, Undo2 } from "lucide-react";
 import { useAgentTryAction } from "../../chat/dock/agent-try";
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { assetAddressFromName } from "@work-shape/catalyst-core";
 import type { AgentDraft, ConfigAssetReferences } from "@work-shape/catalyst-api-client";
 import {
@@ -64,7 +64,7 @@ import {
   draftFieldsView,
   type DraftTitles
 } from "./agent-draft";
-import type { AgentDraftSource } from "./agent-draft-source";
+import { useDraftFollow, type AgentDraftSource } from "./agent-draft-source";
 import type { DraftDecision } from "./build-data";
 import { PlatformInstructions } from "./platform-instructions";
 import { shippedFieldsView } from "./shipped-agent-fields";
@@ -280,8 +280,16 @@ export function AgentEditor({
     shipped.shipped && !platformTextOpen && shipped.asShipped("instructions");
   const changedFields = countChangedFields(form, state.baseline);
   const dirty = changedFields > 0 || availabilityChanged || useEdit.changed;
-  const latest = draft?.latest;
-  const latestRevision = latest === undefined ? undefined : (latest?.revision ?? null);
+  const { amend } = state;
+  const { latest, latestRevision, behind, busy, answer, stale } = useDraftFollow(draft, {
+    held,
+    setHeld,
+    dirty,
+    saving,
+    reload: frame.reload,
+    take: (newer) => amend(() => agentConfigToForm(newer.config)),
+    onRead: frame.draft?.onRead
+  });
   // Try in the dock, for a reader who may change the agent: it runs the draft (section 4.7c).
   const tryAction = useAgentTryAction(
     frame.asset !== undefined && draft !== undefined
@@ -293,40 +301,6 @@ export function AgentEditor({
         }
       : undefined
   );
-  const differs = latestRevision !== undefined && latestRevision !== (held?.revision ?? null);
-  const busy = draft?.busy;
-  // Somebody else wrote the draft, or published or discarded it, while the reader types: the
-  // page keeps what was typed and says who, and saves nothing over it.
-  const behind = draft !== undefined && differs && dirty ? { latest: latest ?? null } : undefined;
-  const { amend } = state;
-  const { reload } = frame;
-  // The live agent is read again once: the page starts again from it.
-  const reloading = useRef(false);
-  useEffect(() => {
-    if (latest === undefined || saving || busy !== undefined) return;
-    if (!differs) {
-      // The same revision read again names its author as the instance does.
-      if (latest !== null && latest !== held) setHeld(latest);
-      return;
-    }
-    if (dirty) return;
-    if (latest === null) {
-      // Published or discarded elsewhere: the live agent is read again.
-      if (!reloading.current) {
-        reloading.current = true;
-        reload?.().catch(() => undefined);
-      }
-      return;
-    }
-    amend(() => agentConfigToForm(latest.config));
-    setHeld(latest);
-  }, [amend, busy, differs, dirty, held, latest, reload, saving]);
-  const onDraftRead = frame.draft?.onRead;
-  useEffect(() => {
-    onDraftRead?.(held?.revision ?? null);
-  }, [held, onDraftRead]);
-  const answer = draft?.answerFor(held?.revision);
-  const stale = held !== null && (held.stale || answer?.kind === "stale");
   // One save bar for the agent and where it can be chosen: the agent first, then its
   // availability, each only when it changed. A new agent that would miss what it uses where it
   // starts is created from the dialog that offers to make it available, as a publish is.
@@ -860,7 +834,7 @@ export function AgentEditor({
               publishReasonId={publishReasonId}
               answer={answer}
               onLoad={() => {
-                reload?.().catch(() => undefined);
+                frame.reload?.().catch(() => undefined);
               }}
             />
           ) : null}

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { AgentDraft } from "@work-shape/catalyst-api-client";
 import { Badge, Banner, Button, FoldedText, ProposedValue } from "@work-shape/catalyst-ui";
+import type { SharedDraftKind } from "../../shared/build-rights";
 import { useTranslation } from "../../shared/i18n";
 import { formatMomentShort } from "../../shared/locale-format";
 import { reasoningEffortLabel } from "../../shared/reasoning-effort-label";
@@ -46,7 +47,8 @@ export function AgentDraftNotice({
   publishRight,
   publishReasonId,
   answer,
-  onLoad
+  onLoad,
+  kind = "agent"
 }: {
   /** The draft the page shows. */
   draft: AgentDraft | null;
@@ -64,6 +66,8 @@ export function AgentDraftNotice({
   answer: AgentDraftAnswer | undefined;
   /** Reads the agent and its draft again: the page starts again from what holds. */
   onLoad(): void;
+  /** Whose draft it is: an agent's, or a shared skill's (SKILL-DRAFT-1). */
+  kind?: SharedDraftKind;
 }) {
   const { locale, t } = useTranslation();
   const stale = draft !== null && (draft.stale || answer?.kind === "stale");
@@ -77,12 +81,18 @@ export function AgentDraftNotice({
         data-agent-draft-behind={latest === null ? "gone" : latest.revision}
         action={
           <Button variant="outline" size="sm" onClick={onLoad}>
-            {t(latest === null ? "agentDraft.loadAgent" : "agentDraft.loadDraft")}
+            {t(
+              latest === null
+                ? kind === "skill"
+                  ? "agentDraft.loadSkill"
+                  : "agentDraft.loadAgent"
+                : "agentDraft.loadDraft"
+            )}
           </Button>
         }
       >
         {latest === null
-          ? t("agentDraft.gone")
+          ? t(kind === "skill" ? "agentDraft.goneSkill" : "agentDraft.gone")
           : // German closes the team's relative clause with a comma: a sentence of its own.
             t(latest.author.release ? "agentDraft.behindRelease" : "agentDraft.behind", {
               author: draftAuthorLabel(latest.author, t),

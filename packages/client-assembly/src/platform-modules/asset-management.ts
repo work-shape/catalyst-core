@@ -20,6 +20,7 @@ export const assetManagementModule = defineModule({
     "assets.move",
     "agents.use.set",
     "agents.draft.discard",
+    "skills.draft.discard",
     "agents.give_tools",
     "agents.try.open",
     "guardrails.unpublish"

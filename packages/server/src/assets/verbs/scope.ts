@@ -1,4 +1,5 @@
 import type { AgentDraftWorkflow } from "../agent-drafts";
+import type { SkillDraftWorkflow } from "../skill-drafts";
 import type { AssetCall } from "../asset-access";
 import type { AssetDraftWorkflow } from "../asset-draft-service";
 import type { AssetReadWorkflow } from "../asset-read-service";
@@ -19,6 +20,7 @@ export interface AssetVerbScope {
   readonly options: AssetWorkflowOptions;
   readonly drafts: AssetDraftWorkflow;
   readonly agentDrafts: AgentDraftWorkflow;
+  readonly skillDrafts: SkillDraftWorkflow;
   readonly reads: AssetReadWorkflow;
   /** The asset an address names, of a kind whose module is on. */
   target(address: AssetAddress): Promise<AssetTarget>;

@@ -28,6 +28,7 @@ describe("permissions", () => {
       "agent.use",
       "skill.read",
       "skill.write",
+      "skill.publish",
       "skill.delete",
       "skill.approve",
       "connection.read",
@@ -106,6 +107,7 @@ describe("permissions", () => {
       action === "system.view" ||
       action === "feedback.review" ||
       action === "agent.publish" ||
+      action === "skill.publish" ||
       action === "agent.approve" ||
       action === "agent.use" ||
       action === "builder" ||
@@ -168,6 +170,7 @@ describe("permissions", () => {
       "agent.use",
       "skill.read",
       "skill.write",
+      "skill.publish",
       "skill.delete",
       "skill.approve",
       "connection.read",

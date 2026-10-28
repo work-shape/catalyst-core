@@ -26,7 +26,8 @@ import {
   type RuntimeAssetSnapshot,
   type RuntimeCallContext,
   type StartAgentRunInput,
-  type StoredModelFallback
+  type StoredModelFallback,
+  withPreviewSkills
 } from "@work-shape/catalyst-core";
 import {
   ModelRouteFailedError,
@@ -124,7 +125,8 @@ export class TurnLoop {
     input: StartAgentRunInput,
     context: RuntimeCallContext
   ): Promise<RunSetup> {
-    const assets = await this.options.assetSource.getSnapshot();
+    // A Try turn tells the agent of the skill drafts it froze, as it reads them (SKILL-DRAFT-1).
+    const assets = withPreviewSkills(await this.options.assetSource.getSnapshot(), input.preview);
     const listed: AgentConfig = input.workflowAgent
       ? {
           name: input.agentName,

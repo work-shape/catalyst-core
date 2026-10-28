@@ -141,16 +141,19 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
     // A publish a guardrail holds waits for the holders of the kind's `approve` right.
     approval: (input) => together.approval(input),
     // An instance-owned agent's publish is made live without a terminal; a workspace's agent
-    // keeps the question, so `--yes` waits as the person's confirmation (WS-PUB-1b).
+    // keeps the question, so `--yes` waits as the person's confirmation (WS-PUB-1b). A skill's
+    // draft is published without a question, as `config push --publish` does (SKILL-DRAFT-1).
     policyFloorOf: (origin, input) =>
       typeof input === "object" &&
       input !== null &&
       "kind" in input &&
-      input.kind === "agent" &&
-      !("workspaceId" in input && typeof input.workspaceId === "string")
+      (input.kind === "skill" ||
+        (input.kind === "agent" &&
+          !("workspaceId" in input && typeof input.workspaceId === "string")))
         ? undefined
         : publishPolicyFloor(origin),
     execute: async (input, context) => {
+      if (input.kind === "skill") return workflow.skillDrafts.publish(context, input);
       if (input.kind !== "agent") return together.publish(context, input);
       const result = await workflow.agentDrafts.publish(
         context,
@@ -292,6 +295,23 @@ export function registerAssetRoutes(route: Route, options: ChatServerOptions): v
       await tries.settled(context, input, "discarded");
       return result;
     }
+  });
+  const skillDraftResource = ({ name }: { name: string }) => assetResource({ kind: "skill", name });
+  route.operation(apiOperations["skills.draft.get"], {
+    authorize: (input, { access }) => workflow.skillDrafts.authorize(access, input),
+    resource: skillDraftResource,
+    policyTargets: (input) => workflow.policyTargets({ ...input, kind: "skill" }),
+    execute: async ({ files, ...input }, context) => ({
+      draft: await workflow.skillDrafts.get(context, { ...input, files: files === "true" })
+    })
+  });
+  route.operation(apiOperations["skills.draft.discard"], {
+    authorize: (input, { access }) => workflow.skillDrafts.authorize(access, input),
+    resource: skillDraftResource,
+    policyTargets: (input) => workflow.policyTargets({ ...input, kind: "skill" }),
+    changeClass: "reversible",
+    module: ASSET_WRITE_MODULE,
+    execute: (input, context) => workflow.skillDrafts.discard(context, input)
   });
   // Tools for the instance's own agent, live at once (T8 ruling, 2026-10-24): the rights of a
   // change and of a publish, the guardrails of both on what goes live, and the policy's wait.

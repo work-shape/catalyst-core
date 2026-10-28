@@ -433,7 +433,7 @@ describe("a kind with a draft and a published revision on an instance", () => {
     );
   });
 
-  it("answers a revert with the publish that does it, and a publish of an active kind with why not", async () => {
+  it("answers a revert with the publish that does it", async () => {
     await t.expectOk(t.admin.id, "assets.put", notice("fixed", "one"));
 
     const revert = await t.expectRefused(
@@ -446,14 +446,6 @@ describe("a kind with a draft and a published revision on an instance", () => {
       { status: 422, code: "VALIDATION_FAILED" }
     );
     expect(revert.details).toMatchObject({ reason: "use_publish" });
-
-    const active = await t.expectRefused(
-      t.admin.id,
-      "assets.publish",
-      { params: { kind: "skill", name: "missing" }, payload: { revision: 1 } },
-      { status: 422, code: "VALIDATION_FAILED" }
-    );
-    expect(active.details).toMatchObject({ reason: "no_draft" });
   });
 
   const syncAs = (userId: string, items: unknown[]) =>

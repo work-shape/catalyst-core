@@ -30,6 +30,7 @@ import {
   SKILL,
   SKILL_MD,
   get,
+  publishDraftOf,
   put,
   refusal,
   useSkillWorlds,
@@ -347,6 +348,7 @@ describe("a skill as a folder of files", () => {
       payload: { revision: before.revision, expectedRevision: after.revision }
     });
     expect(reverted.statusCode, reverted.body).toBe(200);
+    await publishDraftOf(world, reverted);
     const restored = await get(world);
     expect(restored.config).toEqual(before.config);
     expect(required(restored.files).find(({ path }) => path === "SKILL.md")?.text).toBe(SKILL_MD);
@@ -681,6 +683,15 @@ Thirty days a year.
       }
     });
     expect(synced.statusCode, synced.body).toBe(200);
+    // The workspace's skill is written as its draft, which a publish makes live (SKILL-DRAFT-1).
+    const [item] = z
+      .object({ items: z.array(z.object({ draftRevision: z.number() }).loose()) })
+      .parse(synced.json()).items;
+    const published = await world.api.call("assets.publish", {
+      params: SKILL,
+      payload: { revision: required(item).draftRevision, workspaceId }
+    });
+    expect(published.statusCode, published.body).toBe(200);
     expect((await kept()).config.description).toBe("Use when a form has to be filled.");
   });
 
@@ -743,6 +754,7 @@ Thirty days a year.
       payload: { revision: 1, expectedRevision: 2 }
     });
     expect(reverted.statusCode, reverted.body).toBe(200);
+    await publishDraftOf(world, reverted, address);
     expect((await get(world, false, address)).config).toEqual(old("First."));
     const current = await get(world, true, address);
     const grown = await put(

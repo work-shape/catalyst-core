@@ -41,7 +41,12 @@ const kinds = [
     lifecycle: "active",
     representation: "config",
     owners: ["instance", "workspace"],
-    actions: { read: "skill.read", write: "skill.write", delete: "skill.delete" }
+    actions: {
+      read: "skill.read",
+      write: "skill.write",
+      publish: "skill.publish",
+      delete: "skill.delete"
+    }
   }
 ];
 
@@ -117,7 +122,8 @@ describe("platform.context.get", () => {
       "agent.publish",
       "skill.read",
       "skill.write",
-      "skill.delete"
+      "skill.delete",
+      "skill.publish"
     ]);
     // The role administers service principals (RIGHTS-1a) and the spend limits (LU-2), and
     // sees usage by named person (LU-3).
@@ -134,7 +140,8 @@ describe("platform.context.get", () => {
       "agent.write",
       "agent.publish",
       "skill.read",
-      "skill.write"
+      "skill.write",
+      "skill.publish"
     ]);
     // On the instance's assets as a whole the role holds every action: the deny names one
     // workspace.
@@ -145,7 +152,8 @@ describe("platform.context.get", () => {
       "agent.publish",
       "skill.read",
       "skill.write",
-      "skill.delete"
+      "skill.delete",
+      "skill.publish"
     ]);
   });
 
@@ -211,7 +219,8 @@ describe("platform.context.get", () => {
       "agent.publish",
       "skill.read",
       "skill.write",
-      "skill.delete"
+      "skill.delete",
+      "skill.publish"
     ]);
   });
 

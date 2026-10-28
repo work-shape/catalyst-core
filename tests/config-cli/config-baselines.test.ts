@@ -14,6 +14,7 @@ import {
   createTemporaryDirectory,
   writeMinimalManifest,
   instanceHolding,
+  publishPushedDraft,
   agentConfig,
   skillConfig
 } from "../support/config-cli";
@@ -209,6 +210,8 @@ describe("config CLI against an instance", () => {
       await runConfigCommand("push", { ...options, fetchImpl: second.fetchImpl }),
       errors.join("")
     ).toBe(0);
+    // The skill is the instance's: the push wrote its draft, which a person publishes.
+    await publishPushedDraft(second.fixture, "skill", "review");
     expect(await stored("review")).toMatchObject({ revision: 2, config: { content: "# Local" } });
   });
 

@@ -33,6 +33,7 @@ import { resolveConfigLocale } from "@work-shape/catalyst-config-schema";
 import { accessResource, decide, listedTo, type AssetCall } from "./asset-access";
 import { isReleaseSync } from "./asset-write-rules";
 import { readRevisionFiles, readSourceFiles, type AssetFileOutput } from "./asset-files";
+import { hasSharedDrafts } from "./shared-drafts";
 import type { AddresseeNames, WorkflowAssetKind } from "../asset-kinds/shared";
 import {
   notFound,
@@ -54,9 +55,11 @@ import { HELD_ASSET_OPERATION } from "../approvals/held-asset-preview";
  */
 function readsAgentDraft(
   access: ActorAccess,
-  resource: ReturnType<typeof accessResource>
+  resource: ReturnType<typeof accessResource>,
+  kind: string = "agent"
 ): boolean {
-  return access.authorize("agent.write", resource).allowed || isReleaseSync(access, "sync");
+  if (!hasSharedDrafts(kind)) return false;
+  return access.authorize(`${kind}.write`, resource).allowed || isReleaseSync(access, "sync");
 }
 
 /** How many assets a list reads where its caller names no page. */
@@ -221,17 +224,18 @@ export class AssetReadWorkflow {
     ]);
     const draftSummaries = await this.options.stores.agentProposals.summaries({
       clientInstanceId: this.options.clientInstanceId,
-      agentIds:
-        kind.kind === "agent"
-          ? records
-              .filter((record) =>
-                readsAgentDraft(
-                  call.access,
-                  accessResource(record.kind, record.name, record.scope, record.id)
-                )
+      // The shared draft of an agent, or of a team's or the instance's skill (SKILL-DRAFT-1).
+      agentIds: hasSharedDrafts(kind.kind)
+        ? records
+            .filter((record) =>
+              readsAgentDraft(
+                call.access,
+                accessResource(record.kind, record.name, record.scope, record.id),
+                kind.kind
               )
-              .map((record) => record.id)
-          : []
+            )
+            .map((record) => record.id)
+        : []
     });
     const health = new Map(
       (kind.kind === "connection"
@@ -342,15 +346,14 @@ export class AssetReadWorkflow {
     ]);
     // Resolve only after authorization, from the revision the caller is allowed to read.
     const runsAs = await target.kind.readRunsAs?.(content.config);
-    const draftSummary =
-      target.kind.kind === "agent" && readsAgentDraft(call.access, target.resource)
-        ? (
-            await this.options.stores.agentProposals.summaries({
-              clientInstanceId: this.options.clientInstanceId,
-              agentIds: [asset.id]
-            })
-          ).get(asset.id)
-        : undefined;
+    const draftSummary = readsAgentDraft(call.access, target.resource, target.kind.kind)
+      ? (
+          await this.options.stores.agentProposals.summaries({
+            clientInstanceId: this.options.clientInstanceId,
+            agentIds: [asset.id]
+          })
+        ).get(asset.id)
+      : undefined;
     // Only a kind with a publish question reads the reader's language: an App, a Workflow, a
     // Knowledge Base.
     const asksPublish =

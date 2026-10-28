@@ -1,4 +1,4 @@
-import { publishAgentDraft } from "./support/agent-draft-publication";
+import { publishAgentDraft, publishSkillDraft } from "./support/agent-draft-publication";
 import { describe, expect, it } from "vitest";
 import {
   SCOPES_HEADER,
@@ -163,12 +163,15 @@ describe("a release through assets.sync", () => {
       version: before + 1,
       items: [
         { name: "rel-intake", status: "applied", revision: 1 },
-        { name: "rel-guide", status: "applied", revision: 2 },
+        // The instance's skill is written as its draft, which a person publishes (SKILL-DRAFT-1).
+        { name: "rel-guide", status: "applied", revision: 1, draftRevision: 1 },
         { name: "rel-old", status: "applied", revision: 2 }
       ]
     });
     expect(await t.version()).toBe(before + 1);
     expect(await t.stored("agent", "rel-intake")).toMatchObject({ status: "active", revision: 1 });
+    expect(await t.stored("skill", "rel-guide")).toMatchObject({ revision: 1 });
+    await publishSkillDraft(t, "rel-guide");
     expect(await t.stored("skill", "rel-guide")).toMatchObject({
       revision: 2,
       config: { content: "The new guidance." }
@@ -280,6 +283,8 @@ describe("a release through assets.sync", () => {
 
     const pushed = await syncAsService(t, release);
     expect(pushed.statusCode, pushed.body).toBe(200);
+    // A person publishes the release's draft of the skill where the interface is off.
+    await publishSkillDraft(t, "rel-guide");
     expect(await t.stored("skill", "rel-guide")).toMatchObject({
       revision: 2,
       config: { content: "Pushed." }

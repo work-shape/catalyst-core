@@ -417,7 +417,8 @@ export const assetRevisionSelectorSchema = z
   .string()
   .regex(/^(?:draft|published|[1-9]\d{0,8})$/u, "draft, published, or a revision number");
 
-const queryBooleanSchema = z.enum(["true", "false"]);
+/** A yes or no in a query string. */
+export const queryBooleanSchema = z.enum(["true", "false"]);
 
 export const getAssetQuerySchema = assetScopeQuerySchema.extend({
   availabilityMode: agentAvailabilitySchema.shape.mode.optional(),

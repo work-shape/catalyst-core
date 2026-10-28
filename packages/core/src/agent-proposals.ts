@@ -1,3 +1,4 @@
+import type { FileSetId } from "./pages";
 import type { ClientInstanceId, ConversationId, UserId } from "./ids";
 import type { JsonObject } from "./json";
 import type { ISODateString } from "./time";
@@ -15,7 +16,11 @@ export interface AgentDraftAuthor {
   release: boolean;
 }
 
-/** One pending agent draft. Its revisions never enter live history or repeat a number. */
+/**
+ * One pending shared draft: an agent's, or a skill's that the instance or a Shared Workspace
+ * owns (SKILL-DRAFT-1). `agentId` names the config asset of either kind. Its revisions never
+ * enter live history or repeat a number.
+ */
 export interface AgentProposal {
   id: string;
   agentId: string;
@@ -24,6 +29,8 @@ export interface AgentProposal {
   baseRevision: number;
   revision: number;
   config: JsonObject;
+  /** The file set the draft's folder holds beside its config, for a skill with files. */
+  fileSetId?: FileSetId;
   createdAt: ISODateString;
   updatedAt: ISODateString;
 }
@@ -50,6 +57,7 @@ export interface AgentProposalStore {
       baseRevision: number;
       expectedDraftRevision: number | null;
       config: JsonObject;
+      fileSetId?: FileSetId;
       savedAt: ISODateString;
     }
   ): Promise<AgentProposal | undefined>;

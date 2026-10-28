@@ -53,6 +53,7 @@ export const GUARDRAIL_CHECKABLE_FIELDS = {
   "operation.before_call": ["input"],
   "app.before_publish": ["name", "content"],
   "agent.before_publish": ["name", "content"],
+  "skill.before_publish": ["name", "content"],
   "workflow.before_publish": ["name", "content"],
   "data_store.before_publish": ["name", "content"],
   "form_page.before_publish": ["name", "content"],
@@ -70,6 +71,7 @@ export const GUARDRAIL_FILTER_KEYS = {
   "operation.before_call": ["operation", "origin", "agent", "workspace"],
   "app.before_publish": ["origin", "agent", "workspace"],
   "agent.before_publish": ["origin", "agent", "workspace"],
+  "skill.before_publish": ["origin", "agent", "workspace"],
   "workflow.before_publish": ["origin", "agent", "workspace"],
   "data_store.before_publish": ["origin", "agent", "workspace"],
   "form_page.before_publish": ["origin", "agent", "workspace"],
@@ -98,6 +100,7 @@ export const GUARDRAIL_APPROVAL_EVENTS = [
   "operation.before_call",
   "app.before_publish",
   "agent.before_publish",
+  "skill.before_publish",
   "workflow.before_publish",
   "data_store.before_publish",
   "form_page.before_publish"

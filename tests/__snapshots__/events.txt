@@ -145,6 +145,7 @@
 {"name":"role.updated","legacy":true,"audited":true,"phases":["after"]}
 {"name":"scheduled_start.fired","legacy":false,"audited":true,"phases":["after"]}
 {"name":"scope_assignment.changed","legacy":true,"audited":true,"phases":["after"]}
+{"name":"skill.before_publish","legacy":false,"audited":false,"phases":["before"]}
 {"name":"storage.orphaned_file_cleanup_failed","legacy":true,"audited":true,"phases":["after"]}
 {"name":"storage.orphaned_files_deleted","legacy":true,"audited":true,"phases":["after"]}
 {"name":"user.chat_skill_changed","legacy":false,"audited":true,"phases":["after"]}

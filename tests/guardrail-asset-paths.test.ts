@@ -1,3 +1,4 @@
+import { publishSkillDraft } from "./support/agent-draft-publication";
 import { describe, expect, it } from "vitest";
 import { DATA_STORE_ASSET_KIND, DATA_STORE_MANIFEST_FILE } from "@work-shape/catalyst-core";
 import { setupWorkspaceHolder } from "./support/asset-operations";
@@ -44,6 +45,8 @@ describe("a guardrail on a revert", () => {
       }
     });
     expect(put.statusCode).toBe(200);
+    // The instance's skill changes by its draft and that draft's publish (SKILL-DRAFT-1).
+    await publishSkillDraft(t, "kunden-faq");
     const reverted = await t.call(t.admin.id, "assets.revert", {
       params: { kind: "skill", name: "kunden-faq" },
       payload: { revision: 1, expectedRevision: 2 }
