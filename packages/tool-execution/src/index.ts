@@ -5,6 +5,7 @@ export {
   type AppEdited
 } from "./app-edit-tool";
 export * from "./tool-registry";
+export { createDataStoreDescriptionTool } from "./data-store-description-tool";
 export * from "./built-in-tools";
 export {
   createWorkspaceOpenTool,

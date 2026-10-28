@@ -237,7 +237,7 @@ export function knowledgeBaseUse(asset: ConfigAssetRecord, store: string): strin
     : undefined;
 }
 
-async function usedBy(
+export async function usedBy(
   runtime: DataStoreRuntime,
   store: PublishedStore,
   access: ActorAccess

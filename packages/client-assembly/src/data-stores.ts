@@ -8,6 +8,7 @@ import {
   AppError,
   operationBatchFailureSchema,
   DATA_STORE_ACTIONS,
+  DATA_STORE_DESCRIPTION_TOOL_NAME,
   DATA_STORE_OPERATION_RIGHTS,
   dataStoreOperationName,
   dataStoreLoadInputSchema,
@@ -85,6 +86,11 @@ const registerStoreRoutes: RouteRegistration = (routes) => {
       input
     }),
     right: DATA_STORE_OPERATION_RIGHTS[verb],
+    notFound: STORE_NOT_AVAILABLE
+  });
+  routes.resourceOperation(apiOperations["data_stores.description"], {
+    target: ({ store }) => ({ operation: DATA_STORE_DESCRIPTION_TOOL_NAME, input: { store } }),
+    right: DATA_STORE_ACTIONS.read,
     notFound: STORE_NOT_AVAILABLE
   });
   routes.resourceOperation(apiOperations["data_stores.query"], bind("query"));

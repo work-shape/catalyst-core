@@ -152,6 +152,8 @@ export type OperationCallRuntime = Pick<
    * invalid input with this text, after the surface's own check and before anything runs.
    */
   unreadableInput?: { code: string; message: string };
+  /** Trusted snapshot of the data tools offered to this model turn; never caller input. */
+  offeredDataToolNames?: readonly string[];
   /**
    * The file a person sent with the call itself, as a multipart route receives it. Live only
    * and never persisted: a call executed later, after an approval, has none.
@@ -188,7 +190,7 @@ export type OperationCallRuntime = Pick<
 export type ToolOperationRunner = (
   request: ToolExecutionRequest,
   context: RuntimeCallContext,
-  options?: Pick<OperationCallRuntime, "unreadableInput">
+  options?: Pick<OperationCallRuntime, "unreadableInput" | "offeredDataToolNames">
 ) => Promise<ToolExecutionResult | ToolDecisionWait>;
 
 export type OperationResult<TOutput = unknown> =

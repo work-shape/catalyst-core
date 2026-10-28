@@ -1,3 +1,4 @@
+import { dataStoreDescriptionOperation } from "./description";
 import { scopePredicate } from "./scoped-tables";
 import { recordsPropose } from "./records/propose";
 import { recordsDecide } from "./records/decide";
@@ -8,15 +9,14 @@ import {
   AppError,
   auditActorFromIdentity,
   DATA_STORE_ACTIONS,
+  DATA_STORE_DESCRIPTION_TOOL_NAME,
   DATA_STORE_ASSET_KIND,
   DATA_STORE_OPERATION_PREFIX,
   DATA_STORE_OPERATION_RIGHTS,
   DATA_STORE_OPERATION_SCOPES,
   DATA_STORE_PREVIEW_ROW_LIMIT,
   dataStoreOperationName,
-  type ConfigAssetRecord,
   type DataStoreRecord,
-  type PlatformStores,
   type DataStoreSchema,
   type DataToolDescriptor,
   type DataToolSource,
@@ -28,7 +28,8 @@ import { z } from "zod";
 import { ensureCallRecords, keyedCall, readRecordedCall } from "./calls";
 import { readTables, rowsOf } from "./catalog";
 import { validateConstraintNames } from "./constraint-errors";
-import { dataStoreDefinitionSchema } from "./definition";
+import { readStore, publishedStore } from "./published-store";
+export { readStore } from "./published-store";
 import { databaseFailureError } from "./failures";
 import { rowWriteDatabaseFailure, rowWriteOutcomeUnknown } from "./row-write-failures";
 import { DATA_STORE_ROLE_LIMITS } from "./role-limits";
@@ -137,56 +138,6 @@ const VERBS: readonly StoreVerb[] = [
   describe,
   previewRows
 ];
-
-function publishedStore(
-  asset: ConfigAssetRecord,
-  record: DataStoreRecord | undefined
-): PublishedStore | undefined {
-  const definition = dataStoreDefinitionSchema.safeParse(asset.publishedConfig);
-  if (
-    asset.status !== "active" ||
-    !definition.success ||
-    record?.id !== asset.id ||
-    record.status === "retired"
-  ) {
-    return undefined;
-  }
-  return {
-    definition: definition.data,
-    record,
-    resource: {
-      kind: DATA_STORE_ASSET_KIND,
-      title: definition.data.title,
-      id: asset.id,
-      assetId: asset.id,
-      name: asset.name,
-      ...(asset.scope.kind === "workspace" ? { workspaceId: asset.scope.workspaceId } : {})
-    }
-  };
-}
-
-/** One published store by its name: two reads, through the rows the caller hands in. */
-export async function readStore(
-  runtime: Pick<DataStoreRuntime, "clientInstanceId"> & {
-    stores: {
-      configAssets: Pick<PlatformStores["configAssets"], "getConfigAsset">;
-      dataStores: Pick<PlatformStores["dataStores"], "getDataStore">;
-    };
-  },
-  name: string
-): Promise<PublishedStore | undefined> {
-  const { clientInstanceId, stores } = runtime;
-  const asset = await stores.configAssets.getConfigAsset({
-    clientInstanceId,
-    kind: DATA_STORE_ASSET_KIND,
-    name
-  });
-  if (!asset) return undefined;
-  return publishedStore(
-    asset,
-    await stores.dataStores.getDataStore({ clientInstanceId, id: asset.id })
-  );
-}
 
 /**
  * The published stores of the instance, or those of the names: two reads, whatever their
@@ -488,6 +439,7 @@ function readOperation(
 export function createDataStoreOperationSource(runtime: DataStoreRuntime): OperationSource {
   return {
     async resolve(name, stores = runtime.stores) {
+      if (name === DATA_STORE_DESCRIPTION_TOOL_NAME) return dataStoreDescriptionOperation(runtime);
       const lookup = { clientInstanceId: runtime.clientInstanceId, stores };
       const split = splitOperationName(name);
       if (split?.part === DATA_STORE_STATE_VERB) {
