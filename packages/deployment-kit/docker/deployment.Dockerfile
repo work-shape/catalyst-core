@@ -96,6 +96,8 @@ RUN --mount=type=cache,id=vivd-runner-apt-lists,target=/var/lib/apt/lists,sharin
   --mount=type=cache,id=vivd-runner-apt-cache,target=/var/cache/apt,sharing=locked \
   apt-get update \
   && apt-get install -y --no-install-recommends \
+    7zip \
+    libarchive-tools \
     bash \
     ca-certificates \
     coreutils \
@@ -124,11 +126,15 @@ RUN --mount=type=cache,id=vivd-runner-apt-lists,target=/var/lib/apt/lists,sharin
     python3-pip \
     unzip \
   && python3 -m pip install --break-system-packages --no-cache-dir \
+    pillow-heif==1.8.1 \
+    extract-msg==0.57.0 \
+    tnefparse==1.4.0 \
+    numbers-parser==4.22.0 \
     numpy==2.1.3 \
     openpyxl==3.1.5 \
     pandas==2.2.3 \
     pdfplumber==0.11.4 \
-    Pillow==10.4.0 \
+    Pillow==13.0.0 \
     pypdf==4.3.1 \
     python-docx==1.1.2 \
     python-pptx==0.6.23 \
@@ -304,6 +310,9 @@ RUN while IFS="$(printf '\t')" read -r command file; do \
   && python -c "import yaml; yaml.safe_load('ok: true'); print('pyyaml ok')" \
   && python -c "import pdfplumber, pypdf, reportlab; print('python-pdf ok')" \
   && python -c "from PIL import Image; Image.new('RGB', (1, 1)); print('pillow ok')" \
+  && python -c "import extract_msg, tnefparse, numbers_parser, pillow_heif; from PIL import Image; import io; pillow_heif.register_heif_opener(); b=io.BytesIO(); Image.new('RGB', (2, 2)).save(b, format='HEIF'); b.seek(0); assert Image.open(b).load() is not None" \
+  && 7z i >/dev/null \
+  && bsdtar --version \
   && node --version \
   && git --version \
   && fc-match Carlito | grep -i Carlito > /dev/null \

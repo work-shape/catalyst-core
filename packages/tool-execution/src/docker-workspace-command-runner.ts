@@ -14,7 +14,13 @@ import {
   type WorkspaceCommandProcessInput
 } from "./workspace-command-executor";
 
-const SANDBOX_ENV_KEYS = new Set(["HOME", "PATH", "TMPDIR", "WORKSPACE_DIR"]);
+const SANDBOX_ENV_KEYS = new Set([
+  "HOME",
+  "PATH",
+  "TMPDIR",
+  "WORKSPACE_DIR",
+  "CATALYST_MAX_WORKSPACE_BYTES"
+]);
 // Ends the version call of a check whose caller never aborts it. A provider check aborts it
 // earlier, after `PROVIDER_CHECK_TIMEOUT_MS`.
 const ENGINE_CHECK_TIMEOUT_SECONDS = 10;

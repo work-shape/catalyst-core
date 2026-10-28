@@ -443,6 +443,7 @@ export class LocalWorkspaceCommandRunner {
         HOME: workspaceDirectory,
         PATH: readToolExecutionEnv().path,
         TMPDIR: tempDirectory,
+        CATALYST_MAX_WORKSPACE_BYTES: String(command.limits.maxWorkspaceBytes ?? 100 * 1024 * 1024),
         WORKSPACE_DIR: workspaceDirectory
       },
       signal
