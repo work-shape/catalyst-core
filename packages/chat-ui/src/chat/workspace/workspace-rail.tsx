@@ -9,7 +9,7 @@ import {
   Settings,
   SquarePen
 } from "lucide-react";
-import { useEffect, useId, useRef, type ReactNode } from "react";
+import { Fragment, useEffect, useId, useRef, type ReactNode } from "react";
 import type {
   ConversationListItem,
   ProjectView,
@@ -102,6 +102,11 @@ interface WorkspaceRailProps {
   recentProjects?: readonly RailProject[];
   /** The project on screen: its row is the current one. */
   openProjectName?: string;
+  /**
+   * The project whose page or chat is open, with its newest chats the person reads: they stand
+   * under its row with a row to the project's page, and "Recent" leaves them out.
+   */
+  activeProject?: { id: string; chats: readonly ConversationListItem[] };
   onOpenProject?: (project: string) => void;
   /** The plus on the Projects group's label makes a project in the open workspace. */
   onCreateProject?: () => void;
@@ -348,20 +353,29 @@ function RailBranding({ config }: { config: SafeConfig }) {
 
 /**
  * The projects of the open workspace used last, above "Recent", and a row to all of them
- * (PRJ-5). A private project carries the lock a private conversation carries. Nothing shows
- * while the workspace has no project the person sees, or in the collapsed strip.
+ * (PRJ-5). A private project carries the lock a private conversation carries. The active project
+ * stands among them even when it was used earlier, and unfolds to its newest chats with a row to
+ * its page. Nothing shows while the workspace has no project the person sees, or in the
+ * collapsed strip.
  */
-function RecentProjects({
-  recentProjects = [],
-  openProjectName,
-  onOpenProject,
-  onCreateProject,
-  onViewChange
-}: WorkspaceRailProps) {
+function RecentProjects(props: WorkspaceRailProps) {
+  const {
+    recentProjects = [],
+    openProjectName,
+    activeProject,
+    onOpenProject,
+    onCreateProject,
+    onViewChange
+  } = props;
   const { t } = useTranslation();
   if (useSidebarCollapsed() || recentProjects.length === 0) {
     return null;
   }
+  const listed = recentProjects.slice(0, RAIL_PROJECTS_LIMIT);
+  const olderActive = activeProject
+    ? recentProjects.slice(RAIL_PROJECTS_LIMIT).find(({ id }) => id === activeProject.id)
+    : undefined;
+  const rows = olderActive ? [...listed, olderActive] : listed;
   return (
     <NavGroup
       label={t("projects.title")}
@@ -374,32 +388,45 @@ function RecentProjects({
         ) : undefined
       }
     >
-      {recentProjects.slice(0, RAIL_PROJECTS_LIMIT).map((project) => (
-        <NavItem
-          key={project.id}
-          icon={<Folder aria-hidden="true" />}
-          selected={project.name === openProjectName}
-          // The name is cut at the rail's edge; the whole name shows on the pointer.
-          title={project.title}
-          data-testid="rail-project"
-          onClick={() => onOpenProject?.(project.name)}
-        >
-          <span className="flex min-w-0 items-center gap-1">
-            <span className="min-w-0 truncate">{project.title}</span>
-            {project.audience === "private" ? (
-              <span
-                className="shrink-0 text-muted-foreground"
-                data-testid="rail-project-private"
-                role="img"
-                aria-label={t("projects.audiencePrivate")}
-                title={t("projects.audiencePrivate")}
-              >
-                <Lock className="size-3" aria-hidden="true" />
+      {rows.map((project) => {
+        const expanded = project.id === activeProject?.id;
+        return (
+          <Fragment key={project.id}>
+            <NavItem
+              icon={<Folder aria-hidden="true" />}
+              selected={project.name === openProjectName}
+              // The name is cut at the rail's edge; the whole name shows on the pointer.
+              title={project.title}
+              data-testid="rail-project"
+              data-expanded={expanded ? "true" : undefined}
+              onClick={() => onOpenProject?.(project.name)}
+            >
+              <span className="flex min-w-0 items-center gap-1">
+                <span className="min-w-0 truncate">{project.title}</span>
+                {project.audience === "private" ? (
+                  <span
+                    className="shrink-0 text-muted-foreground"
+                    data-testid="rail-project-private"
+                    role="img"
+                    aria-label={t("projects.audiencePrivate")}
+                    title={t("projects.audiencePrivate")}
+                  >
+                    <Lock className="size-3" aria-hidden="true" />
+                  </span>
+                ) : null}
               </span>
+            </NavItem>
+            {expanded && activeProject ? (
+              <ProjectChats
+                {...props}
+                projectTitle={project.title}
+                chats={activeProject.chats}
+                onOpenAll={() => onOpenProject?.(project.name)}
+              />
             ) : null}
-          </span>
-        </NavItem>
-      ))}
+          </Fragment>
+        );
+      })}
       <NavItem
         // The words start where the names of the projects start.
         className="pl-8 text-muted-foreground"
@@ -407,6 +434,67 @@ function RecentProjects({
         onClick={() => onViewChange("projects")}
       >
         {t("projects.railAll")}
+      </NavItem>
+    </NavGroup>
+  );
+}
+
+/**
+ * The newest chats of the active project under its row, as "Recent" lists them, and a row to
+ * the project's page with all of them.
+ */
+function ProjectChats({
+  config,
+  chats,
+  projectTitle,
+  onOpenAll,
+  selectedConversationId,
+  deletingConversation,
+  canMoveConversation,
+  onSelectConversation,
+  onRenameConversation,
+  onMoveConversation,
+  onDeleteConversation,
+  projectActions
+}: WorkspaceRailProps & {
+  chats: readonly ConversationListItem[];
+  projectTitle: string;
+  onOpenAll: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <NavGroup
+      aria-label={t("projects.railChatsOf", { project: projectTitle })}
+      data-testid="rail-project-chats"
+    >
+      {chats.map((conversation) => (
+        <ConversationButton
+          key={conversation.id}
+          conversation={conversation}
+          nested
+          selected={conversation.id === selectedConversationId}
+          retention={config.retention}
+          onSelect={() => onSelectConversation(conversation.id)}
+          onRename={(title) => onRenameConversation(conversation.id, title)}
+          onMove={
+            canMoveConversation
+              ? () => onMoveConversation(conversation.id, conversation.title)
+              : undefined
+          }
+          onRemoveFromProject={
+            projectActions ? () => projectActions.remove(conversation) : undefined
+          }
+          onDelete={() => onDeleteConversation(conversation.id)}
+          deleting={deletingConversation}
+        />
+      ))}
+      <NavItem
+        // The words start where the titles of the chats start.
+        className="pl-8 text-muted-foreground"
+        data-testid="rail-project-chats-all"
+        onClick={onOpenAll}
+      >
+        {t("projects.railAllChats")}
       </NavItem>
     </NavGroup>
   );
@@ -430,7 +518,8 @@ function RecentConversations({
   onRenameConversation,
   onMoveConversation,
   onDeleteConversation,
-  projectActions
+  projectActions,
+  activeProject
 }: WorkspaceRailProps) {
   const { t } = useTranslation();
   // The collapsed strip hides the list with its label.
@@ -438,7 +527,11 @@ function RecentConversations({
     return null;
   }
 
-  const recent = recentConversations(conversations, openConversation);
+  const listed = recentConversations(conversations, openConversation);
+  // The chats under the active project's row stand there alone.
+  const recent = activeProject
+    ? listed.filter(({ id }) => !activeProject.chats.some((chat) => chat.id === id))
+    : listed;
 
   return (
     <NavGroup
@@ -450,7 +543,7 @@ function RecentConversations({
         </IconButton>
       }
     >
-      {recent.length > 0 ? (
+      {listed.length > 0 ? (
         recent.map((conversation) => (
           <ConversationButton
             key={conversation.id}

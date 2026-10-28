@@ -39,10 +39,16 @@ export function ConversationButton({
   onMoveToProject,
   onRemoveFromProject,
   onDelete,
-  deleting
+  deleting,
+  nested = false
 }: {
   conversation: ConversationListItem;
   selected: boolean;
+  /**
+   * The row stands under its project's row in the rail: it starts where the project's name
+   * starts and leaves out the project's mark.
+   */
+  nested?: boolean;
   /** The instance's retention settings, which decide whether and when a deletion is near. */
   retention: SafeConfig["retention"] | undefined;
   onSelect: () => void;
@@ -254,7 +260,7 @@ export function ConversationButton({
         {editing ? (
           <form
             ref={editorFormRef}
-            className="flex h-8 min-w-0 items-center"
+            className={cn("flex h-8 min-w-0 items-center", nested && "pl-6")}
             onBlur={(event) => {
               if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
                 exitEditing();
@@ -284,6 +290,7 @@ export function ConversationButton({
           </form>
         ) : (
           <NavItem
+            className={nested ? "pl-8" : undefined}
             selected={selected}
             aria-describedby={expiryLabel ? expiryHintId : undefined}
             trailing={options}
@@ -330,7 +337,7 @@ export function ConversationButton({
                   {t("conversationWaitsForYou")}
                 </Badge>
               ) : null}
-              {conversation.projectId ? (
+              {conversation.projectId && !nested ? (
                 <span
                   className="shrink-0 text-muted-foreground"
                   data-testid="conversation-project-marker"

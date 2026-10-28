@@ -19,3 +19,8 @@ export {
   proposedInstructions
 } from "../../../packages/chat-ui/src/chat/projects/project-instructions-model";
 export { readProjectFileChange } from "../../../packages/chat-ui/src/chat/projects/project-file-change-line";
+export {
+  activeRailProject,
+  railProjectChats,
+  type RailProject
+} from "../../../packages/chat-ui/src/chat/projects/rail-project-chats";

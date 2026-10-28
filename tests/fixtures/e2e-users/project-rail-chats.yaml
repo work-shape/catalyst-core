@@ -1,0 +1,20 @@
+# The two people of the spec of a project's chats in the rail (PRJ-5), used by no other spec: one
+# has a shared and a private project in a workspace of theirs, the other is a member there and
+# reads the shared project's chats only. The labels sort after every other for the reason in
+# e2e-app.yaml.
+- email: e2e-project-rail@example.test
+  displayLabel: E2E Zz Project Rail
+  passwordEnvName: E2E_PROJECT_RAIL_PASSWORD
+  developmentPassword: e2e-project-rail-password
+  roles:
+    - user
+  permissionRefs:
+    - demo-tools
+- email: e2e-project-rail-member@example.test
+  displayLabel: E2E Zz Project Rail Member
+  passwordEnvName: E2E_PROJECT_RAIL_MEMBER_PASSWORD
+  developmentPassword: e2e-project-rail-member-password
+  roles:
+    - user
+  permissionRefs:
+    - demo-tools

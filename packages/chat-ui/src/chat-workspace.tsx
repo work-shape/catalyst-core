@@ -50,6 +50,7 @@ import { ScheduledPage } from "./chat/scheduled/scheduled-page";
 import { NewProjectDialog, ProjectsArea } from "./chat/projects/projects-area";
 import { AddFromProjectProvider } from "./chat/projects/add-from-project";
 import { useProjectsQuery } from "./shared/api/projects";
+import { useRailProjectChats } from "./chat/projects/rail-project-chats";
 import { ProjectChangeDialogs, type ProjectChange } from "./chat/projects/project-move-dialog";
 import { LoginPanel } from "./chat/login-panel";
 import { TwoFactorSetupScreen } from "./chat/two-factor-setup-screen";
@@ -263,6 +264,13 @@ function ChatWorkspaceContent({
   });
   // The projects of the open workspace used last, in their group of the rail (PRJ-5).
   const railProjects = useProjectsQuery(model.projects.enabled ? (railAppsWorkspaceId ?? "") : "");
+  // The project whose page or chat is open unfolds to its newest chats in the rail.
+  const railActiveProject = useRailProjectChats({
+    projects: model.conversationRail.projects ? railProjects.data : undefined,
+    openProjectName: projectsRoute?.kind === "project" ? projectsRoute.project : undefined,
+    openConversation: onChatRoute ? model.conversationRail.openConversation : undefined,
+    loaded: model.conversationRail.conversations
+  });
   // The plus of the rail's Projects group asked to make a project in the open workspace.
   const [creatingProject, setCreatingProject] = useState(false);
   const chatCovered = onChatRoute && chatSurface.covering && displayPanel.open;
@@ -731,6 +739,11 @@ function ChatWorkspaceContent({
             }
             recentProjects={rail.projects ? railProjects.data : undefined}
             openProjectName={projectsRoute?.kind === "project" ? projectsRoute.project : undefined}
+            activeProject={
+              railActiveProject
+                ? { id: railActiveProject.project.id, chats: railActiveProject.chats }
+                : undefined
+            }
             onOpenProject={(project) => {
               if (railAppsWorkspaceId) {
                 closeDrawer();
