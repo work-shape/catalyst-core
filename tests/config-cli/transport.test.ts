@@ -91,3 +91,92 @@ describe("config CLI API transport", () => {
     expect(fetchCount).toBe(0);
   });
 });
+
+describe("CLI response diagnostics", () => {
+  it("sends the CLI version on exchange and authenticated calls", async () => {
+    const { RELEASE_VERSION } = await import("@work-shape/catalyst-api-contract");
+    const versions: (string | null)[] = [];
+    const api = await createConfigApi({
+      baseUrl: "https://instance.test",
+      apiKey: "private-key",
+      fetchImpl: async (input, init) => {
+        versions.push(new Headers(init?.headers).get("catalyst-cli-version"));
+        return String(input).endsWith("/auth/access-token")
+          ? Response.json({ accessToken: "private-token", expiresAt: "2030-01-01T00:00:00.000Z" })
+          : Response.json({
+              status: "ok",
+              clientInstanceId: "instance",
+              time: "2030-01-01T00:00:00.000Z"
+            });
+      }
+    });
+    await api.read((client) => client.health.get());
+    expect(versions).toEqual([RELEASE_VERSION, RELEASE_VERSION]);
+  });
+
+  it.each([
+    ["text/html", "<html>private content</html>", "an HTML page instead of API JSON"],
+    [
+      "application/json",
+      '{"private":"content"}',
+      "other JSON that does not match the API contract"
+    ],
+    ["text/plain", "private content", "non-JSON text"]
+  ])(
+    "names the reached URL and category of an unexpected 200 (%s)",
+    async (type, body, description) => {
+      const failure = await createConfigApi({
+        baseUrl: "https://instance.test/wrong-path",
+        apiKey: "private-key",
+        fetchImpl: async () => new Response(body, { headers: { "content-type": type } })
+      }).catch((error: unknown) => error);
+      expect(String(failure)).toContain(
+        `https://instance.test/wrong-path/api/v1/auth/access-token returned ${description} (HTTP 200, ${type})`
+      );
+      expect(String(failure)).not.toContain(body);
+      expect(String(failure)).not.toContain("private-key");
+    }
+  );
+
+  it("keeps the right response URL when concurrent reads fail differently", async () => {
+    const api = await createConfigApi({
+      baseUrl: "https://instance.test",
+      apiKey: "private-key",
+      fetchImpl: async (input) =>
+        String(input).endsWith("/auth/access-token")
+          ? Response.json({ accessToken: "private-token", expiresAt: "2030-01-01T00:00:00.000Z" })
+          : String(input).endsWith("/context")
+            ? new Response("<html>private page</html>", {
+                headers: { "content-type": "text/html" }
+              })
+            : Response.json({ private: "other body" })
+    });
+    const results = await Promise.allSettled([
+      api.read((client) => client.platform.context.get()),
+      api.getOverview()
+    ]);
+    expect(results[0]).toMatchObject({
+      status: "rejected",
+      reason: {
+        message: expect.stringContaining(
+          "https://instance.test/api/v1/context returned an HTML page"
+        )
+      }
+    });
+    expect(results[1]).toMatchObject({
+      status: "rejected",
+      reason: { message: expect.stringContaining("other JSON") }
+    });
+    expect(JSON.stringify(results)).not.toContain("private page");
+  });
+
+  it("redacts URL credentials and query strings in response diagnostics", async () => {
+    const failure = await createConfigApi({
+      baseUrl: "https://user:password@instance.test",
+      apiKey: "private-key",
+      fetchImpl: async () => Response.json({ private: "body" })
+    }).catch((error: unknown) => error);
+    expect(String(failure)).toContain("https://instance.test/api/v1/auth/access-token");
+    expect(String(failure)).not.toContain("password");
+  });
+});

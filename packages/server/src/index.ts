@@ -1,3 +1,4 @@
+import { RELEASE_VERSION } from "@work-shape/catalyst-api-contract";
 export { skillSecretWarnings } from "./asset-kinds/skill-secret-warnings";
 import { registerWorkflowUnpublishRoute } from "./workflows/workflow-unpublish";
 import { registerScheduledStartRoutes } from "./routes/scheduled-start-routes";
@@ -249,6 +250,10 @@ export async function createChatServer(
   });
   // Before every other hook, so that an answer one of them gives carries the header set too.
   installAppContentBoundary(app, allowedOrigins);
+  // Available even when authentication or response parsing fails in an outside CLI.
+  app.addHook("onRequest", async (_request, reply) => {
+    void reply.header("catalyst-server-version", RELEASE_VERSION);
+  });
 
   await app.register(cors, {
     origin: allowedOrigins,
