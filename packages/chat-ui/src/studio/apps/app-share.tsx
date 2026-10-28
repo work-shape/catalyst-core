@@ -24,7 +24,11 @@ export function useAppShare(app: string, record: Asset | undefined, title: strin
       queryClient &&
       createAssetShareSource(api.client, () => {
         queryClient
-          .invalidateQueries({ queryKey: workspaceQueryKeys.assets(api.apiBaseUrl, "standalone") })
+          .invalidateQueries({
+            queryKey: workspaceQueryKeys.assets(api.apiBaseUrl, "standalone"),
+            // onMoved opens the destination. The still-mounted old address is gone.
+            refetchType: "none"
+          })
           .catch(() => undefined);
       }),
     [api, queryClient]

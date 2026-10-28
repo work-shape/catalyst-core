@@ -5,6 +5,17 @@ import { requestWithOrigin } from "./request-with-origin";
 import type { Response } from "@playwright/test";
 import { expect, test } from "./test";
 import { requestAnswered } from "./allowed-page-errors";
+import { randomUUID } from "node:crypto";
+import {
+  asker,
+  DESKTOP,
+  expectOwner,
+  memberPage,
+  PHONE,
+  pickerSetup,
+  shoot as shootShare,
+  skillPicker
+} from "./share-move-fixtures";
 
 // The messages this spec's tests cause on purpose (see allowed-page-errors.ts).
 test.use({
@@ -41,7 +52,7 @@ test.use({
 const member = { email: "e2e-inbox@example.test", password: "e2e-inbox-password" };
 
 // These journeys share their member's requests and decisions in one instance.
-test.describe.configure({ mode: "serial" });
+test.describe.configure({ mode: "serial", retries: 0 });
 
 // An agent's tool call that an admin set to approval, from the request in a conversation to
 // the decision in the Inbox, the one execution, and the record under Instance > Operations.
@@ -293,3 +304,130 @@ test("a member's publish of an App waits in the Inbox with its review, and an ad
   await signIn(page, reviewer);
   await approveMemberPublish({ page, browser, baseURL, pageErrors }, testInfo.retry);
 });
+
+for (const viewport of [DESKTOP, PHONE]) {
+  for (const decision of ["approve", "reject"] as const) {
+    test(`a picker share request is ${decision === "approve" ? "accepted" : "declined"} in the Inbox and the requester sees the result at ${viewport.width}px`, async ({
+      page,
+      browser,
+      baseURL,
+      pageErrors,
+      instanceAgentsChange: _instanceAgentsChange
+    }) => {
+      test.setTimeout(120_000);
+      await signIn(page, reviewer);
+      await page.setViewportSize(viewport);
+      await page.evaluate(() => window.localStorage.setItem("vivd-catalyst:locale", "de"));
+      const requester = await memberPage(browser, baseURL, pageErrors, asker, viewport);
+      const fixture = await pickerSetup(
+        page,
+        requester,
+        randomUUID().replaceAll("-", "").slice(0, 8)
+      );
+      // The seed lets the requester read skills for everyone, but only change their own.
+      // The dialog's request path proves that they cannot perform this move themselves.
+      try {
+        const greyed = await skillPicker(requester, fixture.agent, fixture.name, fixture.title);
+        await expect(greyed).toHaveAttribute("data-picker-action", "");
+        await expect(greyed).toContainText("Für alle teilen…");
+        await greyed.click();
+        const dialog = requester.getByRole("dialog", { name: `„${fixture.title}“ teilen` });
+        await expect(dialog.locator("[data-share-users]")).toHaveText(
+          "Alle, denen es angeboten wird"
+        );
+        await expect(dialog.locator("[data-share-request]")).toBeVisible();
+        await expect(dialog.getByRole("button", { name: "Teilen", exact: true })).toHaveCount(0);
+        await dialog.getByRole("button", { name: "Anfrage senden" }).click();
+        await expect(dialog.locator("[data-share-requested]")).toBeVisible();
+        await dialog.getByRole("button", { name: "Schließen", exact: true }).last().click();
+        await expectOwner(requester, "skill", fixture.name, fixture.personal);
+
+        // The request is visible to its sender, who cannot decide it.
+        await requester.goto("/inbox");
+        const ownRow = requester.getByTestId("inbox-row").filter({ hasText: fixture.title });
+        await expect(ownRow).toBeVisible();
+        // A person without decision rights has only their own list, with no tab chooser.
+        await expect(requester.getByRole("tab")).toHaveCount(0);
+        await ownRow.getByRole("button").first().click();
+        const requestUrl = requester.url();
+        await expect(
+          requester.getByTestId("inbox-item").locator('[data-status="pending"]')
+        ).toHaveText("Wartet auf Freigabe");
+        await expect(requester.getByRole("button", { name: "Annehmen", exact: true })).toHaveCount(
+          0
+        );
+        await expect(requester.getByRole("button", { name: "Ablehnen", exact: true })).toHaveCount(
+          0
+        );
+
+        await page.goto("/inbox");
+        const row = page.getByTestId("inbox-row").filter({ hasText: fixture.title });
+        await expect(row).toHaveCount(1);
+        await row.getByRole("button").first().click();
+        await expect(page).toHaveURL(requestUrl);
+        const item = page.getByTestId("inbox-item");
+        await expect(item).toContainText(
+          `E2E Zz Move Asker möchte „${fixture.title}“ für alle teilen`
+        );
+        await expect(item.locator("[data-share-users]")).toHaveText(
+          "Alle, denen es angeboten wird"
+        );
+        await expect(item.locator("[data-share-moves]")).toContainText(fixture.title);
+        await shootShare(page, `inbox-${decision}-${viewport.width}`);
+        await page
+          .getByRole("button", {
+            name: decision === "approve" ? "Annehmen" : "Ablehnen",
+            exact: true
+          })
+          .click();
+        await expect(item.getByTestId("inbox-item-outcome")).toContainText("E2E Superadmin");
+        await expect(page.getByRole("button", { name: "Annehmen", exact: true })).toHaveCount(0);
+        await expect(page.getByRole("button", { name: "Ablehnen", exact: true })).toHaveCount(0);
+
+        // The requester returns to their own request and reads the decision, then verifies its
+        // practical effect in the same chooser and on the skill's own page.
+        await requester.reload();
+        const result = requester.getByTestId("inbox-item");
+        await expect(result).toContainText(decision === "approve" ? "Übernommen" : "Abgelehnt");
+        await expect(result.getByTestId("inbox-item-outcome")).toContainText("E2E Superadmin");
+        await shootShare(requester, `requester-${decision}-${viewport.width}`);
+        await expectOwner(
+          requester,
+          "skill",
+          fixture.name,
+          decision === "approve" ? undefined : fixture.personal
+        );
+        const option = await skillPicker(requester, fixture.agent, fixture.name, fixture.title);
+        if (decision === "approve") {
+          await expect(option).not.toHaveAttribute("data-picker-action");
+          await expect(option).not.toContainText("Für alle teilen…");
+          await option.click();
+        } else {
+          await expect(option).toHaveAttribute("data-picker-action", "");
+          await expect(option).toContainText("Für alle teilen…");
+        }
+        await requester.keyboard.press("Escape");
+        if (decision === "approve") {
+          await expect(
+            requester
+              .getByRole("list", { name: "Skills", exact: true })
+              .getByText(fixture.title, { exact: true })
+          ).toBeVisible();
+        }
+        await requester.evaluate(
+          (scope) => window.localStorage.setItem("vivd-catalyst:build-scope", scope),
+          decision === "approve" ? "instance" : fixture.personal
+        );
+        await requester.goto(`/build/skills/${fixture.name}`);
+        await expect(
+          requester
+            .locator("[data-asset-place]")
+            .getByText(decision === "approve" ? "Alle" : "Nur ich", { exact: true })
+        ).toBeVisible();
+      } finally {
+        await fixture.cleanup();
+        await requester.context().close();
+      }
+    });
+  }
+}

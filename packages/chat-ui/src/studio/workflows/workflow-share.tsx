@@ -9,6 +9,7 @@ import type { WorkflowView } from "./workflow-views";
 import { workflowRightsOn } from "./workflow-model";
 import { useWorkflowsHost } from "./workflows-host";
 import type { OpenRoute } from "./workflows-frame";
+import { rememberWorkflowOwner } from "./instance-source";
 
 /**
  * "Teilen…" of a Workflow (SHARE-1), for whoever may change it: to a team the reader belongs to
@@ -33,11 +34,8 @@ export function useWorkflowShare({
     () =>
       api &&
       queryClient &&
-      createAssetShareSource(api.client, () => {
-        queryClient
-          .invalidateQueries({ queryKey: workspaceQueryKeys.assets(api.apiBaseUrl, "standalone") })
-          .catch(() => undefined);
-      }),
+      // Refresh after onMoved has replaced the source's cached owner.
+      createAssetShareSource(api.client, () => undefined),
     [api, queryClient]
   );
   return useAssetShare({
@@ -57,6 +55,16 @@ export function useWorkflowShare({
     canShare: host !== undefined && workflowRightsOn(host.rights, workflow).write,
     workspaces: host?.places ?? [],
     onMoved: (owner) => {
+      if (api && queryClient) {
+        rememberWorkflowOwner(
+          api.client,
+          workflowId,
+          owner.kind === "workspace" ? owner.workspaceId : undefined
+        );
+        queryClient
+          .invalidateQueries({ queryKey: workspaceQueryKeys.assets(api.apiBaseUrl, "standalone") })
+          .catch(() => undefined);
+      }
       if (owner.kind === "workspace" && owner.workspaceId !== workspaceId) {
         onOpenRoute({
           kind: "workflow",
