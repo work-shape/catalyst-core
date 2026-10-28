@@ -43,6 +43,9 @@
       ],
       "@work-shape/catalyst-chat-ui/build-area": ["packages/chat-ui/src/seams/build-area.ts"],
       "@work-shape/catalyst-chat-ui/control-plane": ["packages/chat-ui/src/seams/control-plane.ts"],
+      "@work-shape/catalyst-chat-ui/data-store-use": [
+        "packages/chat-ui/src/seams/data-store-use.ts"
+      ],
       "@work-shape/catalyst-chat-ui/dock-page-chat": [
         "packages/chat-ui/src/seams/dock-page-chat.ts"
       ],

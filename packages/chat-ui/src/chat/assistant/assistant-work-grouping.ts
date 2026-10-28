@@ -14,6 +14,7 @@ import {
 } from "../../studio/build-area/connection-give-card";
 import { readToolDisplayPayloadFromToolResult } from "../../shared/domain-ui-widgets";
 import { isQuestionCall } from "../questions/question";
+import { isDataStoreUseCall } from "../data-stores/data-store-use-card";
 import { appSavedByCall, standingAssetOpen } from "../conversation/subject-run";
 import { NO_FOLDED_CARDS, type FoldedCard } from "../conversation/card-fold";
 import { isOpenToolName, readPageSave } from "../../studio/pages/page-save";
@@ -60,7 +61,8 @@ export function createAssistantMessageGroupBy(
     isStandingOpen(part) ||
     isSubagentCall(part) ||
     isConnectCall(part) ||
-    isQuestionCall(part)
+    isQuestionCall(part) ||
+    isDataStoreUseCall(part)
       ? []
       : byType(part, context);
 }
@@ -222,6 +224,8 @@ function staysVisibleAfterRun(
     isSubagentCall(part) ||
     // The agent's question is how the person answers it: it stays (ASK-1).
     isQuestionCall(part) ||
+    // A Data Store added for reading, or waiting for the person's click, stays (STORE-USE-1).
+    isDataStoreUseCall(part) ||
     (index > finalTextIndex && isVisibleFinalAssistantPart(part))
   );
 }
@@ -406,7 +410,8 @@ function isStandaloneToolCall(
     isConnectionDraftCard(part) ||
     isConnectCall(part) ||
     isSubagentCall(part) ||
-    isQuestionCall(part)
+    isQuestionCall(part) ||
+    isDataStoreUseCall(part)
   ) {
     return true;
   }

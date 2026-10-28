@@ -266,6 +266,12 @@ function toolCallOf(
       signal: context.runtime.signal,
       runFence: context.runtime.runFence,
       ...(context.runtime.agentPreview ? { agentPreview: context.runtime.agentPreview } : {}),
+      // Who the run serves, as the runtime set it: a tool that only the person's own turn may
+      // call (data_store.use, preview_capture) reads it here.
+      ...(context.runtime.subagent ? { subagent: true } : {}),
+      ...(context.runtime.workflowAgent ? { workflowAgent: true } : {}),
+      ...(context.runtime.unattended ? { unattended: true } : {}),
+      ...(context.runtime.firstPartyRun ? { firstPartyRun: true } : {}),
       toolRequest: request,
       operationRun: {
         id: context.runId,

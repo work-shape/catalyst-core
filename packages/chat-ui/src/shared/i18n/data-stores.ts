@@ -2,6 +2,15 @@ import { defineTranslations } from "./translation-area";
 
 export const dataStores = defineTranslations({
   en: {
+    "dataStores.useTitle": "Read “{title}” in this chat?",
+    "dataStores.useBody":
+      "The agent answers from its records here. Your right to read them is checked on every answer.",
+    "dataStores.useOthersRead":
+      "Others who read this chat will see the answers from this Data Store.",
+    "dataStores.useAllow": "Allow",
+    "dataStores.useAdded": "“{title}” is read in this chat.",
+    "dataStores.useFailed": "The Data Store could not be added. Try again.",
+    "dataStores.useTell": "I allowed reading “{title}” in this chat. Go on.",
     "dataStores.audienceAdminsOnly": "Only instance admins",
     "dataStores.audienceHidden": "{count} more with access",
     "dataStores.audienceHiddenOnly": "{count} with access",
@@ -287,6 +296,16 @@ export const dataStores = defineTranslations({
     "dataStores.valueUnread": "Not read"
   },
   de: {
+    "dataStores.useTitle": "„{title}“ in diesem Chat lesen?",
+    "dataStores.useBody":
+      "Der Agent antwortet hier aus seinen Einträgen. Dein Leserecht wird bei jeder Antwort geprüft.",
+    "dataStores.useOthersRead":
+      "Wer diesen Chat sonst liest, sieht die Antworten aus diesem Datenspeicher.",
+    "dataStores.useAllow": "Erlauben",
+    "dataStores.useAdded": "„{title}“ wird in diesem Chat gelesen.",
+    "dataStores.useFailed":
+      "Der Datenspeicher konnte nicht hinzugefügt werden. Versuch es noch einmal.",
+    "dataStores.useTell": "Ich habe erlaubt, „{title}“ in diesem Chat zu lesen. Mach weiter.",
     "dataStores.audienceAdminsOnly": "Nur Instanz-Admins",
     "dataStores.audienceHidden": "{count} weitere mit Zugriff",
     "dataStores.audienceHiddenOnly": "{count} mit Zugriff",

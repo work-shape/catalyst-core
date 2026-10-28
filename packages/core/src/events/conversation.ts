@@ -17,6 +17,27 @@ export const conversationEvents = {
     name: "conversation.created",
     subject: "conversation"
   },
+  // A person added a Data Store to a conversation for reading (STORE-USE-1): their own store
+  // at their agent's call, or another store by their click on the card. Ids only: no name, no
+  // row, no answer.
+  "conversation.data_store_added": {
+    name: "conversation.data_store_added",
+    subject: "conversation",
+    legacy: false,
+    audited: true,
+    phases: ["after"],
+    payload: {
+      type: "object",
+      additionalProperties: false,
+      required: ["storeAssetId", "by"],
+      properties: {
+        storeAssetId: { type: "string" },
+        by: { type: "string", enum: ["own_store", "card"] },
+        confirmsToolCallId: { type: "string" },
+        operationRunId: { type: "string" }
+      }
+    }
+  },
   "conversation.deleted": {
     ...LEGACY_AUDIT,
     name: "conversation.deleted",

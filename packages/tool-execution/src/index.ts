@@ -6,6 +6,13 @@ export {
 } from "./app-edit-tool";
 export * from "./tool-registry";
 export { createDataStoreDescriptionTool } from "./data-store-description-tool";
+export {
+  createDataStoreUseTool,
+  dataStoreUsedSchema,
+  DATA_STORE_USE_VERBS,
+  type DataStoreUseCalls,
+  type DataStoreUsed
+} from "./data-store-use-tool";
 export * from "./built-in-tools";
 export {
   createWorkspaceOpenTool,

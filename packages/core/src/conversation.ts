@@ -5,6 +5,7 @@ import {
   CONVERSATION_VISIBILITIES
 } from "@work-shape/catalyst-asset-schemas";
 import type { ActiveRunSummary, AgentRunProjection } from "./agent-runtime";
+import type { AssetScope } from "./asset-kinds";
 import type { SkillResourceConfig } from "./config";
 import type { AgentRunWriteFence, AuthenticatedUser } from "./identity";
 import type {
@@ -278,6 +279,27 @@ export interface SetConversationSubjectInput {
 }
 
 /**
+ * A Data Store a person added to a conversation for reading (STORE-USE-1): beside the subject,
+ * the agents of the conversation are offered its read tools. The row grants nothing: every call
+ * still asks the person's `data_store.read`.
+ */
+export interface ConversationDataStore {
+  assetId: string;
+  name: string;
+  scope: AssetScope;
+  addedByUserId: string;
+  addedAt: ISODateString;
+}
+
+export interface AddConversationDataStoreInput {
+  clientInstanceId: ClientInstanceId;
+  conversationId: ConversationId;
+  assetId: string;
+  addedByUserId: string;
+  addedAt: ISODateString;
+}
+
+/**
  * An asset the agent of a conversation created (BUILD-ALL-1): the conversation may keep saving
  * its draft beside its subject. `revision` is the revision the create wrote.
  */
@@ -348,6 +370,16 @@ export interface ConversationStore extends ConversationHistoryStore {
    * is not active.
    */
   setConversationSubject(input: SetConversationSubjectInput): Promise<Conversation | undefined>;
+  /**
+   * Adds a Data Store to an active conversation for reading. False when it was there already
+   * or the conversation is not active; the first row keeps who added it and when.
+   */
+  addConversationDataStore(input: AddConversationDataStoreInput): Promise<boolean>;
+  /** The active Data Stores added to the conversation, oldest first. */
+  listConversationDataStores(input: {
+    clientInstanceId: ClientInstanceId;
+    conversationId: ConversationId;
+  }): Promise<ConversationDataStore[]>;
   /** Notes that the conversation created the asset. A second note of it changes nothing. */
   recordCreatedAsset(input: ConversationCreatedAssetInput): Promise<void>;
   /**

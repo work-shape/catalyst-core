@@ -206,7 +206,8 @@ export async function finishPausedStep(input: {
       answeredToolCallIds: answeredNow,
       subagents,
       opened: [],
-      asked: false
+      asked: false,
+      offerChanged: false
     };
   const outcome = await input.toolDispatch.dispatchToolCalls(
     input.runId,

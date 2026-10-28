@@ -464,6 +464,24 @@ export const openConversationSubjectRequestSchema = conversationSubjectSchema.ex
   toolCallId: z.string().min(1).max(200).optional()
 });
 
+/**
+ * The person's click on the card of an agent's `data_store.use` (STORE-USE-1): it names the
+ * store and the agent's call it confirms.
+ */
+export const addConversationDataStoreRequestSchema = z.object({
+  store: z.string().min(1).max(120),
+  toolCallId: z.string().min(1).max(200)
+});
+
+/** A Data Store added to a conversation for reading: its read tools reach the next run. */
+export const conversationDataStoreAddedSchema = z.object({
+  name: z.string(),
+  title: z.string(),
+  added: z.boolean(),
+  othersRead: z.literal(true).optional(),
+  readTools: z.array(z.string())
+});
+
 export const renameConversationRequestSchema = z.object({
   title: z.string().trim().min(1).max(120)
 });
@@ -964,6 +982,8 @@ export type ConversationVisibility = z.infer<typeof conversationVisibilitySchema
 export type ConversationListItem = z.infer<typeof conversationListItemSchema>;
 export type RenameConversationRequest = z.infer<typeof renameConversationRequestSchema>;
 export type OpenConversationSubjectRequest = z.infer<typeof openConversationSubjectRequestSchema>;
+export type AddConversationDataStoreRequest = z.infer<typeof addConversationDataStoreRequestSchema>;
+export type ConversationDataStoreAdded = z.infer<typeof conversationDataStoreAddedSchema>;
 export type Message = z.infer<typeof messageSchema>;
 export type MessageMetadata = z.infer<typeof messageMetadataSchema>;
 export type ConversationResourceBase = z.infer<typeof conversationResourceBaseSchema>;

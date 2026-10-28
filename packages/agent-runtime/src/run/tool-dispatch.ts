@@ -1,6 +1,7 @@
 import { WEB_FETCH_TOOL_NAME } from "@work-shape/catalyst-web-access";
 import {
   ASK_QUESTION_TOOL_NAME,
+  DATA_STORE_USE_TOOL_NAME,
   WORKSPACE_OPEN_TOOL_NAME,
   forbiddenPreviewTool,
   isFileSetId,
@@ -47,8 +48,16 @@ export type ToolDispatchOutcome =
       kind: "answered";
       subagents: StartedSubagent[];
       opened: OpenedPreview[];
-      /** A call of the step asked the person a question: the turn ends with the step (ASK-1). */
+      /**
+       * A call of the step asked the person a question, or waits for their click on a card
+       * (`data_store.use`): the turn ends with the step (ASK-1, STORE-USE-1).
+       */
       asked: boolean;
+      /**
+       * A call of the step added a Data Store to the conversation: the run reads its tool offer
+       * again before its next model request, so the store's read tools arrive in this turn.
+       */
+      offerChanged: boolean;
     }
   | { kind: "stopped" }
   | {
@@ -65,6 +74,18 @@ export interface OpenedPreview {
   toolCallId: string;
   fileSetId: FileSetId;
   number?: number;
+}
+
+/** What a successful `data_store.use` came to: added at once, or waiting for the person. */
+function storeUse(
+  toolCall: ModelToolCall,
+  result: ToolExecutionResult
+): "added" | "awaits_person" | undefined {
+  if (toolCall.toolName !== DATA_STORE_USE_TOOL_NAME || result.status !== "success") return;
+  const output = result.output;
+  if (typeof output !== "object" || output === null) return;
+  if ("awaitsPerson" in output && output.awaitsPerson === true) return "awaits_person";
+  return "added" in output && output.added === true ? "added" : undefined;
 }
 
 /** The revision a call opened in the preview, when it was a `workspace.open` that showed one. */
@@ -109,6 +130,7 @@ export class ToolDispatch {
     const subagents: StartedSubagent[] = [];
     const opened: OpenedPreview[] = [];
     let asked = false;
+    let offerChanged = false;
     for (const toolCall of toolCalls) {
       if (context.signal?.aborted) return { kind: "stopped" };
       const webRefusal = await this.webFetchRefusal(runId, toolCall.toolName, state, input);
@@ -170,8 +192,11 @@ export class ToolDispatch {
       if (toolCall.toolName === ASK_QUESTION_TOOL_NAME && result.result.status === "success") {
         asked = true;
       }
+      const used = storeUse(toolCall, result.result);
+      if (used === "awaits_person") asked = true;
+      if (used === "added") offerChanged = true;
     }
-    return { kind: "answered", subagents, opened, asked };
+    return { kind: "answered", subagents, opened, asked, offerChanged };
   }
 
   async webFetchRefusal(

@@ -14,7 +14,9 @@ import {
   type ChatMessage,
   type ClientInstanceId,
   type Conversation,
+  type AddConversationDataStoreInput,
   type ConversationCreatedAssetInput,
+  type ConversationDataStore,
   type ConversationId,
   type ConversationListItem,
   type ConversationsStore,
@@ -33,12 +35,13 @@ import { and, asc, desc, eq, gt, inArray, isNull, ne, not, notExists, or, sql } 
 import { isPrunedRunThread } from "./postgres-pruned-run";
 import { type PostgresConnection, type PostgresTransaction } from "./postgres-database";
 import { writeAssistantMessageContinuations } from "./postgres-model-provider-continuation-writes";
-import { mapConversation, mapMessage, type MessageRow } from "./rows";
+import { mapAssetScope, mapConversation, mapMessage, type MessageRow } from "./rows";
 import {
   collaborationWorkspaces,
   configAssetRevisions,
   configAssets,
   conversationCreatedAssets,
+  conversationDataStores,
   conversationAttachments,
   conversations,
   messages,
@@ -383,6 +386,59 @@ async function setConversationSubject(
     )
     .returning();
   return row ? mapConversation(row) : undefined;
+}
+
+async function addConversationDataStore(
+  db: PostgresConnection,
+  input: AddConversationDataStoreInput
+): Promise<boolean> {
+  // One statement: the row is written only while the conversation is active.
+  const added = await db.execute<{ conversation_id: string }>(sql`
+    insert into ${conversationDataStores}
+      (conversation_id, store_asset_id, client_instance_id, added_by_user_id, added_at)
+    select ${conversations.id}, ${input.assetId}, ${input.clientInstanceId},
+      ${input.addedByUserId}, ${input.addedAt}::timestamptz
+    from ${conversations}
+    where ${conversations.clientInstanceId} = ${input.clientInstanceId}
+      and ${conversations.id} = ${input.conversationId}
+      and ${conversations.status} = 'active'
+    on conflict do nothing
+    returning conversation_id`);
+  return added.length > 0;
+}
+
+async function listConversationDataStores(
+  db: PostgresConnection,
+  input: { clientInstanceId: ClientInstanceId; conversationId: ConversationId }
+): Promise<ConversationDataStore[]> {
+  const rows = await db
+    .select({
+      assetId: conversationDataStores.storeAssetId,
+      name: configAssets.name,
+      scopeKind: configAssets.scopeKind,
+      scopeId: configAssets.scopeId,
+      addedByUserId: conversationDataStores.addedByUserId,
+      addedAt: conversationDataStores.addedAt
+    })
+    .from(conversationDataStores)
+    .innerJoin(configAssets, eq(configAssets.id, conversationDataStores.storeAssetId))
+    .where(
+      and(
+        eq(conversationDataStores.clientInstanceId, input.clientInstanceId),
+        eq(conversationDataStores.conversationId, input.conversationId),
+        eq(configAssets.clientInstanceId, input.clientInstanceId),
+        eq(configAssets.kind, "data_store"),
+        eq(configAssets.status, "active")
+      )
+    )
+    .orderBy(asc(conversationDataStores.addedAt), asc(conversationDataStores.storeAssetId));
+  return rows.map((row) => ({
+    assetId: row.assetId,
+    name: row.name,
+    scope: mapAssetScope(row),
+    addedByUserId: row.addedByUserId,
+    addedAt: row.addedAt.toISOString()
+  }));
 }
 
 async function recordCreatedAsset(
@@ -735,6 +791,12 @@ export function createPostgresConversationsStore(
     },
     async setConversationSubject(input): Promise<Conversation | undefined> {
       return setConversationSubject(db, input);
+    },
+    async addConversationDataStore(input): Promise<boolean> {
+      return addConversationDataStore(db, input);
+    },
+    async listConversationDataStores(input): Promise<ConversationDataStore[]> {
+      return listConversationDataStores(db, input);
     },
     async recordCreatedAsset(input): Promise<void> {
       return recordCreatedAsset(db, input);

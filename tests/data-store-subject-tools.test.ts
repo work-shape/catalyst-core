@@ -8,6 +8,7 @@ import {
   createModuleRegistry,
   createPlatformId,
   asConversationId,
+  DATA_STORE_USE_TOOL_NAME,
   type ConversationId,
   type DataToolDescriptor
 } from "@work-shape/catalyst-core";
@@ -17,6 +18,9 @@ import { required } from "./support/assertions";
 
 const verbs = ["describe", "query", "preview_rows", "insert", "update", "delete_rows"];
 const names = verbs.map((verb) => `data_store.findings.${verb}`);
+/** A store's row tool; `data_store.use` is the platform's, offered to every holder. */
+const isRowTool = (name: string) =>
+  name.startsWith("data_store.") && name !== DATA_STORE_USE_TOOL_NAME;
 
 describe("a conversation about a Data Store offers its own tools", () => {
   const { start, publishStore, put, person } = useDataStoreInstance();
@@ -46,9 +50,9 @@ describe("a conversation about a Data Store offers its own tools", () => {
   it("offers the six published-store tools, and insert dispatch reads this conversation's offer", async () => {
     const { world, source, conversationId, offer } = await setup();
     const listing = vi.spyOn(world.execution.store.dataStores, "listDataStores");
-    expect(
-      (await offer(conversationId))?.toolNames.filter((name) => name.startsWith("data_store."))
-    ).toEqual(names);
+    expect((await offer(conversationId))?.toolNames.filter((name) => isRowTool(name))).toEqual(
+      names
+    );
     expect(listing).not.toHaveBeenCalled();
     listing.mockRestore();
     const actor = await person(world, "subject-admin", ["user", "admin", "superadmin"]);
@@ -96,18 +100,14 @@ describe("a conversation about a Data Store offers its own tools", () => {
   it("offers none for a draft subject", async () => {
     const draft = await setup(false);
     expect(
-      (await draft.offer(draft.conversationId))?.toolNames.filter((name) =>
-        name.startsWith("data_store.")
-      )
+      (await draft.offer(draft.conversationId))?.toolNames.filter((name) => isRowTool(name))
     ).toEqual([]);
   });
 
   it("offers none for an agent without platform tools or an App subject", async () => {
     const ready = await setup();
     expect(
-      (await ready.offer(ready.conversationId, []))?.toolNames.filter((name) =>
-        name.startsWith("data_store.")
-      )
+      (await ready.offer(ready.conversationId, []))?.toolNames.filter((name) => isRowTool(name))
     ).toEqual([]);
     // Changing just the conversation's subject must drop every store tool.
     const other = createPlatformTools({
@@ -133,7 +133,7 @@ describe("a conversation about a Data Store offers its own tools", () => {
       conversationId: ready.conversationId,
       agentToolNames: PLATFORM_TOOL_NAMES
     });
-    expect(offered?.toolNames.filter((name) => name.startsWith("data_store."))).toEqual([]);
+    expect(offered?.toolNames.filter((name) => isRowTool(name))).toEqual([]);
   });
 
   it("omits a subject-store tool whose policy denies it", async () => {
@@ -196,6 +196,6 @@ describe("a conversation about a Data Store offers its own tools", () => {
       conversationId,
       agentToolNames: PLATFORM_TOOL_NAMES
     });
-    expect(offer?.toolNames.filter((name) => name.startsWith("data_store."))).toEqual([]);
+    expect(offer?.toolNames.filter((name) => isRowTool(name))).toEqual([]);
   });
 });

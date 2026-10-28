@@ -1,4 +1,5 @@
 conversations.create  POST /api/v1/conversations
+conversations.data_stores.add  POST /api/v1/conversations/:conversationId/data-stores
 conversations.delete  DELETE /api/v1/conversations/:conversationId
 conversations.follow_ups.dispatch  POST /api/v1/conversations/:conversationId/follow-ups/dispatch
 conversations.follow_ups.steer  POST /api/v1/conversations/:conversationId/follow-ups/:followUpId/steer

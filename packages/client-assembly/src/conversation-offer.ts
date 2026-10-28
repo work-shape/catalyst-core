@@ -1,6 +1,8 @@
 import {
   createScheduledStartTools,
   createDataStoreDescriptionTool,
+  createDataStoreUseTool,
+  DATA_STORE_USE_VERBS,
   SCHEDULED_START_TOOL_NAMES
 } from "@work-shape/catalyst-tool-execution";
 import { describeAgentDataTools } from "@work-shape/catalyst-agent-runtime";
@@ -12,6 +14,8 @@ import {
   RUN_AGENT_TOOL_NAME,
   DATA_STORE_ASSET_KIND,
   DATA_STORE_DESCRIPTION_TOOL_NAME,
+  DATA_STORE_USE_TOOL_NAME,
+  asCollaborationWorkspaceId,
   getSubjectUserId,
   isAuthenticatedServicePrincipal,
   dataStoreOperationName,
@@ -24,6 +28,7 @@ import {
   type ConnectorTypeRegistry,
   type AccessResource,
   type Authorizer,
+  type Conversation,
   type ConversationOfferSource,
   type ModuleSnapshot,
   type PlatformStores,
@@ -72,7 +77,9 @@ import { offeredSkillNames } from "./shipped-skills";
 // every conversation, in one about an asset those for its kind and in one about none yet those
 // of every kind, since the agent may open any. Every other agent gets none of them. Every
 // agent, where Apps exist, is offered what opens a folder in the preview and saves it as an App,
-// and every agent is offered the question to the person (ASK-1).
+// and every agent is offered the question to the person (ASK-1). Every agent of a conversation
+// is offered the read tools of the Data Stores the person added to it (STORE-USE-1): the
+// person's step is the consent, and each call still asks the person's right.
 
 /** Whether an agent whose definition lists these tools holds the platform's. */
 function holdsPlatformTools(agentToolNames: readonly string[]): boolean {
@@ -109,12 +116,16 @@ function appToolNames(hasTool: (toolName: string) => boolean): string[] {
 
 interface ConversationOfferInput {
   stores: {
-    conversations: Pick<PlatformStores["conversations"], "getConversation">;
+    conversations: Pick<PlatformStores["conversations"], "getConversation"> &
+      Partial<Pick<PlatformStores["conversations"], "listConversationDataStores">>;
     /** The run an offer is for: whether it is its person's own (SCOPE-MYCHATS). */
     agentRuns?: Pick<PlatformStores["agentRuns"], "getAgentRun">;
     /** The skills a person switched on for their own chats (SCOPE-MYCHATS). */
     configAssets?: Pick<PlatformStores["configAssets"], "listPersonalChatSkills">;
-    /** Whose chat the offer is for: only one its person alone reads (SCOPE-MYCHATS). */
+    /**
+     * Whose chat the offer is for: only one its person alone reads (SCOPE-MYCHATS). Where a
+     * store added to a conversation is owned: a Personal Workspace's stays in it (STORE-USE-1).
+     */
     workspaces?: Pick<PlatformStores["workspaces"], "getWorkspace">;
     /** A person's own settings: a tool they set to Never is not offered to their runs (OP-6). */
     userOperationSettings?: Pick<PlatformStores["userOperationSettings"], "list">;
@@ -246,6 +257,38 @@ async function personalSkillNames(
     .map((skill) => skill.name);
 }
 
+/**
+ * The names of the Data Stores the person added to the conversation (STORE-USE-1). A store of a
+ * Personal Workspace is offered only in a conversation of that workspace: one moved elsewhere
+ * since leaves it out (owner reach).
+ */
+async function usedStores(
+  input: ConversationOfferInput,
+  conversation: Pick<Conversation, "id" | "clientInstanceId" | "collaborationWorkspaceId">
+): Promise<string[]> {
+  const list = input.stores.conversations.listConversationDataStores;
+  if (!list) return [];
+  const stores = await list({
+    clientInstanceId: conversation.clientInstanceId,
+    conversationId: conversation.id
+  });
+  const names: string[] = [];
+  for (const store of stores) {
+    if (
+      store.scope.kind === "workspace" &&
+      store.scope.workspaceId !== conversation.collaborationWorkspaceId
+    ) {
+      const owner = await input.stores.workspaces?.getWorkspace(
+        conversation.clientInstanceId,
+        asCollaborationWorkspaceId(store.scope.workspaceId)
+      );
+      if (owner?.kind !== "shared") continue;
+    }
+    names.push(store.name);
+  }
+  return names;
+}
+
 function createConversationOffer(input: ConversationOfferInput): ConversationOfferSource {
   return {
     async offerOf(request) {
@@ -263,12 +306,20 @@ function createConversationOffer(input: ConversationOfferInput): ConversationOff
       const ownSkillNames = readsSkills
         ? await personalSkillNames(input, request, conversation)
         : [];
-      const rowNames =
+      const subjectRowNames =
         holds && subject?.kind === DATA_STORE_ASSET_KIND
           ? (["describe", "query", "preview_rows", "insert", "update", "delete_rows"] as const).map(
               (verb) => dataStoreOperationName(subject.name, verb)
             )
           : [];
+      const rowNames = [
+        ...new Set([
+          ...subjectRowNames,
+          ...(await usedStores(input, conversation)).flatMap((name) =>
+            DATA_STORE_USE_VERBS.map((verb) => dataStoreOperationName(name, verb))
+          )
+        ])
+      ];
       const source = input.dataTools?.();
       // Use the run's existing bounded description path. An unavailable source offers nothing.
       const rowTools = (
@@ -309,6 +360,7 @@ function createConversationOffer(input: ConversationOfferInput): ConversationOff
         ...(holds
           ? [
               DATA_STORE_DESCRIPTION_TOOL_NAME,
+              DATA_STORE_USE_TOOL_NAME,
               ...WORKFLOW_TEST_TOOL_NAMES,
               KNOWLEDGE_ADD_FILES_TOOL_NAME,
               ...SCHEDULED_START_TOOL_NAMES
@@ -430,6 +482,7 @@ export function createPlatformTools(
       createAskQuestionTool(),
       createAppSaveTool(platformAssets.calls),
       createAppEditTool(platformAssets.calls),
+      createDataStoreUseTool(platformAssets.calls),
       createAppPublishTool(),
       ...createAppTryTools(),
       ...(input.connections
