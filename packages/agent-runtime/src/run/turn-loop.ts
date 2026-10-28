@@ -288,7 +288,16 @@ export class TurnLoop {
               (isRunAgentCall(toolName) || PERSON_TOOL_NAMES.includes(toolName))
             )
         )
-        .filter((toolName) => !input.preview || !forbiddenPreviewTool(toolName))
+        .filter((toolName) => !input.preview || !forbiddenPreviewTool(toolName)),
+      // The Knowledge Bases of the chat's project join the agent's own (PRJ-8): one search
+      // tool covers both, and each search still asks the person's right.
+      ...(offer?.knowledgeBases?.length
+        ? {
+            knowledgeBases: [
+              ...new Set([...(listed.knowledgeBases ?? []), ...offer.knowledgeBases])
+            ]
+          }
+        : {})
     };
     const dataTools = await describeAgentDataTools(
       agent,

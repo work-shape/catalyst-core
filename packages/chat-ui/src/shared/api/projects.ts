@@ -193,12 +193,19 @@ export function useRefreshProjectSetup() {
   );
 }
 
-/** Sets a project's default agent and skills; the answer is the project's setup as it is now. */
+/**
+ * Sets a project's default agent, skills or Knowledge Bases; what the input leaves out stays.
+ * The answer is the project's setup as it is now.
+ */
 export function useSetProjectSetupMutation(projectId: string, heldMessage: string) {
   const { apiBaseUrl, client } = useWorkspaceApiClient();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { defaultAgent: string | null; skills: string[] }) =>
+    mutationFn: async (input: {
+      defaultAgent?: string | null;
+      skills?: string[];
+      knowledgeBases?: string[];
+    }) =>
       completedOutput(
         await requireClient(client).projects.setup.set({ params: { projectId }, body: input }),
         heldMessage

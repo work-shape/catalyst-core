@@ -54,7 +54,7 @@ import {
 const WORKSPACE_DEFAULT = ":workspace";
 
 /** Room for a greyed row's reason beside its share step, and no wider than a phone. */
-const PICKER_WIDTH = "w-[min(30rem,calc(100vw-2rem))]";
+export const PICKER_WIDTH = "w-[min(30rem,calc(100vw-2rem))]";
 
 /** The workspace a project belongs to, as the page names it. */
 export interface ProjectSetupWorkspace {
@@ -97,10 +97,10 @@ function projectStartAgent(setup: ProjectSetupView | undefined) {
 }
 
 /**
- * "Mit {team} teilen…" on a greyed choice: the person's own agent or skill moves to the
- * project's workspace in the same dialog as in Studio, and the choices are read again.
+ * "Mit {team} teilen…" on a greyed choice: the person's own agent, skill or Knowledge Base moves
+ * to the project's workspace in the same dialog as in Studio, and the choices are read again.
  */
-function useProjectChoiceShare(
+export function useProjectChoiceShare(
   project: Pick<ProjectView, "id">,
   workspace: ProjectSetupWorkspace,
   workspaces: readonly BuildWorkspace[]

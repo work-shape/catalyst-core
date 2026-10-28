@@ -56,8 +56,9 @@ export const projectEvents = {
       }
     }
   },
-  // A project's default agent or attached skills changed (PRJ-7). Whether the default changed
-  // and how many skills came and went: never their names, which can name a person's own.
+  // A project's default agent, attached skills or Knowledge Bases changed (PRJ-7, PRJ-8). Whether
+  // the default changed and how many came and went: never their names, which can name a
+  // person's own.
   "project.setup_changed": {
     name: "project.setup_changed",
     subject: "project",
@@ -72,6 +73,8 @@ export const projectEvents = {
         defaultAgentChanged: { type: "boolean" },
         skillsAdded: { type: "integer", minimum: 0 },
         skillsRemoved: { type: "integer", minimum: 0 },
+        knowledgeBasesAdded: { type: "integer", minimum: 0 },
+        knowledgeBasesRemoved: { type: "integer", minimum: 0 },
         operationRunId: { type: "string" }
       }
     }

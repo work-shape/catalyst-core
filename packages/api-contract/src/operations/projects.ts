@@ -90,13 +90,14 @@ export const projectOperations = {
     errors: ["NOT_FOUND"],
     rateClass: "write"
   }),
-  // A project's default agent and skills (PRJ-7), with what the caller may choose of them.
+  // A project's default agent and skills (PRJ-7) and Knowledge Bases (PRJ-8), with what the
+  // caller may choose of them.
   "projects.setup.get": defineOperation({
     id: "projects.setup.get",
     method: "GET",
     path: "/api/v1/project-settings/:projectId/setup",
     summary:
-      "Read a project's default agent and skills, with the agents and skills the caller may choose for it",
+      "Read a project's default agent, skills and Knowledge Bases, with those the caller may choose for it",
     tag: "Projects",
     auth: "user",
     scope: "conversation:read",
@@ -111,7 +112,7 @@ export const projectOperations = {
     method: "PUT",
     path: "/api/v1/project-settings/:projectId/setup",
     summary:
-      "Set the agent a new chat in a project starts with and the skills every run in it is offered",
+      "Set the agent a new chat in a project starts with and the skills and Knowledge Bases every run in it is offered",
     tag: "Projects",
     auth: "user",
     scope: "conversation:write",

@@ -30857,7 +30857,7 @@
     "/api/v1/project-settings/{projectId}/setup": {
       "get": {
         "operationId": "projects.setup.get",
-        "summary": "Read a project's default agent and skills, with the agents and skills the caller may choose for it",
+        "summary": "Read a project's default agent, skills and Knowledge Bases, with those the caller may choose for it",
         "tags": [
           "Projects"
         ],
@@ -30921,7 +30921,7 @@
       },
       "put": {
         "operationId": "projects.setup.set",
-        "summary": "Set the agent a new chat in a project starts with and the skills every run in it is offered",
+        "summary": "Set the agent a new chat in a project starts with and the skills and Knowledge Bases every run in it is offered",
         "tags": [
           "Projects"
         ],
@@ -51725,6 +51725,12 @@
             "items": {
               "type": "string"
             }
+          },
+          "knowledgeBases": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "required": [
@@ -51788,7 +51794,8 @@
       "ProjectChoiceRefusal": {
         "type": "string",
         "enum": [
-          "own_in_shared_project"
+          "own_in_shared_project",
+          "not_everyone_may_use"
         ]
       },
       "ProjectFile": {
@@ -52047,6 +52054,49 @@
           "limits"
         ]
       },
+      "ProjectKnowledgeBaseChoice": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "unpublished": {
+            "type": "boolean"
+          },
+          "own": {
+            "type": "boolean"
+          },
+          "refusal": {
+            "$ref": "#/components/schemas/ProjectChoiceRefusal"
+          },
+          "asset": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "workspaceId": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "workspaceId"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "title",
+          "own"
+        ]
+      },
       "ProjectListItem": {
         "type": "object",
         "properties": {
@@ -52081,6 +52131,12 @@
             "type": "string"
           },
           "skills": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "knowledgeBases": {
             "type": "array",
             "items": {
               "type": "string"
@@ -52134,12 +52190,25 @@
             "items": {
               "$ref": "#/components/schemas/ProjectSkillChoice"
             }
+          },
+          "knowledgeBases": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "knowledgeBaseChoices": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProjectKnowledgeBaseChoice"
+            }
           }
         },
         "required": [
           "skills",
           "agents",
-          "skillChoices"
+          "skillChoices",
+          "knowledgeBases"
         ]
       },
       "ProjectSkillChoice": {
@@ -54016,12 +54085,17 @@
               "minLength": 1,
               "maxLength": 128
             }
+          },
+          "knowledgeBases": {
+            "maxItems": 20,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
           }
-        },
-        "required": [
-          "defaultAgent",
-          "skills"
-        ]
+        }
       },
       "SetUsageSpendLimitRequest": {
         "type": "object",
