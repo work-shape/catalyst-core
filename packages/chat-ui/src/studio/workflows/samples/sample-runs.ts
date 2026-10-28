@@ -447,6 +447,71 @@ function quarter(clock: Clock): readonly SampleRun[] {
   ];
 }
 
+/**
+ * A run of "Monthly analysis" that has ended: the three analyses began together after the
+ * load, the costs took longest with their two steps, and the fork took its second way. Times
+ * are in seconds from the start, so the timeline has something to show.
+ */
+function analysisRun(clock: Clock): SampleRun {
+  const id = "run-analysis";
+  const startedAt = 30;
+  const at = (seconds: number) => clock.ago(startedAt - seconds / 60);
+  const span = (from: number, to: number) => ({
+    status: "done" as const,
+    createdAt: at(from),
+    startedAt: at(from),
+    finishedAt: at(to)
+  });
+  const inBlock = (branch: string) => ({ containerStepRunId: `${id}:analyses`, branch });
+  const once = { total: 1, done: 1, failed: 0, running: 0 };
+  return {
+    run: {
+      id,
+      workflow: "monthly-analysis",
+      trigger: "schedule",
+      startedBy: SCHEDULE,
+      principal: SAMPLE_PRINCIPAL,
+      status: "done",
+      rootRunId: id,
+      depth: 0,
+      definitionRevisionId: SAMPLE_REVISION,
+      createdAt: at(0),
+      startedAt: at(0),
+      finishedAt: at(262)
+    },
+    frame: [
+      stepRun(id, "start", "trigger", span(0, 0)),
+      stepRun(id, "load", "operation", { ...span(0, 38), ...READS }),
+      stepRun(id, "analyses", "parallel", {
+        ...span(38, 251),
+        bodyCounts: {
+          revenue_trend: once,
+          cost_groups: once,
+          cost_outliers: once,
+          risk_rating: once
+        }
+      }),
+      stepRun(id, "revenue_trend", "agent", { ...span(38, 152), ...inBlock("revenue") }),
+      stepRun(id, "cost_groups", "code", { ...span(38, 81), ...inBlock("costs") }),
+      stepRun(id, "cost_outliers", "agent", { ...span(81, 251), ...inBlock("costs") }),
+      stepRun(id, "risk_rating", "agent", { ...span(38, 109), ...inBlock("risks") }),
+      stepRun(id, "high_risk", "condition", span(251, 251)),
+      stepRun(id, "medium_risk", "condition", {
+        ...span(251, 252),
+        containerStepRunId: `${id}:high_risk`,
+        branch: "else"
+      }),
+      stepRun(id, "mark_review", "notify", {
+        ...span(252, 258),
+        containerStepRunId: `${id}:medium_risk`,
+        branch: "then"
+      }),
+      stepRun(id, "result", "output", span(258, 262))
+    ],
+    loops: {}
+  };
+}
+
 /** The sample runs, newest first within each Workflow. */
 export function sampleRuns(now: number): readonly SampleRun[] {
   const clock: Clock = { ago: (minutes) => new Date(now - minutes * MINUTE).toISOString() };
@@ -458,7 +523,8 @@ export function sampleRuns(now: number): readonly SampleRun[] {
     stopped(clock, "run-cancelled", 300, "cancelled"),
     stopped(clock, "run-limit", 900, "limit_reached"),
     done(clock),
-    ...quarter(clock)
+    ...quarter(clock),
+    analysisRun(clock)
   ];
 }
 

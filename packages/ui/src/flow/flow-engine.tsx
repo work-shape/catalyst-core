@@ -272,7 +272,8 @@ function Engine({
             item: group,
             marked,
             ends: ends.get(id) ?? noEnds,
-            box: { width: box.width, height: box.height }
+            box: { width: box.width, height: box.height },
+            ...(layout.lanes.has(id) ? { lanes: layout.lanes.get(id) } : {})
           }
         });
       } else if (step) {

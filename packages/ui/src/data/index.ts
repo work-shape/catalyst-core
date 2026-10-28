@@ -34,6 +34,7 @@ export {
 } from "./steps";
 export { LevelMeter, type LevelMeterProps, type LevelMeterScale } from "./level-meter";
 export { QrCode, type QrCodeProps } from "./qr-code";
+export { Timeline, type TimelineProps, type TimelineRow } from "./timeline";
 export { ListMarker, TimeMarker, type ListMarkerProps, type TimeMarkerProps } from "./time-marker";
 export {
   Table,

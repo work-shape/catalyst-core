@@ -19,8 +19,9 @@ import { useUiLabels } from "../ui-root";
 import { FlowEdge, flowEdgePath, type FlowEdgeEnd } from "./flow-edge";
 import { flowChangeLabels } from "./flow-change";
 import { FlowGroup } from "./flow-group";
+import { FlowLanes } from "./flow-lanes";
 import { FlowInsertPoint } from "./flow-insert-point";
-import type { FlowPoint, FlowSize } from "./flow-layout";
+import type { FlowLaneLayout, FlowPoint, FlowSize } from "./flow-layout";
 import { flowHandleClassName, FlowNode, flowStatusPresentations } from "./flow-node";
 import type {
   FlowDirection,
@@ -42,7 +43,14 @@ export interface NodeEnds {
 }
 
 type StepData = { item: FlowGraphNode; marked: boolean; ends: NodeEnds; direction: FlowDirection };
-type GroupData = { item: FlowGraphGroup; marked: boolean; ends: NodeEnds; box: FlowSize };
+type GroupData = {
+  item: FlowGraphGroup;
+  marked: boolean;
+  ends: NodeEnds;
+  box: FlowSize;
+  /** Where its lanes stand, for an open group that has lanes. */
+  lanes?: FlowLaneLayout;
+};
 export type StepRfNode = Node<StepData, "step">;
 export type GroupRfNode = Node<GroupData, "container">;
 export type InsertRfNode = Node<{ place: FlowInsertPlace }, "insert">;
@@ -343,6 +351,11 @@ function GroupNode({ id, data }: NodeProps<GroupRfNode>) {
       label={accessibleName(item, labels)}
       onOpen={engine.selectable ? () => engine.select(id) : undefined}
       handles={<FrameHandles ends={ends} />}
+      overlay={
+        data.lanes === undefined || item.lanes === undefined ? undefined : (
+          <FlowLanes layout={data.lanes} lanes={item.lanes} joinLabel={item.joinLabel} />
+        )
+      }
     />
   );
 }

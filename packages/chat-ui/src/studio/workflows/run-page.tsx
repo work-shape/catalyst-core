@@ -1,5 +1,5 @@
 import { Bot, RotateCw } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Banner,
   Breadcrumb,
@@ -18,6 +18,8 @@ import { workspaceRoutePath } from "../../shared/routes";
 import type { WorkspaceRoute } from "../../shared/workspace-route";
 import { FailureBanner } from "./failure-banner";
 import { fixWithAgentPrompt } from "./fix-with-agent";
+import { RunReplay } from "./run-replay";
+import { replayMoments, stepRunsAt } from "./run-replay-model";
 import { runKeyText, startedByText } from "./runs-list";
 import { useStartRun } from "./start-run";
 import { useRunLiveOnce, useTestRun, type LiveOnceControl } from "./test-run";
@@ -227,6 +229,11 @@ export function WorkflowRunPageView({
   const run = read.run;
   // "Show failed …" opens the loop's entries in the canvas's panel, filtered to the failed.
   const [focus, setFocus] = useState<WorkflowCanvasFocus>();
+  // The replay's place among the run's moments; nothing for the run as it stands.
+  const [replayAt, setReplayAt] = useState<number>();
+  const moments = useMemo(() => replayMoments(read.stepRuns ?? []), [read.stepRuns]);
+  const moment =
+    replayAt === undefined ? undefined : moments[Math.min(replayAt, moments.length - 1)];
   const failedEntries =
     run === undefined
       ? undefined
@@ -437,18 +444,35 @@ export function WorkflowRunPageView({
               onShowFailed={(stepId) => setFocus({ stepId })}
             />
           )}
+          {run === undefined || workflow === undefined || read.stepRuns === undefined ? null : (
+            <RunReplay
+              steps={workflow.steps}
+              stepRuns={read.stepRuns}
+              moments={moments}
+              now={now}
+              at={replayAt}
+              onAt={setReplayAt}
+            />
+          )}
           <div className="relative min-h-0 flex-1">
             <WorkflowCanvas
               workflow={run === undefined ? undefined : workflow}
               run={
                 run === undefined
                   ? undefined
-                  : {
-                      run,
-                      stepRuns: read.stepRuns,
-                      now,
-                      ...(liveOnce === undefined ? {} : { liveOnce })
-                    }
+                  : moment === undefined
+                    ? {
+                        run,
+                        stepRuns: read.stepRuns,
+                        now,
+                        ...(liveOnce === undefined ? {} : { liveOnce })
+                      }
+                    : {
+                        // The run as it stood at the moment the replay shows: it had not ended.
+                        run: { ...run, ended: false },
+                        stepRuns: stepRunsAt(read.stepRuns ?? [], moment.at),
+                        now: new Date(moment.at)
+                      }
               }
               onOpenChild={openChild}
               {...(focus === undefined ? {} : { focus })}
