@@ -37,6 +37,8 @@ const MAX_TARBALL_BYTES_BY_DIR = {
   core: 360_000,
   // Built documentation site.
   docs: 2_400_000,
+  // Two built web pages: the public form page and its preview beside the chat.
+  "outside-forms": 450_000,
   // Migrations and their snapshot history.
   "postgres-store": 850_000,
   // Pinned view runtime and released App Kit versions.
