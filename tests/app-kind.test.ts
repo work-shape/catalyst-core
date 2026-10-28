@@ -201,7 +201,13 @@ describe("the rights of an App", () => {
         resource: app(workspaceId)
       });
 
-    expect(WORKSPACE_MEMBER_ACTIONS).toEqual(["app.use"]);
+    expect(WORKSPACE_MEMBER_ACTIONS).toEqual([
+      "app.use",
+      // A project is chat work of the workspace: every member reaches it (PRJ-1).
+      "project.read",
+      "project.write",
+      "project.delete"
+    ]);
     expect(decide("app.use", "ws_sales")).toEqual({ allowed: true, source: "membership" });
     expect(decide("app.use", "ws_other")).toEqual({ allowed: false, reason: "no_grant" });
     for (const action of ["app.read", "app.write", "app.publish", "app.delete"]) {

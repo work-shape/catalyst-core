@@ -82,15 +82,19 @@ describe("permissions", () => {
       "roles.edit_built_in",
       "assets.release",
       "builder",
-      "publisher"
+      "publisher",
+      "project.read",
+      "project.write",
+      "project.delete"
     ]);
     // The rights of a Connection, an App, a Workflow, a Data Store, a Knowledge Base, a Guardrail
     // and a mail sender came after the legacy keys, as did the rights over service principals and
     // spend limits, the right to view usage by person, the two bundles, the right to edit the
-    // built-in roles and those to delete users, retry jobs and see the System pages: no key names
-    // one, so nobody holds one through the legacy column.
+    // built-in roles and those to delete users, retry jobs and see the System pages, and a
+    // project's, which membership alone carries: no key names one, so nobody holds one through
+    // the legacy column.
     const unkeyed = (action: string) =>
-      /^(?:connection|app|workflow|data_store|knowledge_base|guardrail|mail_sender)\./u.test(
+      /^(?:connection|app|workflow|data_store|knowledge_base|guardrail|mail_sender|project)\./u.test(
         action
       ) ||
       action === "service_principals.manage" ||
@@ -214,8 +218,9 @@ describe("permissions", () => {
       "builder",
       "publisher"
     ]);
+    // No role holds a project's rights: membership alone carries them (PRJ-1).
     expect(ROLE_DEFAULT_ACTIONS.superadmin).toEqual(
-      ACTIONS.filter((action) => action !== "assets.release")
+      ACTIONS.filter((action) => action !== "assets.release" && !action.startsWith("project."))
     );
     for (const role of ["user", "admin", "superadmin"] as const) {
       expect(

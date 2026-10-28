@@ -80,6 +80,7 @@ export const audit = defineTranslations({
       "Refused to create an asset of the instance from a conversation",
     "audit.event.conversation.data_store_added": "Added a data store to a conversation for reading",
     "audit.event.conversation.moved": "Moved a conversation",
+    "audit.event.conversation.project_set": "Moved a conversation into or out of a project",
     "audit.event.conversation.renamed": "Renamed a conversation",
     "audit.event.conversation.retention_expiration_failed":
       "Deleting an expired conversation failed",
@@ -159,6 +160,7 @@ export const audit = defineTranslations({
     "audit.event.operation.started": "Started a call",
     "audit.event.permission.granted": "Gave a right",
     "audit.event.permission.revoked": "Took back a right",
+    "audit.event.project.created": "Created a project",
     "audit.event.role.created": "Created a role",
     "audit.event.role.deleted": "Deleted a role",
     "audit.event.role.pending_decided": "Decided on a role change",
@@ -372,6 +374,8 @@ export const audit = defineTranslations({
     "audit.event.conversation.data_store_added":
       "Datenspeicher zum Lesen zu einer Unterhaltung hinzugefügt",
     "audit.event.conversation.moved": "Unterhaltung verschoben",
+    "audit.event.conversation.project_set":
+      "Unterhaltung in ein Projekt verschoben oder herausgenommen",
     "audit.event.conversation.renamed": "Unterhaltung umbenannt",
     "audit.event.conversation.retention_expiration_failed":
       "Löschen einer abgelaufenen Unterhaltung fehlgeschlagen",
@@ -458,6 +462,7 @@ export const audit = defineTranslations({
     "audit.event.operation.started": "Aufruf gestartet",
     "audit.event.permission.granted": "Recht vergeben",
     "audit.event.permission.revoked": "Recht entzogen",
+    "audit.event.project.created": "Projekt angelegt",
     "audit.event.role.created": "Rolle erstellt",
     "audit.event.role.deleted": "Rolle gelöscht",
     "audit.event.role.pending_decided": "Über eine Rollenänderung entschieden",
