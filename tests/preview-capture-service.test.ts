@@ -97,8 +97,8 @@ describe("server capture boundaries", () => {
       user: "10001:10001",
       read_only: true,
       cap_drop: ["ALL"],
-      shm_size: "256m",
-      pids_limit: 192,
+      shm_size: "512m",
+      pids_limit: 384,
       cpus: 1.5
     });
     expect(service.security_opt[0]).toBe("no-new-privileges:true");

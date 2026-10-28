@@ -304,16 +304,18 @@ describe("dark server preview requests", () => {
     expect(response.body).not.toContain("private-stored-value");
     expect(spy).not.toHaveBeenCalled();
     spy.mockRestore();
-    expect(
-      (
-        await t.callAction(
-          t.admin.id,
-          { pageSessionId: session, proof: { fileSetId: frame.proof.fileSetId, token } },
-          "echo",
-          {}
-        )
-      ).statusCode
-    ).not.toBe(200);
+    const refused = await t.callAction(
+      t.admin.id,
+      { pageSessionId: session, proof: { fileSetId: frame.proof.fileSetId, token } },
+      "load",
+      { text: "capture must not call" }
+    );
+    expect(refused.statusCode).toBe(404);
+    expect(t.refusal(refused)).toEqual({
+      code: "NOT_FOUND",
+      message: "The page session is not valid. Reload the page.",
+      details: { reason: "session_invalid" }
+    });
     expect(await t.stores.pages.getAppUserStorage(storage)).toEqual({
       secret: "private-stored-value"
     });
@@ -334,42 +336,123 @@ describe("dark server preview requests", () => {
     for (const headers of credentials)
       expect((await t.instance.call("apps.captures.call", { headers })).statusCode).toBe(403);
   });
-  it.each(["another-page", "app-without-write"])(
-    "refuses before minting for an unrelated target: %s",
-    async (kind) => {
-      const { id, conversationId } = await run(t.kai.id);
-      const target =
-        kind === "another-page"
-          ? await t.openPage(t.admin.id)
-          : await t.openApp(t.admin.id, "draft");
-      if (!isFileSetId(target.proof.fileSetId)) throw Error("No file set");
-      const asked = await t.stores.pages.requestPreviewCapture({
+  async function expectRefused(capture: string) {
+    const service = vi.fn(async (): Promise<ServerPreviewCaptureOutcome> => ({
+      status: "refused",
+      code: "capture_failed"
+    }));
+    duringCapture = service;
+    await work(capture);
+    expect(service).not.toHaveBeenCalled();
+    expect(
+      (await t.stores.pages.getServerPreviewCapture({ clientInstanceId, id: capture }))?.status
+    ).toBe("refused");
+  }
+  async function askForTarget(id: string, target?: { proof: { fileSetId: string } }) {
+    const frame = target ?? (await t.openApp(t.admin.id, "draft"));
+    if (!isFileSetId(frame.proof.fileSetId)) throw Error("No file set");
+    const runRow = requireValue(
+      await t.stores.agentRuns.getAgentRun({ clientInstanceId, runId: asAgentRunId(id) })
+    );
+    const asked = await t.stores.pages.requestPreviewCapture({
+      clientInstanceId,
+      userId: asUserId(requireValue(runRow.ownerUserId)),
+      conversationId: runRow.conversationId,
+      runId: id,
+      toolCallId: randomUUID(),
+      fileSetId: frame.proof.fileSetId,
+      requestedAt: new Date().toISOString(),
+      perRun: 3,
+      perHour: 20,
+      server: {
+        deadline: new Date(Date.now() + 20_000).toISOString(),
+        size: "desktop",
+        theme: "light"
+      }
+    });
+    if (!("id" in asked)) throw Error("Limit");
+    return asked.id;
+  }
+  it("refuses a user disabled after requesting an otherwise accessible Page", async () => {
+    const { id } = await run(t.kai.id);
+    const capture = await ask(id);
+    await t.stores.users.updateUser({
+      clientInstanceId,
+      userId: asUserId(t.kai.id),
+      status: "disabled"
+    });
+    // Identity construction also rejects disabled users. Observe this guard's early exit
+    // so that removing it cannot be masked by that later refusal.
+    const identity = vi.spyOn(
+      await import("@work-shape/catalyst-core"),
+      "authenticatedUserFromRecord"
+    );
+    try {
+      await expectRefused(capture);
+      expect(identity).not.toHaveBeenCalled();
+    } finally {
+      identity.mockRestore();
+      await t.stores.users.updateUser({
         clientInstanceId,
         userId: asUserId(t.kai.id),
-        conversationId,
-        runId: id,
-        toolCallId: randomUUID(),
-        fileSetId: target.proof.fileSetId,
-        requestedAt: new Date().toISOString(),
-        perRun: 3,
-        perHour: 20,
-        server: {
-          deadline: new Date(Date.now() + 20_000).toISOString(),
-          size: "desktop",
-          theme: "light"
-        }
+        status: "active"
       });
-      if (!("id" in asked)) throw Error("Limit");
-      let called = false;
-      duringCapture = async () => {
-        called = true;
-        return { status: "refused", code: "capture_failed" };
-      };
-      await work(asked.id);
-      expect(called).toBe(false);
-      expect(
-        (await t.stores.pages.getServerPreviewCapture({ clientInstanceId, id: asked.id }))?.status
-      ).toBe("refused");
+    }
+  });
+  it("rechecks conversation access even when the run and Page still belong to it", async () => {
+    const { id, conversationId } = await run(t.kai.id);
+    const capture = await ask(id);
+    // Keep run/row/file-set agreement intact, but make the private transcript another person's.
+    await withTestSql(
+      (sql) =>
+        sql`update conversations set visibility='private', created_by_user_id=${t.admin.id} where id=${conversationId}`
+    );
+    await expectRefused(capture);
+  });
+  it("refuses a Page from another conversation", async () => {
+    const { id } = await run(t.kai.id);
+    const target = await t.openPage(t.admin.id);
+    await expectRefused(await askForTarget(id, target));
+  });
+  it("refuses an App without write rights even when it is the conversation's subject", async () => {
+    const { id, conversationId } = await run(t.kai.id);
+    await t.stores.conversations.setConversationSubject({
+      clientInstanceId,
+      conversationId,
+      subject: { kind: "app", name: "orders" }
+    });
+    await expectRefused(await askForTarget(id));
+  });
+  it("refuses an unrelated App even when the person holds its write right", async () => {
+    const { id } = await run();
+    await expectRefused(await askForTarget(id));
+  });
+  it.each(["subject", "created"])(
+    "captures a writable App related through %s",
+    async (relation) => {
+      const { id, conversationId } = await run();
+      if (relation === "subject") {
+        await t.stores.conversations.setConversationSubject({
+          clientInstanceId,
+          conversationId,
+          subject: { kind: "app", name: "orders" }
+        });
+      } else {
+        await t.stores.conversations.recordCreatedAsset({
+          clientInstanceId,
+          conversationId,
+          assetId: await t.assetId("app", "orders"),
+          revision: 1,
+          createdAt: new Date().toISOString()
+        });
+      }
+      const service = vi.fn(async (): Promise<ServerPreviewCaptureOutcome> => ({
+        status: "refused",
+        code: "capture_failed"
+      }));
+      duringCapture = service;
+      await work(await askForTarget(id));
+      expect(service).toHaveBeenCalledOnce();
     }
   );
   it("enforces three requests per run even when the writer asks for a higher limit", async () => {
