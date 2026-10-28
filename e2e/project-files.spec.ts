@@ -291,7 +291,11 @@ test("a folder of a project moves to the top level by drag and by the move menu"
   const top = files.getByTestId("file-tree-root-drop");
   await expect(top).toHaveText("Hier ablegen: auf die oberste Ebene verschieben");
   await top.hover();
-  await expect(top).toHaveAttribute("data-drop-over", "");
+  // The browser reports a drag over a target with the moves after the one that enters it.
+  const strip = await top.boundingBox();
+  if (!strip) throw new Error("The top level has no box");
+  await page.mouse.move(strip.x + strip.width / 2 + 6, strip.y + strip.height / 2, { steps: 4 });
+  await expect(top).toHaveAttribute("data-drop-over");
   if (shotsDir) {
     await mkdir(shotsDir, { recursive: true });
     await page.screenshot({
