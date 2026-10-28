@@ -2,8 +2,8 @@ import { ChevronDown, ChevronLeft, ChevronRight, Pause, Play, SkipBack } from "l
 import { useEffect, useMemo, useState } from "react";
 import { Button, IconButton, Timeline, cn } from "@work-shape/catalyst-ui";
 import { useTranslation } from "../../shared/i18n";
-import { formatTime } from "../../shared/locale-format";
-import { formatDuration, timelineRows, type ReplayMoment } from "./run-replay-model";
+import { formatDuration, formatTime } from "../../shared/locale-format";
+import { timelineRows, type ReplayMoment } from "./run-replay-model";
 import { placedSteps } from "./workflow-canvas-model";
 import type { WorkflowStepRunView, WorkflowStepView } from "./workflow-views";
 

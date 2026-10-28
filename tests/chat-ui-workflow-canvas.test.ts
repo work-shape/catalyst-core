@@ -187,7 +187,12 @@ describe("the drawing of a definition", () => {
   });
 
   it("draws nothing for a Workflow without a step", () => {
-    expect(workflowGraph(definition([]).steps, en)).toEqual({ nodes: [], groups: [], edges: [] });
+    expect(workflowGraph(definition([]).steps, en)).toEqual({
+      nodes: [],
+      groups: [],
+      edges: [],
+      tests: []
+    });
   });
 });
 

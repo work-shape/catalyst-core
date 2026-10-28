@@ -22,6 +22,7 @@ export type {
   FlowDirection,
   FlowEdgeState,
   FlowExit,
+  FlowExitPart,
   FlowGraph,
   FlowGraphEdge,
   FlowGraphGroup,

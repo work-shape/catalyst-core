@@ -37,7 +37,8 @@ export {
   workflowGraph,
   type CanvasRun
 } from "./workflow-canvas-model";
-export { formatDuration, replayMoments, stepRunsAt, timelineRows } from "./run-replay-model";
+export { replayMoments, stepRunsAt, timelineRows } from "./run-replay-model";
+export { formatDuration } from "../../shared/locale-format";
 export {
   workflowSteps,
   toWorkflow,
