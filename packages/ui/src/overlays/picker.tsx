@@ -39,6 +39,17 @@ export interface PickerOption {
   disabled?: boolean;
   /** Why the option cannot be chosen now. It takes the description's place. */
   disabledReason?: string;
+  /**
+   * What the reader can do instead, for an option that cannot be chosen: "Share with everyone…".
+   * The row stays greyed and reachable by the keys; choosing it runs this and closes the picker.
+   */
+  disabledAction?: PickerDisabledAction;
+}
+
+export interface PickerDisabledAction {
+  /** The step in a few words, ending in "…" where it opens a dialog. */
+  label: string;
+  onSelect(): void;
 }
 
 export interface PickerOptionGroup {
@@ -226,6 +237,14 @@ export function Picker(props: PickerProps) {
   const isChosen = (option: PickerOption) =>
     props.multiple ? props.value.includes(option.value) : props.value === option.value;
   const choose = (option: PickerOption) => {
+    if (isDisabled(option)) {
+      // A greyed option is chosen only for the step it offers instead.
+      if (option.disabledAction) {
+        changeOpen(false);
+        option.disabledAction.onSelect();
+      }
+      return;
+    }
     if (props.multiple) {
       props.onValueChange(
         isChosen(option)
@@ -342,13 +361,16 @@ export function Picker(props: PickerProps) {
   const fade = useScrollEdgeFade<HTMLDivElement>([visible.length, query, isOpen]);
   const renderOption = (option: PickerOption) => {
     const secondLine = option.disabledReason ?? option.description;
+    const action = isDisabled(option) ? option.disabledAction : undefined;
     return (
       <Command.Item
         key={option.value}
         value={option.value}
-        disabled={isDisabled(option)}
-        className={pickerRowClassName}
+        // A greyed option with a step of its own stays reachable for that step.
+        disabled={isDisabled(option) && action === undefined}
+        className={cn(pickerRowClassName, action && "text-muted-foreground")}
         onSelect={() => choose(option)}
+        {...(action ? { "data-picker-action": "" } : {})}
       >
         {option.leading}
         <span className="grid min-w-0 flex-1">
@@ -365,6 +387,9 @@ export function Picker(props: PickerProps) {
           )}
         </span>
         {option.trailing}
+        {action ? (
+          <span className="shrink-0 text-caption font-medium text-primary">{action.label}</span>
+        ) : null}
         {isChosen(option) ? <Check aria-hidden="true" /> : null}
       </Command.Item>
     );
