@@ -34,7 +34,7 @@ import {
 
 describe("a shipped skill an agent lists", () => {
   it("a change proposed to the instance copy before the switch is superseded, not applied, after it", async () => {
-    const f = await fixture();
+    const f = await fixture(undefined, "shared");
     const request = await f.propose();
     // Push A deletes the copy, and the new release stores its own under the name.
     await applyAtCurrentRevisions(f.store.configAssets, {
@@ -54,7 +54,7 @@ describe("a shipped skill an agent lists", () => {
   });
 
   it("refuses a proposed change to it when the agent proposes, not after a person approves", async () => {
-    const f = await fixture();
+    const f = await fixture(undefined, "shared");
     // The release seed turns the agent's listed skill into one of the platform's, as it does
     // with `pdf` once the deployment lists the shipped one (push B).
     await applyAtCurrentRevisions(f.store.configAssets, {

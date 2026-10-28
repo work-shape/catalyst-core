@@ -118,7 +118,26 @@ export async function pushConfig(options: ConfigCommandOptions): Promise<number>
     ) {
       writeError(
         options,
-        `The skill draft changed. Read it again before saving. (${asset.key}) Commit or stash local edits in git first: the pull overwrites the local files. Run 'catalyst config pull' first, then push again.`
+        [
+          "The skill draft changed. Read it again before saving",
+          formatPushConflict(
+            [
+              {
+                kind: "skill",
+                name: asset.name,
+                draft: { revision: remote.draft?.revision ?? null },
+                ...(remote.draft
+                  ? {
+                      changedBy: formatDraftAuthor(remote.draft.author),
+                      changedAt: remote.draft.updatedAt
+                    }
+                  : {})
+              }
+            ],
+            false,
+            options
+          )
+        ].join("\n")
       );
       return 1;
     }
