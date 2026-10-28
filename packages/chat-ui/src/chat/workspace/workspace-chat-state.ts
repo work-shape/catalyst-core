@@ -66,7 +66,7 @@ export function isAbandonedDraftConversation(input: {
 }
 
 /**
- * The agent a new run would use: the user's pick while this workspace offers
+ * The agent a new run would use: the conversation's pick while this workspace offers
  * it, otherwise the workspace default. Derived rather than stored, so switching
  * to a workspace without the picked agent never renders an unavailable one.
  */
@@ -82,6 +82,25 @@ export function activeAgentNameFor(
     : offered(config?.defaultAgentName)
       ? config?.defaultAgentName
       : agents[0]?.name;
+}
+
+/**
+ * The agent picked for the conversation on screen (T30): the one picked in it here, else the one
+ * its latest run used, else, before its first run, the pick for new conversations. One
+ * conversation's pick never carries into another.
+ */
+export function conversationAgentPickFor(input: {
+  conversationId: string | undefined;
+  pickedIn: Readonly<Record<string, string>>;
+  thread: { conversation: { id: string }; agentName?: string | undefined } | undefined;
+  forNew: string | undefined;
+}): string | undefined {
+  const { conversationId, thread } = input;
+  if (conversationId === undefined) {
+    return input.forNew;
+  }
+  const heldWith = thread?.conversation.id === conversationId ? thread.agentName : undefined;
+  return input.pickedIn[conversationId] ?? heldWith ?? input.forNew;
 }
 
 // The code a run is failed with when no worker took it within its queue limit.

@@ -13,6 +13,7 @@ import {
   collaborationWorkspacesAvailableFor,
   workspaceSendBlock,
   activeAgentNameFor,
+  conversationAgentPickFor,
   workspaceScopedConfigFor
 } from "./support/chat-ui";
 
@@ -547,6 +548,40 @@ describe("workspace-scoped agents", () => {
     expect(
       activeAgentNameFor({ defaultAgentName: undefined, agents: [] }, "general")
     ).toBeUndefined();
+  });
+
+  it("opens each conversation with its own agent; a pick stays in the conversation (T30)", () => {
+    const thread = (id: string, agentName?: string) => ({
+      conversation: { id },
+      ...(agentName === undefined ? {} : { agentName })
+    });
+    const pick = (input: Partial<Parameters<typeof conversationAgentPickFor>[0]>) =>
+      conversationAgentPickFor({
+        conversationId: "conv_a",
+        pickedIn: {},
+        thread: undefined,
+        forNew: "general",
+        ...input
+      });
+
+    // A new conversation starts with the pick for new ones.
+    expect(pick({ conversationId: undefined, pickedIn: { conv_a: "research" } })).toBe("general");
+    // An open one keeps the agent of its latest run, whatever was picked for new ones.
+    expect(pick({ thread: thread("conv_a", "contracts") })).toBe("contracts");
+    // A pick in it wins, and only there.
+    expect(pick({ pickedIn: { conv_a: "research" }, thread: thread("conv_a", "contracts") })).toBe(
+      "research"
+    );
+    expect(
+      pick({
+        conversationId: "conv_b",
+        pickedIn: { conv_a: "research" },
+        thread: thread("conv_b", "contracts")
+      })
+    ).toBe("contracts");
+    // Before its first run, and never from another conversation's thread.
+    expect(pick({ thread: thread("conv_a") })).toBe("general");
+    expect(pick({ thread: thread("conv_b", "contracts") })).toBe("general");
   });
 
   it("shows the Agents row as the instance names it, open and collapsed (NAV-VIS-1)", () => {

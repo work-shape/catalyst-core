@@ -129,7 +129,10 @@ describe("client instance app vertical slice", () => {
       const thread = await app.call("conversations.thread.get", {
         params: { conversationId: conversation.id }
       });
-      return thread.json() as { modelSelection?: unknown };
+      const snapshot = thread.json() as { agentName?: string; modelSelection?: unknown };
+      // The conversation keeps the agent it was held with (T30).
+      expect(snapshot.agentName).toBe("test_agent");
+      return snapshot;
     };
     // Each conversation reports its own run, whatever the user's preference says.
     expect((await threadAfterRun({ idempotencyKey: "defaults" })).modelSelection).toEqual({});

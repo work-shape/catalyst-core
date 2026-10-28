@@ -114,6 +114,7 @@ export class RunObservationWorkflow {
           : {}),
         ...(latestRunOfAnyStatus
           ? {
+              agentName: latestRunOfAnyStatus.agentName,
               modelSelection: {
                 ...(latestRunOfAnyStatus.modelBindingId
                   ? { modelBindingId: latestRunOfAnyStatus.modelBindingId }

@@ -89,6 +89,7 @@ import { useConversationListRefresh } from "./use-conversation-list-refresh";
 import { useUnreadableDockConversation } from "./use-workspace-dock";
 import {
   activeAgentNameFor,
+  conversationAgentPickFor,
   terminalRunNotice,
   WORKSPACE_AUTH_SCOPE,
   workspaceScopedConfigFor
@@ -109,6 +110,7 @@ import {
 } from "./workspace-ui-state";
 export {
   activeAgentNameFor,
+  conversationAgentPickFor,
   isAbandonedDraftConversation,
   terminalRunNotice,
   WORKSPACE_AUTH_SCOPE,
@@ -128,7 +130,12 @@ export function useWorkspaceChatModel({
   const [notice, setNotice] = useState<string | undefined>();
   // The run whose notice the person answered by picking another model.
   const [answeredRunId, setAnsweredRunId] = useState<string | undefined>();
-  const [selectedAgentName, setSelectedAgentName] = useState<string | undefined>();
+  // The agent a new conversation starts with, and the agent picked in an open one, by its id. A
+  // conversation otherwise keeps the agent of its latest run (T30).
+  const [newConversationAgentName, setNewConversationAgentName] = useState<string | undefined>();
+  const [conversationAgentPicks, setConversationAgentPicks] = useState<
+    Readonly<Record<string, string>>
+  >({});
   // The user's default once they change it here; until then the stored one applies.
   const [changedUserModelPicks, setChangedUserModelPicks] = useState<ModelPicks | undefined>();
   const [changedConversationModelPicks, setChangedConversationModelPicks] = useState<
@@ -515,7 +522,23 @@ export function useWorkspaceChatModel({
     config?.localization.supportedLocales ?? preferences.supportedFallbackLocales;
   const { resolvedThemeMode, theme, toggleTheme, themePreference, selectThemePreference } =
     useWorkspaceTheme(config?.ui);
-  const activeAgentName = activeAgentNameFor(config, selectedAgentName);
+  const activeAgentName = activeAgentNameFor(
+    config,
+    conversationAgentPickFor({
+      conversationId: selectedConversationId,
+      pickedIn: conversationAgentPicks,
+      thread: threadQuery.data,
+      forNew: newConversationAgentName
+    })
+  );
+  // A pick in an open conversation applies to it alone; elsewhere it is for the new one.
+  const selectAgentName = (agentName: string | undefined) => {
+    if (selectedConversationId === undefined || agentName === undefined) {
+      setNewConversationAgentName(agentName);
+      return;
+    }
+    setConversationAgentPicks((picks) => ({ ...picks, [selectedConversationId]: agentName }));
+  };
   // A first save creates only in a conversation of the person's own. Where the open workspace
   // starts conversations its members read, a New button makes a private one first (E3).
   const openWorkspace = collaborationWorkspace.activeCollaborationWorkspace;
@@ -543,7 +566,7 @@ export function useWorkspaceChatModel({
     if (buildingAgentName === undefined) {
       return;
     }
-    setSelectedAgentName(buildingAgentName);
+    setNewConversationAgentName(buildingAgentName);
     const startedFrom = workspaceRoutePath(route);
     // Studio set to another workspace than the open one builds there: the conversation is made
     // in it, private, so what its first save creates belongs to that workspace.
@@ -579,7 +602,7 @@ export function useWorkspaceChatModel({
   const buildWithAgent = buildingAgentName === undefined ? undefined : startBuilding;
   const editWithAgent = editWithBuildingAgent(
     buildingAgentName,
-    setSelectedAgentName,
+    setNewConversationAgentName,
     (subject, workspaceId, options) =>
       startConversationAbout(subject, undefined, workspaceId, options)
   );
@@ -993,7 +1016,11 @@ export function useWorkspaceChatModel({
       resolvedThemeMode,
       theme,
       activeAgentName,
-      selectAgentName: setSelectedAgentName,
+      activeAgentLoading:
+        selectedConversationId !== undefined &&
+        conversationAgentPicks[selectedConversationId] === undefined &&
+        selectedThread === undefined,
+      selectAgentName,
       selectLocale,
       toggleTheme,
       attachmentsEnabled,
@@ -1092,7 +1119,7 @@ export function useWorkspaceChatModel({
         workspaceAgentsQuery.refetch().catch(() => undefined);
       },
       startChat: (agentName) => {
-        setSelectedAgentName(agentName);
+        setNewConversationAgentName(agentName);
         startNewConversation();
       }
     },
@@ -1176,7 +1203,7 @@ export function useWorkspaceChatModel({
         configuredCompactThresholdTokens,
         controller.activeRun?.projection
       ),
-      selectAgentName: setSelectedAgentName,
+      selectAgentName,
       // Picking the agent's own model is not a pick: the next agent then uses its own model too.
       selectModelBindingId: (modelBindingId) => {
         if (modelBindingId !== selectedModelBindingId) {

@@ -156,6 +156,8 @@ export interface WorkspaceConfigModel {
   /** The instance's theme inputs for the resolved mode; undefined until the config has loaded. */
   theme: ThemeInputs | undefined;
   activeAgentName: string | undefined;
+  /** The open conversation's thread has not loaded, so the agent it was held with is not known yet. */
+  activeAgentLoading: boolean;
   selectAgentName(agentName: string | undefined): void;
   selectLocale(locale: LocaleCode): void;
   toggleTheme(): void;
