@@ -141,6 +141,7 @@ describe("the file sets of a Page", () => {
       "allowDraftHost",
       // A run's request for a picture of a preview, and its answer: about a file set, not of it.
       "claimPreviewCapture",
+      "claimServerPreviewCapture",
       // A file set of an asset is stored, read and deleted as one of a Page is.
       "createAssetFileSet",
       // The build calls are about the row a save waits on, not about a file set.
@@ -151,6 +152,7 @@ describe("the file sets of a Page", () => {
       "deletePageBuild",
       "ensurePage",
       "finishPageBuild",
+      "finishServerPreviewCapture",
       "getAppUserStorage",
       "getAssetFileSet",
       "getPage",
@@ -160,6 +162,7 @@ describe("the file sets of a Page", () => {
       // A preview's report is diagnostics about a file set in a conversation, not the file set.
       "getPreviewReport",
       "getServedFileSet",
+      "getServerPreviewCapture",
       "listConversationPageIds",
       "listDraftHostAllowances",
       "listPageFileSets",
