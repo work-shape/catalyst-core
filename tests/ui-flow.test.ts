@@ -150,6 +150,35 @@ describe("FlowNode", () => {
     expect(markup).not.toContain('data-slot="flow-footer"');
   });
 
+  it("lets a row that stands for a part of its own open it, and says how that part went", () => {
+    const markup = node({
+      status: "done",
+      rows: [
+        { id: "then", label: "Yes" },
+        {
+          id: "medium:then",
+          label: "Otherwise if: Medium risk?",
+          partId: "medium",
+          status: "failed",
+          meta: "2 s",
+          selected: true,
+          onOpen: () => undefined
+        },
+        { id: "medium:else", label: "Otherwise", partId: "x", status: "skipped" }
+      ]
+    });
+
+    // Only the row with a press of its own is a control, named by its part's id.
+    expect(markup.match(/data-slot="flow-row-open"/gu)).toHaveLength(1);
+    const open = slot(markup, "flow-row-open");
+    expect(open).toContain('data-flow-id="medium"');
+    expect(open).toContain('aria-current="true"');
+    expect(textOf(markup)).toContain("Otherwise if: Medium risk? , Failed 2 s");
+    // A status shows as an icon before the label and a word for readers, never colour alone.
+    expect(markup.match(/data-slot="flow-row-status"/gu)).toHaveLength(2);
+    expect(markup).toContain('data-status="skipped"');
+  });
+
   it("keeps its whole anatomy in the frame when compact, hidden under icon and title", () => {
     const markup = node({ compact: true, summary: "Fetches every client.", status: "done" });
 

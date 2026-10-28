@@ -102,6 +102,56 @@ export interface FlowNodeRow {
   handle?: ReactNode;
   /** At the row's end inside the frame, such as the insert point of the exit. */
   end?: ReactNode;
+  /** How far the part the row stands for has come: an icon before the label, a word for readers. */
+  status?: FlowStatus;
+  /** After the label, such as how long the row's part took. */
+  meta?: ReactNode;
+  /** Called by a press, Enter and Space: the row stands for a part that opens on its own. */
+  onOpen?(): void;
+  /** The row's part is the one open. */
+  selected?: boolean;
+  /** The id the canvas knows the row's part by, so the focus can return to the row. */
+  partId?: string;
+}
+
+/** The label of a row, with the status and the time of the part it stands for. */
+function RowContent({
+  row,
+  labels,
+  compact
+}: {
+  row: FlowNodeRow;
+  labels: UiLabels;
+  /** Zoomed out, the row keeps its label and its status icon; the time is left for the panel. */
+  compact: boolean;
+}) {
+  const presentation = row.status === undefined ? undefined : flowStatusPresentations[row.status];
+  const word = presentation?.label === undefined ? undefined : labels[presentation.label];
+  return (
+    <>
+      {presentation === undefined || presentation.icon === null ? null : (
+        <span
+          data-slot="flow-row-status"
+          className={cn(
+            "mr-1.5 flex shrink-0 [&_svg]:size-3.5 [&_svg]:stroke-2",
+            row.status === "failed" ? "text-destructive" : presentation.footerIcon,
+            row.status === "skipped" && "text-muted-foreground"
+          )}
+        >
+          {presentation.icon}
+        </span>
+      )}
+      <span className="min-w-0 flex-1 truncate">
+        {row.label}
+        {word === undefined ? null : <span className="sr-only">, {word}</span>}
+      </span>
+      {row.meta === undefined || compact ? null : (
+        <span className="shrink-0 pl-2 font-normal whitespace-nowrap text-muted-foreground tabular-nums">
+          {row.meta}
+        </span>
+      )}
+    </>
+  );
 }
 
 export interface FlowHeadProps {
@@ -359,13 +409,40 @@ export function FlowNode({
                 key={row.id}
                 data-slot="flow-row"
                 data-exit={row.id}
+                data-status={row.status}
+                data-selected={row.selected ? "" : undefined}
                 className={cn(
                   "relative flex h-7.5 items-center border-b px-3 font-medium last:border-b-0",
                   // Compact, a row is read from as far away as the title.
                   compact ? "text-title-lg leading-6" : "text-caption"
                 )}
               >
-                <span className="min-w-0 flex-1 truncate">{row.label}</span>
+                {row.onOpen === undefined ? (
+                  <span className="flex min-w-0 flex-1 items-center">
+                    <RowContent row={row} labels={labels} compact={compact} />
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    data-slot="flow-row-open"
+                    data-flow-id={row.partId}
+                    aria-current={row.selected ? "true" : undefined}
+                    className={cn(
+                      // The whole row is the control; its selection is the ring a node has,
+                      // drawn inside the row.
+                      "flex min-w-0 flex-1 cursor-pointer items-center self-stretch text-left hover:bg-muted focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring",
+                      row.end === undefined ? "-mx-3 px-3" : "-ml-3 pl-3",
+                      row.selected && "bg-muted outline-2 -outline-offset-2 outline-ring"
+                    )}
+                    onClick={(event) => {
+                      // A press on the row opens its part, not the node.
+                      event.stopPropagation();
+                      row.onOpen?.();
+                    }}
+                  >
+                    <RowContent row={row} labels={labels} compact={compact} />
+                  </button>
+                )}
                 {row.end === undefined ? null : (
                   <span className="-mr-1.5 ml-2 flex shrink-0">{row.end}</span>
                 )}

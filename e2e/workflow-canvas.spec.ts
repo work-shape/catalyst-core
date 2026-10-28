@@ -88,8 +88,9 @@ test("a run of three analyses at the same time shows them side by side, and its 
     await expect(block.locator('[data-slot="flow-join-label"]')).toHaveText(
       "Weiter, wenn alle fertig sind"
     );
-    // The lanes say how long each path took; the costs, two steps long, took longest.
-    await expect(block.locator('[data-lane-id="costs"]')).toContainText("3 Min.");
+    // The lanes say how long each path took, to the second as the timeline does; the costs,
+    // two steps long, took longest.
+    await expect(block.locator('[data-lane-id="costs"]')).toContainText("3 Min. 33 Sek.");
     const step = (id: string) => boxOf(canvas.locator(`[data-flow-id="${id}"]`));
     const [revenue, costs, risks] = await Promise.all([
       step("revenue_trend"),
@@ -109,7 +110,9 @@ test("a run of three analyses at the same time shows them side by side, and its 
     }
     // The chain of risk tests is one fork with three ways out.
     await expect(canvas.locator('[data-flow-id="high_risk"]')).toContainText("Sonst wenn");
-    await expect(canvas.locator('[data-flow-id="medium_risk"]')).toHaveCount(0);
+    await expect(canvas.locator('[data-slot="flow-node"][data-flow-id="medium_risk"]')).toHaveCount(
+      0
+    );
 
     // The timeline: the three paths begin at the same moment, and the costs bar is longest.
     const replay = page.locator("[data-run-replay]");
@@ -159,6 +162,33 @@ test("a run of three analyses at the same time shows them side by side, and its 
     await shootSurface(page, `workflow-parallel-run-de-${width}`, async () => {
       await expect(canvas.locator('[data-slot="flow-engine"][data-ready]')).toBeVisible();
     });
+
+    // The inner test of the chain is a row of the fork that opens its own panel and says
+    // how it went.
+    const fork = canvas.locator('[data-slot="flow-node"][data-flow-id="high_risk"]');
+    const mediumRow = fork.locator('[data-exit="medium_risk:then"]');
+    await expect(mediumRow).toHaveAttribute("data-status", "done");
+    await expect(mediumRow).toContainText("Sonst wenn: Mittleres Risiko?");
+    await mediumRow.locator('[data-slot="flow-row-open"]').click();
+    const panel = page.locator('[data-step-panel="medium_risk"]');
+    await expect(panel).toContainText("Mittleres Risiko?");
+    await expect(mediumRow).toHaveAttribute("data-selected", "");
+    await expect(fork).not.toHaveAttribute("data-selected", "");
+    // The view brings the fork the row stands in clear of the panel.
+    await expect
+      .poll(async () => {
+        const [row, sheet] = await Promise.all([boxOf(mediumRow), boxOf(panel)]);
+        return width >= 600 ? row.right <= sheet.left : row.bottom <= sheet.top;
+      })
+      .toBe(true);
+    await shootSurface(page, `workflow-else-chain-de-${width}`, async () => {
+      await expect(panel).toBeVisible();
+    });
+    // The first test is the fork itself, with a panel of its own.
+    await fork.locator('[data-slot="flow-main"]').click();
+    await expect(page.locator('[data-step-panel="high_risk"]')).toBeVisible();
+    await expect(mediumRow).not.toHaveAttribute("data-selected", "");
+    await page.keyboard.press("Escape");
   }
 });
 

@@ -8,7 +8,7 @@ import type {
   FlowStatus
 } from "@work-shape/catalyst-ui";
 import type { WorkflowConditionOutput } from "@work-shape/catalyst-core";
-import { formatElapsed, formatMoment } from "../../shared/locale-format";
+import { formatDuration, formatMoment } from "../../shared/locale-format";
 import type { TranslationContextValue } from "../../shared/i18n";
 import { NO_RECIPIENT_NAMES, recipientsLine, type RecipientNames } from "./recipient-names";
 import { MAIL_ICON_FALLBACK, mailAnswerOf, mailSummary } from "./mail-step";
@@ -345,11 +345,15 @@ export function conditionChain(step: WorkflowStepView): WorkflowStepView[] {
 /** A path of a condition. */
 type ConditionPath = WorkflowConditionOutput["taken"];
 
-/** One way out of a fork: the exit it leaves by, its words, and the steps on it. */
+/**
+ * One way out of a fork: the exit it leaves by, its words, and the steps on it. A test further
+ * down the chain stands on the way it opens, which is its row of the fork.
+ */
 interface ForkPath {
   exit: string;
   label: string;
   steps: readonly WorkflowStepView[];
+  test?: WorkflowStepView;
 }
 
 /**
@@ -373,7 +377,8 @@ function forkPaths(chain: readonly WorkflowStepView[], t: Translate): ForkPath[]
         index === 0
           ? (then?.name ?? t("workflows.canvas.exitThen"))
           : t("workflows.canvas.exitElseIf", { name: test.name }),
-      steps: then?.steps ?? []
+      steps: then?.steps ?? [],
+      ...(index === 0 ? {} : { test })
     };
   });
   const last = chain.at(-1) ?? chain[0];
@@ -386,8 +391,12 @@ function forkPaths(chain: readonly WorkflowStepView[], t: Translate): ForkPath[]
   return paths;
 }
 
-/** The drawing of a Workflow: a graph of the canvas that always names its groups. */
-export type WorkflowGraph = FlowGraph & { groups: FlowGraphGroup[] };
+/**
+ * The drawing of a Workflow: a graph of the canvas that always names its groups. A test further
+ * down a chain of conditions is a row of its fork, not a node; `tests` holds what its panel
+ * shows of it.
+ */
+export type WorkflowGraph = FlowGraph & { groups: FlowGraphGroup[]; tests: FlowGraphNode[] };
 
 /**
  * How a step of a draft differs from the published revision, for its mark on the canvas
@@ -419,21 +428,22 @@ export function workflowGraph(
   const nodes: FlowGraphNode[] = [];
   const groups: FlowGraphGroup[] = [];
   const edges: FlowGraphEdge[] = [];
+  const tests: FlowGraphNode[] = [];
   // A step of a loop has a step run per item, which has an `iteration`; those are not read.
   const stepRuns = new Map(
     (run?.stepRuns ?? [])
       .filter((stepRun) => stepRun.iteration === undefined)
       .map((stepRun) => [stepRun.stepId, stepRun])
   );
+  // To the second, as the timeline of the run says it.
+  const elapsed = (start: string, end: Date) =>
+    formatDuration(end.getTime() - Date.parse(start), locale);
   const duration = (stepRun: WorkflowStepRunView) =>
     stepRun.startedAt === undefined
       ? undefined
-      : formatElapsed(
+      : elapsed(
           stepRun.startedAt,
-          stepRun.finishedAt === undefined
-            ? (run?.now ?? new Date())
-            : new Date(stepRun.finishedAt),
-          locale
+          stepRun.finishedAt === undefined ? (run?.now ?? new Date()) : new Date(stepRun.finishedAt)
         );
 
   const marked = (step: WorkflowStepView): Pick<FlowGraphNode, "change" | "oldSummary"> => {
@@ -570,7 +580,7 @@ export function workflowGraph(
     const start = starts.sort()[0];
     if (start === undefined) return { status };
     const end = through && ends.length > 0 ? new Date(Math.max(...ends)) : run.now;
-    return { status, meta: formatElapsed(start, end, locale) };
+    return { status, meta: elapsed(start, end) };
   };
 
   /**
@@ -733,11 +743,32 @@ export function workflowGraph(
         (test) => !place.repeated && stepRuns.get(test.id)?.status === "failed"
       );
       const decided = failed === undefined ? state : ran(failed, place);
+      // A further test is a row of the fork that opens its own panel and says how it went.
+      const exits = paths.map((path) => {
+        if (path.test === undefined) return { id: path.exit, label: path.label };
+        const tested = ran(path.test, place);
+        const testSummary = stepSummary(path.test, text, recipients);
+        tests.push({
+          ...base(path.test, place),
+          kind: "condition",
+          ...(testSummary === undefined ? {} : { summary: testSummary }),
+          ...tested
+        });
+        return {
+          id: path.exit,
+          label: path.label,
+          part: {
+            id: path.test.id,
+            ...(tested.status === undefined ? {} : { status: tested.status }),
+            ...(tested.meta === undefined ? {} : { meta: tested.meta })
+          }
+        };
+      });
       nodes.push({
         ...base(step, place),
         kind: "condition",
         ...described,
-        exits: paths.map((path) => ({ id: path.exit, label: path.label })),
+        exits,
         ...(decided.status === undefined ? {} : { status: decided.status }),
         ...(decided.meta === undefined ? {} : { meta: decided.meta })
       });
@@ -791,7 +822,7 @@ export function workflowGraph(
   };
 
   sequence(steps, TOP);
-  return { nodes, groups, edges };
+  return { nodes, groups, edges, tests };
 }
 
 /** A step with where it stands among the blocks of its definition. */

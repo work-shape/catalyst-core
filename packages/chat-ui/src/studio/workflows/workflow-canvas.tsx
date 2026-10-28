@@ -330,7 +330,9 @@ export function WorkflowCanvas({
     selectedId === undefined
       ? undefined
       : (graph.nodes.find((node) => node.id === selectedId) ??
-        graph.groups.find((group) => group.id === selectedId));
+        graph.groups.find((group) => group.id === selectedId) ??
+        // A further test of a chain of conditions is a row of its fork.
+        graph.tests.find((test) => test.id === selectedId));
   const selectedRun = selectedId === undefined ? undefined : runOf(selectedId);
   const loopRun = selectedRun?.stepRun;
   const loopCounts = loopRun?.loop;

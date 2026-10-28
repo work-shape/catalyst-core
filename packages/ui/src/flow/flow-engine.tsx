@@ -277,10 +277,19 @@ function Engine({
           }
         });
       } else if (step) {
+        const markedPart = step.exits?.find(
+          (exit) => exit.part !== undefined && exit.part.id === selectedId
+        )?.part?.id;
         built.push({
           ...shared,
           type: "step",
-          data: { item: step, marked, ends: ends.get(id) ?? noEnds, direction }
+          data: {
+            item: step,
+            marked,
+            ends: ends.get(id) ?? noEnds,
+            direction,
+            ...(markedPart === undefined ? {} : { markedPart })
+          }
         });
       }
       built.push(...(spots.get(id) ?? []));
@@ -337,10 +346,23 @@ function Engine({
     };
   }, [narrow, size, panelCover]);
 
+  /** The node that holds an exit row's part, by the part's id. */
+  const holders = useMemo(
+    () =>
+      new Map(
+        graph.nodes.flatMap((node) =>
+          (node.exits ?? []).flatMap((exit) =>
+            exit.part === undefined ? [] : [[exit.part.id, node.id] as const]
+          )
+        )
+      ),
+    [graph]
+  );
+
   /** The view moved by the least distance that shows the node, or the view itself. */
   const showing = useCallback(
     (view: FlowViewport, id: string): FlowViewport => {
-      const box = layout.boxes.get(id);
+      const box = layout.boxes.get(holders.get(id) ?? id);
       if (!box) {
         return view;
       }
@@ -355,7 +377,7 @@ function Engine({
       );
       return { x: view.x + move.x, y: view.y + move.y, zoom: view.zoom };
     },
-    [layout.boxes, freeArea]
+    [layout.boxes, holders, freeArea]
   );
 
   /**

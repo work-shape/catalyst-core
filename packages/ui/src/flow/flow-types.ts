@@ -28,6 +28,20 @@ export interface FlowChip {
 export interface FlowExit {
   id: string;
   label: string;
+  /**
+   * The part the row stands for, where the way out is a test of its own, such as a further
+   * test of a multi-way fork. The row is then selected by this id, as a node is by its own,
+   * and says how far that part has come.
+   */
+  part?: FlowExitPart;
+}
+
+/** The part an exit row stands for: its id, and how far it has come. */
+export interface FlowExitPart {
+  id: string;
+  status?: FlowStatus;
+  /** At the row's end, such as how long it took. */
+  meta?: string;
 }
 
 /** How many entries of a repeated part are in which state. */

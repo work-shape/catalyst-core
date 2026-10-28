@@ -42,7 +42,14 @@ export interface NodeEnds {
   exits: Record<string, FlowEdgeState>;
 }
 
-type StepData = { item: FlowGraphNode; marked: boolean; ends: NodeEnds; direction: FlowDirection };
+type StepData = {
+  item: FlowGraphNode;
+  marked: boolean;
+  ends: NodeEnds;
+  direction: FlowDirection;
+  /** The part of one of its exit rows that is selected. */
+  markedPart?: string;
+};
 type GroupData = {
   item: FlowGraphGroup;
   marked: boolean;
@@ -239,9 +246,19 @@ function StepNode({ id, data }: NodeProps<StepRfNode>) {
           </Button>
         ) : undefined
       }
-      rows={item.exits?.map((exit) => ({
+      rows={item.exits?.map(({ part, ...exit }) => ({
         id: exit.id,
         label: exit.label,
+        // A row that stands for a part of its own opens it, as a node opens itself.
+        ...(part === undefined
+          ? {}
+          : {
+              partId: part.id,
+              status: part.status,
+              meta: part.meta,
+              selected: data.markedPart === part.id,
+              ...(engine.selectable ? { onOpen: () => engine.select(part.id) } : {})
+            }),
         end:
           engine.insert === undefined ? undefined : (
             <PlacePoint place={{ kind: "exit", nodeId: id, exitId: exit.id }} className="size-6" />

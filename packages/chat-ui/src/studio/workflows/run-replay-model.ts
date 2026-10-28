@@ -1,6 +1,5 @@
-import type { LocaleCode } from "@work-shape/catalyst-api-client";
 import type { StepTone, TimelineRow } from "@work-shape/catalyst-ui";
-import { formatTime } from "../../shared/locale-format";
+import { formatDuration, formatTime } from "../../shared/locale-format";
 import type { CanvasText } from "./workflow-canvas-model";
 import type { WorkflowLoopCounts, WorkflowStepRunView, WorkflowStepView } from "./workflow-views";
 
@@ -87,26 +86,6 @@ export function stepRunsAt(
     }
     return { ...stepRun, bodyCounts: counts };
   });
-}
-
-/** How long something took, to the second: "45 s", "3 min 2 s", "1 hr 4 min". */
-export function formatDuration(ms: number, locale: LocaleCode): string {
-  const unit = (value: number, name: "second" | "minute" | "hour") =>
-    new Intl.NumberFormat(locale, { style: "unit", unit: name, unitDisplay: "short" }).format(
-      value
-    );
-  const seconds = Math.max(0, Math.round(ms / 1000));
-  if (seconds < 60) return unit(seconds, "second");
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) {
-    const rest = seconds % 60;
-    return rest === 0
-      ? unit(minutes, "minute")
-      : `${unit(minutes, "minute")} ${unit(rest, "second")}`;
-  }
-  const rest = minutes % 60;
-  const hours = Math.floor(minutes / 60);
-  return rest === 0 ? unit(hours, "hour") : `${unit(hours, "hour")} ${unit(rest, "minute")}`;
 }
 
 function toneOf(stepRun: Pick<WorkflowStepRunView, "status" | "loop">): StepTone {

@@ -185,14 +185,28 @@ describe("a parallel block on the canvas", () => {
     expect(block?.status).toBe("done");
     expect(block?.countsLabel).toBe("4 von 4 Schritten");
     expect(block?.counts).toEqual({ total: 4, done: 4, failed: 0, running: 0 });
+    // To the second, as the timeline of the run says it.
     expect(block?.lanes).toEqual([
-      { id: "revenue", label: "Umsatz", status: "done", meta: "1 Min." },
-      { id: "costs", label: "Kosten", status: "done", meta: "3 Min." },
-      { id: "risks", label: "Risiken", status: "done", meta: "1 Min." }
+      { id: "revenue", label: "Umsatz", status: "done", meta: "1 Min. 54 Sek." },
+      { id: "costs", label: "Kosten", status: "done", meta: "3 Min. 33 Sek." },
+      { id: "risks", label: "Risiken", status: "done", meta: "1 Min. 11 Sek." }
     ]);
     // The counts of the block do not hide a step's own state and time.
     const outliers = graph.nodes.find((node) => node.id === "cost_outliers");
-    expect(outliers).toMatchObject({ status: "done", meta: "2 Min." });
+    expect(outliers).toMatchObject({ status: "done", meta: "2 Min. 50 Sek." });
+    expect(block?.note).toBe("3 Min. 33 Sek.");
+  });
+
+  it("says each path's time as the timeline of the run says it", () => {
+    const run = runOf(analysisRuns, true);
+    const lanes = workflowGraph(analyses.steps, de, run).groups[0]?.lanes ?? [];
+    const rows = timelineRows(analyses.steps, run.stepRuns, T0 + 300_000, de);
+    for (const lane of lanes) {
+      expect(lane.meta).toBe(rows.find((row) => row.id === `analyses/${lane.id}`)?.meta);
+    }
+    expect(workflowGraph(analyses.steps, de, run).nodes.find((n) => n.id === "report")?.meta).toBe(
+      rows.find((row) => row.id === "report")?.meta
+    );
   });
 
   it("runs a lane while one of its steps is still to come, and leaves one not yet begun plain", () => {
@@ -230,10 +244,20 @@ describe("a chain of conditions in `else`", () => {
     const fork = graph.nodes.find((node) => node.id === "high");
     expect(fork?.exits).toEqual([
       { id: "then", label: "Wenn ja" },
-      { id: "medium:then", label: "Sonst wenn: Test medium" },
+      // The inner test is the row of the way it opens, selected by its own id.
+      { id: "medium:then", label: "Sonst wenn: Test medium", part: { id: "medium" } },
       { id: "medium:else", label: "Sonst" }
     ]);
     expect(graph.nodes.some((node) => node.id === "medium")).toBe(false);
+    // Its panel shows the test as a condition of its own.
+    expect(graph.tests).toEqual([
+      expect.objectContaining({
+        id: "medium",
+        kind: "condition",
+        eyebrow: "Wenn",
+        title: "Test medium"
+      })
+    ]);
     expect(graph.edges).toEqual(
       expect.arrayContaining([
         { source: "high", sourceExit: "then", target: "warn" },
@@ -292,6 +316,67 @@ describe("a chain of conditions in `else`", () => {
       target: "report",
       state: "skipped"
     });
+    // The inner test's row says that it ran and how long it took; so does its panel.
+    const fork = graph.nodes.find((node) => node.id === "high");
+    expect(fork?.exits?.[1]?.part).toEqual({ id: "medium", status: "done", meta: "1 Sek." });
+    expect(graph.tests[0]).toMatchObject({ id: "medium", status: "done", meta: "1 Sek." });
+  });
+
+  it("says on the row of an inner test that the run did not reach it", () => {
+    const run = runOf(
+      [
+        stepRun("load", 0, 5),
+        stepRun("high", 5, 5, { stepType: "condition", taken: "then" }),
+        stepRun("warn", 5, 7, { containerStepRunId: "sr_high", branch: "then" }),
+        stepRun("report", 7, 8)
+      ],
+      true
+    );
+    const graph = workflowGraph(chained.steps, de, run);
+    const fork = graph.nodes.find((node) => node.id === "high");
+    expect(fork?.status).toBe("done");
+    expect(fork?.exits?.[1]?.part).toEqual({ id: "medium", status: "skipped" });
+    expect(graph.tests[0]).toMatchObject({ status: "skipped", footer: "Nicht erreicht" });
+  });
+
+  it("gives each test of a longer chain its own row, and a failed one says so on its row", () => {
+    const longer = definition([
+      step("load"),
+      condition(
+        "high",
+        [step("warn")],
+        [condition("medium", [step("review")], [condition("low", [step("note")], [])])]
+      )
+    ]);
+    const run = runOf(
+      [
+        stepRun("load", 0, 5),
+        stepRun("high", 5, 5, { stepType: "condition" }),
+        stepRun("medium", 5, 6, {
+          stepType: "condition",
+          containerStepRunId: "sr_high",
+          branch: "else"
+        }),
+        stepRun("low", 6, 8, {
+          stepType: "condition",
+          status: "failed",
+          containerStepRunId: "sr_medium",
+          branch: "else"
+        })
+      ],
+      true
+    );
+    const graph = workflowGraph(longer.steps, de, run);
+    const fork = graph.nodes.find((node) => node.id === "high");
+    expect(fork?.exits?.map((exit) => [exit.id, exit.part?.id, exit.part?.status])).toEqual([
+      ["then", undefined, undefined],
+      ["medium:then", "medium", "done"],
+      ["low:then", "low", "failed"],
+      ["low:else", undefined, undefined]
+    ]);
+    expect(graph.tests.map((test) => test.id)).toEqual(["medium", "low"]);
+    // The fork as a whole failed where one of its tests did.
+    expect(fork?.status).toBe("failed");
   });
 });
 
