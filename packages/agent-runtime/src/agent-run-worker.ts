@@ -877,10 +877,10 @@ function requireAuthorization(run: AgentRun, user: AuthenticatedUser) {
 }
 
 /**
- * The run's authorization, kept for the personal key the current user acts for. A Workflow
- * agent step in a test run that a key started acts for that key: its stored authorization
- * names no key, so the key, its operation scopes and its narrowing come from the user the
- * test run rebuilt, and the step's calls, waited ones too, are asked what the key may do.
+ * The run's authorization, bounded by the personal key the current user was rebuilt for.
+ * This also covers a Workflow agent step in a key-started test: its stored authorization
+ * names no key, so the test run supplies it. Every tool call keeps the key's operation scopes
+ * and the scope ceiling on the user's rights, after a pause too.
  */
 function actingFor(
   authorization: ReturnType<typeof requireAuthorization>,
