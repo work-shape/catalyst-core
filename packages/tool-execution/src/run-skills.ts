@@ -1,17 +1,17 @@
 import {
+  AppError,
+  getSubjectUserId,
   isMountableSkillName,
   type ConfigAssetSource,
   type RuntimeAssetSnapshot,
   type ConversationOfferSource,
+  type ConversationStore,
   type ToolExecutionContext,
   type WorkspaceCommandSkillMount
 } from "@work-shape/catalyst-core";
 import { createSkillSourceVersion } from "./skill-source-version";
 
-/**
- * The skills this run may read or use, including its frozen Try draft and conversation offer,
- * which holds the person's own skills where the run is theirs (SCOPE-MYCHATS).
- */
+/** The skills this run may read or use, including its frozen Try draft and conversation offer. */
 export async function runSkillNames(options: RunSkillOptions): Promise<Set<string>> {
   return (await runSkillOffer(options)).names;
 }
@@ -23,8 +23,9 @@ interface RunSkillOptions {
 }
 
 /**
- * `runSkillNames`, and which of them the run reads only as its person's own (SCOPE-MYCHATS):
- * a read of one of those carries that person's data into the chat.
+ * The skills this run may read or use, including its frozen Try draft and conversation offer,
+ * and which it reads only as its person's own (SCOPE-MYCHATS). A read of one of those carries
+ * that person's data into the chat.
  */
 export async function runSkillOffer(
   options: RunSkillOptions
@@ -57,11 +58,13 @@ export interface WorkspaceSkillSource {
   assetSource: ConfigAssetSource;
   /** Which skills the platform ships to a conversation, beside those its agent lists. */
   conversationOffer?: ConversationOfferSource;
+  /** Marks the chat before a personal skill is mounted. Without it that access fails. */
+  conversations?: Pick<ConversationStore, "markPersonalData">;
 }
 
 /**
  * The skills a workspace command of this run mounts, each at the revision that is live now:
- * exactly those `read_skill` lets the run read (`runSkillNames`, of skills that exist), in the
+ * exactly those `read_skill` lets the run read (`runSkillOffer`, of skills that exist), in the
  * order of their names. None for a call outside an agent run.
  */
 export async function runSkillMounts(
@@ -70,14 +73,14 @@ export async function runSkillMounts(
 ): Promise<WorkspaceCommandSkillMount[]> {
   if (!context.toolRequest?.agentRunId || !context.toolRequest.agentName) return [];
   const assets = await source.assetSource.getSnapshot();
-  const allowed = await runSkillNames({
+  const allowed = await runSkillOffer({
     context,
     assets,
     conversationOffer: source.conversationOffer
   });
   const existing = new Set(assets.skills.map((skill) => skill.name));
   const mounts: WorkspaceCommandSkillMount[] = [];
-  for (const name of [...allowed].filter((candidate) => existing.has(candidate)).sort()) {
+  for (const name of [...allowed.names].filter((candidate) => existing.has(candidate)).sort()) {
     if (!isMountableSkillName(name)) continue;
     const live = await source.assetSource.getSkillRevision(name);
     if (!live || live.skill.name !== name) continue;
@@ -85,6 +88,21 @@ export async function runSkillMounts(
       name,
       revision: live.revision,
       sourceVersion: createSkillSourceVersion(live.skill)
+    });
+  }
+  // A command can read every mounted file, whatever its command text says. Mark before it
+  // is queued, under the same conversation lock and audience rule as read_skill. A move
+  // that won the lock first makes this fail; a move after the mark cannot widen the audience.
+  if (mounts.some((mount) => allowed.personal.has(mount.name))) {
+    const conversationId = context.toolRequest.conversationId;
+    if (!source.conversations || !conversationId || !context.user) {
+      throw new AppError("FORBIDDEN", "This skill cannot be read in this conversation.");
+    }
+    await source.conversations.markPersonalData({
+      clientInstanceId: context.clientInstanceId,
+      conversationId,
+      userId: getSubjectUserId(context.user),
+      at: new Date().toISOString()
     });
   }
   return mounts;
