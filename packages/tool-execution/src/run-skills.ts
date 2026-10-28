@@ -12,14 +12,26 @@ import { createSkillSourceVersion } from "./skill-source-version";
  * The skills this run may read or use, including its frozen Try draft and conversation offer,
  * which holds the person's own skills where the run is theirs (SCOPE-MYCHATS).
  */
-export async function runSkillNames(options: {
+export async function runSkillNames(options: RunSkillOptions): Promise<Set<string>> {
+  return (await runSkillOffer(options)).names;
+}
+
+interface RunSkillOptions {
   context: ToolExecutionContext;
   assets: RuntimeAssetSnapshot;
   conversationOffer?: ConversationOfferSource;
-}): Promise<Set<string>> {
+}
+
+/**
+ * `runSkillNames`, and which of them the run reads only as its person's own (SCOPE-MYCHATS):
+ * a read of one of those carries that person's data into the chat.
+ */
+export async function runSkillOffer(
+  options: RunSkillOptions
+): Promise<{ names: Set<string>; personal: Set<string> }> {
   const { context, assets } = options;
   const agentName = context.toolRequest?.agentName;
-  if (!agentName) return new Set();
+  if (!agentName) return { names: new Set(), personal: new Set() };
   const draft = context.agentPreview?.config;
   const preview = draft?.name === agentName ? draft : undefined;
   const agent = preview ?? assets.agents.find((candidate) => candidate.name === agentName);
@@ -35,11 +47,9 @@ export async function runSkillNames(options: {
           ...(context.toolRequest?.agentRunId ? { runId: context.toolRequest.agentRunId } : {})
         })
       : undefined;
-  return new Set([
-    ...(agent?.skillNames ?? []),
-    ...(offer?.skillNames ?? []),
-    ...(offer?.personalSkillNames ?? [])
-  ]);
+  const shared = new Set([...(agent?.skillNames ?? []), ...(offer?.skillNames ?? [])]);
+  const personal = new Set((offer?.personalSkillNames ?? []).filter((name) => !shared.has(name)));
+  return { names: new Set([...shared, ...personal]), personal };
 }
 
 /** Where a workspace command finds the skills of its run. */

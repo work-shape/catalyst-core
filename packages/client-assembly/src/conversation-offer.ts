@@ -114,6 +114,8 @@ interface ConversationOfferInput {
     agentRuns?: Pick<PlatformStores["agentRuns"], "getAgentRun">;
     /** The skills a person switched on for their own chats (SCOPE-MYCHATS). */
     configAssets?: Pick<PlatformStores["configAssets"], "listPersonalChatSkills">;
+    /** Whose chat the offer is for: only one its person alone reads (SCOPE-MYCHATS). */
+    workspaces?: Pick<PlatformStores["workspaces"], "getWorkspace">;
     /** A person's own settings: a tool they set to Never is not offered to their runs (OP-6). */
     userOperationSettings?: Pick<PlatformStores["userOperationSettings"], "list">;
   };
@@ -183,9 +185,10 @@ type OfferedConversation = NonNullable<
 /**
  * The skills the run's person switched on for their own chats (SCOPE-MYCHATS): only for a run
  * of a chat that its owner started themself in a first-party session, as the stored run records
- * it, and that acts for that person now. A run of another member of the conversation gets that
- * member's own and never the owner's; a subagent, a Workflow step, a service principal, and a
- * run started or acting with a key or for an embedding host get none.
+ * it, and that acts for that person now, in a chat they created that no one else reads (as a
+ * personal Connection requires). A chat other people read gets none, whoever's turn it is; a
+ * subagent, a Workflow step, a service principal, and a run started or acting with a key or for
+ * an embedding host get none.
  */
 async function personalSkillNames(
   input: ConversationOfferInput,
@@ -193,7 +196,7 @@ async function personalSkillNames(
   conversation: OfferedConversation
 ): Promise<string[]> {
   const { user, runId, clientInstanceId } = request;
-  const { agentRuns, configAssets } = input.stores;
+  const { agentRuns, configAssets, workspaces } = input.stores;
   if (!user || !runId || !agentRuns || !configAssets) return [];
   if (
     isAuthenticatedServicePrincipal(user) ||
@@ -219,6 +222,22 @@ async function personalSkillNames(
     authorization.subjectUserId !== person ||
     authorization.principal.kind !== "user" ||
     authorization.principal.id !== person
+  ) {
+    return [];
+  }
+  // Only a chat no one but its person reads, as for a personal Connection: one they created,
+  // in their own Personal Workspace or private. A team-visible chat, or one another person
+  // created, gets none, as the skill's text would reach its other readers.
+  if (conversation.createdByUserId !== person || !workspaces) return [];
+  const workspace = await workspaces.getWorkspace(
+    clientInstanceId,
+    conversation.collaborationWorkspaceId
+  );
+  if (
+    !workspace ||
+    (workspace.kind === "personal"
+      ? workspace.personalUserId !== person
+      : conversation.visibility !== "private")
   ) {
     return [];
   }
