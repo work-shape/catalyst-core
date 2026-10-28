@@ -36,7 +36,11 @@ import {
   formatDataStoreSize,
   migrationNumber
 } from "./data-store-model";
-import { DataStoreDraftPage, dataStoreNeverPublished } from "./data-store-draft";
+import {
+  DataStoreDraftPage,
+  dataStoreDraftAhead,
+  dataStoreNeverPublished
+} from "./data-store-draft";
 import { DataStorePublishSection, pendingMigrations, useDataStoreMenu } from "./data-store-head";
 import { hasDataFlows } from "./data-flows-model";
 import {
@@ -125,8 +129,7 @@ function PublishedDataStorePage({
   const usedBy = source.useUsedBy(asset.name);
   const dataFlows = usedBy.status === "ready" ? usedBy.data.dataFlows : undefined;
   // A draft saved after the publish waits with the migrations it adds past the published level.
-  const draftAhead =
-    asset.draftRevision !== undefined && asset.revision !== asset.publishedRevision;
+  const draftAhead = dataStoreDraftAhead(asset);
   const pending = state ? pendingMigrations(asset.config, state.publishedLevel) : undefined;
   // The agents that carry the store's row tools, from an instance that names them.
   const agentsNamed =
