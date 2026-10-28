@@ -481,6 +481,11 @@ function ProjectChats({
               ? () => onMoveConversation(conversation.id, conversation.title)
               : undefined
           }
+          onMoveToProject={
+            projectActions?.canMoveIn(conversation)
+              ? () => projectActions.moveIn(conversation)
+              : undefined
+          }
           onRemoveFromProject={
             projectActions ? () => projectActions.remove(conversation) : undefined
           }
