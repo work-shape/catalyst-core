@@ -23,6 +23,7 @@ const stand = (name: string) =>
 const PAGE_TOOLS = [
   "workspace.open",
   "app.save",
+  "app.edit",
   "assets.publish",
   // DP-2: the agent tries the App's draft and reviews its publish.
   "apps.try_action",

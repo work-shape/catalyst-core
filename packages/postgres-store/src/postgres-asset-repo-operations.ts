@@ -389,6 +389,30 @@ export async function listAssetRepoBundles(
   });
 }
 
+export async function setAssetCheckout(
+  db: PostgresConnection,
+  input: Parameters<ConfigAssetStore["setAssetCheckout"]>[0]
+): Promise<void> {
+  const { clientInstanceId, conversationId, folder, assetId, baseCommit, baseRevision } = input;
+  const now = new Date();
+  await db
+    .insert(assetCheckouts)
+    .values({
+      clientInstanceId,
+      conversationId,
+      folder,
+      assetId,
+      baseCommit,
+      baseRevision,
+      createdAt: now,
+      updatedAt: now
+    })
+    .onConflictDoUpdate({
+      target: [assetCheckouts.conversationId, assetCheckouts.folder],
+      set: { assetId, baseCommit, baseRevision, updatedAt: now }
+    });
+}
+
 export async function getAssetCheckout(
   db: PostgresConnection,
   input: Parameters<ConfigAssetStore["getAssetCheckout"]>[0]

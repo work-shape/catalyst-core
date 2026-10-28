@@ -1,13 +1,15 @@
 import { APP_ASSET_KIND } from "@work-shape/catalyst-api-contract";
-import { type Conversation, type ToolExecutionContext } from "@work-shape/catalyst-core";
+import {
+  isAppError,
+  type Conversation,
+  type ToolExecutionContext
+} from "@work-shape/catalyst-core";
 import {
   type AppSaveInput,
   type AppSaved,
   type PlatformAssetCalls
 } from "@work-shape/catalyst-tool-execution";
 import {
-  DRAFT_CHANGED_ELSEWHERE,
-  DRAFT_MOVED_TO_OTHER_PAGE,
   DRAFT_OF_OTHER_FOLDER,
   askAboutDraft,
   draftNotWritten,
@@ -49,6 +51,18 @@ export function appSaveCalls(
     return revisions.some(({ origin }) => origin?.kind === "page" && fromPage(origin));
   }
 
+  async function changedDraft(name: string, revision: number): Promise<string> {
+    const saved = await options.configAssets.store.getConfigAssetRevision({
+      clientInstanceId: options.clientInstanceId,
+      kind: APP_ASSET_KIND,
+      name,
+      revision
+    });
+    const who = saved?.actor?.displayLabel ?? "another editor";
+    const when = saved ? ` at ${saved.createdAt}` : "";
+    return `The App's draft was saved by ${who}${when} since this working copy was loaded. Nothing was written. Call app.edit with name '${name}' to load the current draft, then redo your change and save again.`;
+  }
+
   /**
    * A later save in a conversation about the App `name`: the Page's revision becomes the App's
    * next draft revision. Only the App this Page became, or was put into, is written; a draft
@@ -76,36 +90,60 @@ export function appSaveCalls(
       name: row.name,
       title: titleOf(APP_ASSET_KIND, row.name, row.config ?? {}, context.locale)
     };
-    const page = await pageApps.named(conversation.id, input.page);
-    const origin = await options.configAssets.store.getConfigAssetPageOrigin({
-      clientInstanceId: options.clientInstanceId,
-      assetId: row.id
-    });
-    const fromThisPage = (named: { pageId: string; conversationId: string } | undefined) =>
-      named?.pageId === page.id && named.conversationId === conversation.id;
-    // The folder the former `page.save` kept under another name is the App's folder still: its
-    // first save moves the App to the Page of the path.
-    const linkFormer =
-      !fromThisPage(origin) &&
-      origin?.conversationId === conversation.id &&
-      (await wasKeptByFormerSave(options.stores.conversations, {
-        clientInstanceId: options.clientInstanceId,
-        conversationId: conversation.id,
-        pageId: origin.pageId,
-        pageName: page.name
-      }));
-    if (!fromThisPage(origin) && !linkFormer) {
-      // Another Page was put into the App since this one wrote it: the draft moved away.
-      return draftNotWritten(
-        app,
-        (await wasWrittenFrom(row.name, fromThisPage))
-          ? DRAFT_MOVED_TO_OTHER_PAGE
-          : DRAFT_OF_OTHER_FOLDER
-      );
+    await requireOwnTranscript(options, conversation);
+    try {
+      (await callOf(context)).access.require("app.write", {
+        kind: APP_ASSET_KIND,
+        name: row.name,
+        assetId: row.id,
+        workspaceId: row.scope.workspaceId
+      });
+    } catch (error) {
+      return draftNotWritten(app, draftRefusal(error, options.logger));
     }
-    const draftPageId = linkFormer ? origin?.pageId : page.id;
-    if (row.revisionOrigin?.kind !== "page" || row.revisionOrigin.pageId !== draftPageId) {
-      return draftNotWritten(app, DRAFT_CHANGED_ELSEWHERE);
+    const page = await pageApps.named(conversation.id, input.page);
+    const checkout = await options.configAssets.store.getAssetCheckout({
+      clientInstanceId: options.clientInstanceId,
+      conversationId: conversation.id,
+      folder: page.name
+    });
+    if (checkout && checkout.assetId !== row.id) return draftNotWritten(app, DRAFT_OF_OTHER_FOLDER);
+    if (!checkout) {
+      // Only old build chats need their Page origin. Every current save uses its checkout.
+      const origin = await options.configAssets.store.getConfigAssetPageOrigin({
+        clientInstanceId: options.clientInstanceId,
+        assetId: row.id
+      });
+      const fromThisPage = (named: { pageId: string; conversationId: string } | undefined) =>
+        named?.pageId === page.id && named.conversationId === conversation.id;
+      const linkFormer =
+        !fromThisPage(origin) &&
+        origin?.conversationId === conversation.id &&
+        (await wasKeptByFormerSave(options.stores.conversations, {
+          clientInstanceId: options.clientInstanceId,
+          conversationId: conversation.id,
+          pageId: origin.pageId,
+          pageName: page.name
+        }));
+      // A legacy working copy gets a base only while its own last save is still the draft.
+      const legacyBase =
+        (fromThisPage(origin) || linkFormer) &&
+        row.revisionOrigin?.kind === "page" &&
+        row.revisionOrigin.pageId === (linkFormer ? origin?.pageId : page.id);
+      if (!legacyBase) {
+        return draftNotWritten(
+          app,
+          (await wasWrittenFrom(row.name, fromThisPage))
+            ? await changedDraft(row.name, row.revision)
+            : DRAFT_OF_OTHER_FOLDER
+        );
+      }
+    }
+    if (
+      checkout &&
+      (checkout.baseRevision !== row.revision || checkout.baseCommit !== row.commit)
+    ) {
+      return draftNotWritten(app, await changedDraft(row.name, row.revision));
     }
     // The revision the preview shows is the draft, which the guardrails answer first.
     const asked = await askAboutDraft(options.operationCalls?.deps.events, context, pageApps, {
@@ -124,7 +162,7 @@ export function appSaveCalls(
           app: row.name,
           workspaceId: row.scope.workspaceId,
           expectedRevision: row.revision,
-          link: linkFormer,
+          link: true,
           fileSetId: input.fileSetId
         },
         [event]
@@ -139,6 +177,25 @@ export function appSaveCalls(
       };
     } catch (error) {
       // A write of the App that did not happen is the answer's, not a failed call.
+      if (
+        isAppError(error) &&
+        (error.code === "REVISION_CONFLICT" ||
+          (error.code === "CONFLICT" &&
+            typeof error.details === "object" &&
+            error.details !== null &&
+            "reason" in error.details &&
+            error.details.reason === "draft_moved"))
+      ) {
+        const current = await options.configAssets.store.getConfigAsset({
+          clientInstanceId: options.clientInstanceId,
+          kind: APP_ASSET_KIND,
+          name: row.name
+        });
+        return draftNotWritten(
+          app,
+          await changedDraft(row.name, current?.revision ?? row.revision)
+        );
+      }
       return draftNotWritten(app, draftRefusal(error, options.logger));
     }
   }

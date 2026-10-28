@@ -41,6 +41,7 @@ export const appsModule = defineModule({
     "workspace.open",
     PREVIEW_CAPTURE_TOOL_NAME,
     "app.save",
+    "app.edit",
     APP_PUBLISH_TOOL_NAME,
     ...APP_TRY_TOOL_NAMES
   ],

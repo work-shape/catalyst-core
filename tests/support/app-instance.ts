@@ -22,6 +22,7 @@ import {
   assetObjectPrefix,
   type CollaborationWorkspaceId,
   type JobWorker,
+  type ObjectStorage,
   type Logger
 } from "@work-shape/catalyst-core";
 import { createPostgresJobWorker } from "@work-shape/catalyst-postgres-store";
@@ -115,6 +116,8 @@ export interface AppInstanceOptions {
   commits?: AssetRepoCommitRunner | false;
   /** The `files` store, where a test watches or fails what is put. */
   objects?: MemoryObjectStorage;
+  /** Object store of conversation working copies, for workspace.open. */
+  workspaceObjects?: ObjectStorage;
   /** Replaces `APP_BUILD_WAIT_MS`. */
   assetWaitMs?: number;
   /**
@@ -235,7 +238,7 @@ export async function setupAppInstance(options: AppInstanceOptions = {}): Promis
         clientInstanceId,
         stores,
         pages: { objects },
-        workspaceObjects: undefined,
+        workspaceObjects: options.workspaceObjects,
         logger: silent,
         build
       }).handlers
@@ -253,7 +256,7 @@ export async function setupAppInstance(options: AppInstanceOptions = {}): Promis
         clientInstanceId,
         stores,
         objects,
-        workspaceObjects: undefined,
+        workspaceObjects: options.workspaceObjects,
         logger: silent,
         commit: options.commits ?? (await localAssetRepoCommit(join(scratch, "commits")))
       }).handlers

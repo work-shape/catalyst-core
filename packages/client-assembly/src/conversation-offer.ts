@@ -15,6 +15,7 @@ import {
   dataStoreOperationName,
   resolvePolicy,
   type PolicyDefaults,
+  type ObjectStorage,
   type CentralPolicySetting,
   type DataToolSource,
   SUBJECT_TOOL_PREFIX,
@@ -38,6 +39,8 @@ import {
   WORKSPACE_OPEN_TOOL_NAME,
   createAppSaveTool,
   createAskQuestionTool,
+  createAppEditTool,
+  APP_EDIT_TOOL_NAME,
   createConnectionDraftTool,
   createConnectionOfferTool,
   createConnectionProposeTool,
@@ -89,6 +92,7 @@ const APP_TOOLS = [
   WORKSPACE_OPEN_TOOL_NAME,
   PREVIEW_CAPTURE_TOOL_NAME,
   APP_SAVE_TOOL_NAME,
+  APP_EDIT_TOOL_NAME,
   APP_PUBLISH_TOOL_NAME,
   ...APP_TRY_TOOL_NAMES,
   WRITE_FILE_TOOL,
@@ -302,6 +306,7 @@ export function createPlatformTools(
      * instance's Connections and the person's sign-in. Without them it proposes no entry.
      */
     catalogueStores?: PlatformStores;
+    workspaceObjects?: ObjectStorage;
   }
 ) {
   const attached: { tools?: ToolRegistry; authorizer?: Authorizer } = {};
@@ -323,7 +328,7 @@ export function createPlatformTools(
      */
     bind(options: AssetWorkflowOptions): void {
       attached.authorizer = options.authorizer;
-      platformAssets.bind(createPlatformAssetCalls(options));
+      platformAssets.bind(createPlatformAssetCalls(options, input.workspaceObjects));
     },
     /** What `read_skill` says of a save of the skill it reads, for the person of the call. */
     skillSaveApproval: (context: ToolExecutionContext, name: string) =>
@@ -340,6 +345,7 @@ export function createPlatformTools(
       createRunAgentTool(),
       createAskQuestionTool(),
       createAppSaveTool(platformAssets.calls),
+      createAppEditTool(platformAssets.calls),
       createAppPublishTool(),
       ...createAppTryTools(),
       ...(input.connections
@@ -389,7 +395,8 @@ export function createPlatformTools(
           RUN_AGENT_TOOL_NAME,
           ASK_QUESTION_TOOL_NAME,
           WORKSPACE_OPEN_TOOL_NAME,
-          APP_SAVE_TOOL_NAME
+          APP_SAVE_TOOL_NAME,
+          APP_EDIT_TOOL_NAME
         ]),
         modules: input.modules
       });

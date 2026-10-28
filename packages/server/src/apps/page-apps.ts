@@ -73,7 +73,8 @@ export class PageApps {
         source,
         origin,
         config: appConfigOf({ name: input.name, title: input.title, manifest: source.manifest }),
-        firstCommit: "Create from a Page"
+        firstCommit: "Create from a Page",
+        checkout: { conversationId: page.conversationId, folder: page.name }
       }
     );
     // The App's own event: the asset, its revision and the commit it names. No content.
@@ -125,6 +126,7 @@ export class PageApps {
         source,
         origin,
         link: input.link,
+        checkout: { conversationId: page.conversationId, folder: page.name },
         expectedRevision: input.expectedRevision,
         configOf: (current) =>
           appConfigOf({

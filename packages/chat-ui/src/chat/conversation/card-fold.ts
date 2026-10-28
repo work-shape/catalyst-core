@@ -67,13 +67,17 @@ export function foldedCards(parts: readonly CardFoldPart[]): ReadonlyMap<string,
       if (folder !== undefined) savedFolders.add(folder);
       continue;
     }
-    if (
-      isOpenToolName(part.toolName) &&
-      readPageSave({ args: part.args, result: part.result, failed: part.isError === true })
-        .state === "built"
-    ) {
-      if (!previews.some((preview) => preview.callId === part.toolCallId)) {
-        previews.push({ callId: part.toolCallId, folder: folderOf(part.args) });
+    if (isOpenToolName(part.toolName)) {
+      const opened = readPageSave({
+        args: part.args,
+        result: part.result,
+        failed: part.isError === true
+      });
+      if (
+        opened.state === "built" &&
+        !previews.some((preview) => preview.callId === part.toolCallId)
+      ) {
+        previews.push({ callId: part.toolCallId, folder: folderOf({ path: opened.name }) });
       }
     }
   }

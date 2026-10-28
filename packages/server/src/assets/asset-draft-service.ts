@@ -348,6 +348,7 @@ export class AssetDraftWorkflow {
       firstCommit?: string;
       origin?: ConfigAssetRevisionOrigin;
       pageLink?: () => Promise<boolean>;
+      checkout?: AssetRepoWrite["checkout"];
     }
   ) {
     const target = await this.host.target(address);
@@ -385,7 +386,12 @@ export class AssetDraftWorkflow {
   private async commit(
     call: AssetCall,
     target: AssetTarget,
-    write: { assetId: string; fileSet: FileSet; firstCommit?: string }
+    write: {
+      assetId: string;
+      fileSet: FileSet;
+      firstCommit?: string;
+      checkout?: AssetRepoWrite["checkout"];
+    }
   ): Promise<AssetRepoWrite | undefined> {
     const baseCommit = target.asset?.commit ?? null;
     if (
@@ -401,7 +407,7 @@ export class AssetDraftWorkflow {
         { reason: "repository_write_without_commit" }
       );
     }
-    return commitAssetFileSet(this.options, {
+    const repository = await commitAssetFileSet(this.options, {
       assetId: write.assetId,
       operationRunId: call.runId,
       fileSet: write.fileSet,
@@ -410,6 +416,7 @@ export class AssetDraftWorkflow {
       kind: target.kind.kind,
       message: write.firstCommit ?? `Write ${target.kind.kind} '${target.name}'`
     });
+    return { ...repository, ...(write.checkout ? { checkout: write.checkout } : {}) };
   }
 
   /**
@@ -427,6 +434,7 @@ export class AssetDraftWorkflow {
       config: Record<string, unknown>;
       origin: PageRevisionOrigin;
       firstCommit: string;
+      checkout?: AssetRepoWrite["checkout"];
     }
   ) {
     const target = await this.requireFilesWrite(call, address);
@@ -439,7 +447,8 @@ export class AssetDraftWorkflow {
       config: input.config,
       expectedRevision: null,
       origin: input.origin,
-      firstCommit: input.firstCommit
+      firstCommit: input.firstCommit,
+      ...(input.checkout ? { checkout: input.checkout } : {})
     });
     return { ...written, id: assetId, commit };
   }
@@ -462,6 +471,7 @@ export class AssetDraftWorkflow {
       origin: PageRevisionOrigin;
       /** Whether an asset that is not this Page's may be made this Page's by the write. */
       link: boolean;
+      checkout?: AssetRepoWrite["checkout"];
     }
   ) {
     const target = await this.requireFilesWrite(call, address);
@@ -477,7 +487,8 @@ export class AssetDraftWorkflow {
       config: input.configOf(asset.config),
       expectedRevision: input.expectedRevision,
       origin: input.origin,
-      pageLink: () => this.linksPage(target, asset.id, input)
+      pageLink: () => this.linksPage(target, asset.id, input),
+      ...(input.checkout ? { checkout: input.checkout } : {})
     });
     return { ...written, id: asset.id };
   }
@@ -536,6 +547,7 @@ export class AssetDraftWorkflow {
       origin: PageRevisionOrigin;
       firstCommit?: string;
       pageLink?: () => Promise<boolean>;
+      checkout?: AssetRepoWrite["checkout"];
     }
   ) {
     const fileSet = await copyFileSetToAsset(this.options, {
@@ -552,7 +564,8 @@ export class AssetDraftWorkflow {
       expectedRevision: write.expectedRevision,
       origin: write.origin,
       ...(write.firstCommit === undefined ? {} : { firstCommit: write.firstCommit }),
-      ...(write.pageLink ? { pageLink: write.pageLink } : {})
+      ...(write.pageLink ? { pageLink: write.pageLink } : {}),
+      ...(write.checkout ? { checkout: write.checkout } : {})
     });
   }
 

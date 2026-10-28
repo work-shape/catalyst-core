@@ -41,6 +41,19 @@ const open = (toolCallId: string, path: string, number = 1) => ({
 const text = (value: string) => ({ type: "text", text: value });
 
 describe("one card per App and per preview in a conversation", () => {
+  it("folds the loaded app.edit preview into the App card when that working folder is saved", () => {
+    const loaded = {
+      ...open("loaded", "apps/findings"),
+      toolName: "app.edit",
+      args: { name: "findings" },
+      result: { ...open("loaded", "apps/findings").result, path: "apps/findings" }
+    };
+    expect([...foldedCards([loaded, open("changed", "apps/findings"), save("saved")])]).toEqual([
+      ["loaded", "preview"],
+      ["changed", "preview"]
+    ]);
+  });
+
   it("folds three saves of one App into one card at the newest and two lines", () => {
     const folded = foldedCards([
       save("call_1", "apps/findings", true),
