@@ -8,7 +8,7 @@ export const connectionCatalogue = defineTranslations({
     "connectionCatalogue.own": "Your own connection",
     "connectionCatalogue.partTools": "For agents",
     "connectionCatalogue.partSource": "As a Knowledge Base source",
-    "connectionCatalogue.notOffered": "Ask the team that runs this instance",
+    "connectionCatalogue.notOffered": "Ask the technical team",
     "connectionCatalogue.partChoice": "What to connect",
     "connectionCatalogue.examples": "Ask, for example",
     "connectionCatalogue.checklist": "Before you connect",
@@ -22,7 +22,7 @@ export const connectionCatalogue = defineTranslations({
       "{name} is saved. Each person signs in with their own account once you approve its tools.",
     "connectionCatalogue.redirectUri": "Register this redirect URI with the provider:",
     "connectionCatalogue.redirectUriMissing":
-      "This instance has no public address yet, so it cannot name its redirect URI. Ask the team that runs it.",
+      "No public address is set up yet, so there is no redirect URI. Ask the technical team.",
     "connectionCatalogue.widens": "Asks for more access at the next sign-in.",
     "connectionCatalogue.otherTools": "Other tools",
     "connectionCatalogue.signInAsks": "The sign-in asks for: {groups}",
@@ -39,14 +39,14 @@ export const connectionCatalogue = defineTranslations({
     "connectionCatalogue.recreates":
       "A deleted connection had this address. This installs it anew, with none of its earlier access.",
     "connectionCatalogue.managed":
-      "No app registration needed. People sign in through the app the team that runs this instance set up.",
+      "No app registration needed. People sign in through the app the technical team set up.",
     "connectionCatalogue.more": "More",
     "connectionCatalogue.ownApp": "Use your own app registration",
     "connectionCatalogue.ownAppHelp":
       "For an app you registered with the provider yourself. You enter its client ID and secret.",
     "connectionCatalogue.updateTitle": "Set up from an earlier version of {title}",
     "connectionCatalogue.updateText":
-      "This connection was set up from version {from}, and this instance has version {to}. Until you update it, changes to it can't be saved.",
+      "This connection was set up from version {from}, and version {to} is available here. Until you update it, changes to it can't be saved.",
     "connectionCatalogue.updateKeeps":
       "The update takes the settings of version {to}. The tools stay as they are. Everyone stays signed in, unless version {to} signs in at other addresses: then each person connects again.",
     "connectionCatalogue.updateApply": "Update to version {version}",
@@ -57,7 +57,7 @@ export const connectionCatalogue = defineTranslations({
     "connectionCatalogue.own": "Eigene Verbindung",
     "connectionCatalogue.partTools": "Für Agenten",
     "connectionCatalogue.partSource": "Als Quelle einer Wissensdatenbank",
-    "connectionCatalogue.notOffered": "Frag das Team, das diese Instanz betreibt",
+    "connectionCatalogue.notOffered": "Frag das technische Team",
     "connectionCatalogue.partChoice": "Was du verbindest",
     "connectionCatalogue.examples": "Frag zum Beispiel",
     "connectionCatalogue.checklist": "Vor dem Verbinden",
@@ -71,7 +71,7 @@ export const connectionCatalogue = defineTranslations({
       "{name} ist gespeichert. Jede Person meldet sich mit ihrem eigenen Konto an, sobald du die Tools freigegeben hast.",
     "connectionCatalogue.redirectUri": "Trag diese Redirect-URI beim Anbieter ein:",
     "connectionCatalogue.redirectUriMissing":
-      "Diese Instanz hat noch keine öffentliche Adresse und kann ihre Redirect-URI nicht nennen. Frag das Team, das sie betreibt.",
+      "Es ist noch keine öffentliche Adresse eingerichtet, daher gibt es keine Redirect-URI. Frag das technische Team.",
     "connectionCatalogue.widens": "Fragt bei der nächsten Anmeldung nach mehr Zugriff.",
     "connectionCatalogue.otherTools": "Weitere Tools",
     "connectionCatalogue.signInAsks": "Die Anmeldung fragt nach: {groups}",
@@ -89,14 +89,14 @@ export const connectionCatalogue = defineTranslations({
     "connectionCatalogue.recreates":
       "Eine gelöschte Verbindung hatte diese Adresse. Diese Einrichtung legt sie neu an, ohne ihre früheren Rechte.",
     "connectionCatalogue.managed":
-      "Keine App-Registrierung nötig. Alle melden sich über die App an, die das Team dieser Instanz eingerichtet hat.",
+      "Keine App-Registrierung nötig. Alle melden sich über die App an, die das technische Team eingerichtet hat.",
     "connectionCatalogue.more": "Mehr",
     "connectionCatalogue.ownApp": "Eigene App-Registrierung verwenden",
     "connectionCatalogue.ownAppHelp":
       "Für eine App, die du selbst beim Anbieter registriert hast. Du gibst ihre Client-ID und ihr Client-Secret ein.",
     "connectionCatalogue.updateTitle": "Mit einer früheren Version von {title} eingerichtet",
     "connectionCatalogue.updateText":
-      "Diese Verbindung wurde mit Version {from} eingerichtet, diese Instanz hat Version {to}. Bis du sie aktualisierst, lassen sich Änderungen an ihr nicht speichern.",
+      "Diese Verbindung wurde mit Version {from} eingerichtet, hier ist Version {to} verfügbar. Bis du sie aktualisierst, lassen sich Änderungen an ihr nicht speichern.",
     "connectionCatalogue.updateKeeps":
       "Die Aktualisierung übernimmt die Einstellungen von Version {to}. Die Tools bleiben, wie sie sind. Alle bleiben angemeldet, außer Version {to} meldet über andere Adressen an: Dann verbindet sich jede Person neu.",
     "connectionCatalogue.updateApply": "Auf Version {version} aktualisieren",

@@ -176,7 +176,7 @@ describe("agent page", () => {
       references: { reasoningEfforts: ["none", "low", "medium", "high", "xhigh"] }
     });
 
-    expect(markup).toContain(">Instance default</option>");
+    expect(markup).toContain(">Default for all workspaces</option>");
     expect(markup).toContain('value="Help with the workflow."');
     expect(markup).toContain('<option value="high" selected="">High</option>');
     expect(markup).toContain('value="128"');
@@ -252,7 +252,7 @@ describe("agent page", () => {
     );
 
     expect(tools).toContain('data-unavailable-option="crm.lookup"');
-    expect(tools).toContain("Not available: this instance has no such tool. Remove it to save.");
+    expect(tools).toContain("Not available: there is no such tool here. Remove it to save.");
     expect(tools).not.toContain('data-tool-package="own:crm.lookup"');
   });
 
@@ -283,7 +283,7 @@ describe("agent page", () => {
     const model = section(markup, "model");
 
     // The instance's default model by name, never by the id of its provider.
-    expect(model).toContain(">Instance default</option>");
+    expect(model).toContain(">Default for all workspaces</option>");
     expect(model).not.toContain("azure-eu");
     expect(model.match(/<select[^>]*>/gu)?.every((select) => select.includes('disabled=""'))).toBe(
       true
@@ -320,7 +320,7 @@ describe("agent page", () => {
     const effortSelect = (markup: string) =>
       /<select[^>]*aria-label="Default model: Reasoning effort"[^>]*>/u.exec(markup)?.[0];
     const defaultSelect = (markup: string) =>
-      /(<select[^>]*>)<option value="">Instance default/u.exec(markup)?.[1];
+      /(<select[^>]*>)<option value="">Default for all workspaces/u.exec(markup)?.[1];
 
     const editable = page(true);
     expect(editable).toContain('<option value="fast" selected="">GPT-fast</option>');

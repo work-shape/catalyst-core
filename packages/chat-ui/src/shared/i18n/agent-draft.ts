@@ -6,14 +6,14 @@ import { defineTranslations } from "./translation-area";
  */
 export const agentDraft = defineTranslations({
   en: {
-    "agentDraft.authorRelease": "The team that runs this instance",
+    "agentDraft.authorRelease": "The technical team",
     "agentDraft.authorUnknown": "A former member",
     "agentDraft.authorWithAgent": "{name} with the agent",
     "agentDraft.badge": "Draft version {revision}",
     "agentDraft.behind":
       "{author} saved draft version {revision} on {time}, while you were editing. Your text is still here and nothing was overwritten, but it can no longer be saved. Loading the newer draft replaces your text, so copy what you want to keep first.",
     "agentDraft.behindRelease":
-      "The team that runs this instance saved draft version {revision} on {time}, while you were editing. Your text is still here and nothing was overwritten, but it can no longer be saved. Loading the newer draft replaces your text, so copy what you want to keep first.",
+      "The technical team saved draft version {revision} on {time}, while you were editing. Your text is still here and nothing was overwritten, but it can no longer be saved. Loading the newer draft replaces your text, so copy what you want to keep first.",
     "agentDraft.changed":
       "Someone saved a newer draft while you were looking at it. It is shown now: read it before you publish.",
     "agentDraft.discard": "Discard draft",
@@ -36,7 +36,7 @@ export const agentDraft = defineTranslations({
     "agentDraft.pending":
       "{author} saved draft version {revision} on {time}. It is not live: everyone who uses “{name}” gets the published version until the draft is published.",
     "agentDraft.pendingRelease":
-      "The team that runs this instance saved draft version {revision} on {time}. It is not live: everyone who uses “{name}” gets the published version until the draft is published.",
+      "The technical team saved draft version {revision} on {time}. It is not live: everyone who uses “{name}” gets the published version until the draft is published.",
     "agentDraft.publishDescription":
       "Draft version {revision} becomes what everyone who uses “{name}” gets, from now on.",
     "agentDraft.publishDescriptionSkill":
@@ -61,22 +61,22 @@ export const agentDraft = defineTranslations({
       "Ship with the platform and take each release's new version.",
     "agentDraft.platformInstructionsEdit": "Change platform text",
     "agentDraft.platformInstructionsEditHint":
-      "Once you change it, this text is the instance's and no release updates it.",
-    "agentDraft.additionalInstructions": "Additions of this instance",
+      "Once you change it, this text is managed here and no release updates it.",
+    "agentDraft.additionalInstructions": "Additional instructions",
     "agentDraft.additionalInstructionsHint":
       "Apply after the platform's instructions. A release never changes them.",
     "agentDraft.stale":
       "The published version of “{name}” changed after this draft was written, so the draft cannot be published. Save a change to base it on the published version, or discard it."
   },
   de: {
-    "agentDraft.authorRelease": "Das Team, das diese Instanz betreibt",
+    "agentDraft.authorRelease": "Das technische Team",
     "agentDraft.authorUnknown": "Ein ehemaliges Mitglied",
     "agentDraft.authorWithAgent": "{name} mit dem Agenten",
     "agentDraft.badge": "Entwurfsversion {revision}",
     "agentDraft.behind":
       "{author} hat am {time} Entwurfsversion {revision} gespeichert, während du bearbeitet hast. Dein Text ist noch da und nichts wurde überschrieben, aber er lässt sich nicht mehr speichern. Den neueren Entwurf zu laden ersetzt deinen Text. Kopiere vorher, was du behalten willst.",
     "agentDraft.behindRelease":
-      "Das Team, das diese Instanz betreibt, hat am {time} Entwurfsversion {revision} gespeichert, während du bearbeitet hast. Dein Text ist noch da und nichts wurde überschrieben, aber er lässt sich nicht mehr speichern. Den neueren Entwurf zu laden ersetzt deinen Text. Kopiere vorher, was du behalten willst.",
+      "Das technische Team hat am {time} Entwurfsversion {revision} gespeichert, während du bearbeitet hast. Dein Text ist noch da und nichts wurde überschrieben, aber er lässt sich nicht mehr speichern. Den neueren Entwurf zu laden ersetzt deinen Text. Kopiere vorher, was du behalten willst.",
     "agentDraft.changed":
       "Jemand hat einen neueren Entwurf gespeichert, während du ihn angesehen hast. Er wird jetzt gezeigt: Lies ihn, bevor du veröffentlichst.",
     "agentDraft.discard": "Entwurf verwerfen",
@@ -99,7 +99,7 @@ export const agentDraft = defineTranslations({
     "agentDraft.pending":
       "{author} hat am {time} Entwurfsversion {revision} gespeichert. Sie ist nicht live: Alle, die „{name}“ nutzen, bekommen die veröffentlichte Version, bis der Entwurf veröffentlicht ist.",
     "agentDraft.pendingRelease":
-      "Das Team, das diese Instanz betreibt, hat am {time} Entwurfsversion {revision} gespeichert. Sie ist nicht live: Alle, die „{name}“ nutzen, bekommen die veröffentlichte Version, bis der Entwurf veröffentlicht ist.",
+      "Das technische Team hat am {time} Entwurfsversion {revision} gespeichert. Sie ist nicht live: Alle, die „{name}“ nutzen, bekommen die veröffentlichte Version, bis der Entwurf veröffentlicht ist.",
     "agentDraft.publishDescription":
       "Entwurfsversion {revision} wird ab jetzt die Version, die alle bekommen, die „{name}“ nutzen.",
     "agentDraft.publishDescriptionSkill":
@@ -124,8 +124,8 @@ export const agentDraft = defineTranslations({
       "Kommen mit der Plattform und übernehmen mit jedem Release die neue Fassung.",
     "agentDraft.platformInstructionsEdit": "Plattform-Text ändern",
     "agentDraft.platformInstructionsEditHint":
-      "Sobald du ihn änderst, gehört dieser Text der Instanz, und kein Release aktualisiert ihn mehr.",
-    "agentDraft.additionalInstructions": "Ergänzungen dieser Instanz",
+      "Sobald du ihn änderst, wird dieser Text hier verwaltet, und kein Release aktualisiert ihn mehr.",
+    "agentDraft.additionalInstructions": "Zusätzliche Anweisungen",
     "agentDraft.additionalInstructionsHint":
       "Gelten nach den Anweisungen der Plattform. Ein Release ändert sie nie.",
     "agentDraft.stale":

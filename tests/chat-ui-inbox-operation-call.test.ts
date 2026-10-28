@@ -359,7 +359,7 @@ describe("inbox item of an operation call", () => {
       "If you approve, the skill is saved. If you decline, nothing changes."
     );
     expect(markup).toMatch(
-      /data-testid="operation-call-why"[^>]*>.*Needs a decision because this instance holds new and changed skills for approval\./u
+      /data-testid="operation-call-why"[^>]*>.*Needs a decision because new and changed skills are held for approval\./u
     );
     expect(markup).toMatch(/>New skill by Elif Aydin: Elternzeit: häufige Fragen<\/h3>/u);
     // The skill as people read one: title, description and the text with its line breaks,
@@ -382,7 +382,7 @@ describe("inbox item of an operation call", () => {
       "Wenn du freigibst, wird der Skill gespeichert. Wenn du ablehnst, ändert sich nichts."
     );
     expect(german).toContain(
-      "Braucht eine Entscheidung, weil diese Instanz neue und geänderte Skills zur Freigabe vorlegt."
+      "Braucht eine Entscheidung, weil neue und geänderte Skills zur Freigabe vorgelegt werden."
     );
   });
 
@@ -402,10 +402,10 @@ describe("inbox item of an operation call", () => {
 
     const german = call({ preview: held });
     expect(german).toMatch(
-      /data-testid="operation-call-why"[^>]*>[\s\S]*Braucht eine Entscheidung, weil diese Aktion oder die Operation der Verbindung, die sie aufruft, immer eine Freigabe verlangt\. Das lässt sich in dieser Instanz nicht abschalten\./u
+      /data-testid="operation-call-why"[^>]*>[\s\S]*Braucht eine Entscheidung, weil diese Aktion oder die Operation der Verbindung, die sie aufruft, immer eine Freigabe verlangt\. Das lässt sich hier nicht abschalten\./u
     );
     expect(call({ preview: held }, "en")).toContain(
-      "Needs a decision because this action, or the connection operation it calls, always asks for an approval. No setting on this instance can switch that off."
+      "Needs a decision because this action, or the connection operation it calls, always asks for an approval. No setting here can switch that off."
     );
     expect(call({ preview: { ...held, heldBy: "central_setting" } })).not.toContain(
       'data-testid="operation-call-why"'

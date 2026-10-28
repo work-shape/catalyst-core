@@ -228,15 +228,15 @@ export const knowledge = defineTranslations({
       "A knowledge base cannot read this format. It reads PDF, DOCX, TXT and Markdown.",
     "knowledge.failureOverLimit": "The file or its text is too large to read.",
     "knowledge.failureTooManyPages":
-      "Page limit reached. Split the file, or ask the team that runs this instance for a higher limit and retry.",
+      "Page limit reached. Split the file, or ask the technical team for a higher limit and retry.",
     "knowledge.failureTooManyPagesLimit":
-      "Page limit reached. The current limit is {limit} pages. Split the file, or ask the team that runs this instance for a higher limit and retry.",
+      "Page limit reached. The current limit is {limit} pages. Split the file, or ask the technical team for a higher limit and retry.",
     "knowledge.failureFileUnreadable":
       "The file is damaged, encrypted, or not the format its name says.",
     "knowledge.failureFileMissing": "The file is gone. Add it again.",
     "knowledge.failureExtraction": "Its text could not be read, even after several tries.",
     "knowledge.failureFormatUnavailable":
-      "This instance reads no PDF or DOCX files. It reads TXT and Markdown.",
+      "PDF and DOCX files cannot be read here. TXT and Markdown are supported.",
     "knowledge.failureTextUnreadable": "The file holds no readable text.",
     "knowledge.failureTextEmpty":
       "The file has no text to search, such as a scanned PDF without a text layer.",
@@ -282,7 +282,7 @@ export const knowledge = defineTranslations({
     "knowledge.addRefusedStoreNotReady":
       "The knowledge base cannot take documents right now. Check its status.",
     "knowledge.addRefusedFilesUnavailable":
-      "This instance keeps no files, so it cannot add documents.",
+      "File storage is not enabled, so documents cannot be added.",
     "knowledge.addRefused": "You may not add documents to this knowledge base.",
     "knowledge.addFailed": "The files could not be added.",
     "knowledge.addedOne": "1 document added. It is being indexed.",
@@ -518,16 +518,16 @@ export const knowledge = defineTranslations({
       "Dieses Format kann eine Wissensbasis nicht lesen. Sie liest PDF, DOCX, TXT und Markdown.",
     "knowledge.failureOverLimit": "Die Datei oder ihr Text ist zu groß zum Auslesen.",
     "knowledge.failureTooManyPages":
-      "Seitengrenze erreicht. Teile die Datei, oder bitte das Team, das diese Instanz betreibt, um eine höhere Grenze und versuche es dann erneut.",
+      "Seitengrenze erreicht. Teile die Datei, oder bitte das technische Team um eine höhere Grenze und versuche es dann erneut.",
     "knowledge.failureTooManyPagesLimit":
-      "Seitengrenze erreicht. Die aktuelle Grenze liegt bei {limit} Seiten. Teile die Datei, oder bitte das Team, das diese Instanz betreibt, um eine höhere Grenze und versuche es dann erneut.",
+      "Seitengrenze erreicht. Die aktuelle Grenze liegt bei {limit} Seiten. Teile die Datei, oder bitte das technische Team um eine höhere Grenze und versuche es dann erneut.",
     "knowledge.failureFileUnreadable":
       "Die Datei ist beschädigt, verschlüsselt oder nicht das Format, das ihr Name angibt.",
     "knowledge.failureFileMissing": "Die Datei ist nicht mehr da. Füge sie neu hinzu.",
     "knowledge.failureExtraction":
       "Ihr Text ließ sich auch nach mehreren Versuchen nicht auslesen.",
     "knowledge.failureFormatUnavailable":
-      "Diese Instanz liest keine PDF- und DOCX-Dateien. Sie liest TXT und Markdown.",
+      "PDF- und DOCX-Dateien lassen sich hier nicht lesen. TXT und Markdown werden unterstützt.",
     "knowledge.failureTextUnreadable": "Die Datei enthält keinen lesbaren Text.",
     "knowledge.failureTextEmpty":
       "Die Datei hat keinen Text zum Durchsuchen, zum Beispiel ein gescanntes PDF ohne Textebene.",
@@ -575,7 +575,7 @@ export const knowledge = defineTranslations({
     "knowledge.addRefusedStoreNotReady":
       "Die Wissensbasis kann gerade keine Dokumente aufnehmen. Prüf ihren Status.",
     "knowledge.addRefusedFilesUnavailable":
-      "Diese Instanz speichert keine Dateien und kann darum keine Dokumente aufnehmen.",
+      "Dateien werden hier nicht gespeichert, darum lassen sich keine Dokumente aufnehmen.",
     "knowledge.addRefused": "Du darfst dieser Wissensbasis keine Dokumente hinzufügen.",
     "knowledge.addFailed": "Die Dateien konnten nicht hinzugefügt werden.",
     "knowledge.addedOne": "1 Dokument hinzugefügt. Es wird jetzt indexiert.",

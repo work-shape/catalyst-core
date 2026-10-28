@@ -483,7 +483,7 @@ describe("the sign-in step", () => {
       "de"
     );
     await settle();
-    expect(element("h2").textContent).toBe("Instanz beim Anbieter registrieren");
+    expect(element("h2").textContent).toBe("Anmelde-App beim Anbieter registrieren");
     expect(element("[data-sign-in-redirect-uri]").textContent).toBe(
       "https://chat.example.com/api/v1/connections/oauth/callback"
     );

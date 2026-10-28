@@ -108,9 +108,7 @@ describe("create collaboration workspace dialog", () => {
 
     expect(markup).toContain("Arbeitsbereich erstellen");
     expect(markup).toContain("Auffindbar");
-    expect(markup).toContain(
-      "Alle in dieser Instanz können den Arbeitsbereich finden und Zugriff anfragen."
-    );
+    expect(markup).toContain("Alle können den Arbeitsbereich finden und Zugriff anfragen.");
     expect(markup).toContain("Privat");
     expect(markup).toContain('checked="" value="discoverable"');
     expect(markup).toContain('data-testid="collaboration-workspace-accent-ruby"');
@@ -364,7 +362,7 @@ describe("Workspace pages of Settings", () => {
     expect(headings).toEqual(["h1 Mitglieder", "h2 Anfragen"]);
     expect(header).toContain("Mitglied hinzufügen");
     // Who gives the edit and publish rights, in the words a refusal uses for whom to ask.
-    expect(header).toContain("Beide Rechte vergibt jemand, der die Instanz verwaltet.");
+    expect(header).toContain("Beide Rechte vergibt ein Admin für alle Arbeitsbereiche.");
     expect(markup.indexOf("collaboration-workspace-member-row")).toBeLessThan(
       markup.indexOf("Anfragen</h2>")
     );
@@ -453,7 +451,7 @@ describe("Workspace pages of Settings", () => {
 
   it("shows Requests, after Members, with its problem when the requests could not be read", () => {
     const refusal =
-      "Du darfst das nicht sehen. Frag jemanden, der die Instanz verwaltet, zum Beispiel Mara.";
+      "Du darfst das nicht sehen. Frag einen Admin für alle Arbeitsbereiche, zum Beispiel Mara.";
     const markup = membersView(sharedCollaborationWorkspace, {
       accessRequests: undefined,
       accessRequestsLoadProblem: { message: refusal, refused: true }

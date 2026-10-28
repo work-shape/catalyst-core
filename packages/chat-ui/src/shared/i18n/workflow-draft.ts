@@ -12,7 +12,7 @@ export const workflowDraft = defineTranslations({
     "workflows.draft.discardFailed": "The draft could not be discarded.",
     "workflows.draft.discardTitle": "Discard the draft of “{name}”?",
     "workflows.draft.pending":
-      "Sent for approval. An instance admin decides in the Inbox; until then the live version stays as it is.",
+      "Sent for approval. An admin for all workspaces decides in the Inbox; until then the live version stays as it is.",
     "workflows.draft.publish": "Publish",
     "workflows.draft.publishBody": "Version {number} becomes the one that runs.",
     "workflows.draft.publishBodyBoth":
@@ -38,7 +38,7 @@ export const workflowDraft = defineTranslations({
     "workflows.draft.discardFailed": "Der Entwurf konnte nicht verworfen werden.",
     "workflows.draft.discardTitle": "Entwurf von „{name}“ verwerfen?",
     "workflows.draft.pending":
-      "Zur Freigabe gesendet. Ein Instanz-Admin entscheidet im Eingang; bis dahin bleibt die live Version, wie sie ist.",
+      "Zur Freigabe gesendet. Ein Admin für alle Arbeitsbereiche entscheidet im Eingang; bis dahin bleibt die live Version, wie sie ist.",
     "workflows.draft.publish": "Veröffentlichen",
     "workflows.draft.publishBody": "Version {number} wird die, die läuft.",
     "workflows.draft.publishBodyBoth":

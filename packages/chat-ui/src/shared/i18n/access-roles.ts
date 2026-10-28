@@ -10,7 +10,7 @@ export const accessRoles = defineTranslations({
     "access.actionEditBuiltInRolesDescription":
       "Change the rights of User and Admin, reset them and decide what a release brings. A change reaches everybody who holds the role.",
     "access.rolesIntro":
-      "A role is a set of rights on the whole instance. Every person holds User and may hold further roles.",
+      "A role is a set of rights across all workspaces. Every person holds User and may hold further roles.",
     "access.rolesLoadFailed": "The roles could not be loaded.",
     "access.newRole": "New role",
     "access.roleBuiltIn": "Built in",
@@ -25,9 +25,9 @@ export const accessRoles = defineTranslations({
     "access.roleRename": "Rename",
     "access.roleDelete": "Delete",
     "access.roleUserDescription": "Every person holds it: what it allows, everybody may.",
-    "access.roleAdminDescription": "Runs the instance: its assets, its people and their rights.",
+    "access.roleAdminDescription": "Manages assets, people and their rights across all workspaces.",
     "access.roleSuperadminDescription":
-      "Holds every right of this release. Nobody changes it, so the instance can always be repaired from inside.",
+      "Holds every right of this release. Nobody changes it, so an admin can always repair the system from inside.",
 
     "access.newRoleDescription":
       "A new role starts with the rights of the role you copy. You change them on its page.",
@@ -62,7 +62,7 @@ export const accessRoles = defineTranslations({
     "access.areaRemoveLabel": "Remove a right for {area}",
     "access.areaDialogTitle": "{area} in {role}",
     "access.areaDialogDescription":
-      "Each right you tick applies on the whole instance. Rights in one workspace or on one asset, and refusals, stay as they are.",
+      "Each right you tick applies across all workspaces. Rights in one workspace or on one asset, and refusals, stay as they are.",
     "access.rightNotHeld": "You do not hold this right, so you cannot give it.",
     "access.rightRefusedByRole": "The role refuses this right. Remove the refusal first.",
     "access.roleSaveRights": "Save rights",
@@ -89,7 +89,7 @@ export const accessRoles = defineTranslations({
     "access.actionEditBuiltInRolesDescription":
       "Die Rechte von Benutzer und Admin ändern, sie zurücksetzen und entscheiden, was ein Release bringt. Eine Änderung trifft alle, die die Rolle haben.",
     "access.rolesIntro":
-      "Eine Rolle bündelt Rechte für die ganze Instanz. Jede Person hat die Rolle Benutzer und kann weitere Rollen haben.",
+      "Eine Rolle bündelt Rechte für alle Arbeitsbereiche. Jede Person hat die Rolle Benutzer und kann weitere Rollen haben.",
     "access.rolesLoadFailed": "Die Rollen konnten nicht geladen werden.",
     "access.newRole": "Neue Rolle",
     "access.roleBuiltIn": "Eingebaut",
@@ -105,9 +105,9 @@ export const accessRoles = defineTranslations({
     "access.roleDelete": "Löschen",
     "access.roleUserDescription": "Jede Person hat sie: Was sie erlaubt, dürfen alle.",
     "access.roleAdminDescription":
-      "Betreibt die Instanz: ihre Assets, ihre Personen und deren Rechte.",
+      "Verwaltet Assets, Personen und deren Rechte in allen Arbeitsbereichen.",
     "access.roleSuperadminDescription":
-      "Hat jedes Recht dieses Release. Niemand ändert sie, damit sich die Instanz immer von innen reparieren lässt.",
+      "Hat jedes Recht dieses Release. Niemand ändert sie, damit ein Admin das System immer von innen reparieren kann.",
 
     "access.newRoleDescription":
       "Eine neue Rolle beginnt mit den Rechten der Rolle, die du kopierst. Ändern kannst du sie auf ihrer Seite.",
@@ -145,7 +145,7 @@ export const accessRoles = defineTranslations({
     "access.areaRemoveLabel": "Ein Recht für {area} entfernen",
     "access.areaDialogTitle": "{area} in {role}",
     "access.areaDialogDescription":
-      "Jedes Recht, das du ankreuzt, gilt für die ganze Instanz. Rechte in einem Arbeitsbereich oder für ein Asset und Verweigerungen bleiben, wie sie sind.",
+      "Jedes Recht, das du ankreuzt, gilt für alle Arbeitsbereiche. Rechte in einem Arbeitsbereich oder für ein Asset und Verweigerungen bleiben, wie sie sind.",
     "access.rightNotHeld": "Du hast dieses Recht nicht und kannst es daher nicht vergeben.",
     "access.rightRefusedByRole":
       "Die Rolle verweigert dieses Recht. Hebe zuerst die Verweigerung auf.",

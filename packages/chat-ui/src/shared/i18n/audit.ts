@@ -78,7 +78,7 @@ export const audit = defineTranslations({
     "audit.event.conversation.created": "Started a conversation",
     "audit.event.conversation.deleted": "Deleted a conversation",
     "audit.event.conversation.instance_create_refused":
-      "Refused to create an asset of the instance from a conversation",
+      "Refused to create an asset for everyone from a conversation",
     "audit.event.conversation.data_store_added": "Added a data store to a conversation for reading",
     "audit.event.conversation.moved": "Moved a conversation",
     "audit.event.conversation.project_set": "Moved a conversation into or out of a project",
@@ -102,9 +102,9 @@ export const audit = defineTranslations({
     "audit.event.feedback.pruned": "Removed old feedback",
     "audit.event.feedback.received": "Gave feedback on an answer",
     "audit.event.governance.audit_events_viewed": "Viewed the audit log",
-    "audit.event.governance.config_assets_viewed": "Viewed the instance's assets",
+    "audit.event.governance.config_assets_viewed": "Viewed assets across all workspaces",
     "audit.event.governance.config_assets_write_authorized":
-      "Allowed a change to the instance's assets",
+      "Allowed a change to assets across all workspaces",
     "audit.event.governance.usage_limit_changed": "Changed a spend limit",
     "audit.event.governance.usage_users_viewed": "Viewed usage by person",
     "audit.event.governance.usage_viewed": "Viewed usage",
@@ -265,9 +265,9 @@ export const audit = defineTranslations({
     "audit.reason.holder_inactive": "The account is switched off.",
     "audit.reason.input_invalid": "The input was not valid.",
     "audit.reason.insufficient_scope": "The sign-in lacks a permission the call needed.",
-    "audit.reason.internal": "An error inside the instance.",
+    "audit.reason.internal": "An internal error.",
     "audit.reason.invalid_client":
-      "The outside system does not accept this instance's sign-in client.",
+      "The outside system does not accept the sign-in client configured here.",
     "audit.reason.invalid_grant": "The outside system no longer accepts the sign-in.",
     "audit.reason.mail_rejected": "The mail provider refused the email.",
     "audit.reason.module_off": "The module it needs is switched off.",
@@ -373,7 +373,7 @@ export const audit = defineTranslations({
     "audit.event.conversation.created": "Unterhaltung begonnen",
     "audit.event.conversation.deleted": "Unterhaltung gelöscht",
     "audit.event.conversation.instance_create_refused":
-      "Anlegen eines Assets der Instanz aus einer Unterhaltung abgelehnt",
+      "Anlegen eines Assets für alle aus einer Unterhaltung abgelehnt",
     "audit.event.conversation.data_store_added":
       "Datenspeicher zum Lesen zu einer Unterhaltung hinzugefügt",
     "audit.event.conversation.moved": "Unterhaltung verschoben",
@@ -403,9 +403,9 @@ export const audit = defineTranslations({
     "audit.event.feedback.pruned": "Alte Rückmeldungen entfernt",
     "audit.event.feedback.received": "Rückmeldung zu einer Antwort gegeben",
     "audit.event.governance.audit_events_viewed": "Audit-Protokoll angesehen",
-    "audit.event.governance.config_assets_viewed": "Assets der Instanz angesehen",
+    "audit.event.governance.config_assets_viewed": "Assets in allen Arbeitsbereichen angesehen",
     "audit.event.governance.config_assets_write_authorized":
-      "Änderung an den Assets der Instanz erlaubt",
+      "Änderung an Assets in allen Arbeitsbereichen erlaubt",
     "audit.event.governance.usage_limit_changed": "Ausgabenlimit geändert",
     "audit.event.governance.usage_users_viewed": "Nutzung pro Person angesehen",
     "audit.event.governance.usage_viewed": "Nutzung angesehen",
@@ -573,9 +573,9 @@ export const audit = defineTranslations({
     "audit.reason.input_invalid": "Die Eingabe war nicht gültig.",
     "audit.reason.insufficient_scope":
       "Der Anmeldung fehlt eine Berechtigung, die der Aufruf brauchte.",
-    "audit.reason.internal": "Ein Fehler in der Instanz.",
+    "audit.reason.internal": "Ein interner Fehler.",
     "audit.reason.invalid_client":
-      "Das externe System nimmt den Anmelde-Client dieser Instanz nicht an.",
+      "Das externe System nimmt den hier eingerichteten Anmelde-Client nicht an.",
     "audit.reason.invalid_grant": "Das externe System nimmt die Anmeldung nicht mehr an.",
     "audit.reason.mail_rejected": "Der E-Mail-Anbieter hat die E-Mail abgelehnt.",
     "audit.reason.module_off": "Das nötige Modul ist ausgeschaltet.",

@@ -785,7 +785,7 @@ test.describe("admin widget", () => {
     await expect(settingsPages(page)).toBeVisible();
     // You and Instance each have a Usage page; the budget and safeguards are the instance's.
     await settingsPages(page)
-      .getByRole("group", { name: "Instance", exact: true })
+      .getByRole("group", { name: "All workspaces", exact: true })
       .getByRole("button", { name: "Usage", exact: true })
       .click();
     await expect(page.getByTestId("usage-month-budget")).toBeVisible();

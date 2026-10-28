@@ -6,7 +6,7 @@ export const twoFactor = defineTranslations({
     "twoFactor.title": "Two-factor sign-in",
     "twoFactor.setupTitle": "Set up two-factor sign-in",
     "twoFactor.setupRequired":
-      "This instance asks for a code from an authenticator app at every sign-in. Set it up to continue.",
+      "A code from an authenticator app is required at every sign-in. Set it up to continue.",
     "twoFactor.passwordStep": "Confirm with your password to start.",
     "twoFactor.continue": "Continue",
     "twoFactor.scan":
@@ -52,7 +52,7 @@ export const twoFactor = defineTranslations({
     "twoFactor.forgetBrowsersDone": "Every browser asks for the code at its next sign-in.",
     "twoFactor.turnOff": "Turn off",
     "twoFactor.turnOffRequired":
-      "This instance requires two-factor sign-in: after turning it off you set it up again at once.",
+      "Two-factor sign-in is required: after turning it off you set it up again at once.",
     "twoFactor.turnedOff": "Two-factor sign-in is off.",
     "twoFactor.passwordForChanges": "Your password, for new backup codes or to turn it off",
     "twoFactor.adminSetUp": "Set up",
@@ -62,7 +62,7 @@ export const twoFactor = defineTranslations({
     "twoFactor.reset": "Reset two-factor sign-in",
     "twoFactor.resetDialogTitle": "Reset two-factor sign-in of {name}?",
     "twoFactor.resetDialogIdentity":
-      "First make sure it is really this person asking, outside this instance: by phone, in person or through another channel you trust.",
+      "First make sure it is really this person asking: by phone, in person or through another channel you trust.",
     "twoFactor.resetDialogEffect":
       "The reset deletes their authenticator link and backup codes, forgets their trusted browsers and signs them out everywhere.",
     "twoFactor.resetConfirm": "Reset",
@@ -73,7 +73,7 @@ export const twoFactor = defineTranslations({
     "twoFactor.title": "Zwei-Faktor-Anmeldung",
     "twoFactor.setupTitle": "Zwei-Faktor-Anmeldung einrichten",
     "twoFactor.setupRequired":
-      "Diese Instanz fragt bei jeder Anmeldung nach einem Code aus einer Authenticator-App. Richte sie ein, um weiterzumachen.",
+      "Bei jeder Anmeldung wird ein Code aus einer Authenticator-App verlangt. Richte sie ein, um weiterzumachen.",
     "twoFactor.passwordStep": "Bestätige zum Start mit deinem Passwort.",
     "twoFactor.continue": "Weiter",
     "twoFactor.scan":
@@ -122,7 +122,7 @@ export const twoFactor = defineTranslations({
     "twoFactor.forgetBrowsersDone": "Jeder Browser fragt bei der nächsten Anmeldung nach dem Code.",
     "twoFactor.turnOff": "Ausschalten",
     "twoFactor.turnOffRequired":
-      "Diese Instanz verlangt die Zwei-Faktor-Anmeldung: nach dem Ausschalten richtest du sie sofort neu ein.",
+      "Die Zwei-Faktor-Anmeldung ist vorgeschrieben: nach dem Ausschalten richtest du sie sofort neu ein.",
     "twoFactor.turnedOff": "Die Zwei-Faktor-Anmeldung ist aus.",
     "twoFactor.passwordForChanges": "Dein Passwort, für neue Backup-Codes oder zum Ausschalten",
     "twoFactor.adminSetUp": "Eingerichtet",
@@ -132,7 +132,7 @@ export const twoFactor = defineTranslations({
     "twoFactor.reset": "Zwei-Faktor zurücksetzen",
     "twoFactor.resetDialogTitle": "Zwei-Faktor-Anmeldung von {name} zurücksetzen?",
     "twoFactor.resetDialogIdentity":
-      "Stell zuerst außerhalb dieser Instanz sicher, dass wirklich diese Person fragt: per Telefon, persönlich oder über einen anderen Weg, dem du vertraust.",
+      "Stell zuerst sicher, dass wirklich diese Person fragt: per Telefon, persönlich oder über einen anderen Weg, dem du vertraust.",
     "twoFactor.resetDialogEffect":
       "Das Zurücksetzen löscht ihre Authenticator-Verknüpfung und Backup-Codes, vergisst ihre vertrauten Browser und meldet sie überall ab.",
     "twoFactor.resetConfirm": "Zurücksetzen",

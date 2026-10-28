@@ -6,11 +6,11 @@ export const accessSystem = defineTranslations({
   en: {
     "access.kindSystem": "System",
     "access.actionViewSystemDescription":
-      "See the System pages: background jobs, operation runs, modules and what the instance runs on."
+      "See the System pages: background jobs, operation runs, modules and infrastructure."
   },
   de: {
     "access.kindSystem": "System",
     "access.actionViewSystemDescription":
-      "Die Seiten unter System ansehen: Jobs im Hintergrund, Aufrufe von Operationen, Module und worauf die Instanz läuft."
+      "Die Seiten unter System ansehen: Jobs im Hintergrund, Aufrufe von Operationen, Module und Infrastruktur."
   }
 });

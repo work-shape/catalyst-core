@@ -200,9 +200,9 @@ describe("Grants tab", () => {
         ]
       })
     );
-    expect(markup).toContain("may not publish or delete data stores on the whole instance");
+    expect(markup).toContain("may not publish or delete data stores across all workspaces");
     // No allow sentence names the place, so the right of its own words names it itself.
-    expect(markup).toContain("Add rows to data stores (Whole instance)");
+    expect(markup).toContain("Add rows to data stores (Everyone)");
   });
 
   it("names the place of a right of its own words that no sentence of the row names", () => {
@@ -231,9 +231,7 @@ describe("Grants tab", () => {
     expect(markup).toContain("View the data of workflow runs (Workflow monthly-close)");
     expect(markup).toContain("Review extracted fields in data stores (Workspace Team)");
     // A deny is marked by its badge once, not again in its words.
-    expect(markup).toContain(
-      '<span class="min-w-0">Add rows to data stores (Whole instance)</span>'
-    );
+    expect(markup).toContain('<span class="min-w-0">Add rows to data stores (Everyone)</span>');
     expect(markup).not.toContain("Denied: ");
     expect(markup).not.toContain("Also:");
     const german = render(grantsTab({ grants, workspaces }), "de");
@@ -287,7 +285,7 @@ describe("Check tab", () => {
     expect(markup).toContain("Choose an asset");
     expect(markup).not.toContain("<input");
     // A kind without assets says so, and offers nothing to pick.
-    expect(render(checkTab({ assets: [] }))).toContain("This instance has none of this kind yet.");
+    expect(render(checkTab({ assets: [] }))).toContain("There is nothing of this kind yet.");
   });
 
   it("says that the people could not be loaded", () => {
@@ -820,10 +818,10 @@ describe("what the dialogs send", () => {
       scopeKind: "instance"
     };
     expect(render(grantsTab({ grants: [onInstance] }))).toContain(
-      "may edit agents on the whole instance"
+      "may edit agents across all workspaces"
     );
     expect(render(grantsTab({ grants: [onInstance] }), "de")).toContain(
-      "darf auf der ganzen Instanz Agenten bearbeiten"
+      "darf in allen Arbeitsbereichen Agenten bearbeiten"
     );
   });
 

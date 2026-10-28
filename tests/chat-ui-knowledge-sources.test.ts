@@ -333,7 +333,7 @@ describe("the state of a synced source", () => {
     expect(page).not.toContain("Lege zuerst unter Verbindungen");
     expect(page).not.toContain("sobald der Entwurf veröffentlicht ist");
     const none = render("en", { sources: [], connections: [], sourceTypes: [], inBuild: true });
-    expect(none).toContain("This instance connects no document source yet.");
+    expect(none).toContain("No document source is connected yet.");
     expect(none).not.toContain("data-knowledge-source-connect");
     // A reader who may not create Connections is told no type and offered no dialog.
     const unknown = render("en", { sources: [], connections: [] });

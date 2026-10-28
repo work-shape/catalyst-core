@@ -31,7 +31,7 @@ const noop = () => undefined;
 
 const shipped: ShippedGuardrailView = {
   name: "publishing-needs-approval",
-  displayName: "Publishing needs an instance admin's approval",
+  displayName: "Publishing needs approval from an admin for all workspaces",
   reason: "A new revision of an App or a Workflow goes live once an instance admin approved it.",
   on: ["app.before_publish", "workflow.before_publish"],
   outcome: "require_approval",
@@ -171,7 +171,7 @@ describe("the Guardrails list", () => {
     expect(list).toBeGreaterThan(scope);
 
     const row = markup.slice(list);
-    expect(row).toContain("Publishing needs an instance admin&#x27;s approval");
+    expect(row).toContain("Publishing needs approval from an admin for all workspaces");
     expect(row).toContain("Shipped with the platform");
     expect(row).toContain("Needs approval");
     expect(row).toContain("On, as the platform ships it.");
@@ -212,7 +212,9 @@ describe("the Guardrails list", () => {
 
   it("reads in German", () => {
     const markup = renderList({}, "de");
-    expect(markup).toContain("Veröffentlichen braucht die Freigabe eines Instanz-Admins");
+    expect(markup).toContain(
+      "Veröffentlichen braucht die Freigabe eines Admins für alle Arbeitsbereiche"
+    );
     expect(markup).toContain("Mit der Plattform geliefert");
     expect(markup).toContain("Eingeschaltet, wie die Plattform sie liefert.");
   });
@@ -232,7 +234,7 @@ describe("the Guardrails list", () => {
     expect(markup).toMatch(/role="switch"[^>]*aria-checked="false"/u);
     expect(markup).toMatch(/<button[^>]*role="switch"[^>]* disabled=""/u);
     expect(markup).toContain("Switched off by Ada Admin");
-    expect(markup).toContain("Only an instance admin can switch it.");
+    expect(markup).toContain("Only an admin for all workspaces can switch it.");
     expect(markup).toContain("makes a new version live with their own click");
   });
 
@@ -263,10 +265,10 @@ describe("the Guardrails list", () => {
 describe("which shipped guardrails the list shows", () => {
   it("matches the search on the title or the name, whatever the case", () => {
     expect(shippedTitles({ text: "PUBLISHING" })).toBe(
-      "Publishing needs an instance admin&#x27;s approval"
+      "Publishing needs approval from an admin for all workspaces"
     );
     expect(shippedTitles({ text: "needs-approval" })).toBe(
-      "Publishing needs an instance admin&#x27;s approval"
+      "Publishing needs approval from an admin for all workspaces"
     );
     expect(shippedTitles({ text: "privacy" })).toBe("");
   });
@@ -312,7 +314,7 @@ describe("switching off the shipped guardrail", () => {
 
       const asked = required(document.querySelector<HTMLElement>("dialog[open]"));
       expect(asked.textContent).toContain(
-        "Switch off “Publishing needs an instance admin's approval”?"
+        "Switch off “Publishing needs approval from an admin for all workspaces”?"
       );
       expect(asked.textContent).toContain("no admin is asked");
       expect(switched).toEqual([]);

@@ -26,14 +26,14 @@ export const workspace = defineTranslations({
     runModelNotPriced:
       "This model cannot be used at the moment. Choose another model or ask an administrator.",
     runModelNotPricedOperator:
-      "This model has no price on the rate card, so its cost cannot be counted against the spend budget. Choose another model until the team that runs this instance has added the price.",
+      "This model has no price on the rate card, so its cost cannot be counted against the spend budget. Choose another model until the technical team has added the price.",
     runUsageLimitReached: "A usage limit stopped this reply. {advice}",
     runUsageLimitNamed:
       "The {period} limit on {metric} stopped this reply. It counts {scope} and resets {reset}. {advice}",
     runUsageLimitAdvice:
-      "Your answer so far is kept. Ask an administrator of this instance to check the usage limits.",
+      "Your answer so far is kept. Ask an admin for all workspaces to check the usage limits.",
     runUsageLimitAdviceOperator:
-      "Your answer so far is kept. Settings › Usage shows the usage limits and what has been used. Ask the team that runs this instance to review the limits.",
+      "Your answer so far is kept. Settings › Usage shows the usage limits and what has been used. Ask the technical team to review the limits.",
     runUsageLimitPeriodDay: "daily",
     runUsageLimitPeriodMonth: "monthly",
     runUsageLimitMetricModelCallCount: "model calls",
@@ -41,7 +41,7 @@ export const workspace = defineTranslations({
     runUsageLimitMetricCostMicros: "spending",
     runUsageLimitScopeUser: "your own calls",
     runUsageLimitScopeSystem: "the calls the product makes",
-    runUsageLimitScopeInstance: "the calls of everyone on this instance",
+    runUsageLimitScopeInstance: "the calls across all workspaces",
     runUsageLimitScopeWorkspace: "the calls of everyone in this workspace",
     runUsageLimitResetDay: "at midnight UTC",
     runUsageLimitResetMonth: "at the start of next month (UTC)",
@@ -89,14 +89,14 @@ export const workspace = defineTranslations({
     runModelNotPriced:
       "Dieses Modell kann gerade nicht verwendet werden. Wähle ein anderes Modell oder wende dich an einen Administrator.",
     runModelNotPricedOperator:
-      "Für dieses Modell steht kein Preis in der Preisliste, deshalb lassen sich seine Kosten nicht auf das Budget anrechnen. Wähle ein anderes Modell, bis das Team, das diese Instanz betreibt, den Preis eingetragen hat.",
+      "Für dieses Modell steht kein Preis in der Preisliste, deshalb lassen sich seine Kosten nicht auf das Budget anrechnen. Wähle ein anderes Modell, bis das technische Team den Preis eingetragen hat.",
     runUsageLimitReached: "Eine Nutzungsgrenze hat diese Antwort gestoppt. {advice}",
     runUsageLimitNamed:
       "Die {period} Grenze für {metric} hat diese Antwort gestoppt. Sie zählt {scope} und wird {reset} zurückgesetzt. {advice}",
     runUsageLimitAdvice:
-      "Was bisher geantwortet wurde, bleibt erhalten. Bitte einen Administrator dieser Instanz, die Nutzungsgrenzen zu prüfen.",
+      "Was bisher geantwortet wurde, bleibt erhalten. Bitte einen Admin für alle Arbeitsbereiche, die Nutzungsgrenzen zu prüfen.",
     runUsageLimitAdviceOperator:
-      "Was bisher geantwortet wurde, bleibt erhalten. Unter Einstellungen › Nutzung siehst du die Nutzungsgrenzen und den Verbrauch. Bitte das Team, das diese Instanz betreibt, die Grenzen zu prüfen.",
+      "Was bisher geantwortet wurde, bleibt erhalten. Unter Einstellungen › Nutzung siehst du die Nutzungsgrenzen und den Verbrauch. Bitte das technische Team, die Grenzen zu prüfen.",
     runUsageLimitPeriodDay: "tägliche",
     runUsageLimitPeriodMonth: "monatliche",
     runUsageLimitMetricModelCallCount: "Modellaufrufe",
@@ -104,7 +104,7 @@ export const workspace = defineTranslations({
     runUsageLimitMetricCostMicros: "Ausgaben",
     runUsageLimitScopeUser: "deine eigenen Aufrufe",
     runUsageLimitScopeSystem: "die Aufrufe des Produkts",
-    runUsageLimitScopeInstance: "die Aufrufe aller auf dieser Instanz",
+    runUsageLimitScopeInstance: "die Aufrufe in allen Arbeitsbereichen",
     runUsageLimitScopeWorkspace: "die Aufrufe aller in diesem Arbeitsbereich",
     runUsageLimitResetDay: "um Mitternacht UTC",
     runUsageLimitResetMonth: "zu Beginn des nächsten Monats (UTC)",

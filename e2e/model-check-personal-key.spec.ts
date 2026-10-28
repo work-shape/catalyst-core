@@ -18,7 +18,7 @@ test.use({ sessionUser: "superadmin", trace: "off" });
 
 const SYSTEM_LABEL = { en: "View the System pages", de: "Systemseiten ansehen" } as const;
 const NEW_KEY_LABEL = { en: "New key", de: "Neuer Schlüssel" } as const;
-const INSTANCE_LEVEL_LABEL = { en: "Instance", de: "Instanz" } as const;
+const INSTANCE_LEVEL_LABEL = { en: "All workspaces", de: "Alle Arbeitsbereiche" } as const;
 const API_KEYS_PATH = "/settings/you/api-keys";
 /** The instance runs a manual check at most once a minute; a call inside it is told to wait. */
 const MAX_CHECK_WAIT_SECONDS = 65;

@@ -36,18 +36,18 @@ describe("the top of an agent's page", () => {
     const english = notices(status);
     expect(english).toContain('data-agent-unavailable=""');
     expect(english).toContain('aria-label="Not available"');
-    expect(english).toContain("crm.lookup</span> (tool does not exist on this instance), ");
+    expect(english).toContain("crm.lookup</span> (tool does not exist here), ");
     expect(english).toContain("documents.read</span> (module Documents is off), ");
-    expect(english).toContain("tax-old</span> (skill does not exist on this instance), ");
-    expect(english).toContain("retired</span> (model does not exist on this instance)</li>");
+    expect(english).toContain("tax-old</span> (skill does not exist here), ");
+    expect(english).toContain("retired</span> (model does not exist here)</li>");
     // Only the primary model stops the chat: a model people may pick instead does not.
     expect(english).not.toContain("data-agent-chat-unavailable");
     const german = notices(status, "de");
     expect(german).toContain('aria-label="Nicht verfügbar"');
-    expect(german).toContain("crm.lookup</span> (Werkzeug gibt es auf dieser Instanz nicht)");
+    expect(german).toContain("crm.lookup</span> (Werkzeug gibt es hier nicht)");
     expect(german).toContain("documents.read</span> (Modul Dokumente ist aus)");
-    expect(german).toContain("tax-old</span> (Skill gibt es auf dieser Instanz nicht)");
-    expect(german).toContain("retired</span> (Modell gibt es auf dieser Instanz nicht)");
+    expect(german).toContain("tax-old</span> (Skill gibt es hier nicht)");
+    expect(german).toContain("retired</span> (Modell gibt es hier nicht)");
   });
 
   it("says that the agent cannot chat until its model is changed", () => {
@@ -118,6 +118,6 @@ describe("what stays unavailable after a save", () => {
     const markup = notices(repaired);
     expect(markup).not.toContain("data-agent-chat-unavailable");
     expect(markup).not.toContain("crm.lookup");
-    expect(markup).toContain("retired</span> (model does not exist on this instance)");
+    expect(markup).toContain("retired</span> (model does not exist here)");
   });
 });

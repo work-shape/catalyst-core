@@ -311,7 +311,7 @@ test("a member starts a Workflow with inputs from its form and sees the run end;
     // passes the form and not the instance, which names the field it refuses.
     await publish(root, { id, name, runAs, mostBookings: 3 });
     await start.click();
-    await expect(dialog).toContainText("The instance did not accept these values.");
+    await expect(dialog).toContainText("These values were not accepted.");
     await expect(dialog.getByText("must be <= 3", { exact: true })).toBeVisible();
     await expect(dialog).toBeVisible();
     await limit.fill("2");

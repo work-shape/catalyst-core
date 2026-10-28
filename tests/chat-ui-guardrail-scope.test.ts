@@ -163,7 +163,7 @@ describe("a workspace guardrail on the Guardrails page", () => {
       "Runs before an agent saves a skill, in one workspace. Checks the content for a text pattern. Blocks if the check fails."
     );
     expect(english).toContain(
-      "Runs before anyone publishes an App, instance-wide, part of the instance&#x27;s setup."
+      "Runs before anyone publishes an App, in all workspaces, part of the system setup."
     );
     expect(english).not.toContain("asset.before_write");
     const german = render(workspaceGuardrail, { rows, locale: "de" });
@@ -171,7 +171,7 @@ describe("a workspace guardrail on the Guardrails page", () => {
       "Läuft, bevor ein Agent einen Skill speichert, in einem Workspace. Prüft den Inhalt auf ein Textmuster. Blockiert, wenn die Prüfung anschlägt."
     );
     expect(german).toContain(
-      "Läuft, bevor jemand eine App veröffentlicht, instanzweit, aus der Einrichtung der Instanz."
+      "Läuft, bevor jemand eine App veröffentlicht, in allen Arbeitsbereichen, aus der Einrichtung des Systems."
     );
   });
 });

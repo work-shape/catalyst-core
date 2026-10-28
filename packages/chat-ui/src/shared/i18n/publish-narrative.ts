@@ -12,7 +12,7 @@ export const publishNarrative = defineTranslations({
     "publishNarrative.failed":
       "Could not read what this publish makes live. Try again before you publish.",
     "publishNarrative.malformed":
-      "The instance's description of this publish could not be read whole, so it cannot be published from here. Ask an admin."
+      "The description of this publish could not be read whole, so it cannot be published from here. Ask an admin."
   },
   de: {
     "publishNarrative.details": "Details",

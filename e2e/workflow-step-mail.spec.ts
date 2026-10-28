@@ -226,7 +226,7 @@ test.describe("the Send email step", () => {
     // The panel by its step, whichever tab it shows.
     const panel = page.locator(`[data-step-panel="${stepId ?? ""}"]`);
     // A new step is the instance's own sender; its address is told once the step is saved.
-    await expect(panel.locator('[data-mail-field="from"]')).toContainText("This instance");
+    await expect(panel.locator('[data-mail-field="from"]')).toContainText("Default sender");
 
     // To: a person and a workspace by name, and one typed address.
     const to = panel.locator('[data-mail-field="to"]');
@@ -351,7 +351,7 @@ test.describe("the Send email step", () => {
     await typing.fill("otto@outside.test");
     await typing.press("Enter");
     await expect(panel.locator('[data-mail-field="to"] [data-recipient-invalid]')).toContainText(
-      "This instance does not send to outside.test."
+      "Sending to outside.test is not allowed here."
     );
     await expect(panel).not.toContainText(/mailjet/iu);
     await panel.getByRole("button", { name: "Cancel", exact: true }).click();

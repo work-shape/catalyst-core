@@ -10,11 +10,11 @@ export const platformReport = defineTranslations({
     "platformReport.whatIsSent": "Workshape receives",
     "platformReport.run": "Run",
     "platformReport.errorCode": "Error code",
-    "platformReport.instance": "Instance",
+    "platformReport.instance": "System",
     "platformReport.time": "Time",
     "platformReport.timeNow": "Time of the failure and of this report",
     "platformReport.alsoSent":
-      "With it go the instance's id, environment and address and the id of the failed command.",
+      "With it go the system's id, environment and address and the id of the failed command.",
     "platformReport.notSent":
       "Not included: what was written in the conversation, its files and any logs.",
     "platformReport.noteLabel": "What were you doing? (optional)",
@@ -36,11 +36,11 @@ export const platformReport = defineTranslations({
     "platformReport.whatIsSent": "Workshape bekommt",
     "platformReport.run": "Lauf",
     "platformReport.errorCode": "Fehlercode",
-    "platformReport.instance": "Instanz",
+    "platformReport.instance": "System",
     "platformReport.time": "Zeitpunkt",
     "platformReport.timeNow": "Zeitpunkt des Fehlers und dieser Meldung",
     "platformReport.alsoSent":
-      "Dazu kommen Kennung, Umgebung und Adresse der Instanz und die Kennung des fehlgeschlagenen Befehls.",
+      "Dazu kommen Kennung, Umgebung und Adresse des Systems und die Kennung des fehlgeschlagenen Befehls.",
     "platformReport.notSent":
       "Nicht dabei: was in der Unterhaltung steht, ihre Dateien und Protokolle.",
     "platformReport.noteLabel": "Was hast du gerade gemacht? (optional)",

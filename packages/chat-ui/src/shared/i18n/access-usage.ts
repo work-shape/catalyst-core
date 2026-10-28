@@ -6,11 +6,11 @@ export const accessUsage = defineTranslations({
   en: {
     "access.kindUsage": "Usage",
     "access.actionViewUsageUsersDescription":
-      "See what each person used, by name: everyone for the instance, the members of one workspace for a workspace. Every look is recorded."
+      "See what each person used, by name: everyone for all workspaces, the members of one workspace for a workspace. Every look is recorded."
   },
   de: {
     "access.kindUsage": "Nutzung",
     "access.actionViewUsageUsersDescription":
-      "Sehen, was jede Person verbraucht hat, mit Namen: alle für die Instanz, die Mitglieder eines Arbeitsbereichs für einen Arbeitsbereich. Jeder Blick darauf wird protokolliert."
+      "Sehen, was jede Person verbraucht hat, mit Namen: alle für alle Arbeitsbereiche, die Mitglieder eines Arbeitsbereichs für einen Arbeitsbereich. Jeder Blick darauf wird protokolliert."
   }
 });

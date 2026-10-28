@@ -95,7 +95,7 @@ describe("the page of an agent that ships with the platform", () => {
     expect(markup).toContain("Platform instructions");
     expect(markup).toContain("Change platform text");
     expect(markup).toMatch(/<textarea[^>]*readOnly=""[^>]*>As shipped\.<\/textarea>/u);
-    expect(markup).toContain("Additions of this instance");
+    expect(markup).toContain("Additional instructions");
     expect(markup).toMatch(
       /<textarea[^>]*data-additional-instructions=""[^>]*>Answer in short sentences\.<\/textarea>/u
     );
@@ -125,6 +125,6 @@ describe("the page of an agent that ships with the platform", () => {
     const markup = page({ name: "assistant", ...shippedFields }, ["instructions"]);
     expect(markup).not.toContain("Ships with the platform");
     expect(markup).not.toContain("data-shipped-group");
-    expect(markup).not.toContain("Additions of this instance");
+    expect(markup).not.toContain("Additional instructions");
   });
 });

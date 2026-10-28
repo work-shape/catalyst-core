@@ -6,7 +6,7 @@ export const operations = defineTranslations({
   en: {
     "operations.title": "Operations",
     "operations.description":
-      "The calls of operations on this instance: who called, from where and how it ended. A reading call is listed when it was refused, failed or was marked.",
+      "The calls of operations across all workspaces: who called, from where and how it ended. A reading call is listed when it was refused, failed or was marked.",
     "operations.list": "Calls",
     "operations.operation": "Operation",
     "operations.actor": "Called by",
@@ -185,9 +185,9 @@ export const operations = defineTranslations({
     "operations.callAssetEffect":
       "If you approve, it is saved as {actor}. If you decline, nothing changes.",
     "operations.callWhySkillRule":
-      "Needs a decision because this instance holds new and changed skills for approval.",
+      "Needs a decision because new and changed skills are held for approval.",
     "operations.callWhyPolicyFloor":
-      "Needs a decision because this action, or the connection operation it calls, always asks for an approval. No setting on this instance can switch that off.",
+      "Needs a decision because this action, or the connection operation it calls, always asks for an approval. No setting here can switch that off.",
     "operations.callSkillEffectNew":
       "If you approve, the skill is saved. If you decline, nothing changes.",
     "operations.callSkillEffectChange":
@@ -278,7 +278,7 @@ export const operations = defineTranslations({
   de: {
     "operations.title": "Operationen",
     "operations.description":
-      "Die Aufrufe von Operationen auf dieser Instanz: wer aufgerufen hat, von wo und wie der Aufruf endete. Ein lesender Aufruf steht hier, wenn er abgelehnt wurde, fehlgeschlagen ist oder markiert war.",
+      "Die Aufrufe von Operationen in allen Arbeitsbereichen: wer aufgerufen hat, von wo und wie der Aufruf endete. Ein lesender Aufruf steht hier, wenn er abgelehnt wurde, fehlgeschlagen ist oder markiert war.",
     "operations.list": "Aufrufe",
     "operations.operation": "Operation",
     "operations.actor": "Aufgerufen von",
@@ -460,9 +460,9 @@ export const operations = defineTranslations({
     "operations.callAssetEffect":
       "Wenn du freigibst, wird das als {actor} gespeichert. Wenn du ablehnst, ändert sich nichts.",
     "operations.callWhySkillRule":
-      "Braucht eine Entscheidung, weil diese Instanz neue und geänderte Skills zur Freigabe vorlegt.",
+      "Braucht eine Entscheidung, weil neue und geänderte Skills zur Freigabe vorgelegt werden.",
     "operations.callWhyPolicyFloor":
-      "Braucht eine Entscheidung, weil diese Aktion oder die Operation der Verbindung, die sie aufruft, immer eine Freigabe verlangt. Das lässt sich in dieser Instanz nicht abschalten.",
+      "Braucht eine Entscheidung, weil diese Aktion oder die Operation der Verbindung, die sie aufruft, immer eine Freigabe verlangt. Das lässt sich hier nicht abschalten.",
     "operations.callSkillEffectNew":
       "Wenn du freigibst, wird der Skill gespeichert. Wenn du ablehnst, ändert sich nichts.",
     "operations.callSkillEffectChange":

@@ -71,10 +71,9 @@ export const access = defineTranslations({
     "access.chooseTools": "Choose tools",
     "access.chooseModels": "Choose models",
     "access.chosenCount": "{count} of {total} chosen",
-    "access.referencesLoadFailed":
-      "The tools, models and assets of the instance could not be loaded.",
+    "access.referencesLoadFailed": "The tools, models and assets could not be loaded.",
     "access.listEntryGone":
-      "A chosen tool or model no longer exists on this instance. Open the list and choose again.",
+      "A chosen tool or model no longer exists here. Open the list and choose again.",
 
     "access.grantsLoadFailed": "The rights could not be loaded.",
     "access.grantsEmpty":
@@ -90,17 +89,17 @@ export const access = defineTranslations({
     "access.scopeAssetGoneHint":
       "This deny stays until you remove it. It applies again when an asset with this name is created.",
     "access.unknownUser": "Unknown user",
-    "access.noAssets": "This instance has none of this kind yet.",
+    "access.noAssets": "There is nothing of this kind yet.",
     "access.grantRightNotOffered":
       "This right cannot be given at this place. Reload the page and choose one of the actions it offers.",
     "access.grantModuleOff":
-      "The module of this kind is switched off on this instance, so it has no rights to give. Reload the page.",
+      "The module of this kind is switched off, so it has no rights to give. Reload the page.",
     "access.grantMissingManageRight":
       "Your account lacks the right to manage users, so it cannot give or remove rights.",
     "access.grantHolderIsSuperadmin":
       "This person is a superadmin. Only a superadmin can give a superadmin a right or remove one.",
     "access.workspacesDescription":
-      "What the agents of each shared workspace may use. A list that is off adds no limit; it binds everyone who saves an agent of the workspace, instance admins included. A Builder in the workspace picks a model from its list.",
+      "What the agents of each shared workspace may use. A list that is off adds no limit; it binds everyone who saves an agent of the workspace, admins for all workspaces included. A Builder in the workspace picks a model from its list.",
     "access.workspacesEmpty": "There is no shared workspace yet.",
     "access.workspaceName": "Workspace",
     "access.editWorkspaceLimits": "Edit the limits of {name}",
@@ -109,10 +108,9 @@ export const access = defineTranslations({
       "The tools and models the agents this workspace owns may use. Saved agents keep running; their next save is checked.",
     "access.workspaceLimitsSaveFailed": "The limits could not be saved.",
     "access.saveWorkspaceLimits": "Save",
-    "access.workspaceLimitToolsHint":
-      "Off: agents of this workspace may use every tool of the instance.",
+    "access.workspaceLimitToolsHint": "Off: agents of this workspace may use every available tool.",
     "access.workspaceToolsEmptyHint":
-      "No tool is chosen. Nobody can create or change an agent of this workspace that names a tool, an instance admin included.",
+      "No tool is chosen. Nobody can create or change an agent of this workspace that names a tool, an admin for all workspaces included.",
     "access.workspaceModelsEmptyHint":
       "No model is chosen. Nobody can create or change an agent of this workspace that names a model.",
     "access.workspaceModelsListedHint":
@@ -120,9 +118,9 @@ export const access = defineTranslations({
     "access.scopeInWorkspace": "In a shared workspace",
     "access.scopeInWorkspaceDescription":
       "Everything of this kind the workspace owns, also what is made later. This gives no access to its conversations.",
-    "access.scopeWholeInstance": "Whole instance",
+    "access.scopeWholeInstance": "Everyone",
     "access.scopeWholeInstanceDescription":
-      "Everything of this kind on the instance, also what is made later.",
+      "Everything of this kind across all workspaces, also what is made later.",
     "access.grantWorkspace": "Workspace",
     "access.chooseWorkspace": "Choose a workspace",
     "access.noWorkspaces": "There is no shared workspace yet.",
@@ -178,7 +176,7 @@ export const access = defineTranslations({
     "access.decidedByNothing": "No role, individual right or given right covers this.",
 
     "access.referencesForbidden":
-      "Your account may not view agents and skills, so the tools, models and assets of the instance are not shown here.",
+      "Your account may not view agents and skills, so the tools, models and assets are not shown here.",
     "access.deniedAction": "Denied: {action}",
     "access.scopeAssetHidden": "An asset you cannot see",
     "access.scopeWorkspaceHidden": "A workspace you cannot see",
@@ -199,9 +197,9 @@ export const access = defineTranslations({
     "access.checkRightOnlySkill":
       "This is the right alone. A save is still refused when agent configuration in the interface is switched off.",
     "access.checkReadThroughGrant":
-      "Viewing is allowed through a given right: the person can open this asset. The overview of all agents and skills and the export need the right to view them on the whole instance.",
+      "Viewing is allowed through a given right: the person can open this asset. The overview of all agents and skills and the export need the right to view them across all workspaces.",
     "access.checkDenyNote":
-      "A deny on an asset does not take away instance-wide rights: with them a person can still export the asset or set an agent as the default.",
+      "A deny on an asset does not take away rights across all workspaces: with them a person can still export the asset or set an agent as the default.",
     "access.grantRight": "Right",
     "access.rowInPlace": "may {actions} {place}",
     "access.rowOnAsset": "may {verbs} {object}",
@@ -211,7 +209,7 @@ export const access = defineTranslations({
     "access.rowOwnAt": "{action} ({scope})",
     "access.placeIn": "in {name}",
     "access.placeWorkspaceHidden": "in a workspace you cannot see",
-    "access.placeInstance": "on the whole instance",
+    "access.placeInstance": "across all workspaces",
     "access.objectHidden": "an asset you cannot see",
     "access.grantLevel": "Level",
     "access.levelIncludes": "Includes {verbs}.",
@@ -232,9 +230,9 @@ export const access = defineTranslations({
     "access.decidedByRoleWorkspace": "The role {role} allows this in the asset's workspace.",
     "access.decidedByRoleAsset": "The role {role} allows this on this asset.",
     "access.decidedByRoleDeny": "The role {role} refuses this.",
-    "access.decidedByGrantInstance": "Right on the whole instance",
+    "access.decidedByGrantInstance": "Right across all workspaces",
     "access.decidedByGrantWorkspace": "Right in the asset's workspace",
-    "access.decidedByDenyInstance": "Deny on the whole instance",
+    "access.decidedByDenyInstance": "Deny across all workspaces",
     "access.decidedByDenyWorkspace": "Deny in the asset's workspace",
     "access.scopePersonalWorkspace": "Personal workspace",
     "access.effectiveTitle": "Effective rights",
@@ -260,7 +258,7 @@ export const access = defineTranslations({
     "access.decidedByMembershipWorkspace":
       "The person is a member of the workspace that owns the asset.",
     "access.decidedByMembershipAsset": "The asset is available in a workspace of the person.",
-    "access.decidedByAvailabilityInstance": "The App is available to everyone on the instance.",
+    "access.decidedByAvailabilityInstance": "The App is available to everyone.",
     "access.decidedByAvailabilitySelfAllowed": "The App is available to this person only.",
     "access.decidedByAvailabilitySelfRefused": "The App is available to one other person only.",
     "access.effectiveAppsNote":
@@ -338,9 +336,9 @@ export const access = defineTranslations({
     "access.chooseModels": "Modelle wählen",
     "access.chosenCount": "{count} von {total} gewählt",
     "access.referencesLoadFailed":
-      "Die Werkzeuge, Modelle und Assets der Instanz konnten nicht geladen werden.",
+      "Die Werkzeuge, Modelle und Assets konnten nicht geladen werden.",
     "access.listEntryGone":
-      "Ein gewähltes Werkzeug oder Modell gibt es auf dieser Instanz nicht mehr. Öffne die Liste und wähle neu.",
+      "Ein gewähltes Werkzeug oder Modell gibt es hier nicht mehr. Öffne die Liste und wähle neu.",
 
     "access.grantsLoadFailed": "Die Rechte konnten nicht geladen werden.",
     "access.grantsEmpty":
@@ -356,17 +354,17 @@ export const access = defineTranslations({
     "access.scopeAssetGoneHint":
       "Diese Verweigerung bleibt, bis du sie aufhebst. Sie gilt wieder, sobald ein Asset mit diesem Namen angelegt wird.",
     "access.unknownUser": "Unbekannter Benutzer",
-    "access.noAssets": "Auf dieser Instanz gibt es davon noch nichts.",
+    "access.noAssets": "Es gibt davon noch nichts.",
     "access.grantRightNotOffered":
       "Dieses Recht lässt sich an diesem Ort nicht vergeben. Lade die Seite neu und wähle eine der angebotenen Aktionen.",
     "access.grantModuleOff":
-      "Das Modul dieser Art ist auf dieser Instanz abgeschaltet und hat deshalb keine Rechte zu vergeben. Lade die Seite neu.",
+      "Das Modul dieser Art ist abgeschaltet und hat deshalb keine Rechte zu vergeben. Lade die Seite neu.",
     "access.grantMissingManageRight":
       "Deinem Konto fehlt das Recht, Benutzer zu verwalten. Deshalb kann es keine Rechte vergeben oder entziehen.",
     "access.grantHolderIsSuperadmin":
       "Diese Person ist Superadmin. Nur ein Superadmin kann einem Superadmin ein Recht geben oder entziehen.",
     "access.workspacesDescription":
-      "Was die Agenten jedes geteilten Arbeitsbereichs verwenden dürfen. Eine ausgeschaltete Liste begrenzt nichts; eine Liste bindet alle, die einen Agenten des Arbeitsbereichs speichern, auch Instanz-Admins. Ein Builder des Arbeitsbereichs wählt ein Modell aus seiner Liste.",
+      "Was die Agenten jedes geteilten Arbeitsbereichs verwenden dürfen. Eine ausgeschaltete Liste begrenzt nichts; eine Liste bindet alle, die einen Agenten des Arbeitsbereichs speichern, auch Admins für alle Arbeitsbereiche. Ein Builder des Arbeitsbereichs wählt ein Modell aus seiner Liste.",
     "access.workspacesEmpty": "Es gibt noch keinen geteilten Arbeitsbereich.",
     "access.workspaceName": "Arbeitsbereich",
     "access.editWorkspaceLimits": "Grenzen von {name} bearbeiten",
@@ -376,9 +374,9 @@ export const access = defineTranslations({
     "access.workspaceLimitsSaveFailed": "Die Grenzen konnten nicht gespeichert werden.",
     "access.saveWorkspaceLimits": "Speichern",
     "access.workspaceLimitToolsHint":
-      "Aus: Agenten dieses Arbeitsbereichs dürfen jedes Werkzeug der Instanz verwenden.",
+      "Aus: Agenten dieses Arbeitsbereichs dürfen jedes verfügbare Werkzeug verwenden.",
     "access.workspaceToolsEmptyHint":
-      "Kein Werkzeug gewählt. Niemand kann einen Agenten dieses Arbeitsbereichs anlegen oder ändern, der ein Werkzeug nennt, auch ein Instanz-Admin nicht.",
+      "Kein Werkzeug gewählt. Niemand kann einen Agenten dieses Arbeitsbereichs anlegen oder ändern, der ein Werkzeug nennt, auch ein Admin für alle Arbeitsbereiche nicht.",
     "access.workspaceModelsEmptyHint":
       "Kein Modell gewählt. Niemand kann einen Agenten dieses Arbeitsbereichs anlegen oder ändern, der ein Modell nennt.",
     "access.workspaceModelsListedHint":
@@ -386,9 +384,9 @@ export const access = defineTranslations({
     "access.scopeInWorkspace": "In einem geteilten Arbeitsbereich",
     "access.scopeInWorkspaceDescription":
       "Alles dieser Art, was dem Arbeitsbereich gehört, auch später Angelegtes. Das gibt keinen Zugang zu seinen Unterhaltungen.",
-    "access.scopeWholeInstance": "Ganze Instanz",
+    "access.scopeWholeInstance": "Alle",
     "access.scopeWholeInstanceDescription":
-      "Alles dieser Art auf der Instanz, auch später Angelegtes.",
+      "Alles dieser Art in allen Arbeitsbereichen, auch später Angelegtes.",
     "access.grantWorkspace": "Arbeitsbereich",
     "access.chooseWorkspace": "Arbeitsbereich wählen",
     "access.noWorkspaces": "Es gibt noch keinen geteilten Arbeitsbereich.",
@@ -445,7 +443,7 @@ export const access = defineTranslations({
       "Keine Rolle, kein einzelnes Recht und kein vergebenes Recht deckt das ab.",
 
     "access.referencesForbidden":
-      "Dein Konto darf Agenten und Skills nicht ansehen. Deshalb werden die Werkzeuge, Modelle und Assets der Instanz hier nicht angezeigt.",
+      "Dein Konto darf Agenten und Skills nicht ansehen. Deshalb werden die Werkzeuge, Modelle und Assets hier nicht angezeigt.",
     "access.deniedAction": "Verweigert: {action}",
     "access.scopeAssetHidden": "Ein Asset, das du nicht sehen kannst",
     "access.scopeWorkspaceHidden": "Ein Arbeitsbereich, den du nicht sehen kannst",
@@ -468,9 +466,9 @@ export const access = defineTranslations({
     "access.checkRightOnlySkill":
       "Das ist nur das Recht. Ein Speichern wird trotzdem abgelehnt, wenn die Agentenkonfiguration in der Oberfläche abgeschaltet ist.",
     "access.checkReadThroughGrant":
-      "Ansehen ist über ein vergebenes Recht erlaubt: Die Person kann dieses Asset öffnen. Die Übersicht aller Agenten und Skills und der Export brauchen das Recht, sie auf der ganzen Instanz anzusehen.",
+      "Ansehen ist über ein vergebenes Recht erlaubt: Die Person kann dieses Asset öffnen. Die Übersicht aller Agenten und Skills und der Export brauchen das Recht, sie in allen Arbeitsbereichen anzusehen.",
     "access.checkDenyNote":
-      "Eine Verweigerung an einem Asset nimmt keine instanzweiten Rechte: Damit kann eine Person das Asset weiterhin exportieren oder einen Agenten als Standard festlegen.",
+      "Eine Verweigerung an einem Asset nimmt keine Rechte für alle Arbeitsbereiche: Damit kann eine Person das Asset weiterhin exportieren oder einen Agenten als Standard festlegen.",
     "access.grantRight": "Recht",
     "access.rowInPlace": "darf {place} {actions}",
     "access.rowOnAsset": "darf {object} {verbs}",
@@ -480,7 +478,7 @@ export const access = defineTranslations({
     "access.rowOwnAt": "{action} ({scope})",
     "access.placeIn": "in {name}",
     "access.placeWorkspaceHidden": "in einem Arbeitsbereich, den du nicht sehen kannst,",
-    "access.placeInstance": "auf der ganzen Instanz",
+    "access.placeInstance": "in allen Arbeitsbereichen",
     "access.objectHidden": "ein Asset, das du nicht sehen kannst,",
     "access.grantLevel": "Stufe",
     "access.levelIncludes": "Schließt {verbs} ein.",
@@ -501,9 +499,9 @@ export const access = defineTranslations({
     "access.decidedByRoleWorkspace": "Die Rolle {role} erlaubt das im Arbeitsbereich des Assets.",
     "access.decidedByRoleAsset": "Die Rolle {role} erlaubt das an diesem Asset.",
     "access.decidedByRoleDeny": "Die Rolle {role} verweigert das.",
-    "access.decidedByGrantInstance": "Recht auf der ganzen Instanz",
+    "access.decidedByGrantInstance": "Recht für alle Arbeitsbereiche",
     "access.decidedByGrantWorkspace": "Recht im Arbeitsbereich des Assets",
-    "access.decidedByDenyInstance": "Verweigerung auf der ganzen Instanz",
+    "access.decidedByDenyInstance": "Verweigerung für alle Arbeitsbereiche",
     "access.decidedByDenyWorkspace": "Verweigerung im Arbeitsbereich des Assets",
     "access.scopePersonalWorkspace": "Persönlicher Arbeitsbereich",
     "access.effectiveTitle": "Wirksame Rechte",
@@ -531,7 +529,7 @@ export const access = defineTranslations({
       "Die Person ist Mitglied des Arbeitsbereichs, dem das Asset gehört.",
     "access.decidedByMembershipAsset":
       "Das Asset ist in einem Arbeitsbereich der Person verfügbar.",
-    "access.decidedByAvailabilityInstance": "Die App ist für alle in der Instanz verfügbar.",
+    "access.decidedByAvailabilityInstance": "Die App ist für alle verfügbar.",
     "access.decidedByAvailabilitySelfAllowed": "Die App ist nur für diese Person verfügbar.",
     "access.decidedByAvailabilitySelfRefused": "Die App ist nur für eine andere Person verfügbar.",
     "access.effectiveAppsNote":

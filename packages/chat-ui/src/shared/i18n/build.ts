@@ -16,9 +16,9 @@ export const build = defineTranslations({
     "build.assetRefused": "You may not read this asset.",
     "build.conflictDeleted":
       "Somebody deleted this while you were editing. Your text is still here, but it can no longer be saved.",
-    "build.createAvailableHidden": "Hidden until an instance admin makes it available",
+    "build.createAvailableHidden": "Hidden until an admin for all workspaces makes it available",
     "build.createAvailableWorkspaceHint":
-      "Only members of this workspace can choose it. An instance admin can make it available in more.",
+      "Only members of this workspace can choose it. An admin for all workspaces can make it available in more.",
     "build.availabilityOnlyMine":
       "This is “Only me”, so it cannot be offered to a team or to everyone. To offer it, make it in the team or under “Everyone”.",
     "build.offerNotSet":
@@ -125,15 +125,15 @@ export const build = defineTranslations({
       "Ships with the platform and is updated with each release. To change it, copy it and edit the copy.",
     "build.restored": "Version {number} restored.",
     "build.refusedModelInWorkspace":
-      "The model {model} is not allowed in the workspace {workspace}. An instance admin sets its models on Instance > Workspaces.",
+      "The model {model} is not allowed in the workspace {workspace}. An admin for all workspaces sets its models on Settings > All workspaces > Workspaces.",
     "build.refusedModelRequiredInWorkspace":
       "An agent of the workspace {workspace} needs a default model the workspace allows.",
     "build.refusedToolInWorkspace":
-      "The tool {tool} is not allowed in the workspace {workspace}. An instance admin sets its tools on Instance > Workspaces.",
+      "The tool {tool} is not allowed in the workspace {workspace}. An admin for all workspaces sets its tools on Settings > All workspaces > Workspaces.",
     "build.refusedEgress":
-      "A network rule of this instance blocks this destination. To have it allowed, send the team that runs this instance the host of the address.",
+      "A network rule blocks this destination. To have it allowed, send the technical team the host of the address.",
     "build.refusedReadOnlyOrigin":
-      "This connection is part of how the instance is set up, so it cannot be changed here.",
+      "This connection is part of the system setup, so it cannot be changed here.",
     "build.refusedDependencyReview":
       "Where this agent will be available changed after you checked what it uses. Nothing was created. Create it again to check the list once more.",
     "build.dependencyCheckFailed":
@@ -172,7 +172,7 @@ export const build = defineTranslations({
     "build.leaveDescription":
       "What you changed on this page is not saved yet. Leaving discards it.",
     "build.leaveTitle": "Leave without saving?",
-    "build.noKinds": "There is nothing to build on this instance yet.",
+    "build.noKinds": "There is nothing to build here yet.",
     "build.noMatch": "Nothing matches “{query}”.",
     "build.skillMissing": "There is no skill with the id {name}.",
     "build.skillSummary": "Summary",
@@ -199,9 +199,10 @@ export const build = defineTranslations({
     "build.assetRefused": "Du darfst dieses Asset nicht lesen.",
     "build.conflictDeleted":
       "Jemand hat dies gelöscht, während du es bearbeitet hast. Dein Text steht noch hier, lässt sich aber nicht mehr speichern.",
-    "build.createAvailableHidden": "Ausgeblendet, bis ein Instanz-Admin ihn verfügbar macht",
+    "build.createAvailableHidden":
+      "Ausgeblendet, bis ein Admin für alle Arbeitsbereiche ihn verfügbar macht",
     "build.createAvailableWorkspaceHint":
-      "Nur Mitglieder dieses Arbeitsbereichs können ihn auswählen. Ein Instanz-Admin kann ihn in weiteren verfügbar machen.",
+      "Nur Mitglieder dieses Arbeitsbereichs können ihn auswählen. Ein Admin für alle Arbeitsbereiche kann ihn in weiteren verfügbar machen.",
     "build.availabilityOnlyMine":
       "Das ist „Nur ich“ und kann darum keinem Team und nicht allen angeboten werden. Um es anzubieten, lege es im Team oder unter „Alle“ an.",
     "build.offerNotSet":
@@ -312,15 +313,15 @@ export const build = defineTranslations({
       "Kommt mit der Plattform und wird mit jedem Release aktualisiert. Um es zu ändern, kopiere es und bearbeite die Kopie.",
     "build.restored": "Version {number} wiederhergestellt.",
     "build.refusedModelInWorkspace":
-      "Das Modell {model} ist im Arbeitsbereich {workspace} nicht erlaubt. Seine Modelle legt ein Instanz-Admin unter Instanz > Arbeitsbereiche fest.",
+      "Das Modell {model} ist im Arbeitsbereich {workspace} nicht erlaubt. Seine Modelle legt ein Admin für alle Arbeitsbereiche unter Einstellungen > Alle Arbeitsbereiche > Arbeitsbereiche fest.",
     "build.refusedModelRequiredInWorkspace":
       "Ein Agent des Arbeitsbereichs {workspace} braucht ein Standardmodell, das der Arbeitsbereich erlaubt.",
     "build.refusedToolInWorkspace":
-      "Das Werkzeug {tool} ist im Arbeitsbereich {workspace} nicht erlaubt. Seine Werkzeuge legt ein Instanz-Admin unter Instanz > Arbeitsbereiche fest.",
+      "Das Werkzeug {tool} ist im Arbeitsbereich {workspace} nicht erlaubt. Seine Werkzeuge legt ein Admin für alle Arbeitsbereiche unter Einstellungen > Alle Arbeitsbereiche > Arbeitsbereiche fest.",
     "build.refusedEgress":
-      "Eine Netzwerkregel dieser Instanz sperrt dieses Ziel. Damit es erlaubt wird, schick dem Team, das diese Instanz betreibt, den Host der Adresse.",
+      "Eine Netzwerkregel sperrt dieses Ziel. Damit es erlaubt wird, schick dem technischen Team den Host der Adresse.",
     "build.refusedReadOnlyOrigin":
-      "Diese Verbindung gehört zur Einrichtung der Instanz, deshalb lässt sie sich hier nicht ändern.",
+      "Diese Verbindung gehört zur Einrichtung des Systems, deshalb lässt sie sich hier nicht ändern.",
     "build.refusedDependencyReview":
       "Wo dieser Agent verfügbar sein wird, hat sich nach deiner Prüfung geändert. Es wurde nichts erstellt. Erstelle ihn noch einmal, um die Liste erneut zu prüfen.",
     "build.dependencyCheckFailed":
@@ -359,7 +360,7 @@ export const build = defineTranslations({
     "build.leaveDescription":
       "Was du auf dieser Seite geändert hast, ist noch nicht gespeichert. Beim Verlassen geht es verloren.",
     "build.leaveTitle": "Ohne Speichern verlassen?",
-    "build.noKinds": "Auf dieser Instanz gibt es noch nichts zu bauen.",
+    "build.noKinds": "Hier gibt es noch nichts zu bauen.",
     "build.noMatch": "Nichts passt zu „{query}“.",
     "build.skillMissing": "Es gibt keinen Skill mit der Kennung {name}.",
     "build.skillSummary": "Kurzbeschreibung",

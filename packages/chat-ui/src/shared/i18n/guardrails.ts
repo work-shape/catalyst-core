@@ -4,11 +4,11 @@ export const guardrails = defineTranslations({
   en: {
     "guardrails.kind": "Guardrails",
     "guardrails.description":
-      "Guardrails that come with the instance's setup always apply; further ones are written with the CLI and enforce once published. An instance admin switches the guardrail the platform ships here.",
+      "Guardrails that come with the system setup always apply; further ones are written with the CLI and enforce once published. An admin for all workspaces switches the guardrail the platform ships here.",
     "guardrails.shippedHeading": "Shipped with the platform",
-    "guardrails.shippedPublishTitle": "Publishing needs an instance admin's approval",
+    "guardrails.shippedPublishTitle": "Publishing needs approval from an admin for all workspaces",
     "guardrails.shippedPublishText":
-      "A new version of an App, a Workflow or a workspace's agent goes live once an instance admin approved it. An admin's own Publish is the approval.",
+      "A new version of an App, a Workflow or a workspace's agent goes live once an admin for all workspaces approved it. An admin's own Publish is the approval.",
     "guardrails.shippedPublishOffText":
       "Switched off: whoever may publish an App, a Workflow or a workspace's agent makes a new version live with their own click. Nobody else is asked.",
     "guardrails.shippedPublishOffAsk":
@@ -17,14 +17,14 @@ export const guardrails = defineTranslations({
     "guardrails.shippedAsShipped": "On, as the platform ships it.",
     "guardrails.shippedOnBy": "Switched on by {name}, {when}.",
     "guardrails.shippedOffBy": "Switched off by {name}, {when}.",
-    "guardrails.shippedAdminOnly": "Only an instance admin can switch it.",
+    "guardrails.shippedAdminOnly": "Only an admin for all workspaces can switch it.",
     "guardrails.shippedOffTitle": "Switch off “{name}”?",
     "guardrails.shippedOffConfirm": "Switch off",
     "guardrails.shippedFailed": "The guardrails of the platform could not be loaded.",
     "guardrails.shippedSwitchFailed": "The switch was not saved.",
     "guardrails.search": "Search guardrails",
     "guardrails.empty":
-      "No further guardrails yet. A guardrail checks an action before it happens and warns, holds it for approval or blocks it. Some come with the instance's setup, and further ones are written with the CLI.",
+      "No further guardrails yet. A guardrail checks an action before it happens and warns, holds it for approval or blocks it. Some come with the system setup, and further ones are written with the CLI.",
     "guardrails.missing": "There is no guardrail with the id {name}.",
     "guardrails.whenItRuns": "When it runs",
     "guardrails.runs.sentence": "Runs {when}, {where}.",
@@ -60,10 +60,10 @@ export const guardrails = defineTranslations({
     "guardrails.runs.assetConnection": "a Connection",
     "guardrails.runs.assetGuardrail": "a guardrail",
     "guardrails.runs.assetOfKind": "an asset of the kind {kind}",
-    "guardrails.runs.instanceWide": "instance-wide",
+    "guardrails.runs.instanceWide": "in all workspaces",
     "guardrails.runs.inWorkspace": "in workspace {name}",
     "guardrails.runs.inSomeWorkspace": "in one workspace",
-    "guardrails.runs.setByOperator": "{where}, part of the instance's setup",
+    "guardrails.runs.setByOperator": "{where}, part of the system setup",
     "guardrails.runs.checkPattern": "Checks the content for a text pattern.",
     "guardrails.runs.checkJudge": "Checks the content for breaches of its rule, with a model.",
     "guardrails.runs.blocksOnCheck": "Blocks if the check fails.",
@@ -126,11 +126,12 @@ export const guardrails = defineTranslations({
   de: {
     "guardrails.kind": "Leitplanken",
     "guardrails.description":
-      "Die Leitplanken aus der Einrichtung der Instanz gelten immer; weitere werden mit der CLI geschrieben und gelten, sobald sie veröffentlicht sind. Die Leitplanke der Plattform schaltet ein Instanz-Admin hier um.",
+      "Die Leitplanken aus der Einrichtung des Systems gelten immer; weitere werden mit der CLI geschrieben und gelten, sobald sie veröffentlicht sind. Die Leitplanke der Plattform schaltet ein Admin für alle Arbeitsbereiche hier um.",
     "guardrails.shippedHeading": "Mit der Plattform geliefert",
-    "guardrails.shippedPublishTitle": "Veröffentlichen braucht die Freigabe eines Instanz-Admins",
+    "guardrails.shippedPublishTitle":
+      "Veröffentlichen braucht die Freigabe eines Admins für alle Arbeitsbereiche",
     "guardrails.shippedPublishText":
-      "Eine neue Version einer App, eines Workflows oder eines Agenten eines Arbeitsbereichs geht erst live, wenn ein Instanz-Admin sie freigegeben hat. Veröffentlicht ein Admin selbst, ist das die Freigabe.",
+      "Eine neue Version einer App, eines Workflows oder eines Agenten eines Arbeitsbereichs geht erst live, wenn ein Admin für alle Arbeitsbereiche sie freigegeben hat. Veröffentlicht ein Admin selbst, ist das die Freigabe.",
     "guardrails.shippedPublishOffText":
       "Ausgeschaltet: Wer eine App, einen Workflow oder einen Agenten eines Arbeitsbereichs veröffentlichen darf, macht eine neue Version mit dem eigenen Klick live. Niemand sonst wird gefragt.",
     "guardrails.shippedPublishOffAsk":
@@ -139,14 +140,14 @@ export const guardrails = defineTranslations({
     "guardrails.shippedAsShipped": "Eingeschaltet, wie die Plattform sie liefert.",
     "guardrails.shippedOnBy": "Eingeschaltet von {name}, {when}.",
     "guardrails.shippedOffBy": "Ausgeschaltet von {name}, {when}.",
-    "guardrails.shippedAdminOnly": "Nur ein Instanz-Admin kann sie umschalten.",
+    "guardrails.shippedAdminOnly": "Nur ein Admin für alle Arbeitsbereiche kann sie umschalten.",
     "guardrails.shippedOffTitle": "„{name}“ ausschalten?",
     "guardrails.shippedOffConfirm": "Ausschalten",
     "guardrails.shippedFailed": "Die Leitplanken der Plattform konnten nicht geladen werden.",
     "guardrails.shippedSwitchFailed": "Das Umschalten wurde nicht gespeichert.",
     "guardrails.search": "Leitplanken durchsuchen",
     "guardrails.empty":
-      "Noch keine weiteren Leitplanken. Eine Leitplanke prüft eine Aktion, bevor sie geschieht, und warnt, hält sie zur Freigabe an oder blockiert sie. Manche kommen mit der Einrichtung der Instanz, weitere werden mit der CLI geschrieben.",
+      "Noch keine weiteren Leitplanken. Eine Leitplanke prüft eine Aktion, bevor sie geschieht, und warnt, hält sie zur Freigabe an oder blockiert sie. Manche kommen mit der Einrichtung des Systems, weitere werden mit der CLI geschrieben.",
     "guardrails.missing": "Es gibt keine Leitplanke mit der Kennung {name}.",
     "guardrails.whenItRuns": "Wann sie greift",
     "guardrails.runs.sentence": "Läuft, {when}, {where}.",
@@ -181,10 +182,10 @@ export const guardrails = defineTranslations({
     "guardrails.runs.assetConnection": "eine Verbindung",
     "guardrails.runs.assetGuardrail": "eine Leitplanke",
     "guardrails.runs.assetOfKind": "ein Asset der Art {kind}",
-    "guardrails.runs.instanceWide": "instanzweit",
+    "guardrails.runs.instanceWide": "in allen Arbeitsbereichen",
     "guardrails.runs.inWorkspace": "im Workspace {name}",
     "guardrails.runs.inSomeWorkspace": "in einem Workspace",
-    "guardrails.runs.setByOperator": "{where}, aus der Einrichtung der Instanz",
+    "guardrails.runs.setByOperator": "{where}, aus der Einrichtung des Systems",
     "guardrails.runs.checkPattern": "Prüft den Inhalt auf ein Textmuster.",
     "guardrails.runs.checkJudge":
       "Prüft den Inhalt mit einem Modell auf Verstöße gegen ihre Regel.",

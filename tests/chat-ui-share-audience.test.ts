@@ -93,14 +93,14 @@ describe("check 56: the App's Publish dialog asks “For whom?” first", () => 
     expect(at(markup, "Findings opens for everyone in Kai Spezis.")).toBeGreaterThan(question);
     expect(at(markup, ">Only me<")).toBeGreaterThan(question);
     expect(at(markup, ">Kai Spezis<")).toBeGreaterThan(at(markup, ">Only me<"));
-    expect(at(markup, ">Whole instance<")).toBeGreaterThan(at(markup, ">Kai Spezis<"));
+    expect(at(markup, ">Everyone<")).toBeGreaterThan(at(markup, ">Kai Spezis<"));
     expect(held(markup)).toBe(false);
   });
 
   it("asks it in German for a German reader", () => {
     const markup = dialog({ offer: offer("self"), locale: "de" });
     expect(at(markup, "Für wen?")).toBeLessThan(at(markup, ">Nur für mich<"));
-    expect(markup).toContain(">Ganze Instanz<");
+    expect(markup).toContain(">Alle<");
     expect(markup).toContain("Nur du bekommst diesen Stand, wenn du die App öffnest.");
   });
 
@@ -108,9 +108,9 @@ describe("check 56: the App's Publish dialog asks “For whom?” first", () => 
     const markup = dialog({ offer: offer("workspace", ["self", "workspace"]) });
     expect(markup).toContain(">Only me<");
     expect(markup).toContain(">Kai Spezis<");
-    expect(markup).not.toContain("Whole instance");
+    expect(markup).not.toContain(">Everyone<");
     expect(dialog({ offer: offer("self", ["self", "workspace"]), locale: "de" })).not.toContain(
-      "Ganze Instanz"
+      ">Alle<"
     );
   });
 
@@ -354,7 +354,7 @@ describe("SHARE-1 fix round: a narrower publisher of an instance-wide App", () =
     expect(markup).toContain(
       "Shared now: Everyone in the instance. After publishing: Everyone in Kai Spezis."
     );
-    expect(markup).not.toContain("Whole instance");
+    expect(markup).not.toContain(">Everyone<");
     expect(at(markup, 'data-testid="app-publish-audience-change"')).toBeGreaterThan(
       at(markup, "For whom?")
     );
@@ -407,8 +407,8 @@ describe("SHARE-1 fix round: who sees the stored data", () => {
     );
     expect(cell).toContain("Everyone in Kai Spezis (14 people)");
     expect(cell).toContain("Also by a right on the app: Anna Berg · 2 more with access");
-    expect(cell).toContain("Instance admins also have access.");
-    expect(at(cell, "Instance admins")).toBeGreaterThan(at(cell, "Anna Berg"));
+    expect(cell).toContain("Admins for all workspaces also have access.");
+    expect(at(cell, "Admins for all workspaces")).toBeGreaterThan(at(cell, "Anna Berg"));
   });
 
   it("keeps the admins line under “Only me”, without a count, and says it in German", () => {
@@ -420,7 +420,7 @@ describe("SHARE-1 fix round: who sees the stored data", () => {
     );
     expect(cell).toContain("Only me");
     expect(cell).not.toContain("(1 person)");
-    expect(cell).toContain("Instance admins also have access.");
+    expect(cell).toContain("Admins for all workspaces also have access.");
     expect(cell).not.toContain("Also by a right on the app");
     const german = audienceCell(
       dialog({
@@ -430,7 +430,7 @@ describe("SHARE-1 fix round: who sees the stored data", () => {
       })
     );
     expect(german).toContain("Alle in der Instanz (1 Person)");
-    expect(german).toContain("Instanz-Admins haben ebenfalls Zugriff.");
+    expect(german).toContain("Admins für alle Arbeitsbereiche haben ebenfalls Zugriff.");
   });
 });
 
@@ -589,7 +589,7 @@ describe("check 80 on the agent's App publish: the chosen audience's data lines"
     );
     expect(cell).toContain("Everyone in Kai Spezis (14 people)");
     expect(cell).toContain("Also by a right on the app: Anna Berg");
-    expect(cell).toContain("Instance admins also have access.");
+    expect(cell).toContain("Admins for all workspaces also have access.");
     const german = audienceCell(
       view({
         offer: offer("self", undefined, "Nur für mich", { people: 1 }),
@@ -599,7 +599,7 @@ describe("check 80 on the agent's App publish: the chosen audience's data lines"
     );
     expect(german).toContain("Nur für mich");
     expect(german).not.toContain("(1 Person)");
-    expect(german).toContain("Instanz-Admins haben ebenfalls Zugriff.");
+    expect(german).toContain("Admins für alle Arbeitsbereiche haben ebenfalls Zugriff.");
   });
 
   it("never names the people of the choice before while the new choice's answer loads", () => {

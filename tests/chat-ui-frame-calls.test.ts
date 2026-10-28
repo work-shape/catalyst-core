@@ -659,9 +659,9 @@ describe("the calls of a frame", () => {
       );
     };
     expect(sentence("Mara")).toBe(
-      "You may not use the connection Warehouse, so this cannot load. Trying again will not help. Ask an instance admin, for example Mara."
+      "You may not use the connection Warehouse, so this cannot load. Trying again will not help. Ask an admin for all workspaces, for example Mara."
     );
-    expect(sentence(undefined)).toContain("Ask an instance admin.");
+    expect(sentence(undefined)).toContain("Ask an admin for all workspaces.");
     expect(sentence("Mara", "de")).toContain("zum Beispiel Mara.");
     for (const text of [sentence("Mara"), sentence("Mara", "de")]) {
       expect(text).not.toMatch(/Settings|Einstellungen/u);

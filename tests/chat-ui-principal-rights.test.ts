@@ -219,7 +219,7 @@ describe("the rights of a service principal on its page", () => {
     const markup = render({ read: { status: "ready", rows: views } });
     expect(markup.match(/data-testid="principal-right"/gu)).toHaveLength(2);
     expect(markup).toContain(">CRM<");
-    expect(markup).toContain(">Instance<");
+    expect(markup).toContain(">Everyone<");
     expect(markup).toContain(">Workspace Finance<");
     expect(markup).toContain("May use this Connection");
     expect(markup).toContain("Given by Root Admin on 10/1/2026");

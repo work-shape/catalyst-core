@@ -20,7 +20,7 @@ export const accessConnection = defineTranslations({
     "access.scopeOnConnectionDescription": "One existing connection.",
     "access.grantConnection": "Connection",
     "access.chooseConnection": "Choose a connection",
-    "access.noConnections": "This instance has no connection yet.",
+    "access.noConnections": "There is no connection yet.",
     "access.connectionsLoadFailed": "The connections could not be loaded.",
     "access.objectConnection": "the connection {name}"
   },
@@ -41,7 +41,7 @@ export const accessConnection = defineTranslations({
     "access.scopeOnConnectionDescription": "Eine vorhandene Verbindung.",
     "access.grantConnection": "Verbindung",
     "access.chooseConnection": "Verbindung wählen",
-    "access.noConnections": "Auf dieser Instanz gibt es noch keine Verbindung.",
+    "access.noConnections": "Es gibt noch keine Verbindung.",
     "access.connectionsLoadFailed": "Die Verbindungen konnten nicht geladen werden.",
     "access.objectConnection": "die Verbindung {name}"
   }

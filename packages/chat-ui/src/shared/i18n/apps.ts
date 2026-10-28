@@ -8,7 +8,7 @@ export const apps = defineTranslations({
     "apps.actionConnectionMissing": "The connection no longer exists.",
     "apps.actionDataStoreMissing": "The data store is not available to this app.",
     "apps.actionDryRunInput": "What {name} would have started with",
-    "apps.actionWorkflowsOff": "Workflows are turned off on this instance.",
+    "apps.actionWorkflowsOff": "Workflows are turned off.",
     "apps.actionEffect": "Effect",
     "apps.actionInDraft": "In this draft",
     "apps.actionInput": "Input",
@@ -146,7 +146,7 @@ export const apps = defineTranslations({
     "apps.failed": "The app could not be loaded.",
     "apps.failedFileSet": "The app could not be loaded: the files of this version are missing.",
     "apps.failedKit":
-      "The app could not be loaded: this instance does not have the kit version it was built with.",
+      "The app could not be loaded: the kit version it was built with is not available here.",
     "apps.heldBackHosts": "This draft cannot call {hosts} until it is published.",
     "apps.draftHostsAllow": "Allow for my preview",
     "apps.draftHostsHeld":
@@ -179,13 +179,13 @@ export const apps = defineTranslations({
     "apps.promptStart": "Build an app for this workspace: ",
     "apps.publish": "Publish",
     "apps.publishAudience": "For whom?",
-    "apps.publishAudienceInstance": "Whole instance",
+    "apps.publishAudienceInstance": "Everyone",
     "apps.publishAudienceSelf": "Only me",
     "apps.publishAudienceWorkspace": "Everyone in {workspace}",
     "apps.publishAudienceChange": "Shared now: {live}. After publishing: {next}.",
     "apps.publishAudiencePeople": "{label} ({count} people)",
     "apps.publishAudiencePeopleOne": "{label} ({count} person)",
-    "apps.publishDataAdmins": "Instance admins also have access.",
+    "apps.publishDataAdmins": "Admins for all workspaces also have access.",
     "apps.publishDataHolders": "Also by a right on the app: {holders}",
     "apps.publishBodyInstance": "Everyone here gets this state when they open the app.",
     "apps.publishBodySelf": "Only you get this state when you open the app.",
@@ -196,7 +196,7 @@ export const apps = defineTranslations({
     "apps.publishDataAudience": "Who sees its stored data",
     "apps.publishDataFailed": "Who sees its stored data could not be loaded.",
     "apps.publishDataNote":
-      "These actions read with the data store's own app role. Rights on the store are checked for whoever publishes the app, not for each viewer, so everyone who may use the app sees what the actions select. Instance admins always see everything.",
+      "These actions read with the data store's own app role. Rights on the store are checked for whoever publishes the app, not for each viewer, so everyone who may use the app sees what the actions select. Admins for all workspaces always see everything.",
     "apps.publishDataRows":
       "What they show depends on their inputs. The whole store held {rows} in {tables} when last measured.",
     "apps.publishDataRowsUnknown":
@@ -212,7 +212,7 @@ export const apps = defineTranslations({
     "apps.publishMissingRight": "You need the right “{right}” to publish.",
     "apps.publishPending": "The change waits for an approval.",
     "apps.publishWaits":
-      "Sent for approval. An instance admin decides in the Inbox; until then the live version stays as it is.",
+      "Sent for approval. An admin for all workspaces decides in the Inbox; until then the live version stays as it is.",
     "apps.publishTogether": "Published with it",
     "apps.publishTogetherWorkflow": "Workflow “{title}”",
     "apps.publishTogetherNew": "New",
@@ -279,7 +279,7 @@ export const apps = defineTranslations({
     "apps.actionConnectionMissing": "Die Verbindung gibt es nicht mehr.",
     "apps.actionDataStoreMissing": "Der Datenspeicher ist für diese App nicht verfügbar.",
     "apps.actionDryRunInput": "Womit {name} gestartet hätte",
-    "apps.actionWorkflowsOff": "Workflows sind auf dieser Instanz ausgeschaltet.",
+    "apps.actionWorkflowsOff": "Workflows sind ausgeschaltet.",
     "apps.actionEffect": "Wirkung",
     "apps.actionInDraft": "In diesem Entwurf",
     "apps.actionInput": "Eingabe",
@@ -421,7 +421,7 @@ export const apps = defineTranslations({
     "apps.failed": "Die App konnte nicht geladen werden.",
     "apps.failedFileSet": "Die App konnte nicht geladen werden: Die Dateien dieser Version fehlen.",
     "apps.failedKit":
-      "Die App konnte nicht geladen werden: Diese Instanz hat die Kit-Version nicht, mit der sie gebaut wurde.",
+      "Die App konnte nicht geladen werden: Die Kit-Version, mit der sie gebaut wurde, ist hier nicht verfügbar.",
     "apps.heldBackHosts": "Dieser Entwurf kann {hosts} erst aufrufen, wenn er veröffentlicht ist.",
     "apps.draftHostsAllow": "Für meine Vorschau erlauben",
     "apps.draftHostsHeld":
@@ -454,13 +454,13 @@ export const apps = defineTranslations({
     "apps.promptStart": "Baue eine App für diesen Arbeitsbereich: ",
     "apps.publish": "Veröffentlichen",
     "apps.publishAudience": "Für wen?",
-    "apps.publishAudienceInstance": "Ganze Instanz",
+    "apps.publishAudienceInstance": "Alle",
     "apps.publishAudienceSelf": "Nur für mich",
     "apps.publishAudienceWorkspace": "Alle in {workspace}",
     "apps.publishAudienceChange": "Jetzt geteilt: {live}. Nach dem Veröffentlichen: {next}.",
     "apps.publishAudiencePeople": "{label} ({count} Personen)",
     "apps.publishAudiencePeopleOne": "{label} ({count} Person)",
-    "apps.publishDataAdmins": "Instanz-Admins haben ebenfalls Zugriff.",
+    "apps.publishDataAdmins": "Admins für alle Arbeitsbereiche haben ebenfalls Zugriff.",
     "apps.publishDataHolders": "Außerdem mit einem Recht auf die App: {holders}",
     "apps.publishBodyInstance": "Alle hier bekommen diesen Stand, wenn sie die App öffnen.",
     "apps.publishBodySelf": "Nur du bekommst diesen Stand, wenn du die App öffnest.",
@@ -471,7 +471,7 @@ export const apps = defineTranslations({
     "apps.publishDataAudience": "Wer ihre gespeicherten Daten sieht",
     "apps.publishDataFailed": "Wer ihre gespeicherten Daten sieht, konnte nicht geladen werden.",
     "apps.publishDataNote":
-      "Diese Aktionen lesen mit der eigenen App-Rolle des Datenspeichers. Rechte am Speicher werden bei der Person geprüft, die die App veröffentlicht, nicht bei jeder Person, die sie ansieht. Deshalb sehen alle, die die App nutzen dürfen, was die Aktionen auswählen. Instanz-Admins sehen immer alles.",
+      "Diese Aktionen lesen mit der eigenen App-Rolle des Datenspeichers. Rechte am Speicher werden bei der Person geprüft, die die App veröffentlicht, nicht bei jeder Person, die sie ansieht. Deshalb sehen alle, die die App nutzen dürfen, was die Aktionen auswählen. Admins für alle Arbeitsbereiche sehen immer alles.",
     "apps.publishDataRows":
       "Was sie zeigen, hängt von ihren Eingaben ab. Der ganze Speicher hatte bei der letzten Messung {rows} in {tables}.",
     "apps.publishDataRowsUnknown":
@@ -487,7 +487,7 @@ export const apps = defineTranslations({
     "apps.publishMissingRight": "Zum Veröffentlichen brauchst du das Recht „{right}“.",
     "apps.publishPending": "Die Änderung wartet auf eine Freigabe.",
     "apps.publishWaits":
-      "Zur Freigabe gesendet. Ein Instanz-Admin entscheidet im Eingang; bis dahin bleibt die live Version, wie sie ist.",
+      "Zur Freigabe gesendet. Ein Admin für alle Arbeitsbereiche entscheidet im Eingang; bis dahin bleibt die live Version, wie sie ist.",
     "apps.publishTogether": "Wird zusammen veröffentlicht",
     "apps.publishTogetherWorkflow": "Workflow „{title}“",
     "apps.publishTogetherNew": "Neu",

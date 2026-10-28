@@ -44,12 +44,12 @@ describe("a Settings page the person cannot open", () => {
   it.each([
     {
       locale: "en" as const,
-      said: "You cannot open this page: it needs a right you do not have. Ask an instance admin, for example Mara Lindqvist.",
+      said: "You cannot open this page: it needs a right you do not have. Ask an admin for all workspaces, for example Mara Lindqvist.",
       go: "Open your profile"
     },
     {
       locale: "de" as const,
-      said: "Diese Seite kannst du nicht öffnen: Dafür fehlt dir ein Recht. Frag jemanden, der die Instanz verwaltet, zum Beispiel Mara Lindqvist.",
+      said: "Diese Seite kannst du nicht öffnen: Dafür fehlt dir ein Recht. Frag einen Admin für alle Arbeitsbereiche, zum Beispiel Mara Lindqvist.",
       go: "Zu deinem Profil"
     }
   ])("says why, whom to ask and where to go ($locale)", ({ locale, said, go }) => {

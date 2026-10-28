@@ -114,7 +114,7 @@ describe("chat UI conversation controller", () => {
       for (const state of [live, reloaded]) {
         const member = notices(state);
         expect(member.de).toContain("Eine Nutzungsgrenze hat diese Antwort gestoppt");
-        expect(member.de).toContain("Bitte einen Administrator dieser Instanz");
+        expect(member.de).toContain("Bitte einen Admin für alle Arbeitsbereiche");
         expect(member.en).toContain("A usage limit stopped this reply");
         // A limit can be the person's own: the notice names no scope and promises no reset.
         expect(member.en).not.toMatch(/limit of this instance|resets/u);
@@ -174,8 +174,8 @@ describe("chat UI conversation controller", () => {
 
     describe("a reached usage limit that the run names", () => {
       const advice = {
-        en: "Your answer so far is kept. Ask an administrator of this instance to check the usage limits.",
-        de: "Was bisher geantwortet wurde, bleibt erhalten. Bitte einen Administrator dieser Instanz, die Nutzungsgrenzen zu prüfen."
+        en: "Your answer so far is kept. Ask an admin for all workspaces to check the usage limits.",
+        de: "Was bisher geantwortet wurde, bleibt erhalten. Bitte einen Admin für alle Arbeitsbereiche, die Nutzungsgrenzen zu prüfen."
       };
       const generic = {
         en: `A usage limit stopped this reply. ${advice.en}`,
@@ -197,8 +197,8 @@ describe("chat UI conversation controller", () => {
         user: { en: "your own calls", de: "deine eigenen Aufrufe" },
         system: { en: "the calls the product makes", de: "die Aufrufe des Produkts" },
         instance: {
-          en: "the calls of everyone on this instance",
-          de: "die Aufrufe aller auf dieser Instanz"
+          en: "the calls across all workspaces",
+          de: "die Aufrufe in allen Arbeitsbereichen"
         }
       } as const;
       const serverText = "Daily model token safeguard has been reached <b>raw</b>";
@@ -250,7 +250,7 @@ describe("chat UI conversation controller", () => {
                   de: `${named.de} ${advice.de}`
                 });
                 expect(operator.en).toBe(
-                  `${named.en} Your answer so far is kept. Settings › Usage shows the usage limits and what has been used. Ask the team that runs this instance to review the limits.`
+                  `${named.en} Your answer so far is kept. Settings › Usage shows the usage limits and what has been used. Ask the technical team to review the limits.`
                 );
                 expect(operator.de).toContain(`${named.de} Was bisher geantwortet wurde`);
                 expect(operator.de).toContain("Einstellungen › Nutzung");

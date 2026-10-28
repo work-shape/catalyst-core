@@ -32,7 +32,7 @@ export const skillFiles = defineTranslations({
     "skillFiles.refusedTotal":
       "The files of the skill have {size} together. A skill has at most {limit}.",
     "skillFiles.refusedUnavailable":
-      "This instance keeps no files beside the text of a skill, so {path} cannot be saved.",
+      "Files beside the text of a skill are not stored here, so {path} cannot be saved.",
     "skillFiles.replace": "Replace",
     "skillFiles.title": "Files",
     "skillFiles.upload": "Upload file"
@@ -69,7 +69,7 @@ export const skillFiles = defineTranslations({
     "skillFiles.refusedTotal":
       "Die Dateien des Skills haben zusammen {size}. Ein Skill hat höchstens {limit}.",
     "skillFiles.refusedUnavailable":
-      "Diese Instanz speichert neben dem Text eines Skills keine Dateien, darum kann {path} nicht gespeichert werden.",
+      "Hier werden neben dem Text eines Skills keine Dateien gespeichert, darum kann {path} nicht gespeichert werden.",
     "skillFiles.replace": "Ersetzen",
     "skillFiles.title": "Dateien",
     "skillFiles.upload": "Datei hochladen"

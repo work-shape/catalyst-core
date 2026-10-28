@@ -241,7 +241,7 @@ describe("Dienste in New connection", () => {
       createElement(CatalogueServices, { entries: [files], onChoose() {} })
     );
     expect(services).toContain('data-catalogue-offered="false"');
-    expect(services).toContain("Frag das Team, das diese Instanz betreibt");
+    expect(services).toContain("Frag das technische Team");
     expect(services).not.toContain("<button");
   });
 
