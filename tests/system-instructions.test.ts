@@ -1,5 +1,6 @@
 import { PLATFORM_ORIENTATION } from "@work-shape/catalyst-client-assembly";
 import { describe, expect, it } from "vitest";
+import { projectFolderManifest } from "@work-shape/catalyst-core";
 import {
   CATALYST_INTERNAL_AGENT_PROMPT,
   createSystemInstructions
@@ -184,4 +185,27 @@ it("names the Connection kind without repeating how its tools propose one", () =
   expect(PLATFORM_ORIENTATION).not.toContain("catalogue.entries");
   expect(PLATFORM_ORIENTATION).not.toContain("do not web-search the provider");
   expect(PLATFORM_ORIENTATION).not.toContain("use the provider's MCP server where one exists");
+});
+
+// PRJ-2: a chat in a project is told its folder last, as it changes with every write: how to
+// reach it, then at most 50 files by path, size, type and version, never their content.
+it("tells the agent its project's folder last, at most 50 files and never their content", () => {
+  const files = Array.from({ length: 52 }, (_, index) => ({
+    path: `notizen/n${String(index).padStart(2, "0")}.md`,
+    byteSize: 1,
+    mimeType: "text/markdown",
+    version: 1,
+    updatedAt: "2026-10-28T12:05:00.000Z"
+  }));
+  const content = createSystemInstructions("Help.", "de", {
+    projectFolder: projectFolderManifest({ title: "Viele Dateien", files })
+  });
+
+  expect(content.endsWith("and 2 more, see workspace.list_files.")).toBe(true);
+  expect(content).toContain('Project folder of the project "Viele Dateien"');
+  expect(content).toContain("replacesVersion");
+  expect(content).toContain(
+    "- project/notizen/n00.md · 1 B · text/markdown · v1, 2026-10-28 12:05 UTC"
+  );
+  expect(content.match(/- project\/notizen\//gu)).toHaveLength(50);
 });

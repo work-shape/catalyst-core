@@ -1,4 +1,4 @@
-import { and, desc, eq, or, type SQL } from "drizzle-orm";
+import { and, desc, eq, inArray, or, sql, type SQL } from "drizzle-orm";
 import {
   asClientInstanceId,
   asCollaborationWorkspaceId,
@@ -8,7 +8,14 @@ import {
   type ProjectStore
 } from "@work-shape/catalyst-core";
 import type { PostgresConnection, PostgresTransaction } from "./postgres-database";
-import { configAssetRevisions, configAssets, projects } from "./schema";
+import {
+  configAssetRevisions,
+  configAssets,
+  configAssetState,
+  conversations,
+  permissionGrants,
+  projects
+} from "./schema";
 
 // A project is an asset of the kind `project` its workspace owns, with its audience in a row
 // of its own (PRJ-1). Every read here joins both and answers active projects only.
@@ -54,6 +61,78 @@ export function createPostgresProjectStore(db: PostgresConnection): ProjectStore
           or(eq(projects.audience, "workspace"), eq(projects.createdByUserId, input.viewerUserId))
         )
       );
+    },
+    async listProjectIdsOfWorkspace(input) {
+      const rows = await db
+        .select({ id: configAssets.id })
+        .from(configAssets)
+        .where(
+          and(
+            eq(configAssets.clientInstanceId, input.clientInstanceId),
+            eq(configAssets.kind, PROJECT_ASSET_KIND),
+            eq(configAssets.scopeKind, "workspace"),
+            eq(configAssets.scopeId, input.collaborationWorkspaceId)
+          )
+        );
+      return rows.map((row) => row.id);
+    },
+    async listPrivateProjectIdsCreatedBy(input) {
+      const rows = await db
+        .select({ id: projects.assetId })
+        .from(projects)
+        .where(
+          and(
+            eq(projects.clientInstanceId, input.clientInstanceId),
+            eq(projects.createdByUserId, input.userId),
+            eq(projects.audience, "private")
+          )
+        );
+      return rows.map((row) => row.id);
+    },
+    deleteProjects(input) {
+      return db.transaction(async (tx) => {
+        const ids = [...new Set(input.projectIds)];
+        if (ids.length === 0) return { deleted: 0, conversationsLeft: 0 };
+        // Every conversation that names one leaves it first, a deleted one too: the key from
+        // conversations is ON DELETE RESTRICT, and a deleted conversation keeps its row.
+        const left = await tx
+          .update(conversations)
+          .set({ projectId: null })
+          .where(
+            and(
+              eq(conversations.clientInstanceId, input.clientInstanceId),
+              inArray(conversations.projectId, ids)
+            )
+          )
+          .returning({ id: conversations.id });
+        await tx
+          .delete(permissionGrants)
+          .where(
+            and(
+              eq(permissionGrants.clientInstanceId, input.clientInstanceId),
+              eq(permissionGrants.scopeKind, "asset"),
+              inArray(permissionGrants.scopeId, ids)
+            )
+          );
+        // Revisions, the audience and the file rows go with the asset through their keys.
+        const removed = await tx
+          .delete(configAssets)
+          .where(
+            and(
+              eq(configAssets.clientInstanceId, input.clientInstanceId),
+              eq(configAssets.kind, PROJECT_ASSET_KIND),
+              inArray(configAssets.id, ids)
+            )
+          )
+          .returning({ id: configAssets.id });
+        if (removed.length > 0) {
+          await tx
+            .update(configAssetState)
+            .set({ version: sql`${configAssetState.version} + 1` })
+            .where(eq(configAssetState.clientInstanceId, input.clientInstanceId));
+        }
+        return { deleted: removed.length, conversationsLeft: left.length };
+      });
     }
   };
 }

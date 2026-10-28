@@ -44,6 +44,7 @@ import { workspaceRoutePath } from "../../shared/routes";
 import { apiErrorStatus } from "../../shared/workspace-utils";
 import type { WorkspaceRoute } from "../../shared/workspace-route";
 import { RouteLink } from "../../studio/route-link";
+import { ProjectFilesSection } from "./project-files-section";
 
 /** The workspace the projects belong to, as the pages name it. */
 interface ProjectsWorkspace {
@@ -384,8 +385,21 @@ function ProjectPage({
               state={<AudienceBadge project={project} workspace={workspace.name} />}
               description={project.description}
             />
-            <ProjectConversations project={project} onOpenConversation={onOpenConversation} />
-            <ProjectComposer project={project} onStartChat={onStartChat} />
+            {/* The files stand beside the chats where the page has room, and below them where not. */}
+            <div className="grid gap-8 @4xl/page:grid-cols-[minmax(0,1fr)_minmax(18rem,26rem)]">
+              <div className="@container min-w-0">
+                <ProjectConversations project={project} onOpenConversation={onOpenConversation} />
+                <ProjectComposer project={project} onStartChat={onStartChat} />
+              </div>
+              <div className="min-w-0">
+                <ProjectFilesSection
+                  project={project}
+                  onOpenConversation={(conversationId) =>
+                    onOpenConversation(project.collaborationWorkspaceId, conversationId)
+                  }
+                />
+              </div>
+            </div>
           </>
         )}
       </Page>

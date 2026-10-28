@@ -14,11 +14,17 @@ import {
 } from "./conversation-cleanup";
 import type { ChatServerOptions } from "../types";
 import { removeFeedbackOfAuthor } from "../feedback/feedback-jobs";
+import {
+  deletePrivateProjectsOfUser,
+  deleteWorkspaceProjectObjects
+} from "../projects/project-cleanup";
 
 export interface UserDeletionTotals extends ConversationDataDeletionTotals {
   conversationCount: number;
   accessRequestCount: number;
   sharedMembershipCount: number;
+  /** Private projects of the user, with their files (PRJ-2). */
+  projectCount: number;
 }
 
 /**
@@ -119,7 +125,8 @@ export async function cleanupProductUserData(input: {
     workspaceCommandCount: 0,
     workspaceObjectCount: 0,
     accessRequestCount: 0,
-    sharedMembershipCount: 0
+    sharedMembershipCount: 0,
+    projectCount: 0
   };
 
   // First what shows the person to others: while stored data is still being removed, a closed
@@ -172,8 +179,14 @@ export async function cleanupProductUserData(input: {
   // The comments the person left on answers go with them, with their Inbox items (LU-4).
   await removeFeedbackOfAuthor(options, input.userId);
 
+  // The user's private projects go with their files, also those in Shared Workspaces; chats
+  // of the workspace that still name one leave it first (PRJ-2).
+  totals.projectCount = await deletePrivateProjectsOfUser(options, input.userId);
+
   // The store refuses this while a cleanup is pending. The next pass goes on from here.
   if (personalWorkspace) {
+    // The rows of the personal workspace's projects go with it; their bytes go first.
+    await deleteWorkspaceProjectObjects(options, personalWorkspace.id);
     await options.stores.workspaces.deletePersonalWorkspaceForUser({
       clientInstanceId: options.clientInstanceId,
       userId: input.userId

@@ -13,6 +13,7 @@ export * from "./chat-files";
 export * from "./chat-inbox";
 export * from "./chat-markdown";
 export * from "./chat-platform-report";
+export * from "./chat-projects";
 export * from "./chat-subagents";
 export * from "./chat-surface";
 export * from "./chat-tools";

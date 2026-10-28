@@ -1,6 +1,6 @@
 import * as Collapsible from "@radix-ui/react-collapsible";
-import { BarChart3, ChevronDown, Database, Library, X } from "lucide-react";
-import { useCallback, type AnimationEventHandler } from "react";
+import { BarChart3, ChevronDown, Database, FolderInput, Library, X } from "lucide-react";
+import { useCallback, useState, type AnimationEventHandler, type ReactNode } from "react";
 import type {
   ApiClient,
   ConversationResourceListItem,
@@ -35,6 +35,9 @@ import { getArtifactFileType } from "../tools/tool-artifacts";
 import { useWorkspacePreferences } from "../workspace/workspace-ui-state";
 import { SubagentsSection } from "../subagents/subagents-section";
 import { useSubagentsQuery } from "../subagents/subagent-queries";
+import { useProjectFilesQuery, useSaveToProjectMutation } from "../../shared/api/project-files";
+import { ProjectFilePanel } from "../projects/project-file-panel";
+import { ProjectFileTree } from "../projects/project-file-tree";
 
 const AUTH_SCOPE = "standalone";
 const NO_SUBAGENTS: readonly SubagentSummary[] = [];
@@ -42,10 +45,13 @@ const NO_SUBAGENTS: readonly SubagentSummary[] = [];
 export function useResourcesPanelState({
   conversationId,
   enabled,
-  roomBeside
+  roomBeside,
+  projectId
 }: {
   conversationId: string | undefined;
   enabled: boolean;
+  /** The conversation's project: its files are a section of the panel. */
+  projectId?: string;
   /** Whether the card can stand beside the conversation. Where it cannot, it opens on request only. */
   roomBeside: boolean;
 }) {
@@ -60,8 +66,8 @@ export function useResourcesPanelState({
   });
   const resources = query.data ?? [];
   const subagents = useSubagentsQuery({ conversationId, enabled }).data ?? NO_SUBAGENTS;
-  // A subagent is a row of the panel as a Resource is.
-  const hasResources = resources.length > 0 || subagents.length > 0;
+  // A subagent is a row of the panel as a Resource is, and so is a project's folder.
+  const hasResources = resources.length > 0 || subagents.length > 0 || Boolean(projectId);
 
   const open =
     enabled &&
@@ -75,7 +81,13 @@ export function useResourcesPanelState({
   return {
     client,
     /** What the panel lists, as its props take it. */
-    contents: { error: Boolean(query.error), loading: query.isLoading, resources, subagents },
+    contents: {
+      error: Boolean(query.error),
+      loading: query.isLoading,
+      resources,
+      subagents,
+      projectId
+    },
     hasResources,
     open,
     close: () => setResourcesPanelPreference("closed"),
@@ -115,7 +127,8 @@ export function ResourcesPanel({
   covered = false,
   onAnimationEnd,
   resources,
-  subagents = NO_SUBAGENTS
+  subagents = NO_SUBAGENTS,
+  projectId
 }: {
   client: ApiClient;
   conversationId: string;
@@ -131,6 +144,8 @@ export function ResourcesPanel({
   resources: ConversationResourceListItem[];
   /** The conversation's subagents, the panel's first section (CR-1). */
   subagents?: readonly SubagentSummary[];
+  /** The conversation's project (PRJ-2): its files are a section, and a file is kept there. */
+  projectId?: string;
 }) {
   const { locale, t } = useTranslation();
   const displayPanel = useToolDisplayPanel();
@@ -239,13 +254,14 @@ export function ResourcesPanel({
           <p className="px-3 py-8 text-center text-sm text-muted-foreground">
             {t("resourcesLoadFailed")}
           </p>
-        ) : sections.length === 0 && subagents.length === 0 ? (
+        ) : sections.length === 0 && subagents.length === 0 && !projectId ? (
           <p className="px-3 py-8 text-center text-sm text-muted-foreground">
             {t("resourcesEmpty")}
           </p>
         ) : (
           <div className="grid gap-1">
             <SubagentsSection conversationId={conversationId} subagents={subagents} />
+            {projectId ? <ProjectFilesResourceSection projectId={projectId} /> : null}
             {sections.map((section) => (
               <Collapsible.Root key={section.type} defaultOpen>
                 <Collapsible.Trigger className="group flex h-9 w-full items-center gap-2 rounded-md px-2 text-left text-xs font-semibold text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground">
@@ -258,15 +274,26 @@ export function ResourcesPanel({
                   <span className="font-normal tabular-nums">{section.resources.length}</span>
                 </Collapsible.Trigger>
                 <Collapsible.Content className="grid gap-0.5 pb-1">
-                  {section.resources.map((resource) => (
-                    <ResourceRow
-                      key={resource.resourceId}
-                      client={client}
-                      conversationId={conversationId}
-                      resource={resource}
-                      onPreview={() => previewResource(resource)}
-                    />
-                  ))}
+                  {section.resources.map((resource) =>
+                    projectId && isConversationFileResource(resource) ? (
+                      <SavableResourceRow
+                        key={resource.resourceId}
+                        client={client}
+                        conversationId={conversationId}
+                        resource={resource}
+                        projectId={projectId}
+                        onPreview={() => previewResource(resource)}
+                      />
+                    ) : (
+                      <ResourceRow
+                        key={resource.resourceId}
+                        client={client}
+                        conversationId={conversationId}
+                        resource={resource}
+                        onPreview={() => previewResource(resource)}
+                      />
+                    )
+                  )}
                 </Collapsible.Content>
               </Collapsible.Root>
             ))}
@@ -281,11 +308,17 @@ function ResourceRow({
   client,
   conversationId,
   resource,
+  note,
+  saveAction,
   onPreview
 }: {
   client: ApiClient;
   conversationId: string;
   resource: ConversationResourceListItem;
+  /** Stands in place of the date, such as where a save to the project put the file. */
+  note?: ReactNode;
+  /** The row's "Save to project". */
+  saveAction?: ReactNode;
   onPreview(): void;
 }) {
   const { locale } = useTranslation();
@@ -306,12 +339,15 @@ function ResourceRow({
       <ResourceRowIcon resource={resource} />
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-medium">{resource.title}</span>
-        <span className="block truncate text-xs text-muted-foreground">
-          {new Date(resource.createdAt).toLocaleDateString(locale, {
-            dateStyle: "medium"
-          })}
-        </span>
+        {note ?? (
+          <span className="block truncate text-xs text-muted-foreground">
+            {new Date(resource.createdAt).toLocaleDateString(locale, {
+              dateStyle: "medium"
+            })}
+          </span>
+        )}
       </span>
+      {saveAction}
       {isConversationFileResource(resource) ? (
         <ConversationFileDownloadButton
           client={client}
@@ -321,6 +357,72 @@ function ResourceRow({
         />
       ) : null}
     </div>
+  );
+}
+
+/**
+ * A file row of a chat in a project: "Save to project" keeps the file in the project's folder,
+ * and the row then says where, with the version.
+ */
+function SavableResourceRow({
+  projectId,
+  ...row
+}: {
+  client: ApiClient;
+  conversationId: string;
+  resource: ConversationFileResource;
+  projectId: string;
+  onPreview(): void;
+}) {
+  const { t } = useTranslation();
+  const save = useSaveToProjectMutation(row.conversationId, t("projectFiles.held"));
+  const saved = save.data;
+  const { resource } = row;
+  return (
+    <ResourceRow
+      {...row}
+      note={
+        saved ? (
+          <span
+            className="block text-xs break-words text-muted-foreground"
+            role="status"
+            data-testid="project-file-saved"
+          >
+            {t(
+              saved.change === "unchanged" ? "projectFiles.savedUnchanged" : "projectFiles.saved",
+              { path: saved.path, version: saved.version }
+            )}
+          </span>
+        ) : save.isError ? (
+          <span className="block text-xs text-destructive" role="alert">
+            {save.error instanceof Error && save.error.message === t("projectFiles.held")
+              ? t("projectFiles.held")
+              : t("projectFiles.saveFailed")}
+          </span>
+        ) : undefined
+      }
+      saveAction={
+        <IconButton
+          size="sm"
+          label={t("projectFiles.saveToProject")}
+          data-testid="save-to-project"
+          disabled={save.isPending}
+          onClick={(event) => {
+            event.stopPropagation();
+            save.mutate({
+              projectId,
+              source:
+                resource.resourceType === "generated_file"
+                  ? { artifactId: resource.download.artifactId }
+                  : { fileId: resource.download.fileId }
+            });
+          }}
+          onKeyDown={(event) => event.stopPropagation()}
+        >
+          {save.isPending ? <Spinner size="sm" /> : <FolderInput size={15} aria-hidden="true" />}
+        </IconButton>
+      }
+    />
   );
 }
 
@@ -414,4 +516,50 @@ function sectionLabel(
     return t("resourcesCreatedFiles");
   }
   return t("resourcesUploadedFiles");
+}
+
+/** The files of the conversation's project, opened in the panel the project's page opens. */
+function ProjectFilesResourceSection({ projectId }: { projectId: string }) {
+  const { t } = useTranslation();
+  const files = useProjectFilesQuery(projectId);
+  const [openPath, setOpenPath] = useState<string>();
+  return (
+    <Collapsible.Root defaultOpen data-testid="resources-project-files">
+      <Collapsible.Trigger className="group flex h-9 w-full items-center gap-2 rounded-md px-2 text-left text-xs font-semibold text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground">
+        <ChevronDown
+          size={14}
+          className="transition-transform group-data-[state=closed]:-rotate-90"
+          aria-hidden="true"
+        />
+        <span className="min-w-0 flex-1 truncate">{t("projectFiles.projectSection")}</span>
+        {files.data ? (
+          <span className="font-normal tabular-nums">{files.data.items.length}</span>
+        ) : null}
+      </Collapsible.Trigger>
+      <Collapsible.Content className="grid gap-0.5 pb-1">
+        {files.isPending ? (
+          <div className="flex justify-center py-3">
+            <Spinner size="sm" />
+          </div>
+        ) : files.isError ? (
+          <p className="px-2 py-2 text-xs text-muted-foreground">{t("projectFiles.listFailed")}</p>
+        ) : files.data.items.length === 0 ? (
+          <p className="px-2 py-2 text-xs text-muted-foreground">{t("projectFiles.empty")}</p>
+        ) : (
+          <ProjectFileTree
+            files={files.data.items}
+            selectedPath={openPath}
+            onOpen={(file) => setOpenPath(file.path)}
+          />
+        )}
+      </Collapsible.Content>
+      <ProjectFilePanel
+        projectId={projectId}
+        path={openPath}
+        files={files.data}
+        onClose={() => setOpenPath(undefined)}
+        onOpenPath={setOpenPath}
+      />
+    </Collapsible.Root>
+  );
 }

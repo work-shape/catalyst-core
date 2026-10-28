@@ -591,6 +591,35 @@ export const clientInstanceConfigSchema = z.object({
   secretStore: secretStoreConfigSchema,
   /** The limits of the instance's Data Stores. Read with the module `dataStores` on. */
   dataStores: dataStoresConfigSchema,
+  /**
+   * The caps of each project's files (PRJ-2). Read with the module `projects` on. A project
+   * and its files do not expire by themselves: only its conversations do.
+   */
+  projects: z
+    .object({
+      files: z
+        .object({
+          /** Files a project holds at most; a deleted file does not count. */
+          maxFiles: z.number().int().positive().max(100_000).default(500),
+          maxFileBytes: z
+            .number()
+            .int()
+            .positive()
+            .default(50 * 1024 * 1024),
+          /** Every kept version counts, each stored object once. */
+          maxProjectBytes: z
+            .number()
+            .int()
+            .positive()
+            .default(2 * 1024 * 1024 * 1024),
+          /** Versions kept per file; the next one removes the oldest. */
+          versionsPerFile: z.number().int().min(1).max(1000).default(20)
+        })
+        .strict()
+        .prefault({})
+    })
+    .strict()
+    .prefault({}),
   /** The outside targets Connections may reach. Empty refuses all of them. */
   egress: egressConfigSchema,
   /** The catalogue entries this instance offers in New connection. */

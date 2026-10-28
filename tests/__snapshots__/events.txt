@@ -136,6 +136,7 @@
 {"name":"permission.granted","legacy":true,"audited":true,"phases":["after"]}
 {"name":"permission.revoked","legacy":true,"audited":true,"phases":["after"]}
 {"name":"project.created","legacy":false,"audited":true,"phases":["after"]}
+{"name":"project.file_purged","legacy":false,"audited":true,"phases":["after"]}
 {"name":"role.created","legacy":true,"audited":true,"phases":["after"]}
 {"name":"role.deleted","legacy":true,"audited":true,"phases":["after"]}
 {"name":"role.pending_decided","legacy":true,"audited":true,"phases":["after"]}

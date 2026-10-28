@@ -65,6 +65,8 @@ export interface WorkspaceChatModel {
 interface ProjectsModel {
   /** The instance's module is on and the session has workspaces. */
   enabled: boolean;
+  /** The project of the open conversation, while the module is on. */
+  selectedProjectId?: string;
   /** Starts a conversation in the project with its first message and opens it. */
   startChat(input: {
     text: string;

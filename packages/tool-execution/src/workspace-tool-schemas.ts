@@ -234,6 +234,8 @@ export const workspaceListFilesOutputSchema = z.object({
       mimeType: z.string().optional(),
       updatedAt: z.string(),
       lastCommandId: z.string().optional(),
+      /** A file of the project folder (`project/...`): its version (PRJ-2). */
+      version: z.number().int().positive().optional(),
       promotedArtifacts: z
         .array(z.object({ artifactId: z.string(), kind: z.string(), promotedAt: z.string() }))
         .optional()
@@ -260,6 +262,8 @@ export const workspaceReadFileOutputSchema = z.object({
   path: z.string(),
   byteSize: z.number(),
   mimeType: z.string().optional(),
+  /** A file of the project folder (`project/...`): the version to pass as replacesVersion. */
+  version: z.number().int().positive().optional(),
   encoding: z.literal("utf-8"),
   contentPreview: z.string(),
   // True when the answer does not reach the end of the file.

@@ -8,6 +8,7 @@ import {
 import { readPromotedFileArtifacts } from "../workspace-tool-results";
 import type { WorkspaceToolDependencies } from "./dependencies";
 import { findExistingWorkspace } from "./workspace";
+import { listProjectFolderFiles } from "./project-folder";
 
 export function workspaceListFilesTool(deps: WorkspaceToolDependencies) {
   return defineTool({
@@ -47,25 +48,31 @@ export async function listWorkspaceFiles(
         workspaceId
       })
     : [];
+  // The chat's project folder, where it is in a project (PRJ-2), under `project/`.
+  const projectFiles = await listProjectFolderFiles(deps, context);
   return toolSuccess(
     {
       ...(workspaceId ? { workspaceId } : {}),
-      files: files.map((file) => ({
-        path: file.path,
-        byteSize: file.byteSize,
-        checksum: file.checksum,
-        mimeType: file.mimeType,
-        updatedAt: file.updatedAt,
-        lastCommandId: file.lastCommandId,
-        promotedArtifacts: readPromotedFileArtifacts(file.metadata)
-      }))
+      files: [
+        ...files.map((file) => ({
+          path: file.path,
+          byteSize: file.byteSize,
+          checksum: file.checksum,
+          mimeType: file.mimeType,
+          updatedAt: file.updatedAt,
+          lastCommandId: file.lastCommandId,
+          promotedArtifacts: readPromotedFileArtifacts(file.metadata)
+        })),
+        ...projectFiles
+      ]
     },
     {
       auditSummary: {
         action: "workspace.list_files",
         subject: workspaceId ?? conversationId,
         metadata: {
-          count: files.length
+          count: files.length,
+          ...(projectFiles.length > 0 ? { projectCount: projectFiles.length } : {})
         }
       }
     }

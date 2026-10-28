@@ -57,6 +57,11 @@ export interface CreateSystemInstructionsOptions {
    * agent open it, names it no more.
    */
   subject?: SubjectOffer;
+  /**
+   * The folder of the project the conversation is in (PRJ-2): how to reach it and which files
+   * it holds. It changes with every write, so it comes last.
+   */
+  projectFolder?: string;
 }
 
 export function createSystemInstructions(
@@ -107,6 +112,10 @@ export function createSystemInstructions(
 
   if (options.subject) {
     sections.push(`Subject of this conversation:\n${createSubjectContext(options.subject)}`);
+  }
+
+  if (options.projectFolder) {
+    sections.push(options.projectFolder.trim());
   }
 
   return sections.join("\n\n");

@@ -191,7 +191,8 @@ export class TurnLoop {
           agentToolNames: agent.toolNames,
           agentSkillChangesEnabled: this.options.agentSkillChangesEnabled,
           ...(offer?.orientation ? { orientation: offer.orientation } : {}),
-          ...(offer?.subject ? { subject: { ...offer, subject: offer.subject } } : {})
+          ...(offer?.subject ? { subject: { ...offer, subject: offer.subject } } : {}),
+          ...(offer?.projectFolder ? { projectFolder: offer.projectFolder } : {})
         }
       )
     };

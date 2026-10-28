@@ -1,4 +1,14 @@
+conversations.draft_attachments.add_from_project  POST /api/v1/conversations/:conversationId/draft-attachments/from-project
+conversations.project_files.save  POST /api/v1/conversations/:conversationId/project-files
 conversations.set_project  PUT /api/v1/conversations/:conversationId/project
 projects.create  POST /api/v1/projects
+projects.files.delete  POST /api/v1/project-files/:projectId/delete
+projects.files.get_content  GET /api/v1/project-files/:projectId/content
+projects.files.list  GET /api/v1/project-files/:projectId
+projects.files.move  POST /api/v1/project-files/:projectId/move
+projects.files.purge  POST /api/v1/project-files/:projectId/purge
+projects.files.restore  POST /api/v1/project-files/:projectId/restore
+projects.files.upload  POST /api/v1/project-files/:projectId
+projects.files.versions  GET /api/v1/project-files/:projectId/versions
 projects.get  GET /api/v1/projects/:projectName
 projects.list  GET /api/v1/workspaces/:collaborationWorkspaceId/projects

@@ -91,6 +91,12 @@ export interface ConversationOffer {
    * Each call is still decided on its own.
    */
   withheldToolNames?: readonly string[];
+  /**
+   * The folder of the project the chat is in, as a section of the system prompt (PRJ-2): how
+   * the agent reaches it and which files it holds, never their content. Only where the person
+   * of the run reads the project.
+   */
+  projectFolder?: string;
 }
 
 /** The release skill containing this instance's product documentation. */

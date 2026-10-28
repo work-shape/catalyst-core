@@ -16,6 +16,7 @@ import {
   storeTextFile
 } from "./stored-text-file";
 import { resolveWorkspaceHandle } from "./workspace";
+import { projectFolderTarget, writeProjectFolderFile } from "./project-folder";
 
 export function workspaceWriteFileTool(deps: WorkspaceToolDependencies) {
   return defineTool({
@@ -45,6 +46,8 @@ export async function writeWorkspaceFile(
   input: z.infer<typeof workspaceWriteFileInputSchema>,
   context: ToolExecutionContext
 ): Promise<ToolHandlerResult<z.infer<typeof workspaceWriteFileOutputSchema>>> {
+  const project = await projectFolderTarget(deps, context, input.path);
+  if (project) return writeProjectFolderFile(project, input, context);
   const { fileStore } = deps;
   if (!fileStore) {
     return failed(

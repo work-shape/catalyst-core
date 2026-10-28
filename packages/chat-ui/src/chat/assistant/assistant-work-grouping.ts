@@ -15,6 +15,7 @@ import {
 import { readToolDisplayPayloadFromToolResult } from "../../shared/domain-ui-widgets";
 import { isQuestionCall } from "../questions/question";
 import { isDataStoreUseCall } from "../data-stores/data-store-use-card";
+import { isProjectFileChangeCall } from "../projects/project-file-change-line";
 import { appSavedByCall, standingAssetOpen } from "../conversation/subject-run";
 import { NO_FOLDED_CARDS, type FoldedCard } from "../conversation/card-fold";
 import { isOpenToolName, readPageSave } from "../../studio/pages/page-save";
@@ -53,8 +54,8 @@ export function createAssistantMessageGroupBy(
   // run goes on and does not fold into the count of tool calls. An open of an asset stands
   // there too: a change of what the conversation is about is always seen. So does a subagent's
   // card, which is how the person follows and stops it, and the Connect card of a call refused
-  // for a missing sign-in, which is how the person connects. So does an App's card, and the
-  // agent's question to the person. A preview or a save that a newer card stands for folds into
+  // for a missing sign-in, which is how the person connects. So does an App's card, the
+  // agent's question to the person, and the line of a write to a project file. A preview or a save that a newer card stands for folds into
   // the work.
   return (part, context) =>
     ((isPageSaveCall(part) || isAppSavedLine(part)) && !isFolded(part, folded)) ||
@@ -62,7 +63,8 @@ export function createAssistantMessageGroupBy(
     isSubagentCall(part) ||
     isConnectCall(part) ||
     isQuestionCall(part) ||
-    isDataStoreUseCall(part)
+    isDataStoreUseCall(part) ||
+    isProjectFileChangeCall(part)
       ? []
       : byType(part, context);
 }
@@ -226,6 +228,8 @@ function staysVisibleAfterRun(
     isQuestionCall(part) ||
     // A Data Store added for reading, or waiting for the person's click, stays (STORE-USE-1).
     isDataStoreUseCall(part) ||
+    // A write to a project file stays: its line is how the person opens it or undoes it.
+    isProjectFileChangeCall(part) ||
     (index > finalTextIndex && isVisibleFinalAssistantPart(part))
   );
 }

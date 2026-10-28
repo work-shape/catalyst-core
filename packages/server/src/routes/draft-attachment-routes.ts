@@ -1,10 +1,22 @@
+import { Readable } from "node:stream";
 import { apiOperations } from "@work-shape/catalyst-api-contract";
-import { AppError, getSubjectUserId, type JsonObject } from "@work-shape/catalyst-core";
+import { createHash } from "node:crypto";
+import {
+  AppError,
+  getSubjectUserId,
+  type ActorAccess,
+  type AuthenticatedUser,
+  type CollaborationWorkspaceId,
+  type Conversation,
+  type JsonObject,
+  type LocaleCode
+} from "@work-shape/catalyst-core";
 import { ConversationWorkflow } from "../conversations/conversation-service";
 import { readMultipartFile, stageMultipartFile } from "../http/multipart-upload";
 import type { Route } from "../http/route";
 import { conversationIdParam, requirePathParam, resolveRequestLocale } from "./request-context";
 import { getWorkspaceAssetSnapshot } from "../workspaces/agent-availability";
+import { ProjectFileService } from "../projects/project-files";
 import type { ChatServerOptions } from "../types";
 
 export function registerDraftAttachmentRoutes(route: Route, options: ChatServerOptions): void {
@@ -33,21 +45,25 @@ export function registerDraftAttachmentRoutes(route: Route, options: ChatServerO
         // Receiving the body can take minutes. Check again before any bytes are stored, so that
         // a Conversation deleted in the meantime does not receive objects nothing cleans up.
         const conversation = await conversations.requireConversationAccess(conversationId, user);
-        let workspaceToolsAvailable = false;
-        if (query.agentName !== undefined) {
-          const workspace = await conversations.resolveTargetWorkspace(
-            user,
-            conversation.collaborationWorkspaceId
+        const projectFiles = new ProjectFileService(options);
+        // In a chat of a project the upload lands in the project's folder too (PRJ-2). Room is
+        // asked first, so a full folder refuses the upload before anything is stored.
+        if (!(await projectFiles.roomFor(conversation, staged.content.byteSize))) {
+          throw new AppError(
+            "VALIDATION_FAILED",
+            "The project's folder has no room for this file",
+            { reason: "project_files_full" },
+            { exposeMessage: true }
           );
-          const assets = await getWorkspaceAssetSnapshot(options, workspace, access);
-          const agent = assets.agents.find((candidate) => candidate.name === query.agentName);
-          if (!agent) throw new AppError("NOT_FOUND", "The selected agent is not available");
-          workspaceToolsAvailable =
-            options.config.executionWorkspaces?.enabled === true &&
-            ["workspace.import_files", "workspace.exec"].every((tool) =>
-              (agent.toolNames ?? []).includes(tool)
-            );
         }
+        const workspaceToolsAvailable = await workspaceToolsFor(
+          options,
+          conversations,
+          user,
+          access,
+          conversation.collaborationWorkspaceId,
+          query.agentName
+        );
         const service = attachments(options);
         const { attachment, outcome } = await service.uploadDraftAttachment({
           conversationId,
@@ -58,10 +74,19 @@ export function registerDraftAttachmentRoutes(route: Route, options: ChatServerO
           mimeType: file.mimetype,
           content: staged.content
         });
+        const projectFile =
+          conversation.projectId !== undefined && attachment.status !== "failed"
+            ? await projectFiles.landUpload(conversation, user, {
+                filename: file.filename,
+                ...(file.mimetype ? { mimeType: file.mimetype } : {}),
+                bytes: await readAll(staged.content.openStream())
+              })
+            : undefined;
         return {
           attachment: withoutNullError(attachment),
           attachments: listed(await service.listDraftAttachments(conversationId)),
-          outcome
+          outcome,
+          ...(projectFile ? { projectFile } : {})
         };
       } finally {
         await staged.cleanup();
@@ -93,6 +118,94 @@ export function registerDraftAttachmentRoutes(route: Route, options: ChatServerO
       })
     );
   });
+}
+
+/**
+ * Whether the agent chosen for the next message has the workspace tools, so that any file may
+ * come along: the server checks the agent in the conversation's workspace.
+ */
+async function workspaceToolsFor(
+  options: ChatServerOptions,
+  conversations: ConversationWorkflow,
+  user: AuthenticatedUser,
+  access: ActorAccess,
+  collaborationWorkspaceId: CollaborationWorkspaceId,
+  agentName: string | undefined
+): Promise<boolean> {
+  if (agentName === undefined) return false;
+  const workspace = await conversations.resolveTargetWorkspace(user, collaborationWorkspaceId);
+  const assets = await getWorkspaceAssetSnapshot(options, workspace, access);
+  const agent = assets.agents.find((candidate) => candidate.name === agentName);
+  if (!agent) throw new AppError("NOT_FOUND", "The selected agent is not available");
+  return (
+    options.config.executionWorkspaces?.enabled === true &&
+    ["workspace.import_files", "workspace.exec"].every((tool) =>
+      (agent.toolNames ?? []).includes(tool)
+    )
+  );
+}
+
+/**
+ * A draft attachment of bytes the server holds, such as a project file for "Add from project"
+ * (PRJ-2): the same path as an upload from the person's device, after the caller's checks.
+ */
+export async function addDraftAttachmentFromBytes(
+  options: ChatServerOptions,
+  input: {
+    conversation: Conversation;
+    user: AuthenticatedUser;
+    access: ActorAccess;
+    agentName?: string;
+    locale?: LocaleCode;
+    filename: string;
+    mimeType?: string;
+    bytes: Uint8Array;
+  }
+) {
+  const service = attachments(options);
+  if (input.bytes.byteLength > service.maxFileBytes) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      "File exceeds the configured upload size limit",
+      { reason: "attachment_too_large" },
+      { exposeMessage: true }
+    );
+  }
+  const workspaceToolsAvailable = await workspaceToolsFor(
+    options,
+    new ConversationWorkflow(options),
+    input.user,
+    input.access,
+    input.conversation.collaborationWorkspaceId,
+    input.agentName
+  );
+  const bytes = input.bytes;
+  const { attachment, outcome } = await service.uploadDraftAttachment({
+    conversationId: input.conversation.id,
+    workspaceToolsAvailable,
+    ...(input.locale ? { locale: input.locale } : {}),
+    ownerUserId: getSubjectUserId(input.user),
+    filename: input.filename,
+    ...(input.mimeType ? { mimeType: input.mimeType } : {}),
+    content: {
+      byteSize: bytes.byteLength,
+      checksum: createHash("sha256").update(bytes).digest("hex"),
+      headerBytes: bytes.slice(0, 8192),
+      // One chunk, already read.
+      openStream: () => Readable.from([bytes])
+    }
+  });
+  return {
+    attachment: withoutNullError(attachment),
+    attachments: listed(await service.listDraftAttachments(input.conversation.id)),
+    outcome
+  };
+}
+
+async function readAll(stream: AsyncIterable<Uint8Array>): Promise<Uint8Array> {
+  const chunks: Uint8Array[] = [];
+  for await (const chunk of stream) chunks.push(chunk);
+  return Buffer.concat(chunks);
 }
 
 function attachments(options: ChatServerOptions) {
