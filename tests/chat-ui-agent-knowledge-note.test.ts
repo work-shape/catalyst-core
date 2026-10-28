@@ -93,7 +93,7 @@ describe("the Knowledge Base chooser of an agent says why one is missing or does
     await until(() => expect(rows()).toHaveLength(2));
 
     expect(document.body.textContent).toContain(
-      "Lists the knowledge bases of this agent's workspace and those for everyone. One of another workspace is not offered here."
+      "Lists the knowledge bases of this agent's workspace and those for everyone. One of another place is greyed, with the reason."
     );
     expect(document.body.textContent).not.toContain("Only a published knowledge base answers.");
     const [published, unpublished] = rows();
@@ -112,7 +112,7 @@ describe("the Knowledge Base chooser of an agent says why one is missing or does
     await openChooser(container);
     await until(() =>
       expect(document.body.textContent).toContain(
-        "Lists the knowledge bases for everyone. One that belongs to a workspace is not offered here."
+        "Lists the knowledge bases for everyone. One that belongs to a workspace is greyed, with the reason."
       )
     );
     expect(rows()).toEqual([]);
@@ -120,10 +120,10 @@ describe("the Knowledge Base chooser of an agent says why one is missing or does
 
   it("says the same in German", () => {
     expect(de("knowledge.agentNoteWorkspace")).toBe(
-      "Hier stehen die Wissensbasen aus dem Arbeitsbereich dieses Agenten und die für alle. Eine aus einem anderen Arbeitsbereich steht hier nicht zur Wahl."
+      "Hier stehen die Wissensbasen aus dem Arbeitsbereich dieses Agenten und die für alle. Eine von woanders steht ausgegraut da, mit dem Grund."
     );
     expect(de("knowledge.agentNoteInstance")).toBe(
-      "Hier stehen die Wissensbasen für alle. Eine, die einem Arbeitsbereich gehört, steht hier nicht zur Wahl."
+      "Hier stehen die Wissensbasen für alle. Eine, die einem Arbeitsbereich gehört, steht ausgegraut da, mit dem Grund."
     );
     expect(de("knowledge.agentUnpublished")).toBe(
       "Noch nicht veröffentlicht: Sie antwortet, sobald sie veröffentlicht ist"

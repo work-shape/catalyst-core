@@ -3,11 +3,18 @@ export { BuildWithAgentDialog } from "../../../packages/chat-ui/src/studio/build
 export { instanceSentence } from "../../../packages/chat-ui/src/studio/build-area/build-refusals";
 export {
   agentAudience,
+  assetAudience,
   AssetPlacesProvider,
   assetPlace,
   refusalPlaceOf
 } from "../../../packages/chat-ui/src/studio/build-area/asset-place";
 export { AgentSkills } from "../../../packages/chat-ui/src/studio/build-area/agent-skills";
+export { AgentKnowledge } from "../../../packages/chat-ui/src/studio/build-area/agent-knowledge";
+export {
+  shareUpTo,
+  unreachablePlaces,
+  unreachableReason
+} from "../../../packages/chat-ui/src/studio/build-area/unreachable-choices";
 export { NewAssetAvailability } from "../../../packages/chat-ui/src/studio/build-area/build-create-dialog";
 export { AgentDataStores } from "../../../packages/chat-ui/src/studio/build-area/agent-data-stores";
 export {

@@ -54,7 +54,7 @@ import { AGENT_ASSET_KIND, type BuildRights } from "../../shared/build-rights";
 import {
   AssetPlaceLine,
   AVAILABILITY_SECTION_ID,
-  agentAudience,
+  assetAudience,
   assetPlace,
   refusalPlaceOf,
   useKnownWorkspaces
@@ -633,10 +633,10 @@ function LoadedAssetPage({
       : place.rung === "all"
         ? t("build.readOnlyInstance")
         : t("build.readOnly");
-  // Where the asset sits and, for an agent, where a chat can choose it: in the head. Where no
-  // chat can, the chip leads a reader who may change that to the "Available in" section.
-  const audience =
-    entry.kind === AGENT_ASSET_KIND ? agentAudience(stored, workspaces, t, locale) : undefined;
+  // Where the asset sits and who uses it: for an agent where a chat can choose it, for a
+  // Knowledge Base where agents may use it. Where nobody can, the chip leads a reader who may
+  // change that to the "Available in" section.
+  const audience = assetAudience(entry.kind, stored, workspaces, t, locale);
   const maySetAvailability = stored.canSetAvailability ?? source.rights.instanceWrite;
   const placeLine = (
     <AssetPlaceLine

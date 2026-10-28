@@ -1,4 +1,4 @@
-import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { DATA_STORE_ASSET_KIND } from "@work-shape/catalyst-core";
 import { useMemo, useState, type ReactNode } from "react";
 import { Badge, Page, SkeletonPage } from "@work-shape/catalyst-ui";
@@ -20,8 +20,15 @@ import { AGENT_ASSET_KIND } from "../../shared/build-rights";
 import { AGENTS_BUILD_PATH } from "../../shared/build-route";
 import { useConnectionToolChoice } from "./connection-tools";
 import { useKnowledgeBaseSource } from "./knowledge-base-source";
-import { useOwnedChoices } from "./owned-choices";
-import { assetPlace, useKnownWorkspaces } from "./asset-place";
+import { useOwnedChoices, type ListedAsset } from "./owned-choices";
+import {
+  shareUpTo,
+  unreachableReason,
+  useUnreachableChoices,
+  type UnreachableAsset,
+  type UnreachableWords
+} from "./unreachable-choices";
+import { assetPlace, useKnownWorkspaces, type AssetOwner } from "./asset-place";
 import { skillFacts } from "./skill-facts";
 import { useAssetShare } from "./asset-share";
 import {
@@ -36,6 +43,20 @@ import { unusableDataStoreReason } from "./agent-data-stores-model";
 const SKILL_CHOICE_PAGE_SIZE = 50;
 /** How many Data Stores of each owner one page of an agent's chooser asks the instance for. */
 const DATA_STORE_CHOICE_PAGE_SIZE = 50;
+/** How many Knowledge Bases of each other place one page of an agent's chooser asks for. */
+const KNOWLEDGE_BASE_CHOICE_PAGE_SIZE = 50;
+/** Why an agent cannot use a skill of another place: "ihn" in German. */
+const SKILL_WORDS: UnreachableWords = {
+  cannotAll: "build.skillCannotAll",
+  cannotMine: "build.skillCannotMine",
+  cannotIn: "build.skillCannotIn"
+};
+/** Why an agent cannot use a Knowledge Base of another place: "sie" in German. */
+const KNOWLEDGE_WORDS: UnreachableWords = {
+  cannotAll: "knowledge.agentCannotAll",
+  cannotMine: "knowledge.agentCannotMine",
+  cannotIn: "knowledge.agentCannotIn"
+};
 
 export const agentKind: BuildAssetKind = {
   kind: AGENT_ASSET_KIND,
@@ -106,78 +127,27 @@ function AgentAssetEditor(frame: BuildAssetEditorProps) {
     { kind: "skill", owner, search: skillSearch, limit: SKILL_CHOICE_PAGE_SIZE },
     (skill) => ({ name: skill.name, title: skill.title, ...skillFacts(skill) })
   ).choices;
-  // The reader's own skills, which an agent of everyone or of a team cannot use: the chooser
-  // shows them greyed with the reason, so nobody wonders where they went (SCOPE-WORDS).
-  const workspaces = useKnownWorkspaces();
-  const mine = workspaces.find((workspace) => workspace.personal)?.id;
-  const otherPlace = mine !== undefined && owner !== mine;
-  const ownSkills = useQuery({
-    queryKey: [
-      ...workspaceQueryKeys.assets(apiBaseUrl, authScope),
-      "choice",
-      "skill",
-      "mine",
-      mine ?? "",
-      skillSearch
-    ],
-    queryFn: ({ signal }) =>
-      client.assets.list({
-        params: { kind: "skill" },
-        query: {
-          limit: SKILL_CHOICE_PAGE_SIZE,
-          workspaceId: mine ?? "",
-          ...(skillSearch ? { text: skillSearch } : {})
-        },
-        signal
-      }),
-    enabled: otherPlace,
-    retry: false
-  });
-  const ownerName =
-    owner === undefined
-      ? undefined
-      : assetPlace({ kind: "workspace", workspaceId: owner }, workspaces, t).name;
-  // Each of them offers "Für alle teilen…" or "Mit {team} teilen…" (SHARE-1): the dialog opens
-  // on the agent's place, and once the skill moved there the chooser offers it.
-  const skillShare = useAgentChoiceShare();
-  const shareTo: AssetShareTarget | undefined =
-    owner === undefined
-      ? { kind: "instance" }
-      : ownerName === undefined
-        ? undefined
-        : { kind: "workspace", workspaceId: owner, name: ownerName };
-  const unusable = otherPlace
-    ? (ownSkills.data?.items ?? []).map((skill) => ({
-        name: skill.name,
-        title: skill.title,
-        ...skillFacts(skill),
-        reason:
-          ownerName === undefined
-            ? t("build.skillOnlyMine")
-            : t("build.skillOnlyMineIn", { workspace: ownerName }),
-        ...(shareTo === undefined || mine === undefined
-          ? {}
-          : {
-              share: {
-                label:
-                  shareTo.kind === "instance"
-                    ? t("share.withEveryone")
-                    : t("share.withTeam", { team: shareTo.name }),
-                onSelect: () =>
-                  skillShare.start(
-                    {
-                      kind: "skill",
-                      name: skill.name,
-                      title: skill.title || skill.name,
-                      id: skill.id,
-                      owner: { kind: "workspace", workspaceId: mine }
-                    },
-                    shareTo
-                  )
-              }
-            })
-      }))
-    : [];
+  // The skills of the reader's other places, which this agent cannot use: the chooser shows
+  // them greyed with the reason, so nobody wonders where they went (SCOPE-WORDS). Each offers
+  // "Für alle teilen…" or "Mit {team} teilen…" (SHARE-1) where the ladder goes up to the
+  // agent's place: the dialog opens there, and once the skill moved the chooser offers it.
+  const choiceShare = useAgentChoiceShare();
+  const greyed = useGreyedChoices(owner, choiceShare.start);
+  const unusable = greyed(
+    useUnreachableChoices({
+      kind: "skill",
+      owner,
+      search: skillSearch,
+      limit: SKILL_CHOICE_PAGE_SIZE,
+      enabled: true
+    }),
+    SKILL_WORDS
+  ).map(({ asset, ...rest }) => ({
+    name: asset.name,
+    title: asset.title,
+    ...skillFacts(asset),
+    ...rest
+  }));
   // The Knowledge Bases are offered where the instance has the kind: its module is on.
   const context = usePlatformContextQuery({ ...api, enabled: true }).data;
   const knowledgeOn = context?.kinds.some((kind) => kind.kind === "knowledge_base") ?? false;
@@ -188,6 +158,22 @@ function AgentAssetEditor(frame: BuildAssetEditorProps) {
     knowledgeOn,
     owner
   );
+  // Those of the reader's other places, greyed with the reason, as its skills.
+  const unusableKnowledge = greyed(
+    useUnreachableChoices({
+      kind: "knowledge_base",
+      owner,
+      search: knowledgeSearch,
+      limit: KNOWLEDGE_BASE_CHOICE_PAGE_SIZE,
+      enabled: knowledgeOn
+    }),
+    KNOWLEDGE_WORDS
+  ).map(({ asset, ...rest }) => ({
+    name: asset.name,
+    title: asset.title,
+    ...(asset.description ? { description: asset.description } : {}),
+    ...rest
+  }));
   // The Data Stores, where the instance has the kind: of the agent's own place and of everyone,
   // as its skills (AGENT-DATA-1).
   const dataStoreChoice = useDataStoreChoice(
@@ -251,7 +237,7 @@ function AgentAssetEditor(frame: BuildAssetEditorProps) {
 
   return (
     <>
-      {skillShare.dialog}
+      {choiceShare.dialog}
       <AgentEditor
         frame={frame}
         initialForm={
@@ -281,7 +267,8 @@ function AgentAssetEditor(frame: BuildAssetEditorProps) {
                   ? { more: knowledgeRead.data.more }
                   : {}),
                 onSearch: (text) => setKnowledgeSearch(text.trim()),
-                workspaceOwned: owner !== undefined
+                workspaceOwned: owner !== undefined,
+                unusable: unusableKnowledge
               }
             : undefined
         }
@@ -345,6 +332,54 @@ function useAgentChoiceShare(): {
   };
 }
 
+/** A greyed row of an agent's chooser: the asset, why the agent cannot use it, and the share. */
+interface GreyedChoice {
+  asset: ListedAsset;
+  reason: string;
+  share?: { label: string; onSelect(): void };
+}
+
+/**
+ * Turns the assets of the reader's other places into greyed rows for an agent of `owner`: the
+ * reason in the words of the kind, and "Teilen…" where the asset can go up to the agent's place.
+ */
+function useGreyedChoices(
+  owner: string | undefined,
+  share: (subject: AssetShareSubject, to: AssetShareTarget) => void
+): (assets: readonly UnreachableAsset[], words: UnreachableWords) => GreyedChoice[] {
+  const { t } = useTranslation();
+  const workspaces = useKnownWorkspaces();
+  const agent: AssetOwner =
+    owner === undefined ? { kind: "instance" } : { kind: "workspace", workspaceId: owner };
+  const agentPlace = assetPlace(agent, workspaces, t);
+  return (assets, words) =>
+    assets.map(({ asset, owner: assetOwner }) => {
+      const up = shareUpTo(assetOwner, agent, workspaces, t);
+      return {
+        asset,
+        reason: unreachableReason(assetPlace(assetOwner, workspaces, t), agentPlace, t, words),
+        ...(up === undefined
+          ? {}
+          : {
+              share: {
+                label: up.label,
+                onSelect: () =>
+                  share(
+                    {
+                      kind: asset.kind,
+                      name: asset.name,
+                      title: asset.title || asset.name,
+                      id: asset.id,
+                      owner: assetOwner
+                    },
+                    up.to
+                  )
+              }
+            })
+      };
+    });
+}
+
 /**
  * The Data Stores an agent's Data section offers: those of its own place and of everyone, and,
  * greyed with the reason, those of the reader's other places, which the agent cannot use (the
@@ -374,34 +409,14 @@ function useDataStoreChoice(
     }),
     enabled
   ).choices;
-  // The reader's other places: their own and the teams they are in, apart from the agent's.
+  // The reader's other places, whose stores the one owner check refuses for this agent.
   const workspaces = useKnownWorkspaces();
-  const elsewhere = workspaces.filter(
-    (workspace) => (workspace.member || workspace.personal) && workspace.id !== owner
-  );
-  const others = useQueries({
-    queries: elsewhere.map((workspace) => ({
-      queryKey: [
-        ...workspaceQueryKeys.assets(apiBaseUrl, authScope),
-        "choice",
-        DATA_STORE_ASSET_KIND,
-        "elsewhere",
-        workspace.id,
-        search
-      ],
-      queryFn: ({ signal }: { signal: AbortSignal }) =>
-        client.assets.list({
-          params: { kind: DATA_STORE_ASSET_KIND },
-          query: {
-            limit: DATA_STORE_CHOICE_PAGE_SIZE,
-            workspaceId: workspace.id,
-            ...(search ? { text: search } : {})
-          },
-          signal
-        }),
-      enabled,
-      retry: false
-    }))
+  const others = useUnreachableChoices({
+    kind: DATA_STORE_ASSET_KIND,
+    owner,
+    search,
+    limit: DATA_STORE_CHOICE_PAGE_SIZE,
+    enabled
   });
   if (!enabled) return undefined;
   const agentPlace = assetPlace(
@@ -409,18 +424,11 @@ function useDataStoreChoice(
     workspaces,
     t
   );
-  const unusable = elsewhere.flatMap((workspace, index) => {
-    const reason = unusableDataStoreReason(
-      assetPlace({ kind: "workspace", workspaceId: workspace.id }, workspaces, t),
-      agentPlace,
-      t
-    );
-    return (others[index]?.data?.items ?? []).map((store) => ({
-      name: store.name,
-      title: store.title,
-      reason
-    }));
-  });
+  const unusable = others.map(({ asset: store, owner: storeOwner }) => ({
+    name: store.name,
+    title: store.title,
+    reason: unusableDataStoreReason(assetPlace(storeOwner, workspaces, t), agentPlace, t)
+  }));
   return {
     options: usable?.items ?? [],
     ...(usable?.more === undefined ? {} : { more: usable.more }),

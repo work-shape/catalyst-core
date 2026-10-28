@@ -22,7 +22,8 @@ export function invalidateOfferedAgents(
 }
 
 /** The kinds whose assets are made available per workspace. */
-export type AvailabilityKind = "agent" | "knowledge_base" | "connection";
+export const AVAILABILITY_KINDS = ["agent", "knowledge_base", "connection"] as const;
+export type AvailabilityKind = (typeof AVAILABILITY_KINDS)[number];
 
 interface AgentPlacementMutationInput {
   apiBaseUrl: string;

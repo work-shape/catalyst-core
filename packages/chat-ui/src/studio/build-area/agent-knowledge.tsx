@@ -17,6 +17,15 @@ export interface KnowledgeBaseChoice {
    * instance's. Otherwise only the instance's are.
    */
   workspaceOwned: boolean;
+  /**
+   * Knowledge Bases the reader sees in their other places that this agent cannot use: greyed
+   * with the reason instead of hidden (SCOPE-WORDS).
+   */
+  unusable?: readonly (KnowledgeChoice & {
+    reason: string;
+    /** "Für alle teilen…": shares it up to the agent's place (SHARE-1). */
+    share?: { label: string; onSelect(): void };
+  })[];
 }
 
 /**
@@ -35,7 +44,10 @@ export function AgentKnowledge({
   onChange(knowledgeBases: string[]): void;
 }) {
   const { t } = useTranslation();
-  const byName = new Map(choice.options.map((option) => [option.name, option]));
+  const byName = new Map(
+    [...(choice.unusable ?? []), ...choice.options].map((option) => [option.name, option])
+  );
+  const usable = new Set(choice.options.map((option) => option.name));
   return (
     <>
       {value.length === 0 ? (
@@ -71,15 +83,29 @@ export function AgentKnowledge({
             )}
             onSearchChange={choice.onSearch}
             more={choice.more && { loading: choice.more.loading, onLoad: choice.more.load }}
-            options={choice.options.map((option) => ({
-              value: option.name,
-              label: option.title || option.name,
-              description: option.unpublished
-                ? [t("knowledge.agentUnpublished"), option.description].filter(Boolean).join(" · ")
-                : option.description,
-              keywords: option.name,
-              leading: <Library aria-hidden="true" />
-            }))}
+            options={[
+              ...choice.options.map((option) => ({
+                value: option.name,
+                label: option.title || option.name,
+                description: option.unpublished
+                  ? [t("knowledge.agentUnpublished"), option.description]
+                      .filter(Boolean)
+                      .join(" · ")
+                  : option.description,
+                keywords: option.name,
+                leading: <Library aria-hidden="true" />
+              })),
+              ...(choice.unusable ?? [])
+                .filter((option) => !usable.has(option.name))
+                .map((option) => ({
+                  value: option.name,
+                  label: option.title || option.name,
+                  disabledReason: option.reason,
+                  ...(option.share === undefined ? {} : { disabledAction: option.share }),
+                  keywords: option.name,
+                  leading: <Library aria-hidden="true" />
+                }))
+            ]}
             value={value}
             onValueChange={onChange}
           >

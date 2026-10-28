@@ -269,6 +269,21 @@ describe("Knowledge Bases in Build", () => {
   });
 
   // AVAIL-1: agents can use a Knowledge Base in the workspaces it is available in.
+  it("says beside its place who uses a Knowledge Base of everyone (SCOPE-WORDS)", () => {
+    const line = (markup: string) => /<div data-asset-place="".*?<\/div>/su.exec(markup)?.[0] ?? "";
+    const offered = render(
+      {
+        ...knowledgeBase({ revision: 1, publishedRevision: 1 }),
+        availability: { mode: "selected", collaborationWorkspaceIds: [], personalWorkspaces: true }
+      },
+      { locale: "de" }
+    );
+    expect(line(offered)).toContain(">Agenten nutzen sie in: Persönliche Arbeitsbereiche<");
+    expect(line(render(knowledgeBase({ revision: 1, publishedRevision: 1 })))).toContain(
+      ">No agent can use it yet<"
+    );
+  });
+
   it("says where agents can use it, saved with the page and applied at once", () => {
     const section = (page: string) =>
       /<section[^>]*id="availability">.*?<\/section>/su.exec(page)?.[0] ?? "";

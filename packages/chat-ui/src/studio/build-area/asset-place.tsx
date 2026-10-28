@@ -1,6 +1,7 @@
 import { createContext, useContext, type MouseEvent, type ReactNode } from "react";
 import { Users } from "lucide-react";
 import { Chip, ScopeChip, type ChipSize } from "@work-shape/catalyst-ui";
+import { AVAILABILITY_KINDS } from "../../shared/api/agent-placement-mutations";
 import type { BuildWorkspace } from "../../shared/build-rights";
 import type { BuildAsset } from "./build-kind/asset";
 import type { AgentAvailabilityForm } from "./asset-form-model";
@@ -88,6 +89,32 @@ export function agentAudience(
   const names = offeredPlaces(offered, workspaces, t, locale);
   if (names === undefined) return { text: t("build.usedNowhere"), nowhere: true };
   return { text: t("build.usedIn", { names }) };
+}
+
+/** The kinds offered per workspace: an agent to chats, the others to agents. */
+const OFFERED_KINDS: ReadonlySet<string> = new Set(AVAILABILITY_KINDS);
+
+/**
+ * Who uses an asset, where its record says so: an agent by `agentAudience`; a Knowledge Base or a
+ * Connection of everyone in the workspaces where agents may use it, or that none may yet. One
+ * of a workspace is used there: its place says so.
+ */
+export function assetAudience(
+  kind: string,
+  asset: Pick<BuildAsset, "scope" | "availability" | "agentUse">,
+  workspaces: KnownWorkspaces,
+  t: Translate,
+  locale: string
+): AgentAudience | undefined {
+  if (kind === "agent") return agentAudience(asset, workspaces, t, locale);
+  if (!OFFERED_KINDS.has(kind) || asset.scope.kind !== "instance") return undefined;
+  // None stored is offered nowhere.
+  const names =
+    asset.availability === undefined
+      ? undefined
+      : offeredPlaces(asset.availability, workspaces, t, locale);
+  if (names === undefined) return { text: t("build.usableNowhere"), nowhere: true };
+  return { text: t("build.usableIn", { names }) };
 }
 
 /**
