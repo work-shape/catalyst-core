@@ -122,7 +122,8 @@ export function registerAgentRunRoutes(route: Route, options: ChatServerOptions)
           ...(body.conversation?.visibility ? { visibility: body.conversation.visibility } : {}),
           ...(body.conversation?.creationTarget
             ? { creationTarget: body.conversation.creationTarget }
-            : {})
+            : {}),
+          ...(body.conversation?.projectId ? { projectId: body.conversation.projectId } : {})
         }
       );
       return createStartRunResponse(

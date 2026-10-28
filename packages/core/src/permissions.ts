@@ -8,6 +8,7 @@ import {
   GRANT_HOLDER_KINDS,
   GRANT_SCOPE_KINDS,
   PRINCIPAL_HOLDER_KINDS,
+  PROJECT_ACTIONS,
   type PlatformAction
 } from "@work-shape/catalyst-asset-schemas";
 import { resolveDataScope, type DataScope, type ScopeAssignmentInput } from "./data-scope";
@@ -114,10 +115,28 @@ export interface AccessResource {
 }
 
 /**
- * The actions a member of a workspace holds on what that workspace owns, by being a member.
- * Opening a published App is one: it acts with its viewer's rights and shows nothing more.
+ * The rights on a project: a member holds them on the projects of their workspace, and nobody
+ * holds them any other way. No grant row is written for one, no role holds one by default and
+ * no bundle carries one, so an instance admin and a Builder who is no member reach no project
+ * (projects.md, section 8). The project's audience narrows them in one check beside the
+ * conversation's (`requireProjectAccess`), which reads membership and never the evaluator.
  */
-export const WORKSPACE_MEMBER_ACTIONS = ["app.use"] as const satisfies readonly PlatformAction[];
+export const PROJECT_MEMBERSHIP_ACTIONS = PROJECT_ACTIONS satisfies readonly PlatformAction[];
+
+/** Whether only membership of a workspace carries the action. */
+export function isMembershipOnlyAction(action: string): boolean {
+  return PROJECT_MEMBERSHIP_ACTIONS.some((candidate) => candidate === action);
+}
+
+/**
+ * The actions a member of a workspace holds on what that workspace owns, by being a member.
+ * Opening a published App is one: it acts with its viewer's rights and shows nothing more. A
+ * project is chat work, and every member makes conversations.
+ */
+export const WORKSPACE_MEMBER_ACTIONS = [
+  "app.use",
+  ...PROJECT_MEMBERSHIP_ACTIONS
+] as const satisfies readonly PlatformAction[];
 
 /**
  * The verbs each bundle of a workspace carries on every kind: Builder reads and writes,
@@ -133,7 +152,12 @@ const WORKSPACE_BUNDLE_VERBS: Readonly<Record<string, readonly string[]>> = {
  * instance admin's grant. A Workflow's publish joins the Publisher bundle only after the publish
  * review (DT-1b), once a workspace can own a Workflow (build plan, gate of 2026-10-14).
  */
-const BUNDLE_EXCLUDED_ACTIONS: readonly string[] = ["guardrail.publish", "workflow.publish"];
+const BUNDLE_EXCLUDED_ACTIONS: readonly string[] = [
+  "guardrail.publish",
+  "workflow.publish",
+  // A Builder who is no member reaches no project of the workspace (ADR-0015).
+  ...PROJECT_MEMBERSHIP_ACTIONS
+];
 
 /**
  * Whether a row of the action gives the right asked for: its own action, or a bundle held in a

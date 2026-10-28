@@ -386,7 +386,7 @@ describe("access evaluator: an inactive holder", () => {
 });
 
 describe("access evaluator: role defaults", () => {
-  it("gives a plain user nothing, an admin no release, no API access, no built-in role edits, no user deletion, no job retry and no System pages, a superadmin all but release", () => {
+  it("gives a plain user nothing, an admin no release, no API access, no built-in role edits, no user deletion, no job retry and no System pages, a superadmin all but release, and no role a project", () => {
     const allowedFor = (roles: string[]) =>
       ACTIONS.filter((action) => decide({ holder: holder({ roles }), action }).allowed);
 
@@ -400,11 +400,13 @@ describe("access evaluator: role defaults", () => {
           action !== "roles.edit_built_in" &&
           action !== "users.delete" &&
           action !== "jobs.retry" &&
-          action !== "system.view"
+          action !== "system.view" &&
+          !action.startsWith("project.")
       )
     );
+    // A project is reached through membership alone (PRJ-1): no instance role carries it.
     expect(allowedFor(["user", "admin", "superadmin"])).toEqual(
-      ACTIONS.filter((action) => action !== "assets.release")
+      ACTIONS.filter((action) => action !== "assets.release" && !action.startsWith("project."))
     );
     expect(allowedFor(["owner"])).toEqual([]);
   });

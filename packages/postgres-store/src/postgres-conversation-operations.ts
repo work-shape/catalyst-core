@@ -29,10 +29,12 @@ import {
   type ModelProviderContinuationStore,
   type ModelProviderTurnContinuation,
   type MoveConversationInput,
+  type SetConversationProjectInput,
   type SetConversationSubjectInput,
   type UserId
 } from "@work-shape/catalyst-core";
 import { and, asc, desc, eq, gt, inArray, isNull, ne, not, notExists, or, sql } from "drizzle-orm";
+import { lockWorkspaceProject } from "./postgres-project-operations";
 import { isPrunedRunThread } from "./postgres-pruned-run";
 import { type PostgresConnection, type PostgresTransaction } from "./postgres-database";
 import { writeAssistantMessageContinuations } from "./postgres-model-provider-continuation-writes";
@@ -50,6 +52,29 @@ import {
 } from "./schema";
 
 export async function createConversation(
+  db: PostgresConnection,
+  input: CreateConversationInput
+): Promise<Conversation> {
+  if (input.projectId !== undefined) {
+    const { projectId } = input;
+    // The project is held while the row that names it is written: it stays in this workspace.
+    return db.transaction(async (tx) => {
+      const project = await lockWorkspaceProject(tx, {
+        clientInstanceId: input.clientInstanceId,
+        projectId,
+        collaborationWorkspaceId: input.collaborationWorkspaceId
+      });
+      if (!project) throw new AppError("NOT_FOUND", "Project is not available");
+      if (project.audience !== input.visibility) {
+        throw new AppError("INTERNAL", "A conversation in a project takes the project's audience");
+      }
+      return insertConversation(tx, input);
+    });
+  }
+  return insertConversation(db, input);
+}
+
+async function insertConversation(
   db: PostgresConnection,
   input: CreateConversationInput
 ): Promise<Conversation> {
@@ -72,7 +97,8 @@ export async function createConversation(
       ...(input.subject
         ? { subjectKind: input.subject.kind, subjectName: input.subject.name }
         : {}),
-      ...(input.creationTarget ? { creationTarget: input.creationTarget } : {})
+      ...(input.creationTarget ? { creationTarget: input.creationTarget } : {}),
+      ...(input.projectId ? { projectId: input.projectId } : {})
     })
     .returning();
   return mapConversation(row);
@@ -207,7 +233,9 @@ async function moveLockedConversation(db: PostgresConnection, input: MoveConvers
     .update(conversations)
     .set({
       collaborationWorkspaceId: input.toCollaborationWorkspaceId,
-      visibility: input.visibility
+      visibility: input.visibility,
+      // A project belongs to its workspace: the conversation leaves it.
+      projectId: null
     })
     .where(
       and(
@@ -229,6 +257,70 @@ async function moveLockedConversation(db: PostgresConnection, input: MoveConvers
     throw new AppError("CONFLICT", "Conversation workspace changed during the move");
   }
   return mapConversation(row);
+}
+
+/**
+ * Puts a chat into a project of its own workspace or takes it out, under its row lock. The
+ * project is held while the row names it, so it stays in the conversation's workspace. A
+ * conversation that holds personal data stays private in a Shared Workspace.
+ */
+async function setConversationProject(
+  db: PostgresConnection,
+  input: SetConversationProjectInput
+): Promise<Conversation> {
+  return db.transaction(async (tx) => {
+    if (!(await lockActiveConversation(tx, input.clientInstanceId, input.conversationId))) {
+      throw new AppError("NOT_FOUND", "Conversation is not available");
+    }
+    const conversation = await getConversation(tx, input.clientInstanceId, input.conversationId);
+    if (!conversation || conversation.kind !== "chat") {
+      throw new AppError("NOT_FOUND", "Conversation is not available");
+    }
+    if ((conversation.projectId ?? null) !== input.expectedProjectId) {
+      throw new AppError("CONFLICT", "The conversation's project changed meanwhile");
+    }
+    if (input.projectId !== null) {
+      const project = await lockWorkspaceProject(tx, {
+        clientInstanceId: input.clientInstanceId,
+        projectId: input.projectId,
+        collaborationWorkspaceId: conversation.collaborationWorkspaceId
+      });
+      if (!project) throw new AppError("NOT_FOUND", "Project is not available");
+    }
+    if (conversation.personalDataAt && input.visibility !== "private") {
+      const [workspace] = await tx
+        .select({ kind: collaborationWorkspaces.kind })
+        .from(collaborationWorkspaces)
+        .where(
+          and(
+            eq(collaborationWorkspaces.clientInstanceId, input.clientInstanceId),
+            eq(collaborationWorkspaces.id, conversation.collaborationWorkspaceId)
+          )
+        );
+      if (workspace?.kind !== "personal") throw personalConversationPrivateError();
+    }
+    await tx
+      .update(conversations)
+      .set({ visibility: input.visibility })
+      .where(
+        and(
+          eq(conversations.clientInstanceId, input.clientInstanceId),
+          eq(conversations.parentConversationId, input.conversationId),
+          eq(conversations.kind, "run_thread")
+        )
+      );
+    const [row] = await tx
+      .update(conversations)
+      .set({ projectId: input.projectId, visibility: input.visibility })
+      .where(
+        and(
+          eq(conversations.clientInstanceId, input.clientInstanceId),
+          eq(conversations.id, input.conversationId)
+        )
+      )
+      .returning();
+    return mapConversation(row);
+  });
 }
 
 /**
@@ -812,6 +904,9 @@ export function createPostgresConversationsStore(
       input: Parameters<ConversationStore["moveConversation"]>[0]
     ): Promise<Conversation> {
       return moveConversation(db, input);
+    },
+    setConversationProject(input: SetConversationProjectInput) {
+      return setConversationProject(db, input);
     },
     async listExpiredConversations(input) {
       return deps.listExpiredConversations(input);

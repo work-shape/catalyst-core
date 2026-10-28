@@ -64,7 +64,9 @@ export const conversationSchema = z.object({
   /** The asset the conversation is about. Missing on a conversation about none. */
   subject: conversationSubjectSchema.optional(),
   /** `instance`: its first saves create agents, skills and guardrails for the instance. */
-  creationTarget: conversationCreationTargetSchema.optional()
+  creationTarget: conversationCreationTargetSchema.optional(),
+  /** The project of its workspace it is in; its readers are the project's audience. */
+  projectId: z.string().optional()
 });
 
 export const moveConversationRequestSchema = z.object({
@@ -452,7 +454,12 @@ export const createConversationRequestSchema = z.object({
    * create agents, skills and guardrails for the instance, where the person may create them
    * there, and are refused where not. Set only here; nothing changes it later.
    */
-  creationTarget: conversationCreationTargetSchema.optional()
+  creationTarget: conversationCreationTargetSchema.optional(),
+  /**
+   * A project of the target workspace the caller is in the audience of. The conversation takes
+   * the project's audience: shared in a shared project, private in a private one.
+   */
+  projectId: z.string().min(1).optional()
 });
 
 /**

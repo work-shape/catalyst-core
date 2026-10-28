@@ -65,6 +65,7 @@ export * from "./paging";
 export * from "./person-labels";
 export * from "./personal-connection-context";
 export { personalWorkspaceOwnerName } from "./personal-workspace-name";
+export * from "./project";
 export * from "./providers";
 export * from "./publish-narrative";
 export * from "./questions";

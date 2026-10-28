@@ -26,6 +26,7 @@ import { assetManagementModule } from "./platform-modules/asset-management";
 import { connectionsModule } from "./platform-modules/connections";
 import { feedbackModule } from "./platform-modules/feedback";
 import { personalApiKeysModule } from "./platform-modules/personal-api-keys";
+import { projectsModule } from "./platform-modules/projects";
 import { resourcesModule } from "./platform-modules/resources";
 import { userInvitationsModule } from "./platform-modules/user-invitations";
 import { workshaperModule } from "./platform-modules/workshaper";
@@ -45,7 +46,8 @@ export const platformModules = [
   knowledgeModule,
   personalApiKeysModule,
   feedbackModule,
-  workshaperModule
+  workshaperModule,
+  projectsModule
 ];
 
 /**

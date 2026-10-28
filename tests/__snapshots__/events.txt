@@ -64,6 +64,7 @@
 {"name":"conversation.deleted","legacy":true,"audited":true,"phases":["after"]}
 {"name":"conversation.instance_create_refused","legacy":false,"audited":true,"phases":["after"]}
 {"name":"conversation.moved","legacy":true,"audited":true,"phases":["after"]}
+{"name":"conversation.project_set","legacy":false,"audited":true,"phases":["after"]}
 {"name":"conversation.renamed","legacy":true,"audited":true,"phases":["after"]}
 {"name":"conversation.retention_expiration_failed","legacy":true,"audited":true,"phases":["after"]}
 {"name":"conversation.retention_expired","legacy":true,"audited":true,"phases":["after"]}
@@ -133,6 +134,7 @@
 {"name":"outside_form.requested","legacy":false,"audited":true,"phases":["after"]}
 {"name":"permission.granted","legacy":true,"audited":true,"phases":["after"]}
 {"name":"permission.revoked","legacy":true,"audited":true,"phases":["after"]}
+{"name":"project.created","legacy":false,"audited":true,"phases":["after"]}
 {"name":"role.created","legacy":true,"audited":true,"phases":["after"]}
 {"name":"role.deleted","legacy":true,"audited":true,"phases":["after"]}
 {"name":"role.pending_decided","legacy":true,"audited":true,"phases":["after"]}

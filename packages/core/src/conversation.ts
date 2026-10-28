@@ -178,6 +178,11 @@ export interface Conversation {
   subject?: ConversationSubject;
   /** Where its first saves create an agent, skill or guardrail. Missing: the workspace's rule. */
   creationTarget?: ConversationCreationTarget;
+  /**
+   * The id of the project of its workspace it is in (PRJ-1). Its readers are then the
+   * project's audience, and its `visibility` matches that audience.
+   */
+  projectId?: string;
 }
 
 export interface ConversationListItem extends Conversation {
@@ -235,6 +240,11 @@ export interface CreateConversationInput {
   retainedUntil: ISODateString;
   subject?: ConversationSubject;
   creationTarget?: ConversationCreationTarget;
+  /**
+   * A project of the same workspace. The store refuses one of another workspace, or one that
+   * is not active, under the same transaction.
+   */
+  projectId?: string;
 }
 
 export interface CreateMessageInput {
@@ -324,6 +334,19 @@ export interface MoveConversationInput {
   visibility: ConversationVisibility;
 }
 
+/**
+ * Puts an active chat Conversation into a project of its own workspace, or takes it out with
+ * `projectId: null`, and sets its visibility, in one statement under its row lock.
+ */
+export interface SetConversationProjectInput {
+  clientInstanceId: ClientInstanceId;
+  conversationId: ConversationId;
+  /** The project the caller checked the Conversation in; another one by now is a conflict. */
+  expectedProjectId: string | null;
+  projectId: string | null;
+  visibility: ConversationVisibility;
+}
+
 export interface ConversationStore extends ConversationHistoryStore {
   createConversation(input: CreateConversationInput): Promise<Conversation>;
   getConversation(
@@ -336,6 +359,8 @@ export interface ConversationStore extends ConversationHistoryStore {
     scope: ConversationListScope;
     /** Keeps the conversations whose title contains this text, without regard to case. */
     titleQuery?: string;
+    /** Keeps the conversations of this project. */
+    projectId?: string;
     page?: StorePage;
   }): Promise<Conversation[]>;
   /**
@@ -357,7 +382,13 @@ export interface ConversationStore extends ConversationHistoryStore {
     userId: string;
     at: ISODateString;
   }): Promise<void>;
+  /** Moves to another workspace; the Conversation leaves its project and keeps its visibility. */
   moveConversation(input: MoveConversationInput): Promise<Conversation>;
+  /**
+   * Refuses with `CONFLICT` a Conversation that is not active or whose project changed, and
+   * with `NOT_FOUND` a project that is not active in the Conversation's workspace.
+   */
+  setConversationProject(input: SetConversationProjectInput): Promise<Conversation>;
   updateConversationTitle(input: UpdateConversationTitleInput): Promise<Conversation>;
   /**
    * Writes the title only while the conversation still carries `expectedTitle`, in one

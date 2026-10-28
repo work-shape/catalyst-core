@@ -1,5 +1,6 @@
 import {
   createActorAccess,
+  isMembershipOnlyAction,
   listAccessEntries,
   type AccessEntry,
   type AccessHolder,
@@ -25,7 +26,9 @@ type ScopedRight = Pick<AccessEntry, "action" | "scopeKind" | "scopeId">;
  * resource, each membership of a Shared Workspace as the rights it carries
  * there, and each reference of a tool as the action `ref:<reference>`. A right a deny of the
  * person takes away is left out. The person's own Personal Workspace is the account itself, which
- * every account has and nobody gives, so its membership is not asked.
+ * every account has and nobody gives, so its membership is not asked. Nor are a project's
+ * rights: membership alone carries them and nobody else can hold them, so whoever may change
+ * the account's memberships changes them (PRJ-1).
  *
  * The person counts as active: a disabled account holds its rights again once enabled, and
  * enabling it is a change of the account like any other.
@@ -59,7 +62,9 @@ export async function personRights(
     roles: person.roles,
     permissionRefs: person.permissionRefs
   };
-  const allows = listAccessEntries(holder, persisted).filter((entry) => entry.effect === "allow");
+  const allows = listAccessEntries(holder, persisted).filter(
+    (entry) => entry.effect === "allow" && !isMembershipOnlyAction(entry.action)
+  );
   const assets = await scopeAssets(options, allows);
   const held = createActorAccess(holder, persisted);
   const rights = new Map<string, HeldRight>();

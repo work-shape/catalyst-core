@@ -1,0 +1,4 @@
+conversations.set_project  PUT /api/v1/conversations/:conversationId/project
+projects.create  POST /api/v1/projects
+projects.get  GET /api/v1/projects/:projectName
+projects.list  GET /api/v1/workspaces/:collaborationWorkspaceId/projects

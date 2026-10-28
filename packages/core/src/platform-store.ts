@@ -37,6 +37,7 @@ import type { CapabilityRecordStore } from "./capability-records";
 import type { OperationRunStore } from "./operation-runs";
 import type { InfrastructureCheckStore } from "./infrastructure-checks";
 import type { PagesStore } from "./pages";
+import type { ProjectStore } from "./project";
 import type { ModelUsageEventStore } from "./usage";
 import type { UserStore } from "./user";
 import type { ApiAccessStore } from "./api-access";
@@ -118,6 +119,8 @@ export interface PlatformStores {
   feedback: FeedbackStore;
   /** Who reported which failed run to the operator (PLATFORM-REPORT); never the note. */
   platformReports: PlatformReportStore;
+  /** The audience of each project (PRJ-1); its definition is a config asset. */
+  projects: ProjectStore;
   /** Resolves after commit; a rejected callback rolls back all domain writes. Nested calls use savepoints. */
   transaction<T>(fn: (stores: PlatformStores) => Promise<T>): Promise<T>;
   /**

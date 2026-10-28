@@ -85,6 +85,9 @@
       "name": "Platform"
     },
     {
+      "name": "Projects"
+    },
+    {
       "name": "Reference"
     },
     {
@@ -8584,6 +8587,15 @@
               "minLength": 1,
               "maxLength": 200
             }
+          },
+          {
+            "name": "projectId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
           }
         ],
         "responses": {
@@ -11371,6 +11383,136 @@
         },
         "x-catalyst-effect": "reading",
         "x-catalyst-rate-class": "read"
+      }
+    },
+    "/api/v1/conversations/{conversationId}/project": {
+      "put": {
+        "operationId": "conversations.set_project",
+        "summary": "Put a conversation into a project of its workspace, or take it out; it takes the project's audience",
+        "tags": [
+          "Projects"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "conversation:write"
+            ]
+          },
+          {
+            "sessionToken": [
+              "conversation:write"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A key the caller chooses for one changing call, up to 255 characters. The same key with the same input answers what the first call answered instead of acting twice. A key belongs to its caller: another caller's same key is another call.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
+          },
+          {
+            "name": "Catalyst-Unattended",
+            "in": "header",
+            "description": "`1` on a call of an API credential when nobody watches its terminal, such as `catalyst <kind> publish --yes`. The call is then not its caller's own confirmation: a call that needs one waits in the caller's Inbox and answers `202` with its run, status `pending_confirmation`. It only ever makes a call stricter; a browser session's call ignores it.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetConversationProjectRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conversation"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "202": {
+            "description": "The call waits for somebody else to approve it. This is its Operation Run; read it again at `Location`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationRun"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Location": {
+                "$ref": "#/components/headers/Location"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlockedOrDeclined"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictOrIdempotencyKeyReusedOrOperationInProgressOrOperationExpiredOrOutputNotRetained"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "changing",
+        "x-catalyst-rate-class": "write"
       }
     },
     "/api/v1/conversations/{conversationId}/resources": {
@@ -29237,6 +29379,194 @@
         "x-catalyst-rate-class": "auth"
       }
     },
+    "/api/v1/projects": {
+      "post": {
+        "operationId": "projects.create",
+        "summary": "Create a project in a workspace the caller is a member of",
+        "tags": [
+          "Projects"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "conversation:write"
+            ]
+          },
+          {
+            "sessionToken": [
+              "conversation:write"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "A key the caller chooses for one changing call, up to 255 characters. The same key with the same input answers what the first call answered instead of acting twice. A key belongs to its caller: another caller's same key is another call.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
+          },
+          {
+            "name": "Catalyst-Unattended",
+            "in": "header",
+            "description": "`1` on a call of an API credential when nobody watches its terminal, such as `catalyst <kind> publish --yes`. The call is then not its caller's own confirmation: a call that needs one waits in the caller's Inbox and answers `202` with its run, status `pending_confirmation`. It only ever makes a call stricter; a browser session's call ignores it.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateProjectRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Project"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "202": {
+            "description": "The call waits for somebody else to approve it. This is its Operation Run; read it again at `Location`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationRun"
+                }
+              }
+            },
+            "headers": {
+              "Operation-Run-Id": {
+                "$ref": "#/components/headers/OperationRunId"
+              },
+              "Location": {
+                "$ref": "#/components/headers/Location"
+              },
+              "Idempotent-Replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenOrPolicyDeniedOrGuardrailBlockedOrDeclined"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/IdempotencyKeyReusedOrOperationInProgressOrOperationExpiredOrOutputNotRetained"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "changing",
+        "x-catalyst-rate-class": "write"
+      }
+    },
+    "/api/v1/projects/{projectName}": {
+      "get": {
+        "operationId": "projects.get",
+        "summary": "Read one project the caller is in the audience of",
+        "tags": [
+          "Projects"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "conversation:read"
+            ]
+          },
+          {
+            "sessionToken": [
+              "conversation:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "projectName",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Project"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-rate-class": "read"
+      }
+    },
     "/api/v1/scheduled-starts": {
       "get": {
         "operationId": "scheduled_starts.list",
@@ -36520,6 +36850,72 @@
         "x-catalyst-rate-class": "write"
       }
     },
+    "/api/v1/workspaces/{collaborationWorkspaceId}/projects": {
+      "get": {
+        "operationId": "projects.list",
+        "summary": "List the projects of a workspace the caller is in the audience of",
+        "tags": [
+          "Projects"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "conversation:read"
+            ]
+          },
+          {
+            "sessionToken": [
+              "conversation:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "collaborationWorkspaceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Projects"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-rate-class": "read"
+      }
+    },
     "/api/v1/workspaces/{collaborationWorkspaceId}/usage": {
       "get": {
         "operationId": "workspaces.usage.get",
@@ -43447,6 +43843,9 @@
           },
           "creationTarget": {
             "$ref": "#/components/schemas/ConversationCreationTarget"
+          },
+          "projectId": {
+            "type": "string"
           }
         },
         "required": [
@@ -43615,6 +44014,9 @@
           },
           "creationTarget": {
             "$ref": "#/components/schemas/ConversationCreationTarget"
+          },
+          "projectId": {
+            "type": "string"
           },
           "latestMessageAt": {
             "$ref": "#/components/schemas/Timestamp"
@@ -44346,6 +44748,10 @@
           },
           "creationTarget": {
             "$ref": "#/components/schemas/ConversationCreationTarget"
+          },
+          "projectId": {
+            "type": "string",
+            "minLength": 1
           }
         }
       },
@@ -44445,6 +44851,31 @@
         "required": [
           "key",
           "secret"
+        ]
+      },
+      "CreateProjectRequest": {
+        "type": "object",
+        "properties": {
+          "collaborationWorkspaceId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "audience": {
+            "$ref": "#/components/schemas/ProjectAudience"
+          }
+        },
+        "required": [
+          "collaborationWorkspaceId",
+          "title"
         ]
       },
       "CreateRoleRequestInput": {
@@ -48447,6 +48878,69 @@
           "more"
         ]
       },
+      "Project": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "collaborationWorkspaceId": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "audience": {
+            "$ref": "#/components/schemas/ProjectAudience"
+          },
+          "createdByUserId": {
+            "type": "string"
+          },
+          "createdAt": {
+            "$ref": "#/components/schemas/Timestamp"
+          },
+          "updatedAt": {
+            "$ref": "#/components/schemas/Timestamp"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "collaborationWorkspaceId",
+          "title",
+          "audience",
+          "createdByUserId",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "ProjectAudience": {
+        "type": "string",
+        "enum": [
+          "workspace",
+          "private"
+        ]
+      },
+      "Projects": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Project"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
       "PublishAssetRequest": {
         "type": "object",
         "properties": {
@@ -50087,6 +50581,25 @@
         },
         "required": [
           "version"
+        ]
+      },
+      "SetConversationProjectRequest": {
+        "type": "object",
+        "properties": {
+          "projectId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "projectId"
         ]
       },
       "SetOperationSettingRequest": {

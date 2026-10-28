@@ -26,6 +26,7 @@ import { noticeEvents } from "./events/notice";
 import { outsideFormEvents } from "./events/outside-form";
 import { operationEvents } from "./events/operation";
 import { permissionEvents } from "./events/permission";
+import { projectEvents } from "./events/project";
 import { roleEvents } from "./events/role";
 import { scheduledStartEvents } from "./events/scheduled-start";
 import { scopeAssignmentEvents } from "./events/scope-assignment";
@@ -70,6 +71,7 @@ export const EVENTS = joinEvents(
   operationEvents,
   outsideFormEvents,
   permissionEvents,
+  projectEvents,
   roleEvents,
   scheduledStartEvents,
   scopeAssignmentEvents,

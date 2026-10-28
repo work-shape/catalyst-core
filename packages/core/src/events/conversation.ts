@@ -63,6 +63,27 @@ export const conversationEvents = {
     }
   },
   "conversation.moved": { ...LEGACY_AUDIT, name: "conversation.moved", subject: "conversation" },
+  // A conversation was put into a project of its workspace or taken out (PRJ-1). Ids and
+  // visibilities only: never a title.
+  "conversation.project_set": {
+    name: "conversation.project_set",
+    subject: "conversation",
+    legacy: false,
+    audited: true,
+    phases: ["after"],
+    payload: {
+      type: "object",
+      additionalProperties: false,
+      required: ["visibility"],
+      properties: {
+        fromProjectId: { type: "string" },
+        toProjectId: { type: "string" },
+        previousVisibility: { type: "string", enum: ["workspace", "private"] },
+        visibility: { type: "string", enum: ["workspace", "private"] },
+        operationRunId: { type: "string" }
+      }
+    }
+  },
   "conversation.renamed": {
     ...LEGACY_AUDIT,
     name: "conversation.renamed",
