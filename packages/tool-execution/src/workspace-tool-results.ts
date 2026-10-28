@@ -79,6 +79,7 @@ export function commandToExecOutput(command: WorkspaceCommand, workspaceId: Exec
     durationMs: output?.durationMs ?? null,
     changedFiles: (output?.changedFiles ?? []).map(publicChangedFile),
     promotedArtifacts: output?.promotedArtifacts ?? [],
+    ...(output?.projectFileChanges ? { projectFileChanges: output.projectFileChanges } : {}),
     truncated: output?.truncated ?? {
       stdout: false,
       stderr: false

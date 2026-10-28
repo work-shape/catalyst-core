@@ -315,6 +315,20 @@ describe("docker workspace command runner", () => {
     ]);
   });
 
+  it("mounts a project snapshot writable only when the runner supplied one", () => {
+    const mounted = createDockerRunInvocation(
+      dockerProcessInput({
+        projectDirectory: "/host/project-snapshot"
+      }),
+      { image: "runner:test" }
+    );
+    expect(mounted.args).toContain(
+      "type=bind,source=/host/project-snapshot,target=/workspace/project"
+    );
+    const plain = createDockerRunInvocation(dockerProcessInput(), { image: "runner:test" });
+    expect(plain.args.some((arg) => arg.includes("target=/workspace/project"))).toBe(false);
+  });
+
   it("defaults Docker runner containers to a 4 GiB memory limit", () => {
     const invocation = createDockerRunInvocation(dockerProcessInput(), {
       image: "runner:test"

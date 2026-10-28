@@ -1,5 +1,5 @@
 import type { AuthenticatedUser } from "./identity";
-import type { ClientInstanceId, CollaborationWorkspaceId } from "./ids";
+import type { AgentRunId, ClientInstanceId, CollaborationWorkspaceId, ConversationId } from "./ids";
 import type { ISODateString } from "./time";
 import {
   type PROJECT_FILE_CHANGES,
@@ -296,6 +296,35 @@ export interface ProjectFolderPort {
     }
   ): Promise<ProjectFileChange>;
 }
+
+/** The folder of a command, resolved from its persisted run and the person's current access. */
+export interface ProjectCommandFolder {
+  folder: ConversationProjectFolder;
+  userId: string;
+  locale?: string;
+}
+
+/** Only persisted run and chat IDs choose a mount; a caller supplies no project ID. */
+export interface ProjectCommandFolderRequest {
+  clientInstanceId: ClientInstanceId;
+  conversationId: ConversationId;
+  ownerUserId: string;
+  agentRunId?: AgentRunId;
+}
+
+/** The runner uses the same version writer as the file tools, with a snapshot of each read. */
+export interface ProjectCommandFolderPort extends ProjectFolderPort {
+  folderOfCommand(command: ProjectCommandFolderRequest): Promise<ProjectCommandFolder | undefined>;
+  readVersion(folder: ConversationProjectFolder, file: ProjectFile): Promise<Uint8Array>;
+  /** A concurrent edit wins over a deletion: nothing is deleted and no change is returned. */
+  removeVersion(
+    folder: ConversationProjectFolder,
+    input: { path: string; replaces: number; userId: string; runId: string }
+  ): Promise<ProjectFileChange | undefined>;
+}
+
+/** A command's changes, returned to the agent with the project they belong to. */
+export type ProjectCommandFileChange = ProjectFileChange & { projectId: string };
 
 /** The most files the system message lists of a project's folder. */
 export const PROJECT_MANIFEST_MAX_FILES = 50;

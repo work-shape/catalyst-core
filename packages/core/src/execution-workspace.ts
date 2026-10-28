@@ -15,6 +15,7 @@ import type {
 import type { JsonObject, JsonValue } from "./json";
 import type { WorkspaceCommandSkillMount } from "./skill-folders";
 import type { ISODateString } from "./time";
+import type { ProjectCommandFileChange } from "./project-files";
 import type { ToolExecutionContext } from "./tool-execution";
 
 export type ExecutionWorkspaceStatus = "active" | "deleted";
@@ -107,6 +108,7 @@ export interface WorkspaceCommandOutput {
   durationMs: number;
   changedFiles: WorkspaceCommandChangedFile[];
   promotedArtifacts: WorkspaceCommandPromotedArtifact[];
+  projectFileChanges?: ProjectCommandFileChange[];
   truncated: {
     stdout: boolean;
     stderr: boolean;

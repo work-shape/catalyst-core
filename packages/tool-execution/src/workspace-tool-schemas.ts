@@ -4,6 +4,7 @@ import {
   SUPPORTED_IMAGE_MIME_TYPES,
   WORKSPACE_COMMAND_STATUSES
 } from "@work-shape/catalyst-core";
+import { PROJECT_FILE_CHANGES } from "@work-shape/catalyst-core";
 import { z } from "zod";
 
 export interface WorkspaceCommandServiceLimits {
@@ -220,6 +221,18 @@ export const workspaceExecOutputSchema = z.object({
   durationMs: z.number().nullable(),
   changedFiles: z.array(changedFileOutputSchema),
   promotedArtifacts: z.array(promotedArtifactOutputSchema),
+  projectFileChanges: z
+    .array(
+      z.object({
+        projectId: z.string(),
+        path: z.string(),
+        version: z.number().int().positive(),
+        change: z.enum(PROJECT_FILE_CHANGES),
+        previousVersion: z.number().int().positive().optional(),
+        changed: z.object({ path: z.string(), version: z.number().int().positive() }).optional()
+      })
+    )
+    .optional(),
   truncated: z.object({ stdout: z.boolean(), stderr: z.boolean() })
 });
 

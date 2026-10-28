@@ -77,6 +77,8 @@ export interface WorkspaceCommandProcessInput {
    * agent run has any; a command the platform runs itself has none.
    */
   skillFolders?: readonly SandboxSkillFolder[];
+  /** A command's writable snapshot, mounted at /workspace/project by a sandbox with mounts. */
+  projectDirectory?: string;
   workspaceDirectory: string;
   workspaceCwd: string;
   cwd: string;
@@ -118,6 +120,7 @@ export interface WorkspaceCommandProcessExecutor {
    * workspace instead, writable: for development only.
    */
   readonly mountsSkillFolders?: boolean;
+  readonly mountsProjectFolder?: boolean;
   execute(input: WorkspaceCommandProcessInput): Promise<ProcessResult>;
   /**
    * Removes what commands left running whose id starts with `idPrefix` and that were started

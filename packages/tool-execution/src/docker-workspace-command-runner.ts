@@ -138,6 +138,7 @@ export interface DockerRunInvocation {
 export class DockerWorkspaceCommandProcessExecutor implements WorkspaceCommandProcessExecutor {
   readonly dataPaths = SANDBOX_DATA_DIRECTORIES;
   readonly mountsSkillFolders = true;
+  readonly mountsProjectFolder = true;
   private readonly options: Required<
     Pick<
       DockerWorkspaceCommandProcessExecutorOptions,
@@ -189,6 +190,9 @@ export class DockerWorkspaceCommandProcessExecutor implements WorkspaceCommandPr
       try {
         // The worker filled the directory as root. The command must be able to write there.
         await giveDirectoryTo(input.workspaceDirectory, this.options.runnerUser);
+        if (input.projectDirectory) {
+          await giveDirectoryTo(input.projectDirectory, this.options.runnerUser);
+        }
         // The output directory is empty, and the command writes it. Its input stays root's.
         if (input.sandboxLimits && input.dataDirectories) {
           await lchown(
@@ -366,6 +370,9 @@ export function createDockerRunInvocation(
     // The folder of each skill of the command's agent run, read-only, on either path. The
     // change scan reads `/workspace` alone, so nothing here becomes a workspace file.
     ...skillFolderMounts(input.skillFolders ?? []),
+    ...(input.projectDirectory
+      ? ["--mount", `type=bind,source=${input.projectDirectory},target=/workspace/project`]
+      : []),
     // Only a command with limits of its own is handed data directories: what its worker wrote
     // for it, read-only, and one directory on the worker's disk that it writes. The worker
     // bounds what is written there and reads it back without following a link.

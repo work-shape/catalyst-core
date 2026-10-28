@@ -21,6 +21,7 @@ import {
   assetRepoCommitJob,
   assetRepoSweepJob,
   createSkillFolderReader,
+  ProjectFileService,
   pageBundleJob
 } from "@work-shape/catalyst-server";
 import { readClientInstanceEnv, type ClientInstanceEnv } from "./env";
@@ -154,6 +155,16 @@ export async function createClientInstanceWorkspaceCommandWorker(
     stores: store,
     ...(hasFilesStore ? { files: await createFilesStore(config, infrastructure.context) } : {})
   });
+  const projectFolders = new ProjectFileService({
+    stores: store,
+    clientInstanceId,
+    config,
+    modules,
+    logger,
+    ...(hasFilesStore
+      ? { pages: { objects: await createFilesStore(config, infrastructure.context) } }
+      : {})
+  });
   const runner = new LocalWorkspaceCommandRunner({
     store,
     byteStore,
@@ -162,7 +173,8 @@ export async function createClientInstanceWorkspaceCommandWorker(
     processExecutor,
     auditRecorder,
     telemetry,
-    skillFolders
+    skillFolders,
+    projectFolders
   });
   const workerId = env.WORKSPACE_COMMAND_WORKER_ID;
   const commandJobs = createWorkspaceCommandJobs({
