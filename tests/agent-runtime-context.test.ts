@@ -625,4 +625,110 @@ describe("local agent runtime", () => {
     expect(other.system).not.toContain("month-end");
     expect(other.tools).not.toContain("platform.assets.get");
   });
+
+  // SCOPE-MYCHATS: the offer is asked for the run, and the skills of its person's own that it
+  // holds are listed to the agent beside its own, while its definition lists none.
+  it("lists the person's own skills the offer of the run holds", async () => {
+    const clientInstanceId = asClientInstanceId("my-chats-client");
+    const context: RuntimeCallContext = {
+      clientInstanceId,
+      correlationId: "corr-my-chats",
+      user: {
+        id: "user-1",
+        externalUserId: "user-1",
+        displayLabel: "User",
+        roles: ["user"],
+        permissionRefs: [],
+        clientInstanceId,
+        authSource: "test"
+      }
+    };
+    const store = (await createTestInstance()).stores;
+    const conversationId = await createConversationWithMessages(store, {
+      clientInstanceId,
+      messages: []
+    });
+    const askedFor: unknown[] = [];
+    const requests: Parameters<FakeModelProvider["complete"]>[0][] = [];
+    const providerConfig: ModelProviderConfig = {
+      id: "test-provider",
+      type: "deterministic",
+      model: "test-model"
+    };
+    const runtime = new LocalAgentRuntime(
+      withTestModelGateway({
+        assetSource: createStaticConfigAssetSource({
+          agents: [
+            {
+              skillNames: [],
+              name: "plain_agent",
+              displayName: "Plain Agent",
+              instructions: "Help the user.",
+              modelProviderId: "test-provider",
+              toolNames: [],
+              initialPrompts: []
+            }
+          ],
+          skills: [
+            {
+              name: "tax-check",
+              title: "Tax check",
+              description: "Use when checking a tax return.",
+              content: "Check every line."
+            }
+          ]
+        }),
+        modelProviders: [providerConfig],
+        defaultModelProvider: providerConfig,
+        conversationHistory: store.conversations,
+        modelProvider: {
+          id: "test-provider",
+          async complete(request) {
+            requests.push(request);
+            return { text: "Done.", toolCalls: [], usage: noReportedUsage() };
+          }
+        },
+        toolRegistry: new ToolRegistry({
+          tools: [
+            defineTool({
+              name: "read_skill",
+              effect: "reading",
+              description: "Reads a skill.",
+              inputSchema: z.object({}),
+              async execute() {
+                throw new Error("Not called by this test");
+              }
+            })
+          ]
+        }),
+        runTool: createUnusedToolRunner(),
+        conversationOffer: {
+          async offerOf({ runId }) {
+            askedFor.push(runId);
+            return { toolNames: ["read_skill"], skillNames: [], personalSkillNames: ["tax-check"] };
+          }
+        },
+        usageGovernance: new ModelUsageGovernance({
+          store: store.usage,
+          budget: {},
+          safeguards: {}
+        })
+      })
+    );
+    const run = await runtime.start(
+      { agentName: "plain_agent", conversationId, message: { text: "Check my return." } },
+      context
+    );
+    for await (const event of runtime.observe(run.runId, context)) {
+      if (event.type === "run_completed") break;
+    }
+    const [request] = requests;
+    expect(askedFor).toEqual([run.runId]);
+    expect(modelContentText(request?.messages[0]?.content ?? "")).toContain(
+      "- tax-check: Tax check - Use when checking a tax return."
+    );
+    expect((request?.tools ?? []).flatMap((tool) => ("name" in tool ? [tool.name] : []))).toContain(
+      "read_skill"
+    );
+  });
 });

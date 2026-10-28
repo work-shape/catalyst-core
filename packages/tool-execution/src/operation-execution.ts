@@ -31,6 +31,7 @@ import {
   type CentralPolicySetting,
   type ClientInstanceId,
   type AuthenticatedIdentity,
+  type AuthenticatedUser,
   type CollaborationWorkspaceId,
   type ConversationId,
   type JsonObject,
@@ -160,7 +161,12 @@ export interface RunOperationDeps {
    */
   agentToolNames?(
     agentName: string,
-    conversationId?: ConversationId
+    conversationId?: ConversationId,
+    /**
+     * The run of the call and the person it acts for, where a call of a run asks: a run of its
+     * person's own may read the skills they switched on for their chats (SCOPE-MYCHATS).
+     */
+    run?: { runId: AgentRunId; user: AuthenticatedUser }
   ): readonly string[] | Promise<readonly string[]>;
   /** Plain, localized help for missing resource use rights, read only after a refusal. */
   useRightRefusal?(action: UseRightAction, locale?: string): Promise<string>;
@@ -424,8 +430,15 @@ export async function authorizeOrigin(
   if (call.origin.kind !== "agent") {
     return { allowed: true };
   }
-  const { agentName, toolName, conversationId } = call.origin;
-  const listed = (await deps.agentToolNames?.(agentName, conversationId)) ?? [];
+  const { agentName, toolName, conversationId, agentRunId } = call.origin;
+  const listed =
+    (await deps.agentToolNames?.(
+      agentName,
+      conversationId,
+      isAuthenticatedServicePrincipal(call.actor)
+        ? undefined
+        : { runId: agentRunId, user: call.actor }
+    )) ?? [];
   return toolName === definition.name &&
     (listed.includes(toolName) ||
       (isKnowledgeAddFilesOperation(toolName) && listed.includes(KNOWLEDGE_ADD_FILES_TOOL_NAME)))

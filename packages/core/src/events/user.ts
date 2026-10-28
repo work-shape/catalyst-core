@@ -34,6 +34,15 @@ export const userEvents = {
     audited: true,
     phases: ["after"]
   },
+  // A person switched one skill of their Personal Workspace on or off for their own chats
+  // (SCOPE-MYCHATS): the skill's name and the switch, never its content.
+  "user.chat_skill_changed": {
+    name: "user.chat_skill_changed",
+    subject: "user",
+    legacy: false,
+    audited: true,
+    phases: ["after"]
+  },
   // Two-factor sign-in (TWO-FACTOR-1): the event and the person, never a secret or a code.
   "user.two_factor_enabled": {
     name: "user.two_factor_enabled",

@@ -130,7 +130,8 @@ export class TurnLoop {
             clientInstanceId: context.clientInstanceId,
             conversationId: input.conversationId,
             agentToolNames: listed.toolNames,
-            user: context.user
+            user: context.user,
+            runId
           });
     const withheld = new Set(offer?.withheldToolNames ?? []);
     // A subagent starts none of its own, and a Workflow step's agent never gets `run_agent`.
@@ -233,7 +234,10 @@ export class TurnLoop {
         context.locale,
         {
           currentDate: this.options.clock?.now() ?? systemClock.now(),
-          skills: getSnapshotSkillMetadata(assets, agent, offer?.skillNames ?? []),
+          skills: getSnapshotSkillMetadata(assets, agent, [
+            ...(offer?.skillNames ?? []),
+            ...(offer?.personalSkillNames ?? [])
+          ]),
           agentToolNames: agent.toolNames,
           agentSkillChangesEnabled: this.options.agentSkillChangesEnabled,
           ...(offer?.orientation ? { orientation: offer.orientation } : {}),

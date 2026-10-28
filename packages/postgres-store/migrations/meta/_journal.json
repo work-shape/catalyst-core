@@ -1170,6 +1170,13 @@
       "when": 1793117493754,
       "tag": "0166_platform_reports",
       "breakpoints": true
+    },
+    {
+      "idx": 167,
+      "version": "7",
+      "when": 1793189810868,
+      "tag": "0167_personal_chat_skills",
+      "breakpoints": true
     }
   ]
 }

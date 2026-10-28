@@ -758,6 +758,8 @@ export function createPostgresConfigAssetsStore(
     | "setAgentAvailability"
     | "listAgentUseLimits"
     | "setAgentUse"
+    | "listPersonalChatSkills"
+    | "setPersonalChatSkill"
   >,
   inTransaction = false
 ): ConfigAssetStore {
@@ -836,6 +838,8 @@ export function createPostgresConfigAssetsStore(
       return deps.setAgentAvailability(input);
     },
     listAgentUseLimits: (input) => deps.listAgentUseLimits(input),
-    setAgentUse: (input) => deps.setAgentUse(input)
+    setAgentUse: (input) => deps.setAgentUse(input),
+    listPersonalChatSkills: (input) => deps.listPersonalChatSkills(input),
+    setPersonalChatSkill: (input) => deps.setPersonalChatSkill(input)
   };
 }

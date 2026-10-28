@@ -136,6 +136,9 @@ export const workspaceQueryKeys = {
   /** The signed-in person's own confirmation settings (OP-6). */
   ownOperationSettings: (apiBaseUrl: string, authScope: string) =>
     ["own-operation-settings", apiBaseUrl, authScope] as const,
+  /** The skills of the signed-in person's Personal Workspace and their switch for own chats. */
+  ownChatSkills: (apiBaseUrl: string, authScope: string) =>
+    ["own-chat-skills", apiBaseUrl, authScope] as const,
   /** The signed-in person's own API keys. */
   ownApiKeys: (apiBaseUrl: string, authScope: string) =>
     ["own-api-keys", apiBaseUrl, authScope] as const,

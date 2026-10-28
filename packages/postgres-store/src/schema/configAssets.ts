@@ -181,6 +181,19 @@ export const agentUseLimits = pgTable(
   (table) => [index("agent_use_limits_client_idx").on(table.clientInstanceId)]
 );
 
+/**
+ * The skills of a Personal Workspace its owner uses in their own chats with every agent
+ * (SCOPE-MYCHATS). A row is on; no row is off. Its owner is the workspace's person, read
+ * through the skill, so the row goes with the skill and with the person's workspace.
+ */
+export const personalChatSkills = pgTable("personal_chat_skills", {
+  assetId: text("asset_id")
+    .primaryKey()
+    .references(() => configAssets.id, { onDelete: "cascade" }),
+  clientInstanceId: text("client_instance_id").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull()
+});
+
 export const configAssetWorkspaceAvailability = pgTable(
   "config_asset_workspace_availability",
   {
