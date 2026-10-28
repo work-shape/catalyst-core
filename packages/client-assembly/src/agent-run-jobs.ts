@@ -22,6 +22,8 @@ import {
   PENDING_ATTACHMENT_STATUSES,
   createAuthorizer,
   isAgentAvailableInWorkspace,
+  operationScopesOfPersonalApiKey,
+  usablePersonalApiKey,
   type AgentRun,
   type AttachmentManifest,
   type AuthenticatedUser,
@@ -169,6 +171,19 @@ async function loadCurrentUser(
     throw new AppError("FORBIDDEN", "Agent run owner is unavailable or disabled");
   }
   const principal = run.authorization?.principal;
+  const delegatedActor = run.authorization?.delegatedActor;
+  // A run keeps the key's id, not a snapshot of its owner's rights. Rebuild its scope
+  // ceiling as draft Workflow tests and approved calls do, including after a pause.
+  const key =
+    delegatedActor?.kind === "api_key"
+      ? await usablePersonalApiKey(store.personalApiKeys, {
+          clientInstanceId: run.clientInstanceId,
+          keyId: delegatedActor.id,
+          ownerUserId: user.id
+        })
+      : undefined;
+  if (delegatedActor?.kind === "api_key" && !key)
+    throw new AppError("FORBIDDEN", "Agent run key is unavailable, revoked or expired");
   const identity =
     principal?.kind === "user"
       ? user.identities.find(
@@ -187,7 +202,14 @@ async function loadCurrentUser(
     permissions: user.permissions,
     clientInstanceId: user.clientInstanceId,
     authSource: identity?.authSource ?? "agent-worker",
-    subjectUserId: user.id
+    subjectUserId: user.id,
+    ...(key
+      ? {
+          delegatedActor,
+          keyScopes: key.scopes,
+          scopes: operationScopesOfPersonalApiKey(key.scopes)
+        }
+      : {})
   };
   // The queued job is not a permission snapshot. Revocation between tick and execution
   // closes it here, before a model or a tool sees the prompt.

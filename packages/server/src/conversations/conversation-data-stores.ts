@@ -44,7 +44,7 @@ const unavailable = () =>
  * Refuses a call that is not the person's own turn in their own session: a subagent, a
  * Workflow step's agent, a scheduled start, a Workflow draft test and a run started with a key
  * (a personal API key, an embedding host's token) or for a delegated actor. A worker rebuilds
- * the actor of a run without its key, so there the run's own record decides (`firstPartyRun`).
+ * the actor without a sign-in session, so the run's own record decides (`firstPartyRun`).
  */
 export function requirePersonsTurn(context: ToolExecutionContext): void {
   const actor = context.user;
