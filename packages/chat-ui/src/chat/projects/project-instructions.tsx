@@ -5,6 +5,7 @@ import {
   Banner,
   Button,
   Card,
+  CardFooter,
   CardHeader,
   CardTarget,
   CardTitle,
@@ -139,21 +140,18 @@ export function ProjectInstructionsTile({ project }: { project: ProjectView }) {
             aria-hidden="true"
             className="row-span-2 mt-0.5 size-4 text-muted-foreground"
           />
-          <CardTitle>
-            <CardTarget label={label} title={t("projectInstructions.title")}>
-              <button
-                type="button"
-                className="text-left outline-none"
-                onClick={() => setOpen(true)}
-              >
-                {t("projectInstructions.title")}
-              </button>
-            </CardTarget>
-          </CardTitle>
+          <CardTitle>{t("projectInstructions.title")}</CardTitle>
           <p className="text-caption text-muted-foreground wrap-anywhere">
             {files.isPending ? "…" : (meta ?? t("projectInstructions.tileEmpty"))}
           </p>
         </CardHeader>
+        <CardFooter>
+          <CardTarget label={label} title={t("projectInstructions.title")}>
+            <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
+              {label}
+            </Button>
+          </CardTarget>
+        </CardFooter>
       </Card>
       <ProjectInstructionsPanel
         project={project}
@@ -380,11 +378,20 @@ export function ProjectInstructionsDecision({
  * instructions changed. Show changes." It is read again whenever a run of the chat ends.
  */
 export function ProjectInstructionsNotice({ running }: { running: boolean }) {
-  const { t } = useTranslation();
   const chat = useOpenConversationProject();
-  const instructions = useConversationProjectInstructionsQuery(
-    chat?.projectId ? chat.conversationId : undefined
-  );
+  if (!chat?.projectId) return null;
+  return <ProjectInstructionsChangedLine conversationId={chat.conversationId} running={running} />;
+}
+
+function ProjectInstructionsChangedLine({
+  conversationId,
+  running
+}: {
+  conversationId: string;
+  running: boolean;
+}) {
+  const { t } = useTranslation();
+  const instructions = useConversationProjectInstructionsQuery(conversationId);
   const [open, setOpen] = useState(false);
   const wasRunning = useRef(running);
   const { refetch } = instructions;
@@ -393,7 +400,7 @@ export function ProjectInstructionsNotice({ running }: { running: boolean }) {
     wasRunning.current = running;
   }, [running, refetch]);
   const data = instructions.data;
-  if (!chat?.projectId || !data?.changed || !data.projectId) return null;
+  if (!data?.changed || !data.projectId) return null;
   return (
     <>
       <Banner

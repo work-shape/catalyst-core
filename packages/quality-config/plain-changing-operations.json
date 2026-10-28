@@ -177,6 +177,7 @@
     "conversations.list": "own",
     "conversations.messages.list": "conversation_access",
     "conversations.move": "conversation_access",
+    "conversations.project_instructions.get": "conversation_access",
     "conversations.rename": "conversation_access",
     "conversations.resources.list": "conversation_access",
     "conversations.runs.cancel": "conversation_access",
