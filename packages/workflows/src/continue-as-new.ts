@@ -1,3 +1,5 @@
+import { continuationIsBusy, drainsContinuation } from "./continuation-barrier";
+import { loopContinuation } from "./loop-reservation";
 import { valuePosition } from "./json";
 import { isDeepStrictEqual } from "node:util";
 import { indexWorkflowSteps } from "./definition";
@@ -70,7 +72,21 @@ export function createContinuation(options: {
   ) {
     if (!loop.continueAsNew) return false;
     const previous = await tx.workflowRuns.readCheckpoint({ clientInstanceId, id: run.id });
-    const checkpoint = await continuationCheckpoint(tx, run, loopRun, completed, before);
+    const definition = await tx.workflowRuns.readRunDefinition({ clientInstanceId, id: run.id });
+    const index = indexWorkflowSteps(definition ?? { steps: [] });
+    if (await continuationIsBusy(tx, run, index)) {
+      await tx.workflowRuns.requestContinuation({
+        clientInstanceId,
+        id: run.id,
+        pending: previous?.pending ?? {
+          loopRunId: loopRun.id,
+          completed,
+          ...(before ? { before } : {})
+        }
+      });
+      return true;
+    }
+    const checkpoint = await continuationCheckpoint(tx, run, loopRun, completed);
     if (sameContinuationPosition(previous, checkpoint)) {
       await options.finish(tx, run, {
         status: "failed",
@@ -167,12 +183,14 @@ export function createContinuation(options: {
         });
         if (blockers.length > 0) throw workflowOutsideRefusal(published.manifest.id);
       }
-      if (!completePage) {
+      if (!completePage || checkpoint.blocks) {
         const index = indexWorkflowSteps(published.manifest);
         if (
-          [checkpoint, ...(checkpoint.ancestors ?? [])].some(
-            (frame) => index.get(frame.stepId)?.step.type !== "loop"
-          )
+          [
+            checkpoint,
+            ...(checkpoint.ancestors ?? []),
+            ...Object.values(checkpoint.blocks ?? {})
+          ].some((frame) => index.get(frame.stepId)?.step.type !== (frame.stepType ?? "loop"))
         )
           throw new AppError(
             "CONFLICT",
@@ -263,7 +281,23 @@ export function createContinuation(options: {
             {
               ...start,
               checkpoint: completePage
-                ? { stepId: checkpoint.stepId, offset: 0, counts: checkpoint.counts }
+                ? {
+                    ...checkpoint,
+                    offset: 0,
+                    items: undefined,
+                    ...(checkpoint.blocks
+                      ? {
+                          blocks: Object.fromEntries(
+                            Object.entries(checkpoint.blocks).map(([key, frame]) => [
+                              key,
+                              frame.stepId === checkpoint.stepId
+                                ? { ...frame, offset: 0, items: undefined, completed: undefined }
+                                : frame
+                            ])
+                          )
+                        }
+                      : {})
+                  }
                 : checkpoint
             },
             origin,
@@ -323,5 +357,26 @@ export function createContinuation(options: {
     await options.retireData(tx, run);
     return true;
   }
-  return continueRun;
+  async function resumePending(tx: PlatformStores, run: WorkflowRun, stepRun?: WorkflowStepRun) {
+    const checkpoint = await tx.workflowRuns.readCheckpoint({ clientInstanceId, id: run.id });
+    if (!checkpoint?.pending) return false;
+    const definition = await tx.workflowRuns.readRunDefinition({ clientInstanceId, id: run.id });
+    const index = indexWorkflowSteps(definition ?? { steps: [] });
+    if (stepRun && (await drainsContinuation(tx, run, index, stepRun))) return false;
+    const { loopRunId, completed, before } = checkpoint.pending;
+    const loopRun = await tx.workflowRuns.getStepRun({ clientInstanceId, id: loopRunId });
+    const loop = loopRun ? index.get(loopRun.stepId)?.step : undefined;
+    const configuration = loop ? loopContinuation(index, loop.id) : undefined;
+    if (!loopRun || loop?.type !== "loop" || !configuration) return false;
+    await continueRun(
+      tx,
+      run,
+      loopRun,
+      { ...loop, continueAsNew: configuration },
+      completed,
+      before
+    );
+    return true;
+  }
+  return Object.assign(continueRun, { resumePending });
 }

@@ -1,3 +1,4 @@
+import { checkpointFrame } from "./continuation-checkpoint";
 import { createBranchProgress } from "./branch-progress";
 import { startAgentStep } from "./agent-step";
 import { createStepBeginning } from "./step-begin";
@@ -406,6 +407,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     now,
     finishRun,
     advance,
+    failStep,
     continueRun: (...args) => continueRun(...args)
   });
 
@@ -425,6 +427,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     now,
     beginStep,
     advance,
+    resumePending: (...args) => continueRun.resumePending(...args),
     stepDataMaxBytes: limits.stepDataMaxBytes,
     async failBlock(tx, run, index, block, error, systemic) {
       await tx.workflowRuns.endStepRun({
@@ -440,6 +443,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
 
   const fillLoop = createLoopProgress({
     continueRun,
+    resumePending: (...args) => continueRun.resumePending(...args),
     clientInstanceId,
     now,
     datasets,
@@ -488,6 +492,7 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     index: WorkflowStepIndex,
     stepRun: WorkflowStepRun
   ): Promise<void> {
+    if (await continueRun.resumePending(tx, run, stepRun)) return;
     const place = index.get(stepRun.stepId);
     if (!place) return;
     const next = place.sequence.steps[place.position + 1];
@@ -520,7 +525,15 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
     else await branches.fillBranches(tx, run, index, loopRun);
   }
 
-  const claim = createStepClaim({ clientInstanceId, stores, now, waiting, executor, finishRun });
+  const claim = createStepClaim({
+    clientInstanceId,
+    stores,
+    now,
+    waiting,
+    executor,
+    finishRun,
+    resumePending: (...args) => continueRun.resumePending(...args)
+  });
 
   /** Writes how the attempt of a step went and, in the same transaction, what follows it. */
   async function settle(
@@ -682,7 +695,11 @@ export function createWorkflowEngine(options: WorkflowEngineOptions): WorkflowEn
       if (end.kind === "condition")
         await branches.startCondition(tx, run, index, stepRun, end.taken);
       else {
-        await tx.workflowRuns.markBlockWaiting(ref);
+        const frame = await checkpointFrame(tx, run, stepRun);
+        await tx.workflowRuns.markBlockWaiting({
+          ...ref,
+          ...(frame?.failure ? { failure: frame.failure } : {})
+        });
         await branches.fillBranches(tx, run, index, stepRun);
       }
       return;

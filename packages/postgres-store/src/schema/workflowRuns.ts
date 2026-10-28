@@ -25,6 +25,7 @@ import type {
   ServicePrincipalId,
   UserId,
   WorkflowManifest,
+  WorkflowConditionOutput,
   WorkflowDatasetReference,
   WorkflowCodeOutcome,
   WorkflowRunBounds,
@@ -238,8 +239,9 @@ export const workflowStepRuns = pgTable(
     iterationLabel: text("iteration_label"),
     status: text("status").$type<WorkflowStepRunStatus>().notNull(),
     attempt: integer("attempt").notNull().default(0),
-    // A loop's list and checkpoint; of any other step only the cut preview of its input.
+    // Block execution state (loop items or a condition's decision), and cut input previews.
     input: jsonb("input").$type<{
+      taken?: WorkflowConditionOutput["taken"];
       preview?: WorkflowOutputPreview;
       items?: JsonValue[];
       dataset?: WorkflowDatasetReference;

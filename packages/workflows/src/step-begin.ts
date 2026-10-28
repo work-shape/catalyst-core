@@ -20,7 +20,14 @@ type StepPlace = WorkflowStepRunPlacement & { key: string };
 export function createStepBeginning(options: {
   clientInstanceId: ClientInstanceId;
   now(): Date;
-  continueRun: ReturnType<typeof createContinuation>;
+  continueRun: (...args: Parameters<ReturnType<typeof createContinuation>>) => Promise<boolean>;
+  failStep(
+    tx: PlatformStores,
+    run: WorkflowRun,
+    index: WorkflowStepIndex,
+    step: WorkflowStepRun,
+    error: WorkflowRunError
+  ): Promise<void>;
   advance(
     tx: PlatformStores,
     run: WorkflowRun,
@@ -41,19 +48,32 @@ export function createStepBeginning(options: {
     place: StepPlace,
     index: WorkflowStepIndex = new Map()
   ): Promise<boolean> {
-    const loopId = index.get(step.id)?.sequence.loop;
+    let sequence = index.get(step.id)?.sequence;
+    while (sequence && !sequence.loop) sequence = sequence.parent;
+    const loopId = sequence?.loop;
     const loop = loopId ? index.get(loopId)?.step : undefined;
     const configuration = loopId ? loopContinuation(index, loopId) : undefined;
+    // A requested handoff drains admitted concurrent items, even beyond the history budget.
+    // The barrier pauses every other queued step before it is claimed.
+    if ((await tx.workflowRuns.readCheckpoint({ clientInstanceId, id: run.id }))?.pending)
+      return admitStep();
     // Loop admission already reserves enclosing tails, also for plain nested loops.
     if (run.stepRunCount >= run.limits.stepRuns) {
-      const loopRun =
+      let loopRun =
         place.containerStepRunId === undefined
           ? undefined
           : await tx.workflowRuns.getStepRun({ clientInstanceId, id: place.containerStepRunId });
+      let iteration = place.iteration?.index ?? 0;
+      while (loopRun && loopRun.stepType !== "loop") {
+        iteration = loopRun.iteration?.index ?? 0;
+        loopRun = loopRun.containerStepRunId
+          ? await tx.workflowRuns.getStepRun({ clientInstanceId, id: loopRun.containerStepRunId })
+          : undefined;
+      }
       if (loopRun) {
         let parent: WorkflowStepRun | undefined = loopRun;
         let quiet = true;
-        let childIndex = place.iteration?.index ?? 0;
+        let childIndex = iteration;
         // A single frontier cannot represent unfinished siblings or later completed items.
         // Drain those admitted items; fillLoop will checkpoint their common quiet boundary.
         while (parent) {
@@ -81,7 +101,7 @@ export function createStepBeginning(options: {
             run,
             loopRun,
             { ...loop, continueAsNew: configuration },
-            place.iteration?.index ?? 0,
+            iteration,
             step.id
           ))
         )
@@ -113,7 +133,10 @@ export function createStepBeginning(options: {
         createdAt: now().toISOString(),
         ...place
       });
-      if (place.containerStepRunId !== undefined && place.iteration?.index === 0) {
+      if (
+        place.containerStepRunId !== undefined &&
+        (place.iteration === undefined || place.iteration.index === 0)
+      ) {
         const container = await tx.workflowRuns.getStepRun({
           clientInstanceId,
           id: place.containerStepRunId
@@ -123,6 +146,18 @@ export function createStepBeginning(options: {
           frame?.completed && Object.hasOwn(frame.completed, step.id)
             ? frame.completed[step.id]
             : undefined;
+        const failure = frame?.failed?.[step.id];
+        if (failure) {
+          await tx.workflowRuns.endStepRun({
+            clientInstanceId,
+            id: stepRun.id,
+            status: "failed",
+            finishedAt: now().toISOString(),
+            error: failure
+          });
+          await options.failStep(tx, run, index, stepRun, failure);
+          return true;
+        }
         if (output !== undefined) {
           await tx.workflowRuns.endStepRun({
             clientInstanceId,

@@ -633,15 +633,32 @@ export function createPostgresWorkflowRunsStore(db: PostgresConnection): Workflo
         .where(
           and(
             eq(workflowStepRuns.clientInstanceId, ref.clientInstanceId),
-            sql`${workflowStepRuns.containerStepRunId} = ${ref.id}`
+            sql`${workflowStepRuns.containerStepRunId} = ${ref.id}`,
+            ref.iteration === undefined ? undefined : eq(workflowStepRuns.iteration, ref.iteration)
           )
         );
       return rows.map(mapStepRun);
     },
+    readBlockTaken: async (ref) => {
+      const [row] = await db
+        .select({ input: workflowStepRuns.input })
+        .from(workflowStepRuns)
+        .where(stepRunIs(ref));
+      const taken = row?.input?.taken;
+      return taken === "then" || taken === "else" ? taken : undefined;
+    },
     markBlockWaiting: async (ref) => {
       await db
         .update(workflowStepRuns)
-        .set({ status: "waiting", ...(ref.failure ? { error: ref.failure } : {}) })
+        .set({
+          status: "waiting",
+          ...(ref.failure ? { error: ref.failure } : {}),
+          ...(ref.taken
+            ? {
+                input: sql`coalesce(${workflowStepRuns.input}, '{}'::jsonb) || ${JSON.stringify({ taken: ref.taken })}::jsonb`
+              }
+            : {})
+        })
         .where(and(stepRunIs(ref), inArray(workflowStepRuns.status, ["running", "waiting"])));
     },
     findStepOutput: (input) => findWorkflowStepOutput(db, input),
