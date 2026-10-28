@@ -124,7 +124,8 @@ export async function readProjectFolderFile(
       path: shown(file.path),
       byteSize: file.byteSize,
       mimeType: file.mimeType,
-      version: file.version
+      version: file.version,
+      auditSubject: target.folder.projectId
     },
     bytes
   );
