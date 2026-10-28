@@ -441,6 +441,13 @@ export const createConversationRequestSchema = z.object({
    */
   subject: conversationSubjectSchema.optional(),
   /**
+   * "Edit in chat" on an App's page: with an App of the workspace as `subject`, the new
+   * conversation, of the caller's own, holds the App's current draft with all its files in
+   * `apps/<name>`, as the agent's `app.edit` loads it. Needs `app.write` on the App; without it
+   * nothing is created.
+   */
+  checkout: z.literal(true).optional(),
+  /**
    * `instance` for a conversation started under Studio's scope "Instance": its first saves
    * create agents, skills and guardrails for the instance, where the person may create them
    * there, and are refused where not. Set only here; nothing changes it later.

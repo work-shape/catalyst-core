@@ -261,6 +261,7 @@ export async function createClientInstanceApp(
         : []
     ),
     pages,
+    ...(workspaceObjectStore ? { workspaceObjects: workspaceObjectStore } : {}),
     executionWorkspaceCleanup: workspaceObjectStore
       ? {
           store: store.executionWorkspaces,

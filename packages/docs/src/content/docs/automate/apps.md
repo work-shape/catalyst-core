@@ -33,7 +33,7 @@ After that, each change you ask for in the same chat goes into the App's draft o
 
 ## Change an existing App from a new chat
 
-Start a chat in the App's workspace and ask the Workshaper to change it. The agent loads the current draft with all its files, opens its preview and saves your change as a new draft. The conversation that built the App can be deleted; the App keeps its own files.
+On the App's page, choose **Edit in chat** ("Im Chat bearbeiten"); on a phone it is in the **…** menu. A new chat of your own opens beside the App's draft, with the Workshaper and the current draft with all its files already loaded: say what should change. You can also start any chat in the App's workspace and ask the Workshaper to change the App; it then loads the draft itself. Either way it saves your change as a new draft. The conversation that built the App can be deleted; the App keeps its own files.
 
 Nobody locks the App while editing. If somebody saves a newer draft before your agent saves, its save is refused and names who saved and when. The agent reloads the current draft and applies your change again. The newer draft stays intact until that succeeds. You need the right to edit the App and a conversation of your own.
 

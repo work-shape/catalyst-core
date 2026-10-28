@@ -442,6 +442,81 @@ describe("app.save in a conversation", () => {
     }
   });
 
+  it("starts a conversation of the person's own that holds the App's checkout (Edit in chat, CHECKOUT-2)", async () => {
+    const buildChat = await conversationOf(t.admin, "private");
+    await t.storePage("draft for the chat", {}, { conversationId: buildChat });
+    await calls.saveApp(await contextOf(t.admin, buildChat), {
+      page: "Offers",
+      name: "edit-in-chat",
+      title: "Edit in chat"
+    });
+    const app = await stored("edit-in-chat");
+    const created = z
+      .object({ id: z.string(), visibility: z.string(), subject: z.unknown() })
+      .parse(
+        (
+          await t.expectOk(t.admin.id, "conversations.create", {
+            payload: {
+              collaborationWorkspaceId: t.workspaceId,
+              subject: { kind: "app", name: "edit-in-chat" },
+              checkout: true
+            }
+          })
+        ).json()
+      );
+    // Private, though the Shared Workspace's members read its conversations by default.
+    expect(created).toMatchObject({
+      visibility: "private",
+      subject: { kind: "app", name: "edit-in-chat" }
+    });
+    const path = "apps/edit-in-chat";
+    const loaded = await filesOf(created.id);
+    expect(loaded.map((file) => file.path).sort()).toEqual([
+      `${path}/app.yaml`,
+      `${path}/index.html`
+    ]);
+    const html = loaded.find((file) => file.path.endsWith("index.html"));
+    if (!html) throw new Error("No source HTML");
+    expect(
+      new TextDecoder().decode(await readObjectBytes(workspaceObjects, html.objectKey))
+    ).toContain("draft for the chat");
+    expect(await checkoutOf(created.id, path)).toMatchObject({
+      assetId: app?.id,
+      baseRevision: app?.revision,
+      baseCommit: app?.commit
+    });
+    // The agent of that conversation changes the folder and saves it as the App's next draft.
+    await changeAndOpen(created.id, path, "changed in the started chat");
+    expect(
+      await calls.saveApp(await contextOf(t.admin, created.id), { ...later, page: path })
+    ).toMatchObject({ saved: true, name: "edit-in-chat" });
+  });
+
+  it("makes no conversation for Edit in chat where the person may not change the App", async () => {
+    expectStatus(await t.putApp(t.admin.id, "edit-in-chat-rights", appFiles("kept")), 200);
+    const count = async (userId: string) =>
+      z.object({ items: z.array(z.unknown()) }).parse(
+        (
+          await t.expectOk(userId, "conversations.list", {
+            query: { collaborationWorkspaceId: t.workspaceId }
+          })
+        ).json()
+      ).items.length;
+    const before = await count(t.kai.id);
+    for (const [subject, status] of [
+      // A member who may read the workspace's Apps but not write them.
+      [{ kind: "app", name: "edit-in-chat-rights" }, 403],
+      [{ kind: "app", name: "no-such-app" }, 404],
+      [{ kind: "workflow", name: "edit-in-chat-rights" }, 422]
+    ] as const) {
+      const response = await t.call(t.kai.id, "conversations.create", {
+        payload: { collaborationWorkspaceId: t.workspaceId, subject, checkout: true }
+      });
+      expect(response.statusCode, subject.name).toBe(status);
+    }
+    expect(await count(t.kai.id)).toBe(before);
+  });
+
   it("creates the checkout on an old build chat's first save", async () => {
     const chat = await conversationOf(t.admin, "private");
     await t.storePage("legacy build", {}, { conversationId: chat });

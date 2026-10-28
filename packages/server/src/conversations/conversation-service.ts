@@ -4,6 +4,7 @@ import {
   AppError,
   personalConversationPrivateError,
   JobLeaseLostError,
+  type ActorAccess,
   type AuthenticatedUser,
   type Conversation,
   type CollaborationWorkspace,
@@ -41,6 +42,7 @@ import {
   temporaryAttachmentTitles
 } from "./conversation-title";
 import { requireOwnTranscript, requireReadableSubject } from "./platform-asset-subject";
+import { checkoutApp, requireAppToCheckOut } from "../platform/asset-calls/app-edit";
 import { modelBindingRefOf, reasoningEffortTheModelTakes } from "../guardrails/system-model-call";
 import type { ChatServerOptions } from "../types";
 
@@ -159,6 +161,46 @@ export class ConversationWorkflow {
         ...(conversation.creationTarget ? { creationTarget: conversation.creationTarget } : {})
       }
     });
+    return conversation;
+  }
+
+  /**
+   * "Edit in chat" on an App's page: a new conversation of the person's own about the App,
+   * holding the App's current draft in `apps/<name>` as the agent's `app.edit` loads it. The
+   * right to change the App is checked before anything is made; where the files then cannot be
+   * loaded, the empty conversation is discarded again.
+   */
+  async createAppCheckout(
+    user: AuthenticatedUser,
+    access: Pick<ActorAccess, "require">,
+    context: RuntimeCallContext,
+    command: CreateConversationCommand
+  ): Promise<Conversation> {
+    const { subject } = command;
+    if (subject?.kind !== "app") {
+      throw new AppError("VALIDATION_FAILED", "A checkout names an App as the subject");
+    }
+    const { workspace } = await this.workspaceToWorkIn(user, command.collaborationWorkspaceId);
+    await requireAppToCheckOut(this.options, access, {
+      name: subject.name,
+      workspaceId: workspace.id
+    });
+    const conversation = await this.createConversation(user, context, {
+      ...command,
+      collaborationWorkspaceId: workspace.id,
+      visibility: "private"
+    });
+    try {
+      await checkoutApp(this.options, this.options.workspaceObjects, {
+        conversation,
+        access,
+        context,
+        name: subject.name
+      });
+    } catch (error) {
+      await this.deleteConversation(conversation.id, user, context, true).catch(() => undefined);
+      throw error;
+    }
     return conversation;
   }
 

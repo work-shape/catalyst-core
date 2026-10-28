@@ -547,9 +547,16 @@ export function AppEditFrame({
             keepState={known}
             backHref={workspaceRoutePath({ kind: "apps", collaborationWorkspaceId: workspace.id })}
             onBack={onBack}
+            // "Edit in chat" first: it is how a builder changes the draft. Both fold into the
+            // menu where the head has no room for them.
             secondaryActions={
-              known && ahead && publishedRevision !== undefined
-                ? [{ label: t("apps.discard"), onSelect: () => onDiscard?.() }]
+              known
+                ? [
+                    ...(editWithAgent.editInChat === undefined ? [] : [editWithAgent.editInChat]),
+                    ...(ahead && publishedRevision !== undefined
+                      ? [{ label: t("apps.discard"), onSelect: () => onDiscard?.() }]
+                      : [])
+                  ]
                 : undefined
             }
             tabs={tabs}

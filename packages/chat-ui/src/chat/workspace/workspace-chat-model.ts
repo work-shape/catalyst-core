@@ -1129,6 +1129,15 @@ export function useWorkspaceChatModel({
       startChat: startNewConversationWith,
       editWithAgent: (app, options) =>
         startConversationAbout({ kind: APP_ASSET_KIND, name: app }, undefined, undefined, options),
+      ...(editWithAgent === undefined
+        ? {}
+        : {
+            editInChat: (app: string) =>
+              editWithAgent({ kind: APP_ASSET_KIND, name: app }, undefined, {
+                fresh: true,
+                checkout: true
+              })
+          }),
       ...(buildWithAgent !== undefined && appRights.write ? { startNew: buildWithAgent } : {})
     },
     workflows: {

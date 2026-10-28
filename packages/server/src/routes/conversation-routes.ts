@@ -31,21 +31,21 @@ export function registerConversationRoutes(route: Route, options: ChatServerOpti
     );
   });
 
-  route(apiOperations["conversations.create"], ({ user, context, body, request }) =>
-    conversations.createConversation(
-      user,
-      withRequestLocale(context, options, request, body.locale),
-      {
-        title: body.title,
-        collaborationWorkspaceId: body.collaborationWorkspaceId
-          ? asCollaborationWorkspaceId(body.collaborationWorkspaceId)
-          : undefined,
-        ...(body.subject ? { subject: body.subject } : {}),
-        ...(body.visibility ? { visibility: body.visibility } : {}),
-        ...(body.creationTarget ? { creationTarget: body.creationTarget } : {})
-      }
-    )
-  );
+  route(apiOperations["conversations.create"], ({ user, access, context, body, request }) => {
+    const command = {
+      title: body.title,
+      collaborationWorkspaceId: body.collaborationWorkspaceId
+        ? asCollaborationWorkspaceId(body.collaborationWorkspaceId)
+        : undefined,
+      ...(body.subject ? { subject: body.subject } : {}),
+      ...(body.visibility ? { visibility: body.visibility } : {}),
+      ...(body.creationTarget ? { creationTarget: body.creationTarget } : {})
+    };
+    const callContext = withRequestLocale(context, options, request, body.locale);
+    return body.checkout
+      ? conversations.createAppCheckout(user, access, callContext, command)
+      : conversations.createConversation(user, callContext, command);
+  });
 
   route(apiOperations["conversations.messages.list"], ({ user, params }) =>
     runObservation.listMessages(conversationIdParam(params), user)
