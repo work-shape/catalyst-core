@@ -11,6 +11,7 @@ import { useTranslation, type TranslationContextValue } from "../../shared/i18n"
 import { useSettingsPage } from "../../shared/settings-page-context";
 import { apiErrorCode } from "../../shared/workspace-utils";
 import { readDraftRefusal, type AgentDraftRefusal } from "./agent-draft-model";
+import type { AgentAvailabilityForm } from "./asset-form-model";
 import type { DraftDecision } from "./build-data";
 import { instanceSentence } from "./build-refusals";
 
@@ -19,6 +20,15 @@ type Translate = TranslationContextValue["t"];
 /** What the last Publish or Discard answered, for the page to say. */
 export type AgentDraftAnswer =
   { kind: AgentDraftRefusal } | { kind: "waits" } | { kind: "failed"; message: string };
+
+/**
+ * Where a publish was asked to offer the agent, and could not: the publish stands. The page
+ * starts again after it, so the choice and the instance's sentence are kept for the next page.
+ */
+export interface UnsetOffer {
+  form: AgentAvailabilityForm;
+  message: string;
+}
 
 /** An answer and the draft revision the decision was sent for. */
 interface AnsweredRevision {
@@ -91,7 +101,8 @@ export interface AgentDraftSource {
    * it is made. A publish may also make what the draft uses available where the agent is: in
    * the workspaces the reader reviewed, `expectedAvailability`, which the instance compares with
    * the agent's availability now and refuses where it changed. `afterPublish` runs once the
-   * publish is made and before the agent is read again, such as the save of where it is offered.
+   * publish is made and before the agent is read again, such as the save of where it is offered:
+   * where that was refused it answers the choice and the sentence, which the next page shows.
    */
   decide(
     kind: DraftDecision,
@@ -99,9 +110,13 @@ export interface AgentDraftSource {
     options?: {
       makeDependenciesAvailable: boolean;
       expectedAvailability: AgentAvailability | null;
-      afterPublish?: () => Promise<unknown>;
+      afterPublish?: () => Promise<UnsetOffer | undefined>;
     }
   ): Promise<void>;
+  /** The offer the last publish could not set, until the page saves or drops it. */
+  unsetOffer?: UnsetOffer | undefined;
+  /** The page saved or dropped the offer that was not set. */
+  settleOffer?(): void;
   /** The decision on its way. */
   busy: DraftDecision | undefined;
   /** What the last decision answered, while it is about the draft on the page. */
@@ -132,6 +147,15 @@ export function useAgentDraft(input: {
   const scope = workspaceId === undefined ? {} : { workspaceId };
   const queryKey = workspaceQueryKeys.agentDraft(apiBaseUrl, authScope, agent ?? "", workspaceId);
   const reads = enabled && agent !== undefined;
+  const offerKey = workspaceQueryKeys.agentUnsetOffer(
+    apiBaseUrl,
+    authScope,
+    agent ?? "",
+    workspaceId
+  );
+  const [unsetOffer, setUnsetOffer] = useState(() =>
+    queryClient.getQueryData<UnsetOffer>(offerKey)
+  );
   const query = useQuery({
     queryKey,
     enabled: reads,
@@ -181,7 +205,10 @@ export function useAgentDraft(input: {
               body: { expectedRevision: revision, ...scope }
             }),
       done: async () => {
-        if (kind === "publish") await options?.afterPublish?.();
+        if (kind === "publish") {
+          const unset = await options?.afterPublish?.();
+          if (unset !== undefined) queryClient.setQueryData(offerKey, unset);
+        }
         queryClient.setQueryData(queryKey, null);
         // The published draft is the live agent, which the lists of offered agents also show.
         // The page does not wait for them, as a save in Build does not.
@@ -215,6 +242,11 @@ export function useAgentDraft(input: {
       return draft;
     },
     decide,
+    unsetOffer,
+    settleOffer: () => {
+      queryClient.removeQueries({ queryKey: offerKey });
+      setUnsetOffer(undefined);
+    },
     busy,
     answerFor: (revision) => answerOfRevision(answered, revision)
   };

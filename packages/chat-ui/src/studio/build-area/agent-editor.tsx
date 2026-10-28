@@ -140,9 +140,17 @@ export function AgentEditor({
   // The draft the form was started from or last saved as. The page writes against it, and a
   // newer one somebody else wrote is taken over only where nothing is typed.
   const [held, setHeld] = useState<AgentDraft | null>(draft?.latest ?? null);
-  const availabilityEdit = useAvailabilityEdit(availability);
+  // A publish that could not set where the agent is offered leaves that choice here unsaved,
+  // with the instance's sentence, for the reader to save again.
+  const unsetOffer = draft?.unsetOffer;
+  const availabilityEdit = useAvailabilityEdit(availability, unsetOffer?.form);
   const useEdit = useAgentUseEdit(agentUse);
   const availabilityChanged = availabilityEdit.changed;
+  // The held choice is done with once the form is back at what is saved.
+  const settleOffer = draft?.settleOffer;
+  useEffect(() => {
+    if (unsetOffer !== undefined && !availabilityChanged) settleOffer?.();
+  }, [availabilityChanged, settleOffer, unsetOffer]);
   // Publish also makes what the draft uses available where the agent is, where the reader
   // chose so in the dialog. The choice starts unticked each time the dialog opens, and the
   // dialog reads the draft again first: only the instance tells what the draft uses that is
@@ -387,6 +395,7 @@ export function AgentEditor({
       await draft?.reread().catch(() => undefined);
     }
     const refused = saved.ok && availabilityChanged ? await availabilityEdit.save() : undefined;
+    if (saved.ok && availabilityChanged && refused === undefined) draft?.settleOffer?.();
     const useRefused =
       saved.ok && refused === undefined && useEdit.changed ? await useEdit.save() : undefined;
     const answer: BuildWriteOutcome =
@@ -856,6 +865,11 @@ export function AgentEditor({
             />
           ) : null}
           {defaultError ? <FormNotice tone="error">{defaultError}</FormNotice> : null}
+          {unsetOffer ? (
+            <FormNotice tone="error" data-offer-not-set="">
+              {t("build.offerNotSet", { message: unsetOffer.message })}
+            </FormNotice>
+          ) : null}
           <AgentUnavailableNotices status={unavailable} />
         </>
       }
@@ -890,6 +904,7 @@ export function AgentEditor({
         discard: () => {
           state.discard();
           availabilityEdit.discard();
+          draft?.settleOffer?.();
           useEdit.discard();
         }
       }}
@@ -925,8 +940,12 @@ export function AgentEditor({
       expectedAvailability: reviewed?.availability ?? null,
       ...(offerTo !== undefined && offerAfterPublish
         ? {
-            afterPublish: () =>
-              offerAfterPublish(offerTo, { makeDependenciesAvailable: publishDependencies })
+            afterPublish: async () => {
+              const message = await offerAfterPublish(offerTo, {
+                makeDependenciesAvailable: publishDependencies
+              });
+              return message === undefined ? undefined : { form: offerTo, message };
+            }
           }
         : {})
     });

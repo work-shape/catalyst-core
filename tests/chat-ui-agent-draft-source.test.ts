@@ -112,19 +112,26 @@ async function mountDraft(input: { reload?: () => Promise<unknown> } = {}) {
     });
     return null;
   }
-  await act(async () => {
-    root.render(
-      createElement(
-        QueryClientProvider,
-        { client: queryClient },
+  let generation = 0;
+  const render = () =>
+    act(async () => {
+      root.render(
         createElement(
-          SettingsPageProvider,
-          { value: settings },
-          createElement(TranslationProvider, { locale: "en", children: null }, createElement(Probe))
+          QueryClientProvider,
+          { client: queryClient },
+          createElement(
+            SettingsPageProvider,
+            { value: settings },
+            createElement(
+              TranslationProvider,
+              { locale: "en", children: null },
+              createElement(Probe, { key: generation })
+            )
+          )
         )
-      )
-    );
-  });
+      );
+    });
+  await render();
   const shows = async (revision: number | null) =>
     vi.waitFor(() => expect(seen.state?.latest?.revision ?? null).toBe(revision), {
       timeout: CONDITION_WAIT_MS
@@ -164,6 +171,11 @@ async function mountDraft(input: { reload?: () => Promise<unknown> } = {}) {
         required(answerPublish)(response);
         await published;
       });
+    },
+    /** The page starts again from the agent, as it does after a publish is made. */
+    async remount() {
+      generation += 1;
+      await render();
     },
     async unmount() {
       await act(async () => {
@@ -356,6 +368,52 @@ describe("what a Publish makes the rest of the interface read again", () => {
       expect(page.seen.state?.answerFor(1)).toEqual({ kind: "waits" });
       expect(page.queryClient.getQueryState(offered)?.isInvalidated).toBe(false);
       expect(page.queryClient.getQueryState(configuration)?.isInvalidated).toBe(false);
+    } finally {
+      await page.unmount();
+    }
+  });
+});
+
+// OFFER-ON-PUBLISH: the publish is made and the place the dialog chose could not be set. The
+// page starts again after the publish, so the choice and the instance's sentence outlive it,
+// until the page saves the choice or drops it.
+describe("an offer a made Publish could not set", () => {
+  const form = { mode: "all" as const, personalWorkspaces: false, collaborationWorkspaceIds: [] };
+  const message = "Agent “assistant” is only for you and cannot be offered in a team.";
+
+  it("is held for the page that starts again, and gone once the page settles it", async () => {
+    const page = await mountDraft();
+    try {
+      expect(page.seen.state?.unsetOffer).toBeUndefined();
+      const published = page.publish({
+        makeDependenciesAvailable: false,
+        expectedAvailability: null,
+        afterPublish: async () => ({ form, message })
+      });
+      await page.answer(Response.json({ draftRevision: 1, publishedRevision: 1 }), published);
+      await page.remount();
+      expect(page.seen.state?.unsetOffer).toEqual({ form, message });
+
+      await act(async () => page.seen.state?.settleOffer?.());
+      expect(page.seen.state?.unsetOffer).toBeUndefined();
+      await page.remount();
+      expect(page.seen.state?.unsetOffer).toBeUndefined();
+    } finally {
+      await page.unmount();
+    }
+  });
+
+  it("holds nothing where the place was set", async () => {
+    const page = await mountDraft();
+    try {
+      const published = page.publish({
+        makeDependenciesAvailable: false,
+        expectedAvailability: null,
+        afterPublish: async () => undefined
+      });
+      await page.answer(Response.json({ draftRevision: 1, publishedRevision: 1 }), published);
+      await page.remount();
+      expect(page.seen.state?.unsetOffer).toBeUndefined();
     } finally {
       await page.unmount();
     }

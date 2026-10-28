@@ -13,7 +13,8 @@ export {
   answerOfRevision,
   decideDraft,
   useAgentDraft,
-  type AgentDraftSource
+  type AgentDraftSource,
+  type UnsetOffer
 } from "./agent-draft-source";
 export { AgentUnavailableNotices, savedAgentUnavailable } from "./agent-unavailable";
 export { AssetEditorShell } from "./asset-editor-shell";

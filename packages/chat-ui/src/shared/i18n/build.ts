@@ -21,6 +21,8 @@ export const build = defineTranslations({
       "Only members of this workspace can choose it. An instance admin can make it available in more.",
     "build.availabilityOnlyMine":
       "This is “Only me”, so it cannot be offered to a team or to everyone. To offer it, make it in the team or under “Everyone”.",
+    "build.offerNotSet":
+      "Published, but where chats can choose the agent was not set. {message} Your choice is below under “Available in”: save it to try again.",
     "build.copyTitle": "{title} (copy)",
     "build.copyToEdit": "Copy to edit",
     "build.createContinue": "Continue",
@@ -202,6 +204,8 @@ export const build = defineTranslations({
       "Nur Mitglieder dieses Arbeitsbereichs können ihn auswählen. Ein Instanz-Admin kann ihn in weiteren verfügbar machen.",
     "build.availabilityOnlyMine":
       "Das ist „Nur ich“ und kann darum keinem Team und nicht allen angeboten werden. Um es anzubieten, lege es im Team oder unter „Alle“ an.",
+    "build.offerNotSet":
+      "Veröffentlicht, aber wo der Agent in Chats wählbar ist, wurde nicht gesetzt. {message} Deine Auswahl steht unten unter „Verfügbar in“: Speichere sie, um es noch einmal zu versuchen.",
     "build.copyTitle": "{title} (Kopie)",
     "build.copyToEdit": "Zum Bearbeiten kopieren",
     "build.createContinue": "Weiter",
