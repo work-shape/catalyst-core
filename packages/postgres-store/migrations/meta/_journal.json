@@ -1212,6 +1212,13 @@
       "when": 1793204959749,
       "tag": "0172_projects_validate",
       "breakpoints": true
+    },
+    {
+      "idx": 173,
+      "version": "7",
+      "when": 1793206668718,
+      "tag": "0173_project_files",
+      "breakpoints": true
     }
   ]
 }
