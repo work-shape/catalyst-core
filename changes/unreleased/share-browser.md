@@ -6,3 +6,5 @@ section: Changed
 - **Sharing:** Workflow and App pages follow a move into a team without reading the former address.
 - **Menus:** long action labels stay within the available viewport width on phones.
 - **Tests:** wait for menu placement before asserting browser geometry and keep the pointer out of model-picker keyboard navigation.
+- **Tests:** allow the Page tool fixture's asynchronous App build to finish before expecting its answer.
+- **Skills:** an import can reach the recreate handler for a deleted address whose history the reader may read.

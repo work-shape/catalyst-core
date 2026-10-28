@@ -448,7 +448,18 @@ function BuildFrameBody({
       />
       {importing && isEditableKind(entry) && place.kind.state.canCreate && entry.importDialog ? (
         <entry.importDialog.Dialog
-          checkName={(name) => source.checkName(entry.kind, name)}
+          checkName={async (name) => {
+            const answer = await source.checkName(entry.kind, name);
+            if (!answer.available && answer.reason === "name_taken") {
+              // The availability check hides deleted state. Only an authorized history read
+              // can let the import reach the recreate handler below; a refusal stays taken.
+              const history = await source.writes
+                .revisions({ kind: entry.kind, name })
+                .catch(() => undefined);
+              if (history?.items[0]?.operation === "delete") return { available: true };
+            }
+            return answer;
+          }}
           create={async ({ name, files }) => {
             const create = (expectedRevision: number | null) =>
               source.writes.put({ kind: entry.kind, name, files, expectedRevision });

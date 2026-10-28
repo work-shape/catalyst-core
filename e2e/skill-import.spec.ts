@@ -35,6 +35,7 @@ test.use({
 
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:4210";
 const superadmin = { email: "e2e-superadmin@example.test", password: "e2e-superadmin-password" };
+test.describe.configure({ retries: 0 });
 const member = { email: "e2e-user@example.test", password: "e2e-user-password" };
 const NAME = "e2e_skill_import";
 const skillPath = `${apiBaseUrl}/api/v1/assets/skill/${NAME}`;
