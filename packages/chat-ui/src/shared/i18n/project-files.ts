@@ -29,6 +29,11 @@ export const projectFiles = defineTranslations({
     "projectFiles.refusedFileBytes": "{name} is larger than a project file may be ({max}).",
     "projectFiles.refusedProjectBytes": "That is more than the project holds: {bytes} of {max}.",
     "projectFiles.refusedUnreadable": "{name} could not be opened as a .zip.",
+    "projectFiles.refusedUnsafePath":
+      "{name} was not unpacked: it holds paths that climb out of its folder with ..",
+    "projectFiles.zipReplace":
+      "{count} files of the .zip are already in the project. They become the newest versions; the older ones stay.",
+    "projectFiles.zipFailed": "{name} could not be put into the project.",
     "projectFiles.uploads": "Uploads",
     "projectFiles.uploadWaiting": "Waiting",
     "projectFiles.uploadRunning": "Uploading",
@@ -118,6 +123,11 @@ export const projectFiles = defineTranslations({
     "projectFiles.refusedFileBytes": "{name} ist größer, als eine Projektdatei sein darf ({max}).",
     "projectFiles.refusedProjectBytes": "Das ist mehr, als das Projekt fasst: {bytes} von {max}.",
     "projectFiles.refusedUnreadable": "{name} ließ sich nicht als .zip öffnen.",
+    "projectFiles.refusedUnsafePath":
+      "{name} wurde nicht entpackt: Es enthält Pfade, die mit .. aus dem Ordner herausführen.",
+    "projectFiles.zipReplace":
+      "{count} Dateien aus dem .zip liegen schon im Projekt. Sie werden zur neuesten Version, die älteren bleiben.",
+    "projectFiles.zipFailed": "{name} ließ sich nicht ins Projekt legen.",
     "projectFiles.uploads": "Uploads",
     "projectFiles.uploadWaiting": "Wartet",
     "projectFiles.uploadRunning": "Lädt hoch",

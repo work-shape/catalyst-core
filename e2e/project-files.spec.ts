@@ -197,3 +197,50 @@ test("a project's folder takes uploads, and its chats write versions and a confl
   await shot(page, "project-file-versions", page.getByTestId("project-file-versions"));
   await memberContext.close();
 });
+
+test("a .zip in the composer of a project's chat lands as a folder of the project", async ({
+  page
+}, testInfo) => {
+  test.setTimeout(90_000);
+  const suffix = Date.now();
+  const title = `Zip im Chat ${String(suffix)}`;
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await signIn(page, creator);
+  const created = await requestWithOrigin(page, "post", `${apiOrigin}/api/v1/workspaces`, {
+    data: { name: `Zip Team ${String(suffix)}`, defaultConversationVisibility: "workspace" }
+  });
+  expect(created.ok()).toBe(true);
+  const workspaceId = idSchema.parse(await created.json()).id;
+  await page.goto(`/w/${workspaceId}/projects`);
+  await page.getByRole("button", { name: "Neues Projekt" }).click();
+  const dialog = page.getByRole("dialog", { name: "Neues Projekt" });
+  await dialog.getByLabel("Name").fill(title);
+  await dialog.getByRole("button", { name: "Projekt anlegen" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: title })).toBeVisible();
+  const projectPath = new URL(page.url()).pathname;
+  await startChatInProject(page, title, "Hier kommen die Unterlagen hinein.");
+
+  // An archive that is fine lands as a folder, and nothing of it is attached to the message.
+  const { zip } = await uploadsOnDisk(testInfo.outputPath("uploads"));
+  await page.locator('input[type="file"]').setInputFiles(zip);
+  await expect(page.getByText("angebote.zip")).toHaveCount(0);
+
+  // One that climbs out of its folder is refused with a sentence, and puts nothing in.
+  const unsafe = new JSZip();
+  unsafe.file("ok.txt", "ok");
+  unsafe.file("../draussen.txt", "bad");
+  const unsafePath = testInfo.outputPath("uploads", "boese.zip");
+  await writeFile(unsafePath, await unsafe.generateAsync({ type: "nodebuffer" }));
+  await page.locator('input[type="file"]').setInputFiles(unsafePath);
+  const refusal = page.getByRole("alert");
+  await expect(refusal).toContainText("boese.zip wurde nicht entpackt");
+  await shot(page, "composer-zip-refused", refusal);
+
+  await page.goto(projectPath);
+  const files = page.getByTestId("project-files");
+  await expect(files).toContainText("2 Dateien");
+  await files.getByRole("button", { name: "angebote", exact: true }).click();
+  await expect(files.getByTestId("project-file-row")).toHaveCount(2);
+  await expect(files).not.toContainText("boese");
+  await shot(page, "composer-zip-folder", files);
+});

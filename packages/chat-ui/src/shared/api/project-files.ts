@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import {
   completedOutput,
   type ApiClient,
@@ -35,6 +35,17 @@ const projectFileQueryKeys = {
   text: (apiBaseUrl: string, projectId: string, path: string, version: number) =>
     ["project-files", apiBaseUrl, projectId, "text", path, version] as const
 };
+
+/** Reads a project's files again after a change made outside the page's own writes. */
+export function invalidateProjectFiles(
+  queryClient: QueryClient,
+  apiBaseUrl: string,
+  projectId: string
+): void {
+  queryClient
+    .invalidateQueries({ queryKey: projectFileQueryKeys.all(apiBaseUrl, projectId) })
+    .catch(() => undefined);
+}
 
 /**
  * The text of one version of a project file, such as the project's instructions (PRJ-3). A

@@ -12,7 +12,7 @@ import type {
 /** A file to upload with the path it takes in the project's folder. */
 export interface ProjectUpload {
   path: string;
-  /** Known before the file is read: a .zip's entries declare theirs. */
+  /** A .zip's entries carry the size counted while the archive was unpacked. */
   size: number;
   read(): Promise<File>;
 }
@@ -25,7 +25,9 @@ export type ProjectUploadRefusal =
   | { limit: "files"; count: number; max: number }
   | { limit: "file_bytes"; path: string; size: number; max: number }
   | { limit: "project_bytes"; bytes: number; max: number }
-  | { limit: "unreadable"; path: string };
+  | { limit: "unreadable"; path: string }
+  /** A .zip with an entry that climbs out of its folder with `..`. */
+  | { limit: "unsafe_path"; path: string };
 
 const SKIPPED_FOLDERS = new Set(["__MACOSX"]);
 const SKIPPED_FILES = new Set([".DS_Store"]);
@@ -148,27 +150,96 @@ export function droppedUploads(data: DataTransfer): Promise<ProjectUpload[]> {
   })();
 }
 
-/** The size an archive's entry declares, read before it is inflated. */
-function declaredSize(object: JSZip.JSZipObject): number {
-  const data: unknown = "_data" in object ? object._data : undefined;
-  const size =
-    data !== null && typeof data === "object" && "uncompressedSize" in data
-      ? data.uncompressedSize
-      : undefined;
-  return typeof size === "number" ? size : 0;
+/** What a project may still take, to stop an archive at while it is unpacked. */
+export interface ProjectUploadCaps {
+  maxFileBytes: number;
+  maxProjectBytes: number;
+  /** What the project holds already, every kept version counted. */
+  usedBytes: number;
+}
+
+/** The caps a project's files view sets, for `expandProjectUploads`. */
+export function projectUploadCaps(
+  files: Pick<ProjectFilesView, "limits" | "usage">
+): ProjectUploadCaps {
+  return {
+    maxFileBytes: files.limits.maxFileBytes,
+    maxProjectBytes: files.limits.maxProjectBytes,
+    usedBytes: files.usage.bytes
+  };
+}
+
+/** Whether an archive's entry name climbs out of the folder it is unpacked into. */
+function climbsOut(name: string): boolean {
+  return name.split(/[/\\]/u).some((segment) => segment === "..");
+}
+
+/** The library's stream of an entry's content, which its typings leave out. */
+interface InflatingEntry {
+  internalStream(type: "uint8array"): InflatingStream;
+}
+interface InflatingStream {
+  on(event: "data", handler: (chunk: Uint8Array) => void): InflatingStream;
+  on(event: "error", handler: (error: unknown) => void): InflatingStream;
+  on(event: "end", handler: () => void): InflatingStream;
+  pause(): void;
+  resume(): void;
+}
+
+function inflates(object: JSZip.JSZipObject): object is JSZip.JSZipObject & InflatingEntry {
+  return "internalStream" in object && typeof object.internalStream === "function";
+}
+
+/** The name an entry has in the archive, which the library lists resolved of `..`. */
+function writtenName(object: JSZip.JSZipObject, listed: string): string {
+  return "unsafeOriginalName" in object && typeof object.unsafeOriginalName === "string"
+    ? object.unsafeOriginalName
+    : listed;
 }
 
 /**
- * Uploads with each .zip unpacked into a folder of its name beside it. Nothing is inflated
- * here: the entries carry the sizes the archive declares. System files are left out.
+ * The real size of an entry, counted while it is inflated and not kept. It stops as soon as
+ * the count passes `stopAbove`, as an archive's declared sizes are only what it says.
+ */
+function inflatedSize(object: JSZip.JSZipObject, stopAbove: number): Promise<number> {
+  return new Promise((resolve, reject) => {
+    let size = 0;
+    if (!inflates(object)) {
+      reject(new Error("The archive library cannot stream an entry."));
+      return;
+    }
+    const stream = object.internalStream("uint8array");
+    stream
+      .on("data", (chunk: Uint8Array) => {
+        size += chunk.byteLength;
+        if (size > stopAbove) {
+          stream.pause();
+          resolve(size);
+        }
+      })
+      .on("error", reject)
+      .on("end", () => resolve(size))
+      .resume();
+  });
+}
+
+/**
+ * Uploads with each .zip unpacked into a folder of its name beside it, the archive itself left
+ * out. An entry is inflated once to count its real size, stopping at the caps, so the sizes
+ * returned are the real ones whatever the archive declares and nothing is sent before they are
+ * known. An entry that climbs out of the folder with `..` refuses the archive. System files are
+ * left out.
  */
 export async function expandProjectUploads(
-  uploads: readonly ProjectUpload[]
+  uploads: readonly ProjectUpload[],
+  caps: ProjectUploadCaps
 ): Promise<{ ok: true; uploads: ProjectUpload[] } | { ok: false; refusal: ProjectUploadRefusal }> {
   const expanded: ProjectUpload[] = [];
+  let bytes = caps.usedBytes;
   for (const upload of uploads) {
     if (isSkippedUploadPath(upload.path)) continue;
     if (!isZipName(upload.path)) {
+      bytes += upload.size;
       expanded.push(upload);
       continue;
     }
@@ -179,16 +250,46 @@ export async function expandProjectUploads(
       return { ok: false, refusal: { limit: "unreadable", path: upload.path } };
     }
     const folder = zipFolderName(upload.path);
+    const entries: { path: string; name: string; object: JSZip.JSZipObject }[] = [];
+    let unsafe = false;
     zip.forEach((entryPath, object) => {
-      if (object.dir || isSkippedUploadPath(entryPath)) return;
+      if (object.dir) return;
+      // The library resolves `..` in the name it lists and keeps the name as the archive wrote it.
+      if (climbsOut(writtenName(object, entryPath))) unsafe = true;
+      if (isSkippedUploadPath(entryPath)) return;
       const path = `${folder}/${entryPath.replace(/^\/+/u, "")}`;
-      const name = path.slice(path.lastIndexOf("/") + 1);
+      entries.push({ path, name: path.slice(path.lastIndexOf("/") + 1), object });
+    });
+    if (unsafe) return { ok: false, refusal: { limit: "unsafe_path", path: upload.path } };
+    for (const { path, name, object } of entries) {
+      let size: number;
+      try {
+        size = await inflatedSize(
+          object,
+          Math.min(caps.maxFileBytes, caps.maxProjectBytes - bytes)
+        );
+      } catch {
+        return { ok: false, refusal: { limit: "unreadable", path: upload.path } };
+      }
+      if (size > caps.maxFileBytes) {
+        return {
+          ok: false,
+          refusal: { limit: "file_bytes", path, size, max: caps.maxFileBytes }
+        };
+      }
+      bytes += size;
+      if (bytes > caps.maxProjectBytes) {
+        return {
+          ok: false,
+          refusal: { limit: "project_bytes", bytes, max: caps.maxProjectBytes }
+        };
+      }
       expanded.push({
         path,
-        size: declaredSize(object),
+        size,
         read: async () => new File([await object.async("blob")], name)
       });
-    });
+    }
   }
   return { ok: true, uploads: expanded };
 }
