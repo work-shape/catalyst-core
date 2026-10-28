@@ -32,6 +32,8 @@ export function registerProjectRoutes(route: Route, options: ChatServerOptions):
     projects.list(user, asCollaborationWorkspaceId(params.collaborationWorkspaceId))
   );
 
+  route(apiOperations["projects.list_mine"], ({ user }) => projects.listMine(user));
+
   route(apiOperations["projects.get"], ({ user, params }) =>
     projects.get(user, params.projectName)
   );

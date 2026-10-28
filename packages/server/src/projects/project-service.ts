@@ -1,5 +1,6 @@
 import {
   AppError,
+  asUserId,
   auditActorFromUser,
   getSubjectUserId,
   isAppError,
@@ -38,10 +39,30 @@ export class ProjectWorkflow {
   async list(user: AuthenticatedUser, collaborationWorkspaceId: CollaborationWorkspaceId) {
     await requireWorkspaceAccess(this.options, user, collaborationWorkspaceId);
     return {
-      items: await this.options.stores.projects.listProjectsForWorkspace({
+      items: await this.options.stores.projects.listProjectsForViewer({
         clientInstanceId: this.options.clientInstanceId,
-        collaborationWorkspaceId,
+        collaborationWorkspaceIds: [collaborationWorkspaceId],
         viewerUserId: getSubjectUserId(user)
+      })
+    };
+  }
+
+  /**
+   * The projects of every workspace the person is a member of, in their audience (PRJ-5).
+   * Membership alone: the superadmin's Owner access to Shared Workspaces they are no member
+   * of opens each of them on its own page and adds none here, and no grant or bundle does.
+   */
+  async listMine(user: AuthenticatedUser) {
+    const userId = getSubjectUserId(user);
+    const workspaces = await this.options.stores.workspaces.listWorkspacesForUser({
+      clientInstanceId: this.options.clientInstanceId,
+      userId: asUserId(userId)
+    });
+    return {
+      items: await this.options.stores.projects.listProjectsForViewer({
+        clientInstanceId: this.options.clientInstanceId,
+        collaborationWorkspaceIds: workspaces.map((workspace) => workspace.id),
+        viewerUserId: userId
       })
     };
   }

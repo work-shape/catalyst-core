@@ -1,6 +1,20 @@
-import { Blocks, ChevronRight, PanelLeft, Plus, Search, Settings, SquarePen } from "lucide-react";
+import {
+  Blocks,
+  ChevronRight,
+  Folder,
+  Lock,
+  PanelLeft,
+  Plus,
+  Search,
+  Settings,
+  SquarePen
+} from "lucide-react";
 import { useEffect, useId, useRef, type ReactNode } from "react";
-import type { ConversationListItem, SafeConfig } from "@work-shape/catalyst-api-client";
+import type {
+  ConversationListItem,
+  ProjectView,
+  SafeConfig
+} from "@work-shape/catalyst-api-client";
 import {
   Avatar,
   Button,
@@ -27,6 +41,12 @@ import type { WorkspaceRouteView } from "../../shared/workspace-route";
 import { workspaceShortcutLabel } from "./workspace-shortcuts";
 
 export type WorkspaceView = WorkspaceRouteView;
+
+/** How many projects of the open workspace the rail lists under "Projects" (PRJ-5). */
+const RAIL_PROJECTS_LIMIT = 5;
+
+/** A project as the rail lists it. */
+type RailProject = Pick<ProjectView, "id" | "name" | "title" | "audience">;
 
 export { railSections, shownRailSections, type RailSection };
 
@@ -75,6 +95,16 @@ interface WorkspaceRailProps {
     moveIn(conversation: ConversationListItem): void;
     remove(conversation: ConversationListItem): void;
   };
+  /**
+   * The projects of the open workspace the person sees, used last first (PRJ-5). The first
+   * `RAIL_PROJECTS_LIMIT` stand in a group above "Recent", with a row to all of them.
+   */
+  recentProjects?: readonly RailProject[];
+  /** The project on screen: its row is the current one. */
+  openProjectName?: string;
+  onOpenProject?: (project: string) => void;
+  /** The plus on the Projects group's label makes a project in the open workspace. */
+  onCreateProject?: () => void;
   /**
    * The published Apps the person may open, most recently used first. The first
    * `RAIL_APPS_LIMIT` fold under the Apps row, whose caret opens and folds them; the row
@@ -131,6 +161,7 @@ export function WorkspaceRail(props: WorkspaceRailProps) {
       header={<RailHeader {...props} sections={sections} />}
       footer={<RailFooter {...props} />}
     >
+      <RecentProjects {...props} />
       <RecentConversations {...props} />
     </Sidebar>
   );
@@ -312,6 +343,72 @@ function RailBranding({ config }: { config: SafeConfig }) {
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * The projects of the open workspace used last, above "Recent", and a row to all of them
+ * (PRJ-5). A private project carries the lock a private conversation carries. Nothing shows
+ * while the workspace has no project the person sees, or in the collapsed strip.
+ */
+function RecentProjects({
+  recentProjects = [],
+  openProjectName,
+  onOpenProject,
+  onCreateProject,
+  onViewChange
+}: WorkspaceRailProps) {
+  const { t } = useTranslation();
+  if (useSidebarCollapsed() || recentProjects.length === 0) {
+    return null;
+  }
+  return (
+    <NavGroup
+      label={t("projects.title")}
+      data-testid="rail-projects"
+      labelAction={
+        onCreateProject ? (
+          <IconButton size="sm" label={t("projects.new")} onClick={onCreateProject}>
+            <Plus aria-hidden="true" />
+          </IconButton>
+        ) : undefined
+      }
+    >
+      {recentProjects.slice(0, RAIL_PROJECTS_LIMIT).map((project) => (
+        <NavItem
+          key={project.id}
+          icon={<Folder aria-hidden="true" />}
+          selected={project.name === openProjectName}
+          // The name is cut at the rail's edge; the whole name shows on the pointer.
+          title={project.title}
+          data-testid="rail-project"
+          onClick={() => onOpenProject?.(project.name)}
+        >
+          <span className="flex min-w-0 items-center gap-1">
+            <span className="min-w-0 truncate">{project.title}</span>
+            {project.audience === "private" ? (
+              <span
+                className="shrink-0 text-muted-foreground"
+                data-testid="rail-project-private"
+                role="img"
+                aria-label={t("projects.audiencePrivate")}
+                title={t("projects.audiencePrivate")}
+              >
+                <Lock className="size-3" aria-hidden="true" />
+              </span>
+            ) : null}
+          </span>
+        </NavItem>
+      ))}
+      <NavItem
+        // The words start where the names of the projects start.
+        className="pl-8 text-muted-foreground"
+        data-testid="rail-projects-all"
+        onClick={() => onViewChange("projects")}
+      >
+        {t("projects.railAll")}
+      </NavItem>
+    </NavGroup>
   );
 }
 

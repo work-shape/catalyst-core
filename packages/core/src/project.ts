@@ -98,6 +98,14 @@ export function inProjectAudience(
   return project.audience === "workspace" || project.createdByUserId === userId;
 }
 
+/** A project as a list shows it: with how many chats it holds and when it was last used. */
+export interface ProjectListEntry extends Project {
+  /** The sent chats in the project; everyone in its audience reads all of them. */
+  conversationCount: number;
+  /** The latest change to the project or to a chat in it. */
+  lastActivityAt: ISODateString;
+}
+
 export interface CreateProjectRecordInput {
   clientInstanceId: ClientInstanceId;
   assetId: string;
@@ -119,14 +127,15 @@ export interface ProjectStore {
     name: string;
   }): Promise<Project | undefined>;
   /**
-   * The active projects of a workspace the viewer is in the audience of: every `workspace`
-   * project and their own private ones. Newest change first.
+   * The active projects of these workspaces the viewer is in the audience of: every
+   * `workspace` project and their own private ones, each with its chats counted. The caller
+   * names only workspaces the viewer reaches. Latest activity first (PRJ-5).
    */
-  listProjectsForWorkspace(input: {
+  listProjectsForViewer(input: {
     clientInstanceId: ClientInstanceId;
-    collaborationWorkspaceId: CollaborationWorkspaceId;
+    collaborationWorkspaceIds: readonly CollaborationWorkspaceId[];
     viewerUserId: string;
-  }): Promise<Project[]>;
+  }): Promise<ProjectListEntry[]>;
   /** Every project of a workspace whatever its audience or status: what its deletion removes. */
   listProjectIdsOfWorkspace(input: {
     clientInstanceId: ClientInstanceId;

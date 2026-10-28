@@ -30794,6 +30794,58 @@
       }
     },
     "/api/v1/projects": {
+      "get": {
+        "operationId": "projects.list_mine",
+        "summary": "List the projects of every workspace the caller is a member of that the caller is in the audience of",
+        "tags": [
+          "Projects"
+        ],
+        "security": [
+          {
+            "sessionCookie": [
+              "conversation:read"
+            ]
+          },
+          {
+            "sessionToken": [
+              "conversation:read"
+            ]
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Projects"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "x-catalyst-effect": "reading",
+        "x-catalyst-rate-class": "read"
+      },
       "post": {
         "operationId": "projects.create",
         "summary": "Create a project in a workspace the caller is a member of",
@@ -51238,13 +51290,65 @@
           "limits"
         ]
       },
+      "ProjectListItem": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "collaborationWorkspaceId": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "audience": {
+            "$ref": "#/components/schemas/ProjectAudience"
+          },
+          "createdByUserId": {
+            "type": "string"
+          },
+          "createdAt": {
+            "$ref": "#/components/schemas/Timestamp"
+          },
+          "updatedAt": {
+            "$ref": "#/components/schemas/Timestamp"
+          },
+          "conversationCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "lastActivityAt": {
+            "$ref": "#/components/schemas/Timestamp"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "collaborationWorkspaceId",
+          "title",
+          "audience",
+          "createdByUserId",
+          "createdAt",
+          "updatedAt",
+          "conversationCount",
+          "lastActivityAt"
+        ]
+      },
       "Projects": {
         "type": "object",
         "properties": {
           "items": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/Project"
+              "$ref": "#/components/schemas/ProjectListItem"
             }
           }
         },

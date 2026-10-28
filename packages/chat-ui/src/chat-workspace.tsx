@@ -47,8 +47,9 @@ import { AGENTS_BUILD_PATH, buildRouteOfLocation } from "./shared/build-route";
 import { useRailApps } from "./studio/apps/rail-apps";
 import { InboxArea } from "./chat/inbox";
 import { ScheduledPage } from "./chat/scheduled/scheduled-page";
-import { ProjectsArea } from "./chat/projects/projects-area";
+import { NewProjectDialog, ProjectsArea } from "./chat/projects/projects-area";
 import { AddFromProjectProvider } from "./chat/projects/add-from-project";
+import { useProjectsQuery } from "./shared/api/projects";
 import { ProjectChangeDialogs, type ProjectChange } from "./chat/projects/project-move-dialog";
 import { LoginPanel } from "./chat/login-panel";
 import { TwoFactorSetupScreen } from "./chat/two-factor-setup-screen";
@@ -259,6 +260,10 @@ function ChatWorkspaceContent({
     workspaceId: railAppsWorkspaceId,
     openApp: appsRoute?.kind === "app" ? appsRoute.app : undefined
   });
+  // The projects of the open workspace used last, in their group of the rail (PRJ-5).
+  const railProjects = useProjectsQuery(model.projects.enabled ? (railAppsWorkspaceId ?? "") : "");
+  // The plus of the rail's Projects group asked to make a project in the open workspace.
+  const [creatingProject, setCreatingProject] = useState(false);
   const chatCovered = onChatRoute && chatSurface.covering && displayPanel.open;
   // The header's button that opens the sidebar leaves the tab order where a surface covers it.
   const headerCovered = inboxRoute
@@ -500,6 +505,14 @@ function ChatWorkspaceContent({
   const activeWorkspaceName = activeWorkspace
     ? collaborationWorkspaceDisplayName(activeWorkspace, userLabel, t)
     : undefined;
+  // Every workspace of the person by the name the interface gives it, for the Projects page
+  // across workspaces (PRJ-5).
+  const projectWorkspaces = collaborationWorkspace.collaborationWorkspaces.map((workspace) => ({
+    id: workspace.id,
+    name: collaborationWorkspaceDisplayName(workspace, userLabel, t),
+    kind: workspace.kind,
+    emoji: workspace.emoji
+  }));
   const closeDrawer = model.chrome.closeSidebarDrawer;
   const startNewChat = () => {
     closeDrawer();
@@ -713,6 +726,22 @@ function ChatWorkspaceContent({
                   }
                 : undefined
             }
+            recentProjects={rail.projects ? railProjects.data : undefined}
+            openProjectName={projectsRoute?.kind === "project" ? projectsRoute.project : undefined}
+            onOpenProject={(project) => {
+              if (railAppsWorkspaceId) {
+                closeDrawer();
+                model.route.showRoute({
+                  kind: "project",
+                  collaborationWorkspaceId: railAppsWorkspaceId,
+                  project
+                });
+              }
+            }}
+            onCreateProject={() => {
+              closeDrawer();
+              setCreatingProject(true);
+            }}
             publishedApps={railApps.apps}
             morePublishedApps={railApps.more}
             openAppName={appsRoute?.kind === "app" ? appsRoute.app : undefined}
@@ -1026,9 +1055,11 @@ function ChatWorkspaceContent({
                                                   id: activeWorkspace.id,
                                                   name: activeWorkspaceName,
                                                   kind: activeWorkspace.kind,
+                                                  emoji: activeWorkspace.emoji,
                                                   defaultConversationVisibility:
                                                     activeWorkspace.defaultConversationVisibility
                                                 }}
+                                                workspaces={projectWorkspaces}
                                                 onOpenRoute={model.route.showRoute}
                                                 onOpenConversation={(
                                                   collaborationWorkspaceId,
@@ -1110,6 +1141,26 @@ function ChatWorkspaceContent({
             </DockAgentWorkContext.Provider>
           </div>
         </div>
+        {activeWorkspace && activeWorkspaceName ? (
+          <NewProjectDialog
+            open={creatingProject}
+            workspace={{
+              id: activeWorkspace.id,
+              name: activeWorkspaceName,
+              kind: activeWorkspace.kind,
+              defaultConversationVisibility: activeWorkspace.defaultConversationVisibility
+            }}
+            onClose={() => setCreatingProject(false)}
+            onCreated={(project) => {
+              setCreatingProject(false);
+              model.route.showRoute({
+                kind: "project",
+                collaborationWorkspaceId: project.collaborationWorkspaceId,
+                project: project.name
+              });
+            }}
+          />
+        ) : null}
         <ProjectChangeDialogs
           change={projectChange}
           workspaceName={activeWorkspaceName ?? ""}
