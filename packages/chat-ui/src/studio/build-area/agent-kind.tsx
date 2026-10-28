@@ -1,4 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
+import { DATA_STORE_ASSET_KIND } from "@work-shape/catalyst-core";
 import { useState } from "react";
 import { Badge, Page, SkeletonPage } from "@work-shape/catalyst-ui";
 import { useAgentPlacementMutations } from "../../shared/api/agent-placement-mutations";
@@ -22,9 +23,13 @@ import { useKnowledgeBaseSource } from "./knowledge-base-source";
 import { useOwnedChoices } from "./owned-choices";
 import { assetPlace, useKnownWorkspaces } from "./asset-place";
 import { skillFacts } from "./skill-facts";
+import type { DataStoreChoice } from "./agent-data-stores";
+import { unusableDataStoreReason } from "./agent-data-stores-model";
 
 /** How many skills of each owner one page of an agent's chooser asks the instance for. */
 const SKILL_CHOICE_PAGE_SIZE = 50;
+/** How many Data Stores of each owner one page of an agent's chooser asks the instance for. */
+const DATA_STORE_CHOICE_PAGE_SIZE = 50;
 
 export const agentKind: BuildAssetKind = {
   kind: AGENT_ASSET_KIND,
@@ -147,6 +152,12 @@ function AgentAssetEditor(frame: BuildAssetEditorProps) {
     knowledgeOn,
     owner
   );
+  // The Data Stores, where the instance has the kind: of the agent's own place and of everyone,
+  // as its skills (AGENT-DATA-1).
+  const dataStoreChoice = useDataStoreChoice(
+    owner,
+    context?.kinds.some((kind) => kind.kind === DATA_STORE_ASSET_KIND) ?? false
+  );
   // The default and the availability are stored beside the agent. A change of either leaves
   // the form alone, so the page keeps what it was told and what it changed itself.
   const [isDefault, setIsDefault] = useState(asset?.isDefault === true);
@@ -236,6 +247,7 @@ function AgentAssetEditor(frame: BuildAssetEditorProps) {
             }
           : undefined
       }
+      {...(dataStoreChoice === undefined ? {} : { dataStoreChoice })}
       connectionTools={connectionTools}
       appTools={appTools}
       onMakeDefault={
@@ -257,4 +269,88 @@ function AgentAssetEditor(frame: BuildAssetEditorProps) {
       {...(createCheck === undefined ? {} : { createCheck })}
     />
   );
+}
+
+/**
+ * The Data Stores an agent's Data section offers: those of its own place and of everyone, and,
+ * greyed with the reason, those of the reader's other places, which the agent cannot use (the
+ * one owner check refuses them). Nothing where the instance has no Data Stores.
+ */
+function useDataStoreChoice(
+  owner: string | undefined,
+  enabled: boolean
+): DataStoreChoice | undefined {
+  const { apiBaseUrl, authScope, client } = useSettingsPage();
+  const { t } = useTranslation();
+  const [search, setSearch] = useState("");
+  const usable = useOwnedChoices(
+    client,
+    [
+      ...workspaceQueryKeys.assets(apiBaseUrl, authScope),
+      "choice",
+      DATA_STORE_ASSET_KIND,
+      owner ?? "",
+      search
+    ],
+    { kind: DATA_STORE_ASSET_KIND, owner, search, limit: DATA_STORE_CHOICE_PAGE_SIZE },
+    (store) => ({
+      name: store.name,
+      title: store.title,
+      ...(store.description ? { description: store.description } : {})
+    }),
+    enabled
+  ).choices;
+  // The reader's other places: their own and the teams they are in, apart from the agent's.
+  const workspaces = useKnownWorkspaces();
+  const elsewhere = workspaces.filter(
+    (workspace) => (workspace.member || workspace.personal) && workspace.id !== owner
+  );
+  const others = useQueries({
+    queries: elsewhere.map((workspace) => ({
+      queryKey: [
+        ...workspaceQueryKeys.assets(apiBaseUrl, authScope),
+        "choice",
+        DATA_STORE_ASSET_KIND,
+        "elsewhere",
+        workspace.id,
+        search
+      ],
+      queryFn: ({ signal }: { signal: AbortSignal }) =>
+        client.assets.list({
+          params: { kind: DATA_STORE_ASSET_KIND },
+          query: {
+            limit: DATA_STORE_CHOICE_PAGE_SIZE,
+            workspaceId: workspace.id,
+            ...(search ? { text: search } : {})
+          },
+          signal
+        }),
+      enabled,
+      retry: false
+    }))
+  });
+  if (!enabled) return undefined;
+  const agentPlace = assetPlace(
+    owner === undefined ? { kind: "instance" } : { kind: "workspace", workspaceId: owner },
+    workspaces,
+    t
+  );
+  const unusable = elsewhere.flatMap((workspace, index) => {
+    const reason = unusableDataStoreReason(
+      assetPlace({ kind: "workspace", workspaceId: workspace.id }, workspaces, t),
+      agentPlace,
+      t
+    );
+    return (others[index]?.data?.items ?? []).map((store) => ({
+      name: store.name,
+      title: store.title,
+      reason
+    }));
+  });
+  return {
+    options: usable?.items ?? [],
+    ...(usable?.more === undefined ? {} : { more: usable.more }),
+    onSearch: (text) => setSearch(text.trim()),
+    unusable
+  };
 }

@@ -10,6 +10,7 @@ import { AGENT_ASSET_KIND } from "../../shared/build-rights";
 import { AGENTS_BUILD_PATH } from "../../shared/build-route";
 import type { WorkspaceRoute } from "../../shared/routes";
 import { FORMER_OPEN_TOOL_NAME } from "../../studio/pages/page-save";
+import { DATA_STORE_CHANGE_VERBS } from "../../studio/build-area/agent-data-stores-model";
 
 // What the calls of a run tell of the asset its conversation is about. Opening an asset makes
 // it the subject on the server; the browser reads the same from the answers of the run, so the
@@ -31,7 +32,7 @@ export const FORMER_APP_SAVE_TOOL_NAME = "page.save_as_app";
 /** Makes an App's or a Workflow's draft live once its person allowed it. */
 const ASSET_PUBLISH_TOOL_NAME = "assets.publish";
 /** The verbs of `data_store.<store>.<verb>` that write rows. */
-const ROW_WRITE_VERBS: ReadonlySet<string> = new Set(["insert", "update", "delete_rows"]);
+const ROW_WRITE_VERBS: ReadonlySet<string> = new Set(DATA_STORE_CHANGE_VERBS);
 
 /** The asset a conversation is about. */
 export interface SubjectAsset {

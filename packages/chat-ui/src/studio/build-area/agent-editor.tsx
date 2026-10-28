@@ -45,6 +45,9 @@ import { AgentUseFields, useAgentUseEdit, type AgentUseChoice } from "./agent-us
 import { AgentCreateReview, type AgentCreateCheck } from "./agent-create-review";
 import type { DependencyConsent } from "../../shared/api/asset-writes";
 import { AgentKnowledge, type KnowledgeBaseChoice } from "./agent-knowledge";
+import { AVAILABILITY_SECTION_ID } from "./asset-place";
+import { AgentDataStores, type DataStoreChoice } from "./agent-data-stores";
+import { heldDataStores, isAgentDataStoreToolName } from "./agent-data-stores-model";
 import { AgentModels, modelBindingLabel } from "./agent-models";
 import { AgentSkills, type SkillChoice } from "./agent-skills";
 import {
@@ -69,6 +72,7 @@ export function AgentEditor({
   canManageAgentModels,
   skillChoice,
   knowledgeChoice,
+  dataStoreChoice,
   connectionTools = NO_CONNECTION_TOOLS,
   appTools = NO_APP_TOOLS,
   onMakeDefault,
@@ -92,6 +96,11 @@ export function AgentEditor({
   skillChoice: SkillChoice;
   /** The Knowledge Bases on offer. Left out where the instance has none: the section is not shown. */
   knowledgeChoice?: KnowledgeBaseChoice;
+  /**
+   * The Data Stores on offer. Left out where the instance has none: the section shows only
+   * where the agent already holds a store's tools.
+   */
+  dataStoreChoice?: DataStoreChoice;
   /** The tools of Connections on offer. Left out, the page shows only those the agent holds. */
   connectionTools?: ConnectionToolChoice;
   /** The actions of Apps on offer. Left out, the page shows only those the agent holds. */
@@ -150,10 +159,21 @@ export function AgentEditor({
   );
   const modelBindingIds = modelBindings.map((binding) => binding.id);
   const skillsByName = new Map(skillChoice.options.map((skill) => [skill.name, skill]));
+  // A store's row tool in the draft's comparison: the store by its title, and the verb.
+  const dataStoreToolTitle = (name: string) => {
+    const store = heldDataStores([name])[0]?.store;
+    if (store === undefined) return undefined;
+    const title =
+      [...(dataStoreChoice?.options ?? []), ...(dataStoreChoice?.unusable ?? [])].find(
+        (option) => option.name === store
+      )?.title || store;
+    return `${title}: ${name.slice(name.lastIndexOf(".") + 1)}`;
+  };
   const titles: DraftTitles = {
     skill: (name) => skillsByName.get(name)?.title || name,
     tool: (name) =>
       references?.tools?.find((tool) => tool.name === name)?.title?.[locale].trim() ||
+      dataStoreToolTitle(name) ||
       connectionToolTitle(connectionTools.read, name) ||
       name,
     knowledgeBase: (name) =>
@@ -602,6 +622,24 @@ export function AgentEditor({
           }
         ]
       : []),
+    ...(dataStoreChoice || heldDataStores(form.toolNames).length > 0
+      ? [
+          {
+            id: "data",
+            label: t("dataStores.agentSection"),
+            description: t("dataStores.agentSectionDescription"),
+            count: heldDataStores(form.toolNames).length,
+            body: (
+              <AgentDataStores
+                choice={dataStoreChoice ?? NO_DATA_STORES}
+                toolNames={form.toolNames}
+                editable={canEdit("toolNames") && dataStoreChoice !== undefined}
+                onChange={(toolNames) => update({ toolNames })}
+              />
+            )
+          }
+        ]
+      : []),
     {
       id: "tools",
       label: t("configTools"),
@@ -615,7 +653,7 @@ export function AgentEditor({
             locale,
             connections: connectionTools.read,
             unavailable: unavailable?.unavailableTools?.map((tool) => tool.name) ?? [],
-            isOtherSource: isAppToolName
+            isOtherSource: isOutsideTools
           })
         ) + form.toolNames.filter(isAppToolName).length,
       refusalField: "tools",
@@ -630,7 +668,7 @@ export function AgentEditor({
             skillNames={form.skillNames}
             connectionTools={connectionTools}
             unavailable={unavailable?.unavailableTools ?? []}
-            isOtherSource={isAppToolName}
+            isOtherSource={isOutsideTools}
             disabled={!canEdit("toolNames")}
             onChange={(toolNames) => update({ toolNames })}
           />
@@ -666,7 +704,7 @@ export function AgentEditor({
     ...(availability
       ? [
           {
-            id: "availability",
+            id: AVAILABILITY_SECTION_ID,
             label: t("configAvailability"),
             description: t("configAvailabilityDescription"),
             refusalField: "availability" as const,
@@ -915,6 +953,14 @@ export function AgentEditor({
 }
 
 /** What the page is handed while nobody asked the instance for the tools of Connections. */
+/** Tools other sections show: an App's actions, and a Data Store's row tools under Data. */
+function isOutsideTools(name: string): boolean {
+  return isAppToolName(name) || isAgentDataStoreToolName(name);
+}
+
+/** The Data section of an agent that holds stores where the instance offers none. */
+const NO_DATA_STORES: DataStoreChoice = { options: [], onSearch: () => undefined };
+
 const NO_CONNECTION_TOOLS: ConnectionToolChoice = { read: { status: "unknown" } };
 /** The same for the actions of Apps. */
 const NO_APP_TOOLS: AppToolsRead = { status: "unknown" };

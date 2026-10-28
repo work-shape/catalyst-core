@@ -62,6 +62,24 @@ export const dataStores = defineTranslations({
     "dataStores.holderRole": "Everyone with the role {name}",
     "dataStores.kind": "Data",
     "dataStores.kindSingular": "Data store",
+    "dataStores.agentSection": "Data",
+    "dataStores.agentSectionDescription":
+      "The data stores whose tables this agent reads or changes.",
+    "dataStores.agentNone": "No data store chosen.",
+    "dataStores.agentChoose": "Choose data stores",
+    "dataStores.agentChooseNote":
+      "A data store you add is read only. Set read and change in its row.",
+    "dataStores.agentRead": "read",
+    "dataStores.agentChange": "read and change",
+    "dataStores.agentAccess": "What the agent may do in {name}",
+    "dataStores.agentRemove": "Remove {name}",
+    "dataStores.agentRightsNote":
+      "Each read and change also checks the rights of the person in the chat: the agent never does more than they may.",
+    "dataStores.agentOnlyMine": "Only yours.",
+    "dataStores.agentInWorkspace": "In {workspace}.",
+    "dataStores.agentCannotAll": "An agent for everyone cannot use it.",
+    "dataStores.agentCannotMine": "An agent of yours alone cannot use it.",
+    "dataStores.agentCannotIn": "An agent of {workspace} cannot use it.",
     "dataStores.draftUnpublished": "Draft · not published",
     "dataStores.draftUnpublishedText":
       "This Data Store has no published version yet, so it holds no data. Publishing creates its database.",
@@ -332,6 +350,24 @@ export const dataStores = defineTranslations({
     "dataStores.holderRole": "Alle mit der Rolle {name}",
     "dataStores.kind": "Daten",
     "dataStores.kindSingular": "Datenspeicher",
+    "dataStores.agentSection": "Daten",
+    "dataStores.agentSectionDescription":
+      "Die Datenspeicher, deren Tabellen dieser Agent liest oder ändert.",
+    "dataStores.agentNone": "Kein Datenspeicher gewählt.",
+    "dataStores.agentChoose": "Datenspeicher wählen",
+    "dataStores.agentChooseNote":
+      "Ein neu gewählter Datenspeicher wird nur gelesen. „Lesen und ändern“ stellst du in seiner Zeile ein.",
+    "dataStores.agentRead": "lesen",
+    "dataStores.agentChange": "lesen und ändern",
+    "dataStores.agentAccess": "Was der Agent in {name} darf",
+    "dataStores.agentRemove": "{name} entfernen",
+    "dataStores.agentRightsNote":
+      "Bei jedem Lesen und Ändern zählen auch die Rechte der Person im Chat: Der Agent tut nie mehr, als sie selbst darf.",
+    "dataStores.agentOnlyMine": "Gehört nur dir.",
+    "dataStores.agentInWorkspace": "Liegt in {workspace}.",
+    "dataStores.agentCannotAll": "Ein Agent für alle kann ihn nicht verwenden.",
+    "dataStores.agentCannotMine": "Ein Agent nur für dich kann ihn nicht verwenden.",
+    "dataStores.agentCannotIn": "Ein Agent von {workspace} kann ihn nicht verwenden.",
     "dataStores.draftUnpublished": "Entwurf · nicht veröffentlicht",
     "dataStores.draftUnpublishedText":
       "Dieser Datenspeicher hat noch keine veröffentlichte Version und speichert darum noch nichts. Beim Veröffentlichen wird seine Datenbank angelegt.",

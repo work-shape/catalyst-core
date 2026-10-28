@@ -1,4 +1,4 @@
-import { createContext, useContext, type ReactNode } from "react";
+import { createContext, useContext, type MouseEvent, type ReactNode } from "react";
 import { Users } from "lucide-react";
 import { Chip, ScopeChip, type ChipSize } from "@work-shape/catalyst-ui";
 import type { BuildWorkspace } from "../../shared/build-rights";
@@ -63,29 +63,44 @@ export function refusalPlaceOf(workspaces: KnownWorkspaces): RefusalPlace {
 
 const SCOPE_OF_RUNG = { mine: "personal", workspace: "workspace", all: "instance" } as const;
 
+/** Who uses an agent, in a sentence, and whether that is nobody yet. */
+export interface AgentAudience {
+  text: string;
+  /** No chat can choose it: the page points a reader who may change that to "Available in". */
+  nowhere?: true;
+}
+
 /**
- * Who uses an agent, where its record says so and it is not everyone of its place: the
- * workspaces it is offered in, nobody yet, or only the people with the right to use it.
+ * Who uses an agent, where its record says so: for an agent of everyone, the workspaces where a
+ * chat can choose it in the words of its "Available in" section, or that no chat can yet; only
+ * the people with the right to use it. An agent of a workspace is used there: its place says so.
  */
 export function agentAudience(
   agent: Pick<BuildAsset, "scope" | "availability" | "agentUse">,
   workspaces: KnownWorkspaces,
   t: Translate,
   locale: string
-): string | undefined {
-  if (agent.agentUse === "granted") return t("build.usedWithRight");
+): AgentAudience | undefined {
+  if (agent.agentUse === "granted") return { text: t("build.usedWithRight") };
   const offered = agent.availability;
-  // An agent of a workspace is used there; one the instance offers everywhere, by everyone.
-  if (agent.scope.kind !== "instance" || !offered || offered.mode === "all") return undefined;
+  if (agent.scope.kind !== "instance" || !offered) return undefined;
+  if (offered.mode === "all") {
+    return { text: t("build.usedIn", { names: t("configAvailabilityAll") }) };
+  }
   const names = offered.collaborationWorkspaceIds.map(
     (id) => assetPlace({ kind: "workspace", workspaceId: id }, workspaces, t).name
   );
-  if (offered.personalWorkspaces) names.push(t("build.usedByEachOwn"));
-  if (names.length === 0) return t("build.usedNowhere");
-  return t("build.usedIn", {
-    names: new Intl.ListFormat(locale, { type: "conjunction" }).format(names)
-  });
+  if (offered.personalWorkspaces) names.push(t("configAvailabilityPersonal"));
+  if (names.length === 0) return { text: t("build.usedNowhere"), nowhere: true };
+  return {
+    text: t("build.usedIn", {
+      names: new Intl.ListFormat(locale, { type: "conjunction" }).format(names)
+    })
+  };
 }
+
+/** The id of an agent page's "Available in" section, which the audience chip leads to. */
+export const AVAILABILITY_SECTION_ID = "availability";
 
 /**
  * Where an asset sits and, where it differs, who uses it: one line of chips for a list row or a
@@ -94,11 +109,14 @@ export function agentAudience(
 export function AssetPlaceLine({
   owner,
   audience,
+  audienceTo,
   size = "sm"
 }: {
   owner: AssetOwner;
-  /** Who uses the asset, where that is not everyone of its place. */
+  /** Who uses the asset, where its record says. */
   audience?: string;
+  /** The section of the page that changes who uses it: the audience chip leads there. */
+  audienceTo?: string;
   size?: ChipSize;
 }) {
   const { t } = useTranslation();
@@ -107,7 +125,21 @@ export function AssetPlaceLine({
     <>
       <ScopeChip size={size} scope={SCOPE_OF_RUNG[place.rung]} name={place.name} />
       {audience === undefined ? null : (
-        <Chip size={size} leading={<Users aria-hidden="true" />}>
+        <Chip
+          size={size}
+          leading={<Users aria-hidden="true" />}
+          {...(audienceTo === undefined
+            ? {}
+            : {
+                href: `#${audienceTo}`,
+                onClick: (event: MouseEvent<HTMLElement>) => {
+                  event.preventDefault();
+                  document
+                    .getElementById(audienceTo)
+                    ?.scrollIntoView({ behavior: "smooth", block: "start" });
+                }
+              })}
+        >
           {audience}
         </Chip>
       )}

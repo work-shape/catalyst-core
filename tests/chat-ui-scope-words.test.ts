@@ -52,7 +52,7 @@ describe("the place ladder", () => {
     });
   });
 
-  it("says who uses an agent for everyone only where that is not everyone", () => {
+  it("says where a chat can choose an agent for everyone, and when no chat can", () => {
     const agent = (availability?: {
       mode: "all" | "selected";
       collaborationWorkspaceIds: string[];
@@ -65,7 +65,7 @@ describe("the place ladder", () => {
         de,
         "de"
       )
-    ).toBeUndefined();
+    ).toEqual({ text: "Wählbar in: Alle Arbeitsbereiche" });
     expect(
       agentAudience(
         agent({ mode: "selected", collaborationWorkspaceIds: [TEAM], personalWorkspaces: true }),
@@ -73,7 +73,16 @@ describe("the place ladder", () => {
         de,
         "de"
       )
-    ).toBe("Genutzt in Controlling und jeder für sich");
+    ).toEqual({ text: "Wählbar in: Controlling und Persönliche Arbeitsbereiche" });
+    // Offered nowhere: the outcome in plain words, which the page links to "Verfügbar in".
+    expect(
+      agentAudience(
+        agent({ mode: "selected", collaborationWorkspaceIds: [], personalWorkspaces: false }),
+        workspaces,
+        de,
+        "de"
+      )
+    ).toEqual({ text: "In keinem Chat wählbar", nowhere: true });
     expect(
       agentAudience(
         agent({ mode: "selected", collaborationWorkspaceIds: [], personalWorkspaces: false }),
@@ -81,10 +90,10 @@ describe("the place ladder", () => {
         en,
         "en"
       )
-    ).toBe("Offered nowhere yet");
-    expect(agentAudience({ ...agent(), agentUse: "granted" }, workspaces, en, "en")).toBe(
-      "Only people with the right to use it"
-    );
+    ).toEqual({ text: "Cannot be chosen in any chat", nowhere: true });
+    expect(agentAudience({ ...agent(), agentUse: "granted" }, workspaces, en, "en")).toEqual({
+      text: "Only people with the right to use it"
+    });
     // An agent of a workspace is used there: its place says so already.
     expect(
       agentAudience({ scope: { kind: "workspace", workspaceId: TEAM } }, workspaces, en, "en")
