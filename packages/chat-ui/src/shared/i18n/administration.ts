@@ -166,6 +166,9 @@ export const administration = defineTranslations({
     "modules.knowledge": "Knowledge bases",
     "modules.knowledgeDescription":
       "Knowledge Bases: sources an agent searches and queries, and their ingestion.",
+    "modules.projects": "Projects",
+    "modules.projectsDescription":
+      "Projects: folders of chat work in each workspace, shared with it or only for their maker.",
     newPasswordsDoNotMatch: "New passwords do not match",
     passwordUpdated: "Password updated",
     passwordUpdateFailed: "Password update failed",
@@ -370,6 +373,9 @@ export const administration = defineTranslations({
     "modules.knowledge": "Wissensbasen",
     "modules.knowledgeDescription":
       "Wissensbasen: Quellen, die ein Agent durchsucht und abfragt, und ihre Aufnahme.",
+    "modules.projects": "Projekte",
+    "modules.projectsDescription":
+      "Projekte: Ordner für Chat-Arbeit in jedem Workspace, mit ihm geteilt oder nur für die Person, die sie angelegt hat.",
     passwordUpdated: "Passwort aktualisiert",
     passwordUpdateFailed: "Passwortaktualisierung fehlgeschlagen",
     profile: "Profil",

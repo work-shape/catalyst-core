@@ -385,6 +385,32 @@ export function createWorkspaceConversationActions({
     conversationListRefresh.runAccepted(response);
   }
 
+  /**
+   * Starts a new conversation in a project with its first message and opens it (PRJ-1). It
+   * belongs to the project's workspace and takes the project's audience.
+   */
+  async function startConversationInProject(input: {
+    text: string;
+    collaborationWorkspaceId: string;
+    projectId: string;
+  }) {
+    const response = await startProductConversationRun({
+      client,
+      collaborationWorkspaceId: input.collaborationWorkspaceId,
+      projectId: input.projectId,
+      idempotencyKey: createRunIdempotencyKey(),
+      locale: activeLocale,
+      text: input.text
+    });
+    workspaceCache.cacheRunStarted(response);
+    routeState.showConversation(
+      response.conversation.collaborationWorkspaceId,
+      response.conversation.id
+    );
+    setNotice(undefined);
+    conversationListRefresh.runAccepted(response);
+  }
+
   /** The run did not start: open the composer with the message ready to send. */
   function leaveRevisionInComposer(
     conversationId: string | undefined,
@@ -422,6 +448,7 @@ export function createWorkspaceConversationActions({
     startDockedChat,
     selectConversation,
     startRevisionRun,
+    startConversationInProject,
     leaveRevisionInComposer
   };
 }

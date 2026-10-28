@@ -1,6 +1,16 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { ThreadListItemMorePrimitive } from "@assistant-ui/react";
-import { Clock, FolderInput, Lock, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import {
+  Clock,
+  Folder,
+  FolderInput,
+  FolderMinus,
+  FolderPlus,
+  Lock,
+  MoreHorizontal,
+  Pencil,
+  Trash2
+} from "lucide-react";
 import type { ConversationListItem, SafeConfig } from "@work-shape/catalyst-api-client";
 import {
   Badge,
@@ -26,6 +36,8 @@ export function ConversationButton({
   onSelect,
   onRename,
   onMove,
+  onMoveToProject,
+  onRemoveFromProject,
   onDelete,
   deleting
 }: {
@@ -37,6 +49,10 @@ export function ConversationButton({
   onRename: (title: string) => Promise<void>;
   /** Absent while the user belongs to a single Collaboration Workspace. */
   onMove?: () => void;
+  /** Present while projects are on and the person wrote the conversation (PRJ-1). */
+  onMoveToProject?: () => void;
+  /** Present while projects are on and the conversation is in a project. */
+  onRemoveFromProject?: () => void;
   onDelete: () => void;
   deleting: boolean;
 }) {
@@ -187,6 +203,32 @@ export function ConversationButton({
             <span>{t("moveConversationMenuItem")}</span>
           </ThreadListItemMorePrimitive.Item>
         ) : null}
+        {onMoveToProject ? (
+          <ThreadListItemMorePrimitive.Item
+            className={cn(
+              "flex min-h-9 cursor-default select-none items-center gap-2 rounded-md px-2.5 py-2 text-sm outline-none transition-colors",
+              "focus:bg-accent data-[highlighted]:bg-accent data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
+            )}
+            disabled={deleting || saving}
+            onSelect={onMoveToProject}
+          >
+            <FolderPlus size={15} aria-hidden="true" />
+            <span>{t("projects.moveMenuItem")}</span>
+          </ThreadListItemMorePrimitive.Item>
+        ) : null}
+        {onRemoveFromProject ? (
+          <ThreadListItemMorePrimitive.Item
+            className={cn(
+              "flex min-h-9 cursor-default select-none items-center gap-2 rounded-md px-2.5 py-2 text-sm outline-none transition-colors",
+              "focus:bg-accent data-[highlighted]:bg-accent data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
+            )}
+            disabled={deleting || saving}
+            onSelect={onRemoveFromProject}
+          >
+            <FolderMinus size={15} aria-hidden="true" />
+            <span>{t("projects.removeMenuItem")}</span>
+          </ThreadListItemMorePrimitive.Item>
+        ) : null}
         <ThreadListItemMorePrimitive.Item
           className={cn(
             "flex min-h-9 cursor-default select-none items-center gap-2 rounded-md px-2.5 py-2 text-sm outline-none transition-colors",
@@ -287,6 +329,17 @@ export function ConversationButton({
                 <Badge tone="warning" size="sm" dot data-testid="conversation-waits-for-you">
                   {t("conversationWaitsForYou")}
                 </Badge>
+              ) : null}
+              {conversation.projectId ? (
+                <span
+                  className="shrink-0 text-muted-foreground"
+                  data-testid="conversation-project-marker"
+                  role="img"
+                  aria-label={t("projects.inProject")}
+                  title={t("projects.inProject")}
+                >
+                  <Folder className="size-3" aria-hidden="true" />
+                </span>
               ) : null}
               {conversation.visibility === "private" ? (
                 <span

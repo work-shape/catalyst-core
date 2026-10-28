@@ -57,6 +57,19 @@ export interface WorkspaceChatModel {
   agents: AgentsModel;
   apps: AppsModel;
   workflows: WorkflowsModel;
+  projects: ProjectsModel;
+}
+
+/** Projects of the open workspace (PRJ-1). */
+interface ProjectsModel {
+  /** The instance's module is on and the session has workspaces. */
+  enabled: boolean;
+  /** Starts a conversation in the project with its first message and opens it. */
+  startChat(input: {
+    text: string;
+    collaborationWorkspaceId: string;
+    projectId: string;
+  }): Promise<void>;
 }
 
 /** The one way into the dock from every page: the page head's "Chat" and the dock's "New chat". */
@@ -229,6 +242,8 @@ export interface ConversationRailModel {
   workflows: boolean;
   /** The session has workspaces: the Scheduled row shows. */
   scheduled: boolean;
+  /** The Projects module is on and the session has workspaces: the Projects row shows. */
+  projects: boolean;
   view: WorkspaceView;
   creatingConversation: boolean;
   deletingConversation: boolean;

@@ -7,6 +7,8 @@ import type { WorkspaceRouteView } from "../../shared/workspace-route";
  * absent here does not show.
  */
 export interface RailSectionsGiven {
+  /** The Projects module is on and the session has workspaces (PRJ-1). */
+  projects?: boolean;
   /**
    * The session has workspaces and the open one offers a choice of agents, or the person may
    * write one. With one agent New chat starts it and the row has nothing to add.
@@ -44,6 +46,13 @@ export interface RailSection {
  * chat starts a conversation and the list under "Recent" holds the ones there are.
  */
 export const railSections: readonly RailSection[] = [
+  {
+    id: "projects",
+    label: "projects.title",
+    icon: "project",
+    view: "projects",
+    shown: (given) => given.projects === true
+  },
   {
     id: "agents",
     label: "nav.agents",

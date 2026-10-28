@@ -7,6 +7,7 @@ export type WorkspaceRouteView =
   | "apps"
   | "workflows"
   | "scheduled"
+  | "projects"
   | "settings"
   | "inbox"
   | "build"
@@ -56,6 +57,10 @@ export type WorkspaceRoute =
   | { kind: "workflow-run"; collaborationWorkspaceId: string; workflow: string; run: string }
   /** The person's own scheduled prompts in one workspace. */
   | { kind: "scheduled"; collaborationWorkspaceId: string }
+  /** The projects of one workspace the person is in the audience of (PRJ-1). */
+  | { kind: "projects"; collaborationWorkspaceId: string }
+  /** One project by its name, with its conversations and a composer that starts one in it. */
+  | { kind: "project"; collaborationWorkspaceId: string; project: string }
   /** One page of the Settings area. The Settings catalog knows the groups and the pages. */
   | { kind: "settings"; group: string; page: string }
   /**
@@ -166,6 +171,13 @@ export const areaRoutes: readonly AreaRoute[] = [
   {
     area: "scheduled",
     paths: [{ path: "/w/$collaborationWorkspaceId/scheduled", route: "scheduled" }]
+  },
+  {
+    area: "projects",
+    paths: [
+      { path: "/w/$collaborationWorkspaceId/projects", route: "projects" },
+      { path: "/w/$collaborationWorkspaceId/p/$project", route: "project" }
+    ]
   },
   {
     area: "settings",
@@ -339,7 +351,12 @@ function routeOf(
     case "apps":
     case "workflows":
     case "scheduled":
+    case "projects":
       return collaborationWorkspaceId ? { kind, collaborationWorkspaceId } : undefined;
+    case "project":
+      return collaborationWorkspaceId && params.project
+        ? { kind, collaborationWorkspaceId, project: params.project }
+        : undefined;
     case "workflow":
       return collaborationWorkspaceId && params.workflow
         ? {
