@@ -7,6 +7,7 @@ import {
   AppError,
   personalConnectionContextError,
   personalConversationPrivateError,
+  dataStoreConversationPrivateError,
   createApprovalDecisionMessage,
   createPlatformId,
   type AppendAssistantMessageInput,
@@ -182,6 +183,20 @@ async function moveConversation(
           : input.visibility !== "private"))
     ) {
       throw personalConversationPrivateError();
+    }
+    // A conversation that reads a Data Store a person added stays theirs alone (STORE-USE-1).
+    if (destination?.kind !== "personal" && input.visibility !== "private") {
+      const [used] = await tx
+        .select({ id: conversationDataStores.storeAssetId })
+        .from(conversationDataStores)
+        .where(
+          and(
+            eq(conversationDataStores.clientInstanceId, input.clientInstanceId),
+            eq(conversationDataStores.conversationId, input.conversationId)
+          )
+        )
+        .limit(1);
+      if (used) throw dataStoreConversationPrivateError();
     }
     return moveLockedConversation(tx, input);
   });
@@ -392,19 +407,42 @@ async function addConversationDataStore(
   db: PostgresConnection,
   input: AddConversationDataStoreInput
 ): Promise<boolean> {
-  // One statement: the row is written only while the conversation is active.
-  const added = await db.execute<{ conversation_id: string }>(sql`
-    insert into ${conversationDataStores}
-      (conversation_id, store_asset_id, client_instance_id, added_by_user_id, added_at)
-    select ${conversations.id}, ${input.assetId}, ${input.clientInstanceId},
-      ${input.addedByUserId}, ${input.addedAt}::timestamptz
-    from ${conversations}
-    where ${conversations.clientInstanceId} = ${input.clientInstanceId}
-      and ${conversations.id} = ${input.conversationId}
-      and ${conversations.status} = 'active'
-    on conflict do nothing
-    returning conversation_id`);
-  return added.length > 0;
+  // Under the conversation's row lock, which a move takes too: the row is written only while
+  // the conversation is active and nobody but its person reads it (STORE-USE-1).
+  return db.transaction(async (tx) => {
+    if (!(await lockActiveConversation(tx, input.clientInstanceId, input.conversationId))) {
+      return false;
+    }
+    const [place] = await tx
+      .select({ visibility: conversations.visibility, kind: collaborationWorkspaces.kind })
+      .from(conversations)
+      .innerJoin(
+        collaborationWorkspaces,
+        and(
+          eq(collaborationWorkspaces.clientInstanceId, conversations.clientInstanceId),
+          eq(collaborationWorkspaces.id, conversations.collaborationWorkspaceId)
+        )
+      )
+      .where(
+        and(
+          eq(conversations.clientInstanceId, input.clientInstanceId),
+          eq(conversations.id, input.conversationId)
+        )
+      );
+    if (!place || (place.visibility !== "private" && place.kind !== "personal")) return false;
+    const added = await tx
+      .insert(conversationDataStores)
+      .values({
+        conversationId: input.conversationId,
+        storeAssetId: input.assetId,
+        clientInstanceId: input.clientInstanceId,
+        addedByUserId: input.addedByUserId,
+        addedAt: new Date(input.addedAt)
+      })
+      .onConflictDoNothing()
+      .returning({ conversationId: conversationDataStores.conversationId });
+    return added.length > 0;
+  });
 }
 
 async function listConversationDataStores(

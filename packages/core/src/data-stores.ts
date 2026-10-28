@@ -549,3 +549,16 @@ export {
   type DataStoreRecordsFlaggedInput,
   type DataStoreRecordsFlaggedOutput
 } from "@work-shape/catalyst-asset-schemas";
+
+/**
+ * A conversation that reads a Data Store a person added stays theirs alone (STORE-USE-1): it is
+ * not moved, or made visible, to a workspace whose members would read the answers from it.
+ */
+export function dataStoreConversationPrivateError(): AppError {
+  return new AppError(
+    "VALIDATION_FAILED",
+    "A conversation that reads a Data Store stays private: others would read the answers from it",
+    { reason: "data_store_conversation_private" },
+    { exposeMessage: true }
+  );
+}

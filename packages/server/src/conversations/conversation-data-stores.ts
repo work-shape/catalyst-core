@@ -19,12 +19,15 @@ import { DATA_STORE_USE_VERBS, type DataStoreUsed } from "@work-shape/catalyst-t
 import { accessResource } from "../assets/asset-access";
 import { assetTitle } from "../assets/asset-reference-labels";
 import type { AssetWorkflowOptions } from "../types";
+import { requireOwnTranscript } from "./platform-asset-subject";
 
 // A Data Store added to a conversation for reading (STORE-USE-1), beside what the conversation
 // is about. The agent's `data_store.use` adds the person's own store in their own conversation
 // at once; any other store waits for the person's click on a card, which
 // `conversations.data_stores.add` carries. The row grants nothing: the store's read tools ask
 // the person's `data_store.read` on every call, as they do for a conversation about the store.
+// Only a conversation nobody else reads takes a store: the answers from it stand in the
+// transcript, and the person cannot consent for the others who read it.
 
 type Options = Pick<
   AssetWorkflowOptions,
@@ -67,16 +70,16 @@ export function requirePersonsTurn(context: ToolExecutionContext): void {
 }
 
 /**
- * Whether others read the conversation: one shared with its workspace, outside a Personal
- * Workspace. They would see what the agent answers from the store.
+ * Refuses a conversation that others read: one shared with its workspace, outside a Personal
+ * Workspace. They would read what the agent answers from the store, which the person's step
+ * cannot allow for them.
  */
-async function othersRead(options: Options, conversation: Conversation): Promise<boolean> {
-  if (conversation.visibility === "private") return false;
-  const workspace = await options.stores.workspaces.getWorkspace(
-    options.clientInstanceId,
-    conversation.collaborationWorkspaceId
-  );
-  return workspace?.kind !== "personal";
+function requireOwnConversation(options: Options, conversation: Conversation) {
+  return requireOwnTranscript(options, conversation, {
+    message:
+      "Others read this conversation, so no Data Store is added to it: they would see the answers from it. Nothing was added. Tell the person to start a chat of their own and ask there.",
+    reason: "data_store_conversation_shared"
+  });
 }
 
 /**
@@ -102,6 +105,8 @@ export async function useDataStoreInConversation(
 ): Promise<DataStoreUsed> {
   const { conversation, actor, name } = input;
   if (options.modules.offModuleOf("kind", DATA_STORE_ASSET_KIND) !== undefined) throw unavailable();
+  // Before the store is read: a shared conversation learns nothing of it.
+  await requireOwnConversation(options, conversation);
   const row = await options.configAssets.store.getConfigAsset({
     clientInstanceId: options.clientInstanceId,
     kind: DATA_STORE_ASSET_KIND,
@@ -149,13 +154,11 @@ export async function useDataStoreInConversation(
     row.publishedConfig ?? row.config ?? {},
     input.context.locale
   );
-  const shared = await othersRead(options, conversation);
   const answer = (added: boolean): DataStoreUsed => ({
     name: row.name,
     title,
     added,
     ...(added ? {} : { awaitsPerson: true as const }),
-    ...(shared ? { othersRead: true as const } : {}),
     readTools: DATA_STORE_USE_VERBS.map((verb) => dataStoreOperationName(row.name, verb))
   });
   const listed = await options.stores.conversations.listConversationDataStores({
@@ -170,8 +173,7 @@ export async function useDataStoreInConversation(
     owner?.kind === "personal" &&
     owner.personalUserId === userId &&
     row.scope.kind === "workspace" &&
-    row.scope.workspaceId === conversation.collaborationWorkspaceId &&
-    !shared;
+    row.scope.workspaceId === conversation.collaborationWorkspaceId;
   if (!own && !input.confirmed) return answer(false);
   const added = await options.stores.conversations.addConversationDataStore({
     clientInstanceId: options.clientInstanceId,
@@ -181,12 +183,17 @@ export async function useDataStoreInConversation(
     addedAt: new Date().toISOString()
   });
   if (!added) {
-    // Added meanwhile by a second tab or a retry, or the conversation is gone.
+    // Added meanwhile by a second tab or a retry, shared with its workspace meanwhile, or gone.
     const now = await options.stores.conversations.listConversationDataStores({
       clientInstanceId: options.clientInstanceId,
       conversationId: conversation.id
     });
     if (now.some((store) => store.assetId === row.id)) return answer(true);
+    const current = await options.stores.conversations.getConversation(
+      options.clientInstanceId,
+      conversation.id
+    );
+    if (current) await requireOwnConversation(options, current);
     throw new AppError("NOT_FOUND", "Conversation is not available");
   }
   await (input.audit ?? options.auditRecorder).record({

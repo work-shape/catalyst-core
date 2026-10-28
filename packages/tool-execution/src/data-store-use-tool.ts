@@ -28,8 +28,6 @@ export const dataStoreUsedSchema = z.object({
   added: z.boolean(),
   /** The store waits for the person's click on the card; nothing was added yet. */
   awaitsPerson: z.literal(true).optional(),
-  /** Others read this conversation and would see what the agent answers from the store. */
-  othersRead: z.literal(true).optional(),
   /** The tools the store offers here once added, by name. */
   readTools: z.array(z.string())
 });
@@ -56,7 +54,7 @@ export function createDataStoreUseTool(calls: DataStoreUseCalls) {
       "When the person asks about the rows of a Data Store and this conversation has no data_store.<store>.query tool for it, add the store here for reading. Find its name with platform.assets.list or platform.data_stores.describe first.",
       "It adds the store's describe, query and preview_rows tools next to what the conversation is about; it never changes the subject and never gives tools that change rows. The person's right to read the store is checked on every call.",
       "With 'added' true the tools are in your tool list for your next step: go on and answer from them.",
-      "With 'awaitsPerson' the person sees a card to confirm. Say in one sentence that they can confirm it on the card, and call nothing else; the conversation goes on by itself after their click. With 'othersRead' the card also tells them that others who read this conversation see your answers from the store."
+      "With 'awaitsPerson' the person sees a card to confirm. Say in one sentence that they can confirm it on the card, and call nothing else; the conversation goes on by itself after their click. In a conversation others read, the tool refuses: tell the person to start a chat of their own and ask there."
     ].join(" "),
     inputSchema: z.object({
       name: z

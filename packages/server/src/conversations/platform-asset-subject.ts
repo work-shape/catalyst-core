@@ -91,11 +91,13 @@ export async function requireReadableSubject(
 /**
  * Refuses to open or read an asset in a transcript that others read. A member of a Shared
  * Workspace need not hold the read right on the asset, so a conversation about one is its
- * creator's alone, as `createConversation` makes it.
+ * creator's alone, as `createConversation` makes it. `refusal` words it for another use of
+ * the same rule, such as a Data Store added to the conversation (STORE-USE-1).
  */
 export async function requireOwnTranscript(
   options: Pick<AssetWorkflowOptions, "clientInstanceId" | "stores">,
-  conversation: Conversation
+  conversation: Conversation,
+  refusal?: { message: string; reason: string }
 ): Promise<void> {
   if (conversation.visibility === "private") return;
   const workspace = await options.stores.workspaces.getWorkspace(
@@ -105,8 +107,9 @@ export async function requireOwnTranscript(
   if (workspace?.kind === "personal") return;
   throw new AppError(
     "CONFLICT",
-    "This conversation is shared with its workspace, and an asset is opened and read only in a conversation of the person's own. Ask the person to start a new conversation, or to open the asset's page and choose Edit with the agent",
-    { reason: "subject_conversation_shared" },
+    refusal?.message ??
+      "This conversation is shared with its workspace, and an asset is opened and read only in a conversation of the person's own. Ask the person to start a new conversation, or to open the asset's page and choose Edit with the agent",
+    { reason: refusal?.reason ?? "subject_conversation_shared" },
     { exposeMessage: true }
   );
 }

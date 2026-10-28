@@ -478,7 +478,6 @@ export const conversationDataStoreAddedSchema = z.object({
   name: z.string(),
   title: z.string(),
   added: z.boolean(),
-  othersRead: z.literal(true).optional(),
   readTools: z.array(z.string())
 });
 

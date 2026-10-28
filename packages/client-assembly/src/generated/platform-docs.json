@@ -291,7 +291,10 @@
         "When you ask about the records of a Data Store in a chat that has no tools for it, the agent calls `data_store.use` with the store's name. It adds the store to this chat for reading, next to what the chat is about: the agent gets the store's `describe`, `query` and `preview_rows` tools and no tools that change records. Nothing else about the chat changes.",
         "",
         "- **Your own store**, in a chat of your Personal Workspace: it is added at once, and the agent answers from it in the same turn.",
-        "- **Any other store** (one of the instance or of a Shared Workspace): you see a card that asks whether the chat may read it. Once you confirm, the chat goes on by itself. In a chat that others in the workspace read, the card says that they will see the answers from the store.",
+        "- **Any other store** (one of the instance or of a Shared Workspace): you see a card that asks whether the chat may read it. Once you confirm, the chat goes on by itself.",
+        "- **A chat others read**, in a Shared Workspace: no store is added. Start a chat of your own and ask there, so that only you read the answers.",
+        "",
+        "A chat that reads a store stays private. Moving it to a Shared Workspace for the workspace to read is refused; moved without a choice, it stays private.",
         "",
         "Adding a store grants no right. Every read still checks your `data_store.read` on that store, as the store's page does. Only you can add a store, in your own turn: a subagent, a Workflow step, a scheduled start or a call with a personal key cannot. A store of a Personal Workspace is read only in its owner's own chats there. Each add is recorded in the audit log with the conversation and the store's id, never a record."
       ]
